@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
@@ -81,7 +82,7 @@ export function SshRestoreRemovedHostsDialog({
         {removed.status === 'unavailable' ? null : (
           <div className="scrollbar-sleek max-h-32 overflow-y-auto rounded-md border border-border/70 bg-muted/35 px-3 py-2 text-xs text-muted-foreground">
             {removed.status === 'loading' ? (
-              <Loader2 className="size-3 animate-spin" />
+              <Loader2 ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
             ) : aliases.length > 0 ? (
               <span className="break-all">{aliases.join(', ')}</span>
             ) : (
@@ -112,7 +113,9 @@ export function SshRestoreRemovedHostsDialog({
             }
             className="gap-1.5"
           >
-            {busy ? <Loader2 className="size-3 animate-spin" /> : null}
+            {busy ? (
+              <Loader2 ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
+            ) : null}
             {t('auto.components.settings.SshRestoreRemovedHosts.confirm', 'Restore')}
           </Button>
         </DialogFooter>

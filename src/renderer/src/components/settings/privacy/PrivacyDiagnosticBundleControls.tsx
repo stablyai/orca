@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Check, Clipboard, Eye, FileText, Loader2, Trash2, UploadCloud, X } from 'lucide-react'
 import type {
   DiagnosticsBundlePayload,
@@ -179,7 +180,11 @@ export function getDiagnosticBundleDescription(
 }
 
 function ActionIcon({ busy, icon }: { readonly busy: boolean; readonly icon: React.ReactNode }) {
-  return busy ? <Loader2 className="size-3.5 animate-spin" /> : icon
+  return busy ? (
+    <Loader2 ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
+  ) : (
+    icon
+  )
 }
 
 function formatBytes(bytes: number): string {

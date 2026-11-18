@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { AlertTriangle, ExternalLink, LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
@@ -163,7 +164,12 @@ export function CommentCard({
               onClick={() => onResolve(comment.threadId ?? '', !comment.isResolved)}
               className="h-6"
             >
-              {resolving ? <LoaderCircle className="size-3 animate-spin" /> : null}
+              {resolving ? (
+                <LoaderCircle
+                  ref={observeVisibleAnimation}
+                  className="size-3 visible-animate-spin"
+                />
+              ) : null}
               {comment.isResolved
                 ? t('auto.components.GitLabItemDialog.65e784c1f1', 'Reopen')
                 : t('auto.components.GitLabItemDialog.4168eb2c51', 'Resolve')}
@@ -245,7 +251,12 @@ export function PipelineJobRow({
               onClick={() => onRetry(job)}
               className="h-6"
             >
-              {retrying ? <LoaderCircle className="size-3 animate-spin" /> : null}
+              {retrying ? (
+                <LoaderCircle
+                  ref={observeVisibleAnimation}
+                  className="size-3 visible-animate-spin"
+                />
+              ) : null}
               {t('auto.components.GitLabItemDialog.fa3e042203', 'Retry')}
             </Button>
           ) : null}
@@ -272,7 +283,10 @@ export function PipelineJobRow({
           </div>
           {traceState?.loading ? (
             <div className="flex items-center gap-2 px-2.5 py-3 text-xs text-muted-foreground">
-              <LoaderCircle className="size-3.5 animate-spin" />
+              <LoaderCircle
+                ref={observeVisibleAnimation}
+                className="size-3.5 visible-animate-spin"
+              />
               {t('auto.components.GitLabItemDialog.d600c2619a', 'Loading log')}
             </div>
           ) : traceState?.error ? (

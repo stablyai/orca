@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
 import type { GitHubAssignableUser } from '../../../../../../shared/github/pull-requests/pull-request-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
@@ -211,7 +212,10 @@ export function GHAssigneesCell({
         >
           {triggerContent}
           {pendingLogin ? (
-            <LoaderCircle className="size-3 shrink-0 animate-spin text-muted-foreground" />
+            <LoaderCircle
+              ref={observeVisibleAnimation}
+              className="size-3 shrink-0 visible-animate-spin text-muted-foreground"
+            />
           ) : assignees.length > 0 ? (
             <ChevronDown className="size-3 shrink-0 text-muted-foreground" />
           ) : null}
@@ -258,7 +262,10 @@ export function GHAssigneesCell({
                   )}
                 >
                   {pending ? (
-                    <LoaderCircle className="size-3 animate-spin" />
+                    <LoaderCircle
+                      ref={observeVisibleAnimation}
+                      className="size-3 visible-animate-spin"
+                    />
                   ) : isOn ? (
                     <Check className="size-3" />
                   ) : null}

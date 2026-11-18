@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { MessageSquareText, TerminalSquare } from 'lucide-react'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
@@ -123,7 +124,10 @@ export function ActivityThreadDetailPane({
                       </div>
                     ) : showTerminalLoadingLabel ? (
                       <div className="ml-3 mt-3 inline-flex items-center gap-2 rounded-md border border-border bg-background/85 px-2 py-1 text-xs text-muted-foreground shadow-xs">
-                        <span className="h-3 w-1.5 animate-pulse rounded-sm bg-muted-foreground/70" />
+                        <span
+                          ref={observeVisibleAnimation}
+                          className="h-3 w-1.5 visible-animate-pulse rounded-sm bg-muted-foreground/70"
+                        />
                         <span>
                           {t(
                             'auto.components.activity.ActivityPrototypePage.1b633f5c1e',

@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Link2, Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '../../../ui/button'
 import { Input } from '../../../ui/input'
@@ -264,7 +265,10 @@ export function RuntimePairingGeneratorForm({
                     )}
                     className="text-muted-foreground"
                   >
-                    <RefreshCw className={refreshingNetworkInterfaces ? 'animate-spin' : ''} />
+                    <RefreshCw
+                      ref={observeVisibleAnimation}
+                      className={refreshingNetworkInterfaces ? 'visible-animate-spin' : ''}
+                    />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
@@ -304,7 +308,11 @@ export function RuntimePairingGeneratorForm({
             onClick={onGenerate}
             disabled={isGeneratingPairing || !canGenerate}
           >
-            {isGeneratingPairing ? <Loader2 className="animate-spin" /> : <Link2 />}
+            {isGeneratingPairing ? (
+              <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+            ) : (
+              <Link2 />
+            )}
             {t('auto.components.settings.RuntimePairingUrlGenerator.createLink', 'Create link')}
           </Button>
         </div>

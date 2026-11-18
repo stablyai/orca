@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useState } from 'react'
 import { ExternalLink } from 'lucide-react'
 import { Trans } from 'react-i18next'
@@ -204,8 +205,9 @@ export function AgentStep({
           <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3" aria-busy="true">
             {[0, 1, 2].map((key) => (
               <div
+                ref={observeVisibleAnimation}
                 key={key}
-                className="h-[54px] animate-pulse rounded-lg border border-border bg-muted/50"
+                className="h-[54px] visible-animate-pulse rounded-lg border border-border bg-muted/50"
               />
             ))}
           </div>

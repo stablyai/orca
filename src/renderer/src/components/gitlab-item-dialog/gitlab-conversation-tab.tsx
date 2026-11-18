@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { LoaderCircle } from 'lucide-react'
 import { TabsContent } from '@/components/ui/tabs'
 import { useTranslate } from '@/i18n/use-translate'
@@ -20,7 +21,10 @@ export function GitLabConversationTab({ item, state, reviewActions }: Props) {
     <TabsContent value="conversation" className="mt-0 space-y-3">
       {loading && !details ? (
         <div className="flex items-center justify-center py-12">
-          <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
+          <LoaderCircle
+            ref={observeVisibleAnimation}
+            className="size-5 visible-animate-spin text-muted-foreground"
+          />
         </div>
       ) : details?.comments?.length ? (
         details.comments.map((comment) => (

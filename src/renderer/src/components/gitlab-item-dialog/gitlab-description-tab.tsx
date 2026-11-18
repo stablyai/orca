@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Check, LoaderCircle, Pencil, X } from 'lucide-react'
 import CommentMarkdown from '@/components/comment-markdown/CommentMarkdown'
 import { Button } from '@/components/ui/button'
@@ -106,7 +107,12 @@ export function GitLabDescriptionTab({ item, state, detailsEditing, reviewAction
               disabled={reviewerOptionsLoading}
               onClick={() => void loadGitLabReviewerOptions()}
             >
-              {reviewerOptionsLoading ? <LoaderCircle className="size-3 animate-spin" /> : null}
+              {reviewerOptionsLoading ? (
+                <LoaderCircle
+                  ref={observeVisibleAnimation}
+                  className="size-3 visible-animate-spin"
+                />
+              ) : null}
               {t('auto.components.GitLabItemDialog.cb55b0390f', 'Manage')}
             </Button>
           </div>
@@ -175,7 +181,12 @@ export function GitLabDescriptionTab({ item, state, detailsEditing, reviewAction
                   }
                 }}
               >
-                {reviewerUpdating ? <LoaderCircle className="size-3 animate-spin" /> : null}
+                {reviewerUpdating ? (
+                  <LoaderCircle
+                    ref={observeVisibleAnimation}
+                    className="size-3 visible-animate-spin"
+                  />
+                ) : null}
                 {t('auto.components.GitLabItemDialog.7a2117129a', 'Add')}
               </Button>
             </div>
@@ -203,7 +214,10 @@ export function GitLabDescriptionTab({ item, state, detailsEditing, reviewAction
       ) : null}
       {loading && !details ? (
         <div className="flex items-center justify-center py-12">
-          <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
+          <LoaderCircle
+            ref={observeVisibleAnimation}
+            className="size-5 visible-animate-spin text-muted-foreground"
+          />
         </div>
       ) : editingDetails ? (
         <div className="space-y-3">
@@ -245,7 +259,10 @@ export function GitLabDescriptionTab({ item, state, detailsEditing, reviewAction
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {labelOptionsLoading ? (
                   <span className="inline-flex h-6 items-center gap-1 rounded-full border border-border/50 px-2 text-[11px] text-muted-foreground">
-                    <LoaderCircle className="size-3 animate-spin" />
+                    <LoaderCircle
+                      ref={observeVisibleAnimation}
+                      className="size-3 visible-animate-spin"
+                    />
                     {t('auto.components.GitLabItemDialog.717b706849', 'Loading labels')}
                   </span>
                 ) : null}
@@ -292,7 +309,10 @@ export function GitLabDescriptionTab({ item, state, detailsEditing, reviewAction
               onClick={() => void handleSaveDetails()}
             >
               {detailsSaving ? (
-                <LoaderCircle className="size-3.5 animate-spin" />
+                <LoaderCircle
+                  ref={observeVisibleAnimation}
+                  className="size-3.5 visible-animate-spin"
+                />
               ) : (
                 <Check className="size-3.5" />
               )}

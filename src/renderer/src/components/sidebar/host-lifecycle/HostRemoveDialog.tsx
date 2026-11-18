@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { useMemo, useState } from 'react'
 import { ChevronDown, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -283,7 +284,9 @@ function HostRemoveDialogBody({
             disabled={busy || !open}
             onClick={() => void runSshRemoval()}
           >
-            {busy ? <Loader2 className="size-3.5 animate-spin" /> : null}
+            {busy ? (
+              <Loader2 ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
+            ) : null}
             {t('auto.components.sidebar.HostRemoveDialog.8b9c0d1e2f', 'Remove host')}
           </Button>
         )}

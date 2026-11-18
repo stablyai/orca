@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useLayoutEffect, useRef, useState } from 'react'
 import { Check, Clock, Gauge, Loader2, MessageSquarePlus } from 'lucide-react'
 import { toast } from 'sonner'
@@ -317,7 +318,10 @@ export function NativeChatUsageLimitRow({
                       onClick={actions.handOff}
                     >
                       {actions.preparing ? (
-                        <Loader2 className="size-3.5 animate-spin" />
+                        <Loader2
+                          ref={observeVisibleAnimation}
+                          className="size-3.5 visible-animate-spin"
+                        />
                       ) : (
                         <MessageSquarePlus className="size-3.5" />
                       )}

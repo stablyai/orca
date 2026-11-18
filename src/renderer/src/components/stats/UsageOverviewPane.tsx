@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { usageFailureMessage } from './usage-failure-message'
 import { useUsageObservation } from '../../store/slices/usage/use-usage-observation'
 import { useMemo } from 'react'
@@ -194,7 +195,10 @@ export function UsageOverviewPane(): React.JSX.Element {
                   'Refresh usage overview'
                 )}
               >
-                <RefreshCw className={`size-3.5 ${isScanning ? 'animate-spin' : ''}`} />
+                <RefreshCw
+                  ref={observeVisibleAnimation}
+                  className={`size-3.5 ${isScanning ? 'visible-animate-spin' : ''}`}
+                />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>

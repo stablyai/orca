@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { ArchiveRestore, LoaderCircle } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -11,7 +12,10 @@ export function SessionLoadingState({
     <div className="px-3 py-3" aria-busy="true">
       {showLabel ? (
         <div className="mb-3 flex items-center gap-2 text-[11px] text-muted-foreground">
-          <LoaderCircle className="size-3.5 shrink-0 animate-spin" />
+          <LoaderCircle
+            ref={observeVisibleAnimation}
+            className="size-3.5 shrink-0 visible-animate-spin"
+          />
           <span>
             {t(
               'auto.components.right.sidebar.AiVaultPanelControls.scanningSessions',

@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
 import '@/store/slices/linear/linear-issue-read'
 import { confirmLinearIssueWrite } from '@/store/slices/linear/linear-issue-write-publication'
@@ -155,7 +156,10 @@ export function LinearIssueProjectSelector({
             <div className="max-h-64 overflow-y-auto scrollbar-sleek">
               {displayedLoading ? (
                 <div className="flex items-center gap-2 px-2 py-3 text-sm text-muted-foreground">
-                  <LoaderCircle className="size-3.5 animate-spin" />
+                  <LoaderCircle
+                    ref={observeVisibleAnimation}
+                    className="size-3.5 visible-animate-spin"
+                  />
                   {t('auto.components.LinearIssueWorkspace.937ba6ad9a', 'Loading projects')}
                 </div>
               ) : displayedProjects.length > 0 ? (
@@ -173,7 +177,10 @@ export function LinearIssueProjectSelector({
                     />
                     <span className="min-w-0 flex-1 truncate">{project.name}</span>
                     {savingProjectId === project.id ? (
-                      <LoaderCircle className="size-3.5 animate-spin" />
+                      <LoaderCircle
+                        ref={observeVisibleAnimation}
+                        className="size-3.5 visible-animate-spin"
+                      />
                     ) : issue.project?.id === project.id ? (
                       <Check className="size-3.5" />
                     ) : null}

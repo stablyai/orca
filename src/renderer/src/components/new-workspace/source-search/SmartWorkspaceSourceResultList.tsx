@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { isIntegrationCredentialDecryptionError } from '../../../../../shared/secure-storage/integration-credential-errors'
 import { Button } from '@/components/ui/button'
@@ -139,10 +140,11 @@ export function SmartWorkspaceSourceResultList({
           >
             {[0, 1, 2].map((index) => (
               <div
+                ref={observeVisibleAnimation}
                 key={index}
                 className={cn(
                   'h-8 rounded bg-muted/40',
-                  showLinearUrlLoadingFeedback && 'animate-pulse'
+                  showLinearUrlLoadingFeedback && 'visible-animate-pulse'
                 )}
               />
             ))}
@@ -150,7 +152,11 @@ export function SmartWorkspaceSourceResultList({
         ) : loading && searchResultRows.length === 0 ? (
           <div className="space-y-1 p-1">
             {[0, 1, 2].map((index) => (
-              <div key={index} className="h-8 animate-pulse rounded bg-muted/40" />
+              <div
+                ref={observeVisibleAnimation}
+                key={index}
+                className="h-8 visible-animate-pulse rounded bg-muted/40"
+              />
             ))}
           </div>
         ) : searchResultRows.length === 0 && !typedTextActionRow && !visibleLinearReadError ? (

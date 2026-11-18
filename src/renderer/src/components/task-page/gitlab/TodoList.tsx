@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { ExternalLink } from 'lucide-react'
@@ -34,12 +35,24 @@ export function TaskPageGitLabTodoList({
                 key={i}
                 className="grid w-full gap-3 px-3 py-2 grid-cols-[110px_minmax(0,3fr)_minmax(120px,1.2fr)_110px_50px]"
               >
-                <div className="h-4 w-20 animate-pulse rounded bg-muted/70" />
+                <div
+                  ref={observeVisibleAnimation}
+                  className="h-4 w-20 visible-animate-pulse rounded bg-muted/70"
+                />
                 <div>
-                  <div className="h-4 w-3/5 animate-pulse rounded bg-muted/70" />
+                  <div
+                    ref={observeVisibleAnimation}
+                    className="h-4 w-3/5 visible-animate-pulse rounded bg-muted/70"
+                  />
                 </div>
-                <div className="h-3 w-24 animate-pulse rounded bg-muted/60" />
-                <div className="h-3 w-20 animate-pulse rounded bg-muted/60" />
+                <div
+                  ref={observeVisibleAnimation}
+                  className="h-3 w-24 visible-animate-pulse rounded bg-muted/60"
+                />
+                <div
+                  ref={observeVisibleAnimation}
+                  className="h-3 w-20 visible-animate-pulse rounded bg-muted/60"
+                />
                 <div />
               </div>
             ))}

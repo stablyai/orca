@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Loader2, RotateCcw } from 'lucide-react'
 import React from 'react'
 import { Button } from '@/components/ui/button'
@@ -31,7 +32,9 @@ export function CodexResetCredits({
   const t = useTranslate()
   const action = (
     <Button variant="outline" size="xs" disabled={isRedeemingReset} onClick={onReset}>
-      {isRedeemingReset ? <Loader2 className="size-3.5 animate-spin" /> : null}
+      {isRedeemingReset ? (
+        <Loader2 ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
+      ) : null}
       {isRedeemingReset
         ? t('auto.components.status.bar.StatusBar.25d8bbde69', 'Using reset…')
         : t('auto.components.status.bar.StatusBar.e159fc1fd7', 'Reset now')}
@@ -115,7 +118,7 @@ export function CodexResetConfirmation({
           </Button>
           <Button onClick={() => void onConfirm()} disabled={isRedeemingReset}>
             {isRedeemingReset ? (
-              <Loader2 className="size-4 animate-spin" />
+              <Loader2 ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
             ) : (
               <RotateCcw className="size-4" />
             )}

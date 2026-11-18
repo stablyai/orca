@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Loader2, Pencil } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
@@ -43,7 +44,11 @@ export function AccountRenameButton({
       disabled={disabled || pending}
       className="h-6 px-2 text-muted-foreground hover:text-foreground"
     >
-      {pending ? <Loader2 className="size-3 animate-spin" /> : <Pencil className="size-3" />}
+      {pending ? (
+        <Loader2 ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
+      ) : (
+        <Pencil className="size-3" />
+      )}
       {t('accounts.rename.action', 'Rename')}
     </Button>
   )

@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useMemo, useState } from 'react'
 import { Download, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -334,7 +335,11 @@ export function SkillBundleInstallFlow(props: {
             onClick={() => void (result ? install(retryIds, false) : install())}
             className="w-40"
           >
-            {busy ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+            {busy ? (
+              <Loader2 ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
+            ) : (
+              <Download className="size-4" />
+            )}
             {busy
               ? t('auto.components.skills.SkillBundleInstallFlow.01c5a13e03', 'Installing…')
               : result

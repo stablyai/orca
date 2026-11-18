@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { memo, useMemo, useSyncExternalStore } from 'react'
 import { FolderGit2, LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -86,7 +87,12 @@ export const FolderWorkspaceEmptyState = memo(function FolderWorkspaceEmptyState
                     disabled={creating}
                     onClick={() => void createFolderRepoWorktree(folder, repo)}
                   >
-                    {creating ? <LoaderCircle className="animate-spin" /> : null}
+                    {creating ? (
+                      <LoaderCircle
+                        ref={observeVisibleAnimation}
+                        className="visible-animate-spin"
+                      />
+                    ) : null}
                     {t(
                       'auto.components.rightSidebar.FolderWorkspaceEmptyState.createWorktree',
                       'Create worktree'

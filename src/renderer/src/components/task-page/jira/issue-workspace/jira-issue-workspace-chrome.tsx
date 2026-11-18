@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { ArrowRight, LoaderCircle, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -38,7 +39,9 @@ export function JiraIssueWorkspaceHeader({
             {displayed.siteName ? <span>{displayed.siteName}</span> : null}
             <span>{displayed.project.key}</span>
             <span>{formatUiRelativeTimeFromDate(displayed.updatedAt, undefined, intlLocale)}</span>
-            {issueLoading ? <LoaderCircle className="size-3 animate-spin" /> : null}
+            {issueLoading ? (
+              <LoaderCircle ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
+            ) : null}
           </div>
           <h2 className="mt-1 text-[20px] font-semibold leading-tight text-foreground">
             {displayed.title}
@@ -131,7 +134,10 @@ export function JiraIssueMetadataBar({
             {displayed.priority?.name ??
               t('auto.components.JiraIssueWorkspace.51bed73f88', 'No priority')}
             {pendingField === 'priority' ? (
-              <LoaderCircle className="ml-1 inline size-3 animate-spin" />
+              <LoaderCircle
+                ref={observeVisibleAnimation}
+                className="ml-1 inline size-3 visible-animate-spin"
+              />
             ) : null}
           </button>
         </PopoverTrigger>

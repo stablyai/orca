@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Trans } from 'react-i18next'
 import { LoaderCircle } from 'lucide-react'
 import { i18n } from '@/i18n/i18n'
@@ -84,7 +85,10 @@ export function LanguagePackDiscoverySummary({
   if (pending) {
     return (
       <span role="status" aria-live="polite">
-        <LoaderCircle className="mr-1.5 inline size-3 animate-spin align-[-2px] motion-reduce:animate-none" />
+        <LoaderCircle
+          ref={observeVisibleAnimation}
+          className="mr-1.5 inline size-3 visible-animate-spin align-[-2px] motion-reduce:animate-none"
+        />
         <span>
           <LanguageOfferProgressLabel offer={pending.offer} progress={pending.progress} />
         </span>

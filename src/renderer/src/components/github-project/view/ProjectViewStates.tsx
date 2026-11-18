@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { ExternalLink, KanbanSquare, Map as MapIcon, Table as TableIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -210,18 +211,37 @@ export function ProjectTableSkeleton(): React.JSX.Element {
       <div className="grid items-center gap-3 border-b border-border/60 bg-background/95 px-3 py-2">
         <div className="grid grid-cols-6 items-center gap-3">
           {Array.from({ length: 6 }).map((_, index) => (
-            <div key={index} className="h-3 w-20 animate-pulse rounded bg-muted/70" />
+            <div
+              ref={observeVisibleAnimation}
+              key={index}
+              className="h-3 w-20 visible-animate-pulse rounded bg-muted/70"
+            />
           ))}
         </div>
       </div>
       <div className="divide-y divide-border/30">
         {Array.from({ length: 12 }).map((_, index) => (
           <div key={index} className="grid min-h-10 grid-cols-5 items-center gap-3 px-3 py-2">
-            <div className="h-4 w-3/5 animate-pulse rounded bg-muted/70" />
-            <div className="h-4 w-4/5 animate-pulse rounded bg-muted/70" />
-            <div className="h-4 w-2/5 animate-pulse rounded-full bg-muted/60" />
-            <div className="h-4 w-3/5 animate-pulse rounded bg-muted/60" />
-            <div className="h-4 w-1/2 animate-pulse rounded bg-muted/60" />
+            <div
+              ref={observeVisibleAnimation}
+              className="h-4 w-3/5 visible-animate-pulse rounded bg-muted/70"
+            />
+            <div
+              ref={observeVisibleAnimation}
+              className="h-4 w-4/5 visible-animate-pulse rounded bg-muted/70"
+            />
+            <div
+              ref={observeVisibleAnimation}
+              className="h-4 w-2/5 visible-animate-pulse rounded-full bg-muted/60"
+            />
+            <div
+              ref={observeVisibleAnimation}
+              className="h-4 w-3/5 visible-animate-pulse rounded bg-muted/60"
+            />
+            <div
+              ref={observeVisibleAnimation}
+              className="h-4 w-1/2 visible-animate-pulse rounded bg-muted/60"
+            />
           </div>
         ))}
       </div>

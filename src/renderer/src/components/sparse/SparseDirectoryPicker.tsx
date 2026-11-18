@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ChevronRight, ChevronsUpDown, LoaderCircle, Plus } from 'lucide-react'
 import { FolderIcon } from '@/components/icons/FileTypeIcon'
@@ -202,7 +203,10 @@ export function SparseDirectoryPicker({
               ) : null}
               {state.status === 'loading' ? (
                 <div className="flex items-center justify-center py-4">
-                  <LoaderCircle className="size-4 animate-spin opacity-60" />
+                  <LoaderCircle
+                    ref={observeVisibleAnimation}
+                    className="size-4 visible-animate-spin opacity-60"
+                  />
                 </div>
               ) : null}
               {filtered.map((entry) => {

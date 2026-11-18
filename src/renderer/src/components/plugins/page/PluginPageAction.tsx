@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useState } from 'react'
 import { Loader2, ShieldCheck } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
@@ -103,7 +104,9 @@ export function usePluginPageAction({
             aria-label={`${enableLabel}: ${name}`}
             onClick={() => decide('approve')}
           >
-            {busy ? <Loader2 className="animate-spin" /> : null}
+            {busy ? (
+              <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+            ) : null}
             {enableLabel}
           </Button>
         </>
@@ -169,7 +172,9 @@ export function usePluginPageAction({
           )}
           onClick={() => void install.install(listing, preview ? { preview } : undefined)}
         >
-          {installing ? <Loader2 className="animate-spin" /> : null}
+          {installing ? (
+            <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+          ) : null}
           {installButtonLabel(phase, t)}
         </Button>
       ),
@@ -198,7 +203,9 @@ export function usePluginPageAction({
           }
         }}
       >
-        {installing ? <Loader2 className="animate-spin" /> : null}
+        {installing ? (
+          <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+        ) : null}
         {installLabel}
       </Button>
     ),

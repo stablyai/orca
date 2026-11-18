@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useId, useState, type Dispatch, type SetStateAction } from 'react'
 import { CircleStop, Loader2 } from 'lucide-react'
 import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -155,7 +156,9 @@ export function AddRepoNestedImportStep({
               disabled={isAdding || scanInProgress}
               variant="secondary"
             >
-              {showOpenAsFolderSpinner ? <Loader2 className="size-3.5 animate-spin" /> : null}
+              {showOpenAsFolderSpinner ? (
+                <Loader2 ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
+              ) : null}
               {t('auto.components.sidebar.AddRepoNestedImportStep.e52454b7f6', 'Open as Folder')}
             </Button>
           ) : null}
@@ -164,7 +167,9 @@ export function AddRepoNestedImportStep({
             disabled={isAdding || scanInProgress || noRepositoriesSelected}
             variant="outline"
           >
-            {showSeparateSpinner ? <Loader2 className="size-3.5 animate-spin" /> : null}
+            {showSeparateSpinner ? (
+              <Loader2 ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
+            ) : null}
             {t(
               'auto.components.sidebar.AddRepoNestedImportStep.aa0247680d',
               'No, import separately'
@@ -174,7 +179,9 @@ export function AddRepoNestedImportStep({
             onClick={() => handleImport('group')}
             disabled={isAdding || scanInProgress || noRepositoriesSelected}
           >
-            {showGroupSpinner ? <Loader2 className="size-3.5 animate-spin" /> : null}
+            {showGroupSpinner ? (
+              <Loader2 ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
+            ) : null}
             {t(
               'auto.components.sidebar.AddRepoNestedImportStep.a0bc4d1f8e',
               'Yes, import as group'
@@ -204,7 +211,10 @@ function AddRepoNestedImportStopButton({
           title={t('auto.components.sidebar.AddRepoNestedImportStep.a32bef9516', 'Stop scanning')}
           onClick={onStopScan}
         >
-          <Loader2 className="size-3.5 animate-spin text-annotation-highlight group-hover:hidden group-focus-visible:hidden" />
+          <Loader2
+            ref={observeVisibleAnimation}
+            className="size-3.5 visible-animate-spin text-annotation-highlight group-hover:hidden group-focus-visible:hidden"
+          />
           <CircleStop className="hidden size-3.5 group-hover:block group-focus-visible:block" />
         </Button>
       </TooltipTrigger>

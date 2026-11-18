@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { Ellipsis, ListCollapse, Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -128,7 +129,7 @@ export function FileExplorerToolbar({
             }}
           >
             {refresh.showRefreshSpinner ? (
-              <Loader2 className="size-3 animate-spin" />
+              <Loader2 ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
             ) : (
               <RefreshCw className="size-3" />
             )}

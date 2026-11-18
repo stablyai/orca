@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Globe } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { loadWebLinkPreview, readCachedWebLinkPreview } from './native-chat-web-link-preview'
@@ -47,7 +48,11 @@ export function NativeChatWebPeekBody({
           ) : null}
         </>
       ) : state.status === 'loading' ? (
-        <div aria-hidden className="flex flex-col gap-1.5 motion-safe:animate-pulse">
+        <div
+          ref={observeVisibleAnimation}
+          aria-hidden
+          className="flex flex-col gap-1.5 motion-safe:visible-animate-pulse"
+        >
           <div className="h-3.5 w-11/12 rounded bg-muted" />
           <div className="h-3 w-full rounded bg-muted" />
           <div className="h-3 w-2/3 rounded bg-muted" />

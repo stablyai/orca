@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
@@ -20,7 +21,8 @@ export function WorktreeJumpPaletteTaskSearchStatus({
       {loading ? (
         <>
           <Loader2
-            className="size-3.5 animate-spin motion-reduce:animate-none"
+            ref={observeVisibleAnimation}
+            className="size-3.5 visible-animate-spin motion-reduce:animate-none"
             aria-hidden="true"
           />
           <span>{t('worktreeJumpPalette.taskSearchLoading', 'Searching tasks…')}</span>

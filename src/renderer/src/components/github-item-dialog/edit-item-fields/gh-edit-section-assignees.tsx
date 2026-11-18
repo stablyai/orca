@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { ChevronDown, LoaderCircle, Pencil } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -46,7 +47,10 @@ export function GHEditSectionAssigneesColumn({
               className="rounded p-0.5 text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-50"
             >
               {isPending ? (
-                <LoaderCircle className="size-3 animate-spin" />
+                <LoaderCircle
+                  ref={observeVisibleAnimation}
+                  className="size-3 visible-animate-spin"
+                />
               ) : (
                 <Pencil className="size-3" />
               )}
@@ -158,7 +162,10 @@ export function GHEditSectionAssigneesPill({
             ))
           )}
           {isPending ? (
-            <LoaderCircle className="size-3 animate-spin text-muted-foreground" />
+            <LoaderCircle
+              ref={observeVisibleAnimation}
+              className="size-3 visible-animate-spin text-muted-foreground"
+            />
           ) : (
             <ChevronDown className="size-2.5 opacity-50" />
           )}

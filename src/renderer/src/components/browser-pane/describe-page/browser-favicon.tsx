@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useState } from 'react'
 import { Globe, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/class-names'
@@ -34,7 +35,8 @@ export function BrowserFavicon({
   if (loading) {
     return (
       <Loader2
-        className={cn('shrink-0 motion-safe:animate-spin', className, fallbackClassName)}
+        ref={observeVisibleAnimation}
+        className={cn('shrink-0 motion-safe:visible-animate-spin', className, fallbackClassName)}
         aria-hidden="true"
       />
     )

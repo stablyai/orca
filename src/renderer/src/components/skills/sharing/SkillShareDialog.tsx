@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2, Share2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -282,7 +283,7 @@ export function SkillShareDialog({
         <div className="scrollbar-sleek -mx-1 min-h-0 overflow-y-auto px-1">
           {preparing ? (
             <div className="flex min-h-40 items-center justify-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" />
+              <Loader2 ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
               {t('auto.components.skills.SkillShareDialog.preparing', 'Preparing preview…')}
             </div>
           ) : preview && !shareUrl ? (

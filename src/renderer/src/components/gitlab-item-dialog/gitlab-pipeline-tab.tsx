@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { CircleDashed, ExternalLink, LoaderCircle } from 'lucide-react'
 import { TabsContent } from '@/components/ui/tabs'
 import { useTranslate } from '@/i18n/use-translate'
@@ -36,7 +37,10 @@ export function GitLabPipelineTab({ item, state, pipelineActions }: Props) {
     <TabsContent value="pipeline" className="mt-0">
       {loading && !details ? (
         <div className="flex items-center justify-center py-12">
-          <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
+          <LoaderCircle
+            ref={observeVisibleAnimation}
+            className="size-5 visible-animate-spin text-muted-foreground"
+          />
         </div>
       ) : (
         <div className="space-y-3">

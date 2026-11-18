@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -47,7 +48,9 @@ export function OrcaProfileSignOutConfirmDialog({
             {t('auto.components.orca.profiles.signout.confirm.cancel', 'Cancel')}
           </Button>
           <Button size="sm" onClick={onConfirm} disabled={signingOut}>
-            {signingOut ? <Loader2 className="size-4 animate-spin" /> : null}
+            {signingOut ? (
+              <Loader2 ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
+            ) : null}
             {t('auto.components.orca.profiles.signout.confirm.action', 'Sign out')}
           </Button>
         </DialogFooter>

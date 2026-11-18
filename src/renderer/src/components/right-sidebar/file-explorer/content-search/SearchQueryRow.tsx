@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import React from 'react'
 import { Search as SearchIcon, CaseSensitive, WholeWord, Regex, X, Loader2 } from 'lucide-react'
@@ -54,7 +55,12 @@ export function SearchQueryRow({
         onKeyDown={onKeyDown}
         spellCheck={false}
       />
-      {loading ? <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" /> : null}
+      {loading ? (
+        <Loader2
+          ref={observeVisibleAnimation}
+          className="size-3 shrink-0 visible-animate-spin text-muted-foreground"
+        />
+      ) : null}
       {query ? (
         <Button
           type="button"

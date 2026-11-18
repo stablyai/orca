@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { useCallback, useState } from 'react'
 import {
   AlertTriangle,
@@ -216,7 +217,7 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
               onKeyDown={(event) => event.stopPropagation()}
             >
               {busy ? (
-                <Loader2 className="size-3.5 animate-spin" />
+                <Loader2 ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
               ) : (
                 <Ellipsis className="size-3.5" />
               )}

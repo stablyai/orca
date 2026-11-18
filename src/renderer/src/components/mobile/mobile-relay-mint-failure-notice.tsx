@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useEffect, useState } from 'react'
 import { CircleAlert, Loader2 } from 'lucide-react'
 import { Button } from '../ui/button'
@@ -106,7 +107,11 @@ export function MobileRelayMintFailureNotice({
       data-testid="relay-mint-failure-notice"
     >
       {visibleBusy ? (
-        <Loader2 className="mt-0.5 size-3.5 shrink-0 animate-spin" aria-hidden />
+        <Loader2
+          ref={observeVisibleAnimation}
+          className="mt-0.5 size-3.5 shrink-0 visible-animate-spin"
+          aria-hidden
+        />
       ) : (
         <CircleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
       )}
@@ -131,7 +136,9 @@ export function MobileRelayMintFailureNotice({
               disabled={busy}
               className="w-28"
             >
-              {visibleBusy ? <Loader2 className="animate-spin" /> : null}
+              {visibleBusy ? (
+                <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+              ) : null}
               {visibleBusy
                 ? t('auto.components.mobile.MobileRelayMintFailureNotice.retrying', 'Retrying…')
                 : t('auto.components.mobile.MobileRelayMintFailureNotice.retry', 'Retry Relay')}

@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useId, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -154,7 +155,7 @@ export function SparseCheckoutPresetDraftForm({
               </span>
               {submitting ? (
                 <span className="absolute inset-0 flex items-center justify-center">
-                  <Loader2 className="size-4 animate-spin" />
+                  <Loader2 ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
                 </span>
               ) : null}
             </span>

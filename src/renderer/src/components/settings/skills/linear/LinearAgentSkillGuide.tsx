@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import type { ReactNode } from 'react'
 import { Check, Circle, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -43,7 +44,10 @@ function SetupStatusIcon({
   if (checking) {
     return (
       <span className="flex size-5 items-center justify-center text-muted-foreground">
-        <Circle className="size-3.5 animate-pulse motion-reduce:animate-none" />
+        <Circle
+          ref={observeVisibleAnimation}
+          className="size-3.5 visible-animate-pulse motion-reduce:animate-none"
+        />
       </span>
     )
   }

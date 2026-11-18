@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { type Dispatch, type SetStateAction } from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -82,7 +83,9 @@ export function renderResourceUsageKillDialog(
             {t('auto.components.status.bar.ResourceUsageStatusSegment.946d9f94d0', 'Cancel')}
           </Button>
           <Button variant="destructive" onClick={() => void runKillConfirmed()} disabled={killing}>
-            {killing ? <LoaderCircle className="size-4 animate-spin" /> : null}
+            {killing ? (
+              <LoaderCircle ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
+            ) : null}
             {killing
               ? t('auto.components.status.bar.ResourceUsageStatusSegment.41ae4fa725', 'Killing…')
               : t(

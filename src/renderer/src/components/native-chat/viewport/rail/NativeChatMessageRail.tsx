@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { memo, useLayoutEffect, useRef, useState } from 'react'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { cn } from '@/lib/class-names'
@@ -196,12 +197,13 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
                 )}
               >
                 <span
+                  ref={observeVisibleAnimation}
                   aria-hidden
                   className={cn(
                     'h-[3px] rounded-full transition-[width,background-color] duration-150 motion-reduce:transition-none',
                     lit ? 'w-5 bg-foreground' : 'w-3 bg-foreground/50',
                     item.id === pendingId &&
-                      'animate-pulse motion-reduce:animate-none motion-reduce:opacity-60'
+                      'visible-animate-pulse motion-reduce:animate-none motion-reduce:opacity-60'
                   )}
                 />
               </button>

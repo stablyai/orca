@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useRef, useState } from 'react'
 import {
   Loader2,
@@ -70,7 +71,11 @@ export function SshHostsHeaderActions({
   return (
     <>
       <Button variant="outline" size="sm" onClick={onSync} disabled={syncing}>
-        {syncing ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+        {syncing ? (
+          <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+        ) : (
+          <RefreshCw />
+        )}
         {t('auto.components.settings.SshPaneToolbar.sync', 'Sync ~/.ssh/config')}
       </Button>
       <Button variant="outline" size="sm" onClick={onAdd}>
@@ -169,7 +174,11 @@ export function SshHostsListToolbar(props: SshHostsListToolbarProps): React.JSX.
             onClick={props.onTestSelected}
             disabled={props.busy || props.testing}
           >
-            {props.testing ? <Loader2 className="animate-spin" /> : <PlugZap />}
+            {props.testing ? (
+              <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+            ) : (
+              <PlugZap />
+            )}
             {t('auto.components.settings.SshPaneToolbar.testSelected', 'Test')}
           </Button>
           <Button

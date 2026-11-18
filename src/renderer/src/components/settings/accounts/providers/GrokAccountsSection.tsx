@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useCallback, useEffect, useState } from 'react'
 import { ExternalLink, Loader2, RefreshCw, ShieldCheck } from 'lucide-react'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
@@ -147,7 +148,7 @@ export function GrokAccountsSection(): React.JSX.Element {
             className="shrink-0 gap-1"
           >
             {refreshing ? (
-              <Loader2 className="size-3 animate-spin" />
+              <Loader2 ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
             ) : (
               <RefreshCw className="size-3" />
             )}

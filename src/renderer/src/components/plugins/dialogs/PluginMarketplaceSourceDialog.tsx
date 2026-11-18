@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useRef, useState } from 'react'
 import { Loader2, RefreshCw, Trash2 } from 'lucide-react'
 import type { PluginMarketplaceHostSourceState } from '../../../../../preload/api/plugins/plugin-host-api'
@@ -194,7 +195,9 @@ export function PluginMarketplaceSourceDialog({
               disabled={Boolean(busyAction) || !url.trim() || !gitRef.trim()}
               onClick={() => void add()}
             >
-              {busyAction === 'add' ? <Loader2 className="animate-spin" /> : null}
+              {busyAction === 'add' ? (
+                <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+              ) : null}
               {busyAction === 'add'
                 ? t('auto.components.settings.PluginMarketplaceSourceDialog.adding', 'Adding…')
                 : t('auto.components.settings.PluginMarketplaceSourceDialog.add', 'Add source')}
@@ -275,7 +278,10 @@ export function PluginMarketplaceSourceDialog({
                       )}
                       onClick={() => void refresh(source.id)}
                     >
-                      <RefreshCw className={refreshing ? 'animate-spin' : undefined} />
+                      <RefreshCw
+                        ref={observeVisibleAnimation}
+                        className={refreshing ? 'visible-animate-spin' : undefined}
+                      />
                     </Button>
                     {!source.official ? (
                       <Button
@@ -290,7 +296,7 @@ export function PluginMarketplaceSourceDialog({
                         onClick={() => void remove(source.id)}
                       >
                         {removing ? (
-                          <Loader2 className="animate-spin" />
+                          <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
                         ) : (
                           <Trash2 className="text-destructive" />
                         )}

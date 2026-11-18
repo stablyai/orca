@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useAgentPickerDraftScope } from '../agent/AgentLaunchSetupButton'
 import { agentsOfferedForLaunch } from '@/lib/agent-session/launch/inventory/host-chat-program'
 import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
@@ -377,7 +378,9 @@ export function AgentSessionContinuationDialog({
             disabled={startDisabled}
             onClick={() => void handleStart()}
           >
-            {showStarting ? <Loader2 className="size-3.5 animate-spin" /> : null}
+            {showStarting ? (
+              <Loader2 ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
+            ) : null}
             {starting
               ? t('components.agentSessionContinuation.starting', 'Starting…')
               : t('components.agentSessionContinuation.startSessionSentence', 'Start session')}

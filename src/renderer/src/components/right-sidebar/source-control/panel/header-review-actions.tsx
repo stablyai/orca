@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import type React from 'react'
 import { GitPullRequestArrow, Loader2 } from 'lucide-react'
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
@@ -55,7 +56,7 @@ export function CreatePrHeaderButton({
           className="h-6 shrink-0 px-2 text-[11px]"
         >
           {isCreatePrIntentInFlight || isCreatingPr ? (
-            <Loader2 className="size-3.5 animate-spin" />
+            <Loader2 ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
           ) : (
             <GitPullRequestArrow className="size-3.5" aria-hidden="true" />
           )}

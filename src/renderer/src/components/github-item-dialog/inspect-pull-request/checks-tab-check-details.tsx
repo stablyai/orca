@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { ExternalLink, LoaderCircle, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -44,7 +45,7 @@ export function ChecksTabCheckDetails({
     <div className="mx-2 mb-2 mt-1 min-w-0 rounded-md border border-border/50 bg-muted/20 px-3 py-2">
       {state?.loading && !state.error ? (
         <div className="flex items-center gap-2 py-2 text-[12px] text-muted-foreground">
-          <LoaderCircle className="size-3.5 animate-spin" />
+          <LoaderCircle ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
           {t('auto.components.GitHubItemDialog.934d87ab96', 'Loading check details…')}
         </div>
       ) : (
@@ -86,7 +87,10 @@ export function ChecksTabCheckDetails({
                 aria-busy={state.loading}
                 onClick={() => onRetry(check, getCheckDetailsKey(check))}
               >
-                <RefreshCw className={cn('size-3', state.loading && 'animate-spin')} />
+                <RefreshCw
+                  ref={observeVisibleAnimation}
+                  className={cn('size-3', state.loading && 'visible-animate-spin')}
+                />
                 {state.loading
                   ? t('githubChecks.retrying', 'Retrying…')
                   : t('auto.components.GitHubItemDialog.dcb3c546fe', 'Retry')}

@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { cn } from '@/lib/class-names'
 import type { AutomationRunStatus } from '../../../../../shared/automations/history/automation-run'
@@ -16,12 +17,13 @@ export function AutomationRunStatusDot({
   const tone = getToneForAutomationRunStatus(status)
   return (
     <span
+      ref={observeVisibleAnimation}
       aria-hidden="true"
       className={cn(
         'size-2 shrink-0 rounded-full',
         tone === 'failed' && 'bg-destructive',
         tone === 'succeeded' && 'bg-status-success',
-        tone === 'running' && 'animate-pulse bg-foreground motion-reduce:animate-none',
+        tone === 'running' && 'visible-animate-pulse bg-foreground motion-reduce:animate-none',
         (tone === 'skipped' || tone === 'unknown' || tone === 'never') &&
           'border-[1.5px] border-muted-foreground',
         className

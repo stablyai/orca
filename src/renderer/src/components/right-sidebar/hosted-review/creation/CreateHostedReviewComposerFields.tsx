@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { GitHubImageTextarea } from '@/components/github/GitHubImageTextarea'
 import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
 import { CornerDownRight, GitPullRequestArrow, Sparkles } from 'lucide-react'
@@ -125,7 +126,10 @@ export function CreateHostedReviewComposerFields({
             aria-hidden="true"
           >
             <div className="pointer-events-auto flex items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1 text-[11px] text-muted-foreground shadow-xs">
-              <Sparkles className="size-3 animate-pulse text-foreground" />
+              <Sparkles
+                ref={observeVisibleAnimation}
+                className="size-3 visible-animate-pulse text-foreground"
+              />
               <span>
                 {t(
                   'auto.components.right.sidebar.SourceControl.9484270f45',

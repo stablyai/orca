@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CircleDot, ExternalLink, GitPullRequest, LoaderCircle, X } from 'lucide-react'
@@ -267,7 +268,7 @@ export function SlugDialogBody({
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 scrollbar-sleek">
         {loading && !details ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <LoaderCircle className="size-4 animate-spin" />{' '}
+            <LoaderCircle ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />{' '}
             {t('auto.components.github.project.slug.dialog.SlugDialogBody.e4ef8281e9', 'Loading…')}
           </div>
         ) : error ? (

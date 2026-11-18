@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useCallback } from 'react'
 import { AlertTriangle, HardDrive, Loader2, RefreshCw, X } from 'lucide-react'
 import { useAppStore } from '../../../store/index'
@@ -102,7 +103,7 @@ export function WorkspaceSpaceCompactPanel({
           >
             {isScanning ? (
               progress?.state === 'cancelling' ? (
-                <Loader2 className="size-3 animate-spin" />
+                <Loader2 ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
               ) : (
                 <X className="size-3" />
               )

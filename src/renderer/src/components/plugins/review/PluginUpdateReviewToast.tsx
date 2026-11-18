@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 // @protected-copy
 import { useEffect, useState } from 'react'
 import { Loader2, X } from 'lucide-react'
@@ -209,7 +210,10 @@ export function PluginUpdateReviewToast({
           </Button>
         </div>
         {loaded === null ? (
-          <Loader2 className="size-4 animate-spin text-muted-foreground" />
+          <Loader2
+            ref={observeVisibleAnimation}
+            className="size-4 visible-animate-spin text-muted-foreground"
+          />
         ) : (
           <div className="space-y-3">
             {notices.slice(0, SHOWN_PLUGINS).map((notice) => (
@@ -242,7 +246,9 @@ export function PluginUpdateReviewToast({
           </Button>
           {quick ? (
             <Button size="sm" disabled={busy} onClick={() => void update()}>
-              {busy ? <Loader2 className="animate-spin" /> : null}
+              {busy ? (
+                <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+              ) : null}
               {notices.length === 1
                 ? t(
                     'auto.components.settings.PluginUpdateReviewToast.approveOne',

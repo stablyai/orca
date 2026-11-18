@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useId } from 'react'
 import { Trans } from 'react-i18next'
 import { LoaderCircle, X } from 'lucide-react'
@@ -66,7 +67,10 @@ export function LanguagePackSuggestionToast({
             aria-live="polite"
             className="inline-flex min-h-9 items-center gap-2 text-[12.5px] text-muted-foreground"
           >
-            <LoaderCircle className="size-3.5 animate-spin motion-reduce:animate-none" />
+            <LoaderCircle
+              ref={observeVisibleAnimation}
+              className="size-3.5 visible-animate-spin motion-reduce:animate-none"
+            />
             <span>
               <LanguageOfferProgressLabel offer={offer} progress={progress} />
             </span>

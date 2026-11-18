@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { Play, RefreshCw, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -180,7 +181,10 @@ export function ExternalAutomationManagers({
                               {/* Match pause and resume: enabled can flip before the request settles. */}
                               {runningActionKey === actionKey('pause') ||
                               runningActionKey === actionKey('resume') ? (
-                                <RefreshCw className="size-3.5 animate-spin" />
+                                <RefreshCw
+                                  ref={observeVisibleAnimation}
+                                  className="size-3.5 visible-animate-spin"
+                                />
                               ) : null}
                               <Switch
                                 checked={job.enabled}
@@ -244,7 +248,10 @@ export function ExternalAutomationManagers({
                         onClick={() => onAction(manager, job, 'run', scope)}
                       >
                         {runningActionKey === actionKey('run') ? (
-                          <RefreshCw className="size-3.5 animate-spin" />
+                          <RefreshCw
+                            ref={observeVisibleAnimation}
+                            className="size-3.5 visible-animate-spin"
+                          />
                         ) : (
                           <Play className="size-3.5" />
                         )}
@@ -262,7 +269,10 @@ export function ExternalAutomationManagers({
                         onClick={() => onAction(manager, job, 'delete', scope)}
                       >
                         {runningActionKey === actionKey('delete') ? (
-                          <RefreshCw className="size-3.5 animate-spin" />
+                          <RefreshCw
+                            ref={observeVisibleAnimation}
+                            className="size-3.5 visible-animate-spin"
+                          />
                         ) : (
                           <Trash2 className="size-3.5" />
                         )}

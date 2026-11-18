@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { EditorContent, useEditor } from '@tiptap/react'
@@ -187,7 +188,10 @@ export function LinearIssueMarkdownDescriptionEditor({
         </span>
       </div>
       {disabled ? (
-        <LoaderCircle className="absolute right-2 top-2 size-4 animate-spin text-muted-foreground" />
+        <LoaderCircle
+          ref={observeVisibleAnimation}
+          className="absolute right-2 top-2 size-4 visible-animate-spin text-muted-foreground"
+        />
       ) : null}
     </div>
   )

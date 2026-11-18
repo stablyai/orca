@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useEffect, useState } from 'react'
 import type { JSX, ReactNode } from 'react'
 import { Loader2, Plus } from 'lucide-react'
@@ -69,7 +70,7 @@ function ProviderRow(props: {
           {connected ? null : (
             <Button size="sm" onClick={onSignIn} disabled={isAdding}>
               {isAdding ? (
-                <Loader2 className="size-3.5 animate-spin" />
+                <Loader2 ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
               ) : (
                 <Plus className="size-3.5" />
               )}

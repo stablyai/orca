@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { ArrowRight, Loader2, Share2 } from 'lucide-react'
 import type { ArtifactWriteRequest } from '../../../../shared/artifacts/artifacts'
@@ -143,7 +144,11 @@ export function ArtifactPublishButton({
                 disabled={blocked}
                 aria-label={label}
               >
-                {publishing ? <Loader2 className="animate-spin" /> : <Share2 />}
+                {publishing ? (
+                  <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+                ) : (
+                  <Share2 />
+                )}
               </Button>
             </PopoverTrigger>
           </TooltipTrigger>
@@ -255,7 +260,7 @@ export function ArtifactPublishButton({
 
           {checkingLink ? (
             <div className="flex items-center justify-center gap-2 py-2 text-xs text-muted-foreground">
-              <Loader2 className="size-3.5 animate-spin" />
+              <Loader2 ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
               {t(
                 'auto.components.artifacts.ArtifactPublishButton.checkingLink',
                 'Checking for an existing link…'
@@ -295,7 +300,11 @@ export function ArtifactPublishButton({
               disabled={!signedIn || !sharingEnabled || busy}
               onClick={() => void publish()}
             >
-              {publishing ? <Loader2 className="animate-spin" /> : <Share2 />}
+              {publishing ? (
+                <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+              ) : (
+                <Share2 />
+              )}
               {publishing
                 ? t('auto.components.artifacts.ArtifactPublishButton.sharing', 'Sharing…')
                 : t(

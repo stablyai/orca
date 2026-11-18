@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useLayoutEffect, useRef, useState } from 'react'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
 import type { AgentCatalogEntry } from '@/lib/agent-catalog/agent-catalog'
@@ -150,7 +151,10 @@ export function AgentDetectionCatalog({
                   }
                   className="h-7 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
                 >
-                  <RefreshCw className={cn('size-3', isRefreshing && 'animate-spin')} />
+                  <RefreshCw
+                    ref={observeVisibleAnimation}
+                    className={cn('size-3', isRefreshing && 'visible-animate-spin')}
+                  />
                   {isRefreshing
                     ? t('auto.components.settings.AgentsPane.c9b33eb5c0', 'Refreshing…')
                     : t('auto.components.settings.AgentsPane.0d9e293a02', 'Refresh')}
@@ -225,7 +229,10 @@ function RefreshButton({
       disabled={isRefreshing}
       className="h-7 shrink-0 gap-1.5 text-xs"
     >
-      <RefreshCw className={cn('size-3', isRefreshing && 'animate-spin')} />
+      <RefreshCw
+        ref={observeVisibleAnimation}
+        className={cn('size-3', isRefreshing && 'visible-animate-spin')}
+      />
       {isRefreshing
         ? t('auto.components.settings.AgentsPane.c9b33eb5c0', 'Refreshing…')
         : t('auto.components.settings.AgentsPane.0d9e293a02', 'Refresh')}

@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { ArrowRight, ExternalLink } from 'lucide-react'
 
@@ -66,13 +67,34 @@ function LinearProjectTableSkeleton(): React.JSX.Element {
           key={index}
           className="grid gap-3 px-3 py-3 md:grid-cols-[minmax(180px,1.5fr)_110px_100px_90px_120px_110px_80px_70px]"
         >
-          <div className="h-4 w-4/5 animate-pulse rounded bg-muted/70" />
-          <div className="h-4 w-20 animate-pulse rounded bg-muted/60" />
-          <div className="h-4 w-16 animate-pulse rounded bg-muted/60" />
-          <div className="h-4 w-16 animate-pulse rounded bg-muted/60" />
-          <div className="h-4 w-24 animate-pulse rounded bg-muted/60" />
-          <div className="h-4 w-20 animate-pulse rounded bg-muted/60" />
-          <div className="h-4 w-10 animate-pulse rounded bg-muted/60" />
+          <div
+            ref={observeVisibleAnimation}
+            className="h-4 w-4/5 visible-animate-pulse rounded bg-muted/70"
+          />
+          <div
+            ref={observeVisibleAnimation}
+            className="h-4 w-20 visible-animate-pulse rounded bg-muted/60"
+          />
+          <div
+            ref={observeVisibleAnimation}
+            className="h-4 w-16 visible-animate-pulse rounded bg-muted/60"
+          />
+          <div
+            ref={observeVisibleAnimation}
+            className="h-4 w-16 visible-animate-pulse rounded bg-muted/60"
+          />
+          <div
+            ref={observeVisibleAnimation}
+            className="h-4 w-24 visible-animate-pulse rounded bg-muted/60"
+          />
+          <div
+            ref={observeVisibleAnimation}
+            className="h-4 w-20 visible-animate-pulse rounded bg-muted/60"
+          />
+          <div
+            ref={observeVisibleAnimation}
+            className="h-4 w-10 visible-animate-pulse rounded bg-muted/60"
+          />
           <div />
         </div>
       ))}

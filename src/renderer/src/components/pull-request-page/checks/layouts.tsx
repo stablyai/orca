@@ -1,3 +1,5 @@
+import type { LucideIcon } from 'lucide-react'
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import type { ProviderCheckSummary } from '../../../../../shared/github/pull-requests/pull-request-types'
 import { PRCheckEmptyDetails } from '@/components/github/pr-check-empty-details'
 import React from 'react'
@@ -32,7 +34,7 @@ export function ChecksTabLayouts({
   variant: 'compact' | 'page'
   compactHeader: React.JSX.Element
   actions: React.JSX.Element
-  SummaryIcon: React.ComponentType<{ className?: string }>
+  SummaryIcon: LucideIcon
   summaryColor: string
   summaryLabel: string
   counts: ReturnType<typeof getCheckCounts>
@@ -46,7 +48,10 @@ export function ChecksTabLayouts({
       <>
         {variant === 'compact' ? compactHeader : null}
         <div className="flex items-center justify-center py-10">
-          <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
+          <LoaderCircle
+            ref={observeVisibleAnimation}
+            className="size-5 visible-animate-spin text-muted-foreground"
+          />
         </div>
       </>
     )
@@ -71,7 +76,12 @@ export function ChecksTabLayouts({
         <div className="flex flex-col gap-3 px-4 py-3">
           <div className="flex min-w-0 items-center gap-3">
             <SummaryIcon
-              className={cn('size-4 shrink-0', summaryColor, summaryPending && 'animate-spin')}
+              ref={observeVisibleAnimation}
+              className={cn(
+                'size-4 shrink-0',
+                summaryColor,
+                summaryPending && 'visible-animate-spin'
+              )}
             />
             <div className="flex min-w-0 flex-1 items-center gap-2">
               <span className="truncate text-[13px] font-medium text-foreground">

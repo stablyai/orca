@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { NativeChatHighlightedCode } from '@/components/native-chat/markdown/code/NativeChatHighlightedCode'
 import { MarkdownGitHubCallout } from '@/components/comment-markdown/markdown-github-callout'
 import { useTranslate } from '@/i18n/use-translate'
@@ -135,11 +136,12 @@ export function PluginDeclarativeSkeleton({
     >
       {Array.from({ length: lines }, (_, index) => (
         <span
+          ref={observeVisibleAnimation}
           key={index}
           aria-hidden
           data-shape={shape}
           data-last={index === lines - 1 && lines > 1}
-          className="block animate-pulse bg-muted motion-reduce:animate-none data-[last=true]:w-2/3 data-[shape=block]:h-24 data-[shape=block]:w-full data-[shape=block]:rounded-md data-[shape=circle]:size-8 data-[shape=circle]:rounded-full data-[shape=text]:h-3 data-[shape=text]:rounded"
+          className="block visible-animate-pulse bg-muted motion-reduce:animate-none data-[last=true]:w-2/3 data-[shape=block]:h-24 data-[shape=block]:w-full data-[shape=block]:rounded-md data-[shape=circle]:size-8 data-[shape=circle]:rounded-full data-[shape=text]:h-3 data-[shape=text]:rounded"
         />
       ))}
     </div>

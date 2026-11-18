@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { ChevronRight, ExternalLink, GitMerge } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
@@ -90,10 +91,11 @@ export function FolderWorkspacePrChecksRow({
           >
             {showStatusIcon ? (
               <StatusIcon
+                ref={observeVisibleAnimation}
                 className={cn(
                   'size-3 shrink-0',
                   CHECK_COLOR[row.checkTone],
-                  animateStatusIcon && 'animate-spin motion-reduce:animate-none'
+                  animateStatusIcon && 'visible-animate-spin motion-reduce:animate-none'
                 )}
               />
             ) : null}

@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { ListFilter, Loader2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -42,7 +43,12 @@ export function FileExplorerNameFilter({
         onChange={(event) => onQueryChange(event.currentTarget.value)}
         spellCheck={false}
       />
-      {loading ? <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" /> : null}
+      {loading ? (
+        <Loader2
+          ref={observeVisibleAnimation}
+          className="size-3 shrink-0 visible-animate-spin text-muted-foreground"
+        />
+      ) : null}
       {query ? (
         <Button
           type="button"

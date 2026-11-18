@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useId, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
@@ -131,7 +132,10 @@ export function WorkspaceCleanupRuleRows({
               {description}
               {phase === 'checking' ? (
                 <span role="status" className="mt-1 flex items-center gap-1.5 text-foreground">
-                  <Loader2 className="size-3 shrink-0 animate-spin motion-reduce:animate-none" />
+                  <Loader2
+                    ref={observeVisibleAnimation}
+                    className="size-3 shrink-0 visible-animate-spin motion-reduce:animate-none"
+                  />
                   {t(
                     'components.settings.workspaceCleanup.rules.checking',
                     'Checking which workspaces match…'

@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Import, Loader2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { emitBrowserCookieImportToast } from '@/lib/browser/cookies/browser-cookie-import-toast'
@@ -201,7 +202,7 @@ export function BrowserProfileRow({
               disabled={isImporting}
             >
               {isImporting ? (
-                <Loader2 className="size-3 animate-spin" />
+                <Loader2 ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
               ) : (
                 <Import className="size-3" />
               )}

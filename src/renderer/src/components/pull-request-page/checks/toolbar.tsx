@@ -1,3 +1,5 @@
+import type { LucideIcon } from 'lucide-react'
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { ChevronDown, LoaderCircle, RefreshCw, Wrench } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -58,7 +60,10 @@ export function buildChecksToolbar(
           onClick={onRefresh}
           aria-label={t('auto.components.PullRequestPage.5d0f42766d', 'Refresh checks')}
         >
-          <RefreshCw className={cn('size-3.5', refreshing && 'animate-spin')} />
+          <RefreshCw
+            ref={observeVisibleAnimation}
+            className={cn('size-3.5', refreshing && 'visible-animate-spin')}
+          />
         </Button>
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={6}>
@@ -79,7 +84,7 @@ export function buildChecksToolbar(
             onClick={onFix}
           >
             {fixingChecks ? (
-              <LoaderCircle className="size-3 animate-spin" />
+              <LoaderCircle ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
             ) : (
               <Wrench className="size-3" />
             )}
@@ -108,7 +113,7 @@ export function buildChecksToolbar(
             disabled={!canUseChecksRepoContext || rerunning || listLength === 0}
           >
             {rerunning ? (
-              <LoaderCircle className="size-3 animate-spin" />
+              <LoaderCircle ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
             ) : (
               <RefreshCw className="size-3" />
             )}
@@ -160,7 +165,7 @@ export function ChecksCompactHeader({
   rerunAction,
   secondaryActions
 }: {
-  SummaryIcon: React.ComponentType<{ className?: string }>
+  SummaryIcon: LucideIcon
   summaryColor: string
   summaryLabel: string
   counts: { pending: number; failing: number }
@@ -176,10 +181,11 @@ export function ChecksCompactHeader({
       <div className="flex min-w-0 items-start gap-2">
         <div className="flex min-w-0 flex-1 items-start gap-2">
           <SummaryIcon
+            ref={observeVisibleAnimation}
             className={cn(
               'mt-0.5 size-3.5 shrink-0',
               summaryColor,
-              counts.pending > 0 && counts.failing === 0 && 'animate-spin'
+              counts.pending > 0 && counts.failing === 0 && 'visible-animate-spin'
             )}
           />
           <div className="min-w-0 flex-1">

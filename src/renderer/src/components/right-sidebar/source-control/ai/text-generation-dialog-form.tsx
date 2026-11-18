@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useAppStore } from '@/store/index'
 import React, { useCallback, useMemo, useState } from 'react'
 import { RefreshCw, Save, Sparkles, Terminal, TriangleAlert } from 'lucide-react'
@@ -390,7 +391,7 @@ export function SourceControlTextGenerationDialogForm({
             onClick={() => void handleSaveDefaults(selectedSaveTarget)}
           >
             {savingTargetKey === saveTargetKey ? (
-              <RefreshCw className="size-4 animate-spin" />
+              <RefreshCw ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
             ) : (
               <Save className="size-4" />
             )}

@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { PRCheckEmptyDetails } from '@/components/github/pr-check-empty-details'
 import { isCompletePRCheckOwner } from '../../../../../shared/github/checks/complete-pr-check-owner'
 import { usePRCheckRefreshOwner } from '@/lib/work-items/github/use-pr-check-refresh-owner'
@@ -322,8 +323,8 @@ export function ChecksTab({
     return (
       <>
         {variant === 'compact' ? compactHeader : null}
-        <div className="flex items-center justify-center py-10">
-          <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
+        <div className="flex items-center justify-center py-10 text-muted-foreground">
+          <LoaderCircle ref={observeVisibleAnimation} className="size-5 visible-animate-spin" />
         </div>
       </>
     )
@@ -348,10 +349,11 @@ export function ChecksTab({
       <div className="flex flex-col gap-3 px-4 py-3">
         <div className="flex min-w-0 items-center gap-3">
           <SummaryIcon
+            ref={observeVisibleAnimation}
             className={cn(
               'size-4 shrink-0',
               summaryColor,
-              overallCounts.pending > 0 && overallCounts.failing === 0 && 'animate-spin'
+              overallCounts.pending > 0 && overallCounts.failing === 0 && 'visible-animate-spin'
             )}
           />
           <div className="flex min-w-0 flex-1 items-center gap-2">

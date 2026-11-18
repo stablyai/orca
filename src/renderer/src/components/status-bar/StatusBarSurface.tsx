@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { PanelsTopLeft, RefreshCw } from 'lucide-react'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
@@ -304,8 +305,9 @@ export function StatusBarSurface({
                   )}
                 >
                   <RefreshCw
+                    ref={observeVisibleAnimation}
                     size={11}
-                    className={isRefreshing || anyFetching ? 'animate-spin' : ''}
+                    className={isRefreshing || anyFetching ? 'visible-animate-spin' : ''}
                   />
                 </button>
               </TooltipTrigger>

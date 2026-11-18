@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import type React from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Download, Loader2, RefreshCw } from 'lucide-react'
@@ -266,7 +267,7 @@ export function ReleaseChannelSection(): React.JSX.Element {
             onClick={() => void loadBuilds(activeChannel, { force: true })}
           >
             {loading ? (
-              <Loader2 className="size-3.5 animate-spin" />
+              <Loader2 ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
             ) : (
               <RefreshCw className="size-3.5" />
             )}
@@ -289,7 +290,7 @@ export function ReleaseChannelSection(): React.JSX.Element {
             }}
           >
             {busy ? (
-              <Loader2 className="size-3.5 animate-spin" />
+              <Loader2 ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
             ) : needsManualInstall ? (
               <span className="inline-flex items-center gap-1.5">
                 <Download className="size-3.5" aria-hidden="true" />

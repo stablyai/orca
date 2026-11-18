@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   Accessibility,
@@ -332,7 +333,10 @@ export function DeveloperPermissionsPane(): React.JSX.Element {
         )}
         action={
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => void refresh()}>
-            <RefreshCw className={`size-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw
+              ref={observeVisibleAnimation}
+              className={`size-3.5 ${loading ? 'visible-animate-spin' : ''}`}
+            />
             {t('auto.components.settings.DeveloperPermissionsPane.4c17304beb', 'Refresh')}
           </Button>
         }

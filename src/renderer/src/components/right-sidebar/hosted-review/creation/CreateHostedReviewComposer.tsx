@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
 import { useState } from 'react'
 import {
@@ -203,7 +204,7 @@ export function CreateHostedReviewComposer({
       className="text-[11px] text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
       aria-label={stopGeneratingDetailsLabel}
     >
-      <RefreshCw className="size-3 animate-spin" />
+      <RefreshCw ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
       <span>{t('auto.components.right.sidebar.SourceControl.e868cec4e1', 'Generating…')}</span>
       <Square className="size-2.5 fill-current" />
     </Button>
@@ -297,7 +298,7 @@ export function CreateHostedReviewComposer({
             title={createDisabledReason ?? primaryAction.title}
           >
             {isCreating ? (
-              <RefreshCw className="size-3.5 animate-spin" />
+              <RefreshCw ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
             ) : (
               <ReviewIcon className="size-3.5" />
             )}

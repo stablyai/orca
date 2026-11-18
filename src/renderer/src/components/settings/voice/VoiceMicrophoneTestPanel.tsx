@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Check, CircleAlert, Loader2, Play, Square } from 'lucide-react'
 import { DictationGrapes } from '@/components/dictation/DictationGrapes'
 import { useTranslate } from '@/i18n/use-translate'
@@ -132,7 +133,10 @@ export function VoiceMicrophoneTestPanel({
   if (heard?.kind === 'listening') {
     heardLine = (
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <Loader2 className="size-3 animate-spin motion-reduce:animate-none" />
+        <Loader2
+          ref={observeVisibleAnimation}
+          className="size-3 visible-animate-spin motion-reduce:animate-none"
+        />
         {t('components.settings.voice.micTest.listening', '{{model}} is listening too…', model)}
       </p>
     )

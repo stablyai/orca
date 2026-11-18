@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import type { PluginHostInstallSource } from '../../../../../preload/api/plugins/plugin-host-api'
@@ -257,7 +258,9 @@ export function PluginInstallDialog({
               {t('auto.components.settings.PluginInstallDialog.cancel', 'Cancel')}
             </Button>
             <Button type="submit" size="sm" className="w-31" disabled={busy !== null}>
-              {busy ? <Loader2 className="animate-spin" /> : null}
+              {busy ? (
+                <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+              ) : null}
               {submitLabel(busy, awaitingGitResolution, t)}
             </Button>
           </DialogFooter>

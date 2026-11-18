@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
@@ -231,7 +232,10 @@ export function RepositoryForkSyncSection({
           disabled={syncing}
           className="shrink-0"
         >
-          <RefreshCw className={syncing ? 'size-3.5 animate-spin' : 'size-3.5'} />
+          <RefreshCw
+            ref={observeVisibleAnimation}
+            className={syncing ? 'size-3.5 visible-animate-spin' : 'size-3.5'}
+          />
           {syncing
             ? t('auto.components.settings.RepositoryForkSyncSection.syncing', 'Syncing')
             : t('auto.components.settings.RepositoryForkSyncSection.c64463b5fc', 'Sync now')}

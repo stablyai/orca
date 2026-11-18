@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/class-names'
@@ -41,7 +42,9 @@ export function SubmodulePlaceholderRow({
         paddingLeft: `${depth * SOURCE_CONTROL_TREE_INDENT_PX + SOURCE_CONTROL_TREE_FILE_PADDING_PX}px`
       }}
     >
-      {state === 'loading' && <Loader2 className="size-3 shrink-0 animate-spin" />}
+      {state === 'loading' && (
+        <Loader2 ref={observeVisibleAnimation} className="size-3 shrink-0 visible-animate-spin" />
+      )}
       <span className="min-w-0 truncate">{message ?? fallback}</span>
     </div>
   )

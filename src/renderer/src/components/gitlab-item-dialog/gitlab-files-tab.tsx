@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { LoaderCircle, Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { TabsContent } from '@/components/ui/tabs'
@@ -34,7 +35,10 @@ export function GitLabFilesTab({ item, state, reviewActions }: Props) {
     <TabsContent value="files" className="mt-0 space-y-3">
       {loading && !details ? (
         <div className="flex items-center justify-center py-12">
-          <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
+          <LoaderCircle
+            ref={observeVisibleAnimation}
+            className="size-5 visible-animate-spin text-muted-foreground"
+          />
         </div>
       ) : details?.files?.length ? (
         <>
@@ -80,7 +84,10 @@ export function GitLabFilesTab({ item, state, reviewActions }: Props) {
                 onClick={() => void reviewActions.handleSubmitInlineComment()}
               >
                 {inlineCommentSubmitting ? (
-                  <LoaderCircle className="size-3.5 animate-spin" />
+                  <LoaderCircle
+                    ref={observeVisibleAnimation}
+                    className="size-3.5 visible-animate-spin"
+                  />
                 ) : (
                   <Send className="size-3.5" />
                 )}

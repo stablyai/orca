@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { useEffect, useRef } from 'react'
 import { ChevronDown, ChevronUp, ExternalLink, KeyRound, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -326,7 +327,10 @@ export function AutomationRunDetailsPage({
                 disabled={isRerunPending}
                 onClick={onRerun}
               >
-                <RefreshCw className={cn('size-3.5', isRerunPending && 'animate-spin')} />
+                <RefreshCw
+                  ref={observeVisibleAnimation}
+                  className={cn('size-3.5', isRerunPending && 'visible-animate-spin')}
+                />
                 {t('auto.components.automations.AutomationsPage.295698292f', 'Rerun')}
               </Button>
             ) : null}

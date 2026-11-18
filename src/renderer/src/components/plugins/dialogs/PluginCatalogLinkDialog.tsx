@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { gitRepositoryOwnerLabel } from '../../../../../shared/plugins/catalog/plugin-marketplace'
@@ -81,7 +82,9 @@ export function PluginCatalogLinkDialog({
             {t('auto.components.plugins.PluginCatalogLinkDialog.cancel', 'Cancel')}
           </Button>
           <Button disabled={busy} onClick={() => void add()}>
-            {busy ? <Loader2 className="animate-spin" /> : null}
+            {busy ? (
+              <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+            ) : null}
             {t('auto.components.plugins.PluginCatalogLinkDialog.add', 'Add catalog')}
           </Button>
         </DialogFooter>

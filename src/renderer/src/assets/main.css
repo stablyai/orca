@@ -2135,6 +2135,35 @@ html.native-shell .app-layout {
 
 .agent-working-spinner {
   animation: agent-spinner-rotate 86400s steps(1036800, end) infinite;
+  animation-play-state: paused;
+
+  &[data-animation-running] {
+    animation-play-state: running;
+  }
+}
+
+@utility visible-animate-spin {
+  animation: var(--animate-spin);
+  animation-play-state: paused;
+
+  &[data-animation-running] {
+    animation-play-state: running;
+  }
+}
+
+@utility visible-animate-pulse {
+  animation: var(--animate-pulse);
+  animation-play-state: paused;
+
+  &[data-animation-running] {
+    animation-play-state: running;
+  }
+}
+
+/* Retained guests still paint, but their hidden workspace needs no CSS animation frames. */
+[data-workspace-animation-paused],
+[data-workspace-animation-paused] * {
+  animation-play-state: paused !important;
 }
 
 /* Offscreen subtrees pause their loops; the agent ring drops its animation instead so reveal re-anchors phase. */

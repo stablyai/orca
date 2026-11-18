@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { CalendarDays, FileText, FolderKanban, RefreshCw, UserRound } from 'lucide-react'
 
@@ -58,9 +59,18 @@ export function LinearProjectOverviewContent({
       ) : null}
       {loading && !project ? (
         <div className="space-y-3">
-          <div className="h-5 w-1/3 animate-pulse rounded bg-muted/70" />
-          <div className="h-24 animate-pulse rounded-md bg-muted/50" />
-          <div className="h-40 animate-pulse rounded-md bg-muted/50" />
+          <div
+            ref={observeVisibleAnimation}
+            className="h-5 w-1/3 visible-animate-pulse rounded bg-muted/70"
+          />
+          <div
+            ref={observeVisibleAnimation}
+            className="h-24 visible-animate-pulse rounded-md bg-muted/50"
+          />
+          <div
+            ref={observeVisibleAnimation}
+            className="h-40 visible-animate-pulse rounded-md bg-muted/50"
+          />
         </div>
       ) : presentation ? (
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">

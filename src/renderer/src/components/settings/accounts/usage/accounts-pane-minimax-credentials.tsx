@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { HelpCircle, Loader2, Lock, LockOpen } from 'lucide-react'
 import { useNow } from '../../../../lib/window-activity/use-now'
 import { translate } from '@/i18n/i18n'
@@ -212,7 +213,9 @@ export function MiniMaxCredentials({
             disabled={miniMaxCredentialBusy || !cookieEditable || !miniMaxCookieDraft.trim()}
             className="h-7 shrink-0 text-xs"
           >
-            {miniMaxCredentialBusy ? <Loader2 className="size-3 animate-spin" /> : null}
+            {miniMaxCredentialBusy ? (
+              <Loader2 ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
+            ) : null}
             {miniMaxConfigured
               ? t('auto.components.settings.AccountsPane.f38b9cc4bd', 'Replace')
               : t('auto.components.settings.AccountsPane.590a3130f9', 'Save')}
@@ -323,7 +326,9 @@ export function MiniMaxCredentials({
             disabled={apiKeyReplaceLocked || !miniMaxApiKeyDraft.trim()}
             className="h-7 shrink-0 text-xs"
           >
-            {miniMaxCredentialBusy ? <Loader2 className="size-3 animate-spin" /> : null}
+            {miniMaxCredentialBusy ? (
+              <Loader2 ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
+            ) : null}
             {miniMaxApiKeyConfigured
               ? t('auto.components.settings.AccountsPane.f38b9cc4bd', 'Replace')
               : t('auto.components.settings.AccountsPane.590a3130f9', 'Save')}

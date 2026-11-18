@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { ArrowLeft, FolderOpen, LoaderCircle } from 'lucide-react'
 import { CloneFolderNameField } from '../../sidebar/project-admission/clone-folder/CloneFolderNameField'
 import type { CloneFolderOverride } from '../../sidebar/project-admission/clone-folder/use-clone-folder-override'
@@ -85,7 +86,9 @@ export function ExistingFolderForm({
           disabled={!setupPath.trim() || isSubmitting}
           onClick={onSubmit}
         >
-          {isSubmitting ? <LoaderCircle className="size-3.5 animate-spin" /> : null}
+          {isSubmitting ? (
+            <LoaderCircle ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
+          ) : null}
           {isSubmitting
             ? t('auto.components.settings.RepositoryPane.settingUpHost', 'Importing...')
             : t(
@@ -182,7 +185,9 @@ export function CloneForm({
           }
           onClick={onSubmit}
         >
-          {isSubmitting ? <LoaderCircle className="size-3.5 animate-spin" /> : null}
+          {isSubmitting ? (
+            <LoaderCircle ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
+          ) : null}
           {isSubmitting
             ? t('auto.components.settings.RepositoryPane.cloningHost', 'Cloning...')
             : t('auto.components.settings.RepositoryPane.cloneHost', 'Clone')}

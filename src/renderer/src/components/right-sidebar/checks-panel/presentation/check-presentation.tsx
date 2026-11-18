@@ -1,6 +1,6 @@
-import React from 'react'
 import { getCheckConclusion } from '@/components/github/pr-check-counts'
 import {
+  type LucideIcon,
   AlertTriangle,
   CircleCheck,
   CircleX,
@@ -20,7 +20,7 @@ export function checkPresentationKey(check: PRCheckDetail): string {
     : getCheckConclusion(check)
 }
 
-export const CHECK_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
+export const CHECK_ICON: Record<string, LucideIcon> = {
   gitlabAllowedFailure: AlertTriangle,
   success: CircleCheck,
   failure: CircleX,

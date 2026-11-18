@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { AlertTriangle, Copy, Loader2, Square, Trash2, X } from 'lucide-react'
 import type { EphemeralVmRuntimeRecord } from '../../../../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import { getEphemeralVmRecipeResultProjectRoot } from '../../../../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
@@ -112,7 +113,7 @@ export function EphemeralVmRuntimeRow({
             disabled={disabled || isStopping}
           >
             {isStopping ? (
-              <Loader2 className="size-3 animate-spin" />
+              <Loader2 ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
             ) : (
               <Square className="size-3" />
             )}

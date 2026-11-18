@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { SecuritySurface } from '@/components/ui/security-surface'
 import { useRef, useState } from 'react'
 import { ChevronDown, Loader2, ShieldQuestion, X } from 'lucide-react'
@@ -246,7 +247,11 @@ export function NativeChatApprovalCard({
                   >
                     {isSubmitting && opt.send === submittingOption ? (
                       <span className="inline-flex items-center gap-1.5">
-                        <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                        <Loader2
+                          ref={observeVisibleAnimation}
+                          className="size-3.5 visible-animate-spin"
+                          aria-hidden
+                        />
                         {optionLabel(opt)}
                       </span>
                     ) : (

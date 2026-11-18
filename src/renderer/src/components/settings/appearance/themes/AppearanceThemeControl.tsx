@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import type React from 'react'
 import { Loader2, Store, Zap } from 'lucide-react'
 import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
@@ -250,7 +251,10 @@ export function AppearanceThemeSlotSelect({
         status={
           catalog.loading ? (
             <div className="flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground">
-              <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" />
+              <Loader2
+                ref={observeVisibleAnimation}
+                className="size-3.5 visible-animate-spin motion-reduce:animate-none"
+              />
               {t(
                 'auto.components.settings.AppearanceThemeControl.moreThemesLoading',
                 'Loading themes…'
@@ -262,7 +266,10 @@ export function AppearanceThemeSlotSelect({
       />
       {catalog.installing ? (
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" />
+          <Loader2
+            ref={observeVisibleAnimation}
+            className="size-3.5 visible-animate-spin motion-reduce:animate-none"
+          />
           {t(
             'auto.components.settings.AppearanceThemeControl.installingTheme',
             'Installing {{value0}}…',

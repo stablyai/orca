@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { useDeferredValue, useMemo, useState } from 'react'
 import { AlertCircle, ListFilter, RefreshCw, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -208,7 +209,10 @@ export function AutomationRunsDashboard({
                 disabled={loading}
                 className="shrink-0 border border-border bg-background shadow-none hover:bg-muted/50"
               >
-                <RefreshCw className={loading ? 'size-4 animate-spin' : 'size-4'} />
+                <RefreshCw
+                  ref={observeVisibleAnimation}
+                  className={loading ? 'size-4 visible-animate-spin' : 'size-4'}
+                />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>

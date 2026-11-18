@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { LoaderCircle } from 'lucide-react'
 import type { PtyManagementSession } from '../../../../../../preload/api/terminal/pty-management-api'
 import { Button } from '../../../ui/button'
@@ -76,7 +77,12 @@ export function ManageSessionKillDialog({
                 {t('auto.components.settings.ManageSessionKillDialog.6bf4627168', 'Cancel')}
               </Button>
               <Button variant="destructive" onClick={onConfirm} disabled={isBusy}>
-                {isBusy ? <LoaderCircle className="size-4 animate-spin" /> : null}
+                {isBusy ? (
+                  <LoaderCircle
+                    ref={observeVisibleAnimation}
+                    className="size-4 visible-animate-spin"
+                  />
+                ) : null}
                 {isBusy
                   ? t('auto.components.settings.ManageSessionKillDialog.d3dba51b15', 'Killing…')
                   : t(

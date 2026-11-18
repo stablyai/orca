@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { AlertTriangle, ChevronDown, Loader2, Server, ServerOff } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -44,7 +45,12 @@ function HostHeaderHealthIcon({
 }): React.JSX.Element | null {
   // Why: only surface states needing attention; healthy is the silent default.
   if (health === 'connecting') {
-    return <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" />
+    return (
+      <Loader2
+        ref={observeVisibleAnimation}
+        className="size-3 shrink-0 visible-animate-spin text-muted-foreground"
+      />
+    )
   }
   if (health === 'blocked' || health === 'error') {
     return <AlertTriangle className="size-3 shrink-0 text-destructive" />

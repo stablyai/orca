@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, Loader2 } from 'lucide-react'
 import type {
@@ -383,7 +384,10 @@ export function HtmlDocPreview({
         />
         {state === 'loading' && failureReason === null ? (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-editor-surface">
-            <Loader2 className="size-5 animate-spin text-muted-foreground" />
+            <Loader2
+              ref={observeVisibleAnimation}
+              className="size-5 visible-animate-spin text-muted-foreground"
+            />
           </div>
         ) : null}
         {isUnavailable ? (

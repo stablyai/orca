@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { ArrowRight, ChevronDown, CircleDashed, CircleDot, LoaderCircle } from 'lucide-react'
@@ -212,7 +213,10 @@ export function GHEditSection({
               ))
             )}
             {isPending('labels') ? (
-              <LoaderCircle className="size-3 animate-spin text-muted-foreground" />
+              <LoaderCircle
+                ref={observeVisibleAnimation}
+                className="size-3 visible-animate-spin text-muted-foreground"
+              />
             ) : (
               <ChevronDown className="size-2.5 opacity-50" />
             )}
@@ -283,7 +287,10 @@ export function GHEditSection({
               ))
             )}
             {isPending('assignees') ? (
-              <LoaderCircle className="size-3 animate-spin text-muted-foreground" />
+              <LoaderCircle
+                ref={observeVisibleAnimation}
+                className="size-3 visible-animate-spin text-muted-foreground"
+              />
             ) : (
               <ChevronDown className="size-2.5 opacity-50" />
             )}

@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { taskProviderErrorMessage } from '@/lib/work-items/task-provider-error-copy'
 import { UnsealedCredentialNotice } from '../../provider-accounts/UnsealedCredentialNotice'
 import { useState } from 'react'
@@ -189,7 +190,10 @@ export function JiraIntegrationCard(): React.JSX.Element {
                   >
                     {testing ? (
                       <>
-                        <LoaderCircle className="size-3.5 mr-1.5 animate-spin" />
+                        <LoaderCircle
+                          ref={observeVisibleAnimation}
+                          className="size-3.5 mr-1.5 visible-animate-spin"
+                        />
                         {t(
                           'auto.components.settings.task.tracker.integration.cards.3e7c10d286',
                           'Testing...'

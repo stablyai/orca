@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { useMemo, useState } from 'react'
 import { ChevronRight, Circle, Loader2, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -190,7 +191,12 @@ export function AddProjectHostSubmenu({
                       })
                     }}
                   >
-                    {isConnecting ? <Loader2 className="size-3 animate-spin" /> : null}
+                    {isConnecting ? (
+                      <Loader2
+                        ref={observeVisibleAnimation}
+                        className="size-3 visible-animate-spin"
+                      />
+                    ) : null}
                     {isConnecting
                       ? t('auto.components.sidebar.AddRepoHostSelector.connecting', 'Connecting')
                       : t('auto.components.sidebar.AddRepoHostSelector.connect', 'Connect')}

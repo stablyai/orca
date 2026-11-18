@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Loader2, Plus } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { parseHostAccessLink } from '../../../../shared/remote-runtime/pairing/remote-pairing-address'
@@ -219,7 +220,11 @@ export function RuntimeHostAccessForm({
           {t('auto.components.settings.RuntimeHostAccessForm.cancel', 'Cancel')}
         </Button>
         <Button type="submit" size="sm" disabled={!canSubmit}>
-          {busy ? <Loader2 className="animate-spin" /> : <Plus />}
+          {busy ? (
+            <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+          ) : (
+            <Plus />
+          )}
           {tunnelOverrideEnabled
             ? t(
                 'auto.components.settings.RuntimeHostAccessForm.addServerWithTunnel',

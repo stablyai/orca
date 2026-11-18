@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useMemo, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import type { ArtifactListItem } from '../../../../shared/artifacts/artifacts'
@@ -81,7 +82,9 @@ export function ArtifactCollection({
                 disabled={loadingMore}
                 onClick={loadMore}
               >
-                {loadingMore ? <Loader2 className="animate-spin" /> : null}
+                {loadingMore ? (
+                  <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+                ) : null}
                 {t('auto.components.artifacts.ArtifactCollection.loadMore', 'Load more')}
               </Button>
             </div>

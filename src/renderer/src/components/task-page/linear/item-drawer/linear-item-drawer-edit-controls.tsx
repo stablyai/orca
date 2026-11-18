@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { ChevronDown, LoaderCircle } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
@@ -37,7 +38,12 @@ export function LinearEditChipAdornment({
   pending?: boolean
 }): React.JSX.Element {
   if (loading || pending) {
-    return <LoaderCircle className="size-3 shrink-0 animate-spin opacity-70" />
+    return (
+      <LoaderCircle
+        ref={observeVisibleAnimation}
+        className="size-3 shrink-0 visible-animate-spin opacity-70"
+      />
+    )
   }
 
   return <ChevronDown className="size-3 shrink-0 opacity-55" />

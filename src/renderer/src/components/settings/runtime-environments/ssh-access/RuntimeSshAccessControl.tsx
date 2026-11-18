@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Loader2 } from 'lucide-react'
 import { useId, useState } from 'react'
 import { toast } from 'sonner'
@@ -139,7 +140,7 @@ export function RuntimeSshAccessControl({
           disabled={busy}
           onClick={() => void submit()}
         >
-          {busy ? <Loader2 className="animate-spin" /> : null}
+          {busy ? <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" /> : null}
           {t('auto.components.settings.managedServers.access.unlink', 'Stop using SSH')}
         </Button>
       </div>
@@ -186,7 +187,7 @@ export function RuntimeSshAccessControl({
       <div className="flex justify-end gap-2">
         {footerStart}
         <Button type="submit" size="sm" disabled={busy || !valid}>
-          {busy ? <Loader2 className="animate-spin" /> : null}
+          {busy ? <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" /> : null}
           {busy
             ? t('auto.components.settings.managedServers.access.linking', 'Connecting…')
             : t('auto.components.settings.managedServers.access.connect', 'Connect')}

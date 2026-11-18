@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
@@ -189,7 +190,10 @@ export function PluginUpdateAllDialog({
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         {candidates === null ? (
-          <Loader2 className="mx-auto my-4 size-4 animate-spin text-muted-foreground" />
+          <Loader2
+            ref={observeVisibleAnimation}
+            className="mx-auto my-4 size-4 visible-animate-spin text-muted-foreground"
+          />
         ) : alone?.preview ? (
           <PluginUpdateReview
             entry={alone.entry}
@@ -267,7 +271,9 @@ export function PluginUpdateAllDialog({
               : t('auto.components.settings.PluginUpdateAllDialog.cancel', 'Cancel')}
           </Button>
           <Button disabled={busy || chosen.length === 0} onClick={() => void update()}>
-            {busy ? <Loader2 className="animate-spin" /> : null}
+            {busy ? (
+              <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+            ) : null}
             {failure
               ? t('auto.components.settings.PluginUpdateAllDialog.retry', 'Try again')
               : approving

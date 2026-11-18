@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { useState } from 'react'
 import {
   Dialog,
@@ -136,7 +137,13 @@ export function CustomAddressDialog({
             {copy.cancel}
           </Button>
           <Button type="button" disabled={!parsed.ok || submitting} onClick={() => void submit()}>
-            {submitting ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+            {submitting ? (
+              <Loader2
+                ref={observeVisibleAnimation}
+                className="size-4 visible-animate-spin"
+                aria-hidden
+              />
+            ) : null}
             {copy.confirm}
           </Button>
         </DialogFooter>

@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { cn } from '@/lib/class-names'
 import { DICTATION_GRAPES } from '../../../../shared/speech/dictation/dictation-audio-meter'
 
@@ -13,11 +14,12 @@ export function DictationGrapes({ level, active, className }: DictationGrapesPro
 
   return (
     <div
+      ref={observeVisibleAnimation}
       data-testid="dictation-grapes"
       aria-hidden="true"
       className={cn(
         'flex h-6 w-11 shrink-0 items-center justify-center gap-px overflow-hidden',
-        !active && 'animate-pulse motion-reduce:animate-none',
+        !active && 'visible-animate-pulse motion-reduce:animate-none',
         className
       )}
     >

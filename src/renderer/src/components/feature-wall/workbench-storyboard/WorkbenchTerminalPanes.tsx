@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import type { JSX, ReactNode } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
@@ -49,7 +50,10 @@ export function WorkbenchAgentTerminalPane(props: {
           <Prompt claude={props.promptGlyph === '>'}>{props.promptGlyph}</Prompt>
           <span className="text-foreground">{props.typedText}</span>
           {props.showCaret ? (
-            <span className="ml-px inline-block h-[11px] w-[5px] -translate-y-px animate-pulse bg-foreground align-[-1px]" />
+            <span
+              ref={observeVisibleAnimation}
+              className="ml-px inline-block h-[11px] w-[5px] -translate-y-px visible-animate-pulse bg-foreground align-[-1px]"
+            />
           ) : null}
         </TermLine>
       ) : null}
@@ -326,9 +330,10 @@ function PlaywrightDuration(props: { children: ReactNode }): JSX.Element {
 function RunSpinner(props: { reducedMotion?: boolean }): JSX.Element {
   return (
     <span
+      ref={observeVisibleAnimation}
       className={cn(
         'mr-1.5 inline-block size-2 rounded-full border-[1.5px] border-foreground/20 align-[-1px]',
-        props.reducedMotion ? 'border-t-foreground/20' : 'animate-spin border-t-foreground'
+        props.reducedMotion ? 'border-t-foreground/20' : 'visible-animate-spin border-t-foreground'
       )}
     />
   )

@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { AlertTriangle, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -27,7 +28,10 @@ export function WorkspaceCleanupInitialScanBanner({
 
   return (
     <div className="flex items-start gap-2 border-b border-border bg-muted/25 px-4 py-3">
-      <Loader2 className="mt-0.5 size-3.5 shrink-0 animate-spin text-muted-foreground" />
+      <Loader2
+        ref={observeVisibleAnimation}
+        className="mt-0.5 size-3.5 shrink-0 visible-animate-spin text-muted-foreground"
+      />
       <div className="min-w-0">
         <div className="text-xs font-medium text-foreground">{title}</div>
         <div className="mt-0.5 text-xs text-muted-foreground">
@@ -92,8 +96,9 @@ export function WorkspaceCleanupSkeletonRows(): React.JSX.Element {
     <div className="space-y-2">
       {[0, 1, 2].map((index) => (
         <div
+          ref={observeVisibleAnimation}
           key={index}
-          className="h-24 animate-pulse rounded-lg border border-border bg-muted/35"
+          className="h-24 visible-animate-pulse rounded-lg border border-border bg-muted/35"
         />
       ))}
     </div>

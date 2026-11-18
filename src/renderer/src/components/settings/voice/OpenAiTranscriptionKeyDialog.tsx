@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Loader2, Lock } from 'lucide-react'
 import { Button } from '../../ui/button'
 import {
@@ -90,7 +91,9 @@ export function OpenAiTranscriptionKeyDialog({
             </Button>
           )}
           <Button disabled={pending || !apiKeyDraft.trim()} onClick={onSave}>
-            {pending ? <Loader2 className="size-4 animate-spin" /> : null}
+            {pending ? (
+              <Loader2 ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
+            ) : null}
             {t('auto.components.settings.OpenAiTranscriptionKeyDialog.bce1b6d18a', 'Save key')}
           </Button>
         </DialogFooter>

@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useMemo, useState } from 'react'
 import { Globe, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -135,7 +136,10 @@ export function RemoteBrowserPageViewport({
         <div className="absolute inset-0 flex items-center justify-center px-6 text-center">
           <div className="flex max-w-sm flex-col items-center gap-2">
             {busy ? (
-              <Loader2 className="size-5 animate-spin text-muted-foreground" />
+              <Loader2
+                ref={observeVisibleAnimation}
+                className="size-5 visible-animate-spin text-muted-foreground"
+              />
             ) : (
               <Globe className="size-5 text-muted-foreground" />
             )}

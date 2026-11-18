@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { ArrowUpCircle, Copy, FileText, Hash, Loader2, RotateCcw, Trash2 } from 'lucide-react'
 import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
 import { translate } from '@/i18n/i18n'
@@ -101,7 +102,13 @@ export function installedPluginControls(
 
   let action: React.ReactNode = null
   if (primary === 'busy') {
-    action = <Loader2 className="size-4 animate-spin text-muted-foreground" aria-hidden="true" />
+    action = (
+      <Loader2
+        ref={observeVisibleAnimation}
+        className="size-4 visible-animate-spin text-muted-foreground"
+        aria-hidden="true"
+      />
+    )
   } else if (primary === 'remove') {
     action = (
       <Button

@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { Loader2, RotateCcw, Search, SlidersHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -181,7 +182,11 @@ function SizeScanButton({
     <Button variant="link" size="inline" className="shrink-0" disabled={scanning} onClick={onRun}>
       {/* Reserved spinner slot keeps the link from shifting when a scan starts. */}
       <Loader2
-        className={cn('size-3 text-muted-foreground', scanning ? 'animate-spin' : 'invisible')}
+        ref={observeVisibleAnimation}
+        className={cn(
+          'size-3 text-muted-foreground',
+          scanning ? 'visible-animate-spin' : 'invisible'
+        )}
       />
       {/* Stack the idle label under the live one so the link never changes width. */}
       <span className="grid text-xs tabular-nums text-muted-foreground underline decoration-muted-foreground/50 underline-offset-4 hover:text-foreground">
@@ -209,7 +214,7 @@ function GitCheckIndicator({ pendingCount }: { pendingCount: number }): React.JS
     <Tooltip>
       <TooltipTrigger asChild>
         <span role="status" aria-label={label} className="flex">
-          <Loader2 className="size-3.5 animate-spin" />
+          <Loader2 ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
         </span>
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={4}>

@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronsUpDown, LoaderCircle, RefreshCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -255,7 +256,10 @@ export default function SparseCheckoutPresetSelect({
           >
             <span className="truncate">{triggerLabel}</span>
             {isLoadingPresets ? (
-              <LoaderCircle className="size-3.5 animate-spin opacity-60" />
+              <LoaderCircle
+                ref={observeVisibleAnimation}
+                className="size-3.5 visible-animate-spin opacity-60"
+              />
             ) : hasPresetLoadError || !presetsLoaded ? (
               <RefreshCcw className="size-3.5 opacity-60" />
             ) : (

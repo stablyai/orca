@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { UnsealedCredentialNotice } from '../../provider-accounts/UnsealedCredentialNotice'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ExternalLink, GitPullRequestArrow, LoaderCircle, Unlink } from 'lucide-react'
@@ -177,7 +178,10 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
                   className="rounded-md p-1 text-muted-foreground/50 transition-colors hover:text-destructive"
                 >
                   {disconnecting ? (
-                    <LoaderCircle className="size-3.5 animate-spin" />
+                    <LoaderCircle
+                      ref={observeVisibleAnimation}
+                      className="size-3.5 visible-animate-spin"
+                    />
                   ) : (
                     <Unlink className="size-3.5" />
                   )}

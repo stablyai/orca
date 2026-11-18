@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { useEffect, useRef, useState } from 'react'
 import { Loader2, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -139,7 +140,10 @@ export function AutomationHostFilterNotice({
           )}
         >
           {isLoading ? (
-            <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
+            <Loader2
+              ref={observeVisibleAnimation}
+              className="size-3.5 shrink-0 visible-animate-spin text-muted-foreground"
+            />
           ) : (
             <TriangleAlert className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
           )}

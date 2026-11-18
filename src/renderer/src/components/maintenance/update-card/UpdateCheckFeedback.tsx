@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { AlertCircle, Check, Loader2, X } from 'lucide-react'
 import { Button } from '../../ui/button'
 import { useTranslate } from '@/i18n/use-translate'
@@ -18,7 +19,9 @@ export function UpdateCheckFeedback({
   return (
     <div className="flex items-center gap-3 p-3">
       <div className="shrink-0 text-muted-foreground">
-        {icon === 'spinner' && <Loader2 className="size-4 animate-spin" />}
+        {icon === 'spinner' && (
+          <Loader2 ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
+        )}
         {icon === 'check' && <Check className="size-4" />}
         {icon === 'error' && <AlertCircle className="size-4" />}
       </div>

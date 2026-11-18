@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import type { PtyManagementSession } from '../../../../../../preload/api/terminal/pty-management-api'
 import { LoaderCircle, RefreshCw, RotateCw, Trash2, X } from 'lucide-react'
 import { Button } from '../../../ui/button'
@@ -51,7 +52,10 @@ export function ManageSessionsTable({
             aria-label={t('auto.components.settings.ManageSessionsSection.b3b1cc5708', 'Refresh')}
             className="text-muted-foreground"
           >
-            <RefreshCw className={isRefreshing ? 'animate-spin' : ''} />
+            <RefreshCw
+              ref={observeVisibleAnimation}
+              className={isRefreshing ? 'visible-animate-spin' : ''}
+            />
           </Button>
         </div>
         <div className="flex items-center gap-1">
@@ -69,7 +73,7 @@ export function ManageSessionsTable({
                 className="text-muted-foreground hover:text-destructive"
               >
                 {daemonBusyKind === 'killAll' ? (
-                  <LoaderCircle className="animate-spin" />
+                  <LoaderCircle ref={observeVisibleAnimation} className="visible-animate-spin" />
                 ) : (
                   <Trash2 />
                 )}
@@ -93,7 +97,7 @@ export function ManageSessionsTable({
                 className="text-muted-foreground"
               >
                 {daemonBusyKind === 'restart' ? (
-                  <LoaderCircle className="animate-spin" />
+                  <LoaderCircle ref={observeVisibleAnimation} className="visible-animate-spin" />
                 ) : (
                   <RotateCw />
                 )}

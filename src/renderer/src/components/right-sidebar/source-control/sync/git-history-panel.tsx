@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { GitGraphOpenButton } from './git-graph-open-button'
 import { CommitsHeaderIconButton } from './commits-header-icon-button'
@@ -307,7 +308,10 @@ export function GitHistoryPanel({
                   'Refresh commits'
                 )}
               >
-                <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
+                <RefreshCw
+                  ref={observeVisibleAnimation}
+                  className={cn('size-3.5', loading && 'visible-animate-spin')}
+                />
               </CommitsHeaderIconButton>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>

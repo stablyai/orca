@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useEffect } from 'react'
 import { Check, LoaderCircle, RotateCcw, Sparkles, X } from 'lucide-react'
 import { Trans } from 'react-i18next'
@@ -162,7 +163,10 @@ export function WorktreeCardsIntroNotice(): React.JSX.Element | null {
             <span className="grid grid-cols-[12px_auto_12px] items-center gap-1">
               <span aria-hidden="true" className="flex">
                 {saving ? (
-                  <LoaderCircle className="size-3 animate-spin motion-reduce:animate-none" />
+                  <LoaderCircle
+                    ref={observeVisibleAnimation}
+                    className="size-3 visible-animate-spin motion-reduce:animate-none"
+                  />
                 ) : null}
               </span>
               {t('sidebar.worktreeCardsIntroNotice.keep', 'Keep new')}

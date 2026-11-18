@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useCallback, useEffect, useState } from 'react'
 import { Loader2, RefreshCw } from 'lucide-react'
 import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
@@ -190,7 +191,12 @@ export function MobileEmulatorSettingsPane({
                   variant="outline"
                   className={cn('text-[11px]', statusBadgeClassName(availability, enabled))}
                 >
-                  {refreshing ? <Loader2 className="size-3 animate-spin" /> : null}
+                  {refreshing ? (
+                    <Loader2
+                      ref={observeVisibleAnimation}
+                      className="size-3 visible-animate-spin"
+                    />
+                  ) : null}
                   {statusText(availability, enabled, t)}
                 </Badge>
                 <Button
@@ -205,7 +211,10 @@ export function MobileEmulatorSettingsPane({
                   disabled={refreshing}
                 >
                   {refreshing ? (
-                    <Loader2 className="size-3.5 animate-spin" />
+                    <Loader2
+                      ref={observeVisibleAnimation}
+                      className="size-3.5 visible-animate-spin"
+                    />
                   ) : (
                     <RefreshCw className="size-3.5" />
                   )}

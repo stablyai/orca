@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '../ui/button'
@@ -35,7 +36,7 @@ export function OrcaSignInButton({
     >
       {signingIn ? (
         <>
-          <Loader2 className="animate-spin" />
+          <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
           {t('auto.components.OrcaSignInProgress.signingIn', 'Signing in…')}
         </>
       ) : (

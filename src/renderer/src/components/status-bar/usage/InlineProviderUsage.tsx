@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Loader2 } from 'lucide-react'
 import React from 'react'
 import { Button } from '@/components/ui/button'
@@ -89,7 +90,8 @@ export function InlineUsageBars({
 
   return (
     <div
-      className={`grid w-full items-center gap-1.5 ${isFetching ? 'animate-pulse motion-reduce:animate-none' : ''}`}
+      ref={observeVisibleAnimation}
+      className={`grid w-full items-center gap-1.5 ${isFetching ? 'visible-animate-pulse motion-reduce:animate-none' : ''}`}
     >
       {usageWindows.map((window) => {
         const resetsAt =
@@ -183,7 +185,10 @@ export function InlineUsageSignInAction({
         aria-label={`${t('auto.components.status.bar.StatusBar.c35af53b73', 'Sign in')}: ${accountLabel}`}
       >
         {isSigningIn ? (
-          <Loader2 className="size-3 animate-spin motion-reduce:animate-none" />
+          <Loader2
+            ref={observeVisibleAnimation}
+            className="size-3 visible-animate-spin motion-reduce:animate-none"
+          />
         ) : null}
         {t('auto.components.status.bar.StatusBar.c35af53b73', 'Sign in')}
       </Button>
@@ -193,7 +198,10 @@ export function InlineUsageSignInAction({
 
 export function InlineUsageSkeleton(): React.JSX.Element {
   return (
-    <div className="flex w-full animate-pulse motion-reduce:animate-none items-center gap-2">
+    <div
+      ref={observeVisibleAnimation}
+      className="flex w-full visible-animate-pulse motion-reduce:animate-none items-center gap-2"
+    >
       <div className="h-1 flex-1 rounded-full bg-muted" />
       <div className="h-1 flex-1 rounded-full bg-muted" />
     </div>

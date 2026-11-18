@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { useCallback, useState } from 'react'
 import { CircleCheck, CircleDashed, LoaderCircle } from 'lucide-react'
 import type { PtyManagementFolderAccessMismatch } from '../../../../preload/api/terminal/pty-management-api'
@@ -195,7 +196,9 @@ function FixFooter({
           </Button>
         )}
         <Button size="sm" onClick={onReset} disabled={busy}>
-          {resetState === 'busy' ? <LoaderCircle className="size-4 animate-spin" /> : null}
+          {resetState === 'busy' ? (
+            <LoaderCircle ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
+          ) : null}
           {resetState === 'busy'
             ? t('auto.components.shared.MacFolderAccessFixDialog.resetting', 'Resetting…')
             : t('auto.components.shared.MacFolderAccessFixDialog.reset', 'Reset permission')}
@@ -228,7 +231,9 @@ function FixFooter({
         </Button>
       )}
       <Button size="sm" onClick={onRestart} disabled={busy}>
-        {restartState === 'busy' ? <LoaderCircle className="size-4 animate-spin" /> : null}
+        {restartState === 'busy' ? (
+          <LoaderCircle ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
+        ) : null}
         {restartState === 'busy'
           ? t('auto.components.shared.MacFolderAccessFixDialog.restarting', 'Restarting…')
           : t('auto.components.shared.MacFolderAccessFixDialog.restart', 'Restart')}

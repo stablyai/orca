@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { Check, LoaderCircle } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -50,7 +51,10 @@ export function PRViewedCheckbox({
             )}
           >
             {pending ? (
-              <LoaderCircle className="size-3 animate-spin text-muted-foreground" />
+              <LoaderCircle
+                ref={observeVisibleAnimation}
+                className="size-3 visible-animate-spin text-muted-foreground"
+              />
             ) : checked ? (
               <Check className="size-3" strokeWidth={3} />
             ) : null}

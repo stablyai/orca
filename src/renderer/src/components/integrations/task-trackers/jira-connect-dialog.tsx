@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { jiraCredentialStorageCopy } from './jira-credential-storage-copy'
 import {
   taskProviderErrorMessage,
@@ -377,7 +378,10 @@ export function JiraConnectDialog({
             <Button type="submit" disabled={!canSubmit}>
               {connectState === 'connecting' ? (
                 <>
-                  <LoaderCircle className="size-4 animate-spin" />
+                  <LoaderCircle
+                    ref={observeVisibleAnimation}
+                    className="size-4 visible-animate-spin"
+                  />
                   {t('auto.components.jira.connect.dialog.4a2ab52781', 'Verifying…')}
                 </>
               ) : (

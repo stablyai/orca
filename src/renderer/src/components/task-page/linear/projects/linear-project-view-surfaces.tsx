@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { linearIssueReadError } from '@/lib/work-items/linear/linear-read-error'
 import { taskProviderErrorText } from '@/lib/work-items/task-provider-error-copy'
 import React from 'react'
@@ -152,7 +153,10 @@ export function LinearCollectionNotice({
             >
               {loading ? (
                 <>
-                  <LoaderCircle className="size-3.5 animate-spin" />
+                  <LoaderCircle
+                    ref={observeVisibleAnimation}
+                    className="size-3.5 visible-animate-spin"
+                  />
                   {t('auto.components.linear.project.view.surfaces.93e1f6bfca', 'Loading')}
                 </>
               ) : (
@@ -237,7 +241,10 @@ export function LinearProjectOverview({
             disabled={loading}
             className="gap-1 border-border/50 bg-background/70"
           >
-            <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
+            <RefreshCw
+              ref={observeVisibleAnimation}
+              className={cn('size-3.5', loading && 'visible-animate-spin')}
+            />
             {t('auto.components.linear.project.view.surfaces.a9785c7158', 'Refresh')}
           </Button>
           {project ? (

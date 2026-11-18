@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { useAppStore } from '../../../store'
 import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
@@ -69,9 +70,10 @@ export function AccountUsageGauge({
   }
   return (
     <div
+      ref={observeVisibleAnimation}
       role="img"
       aria-label={formatUsagePercentageLabel(headline.window.usedPercent, display, t)}
-      className={`flex items-center justify-end gap-2 ${isFetching ? 'animate-pulse motion-reduce:animate-none' : ''}`}
+      className={`flex items-center justify-end gap-2 ${isFetching ? 'visible-animate-pulse motion-reduce:animate-none' : ''}`}
     >
       {/* Why health: account rows only render inside a provider's details card. */}
       <UsageBar

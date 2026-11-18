@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { AlertTriangle, Check, Loader2, ShieldCheck } from 'lucide-react'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { PluginTrust } from '../presentation/plugin-access-profile'
@@ -89,7 +90,7 @@ export function PluginAccessSection({
     <DetailSection title={t('auto.components.settings.PluginDetailSections.access', 'Can access')}>
       {trust === null ? (
         <DetailRow
-          icon={<Loader2 className="animate-spin" />}
+          icon={<Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />}
           title={t(
             'auto.components.settings.PluginDetailSections.accessLoading',
             'Reading the plugin…'
@@ -150,7 +151,7 @@ export function PluginLogsSection({
     >
       {state?.loading ? (
         <p className="flex items-center gap-2 px-3.5 py-3 text-xs text-muted-foreground">
-          <Loader2 className="size-3.5 animate-spin" />
+          <Loader2 ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
           {t('auto.components.settings.PluginSettingsRow.loadingLogs', 'Loading logs…')}
         </p>
       ) : state?.error ? (

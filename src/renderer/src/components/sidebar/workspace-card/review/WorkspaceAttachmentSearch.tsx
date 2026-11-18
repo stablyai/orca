@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { useCallback, useId, useMemo, useState } from 'react'
 import { ChevronDown, Loader2, Plus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -191,7 +192,10 @@ export function WorkspaceAttachmentSearch({
           trailing={
             <div className="flex items-center gap-1">
               {controller.showSearchSpinner ? (
-                <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+                <Loader2
+                  ref={observeVisibleAnimation}
+                  className="size-3.5 visible-animate-spin text-muted-foreground"
+                />
               ) : null}
               {query ? (
                 <Button

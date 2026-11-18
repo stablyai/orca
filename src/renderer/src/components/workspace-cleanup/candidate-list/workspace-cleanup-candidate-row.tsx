@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import {
   AlertTriangle,
@@ -180,7 +181,10 @@ export const CandidateRow = React.memo(function CandidateRow({
               onCheckedChange={() => onToggleSelected(identity)}
             />
           ) : deleting ? (
-            <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
+            <Loader2
+              ref={observeVisibleAnimation}
+              className="size-4 shrink-0 visible-animate-spin text-muted-foreground"
+            />
           ) : !queueable ? (
             <span className="flex size-4 shrink-0 items-center justify-center" aria-hidden="true">
               <Lock className="size-3.5 text-muted-foreground/70" />
@@ -249,7 +253,8 @@ export const CandidateRow = React.memo(function CandidateRow({
                 className="inline-flex h-5 shrink-0 items-center gap-1 text-xs text-muted-foreground"
               >
                 <Loader2
-                  className="size-3 animate-spin motion-reduce:animate-none"
+                  ref={observeVisibleAnimation}
+                  className="size-3 visible-animate-spin motion-reduce:animate-none"
                   aria-hidden="true"
                 />
                 {t('components.workspace.cleanup.browse.checkingGitRow', 'Checking git status')}

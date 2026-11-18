@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { AlertTriangle, LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -17,7 +18,12 @@ export function NeedsSetupHostIcon({
   attention: boolean
 }): React.JSX.Element {
   if (connecting) {
-    return <LoaderCircle className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
+    return (
+      <LoaderCircle
+        ref={observeVisibleAnimation}
+        className="size-3.5 shrink-0 visible-animate-spin text-muted-foreground"
+      />
+    )
   }
   if (attention) {
     return <AlertTriangle className="size-3.5 shrink-0 text-muted-foreground" />
@@ -53,7 +59,7 @@ export function ConnectHostButton({
     >
       {connecting ? (
         <>
-          <LoaderCircle className="size-3 animate-spin" />
+          <LoaderCircle ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
           {t('auto.components.NewWorkspaceComposerCard.connectingHost', 'Connecting…')}
         </>
       ) : (

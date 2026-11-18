@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { BookOpen, Download, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
@@ -15,10 +16,19 @@ export function SkillsListSkeleton(): React.JSX.Element {
       </p>
       {SKELETON_ROWS.map((row) => (
         <div key={row} className="flex items-start gap-3 border-b border-border/50 px-2 py-2.5">
-          <div className="mt-0.5 size-4 shrink-0 animate-pulse rounded bg-muted/70" />
+          <div
+            ref={observeVisibleAnimation}
+            className="mt-0.5 size-4 shrink-0 visible-animate-pulse rounded bg-muted/70"
+          />
           <div className="min-w-0 flex-1 space-y-2">
-            <div className="h-3.5 w-48 animate-pulse rounded bg-muted/70" />
-            <div className="h-3 w-full max-w-lg animate-pulse rounded bg-muted/50" />
+            <div
+              ref={observeVisibleAnimation}
+              className="h-3.5 w-48 visible-animate-pulse rounded bg-muted/70"
+            />
+            <div
+              ref={observeVisibleAnimation}
+              className="h-3 w-full max-w-lg visible-animate-pulse rounded bg-muted/50"
+            />
           </div>
         </div>
       ))}

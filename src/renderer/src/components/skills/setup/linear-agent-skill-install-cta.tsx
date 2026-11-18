@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { bundledSkillSetupActionLabel } from './bundled-skill-setup-copy'
 import { useActiveProjectSkillRuntime } from '@/hooks/skills/runtime/useActiveProjectSkillRuntime'
 import { WslLinearAgentSkillInstallCta } from './WslLinearAgentSkillInstallCta'
@@ -112,7 +113,10 @@ function BundledLinearAgentSkillInstallCta({
           onClick={() => void skill.refresh()}
           disabled={skill.loading}
         >
-          <RefreshCw className={cn('size-3', skill.loading && 'animate-spin')} />
+          <RefreshCw
+            ref={observeVisibleAnimation}
+            className={cn('size-3', skill.loading && 'visible-animate-spin')}
+          />
           {t('auto.components.settings.linear.agent.skill.install.cta.recheck', 'Re-check')}
         </Button>
       </div>
@@ -139,7 +143,7 @@ function BundledLinearAgentSkillInstallCta({
               disabled={installing || !ready || action.kind === 'loading'}
             >
               {installing ? (
-                <Loader2 className="size-3 animate-spin" />
+                <Loader2 ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
               ) : (
                 <Download className="size-3" />
               )}

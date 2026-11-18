@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { ChevronDown, CircleDashed } from 'lucide-react'
 import { cn } from '@/lib/class-names'
@@ -56,7 +57,12 @@ export function CheckRow({
           )}
         />
         <Icon
-          className={cn('size-3.5 shrink-0', color, conclusion === 'pending' && 'animate-spin')}
+          ref={observeVisibleAnimation}
+          className={cn(
+            'size-3.5 shrink-0',
+            color,
+            conclusion === 'pending' && 'visible-animate-spin'
+          )}
         />
         <span className="min-w-0 flex-1 truncate text-[12px] text-foreground">{check.name}</span>
         <span className="shrink-0 text-[11px] text-muted-foreground">{statusLabel}</span>

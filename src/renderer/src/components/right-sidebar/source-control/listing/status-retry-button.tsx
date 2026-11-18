@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { useEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -73,7 +74,9 @@ export function StatusRetryButton({
       disabled={isRetrying}
       onClick={() => void handleRetry()}
     >
-      {showSpinner ? <Loader2 className="size-3 animate-spin" /> : null}
+      {showSpinner ? (
+        <Loader2 ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
+      ) : null}
       {t('auto.components.right.sidebar.SourceControl.286dbda4d6', 'Retry')}
     </Button>
   )

@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import type { JSX, MouseEventHandler, Ref } from 'react'
 import { Loader2 } from 'lucide-react'
 import type {
@@ -71,7 +72,7 @@ export function FeatureTipActions({
       >
         {primaryBusy ? (
           <>
-            <Loader2 className="size-4 animate-spin" />
+            <Loader2 ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
             {getPrimaryBusyLabel(currentTip.action, t)}
           </>
         ) : (

@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 // COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
 import { useMemo } from 'react'
 import { Copy, RefreshCw } from 'lucide-react'
@@ -121,7 +122,10 @@ export function WslLinearAgentSkillInstallCta({
           onClick={() => void skill.refresh()}
           disabled={skill.loading}
         >
-          <RefreshCw className={cn('size-3', skill.loading && 'animate-spin')} />
+          <RefreshCw
+            ref={observeVisibleAnimation}
+            className={cn('size-3', skill.loading && 'visible-animate-spin')}
+          />
           {t('auto.components.settings.linear.agent.skill.install.cta.recheck', 'Re-check')}
         </Button>
       </div>

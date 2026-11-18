@@ -1,6 +1,9 @@
 import React from 'react'
 import { cn } from '@/lib/class-names'
-import { observeOffscreenAnimation } from '@/lib/window-activity/offscreen-animation-pause'
+import {
+  observeOffscreenAnimation,
+  observeVisibleAnimation
+} from '@/lib/window-activity/offscreen-animation-pause'
 
 const SPINNER_ANIMATION_NAME = 'agent-spinner-rotate'
 
@@ -17,7 +20,11 @@ function syncSpinnerPhase(el: HTMLSpanElement | null): void {
         'animationName' in candidate && candidate.animationName === SPINNER_ANIMATION_NAME
     )
   if (animation !== undefined) {
-    animation.startTime = 0
+    if (animation.playState === 'paused') {
+      animation.currentTime = animation.timeline?.currentTime ?? 0
+    } else {
+      animation.startTime = 0
+    }
   }
 }
 
@@ -29,7 +36,12 @@ function handleSpinnerAnimationStart(event: React.AnimationEvent<HTMLSpanElement
 
 // Offscreen rings drop their animation; the restart on reveal re-anchors phase via animationstart.
 function observeSpinner(el: HTMLSpanElement): () => void {
-  return observeOffscreenAnimation(el)
+  const stopOffscreen = observeOffscreenAnimation(el)
+  const stopVisible = observeVisibleAnimation(el)
+  return () => {
+    stopOffscreen()
+    stopVisible()
+  }
 }
 
 // CSS rotation avoids JS style writes; callers provide size.

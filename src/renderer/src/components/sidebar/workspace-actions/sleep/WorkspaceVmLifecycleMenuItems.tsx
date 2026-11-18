@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { Loader2, Moon, Play } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
@@ -150,7 +151,7 @@ function VmLifecycleMenuItem({
   if (action === 'waking') {
     return (
       <DropdownMenuItem disabled>
-        <Loader2 className="size-3.5 animate-spin" />
+        <Loader2 ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
         {t('workspace.vm.menu.waking', 'Waking VM…')}
       </DropdownMenuItem>
     )

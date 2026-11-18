@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshCw, Server } from 'lucide-react'
 import { toast } from 'sonner'
@@ -134,7 +135,11 @@ export function HostScopedPortsPanel({
               disabled={refreshing}
               aria-label={t('auto.components.right.sidebar.PortsPanel.7822e3edc6', 'Refresh Ports')}
             >
-              <RefreshCw size={14} className={cn(refreshing && 'animate-spin')} />
+              <RefreshCw
+                ref={observeVisibleAnimation}
+                size={14}
+                className={cn(refreshing && 'visible-animate-spin')}
+              />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>

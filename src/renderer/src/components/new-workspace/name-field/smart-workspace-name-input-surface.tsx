@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { ExternalLink, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -174,9 +175,10 @@ export function renderSmartWorkspaceNameInput(
   return (
     <>
       <ActiveInputIcon
+        ref={observeVisibleAnimation}
         className={cn(
           'pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground',
-          showSearchSpinner && mode !== 'text' && 'animate-spin'
+          showSearchSpinner && mode !== 'text' && 'visible-animate-spin'
         )}
       />
       <Input

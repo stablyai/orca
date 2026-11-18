@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -80,7 +81,9 @@ export function NewWorkspaceComposerFooter({
           // Why: the title already says what is created; the button keeps the full name for AT.
           aria-label={primaryActionLabel}
         >
-          {creating ? <LoaderCircle className="size-4 animate-spin" /> : null}
+          {creating ? (
+            <LoaderCircle ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
+          ) : null}
           {t('auto.components.NewWorkspaceComposerFooter.create', 'Create')}
           <ButtonKeyHint modifierLabel={submitShortcutModifierLabel} />
         </Button>

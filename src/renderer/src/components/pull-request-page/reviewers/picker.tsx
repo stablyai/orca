@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { useId } from 'react'
 import { LoaderCircle, Pencil } from 'lucide-react'
 import { Input } from '@/components/ui/input'
@@ -61,7 +62,7 @@ export function ReviewerPicker({
           className="rounded p-0.5 text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-50"
         >
           {submitting ? (
-            <LoaderCircle className="size-3 animate-spin" />
+            <LoaderCircle ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
           ) : (
             <Pencil className="size-3" />
           )}

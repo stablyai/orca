@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import type { AgentPickerEntry } from '../../../../../../shared/agent-launch/picker/agent-launch-picker'
 import React, { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import {
@@ -394,7 +395,7 @@ export function SourceControlAgentActionDialogForm({
         </Button>
         <Button type="button" size="sm" disabled={!canStart} onClick={onStart}>
           {isStarting ? (
-            <RefreshCw className="size-4 animate-spin" />
+            <RefreshCw ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
           ) : (
             <Sparkles className="size-4" />
           )}

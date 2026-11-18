@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import {
   useBundledSkillInstallAction,
   type BundledSkillInstallActionState
@@ -260,7 +261,7 @@ function AgentCapabilitySetupControls(props: {
             onClick={props.onStartFeatureSetup}
           >
             {props.setupBusyLabel ? (
-              <Loader2 className="size-4 animate-spin" />
+              <Loader2 ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
             ) : (
               <Download className="size-4" />
             )}

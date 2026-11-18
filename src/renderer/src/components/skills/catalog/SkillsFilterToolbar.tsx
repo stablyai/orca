@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { RefreshCw, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -113,7 +114,10 @@ export function SkillsFilterToolbar({
                 onClick={onRefresh}
                 aria-label={t('auto.components.skills.SkillsPage.cb142070b4', 'Refresh')}
               >
-                <RefreshCw className={loading ? 'animate-spin' : undefined} />
+                <RefreshCw
+                  ref={observeVisibleAnimation}
+                  className={loading ? 'visible-animate-spin' : undefined}
+                />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>

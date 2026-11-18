@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { TaskPageJiraStatusFilters } from './filters/TaskPageJiraStatusFilters'
 import { TaskPageJiraSavedFilters } from './filters/TaskPageJiraSavedFilters'
 import { TaskPageJiraFavouriteFilters } from './filters/TaskPageJiraFavouriteFilters'
@@ -162,7 +163,10 @@ export function TaskPageJiraFilters({
                 className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
               >
                 {jiraProjectsLoading ? (
-                  <LoaderCircle className="size-4 animate-spin" />
+                  <LoaderCircle
+                    ref={observeVisibleAnimation}
+                    className="size-4 visible-animate-spin"
+                  />
                 ) : (
                   <Plus className="size-4" />
                 )}
@@ -183,7 +187,10 @@ export function TaskPageJiraFilters({
                 className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
               >
                 {jiraLoading ? (
-                  <LoaderCircle className="size-4 animate-spin" />
+                  <LoaderCircle
+                    ref={observeVisibleAnimation}
+                    className="size-4 visible-animate-spin"
+                  />
                 ) : (
                   <RefreshCw className="size-4" />
                 )}

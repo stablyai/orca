@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useState, type ComponentType, type ReactNode } from 'react'
 import { FolderOpen, Globe, Lightbulb, Loader2, Server } from 'lucide-react'
 import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -242,7 +243,10 @@ export function AddRepoServerPathStartStep({
         </div>
         {isAddingServerPath && addProjectBusyLabel ? (
           <div className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
-            <Loader2 className="size-3.5 shrink-0 animate-spin" />
+            <Loader2
+              ref={observeVisibleAnimation}
+              className="size-3.5 shrink-0 visible-animate-spin"
+            />
             <span>{addProjectBusyLabel}</span>
           </div>
         ) : null}

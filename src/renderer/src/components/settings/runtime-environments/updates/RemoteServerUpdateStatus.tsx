@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import type React from 'react'
 import { AlertCircle, CheckCircle2, Download, Loader2, ServerOff, Wrench } from 'lucide-react'
 import type {
@@ -47,7 +48,7 @@ function phaseIcon(phase: RemoteServerUpdatePhase): React.JSX.Element {
     case 'queued':
     case 'checking-update':
     case 'restarting':
-      return <Loader2 className="animate-spin" />
+      return <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
     case 'downloading':
       return <Download />
     case 'current':

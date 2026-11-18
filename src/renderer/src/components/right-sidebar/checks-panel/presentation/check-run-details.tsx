@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { LoaderCircle, PanelRight, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -118,7 +119,7 @@ export function CheckRunDetails({
       {state?.loading && !state.error ? (
         <div role="status" aria-live="polite" className="flex min-w-0 flex-col gap-2 py-1.5">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <LoaderCircle className="size-3.5 animate-spin" />
+            <LoaderCircle ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
             {t(
               'auto.components.right.sidebar.checks.panel.content.1f2b980522',
               'Loading check details…'
@@ -172,7 +173,10 @@ export function CheckRunDetails({
                 aria-busy={state.loading}
                 onClick={onRetry}
               >
-                <RefreshCw className={cn('size-3', state.loading && 'animate-spin')} />
+                <RefreshCw
+                  ref={observeVisibleAnimation}
+                  className={cn('size-3', state.loading && 'visible-animate-spin')}
+                />
                 {state.loading
                   ? t('githubChecks.retrying', 'Retrying…')
                   : t('auto.components.right.sidebar.checks.panel.content.dcb3c546fe', 'Retry')}

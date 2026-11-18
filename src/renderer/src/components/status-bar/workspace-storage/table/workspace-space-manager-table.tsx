@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { VirtualizedList } from '../../../ui/virtualized-list'
@@ -118,7 +119,7 @@ export function WorkspaceSpaceManagerTable({
             <div ref={setScrollElement} className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
               {isInitialScan ? (
                 <div className="flex items-center justify-center gap-2 px-4 py-10 text-center text-sm text-muted-foreground">
-                  <Loader2 className="size-4 animate-spin" />
+                  <Loader2 ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
                   {t(
                     'auto.components.status.bar.WorkspaceSpaceManagerPanel.a02d84d2d2',
                     'Scanning workspaces. You can leave this page.'

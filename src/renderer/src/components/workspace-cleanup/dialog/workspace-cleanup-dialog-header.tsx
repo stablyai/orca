@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { RefreshCcw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -49,7 +50,10 @@ export function WorkspaceCleanupDialogHeader({
                   onClick={onRefresh}
                   disabled={loading}
                 >
-                  <RefreshCcw className={cn('size-3.5', loading && 'animate-spin')} />
+                  <RefreshCcw
+                    ref={observeVisibleAnimation}
+                    className={cn('size-3.5', loading && 'visible-animate-spin')}
+                  />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={4}>

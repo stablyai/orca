@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { Suspense, useEffect, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -130,7 +131,7 @@ export function ExternalFileChangeCompareDialog({
         <div className="min-h-0 flex-1">
           {diskState.kind === 'loading' ? (
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              <Loader2 className="mr-2 size-4 animate-spin" />
+              <Loader2 ref={observeVisibleAnimation} className="mr-2 size-4 visible-animate-spin" />
               {t(
                 'auto.components.editor.ExternalFileChangeCompareDialog.8fe30ab254',
                 'Reading file from disk...'
@@ -155,7 +156,10 @@ export function ExternalFileChangeCompareDialog({
             <Suspense
               fallback={
                 <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                  <Loader2 className="mr-2 size-4 animate-spin" />
+                  <Loader2
+                    ref={observeVisibleAnimation}
+                    className="mr-2 size-4 visible-animate-spin"
+                  />
                   {t(
                     'auto.components.editor.ExternalFileChangeCompareDialog.2c8f1e07b9',
                     'Loading comparison...'

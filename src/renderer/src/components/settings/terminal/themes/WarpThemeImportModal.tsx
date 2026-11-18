@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { FileUp, FolderOpen, Loader2 } from 'lucide-react'
 import type { WarpThemeImportPreviewTheme } from '../../../../../../shared/terminal-themes/terminal-custom-themes'
 import { Button } from '../../../ui/button'
@@ -125,7 +126,7 @@ export function WarpThemeImportModal({
 
           {loading ? (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" />
+              <Loader2 ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
               {t('auto.components.settings.WarpThemeImportModal.loading', 'Loading Warp themes...')}
             </div>
           ) : preview == null ? null : preview.found ? (

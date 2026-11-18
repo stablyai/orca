@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useRef } from 'react'
 import { Loader2 } from 'lucide-react'
 import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
@@ -70,7 +71,9 @@ export function PluginRollbackDialog({
             disabled={busy || !plugin}
             onClick={() => plugin && onConfirm(plugin.pluginKey)}
           >
-            {busy ? <Loader2 className="animate-spin" /> : null}
+            {busy ? (
+              <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+            ) : null}
             {t('auto.components.settings.PluginRollbackDialog.confirm', 'Roll back')}
           </Button>
         </DialogFooter>

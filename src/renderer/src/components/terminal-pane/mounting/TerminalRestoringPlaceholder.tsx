@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Loader2 } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -11,7 +12,7 @@ export function TerminalRestoringPlaceholder(): React.JSX.Element {
       aria-live="polite"
       data-terminal-restoring-placeholder=""
     >
-      <Loader2 className="size-4 animate-spin" />
+      <Loader2 ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
       {t(
         'auto.components.terminal.pane.TerminalRestoringPlaceholder.restoring',
         'Restoring terminal…'

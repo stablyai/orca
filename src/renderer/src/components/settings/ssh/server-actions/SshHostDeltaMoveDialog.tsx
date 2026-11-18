@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Loader2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { OrcadDeltaMovePreview } from '../../../../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
@@ -143,7 +144,10 @@ export function SshHostDeltaMoveDialog({
             ))}
           </div>
         ) : error ? null : (
-          <Loader2 className="size-4 animate-spin text-muted-foreground" />
+          <Loader2
+            ref={observeVisibleAnimation}
+            className="size-4 visible-animate-spin text-muted-foreground"
+          />
         )}
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         <DialogFooter>
@@ -154,7 +158,9 @@ export function SshHostDeltaMoveDialog({
             onClick={() => void move()}
             disabled={running || !preview || preview.added.length === 0 || blocked}
           >
-            {running ? <Loader2 className="animate-spin" /> : null}
+            {running ? (
+              <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+            ) : null}
             {t('auto.components.settings.deltaMove.confirm', 'Move the new projects')}
           </Button>
         </DialogFooter>

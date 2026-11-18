@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { useCallback, useMemo, useState } from 'react'
 import { Plug, ChevronDown, ChevronRight, LoaderCircle } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -109,7 +110,10 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
               )}
             >
               {refreshing ? (
-                <LoaderCircle className="size-3 animate-spin text-muted-foreground" />
+                <LoaderCircle
+                  ref={observeVisibleAnimation}
+                  className="size-3 visible-animate-spin text-muted-foreground"
+                />
               ) : (
                 <Plug className="size-3 text-muted-foreground" />
               )}

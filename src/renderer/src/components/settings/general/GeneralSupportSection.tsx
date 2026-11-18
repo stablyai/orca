@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import type React from 'react'
 import { useEffect, useState } from 'react'
 import { ExternalLink, Loader2, Star } from 'lucide-react'
@@ -140,8 +141,14 @@ function SupportSection({
 function SupportRowSkeleton(): React.JSX.Element {
   return (
     <div className="flex items-center justify-between gap-4 py-2" aria-hidden="true">
-      <div className="h-4 w-36 rounded bg-muted/50 animate-pulse" />
-      <div className="h-8 w-24 rounded-md bg-muted/50 animate-pulse" />
+      <div
+        ref={observeVisibleAnimation}
+        className="h-4 w-36 rounded bg-muted/50 visible-animate-pulse"
+      />
+      <div
+        ref={observeVisibleAnimation}
+        className="h-8 w-24 rounded-md bg-muted/50 visible-animate-pulse"
+      />
     </div>
   )
 }
@@ -179,7 +186,7 @@ function SupportRow({
           className="shrink-0 gap-1.5"
         >
           {state === 'starring' || state === 'opening-github' ? (
-            <Loader2 className="size-3.5 animate-spin" />
+            <Loader2 ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
           ) : state === 'web-fallback' ? (
             <ExternalLink className="size-3.5" />
           ) : (

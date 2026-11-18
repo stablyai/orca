@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { cn } from '@/lib/class-names'
 import TaskProjectSourceCombobox from '@/components/task-page/source-selection/task-project-source-combobox'
@@ -182,7 +183,10 @@ export function TaskPageGitLabFilters({
                   className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
                 >
                   {gitlabLoading || gitlabTodosLoading ? (
-                    <LoaderCircle className="size-4 animate-spin" />
+                    <LoaderCircle
+                      ref={observeVisibleAnimation}
+                      className="size-4 visible-animate-spin"
+                    />
                   ) : (
                     <RefreshCw className="size-4" />
                   )}

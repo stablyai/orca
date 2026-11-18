@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useCallback, useRef, useState } from 'react'
 import { Loader2, MoreHorizontal, Pencil, PlugZap, Trash2 } from 'lucide-react'
 import type {
@@ -147,7 +148,7 @@ export function SshTargetCard({
     if (removeInFlight || testing) {
       return (
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Loader2 className="size-3 animate-spin" />
+          <Loader2 ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
           {removeInFlight
             ? t('auto.components.settings.SshTargetCard.removing', 'Removing…')
             : t('auto.components.settings.SshTargetCard.testing', 'Testing…')}
@@ -183,7 +184,9 @@ export function SshTargetCard({
     }
     const button = (
       <Button variant="ghost" size="xs" onClick={handleConnect} disabled={hasActionInFlight}>
-        {actionInFlight === 'connect' ? <Loader2 className="size-3 animate-spin" /> : null}
+        {actionInFlight === 'connect' ? (
+          <Loader2 ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
+        ) : null}
         {t('auto.components.settings.SshTargetCard.ec6543cee9', 'Connect')}
       </Button>
     )

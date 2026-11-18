@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 // @protected-copy
 import { useEffect, useState } from 'react'
 import {
@@ -185,13 +186,14 @@ export function IpynbKernelToolbar({
         <DropdownMenuTrigger asChild>
           <Button type="button" variant="ghost" size="xs" disabled={settling}>
             {settling ? (
-              <Loader2 className="size-3 animate-spin" />
+              <Loader2 ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
             ) : kernel.status === 'ready' ? (
               <span
+                ref={observeVisibleAnimation}
                 className={cn(
                   'size-2 rounded-full',
                   kernel.busy
-                    ? 'animate-pulse bg-muted-foreground motion-reduce:animate-none'
+                    ? 'visible-animate-pulse bg-muted-foreground motion-reduce:animate-none'
                     : 'bg-status-success'
                 )}
               />
@@ -205,7 +207,7 @@ export function IpynbKernelToolbar({
         <DropdownMenuContent align="end" className="max-w-md">
           {environments === null ? (
             <DropdownMenuItem disabled>
-              <Loader2 className="animate-spin" />
+              <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
               {t(
                 'auto.components.editor.IpynbViewer.findingPython',
                 'Finding Python environments…'

@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { ArrowUp, RefreshCw, Settings2, type LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -75,7 +76,7 @@ export function CompareSummary({
   if (!summary || summary.status === 'loading') {
     return (
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <RefreshCw className="size-3.5 animate-spin" />
+        <RefreshCw ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
         <span>
           {t(
             'auto.components.right.sidebar.SourceControl.comparingAgainstRef',

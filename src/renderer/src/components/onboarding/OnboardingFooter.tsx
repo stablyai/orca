@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { ChevronLeft, CornerDownLeft, Loader2 } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -58,7 +59,9 @@ export function OnboardingFooter({
             disabled={Boolean(busyLabel)}
             onClick={onPrimary}
           >
-            {primaryBusy ? <Loader2 className="size-4 animate-spin" /> : null}
+            {primaryBusy ? (
+              <Loader2 ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
+            ) : null}
             {primaryLabel}
             <span className="ml-1 inline-flex items-center gap-0.5 rounded border border-primary-foreground/20 px-1.5 py-0.5 text-[10px] font-medium leading-none text-current/80">
               <span>{shortcutModifierLabel}</span>

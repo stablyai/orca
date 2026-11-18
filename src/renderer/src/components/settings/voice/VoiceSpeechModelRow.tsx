@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Check, Loader2, Trash2 } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
@@ -192,7 +193,11 @@ export function VoiceSpeechModelRow({
             disabled={deletePending}
             onClick={() => onDelete(manifest.id)}
           >
-            {deletePending ? <Loader2 className="animate-spin" /> : <Trash2 />}
+            {deletePending ? (
+              <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+            ) : (
+              <Trash2 />
+            )}
           </Button>
         ) : null}
       </div>

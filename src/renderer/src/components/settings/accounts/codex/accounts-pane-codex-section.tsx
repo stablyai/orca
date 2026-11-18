@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { AlertTriangle, Loader2, Plus, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
@@ -185,7 +186,7 @@ export function renderCodexAccountsSection(
                 className="gap-1.5"
               >
                 {codexAction === 'adding' ? (
-                  <Loader2 className="size-3 animate-spin" />
+                  <Loader2 ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
                 ) : (
                   <Plus className="size-3" />
                 )}

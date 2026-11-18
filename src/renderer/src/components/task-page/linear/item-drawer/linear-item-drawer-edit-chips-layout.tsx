@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { LoaderCircle } from 'lucide-react'
 
@@ -84,7 +85,7 @@ export function renderLinearIssueChipsLayout(
             <div className="px-2 py-3 text-center text-[12px] text-destructive">{states.error}</div>
           ) : states.loading ? (
             <div className="flex items-center gap-2 px-2 py-3 text-[12px] text-muted-foreground">
-              <LoaderCircle className="size-3 animate-spin" />
+              <LoaderCircle ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
               {t('auto.components.LinearItemDrawer.59b6cd3706', 'Loading states')}
             </div>
           ) : states.data.length > 0 ? (
@@ -203,7 +204,12 @@ export function renderLinearIssueChipsLayout(
                 onClick={handleEstimateSubmit}
                 disabled={estimatePending}
               >
-                {estimatePending ? <LoaderCircle className="size-3.5 animate-spin" /> : null}
+                {estimatePending ? (
+                  <LoaderCircle
+                    ref={observeVisibleAnimation}
+                    className="size-3.5 visible-animate-spin"
+                  />
+                ) : null}
                 {t('auto.components.LinearItemDrawer.b5675b0694', 'Save')}
               </Button>
             </div>
@@ -242,7 +248,10 @@ export function renderLinearIssueChipsLayout(
               </div>
             ) : members.loading ? (
               <div className="flex items-center gap-2 px-2 py-3 text-[12px] text-muted-foreground">
-                <LoaderCircle className="size-3 animate-spin" />
+                <LoaderCircle
+                  ref={observeVisibleAnimation}
+                  className="size-3 visible-animate-spin"
+                />
                 {t('auto.components.LinearItemDrawer.b2376d0179', 'Loading members')}
               </div>
             ) : (
@@ -288,7 +297,7 @@ export function renderLinearIssueChipsLayout(
             <div className="px-2 py-3 text-center text-[12px] text-destructive">{labels.error}</div>
           ) : labels.loading ? (
             <div className="flex items-center gap-2 px-2 py-3 text-[12px] text-muted-foreground">
-              <LoaderCircle className="size-3 animate-spin" />
+              <LoaderCircle ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
               {t('auto.components.LinearItemDrawer.cddd9b04a7', 'Loading labels')}
             </div>
           ) : labels.data.length > 0 ? (

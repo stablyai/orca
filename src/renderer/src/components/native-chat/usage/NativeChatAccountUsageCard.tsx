@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import { getManagedAccountInlineLabel } from '../../../../../shared/agent-accounts/managed-account-display-names'
 import { useRef, useState } from 'react'
@@ -141,7 +142,7 @@ function LoadingUsageCard(): React.JSX.Element {
           {getProviderDisplayName('codex')}
         </div>
         <span className="flex shrink-0 items-center gap-1.5 text-muted-foreground">
-          <Loader2 className="size-3 animate-spin" />
+          <Loader2 ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
           {t('components.native-chat.usage.loading', 'Loading Codex usage…')}
         </span>
       </div>

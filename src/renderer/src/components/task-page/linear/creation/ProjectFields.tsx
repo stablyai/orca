@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
 import { useTranslate } from '@/i18n/use-translate'
@@ -125,7 +126,10 @@ export function TaskPageLinearProjectFields({
             </div>
             {newLinearProjectMembers.loading ? (
               <div className="mx-1 mb-1 flex items-center justify-center p-4">
-                <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
+                <LoaderCircle
+                  ref={observeVisibleAnimation}
+                  className="size-4 visible-animate-spin text-muted-foreground"
+                />
               </div>
             ) : (
               <div className="mx-1 mb-1 max-h-64 overflow-y-auto scrollbar-sleek">
@@ -201,7 +205,10 @@ export function TaskPageLinearProjectFields({
             </div>
             {newLinearProjectMembers.loading ? (
               <div className="mx-1 mb-1 flex items-center justify-center p-4">
-                <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
+                <LoaderCircle
+                  ref={observeVisibleAnimation}
+                  className="size-4 visible-animate-spin text-muted-foreground"
+                />
               </div>
             ) : (
               <div className="mx-1 mb-1 max-h-64 overflow-y-auto scrollbar-sleek">
@@ -266,7 +273,10 @@ export function TaskPageLinearProjectFields({
             </div>
             {newLinearProjectLabels.loading ? (
               <div className="mx-1 mb-1 flex items-center justify-center p-4">
-                <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
+                <LoaderCircle
+                  ref={observeVisibleAnimation}
+                  className="size-4 visible-animate-spin text-muted-foreground"
+                />
               </div>
             ) : (
               <div className="mx-1 mb-1 max-h-64 overflow-y-auto scrollbar-sleek">

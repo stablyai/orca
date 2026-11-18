@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store/index'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -259,7 +260,10 @@ function Sidebar({
               )}
             >
               {affordance.tone === 'busy' ? (
-                <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                <Loader2
+                  ref={observeVisibleAnimation}
+                  className="size-5 visible-animate-spin text-muted-foreground"
+                />
               ) : (
                 <FolderPlus className="size-5 text-muted-foreground" />
               )}

@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { toast } from 'sonner'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
@@ -80,7 +81,10 @@ export function TaskPageJiraContent({
   return taskSource === 'jira' ? (
     !jiraStatusReady ? (
       <div className="mt-4 flex items-center justify-center py-14">
-        <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
+        <LoaderCircle
+          ref={observeVisibleAnimation}
+          className="size-5 visible-animate-spin text-muted-foreground"
+        />
       </div>
     ) : !jiraConnected ? (
       <div className="mt-4 flex flex-col items-center justify-center rounded-md border border-border/50 bg-muted/50 px-6 py-14 text-center shadow-sm">
@@ -169,8 +173,14 @@ export function TaskPageJiraContent({
                 length: 6
               }).map((_, i) => (
                 <div key={i} className="px-3 py-3">
-                  <div className="h-4 w-4/5 animate-pulse rounded bg-muted/70" />
-                  <div className="mt-2 h-3 w-3/5 animate-pulse rounded bg-muted/60" />
+                  <div
+                    ref={observeVisibleAnimation}
+                    className="h-4 w-4/5 visible-animate-pulse rounded bg-muted/70"
+                  />
+                  <div
+                    ref={observeVisibleAnimation}
+                    className="mt-2 h-3 w-3/5 visible-animate-pulse rounded bg-muted/60"
+                  />
                 </div>
               ))}
             </div>

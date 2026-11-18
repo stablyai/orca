@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { ArrowRight, Bot, Check, Copy, Loader2, RefreshCw, Server } from 'lucide-react'
 import type React from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -225,7 +226,11 @@ export function EphemeralVmsPane(): React.JSX.Element {
             disabled={!setupRepo || agentLaunching}
             onClick={setUpWithAgent}
           >
-            {agentLaunching ? <Loader2 className="animate-spin" /> : <Bot />}
+            {agentLaunching ? (
+              <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+            ) : (
+              <Bot />
+            )}
             {t('auto.components.settings.EphemeralVmsPane.setUpWithAgent', 'Set up with an agent')}
           </Button>
           <span className="min-w-0 flex-1 text-xs text-muted-foreground">
@@ -297,7 +302,11 @@ export function EphemeralVmsPane(): React.JSX.Element {
             onClick={() => void refresh()}
             disabled={isLoading}
           >
-            {isLoading ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+            {isLoading ? (
+              <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+            ) : (
+              <RefreshCw />
+            )}
           </Button>
         </div>
 

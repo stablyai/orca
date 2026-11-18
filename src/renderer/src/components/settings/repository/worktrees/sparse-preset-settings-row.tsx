@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Bookmark, LoaderCircle, Pencil, Trash2 } from 'lucide-react'
 import type { SparsePreset } from '../../../../../../shared/worktree/create-types'
 import { cn } from '@/lib/class-names'
@@ -101,7 +102,10 @@ export function SparsePresetSettingsRow({
             )}
           >
             {isDeleting ? (
-              <LoaderCircle className="size-3.5 animate-spin" />
+              <LoaderCircle
+                ref={observeVisibleAnimation}
+                className="size-3.5 visible-animate-spin"
+              />
             ) : (
               <Trash2 className="size-3.5" />
             )}

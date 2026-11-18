@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { LoaderCircle, RefreshCw } from 'lucide-react'
 
@@ -103,7 +104,7 @@ export function LinearIssueActivity({
             className="gap-1"
           >
             {commentsLoading ? (
-              <LoaderCircle className="size-3 animate-spin" />
+              <LoaderCircle ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
             ) : (
               <RefreshCw className="size-3" />
             )}
@@ -114,7 +115,10 @@ export function LinearIssueActivity({
 
       {commentsLoading && comments.length === 0 ? (
         <div className="mb-5 flex items-center justify-center py-8">
-          <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
+          <LoaderCircle
+            ref={observeVisibleAnimation}
+            className="size-4 visible-animate-spin text-muted-foreground"
+          />
         </div>
       ) : comments.length > 0 ? (
         <div className="mb-6 flex flex-col gap-5">

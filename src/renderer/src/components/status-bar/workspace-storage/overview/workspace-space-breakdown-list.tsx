@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { AlertTriangle, FolderSearch, Loader2 } from 'lucide-react'
 import type {
   WorkspaceSpaceItem,
@@ -49,7 +50,9 @@ export function WorkspaceSpaceBreakdownList({
     return (
       <div className="flex h-full min-h-0 items-center justify-center rounded-lg border border-dashed border-border/70 bg-muted/15 px-3 text-center text-sm text-muted-foreground">
         <span className="flex items-center gap-2">
-          {isScanning ? <Loader2 className="size-4 animate-spin" /> : null}
+          {isScanning ? (
+            <Loader2 ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
+          ) : null}
           {isScanning
             ? t(
                 'auto.components.status.bar.WorkspaceSpaceManagerPanel.c5135e7e4a',

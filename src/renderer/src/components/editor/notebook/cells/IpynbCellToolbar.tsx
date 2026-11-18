@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 // @protected-copy
 import type { ReactNode } from 'react'
 import {
@@ -126,7 +127,7 @@ export function IpynbRunPrompt({
           onClick={onRun}
         >
           {state === 'running' ? (
-            <Loader2 className="animate-spin" />
+            <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
           ) : state === 'queued' ? (
             <Clock />
           ) : (

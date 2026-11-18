@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { ExternalLink, Loader2, RefreshCw } from 'lucide-react'
 import type { GitBranchCompareSummary } from '../../../../../../shared/git/diff/git-diff-compare-types'
@@ -163,7 +164,13 @@ export function SourceControlBranchContextRow({
           baseLabel={baseLabel}
           onChangeBaseRef={onChangeBaseRef}
           changeBaseTitle={changeBaseTitle}
-          leading={<Loader2 className="size-3 shrink-0 animate-spin" aria-hidden="true" />}
+          leading={
+            <Loader2
+              ref={observeVisibleAnimation}
+              className="size-3 shrink-0 visible-animate-spin"
+              aria-hidden="true"
+            />
+          }
           trailing={
             <>
               <ManualReviewLinkButton url={manualReviewUrl} />

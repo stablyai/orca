@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import type { JSX, ReactNode } from 'react'
 import { ClaudeIcon } from '@/components/status-bar/accounts/provider-icons'
 import { translate } from '@/i18n/i18n'
@@ -123,7 +124,10 @@ function TerminalEntryView(props: { entry: TerminalEntry }): JSX.Element {
   if (entry.kind === 'working') {
     return (
       <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-        <span className="size-1.5 animate-pulse rounded-full bg-emerald-500 dark:bg-emerald-400" />
+        <span
+          ref={observeVisibleAnimation}
+          className="size-1.5 visible-animate-pulse rounded-full bg-emerald-500 dark:bg-emerald-400"
+        />
         {t('auto.components.feature.wall.BrowserAnimatedVisual.0ce7c24b4d', 'Working…')}
       </span>
     )

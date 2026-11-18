@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useRef, useState } from 'react'
 import { Info, Loader2, RotateCw } from 'lucide-react'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
@@ -122,7 +123,10 @@ export function AdvancedPane({ settings, updateSettings }: AdvancedPaneProps): R
                 className="shrink-0 gap-1.5"
               >
                 {http1CompatibilityRelaunching ? (
-                  <Loader2 className="size-3.5 animate-spin" />
+                  <Loader2
+                    ref={observeVisibleAnimation}
+                    className="size-3.5 visible-animate-spin"
+                  />
                 ) : (
                   <RotateCw className="size-3.5" />
                 )}

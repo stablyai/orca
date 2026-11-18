@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { useCallback, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import {
@@ -119,7 +120,10 @@ export function PRActionsPanel({
                   )}
                 >
                   {mergePending ? (
-                    <LoaderCircle className="size-3.5 animate-spin" />
+                    <LoaderCircle
+                      ref={observeVisibleAnimation}
+                      className="size-3.5 visible-animate-spin"
+                    />
                   ) : (
                     <GitMerge className="size-3.5" />
                   )}
@@ -227,7 +231,7 @@ export function PRActionsPanel({
           }
         >
           {statePending ? (
-            <LoaderCircle className="size-3.5 animate-spin" />
+            <LoaderCircle ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
           ) : nextState === 'closed' ? (
             <GitPullRequestClosed className="size-3.5 text-destructive" />
           ) : (

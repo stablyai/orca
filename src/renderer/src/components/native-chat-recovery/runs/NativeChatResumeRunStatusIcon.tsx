@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { AlertCircle, Check, Clock, Loader2 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
 import { translate } from '@/i18n/i18n'
@@ -47,7 +48,12 @@ function statusText(
 function StatusGlyph({ status }: { status: ResumeRunRowStatus }): React.JSX.Element {
   switch (status.kind) {
     case 'in-flight':
-      return <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+      return (
+        <Loader2
+          ref={observeVisibleAnimation}
+          className="size-3.5 visible-animate-spin text-muted-foreground"
+        />
+      )
     case 'resumed':
       return <Check className="size-3.5 text-status-success" />
     case 'unconfirmed':

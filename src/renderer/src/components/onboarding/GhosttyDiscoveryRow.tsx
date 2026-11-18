@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Check } from 'lucide-react'
 import type { TerminalConfigImportPreview } from '../../../../shared/terminal/appearance/terminal-config-import-preview'
 import ghosttyIcon from '../../../../../resources/ghostty.svg'
@@ -24,7 +25,10 @@ export function GhosttyDiscoveryRow({
   if (discovery.status === 'detecting') {
     return (
       <div className="flex items-center gap-2.5 rounded-lg border border-dashed border-border bg-transparent px-3.5 py-2.5 text-[12px] text-muted-foreground">
-        <span className="size-1.5 animate-pulse rounded-full bg-muted-foreground/60" />
+        <span
+          ref={observeVisibleAnimation}
+          className="size-1.5 visible-animate-pulse rounded-full bg-muted-foreground/60"
+        />
         {t('auto.components.onboarding.ThemeStep.2c3aa538f8', 'Looking for a Ghostty config…')}
       </div>
     )
