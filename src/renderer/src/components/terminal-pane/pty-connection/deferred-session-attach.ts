@@ -2,8 +2,14 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { runDeferredSessionReattachChoice } from './reattach/deferred-session-reattach-choice'
 import { connectUnservedSshPaneTarget } from './host-ownership/unserved-ssh-pane-connect'
 import { startDeferredSessionReattach } from './reattach/deferred-session-reattach-connect'
+import { routeCodexAccountRestartWake } from '../account-restart/codex-account-restart-wake'
 
 export function runDeferredSessionAttach(session: ConnectPanePtySession): void {
+  const accountWake = routeCodexAccountRestartWake(session)
+  if (accountWake !== undefined) {
+    void accountWake
+    return
+  }
   // COMPAT(legacy-relay-bridge, revisit 2027-01-15): reattach the relay-era terminal it still runs.
   if (session.legacyRelayBridgePtyId && !session.pendingReplacedPtyId) {
     startDeferredSessionReattach(session, session.legacyRelayBridgePtyId)
