@@ -12,6 +12,42 @@ import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/h
 const ACTIVE_POLL_MS = 1_500
 const IDLE_POLL_MS = 6_000
 
+async function readSwarmSnapshot(
+  target: RuntimeClientTarget,
+  sessionId: string,
+  ifNoneMatch?: string
+): Promise<{ result: AgentSessionSwarmReadResult } | { error: string }> {
+  try {
+    const result = await callStructuredAgentSession<AgentSessionSwarmReadResult>(
+      target,
+      'agentSession.swarmRead',
+      { sessionId, ...(ifNoneMatch ? { ifNoneMatch } : {}) }
+    )
+    return { result }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : 'Failed to load swarm board' }
+  }
+}
+
+async function readSwarmTranscript(
+  target: RuntimeClientTarget,
+  sessionId: string,
+  conversationId: string
+): Promise<AgentSessionSwarmTranscriptResult> {
+  try {
+    return await callStructuredAgentSession<AgentSessionSwarmTranscriptResult>(
+      target,
+      'agentSession.swarmMemberTranscript',
+      { sessionId, conversationId, maxEntries: 200 }
+    )
+  } catch (err) {
+    return {
+      status: 'failed',
+      message: err instanceof Error ? err.message : 'Failed to read worker transcript'
+    }
+  }
+}
+
 export type NativeChatSwarmBoardState = {
   canOpen: boolean
   isOpen: boolean
@@ -95,56 +131,46 @@ export function useNativeChatSwarmBoard(args: {
       if (force || !activeEtag) {
         setLoading(true)
       }
-      try {
-        const result = await callStructuredAgentSession<AgentSessionSwarmReadResult>(
-          target,
-          'agentSession.swarmRead',
-          {
-            sessionId,
-            ...(force || !activeEtag ? {} : { ifNoneMatch: activeEtag })
-          }
-        )
-        if (requestSeqRef.current !== seq) {
-          return
-        }
-        if (result.status === 'unchanged') {
-          setSnapshotState((prev) =>
-            prev.sessionId === sessionId ? { ...prev, error: null } : prev
-          )
-        } else if (result.status === 'ok') {
-          etagRef.current = { sessionId, etag: result.snapshot.etag }
-          setSnapshotState({ sessionId, snapshot: result.snapshot, error: null })
-        } else if (result.status === 'unsupported') {
-          if (etagRef.current?.sessionId === sessionId) {
-            etagRef.current = null
-          }
-          setUnsupportedFor(sessionId)
-          setSnapshotState({ sessionId, snapshot: null, error: null })
-        } else if (result.status === 'none') {
-          if (etagRef.current?.sessionId === sessionId) {
-            etagRef.current = null
-          }
-          setSnapshotState({ sessionId, snapshot: null, error: null })
-        } else {
-          setSnapshotState((prev) => ({
-            sessionId,
-            snapshot: prev.sessionId === sessionId ? prev.snapshot : null,
-            error: result.message ?? 'Failed to load swarm board'
-          }))
-        }
-      } catch (err) {
-        if (requestSeqRef.current !== seq) {
-          return
-        }
+      const response = await readSwarmSnapshot(
+        target,
+        sessionId,
+        force || !activeEtag ? undefined : activeEtag
+      )
+      if (requestSeqRef.current !== seq) {
+        return
+      }
+      setLoading(false)
+      if ('error' in response) {
         setSnapshotState((prev) => ({
           sessionId,
           snapshot: prev.sessionId === sessionId ? prev.snapshot : null,
-          error: err instanceof Error ? err.message : 'Failed to load swarm board'
+          error: response.error
         }))
-      } finally {
-        if (requestSeqRef.current === seq) {
-          setLoading(false)
+        return
+      }
+      const { result } = response
+      if (result.status === 'unchanged') {
+        setSnapshotState((prev) => (prev.sessionId === sessionId ? { ...prev, error: null } : prev))
+      } else if (result.status === 'ok') {
+        etagRef.current = { sessionId, etag: result.snapshot.etag }
+        setSnapshotState({ sessionId, snapshot: result.snapshot, error: null })
+      } else if (result.status === 'unsupported') {
+        if (etagRef.current?.sessionId === sessionId) {
+          etagRef.current = null
         }
+        setUnsupportedFor(sessionId)
+        setSnapshotState({ sessionId, snapshot: null, error: null })
+      } else if (result.status === 'none') {
+        if (etagRef.current?.sessionId === sessionId) {
+          etagRef.current = null
+        }
+        setSnapshotState({ sessionId, snapshot: null, error: null })
+      } else {
+        setSnapshotState((prev) => ({
+          sessionId,
+          snapshot: prev.sessionId === sessionId ? prev.snapshot : null,
+          error: result.message ?? 'Failed to load swarm board'
+        }))
       }
     },
     [mayHaveSwarmNow, sessionId, target]
@@ -154,33 +180,12 @@ export function useNativeChatSwarmBoard(args: {
     async (conversationId: string) => {
       const seq = ++transcriptSeqRef.current
       setTranscriptLoading(true)
-      try {
-        const result = await callStructuredAgentSession<AgentSessionSwarmTranscriptResult>(
-          target,
-          'agentSession.swarmMemberTranscript',
-          { sessionId, conversationId, maxEntries: 200 }
-        )
-        if (transcriptSeqRef.current !== seq) {
-          return
-        }
-        setTranscriptState({ sessionId, conversationId, result })
-      } catch (err) {
-        if (transcriptSeqRef.current !== seq) {
-          return
-        }
-        setTranscriptState({
-          sessionId,
-          conversationId,
-          result: {
-            status: 'failed',
-            message: err instanceof Error ? err.message : 'Failed to read worker transcript'
-          }
-        })
-      } finally {
-        if (transcriptSeqRef.current === seq) {
-          setTranscriptLoading(false)
-        }
+      const result = await readSwarmTranscript(target, sessionId, conversationId)
+      if (transcriptSeqRef.current !== seq) {
+        return
       }
+      setTranscriptLoading(false)
+      setTranscriptState({ sessionId, conversationId, result })
     },
     [sessionId, target]
   )
