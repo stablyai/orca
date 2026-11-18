@@ -1,12 +1,12 @@
 import { resolveArtifactCloudApiUrl } from '../../artifacts/artifact-cloud-config'
 import { createSkillCloudDeadline } from './skill-cloud-deadline'
-import { SkillCloudRequestError } from './skill-cloud-request-error'
+import { SKILL_CLOUD_UNCODED_ERROR, SkillCloudRequestError } from './skill-cloud-request-error'
 
 export async function skillCloudRequest<T>(input: {
   apiUrl?: string
   authToken?: string
   path: string
-  method?: 'DELETE' | 'GET' | 'POST' | 'PUT'
+  method?: 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT'
   body?: unknown
   signal?: AbortSignal
   idempotencyKey?: string
@@ -44,7 +44,7 @@ export async function skillCloudRequest<T>(input: {
       const error = value as { code?: unknown; message?: unknown } | null
       throw new SkillCloudRequestError(
         response.status,
-        typeof error?.code === 'string' ? error.code : 'skill_cloud_request_failed',
+        typeof error?.code === 'string' ? error.code : SKILL_CLOUD_UNCODED_ERROR,
         typeof error?.message === 'string' ? error.message : 'The skill Cloud request failed.'
       )
     }

@@ -1,4 +1,5 @@
 import { onAgentsRefreshedOnHost } from '../../preflight/agents-refreshed-on-host'
+import { onManagedRuntimeReleasesChanged } from '../../node-runtime/managed-runtime-installation'
 import { onLiveAccount } from './agent-model-catalog-running-account'
 import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
@@ -38,6 +39,8 @@ export function createAgentModelCatalogService(
   const unbindRefresh = onAgentsRefreshedOnHost((userInitiated) =>
     deps.store.refreshInputs(userInitiated)
   )
+  // A listing that failed because the agent was missing must rerun once Orca installs it.
+  const unbindReleases = onManagedRuntimeReleasesChanged(() => deps.store.refreshInputs(false))
   const tasks = new Set<Promise<unknown>>()
   const lifetime = new AbortController()
   const admission = new AgentModelCatalogAdmission()
@@ -155,6 +158,7 @@ export function createAgentModelCatalogService(
       lifetime.abort()
       unbindRetirement()
       unbindRefresh()
+      unbindReleases()
       retireContext()
       deps.store.clearPartialAttempts()
       await Promise.allSettled(tasks)

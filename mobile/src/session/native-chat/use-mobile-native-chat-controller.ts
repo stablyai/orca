@@ -168,7 +168,6 @@ export function useMobileNativeChatController(
 
   const workspaceCatalog = useMobileNativeChatWorkspaceCatalog(args, activeChatAgent)
 
-  // Break the send/options cycle through a ref so snapshot changes cannot recreate send callbacks.
   const recordSessionOptionCommandRef = useRef<(command: string) => void>(() => {})
 
   const {
@@ -191,7 +190,7 @@ export function useMobileNativeChatController(
     onSendError
   })
 
-  const structuredNativeChatSend = useMobileStructuredNativeChatSendBridge({
+  const structuredSend = useMobileStructuredNativeChatSendBridge({
     agent: activeChatResolution?.agent,
     sessionCommands: nativeChatLane.sessionCommands.commands,
     sendStructured: structuredNativeChat.sendWithOutcome,
@@ -288,11 +287,9 @@ export function useMobileNativeChatController(
     nativeChatMcpPanel: activeChatStructured ? structuredNativeChat.mcpPanel : null,
     nativeChatRewind: activeChatStructured ? structuredNativeChat.rewind : undefined,
     ...workspaceCatalog,
-    handleNativeChatSend: activeChatStructured
-      ? structuredNativeChatSend.send
-      : handleNativeChatSend,
+    handleNativeChatSend: activeChatStructured ? structuredSend.send : handleNativeChatSend,
     handleNativeChatSendWithOutcome: activeChatStructured
-      ? structuredNativeChatSend.sendWithOutcome
+      ? structuredSend.sendWithOutcome
       : handleNativeChatSendWithOutcome,
     readSeededLaunchDraft,
     nativeChatSessionOptions,

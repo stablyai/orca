@@ -1,4 +1,5 @@
 import { ExecutionLocation } from '../structured-agent-session-location-params'
+import { BotLinkOpenTargetSchema } from '../../bots/bot-link-open-target'
 import { AgentSessionSelectionSchema } from '../../agent-session/options/protocol/agent-session-execution-options'
 import {
   SendBody,
@@ -174,6 +175,7 @@ export const SetOptionParams = z
 
 export const OptionsParams = z.object({ sessionId: SessionId }).strict()
 export const RevealParams = OptionsParams.extend({
+  botLinkTarget: BotLinkOpenTargetSchema.optional(),
   navigation: z.literal('caller').optional()
 }).strict()
 export const SwitchToChatParams = OptionsParams.extend({

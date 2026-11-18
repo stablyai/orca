@@ -263,7 +263,8 @@ export function installShellDouble({
   streams = [],
   windowCaps = null,
   safeAreaInsets = null,
-  ownsHostArea = false
+  ownsHostArea = false,
+  colorScheme = null
 }) {
   // Capture boundary faults so blank route reports own error instead of timing out.
   globalThis.__orcaRenderCheckFaults = []
@@ -271,6 +272,7 @@ export function installShellDouble({
   globalThis.__orcaRenderCheckNotifies = []
   // Keep full request verbs/geometry to assert gesture’s actual host effect.
   globalThis.__orcaRenderCheckRequests = []
+  globalThis.__orcaRenderCheckSetReplies = (patch) => Object.assign(replies, patch)
   // Record wantsBinary on accepted subscriptions; absent request cannot be inferred from absent frames.
   globalThis.__orcaRenderCheckSubscribes = []
   // Count host-cap frame drops so page can prove stream survives rejected frame.
@@ -289,6 +291,7 @@ export function installShellDouble({
   const initFrame = (patch = {}) => ({
     v: version,
     type: 'init',
+    ...(colorScheme ? { colorScheme } : {}),
     sessionId,
     buildId,
     connection: {

@@ -11,7 +11,7 @@ import {
 } from '../../shared/source-control/ai/generation/commit-message-agent-output'
 import type { ManagedRuntimeOperation } from '../../shared/agent-launch/installation/managed-runtime-install'
 import { getMainHttpClient, type MainHttpClient } from '../network/http-client'
-import { redactString } from '../observability/redactor'
+import { redactString } from '../../shared/observability/redactor'
 import {
   resolveInstalledRuntimeRelease,
   ManagedRuntimeStartError,
@@ -75,7 +75,11 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
   const space = await statfs(root).catch((error: unknown) => {
     console.warn(`[managed-runtime] ${agent} free space unknown; not checked:`, error)
   })
-  const needed = pin.members.reduce((sum, m) => sum + m.bytes, pin.archiveBytes)
+  // A single-file release is renamed into place, so it never needs room for two copies.
+  const needed =
+    pin.format === 'file'
+      ? pin.archiveBytes
+      : pin.members.reduce((sum, m) => sum + m.bytes, pin.archiveBytes)
   if (space && space.bavail * space.bsize < needed + FREE_SPACE_MARGIN_BYTES) {
     const megabytes = Math.ceil((needed + FREE_SPACE_MARGIN_BYTES) / 1024 ** 2)
     throw new Error(`${label} needs ${megabytes} MB of free disk space to install.`)
@@ -111,7 +115,9 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
       throw new Error(downloadFailureMessage(label, error), { cause: error })
     })
     publish({ phase: 'extracting', downloadedBytes: pin.archiveBytes })
-    await extractPinnedZipMembers(archive, release, pin.members, label, signal)
+    await (pin.format === 'file'
+      ? rename(archive, join(release, onlyMember(pin).path))
+      : extractPinnedZipMembers(archive, release, pin.members, label, signal))
     publish({ phase: 'verifying' })
     await verifyMembers(release, pin, label, signal)
     await validate(input, release)
@@ -125,6 +131,16 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
   } finally {
     await rm(staging, { recursive: true, force: true })
   }
+}
+
+function onlyMember(pin: ManagedRuntimePin): ManagedRuntimePin['members'][number] {
+  const [member, ...rest] = pin.members
+  if (!member || rest.length > 0 || member.path.includes('/')) {
+    throw new Error(
+      `A single-file release needs exactly one top-level member, not ${pin.members.length}.`
+    )
+  }
+  return member
 }
 
 export function installFailureText(label: string, error: unknown, deadline: AbortSignal): string {

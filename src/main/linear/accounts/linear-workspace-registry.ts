@@ -4,6 +4,7 @@ import {
   LEGACY_WORKSPACE_ID,
   ensureOrcaDir,
   getWorkspaceFilePath,
+  getWorkspaceLoginPath,
   getWorkspaceTokenPath
 } from './linear-credential-paths'
 import { getLegacyViewer } from './linear-legacy-viewer-store'
@@ -20,6 +21,10 @@ export const workspaceTokenFileCache = createIntegrationTokenFileCache({
   service: 'Linear',
   filePath: getWorkspaceTokenPath
 })
+export const workspaceLoginFileCache = createIntegrationTokenFileCache({
+  service: 'Linear',
+  filePath: getWorkspaceLoginPath
+})
 const workspaceFileCache = createIntegrationStateFileCache({
   filePath: getWorkspaceFilePath,
   readFromDisk: readWorkspaceFileFromDisk
@@ -27,10 +32,11 @@ const workspaceFileCache = createIntegrationStateFileCache({
 
 export function resetCredentialCaches(): void {
   workspaceTokenFileCache.clear()
+  workspaceLoginFileCache.clear()
 }
 
 export function getCredentialError(workspaceId: string): string | undefined {
-  return workspaceTokenFileCache.error(workspaceId)
+  return workspaceTokenFileCache.error(workspaceId) ?? workspaceLoginFileCache.error(workspaceId)
 }
 
 export function resetWorkspaceFileCacheToEmpty(): void {
@@ -159,12 +165,13 @@ export function hasStoredToken(workspaceId?: string): boolean {
   if (!workspaceId) {
     return getWorkspaceState().workspaces.length > 0
   }
-  return workspaceTokenFileCache.has(workspaceId)
+  return workspaceTokenFileCache.has(workspaceId) || workspaceLoginFileCache.has(workspaceId)
 }
 
+// keepActive: a workspace added in the background (Connect Linear's login) leaves the active one.
 export function upsertWorkspace(
   workspace: LinearWorkspace,
-  options: { select?: boolean } = {}
+  options: { select?: boolean; keepActive?: boolean } = {}
 ): void {
   const file = getWorkspaceFile()
   const current = file.workspaces.find((entry) => entry.id === workspace.id)
@@ -181,8 +188,8 @@ export function upsertWorkspace(
       : workspace.id
   writeWorkspaceFile({
     version: 1,
-    activeWorkspaceId: workspace.id,
-    selectedWorkspaceId,
+    activeWorkspaceId: options.keepActive ? file.activeWorkspaceId : workspace.id,
+    selectedWorkspaceId: options.keepActive ? file.selectedWorkspaceId : selectedWorkspaceId,
     workspaces
   })
 }

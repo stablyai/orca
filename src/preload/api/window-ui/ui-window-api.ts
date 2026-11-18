@@ -40,6 +40,8 @@ export type UiWindowApi = {
   readClipboardImageThumbnail: () => Promise<ClipboardImageThumbnail | null>
   writeClipboardText: (text: string) => Promise<void>
   writeTerminalClipboardText: (text: string) => Promise<void>
+  /** For a secret: cleared after a minute if it's still there; clearsLater false where that isn't promised. */
+  writeSecretClipboardText: (text: string) => Promise<{ clearsLater: boolean }>
   writeSelectionClipboardText: (text: string) => Promise<void>
   writeClipboardImage: (dataUrl: string) => Promise<void>
   performNativePaste: (options?: { mode?: 'paste' | 'paste-and-match-style' }) => void

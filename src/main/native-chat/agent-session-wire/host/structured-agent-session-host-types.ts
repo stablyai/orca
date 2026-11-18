@@ -1,3 +1,4 @@
+import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentModelCatalogSource,
   AgentModelCatalogService
@@ -60,6 +61,7 @@ import type { StructuredAgentRegistry } from '../providers/structured-agent-regi
 import type { StructuredAgentSessionStartupLimits } from '../startup/structured-agent-session-startup-attempt-contract'
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentSessionSwitchResult } from '../../../../shared/agent-session/requests/agent-session-switch-execution'
+import type { StructuredAgentSessionTurnContext } from '../structured-agent-session-turn-context'
 
 export type StructuredAgentSessionCaller = {
   callerKey: string
@@ -200,6 +202,7 @@ export type StructuredAgentSessionHostDeps = {
     /** Synchronous witness of every source `accountUsage` reads; an attribution holds while it does. */
     accountWitness?: (provider: AgentSessionRecord['provider']) => string
   }
+  assertQueuedMessageAllowed?: (sessionId: string, messageId: string) => void
   startupLimits?: Partial<StructuredAgentSessionStartupLimits>
   /** Absent means no dispatch ownership. */
   hasOpenDispatch?: (
@@ -209,6 +212,8 @@ export type StructuredAgentSessionHostDeps = {
   hasOwedSwitchWork?: (record: AgentSessionRecord) => boolean
   /** Read-only custody for an agent's queued mail; absent: always owed. */
   queuedAgentMessageOwed?: (sessionId: string, from: AgentMessageSource) => QueuedMessageOwed
+  /** A message the session took: one that opens its turn or joins its running one; must not throw. */
+  onMessageAdmitted?: (message: AdmittedMessage) => void
   /** Advisory tab-hidden notice; failures are logged. */
   onSessionTabHidden?: (sessionId: string, tabId?: string) => void
   /** Throws while a terminal may still write the record's head conversation; run before a spawn. */
@@ -239,10 +244,28 @@ export type StructuredAgentSessionHostDeps = {
     record: AgentSessionRecord,
     purpose?: 'read' | 'identity'
   ) => Promise<AgentSessionAccountHome | null>
+  /** The tools a chat's agent launched with, against what its next launch would get; absent or a
+   *  chat that launched none (not a bot's, or look-around) never refreshes for tools. */
+  launchTools?: {
+    /** Rereads the tools, so it also sees edits made outside Orca. */
+    changed: (sessionId: string) => Promise<boolean>
+    /** No I/O: whether Orca itself changed or signed in to the tools since launch. */
+    outdated: (sessionId: string) => boolean
+  }
   conversationNaming?: StructuredAgentSessionConversationNaming
+  /** What rides ahead of a person's words for this host; absent adds nothing. */
+  turnContext?: StructuredAgentSessionTurnContext
+  /** A turn here that ends this way is no news (a bot's look-around: its owner hears through Up
+   *  next and the failure rule); absent: only the quiet marker is. */
+  quietTurnEnd?: QuietTurnEnd
+  /** Whether a workspace is a bot's home, whose quiet-marker answers previews skip; absent: none is. */
+  isBotHome?: (workspaceId: string) => boolean
   /** Carries the user's chat name into the agent's own conversation; never delays the caller. */
   nameProviderConversation?: (record: AgentSessionRecord) => void
 }
+
+/** Whether a turn of this session that ended with this outcome is no news. */
+export type QuietTurnEnd = (sessionId: string, outcome: 'success' | 'failure') => boolean
 
 export type SetUserConversationName = StructuredAgentSessionConversationNaming['setUserName']
 
@@ -281,6 +304,7 @@ export type AgentSessionHandoverContext = StructuredAgentSessionCommandHandoverC
   settleEndedInput?: (owner: () => void) => Promise<void>
   /** A message the agent took: a chat keeps, where it has none saved, the options it ran. */
   recordRanOptions?: ReturnType<StructuredAgentSessionRanRecorder>
+  turnContext?: StructuredAgentSessionTurnContext | undefined
 }
 
 export type StructuredAgentSessionConversationLifetime = ReturnType<
@@ -302,6 +326,17 @@ export type StructuredAgentSessionConversationDelivery = {
     sessionId: string,
     opened: OpenedStructuredAgentSessionConversation
   ) => Promise<void>
+}
+
+/** A message a session took, as its host admitted it. */
+export type AdmittedMessage = {
+  sessionId: string
+  workspaceId: string
+  /** The send's id; its journal item is `agentJournalSubmissionKey(clientMessageId)`. */
+  clientMessageId: string
+  body: AgentJournalMessageItem
+  /** Sent into the running turn rather than opening one. */
+  joinsRunningTurn: boolean
 }
 
 export type { StructuredAgentSessionLifetimeContext } from '../termination/structured-agent-session-host-lifetime'
