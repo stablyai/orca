@@ -18,6 +18,7 @@ import { AccountSwitchSection } from './AccountSwitchList'
 import { AccountSwitchRowItem } from './AccountSwitchRowItem'
 import { useCodexSwitcherController } from './use-codex-switcher-controller'
 import type { OwnerUsageRateLimits } from '../usage/use-owner-usage-rate-limits'
+import { codexSystemDefaultUsageKey } from '../../../../../shared/agent-accounts/codex/codex-system-default-usage'
 
 export function CodexSwitcherMenu({
   codex,
@@ -32,7 +33,6 @@ export function CodexSwitcherMenu({
 }): React.JSX.Element {
   const t = useTranslate()
   const {
-    activeTarget,
     canRedeemReset,
     confirmedResetAccountId,
     handleConfirmReset,
@@ -59,13 +59,22 @@ export function CodexSwitcherMenu({
     setResetConfirmOpen,
     setSkipFutureResetConfirm,
     skipFutureResetConfirm,
-    switchGroups
+    switchGroups,
+    accountState,
+    usageAccountLabel,
+    displaysDefaultAccount
   } = useCodexSwitcherController(codex, ownerUsage)
 
+  const defaultCodex = (ownerUsage.accountRateLimits ?? ownerUsage.rateLimits).codex
   const isBusy = isSwitching || reauthenticatingAccountId !== null
   const rows = (selectedGroup?.targets ?? []).map((target) => {
-    const inactiveUsage = target.id
-      ? inactiveCodexAccounts.find((a) => a.accountId === target.id)
+    const usageKey =
+      target.id ??
+      (target.runtimeTarget.runtime === 'host'
+        ? codexSystemDefaultUsageKey(accountState.systemDefault)
+        : null)
+    const inactiveUsage = usageKey
+      ? inactiveCodexAccounts.find((a) => a.accountId === usageKey)
       : null
     // Why: sign-in spawns a local `codex login`, so a remote-owned account can't be re-authed from this desktop.
     const showSignInAction =
@@ -84,6 +93,7 @@ export function CodexSwitcherMenu({
     <AccountSwitchRowItem
       label={target.name}
       detail={target.detail}
+      multilineDetail={target.id === null}
       active={target.active}
       key={`${selectedGroup?.key}:${target.id ?? 'system'}`}
       onSelect={(event) => {
@@ -117,7 +127,11 @@ export function CodexSwitcherMenu({
     inactiveUsage: (typeof rows)[number]['inactiveUsage']
   ): React.ReactNode {
     if (active) {
-      return <AccountUsageGauge limits={codex} isFetching={codex.status === 'fetching'} />
+      return defaultCodex &&
+        (defaultCodex.usageMetadata?.readingAccount?.accountId ?? null) ===
+          (selectedGroup?.targets.find((target) => target.active)?.id ?? null) ? (
+        <AccountUsageGauge limits={defaultCodex} isFetching={defaultCodex.status === 'fetching'} />
+      ) : null
     }
     if (inactiveUsage?.isFetching && !inactiveUsage.rateLimits) {
       return <InlineUsageSkeleton />
@@ -139,7 +153,8 @@ export function CodexSwitcherMenu({
       variant="account"
       accountLabel={
         rosterKnown
-          ? (activeTarget?.label ??
+          ? (usageAccountLabel ??
+            activeTarget?.label ??
             t('auto.components.status.bar.StatusBar.c676918adc', 'System default'))
           : undefined
       }
@@ -198,9 +213,13 @@ export function CodexSwitcherMenu({
       {/* Why: until the host lists its accounts, the empty roster's only row would claim "System default". */}
       {rosterKnown ? (
         <AccountSwitchSection
-          heading={t('auto.components.status.bar.AccountSwitchList.accounts', 'Accounts')}
+          heading={
+            codex.usageMetadata?.contextAccountId
+              ? t('usage.codex.hostDefaultAccount', 'Host default account')
+              : t('auto.components.status.bar.AccountSwitchList.accounts', 'Accounts')
+          }
           targets={selectedGroup?.targets ?? []}
-          panelShowsActiveAccount
+          panelShowsActiveAccount={displaysDefaultAccount}
           onOpenSettings={() => {
             openSettingsTarget({
               pane: 'accounts',

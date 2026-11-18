@@ -33,6 +33,7 @@ import {
   normalizeCodexStatusRuntimeTarget,
   resolveCodexStatusAccountState
 } from './status-bar-codex-accounts'
+import { getCodexAccountDisplayLabel } from '../../../../../shared/agent-accounts/codex-account-display-label'
 import { signInCodexAccount } from './codex-sign-in-action'
 import { useCodexResetAction } from './use-codex-reset-action'
 import type { OwnerUsageRateLimits } from '../usage/use-owner-usage-rate-limits'
@@ -91,6 +92,15 @@ export function useCodexSwitcherController(
     usageTarget: codexTarget
   } = getOwnerAccountRows('codex', ownerUsage, accounts, EMPTY_CODEX_ACCOUNTS)
   const accountState = resolveCodexStatusAccountState(settings, roster, activeRuntimeEnvironmentId)
+
+  const displayedAccountId =
+    codex.usageMetadata?.contextAccountId ?? codex.usageMetadata?.readingAccount?.accountId
+  const displaysDefaultAccount =
+    !displayedAccountId ||
+    getCodexStatusActiveId(
+      accountState,
+      normalizeCodexStatusRuntimeTarget(accountState, toCodexStatusRuntimeTarget(codexTarget))
+    ) === displayedAccountId
 
   useEffect(() => {
     mountedRef.current = true
@@ -230,7 +240,17 @@ export function useCodexSwitcherController(
     open
   )
 
+  const displayedAccount = accountState.accounts.find(
+    (account) => account.id === displayedAccountId
+  )
+  const usageAccountLabel = displayedAccount
+    ? getCodexAccountDisplayLabel(displayedAccount, accountState.accounts)
+    : displayedAccountId
+      ? t('usage.codex.workspaceAccount', 'Workspace account')
+      : activeTarget?.label
+
   return {
+    accountState,
     activeTarget,
     handleOpenChange,
     handleSelectAccount,
@@ -246,6 +266,9 @@ export function useCodexSwitcherController(
     reauthenticatingAccountId,
     rosterKnown,
     ...reset,
+    canRedeemReset: reset.canRedeemReset && displaysDefaultAccount,
+    usageAccountLabel,
+    displaysDefaultAccount,
     selectedGroup,
     selectedRuntimeKey,
     switchGroups

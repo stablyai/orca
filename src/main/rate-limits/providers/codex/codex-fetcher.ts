@@ -204,6 +204,12 @@ async function readCodexRateLimits(
   if (options?.signal?.aborted) {
     return abortedCodexRateLimitResult()
   }
+  if (options?.authSnapshot !== undefined) {
+    return (
+      (await fetchBackendUsage(options)) ??
+      codexUnavailable('System default usage could not be verified.', 'error')
+    )
+  }
   const authPresence = await probeCodexAuthPresence(options?.codexHomePath, {
     signal: options?.signal
   })

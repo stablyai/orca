@@ -8,9 +8,14 @@ import { isDirectory } from '../claude-profile-homes'
 export async function prepareClaudeProfileForLaunch(
   profile: ClaudeProfileDescriptor,
   setUp: (profile: ClaudeProfileDescriptor) => Promise<ClaudeProfileSetupReport>,
-  waitMs = 5_000
+  waitMs = 5_000,
+  privateHistory = false
 ): Promise<void> {
-  if (!isDirectory(profile.home) || !existsSync(claudeProfileMarkerPath(profile))) {
+  if (
+    privateHistory ||
+    !isDirectory(profile.home) ||
+    !existsSync(claudeProfileMarkerPath(profile))
+  ) {
     const report = await setUp(profile).catch(() => null)
     if (report?.outcome !== 'prepared') {
       throw claudeProfileSetupFailed()

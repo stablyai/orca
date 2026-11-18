@@ -44,6 +44,7 @@ if ! typeset -f codex >/dev/null 2>&1 && [[ -n "\${__orca_codex_binary:-}" && -x
   # Why the function reserved word: it suppresses alias expansion of the name,
   # which otherwise rewrites this header at parse time and aborts the whole file.
   function codex {
+    if [ -n "\${ORCA_CODEX_LAUNCH_ERROR:-}" ]; then printf '%s\\n' "\${ORCA_CODEX_LAUNCH_ERROR}" >&2; return 1; fi
     # Why local: zsh's warn_create_global warns for each global a function creates.
     local __orca_codex_arg __orca_codex_isolate="\${ORCA_CODEX_ISOLATE:-1}" __orca_codex_identity="\${ORCA_CODEX_ISOLATE:-1}"
     if [[ "\${${REMOTE_VIEWER_CLIPBOARD_ENV}:-}" == 1 && -z "\${SSH_CONNECTION+x}" && -z "\${SSH_TTY+x}" ]]; then
@@ -83,6 +84,10 @@ export function getFishCodexShellLaunchPreflight(): string {
 set -l __orca_codex_type (type -t codex 2>/dev/null)
 if test "$__orca_codex_type" = file
   function codex
+    if test -n "$ORCA_CODEX_LAUNCH_ERROR"
+      printf '%s\\n' "$ORCA_CODEX_LAUNCH_ERROR" >&2
+      return 1
+    end
     if test -x "$ORCA_CODEX_LAUNCH_PREFLIGHT"
       command "$ORCA_CODEX_LAUNCH_PREFLIGHT" agent hooks prepare-codex >/dev/null 2>&1; or true
     end
@@ -114,6 +119,7 @@ export function getPowerShellCodexShellLaunchPreflight(): string {
 if ($orcaCodexCommand -and
     $orcaCodexCommand.CommandType -in @("Application", "ExternalScript")) {
     function Global:codex {
+    if ($env:ORCA_CODEX_LAUNCH_ERROR) { Write-Error $env:ORCA_CODEX_LAUNCH_ERROR -ErrorAction Continue; $global:LASTEXITCODE = 1; return }
         $orcaCodexExecutable = Get-Command codex -CommandType Application,ExternalScript -ErrorAction SilentlyContinue | Select-Object -First 1
         if (-not $orcaCodexExecutable) {
             Write-Error "codex executable not found"

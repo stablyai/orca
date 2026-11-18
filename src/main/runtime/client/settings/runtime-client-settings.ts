@@ -1,3 +1,5 @@
+import { projectSourceControlLaunchRecipes } from './runtime-source-control-launch-recipes'
+import { workspaceAccountSettingUpdates } from './workspace-account-setting-updates'
 import { publishedLegacyChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { getClaudeAgentViewService } from '../../../claude/agent-view/agent-view-service'
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
@@ -84,6 +86,10 @@ export class RuntimeClientSettingsController {
       agentDefaultArgs: launchProfile.agentDefaultArgs,
       agentDefaultEnv: launchProfile.agentDefaultEnv,
       agentStatusHooksEnabled: settings.agentStatusHooksEnabled !== false,
+      // Always present, so a client can tell this host accepts the setting (older hosts omit it).
+      codexShareHistoryAcrossAccounts: settings.codexShareHistoryAcrossAccounts !== false,
+      codexWorkspaceAccounts: settings.codexWorkspaceAccounts ?? {},
+      claudeWorkspaceAccounts: settings.claudeWorkspaceAccounts ?? {},
       claudeSubagentNavigationEnabled: settings.claudeSubagentNavigationEnabled !== false,
       // Mobile honors this Copy option; absence from older hosts means on (#19770).
       terminalCopyTrimsGutter: settings.terminalCopyTrimsGutter !== false,
@@ -159,7 +165,14 @@ export class RuntimeClientSettingsController {
     }
     const beforeSettings = this.store.getSettings()
     const before = beforeSettings.agentStatusHooksEnabled !== false
-    const { agentDefaultArgs, agentDefaultEnv, hostNotifications, ...otherUpdates } = updates
+    const {
+      agentDefaultArgs,
+      agentDefaultEnv,
+      hostNotifications,
+      codexWorkspaceAccount,
+      claudeWorkspaceAccount,
+      ...otherUpdates
+    } = updates
     // Legacy clients can select an agent or a shell, but cannot select None.
     this.store.updateSettings(
       {
@@ -172,6 +185,12 @@ export class RuntimeClientSettingsController {
               }
             }
           : {}),
+        ...workspaceAccountSettingUpdates(beforeSettings, {
+          claudeWorkspaceAccount,
+          codexWorkspaceAccount,
+          codexWorkspaceAccounts: updates.codexWorkspaceAccounts,
+          claudeWorkspaceAccounts: updates.claudeWorkspaceAccounts
+        }),
         // An older client writes Arguments as it reads them, flag included.
         ...(agentDefaultArgs !== undefined || agentDefaultEnv !== undefined
           ? legacyLaunchTextUpdates(

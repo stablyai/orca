@@ -56,6 +56,7 @@ export function createCodexRuntimeHomeLaunchPreparation(deps: {
     try {
       // Propagate home failures: null selects the system account, which could launch the wrong identity (STA-4422).
       const runtimeHomePath = await runtimeHome.prepareForCodexLaunchAsync(target, launchEnv, {
+        workspaceId: launchContext?.workspaceId,
         unavailableManagedHomePath: launchContext?.unavailableManagedHomePath,
         deferConfigSync: (homes) => {
           mirrorHomes = homes

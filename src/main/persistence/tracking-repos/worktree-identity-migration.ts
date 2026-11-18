@@ -103,20 +103,17 @@ export function migrateWorktreeIdentity(
   )) {
     changed = moveKey(selectionsByWorktree) || changed
   }
-  if (state.ui?.explorerDisplayRootByWorktree) {
-    changed = moveKey(state.ui.explorerDisplayRootByWorktree) || changed
+  for (const bindings of [
+    state.settings.codexWorkspaceAccounts,
+    state.settings.claudeWorkspaceAccounts,
+    state.ui?.explorerDisplayRootByWorktree,
+    state.ui?.gitGraphFiltersByWorktree,
+    state.ui?.showDotfilesByWorktree,
+    state.ui?.notificationsMutedByWorktree
+  ]) {
+    if (bindings) {
+      changed = moveKey<unknown>(bindings) || changed
+    }
   }
-  if (state.ui?.gitGraphFiltersByWorktree) {
-    changed = moveKey(state.ui.gitGraphFiltersByWorktree) || changed
-  }
-  const showDotfiles = state.ui?.showDotfilesByWorktree
-  if (showDotfiles) {
-    changed = moveKey(showDotfiles) || changed
-  }
-  const notificationsMuted = state.ui?.notificationsMutedByWorktree
-  if (notificationsMuted) {
-    changed = moveKey(notificationsMuted) || changed
-  }
-
   return changed
 }

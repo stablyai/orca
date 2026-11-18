@@ -1,3 +1,4 @@
+import { codexWorkspaceAccountId } from '../../../../shared/agent-accounts/codex/codex-workspace-account'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import {
@@ -199,6 +200,7 @@ export function codexHomePathsEqual(left: string | null, right: string): boolean
 
 // Reattach retains the shell's original CODEX_HOME; recording the current selection would hide stale-account panes.
 export function recordCodexPaneAccountForSpawn(args: {
+  workspaceId?: string
   ptyId: string | undefined
   isDaemonHostSpawn: boolean
   isReattach: boolean
@@ -223,7 +225,14 @@ export function recordCodexPaneAccountForSpawn(args: {
     forgetCodexPaneAccount(args.ptyId)
     return
   }
-  recordCodexPaneAccount(args.ptyId, record)
+  recordCodexPaneAccount(args.ptyId, {
+    ...record,
+    ...(codexWorkspaceAccountId(args.settings?.codexWorkspaceAccounts, args.workspaceId) ===
+    record.accountId
+      ? { pinnedByWorkspace: true }
+      : {}),
+    ...(args.workspaceId ? { workspaceId: args.workspaceId } : {})
+  })
 }
 
 export function snapshotCodexPaneHomeRoutes(

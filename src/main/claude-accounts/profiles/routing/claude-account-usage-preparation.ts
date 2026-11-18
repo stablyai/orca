@@ -1,3 +1,4 @@
+import { isSameClaudeLogin } from '../../sign-in/claude-account-folder'
 import type { ClaudeProfileRouter } from './claude-profile-router'
 import type { ClaudeRuntimeAuthPreparation } from '../../runtime-auth/runtime-auth-types'
 import { CLAUDE_HOST_SYSTEM_DEFAULT_USAGE_ID } from '../../../../shared/agent-accounts/claude/claude-system-default-usage'
@@ -25,4 +26,19 @@ export function claudeAccountUsagePreparation(
     provenance: `profile:${accountId}`,
     readingAccount: { accountId, runtime: 'host', wslDistro: null }
   }
+}
+
+export function claudeSystemDefaultRunsAnotherAccount(
+  router: Pick<
+    ClaudeProfileRouter,
+    'selectedProfile' | 'accountLogin' | 'savedAccount' | 'systemDefaultLogin'
+  >
+): boolean | null {
+  const profile = router.selectedProfile()
+  if (!profile) {
+    return null
+  }
+  const selected = router.accountLogin(profile.accountId) ?? router.savedAccount(profile.accountId)
+  const system = router.systemDefaultLogin(5_000)
+  return !selected || !system || !isSameClaudeLogin(selected, system)
 }

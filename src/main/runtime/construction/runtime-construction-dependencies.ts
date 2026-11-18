@@ -103,9 +103,11 @@ export type RuntimeConstructionDependencies = {
     args: AiVaultPrepareSessionResumeArgs
   ) => Promise<AiVaultPrepareSessionResumeResult>
   prepareCodexStructuredLaunch?: (input: {
+    workspaceId?: string
     launchEnv: NodeJS.ProcessEnv
   }) => string | null | Promise<string | null>
   resolveCodexStructuredLaunchHome?: (input: {
+    workspaceId?: string
     launchEnv: NodeJS.ProcessEnv
   }) => string | null | Promise<string | null>
   prepareCodexCatalogProbeHome?: (homePath: string) => void | Promise<void>

@@ -1,3 +1,4 @@
+import { resolveClaudeLiveAccount } from './claude-live-account'
 import { RateLimitServiceFetchTargets } from './service-fetch-targets'
 import { withoutResetWindows } from './service-result-policy'
 import {
@@ -147,23 +148,26 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
   }
 
   ingestLiveClaudeRateLimits(event: ClaudeStatusLineRateLimits): void {
-    // Wait for a selected-account snapshot rather than guessing live-post attribution.
-    const snapshot = this.lastClaudeAuthSnapshot
-    if (!snapshot) {
-      console.debug('[rate-limits] dropped live Claude usage: no auth snapshot yet', {
-        eventConfigDir: event.configDir
-      })
+    const activeSnapshot = this.lastClaudeAuthSnapshot
+    const eventDir = normalizeClaudeConfigDir(event.configDir)
+    const reportingAccount = resolveClaudeLiveAccount(
+      event.configDir,
+      this.inactiveClaudeAccountsResolver?.() ?? []
+    )
+    const inactiveAccount = eventDir !== activeSnapshot?.configDir ? reportingAccount : null
+    const snapshot = inactiveAccount
+      ? {
+          configDir: eventDir,
+          home: event.configDir ?? undefined,
+          provenance: `profile:${inactiveAccount.accountId}`
+        }
+      : activeSnapshot
+    if (!snapshot || eventDir !== snapshot.configDir) {
       return
     }
-    // Different accounts/runtimes report their own quota; never merge them into this bar.
-    if (normalizeClaudeConfigDir(event.configDir) !== snapshot.configDir) {
-      console.debug('[rate-limits] dropped live Claude usage: configDir mismatch', {
-        eventConfigDir: event.configDir,
-        snapshotConfigDir: snapshot.configDir
-      })
-      return
-    }
-    const previous = this.state.claude
+    const previous = inactiveAccount
+      ? this.inactiveClaudeCache.get(inactiveAccount.accountId)
+      : this.state.claude
     const now = Date.now()
     const configDir = snapshot.configDir
     const sessionId = event.sessionId ?? null
@@ -223,8 +227,11 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     ) {
       return
     }
-    const priorLive = this.liveClaudeUsage ? withoutResetWindows(this.liveClaudeUsage, now) : null
-    this.liveClaudeUsage = {
+    const priorLive =
+      !inactiveAccount && this.liveClaudeUsage
+        ? withoutResetWindows(this.liveClaudeUsage, now)
+        : null
+    const live: ProviderRateLimits = {
       provider: 'claude',
       session: freshSession ?? priorLive?.session ?? null,
       weekly: freshWeekly ?? priorLive?.weekly ?? null,
@@ -234,15 +241,22 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
       usageMetadata: {
         source: 'live-session',
         lastSuccessfulSource: 'live-session',
-        authProvenance: snapshot.provenance
+        authProvenance: snapshot.provenance,
+        ...(reportingAccount ? { readingAccount: reportingAccount } : {})
       }
     }
-    this.rememberUsageReadingAccount(
-      'claude',
-      this.claudeFetchTarget,
-      snapshot.home,
-      snapshot.provenance
-    )
+    if (inactiveAccount) {
+      this.inactiveClaudeLiveUsage.set(inactiveAccount.accountId, live)
+    }
+    if (!inactiveAccount) {
+      this.liveClaudeUsage = live
+      this.rememberUsageReadingAccount(
+        'claude',
+        this.claudeFetchTarget,
+        snapshot.home,
+        snapshot.provenance
+      )
+    }
     if (
       previous?.status === 'ok' &&
       previous.usageMetadata?.source === 'live-session' &&
@@ -252,31 +266,36 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     ) {
       return
     }
-    this.activeFailureStreakByProvider.claude = 0
-    this.updateState({
-      ...this.state,
-      claude: {
-        provider: 'claude',
-        session,
-        weekly,
-        // Statusline lacks Fable scope and credits; retain the latest OAuth values.
-        fableWeekly: inherited?.fableWeekly ?? null,
-        extraUsage: inherited?.extraUsage ?? null,
-        ...(sameLogin && inherited.planType ? { planType: inherited.planType } : {}),
-        updatedAt: Date.now(),
-        error: null,
-        status: 'ok',
-        usageMetadata: {
-          source: 'live-session',
-          lastSuccessfulSource: 'live-session',
-          credentialSource: previous?.usageMetadata?.credentialSource,
-          retryAtMs: previous?.usageMetadata?.retryAtMs,
-          authProvenance: snapshot.provenance,
-          ...(sameLogin && inherited.usageMetadata?.readingAccount
+    const next: ProviderRateLimits = {
+      provider: 'claude',
+      session,
+      weekly,
+      // Statusline lacks Fable scope and credits; retain the latest OAuth values.
+      fableWeekly: inherited?.fableWeekly ?? null,
+      extraUsage: inherited?.extraUsage ?? null,
+      ...(sameLogin && inherited.planType ? { planType: inherited.planType } : {}),
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok',
+      usageMetadata: {
+        source: 'live-session',
+        lastSuccessfulSource: 'live-session',
+        credentialSource: previous?.usageMetadata?.credentialSource,
+        retryAtMs: previous?.usageMetadata?.retryAtMs,
+        authProvenance: snapshot.provenance,
+        ...(reportingAccount
+          ? { readingAccount: reportingAccount }
+          : sameLogin && inherited.usageMetadata?.readingAccount
             ? { readingAccount: inherited.usageMetadata.readingAccount }
             : {})
-        }
       }
-    })
+    }
+    if (inactiveAccount) {
+      this.inactiveClaudeCache.set(inactiveAccount.accountId, next)
+      this.pushToRenderer()
+    } else {
+      this.activeFailureStreakByProvider.claude = 0
+      this.updateState({ ...this.state, claude: next })
+    }
   }
 }

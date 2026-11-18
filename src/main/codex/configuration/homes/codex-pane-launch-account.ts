@@ -19,7 +19,7 @@ type CodexPaneLaunchAccountSettings = Pick<
   'activeCodexManagedAccountId' | 'activeCodexManagedAccountIdsByRuntime' | 'codexManagedAccounts'
 >
 
-// Resumes pin CODEX_HOME independently of selection; restart prompts must name the actual account.
+// Workspace bindings and resumes can launch a home other than the host default.
 export function resolveCodexPaneLaunchAccount(args: {
   pinnedByResume: boolean
   launchCodexHomePath: string | null
@@ -27,14 +27,16 @@ export function resolveCodexPaneLaunchAccount(args: {
   settings: CodexPaneLaunchAccountSettings
   target: CodexAccountSelectionTarget
 }): CodexPaneAccountRecord | null {
+  const homeOwner = resolveCodexHomeOwnerAccountId(args)
   const accountId = args.pinnedByResume
-    ? resolveCodexHomeOwnerAccountId(args)
-    : getSelectedCodexAccountIdForTarget(args.settings, args.target)
+    ? homeOwner
+    : (homeOwner ?? getSelectedCodexAccountIdForTarget(args.settings, args.target))
   if (accountId === undefined) {
     return null
   }
   return {
     selectionKey: getCodexSelectionLaneKey(args.target),
+    ...(args.pinnedByResume ? { pinnedByResume: true } : {}),
     accountId,
     homeRoute: resolveCodexPaneHomeRoute(args)
   }

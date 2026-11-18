@@ -18,13 +18,19 @@ In Codex account settings, choose **Import from home**, then select the home dir
 
 From the CLI, run `orca account add --agent codex --home PATH`. A Windows path imports into the native host; a WSL UNC path selects its own distro. This imports credentials only.
 
+## Choose an account per workspace
+
+Open the workspace context menu, then **Agent accounts**, and choose the Codex or Claude account for that workspace. This also works for folder workspaces. A saved workspace choice takes precedence over the host default for new launches. Clear the workspace choice to inherit the host default again.
+
+Accounts belong to the host running the workspace. A missing or incompatible assigned account requires attention rather than silently launching another account. Existing terminal processes keep the account they started with. Workspace-aware usage readouts use the assigned account and avoid showing another account's quota when its usage is unavailable.
+
 ## Swap accounts
 
-Click the Codex chip in the status bar to open the account switcher, or pick an account in Settings. Any new Codex session launched after that uses it, and open Codex chats move to it before their next message (a reply already running finishes first). Terminal sessions already running keep their original account until restarted.
+Click the Codex chip in the status bar to open the account switcher, or pick an account in Settings. New sessions without a workspace binding use that account, and new chats use that selection. Existing chats retain the account associated with their conversation. Terminal sessions already running keep their original account until restarted.
 
 ## Running accounts side by side
 
-Because each added account has its own isolated home, two Codex terminal sessions can run under different accounts at the same time: start one, switch accounts, start the next. Each terminal session keeps the account it launched with; chats always follow the selected account. Usage still counts against each account's own plan; Orca does not pool quota across accounts.
+In a workspace without an account binding, two Codex terminal sessions can run under different accounts: start one, switch the host account, then start the next. For a bound workspace, change its account before opening the second terminal. Each terminal session keeps the account it launched with. Workspace-bound or History-resumed chats keep their selected account; existing chats keep their conversation account. Usage still counts against each account's own plan; Orca does not pool quota across accounts.
 
 ## System default
 
@@ -37,8 +43,8 @@ For managed Codex accounts, Orca mirrors settings from your real `~/.codex/confi
 ## Rules & gotchas
 
 - Swapping does not re-authenticate; Orca launches new sessions in the selected account's home.
-- Existing Codex terminal processes keep their current account until restart. Chats switch on their next message.
-- Usage readouts in the status bar follow the currently-active account.
+- Existing Codex terminal processes keep their current account until restart. Existing chats retain their conversation account; workspace and History account choices apply when opening a conversation.
+- Usage readouts follow the workspace account when one is assigned, otherwise the host selection. A running terminal can still retain an earlier launch account.
 - The restart chip preserves the active account at the time of restart.
 - Accounts belong to the machine that runs the agent. On a [Remote Orca Server](/docs/remote-servers), add them on that server.
 

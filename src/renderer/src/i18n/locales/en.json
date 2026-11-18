@@ -25505,6 +25505,21 @@
         "provisionFailed": "The VM was not created, or creation was interrupted. Open Settings to destroy or remove it."
       },
       "suspendFailed": "Failed to suspend VM workspace"
+    },
+    "codexAccount": {
+      "loading": "Loading accounts…",
+      "inherit": "Use host default",
+      "missing": "Assigned account unavailable",
+      "unsupported": "Update this host to choose an account per workspace.",
+      "scope": "For new sessions in this workspace",
+      "wslHost": "This WSL host uses the desktop account selection."
+    },
+    "account": {
+      "empty": "Add {{provider}} accounts in Settings > AI Provider Accounts.",
+      "failed": "Could not save the workspace {{provider}} account.",
+      "title": "{{provider}} account",
+      "agents": "Agent accounts",
+      "savedForNewSessions": "New sessions will use {{account}}. Running sessions keep their account."
     }
   },
   "tabHoverCard": {
@@ -29726,6 +29741,10 @@
       "refresh": "The previous Refresh could not be completed. Try Refresh again.",
       "read": "Usage could not be loaded. Try Refresh again.",
       "retry": "Refresh"
+    },
+    "codex": {
+      "hostDefaultAccount": "Host default account",
+      "workspaceAccount": "Workspace account"
     }
   },
   "crashReport": {

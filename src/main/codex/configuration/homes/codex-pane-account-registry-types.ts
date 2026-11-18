@@ -3,6 +3,10 @@ export type CodexPaneHomeRoute = 'real-home' | 'shared-home' | 'account-home' | 
 export type CodexPaneAccountRecord = {
   /** Spawn selection lane: host or wsl:<distro>. */
   selectionKey: string
+  /** Workspace whose launch choices this pane follows; absent from older records. */
+  workspaceId?: string
+  pinnedByWorkspace?: boolean
+  pinnedByResume?: boolean
   /** Managed account id, or null for the system-default account. */
   accountId: string | null
   /** Older records lack route provenance. */

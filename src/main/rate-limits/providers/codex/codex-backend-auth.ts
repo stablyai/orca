@@ -71,7 +71,8 @@ export async function getCodexBackendAuthHeaders(
     return null
   }
   const authPath = join(getCodexHomePath(options?.codexHomePath), 'auth.json')
-  const auth = JSON.parse(await readBackendAuth(authPath, signal)) as CodexAuthFile
+  const snapshot = options && 'authSnapshot' in options ? options.authSnapshot : undefined
+  const auth: CodexAuthFile = JSON.parse(snapshot ?? (await readBackendAuth(authPath, signal)))
   const accessToken = auth.tokens?.access_token
   if (!accessToken) {
     return null

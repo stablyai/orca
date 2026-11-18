@@ -1,3 +1,5 @@
+import { codexWorkspaceAccountId } from '../../../../shared/agent-accounts/codex/codex-workspace-account'
+import type { CodexManagedAccount } from '../../../../shared/agent-accounts/managed-account-types'
 import { resolveHostCodexSessionSourceHome } from '../../../codex/history/rollouts/codex-session-source-home'
 import { startSystemCodexSessionBridgeInBackground } from '../../../codex/history/bridges/codex-session-bridge'
 import { isCodexHistorySharedAcrossAccounts } from './codex-history-sharing'
@@ -24,6 +26,51 @@ import { getWslHomeAsync } from '../../../wsl/discovery/distro-catalog'
 import type { CodexHomeLaunchOptions } from '../runtime-home-service-types'
 
 export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
+  private workspaceAccount(
+    workspaceId?: string,
+    target?: CodexAccountSelectionTarget
+  ): CodexManagedAccount | null {
+    const settings = this.store.getSettings()
+    const id = codexWorkspaceAccountId(settings.codexWorkspaceAccounts, workspaceId)
+    if (!id) {
+      return null
+    }
+    const account = settings.codexManagedAccounts.find((entry) => entry.id === id)
+    if (!account) {
+      throw new Error(
+        'The Codex account assigned to this workspace was removed. Choose another account.'
+      )
+    }
+    if ((account.managedHomeRuntime === 'wsl') !== (target?.runtime === 'wsl')) {
+      return null
+    }
+    return account
+  }
+
+  private workspaceAccountHome(
+    account: CodexManagedAccount,
+    target?: CodexAccountSelectionTarget
+  ): string {
+    if (target?.runtime === 'wsl') {
+      const distro = this.resolveWslDefaultTarget(target).wslDistro?.trim()
+      const home = this.getWslLaunchCodexHomePath(account, distro)
+      if (home) {
+        return home
+      }
+      throw new Error('The workspace Codex account belongs to a different host or WSL distro.')
+    }
+    if (account.managedHomeRuntime === 'wsl') {
+      throw new Error('A WSL Codex account cannot launch on this host.')
+    }
+    const resolved = this.resolveSelfContainedManagedHome(account)
+    if (resolved.kind !== 'owned') {
+      throw new Error(
+        'The workspace Codex account home is unavailable. Sign in again or choose another account.'
+      )
+    }
+    return resolved.homePath
+  }
+
   protected initializeLastSyncedState(): void {
     const settings = this.store.getSettings()
     const activeAccount = this.getActiveAccount(
@@ -42,6 +89,23 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
     launchEnv?: NodeJS.ProcessEnv,
     options?: CodexHomeLaunchOptions
   ): string | null {
+    const workspaceAccount = this.workspaceAccount(options?.workspaceId, target)
+    if (workspaceAccount) {
+      const home = this.workspaceAccountHome(workspaceAccount, target)
+      if (target?.runtime === 'wsl') {
+        this.finishWslLaunchPreparation(target, home)
+        return home
+      }
+      const prepared = this.prepareSelfContainedManagedHomeForLaunch(
+        workspaceAccount,
+        options?.unavailableManagedHomePath,
+        options?.deferConfigSync
+      )
+      if (!prepared) {
+        throw new Error('The workspace Codex account home is unavailable.')
+      }
+      return prepared
+    }
     if (target?.runtime === 'wsl') {
       const wslTarget = this.resolveWslDefaultTarget(target)
       const homePath = this.getWslCodexHomePathForSelection(wslTarget)
@@ -92,7 +156,14 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
   }
 
   /** Resolve the launch home without side effects for catalog reads; null means real ~/.codex. */
-  resolveHostCodexHomePathForLaunchReadOnly(launchEnv?: NodeJS.ProcessEnv): string | null {
+  resolveHostCodexHomePathForLaunchReadOnly(
+    launchEnv?: NodeJS.ProcessEnv,
+    workspaceId?: string
+  ): string | null {
+    const workspaceAccount = this.workspaceAccount(workspaceId)
+    if (workspaceAccount) {
+      return this.workspaceAccountHome(workspaceAccount)
+    }
     const selfContainedAccount = this.getSelfContainedManagedHostAccount()
     if (selfContainedAccount) {
       const resolved = this.resolveSelfContainedManagedHome(selfContainedAccount)
@@ -119,6 +190,24 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
     launchEnv?: NodeJS.ProcessEnv,
     options?: CodexHomeLaunchOptions
   ): Promise<string | null> {
+    const workspaceAccount = this.workspaceAccount(options?.workspaceId, target)
+    if (workspaceAccount) {
+      const home = this.workspaceAccountHome(workspaceAccount, target)
+      if (target?.runtime === 'wsl') {
+        const wslTarget = this.resolveWslDefaultTarget(target)
+        if (await blockedWslDistroForExec(wslTarget.wslDistro)) {
+          return home
+        }
+        await this.startLegacyWslAuthDrain(wslTarget, { throwOnFailure: true })
+        await this.prepareWslAccountHistory(wslTarget, home)
+      } else {
+        await this.prepareAccountHistory(home)
+      }
+      if (this.workspaceAccount(options?.workspaceId, target)?.id !== workspaceAccount.id) {
+        throw new Error('The workspace Codex account changed during preparation. Launch again.')
+      }
+      return this.prepareForCodexLaunch(target, launchEnv, options)
+    }
     if (target?.runtime !== 'wsl') {
       // Codex must start on linked history, so the launched home's pass finishes first; the
       // selection or the setting may change while it runs, so prepare until both held still.

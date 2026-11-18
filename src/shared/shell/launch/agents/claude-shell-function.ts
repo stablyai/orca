@@ -8,8 +8,9 @@ export function getPosixClaudeShellFunction(): string {
   return `__orca_claude_binary="$(unalias claude 2>/dev/null || :; command -v claude 2>/dev/null || :)"
 # Why typeset -f: a user's own claude function wins; command -v prints its bare name, which -x tests against the cwd.
 if ! typeset -f claude >/dev/null 2>&1 && [[ -n "\${__orca_claude_binary:-}" && -x "\${__orca_claude_binary}" ]] &&
-   [[ -n "\${ORCA_CLAUDE_PROFILE_POINTER:-}" || "\${${ORCA_IMAGE_PROTOCOL_ENV}:-}" == '${ORCA_IMAGE_PROTOCOL_VALUE}' ]]; then
+   [[ -n "\${ORCA_CLAUDE_PROFILE_POINTER:-}" || -n "\${ORCA_CLAUDE_LAUNCH_ERROR:-}" || "\${${ORCA_IMAGE_PROTOCOL_ENV}:-}" == '${ORCA_IMAGE_PROTOCOL_VALUE}' ]]; then
   function claude {
+    if [ -n "\${ORCA_CLAUDE_LAUNCH_ERROR:-}" ]; then printf '%s\\n' "\${ORCA_CLAUDE_LAUNCH_ERROR}" >&2; return 1; fi
     local __orca_claude_home __orca_claude_pointer="\${ORCA_CLAUDE_PROFILE_POINTER:-}"
     if [[ "\${${ORCA_IMAGE_PROTOCOL_ENV}:-}" == '${ORCA_IMAGE_PROTOCOL_VALUE}' && -z "\${CLAUDE_CODE_FORCE_TERMINAL_IMAGES+x}" ]]; then
       local -x CLAUDE_CODE_FORCE_TERMINAL_IMAGES=1
@@ -46,8 +47,12 @@ unset __orca_claude_binary
 export function getFishClaudeShellFunction(): string {
   return `
 set -l __orca_claude_type (type -t claude 2>/dev/null)
-if test "$__orca_claude_type" = file; and begin; test -n "$ORCA_CLAUDE_PROFILE_POINTER"; or test "$${ORCA_IMAGE_PROTOCOL_ENV}" = '${ORCA_IMAGE_PROTOCOL_VALUE}'; end
+if test "$__orca_claude_type" = file; and begin; test -n "$ORCA_CLAUDE_PROFILE_POINTER"; or test -n "$ORCA_CLAUDE_LAUNCH_ERROR"; or test "$${ORCA_IMAGE_PROTOCOL_ENV}" = '${ORCA_IMAGE_PROTOCOL_VALUE}'; end
   function claude
+    if test -n "$ORCA_CLAUDE_LAUNCH_ERROR"
+      printf '%s\\n' "$ORCA_CLAUDE_LAUNCH_ERROR" >&2
+      return 1
+    end
     test "$${ORCA_IMAGE_PROTOCOL_ENV}" = '${ORCA_IMAGE_PROTOCOL_VALUE}'; and not set -q CLAUDE_CODE_FORCE_TERMINAL_IMAGES; and set -lx CLAUDE_CODE_FORCE_TERMINAL_IMAGES 1
     if test -z "$ORCA_CLAUDE_PROFILE_POINTER"
       command claude $argv
@@ -83,9 +88,10 @@ set -e __orca_claude_type
 
 export function getPowerShellClaudeShellFunction(): string {
   return `$orcaClaudeCommand = Get-Command claude -ErrorAction SilentlyContinue | Select-Object -First 1
-if (($env:ORCA_CLAUDE_PROFILE_POINTER -or $env:${ORCA_IMAGE_PROTOCOL_ENV} -ceq '${ORCA_IMAGE_PROTOCOL_VALUE}') -and $orcaClaudeCommand -and
+if (($env:ORCA_CLAUDE_PROFILE_POINTER -or $env:ORCA_CLAUDE_LAUNCH_ERROR -or $env:${ORCA_IMAGE_PROTOCOL_ENV} -ceq '${ORCA_IMAGE_PROTOCOL_VALUE}') -and $orcaClaudeCommand -and
     $orcaClaudeCommand.CommandType -in @("Application", "ExternalScript")) {
 function Global:claude {
+    if ($env:ORCA_CLAUDE_LAUNCH_ERROR) { Write-Error $env:ORCA_CLAUDE_LAUNCH_ERROR -ErrorAction Continue; $global:LASTEXITCODE = 1; return }
     $names = @('CLAUDE_CONFIG_DIR', 'ORCA_CLAUDE_INJECTED_CONFIG_DIR', 'CLAUDE_CODE_FORCE_TERMINAL_IMAGES')
     $saved = @{}
     foreach ($name in $names) { $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }

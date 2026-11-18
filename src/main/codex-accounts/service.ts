@@ -286,7 +286,11 @@ export class CodexAccountService {
     return this.resetCredits.consumeCurrent()
   }
 
-  private resolveSystemDefaultIdentity(): CodexSystemDefaultIdentity {
+  private getSnapshot(): CodexRateLimitAccountsState {
+    return this.selection.snapshot()
+  }
+
+  resolveSystemDefaultIdentity(): CodexSystemDefaultIdentity {
     return this.identity.resolveSystemDefault(this.configMirror.readHostModelProvider())
   }
 

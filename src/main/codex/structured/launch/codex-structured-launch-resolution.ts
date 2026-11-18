@@ -152,7 +152,9 @@ export function codexStructuredLaunchPart(
     const model = record.options?.model
     const visuals = await basis.visuals()
     const launchDirectory = await basis.launchDirectory()
-    const selectedHome = await deps.prepareLaunchAccountHome?.(record, launchDirectory)
+    const selectedHome = resumeThreadId
+      ? record.accountHome
+      : await deps.prepareLaunchAccountHome?.(record, launchDirectory)
     const accountHome = selectedHome
       ? requireLegacyAgentSessionAccountHome(selectedHome)
       : recordHome

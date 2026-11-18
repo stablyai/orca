@@ -7,7 +7,10 @@ import {
 } from '../../../codex/configuration/homes/codex-home-paths'
 import { syncSystemConfigIntoManagedCodexHome } from '../../../codex/configuration/settings/codex-config-mirror'
 import { CodexAccountHistoryPasses } from '../../../codex/history/shared-store/codex-account-history-passes'
-import { isCodexHistorySharedAcrossAccounts } from './codex-history-sharing'
+import {
+  isCodexHistorySharedAcrossAccounts,
+  isCodexHistorySharedForHome
+} from './codex-history-sharing'
 import { resolveHostCodexSessionSourceHome } from '../../../codex/history/rollouts/codex-session-source-home'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
@@ -150,7 +153,7 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
   prepareAccountHistory(accountHome: string, options: { forLaunch?: boolean } = {}): Promise<void> {
     return this.accountHistoryPasses.run(
       accountHome,
-      isCodexHistorySharedAcrossAccounts(this.store.getSettings()),
+      isCodexHistorySharedForHome(this.store.getSettings(), accountHome),
       options
     )
   }
@@ -322,7 +325,7 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
           distro,
           accountHome,
           storeHome: linuxPathOf(storeHome),
-          shared: isCodexHistorySharedAcrossAccounts(this.store.getSettings())
+          shared: isCodexHistorySharedForHome(this.store.getSettings(), accountHome, distro)
         },
         { forLaunch }
       )

@@ -46,6 +46,7 @@ export function publishCommittedPtySpawn(input: PtySpawnCommitInput): PtySpawnOu
     reattach: result.isReattach ?? false
   })
   recordCodexPaneAccountForSpawn({
+    workspaceId: args.worktreeId,
     ptyId: result.id,
     isDaemonHostSpawn: state.isDaemonHostSpawn,
     isReattach: result.isReattach === true,

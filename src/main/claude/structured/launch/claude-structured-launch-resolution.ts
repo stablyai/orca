@@ -34,13 +34,13 @@ import type {
 } from '../../cli-capabilities/claude-cli-flag-support'
 import { resolveClaudeLaunchFlags } from './claude-structured-launch-flags'
 import { withNativeChatVisualsEnv } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
-import { claudeLaunchResumesTranscript } from './claude-structured-launch-home'
+import {
+  claudeLaunchResumesTranscript,
+  claudeRewindForkOptions
+} from './claude-structured-launch-home'
 import type { StructuredAgentLaunchPartResolver } from '../../../runtime/agent-session/launch/structured-agent-launch-composition'
 import { claudeSessionIdForOrcaSession } from '../lifecycle/claude-structured-session-id'
-import {
-  pendingAgentSessionRewindFork,
-  type AgentSessionRewindFork
-} from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
+import { pendingAgentSessionRewindFork } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 
 export const CLAUDE_SESSION_STATE_EVENTS_ENV = 'CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS'
 
@@ -245,7 +245,14 @@ export function claudeStructuredLaunchPart(
       sources,
       { runtimeOnPath: false }
     )
-    const accountRecipe = await prepareClaudeLaunchAccount(router, env, accountHome.path)
+    const accountRecipe = await prepareClaudeLaunchAccount(
+      router,
+      env,
+      accountHome.path,
+      record.location.workspaceId,
+      fork?.sourceSessionId ?? head?.nativeId,
+      record
+    )
     const launchHome = accountRecipe.home
     // Read the config of the account directory the spawn pins, as session acquisition does.
     const chromeArgs = await claudeInChromeDefaultArgs(
@@ -307,13 +314,4 @@ export function claudeStructuredLaunchPart(
       cliRuntimeCommand: command
     }
   }
-}
-
-/** Until Claude writes the rewind's session, each launch forks it from the kept conversation. */
-function claudeRewindForkOptions(
-  fork: AgentSessionRewindFork
-): Pick<ClaudeStructuredSdkOptions, 'resume' | 'resumeSessionAt' | 'forkSession'> {
-  return fork.throughEntryId
-    ? { resume: fork.sourceSessionId, resumeSessionAt: fork.throughEntryId, forkSession: true }
-    : {}
 }
