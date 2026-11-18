@@ -1,6 +1,7 @@
 // A bot picture's corner badge, drawn the same in both card styles: worktree cards size theirs per style.
 import type React from 'react'
-import { Moon } from 'lucide-react'
+import { Gauge, Moon } from 'lucide-react'
+import { StateIndicatorTooltip } from '@/components/agent/status/StateIndicatorTooltip'
 import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
 import { selectIsSleepingWorktree } from '@/components/sidebar/workspace-actions/sleep/use-worktree-sleep-state'
 import { useTranslate } from '@/i18n/use-translate'
@@ -22,6 +23,8 @@ export type BotAvatarBadgeState = {
   status: WorktreeStatus | null
   isUnread: boolean
   sleeping: boolean
+  /** Stopped on a usage limit while quiet: the usage-limit gauge, with this as its tooltip. */
+  stopTip?: string | null
 }
 
 /** Whether the home sleeps while its status is quiet, so its badge is the moon. */
@@ -37,12 +40,14 @@ export function useBotAvatarBadgeSleeping(
 export function botAvatarBadgeCutout({
   status,
   isUnread,
-  sleeping
+  sleeping,
+  stopTip = null
 }: BotAvatarBadgeState): React.CSSProperties | undefined {
-  if (status === null && !isUnread) {
+  if (status === null && !isUnread && !stopTip) {
     return undefined
   }
-  const radius = ICON_STATUSES.has(status) || (sleeping && QUIET_STATUSES.has(status)) ? 8 : 6
+  const radius =
+    stopTip || ICON_STATUSES.has(status) || (sleeping && QUIET_STATUSES.has(status)) ? 8 : 6
   return {
     maskImage: `radial-gradient(circle at calc(100% - 3px) calc(100% - 3px), transparent ${radius}px, #000 ${radius + 0.5}px)`
   }
@@ -52,10 +57,33 @@ export function botAvatarBadgeCutout({
 export function BotAvatarStatusBadge({
   status,
   isUnread,
-  sleeping
+  sleeping,
+  stopTip = null
 }: BotAvatarBadgeState): React.JSX.Element {
   const t = useTranslate()
   const anchor = 'absolute right-[3px] bottom-[3px] flex size-0 items-center justify-center'
+  if (stopTip) {
+    return (
+      <span data-worktree-card-status-slot="" className={anchor}>
+        <StateIndicatorTooltip label={stopTip}>
+          <span role="img" aria-label={stopTip} className="relative flex size-3 shrink-0">
+            <span
+              className="flex size-3 items-center justify-center"
+              style={isUnread ? UNREAD_BITE : undefined}
+            >
+              <Gauge className="size-3 text-status-warning" aria-hidden />
+            </span>
+            {isUnread ? (
+              <span
+                data-bot-unread-dot=""
+                className="absolute -right-0.5 -bottom-0.5 size-1.5 rounded-full bg-unread"
+              />
+            ) : null}
+          </span>
+        </StateIndicatorTooltip>
+      </span>
+    )
+  }
   if (status === null && !isUnread) {
     return <span data-worktree-card-status-slot="" className={anchor} />
   }

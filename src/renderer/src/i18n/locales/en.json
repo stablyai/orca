@@ -29026,6 +29026,14 @@
       "copyHowToAsk": "Copy {{text}}",
       "forOnHost": "for {{name}} on {{host}}",
       "for": "for {{name}}"
+    },
+    "usageLimit": {
+      "continuesAt": "Continues at {{time}}",
+      "hitLimit": "Hit limit · resets {{time}}",
+      "continuesTip": "Continues automatically at {{time}}",
+      "hitTip": "{{agent}} hit its usage limit · resets {{time}}",
+      "continuesShort": "Continues {{time}}",
+      "hitShort": "Hit limit"
     }
   },
   "plugins": {
