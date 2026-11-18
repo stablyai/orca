@@ -10,10 +10,7 @@ import { getLogicalRepoOrderRankById } from '../sections/project-section-order'
 import type { ProjectSectionModel } from '../sections/project-section-grouping'
 import type { Repo } from '../../repository/repo-types'
 import type { ProjectOrderBy } from '../../ui-chrome/ui-chrome-types'
-import {
-  filterFolderWorkspacesFromOtherDevices,
-  isWorkspaceOwnedBySomeoneElse
-} from '../../workspace-view/workspace-creator-visibility'
+import { isWorkspaceOwnedBySomeoneElse } from '../../workspace-view/workspace-creator-visibility'
 import type { WorkspaceRowFilters } from '../../workspace-view/workspace-row-filters'
 import { getWorktreeHostIdentity } from '../../worktree/host-qualified-identity'
 import { hiddenProjectRowFacts, indexHiddenProjects } from '../../project/catalog/hidden-projects'
@@ -31,11 +28,11 @@ import type { WorktreeLineage } from '../../worktree/lineage-types'
 import type { FolderWorkspace } from '../../folder-workspaces/folder-workspace-types'
 import { getEmptyProjectPlaceholderRepoIds } from '../catalog/empty-project-placeholder-repos'
 import {
-  filterFolderWorkspacesForVisibleHosts,
   filterProjectGroupsForVisibleHosts,
   filterReposForVisibleHosts,
   getVisibleSidebarHostIdSet
 } from '../hosts/host-filtering'
+import { sidebarFeedVisibleFolderWorkspaces } from './sidebar-feed-visible-folders'
 import { deferHostSectionCollapse, scopeHostSectionCollapse } from '../hosts/host-section-collapse'
 import { orderHostSectionOptions } from '../hosts/host-section-order'
 import {
@@ -180,18 +177,18 @@ export function planSidebarFeedRows(
     view.workspaceHostScope
   )
   const visibleRepos = filterReposForVisibleHosts(repos, visibleHostIdSet, defaultHostId)
-  const hostVisibleFolderWorkspaces = filterFolderWorkspacesForVisibleHosts(
-    withoutBotListedFolderWorkspaces(folderWorkspaces, extras.botListedWorktreeIdentities),
+  const visibleFolderWorkspaces = sidebarFeedVisibleFolderWorkspaces({
+    folderWorkspaces: withoutBotListedFolderWorkspaces(
+      folderWorkspaces,
+      extras.botListedWorktreeIdentities
+    ),
     projectGroups,
     visibleHostIdSet,
-    defaultHostId
-  )
-  const visibleFolderWorkspaces = view.filters.hideWorkspacesFromOtherDevices
-    ? filterFolderWorkspacesFromOtherDevices(
-        hostVisibleFolderWorkspaces,
-        pairedDeviceIdsByEnvironment
-      )
-    : hostVisibleFolderWorkspaces
+    defaultHostId,
+    hideWorkspacesFromOtherDevices: view.filters.hideWorkspacesFromOtherDevices,
+    pairedDeviceIdsByEnvironment,
+    hideDoneWorkspaces: view.filters.hideDoneWorkspaces
+  })
   const visibleProjectGroups = filterProjectGroupsForVisibleHosts(
     projectGroups,
     visibleHostIdSet,
