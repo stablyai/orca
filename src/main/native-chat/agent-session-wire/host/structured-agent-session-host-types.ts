@@ -265,7 +265,12 @@ export type StructuredAgentSessionHostDeps = {
 }
 
 /** Whether a turn of this session that ended with this outcome is no news. */
-export type QuietTurnEnd = (sessionId: string, outcome: 'success' | 'failure') => boolean
+/** `usageLimited`: the turn ended at the agent's usage limit. */
+export type QuietTurnEnd = (
+  sessionId: string,
+  outcome: 'success' | 'failure',
+  usageLimited?: boolean
+) => boolean
 
 export type SetUserConversationName = StructuredAgentSessionConversationNaming['setUserName']
 
