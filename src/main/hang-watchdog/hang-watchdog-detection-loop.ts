@@ -10,6 +10,8 @@ export type HangWatchdogDetectionLoopConfig = {
   onHangResolved: (unresponsiveMs: number) => void
   /** Heartbeats resumed after a stall no tick saw; its evidence can only be gathered afterwards. */
   onStallMissed?: (unresponsiveMs: number, startedAt: number) => void
+  /** A sleep interrupted a detected stall; its silence after this point belongs to the machine. */
+  onStallEndedBySleep?: () => void
   onWatchdogGap?: (gapMs: number, startedAt: number) => void
 }
 
@@ -49,6 +51,10 @@ export function createHangWatchdogDetectionLoop(
       if (tickGap > sleepGapMs) {
         if (tickGap > config.timeoutMs) {
           config.onWatchdogGap?.(tickGap, now - tickGap)
+        }
+        if (detected === 'stall') {
+          detected = null
+          config.onStallEndedBySleep?.()
         }
         if (!detected) {
           lastHeartbeatAt = now

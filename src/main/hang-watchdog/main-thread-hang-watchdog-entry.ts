@@ -4,7 +4,6 @@ import { createHangWatchdogDetectionLoop } from './hang-watchdog-detection-loop'
 import { readAvailableHangDetectionMarker, writeHangDetectionMarker } from './hang-detection-marker'
 import {
   asHangObservations,
-  isHangTierObservation,
   emptyHangObservations,
   mergeHangObservations,
   parsePowerReceipt,
@@ -15,6 +14,7 @@ import {
 import { captureHangSnapshot } from './hang-snapshot'
 import { createWatchdogHangCapture } from './watchdog-hang-capture'
 import { recentWorkerSends } from './hang-recent-worker-sends'
+import { JS_ONLY, NATIVE_ONLY, stallRecoveredMessage, suspendedSince } from './hang-stall-tier'
 import type {
   HangWatchdogToMainMessage,
   HangWatchdogWorkerData,
@@ -127,7 +127,7 @@ export function runWatchdog(
   type ObserveOptions = {
     tier?: HangObservation['tier']
     capture?: { js: boolean; native: boolean }
-    /** Heartbeats already resumed: record the episode as resolved at detection. */
+    /** Heartbeats already resumed; no resolution snapshot, since detection is the recovery. */
     recovered?: boolean
   }
   const observe = (
@@ -170,7 +170,7 @@ export function runWatchdog(
       initialSleepAssociated,
       ...(kind === 'heartbeat-stall' ? { workerSends: recentWorkerSends(now) } : {}),
       ...(options.tier ? { tier: options.tier } : {}),
-      ...(options.recovered ? { selfRecovered: true, resolution: snapshot } : {})
+      ...(options.recovered ? { selfRecovered: true } : {})
     }
     observations = retainHangObservation(observations, record)
     if (kind === 'heartbeat-stall' && !options.recovered) {
@@ -178,20 +178,14 @@ export function runWatchdog(
     }
     openReceiptWindow(record.id)
     save()
-    if (!isMainThread && !options.recovered) {
+    if (!isMainThread && !options.recovered && find(record.id)) {
       captures.capture(record, detectedAt, showMenuBarIcon, options.capture)
     }
     enrich(record)
     return record.id
   }
   const reportRecovered = (id: string, unresponsiveMs: number): void => {
-    const record = find(id)
-    port.postMessage?.({
-      type: 'stall-recovered',
-      tier: record && isHangTierObservation(record) ? 'hang' : 'stall',
-      unresponsiveMs,
-      endedAt: Date.now()
-    })
+    port.postMessage?.(stallRecoveredMessage(find(id), unresponsiveMs, Date.now()))
   }
   const loop = createHangWatchdogDetectionLoop({
     timeoutMs: config.timeoutMs,
@@ -199,10 +193,10 @@ export function runWatchdog(
     now: () => Date.now(),
     stallMs: config.stallMs,
     onStallDetected: (durationMs) => {
-      observe('heartbeat-stall', durationMs, Date.now() - durationMs, {
-        tier: 'stall',
-        capture: { js: true, native: false }
-      })
+      const startedAt = Date.now() - durationMs
+      if (!suspendedSince(recentPower, startedAt)) {
+        observe('heartbeat-stall', durationMs, startedAt, { tier: 'stall', capture: JS_ONLY })
+      }
     },
     onHangDetected: (durationMs) => {
       const stall = activeStallId ? find(activeStallId) : undefined
@@ -213,7 +207,7 @@ export function runWatchdog(
       // Same record (and detectedAt) so the native artifact still pairs with it at next launch.
       update(stall.id, { tier: 'hang', escalatedAt: Date.now() })
       if (!isMainThread) {
-        captures.capture(stall, performance.now(), showMenuBarIcon, { js: false, native: true })
+        captures.capture(stall, performance.now(), showMenuBarIcon, NATIVE_ONLY)
       }
     },
     onHangResolved: (unresponsiveMs) => {
@@ -227,16 +221,20 @@ export function runWatchdog(
       openReceiptWindow(id)
       reportRecovered(id, unresponsiveMs)
     },
-    onStallMissed: (durationMs, startedAt) => {
-      // A suspend inside the silence means the machine slept, not that main stalled.
-      if (recentPower.some((item) => item.event === 'suspend' && item.observedAt >= startedAt)) {
-        return
+    onStallEndedBySleep: () => {
+      if (activeStallId) {
+        captures.recover(activeStallId)
+        activeStallId = null
       }
-      const id = observe('heartbeat-stall', durationMs, startedAt, {
-        tier: 'stall',
-        recovered: true
-      })
-      reportRecovered(id, durationMs)
+    },
+    onStallMissed: (durationMs, startedAt) => {
+      if (!suspendedSince(recentPower, startedAt)) {
+        const id = observe('heartbeat-stall', durationMs, startedAt, {
+          tier: 'stall',
+          recovered: true
+        })
+        reportRecovered(id, durationMs)
+      }
     },
     onWatchdogGap: (durationMs, startedAt) => {
       const overlapping = observations.observations.findLast(

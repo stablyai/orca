@@ -8,7 +8,6 @@ type CaptureOwner = {
   stop?: (reason: 'recovery' | 'shutdown') => void
 }
 
-/** A stall tier profiles JS only; the native sample waits for the hang timeout. */
 type CaptureParts = { js: boolean; native: boolean }
 
 export function createWatchdogHangCapture(options: {

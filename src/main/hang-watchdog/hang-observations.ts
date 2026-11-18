@@ -1,4 +1,5 @@
 import {
+  hangObservationUnresponsiveMs,
   isHangTierObservation,
   mergeHangTierFields,
   parseHangTierFields,
@@ -16,7 +17,7 @@ import {
   parseNativeHangCapture
 } from './hang-capture-codec'
 import { parseHangWorkerSends } from './hang-worker-sends'
-export { isHangTierObservation, MACHINE_FIELDS, SNAPSHOT_FIELDS } from './hang-observation-schema'
+export { MACHINE_FIELDS, SNAPSHOT_FIELDS } from './hang-observation-schema'
 export type {
   HangSnapshot,
   HangMachineSnapshot,
@@ -255,8 +256,10 @@ export function retainHangObservation(
     return { ...collection, observations }
   }
   const candidates = [...collection.observations, record]
+  // The new record is always kept: an episode still being captured must have a row to publish into.
   const anchors = new Set(
     [
+      record,
       candidates.find(isHangTierObservation),
       candidates.find((item) => item.kind === 'watchdog-gap' && !item.initialSleepAssociated)
     ].filter((item): item is HangObservation => !!item)
@@ -296,9 +299,7 @@ export function latestHangMarker(
     ? {
         detectedAt: record.detectedAt,
         parentPid: record.parentPid,
-        unresponsiveMs:
-          record.durationMs +
-          Math.max(0, (record.resolution?.wallMs ?? record.detectedAt) - record.detectedAt),
+        unresponsiveMs: hangObservationUnresponsiveMs(record),
         selfRecovered: record.selfRecovered
       }
     : null

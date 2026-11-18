@@ -123,4 +123,34 @@ describe('createHangWatchdogDetectionLoop', () => {
     loop.recordHeartbeat()
     expect(onStallMissed).not.toHaveBeenCalled()
   })
+
+  it('ends a detected stall at a sleep gap instead of growing it into a hang', () => {
+    let now = 0
+    const onHangDetected = vi.fn()
+    const onHangResolved = vi.fn()
+    const onStallEndedBySleep = vi.fn()
+    const loop = createHangWatchdogDetectionLoop({
+      timeoutMs: TIMEOUT_MS,
+      checkIntervalMs: CHECK_INTERVAL_MS,
+      stallMs: 8_000,
+      now: () => now,
+      onHangDetected,
+      onHangResolved,
+      onStallDetected: vi.fn(),
+      onStallEndedBySleep
+    })
+    loop.recordHeartbeat()
+    now += 5_000
+    loop.tick()
+    now += 5_000
+    loop.tick()
+    now += 3_600_000
+    loop.tick()
+    expect(onStallEndedBySleep).toHaveBeenCalledTimes(1)
+    now += 5_000
+    loop.tick()
+    expect(onHangDetected).not.toHaveBeenCalled()
+    loop.recordHeartbeat()
+    expect(onHangResolved).not.toHaveBeenCalled()
+  })
 })

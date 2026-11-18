@@ -15,11 +15,11 @@ import {
 import {
   asHangObservations,
   emptyHangObservations,
-  isHangTierObservation,
   latestHangMarker,
   mergeHangObservations,
   type HangObservation
 } from './hang-observations'
+import { hangObservationUnresponsiveMs, isHangTierObservation } from './hang-observation-schema'
 
 function previousMarkerPath(userDataPath: string): string {
   return `${hangDetectionMarkerPath(userDataPath)}.previous`
@@ -74,9 +74,7 @@ function observationDetails(record: HangObservation, omitted: number): CrashRepo
     Object.assign(details, hangCaptureDetails('native', record.native))
   }
   if (record.kind === 'heartbeat-stall') {
-    details.unresponsiveMs =
-      latestHangMarker({ version: 1, observations: [record], omitted: 0 })?.unresponsiveMs ??
-      record.durationMs
+    details.unresponsiveMs = hangObservationUnresponsiveMs(record)
     details.detectedUnresponsiveMs = record.durationMs
     details.selfRecovered = record.selfRecovered
     details.tier = isHangTierObservation(record) ? 'hang' : 'stall'

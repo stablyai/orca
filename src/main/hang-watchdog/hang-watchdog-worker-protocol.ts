@@ -1,6 +1,6 @@
 export const HANG_WATCHDOG_HEARTBEAT_INTERVAL_MS = 2_000
 export const HANG_WATCHDOG_TIMEOUT_MS = 45_000
-// A beachball users notice but that recovers long before the hang timeout.
+// Heartbeat age, so main itself was blocked for 6-8 s: a beachball that recovers long before the hang timeout.
 export const HANG_WATCHDOG_STALL_MS = 8_000
 export const HANG_WATCHDOG_CHECK_INTERVAL_MS = 5_000
 import type { NativeHangProcessMetadata } from './native-hang-report'

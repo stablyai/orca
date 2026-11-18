@@ -158,6 +158,54 @@ describe('previous hang detection', () => {
     ])
   })
 
+  it('keeps a new stall when four hangs are already retained', () => {
+    let collection = emptyHangObservations()
+    for (let index = 0; index < 4; index++) {
+      collection = retainHangObservation(collection, {
+        ...gap,
+        id: `789:${300 + index}:${index + 1}`,
+        kind: 'heartbeat-stall',
+        detectedAt: 300 + index,
+        durationMs: 46_000,
+        tier: 'hang'
+      })
+    }
+    collection = retainHangObservation(collection, {
+      ...gap,
+      id: '789:900:9',
+      kind: 'heartbeat-stall',
+      detectedAt: 900,
+      durationMs: 9_000,
+      tier: 'stall'
+    })
+    expect(collection.observations.map((item) => item.id)).toContain('789:900:9')
+    expect(collection.observations).toHaveLength(4)
+  })
+
+  it('reports an escalated hang that never recovered as lasting at least until escalation', () => {
+    const escalated: HangObservation = {
+      ...gap,
+      id: '789:10000:1',
+      kind: 'heartbeat-stall',
+      detectedAt: 10_000,
+      durationMs: 10_000,
+      tier: 'hang',
+      escalatedAt: 50_000
+    }
+    writeHangDetectionMarker(
+      hangDetectionMarkerPath(dir),
+      retainHangObservation(emptyHangObservations(), escalated)
+    )
+    preservePreviousHangDetection(dir)
+    setActiveSink({ push() {}, flush() {}, close() {} })
+    expect(reportPreviousHangDetection(dir)).toEqual({
+      detectedAt: 10_000,
+      parentPid: 789,
+      unresponsiveMs: 50_000,
+      selfRecovered: false
+    })
+  })
+
   it('reads a stall-only previous run as no hang', () => {
     const stall: HangObservation = {
       ...gap,
