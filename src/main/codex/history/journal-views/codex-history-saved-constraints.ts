@@ -1,6 +1,7 @@
 import { isDeepStrictEqual } from 'node:util'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
+  codexFileChangePatch,
   codexItemBody,
   codexMessageBlocks
 } from '../../structured/items/codex-structured-item-translation'
@@ -185,6 +186,10 @@ export function constrainSavedHistoryItem(
         }
         if (item.type === 'mcpToolCall' && item.error == null) {
           delete item.result
+        } else if (item.type === 'mcpToolCall') {
+          // Still an error, without the text the row holds.
+          const { message: _, ...error } = readRecord(item.error)
+          item.error = error
         }
       }
       if (body.output && !body.output.truncated) {
@@ -201,6 +206,11 @@ export function constrainSavedHistoryItem(
         }
       }
     }
+  }
+  const cut = cutJournalOutput(saved)
+  if (item.type === 'fileChange' && cut && isCutJournalOutputOf(cut, codexFileChangePatch(item))) {
+    // The row holds this patch whole: drop the source copy so the saved cut is borrowed.
+    delete item.changes
   }
   return item
 }

@@ -106,8 +106,14 @@ function fileChangeToolCall(item: CodexThreadItem, output?: string): CodexJourna
   }
 }
 
-function fileChangeItem(item: CodexThreadItem): CodexJournalItem {
-  const changes = Array.isArray(item.changes)
+/** The patch a completed file change saves: its diffs, one per changed path, joined. */
+export function codexFileChangePatch(item: CodexThreadItem): string | null {
+  const changes = fileChanges(item)
+  return changes.length === 0 ? null : changes.map((change) => change.diff).join('\n')
+}
+
+function fileChanges(item: CodexThreadItem): { path: string; diff: string }[] {
+  return Array.isArray(item.changes)
     ? item.changes.flatMap((change) => {
         const record = typeof change === 'object' && change !== null ? readRecord(change) : {}
         const path = readString(record, 'path')
@@ -115,10 +121,14 @@ function fileChangeItem(item: CodexThreadItem): CodexJournalItem {
         return path && diff ? [{ path, diff }] : []
       })
     : []
-  if (changes.length === 0 || codexItemRunState(item) !== 'completed') {
+}
+
+function fileChangeItem(item: CodexThreadItem): CodexJournalItem {
+  const changes = fileChanges(item)
+  const patch = codexFileChangePatch(item)
+  if (patch === null || codexItemRunState(item) !== 'completed') {
     return fileChangeToolCall(item)
   }
-  const patch = changes.map((change) => change.diff).join('\n')
   return {
     body: {
       kind: 'diff',
