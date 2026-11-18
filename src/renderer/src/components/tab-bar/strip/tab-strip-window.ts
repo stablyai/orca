@@ -1,4 +1,4 @@
-import { useLayoutEffect, useState, type RefObject } from 'react'
+import { useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { findTabStripSlot } from './tab-strip-slot-geometry'
 
 /** Overflowing tabs sit at their 144px minimum (tab-width-rules.ts), so unmounted runs need no measuring. */
@@ -144,14 +144,29 @@ export function useTabStripWindowState(
   return state
 }
 
-/** Re-notify strip listeners after every commit: child listeners ran their layout effects before this commit scrolled the strip. */
+/** Re-notify strip listeners when a commit scrolled the strip: child listeners ran their layout effects before it did. */
 export function useNotifyTabStripScrollAfterCommit(
   stripRef: RefObject<HTMLElement | null>,
   listenersRef: RefObject<Set<() => void>>
 ): void {
-  // Why no scrollLeft guard: user scrolls never update it, so a commit returning to that offset would skip the update.
+  const seenScrollLeftRef = useRef(0)
+  // Why track user scrolls too: a commit that scrolls back to the last notified offset must still notify.
   useLayoutEffect(() => {
-    if (stripRef.current) {
+    const strip = stripRef.current
+    if (!strip) {
+      return
+    }
+    seenScrollLeftRef.current = strip.scrollLeft
+    const onScroll = (): void => {
+      seenScrollLeftRef.current = strip.scrollLeft
+    }
+    strip.addEventListener('scroll', onScroll, { passive: true })
+    return () => strip.removeEventListener('scroll', onScroll)
+  }, [stripRef])
+  useLayoutEffect(() => {
+    const strip = stripRef.current
+    if (strip && strip.scrollLeft !== seenScrollLeftRef.current) {
+      seenScrollLeftRef.current = strip.scrollLeft
       for (const listener of listenersRef.current) {
         listener()
       }
