@@ -8,6 +8,7 @@ import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client
 import type { ProviderAccountsSnapshot } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import {
   applyOwnerAccountsSnapshot,
+  currentOwnerAccountsStream,
   readOwnerAccounts,
   subscribeOwnerAccounts
 } from '@/runtime/provider-accounts/observations/owner-accounts-stream'
@@ -91,6 +92,7 @@ export function useAccountOwnerUsage(
     if (!ownerId) {
       return
     }
+    const startedOn = currentOwnerAccountsStream(ownerId)
     try {
       const snapshot = await callRuntimeRpc<ProviderAccountsSnapshot>(
         { kind: 'environment', environmentId: ownerId },
@@ -98,8 +100,8 @@ export function useAccountOwnerUsage(
         { refreshUsage: true },
         { timeoutMs: REMOTE_USAGE_REFRESH_TIMEOUT_MS }
       )
-      // Keyed by host, so a refresh that outlives an owner switch lands on its own host only.
-      applyOwnerAccountsSnapshot(ownerId, snapshot)
+      // Keyed by host and stream, so a refresh that outlives an owner switch never becomes current.
+      applyOwnerAccountsSnapshot(ownerId, snapshot, startedOn)
     } catch {
       // Why: a slow forced refresh is not loss of contact; the stream owns reachability.
     }
