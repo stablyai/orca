@@ -1,4 +1,4 @@
-import { DAEMON_SESSION_SCROLLBACK_ROWS } from '../../../daemon/sessions/daemon-session-scrollback-window'
+import { resolveDaemonSessionScrollbackRows } from '../../../daemon/sessions/daemon-session-scrollback-window'
 import { OrcaRuntimeWithHeadlessGapReseed } from './headless-gap-reseed'
 import type { TerminalOscLinkRange } from '../../../../shared/terminal/links/terminal-osc-link-ranges'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
@@ -18,6 +18,7 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
     opts: { scrollbackRows?: number } = {}
   ): Promise<{
     data: string
+    scrollbackRows?: number
     frameRestoreAnsi?: string
     cols: number
     rows: number
@@ -137,8 +138,17 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
     ptyId: string,
     opts: { scrollbackRows?: number } = {},
     wait: { timeoutMs?: number; retireOnTimeout?: boolean } = {}
-  ): Promise<PtyProviderBufferSnapshot | null> {
-    return (await this.awaitProviderTerminalBuffer(ptyId, opts, wait)).snapshot
+  ): Promise<(PtyProviderBufferSnapshot & { scrollbackRows?: number }) | null> {
+    const { snapshot } = await this.awaitProviderTerminalBuffer(ptyId, opts, wait)
+    return snapshot && this.providerHistoryNeedsLiveWindow(ptyId)
+      ? {
+          ...snapshot,
+          scrollbackRows: Math.min(
+            opts.scrollbackRows ?? resolveDaemonSessionScrollbackRows(),
+            resolveDaemonSessionScrollbackRows()
+          )
+        }
+      : snapshot
   }
 
   protected providerHistoryNeedsLiveWindow(ptyId: string): boolean {
@@ -153,17 +163,18 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
   ): Promise<ProviderTerminalBufferWait> {
     const generation = this.getPtyLifecycleGeneration(ptyId)
     const capped = this.providerHistoryNeedsLiveWindow(ptyId)
-    const requested = opts.scrollbackRows ?? (capped ? DAEMON_SESSION_SCROLLBACK_ROWS : Infinity)
+    const requested =
+      opts.scrollbackRows ?? (capped ? resolveDaemonSessionScrollbackRows() : Infinity)
     const scrollbackRows = Math.max(
       0,
-      Math.floor(capped ? Math.min(requested, DAEMON_SESSION_SCROLLBACK_ROWS) : requested)
+      Math.floor(capped ? Math.min(requested, resolveDaemonSessionScrollbackRows()) : requested)
     )
     const captureOptions = capped ? { ...opts, scrollbackRows } : opts
     let acquisition = this.providerBufferAcquisitionsByPtyId.get(ptyId)
     if (
       acquisition?.generation === generation &&
       acquisition.timedOut &&
-      (!capped || acquisition.scrollbackRows <= DAEMON_SESSION_SCROLLBACK_ROWS)
+      (!capped || acquisition.scrollbackRows <= resolveDaemonSessionScrollbackRows())
     ) {
       return { snapshot: null, late: acquisition.promise }
     }
@@ -171,7 +182,7 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
       !acquisition ||
       acquisition.generation !== generation ||
       acquisition.scrollbackRows < scrollbackRows ||
-      (capped && acquisition.scrollbackRows > DAEMON_SESSION_SCROLLBACK_ROWS)
+      (capped && acquisition.scrollbackRows > resolveDaemonSessionScrollbackRows())
     ) {
       const promise = this.captureProviderTerminalBuffer(ptyId, captureOptions, generation)
       acquisition = { generation, scrollbackRows, promise, timedOut: false }
@@ -195,7 +206,7 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
     )
     if (
       this.providerHistoryNeedsLiveWindow(ptyId) &&
-      acquisition.scrollbackRows > DAEMON_SESSION_SCROLLBACK_ROWS
+      acquisition.scrollbackRows > resolveDaemonSessionScrollbackRows()
     ) {
       return { snapshot: null, late: null }
     }

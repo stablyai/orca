@@ -217,6 +217,8 @@ export type ProviderBufferAcquisition = {
 
 export type RuntimeTerminalBufferSnapshot = {
   data: string
+  /** Acquisition window when provider history was capped during gap recovery. */
+  scrollbackRows?: number
   frameRestoreAnsi?: string
   cols: number
   rows: number

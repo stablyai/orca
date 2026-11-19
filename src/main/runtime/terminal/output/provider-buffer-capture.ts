@@ -20,7 +20,7 @@ import {
   projectTerminalVisibleLines
 } from '../view/orca-runtime-terminal-projection'
 import { VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from './provider-snapshot-budget'
-import { DAEMON_SESSION_SCROLLBACK_ROWS } from '../../../daemon/sessions/daemon-session-scrollback-window'
+import { resolveDaemonSessionScrollbackRows } from '../../../daemon/sessions/daemon-session-scrollback-window'
 import { isNativeWindowsConptyPty } from './terminal-model-query-authority'
 
 export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaRuntimeWithSerializeTerminalBufferFromAvailableState {
@@ -115,6 +115,9 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     if (typeof opts.cursor === 'number') {
       return read
     }
+    if (this.providerHistoryNeedsLiveWindow(ptyId) && !this.isTerminalAlternateScreen(ptyId)) {
+      return this.withRenderedTerminalTail(ptyId, read, opts.limit, providerSnapshot)
+    }
     const blankFallback = shouldFallbackToVisibleTerminalSnapshot(read, opts)
     const recoveredWorkerFallback =
       read.tail.length === 0 && this.legacyWorkerRecovery.hasRecoveredPty(ptyId)
@@ -164,7 +167,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
       !visibleState?.isAlternateScreen
     ) {
       return conpty
-        ? await this.withConptyRenderedTail(ptyId, read, opts.limit, providerSnapshot)
+        ? await this.withRenderedTerminalTail(ptyId, read, opts.limit, providerSnapshot)
         : read
     }
     let projection: RuntimeTerminalProjection = visibleState ?? { lines: [] }
@@ -173,7 +176,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     }
     if (projection.lines.length === 0) {
       return this.providerHistoryNeedsLiveWindow(ptyId)
-        ? this.withConptyRenderedTail(ptyId, read, opts.limit, providerSnapshot)
+        ? this.withRenderedTerminalTail(ptyId, read, opts.limit, providerSnapshot)
         : read
     }
     return buildVisibleSnapshotReadFallback(
@@ -185,8 +188,8 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     )
   }
 
-  // ConPTY absolute cursor paints overwrite text that raw tails retain, including ghost PSReadLine predictions; read rendered cells.
-  private async withConptyRenderedTail(
+  // Rendered cells replace raw tails after gaps and ConPTY cursor repaints.
+  private async withRenderedTerminalTail(
     ptyId: string,
     read: RuntimeTerminalRead,
     limit: number | undefined,
@@ -194,15 +197,12 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
   ): Promise<RuntimeTerminalRead> {
     const projection = await this.readRenderedTerminalTailLines(ptyId, limit, providerSnapshot)
     const lineLimit = terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT)
-    const lines =
-      projection.historyCut !== undefined ? projection.lines.slice(-lineLimit) : projection.lines
-    const rows =
-      projection.historyCut !== undefined
-        ? projection.tailRows?.slice(-lineLimit)
-        : projection.tailRows
-    return lines.length > 0 || projection.historyCut !== undefined
+    const { historyCut, tailRows } = projection
+    const lines = historyCut !== undefined ? projection.lines.slice(-lineLimit) : projection.lines
+    const rows = historyCut !== undefined ? tailRows?.slice(-lineLimit) : tailRows
+    return lines.length > 0 || historyCut !== undefined
       ? buildVisibleSnapshotReadFallback(
-          projection.historyCut !== undefined ? { ...read, limited: projection.historyCut } : read,
+          historyCut !== undefined ? { ...read, limited: historyCut } : read,
           lines,
           limit,
           projection.draft,
@@ -216,17 +216,19 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     limit: number | undefined,
     providerSnapshot: RuntimeProviderSnapshotReadOptions
   ): Promise<RuntimeTerminalProjection> {
-    const lineLimit = terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT)
-    // Over-fetch a screen so blank rows below the prompt cannot consume the requested nonblank line count.
-    const rowLimit = lineLimit + (this.getTerminalSize(ptyId)?.rows ?? 0)
     const state = this.readWholeScreenModel(ptyId)
     const generation = this.getPtyLifecycleGeneration(ptyId)
     if (!state) {
-      return this.readProviderTerminalTailLines(ptyId, rowLimit, {
-        timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
-        ...providerSnapshot
-      })
+      return this.readProviderTerminalTailLines(
+        ptyId,
+        limit,
+        { timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS, ...providerSnapshot },
+        this.getTerminalSize(ptyId)?.rows ?? 0
+      )
     }
+    const lineLimit = terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT)
+    // Over-fetch a screen so blank rows below the prompt cannot consume the requested nonblank line count.
+    const rowLimit = lineLimit + (this.getTerminalSize(ptyId)?.rows ?? 0)
     await state.writeChain
     if (
       this.readWholeScreenModel(ptyId) !== state ||
@@ -248,8 +250,8 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
       ...projection,
       ...(state.recoveredHistoryCut
         ? { historyCut: projection.lines.length < lineLimit }
-        : this.providerHistoryNeedsLiveWindow(ptyId) && projection.lines.length === 0
-          ? { historyCut: true }
+        : this.providerHistoryNeedsLiveWindow(ptyId)
+          ? { historyCut: projection.lines.length > lineLimit }
           : {})
     }
   }
@@ -257,10 +259,12 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
   protected async readProviderTerminalTailLines(
     ptyId: string,
     limit: number | undefined,
-    snapshotOptions: RuntimeProviderSnapshotReadOptions = {}
+    snapshotOptions: RuntimeProviderSnapshotReadOptions = {},
+    screenRows = 0
   ): Promise<RuntimeTerminalProjection> {
     const generation = this.getPtyLifecycleGeneration(ptyId)
-    const lineLimit = Math.max(1, Math.floor(limit ?? DEFAULT_TERMINAL_READ_LIMIT))
+    const lineLimit = terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT)
+    const rowLimit = lineLimit + screenRows
     const capped = this.providerHistoryNeedsLiveWindow(ptyId)
     const unavailable: RuntimeTerminalProjection = {
       lines: [],
@@ -268,7 +272,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     }
     const snapshot = await this.serializeProviderTerminalBuffer(
       ptyId,
-      { scrollbackRows: snapshotOptions.visibleScreenOnly ? 0 : lineLimit },
+      { scrollbackRows: snapshotOptions.visibleScreenOnly ? 0 : rowLimit },
       snapshotOptions
     )
     if (!snapshot) {
@@ -290,13 +294,13 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     const emulator = new HeadlessEmulator({
       cols: snapshot.cols,
       rows: snapshot.rows,
-      scrollback: lineLimit
+      scrollback: rowLimit
     })
     try {
       await emulator.write(data)
       const projection = {
-        ...projectTerminalTailLines(emulator, lineLimit),
-        ...(capped ? { historyCut: lineLimit > DAEMON_SESSION_SCROLLBACK_ROWS } : {})
+        ...projectTerminalTailLines(emulator, rowLimit),
+        ...(capped ? { historyCut: lineLimit > resolveDaemonSessionScrollbackRows() } : {})
       }
       if (projection.lines.length === 0 && capped) {
         projection.historyCut = true

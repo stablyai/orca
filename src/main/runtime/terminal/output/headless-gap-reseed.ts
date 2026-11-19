@@ -1,4 +1,4 @@
-import { DAEMON_SESSION_SCROLLBACK_ROWS } from '../../../daemon/sessions/daemon-session-scrollback-window'
+import { resolveDaemonSessionScrollbackRows } from '../../../daemon/sessions/daemon-session-scrollback-window'
 import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import { OrcaRuntimeWithCreatePtyHeadlessTerminalState } from './headless-terminal-state'
 import type {
@@ -199,9 +199,10 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     // Seed the live window: real history the daemon holds in memory.
     // Its own capture, shared with no reader: cancelling it on timeout touches nothing else.
     const capture = new AbortController()
+    const scrollbackRows = resolveDaemonSessionScrollbackRows()
     const pending = this.captureProviderTerminalBuffer(
       ptyId,
-      { scrollbackRows: DAEMON_SESSION_SCROLLBACK_ROWS, signal: capture.signal, recovery: true },
+      { scrollbackRows, signal: capture.signal, recovery: true },
       this.getPtyLifecycleGeneration(ptyId)
     )
     const snapshot = await withTimeout(pending, GAP_RESEED_CAPTURE_TIMEOUT_MS, null)
@@ -283,7 +284,8 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
         })
       }
       // A gap during the repaint dropped bytes it never saw.
-      if (!this.isGapRecovering(ptyId, state, recovery) || recovery.gaps !== gaps) {
+      const invalidated = recovery.gaps !== gaps || recovery.journal === null
+      if (!this.isGapRecovering(ptyId, state, recovery) || invalidated) {
         return 'failed'
       }
       this.finishGapRecovery(ptyId, state, snapshot)
@@ -303,7 +305,8 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
   ): void {
     const contextChangePending = state.gapReseed?.contextChangePending === true
     state.gapReseed = undefined
-    state.recoveredHistoryCut ||= (snapshot.scrollbackLines ?? 0) >= DAEMON_SESSION_SCROLLBACK_ROWS
+    state.recoveredHistoryCut ||=
+      (snapshot.scrollbackLines ?? 0) >= resolveDaemonSessionScrollbackRows()
     this.headlessHydrationState.set(ptyId, 'done')
     this.providerSnapshotPreferredPtys.delete(ptyId)
     // No new text: observers confirm candidates that arrived while untrusted, with their own arrival times.

@@ -51,8 +51,8 @@ export async function serializeBudgetedRequestedSnapshot(
       return {
         ...serialized,
         data,
-        scrollbackRows: rows,
-        truncatedByByteBudget: rows < requestedRows || overByteBudget
+        scrollbackRows: serialized.scrollbackRows ?? rows,
+        truncatedByByteBudget: (serialized.scrollbackRows ?? rows) < requestedRows || overByteBudget
       }
     }
   }
@@ -181,7 +181,7 @@ function overMobileSnapshotBudget(
 /** If zero scrollback still exceeds a supplied cap, empty text so later output can repaint; metadata may still exceed the cap.
  * Unbudgeted clients retain the oversized screen fallback. */
 function publishedCandidate<T extends SnapshotVariableMeta & { cols: number; rows: number }>(
-  serialized: T,
+  serialized: T & { scrollbackRows?: number },
   data: string,
   rows: number,
   overByteBudget: boolean,
@@ -190,8 +190,9 @@ function publishedCandidate<T extends SnapshotVariableMeta & { cols: number; row
   return {
     ...serialized,
     data: overByteBudget && budget !== undefined ? '' : data,
-    scrollbackRows: rows,
-    truncatedByByteBudget: rows < MOBILE_SUBSCRIBE_SCROLLBACK_ROWS || overByteBudget
+    scrollbackRows: serialized.scrollbackRows ?? rows,
+    truncatedByByteBudget:
+      (serialized.scrollbackRows ?? rows) < MOBILE_SUBSCRIBE_SCROLLBACK_ROWS || overByteBudget
   }
 }
 

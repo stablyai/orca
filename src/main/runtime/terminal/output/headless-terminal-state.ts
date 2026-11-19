@@ -286,8 +286,15 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     if (!state) {
       return
     }
+    if (state.gapReseed) {
+      // A capture from before the clear must not restore its history.
+      stopGapJournal(state.gapReseed)
+    }
     // Queue clears after earlier output so it cannot repopulate cleared mobile scrollback.
-    state.writeChain = state.writeChain.then(() => state.emulator.clearScrollback())
+    state.writeChain = state.writeChain.then(() => {
+      state.emulator.clearScrollback()
+      state.recoveredHistoryCut = false
+    })
     await state.writeChain
   }
 

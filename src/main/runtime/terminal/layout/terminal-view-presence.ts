@@ -22,11 +22,16 @@ const ENDPOINT_REATTACH_INPUT_WAIT_MS = 10_000
 export type RemoteTerminalViewer = { deviceId: string | undefined; followsHostRespawn: boolean }
 
 export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged extends OrcaRuntimeWithRecordAgentPromptLifecycleState {
+  protected abstract serializeHeadlessTerminalBuffer(
+    ptyId: string,
+    opts?: { scrollbackRows?: number; includeEmpty?: boolean }
+  ): Promise<RuntimeTerminalBufferSnapshot | null>
   protected abstract serializeTerminalBufferFromAvailableState(
     ptyId: string,
     opts?: { scrollbackRows?: number }
   ): Promise<{
     data: string
+    scrollbackRows?: number
     frameRestoreAnsi?: string
     cols: number
     rows: number
@@ -44,7 +49,7 @@ export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged ext
     ptyId: string,
     opts?: { scrollbackRows?: number },
     wait?: { timeoutMs?: number; retireOnTimeout?: boolean }
-  ): Promise<PtyProviderBufferSnapshot | null>
+  ): Promise<(PtyProviderBufferSnapshot & { scrollbackRows?: number }) | null>
   protected abstract writeTerminalInputChunks(
     ptyId: string,
     text: string,
@@ -258,6 +263,19 @@ export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged ext
     ptyId: string,
     opts: { scrollbackRows?: number } = {}
   ): Promise<RuntimeTerminalBufferSnapshot | null> {
+    if (
+      this.ptyGapCounts.has(ptyId) &&
+      !this.providerSnapshotPreferredPtys.has(ptyId) &&
+      this.headlessHydrationState.get(ptyId) !== 'pending'
+    ) {
+      const recovered = await this.serializeHeadlessTerminalBuffer(ptyId, {
+        ...opts,
+        includeEmpty: true
+      })
+      if (recovered) {
+        return recovered
+      }
+    }
     const providerSnapshot = await this.serializeProviderTerminalBuffer(ptyId, opts, {
       timeoutMs: AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
       retireOnTimeout: true
