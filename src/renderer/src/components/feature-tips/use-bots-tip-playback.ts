@@ -1,8 +1,15 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import { usePrefersReducedMotion } from '@/hooks/theme/usePrefersReducedMotion'
-import { BOTS_TIP_PAGE_COUNT, BOTS_TIP_PAGE_END, BOTS_TIP_PAGE_HOLD } from './bots-tip-timeline'
+import {
+  BOTS_TIP_PAGE_COUNT,
+  BOTS_TIP_PAGE_END,
+  BOTS_TIP_PAGE_HOLD,
+  botsTipFrameIsContinuous,
+  nextBotsTipCue
+} from './bots-tip-timeline'
 
-// Why: the frame only moves rows and the progress pill; 30 renders a second reads as smooth.
+// Why: CSS transitions carry the motion between cues, so the card renders only when a cue lands;
+// a render per frame for the card's whole life kept the renderer's Blink heap climbing until GC.
 const FRAME_MS = 1000 / 30
 // Why: frames stop while the window is hidden; on return the clock resumes where it was instead of
 // jumping by the whole gap and skipping a page.
@@ -14,8 +21,12 @@ export type BotsTipPlayback = {
   t: number
   /** Each page's frame: the current page's `t`, the others where they were left. */
   pageTimes: readonly number[]
-  /** 0..1 through the current page and its hold, for the progress pill. */
-  progress: number
+  /** Seconds the current page plays, its hold included: the progress pill's fill duration. */
+  pageSeconds: number
+  /** Seconds into that span at this render; the pill's CSS animation resumes from here. */
+  pageElapsed: number
+  /** False while paused (reduced motion or closed): the pill stays where it is. */
+  playing: boolean
   /** Counts page starts, so a page shown again restarts its one-shot pieces. */
   visit: number
   /** How many times each page has started. */
@@ -70,16 +81,20 @@ export function useBotsTipPlayback(active: boolean): BotsTipPlayback {
     let frameId = 0
     let last = performance.now()
     let lastPaint = last
+    let nextCue = nextBotsTipCue(page, elapsedRef.current)
     const tick = (now: number): void => {
       elapsedRef.current += Math.min(now - last, MAX_STEP_MS) / 1000
       last = now
-      if (elapsedRef.current >= total) {
+      const at = elapsedRef.current
+      if (at >= total) {
         goTo(page + 1)
         return
       }
-      if (now - lastPaint >= FRAME_MS) {
+      const continuous = botsTipFrameIsContinuous(page, at)
+      if (at >= nextCue || (continuous && now - lastPaint >= FRAME_MS)) {
         lastPaint = now
-        setElapsed(elapsedRef.current)
+        nextCue = nextBotsTipCue(page, at)
+        setElapsed(at)
       }
       frameId = requestAnimationFrame(tick)
     }
@@ -96,7 +111,9 @@ export function useBotsTipPlayback(active: boolean): BotsTipPlayback {
     pageTimes: BOTS_TIP_PAGE_END.map((pageEnd, index) =>
       reducedMotion ? pageEnd : index === page ? t : (left[index] ?? 0)
     ),
-    progress: reducedMotion ? 1 : Math.min(1, elapsed / (end + BOTS_TIP_PAGE_HOLD)),
+    pageSeconds: end + BOTS_TIP_PAGE_HOLD,
+    pageElapsed: reducedMotion ? end + BOTS_TIP_PAGE_HOLD : Math.min(elapsed, end + BOTS_TIP_PAGE_HOLD),
+    playing,
     visit,
     pageStarts: starts,
     reducedMotion,

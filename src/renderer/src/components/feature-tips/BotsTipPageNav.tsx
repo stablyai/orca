@@ -1,16 +1,46 @@
-import type { JSX } from 'react'
+import { useState, type JSX } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { BOTS_TIP_PAGE_COUNT } from './bots-tip-timeline'
 
+/** Fills over the page's span on the compositor; keyed per page visit, so it restarts with the page. */
+function DotFill({
+  seconds,
+  elapsed,
+  playing
+}: {
+  seconds: number
+  elapsed: number
+  playing: boolean
+}): JSX.Element {
+  // Read once: a later delay would shift the running animation instead of resuming it.
+  const [startAt] = useState(elapsed)
+  return (
+    <span
+      className="bt-dot-fill"
+      style={{
+        animationDuration: `${seconds}s`,
+        animationDelay: `${-startAt}s`,
+        animationPlayState: playing ? 'running' : 'paused'
+      }}
+    />
+  )
+}
+
 /** Arrows round the page dots; the current dot is a pill that fills as its page plays. */
 export function BotsTipPageNav({
   page,
-  progress,
+  visit,
+  pageSeconds,
+  pageElapsed,
+  playing,
   onPage
 }: {
   page: number
-  progress: number
+  visit: number
+  pageSeconds: number
+  pageElapsed: number
+  playing: boolean
   onPage: (page: number) => void
 }): JSX.Element {
   const t = useTranslate()
@@ -38,7 +68,12 @@ export function BotsTipPageNav({
             onClick={() => onPage(index)}
           >
             {index === page ? (
-              <span className="bt-dot-fill" style={{ transform: `scaleX(${progress})` }} />
+              <DotFill
+                key={visit}
+                seconds={pageSeconds}
+                elapsed={pageElapsed}
+                playing={playing}
+              />
             ) : null}
           </button>
         ))}
