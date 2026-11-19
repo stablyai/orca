@@ -39,8 +39,12 @@ export function resumedAcceptedTurn(
     executionHost: previousHost,
     ...accepted
   } = previous
-  // The host follows the binding: a resuming hook's binding brings its own.
-  const executionHost = incoming.providerSession ? incoming.executionHost : previousHost
+  // The host follows the binding: a resuming hook's own binding brings its own host.
+  const executionHost =
+    incoming.executionHost ??
+    (!incoming.providerSession || incoming.providerSession === previous.providerSession
+      ? previousHost
+      : undefined)
   return {
     ...accepted,
     connectionId: incoming.connectionId,
