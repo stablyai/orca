@@ -19,10 +19,15 @@ type AwayRestartDeps = {
   record(event: string, data: Record<string, string | number>): void
 }
 
-type Phase =
-  | { kind: 'waiting'; version: string }
-  | { kind: 'countdown'; version: string; deadline: number; lastIdle: number }
-  | { kind: 'due'; version: string; deadline: number }
+type RestartPhase = {
+  kind: 'countdown' | 'due'
+  version: string
+  deadline: number
+  lastIdle: number
+  lastSampleAt: number
+}
+
+type Phase = { kind: 'waiting'; version: string } | RestartPhase
 
 export class AwayRestartController {
   private phase: Phase | null = null
@@ -81,12 +86,15 @@ export class AwayRestartController {
       this.poll()
       return
     }
-    const countdown = {
+    const lastIdle = this.deps.readIdleSeconds()
+    const lastSampleAt = this.deps.now()
+    const countdown: RestartPhase = {
       kind: 'countdown',
       version: phase.version,
-      deadline: this.deps.now() + AUTO_RESTART_COUNTDOWN_MS,
-      lastIdle: this.deps.readIdleSeconds()
-    } as const
+      deadline: lastSampleAt + AUTO_RESTART_COUNTDOWN_MS,
+      lastIdle,
+      lastSampleAt
+    }
     this.phase = countdown
     this.deps.publish()
     if (this.phase === countdown) {
@@ -113,16 +121,27 @@ export class AwayRestartController {
     }
   }
 
+  userReturned(): void {
+    this.needsPresence = false
+    if (this.phase?.kind === 'countdown' || this.phase?.kind === 'due') {
+      this.cancel('presence')
+    }
+  }
+
   confirmUnattendedRestart(): boolean {
-    if (this.phase?.kind !== 'due') {
+    const phase = this.phase
+    if (phase?.kind !== 'due') {
       return false
     }
     if (!this.deps.isEligible()) {
       this.cancel('ineligible')
       return false
     }
-    if (this.deps.readAway() !== true) {
-      this.cancelUntilPresent('presence')
+    if (!this.confirmAway()) {
+      return false
+    }
+    if (this.sawInput(phase)) {
+      this.cancelUntilPresent('input')
       return false
     }
     if (this.deps.findInterruptingWork() !== null) {
@@ -174,8 +193,7 @@ export class AwayRestartController {
       this.cancel('ineligible')
       return
     }
-    if (this.deps.readAway() !== true) {
-      this.cancelUntilPresent('presence')
+    if (!this.confirmAway()) {
       return
     }
     const now = this.deps.now()
@@ -183,12 +201,10 @@ export class AwayRestartController {
       this.cancel('late')
       return
     }
-    const idle = this.deps.readIdleSeconds()
-    if (!(idle >= phase.lastIdle)) {
+    if (this.sawInput(phase)) {
       this.cancelUntilPresent('input')
       return
     }
-    phase.lastIdle = idle
     if (now < phase.deadline) {
       this.scheduleTick()
       return
@@ -201,9 +217,32 @@ export class AwayRestartController {
       this.cancelUntilPresent('no-window')
       return
     }
-    this.phase = { kind: 'due', version: phase.version, deadline: phase.deadline }
+    this.phase = { ...phase, kind: 'due' }
     this.schedule(() => this.cancel('expired'), AUTO_RESTART_DUE_TTL_MS)
     this.deps.record('auto_restart_requested', { version: phase.version })
+  }
+
+  private confirmAway(): boolean {
+    const away = this.deps.readAway()
+    if (away === false) {
+      this.userReturned()
+    } else if (away === undefined) {
+      this.cancelUntilPresent('presence')
+    }
+    return away === true
+  }
+
+  private sawInput(phase: RestartPhase): boolean {
+    const idle = this.deps.readIdleSeconds()
+    const now = this.deps.now()
+    // Without input, the idle clock advances by at least the whole seconds elapsed between samples.
+    const elapsed = Math.floor((now - phase.lastSampleAt) / 1000)
+    if (!(idle >= phase.lastIdle + elapsed)) {
+      return true
+    }
+    phase.lastIdle = idle
+    phase.lastSampleAt = now
+    return false
   }
 
   private cancelUntilPresent(reason: string): void {

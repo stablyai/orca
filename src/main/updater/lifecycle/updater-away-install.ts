@@ -2,6 +2,7 @@ import { app, powerMonitor } from 'electron'
 import type { UpdateStatus } from '../../../shared/updater/update-status-types'
 import { readDesktopAwayState } from '../../notifications/desktop-away-state'
 import { AWAY_IDLE_SECONDS, AwayRestartController } from '../away-install/away-restart-controller'
+import { setMacInstallPreflightInProgress } from '../mac-install/updater-mac-install'
 import { isPrereleaseVersion, statusesEqual } from '../releases/updater-fallback'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { UpdaterDownloadInstall } from './updater-download-install'
@@ -13,6 +14,7 @@ export abstract class UpdaterAwayInstall extends UpdaterDownloadInstall {
   private releaseCheckIsStableDefault = false
   private offeredReleaseIsStableDefault = false
   private unattendedDownload = false
+  private unattendedInstallPending = false
 
   private readonly awayRestart = new AwayRestartController({
     isEligible: () => this.isUnattendedEligible(),
@@ -70,7 +72,7 @@ export abstract class UpdaterAwayInstall extends UpdaterDownloadInstall {
 
   protected installAwayRestartSignals(): void {
     powerMonitor.on('lock-screen', () => this.awayRestart.evaluateNow())
-    powerMonitor.on('unlock-screen', () => this.awayRestart.interrupt('presence'))
+    powerMonitor.on('unlock-screen', () => this.awayRestart.userReturned())
     powerMonitor.on('suspend', () => this.awayRestart.interrupt('suspend'))
   }
 
@@ -79,7 +81,31 @@ export abstract class UpdaterAwayInstall extends UpdaterDownloadInstall {
       this.sendToMainWindow('updater:quitAndInstallAborted')
       return
     }
+    if (options?.unattended !== true) {
+      // A user click takes over a pending automatic install instead of being re-verified.
+      this.unattendedInstallPending = false
+    }
+    const hadTimer = this.pendingQuitAndInstallTimer !== null
     super.quitAndInstall()
+    if (!hadTimer) {
+      this.unattendedInstallPending =
+        options?.unattended === true && this.pendingQuitAndInstallTimer !== null
+    }
+  }
+
+  protected override async performQuitAndInstall(): Promise<void> {
+    if (this.unattendedInstallPending) {
+      this.unattendedInstallPending = false
+      if (!this.awayRestart.confirmUnattendedRestart()) {
+        this.pendingQuitAndInstallTimer = null
+        if (process.platform === 'darwin') {
+          setMacInstallPreflightInProgress(false)
+        }
+        this.sendToMainWindow('updater:quitAndInstallAborted')
+        return
+      }
+    }
+    return super.performQuitAndInstall()
   }
 
   protected override pinDefaultReleaseFeed(

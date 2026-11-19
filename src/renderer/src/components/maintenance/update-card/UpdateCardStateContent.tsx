@@ -95,7 +95,7 @@ export function UpdateCardStateContent({
       />
     )
   }
-  if (errorCard && !(status.state === 'downloaded' && status.autoRestartAt !== undefined)) {
+  if (errorCard) {
     return <UpdateErrorCardContent {...errorCard} onClose={onCollapse} />
   }
   if (status.state === 'downloaded') {

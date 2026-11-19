@@ -74,7 +74,6 @@ export const ORCHESTRATION_GATE_METHODS = [
 
       if (activeCoordinator) {
         activeCoordinator.stop()
-        activeCoordinator = null
       }
 
       return { runId: run.id, stopped: true }
