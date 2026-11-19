@@ -1,44 +1,59 @@
-import { readFile } from 'node:fs/promises'
+import { readFile, readlink } from 'node:fs/promises'
 import { parseLinuxStartTicks } from '../agent-hooks/installation/locking/managed-hook-owner-identity'
-import { BACKEND_DESKTOP_PID_ARG } from '../../shared/backend/backend-service-contract'
+import type { BackendDesktopOwner } from '../../shared/backend/backend-service-contract'
 
 export const DESKTOP_OWNER_POLL_MS = 2_000
+
+let ownIdentity: Promise<BackendDesktopOwner | undefined> | undefined
+
+/** Main's identity, so a Linux backend can tell main's death from a reused pid. */
+export function readDesktopOwnerIdentity(): Promise<BackendDesktopOwner | undefined> {
+  ownIdentity ??=
+    process.platform !== 'linux'
+      ? Promise.resolve(undefined)
+      : Promise.all([readFile('/proc/self/stat', 'utf8'), readlink('/proc/self/ns/pid')])
+          .then(([stat, pidNamespace]) => {
+            const startTicks = parseLinuxStartTicks(stat)
+            return startTicks ? { pid: process.pid, startTicks, pidNamespace } : undefined
+          })
+          .catch(() => undefined)
+  return ownIdentity
+}
 
 /**
  * Linux: if another process keeps main's end of this utility's IPC socket open, main's death goes
  * unseen, so the backend outlives it holding the service lock and the next launch can't start.
  */
-export function watchDesktopOwner(argv: readonly string[], onGone: () => void): void {
-  const pid = Number(
-    argv
-      .find((arg) => arg.startsWith(BACKEND_DESKTOP_PID_ARG))
-      ?.slice(BACKEND_DESKTOP_PID_ARG.length)
-  )
-  if (process.platform !== 'linux' || !Number.isSafeInteger(pid) || pid <= 1) {
+export async function watchDesktopOwner(
+  owner: BackendDesktopOwner | undefined,
+  onGone: () => void
+): Promise<void> {
+  if (process.platform !== 'linux') {
     return
   }
-  // Main forked this backend, so a process on main's pid that started later is a reused pid.
-  const ownStart = readStartTicks('self')
+  const ownNamespace = await readlink('/proc/self/ns/pid').catch(() => null)
+  if (!owner || ownNamespace !== owner.pidNamespace) {
+    // Main's pid means nothing here; a wrong guess would stop a healthy backend.
+    console.warn(`[backend] Can't identify the desktop process; not watching it.`)
+    return
+  }
+  // Awaited so a desktop that already died stops the backend before it takes the lock.
+  if (await isGone(owner)) {
+    onGone()
+    return
+  }
   let checking = false
-  let seen = false
   const check = (): void => {
     if (checking) {
       return
     }
     checking = true
-    void Promise.all([desktopState(pid), ownStart])
-      .then(([state, own]) => {
-        const reused = Boolean(state?.startTicks && own && Number(state.startTicks) > Number(own))
-        const gone = state === null || reused
-        if (gone && !seen) {
-          // Main forked this backend moments ago; not seeing it means another pid namespace.
-          clearInterval(timer)
-          console.warn(`[backend] Can't observe desktop pid ${pid}; not watching it.`)
-        } else if (gone) {
+    void isGone(owner)
+      .then((gone) => {
+        if (gone) {
           clearInterval(timer)
           onGone()
         }
-        seen = true
       })
       .finally(() => {
         checking = false
@@ -47,27 +62,20 @@ export function watchDesktopOwner(argv: readonly string[], onGone: () => void): 
   // Node exposes no exit event for a process it didn't spawn; this stops once main is gone.
   const timer = setInterval(check, DESKTOP_OWNER_POLL_MS)
   timer.unref()
-  check()
 }
 
-/** Null only on proof main is gone; an unreadable stat on a live pid never stops the backend. */
-async function desktopState(pid: number): Promise<{ startTicks: string | null } | null> {
+/** True only on proof main is gone; an unreadable stat on a live pid never stops the backend. */
+async function isGone(owner: BackendDesktopOwner): Promise<boolean> {
   try {
-    process.kill(pid, 0)
+    process.kill(owner.pid, 0)
   } catch (error) {
     return error instanceof Error && 'code' in error && error.code === 'ESRCH'
-      ? null
-      : { startTicks: null }
   }
-  const stat = await readFile(`/proc/${pid}/stat`, 'utf8').catch(() => null)
-  const state = stat?.slice(stat.lastIndexOf(')') + 2, stat.lastIndexOf(')') + 3)
-  if (state === 'Z' || state === 'X') {
-    return null
+  const stat = await readFile(`/proc/${owner.pid}/stat`, 'utf8').catch(() => null)
+  if (!stat) {
+    return false
   }
-  return { startTicks: stat ? parseLinuxStartTicks(stat) : null }
-}
-
-async function readStartTicks(pid: number | 'self'): Promise<string | null> {
-  const stat = await readFile(`/proc/${pid}/stat`, 'utf8').catch(() => null)
-  return stat ? parseLinuxStartTicks(stat) : null
+  const state = stat.slice(stat.lastIndexOf(')') + 2, stat.lastIndexOf(')') + 3)
+  const startTicks = parseLinuxStartTicks(stat)
+  return state === 'Z' || state === 'X' || (startTicks !== null && startTicks !== owner.startTicks)
 }

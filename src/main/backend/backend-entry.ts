@@ -52,10 +52,6 @@ let usage: ReturnType<typeof createUsageService> | undefined
 let stopping: Promise<void> | undefined
 let booting = false
 let startup: Promise<void> | undefined
-watchDesktopOwner(process.argv, () => {
-  console.error(`[backend ${incarnation}] Desktop process is gone; stopping.`)
-  void stop()
-})
 
 function stop(): Promise<void> {
   stopping ??= (async () => {
@@ -119,6 +115,11 @@ async function bootstrap(raw: unknown, port: BackendNativePort): Promise<void> {
   ) {
     throw new Error('Backend contract is unsupported.')
   }
+  await watchDesktopOwner(config.desktopOwner, () => {
+    console.error(`[backend ${incarnation}] Desktop process is gone; stopping.`)
+    void stop()
+  })
+  abort.signal.throwIfAborted()
   const host = createDesktopBackendEnvironment(config)
   setAppEnvironment(host.environment)
   control = new BackendPortRpc(
