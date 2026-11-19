@@ -41,6 +41,7 @@ function ChoiceLine({
         </span>
       ) : null}
       {replace && location.replaceable ? (
+        // Why: an unrecognized install can be newer than this build, so this must not read as an update.
         <label className="flex w-fit items-center gap-1.5 text-xs text-muted-foreground">
           <Checkbox
             checked={replace.isReplaced(location.path)}
@@ -48,7 +49,7 @@ function ChoiceLine({
           />
           {t(
             'auto.components.skills.SkillUpdateRow.replaceWithOrca',
-            "Replace with Orca's copy (keeps a backup)"
+            "Replace with this version's copy (keeps a backup)"
           )}
         </label>
       ) : null}
