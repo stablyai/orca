@@ -64,11 +64,14 @@ function mergeRow(
   if (!base) {
     return local
   }
+  const localFields = new Map<string, unknown>(Object.entries(local))
+  const diskFields = new Map<string, unknown>(Object.entries(disk))
+  const baseFields = new Map<string, unknown>(Object.entries(base))
   const fromDisk: Partial<DeviceEntry> = {}
-  for (const key of new Set([...Object.keys(local), ...Object.keys(disk)])) {
-    const ours: unknown = Reflect.get(local, key)
-    const theirs: unknown = Reflect.get(disk, key)
-    if (!isDeepStrictEqual(ours, theirs) && isDeepStrictEqual(ours, Reflect.get(base, key))) {
+  for (const key of new Set([...localFields.keys(), ...diskFields.keys()])) {
+    const ours = localFields.get(key)
+    const theirs = diskFields.get(key)
+    if (!isDeepStrictEqual(ours, theirs) && isDeepStrictEqual(ours, baseFields.get(key))) {
       // An undefined value is dropped when written, the same as an absent field.
       Object.assign(fromDisk, { [key]: theirs })
     }
