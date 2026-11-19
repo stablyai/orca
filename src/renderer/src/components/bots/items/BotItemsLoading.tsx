@@ -1,5 +1,6 @@
 // The Items list while its first read is out: a section header and five rows drawn as quiet bars at the
-// real header's and rows' geometry (status dot, #number, title, age), so nothing moves as items arrive.
+// real header's and rows' geometry (status dot, #number, title, age), so the first header and rows land where
+// the loaded list's do.
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 
