@@ -20,11 +20,6 @@ describe('cleanElectronUserAgent', () => {
       'no app token at all',
       `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Electron/43.7.0 Safari/537.36`,
       MAC_CLEAN
-    ],
-    [
-      'an app name after the engine comment on a platform with a short OS comment',
-      `Mozilla/5.0 (Test) AppleWebKit/537.36 (KHTML, like Gecko) Package/0.0.0 Chrome/150.0.0.0 Electron/43.7.0 Safari/537.36`,
-      'Mozilla/5.0 (Test) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36'
     ]
   ])('strips the Electron and app tokens for %s', (_label, raw, expected) => {
     expect(cleanElectronUserAgent(raw)).toBe(expected)

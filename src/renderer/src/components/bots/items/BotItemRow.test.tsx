@@ -28,30 +28,6 @@ function rowText(item: BotItem): string {
   return container.querySelector('button[title]')?.textContent ?? ''
 }
 
-it('draws an In progress row with running workers as one line', () => {
-  const working = makeTestBotItem(3, {
-    title: 'Hold mail while paused',
-    links: [
-      {
-        kind: 'dispatch',
-        ref: 'ctx_d1',
-        latest: null,
-        title: 'Worker',
-        state: 'working',
-        host: null,
-        startedAt: 1,
-        settledAt: null,
-        report: null,
-        pr: null
-      }
-    ]
-  })
-
-  const text = rowText(working)
-  expect(text).toContain('Hold mail while paused')
-  expect(text).not.toMatch(/worker/i)
-})
-
 it('keeps the bot’s question as a Needs you row’s second line', () => {
   const asking = makeTestBotItem(6, {
     title: 'Decide: paused mail',

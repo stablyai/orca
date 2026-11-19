@@ -1921,6 +1921,13 @@
           "memory": "memory"
         }
       }
+    },
+    "automaticUpdates": {
+      "saveFailed": "Could not save automatic updates.",
+      "title": "Automatic updates",
+      "description": "On supported desktop installs, Orca downloads eligible updates on its regular check schedule and restarts to install them automatically.",
+      "info": "About automatic updates",
+      "installingStatus": "is being installed."
     }
   },
   "menu": {
@@ -5661,7 +5668,6 @@
             "27a74f91f0": "Nothing running right now",
             "298f4be7f2": "CPU",
             "2aa2de6cb9": "Name",
-            "1fedf94eae": "Combined CPU load. Values above 100% mean more than one core is working at once.",
             "e7cf14ec78": "Terminal sessions unavailable. The list may be stale.",
             "93b0de3c21": "Restart",
             "f85af9cda6": "Resource snapshots and terminal sessions are unavailable.",
@@ -6069,8 +6075,6 @@
                 "copy": {
                   "terminalSessionCount_one": "{{count}} terminal session",
                   "terminalSessionCount_other": "{{count}} terminal sessions",
-                  "memoryUnavailable": "memory unavailable",
-                  "tooltipSummary": "Resource Manager - {{memory}} - {{sessions}}",
                   "spaceScanReady": "Space scan ready",
                   "sessionsGroupedByWorkspace": "Terminal sessions are grouped by workspace.",
                   "noTerminalSessions": "No terminal sessions yet.",
@@ -20925,6 +20929,7 @@
         "providerUnavailable": "{{agent}} couldn't respond because the service is busy. Pick another model, or wait a little and send again.",
         "providerSafetyStopped": "{{agent}} stopped this response after a safety check. Review your request and send again.",
         "providerResponseFailed": "{{agent}} couldn't finish this response. Open Details for more information.",
+        "providerResponseFailedQuoted": "{{agent}} couldn't finish this response: {{detail}}.",
         "selectedModel": "the selected model",
         "providerRejected": "{{agent}} didn't accept this message.",
         "providerRejectedQuoted": "{{agent}} didn't accept this message: {{detail}}.",
@@ -21641,7 +21646,6 @@
         "backToMain": "Back to main agent",
         "mainAgent": "Main agent",
         "promptFromMain": "Prompt from main agent",
-        "clickToOpen": "Click to open",
         "backTo": "Back to {{value0}}",
         "path": "Subagent path",
         "stateHeading": {
@@ -22075,7 +22079,8 @@
       "toolAdded": {
         "removed": "Removed",
         "heading": "Added a tool",
-        "remove": "Remove"
+        "remove": "Remove",
+        "added": "Added"
       },
       "usageLimitActions": {
         "switchAccount": "Switch account",
@@ -25329,6 +25334,9 @@
     "wslMoveInstallHeld": "A project is moving to its WSL host. Install the update once the move finishes.",
     "wslMoveUndoInstallHeld": "A project is coming back from its WSL host. Install the update once that finishes.",
     "failure": {
+      "automaticInstallTerminalBusy": "Some terminals would end on restart. Orca will try again on a later update check.",
+      "macStagingTimeout": "macOS is still preparing the update. If this persists, quit and reopen Orca.",
+      "automaticInstallCheckpointFailed": "Orca could not save the current window before restarting. Try installing the update again.",
       "releaseNotReady": "A newer release isn't available for this device yet. Check again later.",
       "updateServerUnreachable": "Couldn't reach the update server. Try again in a few minutes.",
       "channelUnsupportedPlatform": "{{channel}} builds are produced only for macOS and Windows.",
@@ -25357,7 +25365,13 @@
       "rateLimitedInMinutes_other": "GitHub rate limit reached. Try again in about {{count}} minutes.",
       "rateLimitedInMinutesSignedOut_one": "GitHub rate limit reached. Try again in about {{count}} minute, or run `gh auth login` so Orca can use your account's higher limit.",
       "rateLimitedInMinutesSignedOut_other": "GitHub rate limit reached. Try again in about {{count}} minutes, or run `gh auth login` so Orca can use your account's higher limit."
-    }
+    },
+    "automatic": {
+      "downloading": "Downloading Orca {{version}}…",
+      "installing": "Installing Orca {{version}}…",
+      "restarting": "Orca will restart automatically."
+    },
+    "remoteUpdateBusy": "This server is already updating. Check again once it finishes."
   },
   "jira": {
     "connect": {
@@ -25747,7 +25761,14 @@
     "restartLocal": "Restart local daemon",
     "killAllLocal": "Kill all local sessions",
     "killFailed": "The terminal could not be ended. Last-observed sessions are retained.",
-    "metricDetails": "Metric details"
+    "metricDetails": "Metric details",
+    "owner": {
+      "orca": "Orca",
+      "agents": "Agents",
+      "otherTerminals": "Other terminals",
+      "description": "Orca is the app. Agents are terminals running an agent; Other terminals are the rest you run in Orca. The bar shows each one's share of their combined memory.",
+      "privateBytes": "Committed by Orca and terminals"
+    }
   },
   "browserExtensions": {
     "permission": {
@@ -27455,17 +27476,20 @@
       "pausedCount": "{{count}} paused"
     },
     "access": {
-      "yourAccess": "Their requests use your access, not their own. Anything {{name}} can do {{there}}, they can ask it to do.",
       "thisComputer": "this computer",
-      "here": "here",
-      "removeAnyTime": "You can remove them from Who can ask at any time.",
       "place": "{{connector}} ({{workspace}})",
       "titleOne": "Give {{person}} access to {{name}}?",
       "titleMany": "Give {{count}} people access to {{name}}?",
-      "descriptionOne": "{{person}} will be able to ask {{name}} from {{place}} and control it remotely: start, steer, approve and stop its work, using its access on {{computer}}.",
-      "descriptionMany": "They will be able to ask {{name}} from {{place}} and control it remotely: start, steer, approve and stop its work, using its access on {{computer}}.",
       "confirm": "Give access",
-      "account": "Their {{connector}} account: {{identity}}",
+      "confirmWarning": "They’ll act as you on this computer.",
+      "confirmComputer": "Run commands and change files",
+      "confirmNoApprovals": "Acts without asking first",
+      "confirmMaySkipApprovals": "May act without asking first",
+      "confirmApproveOne": "{{person}} can approve its prompts",
+      "confirmApproveMany": "They can approve its prompts",
+      "confirmGoogle": "Use your Google account",
+      "confirmGitHub": "Comment and push on GitHub as you",
+      "confirmLinear": "Update Linear issues as you",
       "whoCanAsk": "Who can ask {{name}}",
       "summaryOnlyYou": "Only you can ask {{name}}.",
       "summaryOne": "You and {{person}} can ask {{name}}.",
@@ -28939,7 +28963,6 @@
         "added": "Added {{items}}",
         "canceled": "Canceled {{items}}",
         "changes": "{{from}} → {{to}} · {{count}} changes",
-        "openInItems": "Click to open in Items",
         "updated": "Updated {{items}}",
         "youCanceled": "You canceled {{items}}",
         "youCanceledMany": "You canceled {{count}} items: {{items}}",
@@ -28948,8 +28971,6 @@
         "youMarkedManyDone": "You marked {{count}} items done: {{items}}",
         "youMoved": "You moved {{items}} to {{status}}",
         "youMovedMany": "You moved {{count}} items to {{status}}: {{items}}",
-        "showLess": "Show less",
-        "showMore": "Show more",
         "moreItems": "+{{count}} more",
         "askedYou": "Asked you about {{items}}",
         "aWorker": "a worker",
@@ -29087,16 +29108,15 @@
         "menu": "Snooze",
         "pick": "Pick a time…",
         "pickTitle": "Snooze until",
-        "pickWhy": "It leaves its group until then and keeps its status. A new question or a close from the bot brings it back sooner.",
-        "date": "Date",
         "time": "Time",
         "back": "Back",
-        "confirm": "Snooze until {{when}}",
         "later": "Later today",
         "tomorrow": "Tomorrow",
         "monday": "Monday",
+        "week": "In a week",
         "inHours_one": "In {{count}} hours",
-        "inHours_other": "In {{count}} hours"
+        "inHours_other": "In {{count}} hours",
+        "pickCustom": "Pick a date and time"
       }
     },
     "search": {
@@ -29399,6 +29419,7 @@
     "tryAgain": "Try again",
     "update": "Update",
     "versions": "{{installed}} → {{latest}}",
+    "modelRequires": "Requires {{product}} {{version}}",
     "claudeProduct": "Claude Code",
     "codexProduct": "Codex CLI",
     "commandCopied": "Command copied",
@@ -29442,5 +29463,11 @@
       "cleanUp": "Clean up workspaces"
     },
     "dontShowAgain": "Don't show again"
+  },
+  "ui": {
+    "monthCalendar": {
+      "previous": "Previous month",
+      "next": "Next month"
+    }
   }
 }

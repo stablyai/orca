@@ -95,7 +95,8 @@ export function SidebarBotsSection({ onOpenBot }: { onOpenBot: () => void }): Re
   )
   const entries = useBotSidebarArrangement(savedEntries)
   const listRef = useRef<HTMLDivElement>(null)
-  // Search shows the list in place; while it is open the section shows unfolded and nothing drags.
+  // Search shows the list in place and nothing drags while it is open. Its toggle lives only in the
+  // unfolded header, so a search always starts unfolded.
   const search = useBotSidebarSearch({ listRef, savedEntries, onOpenBot })
   const searchOpen = search.open
   // Only the saved order can be dragged, as for workspaces.
@@ -105,8 +106,13 @@ export function SidebarBotsSection({ onOpenBot }: { onOpenBot: () => void }): Re
     [entries]
   )
   const hasEntries = savedEntries.length > 0
-  // Folds even while empty, so the onboarding card can be put away.
+  // Folds even while empty, so the onboarding card can be put away. A fold landing mid-search
+  // (another writer) still leaves the results showing until the search ends.
   const collapsed = savedCollapsed && !searchOpen
+  // The + menu unmounts with the folded header's controls; a fold it didn't see must not reopen it on unfold.
+  if (collapsed && newMenuOpen) {
+    setNewMenuOpen(false)
+  }
   const collapseAll = useBotCollapseAll(entries, savedEntries)
   const facts = useBotPreviewFacts(rows)
   const preview = collapsedBotPreview(facts)
@@ -218,96 +224,99 @@ export function SidebarBotsSection({ onOpenBot }: { onOpenBot: () => void }): Re
             </span>
           )
         }
+        // Folded, the header is just its title and faces; the controls unmount so Tab can't reach them.
         actions={
-          <>
-            {hasEntries ? (
-              <BotSidebarSearchButton
-                open={searchOpen}
-                buttonRef={search.buttonRef}
-                onToggle={search.toggleOpen}
-              />
-            ) : null}
-            {hasEntries ? <BotSidebarOptionsMenu /> : null}
-            <DropdownMenu open={newMenuOpen} onOpenChange={setNewMenuOpen}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-xs"
-                      className="shrink-0"
-                      aria-label={newLabel}
-                    >
-                      <Plus className="size-3" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>
-                  {newLabel}
-                </TooltipContent>
-              </Tooltip>
-              <DropdownMenuContent side="bottom" align="start" sideOffset={6}>
-                {/* New bot opens its dialog on click or Enter; hover or › shows the other ways to add one. */}
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger
-                    onClick={(event) => {
-                      event.preventDefault()
-                      openNewBot()
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
+          collapsed ? null : (
+            <>
+              {hasEntries ? (
+                <BotSidebarSearchButton
+                  open={searchOpen}
+                  buttonRef={search.buttonRef}
+                  onToggle={search.toggleOpen}
+                />
+              ) : null}
+              {hasEntries ? <BotSidebarOptionsMenu /> : null}
+              <DropdownMenu open={newMenuOpen} onOpenChange={setNewMenuOpen}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        className="shrink-0"
+                        aria-label={newLabel}
+                      >
+                        <Plus className="size-3" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" sideOffset={6}>
+                    {newLabel}
+                  </TooltipContent>
+                </Tooltip>
+                <DropdownMenuContent side="bottom" align="start" sideOffset={6}>
+                  {/* New bot opens its dialog on click or Enter; hover or › shows the other ways to add one. */}
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger
+                      onClick={(event) => {
                         event.preventDefault()
                         openNewBot()
-                      }
-                    }}
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault()
+                          openNewBot()
+                        }
+                      }}
+                    >
+                      <span className={BOT_MENU_ROW}>
+                        <BotIcon className="size-3.5" />
+                        {newBotLabel}
+                      </span>
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent>
+                      <DropdownMenuItem onSelect={openNewBot}>
+                        <span className={BOT_MENU_ROW}>
+                          <Plus className="size-3.5" />
+                          {t('bots.section.startFromScratch', 'Start from scratch')}
+                        </span>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onSelect={() => openBotTemplates()}>
+                        <span className={BOT_MENU_ROW}>
+                          <LayoutTemplate className="size-3.5" />
+                          {t('bots.templates.browse', 'Browse templates')}
+                        </span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => openBotShareLink(null)}>
+                        <span className={BOT_MENU_ROW}>
+                          <Link2 className="size-3.5" />
+                          {t('bots.share.receive.fromLinkMenu', 'From a link…')}
+                        </span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => setImportOpen(true)}>
+                        <span className={BOT_MENU_ROW}>
+                          <Download className="size-3.5" />
+                          {t('bots.import.menu', 'Import from another app…')}
+                        </span>
+                      </DropdownMenuItem>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                  {/* A group needs two bots to talk to each other. */}
+                  <DropdownMenuItem
+                    disabled={bots.length < 2}
+                    onSelect={() => setEditingGroup('new')}
                   >
                     <span className={BOT_MENU_ROW}>
-                      <BotIcon className="size-3.5" />
-                      {newBotLabel}
+                      <Users className="size-3.5" />
+                      {t('bots.groups.newGroup', 'New group')}
                     </span>
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent>
-                    <DropdownMenuItem onSelect={openNewBot}>
-                      <span className={BOT_MENU_ROW}>
-                        <Plus className="size-3.5" />
-                        {t('bots.section.startFromScratch', 'Start from scratch')}
-                      </span>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onSelect={() => openBotTemplates()}>
-                      <span className={BOT_MENU_ROW}>
-                        <LayoutTemplate className="size-3.5" />
-                        {t('bots.templates.browse', 'Browse templates')}
-                      </span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => openBotShareLink(null)}>
-                      <span className={BOT_MENU_ROW}>
-                        <Link2 className="size-3.5" />
-                        {t('bots.share.receive.fromLinkMenu', 'From a link…')}
-                      </span>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => setImportOpen(true)}>
-                      <span className={BOT_MENU_ROW}>
-                        <Download className="size-3.5" />
-                        {t('bots.import.menu', 'Import from another app…')}
-                      </span>
-                    </DropdownMenuItem>
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-                {/* A group needs two bots to talk to each other. */}
-                <DropdownMenuItem
-                  disabled={bots.length < 2}
-                  onSelect={() => setEditingGroup('new')}
-                >
-                  <span className={BOT_MENU_ROW}>
-                    <Users className="size-3.5" />
-                    {t('bots.groups.newGroup', 'New group')}
-                  </span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          )
         }
       />
       <BotSidebarSearchHost
@@ -335,7 +344,7 @@ export function SidebarBotsSection({ onOpenBot }: { onOpenBot: () => void }): Re
             {/* A room kept after its last bot went still lists, so it can be opened or deleted. */}
             {savedEntries.length > 0 && entries.length === 0 ? (
               collapsed ? null : (
-                <div className="px-4 pb-2 text-xs text-muted-foreground">
+                <div className="px-4 text-xs text-muted-foreground">
                   {t('bots.options.allHidden', 'All bots are paused and hidden.')}
                 </div>
               )

@@ -59,8 +59,11 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
     generic: t('chat.agentMessage.messageFrom', 'Message from')
   }
   const heading = headings[agentMessageHeading(from, message)]
+  const merged = message.mergedEvents ?? []
   const expandable =
-    agentMessageCanCopy(text) || message.blocks.some((block) => block.type === 'image-ref')
+    agentMessageCanCopy(text) ||
+    merged.length > 0 ||
+    message.blocks.some((block) => block.type === 'image-ref')
   const Chevron = open ? ChevronUp : ChevronDown
   return (
     <View style={styles.compactCard} testID="agent-message-card">
@@ -116,6 +119,33 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
           />
           {status}
           <MobileNativeChatMessageTime timestamp={message.timestamp} fontScale={fontScale} />
+          {merged.map((earlier) => {
+            const earlierHeading = earlier.from
+              ? headings[agentMessageHeading(earlier.from, earlier)]
+              : null
+            const earlierText = mobileNativeChatDisplayCopyText(earlier)
+            return (
+              <View key={earlier.id} style={styles.mergedEntry}>
+                <View style={styles.sender}>
+                  {earlierHeading && earlierHeading !== heading ? (
+                    <Text style={styles.meta}>{earlierHeading}</Text>
+                  ) : null}
+                  <MobileNativeChatMessageTime
+                    timestamp={earlier.timestamp}
+                    fontScale={fontScale}
+                  />
+                </View>
+                {earlierText.trim() ? (
+                  <MobileNativeChatMarkdown
+                    content={earlierText}
+                    rangeSelectable
+                    {...prose}
+                    onLongPress={onLongPress}
+                  />
+                ) : null}
+              </View>
+            )
+          })}
         </View>
       ) : null}
     </View>

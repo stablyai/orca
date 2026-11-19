@@ -25,11 +25,8 @@ import { BotItemNumberColumn } from './BotItemNumberColumn'
 import { BotItemRowFace } from './BotItemRowFace'
 import { BotItemStatusIcon } from './BotItemStatusIcon'
 import { BOT_ITEM_ROW_HOVER_ACTIONS } from './bot-item-row-hover-actions'
-import {
-  BotItemSnoozeMenuItems,
-  formatBotItemSnoozeTime,
-  type BotItemSnoozing
-} from './BotItemSnooze'
+import { BotItemSnoozeMenuItems, type BotItemSnoozing } from './BotItemSnooze'
+import { formatBotItemSnoozeTime } from './bot-item-snooze-time'
 
 export type BotItemRowAction = { kind: 'open' } | { kind: 'done' } | { kind: 'cancel' }
 

@@ -367,9 +367,11 @@ export function readBots(): readonly Bot[] {
   return flattened
 }
 
-/** One host's bots as last read. */
+const NO_HOST_BOTS: readonly Bot[] = []
+
+/** One host's bots as last read; none, the same list every time, for a host that isn't listed. */
 export function readHostBots(hostId: ExecutionHostId): readonly Bot[] {
-  return entryOf(hostId)?.bots ?? []
+  return entryOf(hostId)?.bots ?? NO_HOST_BOTS
 }
 
 /** The bot's Needs you items that aren't stale, as its host's last list read counted them; null before
