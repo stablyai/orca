@@ -281,9 +281,10 @@ function getMatchRank(
   const normalizedQuery = query.toLowerCase()
   let rank = getNameRank(item.name.toLowerCase(), normalizedQuery)
   for (const alias of item.aliases ?? NO_ALIASES) {
+    // A provider's own name match outranks an alias match of the same tier.
     const aliasRank = getNameRank(alias, normalizedQuery)
-    if (aliasRank !== null && (rank === null || aliasRank < rank)) {
-      rank = aliasRank
+    if (aliasRank !== null && (rank === null || aliasRank + 0.5 < rank)) {
+      rank = aliasRank + 0.5
     }
   }
   if (rank !== null) {

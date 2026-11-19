@@ -149,14 +149,20 @@ describe('skill picker scope retention', () => {
 
 describe('command aliases', () => {
   // A translated description must not be the only way to find Session History by "session".
+  const commands: SlashCommandSuggestion[] = [
+    { name: 'review', description: '审查更改' },
+    { name: 'resume', description: '打开代理会话历史', aliases: ['sessions'] }
+  ]
+  const tokens = (list: SlashCommandSuggestion[], query: string) =>
+    buildNativeChatPickerItems(list, [], query, '/').map((item) => item.token)
+
   it('finds a command by its alias when its description does not name it', () => {
-    const commands: SlashCommandSuggestion[] = [
-      { name: 'review', description: '审查更改' },
-      { name: 'resume', description: '打开代理会话历史', aliases: ['sessions'] }
-    ]
-    const tokens = (query: string) =>
-      buildNativeChatPickerItems(commands, [], query, '/').map((item) => item.token)
-    expect(tokens('session')).toEqual(['/resume'])
-    expect(tokens('sessions')).toEqual(['/resume'])
+    expect(tokens(commands, 'session')).toEqual(['/resume'])
+    expect(tokens(commands, 'sessions')).toEqual(['/resume'])
+  })
+
+  it('ranks an agent command named like the alias ahead of the aliased row', () => {
+    const withSession = [...commands, { name: 'session', description: '会话信息' }]
+    expect(tokens(withSession, 'sess')).toEqual(['/session', '/resume'])
   })
 })

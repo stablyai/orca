@@ -21,6 +21,10 @@ import {
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import { nativeChatPreferenceFor } from '../../../../../../shared/agent-launch/choices/structured-native-chat-launch-route'
+import {
+  adoptsCliConversations,
+  CLI_CONVERSATION_ADOPTING_AGENTS
+} from '../../../../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { FirstPromptCard } from './ai-vault-first-prompt-card'
 import { ResumeInNewCliTooltipText } from '../session-actions/ai-vault-session-cli-fork-copy'
@@ -95,10 +99,15 @@ export function SessionInlineDetails({
   const promptPreview = sessionPromptPreview(session)
   const detailTurns = sessionDetailConversationTurns(session, 3)
   const accountLabel = useAiVaultSessionAccount(session)
-  // Chat first where chat is this agent's default; each button keeps its own surface.
+  // Chat first where chat is the default for a chat that can take the row over; buttons keep their surface.
   const chatFirst =
-    useAppStore((state) => nativeChatPreferenceFor(state.settings, session.agent)) &&
-    onResumeInNewChat !== undefined
+    useAppStore(
+      (state) =>
+        adoptsCliConversations(session.agent) &&
+        CLI_CONVERSATION_ADOPTING_AGENTS[session.agent].some((agent) =>
+          nativeChatPreferenceFor(state.settings, agent)
+        )
+    ) && onResumeInNewChat !== undefined
   const resumeInNewChatButton = onResumeInNewChat ? (
     <ResumeInNewChatButton primary={chatFirst} onResume={onResumeInNewChat} />
   ) : null
