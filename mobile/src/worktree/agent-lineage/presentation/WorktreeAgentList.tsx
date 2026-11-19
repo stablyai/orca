@@ -9,6 +9,7 @@ import {
 } from '../agent-row-lineage'
 import {
   collapsedChildrenSignalState,
+  hidesUnreadAgent,
   isDisclosureOpen,
   partitionIdleChildren,
   toggleDisclosure
@@ -18,7 +19,6 @@ import type { AgentListStatus as AgentDotState } from '../../../../../src/shared
 import { WorktreeAgentChildToggle, WorktreeAgentIdleGroupRow } from './WorktreeAgentChildDisclosure'
 import { WorktreeAgentRow } from './WorktreeAgentRow'
 import { WorktreeAgentSummary } from './WorktreeAgentSummary'
-import { listedAgentVerdict } from '../../../agents/agent-list-rows'
 import { useSharedNow } from '../../../hooks/use-now'
 import { worktreeAgentChildRows } from '../worktree-agent-child-rows'
 
@@ -100,10 +100,13 @@ export function WorktreeAgentList({
     }))
   ]
   // A waiting grandchild must still light a collapsed ancestor; flattenAgentRowLineage already breaks cycles.
-  const descendantItemsOf = (node: AgentRowNode): ChildItem[] =>
-    childItemsOf(node).flatMap((child) =>
-      child.kind === 'agent' ? [child, ...descendantItemsOf(child.node)] : [child]
+  const withDescendants = (items: readonly ChildItem[]): ChildItem[] =>
+    items.flatMap((child) =>
+      child.kind === 'agent' ? [child, ...withDescendants(childItemsOf(child.node))] : [child]
     )
+  const descendantItemsOf = (node: AgentRowNode): ChildItem[] => withDescendants(childItemsOf(node))
+  const hidesUnread = (hidden: readonly ChildItem[]): boolean =>
+    hidesUnreadAgent(hidden.flatMap((item) => (item.kind === 'agent' ? [item.node.row] : [])))
 
   const renderNode = (node: AgentRowNode): ReactNode => {
     const parentKey = node.row.paneKey
@@ -133,10 +136,7 @@ export function WorktreeAgentList({
                 signalState={
                   hiddenDescendants ? collapsedChildrenSignalState(hiddenDescendants) : undefined
                 }
-                unread={hiddenDescendants?.some(
-                  (child) =>
-                    child.kind === 'agent' && listedAgentVerdict(child.node.row)?.unread === true
-                )}
+                unread={hiddenDescendants ? hidesUnread(hiddenDescendants) : false}
                 onToggle={() => toggle(parentDisclosureKey(parentKey))}
               />
             ) : undefined
@@ -150,6 +150,7 @@ export function WorktreeAgentList({
                 count={idleChildren.length}
                 depth={node.depth + 1}
                 expanded={idleExpanded}
+                unread={!idleExpanded && hidesUnread(withDescendants(idleChildren))}
                 onToggle={() => toggle(idleDisclosureKey(parentKey))}
               />
             ) : null}
@@ -166,7 +167,7 @@ export function WorktreeAgentList({
         <WorktreeAgentSummary
           agents={summaryAgents}
           expanded={expanded}
-          unread={agents.some((agent) => listedAgentVerdict(agent)?.unread === true)}
+          unread={hidesUnreadAgent(agents)}
           now={now}
           onToggle={() => setExpanded((value) => !value)}
         />
