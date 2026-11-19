@@ -389,6 +389,7 @@ export function createRemoteRuntimePtyTransport(
   } | null = null
   const inputJournal = createRemoteRuntimeInputJournal({
     currentStream: sequencedInputTarget,
+    canSendDriving: () => canSendAccountInput('driving'),
     // Why: a refusal that never clears would drop every keystroke behind a connected-looking pane.
     onRefusalsPersist: () => notifyWriteUnavailable()
   })
@@ -4319,10 +4320,13 @@ export function createRemoteRuntimePtyTransport(
       storedCallbacks = {}
     },
 
-    // Why: the kind only gates the local hold; terminal.send gets no kind, so the host classifies desktop bytes itself.
+    // Kind gates window delivery; terminal.send still lets the host classify bytes.
     sendInput(data, inputKind): boolean {
       if (!canSendAccountInput(inputKind)) {
         return false
+      }
+      if (inputKind === 'query-reply') {
+        return sendInputImmediateNow(data)
       }
       if (releaseThenShouldHold(inputKind)) {
         if (!data) {
