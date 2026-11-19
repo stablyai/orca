@@ -2,11 +2,9 @@
 // and Stale folded. Each shows five rows, then Show N more. Checked rows get the floating pill; Stale's header
 // cancels them all. Asks have no checkbox, so selection and ranges never reach them.
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/class-names'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import type { Bot } from '../../../../../shared/bot-types'
 import {
@@ -24,6 +22,7 @@ import {
 } from '../../../../../shared/bots/bot-item-groups'
 import { botErrorMessage } from '../bot-presentation'
 import { useBotPanelFold, type BotPanelFoldId } from '../use-bot-panel-fold'
+import { BotFoldChevron } from '../BotFoldChevron'
 import { BotNeedsYouSection, type BotNeedsYouAsks } from '../BotNeedsYouSection'
 import { botNeedsYouCount } from '../../../../../shared/bots/bot-now'
 import { BotItemRow, type BotItemRowAction } from './BotItemRow'
@@ -262,10 +261,10 @@ function BotItemGroup({
         <button
           type="button"
           aria-expanded={open}
-          className="flex min-w-0 items-center gap-1 rounded-sm px-1 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          className="group/fold flex min-w-0 items-center gap-1 rounded-sm px-1 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           onClick={() => setOpen(!open)}
         >
-          <ChevronRight className={cn('size-3 transition-transform', open && 'rotate-90')} />
+          <BotFoldChevron open={open} className="size-3 group-hover/fold:text-foreground" />
           {botItemGroupName(id, t)}
           <span className="tabular-nums">{count}</span>
         </button>

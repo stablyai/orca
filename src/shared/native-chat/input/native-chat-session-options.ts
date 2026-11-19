@@ -126,6 +126,8 @@ export type SessionOptionsCliUpdate = {
   agent: AgentCliUpdateAgent
   phase: 'idle' | 'running' | 'failed'
   start: () => void
+  /** Opens the failed run's output; its Try again runs `start`. */
+  openFailure: () => void
 }
 
 export type SessionOptionsSurface = {

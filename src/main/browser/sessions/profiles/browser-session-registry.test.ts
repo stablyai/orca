@@ -40,7 +40,9 @@ vi.mock('../../extensions/profile-sessions/browser-extension-session-loader', ()
 vi.mock('../../cookies/session-restore/browser-session-cookie-restore', () => ({
   trackBrowserSessionCookies: () => {},
   clearBrowserSessionCookieSnapshots: async () => {},
-  forgetBrowserSessionCookies: () => {}
+  forgetBrowserSessionCookies: () => {},
+  restoreBrowserRoutePartitionSessionCookies: async () => {},
+  forgetBrowserRoutePartitionSessionCookies: () => {}
 }))
 
 vi.mock('../../identity/browser-process-user-agent', () => ({

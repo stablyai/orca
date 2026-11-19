@@ -174,41 +174,11 @@ describe('BotConnectorsSection', () => {
     }
   })
 
-  it('starts a lone Slack row closed until it is clicked', async () => {
-    renderWith(bot(), {
-      state: 'installed',
-      teamId: 'T05',
-      teamName: 'Globex',
-      appId: 'A1',
-      botUserId: 'UB',
-      installerUserId: 'U07'
-    })
-    await screen.findByText('installed by U07')
-    const row = screen.getByRole('button', { name: 'Slack · Globex' })
-    expect(row.getAttribute('aria-expanded')).toBe('false')
-    fireEvent.click(row)
-    expect(row.getAttribute('aria-expanded')).toBe('true')
-  })
-
-  it('starts a row that needs the owner open', async () => {
-    renderWith(
-      bot({ slack: null, members: [], github: {} }),
-      { state: 'not_created' },
-      {
-        ok: true,
-        value: { ...gitHubOn.value, account: null, installations: [] }
-      }
-    )
-    await screen.findByRole('button', { name: 'Finish setup' })
-    expect(screen.getByRole('button', { name: 'GitHub' }).getAttribute('aria-expanded')).toBe(
-      'true'
-    )
-  })
-
-  it('shows no Slack row before the bot is in Slack, only Add a connector', () => {
-    renderWith(bot({ slack: null, members: [] }), { state: 'not_created' })
-    expect(screen.queryByText('Who can ask Scout')).toBeNull()
-    expect(screen.getByRole('button', { name: /Add a connector/ })).toBeDefined()
+  it('offers Add a connector without rows for unused Slack or GitHub', async () => {
+    renderWith(bot({ slack: null, members: [] }), { state: 'not_created' }, gitHubOn)
+    await screen.findByRole('button', { name: /Add a connector/ })
+    expect(screen.queryByRole('button', { name: /^Slack(?: ·|$)/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^GitHub(?: ·|$)/ })).toBeNull()
   })
 
   it('gives Linear its own row, with its handle and its own people', async () => {
@@ -272,26 +242,6 @@ describe('BotConnectorsSection', () => {
     expect(
       screen.getByText('Everyone else on GitHub gets a public reply to ask you.')
     ).toBeDefined()
-  })
-
-  it('shows a bot on GitHub as not linked, with a way to finish setup', async () => {
-    renderWith(
-      bot({ slack: null, members: [], github: {} }),
-      { state: 'not_created' },
-      {
-        ok: true,
-        value: { ...gitHubOn.value, account: null, installations: [] }
-      }
-    )
-    // Not linked shows as its fix, in the status's place.
-    expect(await screen.findByRole('button', { name: 'Finish setup' })).toBeDefined()
-    expect(screen.queryByText('Not linked')).toBeNull()
-  })
-
-  it('shows no GitHub row for a bot not on GitHub', async () => {
-    renderWith(bot({ slack: null, members: [] }), { state: 'not_created' }, gitHubOn)
-    await screen.findByRole('button', { name: /Add a connector/ })
-    expect(screen.queryByText('Connected')).toBeNull()
   })
 
   it('gives each workspace and org its own row, leaving out a removed org', async () => {
@@ -463,7 +413,8 @@ describe('BotConnectorsSection folding', () => {
     await screen.findByRole('button', { name: 'Finish setup' })
     const expanded = (name: string): string | null =>
       screen.getByRole('button', { name }).getAttribute('aria-expanded')
-    // The first bot: Slack opened, GitHub (which opened itself, needing the owner) closed.
+    expect([expanded('Slack · Globex'), expanded('GitHub')]).toEqual(['false', 'true'])
+    // Open Slack and close GitHub for the first bot.
     await user.click(screen.getByRole('button', { name: 'Slack · Globex' }))
     await user.click(screen.getByRole('button', { name: 'GitHub' }))
     expect([expanded('Slack · Globex'), expanded('GitHub')]).toEqual(['true', 'false'])

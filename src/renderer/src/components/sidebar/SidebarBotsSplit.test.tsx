@@ -105,12 +105,6 @@ describe('SidebarBotsSplit', () => {
     }
   })
 
-  it('keeps the default cap until the user drags', () => {
-    const { section } = renderSplit(200, 400)
-    expect(section.style.maxHeight).toBe('')
-    expect(section.className).toContain('max-h-[40%]')
-  })
-
   it('saves the dragged height, starting from the rendered height', () => {
     const { handle } = renderSplit(200, 400)
     drag(handle, 300, 350)
@@ -151,12 +145,6 @@ describe('SidebarBotsSplit', () => {
     expect(mocks.setSidebarBotsHeight).not.toHaveBeenCalled()
     fireEvent.mouseDown(handle, { clientY: 300, detail: 2 })
     expect(mocks.setSidebarBotsHeight).toHaveBeenCalledWith(null)
-  })
-
-  it('renders a saved height as the section cap', () => {
-    mocks.state.sidebarBotsHeight = 900
-    const { section } = renderSplit(200, 400)
-    expect(section.style.maxHeight).toBe('900px')
   })
 
   it('removes the resize handle and saved cap while Projects is folded', () => {

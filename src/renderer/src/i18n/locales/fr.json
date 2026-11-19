@@ -19184,7 +19184,6 @@
         "couldNotStart": "{{agent}} n'a pas pu démarrer.",
         "editSavedArguments": "Modifiez-les dans Paramètres > Agents > Arguments.",
         "couldNotRestart": "{{agent}} n'a pas pu redémarrer.",
-        "cliTooOld": "{{agent}} {{installedVersion}} est trop ancien pour les conversations. Mettez-le à jour vers {{minimumVersion}} ou une version ultérieure.",
         "startTimedOut": "{{agent}} a mis trop de temps à démarrer (aucune réponse à {{method}} après {{seconds}} s).",
         "startTimedOutKeepsHappening": "Si cela se reproduit, l'ordinateur qui exécute ce chat est peut-être surchargé.",
         "notSignedIn": "{{agent}} n’est pas connecté.",

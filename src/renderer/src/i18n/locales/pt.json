@@ -21206,7 +21206,6 @@
         "thenSendAgain": "Depois, envie sua mensagem novamente.",
         "runCommandWhenDone": "Execute /{{command}} quando terminar.",
         "commandAfterAnswer": "Responda à pergunta ou ao pedido de aprovação do agente e execute /{{command}}.",
-        "cliTooOld": "A versão {{installedVersion}} de {{agent}} é antiga demais para chats. Atualize para a versão {{minimumVersion}} ou mais recente.",
         "conversationOpenElsewhere": "O Codex ainda está mantendo esta conversa aberta. Tente novamente em instantes ou feche outros terminais do Codex.",
         "conversationOpenInTerminal": "{{agent}} já está executando esta conversa em outro terminal. Saia do {{agent}} lá ou feche esse terminal para continuar aqui.",
         "modelUnavailableUpdate": "{{agent}} não conseguiu usar {{detail}}. Atualize o {{agent}} para {{minimumVersion}} ou posterior para mantê-lo após reiniciar, ou selecione outro modelo e envie novamente.",

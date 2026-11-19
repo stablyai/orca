@@ -24,12 +24,12 @@ const TRANSCRIPT_BYTES = 24 * 1024 * 1024
 
 const bounded = (text: string) => sliceAtCodeUnitLimit(text, BLOCK_TEXT_LIMIT)
 
-function textBlocks(content: unknown): NativeChatBlock[] {
+function textParts(content: unknown): string[] {
   const parts = Array.isArray(content) ? content : [content]
-  return parts.flatMap((part): NativeChatBlock[] => {
+  return parts.flatMap((part): string[] => {
     // Inline images are base64 a transcript can't carry; mark where they were.
     if (asRecord(part)?.type === 'image_url') {
-      return [{ type: 'text', text: '[image]' }]
+      return ['[image]']
     }
     const text =
       typeof part === 'string'
@@ -37,7 +37,7 @@ function textBlocks(content: unknown): NativeChatBlock[] {
         : asRecord(part)?.type === 'text'
           ? asRecord(part)?.text
           : null
-    return typeof text === 'string' && text.trim() ? [{ type: 'text', text: bounded(text) }] : []
+    return typeof text === 'string' && text.trim() ? [bounded(text)] : []
   })
 }
 
@@ -74,7 +74,13 @@ function hermesChatMessages(row: MessageRow): NativeChatMessage[] {
   const base = { id: `${row.session_id}:${row.id}`, timestamp: row.timestamp * 1000 }
   const content = decodedContent(row)
   if (row.role === 'tool') {
-    const output = bounded(typeof content === 'string' ? content : JSON.stringify(content ?? ''))
+    const output = bounded(
+      Array.isArray(content)
+        ? textParts(content).join('\n')
+        : typeof content === 'string'
+          ? content
+          : JSON.stringify(content ?? '')
+    )
     return [
       {
         ...base,
@@ -90,7 +96,7 @@ function hermesChatMessages(row: MessageRow): NativeChatMessage[] {
     return []
   }
   const messages: NativeChatMessage[] = []
-  const text = textBlocks(content)
+  const text = textParts(content).map((part): NativeChatBlock => ({ type: 'text', text: part }))
   const calls = row.role === 'assistant' ? toolCallBlocks(row.tool_calls) : []
   const parts = (row.reasoning?.trim() ? 1 : 0) + (text.length > 0 ? 1 : 0) + calls.length
   // Each part is its own item, as tool calls render as tool items only on their own.

@@ -13,12 +13,6 @@ export const sessionOptionPickerStyles = themedStyleSheet(() => ({
   header: {
     marginTop: -spacing.xs
   },
-  // Sits in the header's empty leading side, centred on its 52 pt height.
-  back: {
-    position: 'absolute',
-    top: 8,
-    left: spacing.xs
-  },
   pageTop: {
     height: spacing.sm
   }

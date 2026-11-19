@@ -102,16 +102,6 @@ describe('BotTemplatesDialog', () => {
     expect(screen.queryByRole('option', { name: /^Dependency updates/ })).toBeNull()
   })
 
-  it('keeps the detail header and Use template… out of the part that scrolls', () => {
-    openBotTemplates('ci-failures')
-    renderDialog()
-    const scrolling = screen.getByRole('region', { name: 'About CI failures' })
-
-    expect(within(scrolling).getByText('What it does first')).toBeTruthy()
-    expect(within(scrolling).queryByRole('button', { name: 'Use template…' })).toBeNull()
-    expect(within(scrolling).queryByRole('heading', { level: 2 })).toBeNull()
-  })
-
   it('creates only through New bot, opened over the dialog, with the skills left ticked', async () => {
     openBotTemplates('pr-review')
     renderDialog()

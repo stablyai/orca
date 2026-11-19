@@ -19775,7 +19775,6 @@
         "sendAgainToTryOnceMore": "Отправьте сообщение снова, чтобы повторить попытку.",
         "couldNotStart": "Не удалось запустить {{agent}}.",
         "couldNotRestart": "Не удалось перезапустить {{agent}}.",
-        "cliTooOld": "{{agent}} {{installedVersion}} слишком стар для чатов. Обновите до {{minimumVersion}} или новее.",
         "startTimedOut": "{{agent}} запускается слишком долго: нет ответа на {{method}} за {{seconds}} с.",
         "startTimedOutKeepsHappening": "Если это повторяется, возможно, компьютер с этим чатом перегружен.",
         "notSignedIn": "Вход в {{agent}} не выполнен.",
