@@ -323,6 +323,8 @@ function runCompactionChild(
       resolve({ kind: 'failed', error: String(error) })
       return
     }
+    // A child gone before it reads 'go' makes that write fail; at quit that must never be unhandled.
+    child.stdin?.on('error', () => {})
     let output = ''
     let released = false
     let timedOut = false
