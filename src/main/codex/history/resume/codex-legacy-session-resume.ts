@@ -205,9 +205,7 @@ async function installRollout(sourcePath: string, targetPath: string): Promise<v
       await assertMatchingExistingTarget(sourcePath, targetPath)
     } else {
       try {
-        const outcome = await copyCodexRolloutWithoutOverwrite(sourcePath, targetPath, {
-          purpose: 'backfill'
-        })
+        const outcome = await copyCodexRolloutWithoutOverwrite(sourcePath, targetPath)
         if (outcome === 'existing') {
           await assertMatchingExistingTarget(sourcePath, targetPath)
         }

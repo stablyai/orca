@@ -1,16 +1,19 @@
-import { mkdir, realpath, rm, stat, writeFile } from 'node:fs/promises'
-import { isAbsolute, join, relative, sep } from 'node:path'
+import { mkdir, realpath, stat } from 'node:fs/promises'
+import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
-import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import {
   COMPRESSED_ROLLOUT_SUFFIX,
   rolloutTwinPath
 } from '../rollouts/codex-rollout-compressed-twin'
-import { parseCodexRolloutThreadId } from '../rollouts/codex-rollout-thread-id'
 import { isCodexSessionRolloutFileName } from '../rollouts/codex-session-file-listing'
-import { readEntries, StoreNames } from './codex-history-store-names'
-import { canHardLinkIn, copyIntoStore, pickImportForm } from './codex-history-import-publish'
+import { StoreNames, readEntries } from './codex-history-store-names'
+import { datedFolderOf, listDayFolders } from './codex-history-import-folders'
+import { importHomeUnusableReason } from './codex-history-import-home-check'
+import { codexRolloutDeletionGeneration } from '../rollouts/codex-rollout-deletion-guard'
+import { RolloutSourceReadError } from '../rollouts/codex-rollout-staged-copy'
+import { publishStagedImport } from './codex-history-import-publish'
+import { canHardLinkIn, pickImportForm, stageImportRollout } from './codex-history-import-staging'
 import {
   hasUnsavedImportLedger,
   readImportLedger,
@@ -20,7 +23,6 @@ import {
 } from './codex-history-import-ledger'
 
 const ARCHIVED = 'archived_sessions'
-const SESSIONS = 'sessions'
 const LEDGER_SAVE_EVERY = 50
 
 export type CodexHistoryImportArgs = {
@@ -28,74 +30,20 @@ export type CodexHistoryImportArgs = {
   storeHome: string
   ledgerPath: string
   indexPendingDir: string
-  shouldStop: () => boolean
-}
-
-async function realpathIfPresent(path: string): Promise<string | null> {
-  try {
-    return await realpath(path)
-  } catch (error) {
-    if (isDefinitiveAbsence(error)) {
-      return null
-    }
-    throw error
-  }
+  /** Names this run's staged copies, so a sweep leaves them alone. */
+  runId: string
+  /** The import setting is unchanged and Orca isn't quitting. */
+  isCurrent: () => boolean
+  /** Resolves once no launch waits for the history queue. */
+  waitForLaunches: () => Promise<void>
+  /** Runs a short publish job inside the history queue. */
+  publish: <T>(job: () => Promise<T>) => Promise<T>
 }
 
 function rolloutKey(name: string): string {
   return name.endsWith(COMPRESSED_ROLLOUT_SUFFIX)
     ? name.slice(0, -COMPRESSED_ROLLOUT_SUFFIX.length)
     : name
-}
-
-function isWithin(parent: string, child: string): boolean {
-  const path = relative(parent, child)
-  return path === '' || (!path.startsWith(`..${sep}`) && path !== '..' && !isAbsolute(path))
-}
-
-// Codex files a rollout under its start date: `rollout-YYYY-MM-DDT...`.
-function datedFolderOf(name: string): string | null {
-  const stamp = parseCodexRolloutThreadId(name)?.rolloutStamp
-  const match = stamp ? /^(\d{4})-(\d{2})-(\d{2})T/.exec(stamp) : null
-  return match ? join(SESSIONS, match[1], match[2], match[3]) : null
-}
-
-async function childFolders(folder: string): Promise<string[]> {
-  return (await readEntries(folder))
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .sort((left, right) => right.localeCompare(left))
-}
-
-/** Day folders under `sessions/`, newest first, relative to the home. */
-async function listDayFolders(home: string): Promise<string[]> {
-  const days: string[] = []
-  for (const year of await childFolders(join(home, SESSIONS))) {
-    for (const month of await childFolders(join(home, SESSIONS, year))) {
-      for (const day of await childFolders(join(home, SESSIONS, year, month))) {
-        days.push(join(SESSIONS, year, month, day))
-      }
-    }
-  }
-  return days
-}
-
-/** Why an import folder can't feed the store, or null when it can. */
-async function unusableReason(importHome: string, storeHome: string): Promise<string | null> {
-  if (!isAbsolute(importHome) || parseWslUncPath(importHome)) {
-    return 'not an absolute host path'
-  }
-  const [source, store] = await Promise.all([
-    realpathIfPresent(importHome),
-    realpathIfPresent(storeHome)
-  ])
-  if (!source) {
-    return 'missing'
-  }
-  if (store && (isWithin(source, store) || isWithin(store, source))) {
-    return 'overlaps the Codex history folder'
-  }
-  return null
 }
 
 type FolderResult = ImportedFolder & {
@@ -148,15 +96,18 @@ async function importFolder(
     if (handled.has(key)) {
       continue
     }
-    if (args.shouldStop()) {
+    if (!args.isCurrent()) {
       return { copied, stopped: true }
     }
+    // Copies yield to launches between conversations; a launch never waits behind one.
+    await args.waitForLaunches()
+    const otherFolder = archived ? datedFolderOf(key) : ARCHIVED
     const targetNames = await store.names(target)
     // Any form the store holds wins, here or filed in the other place, whatever its mtime.
     if (
       targetNames.has(key) ||
       targetNames.has(rolloutTwinPath(key)) ||
-      (await store.holds(archived ? datedFolderOf(key) : ARCHIVED, key))
+      (await store.holds(otherFolder, key))
     ) {
       handled.add(key)
       continue
@@ -166,39 +117,58 @@ async function importFolder(
       failed = true
       continue
     }
+    const targetDir = join(args.storeHome, target)
     if (!targetReady) {
-      await mkdir(join(args.storeHome, target), { recursive: true })
-      if (!(await canHardLinkIn(join(args.storeHome, target)))) {
+      await mkdir(targetDir, { recursive: true })
+      if (!(await canHardLinkIn(targetDir, args.runId))) {
         return { copied, stopped: false, halt: 'no-hard-links' }
       }
       await mkdir(args.indexPendingDir, { recursive: true })
       targetReady = true
     }
-    // Recorded before publishing, so the store's index learns every rollout that joins it.
-    await writeFile(join(args.indexPendingDir, name), '')
-    const outcome = await copyIntoStore(
-      join(path, name),
-      join(args.storeHome, target, name),
-      args.shouldStop
+    const from = join(path, name)
+    const generation = codexRolloutDeletionGeneration(from)
+    let staged: string
+    try {
+      const outcome = await stageImportRollout(from, targetDir, args.runId)
+      if (outcome === 'source-changed') {
+        failed = true
+        continue
+      }
+      staged = outcome
+    } catch (error) {
+      console.warn(`[codex-history-import] Could not copy ${from}:`, error)
+      // An unreadable source is that conversation's problem; a store that refuses writes ends the pass.
+      if (error instanceof RolloutSourceReadError) {
+        failed = true
+        continue
+      }
+      return { copied, stopped: false, halt: 'failed' }
+    }
+    const published = await args.publish(() =>
+      publishStagedImport({
+        staged,
+        final: join(targetDir, name),
+        storeFolders: [targetDir, ...(otherFolder ? [join(args.storeHome, otherFolder)] : [])],
+        indexPendingDir: args.indexPendingDir,
+        generation,
+        isCurrent: args.isCurrent,
+        isHandled: () => handled.has(key)
+      })
     )
-    if (outcome === 'copied' || outcome === 'existing') {
-      copied += outcome === 'copied' ? 1 : 0
-      handled.add(key)
-      targetNames.add(name)
+    if (published === 'failed') {
+      return { copied, stopped: false, halt: 'failed' }
+    }
+    if (published === 'refused') {
+      failed = true
       continue
     }
-    // No heal runs while this pass is active, so the marker can't settle the thread as missing.
-    await rm(join(args.indexPendingDir, name), { force: true, maxRetries: 3 })
-    if (outcome === 'stopped') {
-      return { copied, stopped: true }
-    }
-    if (outcome !== 'retry') {
-      return { copied, stopped: false, halt: outcome }
-    }
-    failed = true
+    copied += published === 'copied' ? 1 : 0
+    handled.add(key)
+    targetNames.add(name)
   }
   const after = (await stat(path, { bigint: true })).mtimeNs
-  // A folder that changed while read, or a copy that failed or saw its source change, is read again.
+  // Settled only once every conversation in it was published or found in the store.
   return {
     copied,
     stopped: false,
@@ -209,10 +179,11 @@ async function importFolder(
 /**
  * Copies the import folder's rollouts that `~/.codex` lacks into it, never replacing one, so
  * /resume lists them; the ledger keeps each name handled, so one the user deleted stays deleted.
+ * Runs outside the history queue and publishes each copy through `args.publish`.
  * Returns how many were copied, or null when it stopped early (progress so far is kept).
  */
 export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<number | null> {
-  const reason = await unusableReason(args.importHome, args.storeHome)
+  const reason = await importHomeUnusableReason(args.importHome, args.storeHome)
   if (reason) {
     if (reason !== 'missing') {
       console.warn(`[codex-history-import] Not importing from ${args.importHome}: ${reason}`)
@@ -240,7 +211,7 @@ export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<
   let unread = false
   const handled = new Set(source.handled)
   const folders = [ARCHIVED, ...(await listDayFolders(args.importHome))]
-  const store = new StoreNames(args.storeHome)
+  const store = new StoreNames(args.storeHome, args.runId)
   let copied = 0
   let unsaved = 0
   let stopped = false
@@ -251,7 +222,7 @@ export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<
   }
   try {
     for (const folder of folders) {
-      if (args.shouldStop()) {
+      if (!args.isCurrent()) {
         stopped = true
         break
       }

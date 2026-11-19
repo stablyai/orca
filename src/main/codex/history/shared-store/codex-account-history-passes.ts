@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
+import { randomUUID } from 'node:crypto'
 import { basename, dirname, join } from 'node:path'
 import { withSpan } from '../../../observability/tracer'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
@@ -14,7 +15,7 @@ import {
 } from './codex-account-history-index'
 import { shareCodexAccountHistory, unshareCodexAccountHistory } from './codex-account-history-links'
 import { importCodexHistory } from '../import/codex-history-import'
-import { forgetStoreFoldersWithoutHardLinks } from '../import/codex-history-import-publish'
+import { forgetStoreFoldersWithoutHardLinks } from '../import/codex-history-import-staging'
 import { resolveHostCodexSessionSourceHome } from '../rollouts/codex-session-source-home'
 import { isCodexHistorySharedAcrossAccounts } from '../../../codex-accounts/runtime-home/routing/codex-history-sharing'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
@@ -31,6 +32,8 @@ const inRootContext = AsyncLocalStorage.snapshot()
 
 const INDEX_PENDING_DIR = (): string =>
   join(getOrcaUserDataPath(), 'codex-account-history', 'index-pending')
+// Names this run's staged import copies, so a sweep never removes one still to be published.
+const IMPORT_RUN_ID = randomUUID().replaceAll('-', '').slice(0, 12)
 const IMPORT_LEDGER_PATH = (): string =>
   join(getOrcaUserDataPath(), 'codex-account-history', 'import-ledger.json')
 
@@ -69,6 +72,8 @@ export class CodexAccountHistoryPasses {
   private checking = false
   // When each import folder last finished a pass this run.
   private readonly importedAt = new Map<string, number>()
+  private importing: Promise<void> | null = null
+  private importAgain = false
   private startedPasses = 0
   private readonly passProgress = {
     isPaused: (): boolean => this.activePasses > 0,
@@ -124,9 +129,10 @@ export class CodexAccountHistoryPasses {
   }
 
   /**
-   * Copies the import folder's conversations that ~/.codex lacks into it, in the queue with the
-   * history passes and yielding to a waiting launch: at most once per interval, unless the
-   * setting changed. The settings are read again when it starts and while it runs.
+   * Copies the import folder's conversations that ~/.codex lacks into it: at most once per
+   * interval, unless the setting changed. Copies are made outside the queue, pausing while a
+   * launch waits, and each is published by a short job in it. One import runs at a time; a
+   * setting change during one starts another after it.
    */
   importHistory(
     getSettings: () => CodexHistoryImportSettings,
@@ -134,49 +140,63 @@ export class CodexAccountHistoryPasses {
   ): Promise<void> {
     if (options.settingChanged) {
       forgetStoreFoldersWithoutHardLinks()
+      this.importedAt.clear()
     }
+    if (this.importing) {
+      this.importAgain ||= options.settingChanged === true
+      return this.importing
+    }
+    const importing = (async () => {
+      do {
+        this.importAgain = false
+        await this.importOnce(getSettings)
+      } while (this.importAgain)
+    })()
+    this.importing = importing.finally(() => {
+      this.importing = null
+    })
+    return this.importing
+  }
+
+  private async importOnce(getSettings: () => CodexHistoryImportSettings): Promise<void> {
     const importHome = resolveImportHome(getSettings())
     if (!importHome) {
-      return Promise.resolve()
+      return
     }
     const key = normalizeRuntimePathForComparison(importHome)
-    if (options.settingChanged) {
-      this.importedAt.delete(key)
+    if (Date.now() - (this.importedAt.get(key) ?? -Infinity) < IMPORT_INTERVAL_MS) {
+      return
     }
-    return this.requests.request(
-      { queue: 'host', home: `import\0${key}`, shared: true, forLaunch: false },
-      async () => {
-        if (
-          resolveImportHome(getSettings()) !== importHome ||
-          Date.now() - (this.importedAt.get(key) ?? -Infinity) < IMPORT_INTERVAL_MS
-        ) {
-          return
-        }
-        this.activePasses += 1
-        this.startedPasses += 1
-        try {
-          const copied = await importCodexHistory({
-            importHome,
-            storeHome: getSystemCodexHomePath(),
-            ledgerPath: IMPORT_LEDGER_PATH(),
-            indexPendingDir: INDEX_PENDING_DIR(),
-            shouldStop: () =>
-              isCodexAccountHistoryWorkStopping() ||
-              this.requests.hasLaunchWaiting('host') ||
-              resolveImportHome(getSettings()) !== importHome
+    try {
+      const copied = await importCodexHistory({
+        importHome,
+        storeHome: getSystemCodexHomePath(),
+        ledgerPath: IMPORT_LEDGER_PATH(),
+        indexPendingDir: INDEX_PENDING_DIR(),
+        runId: IMPORT_RUN_ID,
+        isCurrent: () =>
+          !isCodexAccountHistoryWorkStopping() && resolveImportHome(getSettings()) === importHome,
+        waitForLaunches: () => this.requests.whenNoLaunchWaiting('host'),
+        // Only publishing pauses the index heal: a frozen import folder must not hold it.
+        publish: (job) =>
+          this.requests.enqueue('host', async () => {
+            this.activePasses += 1
+            this.startedPasses += 1
+            try {
+              return await job()
+            } finally {
+              this.activePasses -= 1
+            }
           })
-          if (copied !== null) {
-            this.importedAt.set(key, Date.now())
-          }
-        } catch (error) {
-          console.warn('[codex-history-import] Importing Codex conversations failed:', error)
-        } finally {
-          this.activePasses -= 1
-        }
-        requestHostCodexIndexHeal(INDEX_PENDING_DIR(), getSystemCodexHomePath(), this.passProgress)
-        this.checkOwed()
+      })
+      if (copied !== null) {
+        this.importedAt.set(key, Date.now())
       }
-    )
+    } catch (error) {
+      console.warn('[codex-history-import] Importing Codex conversations failed:', error)
+    }
+    requestHostCodexIndexHeal(INDEX_PENDING_DIR(), getSystemCodexHomePath(), this.passProgress)
+    this.checkOwed()
   }
 
   private async runPass(key: string, accountHome: string, shared: boolean): Promise<void> {

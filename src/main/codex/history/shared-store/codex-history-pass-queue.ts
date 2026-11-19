@@ -7,10 +7,14 @@ export class CodexHistoryPassQueue {
   private readonly launches: (() => Promise<void>)[] = []
   private readonly background: (() => Promise<void>)[] = []
   private running = false
+  private readonly launchWaiters: (() => void)[] = []
 
-  /** Whether a launch's pass waits behind the running job. */
-  hasLaunchWaiting(): boolean {
-    return this.launches.length > 0
+  /** Resolves once no launch's pass waits in this queue. */
+  whenNoLaunchWaiting(): Promise<void> {
+    if (this.launches.length === 0) {
+      return Promise.resolve()
+    }
+    return new Promise((resolve) => this.launchWaiters.push(resolve))
   }
 
   add<T>(work: () => Promise<T>, options: { forLaunch: boolean }): Promise<T> {
@@ -33,6 +37,11 @@ export class CodexHistoryPassQueue {
         job = this.launches.shift() ?? this.background.shift()
       ) {
         await job()
+        if (this.launches.length === 0) {
+          for (const resume of this.launchWaiters.splice(0)) {
+            resume()
+          }
+        }
       }
     } finally {
       this.running = false
@@ -59,9 +68,16 @@ export class CodexHistoryPassRequests {
     return this.latest.has(home)
   }
 
-  /** Whether a launch waits in `queue`; long background work yields to it. */
-  hasLaunchWaiting(queue: string): boolean {
-    return this.queues.get(queue)?.hasLaunchWaiting() === true
+  /** Resolves once no launch waits in `queue`; background work outside it pauses for launches. */
+  whenNoLaunchWaiting(queue: string): Promise<void> {
+    return this.queues.get(queue)?.whenNoLaunchWaiting() ?? Promise.resolve()
+  }
+
+  /** Runs one short background job in `queue`, outside the per-home pass bookkeeping. */
+  enqueue<T>(queue: string, work: () => Promise<T>): Promise<T> {
+    const passQueue = this.queues.get(queue) ?? new CodexHistoryPassQueue()
+    this.queues.set(queue, passQueue)
+    return passQueue.add(work, { forLaunch: false })
   }
 
   request(

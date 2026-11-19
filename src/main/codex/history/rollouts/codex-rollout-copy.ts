@@ -1,11 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import type { BigIntStats } from 'node:fs'
-import { link, stat, utimes } from 'node:fs/promises'
+import { link, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { errnoCodeOrUnknown } from '../../../../shared/errors/errno-code'
 import {
-  clearDarwinLockFlag,
-  readingSource,
+  clearDarwinFileFlags,
   removeStagedCopy,
   stageRolloutCopy
 } from './codex-rollout-staged-copy'
@@ -28,33 +26,16 @@ export function isHardLinkUnsupportedError(error: unknown): boolean {
   return HARDLINK_UNSUPPORTED_CODES.has(code) || (process.platform === 'win32' && code === 'EISDIR')
 }
 
-export type CodexRolloutCopyOutcome = 'copied' | 'existing' | 'source-changed' | 'stopped'
-
-type CopyOptions = {
-  /** Names the staged file `.orca-<purpose>-<uuid>.tmp`. */
-  purpose: 'backfill' | 'import'
-  /** Discards the copy when the source changed while it was copied. */
-  requireStableSource?: boolean
-  /** Abandons the copy (`stopped`) once this turns true. */
-  shouldStop?: () => boolean
-}
-
-function sameSource(before: BigIntStats, after: BigIntStats): boolean {
-  return before.ino === after.ino && before.size === after.size && before.mtimeNs === after.mtimeNs
-}
-
-function nsToSeconds(ns: bigint): number {
-  return Number(ns) / 1e9
-}
-
-async function publish(
+/**
+ * Publishes a staged copy under the rollout's name with a hard link, which never replaces a
+ * file already there (`existing`). Throws `AtomicNoReplaceUnsupportedError` where links are refused.
+ */
+export async function linkStagedRollout(
   temporaryPath: string,
-  targetPath: string,
-  cloned: boolean
+  targetPath: string
 ): Promise<'copied' | 'existing'> {
   for (let attempt = 0; ; attempt += 1) {
     try {
-      // A same-volume hard link publishes atomically without replacing a concurrent target.
       await link(temporaryPath, targetPath)
       return 'copied'
     } catch (error) {
@@ -62,12 +43,12 @@ async function publish(
       if (code === 'EEXIST') {
         return 'existing'
       }
-      // A macOS clone keeps a Finder-locked source's flag, which refuses the link.
+      // A macOS clone keeps a locked or append-only source's flags, which refuse the link.
       if (
-        cloned &&
+        process.platform === 'darwin' &&
         attempt === 0 &&
         code === 'EPERM' &&
-        (await clearDarwinLockFlag(temporaryPath))
+        (await clearDarwinFileFlags(temporaryPath))
       ) {
         continue
       }
@@ -81,36 +62,17 @@ async function publish(
 
 /**
  * Copies a rollout to `targetPath` through a staged non-rollout name, so readers never see a
- * partial file, and never replaces one already there (`existing`). Failures reading the source
- * throw `RolloutSourceReadError`.
+ * partial file, and never replaces one already there (`existing`).
  */
 export async function copyCodexRolloutWithoutOverwrite(
   sourcePath: string,
-  targetPath: string,
-  options: CopyOptions
-): Promise<CodexRolloutCopyOutcome> {
-  const temporaryPath = join(dirname(targetPath), `.orca-${options.purpose}-${randomUUID()}.tmp`)
-  const readSource = (): Promise<BigIntStats> =>
-    readingSource(sourcePath, () => stat(sourcePath, { bigint: true }))
-  const source = await readSource()
+  targetPath: string
+): Promise<'copied' | 'existing'> {
+  const temporaryPath = join(dirname(targetPath), `.orca-backfill-${randomUUID()}.tmp`)
+  const source = await stat(sourcePath, { bigint: true })
   try {
-    const staged = await stageRolloutCopy(
-      source,
-      sourcePath,
-      temporaryPath,
-      options.shouldStop ?? (() => false)
-    )
-    if (staged === 'stopped') {
-      return 'stopped'
-    }
-    if (staged === 'copied') {
-      // Compressed-twin rules and recency read the rollout's mtime.
-      await utimes(temporaryPath, nsToSeconds(source.atimeNs), nsToSeconds(source.mtimeNs))
-    }
-    if (options.requireStableSource && !sameSource(source, await readSource())) {
-      return 'source-changed'
-    }
-    return await publish(temporaryPath, targetPath, staged === 'cloned')
+    await stageRolloutCopy(source, sourcePath, temporaryPath)
+    return await linkStagedRollout(temporaryPath, targetPath)
   } finally {
     try {
       await removeStagedCopy(temporaryPath)

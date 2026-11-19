@@ -1,16 +1,15 @@
 import { randomUUID } from 'node:crypto'
-import { link, rm, writeFile } from 'node:fs/promises'
+import type { BigIntStats } from 'node:fs'
+import { link, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { lstatIfPresent } from '../../../filesystem/merged-directory-link'
 import { COMPRESSED_ROLLOUT_SUFFIX, plainWins } from '../rollouts/codex-rollout-compressed-twin'
+import { isHardLinkUnsupportedError } from '../rollouts/codex-rollout-copy'
 import {
-  AtomicNoReplaceUnsupportedError,
-  copyCodexRolloutWithoutOverwrite,
-  isHardLinkUnsupportedError
-} from '../rollouts/codex-rollout-copy'
-import { RolloutSourceReadError } from '../rollouts/codex-rollout-staged-copy'
-import { linkCodexRolloutUnlessHeld } from '../rollouts/codex-rollout-deletion-guard'
+  readingSource,
+  removeStagedCopy,
+  stageRolloutCopy
+} from '../rollouts/codex-rollout-staged-copy'
 
 /**
  * The form of one conversation to copy when the import folder has both: a newer plain form,
@@ -35,6 +34,11 @@ export async function pickImportForm(
   return !compressed?.isFile() || plainWins(plain, compressed) ? key : compressedName
 }
 
+/** `.orca-import-<runId>-<uuid>.tmp`: never a rollout name, and swept once its run is long gone. */
+export function stagedImportPath(folder: string, runId: string): string {
+  return join(folder, `.orca-import-${runId}-${randomUUID()}.tmp`)
+}
+
 // Store folders a probe found without hard links; tried again once the setting changes or Orca restarts.
 const foldersWithoutHardLinks = new Set<string>()
 
@@ -43,13 +47,13 @@ export function forgetStoreFoldersWithoutHardLinks(): void {
 }
 
 /** Whether `folder` takes hard links, which publishing a copy needs; checked before any copy. */
-export async function canHardLinkIn(folder: string): Promise<boolean> {
+export async function canHardLinkIn(folder: string, runId: string): Promise<boolean> {
   if (foldersWithoutHardLinks.has(folder)) {
     return false
   }
-  // Both names match the staged-copy sweep, so a crash here leaves nothing behind for good.
-  const probe = join(folder, `.orca-import-probe-${randomUUID()}.tmp`)
-  const probeLink = join(folder, `.orca-import-probe-${randomUUID()}.tmp`)
+  // Both are staged-copy names, so a later run's sweep removes any a crash leaves here.
+  const probe = stagedImportPath(folder, runId)
+  const probeLink = stagedImportPath(folder, runId)
   await writeFile(probe, '', { flag: 'wx' })
   try {
     await link(probe, probeLink)
@@ -67,37 +71,42 @@ export async function canHardLinkIn(folder: string): Promise<boolean> {
   }
 }
 
-/**
- * `retry`: this file alone failed (its source unreadable, gone, changed while copied or being
- * deleted); its folder is read again next pass. `failed`: the store refused a write, which ends
- * the pass so a broken store isn't copied into file after file.
- */
-export type ImportPublishOutcome = 'copied' | 'existing' | 'retry' | 'stopped' | 'failed'
+function sameSource(before: BigIntStats, after: BigIntStats): boolean {
+  return (
+    before.dev === after.dev &&
+    before.ino === after.ino &&
+    before.size === after.size &&
+    before.mtimeNs === after.mtimeNs
+  )
+}
 
-export async function copyIntoStore(
+/**
+ * Copies `from` into `folder` under a staged name, outside the history queue so a slow or frozen
+ * import folder holds up only the import. `source-changed`: Codex wrote to it meanwhile, so the
+ * copy is dropped. A failure reading the source throws `RolloutSourceReadError`.
+ */
+export async function stageImportRollout(
   from: string,
-  to: string,
-  shouldStop: () => boolean
-): Promise<ImportPublishOutcome> {
+  folder: string,
+  runId: string
+): Promise<string | 'source-changed'> {
+  const readSource = (): Promise<BigIntStats> =>
+    readingSource(from, () => stat(from, { bigint: true }))
+  const staged = stagedImportPath(folder, runId)
+  const source = await readSource()
+  let kept = false
   try {
-    // Held from the first byte copied to the link, so a deletion can't race the new name.
-    const outcome = await linkCodexRolloutUnlessHeld(from, () =>
-      copyCodexRolloutWithoutOverwrite(from, to, {
-        purpose: 'import',
-        requireStableSource: true,
-        shouldStop
-      })
-    )
-    return outcome === 'held' || outcome === 'source-changed' ? 'retry' : outcome
-  } catch (error) {
-    if (isDefinitiveAbsence(error)) {
-      return 'retry'
+    await stageRolloutCopy(source, from, staged)
+    if (!sameSource(source, await readSource())) {
+      return 'source-changed'
     }
-    console.warn(`[codex-history-import] Could not copy ${from}:`, error)
-    // The probe found hard links here, so a refused link is this file's alone.
-    return error instanceof RolloutSourceReadError ||
-      error instanceof AtomicNoReplaceUnsupportedError
-      ? 'retry'
-      : 'failed'
+    kept = true
+    return staged
+  } finally {
+    if (!kept) {
+      await removeStagedCopy(staged).catch((error: unknown) =>
+        console.warn('[codex-history-import] Could not remove staged copy:', staged, error)
+      )
+    }
   }
 }

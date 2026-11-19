@@ -15,6 +15,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { holdCodexRolloutForDeletion } from '../rollouts/codex-rollout-deletion-guard'
 import { importCodexHistory } from './codex-history-import'
 
 const DAY = join('sessions', '2026', '11', '18')
@@ -32,12 +33,7 @@ afterEach(() => {
   }
 })
 
-// Launch checks made while a copy is staged don't count, so the chunk size doesn't matter.
-function isStaging(storeHome: string): boolean {
-  return readdirSync(join(storeHome, DAY)).some((name) => name.startsWith('.orca-import-'))
-}
-
-function setup(stopAfterChecks = Infinity): {
+function setup(beforePublish: () => Promise<void> = async () => {}): {
   importHome: string
   storeHome: string
   run: () => Promise<number | null>
@@ -49,16 +45,20 @@ function setup(stopAfterChecks = Infinity): {
   mkdirSync(join(importHome, DAY), { recursive: true })
   mkdirSync(join(importHome, 'archived_sessions'), { recursive: true })
   mkdirSync(join(storeHome, DAY), { recursive: true })
-  const run = (): Promise<number | null> => {
-    let checks = 0
-    return importCodexHistory({
+  const run = (): Promise<number | null> =>
+    importCodexHistory({
       importHome,
       storeHome,
       ledgerPath: join(root, 'import-ledger.json'),
       indexPendingDir: join(root, 'index-pending'),
-      shouldStop: () => !isStaging(storeHome) && ++checks > stopAfterChecks
+      runId: 'testrun',
+      isCurrent: () => true,
+      waitForLaunches: async () => {},
+      publish: async (job) => {
+        await beforePublish()
+        return job()
+      }
     })
-  }
   return { importHome, storeHome, run }
 }
 
@@ -116,24 +116,20 @@ describe('importCodexHistory', () => {
     expect(readFileSync(join(storeHome, DAY, LATER), 'utf8')).toBe('later\n')
   })
 
-  it('keeps progress across passes a launch stops, with both forms of each conversation here', async () => {
-    // Each pass checks for a launch once per folder before its first conversation, so it copies one.
-    const { importHome, storeHome, run } = setup(3)
-    const older = new Date('2026-01-01T00:00:00Z')
-    const newer = new Date('2026-02-01T00:00:00Z')
-    for (const name of [NEW, TAKEN, COMPRESSED]) {
-      writeFileSync(join(importHome, DAY, `${name}.zst`), 'compressed')
-      writeFileSync(join(importHome, DAY, name), 'plain with later turns\n')
-      utimesSync(join(importHome, DAY, `${name}.zst`), older, older)
-      utimesSync(join(importHome, DAY, name), newer, newer)
-    }
+  it('does not publish a conversation deleted between its copy and its publish', async () => {
+    let deleting = true
+    const { importHome, storeHome, run } = setup(async () => {
+      if (deleting) {
+        deleting = false
+        ;(await holdCodexRolloutForDeletion(join(storeHome, DAY, NEW)))()
+      }
+    })
+    writeFileSync(join(importHome, DAY, NEW), 'new\n')
 
-    expect(await run()).toBeNull()
-    expect(await run()).toBeNull()
+    expect(await run()).toBe(0)
+    expect(readdirSync(join(storeHome, DAY))).toEqual([])
     expect(await run()).toBe(1)
-
-    expect(readdirSync(join(storeHome, DAY)).sort()).toEqual([COMPRESSED, NEW, TAKEN].sort())
-    expect(readFileSync(join(storeHome, DAY, TAKEN), 'utf8')).toBe('plain with later turns\n')
+    expect(readFileSync(join(storeHome, DAY, NEW), 'utf8')).toBe('new\n')
   })
 
   it('imports the dated conversations when one archived rollout is unreadable', async () => {
