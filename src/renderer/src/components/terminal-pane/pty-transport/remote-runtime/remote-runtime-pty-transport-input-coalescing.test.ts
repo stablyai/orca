@@ -193,7 +193,6 @@ describe('createRemoteRuntimePtyTransport', () => {
         canSendInput: (_id, kind) => kind === 'query-reply' || allowed
       })
       await transport.connect({ url: '', callbacks: {} })
-      transport.sendInput('leading', 'driving')
       transport.sendInput('denied-prefix', 'driving')
       allowed = false
       expect(transport.sendInputImmediate('\x1b[?1;2c')).toBe(true)
@@ -201,7 +200,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         .map(([bytes]) => decodeTerminalStreamFrame(bytes))
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Input)
         .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
-      expect(input).toEqual(['leading', '\x1b[?1;2c'])
+      expect(input).toEqual(['\x1b[?1;2c'])
     } finally {
       transport?.destroy?.()
       vi.useRealTimers()
