@@ -64,7 +64,7 @@ function tabsAndRecords(db: Database.Database) {
   }
 }
 
-it('deletes the original on a later version once every chat converted, and later opens leave it alone', async () => {
+it('retires the converted original and clears leftover WAL and SHM on a later launch', async () => {
   const { root, filename, db, launch, errors } = await profile()
   writeFileSync(`${filename}-shm`, '')
   expect(journalDomainImportState(db, 'unopened').state).toBe('converting')
@@ -81,8 +81,12 @@ it('deletes the original on a later version once every chat converted, and later
   // The next launch's older-Orca pass sees no original: no rescan, no tab or record change.
   await initializeJournalDomainDatabase(root)
   expect(tabsAndRecords(db)).toEqual(before)
+  writeFileSync(`${filename}-wal`, '')
+  writeFileSync(`${filename}-shm`, 'index')
   await launch().run()
   expect(errors).toEqual([])
+  expect(companions(filename)).toEqual([])
+  expect(tabsAndRecords(db)).toEqual(before)
 })
 
 it('keeps the original whenever the store cannot prove it holds all of it', async () => {
@@ -136,16 +140,6 @@ it('keeps the original whenever the store cannot prove it holds all of it', asyn
   expect(String(unrecorded.errors.at(-1))).toContain('history this store lacks')
 })
 
-it('finishes a removal stopped after the main file went', async () => {
-  const { filename, launch, errors } = await profile()
-  await launch().run()
-  writeFileSync(`${filename}-wal`, '')
-  writeFileSync(`${filename}-shm`, 'index')
-  await launch().run()
-  expect(errors).toEqual([])
-  expect(companions(filename)).toEqual([])
-})
-
 it('after a downgrade to an older Orca, the re-upgrade takes its new chat and then retires that journal too', async () => {
   const { root, filename, db, launch } = await profile()
   await launch().run()
@@ -164,12 +158,6 @@ it('after a downgrade to an older Orca, the re-upgrade takes its new chat and th
 })
 
 it('retires a store from its content, keeping chats deleted here deleted', async () => {
-  // Every store v1.4.260/261 copied: a person's edits that differ are weighed by file times only.
-  const unchanged = await profile()
-  await unchanged.launch().run()
-  expect(unchanged.errors).toEqual([])
-  expect(companions(unchanged.filename)).toEqual([])
-
   // A chat deleted here is not converted back from the original, and doesn't block retirement.
   const deleted = await profile()
   deleted.db.exec("DELETE FROM agent_session_records WHERE session_id='unopened'")
