@@ -184,4 +184,39 @@ describe('createIpcPtyTransport against a relay-recycled PTY id', () => {
       }
     }
   )
+
+  it.each(['buffered', 'during resolution'] as const)(
+    'does not end a verified restart from an unidentified exit %s',
+    async (arrival) => {
+      const { createIpcPtyTransport } = await import('./pty-transport')
+      const { bufferPreHandlerPtyExit } = await import('../delivery/pty-pre-handler-buffer')
+      if (arrival === 'buffered') {
+        bufferPreHandlerPtyExit(RECYCLED_PTY_ID, 7)
+      }
+      vi.mocked(window.api.pty.spawn).mockImplementation(async () => {
+        if (arrival === 'during resolution') {
+          onExit?.({ id: RECYCLED_PTY_ID, code: 7 })
+        }
+        return { id: RECYCLED_PTY_ID, incarnationId: FRESH_INCARNATION_ID }
+      })
+      const exit = vi.fn()
+      const transport = createIpcPtyTransport({})
+      try {
+        const result = await transport.connect({
+          url: '',
+          sessionId: RECYCLED_PTY_ID,
+          attachOnlyView: true,
+          expectedIncarnationId: FRESH_INCARNATION_ID,
+          isAccountRestartCurrent: () => true,
+          verifyAccountRestartResult: async () => true,
+          callbacks: { onExit: exit }
+        })
+        expect(result).toBe(RECYCLED_PTY_ID)
+        expect(transport.isConnected()).toBe(true)
+        expect(exit).not.toHaveBeenCalled()
+      } finally {
+        transport.destroy?.()
+      }
+    }
+  )
 })
