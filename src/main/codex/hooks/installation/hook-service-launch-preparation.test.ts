@@ -357,6 +357,40 @@ describe('completed Codex launch preparation', () => {
     }
   )
 
+  it('recovers the owed mirror on a fresh worker after the pass worker dies once', async () => {
+    const { service, home, runtime } = seed('D')
+    mkdirSync(home, { recursive: true })
+    prepareFactoryHooks.mockImplementation(service.prepareRuntimeHomeForLaunch.bind(service))
+    const prepare = createCodexRuntimeHomeLaunchPreparation({
+      getRuntimeHome: () => ({
+        prepareForCodexLaunchAsync: async (_target, _env, options) => {
+          options?.deferConfigSync?.({
+            systemHomePath: join(homes.tmpHome, '.codex'),
+            runtimeHomePath: home
+          })
+          return home
+        }
+      }),
+      getSettings: () => undefined
+    })
+    const modes: string[] = []
+    codexProjectTrustTestWorker.controls.crashesOn = (request) => {
+      if (request.kind !== 'hookPass') {
+        return false
+      }
+      modes.push(request.mode)
+      return modes.length === 1
+    }
+    try {
+      expect(await prepare()).toBe(home)
+    } finally {
+      codexProjectTrustTestWorker.controls.crashesOn = () => false
+    }
+
+    expect(modes).toEqual(['install', 'mirror'])
+    expect(readFileSync(runtime, 'utf8')).toContain('model = "D"')
+  })
+
   it('repairs a script another writer restored after this pass published its replacement', async () => {
     const { service, home } = seed()
     await settle(service, home)

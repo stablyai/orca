@@ -343,7 +343,7 @@
 2 src/main/codex/hooks/installation/codex-hook-local-install.ts # was 14 on main; the pass now runs on the trust worker, main keeps legacy cleanup and status
 8 src/main/codex/hooks/installation/codex-hook-local-maintenance.ts
 6 src/main/codex/hooks/installation/codex-hook-managed-strip.ts # moved from codex-hook-local-maintenance (the managed-hook strip, shared by the trust worker and Off removal)
-4 src/main/codex/hooks/installation/codex-hook-pass-off-main.ts # moved from codex-hook-local-install/-maintenance (legacy cleanup, status, and the Off strip when the worker is down); those rows drop by 26
+5 src/main/codex/hooks/installation/codex-hook-pass-off-main.ts # moved from codex-hook-local-install/-maintenance (legacy cleanup and status); +1 names the worker-death recovery, whose main strip runs only when a fresh worker also fails
 12 src/main/codex/hooks/installation/codex-hook-service-implementation.ts
 9 src/main/codex/hooks/installation/codex-hook-wsl-runtime.ts
 1 src/main/codex/hooks/installation/codex-wsl-hook-install-plan.ts

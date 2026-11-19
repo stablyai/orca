@@ -9,6 +9,7 @@ import { getConfigPath } from '../definitions/codex-hook-definition'
 import type { CodexHookPassEffects } from './codex-hook-install-effects'
 import type { CodexLaunchConfigPreparation } from './codex-hook-launch-preparation'
 import type { CodexHookPassRequest } from './codex-hook-pass-worker'
+import type { CodexSettingsPromotionHomes } from '../../configuration/settings/config-settings-promotion'
 import { stripCodexManagedHookEffects } from './codex-hook-managed-strip'
 
 /**
@@ -26,16 +27,7 @@ export async function runCodexHookPassEffectsOffMain(
     result = await runCodexHookPassOnTrustWorker({ ...request, configMirror, observation })
   } catch (error) {
     adoptFileObservation({ matches: false, files: [] })
-    if (request.mode === 'strip') {
-      // Why: Off stays authoritative even with the worker down. Strip only: the user-hook rebuild stays
-      // on the worker, so approvals may sit in shifted slots until the next launch's refresh.
-      return stripCodexManagedHookEffects(request.runtimeHomePath, request.codexHashes)
-    }
-    if (configMirror) {
-      // Why: Codex still needs its mirrored config; the hook pass itself is never rerun on main.
-      configPreparation?.run()
-    }
-    return { kind: 'status', status: hookPassUnavailable(request.runtimeHomePath, error) }
+    return recoverAfterWorkerFailure(request, configMirror, error, configPreparation)
   }
   adoptFileObservation(result.observation ?? { matches: false, files: [] })
   if (result.config) {
@@ -56,6 +48,62 @@ export async function runCodexHookPassEffectsOffMain(
   return effects.kind === 'written'
     ? { kind: 'written', complete: effects.complete && configComplete }
     : effects
+}
+
+/**
+ * The worker died or timed out and has exited. Off cleanup and the owed config mirror are retried
+ * once, guarded, on a fresh worker; the hook pass itself is never replayed. Only if that also fails
+ * do they run on main, as they did before the pass moved off it.
+ */
+async function recoverAfterWorkerFailure(
+  request: CodexHookPassRequest,
+  configMirror: CodexSettingsPromotionHomes | null,
+  failure: unknown,
+  configPreparation?: CodexLaunchConfigPreparation
+): Promise<CodexHookPassEffects> {
+  const unavailable: CodexHookPassEffects = {
+    kind: 'status',
+    status: hookPassUnavailable(request.runtimeHomePath, failure)
+  }
+  if (request.mode !== 'strip' && !configMirror) {
+    return unavailable
+  }
+  const recovery: CodexHookPassRequest =
+    request.mode === 'strip'
+      ? request
+      : { mode: 'mirror', runtimeHomePath: request.runtimeHomePath }
+  let recovered: Awaited<ReturnType<typeof runCodexHookPassOnTrustWorker>> | null = null
+  try {
+    recovered = await runCodexHookPassOnTrustWorker({
+      ...recovery,
+      configMirror,
+      observation: null
+    })
+  } catch (error) {
+    console.warn('[codex-hook-service] hook pass recovery worker failed; finishing on main', error)
+  }
+  if (recovered) {
+    if (recovered.config) {
+      configPreparation?.settle(recovered.config)
+    }
+    // Settled above, so this only returns the mirror's result or rethrows its error.
+    configPreparation?.run()
+    if (request.mode !== 'strip') {
+      return unavailable
+    }
+    if (recovered.effectsError) {
+      throw recovered.effectsError
+    }
+    return recovered.effects ?? unavailable
+  }
+  if (request.mode === 'strip') {
+    // Why: Off stays authoritative even with no worker. Strip only: the user-hook rebuild stays
+    // on the worker, so approvals may sit in shifted slots until the next launch's refresh.
+    return stripCodexManagedHookEffects(request.runtimeHomePath, request.codexHashes)
+  }
+  // Why: Codex still needs its mirrored config; the hook pass itself is never rerun on main.
+  configPreparation?.run()
+  return unavailable
 }
 
 /** The main-thread end of a pass: legacy cleanup, then status, inside the caller's lanes and observation. */

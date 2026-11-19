@@ -23,6 +23,8 @@ export type CodexHookPassRequest =
   | { mode: 'install'; runtimeHomePath: string; hashes: CodexHookHashes }
   | { mode: 'refresh'; runtimeHomePath: string }
   | { mode: 'strip'; runtimeHomePath: string; codexHashes: CodexHookHashes[] }
+  /** Recovery after a worker death: only the owed config mirror; the hook pass is never replayed. */
+  | { mode: 'mirror'; runtimeHomePath: string }
 
 export type CodexHookPassWorkerRequest = CodexHookPassRequest & {
   /** The launch's owed config mirror, run first as the main thread used to. */
@@ -91,6 +93,8 @@ function writeEffects(request: CodexHookPassWorkerRequest): CodexHookPassEffects
       return writeCodexRuntimeUserHookRefreshEffects(request.runtimeHomePath)
     case 'strip':
       return writeCodexOffStripEffects(request.runtimeHomePath, request.codexHashes)
+    case 'mirror':
+      return { kind: 'written', complete: false }
   }
 }
 
