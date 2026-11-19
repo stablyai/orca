@@ -1196,6 +1196,8 @@
             "codexSignInError": "Codex sign-in failed. Please try again.",
             "rateLimitResetsAvailable_one": "{{count}} rate-limit reset available",
             "rateLimitResetsAvailable_other": "{{count}} rate-limit resets available",
+            "rateLimitResetsUnsupportedWsl_one": "{{count}} reset available · not in WSL yet",
+            "rateLimitResetsUnsupportedWsl_other": "{{count}} resets available · not in WSL yet",
             "staleCodexSessions_one": "{{count}} Codex session is still on the old account.",
             "staleCodexSessions_other": "{{count}} Codex sessions are still on the old account."
           },

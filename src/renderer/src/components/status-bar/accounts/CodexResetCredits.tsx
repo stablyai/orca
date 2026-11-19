@@ -45,10 +45,10 @@ export function CodexResetCredits({
         {unsupportedRuntime === 'wsl'
           ? t(
               'auto.components.status.bar.StatusBar.rateLimitResetsUnsupportedWsl',
-              '{{count}} resets available · not supported for WSL yet',
+              '{{count}} resets available · not in WSL yet',
               {
                 count: resetCreditCount,
-                defaultValue_one: '{{count}} reset available · not supported for WSL yet'
+                defaultValue_one: '{{count}} reset available · not in WSL yet'
               }
             )
           : t(
