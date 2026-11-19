@@ -7,7 +7,10 @@ import { getDefaultSettings } from '../../../../../shared/orca-profiles/constant
 import { makeTerminalTab } from '@/store/terminals/testing/terminal-row.test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
-import { buildPaneAccountRestartStartup } from './agent-account-restart-startup'
+import {
+  buildManualRestartStartup,
+  buildPaneAccountRestartStartup
+} from './agent-account-restart-startup'
 import type { AgentAccountRestartStartup } from './agent-account-restart-startup'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'
@@ -183,5 +186,77 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
     } finally {
       useAppStore.setState(original)
     }
+  })
+})
+
+describe('buildManualRestartStartup', () => {
+  const pane = { tabId: TAB_ID, leafId: LEAF_ID, worktreeId: WORKTREE_ID }
+  const OTHER_TAB = 'tab-other'
+  const OTHER_LEAF = '0195f2ce-2222-4000-8000-000000000002'
+
+  beforeEach(() => {
+    seedAgentStatus(null)
+    projectRuntimeContext = undefined
+    useAppStore.setState({
+      settings: getDefaultSettings('/home/dev'),
+      tabsByWorktree: {},
+      worktreesByRepo: {}
+    })
+  })
+
+  function seedOtherPane(agentType: 'codex' | 'claude'): void {
+    const own = useAppStore.getState().agentStatusByPaneKey.get(makePaneKey(TAB_ID, LEAF_ID))!
+    const otherPaneKey = makePaneKey(OTHER_TAB, OTHER_LEAF)
+    useAppStore.setState({
+      tabsByWorktree: {
+        [WORKTREE_ID]: [makeTerminalTab({ id: OTHER_TAB, worktreeId: WORKTREE_ID })]
+      },
+      ptyIdsByTabId: { [OTHER_TAB]: ['pty-other'] },
+      terminalLayoutsByTabId: {
+        [OTHER_TAB]: {
+          root: { type: 'leaf', leafId: OTHER_LEAF },
+          activeLeafId: OTHER_LEAF,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [OTHER_LEAF]: 'pty-other' }
+        }
+      },
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        Object.entries({
+          [makePaneKey(TAB_ID, LEAF_ID)]: own,
+          [otherPaneKey]: { ...own, paneKey: otherPaneKey, tabId: OTHER_TAB, agentType }
+        })
+      )
+    })
+  }
+
+  it('never starts a fresh Codex when a manual restart has no session to resume', () => {
+    seedAgentStatus({ agentType: 'codex' })
+    expect(buildManualRestartStartup('codex', pane)).toBeNull()
+  })
+
+  it('resumes the recorded Codex conversation', () => {
+    seedAgentStatus({
+      agentType: 'codex',
+      providerSession: { key: 'session_id', id: SESSION_ID }
+    })
+    expect(buildManualRestartStartup('codex', pane)?.resumeProviderSession?.id).toBe(SESSION_ID)
+  })
+
+  it('refuses when another Codex pane holds the same conversation', () => {
+    seedAgentStatus({
+      agentType: 'codex',
+      providerSession: { key: 'session_id', id: SESSION_ID }
+    })
+    seedOtherPane('codex')
+    expect(buildManualRestartStartup('codex', pane)).toBeNull()
+  })
+
+  it('ignores a pane of another agent that shares the id', () => {
+    seedAgentStatus({
+      agentType: 'codex',
+      providerSession: { key: 'session_id', id: SESSION_ID }
+    })
+    seedOtherPane('claude')
+    expect(buildManualRestartStartup('codex', pane)?.launchAgent).toBe('codex')
   })
 })

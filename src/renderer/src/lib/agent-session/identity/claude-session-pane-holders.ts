@@ -1,4 +1,5 @@
 import { resolvePaneAgentSessionId } from '@/lib/agent-session/identity/pane-agent-session-id'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AppState } from '@/store/types'
 import {
   isTerminalLeafId,
@@ -9,7 +10,8 @@ import {
 export function isSessionHeldByAnotherPane(
   state: AppState,
   paneKey: string,
-  sessionId: string
+  sessionId: string,
+  agent?: TuiAgent
 ): boolean {
   return Object.values(state.tabsByWorktree).some((tabs) =>
     tabs.some((tab) => {
@@ -22,9 +24,18 @@ export function isSessionHeldByAnotherPane(
           bound.includes(ptyId) &&
           isTerminalLeafId(leafId) &&
           leafPaneKey !== paneKey &&
-          resolvePaneAgentSessionId(state, leafPaneKey) === sessionId
+          resolvePaneAgentSessionId(state, leafPaneKey) === sessionId &&
+          (!agent || paneAgentType(state, leafPaneKey) === agent)
         )
       })
     })
+  )
+}
+
+// Same source order as resolvePaneAgentSessionId: live row first, else the sleeping record.
+function paneAgentType(state: AppState, paneKey: string): string | undefined {
+  return (
+    state.agentStatusByPaneKey.get(paneKey)?.agentType ??
+    state.sleepingAgentSessionsByPaneKey[paneKey]?.agent
   )
 }
