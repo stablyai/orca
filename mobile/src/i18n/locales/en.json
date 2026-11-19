@@ -3814,6 +3814,9 @@
     "eventRow": {
       "running": "Running",
       "failed": "Failed"
+    },
+    "tool": {
+      "activity": "Activity"
     }
   },
   "sourceControl": {

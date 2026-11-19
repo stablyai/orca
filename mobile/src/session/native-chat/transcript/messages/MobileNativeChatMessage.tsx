@@ -142,19 +142,16 @@ function MobileNativeChatMessageImpl({
   )
   // Task rows replace their plain-text twins, which the host writes for readers without task blocks.
   const { backgroundTasks } = deriveNativeChatRowContent(message.blocks)
-  const drawnProse = isReasoning
-    ? []
-    : withoutSubagentGroupTwins(
-        backgroundTasks.length > 0 ? withoutBackgroundTaskRows(prose) : prose
-      )
   const isSystem = message.role === 'system'
+  const ownProse = backgroundTasks.length > 0 ? withoutBackgroundTaskRows(prose) : prose
+  const drawnProse = isReasoning || (isSystem && workRun) ? [] : withoutSubagentGroupTwins(ownProse)
   const pullRequestEvent = isSystem
     ? drawnProse.find(
         (block): block is Chat.NativeChatTextBlock =>
           Chat.isTextBlock(block) && block.presentation === PULL_REQUEST_EVENT_PRESENTATION
       )
     : undefined
-  const showToolRun = tools.length > 0
+  const showToolRun = tools.length > 0 || workRun !== undefined
   const askPending = structuredActivityUi
     ? selectActiveToolCall(unansweredAsks, { activeTurnIsWorking }) !== null
     : unansweredAsks.length > 0
@@ -319,7 +316,7 @@ function MobileNativeChatMessageImpl({
                   fontScale={fontScale}
                   onLongPress={onLongPress}
                 />
-              ) : isSystem ? (
+              ) : isSystem && !workRun ? (
                 <MobileNativeChatNoticeRow
                   blocks={drawnProse}
                   fontScale={fontScale}
