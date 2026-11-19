@@ -37,6 +37,7 @@ import { MarkdownReader } from '../files/session-documents/MobileSessionMarkdown
 import { markdownTabDraftKey } from '../drafts/document-edit-draft-rows'
 import { workspaceDraftRowKey } from '../drafts/durable-draft-rows'
 import { loadMarkdownPreviewImage } from '../files/markdown/mobile-markdown-image-source'
+import { MobileAgentMapOverlay } from './agent-map/MobileAgentMapOverlay'
 
 export function MobileSessionActiveContent({
   controller
@@ -368,15 +369,13 @@ export function MobileSessionActiveContent({
                     getSendCompletionGeneration={controller.getSendCompletionGeneration}
                     keyboardInset={keyboardLift}
                     // A workspace routed to another server stops with that server, whose name the phone lacks.
-                    hostName={executionHost === undefined && hostProfile ? hostTitle : null}
+                    hostName={!executionHost && hostProfile ? hostTitle : null}
                     onOpenUrlInOrca={openUrlInOrca}
                     linkOpenMode={controller.linkOpenMode}
                     hostOutage={nativeChatHostOutage}
                     onRunInTerminal={nativeChatTerminalRunner(controller)}
                     // Accounts open on the paired host, so a chat another server runs offers none.
-                    onOpenAccounts={
-                      executionHost === undefined ? openNativeChatAccounts : undefined
-                    }
+                    onOpenAccounts={!executionHost ? openNativeChatAccounts : undefined}
                   />
                 </MobileSessionBotIdentity>
               </MobileBotCardHostProvider>
@@ -385,6 +384,7 @@ export function MobileSessionActiveContent({
         </MobileNativeChatDictationPreviewContext.Provider>
         {terminalLinks.terminalLinkSheet}
         {toast}
+        <MobileAgentMapOverlay controller={controller} client={client} />
       </View>
     )
   return (

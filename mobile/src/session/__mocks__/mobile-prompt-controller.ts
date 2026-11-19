@@ -50,6 +50,7 @@ const sessionCommands = { commands: undefined, refresh: vi.fn() }
 vi.mock('../use-mobile-session-view-mode', () => ({
   useMobileSessionViewMode: () => ({
     isTabChatView: () => visible.value,
+    isTabMapView: () => false,
     setTabView: (_tabId: string, view: string) =>
       Object.assign(visible, { value: view === 'chat' }),
     toggleTabChatView: () => Object.assign(visible, { value: !visible.value })

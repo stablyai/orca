@@ -42,6 +42,7 @@ function mergeOverrides(
 export type MobileSessionViewModeController = {
   ready: boolean
   isTabChatView: (tabId: string) => boolean
+  isTabMapView: (tabId: string) => boolean
   setTabView: (tabId: string, view: MobileSessionView) => void
   toggleTabChatView: (tabId: string) => void
 }
@@ -143,6 +144,18 @@ export function useMobileSessionViewMode(args: {
     [defaultView, hostId, viewOverridesState, worktreeId]
   )
 
+  const isTabMapView = useCallback(
+    (tabId: string): boolean => {
+      if (!isOverrideScope(viewOverridesState, hostId, worktreeId)) {
+        return false
+      }
+      const override = viewOverridesState.overrides.get(tabId)
+      // Map is per-tab opt-in; the workspace default is never map.
+      return override === 'map'
+    },
+    [hostId, viewOverridesState, worktreeId]
+  )
+
   const setTabView = useCallback(
     (tabId: string, nextView: MobileSessionView) => {
       const current = viewOverridesStateRef.current
@@ -216,6 +229,7 @@ export function useMobileSessionViewMode(args: {
   return {
     ready: defaultViewReady && settledScope === scope,
     isTabChatView,
+    isTabMapView,
     setTabView,
     toggleTabChatView
   }

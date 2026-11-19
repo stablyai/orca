@@ -2591,7 +2591,8 @@
     },
     "nativeChatToggleAction": {
       "switchToTerminalView": "Switch to terminal view",
-      "switchToChatView": "Switch to chat view"
+      "switchToChatView": "Switch to chat view",
+      "showAgentMap": "Show agent map"
     },
     "prSidebarState": {
       "loadFailed": "Unable to load pull request"
@@ -3154,6 +3155,61 @@
     },
     "orcaCommands": {
       "desktopOnly": "Available in the desktop app"
+    },
+    "agentMap": {
+      "status": {
+        "running": "Running",
+        "waiting": "Waiting",
+        "done": "Done",
+        "idle": "Idle",
+        "failed": "Failed",
+        "unknown": "Unknown"
+      },
+      "title": "Agent Map",
+      "agents": {
+        "count": "{{count}} agents"
+      },
+      "session": {
+        "tools": "{{count}} tools",
+        "files": "{{count}} files"
+      },
+      "graph": {
+        "ariaLabel": "Agent session map"
+      },
+      "empty": "No agent session in this pane",
+      "timeline": {
+        "live": "Live"
+      },
+      "node": {
+        "waitingOn": "Waiting on {{target}}",
+        "mainAgent": "Main agent",
+        "subagent": "Sub-agent"
+      },
+      "detail": {
+        "close": "Close details",
+        "duration": "Duration",
+        "tools": "Tool calls",
+        "prompts": "Prompts",
+        "files": "Files touched",
+        "lastPrompt": "Last prompt",
+        "requests": "Questions & approvals ({{count}})",
+        "question": "Question",
+        "approval": "Approval",
+        "resolution": {
+          "pending": "pending",
+          "resolved": "resolved",
+          "cancelled": "cancelled"
+        },
+        "toolCalls": "Tool calls ({{count}})",
+        "turns": "Turns ({{count}})",
+        "turnState": {
+          "running": "Running",
+          "completed": "Completed",
+          "interrupted": "Interrupted",
+          "unverifiable": "Unverifiable"
+        },
+        "filesTouched": "Files touched ({{count}})"
+      }
     }
   },
   "chat": {

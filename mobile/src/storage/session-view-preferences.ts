@@ -2,7 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { persistMirrored } from './mirrored-storage-keys'
 import type { AgentLaunchSurface } from '../../../src/shared/agent-launch/contracts/agent-launch-surface'
 
-export type MobileSessionView = 'terminal' | 'chat'
+// `map` is a per-tab override only; the workspace default stays terminal/chat.
+export type MobileSessionView = 'terminal' | 'chat' | 'map'
 
 const DEFAULT_SESSION_VIEW_KEY = 'orca:defaultSessionView'
 const NATIVE_CHAT_TABS_PREFIX = 'orca:nativeChatTabs:'
@@ -110,7 +111,7 @@ async function readSessionViewOverridesStorage(
   if (parsed && typeof parsed === 'object') {
     const entries = Object.entries(parsed as Record<string, unknown>).filter(
       (entry): entry is [string, MobileSessionView] =>
-        entry[1] === 'terminal' || entry[1] === 'chat'
+        entry[1] === 'terminal' || entry[1] === 'chat' || entry[1] === 'map'
     )
     return { overrides: new Map(entries), loaded: true }
   }
