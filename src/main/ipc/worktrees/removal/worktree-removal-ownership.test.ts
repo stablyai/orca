@@ -42,10 +42,13 @@ afterEach(() => {
   }
 })
 
-function purge(checkoutDeleted: boolean): Promise<void> {
+function purge(
+  checkoutDeleted: boolean,
+  repos: { id: string; connectionId?: string }[] = []
+): Promise<void> {
   const store = {
     getWorktreeMeta: () => undefined,
-    getRepos: () => [],
+    getRepos: () => repos,
     removeWorktreeMeta: () => {},
     getProfileStorageDirectory: () => userDataDir
   }
@@ -53,7 +56,7 @@ function purge(checkoutDeleted: boolean): Promise<void> {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the purge reads only the store members the fake supplies.
   const context = { store: store as never, runtime }
   return checkoutDeleted
-    ? removeDeletedCheckoutMetadataAndTransientState(context, WORKTREE_ID)
+    ? removeDeletedCheckoutMetadataAndTransientState(context, WORKTREE_ID, 'local')
     : removeWorktreeMetadataAndTransientState(context, WORKTREE_ID)
 }
 
@@ -71,4 +74,10 @@ it('keeps the trust when the directory stays on disk (forget, folder removal)', 
   await purge(false)
 
   expect(trustedWorkspaces()).toEqual(['/home/me/app', PROJECT])
+})
+
+it('still drops local trust when the same repo is also registered on another host', async () => {
+  await purge(true, [{ id: 'repo-1' }, { id: 'repo-1', connectionId: 'ssh-box' }])
+
+  expect(trustedWorkspaces()).toEqual(['/home/me/app'])
 })

@@ -85,20 +85,20 @@ export function removeWorktreeMetadataAndTransientState(
 ): Promise<void> {
   const persistedHostId = store.getWorktreeMeta(worktreeId)?.hostId
   const repoId = getRepoIdFromWorktreeId(worktreeId)
-  const preservesSameIdOwner = Boolean(
-    hostId &&
-    ((persistedHostId && persistedHostId !== hostId) ||
-      hasWorktreeRemovalRepoOwnerOnOtherHost(store, repoId, hostId))
-  )
+  const worktreeOwnedByOtherHost = Boolean(hostId && persistedHostId && persistedHostId !== hostId)
+  const preservesSameIdOwner =
+    worktreeOwnedByOtherHost ||
+    Boolean(hostId && hasWorktreeRemovalRepoOwnerOnOtherHost(store, repoId, hostId))
   // Path-derived IDs are reusable; retire old process state before a new workspace can inherit it.
   removeWorktreeMetaRow(store, worktreeId, hostId)
   // Status retirement is host/pane-scoped, even when another owner keeps the same workspace ID.
   agentHookServer.dropStatusEntriesForRemovedWorktree(worktreeId, hostId ?? persistedHostId)
-  let pretrustDrop: Promise<void> | undefined
-  if (!preservesSameIdOwner) {
-    pretrustDrop = options.dropAgentTrust
+  // Why: trust is keyed by this path in local files; another host's repo copy doesn't use it.
+  const pretrustDrop =
+    options.dropAgentTrust && !worktreeOwnedByOtherHost
       ? dropOrcaCreatedAgentTrustForRemovedWorktree(worktreeId)
       : undefined
+  if (!preservesSameIdOwner) {
     dropRemovedWorktreeProcessState(worktreeId)
     // Keep Electron-dependent desktop PR cleanup outside the runtime-shared drop.
     pruneWorktreePRRefreshAliases(worktreeId)
