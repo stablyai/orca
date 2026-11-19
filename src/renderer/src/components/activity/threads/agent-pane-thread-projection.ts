@@ -240,6 +240,11 @@ export function createAgentPaneThreadProjection(store: ProjectionStore) {
     listeners.set(registered, needsAllThreads)
     return () => {
       listeners.delete(registered)
+      if (needsAllThreads && !Array.from(listeners.values()).some(Boolean)) {
+        // Badge readers never read the full snapshot; let it go with its last reader.
+        full = null
+        threadCache = createAgentPaneThreadReuseCache()
+      }
       if (listeners.size === 0 && release) {
         release()
         release = null
