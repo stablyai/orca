@@ -32,6 +32,16 @@ describe('quote sources', () => {
     expect(nativeChatQuoteSource('a <br> b')?.messageId).toBe('m5')
   })
 
+  it('keeps the newest 200 sources and survives bad storage', () => {
+    for (let index = 0; index < 201; index++) {
+      rememberNativeChatQuoteSource(`quote ${index}`, source(`m${index}`))
+    }
+    expect(nativeChatQuoteSource('quote 0')).toBeNull()
+    expect(nativeChatQuoteSource('quote 200')?.messageId).toBe('m200')
+    localStorage.setItem('orca.nativeChat.quoteSources', '{bad')
+    expect(nativeChatQuoteSource('quote 200')).toBeNull()
+  })
+
   it('reads the file of a quote only from a header line that a code fence follows', () => {
     expect(quotedFileLocation('src/a b.ts:12-20', true)).toEqual({
       pathText: 'src/a b.ts',

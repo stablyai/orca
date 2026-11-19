@@ -97,11 +97,36 @@ it('searches for the quote when the reply changed since, and skips only whitespa
   expect(quotedTextRange(root, 'The quotedtext!')).toBeNull()
 })
 
+it('keeps the highlight of a second jump when the first one times out', () => {
+  const root = element('<p>Before. The quoted text.</p>')
+  showQuotedText(root, 'quoted text', null)
+  vi.advanceTimersByTime(1000)
+  showQuotedText(root, 'Before.', null)
+  vi.advanceTimersByTime(600)
+  expect(shown()?.toString()).toBe('Before.')
+  vi.advanceTimersByTime(1500)
+  expect(highlights.has('native-chat-quote-jump')).toBe(false)
+})
+
 it('finds a quote with no saved place as a whole word, not inside a longer word', () => {
   const root = element('<p>Use bobcat, then cat the file.</p>')
   showQuotedText(root, 'cat', null)
   expect(shown()?.startOffset).toBe('Use bobcat, then '.length)
 })
+
+it.each([
+  ['Chinese', '<p>我们使用草稿存储。</p>', '草稿'],
+  ['Japanese', '<p>下書きを保存します。</p>', '保存'],
+  ['Thai', '<p>เราใช้ที่เก็บร่าง</p>', 'ที่เก็บ'],
+  ['a Korean word with a particle', '<p>서울에 갑니다.</p>', '서울'],
+  ['blocks drawn against the next block', '<h2>Setup</h2><p>Run it.</p>', 'Setup']
+])(
+  'finds a quote with no saved place in %s, where no word edge is at the quote',
+  (_name, html, quote) => {
+    showQuotedText(element(html), quote, null)
+    expect(shown()?.toString()).toBe(quote)
+  }
+)
 
 it('keeps the part of a selection that is in the reply when it starts before the reply', () => {
   const page = element('<p>Your prompt</p><div data-reply="">The reply text.</div>')

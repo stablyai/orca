@@ -61,7 +61,9 @@ const WORD_CHAR = /[\p{L}\p{N}_]/u
 /**
  * The first range of `text` in `root`, for a reply drawn again since the quote. Whitespace in the
  * quote matches any whitespace or none: a selection has line breaks between blocks that the page
- * text does not have. A quote that starts or ends in a word does not match inside a longer word.
+ * text does not have. A whole-word match comes first, so a quote does not match inside a longer
+ * word. Without one, any match counts: scripts without spaces, Korean particles and blocks drawn
+ * against the next block have no word edge at the quote.
  */
 export function quotedTextRange(root: HTMLElement, text: string): Range | null {
   const words = text.trim().split(/\s+/).filter(Boolean)
@@ -72,9 +74,9 @@ export function quotedTextRange(root: HTMLElement, text: string): Range | null {
   const before = WORD_CHAR.test(text.trim()[0]) ? '(?<![\\p{L}\\p{N}_])' : ''
   const after = WORD_CHAR.test(text.trim().at(-1) ?? '') ? '(?![\\p{L}\\p{N}_])' : ''
   const nodes = textNodes(root)
-  const match = new RegExp(`${before}${body}${after}`, 'u').exec(
-    nodes.map((node) => node.data).join('')
-  )
+  const page = nodes.map((node) => node.data).join('')
+  const match =
+    new RegExp(`${before}${body}${after}`, 'u').exec(page) ?? new RegExp(body, 'u').exec(page)
   if (!match) {
     return null
   }
