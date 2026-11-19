@@ -16,6 +16,7 @@ import { waitForActiveTerminalManager } from '../../terminal/layout/terminal-pan
 import { waitForPtyShellEcho } from '../../terminal/lifecycle/terminal-pty-readiness'
 
 const TRANSCRIPT_ROWS = 650
+const RUN_COMMANDS = 8
 
 type PrependTrace = {
   active: boolean
@@ -135,6 +136,43 @@ async function nextFrames(page: Page, count: number): Promise<void> {
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
     }
   }, count)
+}
+
+/** A prompt, a long stretch of its answer, then a run of commands the first window cuts in two;
+ *  the first older page extends the run without reaching the prompt, so the turn stays unfolded. */
+function claudeRunTranscript(sessionId: string): string {
+  const startedAt = Date.now() - 1_000_000
+  let at = 0
+  const line = (type: 'user' | 'assistant', content: unknown[]) => {
+    at += 1
+    return JSON.stringify({
+      sessionId,
+      uuid: `${sessionId}-${at}`,
+      timestamp: new Date(startedAt + at * 1_000).toISOString(),
+      type,
+      // Records sharing a message id are one message; each record here is its own.
+      message: { id: `message-${at}`, role: type, model: 'claude-opus-4', content }
+    })
+  }
+  const text = (type: 'user' | 'assistant', index: number) =>
+    line(type, [{ type: 'text', text: `E2E run transcript row ${String(index).padStart(4, '0')}` }])
+  const answer = Array.from({ length: 260 }, (_, index) => text('assistant', index))
+  const run = Array.from({ length: RUN_COMMANDS }, (_, index) => [
+    line('assistant', [
+      {
+        type: 'tool_use',
+        id: `run-${index}`,
+        name: 'Bash',
+        input: { command: `cat run-${index}.log` }
+      }
+    ]),
+    line('user', [{ type: 'tool_result', tool_use_id: `run-${index}`, content: `run ${index} ok` }])
+  ]).flat()
+  const newer = Array.from({ length: 296 }, (_, index) =>
+    text(index % 2 === 0 ? 'assistant' : 'user', index + 1_000)
+  )
+  const prompt = line('user', [{ type: 'text', text: 'E2E run prompt' }])
+  return `${[prompt, ...answer, ...run, ...newer].join('\n')}\n`
 }
 
 function claudeTranscript(rowCount: number, sessionId: string, tools = false): string {
@@ -395,6 +433,154 @@ test.describe('Native chat transcript anchoring', () => {
       }
     })
   }
+
+  test('keeps a partly visible command in place when an older page extends its open run', async ({
+    orcaPage
+  }) => {
+    await waitForSessionReady(orcaPage)
+    await waitForActiveWorktree(orcaPage)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+
+    const boundPane = await waitForPaneIdentitySnapshot(orcaPage, 1)
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    await waitForPtyShellEcho(orcaPage, ptyId, 15_000)
+    const descriptor = await waitForActivePaneHookDescriptor(orcaPage)
+    expect(descriptor.paneKey).toBe(`${boundPane.tabId}:${boundPane.activeLeafId}`)
+    const [tabId] = descriptor.paneKey.split(':')
+    const sessionId = `e2e-run-anchor-${randomUUID()}`
+    const scratchDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-native-chat-run-'))
+    const transcriptPath = path.join(scratchDir, `${sessionId}.jsonl`)
+    writeFileSync(transcriptPath, claudeRunTranscript(sessionId))
+
+    try {
+      await enableNativeChatSetting(orcaPage)
+      await seedClaudeProviderSession(orcaPage, {
+        paneKey: descriptor.paneKey,
+        worktreeId: descriptor.worktreeId,
+        sessionId,
+        transcriptPath
+      })
+      // Manual paging keeps the reader parked at the run instead of auto-loading on approach.
+      await orcaPage.evaluate(() => {
+        Object.defineProperty(window, 'IntersectionObserver', {
+          value: undefined,
+          configurable: true
+        })
+      })
+      await toggleTerminalTabToChatView(orcaPage, { tabId, worktreeId: descriptor.worktreeId })
+
+      const scroll = orcaPage.locator('[data-native-chat-scroll]')
+      const loadEarlier = orcaPage.getByRole('button', { name: 'Load earlier messages' })
+      await expect(orcaPage.locator('[data-native-chat-window]')).toBeVisible({ timeout: 30_000 })
+      await expect(loadEarlier).toBeAttached({ timeout: 30_000 })
+      // A reader's wheel detaches the transcript from its end; read up to the oldest loaded rows.
+      await scroll.hover()
+      for (let step = 0; step < 200; step += 1) {
+        if ((await scroll.evaluate((element) => element.scrollTop)) === 0) {
+          break
+        }
+        await orcaPage.mouse.wheel(0, -3_000)
+        await nextFrames(orcaPage, 2)
+      }
+      await settleScroll(scroll)
+      const runHeader = orcaPage
+        .locator('[data-native-chat-tool-run-state="settled"][aria-expanded="false"]')
+        .first()
+      await runHeader.click()
+      const members = orcaPage.locator(
+        '[data-native-chat-tool-run-members] [data-native-chat-content-anchor]'
+      )
+      await expect.poll(() => members.count()).toBeGreaterThan(0)
+      const loadedMembers = await members.count()
+      expect(loadedMembers, 'the first window cuts the run').toBeLessThan(RUN_COMMANDS)
+
+      // Park the reader so the run's last loaded command is half above the viewport's top edge.
+      const anchor = (await members.last().getAttribute('data-native-chat-content-anchor')) ?? ''
+      const command = members.last()
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        const miss = await command.evaluate((member) => {
+          const rect = member.getBoundingClientRect()
+          const top = member.closest('[data-native-chat-scroll]')!.getBoundingClientRect().top
+          return rect.top - top + rect.height / 2
+        })
+        if (Math.abs(miss) < 2) {
+          break
+        }
+        await orcaPage.mouse.wheel(0, miss)
+        await settleScroll(scroll)
+      }
+      const place = (key: string) =>
+        scroll.evaluate((root, anchorKey) => {
+          const member = root.querySelector(`[data-native-chat-content-anchor="${anchorKey}"]`)
+          // The transcript row, not the run's own member row inside it.
+          const row = member?.closest('[data-native-chat-row-key]')
+          if (!member || !row) {
+            return null
+          }
+          const top = member.getBoundingClientRect().top
+          return {
+            height: member.getBoundingClientRect().height,
+            offset: top - root.getBoundingClientRect().top,
+            inset: top - row.getBoundingClientRect().top
+          }
+        }, key)
+      const before = await place(anchor)
+      expect(before, 'the command row is mounted').not.toBeNull()
+      expect(before!.offset, 'the command starts above the viewport').toBeLessThan(0)
+      expect(before!.offset + before!.height, 'and ends inside it').toBeGreaterThan(0)
+
+      await orcaPage.evaluate((anchorKey) => {
+        const trace: PrependTrace = { active: true, frames: [] }
+        window.__nativeChatPrependTrace = trace
+        const sample = () => {
+          const channel = new MessageChannel()
+          channel.port1.onmessage = () => {
+            const root = document.querySelector('[data-native-chat-scroll]')
+            const member = root?.querySelector(`[data-native-chat-content-anchor="${anchorKey}"]`)
+            const top = root?.getBoundingClientRect().top ?? 0
+            trace.frames.push({
+              content: member ? member.getBoundingClientRect().top - top : null,
+              slot: null
+            })
+            channel.port1.close()
+            channel.port2.close()
+            if (trace.active) {
+              requestAnimationFrame(sample)
+            }
+          }
+          channel.port2.postMessage(0)
+        }
+        requestAnimationFrame(sample)
+      }, anchor)
+      await loadEarlier.evaluate((button: HTMLButtonElement) => button.click())
+      await expect.poll(() => members.count(), { timeout: 30_000 }).toBeGreaterThan(loadedMembers)
+      await settleScroll(scroll)
+
+      const after = await place(anchor)
+      const frames = await orcaPage.evaluate(() => {
+        const trace = window.__nativeChatPrependTrace!
+        trace.active = false
+        return trace.frames
+      })
+      expect(after, 'the opened run keeps the command mounted').not.toBeNull()
+      expect(
+        after!.inset - before!.inset,
+        'older commands drew above it inside its row'
+      ).toBeGreaterThan(10)
+      expect(frames.length).toBeGreaterThan(0)
+      expect(
+        frames.every((frame) => frame.content !== null),
+        'mounted in every frame'
+      ).toBe(true)
+      expect(
+        Math.max(...frames.map((frame) => Math.abs((frame.content ?? Infinity) - before!.offset))),
+        'displacement in any painted frame'
+      ).toBeLessThanOrEqual(2)
+    } finally {
+      rmSync(scratchDir, { recursive: true, force: true })
+    }
+  })
 
   test('keeps content where the wheel put it when an older page lands mid-gesture', async ({
     orcaPage

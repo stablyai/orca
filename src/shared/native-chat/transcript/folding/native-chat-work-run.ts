@@ -98,7 +98,9 @@ export function nativeChatWorkRunSpans(rows: readonly NativeChatWorkRunRow[]): n
 
 const blockSourceKeys = new WeakMap<NativeChatMessage, ReadonlyMap<NativeChatBlock, string>>()
 
-/** Message-local provenance survives a row joining a run, including anonymous calls/results. */
+/** A block's identity across re-reads. Calls and results go by their call id, because a
+ *  transcript can regroup calls under a different message once older records load; anonymous
+ *  blocks fall back to their place in the message. */
 export function nativeChatMessageBlockSourceKeys(
   message: NativeChatMessage
 ): ReadonlyMap<NativeChatBlock, string> {
@@ -106,11 +108,30 @@ export function nativeChatMessageBlockSourceKeys(
   if (cached) {
     return cached
   }
-  const keys = new Map(
-    message.blocks.map((block, index) => [block, `${message.id}:${index}`] as const)
-  )
+  const keys = new Map<NativeChatBlock, string>()
+  const repeats = new Map<string, number>()
+  for (const [index, block] of message.blocks.entries()) {
+    const callKey =
+      (block.type === 'tool-call' || block.type === 'tool-result') && block.callId
+        ? `${block.type === 'tool-call' ? 'call' : 'result'}:${block.callId}`
+        : undefined
+    if (callKey === undefined) {
+      keys.set(block, `${message.id}:${index}`)
+      continue
+    }
+    const repeat = repeats.get(callKey) ?? 0
+    repeats.set(callKey, repeat + 1)
+    keys.set(block, repeat === 0 ? callKey : `${callKey}#${repeat}`)
+  }
   blockSourceKeys.set(message, keys)
   return keys
+}
+
+/** The call keys a message carries: what a row keeps its identity by when its message regroups. */
+export function nativeChatMessageCallKeys(message: NativeChatMessage): string[] {
+  return [...nativeChatMessageBlockSourceKeys(message).values()].filter((key) =>
+    key.startsWith('call:')
+  )
 }
 
 export type NativeChatWorkRunEntries = {
@@ -128,6 +149,7 @@ export function nativeChatWorkRunEntries(
 ): NativeChatWorkRunEntries {
   const blocks: NativeChatBlock[] = []
   const sourceKeys = new Map<NativeChatBlock, string>()
+  const used = new Set<string>()
   const thoughtsBefore = new Map<NativeChatBlock, NativeChatMessage[]>()
   let waiting: NativeChatMessage[] = []
   for (const message of members) {
@@ -145,7 +167,13 @@ export function nativeChatWorkRunEntries(
     }
     blocks.push(...tools)
     for (const [block, key] of nativeChatMessageBlockSourceKeys(message)) {
-      sourceKeys.set(block, key)
+      // A call id repeated across members still needs one key per block.
+      let unique = key
+      for (let repeat = 1; used.has(unique); repeat += 1) {
+        unique = `${key}~${repeat}`
+      }
+      used.add(unique)
+      sourceKeys.set(block, unique)
     }
   }
   return { blocks, sourceKeys, thoughtsBefore, thoughtsAfter: waiting }

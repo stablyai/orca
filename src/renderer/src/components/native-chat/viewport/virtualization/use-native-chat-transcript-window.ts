@@ -18,6 +18,7 @@ import {
 } from './use-native-chat-viewport-align'
 import {
   useNativeChatContentAnchor,
+  type NativeChatAnchorState,
   type NativeChatContentAnchor
 } from './use-native-chat-content-anchor'
 import { useNativeChatRetiredMeasurements } from './use-native-chat-retired-measurements'
@@ -75,6 +76,8 @@ export function useNativeChatTranscriptWindow({
   const measuredScrollMargin = useRef(0)
   const [programmaticScrollMarks] = useState(createProgrammaticScrollMarks)
   const readerTakeoverFrameRef = useRef<number | null>(null)
+  // Shared with the content anchor: a landing page and the row whose in-row growth it corrects.
+  const [anchorState] = useState<NativeChatAnchorState>(() => ({ landing: false, row: null }))
   const pinned = useMemo(
     () => nativeChatPinnedRowIndexes({ count: slots.length, revealIndex, newRowsMarkerIndex }),
     [slots.length, revealIndex, newRowsMarkerIndex]
@@ -195,9 +198,13 @@ export function useNativeChatTranscriptWindow({
 
   // Compensate rows above the reader, excluding visible/first jump-target measurements, unseen scroll writes and backward-reader scrolling; preserve landed jumps.
   virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, _delta, instance) => {
+    if (anchorState.row && item.key === anchorState.row.key) {
+      return anchorState.row.correcting
+    }
     const offset = instance.scrollOffset ?? 0
     const written = scrollRef.current?.scrollTop ?? offset
-    if (Math.abs(written - offset) > UNSEEN_SCROLL_PX) {
+    // While a page lands, the gap is the virtualizer's own pending write, which includes adjustments.
+    if (!anchorState.landing && Math.abs(written - offset) > UNSEEN_SCROLL_PX) {
       return false
     }
     if (pinsEndGrowth(item.index, instance.measurementsCache)) {
@@ -307,7 +314,7 @@ export function useNativeChatTranscriptWindow({
   }, [isAlignHeld, reconcileReaderScroll])
 
   return useNativeChatContentAnchor(
-    { scrollRef, isVisible, virtualizer, isAlignHeld },
+    { scrollRef, isVisible, virtualizer, isAlignHeld, anchorState },
     {
       virtualItems: virtualizer.getVirtualItems(),
       totalSize: virtualizer.getTotalSize(),

@@ -130,4 +130,40 @@ describe('older history prepend disclosure identity', () => {
     expect(commandButton('Ran echo kept').getAttribute('aria-expanded')).toBe('true')
     expect(screen.getByText('KEPT_OUTPUT')).toBeTruthy()
   })
+
+  it('keeps the opened run when its calls regroup under an older message', () => {
+    // A window cut leaves the run's later calls in a message of their own; the older page then
+    // reads them back as part of the message that holds the agent's words before them.
+    const calls = (from: number, to: number) =>
+      Array.from({ length: to - from }, (_, offset) => [
+        shellCall(`run-${from + offset}`, `echo step-${from + offset}`),
+        shellResult(`run-${from + offset}`, `STEP_${from + offset}_OUTPUT`)
+      ]).flat()
+    const cut: NativeChatMessage = {
+      id: 'cut-head',
+      role: 'assistant',
+      source: 'transcript',
+      timestamp: null,
+      blocks: calls(2, 4)
+    }
+    const { rerender } = render(<HistoryRun messages={[cut]} />)
+    fireEvent.click(screen.getByRole('button', { expanded: false }))
+    const outputButton = commandButton('Ran echo step-3')
+    fireEvent.click(outputButton)
+    expect(screen.getByText('STEP_3_OUTPUT')).toBeTruthy()
+
+    const regrouped: NativeChatMessage = {
+      id: 'older-words',
+      role: 'assistant',
+      source: 'transcript',
+      timestamp: null,
+      blocks: [{ type: 'text', text: 'Looking at the logs first.' }, ...calls(0, 4)]
+    }
+    rerender(<HistoryRun messages={[regrouped]} />)
+
+    expect(screen.getByText('Looking at the logs first.')).toBeTruthy()
+    expect(commandButton('Ran echo step-3')).toBe(outputButton)
+    expect(outputButton.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByText('STEP_3_OUTPUT')).toBeTruthy()
+  })
 })

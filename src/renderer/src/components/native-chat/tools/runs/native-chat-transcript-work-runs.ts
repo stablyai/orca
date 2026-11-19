@@ -3,6 +3,7 @@ import { nativeChatSlotKey } from '../../conversation/slots/native-chat-transcri
 
 import { agentJournalItemSubagentId } from '../../../../../../shared/agent-session/journal/agent-session-journal-producer'
 import {
+  nativeChatMessageCallKeys,
   nativeChatWorkRunMember,
   nativeChatWorkRunSpans,
   type NativeChatWorkRunRow
@@ -109,9 +110,14 @@ export function nativeChatTranscriptWorkRuns(
       continue
     }
     const messages = slot.workRun ?? [slot.message]
+    // Members are known by message id and by their calls, which outlive a message regrouping.
+    const identities = messages.flatMap((member) => [
+      member.id,
+      ...nativeChatMessageCallKeys(member)
+    ])
     let key = slot.message.id
-    for (const member of messages) {
-      const previous = previousOwners.get(member.id)
+    for (const identity of identities) {
+      const previous = previousOwners.get(identity)
       if (
         previous !== undefined &&
         !claimed.has(previous) &&
@@ -122,8 +128,8 @@ export function nativeChatTranscriptWorkRuns(
       }
     }
     claimed.add(key)
-    for (const member of messages) {
-      owners.set(member.id, key)
+    for (const identity of identities) {
+      owners.set(identity, key)
     }
     result.push(key === slot.message.id ? slot : { ...slot, presentationKey: key })
   }
