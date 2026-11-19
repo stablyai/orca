@@ -817,6 +817,21 @@
       "moreActions": "More actions",
       "automations": "Automations"
     },
+    "deleteConfirm": {
+      "changes_one": "{{count}} uncommitted change",
+      "changes_other": "{{count}} uncommitted changes",
+      "changesAndIgnoredLost": "{{what}} and ignored files will be lost",
+      "lost": "{{what}} will be lost",
+      "ignoredLost": "Ignored files will be lost",
+      "checking": "Checking for changes…",
+      "unchecked": "Changes could not be checked",
+      "ignoredNamesMore": "{{names}} and more",
+      "ignoredNamesCount": "{{names}} +{{value0}}",
+      "ignoredUnchecked": "Ignored files could not be fully checked",
+      "needsUpdate": "Update Orca on your computer to delete this workspace from your phone.",
+      "removeTitle": "Remove Workspace",
+      "removeFolderMessage": "Remove \"{{name}}\" from Orca? The folder on disk is kept."
+    },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "Delete \"{{name}}\" ({{branch}})?",
       "deleteDestroysEnvironment": "This also destroys the environment \"{{environment}}\" that Orca created for it, with any uncommitted work and running terminals on it.",
