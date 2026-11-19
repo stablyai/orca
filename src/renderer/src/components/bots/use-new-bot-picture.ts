@@ -7,7 +7,7 @@ import { uploadBotAvatar } from '@/lib/bot-catalog'
 import { PICKABLE_BOT_MASCOT_IDS, isBotMascotId, mascotAvatar } from '../../../../shared/bot-avatar'
 import type { Bot } from '../../../../shared/bot-types'
 import { botErrorMessage } from './bot-presentation'
-import { useBotMascotSrc } from './bot-mascot-color'
+import { botMascotSrc } from './bot-mascot-color'
 import { pictureMascotIndex, type BotPictureCustom, type BotPictureValue } from './BotPicturePicker'
 
 // Opens on a random mascot, or the one a proposal chose, so no bot is created without a picture.
@@ -70,7 +70,7 @@ export function useNewBotPicture(
   const showingUpload = value.kind === 'custom' && upload !== null
   const mascotId =
     PICKABLE_BOT_MASCOT_IDS[pictureMascotIndex(value, custom)] ?? PICKABLE_BOT_MASCOT_IDS[0]
-  const mascotSrc = useBotMascotSrc(mascotId, color) ?? ''
+  const mascotSrc = botMascotSrc(mascotId, color) ?? ''
   return {
     value,
     custom,

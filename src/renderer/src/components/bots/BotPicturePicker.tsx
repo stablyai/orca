@@ -15,7 +15,7 @@ import {
 } from '../../../../shared/bots/bot-avatar-color'
 import { BotAvatarTile } from './BotAvatar'
 import { BOT_AVATAR_ACCEPT } from './bot-avatar-intake'
-import { useBotMascotSrcs } from './bot-mascot-color'
+import { botMascotSrcs } from './bot-mascot-color'
 import { BotPictureIntakeLine, BotPictureVeil, LineAction } from './BotPictureIntakeLine'
 import { useBotAvatarIntake } from './use-bot-avatar-intake'
 
@@ -281,7 +281,7 @@ export function BotPicturePicker({
   const t = useTranslate()
   const rootRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
-  const faces = pictureFaces(useBotMascotSrcs(PICKABLE_BOT_MASCOT_IDS, color), custom)
+  const faces = pictureFaces(botMascotSrcs(PICKABLE_BOT_MASCOT_IDS, color), custom)
   const showingCustom = value.kind === 'custom' && custom !== null
   const mascotIndex = pictureMascotIndex(value, custom)
   const faceIndex = showingCustom
