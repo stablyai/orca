@@ -80,7 +80,8 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
         // A window that answered but never launched under this attempt leaves no process to wait for.
         if (
           !woke &&
-          attempt?.mailWake?.id === claimedId &&
+          attempt &&
+          attempt.mailWake?.id === claimedId &&
           !this.mailWakeAttempts.stampLaunch(attempt).mailWake?.attempt
         ) {
           this.settleMailWakeAttempt(attempt)
