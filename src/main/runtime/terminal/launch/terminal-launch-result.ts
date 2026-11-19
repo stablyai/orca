@@ -128,10 +128,10 @@ export function boundTerminalLaunchFacts(
   pty: RuntimePtyWorktreeRecord | undefined | null,
   boundPtyId: string | null | undefined
 ): TerminalLaunchResult | undefined {
-  return pty &&
-    pty.ptyId === boundPtyId &&
-    pty.incarnationId &&
-    pty.launchIncarnationId === pty.incarnationId
-    ? currentTerminalLaunchFacts(pty)
-    : undefined
+  if (!pty || pty.ptyId !== boundPtyId) {
+    return undefined
+  }
+  // The resolver exposes launch ownership separately through its incarnation-attested token.
+  const { launchToken: _token, ...facts } = currentTerminalLaunchFacts(pty) ?? {}
+  return facts
 }

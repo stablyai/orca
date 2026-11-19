@@ -128,7 +128,10 @@ export function failCodexAccountRestart(
   }
   const unknown = receipt
     ? receipt.outcome !== 'terminal'
-    : !(options.notDispatched && ['claimed', 'preparing'].includes(request.phase))
+    : !(
+        request.notDispatched ||
+        (options.notDispatched && ['claimed', 'preparing'].includes(request.phase))
+      )
   state.updateCodexAccountRestart(token, {
     phase:
       unknown || (settledPhase === 'deferred' && (!receipt || receipt.stop === 'unknown'))
@@ -136,7 +139,8 @@ export function failCodexAccountRestart(
         : settledPhase,
     condition,
     receipt,
-    notDispatched: !unknown && options.notDispatched === true ? true : undefined,
+    notDispatched:
+      !unknown && (request.notDispatched || options.notDispatched === true) ? true : undefined,
     error: message
   })
 }

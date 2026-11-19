@@ -140,7 +140,9 @@ it('does not return a predecessor create result after subscription yields to a s
     const predecessor = transport.connect({ url: '', callbacks: {} })
     await vi.waitFor(() => expect(transport.getPtyId()).toBe('remote:env-1@@created'))
     transport.detach?.({ preserveExitObserver: false })
+    resolvedPaneHandle = 'successor'
     transport.attach({ existingPtyId: 'remote:env-1@@successor', callbacks: {} })
+    await vi.waitFor(() => expect(transport.getPtyId()).toBe('remote:env-1@@successor'))
     opening.resolve()
     await expect(predecessor).resolves.toBeUndefined()
     expect(transport.getPtyId()).toBe('remote:env-1@@successor')
