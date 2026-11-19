@@ -119,11 +119,14 @@ describe('compactOrchestrationDb', () => {
     const file = legacyDatabase({ activeWorker: true })
     await holdOpenInAnotherProcess(file)
 
+    // The runtime sees the worker first; without it, the daemon's connection still refuses the lock.
+    expect(await compactOrchestrationDb(file, { isActive: () => true })).toEqual({ kind: 'active' })
     expect(await compactOrchestrationDb(file)).toEqual({ kind: 'busy' })
     const holder = holders.pop()!
     holder.kill('SIGKILL')
     await once(holder, 'exit')
-    expect(await compactOrchestrationDb(file)).toEqual({ kind: 'active' })
+    // That attempt counted as the file's one try.
+    expect(await compactOrchestrationDb(file)).toEqual({ kind: 'deferred', timeouts: 1 })
     expect(inspect(file)).toEqual({ autoVacuum: 0, integrity: 'ok' })
   })
 

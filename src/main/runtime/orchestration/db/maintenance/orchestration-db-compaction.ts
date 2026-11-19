@@ -196,11 +196,6 @@ async function writeDeferral(
   }
 }
 
-/** An attempt that waited without compacting (stopped, failed or cut off at quit) keeps its deferral. */
-function keepsDeferral(result: OrchestrationDbCompaction): boolean {
-  return result.kind === 'timed-out' || result.kind === 'failed'
-}
-
 export type OrchestrationDbQuitOwner = {
   /** The database file, or null when there is none. */
   orchestrationDbFileForQuit(): string | null
@@ -269,9 +264,11 @@ export async function compactOrchestrationDb(
           result: { kind: 'timed-out' as const, ms: Math.round(performance.now() - started) },
           heldLock: false
         }
-  if (!keepsDeferral(result)) {
-    await writeDeferral(filename, result.kind === 'compacted' ? null : deferral)
-  } else if (heldLock) {
+  // Only success clears the note: rewriting it after any other outcome could erase another quit's note,
+  // and a file that stays busy or active is not worth a wait on every quit.
+  if (result.kind === 'compacted') {
+    await writeDeferral(filename, null)
+  } else if (heldLock && (result.kind === 'timed-out' || result.kind === 'failed')) {
     // A VACUUM stopped under its exclusive lock leaves its copy in the WAL; clear it now, after the
     // windows closed, rather than on the next launch's first open.
     const leftMs = budgetMs + EXIT_GRACE_MS + RECOVERY_MS - (performance.now() - started)
