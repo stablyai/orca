@@ -30,72 +30,9 @@ import {
 import { formatBareUsagePercentage, formatUsagePercentageLabel } from './usage-percentage-label'
 import { getUsageHealthTone } from './usage-health-tone'
 import { UsageBar, UsageDisplayToggle, UsageValue } from './usage-meter'
+import { DetailMetric, getOllamaUsageSummary } from './usage-roster-summary'
 
 type ProviderId = ProviderRateLimits['provider']
-
-function getOllamaUsageSummary(
-  p: ProviderRateLimits,
-  t: Translate,
-  intlLocale: string
-): string | null {
-  if (p.provider !== 'ollama') {
-    return null
-  }
-  const spend = p.ollamaUsageTotals?.spentUsd
-  if (spend != null) {
-    return t(
-      'auto.components.status.bar.UsageRosterPanel.ollamaSpend',
-      '${{value0}} spent (30d)',
-      { value0: spend.toFixed(2) }
-    )
-  }
-  const requestCount = p.ollamaUsageTotals?.requestCount
-  if (requestCount != null) {
-    return t(
-      'auto.components.status.bar.UsageRosterPanel.ollamaRequests',
-      '{{value0}} requests (30d)',
-      { value0: requestCount.toLocaleString(intlLocale) }
-    )
-  }
-  const balance = p.extraUsage?.unit === 'currency' ? p.extraUsage.balance : null
-  return balance != null
-    ? t('auto.components.status.bar.UsageRosterPanel.ollamaBalance', '${{value0}} left', {
-        value0: balance.toFixed(2)
-      })
-    : null
-}
-
-function DetailMetric({
-  section,
-  label,
-  display,
-  title
-}: {
-  section: UsageSection
-  label: string
-  display: UsagePercentageDisplay
-  title?: string
-}): React.JSX.Element {
-  return (
-    <span
-      data-usage-window={section.label}
-      title={title}
-      className="flex shrink-0 items-center gap-1.5"
-    >
-      <span className="text-[10px] text-muted-foreground">{label}</span>
-      <UsageBar
-        usedPercent={section.window.usedPercent}
-        display={display}
-        className="h-[5px] w-7"
-      />
-      <UsageValue
-        usedPercent={section.window.usedPercent}
-        display={display}
-        className="text-[11px]"
-      />
-    </span>
-  )
-}
 
 /** Spells out what a Fable figure limits; MCP windows are not weekly, so they get no title. */
 function scopedUsageTitle(

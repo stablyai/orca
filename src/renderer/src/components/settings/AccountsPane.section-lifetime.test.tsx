@@ -1,7 +1,9 @@
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import type { ReactElement } from 'react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { getDefaultSettings } from '../../../../shared/constants'
+import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
+import { TooltipProvider } from '../ui/tooltip'
 import { AccountsPane } from './accounts/AccountsPane'
 import { LOCAL_SETTINGS_HOST_SCOPE } from './host-scope/settings-host-scope'
 
@@ -34,6 +36,7 @@ const fake = vi.hoisted(() => ({
 }))
 vi.mock('@/i18n/i18n', () => ({
   i18n: { language: 'en' },
+  getIntlLocale: () => 'en',
   translate: (_key: string, fallback: string, values?: Record<string, string | number>) =>
     Object.entries(values ?? {}).reduce(
       (text, [key, value]) => text.replaceAll(`{{${key}}}`, String(value)),
@@ -58,7 +61,7 @@ vi.mock('@/store', () => ({
       fetchSettings: fake.write
     })
 }))
-vi.mock('@/runtime/runtime-provider-accounts-client', () => ({
+vi.mock('@/runtime/provider-accounts/observations/runtime-provider-accounts-client', () => ({
   emptyClaudeAccountsState: () => ({
     accounts: [],
     activeAccountId: null,
@@ -77,6 +80,16 @@ vi.mock('@/runtime/runtime-provider-accounts-client', () => ({
   removeClaudeProviderAccount: fake.write,
   removeCodexProviderAccount: fake.write
 }))
+vi.mock('./accounts/accounts-pane-ollama-section', () => ({
+  renderOllamaAccountsSection: () => null
+}))
+function accountsPaneElement(props: Parameters<typeof AccountsPane>[0]): ReactElement {
+  return (
+    <TooltipProvider>
+      <AccountsPane {...props} />
+    </TooltipProvider>
+  )
+}
 beforeEach(() => {
   vi.clearAllMocks()
   fake.query = ''
@@ -130,7 +143,7 @@ it.each([false, true])(
       hostScope: LOCAL_SETTINGS_HOST_SCOPE,
       wslSupportedPlatform
     }
-    const view = render(<AccountsPane {...props} />)
+    const view = render(accountsPaneElement(props))
     await act(async () => {})
     // Assert DOM identity across query edits so search cannot remount sections and add reads/watchers.
     const mountedHeading = screen.getByText('Grok (xAI)', { exact: true })
@@ -138,7 +151,7 @@ it.each([false, true])(
     const statusReadsAfterMount = fake.status.mock.calls.length
     for (const query of ['g', 'gr', 'gro', 'grok', '', 'g', 'gr', 'gro', 'grok']) {
       fake.query = query
-      await act(async () => view.rerender(<AccountsPane {...props} />))
+      await act(async () => view.rerender(accountsPaneElement(props)))
       expect(screen.getByText('Grok (xAI)', { exact: true })).toBe(mountedHeading)
     }
     expect(fake.watcher.mock.calls.length).toBe(watchersAfterMount)
@@ -155,7 +168,7 @@ it.each([false, true])(
       hostScope: LOCAL_SETTINGS_HOST_SCOPE,
       wslSupportedPlatform
     }
-    const view = render(<AccountsPane {...props} />)
+    const view = render(accountsPaneElement(props))
     await act(async () => {})
     const mountedHeading = screen.getByText('Codex', { exact: true })
     const pendingReadsAfterMount = fake.pending.mock.calls.length
@@ -174,7 +187,7 @@ it.each([false, true])(
       'codex'
     ]) {
       fake.query = query
-      await act(async () => view.rerender(<AccountsPane {...props} />))
+      await act(async () => view.rerender(accountsPaneElement(props)))
       expect(screen.getByText('Codex', { exact: true })).toBe(mountedHeading)
     }
     expect(fake.pending.mock.calls.length).toBe(pendingReadsAfterMount)
@@ -189,17 +202,17 @@ it('preserves explicit Grok refresh and real hide/reopen status reads', async ()
     updateSettingsOrThrow: fake.write,
     hostScope: LOCAL_SETTINGS_HOST_SCOPE
   }
-  const view = render(<AccountsPane {...props} />)
+  const view = render(accountsPaneElement(props))
   await act(async () => {})
   fireEvent.click(screen.getByRole('button', { name: 'Refresh usage' }))
   await act(async () => {})
   expect(fake.refresh).toHaveBeenCalledTimes(1)
   expect(fake.status).toHaveBeenCalledTimes(2)
   fake.query = 'codex'
-  await act(async () => view.rerender(<AccountsPane {...props} />))
+  await act(async () => view.rerender(accountsPaneElement(props)))
   expect(screen.queryByText('Grok (xAI)', { exact: true })).toBeNull()
   fake.query = 'grok'
-  await act(async () => view.rerender(<AccountsPane {...props} />))
+  await act(async () => view.rerender(accountsPaneElement(props)))
   expect(fake.status).toHaveBeenCalledTimes(3)
   expect(fake.write).not.toHaveBeenCalled()
 })
@@ -212,16 +225,16 @@ it('keeps usage-driven Grok status refreshes while the section stays mounted', a
     updateSettingsOrThrow: fake.write,
     hostScope: LOCAL_SETTINGS_HOST_SCOPE
   }
-  const view = render(<AccountsPane {...props} />)
+  const view = render(accountsPaneElement(props))
   await act(async () => {})
   fake.grokUsage = { updatedAt: 10 }
-  await act(async () => view.rerender(<AccountsPane {...props} />))
+  await act(async () => view.rerender(accountsPaneElement(props)))
   expect(fake.status).toHaveBeenCalledTimes(2)
   fake.query = 'gro'
-  await act(async () => view.rerender(<AccountsPane {...props} />))
+  await act(async () => view.rerender(accountsPaneElement(props)))
   expect(fake.status).toHaveBeenCalledTimes(2)
   fake.grokUsage = { updatedAt: 11 }
-  await act(async () => view.rerender(<AccountsPane {...props} />))
+  await act(async () => view.rerender(accountsPaneElement(props)))
   expect(fake.status).toHaveBeenCalledTimes(3)
 })
 
@@ -232,17 +245,17 @@ it('keeps the login subscription until Codex genuinely hides', async () => {
     updateSettingsOrThrow: fake.write,
     hostScope: LOCAL_SETTINGS_HOST_SCOPE
   }
-  const view = render(<AccountsPane {...props} />)
+  const view = render(accountsPaneElement(props))
   await act(async () => {})
   const unsubscribe = fake.subscribe.mock.results[0].value
   fake.query = 'codex'
-  await act(async () => view.rerender(<AccountsPane {...props} />))
+  await act(async () => view.rerender(accountsPaneElement(props)))
   expect(unsubscribe).not.toHaveBeenCalled()
   fake.query = 'grok'
-  await act(async () => view.rerender(<AccountsPane {...props} />))
+  await act(async () => view.rerender(accountsPaneElement(props)))
   expect(unsubscribe).toHaveBeenCalledTimes(1)
   fake.query = 'codex'
-  await act(async () => view.rerender(<AccountsPane {...props} />))
+  await act(async () => view.rerender(accountsPaneElement(props)))
   expect(fake.subscribe).toHaveBeenCalledTimes(2)
   view.unmount()
   expect(fake.subscribe.mock.results[1].value).toHaveBeenCalledTimes(1)
@@ -258,13 +271,13 @@ it.each([false, true])(
       hostScope: LOCAL_SETTINGS_HOST_SCOPE,
       wslSupportedPlatform
     }
-    const view = render(<AccountsPane {...props} />)
+    const view = render(accountsPaneElement(props))
     await act(async () => {})
     const mountedHeading = screen.getByText('Cursor', { exact: true })
     const statusReadsAfterMount = fake.cursorStatus.mock.calls.length
     for (const query of ['c', 'cu', 'cur', 'curs', 'curso', 'cursor', '', 'c', 'cu', 'cursor']) {
       fake.query = query
-      await act(async () => view.rerender(<AccountsPane {...props} />))
+      await act(async () => view.rerender(accountsPaneElement(props)))
       expect(screen.getByText('Cursor', { exact: true })).toBe(mountedHeading)
     }
     expect(fake.cursorStatus.mock.calls.length).toBe(statusReadsAfterMount)
@@ -280,19 +293,19 @@ it('keeps Cursor refresh driven by usage updates and genuine reopen', async () =
     updateSettingsOrThrow: fake.write,
     hostScope: LOCAL_SETTINGS_HOST_SCOPE
   }
-  const view = render(<AccountsPane {...props} />)
+  const view = render(accountsPaneElement(props))
   await act(async () => {})
   fireEvent.click(screen.getByRole('button', { name: 'Refresh usage' }))
   await act(async () => {})
   expect(fake.cursorRefresh).toHaveBeenCalledTimes(1)
   expect(fake.cursorStatus).toHaveBeenCalledTimes(1)
   fake.cursorUsage = { updatedAt: 1 }
-  await act(async () => view.rerender(<AccountsPane {...props} />))
+  await act(async () => view.rerender(accountsPaneElement(props)))
   expect(fake.cursorStatus).toHaveBeenCalledTimes(2)
   fake.query = 'codex'
-  await act(async () => view.rerender(<AccountsPane {...props} />))
+  await act(async () => view.rerender(accountsPaneElement(props)))
   expect(screen.queryByText('Cursor', { exact: true })).toBeNull()
   fake.query = 'cursor'
-  await act(async () => view.rerender(<AccountsPane {...props} />))
+  await act(async () => view.rerender(accountsPaneElement(props)))
   expect(fake.cursorStatus).toHaveBeenCalledTimes(3)
 })

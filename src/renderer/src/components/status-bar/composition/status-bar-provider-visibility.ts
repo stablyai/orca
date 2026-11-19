@@ -40,6 +40,25 @@ type UsageProviderSnapshots = {
 
 type UsageProviderId = ProviderRateLimits['provider']
 
+const USAGE_PROVIDER_KEYS = [
+  'claude',
+  'codex',
+  'gemini',
+  'opencodeGo',
+  'kimi',
+  'antigravity',
+  'minimax',
+  'grok',
+  'cursor',
+  'zcode',
+  'muse',
+  'ollama'
+] as const satisfies readonly (keyof UsageProviderSnapshots)[]
+
+export function isAnyUsageProviderFetching(providers: UsageProviderSnapshots): boolean {
+  return USAGE_PROVIDER_KEYS.some((provider) => providers[provider]?.status === 'fetching')
+}
+
 function isProviderSnapshotPending(provider: ProviderRateLimits | null | undefined): boolean {
   return provider == null || (provider.status === 'fetching' && !hasUsageData(provider))
 }

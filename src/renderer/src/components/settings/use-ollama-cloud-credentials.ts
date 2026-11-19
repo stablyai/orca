@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '../../store'
 import type { OllamaCloudCredentialsStatus } from '../../../../shared/ollama-cloud'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
@@ -15,11 +15,33 @@ import {
 
 const LOCAL_OWNER: RuntimeClientTarget = { kind: 'local' }
 
+async function runCredentialMutation(
+  mutate: () => Promise<OllamaCloudCredentialsStatus>,
+  onSuccess: (status: OllamaCloudCredentialsStatus) => void,
+  onError: (error: unknown) => void,
+  onFinally: () => void
+): Promise<void> {
+  try {
+    const next = await mutate()
+    if (!next || typeof next.apiKeyConfigured !== 'boolean') {
+      throw new Error(
+        'Ollama cloud credentials can only be changed in the desktop app on the computer running Orca.'
+      )
+    }
+    onSuccess(next)
+  } catch (error) {
+    onError(error)
+  } finally {
+    onFinally()
+  }
+}
+
 /** Key by owner so switching Ollama credential hosts resets drafts. */
 export function useOllamaCloudCredentials(
   updatedAt: number | undefined,
   owner: RuntimeClientTarget = LOCAL_OWNER
 ) {
+  const t = useTranslate()
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const [status, setStatus] = useState<OllamaCloudCredentialsStatus | null>(null)
   const [access, setAccess] = useState<UsageCredentialAccess>(
@@ -67,42 +89,42 @@ export function useOllamaCloudCredentials(
     readGeneration.current += 1
     mutationPending.current = true
     setCredentialBusy(true)
-    try {
-      const next =
-        action === 'save'
-          ? await callOllamaCloudCredentials(owner, 'saveApiKey', apiKeyDraft.trim())
-          : await callOllamaCloudCredentials(owner, 'clearApiKey')
-      if (!next || typeof next.apiKeyConfigured !== 'boolean') {
-        throw new Error(
-          'Ollama cloud credentials can only be changed in the desktop app on the computer running Orca.'
-        )
-      }
-      setStatus(next)
-      setApiKeyDraft('')
-      recordFeatureInteraction('usage-tracking')
-      if (action === 'save') {
-        toast.success(
-          translate(
-            'auto.components.settings.OllamaCloudAccountsSection.keySaved',
-            'Ollama cloud API key saved.'
+    const mutate = () =>
+      action === 'save'
+        ? callOllamaCloudCredentials(owner, 'saveApiKey', apiKeyDraft.trim())
+        : callOllamaCloudCredentials(owner, 'clearApiKey')
+    await runCredentialMutation(
+      mutate,
+      (next) => {
+        setStatus(next)
+        setApiKeyDraft('')
+        recordFeatureInteraction('usage-tracking')
+        if (action === 'save') {
+          toast.success(
+            t(
+              'auto.components.settings.OllamaCloudAccountsSection.keySaved',
+              'Ollama cloud API key saved.'
+            )
           )
+        }
+      },
+      (error) => {
+        if (error instanceof UsageCredentialsHostOutdatedError) {
+          setAccess('outdated')
+        }
+        toast.error(
+          t(
+            'auto.components.settings.OllamaCloudAccountsSection.keySaveFailed',
+            'Ollama cloud credential update failed.'
+          ),
+          { description: error instanceof Error ? error.message : String(error) }
         )
+      },
+      () => {
+        mutationPending.current = false
+        setCredentialBusy(false)
       }
-    } catch (error) {
-      if (error instanceof UsageCredentialsHostOutdatedError) {
-        setAccess('outdated')
-      }
-      toast.error(
-        translate(
-          'auto.components.settings.OllamaCloudAccountsSection.keySaveFailed',
-          'Ollama cloud credential update failed.'
-        ),
-        { description: error instanceof Error ? error.message : String(error) }
-      )
-    } finally {
-      mutationPending.current = false
-      setCredentialBusy(false)
-    }
+    )
   }
 
   return {

@@ -2,40 +2,40 @@
 import {
   clearOllamaCloudApiKey,
   getOllamaCloudApiKeyProtection,
-  hasOllamaCloudApiKey,
+  hasOllamaCloudApiKeyAsync,
   OLLAMA_CLOUD_API_KEY_ENVELOPE_PREFIX,
   getOllamaCloudApiKeyPath,
   saveOllamaCloudApiKey
 } from './ollama-cloud-api-key-store'
 import {
   refuseCredentialSealedElsewhere,
-  savedCredentialUnreadable
+  savedCredentialUnreadableAsync
 } from '../credentials/saved-credential-readability'
-import { refreshAfterCredentialChange } from '../ipc/credential-change-rate-limit-refresh'
+import { refreshAfterCredentialChange } from '../ipc/accounts/credential-change-rate-limit-refresh'
 import type { RateLimitService } from '../rate-limits/service/rate-limit-service'
 import type { OllamaCloudCredentialsStatus } from '../../shared/ollama-cloud'
 
 type UsageRefresher = Pick<RateLimitService, 'refresh' | 'invalidateOllamaCredentialState'>
 
-export function getOllamaCloudCredentialsStatus(): OllamaCloudCredentialsStatus {
-  const apiKeyConfigured = hasOllamaCloudApiKey()
+export async function getOllamaCloudCredentialsStatus(): Promise<OllamaCloudCredentialsStatus> {
+  const apiKeyConfigured = await hasOllamaCloudApiKeyAsync()
   return {
     apiKeyConfigured,
-    apiKeyProtection: getOllamaCloudApiKeyProtection(),
-    apiKeyUnreadable: apiKeyConfigured ? apiKeyUnreadable() : undefined
+    apiKeyProtection: await getOllamaCloudApiKeyProtection(),
+    apiKeyUnreadable: apiKeyConfigured ? await apiKeyUnreadable() : undefined
   }
 }
 
-function apiKeyUnreadable(): ReturnType<typeof savedCredentialUnreadable> {
-  return savedCredentialUnreadable({
+function apiKeyUnreadable(): ReturnType<typeof savedCredentialUnreadableAsync> {
+  return savedCredentialUnreadableAsync({
     path: getOllamaCloudApiKeyPath(),
     envelopePrefix: OLLAMA_CLOUD_API_KEY_ENVELOPE_PREFIX
   })
 }
 
 /** Reject save when this host cannot open the existing seal; forgetting remains allowed. */
-export function assertOllamaCloudApiKeyOpensHere(): void {
-  if (apiKeyUnreadable() === 'sealed-elsewhere') {
+export async function assertOllamaCloudApiKeyOpensHere(): Promise<void> {
+  if ((await apiKeyUnreadable()) === 'sealed-elsewhere') {
     refuseCredentialSealedElsewhere('Ollama cloud API key')
   }
 }
@@ -48,23 +48,24 @@ function refreshAfterChange(rateLimits: UsageRefresher | null, action: 'save' | 
   )
 }
 
-export function saveOllamaCloudApiKeyCredential(
+export async function saveOllamaCloudApiKeyCredential(
   rateLimits: UsageRefresher | null,
   key: unknown
-): OllamaCloudCredentialsStatus {
+): Promise<OllamaCloudCredentialsStatus> {
   // Runtime-check IPC/RPC input; compile-time types do not constrain the wire.
   if (typeof key !== 'string') {
     throw new Error('Ollama cloud API key must be a string')
   }
-  saveOllamaCloudApiKey(key)
+  await assertOllamaCloudApiKeyOpensHere()
+  await saveOllamaCloudApiKey(key)
   refreshAfterChange(rateLimits, 'save')
   return getOllamaCloudCredentialsStatus()
 }
 
-export function clearOllamaCloudApiKeyCredential(
+export async function clearOllamaCloudApiKeyCredential(
   rateLimits: UsageRefresher | null
-): OllamaCloudCredentialsStatus {
-  clearOllamaCloudApiKey()
+): Promise<OllamaCloudCredentialsStatus> {
+  await clearOllamaCloudApiKey()
   refreshAfterChange(rateLimits, 'clear')
   return getOllamaCloudCredentialsStatus()
 }

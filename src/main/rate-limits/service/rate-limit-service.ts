@@ -6,7 +6,10 @@ import type { BrowserWindow } from 'electron'
 import { hasMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
 import { hasMiniMaxApiKey } from '../../minimax/minimax-api-key-store'
 import { hasZcodePlanApiKey } from '../../zcode/zcode-plan-api-key-store'
-import { hasOllamaCloudApiKey } from '../../ollama/ollama-cloud-api-key-store'
+import {
+  hasOllamaCloudApiKey,
+  hasOllamaCloudApiKeyAsync
+} from '../../ollama/ollama-cloud-api-key-store'
 import { RateLimitServiceAccountRefresh } from './service-account-refresh'
 import type { AntigravityAccountUsageRecorder } from '../providers/antigravity/antigravity-account-usage'
 import {
@@ -180,6 +183,7 @@ export class RateLimitService extends RateLimitServiceAccountRefresh {
   }
 
   start(options: { fetchImmediately?: boolean } = {}): void {
+    void hasOllamaCloudApiKeyAsync().then(() => this.pushToRenderer())
     if (options.fetchImmediately !== false) {
       this.clearDeferredStartupRefresh()
       void this.fetchAll()

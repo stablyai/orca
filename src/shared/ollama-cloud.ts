@@ -1,5 +1,5 @@
 /** Ollama cloud usage: provider identity, credential status shape, and key-source doc. https://ollama.com/settings/keys */
-import type { SecretAtRestProtection } from './secret-at-rest-protection'
+import type { SecretAtRestProtection } from './secure-storage/secret-at-rest-protection'
 
 /** Single cloud site: the shared endpoint all key holders use. */
 export type OllamaCloudCredentialsStatus = {

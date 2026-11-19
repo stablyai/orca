@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { ExternalLink, Loader2, Lock, LockOpen, RefreshCw, ShieldCheck } from 'lucide-react'
-import { getIntlLocale, translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import { useAppStore } from '../../store/index'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
@@ -29,11 +29,25 @@ function formatUsd(amount: number | null): string | null {
   return `$${amount.toFixed(2)}`
 }
 
+async function runUsageRefresh(
+  refreshRateLimits: () => Promise<unknown>,
+  setRefreshing: (refreshing: boolean) => void
+): Promise<void> {
+  setRefreshing(true)
+  try {
+    await refreshRateLimits()
+  } finally {
+    setRefreshing(false)
+  }
+}
+
 export function OllamaCloudAccountsSection({
   host
 }: {
   host: UsageCredentialHost
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const refreshRateLimits = useAppStore((s) => s.refreshRateLimits)
   const storeOllamaUsage = useAppStore((s) => s.rateLimits.ollama)
   const hostLabel = host.label
@@ -50,11 +64,11 @@ export function OllamaCloudAccountsSection({
   const localUnreadableNotice =
     hostLabel === null && status?.apiKeyUnreadable
       ? status.apiKeyUnreadable === 'sealed-elsewhere'
-        ? translate(
+        ? t(
             'auto.components.settings.OllamaCloudAccountsSection.keySealedElsewhere',
             'This key was saved by another Orca app on this computer. Forget it here, then save it again in this app.'
           )
-        : translate(
+        : t(
             'auto.components.settings.OllamaCloudAccountsSection.keyUnreadable',
             'Orca cannot read the saved key. Forget it and save it again.'
           )
@@ -64,14 +78,7 @@ export function OllamaCloudAccountsSection({
   const detailsUnavailable = webClient || status?.detailsUnavailable === true
   const apiKeyConfigured = status?.apiKeyConfigured === true
 
-  const handleRefreshUsage = async (): Promise<void> => {
-    setRefreshing(true)
-    try {
-      await refreshRateLimits()
-    } finally {
-      setRefreshing(false)
-    }
-  }
+  const handleRefreshUsage = (): Promise<void> => runUsageRefresh(refreshRateLimits, setRefreshing)
 
   const usage = ollamaUsage ?? null
   const balance = usage?.extraUsage ?? null
@@ -85,10 +92,10 @@ export function OllamaCloudAccountsSection({
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
           <h3 className="flex items-center gap-2 text-sm font-semibold">
-            {translate('auto.components.settings.OllamaCloudAccountsSection.title', 'Ollama Cloud')}
+            {t('auto.components.settings.OllamaCloudAccountsSection.title', 'Ollama Cloud')}
           </h3>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.OllamaCloudAccountsSection.subtitle',
               'Track Ollama cloud subscription usage in the status bar. Save the API key from ollama.com here.'
             )}
@@ -100,10 +107,7 @@ export function OllamaCloudAccountsSection({
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
         >
-          {translate(
-            'auto.components.settings.OllamaCloudAccountsSection.consoleLink',
-            'Get API key'
-          )}
+          {t('auto.components.settings.OllamaCloudAccountsSection.consoleLink', 'Get API key')}
           <ExternalLink className="size-3" />
         </a>
       </div>
@@ -125,7 +129,7 @@ export function OllamaCloudAccountsSection({
             <p className="text-xs font-medium">{accessNotice}</p>
           ) : detailsUnavailable ? (
             <p className="text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.settings.OllamaCloudAccountsSection.detailsUnavailable',
                 'Credential details are only readable on the computer running Orca.'
               )}
@@ -133,18 +137,18 @@ export function OllamaCloudAccountsSection({
           ) : apiKeyConfigured ? (
             <>
               <p className="text-xs font-medium">
-                {translate(
+                {t(
                   'auto.components.settings.OllamaCloudAccountsSection.keyStored',
                   'API key saved'
                 )}
               </p>
               <p className="text-xs text-muted-foreground">
                 {hostLabel === null
-                  ? translate(
+                  ? t(
                       'auto.components.settings.OllamaCloudAccountsSection.keyStoredHelp',
                       'Stored locally and sent only to ollama.com for usage refreshes.'
                     )
-                  : translate(
+                  : t(
                       'auto.components.settings.OllamaCloudAccountsSection.keyStoredOnHostHelp',
                       'Stored on {{host}} and sent from there only to ollama.com for usage refreshes.',
                       { host: hostLabel }
@@ -154,18 +158,18 @@ export function OllamaCloudAccountsSection({
           ) : (
             <>
               <p className="text-xs font-medium">
-                {translate(
+                {t(
                   'auto.components.settings.OllamaCloudAccountsSection.notConfigured',
                   'No Ollama cloud subscription linked'
                 )}
               </p>
               <p className="text-xs text-muted-foreground">
                 {hostLabel === null
-                  ? translate(
+                  ? t(
                       'auto.components.settings.OllamaCloudAccountsSection.notConfiguredHelp',
                       'Save the API key from ollama.com below.'
                     )
-                  : translate(
+                  : t(
                       'auto.components.settings.OllamaCloudAccountsSection.notConfiguredOnHostHelp',
                       'Save the API key from ollama.com below in the desktop app on {{host}}.',
                       { host: hostLabel }
@@ -190,17 +194,14 @@ export function OllamaCloudAccountsSection({
             ) : (
               <RefreshCw className="size-3" />
             )}
-            {translate(
-              'auto.components.settings.OllamaCloudAccountsSection.refreshUsage',
-              'Refresh usage'
-            )}
+            {t('auto.components.settings.OllamaCloudAccountsSection.refreshUsage', 'Refresh usage')}
           </Button>
         ) : null}
       </div>
 
       {webClient ? (
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.OllamaCloudAccountsSection.hostOnly',
             'Change the API key in the desktop app on the computer running Orca.'
           )}
@@ -208,7 +209,7 @@ export function OllamaCloudAccountsSection({
       ) : null}
 
       <SearchableSetting
-        title={translate('auto.components.settings.OllamaCloudAccountsSection.keyTitle', 'API key')}
+        title={t('auto.components.settings.OllamaCloudAccountsSection.keyTitle', 'API key')}
         description={ollamaCloudKeyDescription(host)}
         keywords={SEARCH_KEYWORDS}
         className="space-y-2"
@@ -216,24 +217,21 @@ export function OllamaCloudAccountsSection({
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Label htmlFor="ollama-cloud-api-key">
-              {translate('auto.components.settings.OllamaCloudAccountsSection.keyTitle', 'API key')}
+              {t('auto.components.settings.OllamaCloudAccountsSection.keyTitle', 'API key')}
             </Label>
             {!detailsUnavailable ? (
               <Badge variant={apiKeyConfigured ? 'secondary' : 'outline'}>
                 {apiKeyConfigured ? <Lock className="size-3" /> : <LockOpen className="size-3" />}
                 {apiKeyConfigured
-                  ? translate('auto.components.settings.OllamaCloudAccountsSection.saved', 'Saved')
-                  : translate(
-                      'auto.components.settings.OllamaCloudAccountsSection.notSaved',
-                      'Not saved'
-                    )}
+                  ? t('auto.components.settings.OllamaCloudAccountsSection.saved', 'Saved')
+                  : t('auto.components.settings.OllamaCloudAccountsSection.notSaved', 'Not saved')}
               </Badge>
             ) : null}
           </div>
         </div>
         <UnsealedCredentialNotice
           protection={status?.apiKeyProtection ?? null}
-          credentialName={translate(
+          credentialName={t(
             'auto.components.settings.OllamaCloudAccountsSection.title',
             'Ollama Cloud'
           )}
@@ -251,7 +249,7 @@ export function OllamaCloudAccountsSection({
             disabled={credentialBusy || !keyEditable}
             value={apiKeyDraft}
             onChange={(e) => setApiKeyDraft(e.target.value)}
-            placeholder={translate(
+            placeholder={t(
               'auto.components.settings.OllamaCloudAccountsSection.keyPlaceholder',
               'Paste your Ollama API key'
             )}
@@ -266,8 +264,8 @@ export function OllamaCloudAccountsSection({
           >
             {credentialBusy ? <Loader2 className="size-3 animate-spin" /> : null}
             {apiKeyConfigured
-              ? translate('auto.components.settings.OllamaCloudAccountsSection.replace', 'Replace')
-              : translate('auto.components.settings.OllamaCloudAccountsSection.save', 'Save')}
+              ? t('auto.components.settings.OllamaCloudAccountsSection.replace', 'Replace')
+              : t('auto.components.settings.OllamaCloudAccountsSection.save', 'Save')}
           </Button>
           {apiKeyConfigured ? (
             <Button
@@ -277,15 +275,12 @@ export function OllamaCloudAccountsSection({
               disabled={credentialBusy || !credentialEditable}
               className="shrink-0"
             >
-              {translate(
-                'auto.components.settings.OllamaCloudAccountsSection.forgetKey',
-                'Forget key'
-              )}
+              {t('auto.components.settings.OllamaCloudAccountsSection.forgetKey', 'Forget key')}
             </Button>
           ) : null}
         </div>
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.OllamaCloudAccountsSection.keyHelp',
             'The same OLLAMA_API_KEY your launch tools use (ollama launch claude, codex, droid…). Sent only to ollama.com for usage checks.'
           )}
@@ -294,11 +289,11 @@ export function OllamaCloudAccountsSection({
 
       {balance ? (
         <SearchableSetting
-          title={translate(
+          title={t(
             'auto.components.settings.OllamaCloudAccountsSection.usageTitle',
             'Subscription usage'
           )}
-          description={translate(
+          description={t(
             'auto.components.settings.OllamaCloudAccountsSection.usageDescription',
             'Remaining credits and 30-day spend for the linked subscription, refreshed with the status bar usage cycle.'
           )}
@@ -308,12 +303,12 @@ export function OllamaCloudAccountsSection({
             {balanceText !== null ? (
               <p>
                 {spendLimitText !== null
-                  ? translate(
+                  ? t(
                       'auto.components.settings.OllamaCloudAccountsSection.includedWithLimit',
                       'Included credits: {{value0}} of {{value1}}',
                       { value0: balanceText, value1: spendLimitText }
                     )
-                  : translate(
+                  : t(
                       'auto.components.settings.OllamaCloudAccountsSection.included',
                       'Included credits: {{value0}}',
                       {
@@ -324,7 +319,7 @@ export function OllamaCloudAccountsSection({
             ) : null}
             {totals?.spentUsd != null ? (
               <p className="text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.settings.OllamaCloudAccountsSection.monthSpend',
                   '30-day cloud spend: ${{value0}} across {{value1}} requests',
                   {
@@ -336,7 +331,7 @@ export function OllamaCloudAccountsSection({
             ) : null}
             {totals?.purchasedBalanceUsd != null ? (
               <p className="text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.settings.OllamaCloudAccountsSection.purchasedCredits',
                   'Purchased credits: ${{value0}}',
                   { value0: totals.purchasedBalanceUsd.toFixed(2) }
@@ -345,18 +340,18 @@ export function OllamaCloudAccountsSection({
             ) : null}
             {totals?.inputTokens != null ? (
               <p className="text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.settings.OllamaCloudAccountsSection.monthTokens',
                   '30-day tokens: {{value0}} in · {{value1}} cached · {{value2}} out',
                   {
-                    value0: totals.inputTokens.toLocaleString(getIntlLocale()),
+                    value0: totals.inputTokens.toLocaleString(intlLocale),
                     value1:
                       totals.cachedInputTokens != null
-                        ? totals.cachedInputTokens.toLocaleString(getIntlLocale())
+                        ? totals.cachedInputTokens.toLocaleString(intlLocale)
                         : '—',
                     value2:
                       totals.outputTokens != null
-                        ? totals.outputTokens.toLocaleString(getIntlLocale())
+                        ? totals.outputTokens.toLocaleString(intlLocale)
                         : '—'
                   }
                 )}
@@ -364,7 +359,7 @@ export function OllamaCloudAccountsSection({
             ) : null}
             {usage?.planType ? (
               <p className="text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.settings.OllamaCloudAccountsSection.planLevel',
                   'Plan: {{value0}}',
                   {

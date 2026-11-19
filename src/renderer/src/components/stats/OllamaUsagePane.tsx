@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { CalendarClock, Coins, Cpu, ExternalLink, RefreshCw, ShoppingBag } from 'lucide-react'
-import { getIntlLocale, translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '../../store'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
@@ -9,6 +9,8 @@ import { formatUpdatedAt } from './usage-formatters'
 
 /** Ollama cloud subscription usage: account-wide spend/balance labels; token counts are totals, not per-session analytics. */
 export function OllamaUsagePane(): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const ollama = useAppStore((s) => s.rateLimits.ollama)
   const ollamaApiKeyConfigured = useAppStore((s) => s.rateLimits.ollamaApiKeyConfigured)
   const refreshOllamaRateLimits = useAppStore((s) => s.refreshOllamaRateLimits)
@@ -30,7 +32,7 @@ export function OllamaUsagePane(): React.JSX.Element {
     openSettingsPage()
   }
 
-  const paneTitle = translate('auto.components.stats.OllamaUsagePane.title', 'Ollama cloud usage')
+  const paneTitle = t('auto.components.stats.OllamaUsagePane.title', 'Ollama cloud usage')
 
   if (!ollamaApiKeyConfigured) {
     return (
@@ -42,7 +44,7 @@ export function OllamaUsagePane(): React.JSX.Element {
           <div className="space-y-2">
             <h3 className="text-sm font-semibold text-foreground">{paneTitle}</h3>
             <p className="text-sm text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.stats.OllamaUsagePane.notConfiguredDescription',
                 'Cloud subscription usage from ollama.com (API key from ollama.com/settings/keys). Same source as the status bar.'
               )}
@@ -57,7 +59,7 @@ export function OllamaUsagePane(): React.JSX.Element {
               openOllamaAccounts()
             }}
           >
-            {translate('auto.components.stats.OllamaUsagePane.setupButton', 'Set up in Accounts')}
+            {t('auto.components.stats.OllamaUsagePane.setupButton', 'Set up in Accounts')}
           </Button>
         </div>
       </div>
@@ -89,7 +91,7 @@ export function OllamaUsagePane(): React.JSX.Element {
         <div className="space-y-2">
           <h3 className="text-sm font-semibold text-foreground">{paneTitle}</h3>
           <p className="text-sm text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.stats.OllamaUsagePane.description',
               'Cloud credits and 30-day usage from ollama.com. Same source as the status bar.'
             )}
@@ -103,7 +105,7 @@ export function OllamaUsagePane(): React.JSX.Element {
                 size="icon-xs"
                 onClick={handleRefresh}
                 disabled={isRefreshing}
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.stats.OllamaUsagePane.refreshLabel',
                   'Refresh Ollama usage'
                 )}
@@ -112,7 +114,7 @@ export function OllamaUsagePane(): React.JSX.Element {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              {translate('auto.components.stats.OllamaUsagePane.refresh', 'Refresh')}
+              {t('auto.components.stats.OllamaUsagePane.refresh', 'Refresh')}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -120,7 +122,7 @@ export function OllamaUsagePane(): React.JSX.Element {
 
       <div className="grid gap-3 md:grid-cols-2">
         <StatCard
-          label={translate(
+          label={t(
             'auto.components.stats.OllamaUsagePane.includedCredits',
             'Included credits left'
           )}
@@ -134,23 +136,17 @@ export function OllamaUsagePane(): React.JSX.Element {
           icon={<Coins className="size-4" />}
         />
         <StatCard
-          label={translate(
-            'auto.components.stats.OllamaUsagePane.purchasedCredits',
-            'Purchased credits'
-          )}
+          label={t('auto.components.stats.OllamaUsagePane.purchasedCredits', 'Purchased credits')}
           value={purchasedText ?? '—'}
           icon={<ShoppingBag className="size-4" />}
         />
         <StatCard
-          label={translate('auto.components.stats.OllamaUsagePane.monthSpend', '30-day spend')}
+          label={t('auto.components.stats.OllamaUsagePane.monthSpend', '30-day spend')}
           value={totals?.spentUsd != null ? `$${totals.spentUsd.toFixed(2)}` : '—'}
           icon={<Cpu className="size-4" />}
         />
         <StatCard
-          label={translate(
-            'auto.components.stats.OllamaUsagePane.periodReset',
-            'Plan period resets'
-          )}
+          label={t('auto.components.stats.OllamaUsagePane.periodReset', 'Plan period resets')}
           value={balance?.resetsAt ? formatUpdatedAt(balance.resetsAt) : '—'}
           icon={<CalendarClock className="size-4" />}
         />
@@ -168,17 +164,14 @@ export function OllamaUsagePane(): React.JSX.Element {
         <div className="grid gap-3 md:grid-cols-2">
           {ollama?.session ? (
             <StatCard
-              label={translate(
-                'auto.components.stats.OllamaUsagePane.sessionWindow',
-                '5 hours used'
-              )}
+              label={t('auto.components.stats.OllamaUsagePane.sessionWindow', '5 hours used')}
               value={`${Math.round(ollama.session.usedPercent)}%`}
               icon={<CalendarClock className="size-4" />}
             />
           ) : null}
           {ollama?.weekly ? (
             <StatCard
-              label={translate('auto.components.stats.OllamaUsagePane.weeklyWindow', 'Weekly used')}
+              label={t('auto.components.stats.OllamaUsagePane.weeklyWindow', 'Weekly used')}
               value={`${Math.round(ollama.weekly.usedPercent)}%`}
               icon={<CalendarClock className="size-4" />}
             />
@@ -187,23 +180,19 @@ export function OllamaUsagePane(): React.JSX.Element {
       )}
       {totals?.inputTokens != null ? (
         <p className="px-1 text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.stats.OllamaUsagePane.tokenTotals',
             '30-day tokens: {{value0}} in · {{value1}} cached · {{value2}} out across {{value3}} requests',
             {
-              value0: totals.inputTokens.toLocaleString(getIntlLocale()),
+              value0: totals.inputTokens.toLocaleString(intlLocale),
               value1:
                 totals.cachedInputTokens != null
-                  ? totals.cachedInputTokens.toLocaleString(getIntlLocale())
+                  ? totals.cachedInputTokens.toLocaleString(intlLocale)
                   : '—',
               value2:
-                totals.outputTokens != null
-                  ? totals.outputTokens.toLocaleString(getIntlLocale())
-                  : '—',
+                totals.outputTokens != null ? totals.outputTokens.toLocaleString(intlLocale) : '—',
               value3:
-                totals.requestCount != null
-                  ? totals.requestCount.toLocaleString(getIntlLocale())
-                  : '—'
+                totals.requestCount != null ? totals.requestCount.toLocaleString(intlLocale) : '—'
             }
           )}
         </p>
@@ -217,7 +206,7 @@ export function OllamaUsagePane(): React.JSX.Element {
 
       <div className="flex flex-wrap items-center gap-2 px-1">
         <Button variant="ghost" size="sm" onClick={openOllamaAccounts}>
-          {translate(
+          {t(
             'auto.components.stats.OllamaUsagePane.accountSettings',
             'Ollama cloud account settings'
           )}

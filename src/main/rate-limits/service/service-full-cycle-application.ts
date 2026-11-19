@@ -220,12 +220,12 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
 
     const [grokSettled, cursorSettled, zcodeSettled, antigravitySettled, ollamaSettled] =
       await Promise.all([
-      grokResultPromise,
-      cursorResultPromise,
-      zcodeResultPromise,
-      antigravityResultPromise,
-      ollamaResultPromise
-    ])
+        grokResultPromise,
+        cursorResultPromise,
+        zcodeResultPromise,
+        antigravityResultPromise,
+        ollamaResultPromise
+      ])
     if (signal.aborted) {
       return
     }

@@ -6,7 +6,11 @@ import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-
 import { normalizeUsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../../../../../shared/status-bar/status-bar-usage-mode'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
-import { getVisibleUsageProvider, isUsageEmptyState } from './status-bar-provider-visibility'
+import {
+  getVisibleUsageProvider,
+  isAnyUsageProviderFetching,
+  isUsageEmptyState
+} from './status-bar-provider-visibility'
 import {
   getUsageProviderAccountsSectionId,
   usageRowSignInOpensSettings
@@ -109,8 +113,19 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     return null
   }
 
-  const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, cursor, zcode, ollama } =
-    rateLimits
+  const {
+    claude,
+    codex,
+    gemini,
+    opencodeGo,
+    kimi,
+    antigravity,
+    minimax,
+    grok,
+    cursor,
+    zcode,
+    ollama
+  } = rateLimits
   const muse = rateLimits.muse
 
   // Antigravity has no saved credential; the checked item and detected CLI establish setup.
@@ -189,44 +204,6 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const showFloatingTerminalToggle =
     floatingTerminalEnabled && settings?.floatingTerminalTriggerLocation === 'status-bar'
   // Why: meter-only children (excludes resource-usage) so the % display callout anchors to a real meter cluster.
-  const hasVisibleUsageMeters =
-    showClaude ||
-    showCodex ||
-    showGemini ||
-    showOpencodeGo ||
-    showKimi ||
-    showAntigravity ||
-    showMiniMax ||
-    showGrok ||
-    showCursor ||
-    showZcode ||
-    showMuse ||
-    showOllama
-  const anyVisible = hasVisibleUsageMeters || showResourceUsage
-  // Why: include Settings so durable managed accounts count — a configured user isn't shown the empty state while snapshots hydrate.
-  // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later.
-  const isEmptyUsageState = isUsageEmptyState(rateLimits, usageSettings)
-  const showEmptyUsageCta = isEmptyUsageState && !usageEmptyStateDismissed
-  const anyFetching =
-    claude?.status === 'fetching' ||
-    codex?.status === 'fetching' ||
-    gemini?.status === 'fetching' ||
-    opencodeGo?.status === 'fetching' ||
-    kimi?.status === 'fetching' ||
-    antigravity?.status === 'fetching' ||
-    minimax?.status === 'fetching' ||
-    grok?.status === 'fetching' ||
-    cursor?.status === 'fetching' ||
-    zcode?.status === 'fetching' ||
-    muse?.status === 'fetching' ||
-    ollama?.status === 'fetching'
-
-  const floatingTerminalActionLabel = floatingTerminalOpen
-    ? t('auto.components.status.bar.floatingWorkspace.minimize', 'Minimize Floating Workspace')
-    : t('auto.components.status.bar.floatingWorkspace.show', 'Show Floating Workspace')
-  const showFloatingWorkspaceAttentionDot = !floatingTerminalOpen && hasFloatingUnread
-
-  // Respect per-item visibility in the roster so its trigger cannot bypass hidden status items.
   const rosterProviders = [
     showClaude ? visibleClaude : null,
     showCodex ? visibleCodex : null,
@@ -244,6 +221,18 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     .filter((p): p is ProviderRateLimits => p !== null)
     // Why: the bar collapses chips from the end, so placeholders give way first.
     .sort((a, b) => Number(isOwnerNotSetUpPlaceholder(a)) - Number(isOwnerNotSetUpPlaceholder(b)))
+  const hasVisibleUsageMeters = rosterProviders.length > 0
+  const anyVisible = hasVisibleUsageMeters || showResourceUsage
+  // Why: include Settings so durable managed accounts count — a configured user isn't shown the empty state while snapshots hydrate.
+  // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later.
+  const isEmptyUsageState = isUsageEmptyState(rateLimits, usageSettings)
+  const showEmptyUsageCta = isEmptyUsageState && !usageEmptyStateDismissed
+  const anyFetching = isAnyUsageProviderFetching(rateLimits)
+
+  const floatingTerminalActionLabel = floatingTerminalOpen
+    ? t('auto.components.status.bar.floatingWorkspace.minimize', 'Minimize Floating Workspace')
+    : t('auto.components.status.bar.floatingWorkspace.show', 'Show Floating Workspace')
+  const showFloatingWorkspaceAttentionDot = !floatingTerminalOpen && hasFloatingUnread
 
   // Why: the shown accounts are the owning host's; without a scope Settings opens on the default host.
   const hostScope = getUsageOwnerHostScope(remoteOwner)

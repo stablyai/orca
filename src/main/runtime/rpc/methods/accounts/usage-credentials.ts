@@ -18,7 +18,6 @@ import {
   saveZcodePlanApiKeyCredential
 } from '../../../../zcode/zcode-plan-credential-commands'
 import {
-  assertOllamaCloudApiKeyOpensHere,
   clearOllamaCloudApiKeyCredential,
   getOllamaCloudCredentialsStatus,
   saveOllamaCloudApiKeyCredential
@@ -117,7 +116,6 @@ export const USAGE_CREDENTIAL_METHODS = [
     params: UsageCredentialApiKeyParams,
     handler: async ({ apiKey }, { runtime }) => {
       const rateLimits = runtime.requireUsageRateLimits()
-      assertOllamaCloudApiKeyOpensHere()
       return saveOllamaCloudApiKeyCredential(rateLimits, apiKey)
     }
   }),

@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { getSecretStore } from '../../shared/secure-storage/secret-store'
 
 export type SavedCredentialUnreadable =
@@ -38,6 +39,25 @@ export function savedCredentialUnreadable(
   } catch {
     return 'unreadable'
   }
+  return classifyCredentialText(file, text)
+}
+
+export async function savedCredentialUnreadableAsync(
+  file: SavedCredentialFile
+): Promise<SavedCredentialUnreadable | undefined> {
+  let text: string
+  try {
+    text = await readFile(file.path, 'utf8')
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'ENOENT' ? undefined : 'unreadable'
+  }
+  return classifyCredentialText(file, text)
+}
+
+function classifyCredentialText(
+  file: SavedCredentialFile,
+  text: string
+): SavedCredentialUnreadable | undefined {
   if (!text.startsWith(file.envelopePrefix)) {
     return file.legacyRaw ? undefined : 'unreadable'
   }
