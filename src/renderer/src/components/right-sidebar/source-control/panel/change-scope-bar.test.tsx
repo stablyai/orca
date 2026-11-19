@@ -149,6 +149,48 @@ describe('SourceControlChangeScopeBar menu', () => {
     expect(document.activeElement).toBe(screen.getByTestId('source-control-change-scope-trigger'))
   })
 
+  it('supports keyboard entry, typing and exit through the commit filter', async () => {
+    renderBar({
+      history: {
+        status: 'ready',
+        result: {
+          ...PAGE,
+          items: Array.from({ length: 12 }, (_, index) => ({
+            ...COMMIT,
+            id: `commit-${index}`,
+            subject: `Change ${index + 1}`
+          }))
+        }
+      }
+    })
+    const trigger = screen.getByTestId('source-control-change-scope-trigger')
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' })
+    const all = await screen.findByRole('menuitemradio', { name: /All changes/ })
+    await waitFor(() => expect(document.activeElement).toBe(all))
+    const uncommitted = screen.getByRole('menuitemradio', { name: /Uncommitted/ })
+    fireEvent.keyDown(all, { key: 'ArrowDown' })
+    await waitFor(() => expect(document.activeElement).toBe(uncommitted))
+    const filter = screen.getByRole('textbox', { name: 'Filter commits' })
+    fireEvent.keyDown(uncommitted, { key: 'ArrowDown' })
+    await waitFor(() => expect(document.activeElement).toBe(filter))
+    fireEvent.keyDown(filter, { key: 'C' })
+    fireEvent.change(filter, { target: { value: 'Change 12' } })
+    expect(document.activeElement).toBe(filter)
+    expect(screen.queryByRole('menuitemradio', { name: /^Change 1\b/ })).toBeNull()
+    const commit = screen.getByRole('menuitemradio', { name: /^Change 12/ })
+    fireEvent.keyDown(filter, { key: 'ArrowDown' })
+    await waitFor(() => expect(document.activeElement).toBe(commit))
+    fireEvent.keyDown(commit, { key: 'ArrowUp' })
+    await waitFor(() => expect(document.activeElement).toBe(filter))
+    fireEvent.keyDown(filter, { key: 'ArrowUp' })
+    await waitFor(() => expect(document.activeElement).toBe(uncommitted))
+    fireEvent.keyDown(uncommitted, { key: 'ArrowDown' })
+    await waitFor(() => expect(document.activeElement).toBe(filter))
+    fireEvent.keyDown(filter, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
+    expect(document.activeElement).toBe(trigger)
+  })
+
   it('shows a picked commit with its meta line and returns to All changes with ×', async () => {
     renderBar()
     openMenu()
