@@ -21,6 +21,8 @@ type TextFieldProps = Omit<TextInputProps, 'style' | 'placeholderTextColor' | 's
   trailing?: ReactNode
   /** A caption that stays above the text, e.g. what the field types into. */
   label?: string
+  /** Keeps Return as a line break and grows the field to a paragraph before it scrolls. */
+  multiline?: boolean
   monospace?: boolean
   style?: StyleProp<ViewStyle>
 }
@@ -32,6 +34,7 @@ export function TextField({
   trailing,
   label,
   monospace = false,
+  multiline = false,
   style,
   editable = true,
   onFocus,
@@ -46,7 +49,8 @@ export function TextField({
       editable={editable}
       placeholderTextColor={colors.textMuted}
       selectionColor={colors.accentBlue}
-      style={[styles.fieldText, monospace && styles.mono]}
+      multiline={multiline}
+      style={[styles.fieldText, monospace && styles.mono, multiline && styles.multilineText]}
       {...inputProps}
       onFocus={focus.onFocus}
       onBlur={focus.onBlur}

@@ -6,7 +6,7 @@ import {
   type StyleProp,
   type ViewStyle
 } from 'react-native'
-import { ImagePlus } from 'lucide-react-native'
+import { AlignLeft, ImagePlus } from 'lucide-react-native'
 import { colors } from '../../../theme/mobile-theme'
 import {
   COMPOSER_CONTROL_HIT_SLOP,
@@ -54,25 +54,69 @@ type MobileTerminalAttachButtonProps = {
 }
 
 type MobileTerminalInputActionsProps = MobileTerminalDictationButtonProps &
-  MobileTerminalAttachButtonProps
+  MobileTerminalAttachButtonProps & {
+    /** Opens the long-prompt surface; the dock shows no button when this is absent. */
+    readonly onOpenLongPrompt?: () => void
+  }
 
 export function MobileTerminalInputActions(props: MobileTerminalInputActionsProps) {
   const { isStarting, isRecording, isProcessing } = props.dictation
   const live = useContext(MobileDictationLiveContext)
   // A kept failure is cleared by every start and Retry, so it never shows while dictating.
   const failureReason = live?.failureReason ?? null
+  const dictating = isStarting || isRecording || isProcessing || failureReason !== null
   // Attach steps aside while dictating or holding a failed recording, so the field gets the room.
   return (
     <>
-      {isStarting || isRecording || isProcessing || failureReason !== null ? null : (
-        <MobileTerminalAttachButton {...props} />
+      {dictating || !props.onOpenLongPrompt ? null : (
+        <MobileTerminalLongPromptButton
+          canSend={props.canSend}
+          buttonStyle={props.buttonStyle}
+          disabledButtonStyle={props.disabledButtonStyle}
+          onOpenLongPrompt={props.onOpenLongPrompt}
+        />
       )}
+      {dictating ? null : <MobileTerminalAttachButton {...props} />}
       {failureReason !== null && live ? (
         <MobileDictationRetryButton onRetry={live.retry} labelled={false} />
       ) : (
         <MobileTerminalDictationButton {...props} />
       )}
     </>
+  )
+}
+
+function MobileTerminalLongPromptButton({
+  canSend,
+  buttonStyle,
+  disabledButtonStyle,
+  onOpenLongPrompt
+}: {
+  canSend: boolean
+  buttonStyle: StyleProp<ViewStyle>
+  disabledButtonStyle: StyleProp<ViewStyle>
+  onOpenLongPrompt: () => void
+}) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        buttonStyle,
+        pressed && composerInputStyles.pressed,
+        !canSend && disabledButtonStyle
+      ]}
+      disabled={!canSend}
+      hitSlop={COMPOSER_CONTROL_HIT_SLOP}
+      onPress={onOpenLongPrompt}
+      accessibilityLabel={t('session.longPrompt.open', 'Write a long prompt')}
+      accessibilityHint={t(
+        'session.longPrompt.openHint',
+        'Opens a multi-line draft that sends as one message'
+      )}
+    >
+      <AlignLeft size={17} color={colors.textSecondary} strokeWidth={2.4} />
+    </Pressable>
   )
 }
 

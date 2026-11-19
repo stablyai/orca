@@ -18,6 +18,8 @@ type SheetProps = {
   /** The back-out's label, when "Cancel" would read as the submit itself. */
   cancelLabel?: string
   selectTextOnFocus?: boolean
+  /** Keeps Return as a line break, for a draft that outlives one line; the button submits it. */
+  multiline?: boolean
   allowEmpty?: boolean
   keyboardType?: KeyboardTypeOptions
   /** Shown under the field; the text stays so the user can retry. */
@@ -85,6 +87,7 @@ export function TextInputSheetContent({
   submitLabel,
   cancelLabel,
   selectTextOnFocus = false,
+  multiline = false,
   allowEmpty = false,
   keyboardType,
   error,
@@ -122,8 +125,9 @@ export function TextInputSheetContent({
         autoCorrect={false}
         selectTextOnFocus={selectTextOnFocus}
         keyboardType={keyboardType}
-        returnKeyType="done"
-        onSubmitEditing={handleSubmit}
+        multiline={multiline}
+        returnKeyType={multiline ? 'default' : 'done'}
+        onSubmitEditing={multiline ? undefined : handleSubmit}
       />
 
       {error ? (

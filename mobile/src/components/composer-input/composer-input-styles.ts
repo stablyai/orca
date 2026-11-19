@@ -87,6 +87,12 @@ export const composerInputStyles = themedStyleSheet(() => ({
     ...noOwnRing,
     minHeight: FORM_MESSAGE_MIN_HEIGHT
   },
+  // A paragraph of room, then it scrolls inside the box.
+  multilineText: {
+    minHeight: FORM_MESSAGE_MIN_HEIGHT,
+    maxHeight: MESSAGE_MAX_HEIGHT,
+    textAlignVertical: 'top'
+  },
   messageText: {
     width: '100%',
     minHeight: MESSAGE_MIN_HEIGHT,

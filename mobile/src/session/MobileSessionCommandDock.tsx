@@ -1,10 +1,12 @@
-import { useRef, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { View, type HostInstance } from 'react-native'
 import { Keyboard as KeyboardIcon } from 'lucide-react-native'
 import { composerInputStyles as inputStyles } from '../components/composer-input/composer-input-styles'
 import { TextField } from '../components/composer-input/TextField'
 import { MobileTerminalLiveInputStatus } from '../terminal/session/input-controls/MobileTerminalLiveInputStatus'
 import { MobileTerminalInputActions } from '../terminal/session/input-controls/MobileTerminalInputActions'
+import { TextInputModal } from '../components/sheets/TextInputModal'
+import { buildMobileLongPromptPayload } from '../terminal/session/long-prompt/mobile-long-prompt-payload'
 import { MobileSessionAccessoryKeys } from '../terminal/session/accessory-keys/MobileSessionAccessoryKeys'
 import { MobileTerminalMoreKeysSheet } from '../terminal/session/accessory-keys/MobileTerminalMoreKeysSheet'
 import { sessionCommandDockShown } from './mobile-session-command-dock-shown'
@@ -21,12 +23,15 @@ import { useKeyboardPersistingTaps } from '../platform/keyboard/keyboard-persist
 // The key row above one live field: every letter typed goes straight to the terminal, shell or agent.
 export function MobileSessionCommandDock({ controller }: { controller: MobileSessionController }) {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const rail = useSessionTerminalKeyRail(controller)
   const keyboardLift = useMobileSessionKeyboardLift(controller.dockBottomInset)
   // The field's ✕, which the held mic may be released over.
   const dictationCancelRef = useRef<HostInstance>(null)
   // The mic and attach buttons keep the field focused, like the key row: a closing keyboard ends a held mic.
   const keepsKeyboard = useKeyboardPersistingTaps('always')
+  // Return sends on the live field, so a draft that spans lines needs its own surface.
+  const [longPromptVisible, setShowLongPrompt] = useState(false)
   const {
     insets,
     dictationMode,
@@ -44,6 +49,20 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
   if (!sessionCommandDockShown(controller)) {
     return null
   }
+  // Written in the sheet, sent as one paste so the agent reads a single message.
+  const sendLongPrompt = (text: string): void => {
+    const handle = controller.activeHandle
+    if (!handle) {
+      return
+    }
+    const payload = buildMobileLongPromptPayload(
+      text,
+      controller.ptyModesRef.current.get(handle)?.bracketedPasteMode
+    )
+    if (payload !== '') {
+      void controller.handleAccessoryKey({ bytes: payload })
+    }
+  }
   return (
     <View
       style={[
@@ -60,6 +79,19 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
       ) : (
         <MobileSessionAccessoryKeys controller={controller} />
       )}
+      <TextInputModal
+        visible={longPromptVisible}
+        title={t('session.longPrompt.title', 'Long prompt')}
+        message={t(
+          'session.longPrompt.hint',
+          'Return adds a line break. Send delivers the whole prompt as one message.'
+        )}
+        placeholder={t('session.longPrompt.placeholder', 'Write the prompt')}
+        submitLabel={t('session.longPrompt.send', 'Send')}
+        multiline
+        onCancel={() => setShowLongPrompt(false)}
+        onSubmit={sendLongPrompt}
+      />
       <View ref={keepsKeyboard} style={dockStyles.inputBar}>
         <LiveInputField
           controller={controller}
@@ -82,6 +114,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
           buttonStyle={inputStyles.controlButton}
           dictationCancelRef={dictationCancelRef}
           disabledButtonStyle={inputStyles.disabled}
+          onOpenLongPrompt={() => setShowLongPrompt(true)}
           onAttachImage={() => void attachImage('library')}
           onAttachFile={() => void attachImage('files')}
           onDictationToggle={handleDictationToggle}
