@@ -110,6 +110,14 @@ export const KEYBINDING_DEFINITION_CORE_3: readonly KeybindingDefinition[] = [
     searchKeywords: ['shortcut', 'editor', 'copy', 'context'],
     defaultBindings: platformBindings(['Mod+Alt+C'])
   },
+  {
+    id: 'editor.addSelectionToLastAgent',
+    title: 'Add Selection to Last Agent',
+    group: 'Editors',
+    scope: 'editor',
+    searchKeywords: ['shortcut', 'editor', 'selection', 'agent', 'chat', 'context', 'send'],
+    defaultBindings: platformBindings(['Mod+Enter'])
+  },
   // Why: F7 / Shift+F7 mirror VS Code / JetBrains diff-change nav; function keys are safe bare/Shift, so both opt into allowBareKeybindings.
   {
     id: 'editor.previousChange',

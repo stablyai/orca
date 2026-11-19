@@ -102,6 +102,36 @@ export function installEditorAddReviewNoteShortcut(
   return () => target.removeEventListener('keydown', handleKeyDown, true)
 }
 
+/** True when the chord was consumed. Selection-only, so the editor keeps its own chord when nothing is selected. */
+export function createAddSelectionToLastAgentKeyHandler(
+  onAdd: () => boolean
+): (event: KeyboardEvent) => boolean {
+  // Repeats follow their initial press so a held chord never falls through to the editor's own edit.
+  let initialPressHandled = false
+  return (event) => {
+    if (!editorShortcutMatches('editor.addSelectionToLastAgent', event)) {
+      return false
+    }
+    if (!event.repeat) {
+      initialPressHandled = onAdd()
+    }
+    if (initialPressHandled) {
+      event.preventDefault()
+      event.stopPropagation()
+    }
+    return initialPressHandled
+  }
+}
+
+export function installEditorAddSelectionToLastAgentShortcut(
+  target: HTMLElement,
+  onAdd: () => boolean
+): () => void {
+  const handleKeyDown = createAddSelectionToLastAgentKeyHandler(onAdd)
+  target.addEventListener('keydown', handleKeyDown, true)
+  return () => target.removeEventListener('keydown', handleKeyDown, true)
+}
+
 /** Consume the chord and repeats within the composer subtree to prevent remounts without swallowing another pane’s shortcuts. */
 export function installOpenDraftAddReviewNoteGuard(target: HTMLElement): () => void {
   const handleKeyDown = (event: KeyboardEvent): void => {

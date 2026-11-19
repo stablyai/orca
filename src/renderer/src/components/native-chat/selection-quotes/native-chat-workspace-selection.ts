@@ -61,8 +61,8 @@ export function addQuoteToWorkspaceChat(
   if (!chat) {
     return false
   }
-  appendQuoteToChatDraft(chat.scopeKey, quote)
   const { tab, chatLeafId } = chat
+  appendQuoteToChatDraft(chat.scopeKey, quote, chatLeafId ? tab.entityId : tab.id)
   if (!chatLeafId) {
     activateStructuredAgentSessionTab({ worktreeId, tabId: tab.id })
     return true

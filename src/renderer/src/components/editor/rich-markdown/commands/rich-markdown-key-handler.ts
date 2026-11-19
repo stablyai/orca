@@ -32,6 +32,7 @@ import { handleRichMarkdownCitationKey } from '../citations/rich-markdown-citati
 import { getRichMarkdownSelectionLinkBubble } from '../links/rich-markdown-selected-link-actions'
 import { handleRichMarkdownLinkShortcut } from '../links/rich-markdown-link-shortcut'
 import { handleRichMarkdownSaveShortcut } from './rich-markdown-save-shortcut'
+import { createAddSelectionToLastAgentKeyHandler } from '../../commands/editor-shortcuts'
 import { flushPendingProseMirrorSelection } from '../review/rich-markdown-selection-flush'
 
 function isComposingMarkdownInput(event: KeyboardEvent, editor: Editor | null): boolean {
@@ -41,6 +42,9 @@ function isComposingMarkdownInput(event: KeyboardEvent, editor: Editor | null): 
 export function createRichMarkdownKeyHandler(
   ctx: KeyHandlerContext
 ): (_view: unknown, event: KeyboardEvent) => boolean {
+  const handleAddSelectionToLastAgent = createAddSelectionToLastAgentKeyHandler(() =>
+    ctx.addSelectionToLastAgentRef.current()
+  )
   return (_view, event) => {
     if (isImeOwnedKeyboardEvent(event)) {
       return false
@@ -53,6 +57,10 @@ export function createRichMarkdownKeyHandler(
       return false
     }
     const mod = ctx.isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
+    // Before citation handling, which takes any Enter on a selected citation.
+    if (handleAddSelectionToLastAgent(event)) {
+      return true
+    }
     if (
       handleRichMarkdownCitationKey({
         editor: ctx.editorRef.current,

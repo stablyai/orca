@@ -29,6 +29,8 @@ export type KeyHandlerContext = {
   flushPendingSerialization: () => boolean
   openSearchRef: MutableRefObject<() => void>
   openAnnotationPopoverRef: MutableRefObject<(requireLiveSelection?: boolean) => boolean>
+  /** True when the selection was taken; false leaves the chord to the editor. */
+  addSelectionToLastAgentRef: MutableRefObject<() => boolean>
   setIsEditingLink: (editing: boolean) => void
   setLinkBubble: (bubble: LinkBubbleState | null) => void
   setSelectedCommandIndex: Dispatch<SetStateAction<number>>
