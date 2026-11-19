@@ -1,6 +1,7 @@
 import { parseWslUncPath } from '../../../../../../shared/file-access/wsl-paths'
 import { historyTranscriptKey } from '../../../../../../shared/ai-vault/resume/history-transcript-identity'
 import { createContext, useContext } from 'react'
+import { translate } from '@/i18n/i18n'
 import { normalizeRuntimePathForComparison } from '../../../../../../shared/file-access/cross-platform-path'
 import { isLegacyAgentSessionAccountHome } from '../../../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
@@ -84,9 +85,14 @@ export function historyAccountInfo(
   )
   const lastAccountId = recorded?.accountId
   const last = roster.accounts.find((entry) => entry.id === lastAccountId)
+  const systemDefaultEmail =
+    provider === 'codex' ? catalog.codex.systemDefault?.email : catalog.claude.systemDefaultEmail
+  const systemDefaultLabel = translate('accounts.claude.systemDefault', 'System default')
   const lastAccountLabel =
     lastAccountId === null
-      ? 'System default'
+      ? systemDefaultEmail
+        ? `${systemDefaultEmail} · ${systemDefaultLabel}`
+        : systemDefaultLabel
       : last
         ? last.displayName
           ? `${last.displayName} · ${last.email}`

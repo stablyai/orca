@@ -30,10 +30,7 @@ export function HistorySessionResumeSummary({
       <p className="text-xs font-medium">
         {account.lastAccountId !== undefined
           ? t('historyResume.lastUsedAccount', 'Last used: {{account}}', {
-              account:
-                account.lastAccountId === null
-                  ? t('accounts.claude.systemDefault', 'System default')
-                  : account.lastAccountLabel
+              account: account.lastAccountLabel
             })
           : t('historyResume.lastUnknown', 'Last used account not recorded')}
       </p>
