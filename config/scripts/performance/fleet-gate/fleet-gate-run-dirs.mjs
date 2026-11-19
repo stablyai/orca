@@ -1,7 +1,7 @@
 // A copy's terminal daemon detaches into its own session, so a killed gate (SIGKILL, a timeout, a lost host) would leave
 // it running forever. Each gate's run folder therefore records its owner, every copy (before it launches) and every
 // helper process, and the next gate reaps folders whose owner is gone; a live gate also kills them on any exit.
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -95,7 +95,7 @@ export function recordHelperLaunch(runDir) {
     arg: `--fleet-gate-helper=${marker}`,
     record: (pid) => {
       try {
-        return recordHelper(runDir, pid)
+        return recordHelper(runDir, pid, process.execPath)
       } catch {
         // The marker on its command line still lets a reap find it.
         return () => {}
@@ -106,7 +106,10 @@ export function recordHelperLaunch(runDir) {
 }
 
 /** Records a helper the gate spawned (Xvfb, CPU load); returns the call that forgets it once it is stopped. */
-export function recordHelper(runDir, pid) {
+export function recordHelper(runDir, pid, command) {
+  const file = path.join(ownerFolder(runDir), 'helpers', String(pid))
+  // Written before any ps call: until the start time is known, the command and launch time identify it.
+  writeRecord(file, { command: path.basename(command), after: Date.now() - 2_000 })
   let identity = processIdentity(pid)
   for (let attempt = 0; !identity && attempt < 10; attempt += 1) {
     Atomics.wait(sleeper, 0, 0, 100)
@@ -116,7 +119,6 @@ export function recordHelper(runDir, pid) {
     // Unrecorded, a gate killed later would leave it running for good.
     throw new Error(`can't read process ${String(pid)}'s start time with ps, so can't record it`)
   }
-  const file = path.join(ownerFolder(runDir), 'helpers', String(pid))
   writeRecord(file, { identity })
   live.set(pid, { identity })
   return () => {
@@ -150,7 +152,7 @@ function killVerified(pid, identity, group) {
 }
 
 /** true once every daemon recorded in userDataDir is provably gone; a failed ps or read is never proof. */
-function daemonsGone(userDataDir) {
+export function daemonsGone(userDataDir) {
   const daemonDir = path.join(userDataDir, 'daemon')
   let names
   try {
@@ -212,22 +214,61 @@ function pidsCarrying(arg) {
   }
 }
 
+/** Records in apps/ or helpers/; throws on any read failure but a missing file, which is never "no records". */
 function readRecords(dir) {
+  let names = []
   try {
-    return fs
-      .readdirSync(dir)
-      .filter((name) => !name.endsWith('.new'))
-      .flatMap((name) => {
-        try {
-          return [{ name, ...JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8')) }]
-        } catch {
+    names = fs.readdirSync(dir)
+  } catch (error) {
+    // Another gate reaped this folder first.
+    if (error?.code === 'ENOENT') {
+      return []
+    }
+    throw error
+  }
+  return names
+    .filter((name) => !name.endsWith('.new'))
+    .flatMap((name) => {
+      let text = ''
+      try {
+        text = fs.readFileSync(path.join(dir, name), 'utf8')
+      } catch (error) {
+        if (error?.code === 'ENOENT') {
           return []
         }
-      })
-  } catch {
-    // Another gate reaped this folder first.
-    return []
+        throw error
+      }
+      try {
+        return [{ name, ...JSON.parse(text) }]
+      } catch {
+        // Records appear whole by rename, so this one can't name a process.
+        return []
+      }
+    })
+}
+
+/** A helper recorded before its start time was known: killed only if its command and start fit; false if ps failed. */
+function killProvisional(pid, { command, after }) {
+  const r = spawnSync('ps', ['-o', 'comm=,lstart=', '-p', String(pid)], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+    env: { ...process.env, LC_ALL: 'C', TZ: 'UTC' }
+  })
+  const out = typeof r.stdout === 'string' ? r.stdout.trim() : ''
+  if (r.error || r.signal || (r.status !== 0 && !(r.status === 1 && !out))) {
+    return false
   }
+  const match = /^(.*\S)\s+(\S+ \S+ +\d+ \S+ \d+)$/.exec(out)
+  const started = match ? Date.parse(`${match[2]} UTC`) : Number.NaN
+  if (
+    match &&
+    path.basename(match[1]) === command &&
+    started >= after &&
+    started <= after + 120_000
+  ) {
+    signal(pid, 'SIGKILL', false)
+  }
+  return true
 }
 
 function killByMarker(arg, group) {
@@ -270,9 +311,12 @@ async function reapFolderOrThrow(dir) {
     }
   }
   for (const record of readRecords(path.join(dir, 'helpers'))) {
+    const pid = Number(record.name)
     const settled = record.name.startsWith('pending-')
       ? killByMarker(`--fleet-gate-helper=${String(record.marker)}`, false)
-      : killVerified(Number(record.name), record.identity, false)
+      : record.identity
+        ? killVerified(pid, record.identity, false)
+        : killProvisional(pid, record)
     if (!settled) {
       return false
     }
@@ -294,8 +338,15 @@ export function hasRecords(dir) {
 
 /** Deletes a copy's run folder unless a record still points into it (its daemon pid records must survive). */
 export function removeRunDir(runDir) {
-  const apps = readRecords(path.join(ownerFolder(runDir), 'apps'))
-  if (apps.some((record) => !path.relative(runDir, String(record.userDataDir)).startsWith('..'))) {
+  try {
+    const apps = readRecords(path.join(ownerFolder(runDir), 'apps'))
+    if (
+      apps.some((record) => !path.relative(runDir, String(record.userDataDir)).startsWith('..'))
+    ) {
+      return
+    }
+  } catch {
+    // Unreadable records: keep the folder for the next gate's reap.
     return
   }
   fs.rmSync(runDir, { recursive: true, force: true })

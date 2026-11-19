@@ -11,6 +11,7 @@ import { lockCacheEntryAsync, releaseHeldLocks } from './fleet-gate-cache-lock.m
 import { copyProfile, stopCopyDaemons } from './fleet-gate-copies.mjs'
 import {
   createRunDir,
+  daemonsGone,
   killLiveNow,
   reapStaleRunDirs,
   hasRecords,
@@ -137,6 +138,16 @@ function isolatedEnv(runDir, userDataDir) {
   }
 }
 
+/** Stops a copy's daemons and proves them gone; a failed ps never counts, so the copy's record stays. */
+async function daemonsStopped(userDataDir) {
+  try {
+    await stopCopyDaemons(userDataDir)
+    return daemonsGone(userDataDir)
+  } catch {
+    return false
+  }
+}
+
 /** Launches one hidden copy on userDataDir; close() quits it (gracefully first) and is safe to call twice. */
 async function launchCopy({ buildDir, runDir, userDataDir, label, outDir, extraEnv = {} }) {
   if (stopping) {
@@ -157,12 +168,7 @@ async function launchCopy({ buildDir, runDir, userDataDir, label, outDir, extraE
   } catch (error) {
     // Still in flight until its daemons are stopped and its record dropped, so a stop signal waits for it.
     // A failed daemon stop keeps the pending record, so the next gate's reap retries it.
-    if (
-      await stopCopyDaemons(userDataDir).then(
-        () => true,
-        () => false
-      )
-    ) {
+    if (await daemonsStopped(userDataDir)) {
       launchRecord.forget()
     }
     launchesInFlight -= 1
@@ -196,12 +202,7 @@ async function launchCopy({ buildDir, runDir, userDataDir, label, outDir, extraE
       child.kill('SIGKILL')
     }
     // A failed daemon stop keeps the record, so the run folder (and the next gate's reap) still knows the daemon.
-    if (
-      await stopCopyDaemons(userDataDir).then(
-        () => true,
-        () => false
-      )
-    ) {
+    if (await daemonsStopped(userDataDir)) {
       launchRecord.forget()
     }
     liveCleanups.delete(close)
@@ -454,7 +455,9 @@ async function main() {
     ensureFleetCorpus(path.join(CACHE_ROOT, 'corpus'))
   }
   installStopHandlers()
-  virtualDisplay = await startVirtualDisplay((pid) => recordHelper(gateRunDir, pid))
+  virtualDisplay = await startVirtualDisplay((pid, command) =>
+    recordHelper(gateRunDir, pid, command)
+  )
   // Without a private display copies stay hidden and unpainted, so clicks and focus can't be driven.
   options.scenarios ??= virtualDisplay
     ? [...Object.keys(SCENARIOS), 'burst']

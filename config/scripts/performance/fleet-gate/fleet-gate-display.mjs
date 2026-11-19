@@ -29,7 +29,7 @@ export async function startVirtualDisplay(record = () => () => {}) {
   )
   let forget = () => {}
   try {
-    forget = record(child.pid)
+    forget = record(child.pid, xvfb)
   } catch (error) {
     child.kill('SIGKILL')
     throw error
