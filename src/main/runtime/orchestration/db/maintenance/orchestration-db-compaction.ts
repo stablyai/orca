@@ -1,5 +1,4 @@
 import { open, readFile, rm, stat, statfs, writeFile } from 'node:fs/promises'
-import { randomUUID } from 'node:crypto'
 import { dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { spawnProcess } from '@orca/process-host'
@@ -160,8 +159,7 @@ function readChildResult(output: string): OrchestrationDbCompaction | null {
   }
 }
 
-// `attempt` identifies the quit that wrote it, so a late undo never removes another quit's note.
-type CompactionDeferral = { liveBytes: number; timeouts: number; attempt?: string }
+type CompactionDeferral = { liveBytes: number; timeouts: number }
 
 function deferralFile(filename: string): string {
   return `${filename}-compaction-deferred`
@@ -176,13 +174,7 @@ async function readDeferral(filename: string): Promise<CompactionDeferral | null
       typeof parsed.liveBytes === 'number' &&
       'timeouts' in parsed &&
       typeof parsed.timeouts === 'number'
-      ? {
-          liveBytes: parsed.liveBytes,
-          timeouts: parsed.timeouts,
-          ...('attempt' in parsed && typeof parsed.attempt === 'string'
-            ? { attempt: parsed.attempt }
-            : {})
-        }
+      ? { liveBytes: parsed.liveBytes, timeouts: parsed.timeouts }
       : null
   } catch {
     return null
@@ -263,21 +255,10 @@ export async function compactOrchestrationDb(
   if (await isActive()) {
     return { kind: 'active' }
   }
-  // Recorded before the wait, so a quit cut off mid-attempt still counts as the one wait it paid; a disk
-  // that can't write it promptly gets no attempt at all.
-  const attempt = { liveBytes, timeouts: (deferral?.timeouts ?? 0) + 1, attempt: randomUUID() }
-  const write = writeDeferral(filename, attempt)
-  const recorded = await settlesWithin(write, MARKER_WRITE_MS)
-  if (recorded !== true) {
-    if (recorded === 'late') {
-      // No attempt ran, so a write that lands later mustn't defer the file.
-      void write.then(
-        async (saved) =>
-          saved &&
-          (await readDeferral(filename))?.attempt === attempt.attempt &&
-          writeDeferral(filename, deferral)
-      )
-    }
+  // Recorded before the wait, so a quit cut off mid-attempt still counts as the one wait it paid. A disk
+  // that can't write it promptly gets no attempt; if the write lands later it just defers the file.
+  const write = writeDeferral(filename, { liveBytes, timeouts: (deferral?.timeouts ?? 0) + 1 })
+  if ((await settlesWithin(write, MARKER_WRITE_MS)) !== true) {
     return { kind: 'busy' }
   }
   const remainingMs = budgetMs - (performance.now() - started)
