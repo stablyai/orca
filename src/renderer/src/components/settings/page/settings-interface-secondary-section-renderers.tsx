@@ -3,6 +3,7 @@ import { AppearancePane } from '../appearance/AppearancePane'
 import { ChatSettingsSection } from '../chat/ChatSettingsSection'
 import { InputPane } from '../input/InputPane'
 import { NotificationsPane } from '../notifications/NotificationsPane'
+import { ServerNotificationsPane } from '../notifications/ServerNotificationsPane'
 import { ShortcutsPane } from '../shortcuts/ShortcutsPane'
 import { SettingsSection } from '../section-layout/SettingsSection'
 import { translate } from '@/i18n/i18n'
@@ -118,9 +119,13 @@ export function renderNotificationsSettingsSection(
       )}
       searchEntries={navigation.getSectionSearchEntries('notifications')}
     >
-      {view.isSectionMounted('notifications') ? (
+      {!view.isSectionMounted('notifications') ? null : !model.settingsHostScope.available ? (
+        <SettingsHostScopeUnavailableNotice />
+      ) : model.settingsHostScope.target.kind === 'environment' ? (
+        <ServerNotificationsPane environmentId={model.settingsHostScope.target.environmentId} />
+      ) : (
         <NotificationsPane settings={model.settings} updateSettings={model.updateSettings} />
-      ) : null}
+      )}
     </SettingsSection>
   ) : null
 }

@@ -23420,6 +23420,14 @@
           "cleanup": "cleanup",
           "chatHistory": "delete chat history"
         }
+      },
+      "notifications": {
+        "server": {
+          "fallbackHost": "this server",
+          "updateFailed": "Couldn't update notifications on {{host}}.",
+          "unsupported": "Update Orca on {{host}} to change its notifications here.",
+          "enabledDescription": "Alerts {{host}} sends for its agents and terminals, including pushes to your phones."
+        }
       }
     },
     "agentChildRow": {
