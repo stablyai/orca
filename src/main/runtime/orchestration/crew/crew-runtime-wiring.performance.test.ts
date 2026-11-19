@@ -5,6 +5,7 @@ import { AgentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { partialRuntimeStore } from '../../construction/test-context/runtime-store-partial-fixture'
 import { subscribeCrew } from './crew-stream'
+import { OrchestrationDb } from '../db/orchestration-db'
 
 const WT = 'repo-1::/tmp/worktree-a'
 const LEAF = '22222222-2222-4222-8222-222222222222'
@@ -67,5 +68,49 @@ it('wakes no mounted crew for the runtime’s own graph publishes and hook statu
     expect({ reads, frames: frames.length }).toEqual({ reads: 0, frames: 0 })
   } finally {
     stop()
+  }
+})
+
+it('wakes only the crew stream whose party a Dispatch write concerns, through the runtime’s subscribe', async () => {
+  const runtime = new OrcaRuntimeService(partialRuntimeStore({ getSettings: () => ({}) }))
+  const db = new OrchestrationDb(':memory:')
+  runtime.setOrchestrationDb(db)
+  // Two coordinators, each with its own worker: crews that share no party.
+  const tasks = [0, 1].map((index) => {
+    const coordinator = `term_c${index}`
+    const run = db.createRun({
+      objective: `Crew ${index}`,
+      coordinatorHandle: coordinator,
+      coordinatorPaneKey: null
+    })
+    const task = db.createTask({ runId: run.id, spec: `Task ${index}` })
+    db.createDispatchContext({
+      taskId: task.id,
+      assigneeHandle: `term_b${index}`,
+      creator: { kind: 'terminal', handle: coordinator },
+      maxDepth: 10
+    })
+    return task.id
+  })
+  const reads = new Map<string, number>()
+  const stops = ['term_c0', 'term_c1'].map((party) =>
+    subscribeCrew(
+      () => {
+        reads.set(party, (reads.get(party) ?? 0) + 1)
+        return runtime.getOrchestrationCrewSnapshot(party)
+      },
+      runtime.watchOrchestrationCrew(party),
+      () => {}
+    )
+  )
+  try {
+    await flush()
+    reads.clear()
+    db.updateTaskStatus(tasks[0]!, 'completed', 'done')
+    await flush()
+    expect(Object.fromEntries(reads)).toEqual({ term_c0: 1 })
+  } finally {
+    stops.forEach((stop) => stop())
+    db.close()
   }
 })
