@@ -1,7 +1,7 @@
-import { withDurableRuntimeStore } from '../../orca-runtime-tests/runtime-durable-store-fixture'
+import { withDurableRuntimeStore } from '../../construction/test-context/runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { sessionLayoutApply } from '../../__fixtures__/main-layout-close-fixture'
 import type {
   RuntimeMobileSessionTabsResult,

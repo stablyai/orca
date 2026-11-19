@@ -1,6 +1,6 @@
 import { closeAllWatchers } from '../../ipc/filesystem/watchers/filesystem-watcher-shutdown'
 import { disposeWorktreeBaseDirectoryWatchers } from '../../ipc/worktrees/creation/worktree-base-directory-watcher'
-import { stopFolderRepoGitUpgradeWatch } from '../../ipc/folder-repo-git-upgrade'
+import { stopFolderRepoGitUpgradeWatch } from '../../ipc/worktrees/listing/folder-repo-git-upgrade'
 import { mainProcessState as state } from '../main-process-state'
 
 let watcherShutdownPromise: Promise<void> | null = null

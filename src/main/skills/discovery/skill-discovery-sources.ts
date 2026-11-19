@@ -7,7 +7,10 @@ import type {
 } from '../../../shared/skills/discovery/skills'
 import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
 import type { Repo } from '../../../shared/repository/repo-types'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../shared/execution-host/execution-host'
 import {
   SKILL_INSTALL_PROVIDERS,
   type SkillInstallProviderId
@@ -83,6 +86,15 @@ function providerRepoSources(
     ]
   })
 }
+
+// Project folders these agents also read; they install into the canonical `.agents/skills` root.
+const PROJECT_SKILL_FOLDERS: readonly (readonly [AgentType, string, SkillProvider[]])[] = [
+  ['codex', '.codex', ['codex']],
+  ['cursor', '.cursor', ['agent-skills']],
+  ['copilot', '.github', ['agent-skills']],
+  ['qoder', '.qoder', ['agent-skills']],
+  ['opencode', '.opencode', ['agent-skills']]
+]
 
 export function buildSkillDiscoverySources(
   args: {
@@ -182,6 +194,23 @@ export function buildSkillDiscoverySources(
       ['agent-skills'],
       'muse'
     ),
+    source(
+      'home-copilot',
+      'Copilot home',
+      pathApi.join(home, '.copilot', 'skills'),
+      'home',
+      ['agent-skills'],
+      'copilot'
+    ),
+    // Cursor writes its own built-in skills here; they cannot be deleted like a user's.
+    source(
+      'home-cursor-builtin',
+      'Cursor',
+      pathApi.join(home, '.cursor', 'skills-cursor'),
+      'bundled',
+      ['agent-skills'],
+      'cursor'
+    ),
     // Why: Antigravity also reads its CLI's skill folder beside the `config/skills` install root.
     source(
       'home-antigravity-cli',
@@ -218,22 +247,15 @@ export function buildSkillDiscoverySources(
         null
       ),
       ...providerRepoSources(repoPath, label, pathApi),
-      // OpenCode and Qoder also read their own project folders; they install into the canonical root above.
-      source(
-        `repo-qoder-${stablePathId(repoPath)}`,
-        `${label} .qoder`,
-        pathApi.join(repoPath, '.qoder', 'skills'),
-        'repo',
-        ['agent-skills'],
-        'qoder'
-      ),
-      source(
-        `repo-opencode-${stablePathId(repoPath)}`,
-        `${label} .opencode`,
-        pathApi.join(repoPath, '.opencode', 'skills'),
-        'repo',
-        ['agent-skills'],
-        'opencode'
+      ...PROJECT_SKILL_FOLDERS.map(([owner, folder, providers]) =>
+        source(
+          `repo-${owner}-${stablePathId(repoPath)}`,
+          `${label} ${folder}`,
+          pathApi.join(repoPath, folder, 'skills'),
+          'repo',
+          providers,
+          owner
+        )
       )
     )
   }

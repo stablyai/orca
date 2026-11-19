@@ -1,12 +1,12 @@
-import type { AgentSessionForkNaming } from './agent-session-fork-name'
-import type { AgentSessionUnavailable } from './agent-session-availability'
-import type { AgentSessionFrameFields } from './agent-session-frame-fields'
-import type { AgentSessionUsageLimitContinue } from './agent-session-usage-limit-continue-wire'
+import type { AgentSessionForkNaming } from './conversation-naming/agent-session-fork-name'
+import type { AgentSessionUnavailable } from './failures/agent-session-availability'
+import type { AgentSessionFrameFields } from './view/live-read/agent-session-frame-fields'
+import type { AgentSessionUsageLimitContinue } from './lifecycle/stopping/agent-session-usage-limit-continue-wire'
 import type { AgentSessionCurrentWorkFields } from './requests/agent-session-current-work-wire'
 import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskState
-} from './agent-session-background-task-wire'
+} from './background-tasks/agent-session-background-task-wire'
 import type { AgentSessionRewindReason } from './lifecycle/rewind/agent-session-rewind-reasons'
 import type { AgentSessionWireRefusal } from './failures/agent-session-wire-refusals'
 import type { AgentChildWorkView } from '../agent-status/child-work/agent-status-child-work-view'
@@ -32,8 +32,11 @@ import type { NativeChatSubagentEntry } from '../native-chat/native-chat-types'
 import type { AgentSessionStatusPermissionFields } from './options/permissions/agent-session-status-permission-fields'
 import type { StructuredAgentSessionProjectedStatus } from './view/structured-agent-session-projection'
 
-export type AgentSessionTurnActivity = {
-  turnId: string
+export type AgentSessionTurnActivity = { turnId: string; text: string }
+
+/** The agent's guess at the user's next prompt; never journaled, replaced when a turn opens. */
+export type AgentSessionPromptSuggestion = {
+  id: string
   text: string
 }
 
@@ -167,6 +170,8 @@ export type AgentSessionSubscribeEvent =
       commands?: AgentSessionSlashCommand[] | null
       /** Additive ephemeral state; it never creates or advances journal rows. */
       activity?: AgentSessionTurnActivity | null
+      /** Sent only to subscribers that asked for suggestions; null clears, absent keeps. */
+      promptSuggestion?: AgentSessionPromptSuggestion | null
       /** Rides every batch that carries rows, removals or submissions, so absent there means an
        *  older host; absent on one that carries none, which changes no turn. */
       latestTurn?: AgentSessionLatestTurn | null
@@ -235,6 +240,9 @@ export type AgentSessionStatusSummary = {
   /** The agent asked a question its turn does not wait on (Codex's async question), and the person
    *  has not answered it yet. Turn status is unchanged; only the lead state shows it. Older hosts omit it. */
   awaitsAnswer?: true
+  /** The newest async question row the person skipped: clients hide it and every earlier question.
+   *  Older hosts omit it, and their clients hide a skipped card on that screen only. */
+  asyncQuestionsSkippedThrough?: string
   /** Optional live provider tasks let lists show children without journal subscriptions; derive from children when published. */
   backgroundTasks?: AgentSessionBackgroundTask[]
   /** Running/monitoring child views (decodeAgentChildWorkViews); finished children use background tasks only. Omit usage and per-tick freshness here; the background-task channel carries those ticks. Older hosts omit this. */
@@ -276,6 +284,8 @@ export type AgentSessionConversationName = {
   sessionId: string
   conversationName: string | null
   namingError?: AgentSessionNamingError
+  /** The chat's agent, so an older fork can title itself from an unnamed source no longer open. */
+  agent?: AgentSessionStatusSummary['agent']
 } & Pick<AgentSessionStatusSummary, 'conversationNameSource' | 'forkedFrom'>
 
 /** Retain projections after child eviction; idle remains idle. Tabs decide list membership, never this feed. */
@@ -369,8 +379,7 @@ export type AgentSessionOptionChoice = {
   description?: string
 }
 
-import type { AgentSessionModelOption } from './agent-session-model-option'
-export type { AgentSessionModelOption }
+import type { AgentSessionModelOption } from './options/model-catalog/agent-session-model-option'
 
 export type AgentSessionFastModeState = 'off' | 'cooldown' | 'on'
 

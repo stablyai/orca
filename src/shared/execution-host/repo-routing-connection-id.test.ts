@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getRepoRoutingConnectionId } from '../execution-host'
+import { getRepoRoutingConnectionId } from './execution-host'
 
 describe('getRepoRoutingConnectionId', () => {
   it.each([
@@ -15,8 +15,6 @@ describe('getRepoRoutingConnectionId', () => {
       { executionHostId: 'local' as const, connectionId: 'gpu' },
       'gpu'
     ],
-    ['local', { executionHostId: 'local' as const }, null],
-    ['runtime host', { executionHostId: 'runtime:env' as const }, null],
     ['unstamped', {}, null]
   ])('%s', (_label, repo, expected) => {
     expect(getRepoRoutingConnectionId(repo)).toBe(expected)

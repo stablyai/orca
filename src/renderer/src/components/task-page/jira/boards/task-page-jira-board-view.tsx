@@ -17,7 +17,10 @@ import type { TaskPageJiraBoardSection } from './task-page-jira-board-sections'
 import { JiraBoardMoveDialog, type JiraBoardMovePrompt } from './task-page-jira-board-move-dialog'
 import { applyJiraBoardMove, getJiraBoardMoveTransitions } from './task-page-jira-board-move'
 import { formatRelativeTime } from '../../task-page-source-context'
-import { enqueueJiraIssueMutation, jiraIssueRequestScope } from '../../../jira-issue-mutation-queue'
+import {
+  enqueueJiraIssueMutation,
+  jiraIssueRequestScope
+} from '../issue-workspace/jira-issue-mutation-queue'
 
 type Props = {
   issues: JiraIssue[]
@@ -26,6 +29,8 @@ type Props = {
   sourceContext: TaskSourceContext | null
   target: RuntimeClientTarget | null
   scopeKey: string
+  /** Scopes the saved lane order; the status order's own scope, so each board keeps its own. */
+  columnOrderScopeKey: string
   showSiteContext: boolean
   loading?: boolean
   onOpenIssue: (issue: JiraIssue) => void
@@ -40,6 +45,7 @@ export function TaskPageJiraBoardView({
   sourceContext,
   target,
   scopeKey,
+  columnOrderScopeKey,
   showSiteContext,
   loading = false,
   onOpenIssue,
@@ -219,6 +225,7 @@ export function TaskPageJiraBoardView({
   return (
     <>
       <TaskPageJiraBoard
+        columnOrderScopeKey={columnOrderScopeKey}
         issues={issues}
         statusOrder={statusOrder}
         selectedIssue={selectedIssue}

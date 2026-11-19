@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { useListMultiSelection } from '@/hooks/use-list-multi-selection'
+import { useListMultiSelection } from '@/lib/list-interaction/use-list-multi-selection'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import {
   buildResourcePtyRows,

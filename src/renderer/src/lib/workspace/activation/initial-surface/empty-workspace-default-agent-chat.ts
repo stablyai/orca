@@ -6,8 +6,8 @@ import type { AppState } from '@/store/types'
 import {
   getAgentDetectionTargetKeyForWorktree,
   parseAgentDetectionTargetKey
-} from '@/hooks/useAgentDetectionTarget'
-import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
+} from '@/lib/agent-session/launch/inventory/useAgentDetectionTarget'
+import type { AgentDetectionTarget } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 import {
   ensureDetectedAgentsForTarget,
   readDetectedAgentsForTarget

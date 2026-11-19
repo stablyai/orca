@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
+import { usePrefersReducedMotion } from '@/hooks/theme/usePrefersReducedMotion'
 
 // Why a delay: loads that finish sooner (most local dev servers) should show nothing at all.
 const SHOW_DELAY_MS = 200

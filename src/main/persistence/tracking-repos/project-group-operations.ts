@@ -1,6 +1,6 @@
 import type { ProfileSaveDomains } from '../profile-save-domains'
 import { WORKSPACE_SESSION_DOMAINS } from '../workspace-session-domains'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import type {
   ProjectGroup,
   ProjectGroupMutation,
@@ -11,7 +11,7 @@ import {
   getProjectGroupSubtreeIds,
   normalizeProjectGroupName
 } from '../../../shared/project/groups/project-groups'
-import { getNextRootProjectOrder } from '../../../shared/root-project-order'
+import { getNextRootProjectOrder } from '../../../shared/sidebar-list/sections/root-project-order'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { removeWorkspaceSessionOwnersEverywhere } from '../restoring-sessions/session-owner-removal'
 

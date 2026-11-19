@@ -1,21 +1,23 @@
-import { useContext, useEffect, useMemo, useRef, useSyncExternalStore, type ReactNode } from 'react'
+import { useContext, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import {
   getRuntimeEnvironmentRevision,
   onRuntimeEnvironmentRevisionsChanged
 } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
-import type { FileLinkExists } from '../../../../../../shared/native-chat/native-chat-file-link-tree'
+import type { FileLinkExists } from '../../../../../../shared/native-chat/file-access/native-chat-file-link-tree'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
 import {
   createNativeChatFileLinkExistence,
   NativeChatFileLinkExistenceContext
 } from './native-chat-file-link-existence'
-import type { NativeChatFileLinkExistence } from '../../../../../../shared/native-chat/native-chat-file-link-existence'
-import { createNativeChatFileLinkHooks } from '../../../../../../shared/native-chat/native-chat-file-link-hooks'
+import type { NativeChatFileLinkExistence } from '../../../../../../shared/native-chat/file-access/native-chat-file-link-existence'
+import { createNativeChatFileLinkHooks } from '../../../../../../shared/native-chat/file-access/native-chat-file-link-hooks'
 
 const { useNativeChatFileLinkExistsFrom, useRecheckNativeChatFileLinksWhenSettled } =
   createNativeChatFileLinkHooks({ useEffect, useMemo, useRef, useSyncExternalStore })
+// A caller that owns the transcript's existence, rather than sitting under it, rechecks through this.
+export { useRecheckNativeChatFileLinksWhenSettled }
 
 type FileLinkHostEpoch = {
   /** The SSH connection generation while connected; null while it is not. */
@@ -76,13 +78,10 @@ export function useRecheckNativeChatFileLinksWhenTurnEnds(isWorking: boolean): v
 }
 
 /** One per chat view: paths in its transcript are checked on the workspace's host. */
-export function NativeChatFileLinkExistenceProvider({
-  tabId,
-  children
-}: {
+
+export function useNativeChatTabFileLinkExistence(
   tabId: string
-  children: ReactNode
-}): React.JSX.Element {
+): NativeChatFileLinkExistence | null {
   const context = useNativeChatFileLinkContext(tabId)
   const worktreeId = context?.worktreeId
   const worktreePath = context?.worktreePath
@@ -104,11 +103,7 @@ export function NativeChatFileLinkExistenceProvider({
     [connectionId, runtimeEnvironmentId, worktreeId, worktreePath]
   )
   useRecheckWhenHostReturns(existence, useFileLinkHostEpoch(connectionId, runtimeEnvironmentId))
-  return (
-    <NativeChatFileLinkExistenceContext.Provider value={existence}>
-      {children}
-    </NativeChatFileLinkExistenceContext.Provider>
-  )
+  return existence
 }
 
 /** Undefined when this chat cannot open files, so nothing is underlined. */

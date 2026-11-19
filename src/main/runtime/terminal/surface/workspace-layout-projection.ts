@@ -1,7 +1,7 @@
 // Reproject dirty Store partitions and publish each workspace only from its owning partition.
 
-import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { loadWorkspaceLayoutWithoutReport } from '../../../../shared/workspace-layout/persistence/workspace-layout-load'
 import { stableJson } from '../../../../shared/workspace-layout/persistence/workspace-layout-load-report'
 import type {

@@ -1,7 +1,7 @@
 import type { TerminalSplitOptions } from './terminal-split-surface'
 import type { SplitPaneInMainOptions, SplitPaneSource } from './terminal-split-in-main'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
-import { OrcaRuntimeWithStopExplicitlyClosedTabPtys } from '../../session-tabs/explicit-terminal-close-stops'
+import { OrcaRuntimeWithStopExplicitlyClosedTabPtys } from '../../session-tabs/terminal-retirement/explicit-terminal-close-stops'
 import type { TerminalPaneSplitSource } from '../../../../shared/feature-education/feature-education-telemetry'
 import type { RuntimeTerminalSplit } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { randomUUID } from 'node:crypto'
@@ -10,7 +10,7 @@ import {
   splitRetryUnknownError,
   type RendererSplit
 } from './terminal-split-retry'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { Worktree } from '../../../../shared/worktree/types'
 
 export abstract class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopExplicitlyClosedTabPtys {

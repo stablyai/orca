@@ -167,5 +167,20 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     scope: 'tabs',
     searchKeywords: ['shortcut', 'tab', 'move', 'right', 'reorder'],
     defaultBindings: platformBindings([])
+  },
+  {
+    id: 'botItem.back',
+    title: 'Back to Items',
+    group: 'Bots',
+    scope: 'botItem',
+    // Why: global and tab chords run first wherever focus is, so a rebind there would shadow this.
+    conflictGroups: ['global', 'tabs', 'botItem'],
+    searchKeywords: ['shortcut', 'bot', 'item', 'items', 'back', 'list'],
+    // Browser back's chords: Ctrl+[ is the terminal's previous-pane key off Mac.
+    defaultBindings: {
+      darwin: ['Mod+BracketLeft'],
+      linux: ['Alt+ArrowLeft'],
+      win32: ['Alt+ArrowLeft']
+    }
   }
 ]

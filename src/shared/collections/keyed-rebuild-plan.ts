@@ -1,4 +1,4 @@
-import { KeyedDeadlines } from '../keyed-deadlines'
+import { KeyedDeadlines } from './keyed-deadlines'
 
 /** A keyed change journal; the cursor advances when a batch of changed keys is published. */
 export type KeyedChangeFeed = {

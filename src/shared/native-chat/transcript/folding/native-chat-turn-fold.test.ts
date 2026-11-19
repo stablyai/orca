@@ -5,6 +5,7 @@ import {
   nativeChatTurnFold,
   nativeChatTurnFoldRow
 } from './native-chat-turn-fold'
+import type { NativeChatResolvedPrompt } from '../../input/questions/native-chat-resolution-receipt'
 
 function hookFailure(id: string, event: string): NativeChatMessage {
   return {
@@ -92,7 +93,7 @@ describe('rendered plans in collapsed turns', () => {
       answers: [1, 5]
     }
   ])('keeps the plan and existing answers visible: $name', ({ messages, folded, answers }) => {
-    const rows = messages.map((item) => nativeChatTurnFoldRow(item, 'turn-1', false))
+    const rows = messages.map((item) => nativeChatTurnFoldRow(item, 'turn-1', undefined))
     const result = nativeChatTurnFold({ rows, settledTurnKeys: SETTLED, expandedTurnKeys: NONE })
     expect([...result.foldedRows]).toEqual(folded)
     expect([...nativeChatTurnAnswerRows(rows)]).toEqual(answers)
@@ -109,12 +110,117 @@ describe('failed hooks in a settled turn', () => {
       hookFailure('post-model', 'PostModelRequest'),
       hookFailure('stop', 'Stop')
     ]
-    const rows = messages.map((item) => nativeChatTurnFoldRow(item, 'turn-1', false))
+    const rows = messages.map((item) => nativeChatTurnFoldRow(item, 'turn-1', undefined))
     const { foldedRows } = nativeChatTurnFold({
       rows,
       settledTurnKeys: SETTLED,
       expandedTurnKeys: NONE
     })
     expect([...foldedRows].sort()).toEqual([1, 2])
+  })
+})
+
+describe('replies a settled turn keeps visible', () => {
+  function answersAndFolded(
+    messages: NativeChatMessage[],
+    keys?: string[],
+    receipts?: ReadonlyMap<string, NativeChatResolvedPrompt>
+  ) {
+    const rows = messages.map((item, index) =>
+      nativeChatTurnFoldRow(item, keys?.[index] ?? 'turn-1', receipts?.get(item.id))
+    )
+    const { foldedRows } = nativeChatTurnFold({
+      rows,
+      settledTurnKeys: new Set(keys ?? ['turn-1']),
+      expandedTurnKeys: NONE
+    })
+    return {
+      answers: [...nativeChatTurnAnswerRows(rows)].sort(),
+      folded: [...foldedRows].sort()
+    }
+  }
+
+  it('keeps the reply a steer interrupted, but not one before another agent’s message or a tool result', () => {
+    const steer = message('steer', 'user', 'Also, which branch are you on?')
+    const agentNote: NativeChatMessage = {
+      ...message('note', 'user', 'Worker finished.'),
+      from: { kind: 'agent', senders: [], orchestration: null }
+    }
+    const ack = message('ack', 'assistant', 'On main; continuing.')
+    const orphanResult: NativeChatMessage = {
+      ...message('orphan', 'user', ''),
+      blocks: [{ type: 'tool-result', callId: 'gone', output: 'ok' }],
+      unpairedToolResults: true
+    }
+    const messages = [PROMPT, PREAMBLE, WORK, steer, ack, agentNote, orphanResult, WORK, ANSWER]
+    expect(answersAndFolded(messages)).toEqual({ answers: [1, 8], folded: [2, 4, 7] })
+  })
+
+  it('keeps the words that led to an answered question, whether its row holds the call or a receipt', () => {
+    const report = message('report', 'assistant', '| Option | Cost |')
+    const ask: NativeChatMessage = {
+      ...WORK,
+      id: 'ask',
+      blocks: [
+        { type: 'text', text: '| Option | Cost |' },
+        { type: 'tool-call', name: 'AskUserQuestion', input: {}, state: 'completed' },
+        ...WORK.blocks
+      ]
+    }
+    expect(answersAndFolded([PROMPT, PREAMBLE, WORK, ask, WORK, ANSWER])).toEqual({
+      answers: [3, 5],
+      folded: [1, 2, 4]
+    })
+    const question = message('question', 'system', 'Which option?')
+    const receipt: NativeChatResolvedPrompt = {
+      kind: 'question',
+      question: 'Which option?',
+      options: [{ id: 'a', label: 'A' }],
+      resolution: { state: 'resolved', selectedOptionId: 'a', resolvedBy: null, resolvedAt: 2 }
+    }
+    expect(
+      answersAndFolded(
+        [PROMPT, WORK, report, question, WORK, ANSWER],
+        undefined,
+        new Map([['question', receipt]])
+      )
+    ).toEqual({ answers: [2, 5], folded: [1, 3, 4] })
+    expect(
+      answersAndFolded(
+        [PROMPT, PREAMBLE, WORK, question, WORK, ANSWER],
+        undefined,
+        new Map([['question', receipt]])
+      )
+    ).toEqual({ answers: [5], folded: [1, 2, 3, 4] })
+  })
+
+  it('keeps back-to-back replies, but not a reply its own row or an image operation follows', () => {
+    const note = message('note', 'assistant', 'Checked the config.')
+    const narration: NativeChatMessage = {
+      ...WORK,
+      id: 'narration',
+      blocks: [{ type: 'text', text: 'I will run the tests.' }, ...WORK.blocks]
+    }
+    const messages = [PROMPT, note, PREAMBLE, WORK, narration, ANSWER]
+    expect(answersAndFolded(messages)).toEqual({ answers: [1, 5], folded: [2, 3, 4] })
+  })
+
+  it.each([
+    ['a generation whose preview moved into the answer', 'Generated image', 'generated-image'],
+    ['an image view', 'Viewed image', 'image-operation']
+  ] as const)('folds %s as work, not a reply', (_name, text, presentation) => {
+    const operation = message('image', 'assistant', text, presentation)
+    expect(answersAndFolded([PROMPT, PREAMBLE, operation, ANSWER])).toEqual({
+      answers: [3],
+      folded: [1, 2]
+    })
+  })
+
+  it('judges back-to-back replies within their own turn when another turn’s rows interleave', () => {
+    const { answers } = answersAndFolded(
+      [PROMPT, PREAMBLE, WORK, ANSWER],
+      ['turn-1', 'turn-1', 'turn-2', 'turn-1']
+    )
+    expect(answers).toEqual([1, 3])
   })
 })

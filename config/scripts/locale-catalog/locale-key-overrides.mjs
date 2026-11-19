@@ -13,8 +13,9 @@ const BASE_LOCALE_KEY_OVERRIDES = {
   'auto.components.settings.TerminalWindowSection.c9e1fdf42f': { ja: 'カーソル' },
   'auto.components.onboarding.ThemeStep.ab2a583a97': { ja: 'カーソル' },
   // File-row "Duplicate" is the action, and it sits beside "Copy" (复制) in the same menu; keyed
-  // because the skills-dialog chip shares the English string but reads as a noun.
-  'auto.components.right.sidebar.FileExplorerRow.0fec99bfd7': { zh: '创建副本' },
+  // because the skills-dialog chip shares the English string but reads as a noun. The French
+  // noun "Doublon" has the same problem.
+  'auto.components.right.sidebar.FileExplorerRow.0fec99bfd7': { zh: '创建副本', fr: 'Dupliquer' },
   'menu.reportCrash': { ko: '크래시 신고...', zh: '报告崩溃...', ja: 'クラッシュを報告...' },
   'menu.showMobileButton': {
     ko: 'Orca 모바일 버튼 표시',
@@ -180,6 +181,12 @@ const BASE_LOCALE_KEY_OVERRIDES = {
     zh: '新功能',
     ja: '新機能'
   },
+  // The worktree cards notice badge marks a new feature too.
+  'sidebar.worktreeCardsUpdateNotice.newLabel': { zh: '新功能' },
+  // Automation status: "Active" means enabled, not the generic "current" (当前).
+  'auto.components.automations.listGroups.active': { zh: '已启用' },
+  'auto.components.automations.AutomationDetail.active': { zh: '已启用' },
+  'auto.components.automations.ExternalAutomationManagers.b3feba84c7': { zh: '已启用' },
   'auto.components.sidebar.SidebarSettingsHelpMenu.eb9884e55b': {
     ko: 'Discord',
     zh: 'Discord',

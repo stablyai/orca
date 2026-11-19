@@ -1,3 +1,4 @@
+import type { TerminalFontStyle } from '../../preferences/terminal-font-style'
 import { useCallback, useEffect, useState } from 'react'
 import { AppState, StyleSheet, View, Text, Pressable } from 'react-native'
 import { useFocusEffect } from 'expo-router'
@@ -7,7 +8,7 @@ import { terminalPaneKeyboardLayout } from './mobile-terminal-pane-layout'
 import { colors, spacing, pressedStyle } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import type { TerminalFrame } from '../../webview/terminal-webview-messages'
+import type { TerminalFrame, TerminalHostSettings } from '../../webview/terminal-webview-messages'
 import { TerminalWebView } from '../../webview/TerminalWebView'
 import type {
   TerminalKeyboardAvoidanceMetrics,
@@ -29,7 +30,9 @@ type TerminalPaneViewProps = {
   onFrame?: (handle: string, frame: TerminalFrame) => void
   keyboardLift: number
   terminalTheme?: RuntimeMobileTerminalTheme
+  hostSettings?: TerminalHostSettings
   textScale: number
+  fontStyle: TerminalFontStyle
   onRef: (handle: string, ref: TerminalWebViewHandle | null) => void
   // Must keep one identity: the pane reports its document gone when it unmounts.
   onDocumentReleased: (handle: string) => void
@@ -63,7 +66,9 @@ export function TerminalPaneView({
   onFrame,
   keyboardLift,
   terminalTheme,
+  hostSettings,
   textScale,
+  fontStyle,
   onRef,
   onDocumentReleased,
   onWebReady,
@@ -173,7 +178,9 @@ export function TerminalPaneView({
               keyboardLift > 0 && { transform: [{ translateY: -keyboardLift }] }
             ]}
             terminalTheme={terminalTheme}
+            hostSettings={hostSettings}
             textScale={textScale}
+            fontStyle={fontStyle}
             shownAtMount={visible}
             interactionActive={visible && appActive && routeFocused}
             onWebReady={() => onWebReady(handle)}

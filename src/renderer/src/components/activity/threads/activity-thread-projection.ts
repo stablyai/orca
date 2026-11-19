@@ -1,0 +1,320 @@
+import { shallow } from 'zustand/shallow'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
+import {
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
+import { subscribeTranslationResourceVersion } from '@/i18n/translation-resource-version'
+import {
+  getStructuredChatTabNames,
+  subscribeStructuredChatTabNames
+} from '@/runtime/native-chat/naming/structured-chat-name-observation'
+import type { StructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-tab-name'
+import { buildActivityEvents } from '../events/activity-event-builder'
+import { freshActivityLiveAgentState } from '../events/activity-event-state'
+import {
+  createActivityEventBuildCache,
+  resetActivityEventBuildCache
+} from '../events/activity-event-build-cache'
+import { standaloneActivityWorktreeScope } from '../events/activity-standalone-worktree'
+import { buildAgentPaneThreads, createAgentPaneThreadReuseCache } from './activity-thread-builder'
+import type { AgentPaneThread } from './activity-thread-types'
+import {
+  releaseActivityTabProjection,
+  selectAllAgentPaneThreadStoreData,
+  type AllAgentPaneThreadsStoreData
+} from './use-agent-pane-thread-store-data'
+
+/** `live` keeps only panes with a live turn (the sidebar badge); `all` is every thread. */
+export type ActivityThreadMode = 'all' | 'live'
+
+export type ActivityThreadSnapshot = {
+  storeData: AllAgentPaneThreadsStoreData
+  allThreads: AgentPaneThread[]
+}
+
+type ProjectionInputs = {
+  state: AppState
+  storeData: AllAgentPaneThreadsStoreData
+  /** Freshness expiry changes output without a store write. */
+  agentStatusEpoch: number
+  chatNames: StructuredChatTabNames
+  /** Standalone owner names are translated. */
+  scope: string
+}
+
+type ActivityEventsBuild = ReturnType<typeof buildActivityEvents>
+
+type ThreadProjection = {
+  cache: ReturnType<typeof createAgentPaneThreadReuseCache>
+  build: ActivityEventsBuild | null
+  generatedTitlesEnabled: boolean
+  threads: AgentPaneThread[]
+}
+
+const MODES: readonly ActivityThreadMode[] = ['all', 'live']
+const NO_THREADS: AgentPaneThread[] = []
+const UNSUBSCRIBED_RELEASE_MS = 1000
+
+function createThreadProjection(): ThreadProjection {
+  return {
+    cache: createAgentPaneThreadReuseCache(),
+    build: null,
+    generatedTitlesEnabled: false,
+    threads: NO_THREADS
+  }
+}
+
+// One owner per window: Activity, the sidebar and the phone publisher read the same build.
+const listeners: Record<ActivityThreadMode, Set<() => void>> = { all: new Set(), live: new Set() }
+const threadProjections: Record<ActivityThreadMode, ThreadProjection> = {
+  all: createThreadProjection(),
+  live: createThreadProjection()
+}
+const snapshots: Record<
+  ActivityThreadMode,
+  { inputs: ProjectionInputs; snapshot: ActivityThreadSnapshot } | null
+> = { all: null, live: null }
+const eventBuildCache = createActivityEventBuildCache()
+let eventsProjection: { inputs: ProjectionInputs; build: ActivityEventsBuild } | null = null
+let currentInputs: ProjectionInputs | null = null
+let chatNames: StructuredChatTabNames | null = null
+let detach: (() => void) | null = null
+let releaseTimer: ReturnType<typeof setTimeout> | null = null
+
+function listenerCount(): number {
+  return listeners.all.size + listeners.live.size
+}
+
+function notify(): void {
+  for (const mode of MODES) {
+    for (const listener of listeners[mode]) {
+      listener()
+    }
+  }
+}
+
+function releaseEventsProjection(): void {
+  eventsProjection = null
+  resetActivityEventBuildCache(eventBuildCache)
+}
+
+function releaseAll(): void {
+  releaseEventsProjection()
+  releaseActivityTabProjection()
+  for (const mode of MODES) {
+    threadProjections[mode] = createThreadProjection()
+    snapshots[mode] = null
+  }
+  currentInputs = null
+  chatNames = null
+}
+
+function attach(): () => void {
+  chatNames = getStructuredChatTabNames()
+  const stops = [
+    useAppStore.subscribe(notify),
+    subscribeStructuredChatTabNames(() => {
+      chatNames = getStructuredChatTabNames()
+      notify()
+    }),
+    subscribeTranslationResourceVersion(notify)
+  ]
+  return () => stops.forEach((stop) => stop())
+}
+
+/** Release once no reader arrives: covers a render that never commits and a reader switching modes. */
+function scheduleRelease(): void {
+  if (releaseTimer !== null) {
+    return
+  }
+  releaseTimer = setTimeout(() => {
+    releaseTimer = null
+    if (listenerCount() === 0) {
+      releaseAll()
+    }
+  }, UNSUBSCRIBED_RELEASE_MS)
+}
+
+function cancelReleaseTimer(): void {
+  if (releaseTimer !== null) {
+    clearTimeout(releaseTimer)
+    releaseTimer = null
+  }
+}
+
+/** Inputs keep their identity until a value the projection reads changes. */
+function readInputs(): ProjectionInputs {
+  const state = useAppStore.getState()
+  // Subscribed reads use the observed names; a render before the first subscribe reads them directly.
+  const names = chatNames ?? getStructuredChatTabNames()
+  const scope = standaloneActivityWorktreeScope()
+  const previous = currentInputs
+  if (
+    previous &&
+    previous.state === state &&
+    previous.chatNames === names &&
+    previous.scope === scope
+  ) {
+    return previous
+  }
+  const selected = selectAllAgentPaneThreadStoreData(state)
+  const storeData =
+    previous && shallow(previous.storeData, selected) ? previous.storeData : selected
+  const next: ProjectionInputs = {
+    state,
+    storeData,
+    agentStatusEpoch: state.agentStatusEpoch,
+    chatNames: names,
+    scope
+  }
+  // A write the projection does not read keeps the previous inputs, so readers skip rebuilding.
+  currentInputs =
+    previous &&
+    previous.storeData === storeData &&
+    previous.agentStatusEpoch === next.agentStatusEpoch &&
+    previous.chatNames === names &&
+    previous.scope === scope
+      ? { ...previous, state }
+      : next
+  return currentInputs
+}
+
+function sameBuildInputs(a: ProjectionInputs, b: ProjectionInputs): boolean {
+  return (
+    a.storeData === b.storeData &&
+    a.agentStatusEpoch === b.agentStatusEpoch &&
+    a.chatNames === b.chatNames &&
+    a.scope === b.scope
+  )
+}
+
+function projectActivityEvents(inputs: ProjectionInputs): ActivityEventsBuild {
+  if (eventsProjection && sameBuildInputs(eventsProjection.inputs, inputs)) {
+    return eventsProjection.build
+  }
+  const { storeData } = inputs
+  // Global history caps affect live-thread unread and search state.
+  const build = buildActivityEvents(
+    {
+      chatNames: inputs.chatNames,
+      agentStatusByPaneKey: storeData.agentStatusByPaneKey,
+      runtimeAgentOrchestrationByPaneKey: storeData.runtimeAgentOrchestrationByPaneKey,
+      migrationUnsupportedByPtyId: storeData.migrationUnsupportedByPtyId,
+      tabsByWorktree: storeData.tabsByWorktree,
+      ptyIdsByTabId: storeData.ptyIdsByTabId,
+      unifiedTabsByWorktree: storeData.activityTabs,
+      worktreeMap: storeData.worktreeMap,
+      repoMap: storeData.repoMap,
+      repos: storeData.repos,
+      resolveWorktree: storeData.getKnownWorktreeById,
+      resolveWorktreeInputs: [
+        selectWorktreesByRepo(storeData),
+        selectFolderWorkspaces(storeData),
+        storeData.projectGroups,
+        storeData.repos,
+        selectDetectedWorktreesByRepo(storeData),
+        storeData.floatingWorkspacePath
+      ],
+      acknowledgedAgentsByPaneKey: storeData.acknowledgedAgentsByPaneKey,
+      activityClearedAtByPaneKey: storeData.activityClearedAtByPaneKey,
+      // Read at build time; agentStatusEpoch in the inputs rebuilds when a freshness boundary passes.
+      now: Date.now()
+    },
+    eventBuildCache
+  )
+  eventsProjection = { inputs, build }
+  return build
+}
+
+function hasLiveActivity({ storeData }: ProjectionInputs): boolean {
+  if (Object.keys(storeData.migrationUnsupportedByPtyId).length > 0) {
+    return true
+  }
+  const now = Date.now()
+  for (const entry of storeData.agentStatusByPaneKey.values()) {
+    if (freshActivityLiveAgentState(entry, now)) {
+      return true
+    }
+  }
+  return false
+}
+
+function projectThreads(inputs: ProjectionInputs, mode: ActivityThreadMode): AgentPaneThread[] {
+  if (mode === 'live' && !hasLiveActivity(inputs)) {
+    if (threadProjections.live.build !== null) {
+      threadProjections.live = createThreadProjection()
+    }
+    // An empty badge alone keeps nothing; with a full reader mounted the shared build stays warm.
+    if (listeners.all.size === 0) {
+      releaseEventsProjection()
+    }
+    return NO_THREADS
+  }
+  const build = projectActivityEvents(inputs)
+  const projection = threadProjections[mode]
+  const { generatedTitlesEnabled } = inputs.storeData
+  if (projection.build === build && projection.generatedTitlesEnabled === generatedTitlesEnabled) {
+    return projection.threads
+  }
+  projection.threads = buildAgentPaneThreads(
+    {
+      events:
+        mode === 'live'
+          ? build.events.filter((event) => build.liveAgentByPaneKey[event.entry.paneKey])
+          : build.events,
+      liveAgentByPaneKey: build.liveAgentByPaneKey,
+      paneEntryByPaneKey: build.paneEntryByPaneKey,
+      generatedTitlesEnabled
+    },
+    projection.cache
+  )
+  projection.build = build
+  projection.generatedTitlesEnabled = generatedTitlesEnabled
+  return projection.threads
+}
+
+/** The window's Activity threads for `mode`; the same reference until an input changes. */
+export function getActivityThreadSnapshot(mode: ActivityThreadMode): ActivityThreadSnapshot {
+  const inputs = readInputs()
+  let current = snapshots[mode]
+  if (!current || !sameBuildInputs(current.inputs, inputs)) {
+    const allThreads = projectThreads(inputs, mode)
+    const snapshot =
+      current?.snapshot.storeData === inputs.storeData && current.snapshot.allThreads === allThreads
+        ? current.snapshot
+        : { storeData: inputs.storeData, allThreads }
+    current = { inputs, snapshot }
+    snapshots[mode] = current
+  }
+  if (listenerCount() === 0) {
+    scheduleRelease()
+  }
+  return current.snapshot
+}
+
+/** Observe the projection; the first reader attaches it, and caches go shortly after the last one leaves. */
+export function subscribeActivityThreads(
+  mode: ActivityThreadMode,
+  listener: () => void
+): () => void {
+  cancelReleaseTimer()
+  listeners[mode].add(listener)
+  detach ??= attach()
+  return () => {
+    listeners[mode].delete(listener)
+    if (listeners[mode].size === 0) {
+      // Switching the sidebar between list and badge keeps the shared events build warm.
+      threadProjections[mode] = createThreadProjection()
+      snapshots[mode] = null
+    }
+    if (listenerCount() === 0) {
+      detach?.()
+      detach = null
+      chatNames = null
+      scheduleRelease()
+    }
+  }
+}

@@ -1,0 +1,65 @@
+// Sharing a bot by link: the candidate the owner reviews, publishing it, moving or stopping the link.
+import * as z from 'zod'
+import { requiredString } from './rpc-param-primitives'
+
+const Names = z.array(z.string().min(1).max(200)).max(64).optional()
+const BotId = requiredString('Missing bot')
+
+/** The owner's picks; an absent list shares all of that part, except memory, which is off unless named. */
+export const BotSharePrepare = z.object({
+  botId: BotId,
+  skills: Names,
+  tools: Names,
+  schedules: Names,
+  eventSuggestions: Names,
+  memory: Names,
+  purpose: z.string().max(200).optional(),
+  /** Built in, so the candidate digests as a version published with this note would. */
+  setupNote: z.string().max(2000).optional(),
+  /** Build from the picks and note the bot was last published with, and return them. */
+  last: z.boolean().optional()
+})
+
+export const BotShareCandidate = z.object({
+  botId: BotId,
+  candidateId: requiredString('Missing candidate')
+})
+
+/** Publish the candidate with the setup note on screen; with `link` it is *Update link*: the link the owner sees, from the version it
+ *  showed them, never a new link. */
+export const BotSharePublish = BotShareCandidate.extend({
+  setupNote: z.string().max(2000).optional(),
+  link: z
+    .object({
+      shareId: requiredString('Missing link'),
+      expectedVersionId: requiredString('Missing version')
+    })
+    .optional()
+})
+
+/** A link the signed-in account owns; Orca Cloud refuses any other. It needs no bot on this computer:
+ *  a deleted bot's link, or one made on another install, can be stopped too. */
+export const BotShareStop = z.object({
+  shareId: requiredString('Missing link'),
+  /** The bot the link shares, when known: its stored picks on this computer go too. */
+  botId: z.string().min(1).optional()
+})
+
+/** The owner's live bot links. */
+export const BotShareStatusParams = z.object({
+  /** A bot whose link should also carry its version's publish time and digest. */
+  botId: z.string().min(1).optional()
+})
+
+/** One part's exact text: `soul`, `skill:<name>`, `memory:<topic>`, `schedule:<id>`, `event:<id>`,
+ *  `tool:<name>`. */
+export const BotSharePartView = BotShareCandidate.extend({
+  part: z.string().min(1).max(300)
+})
+
+const ShareId = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/, 'Not a bot link')
+const VersionId = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/)
+
+/** A shared link to review before making a bot from it; with `versionId`, a copy's original, which
+ *  is gone once the link has moved past it. */
+export const BotShareReviewParams = z.object({ shareId: ShareId, versionId: VersionId.optional() })

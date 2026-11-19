@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -12,7 +12,7 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import {
   partialRuntimeStore,
   storeWorktreeMeta
-} from '../../orca-runtime-tests/runtime-store-partial-fixture'
+} from '../../construction/test-context/runtime-store-partial-fixture'
 
 // BUG-9: lost relay contact must report unverifiable, never live:0/pty:no for a surviving terminal.
 

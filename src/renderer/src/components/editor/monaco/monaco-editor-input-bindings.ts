@@ -6,7 +6,7 @@ import { translate } from '@/i18n/i18n'
 import { getMonacoCodebaseSearchQuery } from './monaco-codebase-search'
 import { formatSelectionReference } from '../contextual-copy/selection-copy'
 import { openAddToChatMenuAt } from '../../native-chat/selection-quotes/add-to-chat-point-menu'
-import { formatNativeChatQuote } from '../../native-chat/selection-quotes/native-chat-quote-selection'
+import { formatNativeChatQuote } from '../../../../../shared/native-chat/input/quotes/native-chat-quote-selection'
 import { getDiffCommentPopoverLeft } from '../../diff-comments/diff-comment-popover-position'
 import {
   installEditorAddReviewNoteShortcut,

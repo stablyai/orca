@@ -176,6 +176,19 @@ export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial
         window.api.ui.set({ worktreeCardsUpdateNoticeSeen: true }).catch(console.error)
         return { worktreeCardsUpdateNoticeSeen: true }
       }),
+    worktreeCardsIntroNoticeSeen: true,
+    markWorktreeCardsIntroNoticeSeen: () =>
+      set((s) => {
+        if (s.worktreeCardsIntroNoticeSeen) {
+          return s
+        }
+        window.api.ui.set({ worktreeCardsIntroNoticeSeen: true }).catch(console.error)
+        return { worktreeCardsIntroNoticeSeen: true }
+      }),
+    worktreeCardsIntroChoice: null,
+    setWorktreeCardsIntroChoice: (choice) => set({ worktreeCardsIntroChoice: choice }),
+    worktreeCardsIntroKeptHintOpen: false,
+    setWorktreeCardsIntroKeptHintOpen: (open) => set({ worktreeCardsIntroKeptHintOpen: open }),
     claudeDiffPanelNoticeSeen: true,
     markClaudeDiffPanelNoticeSeen: () =>
       set((s) => {

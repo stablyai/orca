@@ -13,6 +13,7 @@ import type { ProfilePreferences } from '../../persistence/loading-store/profile
 import type { BackendServiceCleanup } from '../../backend/service-composition'
 import type { AgentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { installLocalHookRootEvidence } from '../../agent-hooks/observations/local-hook-root-evidence'
+import { botToolRelay } from '../../bots/tool-relay/bot-tool-relay'
 
 /** SSH and WSL-host panes run beside this host, so it proves which agent owns each pane, from the
  *  first record its startup replay reads. */
@@ -22,6 +23,12 @@ export function startOrcadAgentHookServer(
 ): Promise<void> {
   installLocalHookRootEvidence(server)
   return server.start(options)
+}
+
+/** The agents' loopback listeners: the hook server and the bots' tool relay. */
+export function stopOrcadAgentListeners(server: AgentHookServer): void {
+  server.stop()
+  botToolRelay.close()
 }
 
 /**
