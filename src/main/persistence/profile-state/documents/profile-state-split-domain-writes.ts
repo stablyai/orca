@@ -58,9 +58,12 @@ export function keepWrittenSessionParts(
   written: StoredProfileStateDomainParts,
   stored: { contentHash: string; revision: number; legacyRevision: number }
 ): CommittedPartsTree | undefined {
-  // Only an object session takes patches; other JSON is stored as is and never cached.
-  const patchable = !written.parts.some(({ key, payload }) => key === '[]' && payload !== '{}')
-  return isWorkspaceSessionDomain(domain) && patchable
-    ? { root: partsTreeFromWrittenParts(domain, written), rows: written.rows, ...stored }
-    : undefined
+  if (!isWorkspaceSessionDomain(domain)) {
+    return undefined
+  }
+  // Only an object session takes patches; anything else is stored as a lone root part.
+  const [first] = written.parts
+  return first?.key === '[]' && first.payload !== '{}'
+    ? undefined
+    : { root: partsTreeFromWrittenParts(domain, written), rows: written.rows, ...stored }
 }
