@@ -2,7 +2,7 @@ import { createAcpModelCatalogProbe } from '../../acp/discovery/acp-model-catalo
 import { acpLaunchSpecFor } from '../../acp/launch/acp-launch-registry'
 import { openCodeAcpAccountBinding } from '../../opencode/accounts/opencode-structured-account-home'
 import { ManagedDataAccountService } from '../../managed-data-accounts/service'
-import { mkdtemp, writeFile, readFile, rm, mkdir } from 'node:fs/promises'
+import { mkdtemp, writeFile, readFile, rm, mkdir, rename } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { expect, it, onTestFinished } from 'vitest'
@@ -63,6 +63,10 @@ it.each(['grok', 'codex'])(
       })
     expect(await read()).toMatchObject({ models: [{ id: 'first' }] })
     model = 'second'
+    // A byte-identical atomic rewrite of the config, as the CLIs do, must not expire the scope (#44692).
+    await writeFile(`${config}.tmp`, '{}')
+    await rename(`${config}.tmp`, config)
+    expect(await read()).toMatchObject({ models: [{ id: 'first' }] })
     await writeFile(join(folder, '.claude.json'), 'probe usage')
     await read()
     expect(await read()).toMatchObject({ models: [{ id: 'first' }] })
@@ -73,6 +77,22 @@ it.each(['grok', 'codex'])(
     expect(await read()).toMatchObject({ models: [{ id: 'configured' }] })
   }
 )
+
+it('keeps the config stamp through a byte-identical atomic rewrite, expiring only on content change', async () => {
+  const folder = await mkdtemp(join(tmpdir(), 'orca-catalog-config-rewrite-'))
+  onTestFinished(() => rm(folder, { recursive: true, force: true }))
+  const config = join(folder, 'settings.json')
+  await writeFile(config, '{"model":"a"}')
+  const input = { command: process.execPath, cwd: folder, env: {}, configFiles: [config] }
+  const before = await agentModelCatalogInputStamp(input)
+  // The CLIs rewrite their config through a temp file and rename: new inode, same bytes (#44692).
+  const tmp = join(folder, '.settings.json.tmp-1-0')
+  await writeFile(tmp, '{"model":"a"}')
+  await rename(tmp, config)
+  expect(await agentModelCatalogInputStamp(input)).toBe(before)
+  await writeFile(config, '{"model":"b"}')
+  expect(await agentModelCatalogInputStamp(input)).not.toBe(before)
+})
 
 it('resolves relative PATH installs and direct interpreter scripts from their actual cwd', async () => {
   const folder = await mkdtemp(join(tmpdir(), 'orca-catalog-relative-'))

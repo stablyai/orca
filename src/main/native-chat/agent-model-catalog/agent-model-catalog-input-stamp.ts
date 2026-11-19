@@ -1,4 +1,5 @@
-import { access, realpath, stat } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { access, readFile, realpath, stat } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { basename, delimiter, isAbsolute, resolve } from 'node:path'
 import { getExecutableNames } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
@@ -14,7 +15,22 @@ async function fileStamp(path: string): Promise<unknown> {
   }
 }
 
-/** Observe install/config identity without running the CLI or reading credentials. */
+/** CLIs rewrite their own configs byte-identically through a temp file and rename; identity is content, not inode churn (#44692). */
+async function configFileStamp(path: string): Promise<unknown> {
+  try {
+    return [
+      path,
+      'content',
+      createHash('sha256')
+        .update(await readFile(path))
+        .digest('hex')
+    ]
+  } catch {
+    return [path, 'unknown']
+  }
+}
+
+/** Observe install identity and config content without running the CLI or retaining config bytes. */
 export async function agentModelCatalogInputStamp(input: {
   command: string
   prefixArgs?: readonly string[]
@@ -44,6 +60,6 @@ export async function agentModelCatalogInputStamp(input: {
   return JSON.stringify([
     await fileStamp(executable),
     script ? await fileStamp(script) : null,
-    await Promise.all((input.configFiles ?? []).map(fileStamp))
+    await Promise.all((input.configFiles ?? []).map(configFileStamp))
   ])
 }
