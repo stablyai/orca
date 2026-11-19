@@ -35,6 +35,7 @@ import { StalledTerminalDaemonBanner } from '../maintenance/terminal-daemon/Stal
 import { SidebarBotsSection } from '@/components/bots/SidebarBotsSection'
 import { SidebarBotsSplit, SidebarProjectsListSlot } from './SidebarBotsSplit'
 import { SidebarContentViewport } from './SidebarContentViewport'
+import { SidebarSectionDragOverlay } from './SidebarSectionDragOverlay'
 import { PROJECTS_SECTION_GROUP_KEY } from '../../../../shared/sidebar-list/sections/group-keys'
 import { useBotsEnabled } from '@/lib/bot-catalog'
 import { StartupWorktreeRefreshStatus } from './worktree-list/listing/StartupWorktreeRefreshStatus'
@@ -72,7 +73,7 @@ const sidebarSectionDragModifiers: Modifier[] = [
   ({ draggingNodeRect, scrollableAncestorRects: [viewport], transform }) => ({
     ...transform,
     x: 0,
-    // Translated headers contribute to scrollHeight, so cap movement at the viewport edges.
+    // Keep the preview within the sidebar viewport when the pointer leaves it.
     y:
       draggingNodeRect && viewport
         ? Math.max(
@@ -295,21 +296,22 @@ function Sidebar({
         >
           {sidebarOpen && (
             <>
-              <SidebarContentViewport>
-                <SidebarNav />
-                <DndContext
-                  sensors={sidebarSectionDragSensors}
-                  modifiers={sidebarSectionDragModifiers}
-                  collisionDetection={pointerWithin}
-                  onDragEnd={({ active, over }) => {
-                    if (botsShown && over && active.id !== over.id) {
-                      setProjectsFirst(!projectsFirst)
-                    }
-                  }}
-                >
+              <DndContext
+                sensors={sidebarSectionDragSensors}
+                modifiers={sidebarSectionDragModifiers}
+                collisionDetection={pointerWithin}
+                onDragEnd={({ active, over }) => {
+                  if (botsShown && over && active.id !== over.id) {
+                    setProjectsFirst(!projectsFirst)
+                  }
+                }}
+              >
+                <SidebarContentViewport>
+                  <SidebarNav />
                   {projectsFirst ? [projectsSection, botsSection] : [botsSection, projectsSection]}
-                </DndContext>
-              </SidebarContentViewport>
+                </SidebarContentViewport>
+                <SidebarSectionDragOverlay sidebarStyle={leftSidebarStyle} />
+              </DndContext>
 
               {/* mt-auto keeps the toolbar at the bottom when both sections are folded and nothing grows. */}
               <div className="relative mt-auto shrink-0">

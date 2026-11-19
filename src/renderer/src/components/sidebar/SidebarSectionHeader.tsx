@@ -1,6 +1,6 @@
 import React from 'react'
 import { useDraggable, useDroppable } from '@dnd-kit/core'
-import { CSS, useCombinedRefs } from '@dnd-kit/utilities'
+import { useCombinedRefs } from '@dnd-kit/utilities'
 import { cn } from '@/lib/class-names'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { SidebarSectionFoldChevron } from './sidebar-section-fold'
@@ -43,7 +43,7 @@ export function SidebarSectionHeader({
   tourTarget,
   reorderable = false
 }: SidebarSectionHeaderProps): React.JSX.Element {
-  const { setNodeRef, setActivatorNodeRef, listeners, isDragging, transform } = useDraggable({
+  const { setNodeRef, setActivatorNodeRef, listeners, isDragging } = useDraggable({
     id: sectionId,
     disabled: !reorderable
   })
@@ -58,13 +58,11 @@ export function SidebarSectionHeader({
       ref={headerRef}
       className={cn(
         'group/sidebar-header mt-2 flex h-8 min-w-0 shrink-0 items-center justify-between gap-1.5 px-2',
-        isDragging &&
-          'pointer-events-none relative z-20 rounded-md bg-worktree-sidebar shadow-xs ring-1 ring-worktree-sidebar-border',
+        isDragging && 'pointer-events-none opacity-0',
         isOver &&
           !isDragging &&
           'rounded-md outline-1 outline-offset-1 outline-worktree-sidebar-ring'
       )}
-      style={isDragging ? { transform: CSS.Translate.toString(transform) } : undefined}
     >
       <div
         className={cn(
