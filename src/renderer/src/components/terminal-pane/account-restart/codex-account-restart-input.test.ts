@@ -2,14 +2,13 @@ import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import { selectCodexStaleSessionCount } from '@/components/status-bar/accounts/codex-restart-status-summary'
 import { codexAccountRestartToken } from '@/store/terminals/codex-account-restart-continuation'
+import { seed, leaf, sibling } from './codex-account-restart.test-fixture'
 import { installPtyInputForward } from '../pty-connection/input/pty-input-forward'
 
 vi.mock('@/lib/agent-session/accounts/agent-account-restart-startup', () => ({
   captureAgentAccountRestartResumeInput: () => null,
   buildPaneAccountRestartStartup: () => ({ command: 'codex', launchAgent: 'codex' })
 }))
-const leaf = '00000000-0000-4000-8000-000000000001'
-const sibling = '00000000-0000-4000-8000-000000000002'
 
 function input(ptyId: string, leafId = leaf, incarnationId = 'inc-old') {
   const writes: string[] = [],
@@ -57,35 +56,8 @@ function failCurrent() {
 beforeEach(() => {
   useAppStore.setState(useAppStore.getInitialState(), true)
   vi.stubGlobal('window', { api: { pty: { noteUserInput: vi.fn() } } })
+  seed()
   useAppStore.setState({
-    tabsByWorktree: {
-      wt: [
-        {
-          id: 'tab',
-          worktreeId: 'wt',
-          createdAt: 1,
-          ptyId: 'old',
-          title: 'Codex',
-          customTitle: null,
-          color: null,
-          sortOrder: 0
-        }
-      ]
-    },
-    ptyIdsByTabId: { tab: ['old', 'sibling'] },
-    terminalLayoutsByTabId: {
-      tab: {
-        root: {
-          type: 'split',
-          direction: 'horizontal',
-          first: { type: 'leaf', leafId: leaf },
-          second: { type: 'leaf', leafId: sibling }
-        },
-        activeLeafId: leaf,
-        expandedLeafId: null,
-        ptyIdsByLeafId: { [leaf]: 'old', [sibling]: 'sibling' }
-      }
-    },
     codexRestartNoticeByPtyId: {
       old: { previousAccountLabel: 'old', nextAccountLabel: 'new', incarnationId: 'inc-old' }
     }
@@ -128,6 +100,16 @@ it('keeps rootless recovery failure guarded without borrowing a sibling binding'
   })
   useAppStore.getState().queuePaneAccountRestarts(['old'], 'codex')
   useAppStore.getState().clearCodexRestartNotice('old')
+  const layout = useAppStore.getState().terminalLayoutsByTabId.tab
+  useAppStore.setState({
+    ptyIdsByTabId: { tab: ['old', 'sibling'] },
+    terminalLayoutsByTabId: {
+      tab: { ...layout, ptyIdsByLeafId: { ...layout.ptyIdsByLeafId, [sibling]: 'sibling' } }
+    }
+  })
+  const other = input('sibling', sibling)
+  other.type('sibling remains reachable\r')
+  expect(other.writes).toEqual(['sibling remains reachable\r'])
   const old = input('old')
   old.type('must remain blocked\r')
   expect(old.writes).toEqual([])

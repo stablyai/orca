@@ -200,7 +200,13 @@ export type TerminalActions = {
     patch: Partial<
       Pick<
         CodexAccountRestart,
-        'phase' | 'condition' | 'receipt' | 'error' | 'resultPtyId' | 'resultIncarnationId'
+        | 'phase'
+        | 'condition'
+        | 'receipt'
+        | 'error'
+        | 'resultPtyId'
+        | 'resultIncarnationId'
+        | 'notDispatched'
       >
     > | null
   ) => void

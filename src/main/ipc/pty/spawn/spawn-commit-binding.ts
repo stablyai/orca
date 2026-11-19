@@ -10,6 +10,7 @@ import { persistFreshPaneBinding } from '../pane/fresh-pane-binding'
 import { swapReplacedPaneBinding } from '../pane/pane-owner-replacement'
 import type { ReplacedPaneOwner } from '../pane/replaced-pane-owner'
 import { discardUnpersistedPtySpawn } from '../pane/spawn-registration'
+import { toSshExecutionHostId } from '../../../../shared/execution-host/execution-host'
 
 /** A lane's pane binding for its new process, saved before the spawn is acknowledged. */
 export type PtySpawnPaneBinding = {
@@ -42,9 +43,13 @@ export async function savePtySpawnPaneBinding(
     }
   }
   const replaced = state.replacedPaneOwner
+  const hostId = connectionId ? toSshExecutionHostId(connectionId) : replaced?.pane?.hostId
   try {
     const persisted = replaced
-      ? await store.persistPtyBinding(swapReplacedPaneBinding(store, binding, replaced))
+      ? await store.persistPtyBinding(
+          swapReplacedPaneBinding(store, binding, replaced, hostId),
+          hostId
+        )
       : await persistFreshPaneBinding(store, binding, connectionId, absentOwner)
     if (persisted === false) {
       throw new Error(refusal)

@@ -62,6 +62,8 @@ const ReceiptSchema = z.object({
     })
     .optional()
 })
+const MAX_RECEIPT_BYTES = 4096
+const MAX_ENCODED_RECEIPT_CHARS = Math.ceil(MAX_RECEIPT_BYTES / 3) * 4
 export function readAccountRestartCondition(value: unknown): AccountRestartCondition | undefined {
   const parsed = AccountRestartConditionSchema.safeParse(value)
   return parsed.success ? parsed.data : undefined
@@ -115,14 +117,14 @@ export function readAccountRestartReceipt(error: unknown): AccountRestartReceipt
     return undefined
   }
   const encoded = message.slice(index + PREFIX.length).trim()
-  if (!/^[\w-]+$/.test(encoded) || encoded.length > 1400) {
+  if (!/^[\w-]+$/.test(encoded) || encoded.length > MAX_ENCODED_RECEIPT_CHARS) {
     return undefined
   }
   try {
     const bytes = Uint8Array.from(atob(encoded.replaceAll('-', '+').replaceAll('_', '/')), (c) =>
       c.charCodeAt(0)
     )
-    if (bytes.length > 1024) {
+    if (bytes.length > MAX_RECEIPT_BYTES) {
       return undefined
     }
     return parseAccountRestartReceipt(JSON.parse(new TextDecoder().decode(bytes)))

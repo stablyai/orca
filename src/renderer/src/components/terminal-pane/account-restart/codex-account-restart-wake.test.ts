@@ -165,6 +165,7 @@ it('initializes a retained account pane before choosing its main-layout wake rou
 
 it('refuses a late create result after main publishes a different successor', async () => {
   const { session, connect, retained } = await deferredSession()
+  let lateDecision: boolean | undefined
   connect.mockImplementation(async (options) => {
     expect(options.onAccountRestartDispatch()).toBe(true)
     const layout = useAppStore.getState().terminalLayoutsByTabId.tab
@@ -176,16 +177,17 @@ it('refuses a late create result after main publishes a different successor', as
         }
       }
     })
-    expect(options.shouldContinue({ id: 'late-result', incarnationId: 'inc-late' })).toBe(false)
+    lateDecision = options.shouldContinue({ id: 'late-result', incarnationId: 'inc-late' })
     return undefined
   })
   await session.resumeDeferredSpawn()
+  expect(lateDecision).toBe(false)
 
   expect(useAppStore.getState().terminalLayoutsByTabId.tab.ptyIdsByLeafId?.[leaf]).toBe(
     'foreign-successor'
   )
   expect(retained.get(leaf)).toBe('saved output')
-  expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(0)
+  expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(1)
 })
 
 it('keeps an unknown outcome read-only when two wake routes race', async () => {
@@ -194,11 +196,16 @@ it('keeps an unknown outcome read-only when two wake routes race', async () => {
     .getState()
     .updateCodexAccountRestart(codexAccountRestartToken(request), { phase: 'unresolved' })
   const read = Promise.withResolvers<ReturnType<typeof snapshot>>()
-  call.mockReturnValue(read.promise)
+  const reading = Promise.withResolvers<void>()
+  call.mockImplementation(() => {
+    reading.resolve()
+    return read.promise
+  })
   const first = session.resumeDeferredSpawn()
-  const second = session.resumeDeferredSpawn()
+  await reading.promise
+  runDeferredSessionAttach(session)
   read.resolve(snapshot({ ptyId: 'old', incarnationId: 'inc-old' }))
-  await Promise.all([first, second])
+  await first
 
   expect(connect).not.toHaveBeenCalled()
   expect(session.transport.getPtyId()).toBeNull()

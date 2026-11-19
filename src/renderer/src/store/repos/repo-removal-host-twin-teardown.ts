@@ -7,6 +7,7 @@ import { cancelStructuredLaunchesForWorktrees } from '../slices/worktrees/teardo
 import { collectHostTwinPurgeScopes } from '../slices/worktrees/teardown/host-twin-purge-scopes'
 import { omitRecordKeys } from '../slices/worktrees/teardown/record-key-omission'
 import { removeWorkspaceUnreadState } from '../slices/workspace-attention/workspace-unread-removal'
+import { releaseRetiredAccountRestartSlots } from '@/components/terminal-pane/account-restart/detached/detached-pane-restart-slots'
 import {
   collectRemovedHostTwinState,
   isRuntimeHost,
@@ -119,6 +120,7 @@ export function closeRemovedHostTwinState(
       }
     }
     // Why: a parked or restored pane has no exit callback left to clear these; shared PTYs are not in the plans' lists.
+    const beforeRestarts = get().pendingPaneAccountRestarts
     set((state) => ({
       ...removeWorkspaceUnreadState(
         state,
@@ -144,6 +146,7 @@ export function closeRemovedHostTwinState(
       ),
       codexRestartNoticeByPtyId: omitRecordKeys(state.codexRestartNoticeByPtyId, retiredPtyIds)
     }))
+    releaseRetiredAccountRestartSlots(beforeRestarts, get().pendingPaneAccountRestarts)
     // Why: a pending chat's tab can already be gone, so its launch is cancelled through the registry.
     cancelStructuredLaunchesForWorktrees(
       new Set(hostTwinIds.keys()),

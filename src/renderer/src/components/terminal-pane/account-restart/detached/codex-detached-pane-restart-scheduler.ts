@@ -1,5 +1,7 @@
 import { useAppStore } from '@/store/index'
 import { subscribeMountedTerminalTabChanges } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
+import { subscribePtyDataHandlerRemoval } from '../../pty-transport/shutdown/pty-shutdown-data-suspension'
+import { subscribeDetachedRestartCapacity } from './detached-pane-restart-slots'
 import type { PaneAccountRestart } from '@/store/terminals/terminal-contracts'
 import {
   resetDetachedCodexPaneRestartClaimsForTests,
@@ -38,15 +40,20 @@ export function installCodexDetachedPaneRestartExecutor(): () => void {
       scheduleClaimSweep()
     }
   })
-  const unsubscribeMountedTabs = subscribeMountedTerminalTabChanges(() => {
+  const onDeliveryOwnerChange = (): void => {
     if (!sweepQueued && Object.keys(useAppStore.getState().pendingPaneAccountRestarts).length > 0) {
       scheduleClaimSweep()
     }
-  })
+  }
+  const unsubscribeMountedTabs = subscribeMountedTerminalTabChanges(onDeliveryOwnerChange)
+  const unsubscribeDataHandlers = subscribePtyDataHandlerRemoval(onDeliveryOwnerChange)
+  const unsubscribeCapacity = subscribeDetachedRestartCapacity(onDeliveryOwnerChange)
   scheduleClaimSweep()
   return () => {
     unsubscribe()
     unsubscribeMountedTabs()
+    unsubscribeDataHandlers()
+    unsubscribeCapacity()
     if (executorGeneration === generation) {
       executorInstalled = false
       executorGeneration += 1

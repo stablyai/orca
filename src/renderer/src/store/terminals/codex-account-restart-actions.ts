@@ -2,6 +2,10 @@ import { getTerminalNoticeLifetime } from '@/components/terminal-pane/provider-n
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
+import {
+  getCachedWindowsTerminalCapabilities,
+  hasCachedWindowsTerminalCapabilities
+} from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
 import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
@@ -70,6 +74,9 @@ export function createCodexAccountRestartActions(
           }
           const environmentId = runtimeEnvironmentIdUnlessTwin(s, pane.worktreeId)
           const tab = s.tabsByWorktree[pane.worktreeId]?.find((t) => t.id === pane.tabId)
+          const capabilities = hasCachedWindowsTerminalCapabilities()
+            ? getCachedWindowsTerminalCapabilities()
+            : null
           next[pane.key] = {
             agent: 'codex',
             requestId: createBrowserUuid(),
@@ -98,7 +105,10 @@ export function createCodexAccountRestartActions(
               )?.path,
             connectionId: getConnectionIdFromState(s, pane.worktreeId),
             shellOverride: tab?.shellOverride,
-            projectRuntime: getLocalProjectExecutionRuntimeContext(s, pane.worktreeId),
+            projectRuntime: getLocalProjectExecutionRuntimeContext(s, pane.worktreeId, undefined, {
+              wslAvailable: capabilities?.wslAvailable,
+              availableWslDistros: capabilities?.wslDistros ?? null
+            }),
             hostId: getResourceExecutionHostIdForWorktree(s, pane.worktreeId),
             phase: startup ? 'accepted' : 'failed',
             startupInput: startup ? null : startupInput,
@@ -146,6 +156,7 @@ export function createCodexAccountRestartActions(
         claimed = {
           ...candidate,
           phase: 'claimed',
+          notDispatched: undefined,
           executorId: createBrowserUuid(),
           ...(deferred
             ? {

@@ -91,7 +91,8 @@ async function stopRendererOwnedPtyAs(
   let stopped = false
   try {
     const evidence = await stopRendererOwnedPtyProcess(deps, args)
-    stopped = evidence instanceof PtyExitProof
+    // Legacy relay acknowledgement retains ordinary stop labels without proving account retirement.
+    stopped = evidence === undefined || evidence instanceof PtyExitProof
     return evidence
   } finally {
     settleStop?.(stopped)

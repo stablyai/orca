@@ -5,6 +5,7 @@ import { isWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layou
 import { shouldRetainDisposedPaneSpawn } from './spawn/disposed-spawn-retention'
 import { findColdRestoreResumeSource } from './startup/cold-restore-resume-startup'
 import { mainStartsPane } from './spawn/main-starts-pane'
+import { isCodexPaneStale } from './input/codex-pane-stale'
 import { requestTerminalPaneRecovery } from '../render-health/recovery/terminal-pane-recovery'
 import type { IpcPtyTransportOptions } from '../pty-transport/pty-transport-types'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
@@ -93,6 +94,15 @@ function terminalShowsOutput(terminal: ConnectPanePtySession['pane']['terminal']
 export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPtyTransportOptions {
   const holdsInput = holdsInputUntilConnect(session)
   return {
+    canSendInput: (ptyId, inputKind, incarnationId) =>
+      inputKind === 'query-reply' ||
+      !isCodexPaneStale({
+        tabId: session.deps.tabId,
+        worktreeId: session.deps.worktreeId,
+        leafId: session.pane.leafId,
+        panePtyId: ptyId,
+        paneIncarnationId: incarnationId
+      }),
     onDrivingInputAttempt: (ptyId) => session.noteTerminalInputForPty(ptyId),
     terminalKittyKeyboardProtocol:
       session.pane.terminal.options.vtExtensions?.kittyKeyboard === true,

@@ -191,9 +191,9 @@ export function currentCodexAccountRestart(
     : null
 }
 
-function reconcileRetiredCodexNotices(
-  before: AppState,
-  next: AppState
+export function reconcileRetiredCodexNotices(
+  before: Pick<AppState, 'pendingPaneAccountRestarts'>,
+  next: CodexRestartPopulationState
 ): AppState['codexRestartNoticeByPtyId'] {
   let notices = next.codexRestartNoticeByPtyId
   let panes: ReturnType<typeof currentCodexRestartPanes> | undefined
@@ -244,7 +244,14 @@ export function withCodexAccountRestartPruning(
     return patch
   }
   const next = { ...state, ...patch }
-  const requests = pruneCodexAccountRestarts(next)
+  const topologyChanged =
+    next.tabsByWorktree !== state.tabsByWorktree ||
+    next.terminalLayoutsByTabId !== state.terminalLayoutsByTabId ||
+    next.ptyIdsByTabId !== state.ptyIdsByTabId
+  // Queue actions already fence their affected pane; phase changes cannot retire unrelated panes.
+  const requests = topologyChanged
+    ? pruneCodexAccountRestarts(next)
+    : next.pendingPaneAccountRestarts
   const notices = reconcileRetiredCodexNotices(state, {
     ...next,
     pendingPaneAccountRestarts: requests
