@@ -119,9 +119,17 @@ const lastUsedAt = (entry: TerminalSessionNameEntry) => entry.usedAt ?? entry.sa
 // so a refused clear is not undone by the next successful write; dropped once one lands.
 let unsaved: Mutation[] = []
 
-function applyMutations(current: Entries, mutations: readonly Mutation[], replay = false): boolean {
+/** Applies mutations to `current`; `resolved` (when given) receives each as it was decided, with
+ *  the naming time a handoff kept, so a refused one replays as decided rather than as asked. */
+function applyMutations(
+  current: Entries,
+  mutations: readonly Mutation[],
+  replay = false,
+  resolved?: Mutation[]
+): boolean {
   let changed = false
   for (const mutation of mutations) {
+    resolved?.push(mutation)
     if ('entry' in mutation) {
       const stored = current.get(mutation.key)
       // A refused save replayed later must not undo a newer one another window made: a different
@@ -145,7 +153,9 @@ function applyMutations(current: Entries, mutations: readonly Mutation[], replay
           mutation.keepNamedAt && stored?.title === mutation.entry.title
             ? stored.savedAt
             : mutation.entry.savedAt
-        current.set(mutation.key, { ...mutation.entry, savedAt })
+        const entry = { ...mutation.entry, savedAt }
+        current.set(mutation.key, entry)
+        resolved?.splice(-1, 1, { key: mutation.key, entry })
         changed = true
       }
     } else if (current.get(mutation.key)?.tabId === mutation.forgetOwnedBy) {
@@ -178,7 +188,8 @@ function notify(): void {
 /** Re-read before writing so another window's saves and forgets are kept; apply only these changes. */
 function commit(mutations: readonly Mutation[]): void {
   const current = readCurrent()
-  if (!applyMutations(current, mutations)) {
+  const resolved: Mutation[] = []
+  if (!applyMutations(current, mutations, false, resolved)) {
     entries = current
     return
   }
@@ -197,7 +208,7 @@ function commit(mutations: readonly Mutation[]): void {
     unsaved = []
   } catch {
     // Quota or a disabled store: keep the changes for the next write to try again.
-    unsaved = [...unsaved, ...mutations].slice(-TERMINAL_SESSION_NAMES_MAX_ENTRIES)
+    unsaved = [...unsaved, ...resolved].slice(-TERMINAL_SESSION_NAMES_MAX_ENTRIES)
   }
   notify()
 }
