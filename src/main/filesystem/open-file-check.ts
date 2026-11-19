@@ -1,5 +1,5 @@
 import { constants } from 'node:fs'
-import { lstat, open, readdir, readlink, realpath, stat } from 'node:fs/promises'
+import { lstat, open, readFile, readdir, readlink, realpath, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
@@ -14,6 +14,19 @@ const WINDOWS_EXCLUSIVE_OPEN = 0x10000000
 
 type Target = { path: string; ino: bigint; dev: bigint }
 
+async function procHidesProcesses(): Promise<boolean> {
+  const mounts = await readFile('/proc/self/mountinfo', 'utf8').catch(() => null)
+  if (mounts === null) {
+    return true
+  }
+  // Fields: id parent major:minor root mountpoint options ... - fstype source superoptions.
+  return mounts.split('\n').some((line) => {
+    const fields = line.split(' ')
+    const hidepid = /(?:^|,)hidepid=([^,]+)/.exec(fields.at(-1) ?? '')?.[1]
+    return fields[4] === '/proc' && hidepid !== undefined && hidepid !== '0' && hidepid !== 'off'
+  })
+}
+
 // Every readable process's open files, from the /proc fd links: reading a link never touches the
 // file's own filesystem, so a dead network mount can't stall it. Other users' processes are
 // skipped (their descriptors are unreadable anyway); one of ours we can't read makes it unknown.
@@ -25,6 +38,10 @@ async function openOnLinux(
   const paths = new Set(targets.map((target) => target.path))
   const byInode = new Map(targets.map((target) => [`${target.dev}:${target.ino}`, target.path]))
   const found = new Set<string>()
+  // Under hidepid, processes we may not inspect (an undumpable Codex) aren't even listed.
+  if (await procHidesProcesses()) {
+    return null
+  }
   const deadline = Date.now() + PROC_SCAN_BUDGET_MS
   const uid = process.getuid?.()
   for (const pid of await readdir('/proc')) {
