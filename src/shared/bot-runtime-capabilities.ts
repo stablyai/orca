@@ -41,6 +41,11 @@ export const BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY =
 // update refuses the field, so clients offer the colors only where this is advertised.
 export const BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY = 'bots.avatar-color.v1' as const
 
+// Host records the owner's answer to an item's open question (the owner-comment endpoint's answer link,
+// `answers`, `answerId`): one write that also moves the item to In progress and replies
+// `answered: true`. An older host has no answers, so a client shows its comment box instead of the card.
+export const BOTS_ITEM_ANSWERS_RUNTIME_CAPABILITY = 'bots.item-answers.v1' as const
+
 export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_GROUPS_RUNTIME_CAPABILITY,
   BOTS_MOBILE_RUNTIME_CAPABILITY,
@@ -53,5 +58,6 @@ export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_ITEM_COMMENT_ATTACHMENTS_RUNTIME_CAPABILITY,
   BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY,
   BOTS_SESSION_LINKS_RUNTIME_CAPABILITY,
-  BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY
+  BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY,
+  BOTS_ITEM_ANSWERS_RUNTIME_CAPABILITY
 ] as const

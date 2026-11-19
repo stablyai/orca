@@ -90,7 +90,6 @@ export const posted = defineFixture({
       bot={fixtureCos}
       item={item}
       entry={{
-        question: null,
         event: {
           id: 'e1',
           kind: 'commented',
