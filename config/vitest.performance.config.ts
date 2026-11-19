@@ -19,8 +19,6 @@ const namedContracts = [
   'config/scripts/static-analysis/oxlint-contracts/app-store-performance-plugin.test.mjs',
   'config/scripts/static-analysis/oxlint-contracts/quadratic-buffer-concat-plugin.test.mjs'
 ]
-// Wall-clock budgets aren't contracts: this selection must run in seconds and never flake on a busy runner.
-const notContracts = ['src/main/bots/bot-chat-search-host.performance.test.ts']
 for (const contract of namedContracts) {
   if (!existsSync(resolve(contract))) {
     throw new Error(`Missing performance contract: ${contract}`)
@@ -35,7 +33,6 @@ export default defineConfig({
     projects: undefined,
     ...(process.versions.bun ? { pool: 'node-runtime', poolRunner: nodeRuntimePool } : {}),
     include: [...contractGlobs, ...namedContracts],
-    exclude: [...(baseConfig.test?.exclude ?? []), ...notContracts],
     benchmark: { include: [] },
     fileParallelism: false,
     retry: 0
