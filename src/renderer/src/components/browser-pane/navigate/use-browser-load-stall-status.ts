@@ -11,7 +11,7 @@ function subscribe(listener: () => void): () => void {
   listeners.add(listener)
   if (!listening) {
     listening = true
-    window.api.browser.onLoadStall((event) => {
+    window.api?.browser?.onLoadStall?.((event) => {
       if (event.stall) {
         stalls.set(event.browserPageId, event.stall)
       } else if (!stalls.delete(event.browserPageId)) {
