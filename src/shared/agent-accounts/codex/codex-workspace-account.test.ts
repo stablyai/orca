@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
 import { assignCodexWorkspaceAccount } from './codex-workspace-account'
+import { effectiveWorkspaceAccountId } from '../workspace-account-binding'
 
 it('updates one workspace without replacing other assignments and clears only that workspace', () => {
   const accounts = [{ id: 'personal' }, { id: 'work' }]
@@ -27,6 +28,15 @@ it('rejects an account that does not belong to the host', () => {
       { workspaceId: 'folder:a', accountId: 'remote-account' }
     )
   ).toThrow('That Codex account no longer exists on this host.')
+})
+
+it('resolves inheritance, managed bindings and the real system default against the host selection', () => {
+  expect(effectiveWorkspaceAccountId({}, 'folder:a', 'personal')).toBe('personal')
+  expect(effectiveWorkspaceAccountId({}, 'folder:a', null)).toBeNull()
+  expect(effectiveWorkspaceAccountId({ 'folder:a': 'work' }, 'folder:a', 'personal')).toBe('work')
+  expect(
+    effectiveWorkspaceAccountId({ 'folder:a': 'system-default' }, 'folder:a', 'personal')
+  ).toBeNull()
 })
 
 it('saves a real system-default assignment separately from inheriting the host account', () => {

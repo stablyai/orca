@@ -4,7 +4,7 @@ import type { CodexRuntimeHomeService } from '../../codex-accounts/runtime-home-
 import type { ClaudeRuntimeAuthService } from '../../claude-accounts/runtime-auth-service'
 import { folderIdOfSelector } from '../../../shared/workspace/identity/workspace-scope'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
-import { workspaceAccountId } from '../../../shared/agent-accounts/workspace-account-binding'
+import { effectiveWorkspaceAccountId } from '../../../shared/agent-accounts/workspace-account-binding'
 import { join } from 'node:path'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import { HistoryContinuationLedger } from './history-continuation-ledger'
@@ -48,11 +48,14 @@ export function installProviderWorkspaceSessionResume(
               ? rosters.codex().systemDefault?.email
               : rosters.claude().systemDefaultEmail
           return {
-            workspaceAccountId: workspaceAccountId(
+            workspaceAccountId: effectiveWorkspaceAccountId(
               provider === 'codex'
                 ? settings.codexWorkspaceAccounts
                 : settings.claudeWorkspaceAccounts,
-              workspaceId
+              workspaceId,
+              roster.activeAccountIdsByRuntime
+                ? roster.activeAccountIdsByRuntime.host
+                : roster.activeAccountId
             ),
             accounts: [
               {

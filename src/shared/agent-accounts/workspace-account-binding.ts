@@ -15,6 +15,15 @@ export function workspaceAccountId(
   return Object.hasOwn(bindings, key) ? bindings[key] : undefined
 }
 
+export function effectiveWorkspaceAccountId(
+  bindings: Record<string, string> | undefined,
+  workspaceId: string | undefined,
+  hostAccountId: string | null
+): string | null {
+  const assignedId = workspaceAccountId(bindings, workspaceId)
+  return assignedId === WORKSPACE_SYSTEM_DEFAULT_ACCOUNT_ID ? null : (assignedId ?? hostAccountId)
+}
+
 export function assignWorkspaceAccount(
   bindings: Record<string, string> | undefined,
   accounts: readonly { id: string }[] | undefined,

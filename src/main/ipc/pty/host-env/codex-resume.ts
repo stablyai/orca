@@ -24,6 +24,23 @@ export type PreparedCodexResumeHome = {
   preparation: Promise<CodexSessionResumePreparation | null>
 }
 
+export type PtySpawnCodexResumeDeps = {
+  prepareCodexResumeHome: (args: PrepareCodexResumeHomeArgs) => PreparedCodexResumeHome | null
+  resolveCodexResumeLaunch: (
+    command: string | undefined,
+    prepared: PreparedCodexResumeHome
+  ) => Promise<CodexResumeLaunch>
+  noCodexResumeLaunch: (command: string | undefined) => CodexResumeLaunch
+  reconcileSharedRuntimeResumeHome: (
+    resumeHome: Extract<CodexSessionResumePreparation, { outcome: 'resume' }>,
+    resolveCurrent: () => string | null | Promise<string | null>
+  ) => Promise<string>
+  stripSequencedStartupResumeArgv: <T extends Record<string, string> | undefined>(
+    env: T,
+    launch: CodexResumeLaunch
+  ) => T
+}
+
 export type PrepareCodexResumeHomeArgs = {
   connectionId?: string | null
   launchAgent?: TuiAgent

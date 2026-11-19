@@ -13,7 +13,6 @@ import { addWslEnvKeys } from '../../../../shared/shell/wsl/wsl-env'
 import { isAgentStatusHooksEnabled } from '../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { awaitExplicitAgentPluginGuestReadiness } from '../../../agent-hooks/wsl-relay/wsl-agent-plugin-readiness'
 import { ensureCodexStateDbBackfillRecoveryStarted } from '../../../codex/history/index/codex-state-db-backfill-recovery'
-import type { CodexSessionResumePreparation } from '../../../codex/history/resume/codex-session-resume-home'
 import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import { isSafePtySessionId } from '../../../daemon/sessions/pty-session-id'
 import type { IPtyProvider } from '../../../providers/pty/provider-contract'
@@ -31,32 +30,13 @@ import {
   shouldSkipCodexHomeEnvForWindowsShell,
   shouldStripInheritedOrcaCodexHome
 } from './codex-home'
-import type {
-  CodexResumeLaunch,
-  PrepareCodexResumeHomeArgs,
-  PreparedCodexResumeHome
-} from './codex-resume'
+import type { CodexResumeLaunch, PtySpawnCodexResumeDeps } from './codex-resume'
 import { inheritOmpLaunchEnvironment } from './omp-launch-environment'
 import { promoteAgentTeamsShimPath } from './path'
 import type { GetSelectedCodexHomePath } from './types'
 import { clearProviderPtyState } from '../provider/state-cleanup'
 
-export type PtySpawnCodexResumeDeps = {
-  prepareCodexResumeHome: (args: PrepareCodexResumeHomeArgs) => PreparedCodexResumeHome | null
-  resolveCodexResumeLaunch: (
-    command: string | undefined,
-    prepared: PreparedCodexResumeHome
-  ) => Promise<CodexResumeLaunch>
-  noCodexResumeLaunch: (command: string | undefined) => CodexResumeLaunch
-  reconcileSharedRuntimeResumeHome: (
-    resumeHome: Extract<CodexSessionResumePreparation, { outcome: 'resume' }>,
-    resolveCurrent: () => string | null | Promise<string | null>
-  ) => Promise<string>
-  stripSequencedStartupResumeArgv: <T extends Record<string, string> | undefined>(
-    env: T,
-    launch: CodexResumeLaunch
-  ) => T
-}
+export type { PtySpawnCodexResumeDeps } from './codex-resume'
 
 export type PtySpawnHostEnv = {
   codexResumeLaunch: CodexResumeLaunch
@@ -123,19 +103,31 @@ export async function resolvePtySpawnHostEnv(args: PtySpawnHostEnvArgs): Promise
 
 async function resolvePtySpawnHostEnvForAct(args: PtySpawnHostEnvArgs): Promise<PtySpawnHostEnv> {
   const { deps, codexSelectionTarget: target } = args
-  const codexResumePreparation = args.preAdopted
-    ? null
-    : deps.prepareCodexResumeHome({
-        launchAgent: args.launchAgent,
-        providerSession: args.resumeProviderSession,
-        target,
-        // Client-supplied CODEX_HOME can bypass host resume preparation.
-        launchEnv: args.env,
-        ...(args.resumeOnSelectedAccount ? { useSelectedAccount: true } : {})
-      })
-  const codexResumeLaunch = codexResumePreparation
-    ? await deps.resolveCodexResumeLaunch(args.command, codexResumePreparation)
-    : deps.noCodexResumeLaunch(args.preAdopted ? undefined : args.command)
+  const launchesCodex = args.launchAgent === 'codex'
+  const pinnedCodex =
+    !args.preAdopted && launchesCodex && args.env?.ORCA_HISTORY_RESUME_RECEIPT
+      ? await historyLaunchAccount(args.env, 'codex', args.worktreeId)
+      : null
+  const codexResumePreparation =
+    args.preAdopted || pinnedCodex
+      ? null
+      : deps.prepareCodexResumeHome({
+          launchAgent: args.launchAgent,
+          providerSession: args.resumeProviderSession,
+          target,
+          // Client-supplied CODEX_HOME can bypass host resume preparation.
+          launchEnv: args.env,
+          ...(args.resumeOnSelectedAccount ? { useSelectedAccount: true } : {})
+        })
+  const codexResumeLaunch: CodexResumeLaunch = pinnedCodex
+    ? {
+        ...deps.noCodexResumeLaunch(args.command),
+        codexResumeHome: { outcome: 'resume', codexHomePath: pinnedCodex.home },
+        providerSession: args.resumeProviderSession ?? null
+      }
+    : codexResumePreparation
+      ? await deps.resolveCodexResumeLaunch(args.command, codexResumePreparation)
+      : deps.noCodexResumeLaunch(args.preAdopted ? undefined : args.command)
   // Time provenance/hook repair, auth selection and env assembly separately to attribute their different costs.
   args.mark?.('codex_resume')
   const codexResumeHome = codexResumeLaunch.codexResumeHome
@@ -149,10 +141,6 @@ async function resolvePtySpawnHostEnvForAct(args: PtySpawnHostEnvArgs): Promise<
       Object.assign(baseEnv, claude.envPatch)
     }
   }
-  const launchesCodex = args.launchAgent === 'codex'
-  const pinnedCodex = launchesCodex
-    ? await historyLaunchAccount(baseEnv, 'codex', args.worktreeId)
-    : null
   if (pinnedCodex) {
     delete baseEnv.ORCA_CODEX_LAUNCH_ERROR
   }
