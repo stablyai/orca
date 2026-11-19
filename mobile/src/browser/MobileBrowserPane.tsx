@@ -208,23 +208,30 @@ export function MobileBrowserPane({
       zoomRef
     })
 
+  const navigateTo = useCallback(
+    async (url: string) => {
+      const settled = await sendBrowserRequest(
+        async (rpc, page, options) =>
+          browserNavigate.interpret(await browserNavigate.request(rpc, { ...page, url }, options)),
+        { showBusy: true, timeoutMs: 30_000 }
+      )
+      if (settled?.url !== undefined) {
+        setAddressValue(displayBrowserUrl(settled.url))
+        lastZoomResetUrlRef.current = settled.url
+        resetBrowserZoomState()
+      }
+    },
+    [resetBrowserZoomState, sendBrowserRequest]
+  )
+
   const navigateToAddress = useCallback(async () => {
     const url = normalizeBrowserUrl(addressValue)
     if (!url) {
       setError(translate('browser.pane.invalidUrl', 'Enter a valid URL.'))
       return
     }
-    const settled = await sendBrowserRequest(
-      async (rpc, page, options) =>
-        browserNavigate.interpret(await browserNavigate.request(rpc, { ...page, url }, options)),
-      { showBusy: true, timeoutMs: 30_000 }
-    )
-    if (settled?.url !== undefined) {
-      setAddressValue(displayBrowserUrl(settled.url))
-      lastZoomResetUrlRef.current = settled.url
-      resetBrowserZoomState()
-    }
-  }, [addressValue, resetBrowserZoomState, sendBrowserRequest])
+    await navigateTo(url)
+  }, [addressValue, navigateTo])
 
   const { panResponder, sendDialogCommand, sendKeyboardText, sendKeypress, togglePointerModifier } =
     useMobileBrowserInteractions({
@@ -284,6 +291,14 @@ export function MobileBrowserPane({
     )
   }, [controlsDisabled, sendBrowserRequest])
 
+  // As on desktop's streamed pane: reloading the host's error page only refreshes it, so re-attempt the URL that failed.
+  const retryFailedLoad = useCallback(() => {
+    if (controlsDisabled) {
+      return
+    }
+    void navigateTo(tab.loadError?.validatedUrl || tab.url)
+  }, [controlsDisabled, navigateTo, tab.loadError?.validatedUrl, tab.url])
+
   const selectBrowserViewMode = useCallback(
     (mode: MobileBrowserViewMode) => {
       if (browserViewMode === mode) {
@@ -318,6 +333,7 @@ export function MobileBrowserPane({
       panResponder={panResponder}
       pointerModifiers={pointerModifiers}
       reloadPage={reloadPage}
+      retryFailedLoad={retryFailedLoad}
       renderedFrameSource={renderedFrameSource}
       selectBrowserViewMode={selectBrowserViewMode}
       sendDialogCommand={sendDialogCommand}

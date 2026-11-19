@@ -8,6 +8,7 @@ import {
   readdirSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   utimesSync,
   writeFileSync
 } from 'node:fs'
@@ -256,6 +257,31 @@ describe('shareCodexAccountHistory', () => {
 
     expect(lstatSync(join(f.account, 'thread-writer-locks')).isSymbolicLink()).toBe(true)
     expect(existsSync(join(f.store, 'thread-writer-locks', name))).toBe(false)
+  })
+
+  it('keeps history apart while a thread lock the merge kept beside the store copy is held', async () => {
+    const f = fixture()
+    const kept = join(f.account, 'thread-writer-locks.orca-profile-merge')
+    const lock = join(kept, '0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c.lock')
+    mkdirSync(join(f.store, 'thread-writer-locks'))
+    symlinkSync(
+      join(f.store, 'thread-writer-locks'),
+      join(f.account, 'thread-writer-locks'),
+      'junction'
+    )
+    mkdirSync(kept)
+    writeFileSync(lock, '')
+    const release = await holdThreadLock(lock)
+
+    try {
+      expect(await f.share()).toBe('busy')
+    } finally {
+      await release()
+    }
+    expect(lstatSync(join(f.account, 'sessions')).isSymbolicLink()).toBe(false)
+
+    expect(await f.share()).toBe('shared')
+    expect(existsSync(lock)).toBe(false)
   })
 })
 

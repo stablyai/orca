@@ -89,6 +89,26 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
     expect(codex.connections[0].closeCount).toBe(1)
   })
 
+  it('opens a read-only thread with every server its effective config has turned off', async () => {
+    const project = { name: { type: 'project', dotCodexFolder: '/work/.codex' }, version: 'x' }
+    const codex = fakeCodex({
+      'config/read': () => ({
+        config: { mcp_servers: { probe: { command: 'python3' } } },
+        origins: { 'mcp_servers.probe.command': project }
+      })
+    })
+    await acquired(codex, { readOnly: 'reply-only', threadConfig: { web_search: 'disabled' } })
+
+    const calls = codex.connections[0].calls
+    expect(calls.find((call) => call.method === 'config/read')?.params).toEqual({
+      cwd: '/work/repo'
+    })
+    expect(calls.find((call) => call.method === 'thread/start')?.params?.config).toMatchObject({
+      web_search: 'disabled',
+      'mcp_servers.probe.enabled': false
+    })
+  })
+
   it('keeps the traffic Codex sends before the session is published', async () => {
     const codex = fakeCodex()
     const events: CodexStructuredSessionEvent[] = []

@@ -20,6 +20,8 @@ export type RuntimeClientSettings = Pick<
   | 'deleteChatHistoryWithWorkspace'
   | 'claudeSubagentNavigationEnabled'
   | 'terminalCopyTrimsGutter'
+  | 'terminalScrollbackRows'
+  | 'terminalWordSeparator'
   | 'defaultTaskSource'
   | 'defaultTaskViewPreset'
   | 'visibleTaskProviders'
@@ -59,8 +61,12 @@ export type RuntimeClientSettings = Pick<
   voice: Pick<VoiceSettings, 'enabled' | 'sttModel'>
 }
 
-/** The saved per-action launch recipes (agent, prompt template, agent args), already migrated. */
-export type RuntimeClientSourceControlAi = { actions: SourceControlAiActionDefaults }
+/** The Source Control AI switch and saved per-action launch recipes (agent, prompt template, agent args), already migrated. */
+export type RuntimeClientSourceControlAi = {
+  /** Absent on older hosts, which read as on. */
+  enabled: boolean
+  actions: SourceControlAiActionDefaults
+}
 
 /** Safe paired projection: host labels only; filesystem defaults stay host-private. */
 export type RuntimeHostDisplayLabelOverrides = Partial<
@@ -71,7 +77,7 @@ export type RuntimeClientSettingsUpdate = Pick<
   Partial<GlobalSettings>,
   | 'agentStatusHooksEnabled'
   | 'claudeSubagentNavigationEnabled'
-  | 'experimentalConnectors'
+  | 'botsEnabled'
   | 'defaultTuiAgent'
   | 'disabledTuiAgents'
   | 'agentDefaultArgs'

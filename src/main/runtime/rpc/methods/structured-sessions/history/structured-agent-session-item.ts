@@ -15,7 +15,7 @@ export const STRUCTURED_AGENT_SESSION_ITEM_METHODS = [
     params: ItemParams,
     handler: async (params, ctx): Promise<{ item: AgentJournalRenderItem | null }> => {
       const item = await (
-        await requireInstalledStructuredHost(ctx, params.sessionId)
+        await requireInstalledStructuredHost(ctx, params.sessionId, true)
       ).historyItem(params.sessionId, params.itemId)
       if (!item) {
         return { item: null }

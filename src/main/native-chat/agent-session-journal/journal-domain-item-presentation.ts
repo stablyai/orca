@@ -1,3 +1,4 @@
+import { boundedStoredJson, boundedStoredJsonSql } from './journal-stored-json-bounds'
 import type Database from '../../sqlite/sync-database'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -17,9 +18,17 @@ import {
 } from './journal-domain-item-display'
 
 export function journalDomainClientFormColumns(alias = 'item'): string {
-  return `${alias}.item_id,${alias}.wire_version,
-    CASE WHEN ${alias}.wire_version=${AGENT_SESSION_ITEM_WIRE_VERSION}
-      THEN COALESCE(${alias}.wire_json,${alias}.payload_json) ELSE ${alias}.payload_json END AS client_json,
+  const current = `${alias}.wire_version=${AGENT_SESSION_ITEM_WIRE_VERSION}`
+  return `${alias}.item_id,${alias}.wire_version,${boundedStoredJsonSql(
+    `CASE WHEN ${current} THEN COALESCE(${alias}.wire_json,${alias}.payload_json)
+      ELSE ${alias}.payload_json END`,
+    'client_json',
+    {
+      bytes: `CASE WHEN ${current} THEN COALESCE(octet_length(${alias}.wire_json),octet_length(${alias}.payload_json))
+        ELSE octet_length(${alias}.payload_json) END`,
+      shortenColumn: `${alias}.payload_json`
+    }
+  )},
     CASE WHEN ${alias}.wire_version=${AGENT_SESSION_ITEM_WIRE_VERSION}
       THEN COALESCE(${alias}.wire_bytes,octet_length(${alias}.payload_json)) END AS client_bytes,
     CASE WHEN ${alias}.wire_version=${AGENT_SESSION_ITEM_WIRE_VERSION} AND ${alias}.wire_json IS NOT NULL
@@ -62,7 +71,7 @@ export function readJournalDomainClientForm(
   const item = readJournalStoredItem(
     db,
     [target.sessionId, target.epoch],
-    row.client_json,
+    boundedStoredJson(row, 'client_json'),
     row.output_blob
   )
   return row.wire_version === AGENT_SESSION_ITEM_WIRE_VERSION
@@ -88,21 +97,25 @@ export function readJournalDomainClientItems(
   return ids.flatMap((id) => (selected.has(id) ? [selected.get(id)!.item] : []))
 }
 
+// Current rows keep a detail form within the detail limit; older rows hold only the whole item.
+const DETAIL_JSON = `CASE WHEN wire_version=${AGENT_SESSION_ITEM_WIRE_VERSION}
+  THEN COALESCE(detail_json,payload_json) ELSE payload_json END`
+const DETAIL_BYTES = `CASE WHEN wire_version=${AGENT_SESSION_ITEM_WIRE_VERSION}
+  THEN COALESCE(octet_length(detail_json),octet_length(payload_json)) ELSE octet_length(payload_json) END`
+
 export function readJournalDomainItemDetail(
   db: Database.Database,
   target: JournalDomainItemTarget,
   itemId: string
 ): AgentJournalRenderItem | null {
   const row = db
-    .prepare(`SELECT wire_version,
-    CASE WHEN wire_version=${AGENT_SESSION_ITEM_WIRE_VERSION} THEN COALESCE(detail_json,payload_json)
-      ELSE payload_json END AS detail_json FROM journal_items
+    .prepare(`SELECT wire_version,${boundedStoredJsonSql(DETAIL_JSON, 'detail_json', { bytes: DETAIL_BYTES, shortenColumn: 'payload_json' })} FROM journal_items
     WHERE session_id=? AND epoch=? AND item_id=? AND hidden=0`)
     .get(target.sessionId, target.epoch, itemId)
   if (!row) {
     return null
   }
-  const parsed: AgentJournalRenderItem = JSON.parse(String(row.detail_json))
+  const parsed: AgentJournalRenderItem = JSON.parse(String(boundedStoredJson(row, 'detail_json')))
   const item = hydrateJournalStoredItem(db, [target.sessionId, target.epoch], parsed)
   if (row.wire_version === AGENT_SESSION_ITEM_WIRE_VERSION) {
     return item

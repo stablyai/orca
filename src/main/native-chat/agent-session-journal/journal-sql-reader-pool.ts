@@ -1,8 +1,10 @@
 import type { JournalSqlForkReader, JournalSqlConversionReader } from './journal-sql-reader-slot'
 import { ReaderSlot } from './journal-sql-reader-slot'
+import { JOURNAL_SQL_READERS } from './journal-sql-reader-requests'
 import type { JournalForkPreparationInput } from './journal-fork-preparation'
 import { throwIfSignalAborted } from '../../../shared/concurrency/abort-signal-reason'
 import type { JournalOutlineCache } from './journal-domain-outline'
+import type { JournalLegacyChatComparison } from './journal-sql-reader-protocol'
 import {
   currentWorkerEntryLayout,
   resolveWorkerThreadEntryPath
@@ -126,6 +128,15 @@ export class JournalSqlReaderPool {
     return this.conversionSlot.prepareConversion(sessionId)
   }
 
+  /** Null when the original journal is gone. */
+  async compareLegacyChat(sessionId: string): Promise<JournalLegacyChatComparison | null> {
+    const response = await this.slot().request({ kind: 'legacy-compare', sessionId })
+    if (response.type !== 'legacy-compare') {
+      throw new Error('journal reader returned no legacy compare')
+    }
+    return response.result
+  }
+
   async importState(sessionId: string) {
     const response = await this.slot().request({ kind: 'import-state', sessionId })
     if (response.type !== 'import-state') {
@@ -172,7 +183,7 @@ export class JournalSqlReaderPool {
     let slot = this.slots
       .filter((slot) => slot !== this.forkSlot && (!forFork || slot !== this.conversionSlot))
       .toSorted((a, b) => a.pendingCount - b.pendingCount)[0]
-    if ((!slot || slot.pendingCount > 0) && this.slots.length < 4) {
+    if ((!slot || slot.pendingCount > 0) && this.slots.length < JOURNAL_SQL_READERS) {
       slot = new ReaderSlot(this.filename, this.originalFilename, this.workerPath)
       this.slots.push(slot)
     }

@@ -159,7 +159,7 @@ export function runLocalSourceControlPlan(
       finalize({
         success: false,
         ...textGenerationFailure('timedOut', {
-          seconds: SOURCE_CONTROL_GENERATION_TIMEOUT_MS / 1000
+          seconds: Math.round(timeoutMs / 1000)
         })
       })
     }, timeoutMs)

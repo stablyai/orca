@@ -14,7 +14,9 @@ import {
 } from './codex-account-history-index'
 import { shareCodexAccountHistory, unshareCodexAccountHistory } from './codex-account-history-links'
 
-type QueuedPass = { shared: boolean; pass: Promise<void> }
+import { CodexHistoryPassRequests } from './codex-history-pass-queue'
+import { WRITER_LOCKS } from './codex-thread-writer-locks'
+import { isLinkedDirectory } from '../../../filesystem/merged-directory-link'
 
 const BUSY_RETRY_MS = 5 * 60_000
 // Retries start outside any pass's trace, so each is its own trace instead of nesting forever.
@@ -24,9 +26,9 @@ const INDEX_PENDING_DIR = (): string =>
   join(getOrcaUserDataPath(), 'codex-account-history', 'index-pending')
 
 /**
- * Host account history passes, one at a time in request order (homes merging into one store at
- * once would race on its folders): a request joins only the latest one queued for that home with
- * the same mode. A home settled in a mode this run skips later passes in it.
+ * Host account history passes, one at a time (homes merging into one store at once would race on
+ * its folders), a launch's own ahead of background ones; the newest request for a home replaces
+ * an older one still queued. A home settled in a mode this run skips later passes.
  */
 export class CodexAccountHistoryPasses {
   /**
@@ -35,12 +37,12 @@ export class CodexAccountHistoryPasses {
    */
   constructor(private readonly isStillShared: (accountHome: string) => boolean) {}
 
-  private readonly latest = new Map<string, QueuedPass>()
-  private tail: Promise<void> = Promise.resolve()
+  private readonly requests = new CodexHistoryPassRequests()
   private readonly settledThisRun = new Map<string, boolean>()
+  // When a home's lock folder last failed to link (another volume, a user's own link, a full
+  // disk): a pass starts the helper again only after the busy retry's interval.
+  private readonly lockFolderFailedAt = new Map<string, number>()
   private readonly busyRetries = new Map<string, ReturnType<typeof setTimeout>>()
-  // Retries whose pass is queued but not started: a launch doesn't wait behind other homes for one.
-  private readonly queuedRetries = new Set<string>()
   private activePasses = 0
   // Homes whose left-behind rollouts still await a content check, checked once no pass runs.
   private readonly owedChecks = new Map<string, { accountHome: string }>()
@@ -51,65 +53,52 @@ export class CodexAccountHistoryPasses {
     started: (): number => this.startedPasses
   }
 
+  /** `forLaunch`: a launch waits on it, so it goes ahead of queued background passes. */
   run(
     accountHome: string,
     shared: boolean,
-    options: { stillWanted?: () => boolean; fromRetry?: boolean } = {}
+    options: { forLaunch?: boolean; stillWanted?: () => boolean } = {}
   ): Promise<void> {
     const key = normalizeRuntimePathForComparison(accountHome)
-    if (
-      shared &&
-      !options.fromRetry &&
-      this.latest.get(key)?.shared !== false &&
-      (this.busyRetries.has(key) || this.queuedRetries.has(key))
-    ) {
-      // Found busy: its retry looks again within five minutes (unless an unshare queued since then
-      // would run last). A launch doesn't pay for a probe (a PowerShell start on Windows) or wait
-      // behind other homes for one.
+    if (shared && this.busyRetries.has(key) && !this.requests.has(key)) {
+      // Found busy and nothing queued for it: its retry looks again within five minutes. A launch
+      // doesn't pay for a probe (a PowerShell start on Windows) meanwhile.
       return Promise.resolve()
     }
-    const previous = this.latest.get(key)
-    if (previous?.shared === shared) {
-      return previous.pass
-    }
-    const pass = this.tail.then(async () => {
-      if (options.fromRetry) {
-        // Started: a launch now waits for it, since it may be moving the home's files.
-        this.queuedRetries.delete(key)
-      }
-      if (options.stillWanted && !options.stillWanted()) {
-        return
-      }
-      if (this.settledThisRun.get(key) === shared) {
-        // Moves are done; only index work a stopped or failed heal left behind is retried.
-        if (hasIncompleteHostCodexIndexHeal(INDEX_PENDING_DIR())) {
-          requestHostCodexIndexHeal(
-            INDEX_PENDING_DIR(),
-            getSystemCodexHomePath(),
-            this.passProgress
-          )
+    // A launch's own pass goes ahead of background ones, never behind a queued one.
+    return this.requests.request(
+      { queue: 'host', home: key, shared, forLaunch: options.forLaunch ?? false },
+      async () => {
+        if (options.stillWanted && !options.stillWanted()) {
+          return
         }
-        return
+        const failedAt = this.lockFolderFailedAt.get(key)
+        if (shared && failedAt !== undefined && Date.now() - failedAt < BUSY_RETRY_MS) {
+          return
+        }
+        if (this.settledThisRun.get(key) === shared) {
+          // Moves are done; only index work a stopped or failed heal left behind is retried.
+          if (hasIncompleteHostCodexIndexHeal(INDEX_PENDING_DIR())) {
+            requestHostCodexIndexHeal(
+              INDEX_PENDING_DIR(),
+              getSystemCodexHomePath(),
+              this.passProgress
+            )
+          }
+          return
+        }
+        this.activePasses += 1
+        this.startedPasses += 1
+        try {
+          await this.runPass(key, accountHome, shared)
+        } finally {
+          this.activePasses -= 1
+        }
+        // Index once no pass is moving files.
+        requestHostCodexIndexHeal(INDEX_PENDING_DIR(), getSystemCodexHomePath(), this.passProgress)
+        this.checkOwed()
       }
-      this.activePasses += 1
-      this.startedPasses += 1
-      try {
-        await this.runPass(key, accountHome, shared)
-      } finally {
-        this.activePasses -= 1
-      }
-      // Index once no pass is moving files.
-      requestHostCodexIndexHeal(INDEX_PENDING_DIR(), getSystemCodexHomePath(), this.passProgress)
-      this.checkOwed()
-    })
-    this.tail = pass.catch(() => {})
-    this.latest.set(key, { shared, pass })
-    void pass.finally(() => {
-      if (this.latest.get(key)?.pass === pass) {
-        this.latest.delete(key)
-      }
-    })
-    return pass
+    )
   }
 
   private async runPass(key: string, accountHome: string, shared: boolean): Promise<void> {
@@ -126,8 +115,11 @@ export class CodexAccountHistoryPasses {
     const onWarning = (error: unknown): void => {
       console.warn('[codex-account-history] Account history was not fully shared:', error)
     }
+    // Whatever this pass settles, an older busy retry no longer speaks for the home.
+    this.cancelRetry(key)
     try {
       if (!shared) {
+        this.lockFolderFailedAt.delete(key)
         if (await unshareCodexAccountHistory({ accountHome, storeHome, onWarning })) {
           this.settledThisRun.set(key, false)
           return 'unshared'
@@ -152,11 +144,24 @@ export class CodexAccountHistoryPasses {
       if (result === 'busy') {
         this.retryWhenIdle(key, accountHome)
       }
+      // Only a lock folder that couldn't link starts the helper again each pass; a history folder
+      // that failed (an antivirus handle, say) is cheap to retry.
+      if (
+        result === 'private' &&
+        !(await isLinkedDirectory(join(accountHome, WRITER_LOCKS), join(storeHome, WRITER_LOCKS)))
+      ) {
+        this.lockFolderFailedAt.set(key, Date.now())
+      }
       return result
     } catch (error) {
       onWarning(error)
       return 'failed'
     }
+  }
+
+  private cancelRetry(key: string): void {
+    clearTimeout(this.busyRetries.get(key))
+    this.busyRetries.delete(key)
   }
 
   // The account in use always has a Codex running at launch: retry until a moment none holds a lock.
@@ -167,15 +172,16 @@ export class CodexAccountHistoryPasses {
     const timer = inRootContext(() =>
       setTimeout(() => {
         this.busyRetries.delete(key)
-        if (!isCodexAccountHistoryWorkStopping()) {
-          this.queuedRetries.add(key)
+        // A request queued since (an unshare above all) decides instead; the retry would replace it.
+        if (
+          !isCodexAccountHistoryWorkStopping() &&
+          this.isStillShared(accountHome) &&
+          !this.requests.has(key)
+        ) {
           void this.run(accountHome, true, {
-            fromRetry: true,
             stillWanted: () =>
               !isCodexAccountHistoryWorkStopping() && this.isStillShared(accountHome)
-          })
-            .finally(() => this.queuedRetries.delete(key))
-            .catch(() => {})
+          }).catch(() => {})
         }
       }, BUSY_RETRY_MS)
     )
