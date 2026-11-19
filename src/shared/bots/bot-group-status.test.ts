@@ -55,7 +55,10 @@ describe('botGroupStatus', () => {
     expect(botGroupStatus(group, statuses, 2)).toBe('permission')
   })
 
-  it('shows working for a member turn and nothing for a clean finish', () => {
+  it('counts only room member turns and clears after a clean finish', () => {
+    expect(
+      botGroupStatus(group, new Map([entry('home-session', {}), entry('worker-session', {})]), 2)
+    ).toBeNull()
     expect(botGroupStatus(group, new Map([entry('bot-group-member-2', {})]), 2)).toBe('working')
     expect(
       botGroupStatus(

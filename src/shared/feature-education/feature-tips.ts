@@ -110,10 +110,11 @@ export const FEATURE_TIPS = [
     id: 'bots-teammate',
     priority: 'new',
     eyebrow: 'New',
-    title: 'Meet your AI teammate',
-    description: 'Ask from anywhere. It runs a fleet of agents and remembers what it learns.',
+    title: 'Your AI teammate',
+    description:
+      'Ask it in a thread. It runs the work, gets it reviewed and brings back a pull request.',
     action: 'create-bot',
-    ctaLabel: 'Create your first bot',
+    ctaLabel: 'Create a bot',
     completedByFeatureInteractions: []
   },
   {

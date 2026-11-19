@@ -173,9 +173,11 @@ const emojiShortcodeDatasetResource = {
   from: 'node_modules/emojibase-data/en/shortcodes/emojibase.json',
   to: 'node_modules/emojibase-data/en/shortcodes/emojibase.json'
 }
+// The native dependency rebuild runs after beforePack and replaces node-pty/build.
+const journalFileLockBuildDir = 'native/journal-file-lock/.build'
 const commonExtraResources = [
   {
-    from: 'node_modules/node-pty/build/Release',
+    from: `${journalFileLockBuildDir}/\${arch}`,
     to: 'bin',
     filter: ['journal-file-lock', 'journal-file-lock.exe']
   },
@@ -384,6 +386,7 @@ module.exports = {
     'out/main/foreign-sqlite-reader-entry.js',
     'out/main/agent-identity-worker-entry.js',
     'out/main/bots-db-worker-entry.js',
+    'out/main/orchestration-reader-entry.js',
     'out/main/session-link-worker-entry.js',
     'out/main/session-search-worker-entry.js',
     'out/main/journal-sql-worker-entry.js',
@@ -435,11 +438,10 @@ module.exports = {
       ({ buildJournalFileLock }) => {
         const lockName =
           context.electronPlatformName === 'win32' ? 'journal-file-lock.exe' : 'journal-file-lock'
-        buildJournalFileLock(
-          join(__dirname, '..', 'node_modules', 'node-pty', 'build', 'Release', lockName),
-          context.arch === 3 ? 'arm64' : 'x64',
-          { glibcFloor: context.electronPlatformName === 'linux' ? 'desktop' : false }
-        )
+        const arch = normalizeElectronArchitecture(context.arch)
+        buildJournalFileLock(join(__dirname, '..', journalFileLockBuildDir, arch, lockName), arch, {
+          glibcFloor: context.electronPlatformName === 'linux' ? 'desktop' : false
+        })
       }
     )
   },

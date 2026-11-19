@@ -1,7 +1,5 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
-import { autoUpdate } from '@floating-ui/dom'
-import { ChevronDown, ChevronUp, LoaderCircle, RefreshCw, X } from 'lucide-react'
-import { OrcaLogoSettingsIcon } from '@/components/settings/page/orca-logo-settings-icon'
+import { useEffect, useId, useRef, useState } from 'react'
+import { LoaderCircle, RefreshCw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
@@ -20,7 +18,8 @@ import {
 import { GitHubIcon } from '../icons/GitHubIcon'
 import { LinearIcon } from '../icons/LinearIcon'
 import { SlackIcon } from '../icons/SlackIcon'
-import { BotPanelCard } from './BotPanelCard'
+import { BotPanelSection } from './BotPanelSection'
+import { BotRowHoverCard } from './BotPanelRow'
 import { useBotPanelFold } from './use-bot-panel-fold'
 import { dismissSuggestion, lookNow, startSuggestion } from './bot-up-next-actions'
 import { BotLookSteps } from './BotLookSteps'
@@ -73,7 +72,11 @@ export function useLooking(
 }
 
 /** Suggestions newer than the owner had seen when this panel opened, marked seen only while shown. */
-function useNewSuggestions(bot: Bot, upNext: BotUpNext, shown: boolean): number {
+function useNewSuggestions(
+  bot: Bot,
+  upNext: BotUpNext,
+  shown: boolean
+): { newCount: number; seenWhenOpened: number } {
   const { state, items } = upNext
   const [seenWhenOpened] = useState(state.seenAt)
   const hostUnseen = items.some((item) => item.createdAt > state.seenAt)
@@ -83,105 +86,79 @@ function useNewSuggestions(bot: Bot, upNext: BotUpNext, shown: boolean): number 
       void markBotUpNextSeen({ hostId, id })
     }
   }, [hostId, id, hostUnseen, items, shown])
-  return items.filter((item) => item.createdAt > seenWhenOpened).length
+  return {
+    newCount: items.filter((item) => item.createdAt > seenWhenOpened).length,
+    seenWhenOpened
+  }
 }
 
-function UpNextHeader({
+/** The header's Look now: a spinner while looking (it opens the steps when there are some), else a
+ *  refresh shown on hover or focus whose tooltip says when it last looked. */
+function UpNextLookButton({
   looking,
   stepsOpen,
   onToggleSteps,
-  upNext,
-  newCount,
+  lastLookedAt,
   onLookNow
 }: {
   looking: boolean
   stepsOpen: boolean
   onToggleSteps: (() => void) | null
-  upNext: BotUpNext
-  newCount: number
+  lastLookedAt: number | undefined
   onLookNow: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const { state } = upNext
   if (looking) {
-    const label = t('bots.upNext.looking', 'Looking around…')
-    const Chevron = stepsOpen ? ChevronUp : ChevronDown
-    return onToggleSteps ? (
-      <button
-        type="button"
-        className="flex h-6 items-center gap-1 rounded-md px-1 text-2xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-        aria-expanded={stepsOpen}
-        onClick={onToggleSteps}
-      >
-        <LoaderCircle className="size-3 animate-spin" />
-        {label}
-        <Chevron className="size-3" />
-      </button>
-    ) : (
-      <span className="flex h-6 items-center gap-1 text-2xs text-muted-foreground">
-        <LoaderCircle className="size-3 animate-spin" />
-        {label}
-      </span>
-    )
-  }
-  return (
-    <div className="flex h-6 items-center gap-1">
-      {state.lastLookedAt ? (
-        <span className="text-2xs whitespace-nowrap text-muted-foreground @max-[284px]:hidden">
-          {lookedText(state.lastLookedAt)}
-          {newCount > 0 ? (
-            <>
-              {' · '}
-              <span className="font-medium text-foreground">
-                {t('bots.upNext.newCount', '{{count}} new', { count: newCount })}
-              </span>
-            </>
-          ) : null}
-        </span>
-      ) : null}
+    return (
       <Button
         variant="ghost"
         size="icon-xs"
-        aria-label={t('bots.upNext.lookNow', 'Look now')}
-        onClick={onLookNow}
+        aria-label={t('bots.upNext.lookingShort', 'Looking around')}
+        aria-expanded={onToggleSteps ? stepsOpen : undefined}
+        aria-disabled={onToggleSteps ? undefined : true}
+        onClick={onToggleSteps ?? undefined}
       >
-        <RefreshCw />
+        <LoaderCircle className="animate-spin" />
       </Button>
-    </div>
+    )
+  }
+  const label = t('bots.upNext.lookNow', 'Look now')
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button variant="ghost" size="icon-xs" aria-label={label} onClick={onLookNow}>
+          <RefreshCw />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={4}>
+        {label}
+        {lastLookedAt ? (
+          <span className="block text-muted-foreground">{lookedText(lastLookedAt)}</span>
+        ) : null}
+      </TooltipContent>
+    </Tooltip>
   )
 }
 
 // Takes the pointer only while the row shows its actions, so a hidden action is never clicked.
 const REVEALED_POINTER =
   "pointer-events-none group-hover/upnext:pointer-events-auto [[class~='group/upnext']:has(:focus-visible)_&]:pointer-events-auto"
-const PREVIEW_GAP = 4
-const PREVIEW_COLLISION_PADDING = 8
 
-function UpNextRow({ bot, item }: { bot: Bot; item: Suggestion }): React.JSX.Element {
+function UpNextRow({
+  bot,
+  item,
+  unseen
+}: {
+  bot: Bot
+  item: Suggestion
+  unseen: boolean
+}): React.JSX.Element {
   const t = useTranslate()
   const Icon = item.source ? SOURCE_ICONS[item.source] : null
   const link = item.link
   // The panel's fieldset already disables Start and Dismiss; this says why, and their variants keep them readable.
   const offline = useBotHostOffline(bot.hostId)
   const offlineId = useId()
-  const previewAnchor = useRef<HTMLButtonElement>(null)
-  const [previewElement, setPreviewElement] = useState<HTMLDivElement | null>(null)
-  const [previewOffset, setPreviewOffset] = useState(PREVIEW_GAP)
-  useLayoutEffect(() => {
-    const anchor = previewAnchor.current
-    if (!anchor || !previewElement) {
-      return
-    }
-    // Allow anchor overlap only when neither adjacent side has room for the whole preview.
-    return autoUpdate(anchor, previewElement, () => {
-      const bounds = anchor.getBoundingClientRect()
-      const space = Math.max(
-        bounds.top - PREVIEW_COLLISION_PADDING,
-        document.documentElement.clientHeight - bounds.bottom - PREVIEW_COLLISION_PADDING
-      )
-      setPreviewOffset(Math.min(PREVIEW_GAP, space - previewElement.getBoundingClientRect().height))
-    })
-  }, [previewElement])
   const offlineText = t('bots.upNext.hostOffline', '{{bot}}’s computer is offline', {
     bot: bot.name
   })
@@ -219,54 +196,47 @@ function UpNextRow({ bot, item }: { bot: Bot; item: Suggestion }): React.JSX.Ele
   return (
     // The ring sits on the row, outside the actions' backdrop, so it is never cut off at the end.
     <div className="group/upnext relative flex w-full min-w-0 items-start rounded-sm hover:bg-accent has-focus-visible:bg-accent has-[>button:focus-visible]:ring-1 has-[>button:focus-visible]:ring-ring">
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            ref={previewAnchor}
-            type="button"
-            className="flex min-w-0 flex-1 items-start gap-2 px-2 py-1.5 text-left focus-visible:outline-none disabled:hover:bg-transparent"
-            disabled={!link}
-            aria-describedby={offline ? offlineId : undefined}
-            onClick={
-              link
-                ? (event) =>
-                    openAppHttpLink(link, {
-                      worktreeId: folderWorkspaceKey(bot.folderWorkspaceId),
-                      event
-                    })
-                : undefined
-            }
-          >
-            <span className="flex h-5 w-4 shrink-0 items-center justify-center text-muted-foreground">
-              {Icon ? <Icon className="size-3.5" /> : <OrcaLogoSettingsIcon className="size-3.5" />}
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-[13px] font-medium text-foreground">
-                {item.title}
-              </span>
-              <span className="block truncate text-2xs text-muted-foreground">{item.why}</span>
-            </span>
-          </button>
-        </TooltipTrigger>
-        {/* The hovered row's actions cover its end, so the whole suggestion reads here. */}
-        <TooltipContent
-          ref={setPreviewElement}
-          side="top"
-          align="end"
-          sideOffset={previewOffset}
-          collisionPadding={PREVIEW_COLLISION_PADDING}
-          variant="tab-preview"
-          showArrow={false}
+      <BotRowHoverCard
+        card={
+          <>
+            <p className="font-medium">{item.title}</p>
+            <p className="mt-1 text-muted-foreground">{item.why}</p>
+            {link ? (
+              <p className="mt-1.5 text-muted-foreground">{suggestionLinkLabel(link)}</p>
+            ) : null}
+          </>
+        }
+      >
+        <button
+          type="button"
+          className={cn(
+            'flex min-w-0 flex-1 items-center gap-2 px-2 py-1 text-left focus-visible:outline-none',
+            link ? 'cursor-pointer' : 'cursor-default'
+          )}
+          aria-disabled={link ? undefined : true}
+          aria-describedby={offline ? offlineId : undefined}
+          onClick={
+            link
+              ? (event) =>
+                  openAppHttpLink(link, {
+                    worktreeId: folderWorkspaceKey(bot.folderWorkspaceId),
+                    event
+                  })
+              : undefined
+          }
         >
-          <p className="font-medium [overflow-wrap:anywhere]">{item.title}</p>
-          <p className="mt-1 text-muted-foreground [overflow-wrap:anywhere]">{item.why}</p>
-          {link ? (
-            <p className="mt-1.5 text-muted-foreground [overflow-wrap:anywhere]">
-              {suggestionLinkLabel(link)}
-            </p>
+          {/* The slot stays without a source so every title in the panel starts at one edge. */}
+          <span className="flex h-5 w-4 shrink-0 items-center justify-center text-muted-foreground">
+            {Icon ? <Icon className="size-3.5" /> : null}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-[13px] leading-5 text-foreground">
+            {item.title}
+          </span>
+          {unseen ? (
+            <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-foreground" />
           ) : null}
-        </TooltipContent>
-      </Tooltip>
+        </button>
+      </BotRowHoverCard>
       {/* Over the row's end on hover or focus; the fade hides the text it covers. Only the buttons take
           the pointer, so a click on the backdrop around them still opens the row's link. */}
       <span className="pointer-events-none absolute inset-y-0 right-0 flex items-center rounded-r-sm bg-accent pr-1.5 pl-1 text-accent-foreground opacity-0 transition-opacity before:absolute before:inset-y-0 before:right-full before:w-6 before:bg-linear-to-r before:from-transparent before:to-accent group-hover/upnext:opacity-100 [[class~='group/upnext']:has(:focus-visible)_&]:opacity-100">
@@ -307,7 +277,7 @@ export function BotUpNextSection({
   const fold = useBotPanelFold(bot.id, 'suggestions')
   // A reveal shows them even when folded; folded, they stay unseen until opened (the sidebar doesn't count them).
   const open = fold.open || glowing
-  const newCount = useNewSuggestions(bot, upNext, open)
+  const { newCount, seenWhenOpened } = useNewSuggestions(bot, upNext, open)
   const sectionRef = useRef<HTMLElement>(null)
   useEffect(() => {
     if (glowing) {
@@ -317,28 +287,53 @@ export function BotUpNextSection({
   if (items.length === 0 && !looking) {
     return null
   }
+  const lookButton = (
+    <UpNextLookButton
+      looking={looking}
+      stepsOpen={stepsOpen && open}
+      onToggleSteps={
+        runSessionId
+          ? () => {
+              // The steps show under the header, so opening them opens a folded section.
+              const next = !(stepsOpen && open)
+              setStepsOpen(next)
+              if (next && !open) {
+                fold.onOpenChange(true)
+              }
+            }
+          : null
+      }
+      lastLookedAt={state.lastLookedAt}
+      onLookNow={lookNowClicked}
+    />
+  )
   return (
-    <BotPanelCard
+    <BotPanelSection
       ref={sectionRef}
       className={cn('rounded-lg', glowing && 'native-chat-composer-glow')}
       title={t('bots.upNext.title', 'Suggestions')}
-      count={items.length}
       fold={{ open, onOpenChange: fold.onOpenChange }}
-      action={
-        <UpNextHeader
-          looking={looking}
-          stepsOpen={stepsOpen}
-          onToggleSteps={runSessionId ? () => setStepsOpen((open) => !open) : null}
-          upNext={upNext}
-          newCount={newCount}
-          onLookNow={lookNowClicked}
-        />
+      // Folded, nothing else says what it hides.
+      summary={
+        open ? null : (
+          <>
+            {items.length}
+            {newCount > 0 ? (
+              <span className="text-foreground">
+                {' · '}
+                {t('bots.upNext.newCount', '{{count}} new', { count: newCount })}
+              </span>
+            ) : null}
+          </>
+        )
       }
+      actions={looking ? null : lookButton}
+      live={looking ? lookButton : null}
     >
       {runSessionId && stepsOpen ? <BotLookSteps bot={bot} sessionId={runSessionId} /> : null}
       {items.map((item) => (
-        <UpNextRow key={item.id} bot={bot} item={item} />
+        <UpNextRow key={item.id} bot={bot} item={item} unseen={item.createdAt > seenWhenOpened} />
       ))}
-    </BotPanelCard>
+    </BotPanelSection>
   )
 }

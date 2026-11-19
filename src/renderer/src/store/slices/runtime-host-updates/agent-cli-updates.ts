@@ -55,7 +55,8 @@ function sameUpdates(a: readonly AgentCliUpdate[], b: readonly AgentCliUpdate[])
         other.installedVersion === update.installedVersion &&
         other.latestVersion === update.latestVersion &&
         other.command === update.command &&
-        other.runnable === update.runnable
+        other.runnable === update.runnable &&
+        JSON.stringify(other.models ?? []) === JSON.stringify(update.models ?? [])
       )
     })
   )

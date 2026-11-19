@@ -21,7 +21,6 @@ import {
 } from './bot-automation-card'
 import type { BotNeedsYouAsks } from './BotNeedsYouSection'
 import { BotUpcomingSection } from './BotUpcomingSection'
-import { BotRecentSection, BotWorkingSection } from './BotWorkingRecentSections'
 import { useBotForWorkspace, useBotGroupForWorkspace } from './bot-workspace'
 import { BotGroupItemsPanel } from './BotGroupItemsPanel'
 import { setBotSettingsPlace, useBotSettingsPlace } from './settings-view/bot-settings-place'
@@ -100,9 +99,8 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
   const activity = useBotActivity(bot)
   const now = useBotNow(bot)
   const tree = useBotChatTree(bot)
-  const chatsRead = tree.chats.length > 0
   const items = useBotItems(bot)
-  const read = items.state === 'unsupported' ? null : items.read
+  const read = items.read
   const seenAtOpen = useBotItemsSeenAtOpen(bot, read)
   const [filter, setFilterState] = useState<BotItemFilter>(BOT_ITEM_NO_FILTER)
   // The row Back returns focus to; another filter shows other rows.
@@ -210,7 +208,7 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
           <BotItemsFilterChips chats={itemChats} filter={filter} onFilter={setFilter} />
         ) : null}
         {read && items.refreshFailed ? <BotItemsReadFailed stale onRetry={items.retry} /> : null}
-        {/* Asks lead Needs you in every item-read state: loading, failed, empty or unsupported. */}
+        {/* Asks lead Needs you in every item-read state: loading, failed or empty. */}
         <BotItemsSection
           key={botItemFilterChat(filter) ?? ''}
           bot={bot}
@@ -227,10 +225,6 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
           offline={offline}
           focusFallback={scroll}
         />
-        {items.state === 'unsupported' ? (
-          // A host without items keeps what's running here.
-          <BotWorkingSection bot={bot} work={now.work} />
-        ) : null}
         <BotUpcomingSection
           bot={bot}
           rows={automationRows}
@@ -242,7 +236,6 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
         {activity.upNext ? (
           <BotUpNextSection key={bot.id} bot={bot} upNext={activity.upNext} />
         ) : null}
-        {chatsRead || read ? null : <BotRecentSection bot={bot} completed={activity.completed} />}
       </fieldset>
     </div>
   )

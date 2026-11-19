@@ -1903,6 +1903,13 @@
       },
       "stepFailed": "Orca could not finish this step.",
       "finishFailed": "Orca could not do that."
+    },
+    "automaticUpdates": {
+      "saveFailed": "Could not save automatic updates.",
+      "title": "Automatic updates",
+      "description": "On supported desktop installs, Orca downloads eligible updates on its regular check schedule and restarts to install them automatically.",
+      "info": "About automatic updates",
+      "installingStatus": "is being installed."
     }
   },
   "menu": {
@@ -5643,7 +5650,6 @@
             "27a74f91f0": "Nothing running right now",
             "298f4be7f2": "CPU",
             "2aa2de6cb9": "Name",
-            "1fedf94eae": "Combined CPU load. Values above 100% mean more than one core is working at once.",
             "e7cf14ec78": "Terminal sessions unavailable. The list may be stale.",
             "93b0de3c21": "Restart",
             "f85af9cda6": "Resource snapshots and terminal sessions are unavailable.",
@@ -6051,8 +6057,6 @@
                 "copy": {
                   "terminalSessionCount_one": "{{count}} terminal session",
                   "terminalSessionCount_other": "{{count}} terminal sessions",
-                  "memoryUnavailable": "memory unavailable",
-                  "tooltipSummary": "Resource Manager - {{memory}} - {{sessions}}",
                   "spaceScanReady": "Space scan ready",
                   "sessionsGroupedByWorkspace": "Terminal sessions are grouped by workspace.",
                   "noTerminalSessions": "No terminal sessions yet.",
@@ -7520,7 +7524,7 @@
         },
         "SidebarWorkspaceOptionsMenu": {
           "hosts": "Hosts",
-          "showSection": "Show",
+          "selectionSection": "Selection",
           "allHostsDetail": "Show every host",
           "configuredSshHost": "Configured SSH",
           "projectSshHost": "Project SSH",
@@ -7570,7 +7574,6 @@
           "219ebf1961": "Branch name",
           "folderPathIdentity": "Branch / folder path",
           "cli": "Orca CLI",
-          "workspaceOptions": "Workspace options",
           "optionsActiveFilters_one": "Workspace options ({{count}} filter active)",
           "optionsActiveFilters_other": "Workspace options ({{count}} filters active)",
           "optionsFilterCount_one": "Workspace options ({{count}} filter)",
@@ -20907,6 +20910,7 @@
         "providerUnavailable": "{{agent}} couldn't respond because the service is busy. Pick another model, or wait a little and send again.",
         "providerSafetyStopped": "{{agent}} stopped this response after a safety check. Review your request and send again.",
         "providerResponseFailed": "{{agent}} couldn't finish this response. Open Details for more information.",
+        "providerResponseFailedQuoted": "{{agent}} couldn't finish this response: {{detail}}.",
         "selectedModel": "the selected model",
         "providerRejected": "{{agent}} didn't accept this message.",
         "providerRejectedQuoted": "{{agent}} didn't accept this message: {{detail}}.",
@@ -21623,7 +21627,6 @@
         "backToMain": "Back to main agent",
         "mainAgent": "Main agent",
         "promptFromMain": "Prompt from main agent",
-        "clickToOpen": "Click to open",
         "backTo": "Back to {{value0}}",
         "path": "Subagent path",
         "stateHeading": {
@@ -22057,7 +22060,8 @@
       "toolAdded": {
         "removed": "Removed",
         "heading": "Added a tool",
-        "remove": "Remove"
+        "remove": "Remove",
+        "added": "Added"
       },
       "usageLimitActions": {
         "switchAccount": "Switch account",
@@ -24124,47 +24128,63 @@
       "demoCookie": "cookie"
     },
     "botsTeammate": {
-      "title": "Meet your AI teammate",
-      "description": "Ask from anywhere. It runs a fleet of agents and remembers what it learns.",
-      "cta": "Create your first bot",
-      "later": "Maybe later",
-      "stepAsk": "Message it from anywhere",
-      "stepFleet": "It runs a fleet of agents",
-      "stepReview": "You review the PR",
-      "storySummary": "You message the bot in Slack from your phone. It runs four coding agents in parallel on your computer, another bot reviews the work, and you get one pull request to review.",
-      "demoName": "Scout",
-      "demoReviewer": "Lens",
-      "you": "You",
-      "youInitial": "Y",
-      "youTyping": "You are typing",
-      "fromPhone": "Slack · from your phone",
-      "ask": "ship dark mode for Settings on desktop and mobile",
-      "onThisComputer": "on this computer",
-      "agents": "Agents",
-      "taskDesktop": "Desktop settings.css",
+      "title": "Your AI teammate",
+      "groupTitle": "Bots work together",
+      "pageAnnounce": "Page {{number}} of {{count}}: {{title}}",
+      "product": "Orca Bots",
+      "groupName": "Launch crew",
+      "releaseBot": "Release bot",
+      "reviewBot": "Review bot",
+      "groupAsk": "Ship the new settings page.",
+      "groupBuilding": "Building it.",
+      "groupReview": "The save button overlaps the footer on small screens.",
+      "docsBot": "Docs bot",
+      "groupDocs": "Updated the settings docs.",
+      "groupAnswer": "Fixed the overlap. Ready for you:",
+      "groupPr": "#1302 New settings page",
+      "groupComposer": "Message {{group}}, @ to mention a bot",
+      "description": "Ask it in a thread. It runs the work, gets it reviewed and brings back a pull request.",
+      "alwaysOnLead": "Always on.",
+      "alwaysOn": "Picks up work while you’re away.",
+      "teamLead": "Part of the team.",
+      "askIn": "Anyone can ask it in",
+      "askInPlaces": "Slack, GitHub or Linear",
+      "learnsLead": "Learns as it goes.",
+      "learns": "Remembers what you teach it.",
+      "agents": "Works with the agents you use",
+      "groupDescription": "Put a few bots in one group chat and give them one goal. They split the work and come back with one answer.",
+      "groupChatLead": "Put bots in one chat.",
+      "groupChat": "Mention one, or all of them.",
+      "groupHandLead": "They hand work to each other.",
+      "groupHand": "Each one picks up its part.",
+      "groupOneLead": "You get one answer.",
+      "groupOne": "With the pull request.",
+      "previousPage": "Previous page",
+      "pageNumber": "Page {{number}}",
+      "nextPage": "Next page",
+      "slackAppTag": "APP",
+      "taskDesktop": "Desktop settings layout",
       "taskMobile": "Mobile settings screen",
-      "taskScreenshots": "Update screenshot tests",
-      "taskTypes": "Fix 2 type errors",
-      "phaseReading": "Reading files…",
-      "phaseEditing": "Editing…",
-      "phaseTesting": "Running tests…",
-      "testsPass": "tests pass",
-      "statusPlanning": "Planning…",
-      "statusStarting": "Starting {{count}} agents…",
-      "statusRunning": "{{count}} agents running…",
-      "statusAgentsDone": "All agents done",
-      "statusReview": "Asking {{name}} to review…",
-      "statusMemory": "Saving what it learned…",
-      "statusDone": "Done",
-      "reviewedAll": "reviewed all 4 · 1 fix",
-      "remembered": "{{name}} remembered: use color tokens",
-      "prNumber": "PR #{{number}}",
-      "prTitle": "Dark mode for Settings",
-      "reviewedBy": "Reviewed by {{name}}",
-      "review": "Review",
-      "pause": "Pause",
-      "play": "Play",
-      "replay": "Replay"
+      "taskScreenshots": "Screenshot tests",
+      "taskTypes": "Type errors",
+      "slackThread": "Thread",
+      "slackChannel": "# mobile",
+      "slackPerson": "Jordan Lee",
+      "slackAsk": "the settings page breaks on mobile. Can you take it?",
+      "slackTyping": "{{name}} is typing",
+      "slackReply": "On it. Running 4 agents in parallel.",
+      "agentDone": "Done",
+      "agentRunning": "Running",
+      "agentsFinished": "4 agents finished",
+      "slackReview": "Reviewed the diff. Fixed two spacing issues on small screens.",
+      "slackMemory": "Noted for next time: check settings at the small breakpoint.",
+      "savedToMemory": "Saved to memory",
+      "slackReady": "Ready for review.",
+      "slackPrTitle": "#1284 Make the settings page responsive",
+      "slackPrBody": "Desktop and mobile layouts, with updated screenshot tests.",
+      "slackPrFiles": "6 files",
+      "checksPassed": "Checks passed",
+      "cta": "Create a bot"
     }
   },
   "quickOpen": {
@@ -25423,6 +25443,9 @@
     "wslMoveInstallHeld": "A project is moving to its WSL host. Install the update once the move finishes.",
     "wslMoveUndoInstallHeld": "A project is coming back from its WSL host. Install the update once that finishes.",
     "failure": {
+      "automaticInstallTerminalBusy": "Some terminals would end on restart. Orca will try again on a later update check.",
+      "macStagingTimeout": "macOS is still preparing the update. If this persists, quit and reopen Orca.",
+      "automaticInstallCheckpointFailed": "Orca could not save the current window before restarting. Try installing the update again.",
       "releaseNotReady": "A newer release isn't available for this device yet. Check again later.",
       "updateServerUnreachable": "Couldn't reach the update server. Try again in a few minutes.",
       "channelUnsupportedPlatform": "{{channel}} builds are produced only for macOS and Windows.",
@@ -25451,7 +25474,13 @@
       "rateLimitedInMinutes_other": "GitHub rate limit reached. Try again in about {{count}} minutes.",
       "rateLimitedInMinutesSignedOut_one": "GitHub rate limit reached. Try again in about {{count}} minute, or run `gh auth login` so Orca can use your account's higher limit.",
       "rateLimitedInMinutesSignedOut_other": "GitHub rate limit reached. Try again in about {{count}} minutes, or run `gh auth login` so Orca can use your account's higher limit."
-    }
+    },
+    "automatic": {
+      "downloading": "Downloading Orca {{version}}…",
+      "installing": "Installing Orca {{version}}…",
+      "restarting": "Orca will restart automatically."
+    },
+    "remoteUpdateBusy": "This server is already updating. Check again once it finishes."
   },
   "jira": {
     "connect": {
@@ -25841,7 +25870,14 @@
     "restartLocal": "Restart local daemon",
     "killAllLocal": "Kill all local sessions",
     "killFailed": "The terminal could not be ended. Last-observed sessions are retained.",
-    "metricDetails": "Metric details"
+    "metricDetails": "Metric details",
+    "owner": {
+      "orca": "Orca",
+      "agents": "Agents",
+      "otherTerminals": "Other terminals",
+      "description": "Orca is the app. Agents are terminals running an agent; Other terminals are the rest you run in Orca. The bar shows each one's share of their combined memory.",
+      "privateBytes": "Committed by Orca and terminals"
+    }
   },
   "browserExtensions": {
     "permission": {
@@ -26408,6 +26444,7 @@
   "agentPicker": {
     "catalogUnsupportedLaunch": "{{agent}} models are unavailable on this host. Your current choices still apply.",
     "catalogLoadFailed": "Could not load {{agent}} models.",
+    "catalogLoading": "Loading models…",
     "catalogSignInToLoad": "Sign in to {{agent}} to load its models.",
     "catalogInstallToLoad": "Install {{agent}} on this host to load its models.",
     "catalogNotLoaded": "{{agent}} models have not loaded.",
@@ -26959,14 +26996,12 @@
       "hostUnreachable": "Can’t reach {{host}}",
       "hostUpdate": "Update Orca on {{host}}",
       "hostNoBots": "Orca on {{host}} can’t run bots yet",
+      "hostNeedsServer": "Needs Orca server",
+      "hostNeedsServerHint": "Set up an Orca server on {{host}} in Settings → Remote Orca Servers to run bots.",
       "hostAs": "as {{account}}",
       "hostReconnect": "Reconnect",
       "hostReconnecting": "Reconnecting…",
       "hostUpdateAction": "Update",
-      "hostHintAction": "{{hint}}. {{action}}",
-      "hostsReady": "Ready",
-      "hostsUnavailable": "Not available",
-      "searchComputers": "Search computers…",
       "title": "New bot",
       "description": "Your AI teammate, with a name, memory and automations. It lives in a folder on one computer.",
       "name": "Name",
@@ -26976,8 +27011,22 @@
       "nextPicture": "Next picture",
       "pictureMascot": "Mascot {{n}} of {{total}}",
       "pictureUpload": "Your image",
+      "pictureColor": "Background color",
+      "pictureColorCustom": "Custom color",
+      "colorSky": "Sky",
+      "colorWhite": "White",
+      "colorLavender": "Lavender",
+      "colorPink": "Pink",
+      "colorPeach": "Peach",
+      "colorButter": "Butter",
+      "colorSage": "Sage",
+      "colorMint": "Mint",
+      "colorSlate": "Slate",
+      "colorGraphite": "Graphite",
+      "colorInk": "Ink",
       "runsOn": "Runs on <host/> with <agent/>",
       "runsOnAs": "Runs on <host/>, as <account/>, with <agent/>",
+      "noChatAgents": "No chat agents available on this computer.",
       "change": "Change",
       "computer": "Computer",
       "computerHint": "Where the bot runs.",
@@ -27188,12 +27237,7 @@
       "idle": "Idle",
       "needsYou": "Needs you",
       "askedCoordinator": "Asked {{name}} a question",
-      "chat": "Chat",
-      "startedByChat": "Started by your chat",
-      "startedByThread": "Started by a {{source}} thread",
-      "startedByAutomation": "Started by automation {{name}}",
-      "startedInSession": "Started in {{name}}",
-      "run": "Run"
+      "chat": "Chat"
     },
     "workspaces": {
       "showMore": "Show {{count}} more",
@@ -27530,28 +27574,36 @@
       "failed": "Failed",
       "running": "Running",
       "all": "All {{count}} automations",
-      "pausedCount": "{{count}} paused"
+      "pausedCount": "{{count}} paused",
+      "next": "Next",
+      "runNow": "Run now",
+      "openOnPage": "Open on Automations page",
+      "pauseShort": "Pause",
+      "resumeShort": "Resume"
     },
     "access": {
-      "yourAccess": "Their requests use your access, not their own. Anything {{name}} can do {{there}}, they can ask it to do.",
       "thisComputer": "this computer",
-      "here": "here",
-      "removeAnyTime": "You can remove them from Who can ask at any time.",
       "place": "{{connector}} ({{workspace}})",
       "titleOne": "Give {{person}} access to {{name}}?",
       "titleMany": "Give {{count}} people access to {{name}}?",
-      "descriptionOne": "{{person}} will be able to ask {{name}} from {{place}} and control it remotely: start, steer, approve and stop its work, using its access on {{computer}}.",
-      "descriptionMany": "They will be able to ask {{name}} from {{place}} and control it remotely: start, steer, approve and stop its work, using its access on {{computer}}.",
       "confirm": "Give access",
-      "account": "Their {{connector}} account: {{identity}}",
+      "confirmWarning": "They’ll act as you on {{computer}}.",
+      "confirmComputer": "Run commands and change files",
+      "confirmNoApprovals": "Acts without asking first",
+      "confirmMaySkipApprovals": "May act without asking first",
+      "confirmApproveOne": "{{person}} can approve its prompts",
+      "confirmApproveMany": "They can approve its prompts",
+      "confirmGoogle": "Use your Google account",
+      "confirmGitHub": "Comment and push on GitHub as you",
+      "confirmLinear": "Update Linear issues as you",
       "whoCanAsk": "Who can ask {{name}}",
       "summaryOnlyYou": "Only you can ask {{name}}.",
       "summaryOne": "You and {{person}} can ask {{name}}.",
       "summarySome": "You, {{people}} and {{last}} can ask {{name}}.",
       "summaryMany": "You and {{count}} other people can ask {{name}}.",
-      "controlNone": "Anyone you add can control {{name}} remotely, using its access on {{computer}}.",
-      "controlOne": "{{person}} can control {{name}} remotely: start, steer, approve and stop its work, using its access on {{computer}}.",
-      "controlMany": "They can control {{name}} remotely: start, steer, approve and stop its work, using its access on {{computer}}.",
+      "controlNone": "Anyone you add can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
+      "controlOne": "{{person}} can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
+      "controlMany": "They can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
       "reachHeading": "What {{name}} can reach",
       "reachComputer": "Your files, commands and accounts on {{computer}}",
       "reachComputerDetail": "As you, as far as the permission below allows.",
@@ -27591,7 +27643,11 @@
       "fixOnlyMeFailed": "Couldn’t remove {{names}}. Try again.",
       "reachGoogleDrive": "Use your Drive files",
       "reachGoogleDocs": "Read and edit your Docs",
-      "reachGoogleSheets": "Read and edit your Sheets"
+      "reachGoogleSheets": "Read and edit your Sheets",
+      "here": "here",
+      "thisServer": "this server",
+      "there": "there",
+      "executionComputer": "the computer this agent runs on"
     },
     "accessRequest": {
       "toast": "{{person}} asked for access to {{name}}",
@@ -27795,7 +27851,6 @@
       "pausedSignedOut": "{{hooks}} · paused while signed out"
     },
     "upNext": {
-      "looking": "Looking around…",
       "looked": "Looked {{time}}",
       "lookedYesterday": "Looked yesterday {{time}}",
       "lookNow": "Look now",
@@ -27810,7 +27865,8 @@
       "newSuggestions_one": "{{count}} new suggestion · click to see",
       "newSuggestions_other": "{{count}} new suggestions · click to see",
       "newCount": "{{count}} new",
-      "newSuggestions": "{{count}} new suggestions · click to see"
+      "newSuggestions": "{{count}} new suggestions · click to see",
+      "lookingShort": "Looking around"
     },
     "firstScreen": {
       "namesMore": "{{names}} and {{count}} more",
@@ -28216,10 +28272,11 @@
       }
     },
     "import": {
-      "nudgeOne": "We found a bot in {{app}}. Bring it over?",
-      "nudgeMany": "We found {{count}} bots in {{app}}. Bring one over?",
+      "nudgeOne": "We found a bot in {{app}}.",
+      "nudgeMany": "We found {{count}} bots in {{app}}.",
       "nudgeActionOne": "Bring it over",
       "nudgeActionMany": "Bring one over",
+      "nudgeDismiss": "Don't show again",
       "updateDraft": "Bring over anything new from {{name}} in {{app}}.",
       "title": "Import from another app",
       "description": "Your new bot reads the old one and sets itself up.",
@@ -28426,10 +28483,10 @@
       "category": {
         "coding": "Coding",
         "releases": "Releases & CI",
-        "support": "Support & feedback",
+        "support": "Support & triage",
         "planning": "Planning & docs",
         "ops": "Ops",
-        "personal": "Personal follow-ups"
+        "personal": "Personal assistant"
       },
       "paletteLine": "Bot template"
     },
@@ -28458,7 +28515,8 @@
       "upToDate": "Up to date",
       "changedSince": "Bot changed since",
       "copied": "Copied",
-      "cantReachCloud": "Can’t reach Orca Cloud",
+      "linkStatusUnavailable": "Couldn’t check the share link",
+      "linkNoLongerAvailable": "This share link is no longer available.",
       "publishedJustNow": "Published just now",
       "nextUpdate": "Next update",
       "sameLink": "Goes to the same link. Copies already made stay as they are.",
@@ -28466,6 +28524,7 @@
       "movedHere": "This link was updated somewhere else.",
       "updating": "Updating…",
       "publishing": "Publishing…",
+      "previewChanged": "The preview changed. Review it before publishing.",
       "manageSharing": "Manage sharing…",
       "sharedUpdated": "Shared · updated {{date}}",
       "secretFoundTitle": "Secret found",
@@ -28478,6 +28537,8 @@
       "cancel": "Cancel",
       "updateLink": "Update link",
       "publishLink": "Publish link",
+      "signInToPublish": "Sign in to publish",
+      "cancelSignIn": "Cancel sign-in",
       "lines": "{{count}} lines",
       "flagOnLine": "{{flag}} on line {{line}}",
       "memory": "Memory",
@@ -28714,8 +28775,13 @@
       "twiceDaily": "twice a day",
       "tidyNightAfter": "Each night after {{from}}, or once this computer is awake",
       "tidyWeekAfter": "Once a week after {{from}}, or once this computer is awake",
-      "lookDueNow": "Due now · {{every}}",
-      "lastNeededSignIn": "Its last run stopped for a sign-in"
+      "lastNeededSignIn": "Its last run stopped for a sign-in",
+      "stopped": "Stopped",
+      "lookAroundSettings": "Look around settings",
+      "dueNow": "Due now",
+      "runsEvery": "Runs {{every}}",
+      "tidySettings": "Tidy memory settings",
+      "needsSignIn": "Needs sign-in"
     },
     "toolApp": {
       "address": "Address",
@@ -28897,17 +28963,7 @@
       "workers": "Workers",
       "waitingCount": "{{count}} waiting",
       "loading": "Loading chats…",
-      "readFailed": "Couldn't read this bot's chats.",
-      "unsupported": "This bot's computer runs an older Orca that can't list chats.",
-      "seeItems": "See its work in Items"
-    },
-    "working": {
-      "title": "Working on",
-      "replying": "Replying"
-    },
-    "recent": {
-      "title": "Recent",
-      "seeAll": "See all"
+      "readFailed": "Couldn't read this bot's chats."
     },
     "cloudSignIn": {
       "automationScheduledOnly": "Runs on its schedule only: its events are paused while signed out of Orca",
@@ -28918,7 +28974,6 @@
       "slack": "Slack connects through Orca Cloud. Sign in to Orca to continue.",
       "github": "GitHub connects through Orca Cloud. Sign in to Orca to continue.",
       "linear": "Linear connects through Orca Cloud. Sign in to Orca to continue.",
-      "share": "Sharing goes through Orca Cloud. Sign in to Orca to continue.",
       "cancel": "Cancel",
       "paused": "Paused while signed out",
       "needsSignIn": "Needs sign-in",
@@ -28943,7 +28998,7 @@
       "copyPath": "Copy path",
       "topicFiles": "Topic files",
       "schedule": "Schedule",
-      "automationsFoot": "Automations are in Items › Automations.",
+      "automationsFoot": "Automations are in Home › Automations.",
       "soulAndMemory": "Soul and memory",
       "access": "Access",
       "whoCanAsk": "Who can ask",
@@ -28956,7 +29011,7 @@
       "deleteBot": "Delete bot…",
       "openAsFile": "Open as file",
       "backToSettings": "Back to Settings",
-      "backToItems": "Back to Items",
+      "backToItems": "Back to Home",
       "backToBots": "Back to Bots",
       "crumb": "Bot settings",
       "sharing": "Sharing",
@@ -29016,7 +29071,6 @@
         "added": "Added {{items}}",
         "canceled": "Canceled {{items}}",
         "changes": "{{from}} → {{to}} · {{count}} changes",
-        "openInItems": "Click to open in Items",
         "updated": "Updated {{items}}",
         "youCanceled": "You canceled {{items}}",
         "youCanceledMany": "You canceled {{count}} items: {{items}}",
@@ -29025,8 +29079,6 @@
         "youMarkedManyDone": "You marked {{count}} items done: {{items}}",
         "youMoved": "You moved {{items}} to {{status}}",
         "youMovedMany": "You moved {{count}} items to {{status}}: {{items}}",
-        "showLess": "Show less",
-        "showMore": "Show more",
         "moreItems": "+{{count}} more",
         "askedYou": "Asked you about {{items}}",
         "aWorker": "a worker",
@@ -29136,7 +29188,7 @@
         "planned": "Planned",
         "working": "In progress"
       },
-      "tab": "Items",
+      "tab": "Home",
       "view": {
         "activity": "Activity",
         "canceledNote": "Canceled:",
@@ -29164,16 +29216,15 @@
         "menu": "Snooze",
         "pick": "Pick a time…",
         "pickTitle": "Snooze until",
-        "pickWhy": "It leaves its group until then and keeps its status. A new question or a close from the bot brings it back sooner.",
-        "date": "Date",
         "time": "Time",
         "back": "Back",
-        "confirm": "Snooze until {{when}}",
         "later": "Later today",
         "tomorrow": "Tomorrow",
         "monday": "Monday",
+        "week": "In a week",
         "inHours_one": "In {{count}} hours",
-        "inHours_other": "In {{count}} hours"
+        "inHours_other": "In {{count}} hours",
+        "pickCustom": "Pick a date and time"
       }
     },
     "search": {
@@ -29476,9 +29527,9 @@
     "tryAgain": "Try again",
     "update": "Update",
     "versions": "{{installed}} → {{latest}}",
+    "modelRequires": "Requires {{product}} {{version}}",
     "claudeProduct": "Claude Code",
     "codexProduct": "Codex CLI",
-    "modelPickerRow": "Update {{product}} for new models",
     "commandCopied": "Command copied",
     "commandNotCopied": "Could not copy the command",
     "copyCommand": "Copy",
@@ -29506,5 +29557,11 @@
     "title": "Some background work paused after crashing repeatedly",
     "description": "Claude chat recovery is off until you retry. Copy, rewind and Space scans resume when you start them again.",
     "retry": "Retry"
+  },
+  "ui": {
+    "monthCalendar": {
+      "previous": "Previous month",
+      "next": "Next month"
+    }
   }
 }

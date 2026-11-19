@@ -1,5 +1,6 @@
 import * as z from 'zod'
 import { BOT_AGENTS, BotNameSchema } from '../bot-types'
+import { BotAvatarColorSchema } from './bot-avatar-color'
 import { isAdmissibleAgentJournalRenderItem } from '../agent-session/journal/agent-session-journal-schemas'
 import type { AgentJournalRenderItem } from '../agent-session/journal/agent-session-journal-types'
 
@@ -62,6 +63,7 @@ const BotGroupTurnSchema = z.object({
   botId: z.string(),
   botName: z.string(),
   avatar: z.string().nullable(),
+  avatarColor: BotAvatarColorSchema.nullable().optional().catch(undefined),
   agent: z.enum(BOT_AGENTS),
   sessionId: z.string(),
   mailbox: z.literal(true).optional(),

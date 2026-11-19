@@ -2852,6 +2852,7 @@
       "providerUnavailable": "{{agent}} couldn't respond because the service is busy. Pick another model, or wait a little and send again.",
       "providerSafetyStopped": "{{agent}} stopped this response after a safety check. Review your request and send again.",
       "providerResponseFailed": "{{agent}} couldn't finish this response. Open Details for more information.",
+      "providerResponseFailedQuoted": "{{agent}} couldn't finish this response: {{detail}}.",
       "selectedModel": "the selected model",
       "providerRejected": "{{agent}} didn't accept this message.",
       "providerRejectedQuoted": "{{agent}} didn't accept this message: {{detail}}.",
@@ -3617,15 +3618,16 @@
       "fullCopySaveUpdate": "Full Copy and Save for this attachment will be available in a phone update."
     },
     "agentMessage": {
-      "startedWorker": "Started worker",
-      "reopenedWorker": "Reopened worker",
-      "sentFollowUpToWorker": "Sent follow-up to worker",
-      "handedOffToAgent": "Handed off to agent",
-      "startedAgent": "Started agent",
-      "taskFromCoordinator": "Task from coordinator",
-      "messageFromCoordinator": "Message from coordinator",
-      "updateFromWorker": "Update from worker",
-      "messageFrom": "Message from",
+      "open": "Open {{name}}",
+      "row": {
+        "started": "Started",
+        "reopened": "Reopened",
+        "followedUp": "Sent follow-up to",
+        "handedOff": "Handed off to",
+        "task": "Task from",
+        "update": "Update from",
+        "message": "Message from"
+      },
       "sessionLink": "Link"
     },
     "fork": {
@@ -3809,6 +3811,10 @@
         "noteChanged": "Note changed",
         "indexChanged": "MEMORY.md changed"
       }
+    },
+    "eventRow": {
+      "running": "Running",
+      "failed": "Failed"
     }
   },
   "sourceControl": {
@@ -5043,17 +5049,13 @@
       "workspaceDeleted": "This chat’s workspace was deleted on {{name}}."
     },
     "activity": {
-      "empty": "{{name}}’s workers, threads and runs show up here.",
-      "inProgress": "In progress",
-      "completed": "Completed",
       "readFailed": "Couldn’t load activity.",
       "loading": "Loading activity…",
       "unavailable": "Activity is unavailable on this host.",
       "retry": "Retry",
       "lastRead": "Showing the last activity read.",
       "readFailedTitle": "Couldn’t load activity",
-      "unavailableTitle": "Activity unavailable",
-      "emptyTitle": "No activity yet"
+      "unavailableTitle": "Activity unavailable"
     },
     "automations": {
       "couldNotFinish": "Couldn’t finish",
@@ -5273,10 +5275,10 @@
       "category": {
         "coding": "Coding",
         "releases": "Releases & CI",
-        "support": "Support & feedback",
+        "support": "Support & triage",
         "planning": "Planning & docs",
         "ops": "Ops",
-        "personal": "Personal follow-ups"
+        "personal": "Personal assistant"
       },
       "allCategories": "All"
     },
@@ -5367,7 +5369,8 @@
       "showMoreWorkers_one": "Show {{count}} more worker",
       "showMoreWorkers_other": "Show {{count}} more workers",
       "moreMatches_one": "{{count}} more match. Search for more of a name to narrow it.",
-      "moreMatches_other": "{{count}} more matches. Search for more of a name to narrow it."
+      "moreMatches_other": "{{count}} more matches. Search for more of a name to narrow it.",
+      "readFailedTitle": "Couldn’t load chats"
     },
     "row": {
       "replyingIn": "Replying in {{place}}",

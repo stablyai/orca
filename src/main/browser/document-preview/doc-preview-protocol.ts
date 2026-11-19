@@ -5,6 +5,7 @@ import {
   parseDocPreviewUrl
 } from '../../../shared/document-preview/doc-preview-scheme'
 import { installBrowserSessionPartitionPolicies } from '../sessions/partition-policies/browser-session-partition-policies'
+import { holdBrowserSessionWebRequest } from '../sessions/requests/browser-session-web-request-owner'
 import { readDocPreviewFile } from './doc-preview-file-reader'
 import { publishDocPreviewFailure } from './doc-preview-failure-notice'
 import { getDocPreviewGrant } from './doc-preview-grant-registry'
@@ -116,11 +117,12 @@ export function installDocPreviewProtocolHandler(): void {
   if (previewSession.protocol.isProtocolHandled(DOC_PREVIEW_SCHEME)) {
     return
   }
-  previewSession.protocol.handle(DOC_PREVIEW_SCHEME, handleDocPreviewRequest)
   // Block network requests beyond CSP; explicit DNS-prefetch bypasses this hook.
-  previewSession.webRequest.onBeforeRequest((details, callback) => {
+  // Why first: if the block can't be held, previews never get their scheme and stay closed.
+  holdBrowserSessionWebRequest(previewSession, 'onBeforeRequest', (details, callback) => {
     callback({ cancel: !isAllowedDocPreviewRequestUrl(details.url) })
   })
+  previewSession.protocol.handle(DOC_PREVIEW_SCHEME, handleDocPreviewRequest)
   installBrowserSessionPartitionPolicies(
     {
       id: DOC_PREVIEW_PARTITION,
@@ -129,7 +131,8 @@ export function installDocPreviewProtocolHandler(): void {
       label: 'Document preview',
       source: null
     },
-    // Previews have no browsing-page download flow or ambient device permissions.
-    { downloads: 'deny', permissions: 'deny' }
+    // Previews have no browsing-page download flow or ambient device permissions. The block above
+    // already cancels all network, and the certificate guard would replace it as onBeforeRequest.
+    { downloads: 'deny', permissions: 'deny', certificateRequestGuard: false }
   )
 }
