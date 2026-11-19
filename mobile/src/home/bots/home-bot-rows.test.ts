@@ -80,12 +80,16 @@ const on = (...answers: BotComputerAnswer[]): HomeComputerBots => ({
 })
 
 function input(overrides: Partial<HomeBotRowsInput>): HomeBotRowsInput {
+  const hostStates = overrides.hostStates ?? { studio: 'connected', air: 'connected' }
   return {
     hosts: [
       { id: 'studio', name: 'Studio Mac' },
       { id: 'air', name: 'MacBook Air' }
     ],
-    hostStates: { studio: 'connected', air: 'connected' },
+    hostStates,
+    unreachableHosts: new Set(
+      Object.keys(hostStates).filter((id) => hostStates[id] === 'disconnected')
+    ),
     botsByHost: {},
     freshHosts: new Set(['studio', 'air']),
     kept: {},
@@ -151,9 +155,9 @@ describe('Home bots', () => {
       })
     )
     expect(result.rows.map((row) => [row.title, row.hostLabel, row.needsYou, row.dot])).toEqual([
-      ['Bot builder', 'Studio Mac', 2, 'inactive'],
+      ['Bot builder', 'Studio Mac', 2, 'active'],
       ['Atlas', 'MacBook Air', 0, 'working'],
-      ['ux-designer', 'Studio Mac', 0, 'inactive']
+      ['ux-designer', 'Studio Mac', 0, 'active']
     ])
     expect(result.needsYou).toBe(2)
     expect(result.rows.map((row) => row.preview)).toEqual([
