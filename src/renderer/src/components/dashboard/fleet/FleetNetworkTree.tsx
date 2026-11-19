@@ -1,7 +1,11 @@
 import { cn } from '@/lib/class-names'
 import { FleetNetworkNode, type FleetCardOpener } from './FleetNetworkNode'
 import type { FleetAgeFormatter } from './fleet-age-formatter'
-import { FLEET_TREE_BRANCH_GUTTER_PX, FLEET_TREE_NODE_MAX_WIDTH_PX } from './fleet-team-fold'
+import {
+  FLEET_TREE_BRANCH_GUTTER_PX,
+  FLEET_TREE_NODE_MAX_WIDTH_PX,
+  fleetTreeMinWidthPx
+} from './fleet-team-fold'
 import type { FleetNode, FleetProject } from './fleet-view-model'
 
 const CHILD_LIST_CLASS = cn(
@@ -10,7 +14,7 @@ const CHILD_LIST_CLASS = cn(
 )
 
 const BRANCH_CLASS = cn(
-  'relative flex min-w-0 basis-0 flex-col items-center pt-4',
+  'relative flex basis-0 flex-col items-center pt-4',
   'before:absolute before:top-0 before:right-1/2 before:h-4 before:w-1/2 before:border-t',
   'after:absolute after:top-0 after:left-1/2 after:h-4 after:w-1/2 after:border-t after:border-l',
   'before:border-muted-foreground/30 after:border-muted-foreground/30',
@@ -35,7 +39,11 @@ function FleetNetworkBranch({
   return (
     <li
       className={BRANCH_CLASS}
-      style={{ flexGrow: node.leafCount, paddingInline: FLEET_TREE_BRANCH_GUTTER_PX }}
+      style={{
+        flexGrow: node.leafCount,
+        minWidth: fleetTreeMinWidthPx(node),
+        paddingInline: FLEET_TREE_BRANCH_GUTTER_PX
+      }}
     >
       <FleetNetworkNode
         card={node.card}

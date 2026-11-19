@@ -52,7 +52,7 @@ export function FleetProjectSection({
               key={team.root.card.paneKey}
               team={team}
               project={project}
-              layout={fleetTeamLayout(team.root.leafCount, width)}
+              layout={fleetTeamLayout(team.root, width)}
               open={teamOpenOverrides.get(team.root.card.paneKey) ?? !team.settled}
               onOpenChange={(teamOpen) => onTeamOpenChange(team.root.card.paneKey, teamOpen)}
               now={now}

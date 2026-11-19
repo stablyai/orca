@@ -6,9 +6,16 @@ const FLEET_PROJECT_BORDER_PX = 1
 
 export type FleetTeamLayout = 'tree' | 'outline'
 
-/** Fold a team into indented rows once its leaves no longer fit side by side at a readable node width. */
-export function fleetTeamLayout(leafCount: number, viewWidth: number): FleetTeamLayout {
-  const leafSlotPx = FLEET_TREE_NODE_MIN_WIDTH_PX + 2 * FLEET_TREE_BRANCH_GUTTER_PX
+type FleetTreeShape = { readonly children: readonly FleetTreeShape[] }
+
+/** The narrowest branch that keeps its own node and every node below it at a readable width, gutters included. */
+export function fleetTreeMinWidthPx(node: FleetTreeShape): number {
+  const childrenPx = node.children.reduce((total, child) => total + fleetTreeMinWidthPx(child), 0)
+  return 2 * FLEET_TREE_BRANCH_GUTTER_PX + Math.max(FLEET_TREE_NODE_MIN_WIDTH_PX, childrenPx)
+}
+
+/** Fold a team into indented rows once its tree no longer fits with every node at a readable width. */
+export function fleetTeamLayout(root: FleetTreeShape, viewWidth: number): FleetTeamLayout {
   const treeWidthPx = viewWidth - 2 * (FLEET_PROJECT_BORDER_PX + FLEET_TEAM_TREE_INSET_PX)
-  return leafCount * leafSlotPx <= treeWidthPx ? 'tree' : 'outline'
+  return fleetTreeMinWidthPx(root) <= treeWidthPx ? 'tree' : 'outline'
 }
