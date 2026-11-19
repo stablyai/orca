@@ -146,6 +146,38 @@ describe('readZCodeInteractiveCapability', () => {
     }
   )
 
+  it('resolves and probes a command found through a relative PATH="." entry', async () => {
+    const relDir = join(root, 'relative-path')
+    const emptyHome = join(root, 'empty-home')
+    mkdirSync(relDir, { recursive: true })
+    mkdirSync(emptyHome, { recursive: true })
+    const binary = join(relDir, process.platform === 'win32' ? 'zcode.cmd' : 'zcode')
+    if (process.platform === 'win32') {
+      writeFileSync(
+        binary,
+        ['@echo off', "echo Cannot find package '@zcode/tui' 1>&2", 'exit /b 1', ''].join('\r\n')
+      )
+    } else {
+      writeFileSync(binary, '#!/bin/sh\necho "Cannot find package \'@zcode/tui\'" >&2\nexit 1\n')
+      chmodSync(binary, 0o755)
+    }
+
+    const relativeEnv =
+      process.platform === 'win32'
+        ? { ...process.env, PATH: '.', Path: '.' }
+        : { ...process.env, PATH: '.' }
+    expect(
+      await resolveZCodeExecutable('zcode', { env: relativeEnv, homePath: emptyHome, cwd: relDir })
+    ).toBe(binary)
+    expect(
+      await readZCodeInteractiveCapability('zcode', {
+        env: relativeEnv,
+        homePath: emptyHome,
+        cwd: relDir
+      })
+    ).toBe('missing-tui')
+  })
+
   it('does not cache unknown verdicts when the target binary is missing and retries once it exists', async () => {
     const missing = join(root, process.platform === 'win32' ? 'late-zcode.cmd' : 'late-zcode')
     expect(await readZCodeInteractiveCapability(missing)).toBe('unknown')

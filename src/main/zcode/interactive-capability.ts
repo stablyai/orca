@@ -16,6 +16,7 @@ export type ZCodeInteractiveCapabilityOptions = {
   env?: NodeJS.ProcessEnv
   homePath?: string
   platform?: NodeJS.Platform
+  cwd?: string
 }
 
 // Measured answers arrive under a second; timeouts mean unknown, never proven missing TUI.
@@ -65,6 +66,25 @@ export function resolveZCodeCommandOverride(
   return token && !/[\0\r\n]/.test(token) ? token : 'zcode'
 }
 
+function normalizePathEnv(
+  pathEnv: string | null,
+  cwd: string,
+  platform: NodeJS.Platform
+): string | null {
+  if (!pathEnv) {
+    return null
+  }
+  const pathApi = platform === 'win32' ? win32 : posix
+  const pathDelimiter = platform === 'win32' ? ';' : ':'
+  // Resolve relative PATH entries like `.` so `path.join('.', name)` cannot collapse a valid hit back to a bare name.
+  const entries = pathEnv
+    .split(pathDelimiter)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => (pathApi.isAbsolute(entry) ? entry : pathApi.resolve(cwd, entry)))
+  return entries.length > 0 ? entries.join(pathDelimiter) : null
+}
+
 /** Resolve bare names through PATH and standard CLI install dirs so Windows `.cmd` shims keep their extension for process-host's `shell: false` spawn. Returns null when no file exists so missing `.cmd` paths cannot spawn `cmd.exe` and be misclassified as interactive. */
 export async function resolveZCodeExecutable(
   command = 'zcode',
@@ -73,32 +93,33 @@ export async function resolveZCodeExecutable(
   const platform = options.platform ?? process.platform
   const env = options.env ?? process.env
   const homePath = options.homePath ?? homedir()
+  const cwd = options.cwd ?? process.cwd()
+  const pathApi = platform === 'win32' ? win32 : posix
   const raw = command.trim() || 'zcode'
   const expanded =
     raw.startsWith('~/') || (platform === 'win32' && raw.startsWith('~\\'))
-      ? (platform === 'win32' ? win32 : posix).join(homePath, raw.slice(2))
+      ? pathApi.join(homePath, raw.slice(2))
       : raw
   const hasSeparator = expanded.includes('/') || (platform === 'win32' && expanded.includes('\\'))
   if (!hasSeparator) {
     const resolved = await resolveCliCommandAsync(expanded, {
-      pathEnv: readPathEnv(env, platform),
+      pathEnv: normalizePathEnv(readPathEnv(env, platform), cwd, platform),
       homePath,
       platform
     })
-    const resolvedHasSeparator =
-      resolved.includes('/') || (platform === 'win32' && resolved.includes('\\'))
-    return resolvedHasSeparator ? resolved : null
+    return pathApi.isAbsolute(resolved) ? resolved : null
   }
-  if (platform === 'win32' && !WINDOWS_EXECUTABLE_EXTENSION_RE.test(expanded)) {
+  const target = pathApi.isAbsolute(expanded) ? expanded : pathApi.resolve(cwd, expanded)
+  if (platform === 'win32' && !WINDOWS_EXECUTABLE_EXTENSION_RE.test(target)) {
     // Explicit Windows paths without an extension should prefer `.cmd`/`.exe`/`.bat` shims over sibling POSIX scripts (e.g. npm's `zcode` next to `zcode.cmd`).
     for (const extension of ['.cmd', '.exe', '.bat']) {
-      const candidate = `${expanded}${extension}`
+      const candidate = `${target}${extension}`
       if (await isExistingFile(candidate)) {
         return candidate
       }
     }
   }
-  return (await isExistingFile(expanded)) ? expanded : null
+  return (await isExistingFile(target)) ? target : null
 }
 
 async function probe(
