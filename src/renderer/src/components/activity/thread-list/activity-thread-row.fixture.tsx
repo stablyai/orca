@@ -1,5 +1,6 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { ActivityThreadRow } from './activity-thread-row'
+import { ActivityThreadHoverCardSummary } from '../thread-preview/activity-thread-hover-card-summary'
 import type { AgentPaneThread } from '../threads/activity-thread-types'
 
 function thread(minutesAgo: number, unread: boolean): AgentPaneThread {
@@ -83,4 +84,20 @@ export const full = defineFixture({
 export const narrowCompact = defineFixture({
   width: 240,
   render: () => <ActivityCards compactMode />
+})
+
+// The hover card body for the first row, framed like the real popover.
+export const hoverCard = defineFixture({
+  width: 360,
+  render: () => (
+    <div className="bg-background p-2 text-foreground">
+      <div className="w-80 space-y-3 rounded-lg border border-border bg-popover p-3 text-xs text-popover-foreground">
+        <ActivityThreadHoverCardSummary
+          thread={thread(2, true)}
+          settings={null}
+          canJumpToWorkspace
+        />
+      </div>
+    </div>
+  )
 })

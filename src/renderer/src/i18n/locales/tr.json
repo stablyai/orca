@@ -18325,10 +18325,6 @@
           "hideOtherClients": "Diğer istemcilerin ajanlarını gizle"
         },
         "ActivityThreadHoverCard": {
-          "pathCopied": "Yol panoya kopyalandı",
-          "copyPathFailed": "Yol kopyalanamadı",
-          "workspace": "Çalışma alanı",
-          "copyPath": "Yolu kopyala",
           "jumpToWorkspace": "Çalışma alanına git"
         },
         "ActivityThreadRow": {

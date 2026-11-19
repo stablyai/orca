@@ -17928,10 +17928,6 @@
           "hideOtherClients": "隱藏其他用戶端的代理程式"
         },
         "ActivityThreadHoverCard": {
-          "pathCopied": "路徑已複製到剪貼簿",
-          "copyPathFailed": "無法複製路徑",
-          "workspace": "工作區",
-          "copyPath": "複製路徑",
           "jumpToWorkspace": "跳至工作區"
         },
         "ActivityThreadRow": {

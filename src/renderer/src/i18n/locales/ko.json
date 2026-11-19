@@ -17431,10 +17431,6 @@
           "standaloneTerminal": "독립형 터미널"
         },
         "ActivityThreadHoverCard": {
-          "pathCopied": "경로가 클립보드에 복사되었습니다.",
-          "copyPathFailed": "경로를 복사하지 못했습니다.",
-          "workspace": "워크스페이스",
-          "copyPath": "경로 복사",
           "jumpToWorkspace": "워크스페이스로 이동"
         },
         "ActivityThreadContextMenu": {

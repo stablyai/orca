@@ -19680,10 +19680,6 @@
           "hideOtherClients": "Hide other-client agents"
         },
         "ActivityThreadHoverCard": {
-          "pathCopied": "Path copied to clipboard",
-          "copyPathFailed": "Failed to copy path",
-          "workspace": "Workspace",
-          "copyPath": "Copy path",
           "jumpToWorkspace": "Jump to workspace"
         },
         "ActivityThreadRow": {

@@ -18707,10 +18707,6 @@
           "hideOtherClients": "Скрывать агентов других клиентов"
         },
         "ActivityThreadHoverCard": {
-          "pathCopied": "Путь скопирован в буфер обмена",
-          "copyPathFailed": "Не удалось скопировать путь",
-          "workspace": "Рабочее пространство",
-          "copyPath": "Скопировать путь",
           "jumpToWorkspace": "Перейти к рабочему пространству"
         },
         "ActivityThreadRow": {

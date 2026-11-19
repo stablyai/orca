@@ -18530,10 +18530,6 @@
           "hideOtherClients": "Ocultar agentes de outros clientes"
         },
         "ActivityThreadHoverCard": {
-          "pathCopied": "Caminho copiado para a área de transferência",
-          "copyPathFailed": "Falha ao copiar o caminho",
-          "workspace": "Espaço de Trabalho",
-          "copyPath": "Copiar caminho",
           "jumpToWorkspace": "Ir para o espaço de trabalho"
         },
         "ActivityThreadRow": {
