@@ -59,7 +59,18 @@ try {
   process.stdin.destroy();
 }
 };
-try {
+if (w.recoverOnly) {
+  // After a stopped VACUUM: reading the file rolls its abandoned WAL frames back, and closing removes them.
+  try {
+    db = new DatabaseSync(w.filename);
+    db.exec('PRAGMA busy_timeout = 0');
+    db.prepare('SELECT 1 FROM sqlite_master LIMIT 1').get();
+    db.close();
+    report({ kind: 'recovered' });
+  } catch (error) {
+    report({ kind: 'failed', error: String(error) });
+  }
+} else try {
   // Joined before the parent closes its connection, so that close is not the last one and never checkpoints.
   db = new DatabaseSync(w.filename);
   db.exec('PRAGMA busy_timeout = 0');

@@ -14,6 +14,9 @@ const QUIT_BUDGET_MS = 2_000
 const EXIT_GRACE_MS = 500
 // Quit pays the wait once: a stopped attempt waits until the live data shrinks this much.
 const MAX_TIMEOUTS = 1
+const MARKER_WRITE_MS = 250
+// Time after the kill grace for rolling back a stopped VACUUM's WAL; launch does it if this runs out.
+const RECOVERY_MS = 200
 // Our close checkpoints only if the child died after 'ready'; this (journal_size_limit) bounds that close.
 const MAX_WAL_BYTES = 8 * MIB
 const RETRY_LIVE_FRACTION = 0.75
@@ -68,6 +71,50 @@ async function walBacklogExceeds(filename: string, maxBytes: number): Promise<bo
   } catch {
     return false
   }
+}
+
+async function settlesWithin(work: Promise<void>, ms: number): Promise<boolean> {
+  let timer: NodeJS.Timeout | undefined
+  const late = new Promise<false>((resolve) => {
+    timer = setTimeout(() => resolve(false), ms)
+  })
+  try {
+    return await Promise.race([work.then(() => true as const), late])
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/** Runs the child for one job only, stopped at `ms`; resolves when it has exited or at `ms`. */
+function runChild(filename: string, job: { recoverOnly: true }, ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    let child: ReturnType<typeof spawnProcess>
+    try {
+      child = spawnProcess({
+        program: process.execPath,
+        args: ['-e', compactionChildSource],
+        env: {
+          ...process.env,
+          ELECTRON_RUN_AS_NODE: '1',
+          ORCA_ORCHESTRATION_COMPACTION: JSON.stringify({ filename, ...job })
+        },
+        stdio: 'ignore'
+      })
+    } catch {
+      resolve()
+      return
+    }
+    const stop = setTimeout(() => {
+      child.kill('SIGKILL')
+      resolve()
+    }, ms)
+    const done = (): void => {
+      clearTimeout(stop)
+      resolve()
+    }
+    child.once('error', done)
+    child.once('close', done)
+  })
 }
 
 /** The page counts in a SQLite header; null when the file is missing or not a database. */
@@ -202,8 +249,15 @@ export async function compactOrchestrationDb(
   if (await isActive()) {
     return { kind: 'active' }
   }
-  // Recorded before the wait, so a quit cut off mid-attempt still counts as the one wait it paid.
-  await writeDeferral(filename, { liveBytes, timeouts: (deferral?.timeouts ?? 0) + 1 })
+  // Recorded before the wait, so a quit cut off mid-attempt still counts as the one wait it paid; a disk
+  // that can't write it promptly gets no attempt at all.
+  const recorded = await settlesWithin(
+    writeDeferral(filename, { liveBytes, timeouts: (deferral?.timeouts ?? 0) + 1 }),
+    MARKER_WRITE_MS
+  )
+  if (!recorded) {
+    return { kind: 'busy' }
+  }
   const remainingMs = budgetMs - (performance.now() - started)
   const result =
     remainingMs > 0
@@ -211,6 +265,10 @@ export async function compactOrchestrationDb(
       : { kind: 'timed-out' as const, ms: Math.round(performance.now() - started) }
   if (!keepsDeferral(result)) {
     await writeDeferral(filename, result.kind === 'compacted' ? null : deferral)
+  } else if (await walBacklogExceeds(filename, MAX_WAL_BYTES)) {
+    // A stopped VACUUM leaves its copy in the WAL; clear it now, after the windows closed, not at launch.
+    const leftMs = budgetMs + EXIT_GRACE_MS + RECOVERY_MS - (performance.now() - started)
+    await runChild(filename, { recoverOnly: true }, Math.max(leftMs, 0))
   }
   return result
 }
@@ -298,7 +356,7 @@ export async function compactOrchestrationDbAtQuit(
   let cap: NodeJS.Timeout | undefined
   // Quit never waits past the budget plus the kill grace, whatever the disk does.
   const capped = new Promise<void>((resolve) => {
-    cap = setTimeout(resolve, QUIT_BUDGET_MS + EXIT_GRACE_MS + 250)
+    cap = setTimeout(resolve, QUIT_BUDGET_MS + EXIT_GRACE_MS + RECOVERY_MS + 50)
     cap.unref()
   })
   await Promise.race([compactAtQuit(owner), capped])
