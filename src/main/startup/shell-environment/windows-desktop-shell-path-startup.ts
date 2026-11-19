@@ -1,3 +1,5 @@
+const WINDOWS_FIRST_WINDOW_LOAD_FALLBACK_MS = 2_000
+
 export type WindowsDesktopStartupServices = {
   firstWindowReady: Promise<void>
   localPtyReady: Promise<void>
@@ -6,7 +8,7 @@ export type WindowsDesktopStartupServices = {
 
 type WindowsDesktopShellPathStartupOptions<TWindow> = {
   bindServices: (services: Promise<WindowsDesktopStartupServices>) => void
-  openWindow: () => TWindow
+  openWindow: (onLoaded: () => void) => TWindow
   shellPathReady: Promise<void>
   startServices: () => WindowsDesktopStartupServices
 }
@@ -14,7 +16,17 @@ type WindowsDesktopShellPathStartupOptions<TWindow> = {
 export function startWindowsDesktopBeforeShellPathReady<TWindow>(
   options: WindowsDesktopShellPathStartupOptions<TWindow>
 ): { window: TWindow; services: Promise<WindowsDesktopStartupServices> } {
-  const services = options.shellPathReady.then(options.startServices)
+  // Staging and launching the terminal daemon can block main before the first window appears.
+  const firstWindowLoad = Promise.withResolvers<void>()
+  const fallback = setTimeout(firstWindowLoad.resolve, WINDOWS_FIRST_WINDOW_LOAD_FALLBACK_MS)
+  fallback.unref()
+  const services = Promise.all([options.shellPathReady, firstWindowLoad.promise]).then(
+    options.startServices
+  )
   options.bindServices(services)
-  return { window: options.openWindow(), services }
+  const window = options.openWindow(() => {
+    clearTimeout(fallback)
+    setImmediate(firstWindowLoad.resolve)
+  })
+  return { window, services }
 }
