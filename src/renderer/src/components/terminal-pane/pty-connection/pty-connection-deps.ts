@@ -1,3 +1,5 @@
+import type { CodexAccountRestartToken } from '@/store/terminals/codex-account-restart-continuation'
+import type { AccountRestartCondition } from '../../../../../shared/terminal/pty/lifecycle/account-restart-contract'
 import type { isGeminiTerminalTitle } from '../../../../../shared/agent-status/title/agent-title-core'
 import type { isClaudeAgent } from '../../../../../shared/agent-status/title/agent-title-identity'
 import type { detectAgentStatusFromTitle } from '../../../../../shared/agent-status/title/agent-title-status'
@@ -38,6 +40,8 @@ export type PtyConnectionDeps = {
   replacesPtyId?: string
   /** Ownership acquired before clearing the old binding; released on spawn settlement or disposal. */
   releaseResumeInPlace?: () => void
+  accountRestart?: AccountRestartCondition
+  accountRestartToken?: CodexAccountRestartToken
   restoredLeafId?: string | null
   restoredPtyIdByLeafId?: Record<string, string>
   /** Render-time park intent survives watcher disposal and is consumed once after layout replay. */

@@ -54,7 +54,7 @@ function seedAgentStatus(entry: Partial<AgentStatusEntry> | null): void {
 }
 
 function build(): AgentAccountRestartStartup {
-  const startup = buildPaneAccountRestartStartup('codex', {
+  const startup = buildPaneAccountRestartStartup(useAppStore.getState(), 'codex', {
     tabId: TAB_ID,
     leafId: LEAF_ID,
     worktreeId: WORKTREE_ID
@@ -134,7 +134,7 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
       )
     })
 
-    expect(buildPaneAccountRestartStartup('claude', pane)).toBeNull()
+    expect(buildPaneAccountRestartStartup(useAppStore.getState(), 'claude', pane)).toBeNull()
   })
 
   it.each([
@@ -177,7 +177,7 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
         }
       })
 
-      expect(buildPaneAccountRestartStartup('claude', pane)?.command).toBe(
+      expect(buildPaneAccountRestartStartup(useAppStore.getState(), 'claude', pane)?.command).toBe(
         `${prefix}claude '--resume' '${SESSION_ID}'`
       )
     } finally {

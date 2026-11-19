@@ -1,3 +1,4 @@
+import type { AccountRestartCondition } from '../../../../shared/terminal/pty/lifecycle/account-restart-contract'
 import type { DaemonLaunchNoteChange } from '../../../daemon/protocol/daemon-launch-note-protocol'
 import type {
   TerminalLimitStatus,
@@ -70,6 +71,7 @@ export type RuntimePtyController = {
     materialized?: true
   } | null>
   spawn?(opts: {
+    accountRestart?: AccountRestartCondition
     resolvedWorkspace?: TerminalWorkspaceLaunchScope
     cols: number
     rows: number

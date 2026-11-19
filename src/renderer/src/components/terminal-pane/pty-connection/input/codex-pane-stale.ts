@@ -1,3 +1,8 @@
+import {
+  isCodexAccountRestart,
+  isCurrentCodexAccountRestart
+} from '@/store/terminals/codex-account-restart-continuation'
+import { getTerminalNoticeLifetime } from '../../provider-notices/terminal-notice-lifetime'
 import { useAppStore } from '@/store/index'
 import { blocksCodexPaneInput } from '../../account-restart/codex-restart-notice-state'
 
@@ -20,22 +25,51 @@ export function hasCodexRestartNotices(
 export function isCodexPaneStale(args: {
   tabId: string
   worktreeId: string
+  leafId: string
   panePtyId: string | null
+  paneIncarnationId?: string | null
 }): boolean {
   const state = useAppStore.getState()
   const { codexRestartNoticeByPtyId } = state
+  const panePtyId =
+    args.panePtyId ??
+    state.terminalLayoutsByTabId[args.tabId]?.ptyIdsByLeafId?.[args.leafId] ??
+    null
+  const paneIncarnationId = args.panePtyId
+    ? args.paneIncarnationId
+    : panePtyId
+      ? getTerminalNoticeLifetime(panePtyId)?.incarnationId
+      : null
+  if (panePtyId) {
+    const request =
+      state.pendingPaneAccountRestarts[`${args.tabId}:${args.leafId}`] ??
+      state.pendingPaneAccountRestarts[`${args.tabId}:unresolved`]
+    const expectedIncarnation = isCodexAccountRestart(request)
+      ? (request.oldIncarnationId ??
+        (request.condition?.expected.kind === 'endpoint'
+          ? request.condition.expected.incarnationId
+          : undefined))
+      : undefined
+    if (
+      isCodexAccountRestart(request) &&
+      request.oldPtyId === panePtyId &&
+      request.worktreeId === args.worktreeId &&
+      (!paneIncarnationId || !expectedIncarnation || paneIncarnationId === expectedIncarnation) &&
+      isCurrentCodexAccountRestart(state, request)
+    ) {
+      return true
+    }
+  }
   if (!hasCodexRestartNotices(codexRestartNoticeByPtyId)) {
     return false
   }
   // The bound PTY owns this pane’s input; tab.ptyId may name a sibling whose notice must not block this keyboard.
-  if (args.panePtyId) {
-    return blocksCodexPaneInput(codexRestartNoticeByPtyId[args.panePtyId])
-  }
-
-  // Only unbound panes use the persisted tab ID: transports refuse writes until bound, so input can only arm recovery.
-  const tab = (state.tabsByWorktree[args.worktreeId] ?? []).find((entry) => entry.id === args.tabId)
-  if (tab?.ptyId && blocksCodexPaneInput(codexRestartNoticeByPtyId[tab.ptyId])) {
-    return true
+  if (panePtyId) {
+    const notice = codexRestartNoticeByPtyId[panePtyId]
+    return (
+      blocksCodexPaneInput(notice) &&
+      (!paneIncarnationId || !notice?.incarnationId || notice.incarnationId === paneIncarnationId)
+    )
   }
 
   return false

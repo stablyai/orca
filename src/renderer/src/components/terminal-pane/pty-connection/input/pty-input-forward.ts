@@ -36,12 +36,14 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
       session.sendDesktopQueryReplyImmediate(data)
       return
     }
-    // Account switches change runtime auth; block stale-pane typing until restart, using persisted IDs during unbound reconnect windows.
+    // Account switches change runtime auth; only this bound endpoint can own its input guard.
     if (
       isCodexPaneStale({
         tabId: session.deps.tabId,
         worktreeId: session.deps.worktreeId,
-        panePtyId: currentPtyId
+        leafId: session.pane.leafId,
+        panePtyId: currentPtyId,
+        paneIncarnationId: session.remotePtyIncarnationId
       })
     ) {
       session.clearPendingTerminalInputIntent()

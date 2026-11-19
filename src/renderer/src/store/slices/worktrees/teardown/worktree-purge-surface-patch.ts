@@ -57,7 +57,11 @@ export function buildWorktreePurgeSurfacePatch(
     codexRestartNoticeByPtyId: omitByPtyId(s.codexRestartNoticeByPtyId),
     migrationUnsupportedByPtyId: omitByPtyId(s.migrationUnsupportedByPtyId),
     suppressedPtyExitIds: omitByPtyId(s.suppressedPtyExitIds),
-    pendingPaneAccountRestarts: omitByPtyId(s.pendingPaneAccountRestarts),
+    pendingPaneAccountRestarts: Object.fromEntries(
+      Object.entries(omitByPtyId(s.pendingPaneAccountRestarts)).filter(
+        ([, r]) => typeof r === 'string' || !doomedTabIds.has(r.tabId)
+      )
+    ),
     // Bulk purges skip pane teardown, so evict its agent identity and activity state here.
     agentStatusByPaneKey: nextAgentStatusByPaneKey,
     agentConversationsByPaneKey: omitByPaneKeyTabPrefix(s.agentConversationsByPaneKey),

@@ -4,6 +4,7 @@ import type {
 } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { AppState } from '../../types'
+import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 
 export type RuntimeStatusSlice = {
   readRuntimeHostStatusSnapshots: () => Promise<void>
@@ -31,6 +32,7 @@ export type RuntimeStatusSlice = {
 }
 
 export type RuntimeStatusStoreState = RuntimeStatusSlice &
+  Partial<Pick<AppState, keyof WorktreeRuntimeOwnerState>> &
   Pick<
     AppState,
     'clientHostedBrowserCloseIntentsByEnvironment' | 'clearClientHostedBrowserCloseIntents'
@@ -39,6 +41,11 @@ export type RuntimeStatusStoreState = RuntimeStatusSlice &
     Pick<
       AppState,
       | 'settings'
+      | 'pendingPaneAccountRestarts'
+      | 'codexRestartNoticeByPtyId'
+      | 'tabsByWorktree'
+      | 'terminalLayoutsByTabId'
+      | 'ptyIdsByTabId'
       | 'remoteBrowserPageHandlesByPageId'
       | 'retainRuntimeDetectedAgents'
       | 'retainRuntimeTerminalQuickCommands'

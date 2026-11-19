@@ -3,6 +3,29 @@ import type { PtyDataMeta } from '../delivery/pty-dispatcher'
 import { PtyShutdownOutputQueue, type PtyShutdownOutputEvent } from './pty-shutdown-output-queue'
 
 export const ptyDataHandlers = new Map<string, (data: string, meta?: PtyDataMeta) => void>()
+const dataHandlerRemovalListeners = new Set<() => void>()
+
+export function subscribePtyDataHandlerRemoval(listener: () => void): () => void {
+  dataHandlerRemovalListeners.add(listener)
+  return () => {
+    dataHandlerRemovalListeners.delete(listener)
+  }
+}
+/** Only removal of the captured delivery owner can release queued work. */
+export function removePtyDataHandler(
+  ptyId: string,
+  expected = ptyDataHandlers.get(ptyId)
+): boolean {
+  if (!expected || ptyDataHandlers.get(ptyId) !== expected) {
+    return false
+  }
+  ptyDataHandlers.delete(ptyId)
+  for (const listener of dataHandlerRemovalListeners) {
+    listener()
+  }
+  return true
+}
+
 export const ptyDataSidecars = new Map<string, Set<(data: string) => void>>()
 export const ptyReplayHandlers = new Map<string, (data: string) => void>()
 export const ptyExitHandlers = new Map<string, (code: number) => void>()
@@ -135,7 +158,9 @@ function settlePtyDataHandlerShutdown(ptyId: string, committed: boolean): void {
     rolledBackShutdownEvents.delete(ptyId)
     pending.outputQueue.discard()
     pending.lifecycleHandler?.commit()
-    deleteCapturedHandler(ptyDataHandlers, ptyId, pending.dataHandler)
+    if (pending.dataHandler) {
+      removePtyDataHandler(ptyId, pending.dataHandler)
+    }
     deleteCapturedHandler(ptyReplayHandlers, ptyId, pending.replayHandler)
     deleteCapturedHandler(ptyTeardownHandlers, ptyId, pending.teardownHandler)
     deleteCapturedHandler(ptyShutdownLifecycleHandlers, ptyId, pending.lifecycleHandler)

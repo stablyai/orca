@@ -134,8 +134,19 @@ function clearSshTargetTabPtyState(
     }
   }
 
+  for (const [key, request] of Object.entries(nextPendingPaneAccountRestarts)) {
+    if (
+      typeof request === 'object' &&
+      (request.hostId === `ssh:${targetId}` || targetTabIds.has(request.tabId))
+    ) {
+      delete nextPendingPaneAccountRestarts[key]
+    }
+  }
   return {
-    changed: unboundTabIds.size > 0,
+    changed:
+      unboundTabIds.size > 0 ||
+      Object.keys(nextPendingPaneAccountRestarts).length !==
+        Object.keys(state.pendingPaneAccountRestarts).length,
     ...unbindTerminalTabPtys(state, unboundTabIds),
     lastKnownRelayPtyIdByTabId: lastKnownRelayPtyIdDraft.finish(),
     pendingPaneAccountRestarts: nextPendingPaneAccountRestarts,

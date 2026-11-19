@@ -1,0 +1,235 @@
+import { ACCOUNT_RESTART_OUTCOME_UNKNOWN } from '../../../../../../shared/terminal/pty/lifecycle/account-restart-contract'
+import { readTerminalSpawnDeferral } from '../../../../../../shared/terminal/pty/admission/spawn-admission-contract'
+import {
+  setPaneSpawnDeferral,
+  clearPaneSpawnDeferral,
+  getPaneSpawnDeferral
+} from '../../session-restore/spawn-deferral/pane-spawn-deferral-registry'
+import { queueDeferredRestoreRetry } from '../../session-restore/spawn-deferral/pane-spawn-deferral-drain'
+import { useAppStore } from '@/store'
+import {
+  currentCodexAccountRestart,
+  codexAccountRestartToken,
+  isCodexAccountRestart,
+  type CodexAccountRestartToken
+} from '@/store/terminals/codex-account-restart-continuation'
+import { hasRegisteredRuntimeTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { toRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
+import type { RuntimeTerminalCreate } from '../../../../../../shared/terminal/runtime/runtime-terminal-create-contract'
+import type { AccountRestartCondition } from '../../../../../../shared/terminal/pty/lifecycle/account-restart-contract'
+import {
+  prepareCodexAccountRestart,
+  continueCodexAccountRestart,
+  dispatchCodexAccountRestart,
+  isObsoleteCodexRestartResult,
+  failCodexAccountRestart
+} from '../codex-account-restart-execution'
+import { clearRetainedInlineScrollback } from '../../snapshots/terminal-scrollback-ref-hydration'
+import { ptyDataHandlers } from '../../pty-transport/shutdown/pty-shutdown-data-suspension'
+import { buildPaneIdentityEnv } from './detached-pane-restart-spawn-context'
+import {
+  accountRestartSlotKey,
+  holdDetachedRestartSlot,
+  hasFreeDetachedRestartSlot
+} from './detached-pane-restart-slots'
+import { releaseReplacedCodexPanePty } from './detached-pane-restart-pty-release'
+
+function claimDetachedRequest(
+  key: string,
+  deferred?: CodexAccountRestartToken
+): CodexAccountRestartToken | null {
+  const state = useAppStore.getState(),
+    queued = state.pendingPaneAccountRestarts[key]
+  if (
+    !isCodexAccountRestart(queued) ||
+    (deferred ? queued.phase !== 'deferred' : queued.phase !== 'accepted') ||
+    (!deferred &&
+      (hasRegisteredRuntimeTerminalTab(queued.tabId, queued.worktreeId) ||
+        ptyDataHandlers.has(queued.oldPtyId)))
+  ) {
+    return null
+  }
+  const claimed = state.claimCodexAccountRestart(key, deferred)
+  if (claimed && hasRegisteredRuntimeTerminalTab(claimed.tabId, claimed.worktreeId)) {
+    state.updateCodexAccountRestart(codexAccountRestartToken(claimed), { phase: 'accepted' })
+    return null
+  }
+  return claimed ? codexAccountRestartToken(claimed) : null
+}
+
+function prepareDetachedRequest(
+  token: CodexAccountRestartToken
+): Promise<AccountRestartCondition | null> {
+  const request = currentCodexAccountRestart(useAppStore.getState(), token)
+  return request ? prepareCodexAccountRestart(request) : Promise.resolve(null)
+}
+
+/** Synchronous assembly lets the pending settlement retain identity, not another copy of startup. */
+function dispatchDetachedRequest(
+  token: CodexAccountRestartToken,
+  condition: AccountRestartCondition
+): Promise<{ id: string; incarnationId?: string | null }> | null {
+  const state = useAppStore.getState(),
+    request = currentCodexAccountRestart(state, token)
+  if (!request?.startup || !request.leafId) {
+    return null
+  }
+  if (
+    hasRegisteredRuntimeTerminalTab(request.tabId, request.worktreeId) ||
+    ptyDataHandlers.has(request.oldPtyId)
+  ) {
+    state.updateCodexAccountRestart(token, { phase: 'accepted' })
+    return null
+  }
+  if (request.resultPtyId && request.resultIncarnationId) {
+    return Promise.resolve({ id: request.resultPtyId, incarnationId: request.resultIncarnationId })
+  }
+  if (!dispatchCodexAccountRestart(token, condition)) {
+    return null
+  }
+  const { environmentId } = request
+  if (environmentId) {
+    return callRuntimeRpc<{ terminal: RuntimeTerminalCreate }>(
+      { kind: 'environment', environmentId },
+      'terminal.create',
+      {
+        worktree: `id:${request.worktreeId}`,
+        ...request.startup,
+        tabId: condition.pane.tabId,
+        leafId: condition.pane.leafId,
+        accountRestart: condition,
+        clientMutationId: request.attemptId,
+        cwd: request.cwd,
+        ...(request.shellOverride ? { shell: request.shellOverride } : {}),
+        spawnIntent: 'user-resume',
+        focus: false,
+        presentation: 'background'
+      },
+      {
+        timeoutMs: 15000,
+        expectedEnvironmentPairingRevision: request.pairingRevision,
+        expectedEnvironmentRuntimeId: request.runtimeId
+      }
+    ).then((result) => ({
+      id: toRemoteRuntimePtyId(result.terminal.handle, environmentId),
+      incarnationId: result.terminal.incarnationId
+    }))
+  }
+  return window.api.pty
+    .spawn({
+      cols: 80,
+      rows: 24,
+      cwd: request.cwd,
+      ...request.startup,
+      env: {
+        ...request.startup.env,
+        ...buildPaneIdentityEnv(state, request.worktreeId, request.tabId, request.leafId)
+      },
+      worktreeId: request.worktreeId,
+      tabId: request.tabId,
+      leafId: request.leafId,
+      accountRestart: condition,
+      spawnIntent: 'user-resume',
+      ...(request.connectionId ? { connectionId: request.connectionId } : {}),
+      ...(request.shellOverride ? { shellOverride: request.shellOverride } : {}),
+      ...(request.projectRuntime ? { projectRuntime: request.projectRuntime } : {}),
+      initiallyHidden: true
+    })
+    .then((result) => ({ id: result.id, incarnationId: result.incarnationId }))
+}
+
+export async function restartDetachedAccountRequest(
+  key: string,
+  onSettled?: () => void,
+  deferred?: CodexAccountRestartToken
+): Promise<void> {
+  if (!hasFreeDetachedRestartSlot()) {
+    return
+  }
+  const token = claimDetachedRequest(key, deferred)
+  if (!token) {
+    return
+  }
+  const release = holdDetachedRestartSlot(accountRestartSlotKey(key, token), () => {
+    useAppStore.getState().updateCodexAccountRestart(token, {
+      phase: 'unresolved',
+      error: ACCOUNT_RESTART_OUTCOME_UNKNOWN
+    })
+    onSettled?.()
+  })
+  try {
+    const condition = await prepareDetachedRequest(token)
+    if (!condition) {
+      return
+    }
+    const pending = dispatchDetachedRequest(token, condition)
+    if (!pending) {
+      return
+    }
+    const result = await pending
+    const { id } = result
+    const state = useAppStore.getState(),
+      request = currentCodexAccountRestart(state, token)
+    if (!request?.leafId) {
+      return
+    }
+    if (isObsoleteCodexRestartResult(request, result)) {
+      state.updateCodexAccountRestart(token, null)
+      return
+    }
+    if (!continueCodexAccountRestart(token, result)) {
+      return
+    }
+    state.updateTabPtyId(request.tabId, id, request.oldPtyId)
+    state.replaceTerminalLayoutPanePtyId(request.tabId, request.leafId, id)
+    const layout = useAppStore.getState().terminalLayoutsByTabId[request.tabId]
+    if (layout?.ptyIdsByLeafId?.[request.leafId] === id) {
+      const cleared = clearRetainedInlineScrollback(layout, request.leafId)
+      if (cleared !== layout) {
+        state.setTabLayout(request.tabId, cleared)
+      }
+    }
+    state.clearCodexRestartNotice(request.oldPtyId)
+    state.clearCodexRestartNotice(id)
+    state.updateCodexAccountRestart(token, null)
+    releaseReplacedCodexPanePty(request.oldPtyId)
+  } catch (error) {
+    const reason = readTerminalSpawnDeferral(error)
+    failCodexAccountRestart(token, error, reason ? 'deferred' : 'failed', { notDispatched: true })
+    const current = currentCodexAccountRestart(useAppStore.getState(), token)
+    if (reason && current?.phase === 'deferred') {
+      const resume = (): Promise<void> => {
+        const state = useAppStore.getState(),
+          request = currentCodexAccountRestart(state, token)
+        if (request?.phase !== 'deferred') {
+          return Promise.resolve()
+        }
+        if (getPaneSpawnDeferral(token.key)?.resume !== deferral.resume) {
+          return Promise.resolve()
+        }
+        const restarted = restartDetachedAccountRequest(token.key, onSettled, token)
+        if (currentCodexAccountRestart(useAppStore.getState(), token)?.phase !== 'deferred') {
+          clearPaneSpawnDeferral(token.key)
+        }
+        return restarted
+      }
+      const deferral = { reason, resume, accountRestart: token }
+      setPaneSpawnDeferral(token.key, deferral)
+      if (reason !== 'paused') {
+        const retry = async (): Promise<boolean> => {
+          await resume()
+          const current = currentCodexAccountRestart(useAppStore.getState(), token)
+          if (current?.phase === 'deferred' && getPaneSpawnDeferral(token.key) === deferral) {
+            queueDeferredRestoreRetry(token.key, current.environmentId, retry)
+          }
+          return current?.phase !== 'deferred'
+        }
+        queueDeferredRestoreRetry(token.key, current.environmentId, retry)
+      }
+    }
+  } finally {
+    release()
+    onSettled?.()
+  }
+}

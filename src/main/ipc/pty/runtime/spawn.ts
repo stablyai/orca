@@ -1,3 +1,7 @@
+import { toSshExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { beginAccountRestartOperation } from '../pane/account-restart-owner'
+import { readAccountRestartCondition } from '../../../../shared/terminal/pty/lifecycle/account-restart-contract'
+import { stopAndWaitPtyFromRuntimeController } from './kill'
 import { runPtySpawn, normalizePtySpawnSessionId } from '../spawn/spawn-operation'
 import { requireAcceptedSpawn } from '../spawn/spawn-outcome'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
@@ -18,9 +22,58 @@ export async function spawnPtyFromRuntimeController(
   request: RuntimePtySpawnArgs
 ) {
   const args = { ...request, sessionId: normalizePtySpawnSessionId(request.sessionId) }
+  const condition = readAccountRestartCondition(args.accountRestart)
+  if (
+    args.accountRestart &&
+    (!condition ||
+      condition.pane.worktreeId !== args.worktreeId ||
+      condition.pane.tabId !== args.tabId ||
+      condition.pane.leafId !== args.leafId)
+  ) {
+    throw new Error('invalid_account_restart')
+  }
+  if (condition) {
+    args.launchToken = condition.attemptId
+  }
   const ctx = createRuntimePtySpawnState(deps, args)
+  if (condition) {
+    ctx.accountRestartOperation = beginAccountRestartOperation(condition)
+  }
   const outcome = await runPtySpawn({
     state: ctx,
+    ...(condition?.expected.kind === 'endpoint'
+      ? {
+          replace: async () => {
+            const operation = ctx.accountRestartOperation!
+            operation.stop = 'unknown'
+            const original = operation.original!
+            const settleStop = deps.runtime?.intentionalPtyStops?.mark(
+              original.ptyId,
+              'replaced',
+              original.incarnationId
+            )
+            let stopped = false
+            try {
+              stopped = await stopAndWaitPtyFromRuntimeController(deps, original.ptyId, {
+                keepHistory: true
+              })
+              if (!stopped) {
+                throw new Error('terminal_replaced_pty_stop_unverified')
+              }
+            } finally {
+              settleStop?.(stopped)
+            }
+            operation.stop = 'confirmed-retired'
+            ctx.replacedPaneOwner = {
+              ptyId: condition.expected.kind === 'endpoint' ? condition.expected.ptyId : '',
+              pane: {
+                ...condition.pane,
+                hostId: args.connectionId ? toSshExecutionHostId(args.connectionId) : undefined
+              }
+            }
+          }
+        }
+      : {}),
     prepare: async () => {
       ctx.args = await applyAgentLaunchPluginHook(ctx.args, deps.runtime)
       await prepareRuntimePtySpawn(ctx)
@@ -28,6 +81,7 @@ export async function spawnPtyFromRuntimeController(
     },
     facts: () => ({
       sessionId: ctx.sessionId,
+      replacedPaneOwner: ctx.replacedPaneOwner,
       savedResumePaneKey: ctx.spawnIdentityPaneKey,
       launchConfig: ctx.args.launchConfig,
       suppressRefusedLaunch: () => {

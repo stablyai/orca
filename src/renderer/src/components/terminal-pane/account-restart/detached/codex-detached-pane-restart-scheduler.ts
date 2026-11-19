@@ -1,6 +1,8 @@
 import { useAppStore } from '@/store/index'
 import { subscribeMountedTerminalTabChanges } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
-import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
+import { subscribePtyDataHandlerRemoval } from '../../pty-transport/shutdown/pty-shutdown-data-suspension'
+import { subscribeDetachedRestartCapacity } from './detached-pane-restart-slots'
+import type { PaneAccountRestart } from '@/store/terminals/terminal-contracts'
 import {
   resetDetachedCodexPaneRestartClaimsForTests,
   sweepUnclaimedCodexPaneRestarts
@@ -11,13 +13,17 @@ let executorGeneration = 0
 let sweepQueued = false
 
 export function hasAddedPendingCodexPaneRestart(
-  current: Record<string, AccountRestartAgent>,
-  previous: Record<string, AccountRestartAgent>
+  current: Record<string, PaneAccountRestart>,
+  previous: Record<string, PaneAccountRestart>
 ): boolean {
   if (current === previous) {
     return false
   }
-  return Object.keys(current).some((ptyId) => !previous[ptyId])
+  return Object.entries(current).some(([key, value]) =>
+    typeof value === 'object'
+      ? value.phase === 'accepted' && previous[key] !== value
+      : !previous[key]
+  )
 }
 
 /** Installed once at app startup; returns the uninstaller (tests). */
@@ -34,15 +40,20 @@ export function installCodexDetachedPaneRestartExecutor(): () => void {
       scheduleClaimSweep()
     }
   })
-  const unsubscribeMountedTabs = subscribeMountedTerminalTabChanges(() => {
+  const onDeliveryOwnerChange = (): void => {
     if (!sweepQueued && Object.keys(useAppStore.getState().pendingPaneAccountRestarts).length > 0) {
       scheduleClaimSweep()
     }
-  })
+  }
+  const unsubscribeMountedTabs = subscribeMountedTerminalTabChanges(onDeliveryOwnerChange)
+  const unsubscribeDataHandlers = subscribePtyDataHandlerRemoval(onDeliveryOwnerChange)
+  const unsubscribeCapacity = subscribeDetachedRestartCapacity(onDeliveryOwnerChange)
   scheduleClaimSweep()
   return () => {
     unsubscribe()
     unsubscribeMountedTabs()
+    unsubscribeDataHandlers()
+    unsubscribeCapacity()
     if (executorGeneration === generation) {
       executorInstalled = false
       executorGeneration += 1

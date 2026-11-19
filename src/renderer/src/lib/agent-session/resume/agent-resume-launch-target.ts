@@ -1,4 +1,4 @@
-import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { REMOTE_RUNTIME_PTY_HONOURS_TAB_SHELL_OVERRIDE } from '@/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-shell'
 import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
@@ -102,7 +102,9 @@ function reportedRemotePlatform(args: AgentResumeLaunchTargetArgs): NodeJS.Platf
 
 function resolveResumeLaunchPlatform(args: AgentResumeLaunchTargetArgs): NodeJS.Platform {
   if (args.projectRuntime?.status === 'repair-required') {
-    return args.projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : CLIENT_PLATFORM
+    return args.projectRuntime.repair.preferredRuntime.kind === 'wsl'
+      ? 'linux'
+      : getShortcutPlatform()
   }
   if (args.projectRuntime?.status === 'resolved' && args.projectRuntime.runtime.kind === 'wsl') {
     return 'linux'
@@ -134,7 +136,7 @@ function resolveResumeLaunchPlatform(args: AgentResumeLaunchTargetArgs): NodeJS.
   ) {
     return 'linux'
   }
-  return CLIENT_PLATFORM
+  return getShortcutPlatform()
 }
 
 /** Quote for both host platform and live shell; typing PowerShell quotes into cmd.exe passes literal quotes that agent CLIs reject (#12320). */

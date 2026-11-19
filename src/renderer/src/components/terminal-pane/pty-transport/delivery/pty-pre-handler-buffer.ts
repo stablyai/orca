@@ -69,7 +69,8 @@ function evictOldestPtyIfAtCap<V>(map: Map<string, V>, ptyId: string, cap: numbe
 /** Reject positively foreign exit incarnations regardless of arrival time; sequence fences cannot catch late old-owner exits. Missing incarnation remains unknown for older hosts and reattach. */
 export function discardPreHandlerPtyExitFromForeignIncarnation(
   ptyId: string,
-  incarnationId: unknown
+  incarnationId: unknown,
+  requireMatchingIncarnation = false
 ): void {
   // Only well-formed incarnation IDs supply evidence; malformed IDs remain unknown.
   if (!isPtyIncarnationId(incarnationId)) {
@@ -77,7 +78,9 @@ export function discardPreHandlerPtyExitFromForeignIncarnation(
   }
   retainPreHandlerPtyExits(
     ptyId,
-    (exit) => exit.incarnationId === undefined || exit.incarnationId === incarnationId
+    (exit) =>
+      exit.incarnationId === incarnationId ||
+      (!requireMatchingIncarnation && exit.incarnationId === undefined)
   )
 }
 
@@ -272,32 +275,44 @@ export function discardPreHandlerPtyState(ptyId: string): void {
   discardedPreHandlerPtyStates.set(ptyId, timer)
 }
 
-/** Filter every exit read by positive incarnation disagreement; callers without lifetime evidence retain unknown records. */
+/** Verified restarts require matching evidence; ordinary reattach keeps legacy unknown exits. */
 function admissiblePreHandlerPtyExits(
   ptyId: string,
-  incarnationId: unknown
+  incarnationId: unknown,
+  requireMatchingIncarnation: boolean
 ): BufferedPreHandlerPtyExit[] {
   const exits = preHandlerPtyExit.get(ptyId) ?? []
   if (!isPtyIncarnationId(incarnationId)) {
     return exits
   }
   return exits.filter(
-    (exit) => exit.incarnationId === undefined || exit.incarnationId === incarnationId
+    (exit) =>
+      exit.incarnationId === incarnationId ||
+      (!requireMatchingIncarnation && exit.incarnationId === undefined)
   )
 }
 
-export function hasPreHandlerPtyExit(ptyId: string, incarnationId?: unknown): boolean {
-  return admissiblePreHandlerPtyExits(ptyId, incarnationId).length > 0
+export function hasPreHandlerPtyExit(
+  ptyId: string,
+  incarnationId?: unknown,
+  requireMatchingIncarnation = false
+): boolean {
+  return admissiblePreHandlerPtyExits(ptyId, incarnationId, requireMatchingIncarnation).length > 0
 }
 
 export function drainPreHandlerPtyExit(
   ptyId: string,
   handler: (code: number, incarnationId?: string) => void,
-  incarnationId?: unknown
+  incarnationId?: unknown,
+  requireMatchingIncarnation = false
 ): void {
   // Select the newest admissible lifetime record to preserve last-write-wins behavior.
   let exit: BufferedPreHandlerPtyExit | undefined
-  for (const candidate of admissiblePreHandlerPtyExits(ptyId, incarnationId)) {
+  for (const candidate of admissiblePreHandlerPtyExits(
+    ptyId,
+    incarnationId,
+    requireMatchingIncarnation
+  )) {
     if (!exit || candidate.sequence > exit.sequence) {
       exit = candidate
     }

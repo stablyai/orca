@@ -1,3 +1,4 @@
+import type { AccountRestartSnapshot } from '../pty/lifecycle/account-restart-contract'
 import type { TerminalLaunchResult } from '../../agent-session/lifecycle/agent-session-resume'
 import type * as AgentSessionResume from '../../agent-session/lifecycle/agent-session-resume'
 import type { StartupCommandDelivery } from '../../agent-launch/startup/codex-startup-delivery'
@@ -284,6 +285,7 @@ export type RuntimeTerminalSplit = {
 }
 
 export type RuntimeTerminalResolvePane = TerminalLaunchResult & {
+  accountRestart?: AccountRestartSnapshot
   handle: string
   /** Host-owned PTY incarnation used to fence remote identity observations. */
   incarnationId?: string | null

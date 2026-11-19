@@ -1,4 +1,7 @@
-import { terminalLaunchFacts } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import {
+  terminalLaunchFacts,
+  type TerminalLaunchResult
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { admitStablePaneAdoption } from '../identity/runtime-terminal-pane-identity'
 import type { RuntimePtyController } from '../lifecycle/runtime-pty-controller-contract'
 import type { TerminalCreateOptions } from './terminal-create-options'
@@ -100,4 +103,35 @@ export function terminalLaunchPublicFacts(
       : {}),
     ...(adoptedStablePane ? { isReattach: true as const } : {})
   }
+}
+
+export function currentTerminalLaunchFacts(
+  pty: RuntimePtyWorktreeRecord | undefined | null
+): TerminalLaunchResult | undefined {
+  const saved = pty?.savedTerminalLaunchResult
+  if (!pty) {
+    return undefined
+  }
+  return terminalLaunchFacts({
+    ...(saved?.incarnationId === pty.incarnationId &&
+    saved.launchConfig === pty.launchConfig &&
+    saved.launchToken === pty.launchToken
+      ? saved.result
+      : {}),
+    launchAgent: pty.launchAgent ?? undefined,
+    launchToken: pty.launchToken ?? undefined,
+    launchConfig: pty.launchConfig ?? undefined
+  })
+}
+
+export function boundTerminalLaunchFacts(
+  pty: RuntimePtyWorktreeRecord | undefined | null,
+  boundPtyId: string | null | undefined
+): TerminalLaunchResult | undefined {
+  if (!pty || pty.ptyId !== boundPtyId) {
+    return undefined
+  }
+  // The resolver exposes launch ownership separately through its incarnation-attested token.
+  const { launchToken: _token, ...facts } = currentTerminalLaunchFacts(pty) ?? {}
+  return facts
 }
