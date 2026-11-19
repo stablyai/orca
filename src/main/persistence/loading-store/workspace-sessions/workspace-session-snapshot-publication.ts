@@ -33,7 +33,11 @@ import { preserveMissingWorkspaceSessionTerminalBindings } from './workspace-ses
 import type { SessionSnapshotOperations } from './session-snapshot-operations'
 import { getSessionSnapshotOperationsContext } from './session-snapshot-operations-context'
 import { scheduleSave } from '../profile-writing/write-scheduling'
-import type { WrittenWorkspaceScope } from './workspace-session-write-listeners'
+import {
+  membershipRewritesFor,
+  withStoreRewrites,
+  type WrittenWorkspaceScope
+} from './workspace-session-write-listeners'
 import { orderTerminalRowsByTabGroups } from '../../../../shared/workspace-layout/terminal-topology/terminal-row-order'
 
 export function setLocalWorkspaceSession(
@@ -54,7 +58,8 @@ export function setLocalWorkspaceSession(
   session = keepWslMoveFrozenSessionsForStore(session, prior)
   // Quit staging bypasses caller guards; preserve runtime fields at the shared write boundary.
   session = dropClosedTerminalTabs(preserveRuntimeAuthoredWorkspaceSessionFields(session, prior))
-  session = sanitizeWorkspaceSessionTerminalRetirements(session, prior)
+  const rewrites = membershipRewritesFor(written)
+  session = sanitizeWorkspaceSessionTerminalRetirements(session, prior, rewrites)
   session = pruneWorkspaceSessionBrowserHistory(pruneScrollback(session))
 
   // Recover bindings from stale pre-spawn snapshots without reviving proven closes.
@@ -109,12 +114,14 @@ export function setLocalWorkspaceSession(
   }
   session = preserveMissingWorkspaceSessionTerminalBindings(session, prior, context.bindingRecovery)
   session = pruneScrollback(session)
+  let migratedTabIds: readonly string[] = []
   if (!deferSnapshotFiles) {
     const migratedScrollback = migrateWorkspaceSessionTerminalScrollbackSnapshots(
       session,
       context.runtime.terminalScrollbackSnapshotStorage
     )
     session = migratedScrollback.session
+    migratedTabIds = migratedScrollback.tabIds
     deleteRemovedTerminalScrollbackSnapshots(
       prior,
       session,
@@ -145,7 +152,9 @@ export function setLocalWorkspaceSession(
       remappedLeases.changed ? ['workspaceSession', 'sshRemotePtyLeases'] : ['workspaceSession'],
       LOCAL_EXECUTION_HOST_ID,
       // Renormalized pane ids can belong to any workspace.
-      normalized.changed || remappedLeases.changed || pruned ? undefined : written
+      normalized.changed || remappedLeases.changed || pruned
+        ? undefined
+        : withStoreRewrites(written, rewrites, migratedTabIds)
     )
   }
 }

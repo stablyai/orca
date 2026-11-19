@@ -37,7 +37,11 @@ import {
 import type { NativeLocalWorktreeMetadataScanExpectation } from '../../tracking-repos/local-worktree-metadata-scan-expectation'
 
 import { type WriteSchedulingOperations, scheduleSave } from '../profile-writing/write-scheduling'
-import type { WrittenWorkspaceScope } from './workspace-session-write-listeners'
+import {
+  membershipRewritesFor,
+  withStoreRewrites,
+  type WrittenWorkspaceScope
+} from './workspace-session-write-listeners'
 import {
   preserveMissingWorkspaceSessionTerminalBindings,
   sshTargetIdForWorkspaceSessionHost
@@ -273,12 +277,14 @@ export function setHostWorkspaceSession(
   // Enforce at this shared boundary: quit staging bypasses per-caller normalization.
   session = dropClosedTerminalTabs(preserveRuntimeAuthoredWorkspaceSessionFields(session, prior))
   const { runtime } = owner[sessionHostPartitionOperationsContext]
+  const rewrites = membershipRewritesFor(written)
   // Each host owns its topology fence; stale renderer snapshots rebase against that host only.
   session = keepRuntimePartitionRevisions(
     hostId,
     sanitizeWorkspaceSessionTerminalRetirements(
       session,
-      runtimePartitionFencePrior(runtime, hostId, session, prior)
+      runtimePartitionFencePrior(runtime, hostId, session, prior),
+      rewrites
     ),
     prior
   )
@@ -309,7 +315,7 @@ export function setHostWorkspaceSession(
     ['workspaceSessionsByHostId'],
     hostId,
     // A prune can strip scrollback from workspaces the caller never named.
-    scrollbackKept === session ? written : undefined
+    scrollbackKept === session ? withStoreRewrites(written, rewrites) : undefined
   )
 }
 
