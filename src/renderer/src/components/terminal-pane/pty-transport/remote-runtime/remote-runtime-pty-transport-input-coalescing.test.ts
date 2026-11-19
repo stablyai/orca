@@ -1,3 +1,4 @@
+import type { PtyTransport } from '../pty-transport-types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   TerminalStreamOpcode,
@@ -138,5 +139,72 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(sendCalls).toHaveLength(2)
     expect(sendCalls[0]?.[0].params.text).toBe(chunk)
     expect(sendCalls[1]?.[0].params.text).toBe('tail')
+  })
+
+  it('drops claim-held typing whose account permission changed while preserving query replies', async () => {
+    vi.useFakeTimers()
+    let transport: PtyTransport | undefined
+    try {
+      runtimeSubscribe.mockImplementation(
+        async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
+          subscriptionCallbacks = callbacks
+          return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
+        }
+      )
+      let allowed = true
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId: 'pane:1',
+        canSendInput: (_id, kind) => kind === 'query-reply' || allowed
+      })
+      transport.attach({ existingPtyId: 'remote:terminal-1', callbacks: {} })
+      await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalled())
+      transport.claimViewport?.(101, 33)
+      transport.sendInput('old-account-command', 'driving')
+      transport.sendInputImmediate('\x1b[?1;2c')
+      await vi.advanceTimersByTimeAsync(8)
+      allowed = false
+      emitMultiplexReady()
+      await vi.waitFor(() => {
+        const input = subscriptionSendBinary.mock.calls
+          .map(([bytes]) => decodeTerminalStreamFrame(bytes))
+          .filter((frame) => frame?.opcode === TerminalStreamOpcode.Input)
+          .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+        expect(input).toEqual(['\x1b[?1;2c'])
+      })
+    } finally {
+      transport?.destroy?.()
+      vi.useRealTimers()
+    }
+  })
+
+  it('sends a query reply after discarding a newly denied debounce prefix', async () => {
+    vi.useFakeTimers()
+    let transport: PtyTransport | undefined
+    try {
+      let allowed = true
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId: 'pane:1',
+        canSendInput: (_id, kind) => kind === 'query-reply' || allowed
+      })
+      await transport.connect({ url: '', callbacks: {} })
+      transport.sendInput('leading', 'driving')
+      transport.sendInput('denied-prefix', 'driving')
+      allowed = false
+      expect(transport.sendInputImmediate('\x1b[?1;2c')).toBe(true)
+      const input = subscriptionSendBinary.mock.calls
+        .map(([bytes]) => decodeTerminalStreamFrame(bytes))
+        .filter((frame) => frame?.opcode === TerminalStreamOpcode.Input)
+        .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+      expect(input).toEqual(['leading', '\x1b[?1;2c'])
+    } finally {
+      transport?.destroy?.()
+      vi.useRealTimers()
+    }
   })
 })
