@@ -113,6 +113,7 @@ export async function listHostCodexRolloutHomes(
   settings: Pick<GlobalSettings, 'codexSessionSourceHome'>
 ): Promise<{ homes: string[]; protectedRoots: string[] }> {
   const { accounts } = await listHostCodexRolloutHomeSources(settings)
+  const importFolder = resolveHostCodexSessionSourceHome(settings)
   return {
     // Only Orca's own homes: the import folder is the user's, even when it holds the same chats.
     homes: uniqueHostHomes([
@@ -122,6 +123,10 @@ export async function listHostCodexRolloutHomes(
       ...ownedAccountHomes(accounts),
       ...configuredAdditionalCodexHomePaths()
     ]),
-    protectedRoots: uniqueHostHomes([resolveHostCodexSessionSourceHome(settings)])
+    // Kept even inside WSL: a host folder can link into it.
+    protectedRoots:
+      importFolder && (isAbsolute(importFolder) || parseWslUncPath(importFolder))
+        ? [importFolder]
+        : []
   }
 }

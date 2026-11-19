@@ -23,7 +23,7 @@ async function realpathUnlessAbsent(path: string): Promise<string | null> {
 
 /**
  * Where the protected roots really are, since a linked folder can put a home's names inside one.
- * A root that is itself a home Orca deletes from is that home, so it isn't protected; a root that
+ * A root that is exactly a home Orca deletes from is that home, so it isn't protected; a root that
  * can't be resolved for a reason other than being gone throws, since its names can't be told apart.
  */
 export async function resolveProtectedRoots({
@@ -58,7 +58,10 @@ export async function isOutsideProtectedRoots(
     return true
   }
   const realFolder = await realpathUnlessAbsent(dirname(path))
-  return (
-    realFolder !== null && !protectedRoots.some((root) => isPathInsideOrEqual(root, realFolder))
-  )
+  if (realFolder === null) {
+    return false
+  }
+  // Case-folded everywhere: a case-insensitive Linux volume keeps each link's spelling.
+  const folder = realFolder.toLowerCase()
+  return !protectedRoots.some((root) => isPathInsideOrEqual(root.toLowerCase(), folder))
 }
