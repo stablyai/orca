@@ -325,9 +325,14 @@ it('moves the row revision on a rewind or a retitle that leaves every timestamp 
   const rewound = revision()
   db.prepare("UPDATE sessions SET title = 'Renamed' WHERE id = 'chat'").run()
   const renamed = revision()
+  const retitle = db.prepare("UPDATE sessions SET title = ? WHERE id = 'chat'")
+  retitle.run('Plan \u{1F600}')
+  const grinning = revision()
+  retitle.run('Plan \u{1F601}')
+  const beaming = revision()
   db.close()
 
-  expect(new Set([first, rewound, renamed]).size).toBe(3)
+  expect(new Set([first, rewound, renamed, grinning, beaming]).size).toBe(5)
 })
 
 it('keeps a message rewound in a continuation hidden, and a compacted tool result whole', () => {
