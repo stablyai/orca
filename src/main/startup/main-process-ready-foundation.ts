@@ -21,7 +21,6 @@ import { loadWslMoveFence } from '../persistence/moving-wsl-projects/quiescence/
 import { startWslMoveStartup } from '../persistence/moving-wsl-projects/startup/wsl-move-startup'
 import { startWslHostsPolicyLiveUpdates } from '../wsl/host-lifecycle/wsl-hosts-policy-live-update'
 import { startCodexHistoryCleanupPolicyLiveUpdates } from '../codex/history/cleanup-policy/codex-history-cleanup-policy-live-update'
-import { readInstallId } from '../telemetry/install-id'
 import { runPendingWslDriveUncConversions } from '../wsl/filesystem/wsl-drive-unc-conversion-startup'
 import { createProfileStateStoreForStartup } from '../persistence/profile-state/startup/profile-state-startup-authority'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
@@ -209,7 +208,7 @@ export async function initializeReadyFoundation(): Promise<void> {
     void state.initialProxyApplicationReady.then(startWslHostsPolicyLiveUpdates)
   }
   void state.initialProxyApplicationReady.then(() =>
-    startCodexHistoryCleanupPolicyLiveUpdates(() => readInstallId(store))
+    startCodexHistoryCleanupPolicyLiveUpdates(store)
   )
   // Wait for profile-sidecar location, then defer potentially blocking OS-keyring probes past first paint (STA-5765).
   scheduleSecretProtectionGapReport({

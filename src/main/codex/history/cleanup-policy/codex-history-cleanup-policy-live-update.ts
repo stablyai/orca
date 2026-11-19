@@ -1,5 +1,7 @@
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import { getMainHttpClient } from '../../../network/http-client'
+import type { Store } from '../../../persistence/loading-store/store'
+import { readInstallId as readStoredInstallId } from '../../../telemetry/install-id'
 import {
   ReleaseAssetPolicyLiveUpdater,
   type ReleaseAssetPolicySpec
@@ -60,14 +62,12 @@ function liveMode(kind: CodexHistoryCleanupKind): CodexHistoryCleanupMode {
 }
 
 /** Cleanup runs only on macOS and Windows, so only they fetch; unpackaged runs never do. */
-export function startCodexHistoryCleanupPolicyLiveUpdates(
-  installId: () => string | undefined
-): void {
+export function startCodexHistoryCleanupPolicyLiveUpdates(store: Store): void {
   if (process.platform !== 'darwin' && process.platform !== 'win32') {
     return
   }
   const environment = getAppEnvironment()
-  readInstallId = installId
+  readInstallId = () => readStoredInstallId(store)
   updater = new ReleaseAssetPolicyLiveUpdater(CODEX_HISTORY_CLEANUP_POLICY, {
     userDataPath: environment.getPath('userData'),
     appVersion: environment.getVersion(),
