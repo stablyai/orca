@@ -90,18 +90,17 @@ it('types a redirected key into the box at its caret and focuses it', () => {
   expect(box.contains(document.activeElement)).toBe(true)
 })
 
-it('focuses the box when the card around it is clicked', () => {
+it('focuses the box from its card but leaves focus alone when the Comment button is clicked', () => {
   const box = renderBox(undefined, 63)
   changePrompt(box, 'draft')
 
   fireEvent.click(box.closest('[data-native-chat-composer-scope]')!)
 
   expect(box.contains(document.activeElement)).toBe(true)
-})
-
-it('leaves focus alone when the Comment button is clicked', () => {
-  const box = renderBox(undefined, 64)
-  changePrompt(box, 'draft')
+  if (document.activeElement instanceof HTMLElement) {
+    document.activeElement.blur()
+  }
+  expect(box.contains(document.activeElement)).toBe(false)
 
   fireEvent.click(screen.getByRole('button', { name: 'Comment' }))
 
