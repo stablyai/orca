@@ -235,6 +235,8 @@ it('proves a tmux-hosted pane only from a complete process picture', async () =>
   await expect(readPaneTmuxHost(io, pane)).resolves.toBe(false)
   runningPane(4050, [4050, 101, 4050, 'tmux -DL qa', 'S+'], ...TMUX)
   await expect(readPaneTmuxHost(io, pane)).resolves.toBe(false)
+  runningPane(4050, [4050, 101, 4050, 'tmux -VL qa', 'S+'], ...TMUX)
+  await expect(readPaneTmuxHost(io, pane)).resolves.toBe(false)
   runningPane(4050, [4050, 101, 4050, 'tmux -Lc attach', 'S+'], ...TMUX)
   await expect(readPaneTmuxHost(io, pane)).resolves.toBe(true)
   // A foreground tmux command that attaches no session hosts nothing.

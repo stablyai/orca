@@ -62,25 +62,30 @@ export function createLocalPtyInventoryReader(options: InventoryOptions): LocalP
     }
     return pending
   }
-  // A lone lookup scans as before; a second against the same snapshot (sleep capture walks every
-  // pane) indexes it once.
-  const indexes = new WeakMap<PtyProcessInfo[], InventoryIndex | 'scanned'>()
+  // One pane's lookups scan once per snapshot as before; a second pane against the same snapshot
+  // (sleep capture walks every pane) indexes it once.
+  type FirstLookup = { key: string; row: PtyProcessInfo | null }
+  const lookups = new WeakMap<PtyProcessInfo[], FirstLookup | InventoryIndex>()
   const find = (rows: PtyProcessInfo[], paneKey: string, id: string | undefined | null) => {
-    let index = indexes.get(rows)
-    if (!index) {
-      indexes.set(rows, 'scanned')
+    const key = id ? `id:${id}` : `pane:${paneKey}`
+    let seen = lookups.get(rows)
+    if (!seen) {
       // Before a restored pane reattaches, the provider's own spawn record still names its PTY.
       const spawned = id ? [] : rows.filter((entry) => entry.paneKey === paneKey)
-      return (
+      const row =
         (id ? rows.find((entry) => entry.id === id) : spawned.length === 1 && spawned[0]) || null
-      )
+      lookups.set(rows, { key, row })
+      return row
     }
-    if (index === 'scanned') {
-      index = indexInventory(rows)
-      indexes.set(rows, index)
+    if ('key' in seen) {
+      if (seen.key === key) {
+        return seen.row
+      }
+      seen = indexInventory(rows)
+      lookups.set(rows, seen)
     }
-    const spawned = id ? undefined : index.bySpawnPaneKey.get(paneKey)
-    return (id ? index.byId.get(id) : spawned?.length === 1 && spawned[0]) || null
+    const spawned = id ? undefined : seen.bySpawnPaneKey.get(paneKey)
+    return (id ? seen.byId.get(id) : spawned?.length === 1 && spawned[0]) || null
   }
   return async (paneKey, lookup) => {
     const id = options.getPtyId(paneKey)
