@@ -7,7 +7,6 @@ import type {
 import { nativeChatAutomationTurnKeys } from '../../../../../../shared/native-chat/transcript/turns/native-chat-automation-turns'
 import { nativeChatActingTurnKeys } from '../../../../../../shared/native-chat/transcript/turns/native-chat-acting-turns'
 import { isNativeChatOrcaCard } from '../../../../../../shared/native-chat/native-chat-orca-card'
-import { foldBotItemNotes } from '../../../../../../shared/bots/bot-item-note-runs'
 import type { NativeChatTurnStatus } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-status'
 import { isNativeChatRowInLiveWorkingTurn } from '../../../../../../shared/native-chat/transcript/turns/native-chat-live-turn-membership'
 import { nativeChatTurnBarRows } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-grouping'
@@ -16,7 +15,6 @@ import {
   nativeChatTurnFoldRow
 } from '../../../../../../shared/native-chat/transcript/folding/native-chat-turn-fold'
 import { nativeChatRowRendersContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
-import { nativeChatGeneratedImageAnswers } from '../../../../../../shared/native-chat/transcript/images/native-chat-generated-image-answers'
 import { nativeChatMarkdownImageSources } from '../../markdown/native-chat-markdown-image-sources'
 import {
   estimateNativeChatRowHeight,
@@ -47,7 +45,7 @@ import {
   type NativeChatSideChatForkPoint
 } from '../../messages/actions/native-chat-side-chat-fork-point'
 import { markNativeChatResponseActionsHang } from './native-chat-response-actions-hang'
-import { nativeChatQuietTurns } from './native-chat-quiet-turn-rows'
+import { nativeChatShownRows } from './native-chat-quiet-turn-rows'
 import type { Translate } from '../../../../i18n/use-translate'
 
 export type NativeChatTranscriptSlot = NativeChatMessageSlot | NativeChatSubagentHeadSlot
@@ -127,7 +125,6 @@ export function buildNativeChatTranscript(
   forkPoint: NativeChatSideChatForkPoint | null
 } {
   const {
-    messages: sourceMessages,
     imageSources = nativeChatMarkdownImageSources,
     unresolvedRowIds,
     typography,
@@ -149,12 +146,7 @@ export function buildNativeChatTranscript(
       .filter(([, status]) => status.workedSeconds != null)
       .map(([turnKey]) => turnKey)
   )
-  const messages = nativeChatGeneratedImageAnswers(
-    foldBotItemNotes(sourceMessages, turnKeys),
-    turnKeys,
-    settledTurnKeys,
-    imageSources
-  )
+  const { quiet, messages } = nativeChatShownRows(input, settledTurnKeys, imageSources)
   // Share row rendering facts with fold selection so answer detection agrees with visible prose.
   const foldRows = messages.map((message, index) =>
     nativeChatTurnFoldRow(message, turnKeys[index], receipts.get(message.id))
@@ -170,7 +162,6 @@ export function buildNativeChatTranscript(
   })
   const bars = nativeChatTurnBarRows(messages, turnKeys)
   const automationTurns = nativeChatAutomationTurnKeys(messages, turnKeys)
-  const quiet = nativeChatQuietTurns(input, messages, settledTurnKeys)
   const actingTurns = nativeChatActingTurnKeys(messages, turnKeys)
   // Turn rows can interleave with other prompts; emit one rollup after their last row.
   const lastRowByTurn = new Map<string, number>()
@@ -226,6 +217,7 @@ export function buildNativeChatTranscript(
     const drawsRow =
       receipt !== undefined ||
       (!folded &&
+        message.mergedInto === undefined &&
         (isNativeChatOrcaCard(message) || nativeChatRowRendersContent(message.blocks)) &&
         message.id !== liveReasoningId)
     if (
