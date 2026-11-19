@@ -345,6 +345,46 @@ describe('switching annotate tools', () => {
     expect(markup.resume).not.toHaveBeenCalled()
   })
 
+  it('going back to Draw while Undo is on offer brings back that drawing without a new capture', async () => {
+    const saved: MarkupResumeSnapshot = {
+      baseImage: { dataUrl: 'data:image/png;base64,AA', width: 800, height: 600 },
+      context: {
+        source: { kind: 'image', element: document.createElement('img') },
+        cssWidth: 800,
+        cssHeight: 600,
+        outputScale: 1
+      }
+    }
+    const markup: MarkupModeController = {
+      ...makeMarkup(),
+      state: 'drawing',
+      isActive: true,
+      snapshot: vi.fn(() => saved)
+    }
+    markup.cancel = vi.fn(() => {
+      markup.isActive = false
+      markup.state = 'idle'
+    })
+    const { result, rerender } = renderBrowserTools(markup)
+    const stroke: MarkupShape = {
+      id: 's',
+      color: '#ef4444',
+      kind: 'rect',
+      from: { x: 1, y: 1 },
+      to: { x: 9, y: 9 },
+      width: 4
+    }
+    act(() => result.current.tools.reportShapes([stroke]))
+    act(() => result.current.tools.exit())
+    rerender()
+
+    await act(async () => result.current.tools.selectTool('draw'))
+
+    expect(markup.start).not.toHaveBeenCalled()
+    expect(markup.resume).toHaveBeenCalledWith(saved)
+    expect(result.current.tools.restoredShapes).toEqual([stroke])
+  })
+
   it('leaves Draw without an Undo offer when nothing was drawn', () => {
     const markup = { ...makeMarkup(), state: 'drawing' as const, isActive: true }
     toastMock.mockClear()

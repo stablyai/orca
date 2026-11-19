@@ -11,6 +11,7 @@ import { translate } from '@/i18n/i18n'
 import { isEditableKeyboardTarget } from '../../host-guest/input/browser-keyboard'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { useGuestEscape } from '../../host-guest/input/use-guest-escape'
+import { interceptAnnotateEscape } from '../palette/annotate-escape-interceptor'
 
 export type GrabModeState = 'idle' | 'armed' | 'awaiting' | 'confirming' | 'error'
 
@@ -248,15 +249,24 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
         }
         e.preventDefault()
         e.stopPropagation()
+        // An open notes list takes this Esc first; the next one leaves the mode.
+        if (interceptAnnotateEscape(browserPageId)) {
+          return
+        }
         cancel()
       }
     }
     addAppKeyListener('keydown', handleKeyDown)
     return () => removeAppKeyListener('keydown', handleKeyDown)
-  }, [state, cancel])
+  }, [browserPageId, state, cancel])
 
   // Includes the copy toast's wait before rearming, while the page still has focus.
-  useGuestEscape(browserPageId, state !== 'idle', cancel)
+  const cancelUnlessIntercepted = useCallback(() => {
+    if (!interceptAnnotateEscape(browserPageId)) {
+      cancel()
+    }
+  }, [browserPageId, cancel])
+  useGuestEscape(browserPageId, state !== 'idle', cancelUnlessIntercepted)
 
   return { state, payload, error, contextMenu, toggle, cancel, rearm, exit }
 }

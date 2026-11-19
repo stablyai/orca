@@ -117,12 +117,18 @@ export function isBrowserGuestToolKey(key: string): key is BrowserGuestToolKey {
   return BROWSER_GUEST_TOOL_KEYS.has(key)
 }
 
-/** Physical key → tool key, so the keys work on non-Latin layouts; falls back to the typed letter. */
+/**
+ * The tool letter a key press means. Latin layouts (QWERTY, AZERTY, Dvorak, Colemak…) use the typed letter, so the
+ * key labelled "C" copies wherever it sits; only a non-Latin character falls back to the physical key, so the keys
+ * still work on Cyrillic, Greek and similar layouts.
+ */
 export function browserGuestToolKeyFromEvent(event: { code?: string; key: string }): string {
+  const typed = event.key.toLowerCase()
+  if (/^[a-z]$/.test(typed)) {
+    return typed
+  }
   const code = event.code ?? ''
-  return code.startsWith('Key') && code.length === 4
-    ? code.slice(3).toLowerCase()
-    : event.key.toLowerCase()
+  return code.startsWith('Key') && code.length === 4 ? code.slice(3).toLowerCase() : typed
 }
 
 export function isBrowserGrabActionKey(key: BrowserGuestToolKey): key is BrowserGrabActionKey {

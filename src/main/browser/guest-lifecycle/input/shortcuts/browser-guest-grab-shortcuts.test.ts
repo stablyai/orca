@@ -129,4 +129,34 @@ describe('grab shortcut forwarding from a focused page', () => {
       key: 'alt-up'
     })
   })
+
+  it('follows the letter on the key for Latin layouts, not its physical position', () => {
+    const { press, send } = setup(true)
+    // AZERTY: the key labelled A sits where QWERTY has Q.
+    press({ key: 'a', code: 'KeyQ' })
+    expect(send).toHaveBeenLastCalledWith('browser:grabActionShortcut', {
+      browserPageId: 'page-1',
+      key: 'a'
+    })
+    send.mockClear()
+    // Dvorak: J sits where QWERTY has C, and must not copy.
+    expect(press({ key: 'j', code: 'KeyC' })).toBe(false)
+    // Colemak: R sits where QWERTY has S, and must not take a screenshot.
+    expect(press({ key: 'r', code: 'KeyS' })).toBe(false)
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('ignores the tool letters with Shift held', () => {
+    const { press, send } = setup(true)
+    for (const [key, code] of [
+      ['C', 'KeyC'],
+      ['S', 'KeyS'],
+      ['A', 'KeyA'],
+      ['G', 'KeyG'],
+      ['D', 'KeyD']
+    ]) {
+      expect(press({ key, code, shift: true })).toBe(false)
+    }
+    expect(send).not.toHaveBeenCalled()
+  })
 })

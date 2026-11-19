@@ -44,6 +44,7 @@ export function BrowserAnnotatePaletteNotes({
         className="shrink-0"
         onClick={onShowNotes}
         aria-expanded={notesOpen}
+        data-browser-annotate-notes-chip
         title={t('browser.annotatePalette.showNotes', 'Show notes')}
       >
         {short

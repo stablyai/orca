@@ -100,6 +100,10 @@ export function PendingBrowserAnnotationCard({
         )}
         onEscapeKeyDown={(event) => {
           event.preventDefault()
+          // Esc during IME composition only ends the composition.
+          if (event.isComposing || event.keyCode === 229) {
+            return
+          }
           onCancel()
         }}
       >

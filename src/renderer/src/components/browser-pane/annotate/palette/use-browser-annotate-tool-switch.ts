@@ -105,7 +105,14 @@ export function useBrowserAnnotateToolSwitch({
   }, [markup.isActive])
   const [restoredShapes, setRestoredShapes] = useState<readonly MarkupShape[] | undefined>()
   const undoToastRef = useRef<string | number | null>(null)
+  // The discarded drawing while its Undo is on offer: entering Draw again in that window restores it.
+  const discardedRef = useRef<{
+    saved: MarkupResumeSnapshot
+    shapes: readonly MarkupShape[]
+    owner: string
+  } | null>(null)
   const dismissUndo = useCallback((): void => {
+    discardedRef.current = null
     if (undoToastRef.current !== null) {
       toast.dismiss(undoToastRef.current)
       undoToastRef.current = null
@@ -150,21 +157,36 @@ export function useBrowserAnnotateToolSwitch({
     if (!saved || shapes.length === 0) {
       return
     }
+    const discarded = { saved, shapes, owner: drawOwner }
+    discardedRef.current = discarded
+    const expire = (): void => {
+      if (discardedRef.current === discarded) {
+        discardedRef.current = null
+      }
+    }
     undoToastRef.current = toast(
       translate('browser.annotatePalette.drawingDiscarded', 'Drawing discarded'),
       {
         duration: DISCARDED_DRAWING_UNDO_MS,
+        onAutoClose: expire,
+        onDismiss: expire,
         action: {
           label: translate('browser.annotatePalette.undo', 'Undo'),
           onClick: () => reopenDrawing(saved, shapes)
         }
       }
     )
-  }, [markup, reopenDrawing])
+  }, [drawOwner, markup, reopenDrawing])
 
   const startDraw = useCallback(
     (transition: number): void => {
-      dismissUndo()
+      // Back to Draw while the discarded drawing can still be undone: bring that drawing back, no new capture.
+      const discarded = discardedRef.current
+      if (discarded && discarded.owner === drawOwner) {
+        dismissUndo()
+        reopenDrawing(discarded.saved, discarded.shapes)
+        return
+      }
       setDrawStartingFor(drawOwner)
       cancelPendingBrowserCapture()
       // Why a second, awaited disable: with the pick already cancelled it awaits the overlay teardown script, which
@@ -195,7 +217,7 @@ export function useBrowserAnnotateToolSwitch({
           void markup.start()
         })
     },
-    [cancelPendingBrowserCapture, dismissUndo, drawOwner, markup, toolTargetId]
+    [cancelPendingBrowserCapture, dismissUndo, drawOwner, markup, reopenDrawing, toolTargetId]
   )
 
   const selectTool = useCallback(

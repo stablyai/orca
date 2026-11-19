@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { registerAnnotateEscapeInterceptor } from './palette/annotate-escape-interceptor'
 import { createPortal } from 'react-dom'
 import type { MutableRefObject, RefObject } from 'react'
 import { Copy, Image } from 'lucide-react'
@@ -112,9 +113,25 @@ export function BrowserGuestAnnotateOverlays({
 
   const activeTool = toolSwitch.activeTool
   const drafts = useBrowserAnnotationDrafts(activeTool !== null)
-  if (activeTool === null && notesOpen) {
+  // The list belongs to Annotate; Grab, Draw and leaving the mode close it.
+  if (activeTool !== 'annotate' && notesOpen) {
     setNotesOpen(false)
   }
+  // Esc closes an open list first (from the palette, the list or the page) and hands focus back to the chip;
+  // the next Esc leaves the mode. The picker asks this interceptor before exiting.
+  const notesPageId = toolSwitch.toolTargetId
+  useEffect(() => {
+    if (!notesOpen) {
+      return
+    }
+    return registerAnnotateEscapeInterceptor(notesPageId, () => {
+      setNotesOpen(false)
+      containerRef.current
+        ?.querySelector<HTMLElement>('[data-browser-annotate-notes-chip]')
+        ?.focus({ preventScroll: true })
+      return true
+    })
+  }, [containerRef, notesOpen, notesPageId])
   const pendingDraftKey = pendingAnnotationPayload
     ? browserAnnotationDraftKey(pendingAnnotationPayload)
     : null
@@ -281,7 +298,16 @@ export function BrowserGuestAnnotateOverlays({
       {browserAnnotations.length > 0 && (activeTool === null || notesOpen) ? (
         <BrowserPageAnnotationTray
           revealSignal={notesRevealSignal}
-          onDismiss={activeTool === null ? undefined : () => setNotesOpen(false)}
+          onDismiss={
+            activeTool === null
+              ? undefined
+              : () => {
+                  setNotesOpen(false)
+                  containerRef.current
+                    ?.querySelector<HTMLElement>('[data-browser-annotate-notes-chip]')
+                    ?.focus({ preventScroll: true })
+                }
+          }
           browserAnnotations={browserAnnotations}
           currentUrl={currentUrl}
           annotationTraySendOpen={annotationTraySendOpen}
