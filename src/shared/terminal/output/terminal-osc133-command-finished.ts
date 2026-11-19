@@ -4,6 +4,7 @@ import { ownRetainedString } from '../../text/own-retained-string'
 
 type OscTerminator = {
   index: number
+  /** 0 when an ESC other than ST cancels the sequence, as a VT parser does. */
   length: number
 }
 
@@ -13,15 +14,21 @@ const OSC_133_PREFIX = '\x1b]133;'
 const JOB_STOP_STATUSES: ReadonlySet<number> = new Set([145, 146, 147, 148, 149, 150])
 const MAX_OSC_CARRY_LENGTH = 4096
 
-// Why stop at the first ESC: an ST is the first ESC after the payload, so the search never walks past
-// the next marker; a BEL-terminated burst of markers is scanned once rather than once per marker.
+/** One forward pass to the first BEL or ESC: a burst of markers is scanned once, whatever ends them. */
 function findOscTerminator(data: string, startIndex: number): OscTerminator | null {
-  const bel = data.indexOf('\x07', startIndex)
-  const esc = data.indexOf('\x1b', startIndex)
-  if (esc !== -1 && (bel === -1 || esc < bel) && data[esc + 1] === '\\') {
-    return { index: esc, length: 2 }
+  for (let index = startIndex; index < data.length; index += 1) {
+    const code = data.charCodeAt(index)
+    if (code === 0x07) {
+      return { index, length: 1 }
+    }
+    if (code === 0x1b) {
+      if (index + 1 === data.length) {
+        return null
+      }
+      return { index, length: data[index + 1] === '\\' ? 2 : 0 }
+    }
   }
-  return bel === -1 ? null : { index: bel, length: 1 }
+  return null
 }
 
 function parseBestEffortExitCode(value: string | undefined): number | null {
@@ -122,6 +129,11 @@ export function createOsc133CommandFinishedScanner(
         break
       }
 
+      if (terminator.length === 0) {
+        // A cancelled sequence is no marker; its ESC may start the next one.
+        offset = terminator.index
+        continue
+      }
       const sequenceEnd = terminator.index + terminator.length
       handleOsc133(
         combined.slice(payloadStart, terminator.index),
