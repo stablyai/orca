@@ -61,7 +61,12 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
     ) {
       return false
     }
-    if (this.backgroundCheckLaunchPending || this.currentStatus.state === 'checking') {
+    if (
+      this.backgroundCheckLaunchPending ||
+      this.currentStatus.state === 'checking' ||
+      this.currentStatus.state === 'downloading' ||
+      (this.currentStatus.state === 'downloaded' && this.currentStatus.automaticDownload)
+    ) {
       return false
     }
     if (!app.isPackaged) {

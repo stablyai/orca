@@ -1903,6 +1903,12 @@
       },
       "stepFailed": "Orca could not finish this step.",
       "finishFailed": "Orca could not do that."
+    },
+    "automaticUpdates": {
+      "saveFailed": "Could not save automatic updates.",
+      "readyStatus": "will install when you quit Orca.",
+      "title": "Automatic updates",
+      "description": "Download desktop updates in the background and install them when you quit Orca."
     }
   },
   "menu": {
@@ -25339,6 +25345,11 @@
       "rateLimitedInMinutes_other": "GitHub rate limit reached. Try again in about {{count}} minutes.",
       "rateLimitedInMinutesSignedOut_one": "GitHub rate limit reached. Try again in about {{count}} minute, or run `gh auth login` so Orca can use your account's higher limit.",
       "rateLimitedInMinutesSignedOut_other": "GitHub rate limit reached. Try again in about {{count}} minutes, or run `gh auth login` so Orca can use your account's higher limit."
+    },
+    "automatic": {
+      "readySummary": "Orca {{version}} is ready. It will install the next time you quit.",
+      "later": "Later",
+      "restartNow": "Restart now"
     }
   },
   "jira": {

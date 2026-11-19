@@ -104,6 +104,7 @@ function createContext(overrides?: Partial<HandlerContext>): HandlerContext {
     sendCheckFailureStatus: vi.fn().mockResolvedValue(undefined),
     sendErrorStatus: vi.fn(),
     sendStatus: vi.fn(),
+    publishUpdateOffer: vi.fn(),
     scheduleAutomaticUpdateCheck: vi.fn(),
     shouldSuppressMissingManifestPrereleaseFallbackEvent: vi.fn(() => false),
     suppressMissingManifestPrereleaseFallbackPromiseFailure: vi.fn(),

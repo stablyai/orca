@@ -1,3 +1,4 @@
+import { app } from 'electron'
 import {
   beginMacUpdateDownload,
   deferMacQuitUntilInstallerReady,
@@ -6,6 +7,7 @@ import {
 } from '../mac-install/updater-mac-install'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { isExternallyManagedLinuxInstall } from '../linux-package/linux-update-package-type'
+import type { UpdateStatus } from '../../../shared/updater/update-status-types'
 import { updaterCodedMessage } from '../../../shared/updater/updater-failure-copy'
 import { QUIT_AND_INSTALL_DELAY_MS } from './updater-state'
 import { UpdaterRemoteStatus } from './updater-remote-status'
@@ -50,7 +52,45 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     }, QUIT_AND_INSTALL_DELAY_MS)
   }
 
-  protected downloadUpdate(): void {
+  protected publishUpdateOffer(
+    status: UpdateStatus,
+    { eligible, backgroundCheck }: { eligible: boolean; backgroundCheck: boolean }
+  ): void {
+    this.automaticDownloadOfferVersion =
+      eligible && status.state === 'available' ? status.version : null
+    const autoDownload =
+      backgroundCheck &&
+      this.pendingUserInitiatedCheckAfterInFlight === null &&
+      status.state === 'available' &&
+      this.canDownloadAutomatically(status.version)
+    this.sendStatus(autoDownload ? { ...status, automaticDownload: true } : status)
+    if (autoDownload) {
+      this.downloadAvailableUpdateAutomatically()
+    }
+  }
+
+  protected downloadAvailableUpdateAutomatically(): void {
+    if (
+      !this.backgroundCheckLaunchPending &&
+      this.currentStatus.state === 'available' &&
+      this.canDownloadAutomatically(this.currentStatus.version)
+    ) {
+      this.downloadUpdate(true)
+    }
+  }
+
+  private canDownloadAutomatically(version: string): boolean {
+    return (
+      app.isPackaged &&
+      this.getAutomaticUpdates?.() === true &&
+      this.autoUpdater?.autoInstallOnAppQuit === true &&
+      this.automaticDownloadOfferVersion === version &&
+      this.activeUpdateSource === 'release' &&
+      !this.isPinnedBuildActive
+    )
+  }
+
+  protected downloadUpdate(automatic = false): void {
     if (
       this.localBuildSelectionInProgress ||
       this.pinnedBuildSelectionInProgress ||
@@ -92,6 +132,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     if (this.deferHeadlessServeInstall('download', version)) {
       return
     }
+    this.automaticDownloadVersion = automatic ? version : null
     this.downloadInFlight = true
     const localBuildDownload = this.activeUpdateSource === 'local'
     beginMacUpdateDownload()

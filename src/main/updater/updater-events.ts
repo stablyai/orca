@@ -55,6 +55,7 @@ export function registerAutoUpdaterHandlers({
   sendCheckFailureStatus,
   sendErrorStatus,
   sendStatus,
+  publishUpdateOffer,
   scheduleAutomaticUpdateCheck,
   shouldSuppressMissingManifestPrereleaseFallbackEvent,
   suppressMissingManifestPrereleaseFallbackPromiseFailure,
@@ -157,13 +158,21 @@ export function registerAutoUpdaterHandlers({
           }
         }
 
-        sendStatus(
+        publishUpdateOffer(
           getRetainedLinuxPackageManualInstallStatus() ?? {
             state: 'available',
             version: info.version,
             changelog,
             // Tell clients this host cannot self-update before offering a download.
             ...(isExternallyManagedLinuxInstall() ? { externallyManaged: true } : {})
+          },
+          {
+            eligible:
+              !isLocalBuildCheck() &&
+              !isPinnedBuildCheck() &&
+              !missingManifestFallback &&
+              !publishingWindowLastGoodCheck,
+            backgroundCheck: !wasUserInitiated && !getUserInitiatedCheck()
           }
         )
       } finally {

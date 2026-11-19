@@ -72,6 +72,10 @@ export abstract class UpdaterRemoteStatus extends UpdaterNudge {
 
   protected downloadRemoteServerUpdate(runtimeId: string): RemoteServerUpdaterSnapshot {
     this.assertRemoteServerUpdateAvailable()
+    // The host may have started an automatic download since the client last checked the offer.
+    if (this.currentStatus.state === 'downloading' || this.currentStatus.state === 'downloaded') {
+      return this.getRemoteServerUpdaterSnapshot(runtimeId)
+    }
     if (this.currentStatus.state !== 'available') {
       throw new Error('remote_update_not_available')
     }

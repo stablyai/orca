@@ -110,10 +110,12 @@ export function UpdateDownloadingContent({
 
 export function UpdateReadyToInstallContent({
   version,
+  installsOnQuit,
   onRestart,
   onClose
 }: {
   version: string
+  installsOnQuit?: boolean
   onRestart: () => void
   onClose: () => void
 }): React.JSX.Element {
@@ -124,26 +126,45 @@ export function UpdateReadyToInstallContent({
         <h3 className="text-sm font-semibold">
           {t('auto.components.UpdateCard.17412483da', 'Ready to Install')}
         </h3>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-7 shrink-0 min-w-[44px] min-h-[44px] -m-2"
-          onClick={onClose}
-          aria-label={t('auto.components.UpdateCard.8acbdd3961', 'Minimize to status bar')}
-        >
-          <Minus className="size-3.5" />
-        </Button>
+        {installsOnQuit ? null : (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7 shrink-0 min-w-[44px] min-h-[44px] -m-2"
+            onClick={onClose}
+            aria-label={t('auto.components.UpdateCard.8acbdd3961', 'Minimize to status bar')}
+          >
+            <Minus className="size-3.5" />
+          </Button>
+        )}
       </div>
       <p className="text-sm text-muted-foreground">
-        {t(
-          'auto.components.UpdateCard.6714206e5a',
-          "Orca v{{value0}} is downloaded. Restart when you're ready.",
-          { value0: version }
-        )}
+        {installsOnQuit
+          ? t(
+              'updates.automatic.readySummary',
+              'Orca {{version}} is ready. It will install the next time you quit.',
+              { version }
+            )
+          : t(
+              'auto.components.UpdateCard.6714206e5a',
+              "Orca v{{value0}} is downloaded. Restart when you're ready.",
+              { value0: version }
+            )}
       </p>
-      <Button variant="default" size="sm" onClick={onRestart} className="w-full">
-        {t('auto.components.UpdateCard.68b235d264', 'Restart to Update')}
-      </Button>
+      {installsOnQuit ? (
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            {t('updates.automatic.later', 'Later')}
+          </Button>
+          <Button size="sm" onClick={onRestart}>
+            {t('updates.automatic.restartNow', 'Restart now')}
+          </Button>
+        </div>
+      ) : (
+        <Button variant="default" size="sm" onClick={onRestart} className="w-full">
+          {t('auto.components.UpdateCard.68b235d264', 'Restart to Update')}
+        </Button>
+      )}
     </div>
   )
 }

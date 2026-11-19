@@ -35,6 +35,7 @@ export type UpdaterSetupOptions = {
   setDismissedUpdateNudgeId?: (id: string | null) => void
   getReleaseChannelOverride?: () => ReleaseChannel | null
   getUpdateDelayDays?: () => number
+  getAutomaticUpdates?: () => boolean
   installMode?: UpdateInstallMode
   onBeforeQuitFailure?: PreQuitCleanupFailureMode
 }
@@ -48,8 +49,12 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     super.checkForUpdatesFromMenu(options)
   }
 
-  downloadUpdate(): void {
-    super.downloadUpdate()
+  downloadUpdate(automatic = false): void {
+    super.downloadUpdate(automatic)
+  }
+
+  applyAutomaticUpdatesSetting(): void {
+    this.downloadAvailableUpdateAutomatically()
   }
 
   quitAndInstall(): void {
@@ -127,6 +132,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     this._setDismissedUpdateNudgeId = opts?.setDismissedUpdateNudgeId ?? null
     this.getReleaseChannelOverride = opts?.getReleaseChannelOverride ?? null
     this.getUpdateDelayDays = opts?.getUpdateDelayDays ?? null
+    this.getAutomaticUpdates = opts?.getAutomaticUpdates ?? null
     this.updateInstallMode = opts?.installMode ?? 'interactive'
     this.lastInstallDeferralVersion = { download: null, install: null }
 
@@ -146,6 +152,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
 
     const autoUpdater = this.getAutoUpdater()
     configureMacShipItScheduling()
+    // Start automatic downloads after Orca publishes the offer and finishes release checks.
     autoUpdater.autoDownload = false
     if (this.activeUpdateSource === 'release') {
       autoUpdater.allowDowngrade = false
@@ -221,6 +228,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
         this.sendCheckFailureStatus(message, userInitiated, source, sourceError),
       sendErrorStatus: (message, userInitiated) => this.sendErrorStatus(message, userInitiated),
       sendStatus: (status) => this.sendStatus(status),
+      publishUpdateOffer: (status, options) => this.publishUpdateOffer(status, options),
       scheduleAutomaticUpdateCheck: (delayMs) => this.scheduleAutomaticUpdateCheck(delayMs),
       shouldSuppressMissingManifestPrereleaseFallbackEvent: (message, error) =>
         this.shouldSuppressMissingManifestPrereleaseFallbackEvent(message, error),
