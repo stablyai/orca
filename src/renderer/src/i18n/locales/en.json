@@ -1903,6 +1903,13 @@
       },
       "stepFailed": "Orca could not finish this step.",
       "finishFailed": "Orca could not do that."
+    },
+    "automaticUpdates": {
+      "saveFailed": "Could not save automatic updates.",
+      "title": "Automatic updates",
+      "description": "On supported desktop installs, Orca downloads eligible updates on its regular check schedule and restarts to install them automatically.",
+      "info": "About automatic updates",
+      "installingStatus": "is being installed."
     }
   },
   "menu": {
@@ -25312,6 +25319,9 @@
     "wslMoveInstallHeld": "A project is moving to its WSL host. Install the update once the move finishes.",
     "wslMoveUndoInstallHeld": "A project is coming back from its WSL host. Install the update once that finishes.",
     "failure": {
+      "automaticInstallTerminalBusy": "Some terminals would end on restart. Orca will try again on a later update check.",
+      "macStagingTimeout": "macOS is still preparing the update. If this persists, quit and reopen Orca.",
+      "automaticInstallCheckpointFailed": "Orca could not save the current window before restarting. Try installing the update again.",
       "releaseNotReady": "A newer release isn't available for this device yet. Check again later.",
       "updateServerUnreachable": "Couldn't reach the update server. Try again in a few minutes.",
       "channelUnsupportedPlatform": "{{channel}} builds are produced only for macOS and Windows.",
@@ -25340,7 +25350,13 @@
       "rateLimitedInMinutes_other": "GitHub rate limit reached. Try again in about {{count}} minutes.",
       "rateLimitedInMinutesSignedOut_one": "GitHub rate limit reached. Try again in about {{count}} minute, or run `gh auth login` so Orca can use your account's higher limit.",
       "rateLimitedInMinutesSignedOut_other": "GitHub rate limit reached. Try again in about {{count}} minutes, or run `gh auth login` so Orca can use your account's higher limit."
-    }
+    },
+    "automatic": {
+      "downloading": "Downloading Orca {{version}}…",
+      "installing": "Installing Orca {{version}}…",
+      "restarting": "Orca will restart automatically."
+    },
+    "remoteUpdateBusy": "This server is already updating. Check again once it finishes."
   },
   "jira": {
     "connect": {
