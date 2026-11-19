@@ -51,19 +51,6 @@ export function codexDaemonSocketPathExceedsLimit(
 const unguardableHomesWarned = new Set<string>()
 
 /** Applies (or removes) Orca's daemon override so it tracks the home's current path. */
-export function applyCodexDaemonSocketGuard(
-  config: string,
-  homePath: string,
-  platform = process.platform
-): string {
-  return applyCodexDaemonOverride(
-    config,
-    homePath,
-    codexDaemonSocketPathExceedsLimit(homePath, platform)
-  )
-}
-
-/** `applyCodexDaemonSocketGuard` for a caller that already measured the home's socket path. */
 export function applyCodexDaemonOverride(
   config: string,
   homePath: string,
