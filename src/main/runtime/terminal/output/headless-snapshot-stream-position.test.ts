@@ -93,6 +93,8 @@ it.each([false, true])(
 )
 
 it('rebuilds the screen from a provider snapshot plus the output after it, cutting a straddling chunk', async () => {
+  // Recovery's capture and any reader's are separate requests; the daemon answers both alike.
+  const pending: ((value: PtyProviderBufferSnapshot) => void)[] = []
   const capture: { land?: (value: PtyProviderBufferSnapshot) => void } = {}
   const runtime = createRuntime()
   runtime.setPtyController({
@@ -102,7 +104,8 @@ it('rebuilds the screen from a provider snapshot plus the output after it, cutti
     getSize: () => grid,
     serializeProviderBuffer: () =>
       new Promise<PtyProviderBufferSnapshot>((resolve) => {
-        capture.land = resolve
+        pending.push(resolve)
+        capture.land = (value) => pending.forEach((land) => land(value))
       })
   })
   try {

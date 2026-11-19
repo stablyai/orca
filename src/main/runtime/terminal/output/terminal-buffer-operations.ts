@@ -69,8 +69,8 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
   ): Promise<PtyProviderBufferSnapshot | null>
   protected abstract awaitProviderTerminalBuffer(
     ptyId: string,
-    opts?: { scrollbackRows?: number; signal?: AbortSignal },
-    wait?: { timeoutMs?: number; retireOnTimeout?: boolean; fresh?: boolean }
+    opts?: { scrollbackRows?: number },
+    wait?: { timeoutMs?: number; retireOnTimeout?: boolean }
   ): Promise<ProviderTerminalBufferWait>
   abstract resolveLeafForHandle(handle: string): { ptyId: string | null } | null
   abstract clearHeadlessTerminalBuffer(ptyId: string): Promise<void>

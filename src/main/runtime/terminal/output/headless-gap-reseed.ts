@@ -37,6 +37,12 @@ type RebuildResult = 'rebuilt' | 'failed' | 'behind'
 /** After the provider drops output, main's model keeps parsing and answering queries, but its screen is untrusted
  *  until it is repainted from a provider snapshot plus the output journaled since that capture started. */
 export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCreatePtyHeadlessTerminalState {
+  protected abstract captureProviderTerminalBuffer(
+    ptyId: string,
+    opts: { scrollbackRows?: number; signal?: AbortSignal },
+    generation: number
+  ): Promise<PtyProviderBufferSnapshot | null>
+
   private gapCapturesInFlight = 0
   // Keyed and insertion-ordered: FIFO admission, and a retired model leaves without a scan.
   private readonly gapCaptureWaiters = new Map<string, (granted: boolean) => void>()
@@ -189,17 +195,22 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     // The snapshot's seq is mapped through the offset as it lands; one that moves before the repaint cannot place it.
     const revision = this.providerSequenceAnchorRevisions.get(ptyId)
     // Screen only: a storm repeats this, and history readers go to the provider instead.
+    // Its own capture, shared with no reader: cancelling it on timeout touches nothing else.
     const capture = new AbortController()
-    const { snapshot, late } = await this.awaitProviderTerminalBuffer(
+    const pending = this.captureProviderTerminalBuffer(
       ptyId,
       { scrollbackRows: 0, signal: capture.signal },
-      { timeoutMs: GAP_RESEED_CAPTURE_TIMEOUT_MS, fresh: true }
+      this.getPtyLifecycleGeneration(ptyId)
     )
+    const snapshot = await Promise.race([
+      pending,
+      delay(GAP_RESEED_CAPTURE_TIMEOUT_MS).then(() => null)
+    ])
     if (!snapshot) {
-      // The slot bounds live captures, not attempts: cancel a timed-out one before giving the slot back.
+      // The slot bounds live captures: cancel a timed-out one before giving the slot back.
       stopGapJournal(recovery)
       capture.abort()
-      await late?.catch(() => {})
+      await pending
       return false
     }
     const deadline = Date.now() + GAP_RESEED_CAPTURE_TIMEOUT_MS
