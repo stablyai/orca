@@ -69,20 +69,13 @@ const CALLS: [string, Record<string, unknown>][] = [
 ]
 
 describe('who may share a bot', () => {
-  it.each([
-    ['an agent CLI', { caller: LOCAL_CLI_RPC_CALLER }],
-    [
-      "an agent CLI over a paired device's pairing",
-      { pairedDeviceId: 'device-1', clientCapabilities: [CLI_AGENT_CALLER_CLIENT_CAPABILITY] }
-    ],
-    ['a client with no proven identity', { clientKind: 'runtime' as const }]
-  ])('refuses every share call from %s before it reaches the service', async (_who, options) => {
+  it('refuses every share call from a client with no proven identity before it reaches the service', async () => {
     const { dispatcher, reached } = shareRuntime()
     for (const [method, params] of CALLS) {
-      const result = await dispatcher.dispatch(request(method, params), options)
+      const result = await dispatcher.dispatch(request(method, params), { clientKind: 'runtime' })
       expect(result, method).toMatchObject({
         ok: false,
-        error: { message: 'Only your owner shares a bot, in Orca: Settings, the bot, Share bot….' }
+        error: { message: 'Share a bot from Orca or its `orca` CLI.' }
       })
     }
     expect(reached).toEqual([])
@@ -90,8 +83,13 @@ describe('who may share a bot', () => {
 
   it.each([
     ['in an Orca window', { caller: DESKTOP_RPC_CALLER }],
-    ['on a paired device', { pairedDeviceId: 'device-1' }]
-  ])('lets the owner share %s', async (_where, options) => {
+    ['on a paired device', { pairedDeviceId: 'device-1' }],
+    ["from an agent's orca CLI", { caller: LOCAL_CLI_RPC_CALLER }],
+    [
+      "from an agent's orca CLI over a paired device's pairing",
+      { pairedDeviceId: 'device-1', clientCapabilities: [CLI_AGENT_CALLER_CLIENT_CAPABILITY] }
+    ]
+  ])('lets a trusted caller share %s', async (_where, options) => {
     const { dispatcher, reached } = shareRuntime()
     for (const [method, params] of CALLS) {
       expect(await dispatcher.dispatch(request(method, params), options), method).toMatchObject({
@@ -106,9 +104,6 @@ describe('who may share a bot', () => {
     const stop = request('bots.share.stop', { shareId: 's1' })
     expect(await dispatcher.dispatch(stop, { caller: DESKTOP_RPC_CALLER })).toMatchObject({
       ok: true
-    })
-    expect(await dispatcher.dispatch(stop, { caller: LOCAL_CLI_RPC_CALLER })).toMatchObject({
-      ok: false
     })
     expect(reached).toEqual(['stop'])
   })
