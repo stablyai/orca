@@ -5,6 +5,8 @@ import type {
 } from '../../../../../../shared/git/history/git-history-types'
 import {
   commitScopeFromPage,
+  readRememberedChangeScope,
+  rememberChangeScope,
   provesPickedCommitGone,
   summarizeChangeScopeEntries
 } from './change-scope'
@@ -93,5 +95,14 @@ describe('summarizeChangeScopeEntries', () => {
     expect(
       summarizeChangeScopeEntries([{ path: 'a.ts', added: 2, removed: 1 }, { path: 'logo.png' }])
     ).toEqual({ files: 2, lines: null })
+  })
+})
+
+describe('remembered scope ownership', () => {
+  it('restores a scope only for its worktree and execution owner', () => {
+    rememberChangeScope('A', { kind: 'uncommitted' }, 'host-a')
+    expect(readRememberedChangeScope('A', 'host-a')).toEqual({ kind: 'uncommitted' })
+    expect(readRememberedChangeScope('A', 'host-b')).toEqual({ kind: 'all' })
+    expect(readRememberedChangeScope('B', 'host-a')).toEqual({ kind: 'all' })
   })
 })

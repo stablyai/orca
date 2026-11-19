@@ -143,3 +143,18 @@ describe('useSourceControlGitHistory session page', () => {
     })
   })
 })
+
+describe('plain history base context', () => {
+  it('hides an old-host page when a different base resolves and the new request fails', async () => {
+    mocks.getRuntimeGitHistory.mockResolvedValueOnce(historyResult('recent', 'h1'))
+    const root = await mount({ headOid: 'h1', compareBaseOid: 'b1' })
+    await flush()
+    expect(historyProbe.current?.gitHistoryState.result?.items[0].subject).toBe('recent')
+    const pending = deferred<GitHistoryResult>()
+    mocks.getRuntimeGitHistory.mockReturnValueOnce(pending.promise)
+    await act(async () => root.render(<Probe headOid="h1" compareBaseOid="b2" />))
+    expect(historyProbe.current?.gitHistoryState.result).toBeUndefined()
+    await act(async () => pending.reject(new Error('offline')))
+    expect(historyProbe.current?.gitHistoryState).toEqual({ status: 'error', error: 'offline' })
+  })
+})
