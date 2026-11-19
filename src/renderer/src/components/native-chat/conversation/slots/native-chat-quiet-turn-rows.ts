@@ -1,15 +1,15 @@
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
-import { nativeChatQuietCardAnswerRows as quietRows } from '../../../../../../shared/native-chat/transcript/turns/native-chat-quiet-card-answer-turns'
+import { nativeChatQuietTurns as quietTurns } from '../../../../../../shared/native-chat/transcript/turns/native-chat-quiet-turns'
 import type { NativeChatTranscriptSlotsInput } from './native-chat-transcript-input'
 
-/** The transcript rows a quiet card-answer turn hides; a turn with a diff or an opened PR stays. */
-export function nativeChatQuietCardAnswerRows(
+/** The rows and turn bars a quiet turn hides; a turn with a diff or an opened PR stays. */
+export function nativeChatQuietTurns(
   input: Pick<NativeChatTranscriptSlotsInput, 'turnKeys' | 'turnDiffs' | 'openedPullRequests'>,
   rows: readonly NativeChatMessage[],
   settledTurnKeys: ReadonlySet<string>
-): ReadonlySet<number> {
+): ReturnType<typeof quietTurns> {
   const { turnKeys, turnDiffs, openedPullRequests } = input
-  return quietRows(
+  return quietTurns(
     rows,
     turnKeys,
     settledTurnKeys,

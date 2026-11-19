@@ -61,9 +61,14 @@ function line(entries: AgentStatusEntry[], input: Partial<BotRowLineInput> = {})
 }
 
 describe('selectBotRowLine', () => {
-  it('says what its own Chat is doing, with no place', () => {
+  it('shows Home Chat without a place when its activity ties with a thread', () => {
     expect(
       line([
+        session('slack-thread', {
+          state: 'working',
+          updatedAt: NOW - MIN,
+          toolName: 'Write'
+        }),
         session('chat', {
           state: 'working',
           updatedAt: NOW - MIN,

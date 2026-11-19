@@ -310,7 +310,7 @@ export function NativeChatMessageList({
     sessionId: session.sessionId,
     ready: session.readPhase === 'ready',
     isVisible,
-    loadEarlier,
+    loadEarlier: olderHistory.loadEarlier,
     holdHistory: historyRetention.leaveEnd,
     releaseHistory: historyRetention.returnToEnd,
     scrollRef,

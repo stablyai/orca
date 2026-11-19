@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { RepoSelector, SlugRepo } from './github-repo-target-params'
 import { OptionalString, requiredString } from '../rpc-param-primitives'
+import { FullGitObjectId } from '../source-control/git-params'
 
 export const UpdatePrTitle = RepoSelector.extend({
   prNumber: z.number().int().positive(),
@@ -17,10 +18,14 @@ export const UpdatePr = RepoSelector.extend({
   prRepo: SlugRepo.nullable().optional()
 })
 
+/** `expectedHeadSha`: the PR head the client reviewed; older hosts drop it and merge unfenced. */
 export const MergePr = RepoSelector.extend({
   prNumber: z.number().int().positive(),
   method: z.enum(['merge', 'squash', 'rebase']).optional(),
-  prRepo: SlugRepo.nullable().optional()
+  prRepo: SlugRepo.nullable().optional(),
+  expectedHeadSha: FullGitObjectId.transform((sha) => sha.toLowerCase())
+    .nullable()
+    .optional()
 })
 
 export const SetPrAutoMerge = RepoSelector.extend({
