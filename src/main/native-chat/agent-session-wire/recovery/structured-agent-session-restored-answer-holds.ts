@@ -14,7 +14,7 @@ import type {
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import { restoredPromptOptionFor } from '../../../../shared/agent-session/requests/prompts/agent-session-restored-prompt'
 import type { AgentSessionTurnCompletionEvent } from '../../../../shared/agent-session/view/agent-session-turn-completion-wire'
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { RestoredPromptJournal } from './structured-agent-session-restored-prompts'
 import type { StructuredAgentSessionTurnCompletionSubscriber } from '../observations/structured-agent-session-turn-completion-feed'
 import type { AgentSessionPromptRequest } from '../operations/structured-agent-session-turns-prompt'
 import type { StructuredAgentSessionCaller } from '../host/structured-agent-session-host-types'
@@ -34,7 +34,7 @@ type Hold = {
 }
 
 export type RestoredAnswerHoldsDeps = {
-  conversation: (sessionId: string) => Promise<{ journal: AgentSessionJournal }>
+  conversation: (sessionId: string) => Promise<{ journal: Pick<RestoredPromptJournal, 'reads'> }>
   conversationFence: (sessionId: string) => number | null
   respond: (
     caller: StructuredAgentSessionCaller,

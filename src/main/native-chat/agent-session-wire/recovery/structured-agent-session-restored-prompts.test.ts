@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalApprovalItem,
-  AgentJournalRenderItem,
-  AgentJournalResolution
+  AgentJournalRenderItem
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { refuse } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionTurnCompletionEvent } from '../../../../shared/agent-session/view/agent-session-turn-completion-wire'
 import {
   StructuredAgentSessionRestoredPrompts,
+  type RestoredPromptJournal,
   type StructuredAgentSessionRestoredPromptsDeps
 } from './structured-agent-session-restored-prompts'
 
@@ -57,13 +57,13 @@ function rig() {
   let running = false
   const sent: string[] = []
   const respond = vi.fn<StructuredAgentSessionRestoredPromptsDeps['respond']>(async () => REFUSED)
-  const journal = {
+  const journal: RestoredPromptJournal = {
     reads: {
-      item: async (id: string) => items.get(id) ?? null,
+      item: async (id) => items.get(id) ?? null,
       generation: async () => ({ items: [...items.values()] }),
       cursor: async () => ({ epoch: 'e', sequence: 9 })
     },
-    mutatePrompt: async (input: { itemId: string; resolution: AgentJournalResolution }) => {
+    mutatePrompt: async (input) => {
       const current = items.get(input.itemId)!
       const body = current.body.kind === 'approval' ? current.body : null
       items.set(input.itemId, {
@@ -71,32 +71,48 @@ function rig() {
         revision: current.revision + 1,
         ...(body ? { body: { ...body, resolution: input.resolution } } : {})
       })
-      return { itemId: input.itemId, revision: current.revision + 1 }
+      return { revision: current.revision + 1 }
     }
   }
-  const deps = {
+  const deps: StructuredAgentSessionRestoredPromptsDeps = {
     conversation: async () => ({ journal }),
     agentRunning: () => running,
     continuationHost: () => ({
       conversationFence: () => 3,
       now: () => 1_000,
-      send: async (input: {
-        body: { blocks: { text: string }[] }
-        beforeRun?: () => Promise<void>
-      }) => {
+      send: async (input) => {
         await input.beforeRun?.()
         running = true
-        sent.push(input.body.blocks[0]!.text)
-        return { ok: true, value: { submission: { dispatchState: 'accepted' } } }
+        const block = input.body.blocks[0]
+        sent.push(block?.type === 'text' ? block.text : '')
+        return {
+          ok: true,
+          replayed: false,
+          fence: 3,
+          cursor: { epoch: 'e', sequence: 10 },
+          value: {
+            clientMessageId: input.envelope.clientOperationId,
+            submission: {
+              clientMessageId: input.envelope.clientOperationId,
+              fence: 3,
+              payloadFingerprint: 'fp',
+              dispatchState: 'accepted',
+              providerItemId: null,
+              reason: null,
+              submittedAt: 1_000,
+              resolvedAt: 1_000
+            }
+          }
+        }
       },
       awaitSendHandedOver: async () => undefined,
       awaitSendSettlement: async () => undefined,
       awaitSendDispatched: async () => undefined,
       sessions: new Map(),
-      logger: { warn: () => {}, info: () => {}, error: () => {}, debug: () => {} }
+      logger: { warn: () => {}, error: () => {} }
     }),
     respond,
-    subscribeTurnCompletions: (subscriber: { emit: typeof emit }) => {
+    subscribeTurnCompletions: (subscriber) => {
       emit = subscriber.emit
       return () => {
         emit = null
@@ -104,10 +120,7 @@ function rig() {
     },
     now: () => 1_000
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake journal and continuation host implement only the members this class calls.
-  const prompts = new StructuredAgentSessionRestoredPrompts(
-    deps as unknown as StructuredAgentSessionRestoredPromptsDeps
-  )
+  const prompts = new StructuredAgentSessionRestoredPrompts(deps)
   const live = vi.fn(async () => REFUSED)
   const answer = (optionId: string) =>
     prompts.respond(

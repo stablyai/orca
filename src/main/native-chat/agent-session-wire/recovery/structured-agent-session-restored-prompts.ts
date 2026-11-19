@@ -9,6 +9,7 @@ import type {
 } from '../../../../shared/agent-session/agent-session-wire'
 import type {
   AgentJournalItemBody,
+  AgentJournalRenderItem,
   AgentJournalResolution
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -20,6 +21,8 @@ import {
   restoredPromptContinuationMessage
 } from '../../../../shared/agent-session/requests/prompts/agent-session-restored-prompt'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { JournalPromptMutationInput } from '../../agent-session-journal/journal-store-contracts'
+import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { StructuredAgentSessionTurnCompletionSubscriber } from '../observations/structured-agent-session-turn-completion-feed'
 import { RestoredAnswerHolds } from './structured-agent-session-restored-answer-holds'
 import {
@@ -38,9 +41,18 @@ type PromptParams = AgentSessionPromptRequest & { envelope: AgentSessionMutation
 type PromptResult = AgentSessionMutationResult<AgentSessionPromptResult>
 type PromptBody = Extract<AgentJournalItemBody, { kind: 'approval' | 'question' }>
 
+/** The reads and the one write a restored answer needs from the chat's journal. */
+export type RestoredPromptJournal = {
+  reads: Pick<AgentSessionJournal['reads'], 'item'> & {
+    generation: () => Promise<{ items: readonly AgentJournalRenderItem[] }>
+    cursor: () => Promise<AgentJournalCursor>
+  }
+  mutatePrompt: (input: JournalPromptMutationInput) => Promise<{ revision: number }>
+}
+
 export type StructuredAgentSessionRestoredPromptsDeps = {
   /** Opens the chat at rest; never starts its agent. */
-  conversation: (sessionId: string) => Promise<{ journal: AgentSessionJournal }>
+  conversation: (sessionId: string) => Promise<{ journal: RestoredPromptJournal }>
   /** A child or a start in flight: its prompts are answered live. */
   agentRunning: (sessionId: string) => boolean
   continuationHost: () => Omit<StructuredAgentSessionContinuationHost, 'stillResumable'>
@@ -127,7 +139,7 @@ export class StructuredAgentSessionRestoredPrompts {
   }
 
   private async answerAndResume(
-    journal: AgentSessionJournal,
+    journal: RestoredPromptJournal,
     params: PromptParams,
     body: PromptBody,
     digest: string,
@@ -213,7 +225,7 @@ export class StructuredAgentSessionRestoredPrompts {
 
   private async accepted(
     sessionId: string,
-    journal: AgentSessionJournal,
+    journal: RestoredPromptJournal,
     itemId: string,
     revision: number,
     resolution: AgentJournalResolution,

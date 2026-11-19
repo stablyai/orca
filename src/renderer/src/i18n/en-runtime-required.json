@@ -2303,6 +2303,7 @@
         "imageCount_other": "{{count}} images"
       },
       "receipt": {
+        "agentExited": "Not answered before the agent stopped",
         "cancelled": "Cancelled",
         "cancelledBy": "Cancelled on {{device}}",
         "emptyAnswer": "Empty answer",
