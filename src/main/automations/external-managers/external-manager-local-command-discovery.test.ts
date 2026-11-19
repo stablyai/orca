@@ -1,4 +1,4 @@
-import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { delimiter, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -106,20 +106,23 @@ it('preserves inherited PATH order and repeated entries when the directory is pr
   )
 })
 
-it('matches a case-variant Windows PATH entry without trailing separators', async () => {
-  Object.defineProperty(process, 'platform', { value: 'win32' })
-  vi.stubEnv('PATH', 'C:\\Tools\\;D:\\bin')
-  mocks.resolveCliCommandAsync.mockResolvedValue('c:\\tools\\openclaw.cmd')
+it.skipIf(process.platform !== 'win32')(
+  'matches a case-variant Windows PATH entry without trailing separators',
+  async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    vi.stubEnv('PATH', 'C:\\Tools\\;D:\\bin')
+    mocks.resolveCliCommandAsync.mockResolvedValue('c:\\tools\\openclaw.cmd')
 
-  await runLocalAutomationCommand('openclaw', ['cron', 'list'])
+    await runLocalAutomationCommand('openclaw', ['cron', 'list'])
 
-  const pathKey = resolvePathEnvKey(process.env, 'win32')
-  expect(mocks.runProcess).toHaveBeenCalledWith(
-    expect.objectContaining({
-      env: expect.objectContaining({ [pathKey]: 'C:\\Tools\\;D:\\bin' })
-    })
-  )
-})
+    const pathKey = resolvePathEnvKey(process.env, 'win32')
+    expect(mocks.runProcess).toHaveBeenCalledWith(
+      expect.objectContaining({
+        env: expect.objectContaining({ [pathKey]: 'C:\\Tools\\;D:\\bin' })
+      })
+    )
+  }
+)
 
 it('spawns the local-path shim when the CLI lookup misses', async () => {
   Object.defineProperty(process, 'platform', { value: 'win32' })
@@ -150,6 +153,7 @@ it.skipIf(process.platform === 'win32')(
       process.chdir(cwd)
       vi.stubEnv('PATH', `.${delimiter}${inheritedPath}`)
 
+      // ast-grep-ignore: test-no-in-test-import-actual -- This test deliberately loads the real resolver after filesystem setup.
       const actualResolver = await vi.importActual<typeof AsyncCommandResolution>(
         '../../../shared/shell/command-resolution/node-cli-command-async-resolution'
       )
@@ -160,7 +164,7 @@ it.skipIf(process.platform === 'win32')(
 
       await runLocalAutomationCommand(command, [])
       expect(mocks.runProcess).toHaveBeenCalledWith(
-        expect.objectContaining({ program: executablePath })
+        expect.objectContaining({ program: await realpath(executablePath) })
       )
     } finally {
       process.chdir(originalCwd)
