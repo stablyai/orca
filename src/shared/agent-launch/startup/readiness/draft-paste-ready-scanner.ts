@@ -210,11 +210,13 @@ function createSingleSignalScanner(readySignal: SingleSignal): {
     const window = state.anchorCarry + data
     state.anchorCarry = window.slice(-state.carryChars)
     let cursor = 0
+    // A hit still reads the chunk's later exits, so a vetoed ready cannot outlive its takeover.
+    let fired = false
     while (cursor < window.length) {
       if (!state.sawMarkerAnchor) {
         const enterIndex = window.indexOf(state.enter, cursor)
         if (enterIndex === -1) {
-          return false
+          return fired
         }
         state.sawMarkerAnchor = true
         state.postAnchorRecent = ''
@@ -226,18 +228,20 @@ function createSingleSignalScanner(readySignal: SingleSignal): {
       const segmentStart = Math.max(cursor, carriedLength)
       const segment =
         leaveIndex === -1 ? window.slice(segmentStart) : window.slice(segmentStart, leaveIndex)
-      if (containsMarker(state.postAnchorRecent + segment, state.marker)) {
-        return true
-      }
+      const hit = containsMarker(state.postAnchorRecent + segment, state.marker)
+      fired ||= hit
       if (leaveIndex === -1) {
-        state.postAnchorRecent = (state.postAnchorRecent + segment).slice(-512)
-        return false
+        // A hit is not kept, so a vetoed ready waits for a new marker.
+        if (!hit) {
+          state.postAnchorRecent = (state.postAnchorRecent + segment).slice(-512)
+        }
+        return fired
       }
       state.sawMarkerAnchor = false
       state.postAnchorRecent = ''
       cursor = leaveIndex + state.exit.length
     }
-    return false
+    return fired
   }
 
   return {
