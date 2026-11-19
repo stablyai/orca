@@ -192,13 +192,9 @@ export function ClientHostedBrowserPagePane(props: Props) {
     const publisher = startBrowserClientPageMetadataPublisher({
       browserPageId: browserTab.id,
       environmentId: runtimeEnvironmentId,
-      placement: {
-        kind: 'client',
-        browserHostClientId,
-        browserHostGeneration,
-        pageHostGeneration
-      },
-      nextRevision: attachment.nextMetadataRevision
+      placement: { kind: 'client', browserHostClientId, browserHostGeneration, pageHostGeneration },
+      nextRevision: attachment.nextMetadataRevision,
+      faviconUrl: readCurrentPage()?.faviconUrl ?? null
     })
     webviewRef.current = webview
     setAttachmentError(null)
@@ -274,6 +270,7 @@ export function ClientHostedBrowserPagePane(props: Props) {
     const unbindChrome = bindBrowserClientPageChromeListeners(webview, {
       browserPageId: browserTab.id,
       updatePageState: (pageId, updates) => updatePageStateFromGuest(pageId, updates),
+      publishFavicon: (faviconUrl) => publisher.publishFavicon(faviconUrl),
       dismissAddressBarSuggestions: () => dismissAddressBarSuggestionsRef.current?.(),
       applyViewportPreset: pageBox.applyOverride
     })
@@ -301,7 +298,6 @@ export function ClientHostedBrowserPagePane(props: Props) {
     unsubscribeMetadata = subscribeBrowserGuestMetadata(browserTab.id, webview, receiveMetadata)
     if (!guestAvailable) {
       cleanupGuest()
-      return cleanupGuest
     }
     return cleanupGuest
   }, [
