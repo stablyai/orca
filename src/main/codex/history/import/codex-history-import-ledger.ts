@@ -13,11 +13,13 @@ export type ImportedSource = {
   /** `dev:ino` of the import folder; a replaced folder starts over. */
   identity: string
   /**
-   * Rollout names already linked or found in the store, wherever they sit in the import folder
+   * Rollout names (without `.zst`) already linked or found in the store, wherever they sit in the import folder
    * now (Codex archives by moving): never linked again, so one the user deleted stays deleted.
    */
   handled: string[]
   folders: Record<string, ImportedFolder>
+  /** Set after a damaged ledger: passes only record names until one reads every folder. */
+  seeding?: true
 }
 
 type ImportLedger = {
@@ -38,6 +40,7 @@ function isImportedSource(value: unknown): value is ImportedSource {
   const source = value as Partial<ImportedSource>
   return (
     typeof source.identity === 'string' &&
+    (source.seeding === undefined || source.seeding === true) &&
     Array.isArray(source.handled) &&
     source.handled.every((name) => typeof name === 'string') &&
     typeof source.folders === 'object' &&

@@ -81,14 +81,14 @@ describe('importCodexHistory', () => {
     )
   })
 
-  it('does not bring back a conversation deleted from the store, even once archived', async () => {
+  it('does not bring back a deleted conversation that Codex archived and compressed', async () => {
     const { importHome, storeHome, run } = setup()
     writeFileSync(join(importHome, DAY, NEW), 'new\n')
     expect(await run()).toBe(1)
 
     rmSync(join(storeHome, DAY, NEW))
-    // Codex outside Orca archives it in the import folder by moving it.
-    renameSync(join(importHome, DAY, NEW), join(importHome, 'archived_sessions', NEW))
+    // Codex outside Orca archives it in the import folder, then compresses it.
+    renameSync(join(importHome, DAY, NEW), join(importHome, 'archived_sessions', `${NEW}.zst`))
     writeFileSync(join(importHome, DAY, LATER), 'later\n')
     const later = new Date(Date.now() + 5_000)
     utimesSync(join(importHome, DAY), later, later)
@@ -96,7 +96,7 @@ describe('importCodexHistory', () => {
 
     expect(await run()).toBe(1)
     expect(existsSync(join(storeHome, DAY, NEW))).toBe(false)
-    expect(existsSync(join(storeHome, 'archived_sessions', NEW))).toBe(false)
+    expect(existsSync(join(storeHome, 'archived_sessions', `${NEW}.zst`))).toBe(false)
     expect(readFileSync(join(storeHome, DAY, LATER), 'utf8')).toBe('later\n')
   })
 })

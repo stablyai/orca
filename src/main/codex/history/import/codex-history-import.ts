@@ -5,6 +5,7 @@ import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesy
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import {
+  COMPRESSED_ROLLOUT_SUFFIX,
   compressedRolloutsFirst,
   isRolloutTwinKeptFromStore,
   rolloutTwinPath
@@ -50,6 +51,12 @@ async function realpathIfPresent(path: string): Promise<string | null> {
     }
     throw error
   }
+}
+
+function rolloutKey(name: string): string {
+  return name.endsWith(COMPRESSED_ROLLOUT_SUFFIX)
+    ? name.slice(0, -COMPRESSED_ROLLOUT_SUFFIX.length)
+    : name
 }
 
 function isWithin(parent: string, child: string): boolean {
@@ -168,16 +175,24 @@ async function importFolder(
     if (args.shouldStop()) {
       return { linked, stopped: true }
     }
-    if (handled.has(name)) {
-      continue
-    }
+    const key = rolloutKey(name)
     if (seedOnly) {
-      handled.add(name)
+      handled.add(key)
       continue
     }
     const from = join(path, name)
     const to = join(args.storeHome, target, name)
     const targetNames = await store.names(target)
+    // A conversation handled before joins again only as the newer plain form of a compressed copy
+    // the store still holds; one the user deleted stays deleted whichever form Codex leaves here.
+    if (
+      handled.has(key) &&
+      (targetNames.has(name) ||
+        !targetNames.has(rolloutTwinPath(name)) ||
+        (await isRolloutTwinKeptFromStore(from, to)))
+    ) {
+      continue
+    }
     // The store's own copy wins: the same name, either form filed in the other place, or a twin
     // holding everything this form has (a newer plain form still joins its compressed one).
     if (
@@ -185,7 +200,7 @@ async function importFolder(
       (await store.holds(archived ? datedFolderOf(name) : ARCHIVED, name)) ||
       (targetNames.has(rolloutTwinPath(name)) && (await isRolloutTwinKeptFromStore(from, to)))
     ) {
-      handled.add(name)
+      handled.add(key)
       continue
     }
     if (!targetReady) {
@@ -198,7 +213,7 @@ async function importFolder(
     const outcome = await linkCodexSessionFileAsync(from, to, { hardlinkOnly: true })
     if (outcome === 'linked' || outcome === 'existing') {
       linked += outcome === 'linked' ? 1 : 0
-      handled.add(name)
+      handled.add(key)
       targetNames.add(name)
     } else {
       // No heal runs while this pass is active, so the marker can't settle the thread as missing.
@@ -233,11 +248,20 @@ export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<
   const sourceKey = normalizeRuntimePathForComparison(await realpath(args.importHome))
   const ledger = await readImportLedger(args.ledgerPath)
   const known = ledger.sources[sourceKey]
-  // After a damaged ledger, this folder's first pass only records what it holds.
-  const seedOnly = ledger.recovered === true && !known
+  // A replaced folder (restored from a backup, say) is read afresh but keeps what was handled.
   const source: ImportedSource =
-    known?.identity === identity ? known : { identity, handled: [], folders: {} }
+    known?.identity === identity
+      ? known
+      : {
+          identity,
+          handled: known?.handled ?? [],
+          folders: {},
+          // After a damaged ledger, passes only record what this folder holds until one finishes.
+          ...(ledger.recovered && !known ? { seeding: true } : {})
+        }
   ledger.sources[sourceKey] = source
+  const seedOnly = source.seeding === true
+  let unread = false
   const handled = new Set(source.handled)
   const folders = [ARCHIVED, ...(await listDayFolders(args.importHome))]
   const store = new StoreNames(args.storeHome)
@@ -259,6 +283,7 @@ export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<
       try {
         result = await importFolder(args, folder, source, handled, store, seedOnly)
       } catch (error) {
+        unread = true
         // One unreadable folder must not hold back the rest; the next pass reads it again.
         console.warn(
           `[codex-history-import] Could not read ${join(args.importHome, folder)}:`,
@@ -284,8 +309,9 @@ export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<
       await save()
     }
   }
-  if (seedOnly && !stopped) {
-    delete ledger.recovered
+  if (seedOnly && !stopped && !unread) {
+    delete source.seeding
+    await save()
   }
   if (linked > 0) {
     console.info(`[codex-history-import] Linked ${linked} conversations from ${args.importHome}`)
