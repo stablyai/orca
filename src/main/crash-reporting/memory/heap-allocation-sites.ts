@@ -9,8 +9,10 @@ const MAX_STACK_TEXT_LENGTH = 225
 // Main's shared bundle chunks sit one folder down.
 const BUNDLE_FILE_NAME = /^(?:chunks\/)?[\w.-]+\.[cm]?js$/
 const CODE_IDENTIFIER = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/
-// A shipped dependency's own file, named by package: `@scope/pkg/dir/file.mjs`.
-const PACKAGE_FILE_NAME = /^(?:@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]*\/(?:[\w.-]+\/)*[\w.-]+\.[cm]?js$/
+// A shipped dependency's own file, named by package: `@scope/pkg/dir/file.mjs`. No segment may start
+// with a dot, so `..` can never walk out of node_modules.
+const PACKAGE_FILE_NAME =
+  /^(?:@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]*\/(?:[\w-][\w.-]*\/)*[\w-][\w.-]*\.[cm]?js$/
 const MAX_PACKAGE_FILE_NAME_LENGTH = 96
 // V8 runtime frames without scripts use labels such as (GC) and (V8 API).
 const RUNTIME_LABEL = /^\([A-Za-z0-9 _-]{1,24}\)$/

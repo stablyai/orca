@@ -65,7 +65,8 @@ describe('summarizeSamplingProfile with shipped packages', () => {
               frame('clientSecret', 'file:///Users/someone/acme-app/node_modules/acme/index.js'),
               4
             ),
-            leaf(frame('escape', `${APP_MODULES}../../../../Users/someone/notes.js`), 3),
+            leaf(frame('escape', `${APP_MODULES}../../../../Users/someone/notes.js`), 1),
+            leaf(frame('nested', `${APP_MODULES}acme/../../../../Users/someone/notes.js`), 2),
             leaf(frame('loose', `${APP_MODULES}Customer Files/plan.js`), 2)
           ]
         }
