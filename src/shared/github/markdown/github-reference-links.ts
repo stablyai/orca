@@ -39,30 +39,80 @@ function createGitHubIssueUrl(owner: string, repo: string, number: string): stri
   return `https://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${number}`
 }
 
+const REFERENCE_PREFIX_CHAR = /[A-Za-z0-9_./-]/
+const REPO_NAME_CHAR = /[A-Za-z0-9_.-]/
+
 function isEmbeddedGitHubReference(value: string, index: number): boolean {
   if (index === 0) {
     return false
   }
-  return /[A-Za-z0-9_./-]/.test(value[index - 1] ?? '')
+  return REFERENCE_PREFIX_CHAR.test(value[index - 1] ?? '')
 }
 
-function splitGitHubReferenceText(value: string, defaultRepo: GitHubRepoReference): MarkdownNode[] {
+function sameName(a: string, b: string): boolean {
+  return a.toLowerCase() === b.toLowerCase()
+}
+
+/** The one known repo called `name`; on a tie, the one owned by the default repo's owner. */
+function repoNamed(
+  name: string,
+  defaultRepo: GitHubRepoReference,
+  projectRepos: readonly GitHubRepoReference[]
+): GitHubRepoReference | null {
+  const matches = [defaultRepo, ...projectRepos].filter(
+    (candidate, i, all) =>
+      sameName(candidate.repo, name) &&
+      all.findIndex(
+        (other) => sameName(other.owner, candidate.owner) && sameName(other.repo, candidate.repo)
+      ) === i
+  )
+  if (matches.length === 1) {
+    return matches[0]
+  }
+  const sameOwner = matches.filter((candidate) => sameName(candidate.owner, defaultRepo.owner))
+  return sameOwner.length === 1 ? sameOwner[0] : null
+}
+
+/** `name#123` written right before a bare match: where `name` starts, or -1 when it is not one. */
+function repoNameStart(value: string, hashIndex: number, cursor: number): number {
+  let start = hashIndex
+  while (start > cursor && REPO_NAME_CHAR.test(value[start - 1] ?? '')) {
+    start -= 1
+  }
+  if (start === hashIndex || (start > 0 && REFERENCE_PREFIX_CHAR.test(value[start - 1] ?? ''))) {
+    return -1
+  }
+  return start
+}
+
+function splitGitHubReferenceText(
+  value: string,
+  defaultRepo: GitHubRepoReference,
+  projectRepos: readonly GitHubRepoReference[]
+): MarkdownNode[] {
   const parts: MarkdownNode[] = []
   let cursor = 0
 
   for (const match of value.matchAll(GITHUB_REFERENCE_PATTERN)) {
-    const label = match[0]
-    const index = match.index ?? 0
-    if (isEmbeddedGitHubReference(value, index)) {
-      continue
-    }
-
-    const owner = match[1] ?? defaultRepo.owner
-    const repo = match[2] ?? defaultRepo.repo
+    let index = match.index ?? 0
+    let owner = match[1] ?? defaultRepo.owner
+    let repo = match[2] ?? defaultRepo.repo
     const number = match[3]
     if (!number) {
       continue
     }
+    if (isEmbeddedGitHubReference(value, index)) {
+      const nameStart = match[1] ? -1 : repoNameStart(value, index, cursor)
+      const named =
+        nameStart < 0 ? null : repoNamed(value.slice(nameStart, index), defaultRepo, projectRepos)
+      if (!named) {
+        continue
+      }
+      index = nameStart
+      owner = named.owner
+      repo = named.repo
+    }
+    const end = (match.index ?? 0) + match[0].length
 
     if (index > cursor) {
       parts.push({ type: 'text', value: value.slice(cursor, index) })
@@ -71,9 +121,9 @@ function splitGitHubReferenceText(value: string, defaultRepo: GitHubRepoReferenc
       type: 'link',
       url: createGitHubIssueUrl(owner, repo, number),
       title: null,
-      children: [{ type: 'text', value: label }]
+      children: [{ type: 'text', value: value.slice(index, end) }]
     })
-    cursor = index + label.length
+    cursor = end
   }
 
   if (cursor === 0) {
@@ -85,8 +135,13 @@ function splitGitHubReferenceText(value: string, defaultRepo: GitHubRepoReferenc
   return parts
 }
 
-/** Turns `#123` and `owner/repo#123` in an mdast tree's text into issue links, in place. */
-export function linkGitHubReferences(node: MarkdownNode, defaultRepo: GitHubRepoReference): void {
+/** Turns `#123`, `owner/repo#123` and `name#123` in an mdast tree's text into issue links, in
+ *  place. `name#123` links only when `name` is the repo of exactly one of `projectRepos`. */
+export function linkGitHubReferences(
+  node: MarkdownNode,
+  defaultRepo: GitHubRepoReference,
+  projectRepos: readonly GitHubRepoReference[] = []
+): void {
   if (!node.children || node.type === 'link' || node.type === 'image') {
     return
   }
@@ -96,11 +151,11 @@ export function linkGitHubReferences(node: MarkdownNode, defaultRepo: GitHubRepo
     // Text an earlier pass drew as something else, such as a mention chip, stays as drawn.
     if (child.type === 'text' && child.value !== undefined && child.data === undefined) {
       // Agent replies can contain thousands of issue refs; append iteratively to avoid V8’s argument limit.
-      for (const part of splitGitHubReferenceText(child.value, defaultRepo)) {
+      for (const part of splitGitHubReferenceText(child.value, defaultRepo, projectRepos)) {
         nextChildren.push(part)
       }
     } else {
-      linkGitHubReferences(child, defaultRepo)
+      linkGitHubReferences(child, defaultRepo, projectRepos)
       nextChildren.push(child)
     }
   }

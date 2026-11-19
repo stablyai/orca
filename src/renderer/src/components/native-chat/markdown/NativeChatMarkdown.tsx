@@ -222,7 +222,7 @@ export function NativeChatMarkdown({
     linkifyFilePaths && onLinkClick !== undefined,
     streaming
   )
-  const { githubRepo } = useContext(NativeChatLinkPeekContext)
+  const { githubRepo, projectGitHubRepos } = useContext(NativeChatLinkPeekContext)
   return (
     <NativeChatMarkdownRowKeyContext.Provider value={rowKey}>
       <CommentMarkdown
@@ -231,6 +231,7 @@ export function NativeChatMarkdown({
         growing={growing || streaming}
         // Only the document variant's links can peek; bare #123 links follow it.
         githubRepo={variant === 'document' ? githubRepo?.referenceRepo : undefined}
+        projectGitHubRepos={projectGitHubRepos}
         onLinkClick={onLinkClick}
         allowFileUriLinks={onLinkClick !== undefined}
         content={
