@@ -207,22 +207,15 @@ export function SidebarBotsSection({ onOpenBot }: { onOpenBot: () => void }): Re
           tooltip: collapseLabel,
           onToggle: toggleBots
         }}
+        titleAccessory={
+          !collapsed && collapseAll && !searchOpen ? (
+            <BotsCollapseAllButton collapseAll={collapseAll} />
+          ) : null
+        }
         summary={
           collapsed ? (
             <BotCollapsedPreview facts={facts} onOpenBot={openFromFace} onExpand={toggleBots} />
-          ) : (
-            <span className="flex min-w-0 flex-1 items-center gap-0.5">
-              {/* A 0 next to the onboarding card says nothing. */}
-              {entries.length > 0 ? (
-                <span className="pointer-events-none text-left text-xs text-muted-foreground">
-                  {entries.length}
-                </span>
-              ) : null}
-              {collapseAll && !searchOpen ? (
-                <BotsCollapseAllButton collapseAll={collapseAll} />
-              ) : null}
-            </span>
-          )
+          ) : null
         }
         // Folded, the header is just its title and faces; the controls unmount so Tab can't reach them.
         actions={
