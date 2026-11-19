@@ -2,6 +2,7 @@ import { mapAgentStatusStateToVisualStatus } from '@/lib/agent-status/aggregatio
 import type { WorktreeStatus } from '../../../../shared/worktree/row-display/worktree-status-rollup'
 import { isAgentStatusState } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentMessageSenderView } from '../../../../shared/agent-session/view/messages/agent-message-presentation'
+import type { AgentListStatus } from '../../../../shared/agent-status/presentation/agent-list-status'
 
 export type CrewStatusGroup = 'needsYou' | 'working' | 'idle' | 'failed'
 export const CREW_STATUS_GROUPS: readonly CrewStatusGroup[] = [
@@ -49,6 +50,15 @@ export function crewPartyStatus(party: CrewPartyState): WorktreeStatus {
     : 'inactive'
   // A settled assignment whose task failed is a failure, not a quiet finish.
   return status === 'done' && party.taskFailed ? 'failed' : status
+}
+
+/** The per-agent dot the sidebar's agent rows draw, from the same inputs as the party's status. */
+export function crewPartyDotState(party: CrewPartyState): AgentListStatus {
+  if (party.dot) {
+    return party.dot
+  }
+  const state = isAgentStatusState(party.status) ? party.status : 'idle'
+  return state === 'done' && party.taskFailed ? 'failed' : state
 }
 
 export function crewStatusGroup(status: WorktreeStatus): CrewStatusGroup {
