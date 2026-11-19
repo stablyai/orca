@@ -14,6 +14,7 @@ import type { TerminalOscColorQueryReplyColors } from '../../../../shared/termin
 import type { RuntimeTerminalPresentation } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { AgentLaunchTabViewerRule } from '../../../../shared/agent-launch/contracts/agent-launch-tab-publication'
 import type { SpawnIntent } from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
+import type { TerminalViewMode } from '../../../../shared/terminal-view-mode.ts'
 
 export type TerminalCreateOptions = {
   command?: string
@@ -59,7 +60,7 @@ export type TerminalCreateOptions = {
   terminalColorQueryReplies?: TerminalOscColorQueryReplyColors
   /** Unvalidated wire value: the creator's palette and cursor, pinned with its colours on a windowed host. */
   terminalViewAttributes?: unknown
-  viewMode?: 'terminal' | 'chat'
+  viewMode?: TerminalViewMode
   /** The tab group a background create joins; defaults to the first group. */
   targetGroupId?: string
   /** Main-internal placement anchor; removed before PTY dispatch. */

@@ -1,10 +1,11 @@
 import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
 import type { TerminalPaneSplitDirection } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { RuntimeTerminalPresentation } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { TerminalViewMode } from '../../../../shared/terminal-view-mode.ts'
 
 /** Use requested/first group; revealed tabs honor user names, background worker tabs keep live titles. */
 export function newTabIn(opts: {
-  viewMode?: 'terminal' | 'chat'
+  viewMode?: TerminalViewMode
   targetGroupId?: string
   title?: string
   presentation?: RuntimeTerminalPresentation

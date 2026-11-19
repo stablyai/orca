@@ -71,6 +71,7 @@ import type { HostScopedWorktreeKey } from '../../../shared/worktree/host-qualif
 import type { TerminalHandleAccess } from '../agent-senders/runtime-agent-sender-associations'
 
 import { RuntimeBotConstructionHooks } from './runtime-bot-construction-hooks'
+import type { TerminalViewMode } from '../../../shared/terminal-view-mode.ts'
 
 export type ClientHostedPageObservation = MobileSessionTabSubscription | symbol
 
@@ -239,7 +240,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHoo
       activate: boolean
       paired: boolean
       selectIfNoActiveTab: boolean
-      viewMode?: 'terminal' | 'chat'
+      viewMode?: TerminalViewMode
       /** Retain launch delivery over bare renderer PTYs; silent settlement would lose the command (STA-3214). */
       startupCommand?: string
     }

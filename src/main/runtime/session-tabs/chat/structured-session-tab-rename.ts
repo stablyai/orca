@@ -1,11 +1,12 @@
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { TerminalViewMode } from '../../../../shared/terminal-view-mode.ts'
 
 export type SessionTabProps = {
   tabId: string
   color?: string | null
   isPinned?: boolean
-  viewMode?: 'terminal' | 'chat'
+  viewMode?: TerminalViewMode
   customTitle?: string | null
 }
 

@@ -17,6 +17,7 @@ import {
 } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 
 import { seedResumeLaunchIdentity } from '../../../ipc/pty/pane/resume-launch-identity'
+import type { TerminalViewMode } from '../../../../shared/terminal-view-mode'
 // Allow lost-response reconnect retries for one minute; later intentional resumes fork fresh.
 const MOBILE_TERMINAL_CREATE_RESULT_TTL_MS = 60_000
 
@@ -37,7 +38,7 @@ export type MobileTerminalCreateOptions = {
   launchConfig?: SleepingAgentLaunchConfig
   launchAgent?: TuiAgent
   trustWorktreeId?: string
-  viewMode?: 'terminal' | 'chat'
+  viewMode?: TerminalViewMode
   activate?: boolean
   clientNavigationId?: string
   clientMutationId?: string
@@ -58,7 +59,7 @@ export type OwnedMobileTerminalCreateOptions = {
   createMutation?: { clientIdentity: string; id: string }
   launchAgent?: TuiAgent
   trustWorktreeId?: string
-  viewMode?: 'terminal' | 'chat'
+  viewMode?: TerminalViewMode
   targetGroupId?: string
   afterDesktopTabId?: string
   presentation?: RuntimeTerminalPresentation
@@ -113,7 +114,7 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
       launchAgent?: TuiAgent
       trustWorktreeId?: string
       terminalImageViewerSupported?: boolean
-      viewMode?: 'terminal' | 'chat'
+      viewMode?: TerminalViewMode
       activate?: boolean
       select?: boolean
       clientNavigationId?: string
