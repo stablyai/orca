@@ -5,13 +5,12 @@ import type { E2EEKeypair } from '../../rpc/server/pairing/e2ee-keypair'
 import type { RelayAccessTokenRefresh } from './relay-session-broker-contract'
 import {
   RelayRenewalOrigin,
-  relayAuthConfigAt,
   renewRelayAuthorization,
   type RelayRenewal
 } from './relay-renewal-origin'
 
 const AUTH_BASE = 'https://auth.example.test'
-const FRONT_DOOR = 'https://front-door.example.test'
+const FRONT_DOOR = 'https://front-door.director.example.test'
 
 const authConfig = {
   apiBaseUrl: AUTH_BASE,
@@ -35,32 +34,38 @@ const keypair: E2EEKeypair = {
   publicKeyB64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
 }
 
-type Outcome = 'ok' | 'network' | 503 | 401 | 403
+type Outcome = 'ok' | 'network' | 'malformed' | 'local' | 503 | 401 | 403
 
-// One fake auth service per origin: the session refresh (readContext) and the relay-token POST.
+// The session refresh (always the configured auth base) and one relay-token service per origin.
 function fakeAuth(plan: { refresh?: Outcome[]; relayToken?: Outcome[] }) {
-  const refreshes: (string | undefined)[] = []
-  const relayTokenUrls: string[] = []
+  const refreshArgs: unknown[][] = []
+  const relayTokenRequests: { url: string; redirect: RequestInit['redirect'] }[] = []
   const refreshPlan = [...(plan.refresh ?? [])]
   const relayTokenPlan = [...(plan.relayToken ?? [])]
-  const refreshAccessToken = async (authOrigin?: string): Promise<RelayAccessTokenRefresh> => {
-    refreshes.push(authOrigin)
+  const refreshAccessToken = async (...args: unknown[]): Promise<RelayAccessTokenRefresh> => {
+    refreshArgs.push(args)
     const outcome = refreshPlan.shift() ?? 'ok'
     if (outcome === 'network') {
       throw new TypeError('fetch failed')
     }
+    if (outcome === 'local') {
+      throw new Error('orca_cloud_refresh_replay_blocked')
+    }
     if (outcome !== 'ok') {
-      throw new OrcaCloudRequestError(outcome)
+      throw new OrcaCloudRequestError(outcome === 'malformed' ? 502 : outcome)
     }
     return { accessToken: 'access-token' }
   }
-  const fetch: typeof globalThis.fetch = async (url) => {
-    relayTokenUrls.push(String(url))
+  const fetch: typeof globalThis.fetch = async (url, init) => {
+    relayTokenRequests.push({ url: String(url), redirect: init?.redirect })
     const outcome = relayTokenPlan.shift() ?? 'ok'
     if (outcome === 'network') {
       throw new TypeError('fetch failed')
     }
-    if (outcome !== 'ok') {
+    if (outcome === 'malformed') {
+      return new Response('<html>captive portal</html>', { status: 200 })
+    }
+    if (outcome !== 'ok' && outcome !== 'local') {
       return new Response('{}', { status: outcome })
     }
     return new Response(JSON.stringify({ relayToken: 'relay-jwt', expiresAt: 1_900_000_000 }), {
@@ -68,7 +73,13 @@ function fakeAuth(plan: { refresh?: Outcome[]; relayToken?: Outcome[] }) {
       headers: { 'content-type': 'application/json' }
     })
   }
-  return { refreshAccessToken, fetch, refreshes, relayTokenUrls }
+  return {
+    refreshAccessToken,
+    fetch,
+    refreshArgs,
+    relayTokenRequests,
+    relayTokenUrls: () => relayTokenRequests.map((request) => request.url)
+  }
 }
 
 // The broker's renewal loop: one attempt per retry tick, origin chosen by RelayRenewalOrigin.
@@ -102,67 +113,63 @@ async function renewUntilSuccess(
 const PRIMARY_TOKEN_URL = `${AUTH_BASE}/v1/desktop/auth/relay-token`
 const DOOR_TOKEN_URL = `${FRONT_DOOR}/v1/desktop/auth/relay-token`
 
-describe('relayAuthConfigAt', () => {
-  it('moves only the refresh and relay-token endpoints to the auth origin', () => {
-    expect(relayAuthConfigAt(authConfig, FRONT_DOOR)).toEqual({
-      ...authConfig,
-      refreshEndpoint: `${FRONT_DOOR}/v1/desktop/auth/refresh`,
-      relayTokenEndpoint: DOOR_TOKEN_URL
-    })
-  })
-})
-
 describe('relay token renewal with an authOrigin', () => {
-  it('renews through the authOrigin when the session refresh on the auth base gets no answer', async () => {
-    const auth = fakeAuth({ refresh: ['network'] })
-    const result = await renewUntilSuccess(auth, FRONT_DOOR)
-    expect(result.attempts).toBe(2)
-    expect(result.renewal).toMatchObject({ kind: 'renewed' })
-    expect(auth.refreshes).toEqual([undefined, FRONT_DOOR])
-    expect(auth.relayTokenUrls).toEqual([DOOR_TOKEN_URL])
-  })
-
-  it('renews through the authOrigin when the relay-token POST on the auth base fails 5xx or times out', async () => {
+  it('exchanges through the authOrigin after the relay-token POST on the auth base fails 5xx or gets no response', async () => {
     for (const failure of [503, 'network'] as const) {
       const auth = fakeAuth({ relayToken: [failure] })
       const result = await renewUntilSuccess(auth, FRONT_DOOR)
       expect(result.attempts).toBe(2)
-      expect(auth.refreshes).toEqual([undefined, FRONT_DOOR])
-      expect(auth.relayTokenUrls).toEqual([PRIMARY_TOKEN_URL, DOOR_TOKEN_URL])
+      expect(result.renewal).toMatchObject({ kind: 'renewed' })
+      expect(auth.relayTokenUrls()).toEqual([PRIMARY_TOKEN_URL, DOOR_TOKEN_URL])
     }
   })
 
-  it('alternates origins while neither answers, and returns to the auth base after a success', async () => {
-    const origin = new RelayRenewalOrigin()
-    const seen: (string | undefined)[] = []
-    for (let i = 0; i < 4; i++) {
-      seen.push(origin.next(FRONT_DOOR))
-      origin.failed(new TypeError('fetch failed'), FRONT_DOOR)
-    }
-    expect(seen).toEqual([undefined, FRONT_DOOR, undefined, FRONT_DOOR])
-    origin.failed(new TypeError('fetch failed'), FRONT_DOOR)
-    expect(origin.next(FRONT_DOOR)).toBe(FRONT_DOOR)
-    origin.succeeded()
-    expect(origin.next(FRONT_DOOR)).toBeUndefined()
+  it('never sends the session refresh to the authOrigin', async () => {
+    const auth = fakeAuth({ relayToken: ['network', 'network', 503] })
+    const result = await renewUntilSuccess(auth, FRONT_DOOR)
+    expect(result.attempts).toBe(4)
+    expect(auth.relayTokenUrls()).toEqual([
+      PRIMARY_TOKEN_URL,
+      DOOR_TOKEN_URL,
+      PRIMARY_TOKEN_URL,
+      DOOR_TOKEN_URL
+    ])
+    expect(auth.refreshArgs).toEqual([[], [], [], []])
   })
 
-  it('does not fail over on a 4xx answer from the auth base', async () => {
-    const answers: Outcome[] = [401, 403]
-    for (const plan of [{ refresh: answers }, { relayToken: answers }]) {
-      const auth = fakeAuth(plan)
-      const result = await renewUntilSuccess(auth, FRONT_DOOR)
-      expect(result.attempts).toBe(3)
-      expect(auth.refreshes).toEqual([undefined, undefined, undefined])
-      expect(auth.relayTokenUrls.every((url) => url === PRIMARY_TOKEN_URL)).toBe(true)
-    }
+  it('stays on the auth base when the session refresh fails, whatever the failure', async () => {
+    const auth = fakeAuth({ refresh: ['network', 503, 'local', 401] })
+    const result = await renewUntilSuccess(auth, FRONT_DOOR)
+    expect(result.attempts).toBe(5)
+    expect(auth.relayTokenUrls()).toEqual([PRIMARY_TOKEN_URL])
   })
 
-  it('goes back to the auth base after a 4xx from the authOrigin', () => {
-    const origin = new RelayRenewalOrigin()
-    origin.failed(new TypeError('fetch failed'), FRONT_DOOR)
-    expect(origin.next(FRONT_DOOR)).toBe(FRONT_DOOR)
-    origin.failed(new OrcaCloudRequestError(404), FRONT_DOOR)
-    expect(origin.next(FRONT_DOOR)).toBeUndefined()
+  it('does not fail over on a 4xx answer or a malformed 2xx body from the auth base', async () => {
+    const auth = fakeAuth({ relayToken: [401, 403, 'malformed'] })
+    const result = await renewUntilSuccess(auth, FRONT_DOOR)
+    expect(result.attempts).toBe(4)
+    expect(auth.relayTokenUrls()).toEqual([
+      PRIMARY_TOKEN_URL,
+      PRIMARY_TOKEN_URL,
+      PRIMARY_TOKEN_URL,
+      PRIMARY_TOKEN_URL
+    ])
+  })
+
+  it('goes back to the auth base after a 4xx from the authOrigin', async () => {
+    const auth = fakeAuth({ relayToken: [503, 403] })
+    const result = await renewUntilSuccess(auth, FRONT_DOOR)
+    expect(result.attempts).toBe(3)
+    expect(auth.relayTokenUrls()).toEqual([PRIMARY_TOKEN_URL, DOOR_TOKEN_URL, PRIMARY_TOKEN_URL])
+  })
+
+  it('refuses redirects on the relay-token POST at either origin', async () => {
+    const auth = fakeAuth({ relayToken: [503] })
+    await renewUntilSuccess(auth, FRONT_DOOR)
+    expect(auth.relayTokenRequests).toEqual([
+      { url: PRIMARY_TOKEN_URL, redirect: 'error' },
+      { url: DOOR_TOKEN_URL, redirect: 'error' }
+    ])
   })
 
   it('passes a refusal through without another origin', async () => {
@@ -178,7 +185,7 @@ describe('relay token renewal with an authOrigin', () => {
       undefined
     )
     expect(renewal).toEqual({ kind: 'refused', hostCloseReason: undefined })
-    expect(auth.relayTokenUrls).toEqual([])
+    expect(auth.relayTokenUrls()).toEqual([])
   })
 })
 
@@ -190,7 +197,6 @@ describe('relay token renewal without an authOrigin', () => {
     })
     const result = await renewUntilSuccess(auth, undefined)
     expect(result.attempts).toBe(5)
-    expect(auth.refreshes).toEqual([undefined, undefined, undefined, undefined, undefined])
-    expect(auth.relayTokenUrls).toEqual([PRIMARY_TOKEN_URL, PRIMARY_TOKEN_URL, PRIMARY_TOKEN_URL])
+    expect(auth.relayTokenUrls()).toEqual([PRIMARY_TOKEN_URL, PRIMARY_TOKEN_URL, PRIMARY_TOKEN_URL])
   })
 })

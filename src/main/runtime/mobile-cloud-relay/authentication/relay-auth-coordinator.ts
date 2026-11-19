@@ -26,12 +26,12 @@ export type CoordinatedRelayBroker = {
 }
 
 type RelayAuthCoordinatorOptions = {
-  readContext: (authOrigin?: string) => Promise<RelayAuthContext | null>
+  readContext: () => Promise<RelayAuthContext | null>
   hasDemand?: (context: RelayAuthContext) => boolean
   openBroker: (input: {
     context: RelayAuthContext
     isCurrent: () => boolean
-    refreshAccessToken: (authOrigin?: string) => Promise<RelayAccessTokenRefresh>
+    refreshAccessToken: () => Promise<RelayAccessTokenRefresh>
   }) => Promise<CoordinatedRelayBroker>
   onStatus: RelayStatus.MobileRelayStatusPublisher
   lingerMs?: number
@@ -239,7 +239,7 @@ export class RelayAuthCoordinator {
         broker = await this.options.openBroker({
           context,
           isCurrent,
-          refreshAccessToken: this.refreshAccessToken.bind(this, ownership, nextIdentityKey)
+          refreshAccessToken: () => this.refreshAccessToken(ownership, nextIdentityKey)
         })
       } finally {
         this.pendingOwnerships.delete(ownership)
@@ -283,14 +283,13 @@ export class RelayAuthCoordinator {
 
   private async refreshAccessToken(
     ownership: { valid: boolean },
-    expectedIdentityKey: string,
-    authOrigin?: string
+    expectedIdentityKey: string
   ): Promise<RelayAccessTokenRefresh> {
     if (!ownership.valid || this.stopped) {
       return { accessToken: null }
     }
     const epoch = this.authEpoch
-    const context = await this.options.readContext(authOrigin)
+    const context = await this.options.readContext()
     if (!ownership.valid || !this.isEpochCurrent(epoch)) {
       return { accessToken: null }
     }

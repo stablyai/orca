@@ -269,7 +269,7 @@ export class RelaySessionBroker {
   }
 
   private async refreshAuthorization(): Promise<void> {
-    // Retries after an unanswered attempt alternate with the director's authOrigin (front door).
+    // After an unanswered relay-token exchange, retries alternate with the director's authOrigin.
     const authOrigin = this.originPool.activeAssignment?.authOrigin
     try {
       const via = this.renewalOrigin.next(authOrigin)

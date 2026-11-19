@@ -29,8 +29,7 @@ export type RelaySessionBrokerOptions = {
   appVersion: string
   mobileSocketWiring: MobileSocketWiring
   isCurrent: () => boolean
-  /** `authOrigin`: refresh the session through this director-provided origin, not the auth base. */
-  refreshAccessToken: (authOrigin?: string) => Promise<RelayAccessTokenRefresh>
+  refreshAccessToken: () => Promise<RelayAccessTokenRefresh>
   /** The broker gave up on token refresh and closed; its owner should reconcile now, not at a tick. */
   onSelfClose?: () => void
   resolvePreferredRegion?: () => Promise<RelayRegion | undefined>

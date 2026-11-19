@@ -111,14 +111,14 @@ describe('requestRelayAssignment origin alternates', () => {
 })
 
 describe('requestRelayAssignment authOrigin', () => {
-  const DOOR = 'https://front-door.example.test'
+  const DOOR = 'https://front-door.director.example.test'
 
   it('returns the same assignment as before when the field is absent', async () => {
     const assignment = await assign(fakeDirector(assignmentAnswer()).fetch)
     expect('authOrigin' in assignment).toBe(false)
   })
 
-  it('keeps an authOrigin equal to cellUrl or one of the alternates', async () => {
+  it('keeps an authOrigin under the director host that is cellUrl or one of the alternates', async () => {
     const onDoor = await assign(
       fakeDirector({ ...assignmentAnswer({ authOrigin: DOOR }), cellUrl: DOOR }).fetch
     )
@@ -131,8 +131,8 @@ describe('requestRelayAssignment authOrigin', () => {
 
   it('ignores an invalid authOrigin or one this assignment does not connect to', async () => {
     for (const authOrigin of [
-      'https://elsewhere.example.test',
-      'http://front-door.example.test',
+      'https://other.director.example.test',
+      'http://front-door.director.example.test',
       `${CELL_URL}/`,
       `${CELL_URL}/v1`,
       42,
@@ -143,5 +143,40 @@ describe('requestRelayAssignment authOrigin', () => {
       expect(assignment.cellUrl).toBe(CELL_URL)
       expect('authOrigin' in assignment).toBe(false)
     }
+  })
+
+  it('ignores an authOrigin outside the director host even when the assignment connects to it', async () => {
+    for (const origin of [
+      'https://attacker.example.test',
+      'https://evildirector.example.test',
+      DIRECTOR_URL,
+      'https://front-door.director.example.test:8443',
+      'https://front-door.director.example.test.',
+      'https://203.0.113.7',
+      'https://10.0.0.5',
+      'https://169.254.169.254',
+      'https://127.0.0.1',
+      'https://[::1]',
+      'https://localhost'
+    ]) {
+      const assignment = await assign(
+        fakeDirector({ ...assignmentAnswer({ authOrigin: origin }), cellUrl: origin }).fetch
+      )
+      expect(assignment.cellUrl).toBe(origin)
+      expect('authOrigin' in assignment).toBe(false)
+    }
+  })
+
+  it('ignores every authOrigin when the director itself is not a DNS name', async () => {
+    const origin = 'https://door.localhost'
+    const assignment = await requestRelayAssignment({
+      directorUrl: 'http://localhost',
+      relayToken: 'relay-token',
+      relayHostId: 'host-under-test',
+      fetch: fakeDirector({ ...assignmentAnswer({ authOrigin: origin }), cellUrl: origin }).fetch,
+      assignRateGate: new RelayAssignRateGate()
+    })
+    expect(assignment.cellUrl).toBe(origin)
+    expect('authOrigin' in assignment).toBe(false)
   })
 })

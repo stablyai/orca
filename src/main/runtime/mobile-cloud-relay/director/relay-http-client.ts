@@ -64,9 +64,8 @@ export type RelayAssignment = Omit<
   // Other origins reaching the same host session as cellUrl, in preference order; never cellUrl.
   // RelayControlOrigin resumes the control on these when the cellUrl path stalls (desktop only).
   alternateCellUrls?: string[]
-  // A second origin for relay token renewal (the front door this assignment routes through), which
-  // serves /v1/desktop/auth/refresh and /v1/desktop/auth/relay-token. Only ever cellUrl or one of
-  // alternateCellUrls, so credentials go nowhere the relay JWT does not already go.
+  // A second origin for the relay-token exchange (the front door this assignment routes through).
+  // Only ever cellUrl or one of alternateCellUrls, and always a DNS name under the director host.
   authOrigin?: string
 }
 
@@ -153,16 +152,41 @@ function relayAlternateCellUrls(value: unknown, cellUrl: string): string[] | und
   return kept.length > 0 ? kept : undefined
 }
 
+const DNS_NAME = /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]*$/
+
+function isPublicDnsName(hostname: string): boolean {
+  return DNS_NAME.test(hostname) && !hostname.endsWith('.localhost')
+}
+
+// The director's answer alone must not choose where the cloud access token goes: authOrigin has to
+// be a DNS name under the configured director host (never an IP, loopback, port, or other domain).
+function isAuthOriginUnderDirector(authOrigin: string, directorUrl: string): boolean {
+  const url = new URL(authOrigin)
+  const directorHost = new URL(directorUrl).hostname
+  return (
+    url.port === '' &&
+    isPublicDnsName(directorHost) &&
+    isPublicDnsName(url.hostname) &&
+    url.hostname.endsWith(`.${directorHost}`)
+  )
+}
+
 // Keep authOrigin only when it is a canonical https origin this assignment already connects to.
 function relayAuthOrigin(
   value: unknown,
-  cellUrl: string,
-  alternateCellUrls: string[] | undefined
+  assignment: { cellUrl: string; alternateCellUrls: string[] | undefined },
+  directorUrl: string
 ): string | undefined {
-  if (typeof value !== 'string' || !isCanonicalHttpsOrigin(value)) {
+  if (
+    typeof value !== 'string' ||
+    !isCanonicalHttpsOrigin(value) ||
+    !isAuthOriginUnderDirector(value, directorUrl)
+  ) {
     return undefined
   }
-  return value === cellUrl || alternateCellUrls?.includes(value) ? value : undefined
+  return value === assignment.cellUrl || assignment.alternateCellUrls?.includes(value)
+    ? value
+    : undefined
 }
 
 export async function exchangeRelayAuthorization(input: {
@@ -179,6 +203,8 @@ export async function exchangeRelayAuthorization(input: {
       authorization: `Bearer ${input.accessToken}`,
       'content-type': 'application/json'
     },
+    // A redirect must not carry the cloud access token to another URL.
+    redirect: 'error',
     signal: AbortSignal.timeout(input.requestDeadlineMs ?? RELAY_HTTP_REQUEST_DEADLINE_MS),
     body: JSON.stringify({ relayHostId, hostPublicKeyB64: input.keypair.publicKeyB64 })
   })
@@ -280,7 +306,11 @@ async function sendRelayAssignment(
     ...assignment
   } = parsed.data
   const alternateCellUrls = relayAlternateCellUrls(rawAlternateCellUrls, assignment.cellUrl)
-  const authOrigin = relayAuthOrigin(rawAuthOrigin, assignment.cellUrl, alternateCellUrls)
+  const authOrigin = relayAuthOrigin(
+    rawAuthOrigin,
+    { cellUrl: assignment.cellUrl, alternateCellUrls },
+    input.directorUrl
+  )
   return {
     ...assignment,
     ...(alternateCellUrls ? { alternateCellUrls } : {}),
