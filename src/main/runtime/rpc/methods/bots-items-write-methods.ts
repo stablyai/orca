@@ -29,8 +29,8 @@ const SET = defineMethod({
     const writer = writerOf(params, context)
     const store = context.runtime.botItems.store()
     const item = await resolveItem(store, params.item)
-    const { title, description, doneMeans, status, note, reason, comment } = params
-    const changes = { title, description, doneMeans, status, note, reason, comment }
+    const { title, description, doneMeans, status, note, reason, comment, ask } = params
+    const changes = { title, description, doneMeans, status, note, reason, comment, ask }
     const defined = Object.fromEntries(
       Object.entries(changes).filter(([, value]) => value !== undefined)
     )

@@ -1,6 +1,6 @@
 // The owner's writes from the panel (desktop or phone): comments, which move a Needs you item to In
-// progress, and any status on any number of items, each owing the item's chat a mail; and snoozes, which
-// mail nobody. A comment or status move brings a snoozed item back.
+// progress, answers to its open question, and any status on any number of items, each owing the item's
+// chat a mail; and snoozes, which mail nobody. A comment or status move brings a snoozed item back.
 import {
   botItemEventId,
   isOpenBotItemStatus,
@@ -8,6 +8,14 @@ import {
   type BotItemStatus
 } from '../../shared/bots/bot-items'
 import { BOT_ITEM_SNOOZE_MAX_MS } from '../../shared/bots/bot-item-snooze'
+import {
+  BOT_ITEM_ASK_LIMITS,
+  botItemAnswerProblem,
+  botItemAnswerText,
+  botItemAskOf,
+  normalizeBotItemAnswers,
+  type BotItemAnswer
+} from '../../shared/bots/bot-item-ask'
 import { BotItemError } from './bot-item-error'
 import { BotItemsWrites } from './bot-items-writes'
 import {
@@ -119,6 +127,75 @@ export class BotItemsOwner extends BotItemsWrites {
       ...(answers === undefined ? {} : { answers })
     }
     return this.appendEvent(item.uid, 'commented', actor, data, true, now)
+  }
+
+  /** The owner's answer to the item's open question, in one transaction: the answer comment (naming the
+   *  question, its answers and the sender's `answerId`), the item row's move to In progress and its
+   *  status event, all one action, so the agent gets one mail for both. Only the open question takes an
+   *  answer, so the first from any device wins. The same `answerId` again (a retry after a lost reply,
+   *  or a double submit) gets the first write back, `unchanged`, and writes nothing; any other answer
+   *  to a question no longer open is refused, and the caller keeps its words. */
+  ownerAnswer(
+    uid: string,
+    questionEventId: number,
+    answers: readonly BotItemAnswer[],
+    answerId: string,
+    actor: BotItemOwnerActor,
+    now = Date.now()
+  ): BotItemWriteOutcome {
+    const given = normalizeBotItemAnswers(answers)
+    return this.transaction(() => {
+      const item = this.requireItem(uid)
+      const replay = this.answerWithId(uid, questionEventId, answerId)
+      if (replay !== null) {
+        return { uid, eventId: replay, unchanged: true }
+      }
+      if (item.status !== 'needs_you' || item.questionEvent !== questionEventId) {
+        throw new BotItemError(
+          'question_closed',
+          'That question is no longer open: it was answered, replaced, or the item moved on.'
+        )
+      }
+      const [question] = this.events(uid, questionEventId - 1, 1)
+      if (question?.id !== questionEventId || question.actor.kind !== 'bot') {
+        throw new BotItemError('invalid_argument', "Only a bot's open question takes an answer.")
+      }
+      const ask = botItemAskOf(question.data)
+      const problem = botItemAnswerProblem(ask, given)
+      if (problem) {
+        throw new BotItemError('invalid_argument', problem)
+      }
+      const asked = typeof question.data.text === 'string' ? question.data.text : ''
+      const data = {
+        text: botItemAnswerText(ask, given),
+        // The same question link a plain reply carries, so every reader pairs the two alike.
+        answers: botItemEventId(questionEventId),
+        decisions: given,
+        answerId,
+        // A prose question's words, so its receipt still says what was asked when the question is
+        // off the loaded page; an ask's decisions are already in `text`.
+        ...(ask ? {} : { asked: asked.slice(0, BOT_ITEM_ASK_LIMITS.prompt * 4) })
+      }
+      const eventId = this.appendEvent(uid, 'commented', actor, data, true, now)
+      this.endSnooze(uid, actor, now)
+      this.writeStatus(uid, 'working', null, actor, now)
+      const moved = { from: 'needs_you', to: 'working', cause: 'answer' }
+      this.appendEvent(uid, 'status', actor, moved, true, now)
+      return { uid, eventId }
+    })
+  }
+
+  /** The answer this `answerId` already wrote to the question, if any. */
+  private answerWithId(uid: string, questionEventId: number, answerId: string): number | null {
+    const row: unknown = this.db
+      .prepare(
+        `SELECT id FROM item_events WHERE item_uid = ? AND kind = 'commented'
+           AND json_extract(data, '$.answers') = ? AND json_extract(data, '$.answerId') = ? LIMIT 1`
+      )
+      .get(uid, botItemEventId(questionEventId), answerId)
+    return typeof row === 'object' && row !== null && 'id' in row && typeof row.id === 'number'
+      ? row.id
+      : null
   }
 
   /** One status for every item named, each its own event, in one transaction. */

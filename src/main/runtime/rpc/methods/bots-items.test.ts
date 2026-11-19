@@ -329,6 +329,43 @@ describe('bot items over RPC', () => {
     ])
   })
 
+  it("records the owner's answer to the open question as answered, moved and mailed once, even sent twice", async () => {
+    const { dispatcher } = itemsRuntime()
+    await dispatcher.dispatch(
+      request('bots.items.add', { callerSessionId: RANGER_CHAT, title: 'Merge 880' })
+    )
+    await dispatcher.dispatch(
+      request('bots.items.set', {
+        callerSessionId: RANGER_CHAT,
+        item: '1',
+        status: 'needs_you',
+        ask: {
+          questions: [{ prompt: 'Merge now?', options: [{ label: 'Merge' }, { label: 'Wait' }] }]
+        }
+      })
+    )
+    await host!.sendOwedMail()
+    mailed.length = 0
+    const desktop = { caller: DESKTOP_RPC_CALLER }
+    const answer = request('bots.items.owner.comment', {
+      item: '1',
+      text: '',
+      answering: 'e2',
+      answers: [{ picks: [0] }],
+      answerId: 'answer-1'
+    })
+
+    const first = await dispatcher.dispatch(answer, desktop)
+    const again = await dispatcher.dispatch(answer, desktop)
+
+    expect(first).toMatchObject({ ok: true, result: { eventId: 'e4', answered: true } })
+    expect(again).toMatchObject({ ok: true, result: { eventId: 'e4', answered: true } })
+    expect(mailed).toEqual([
+      { chatId: RANGER_CHAT, eventId: 4, kind: 'commented' },
+      { chatId: RANGER_CHAT, eventId: 5, kind: 'status' }
+    ])
+  })
+
   it("takes a paired client's store image on a comment, claimed for the item's live chat, and nothing outside the store", async () => {
     const { dispatcher } = itemsRuntime()
     const store = new AgentSessionAttachmentStore(

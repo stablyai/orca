@@ -64,7 +64,7 @@ it("opens an answer's file link and navigates between its answer and question", 
   render(
     <NativeChatFileLinkExistenceContext value={existence}>
       <NativeChatLinkClickContext value={opened}>
-        <BotItemActivityList bot={BOT} item={makeTestBotItem(6)} events={events} />
+        <BotItemActivityList bot={BOT} item={makeTestBotItem(6)} events={events} askShown={false} />
       </NativeChatLinkClickContext>
     </NativeChatFileLinkExistenceContext>
   )

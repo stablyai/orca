@@ -25,7 +25,10 @@ export function typeIntoBotItemComment(
     !inPane ||
     event.altKey ||
     isImeOwnedKeyboardEvent(event) ||
-    !shouldRedirectNativeChatTyping(event, false)
+    !shouldRedirectNativeChatTyping(event, false) ||
+    // While the open question's card shows its choices, a digit picks one (the card's own keys).
+    (/^[1-9]$/.test(event.key) &&
+      pane?.querySelector('[data-native-chat-prompt-card-focus] button[aria-pressed]'))
   ) {
     return
   }

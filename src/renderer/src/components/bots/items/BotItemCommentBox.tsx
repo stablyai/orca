@@ -2,7 +2,6 @@
 // composer, Enter sends and Shift+Enter adds a line; images paste, drop or attach as thumbnails with an
 // "Image #N" pill at the caret, other files as `@path` pills. Uploads go to the item's chat on the bot's
 // host, which then holds them as its own.
-// While the bot's question is open the box names it, since the question may have scrolled away.
 import {
   useCallback,
   useImperativeHandle,
@@ -12,7 +11,7 @@ import {
   useState,
   type Ref
 } from 'react'
-import { ArrowUp, CornerDownRight } from 'lucide-react'
+import { ArrowUp } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import { useImeEnterGestureOwnership } from '@/lib/text-input/ime/ime-composition-keyboard-event'
@@ -324,15 +323,6 @@ export function BotItemCommentBox({
         />
       ) : null}
       <NativeChatComposerNotices notices={notices} className="mb-1.5 px-1" />
-      {item.question ? (
-        <div className="mb-1.5 mt-0.5 flex min-w-0 items-center gap-1.5 px-1 text-2xs text-muted-foreground">
-          <CornerDownRight className="size-3 shrink-0" />
-          <span className="min-w-0 flex-1 truncate">
-            {t('bots.items.comment.answering', 'Answering:')}{' '}
-            <b className="font-medium text-foreground/80">{item.question.text}</b>
-          </span>
-        </div>
-      ) : null}
       {images.length > 0 ? (
         // Two rows of chips, then they scroll, so the text and send button stay reachable.
         <div className="scrollbar-sleek mb-1 flex max-h-[128px] flex-wrap gap-2 overflow-y-auto px-1 pt-1">
