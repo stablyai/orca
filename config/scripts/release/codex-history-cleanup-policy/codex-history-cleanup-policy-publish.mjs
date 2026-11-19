@@ -198,10 +198,6 @@ export function publishCodexHistoryCleanupOff({
     minRevision,
     Math.max(checkedInRevision(fileText), ...channels.map((channel) => channel.revision ?? 0)) + 1
   )
-  const warnings = unknown.map(
-    ({ channel }) =>
-      `the ${channel} revision is unreadable; if apps may hold a revision above ${revision - 1}, rerun with a higher revision`
-  )
   const policy = {
     version: 1,
     revision,
@@ -217,10 +213,18 @@ export function publishCodexHistoryCleanupOff({
         publishCodexHistoryCleanupPolicy({ repo, channel, bytes, target, gh, lenient: true })
       )
     } catch (error) {
-      failures.push(`${channel}: ${error instanceof Error ? error.message : String(error)}`)
+      failures.push(
+        `not published on ${channel}: ${error instanceof Error ? error.message : String(error)}`
+      )
     }
   }
-  return { results, failures, warnings }
+  // Published anyway so some installs take it, but the run fails: apps holding a higher revision ignore it.
+  if (unknown.length > 0 && minRevision === 0) {
+    failures.push(
+      `the ${unknown.map(({ channel }) => channel).join(' and ')} revision could not be read, so off went out at revision ${revision}, which apps holding a higher revision ignore; rerun with -f revision=<N> above any revision ever published`
+    )
+  }
+  return { results, failures }
 }
 
 function requireEnv(name) {
@@ -259,16 +263,12 @@ function main([command, ...args]) {
   } else if (command === 'promote-stable') {
     results = [promoteCodexHistoryCleanupPolicy({ repo, target })]
   } else if (command === 'emergency-off') {
-    const off = publishCodexHistoryCleanupOff({
+    ;({ results, failures } = publishCodexHistoryCleanupOff({
       repo,
       target,
       fileText: file.toString('utf8'),
       minRevision: parseMinRevision(args)
-    })
-    for (const warning of off.warnings) {
-      console.log(`::warning::${warning}`)
-    }
-    ;({ results, failures } = off)
+    }))
   } else {
     throw new Error(`unknown command ${command ?? '(none)'}`)
   }
@@ -278,7 +278,7 @@ function main([command, ...args]) {
     )
   }
   if (failures.length > 0) {
-    throw new Error(`not published on ${failures.join('; ')}`)
+    throw new Error(failures.join('; '))
   }
 }
 
