@@ -1,7 +1,7 @@
 import { readLocalGitConfigSignature } from '../../github/repositories/local-git-config-signature'
 import { runCoalescedProbe, type CoalescedProbes } from './coalesced-probe'
 import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
-import { REMOTE_URL_PROBE_TIMEOUT_MS } from './remote-url-probe'
+import { REMOTE_URL_PROBE_TIMEOUT_MS } from './remote-git-probe-timeout'
 import { gitExecFileAsync } from '../command-runner/git-exec-file'
 
 export type RemoteNameListingGitOptions = {
