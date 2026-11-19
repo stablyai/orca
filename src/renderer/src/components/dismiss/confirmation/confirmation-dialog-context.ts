@@ -1,4 +1,4 @@
-import { createContext, useContext } from 'react'
+import { createContext, useContext, type ReactNode } from 'react'
 
 // Keep the context component-free so Fast Refresh preserves its identity.
 
@@ -14,6 +14,8 @@ export type ConfirmationDialogOptions = {
   title: string
   description?: string
   descriptionClassName?: string
+  /** Shown under the description, for facts the decision rests on. */
+  details?: ReactNode
   /** The verb the button performs ("Delete", "Restart"); there is no generic default. */
   confirmLabel: string
   cancelLabel?: string

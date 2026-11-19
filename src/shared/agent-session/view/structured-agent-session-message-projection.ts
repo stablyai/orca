@@ -18,6 +18,10 @@ import { compareNativeChatTranscriptMessages } from '../../native-chat/transcrip
 import type { NativeChatMessage } from '../../native-chat/native-chat-types'
 import { dispatchWasWithdrawn } from '../requests/structured-agent-session-dispatch-rejection'
 import { projectStructuredItemsToNativeChat } from './structured-agent-session-projection'
+import {
+  automationResultMarks,
+  withAutomationResultMarks
+} from '../../bots/bot-automation-result-marks'
 import { isActionableStructuredAgentSessionPrompt } from './structured-agent-session-live-turn'
 import {
   agentSessionContextSequenceFor,
@@ -159,6 +163,7 @@ export function projectStructuredAgentSessionMessageRows(
       submission
     ])
   )
+  const marks = automationResultMarks(visibleItems)
   const delivered: NativeChatMessage[] = []
   const held: NativeChatMessage[] = []
   const shownStopped = new Set<string>()
@@ -181,7 +186,7 @@ export function projectStructuredAgentSessionMessageRows(
     ) {
       held.push({ ...message, queued: true })
     } else if (!placement || !stoppedBeforeStart.has(message.id)) {
-      delivered.push(message)
+      delivered.push(withAutomationResultMarks(message, marks))
     } else {
       const { opensTurn, position } = placement(message.id)
       moved ||= position !== undefined

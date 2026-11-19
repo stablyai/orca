@@ -2,7 +2,12 @@
 
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { randomBytes } from 'node:crypto'
-import { redactSpan, type RedactableSpan, type SpanEvent, type SpanExit } from './redactor'
+import {
+  redactSpan,
+  type RedactableSpan,
+  type SpanEvent,
+  type SpanExit
+} from '../../shared/observability/redactor'
 
 export type TracerSink = {
   push(record: unknown): void

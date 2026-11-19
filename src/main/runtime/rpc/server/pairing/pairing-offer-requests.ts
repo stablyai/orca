@@ -33,6 +33,7 @@ export type PairingOfferServer = Pick<
     name?: string
     rotate?: boolean
     offerTtlMs?: number
+    createdByDeviceId?: string
   }): Promise<MobilePairingOffer>
 }
 
@@ -65,6 +66,7 @@ export async function requestMobilePairingOffer(
     rotate?: boolean
     // Unset leaves the offer without an expiry, as headless serve/orcad mint today.
     offerTtlMs?: number
+    createdByDeviceId?: string
   },
   lookup: DefaultRouteInterfaceLookup = getWindowsDefaultRouteInterfaceNames
 ): Promise<
@@ -82,7 +84,8 @@ export async function requestMobilePairingOffer(
     connectionMode: args.connectionMode,
     rotate: args.rotate,
     name: `Mobile ${new Date().toLocaleDateString()}`,
-    offerTtlMs: args.offerTtlMs
+    offerTtlMs: args.offerTtlMs,
+    createdByDeviceId: args.createdByDeviceId
   })
   if (!offer.available) {
     return offer
@@ -99,6 +102,7 @@ export async function requestRuntimePairingOffer(
     reach?: RuntimePairingReach
     grants?: readonly RuntimeDeviceGrant[]
     offerTtlMs?: number
+    createdByDeviceId?: string
   },
   lookup: DefaultRouteInterfaceLookup = getWindowsDefaultRouteInterfaceNames
 ): Promise<ReturnType<PairingOfferServer['createPairingOffer']>> {
@@ -128,23 +132,26 @@ export async function requestRuntimePairingOffer(
     // Persist local reach so local authentication cannot expose the next launch to the LAN.
     reach: thisComputerOnly ? 'this-computer' : 'network',
     grants: args.grants,
-    offerTtlMs: args.offerTtlMs
+    offerTtlMs: args.offerTtlMs,
+    createdByDeviceId: args.createdByDeviceId
   })
 }
 
 export async function createOwnerPairingOffer(
   server: PairingOfferServer,
   params: PairingCreateOfferParams,
-  lookup?: DefaultRouteInterfaceLookup
+  lookup?: DefaultRouteInterfaceLookup,
+  createdByDeviceId?: string
 ): Promise<PairingCreateOfferResult> {
   if (params.scope === 'mobile') {
     const offer = await requestMobilePairingOffer(
       server,
       {
         address: params.address,
-        // A headless host has no Relay; Relay stays an explicit opt-in here as on the desktop.
+        // Relay stays an explicit opt-in here, as on the desktop.
         connectionMode: params.relay ? 'automatic' : 'local-only',
-        rotate: params.rotate
+        rotate: params.rotate,
+        createdByDeviceId
       },
       lookup
     )
@@ -167,7 +174,8 @@ export async function createOwnerPairingOffer(
     {
       address: params.address,
       rotate: params.rotate,
-      grants: params.grantDesktopControl ? ['desktop-control'] : []
+      grants: params.grantDesktopControl ? ['desktop-control'] : [],
+      createdByDeviceId
     },
     lookup
   )

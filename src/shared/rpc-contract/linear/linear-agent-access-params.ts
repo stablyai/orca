@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../rpc-param-primitives'
 
 export const LINEAR_DUE_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
@@ -94,7 +94,9 @@ export const LinearIssueUpdateTask = LinearWriteTarget.extend({
 export const LinearIssueAddComment = LinearWriteTarget.extend({
   body: requiredString('Missing comment body'),
   replyTo: OptionalString,
-  writeId: OptionalString
+  writeId: OptionalString,
+  // A bot's chat: its waking issue is refused and a teammate's request is tagged.
+  callerSessionId: OptionalString
 })
 
 const LinearCommentWorkspace = OptionalString.refine((value) => value !== 'all', {

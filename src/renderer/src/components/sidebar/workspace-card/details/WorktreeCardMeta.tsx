@@ -13,16 +13,16 @@ import {
   WorktreeCardDetailSectionContent
 } from './WorktreeCardDetailSection'
 import { DetailHeader, MetadataActionIcon } from '../metadata/WorktreeCardMetadataControls'
-import { hasWorktreeCardDetails } from '../metadata/WorktreeCardMetaBadges'
+import { hasComment, hasWorktreeCardDetails } from '../metadata/WorktreeCardMetaBadges'
 import { useWorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
 import { WorktreeCardLinkedReviewActions } from '../review/WorktreeCardReviewActions'
 import type { WorktreeCardDetailsHoverProps } from '../metadata/worktree-card-meta-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { WorktreeCardReviewDetailSection } from '../review/WorktreeCardReviewDetailSection'
 import { WorktreeCardAutomationDetailSection } from './WorktreeCardAutomationDetailSection'
-import { WorktreeCardCliDetailSection } from './WorktreeCardCliDetailSection'
 import { WorktreeCardTaskDetailSection } from '../review/WorktreeCardTaskDetailSection'
 import { getWorktreeCardTaskActions } from '../review/worktree-card-task-actions'
+import { WorktreeCardOriginDetailSections } from './WorktreeCardBotDetailSection'
 import { WorktreeCardHoverIdentityHeader } from './WorktreeCardHoverIdentityHeader'
 import {
   CommentMarkdownAsync,
@@ -32,10 +32,6 @@ import { useActivityThreadHoverCardIntent } from '@/components/activity/thread-p
 
 const COMMENT_MARKDOWN_CLASS_NAME =
   'text-[11.5px] text-foreground break-words leading-normal [&_.comment-md-p]:block [&_.comment-md-p+.comment-md-p]:mt-1'
-
-function hasComment(comment: string | null): boolean {
-  return (comment ?? '').trim().length > 0
-}
 
 export function WorktreeCardDetailsHover({
   workspace,
@@ -48,6 +44,7 @@ export function WorktreeCardDetailsHover({
   comment,
   automationProvenance,
   cliProvenance,
+  bot,
   children,
   branchName,
   workspaceTitle,
@@ -143,7 +140,8 @@ export function WorktreeCardDetailsHover({
       review,
       comment,
       automationProvenance,
-      cliProvenance
+      cliProvenance,
+      bot
     }) &&
     !detailsAfter
   ) {
@@ -251,7 +249,7 @@ export function WorktreeCardDetailsHover({
             />
           )}
 
-          {cliProvenance && <WorktreeCardCliDetailSection provenance={cliProvenance} />}
+          <WorktreeCardOriginDetailSections bot={bot} cliProvenance={cliProvenance} />
 
           {hasComment(comment) && (
             <WorktreeCardDetailSection>

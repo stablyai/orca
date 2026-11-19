@@ -2,7 +2,6 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/class-names'
 import '@/lib/workspace/ownership/connection-context'
-import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { useAppStore } from '@/store/index'
 import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import '../../../../../shared/orca-profiles/constants'
@@ -125,7 +124,6 @@ export function BrowserPagePane({
     version: 0
   })
 
-  const workspaceConnectionId = useAppStore((state) => getConnectionIdFromState(state, worktreeId))
   const certificateFailure = useAppStore(
     (s) => s.browserCertificateFailuresByPageId[browserTab.id] ?? null
   )
@@ -280,8 +278,8 @@ export function BrowserPagePane({
   const liveBrowserUrl = getLiveBrowserUrl(browserTab.id) ?? browserTab.url
   const externalUrl = getOpenableExternalUrl(liveBrowserUrl)
   const currentBrowserUrl = toDisplayUrl(liveBrowserUrl)
-  const shareableArtifactFile =
-    workspaceConnectionId === null ? getShareableBrowserArtifactFile(currentBrowserUrl) : null
+  // A file: page in this webview is always this machine's file, even in an SSH workspace.
+  const shareableArtifactFile = getShareableBrowserArtifactFile(currentBrowserUrl)
   const failedNavigationUrl = browserTab.loadError?.validatedUrl ?? currentBrowserUrl
   const failureExternalUrl = normalizeExternalBrowserUrl(failedNavigationUrl)
   const showFailureOverlay = Boolean(browserTab.loadError) && !isBlankTab

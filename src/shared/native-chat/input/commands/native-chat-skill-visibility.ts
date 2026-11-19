@@ -29,7 +29,7 @@ export function isNativeChatSkillForAgent(
   const rootPaths = skill.rootPaths?.length ? skill.rootPaths : [skill.rootPath]
   return rootPaths.some((rootPath) => {
     const source = result.sources.find((entry) => entry.path === rootPath)
-    return source !== undefined && readsSkillSource(profile, source)
+    return source !== undefined && readsSkillSource(profile, source, skill)
   })
 }
 
