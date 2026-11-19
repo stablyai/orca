@@ -3,8 +3,6 @@ import { dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { potentiallyLiveRemoteAttachmentSql } from '../federation/remote-attachment-liveness'
 import { runChild, runCompactionChild } from './orchestration-db-compaction-children'
-import { openServeBundlePark } from '../../../../../shared/remote-runtime/serve-supervisor/serve-bundle-park'
-import { ORCAD_BROWSER_PARK_LABEL } from '../../../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
 
 const MIB = 1024 * 1024
 const MIN_FREE_BYTES = 32 * MIB
@@ -14,6 +12,7 @@ const MAX_LIVE_BYTES = 128 * MIB
 const QUIT_BUDGET_MS = 2_000
 const EXIT_GRACE_MS = 500
 const MARKER_WRITE_MS = 250
+const SLOW_VETO_MS = 250
 // How long the child waits for other connections to close; the runtime's checkpoint worker exits async.
 const LOCK_WAIT_MS = 300
 // Time after the kill grace for rolling back a stopped VACUUM's WAL; launch does it if this runs out.
@@ -186,6 +185,7 @@ export async function compactOrchestrationDb(
   if (await walBacklogExceeds(filename, MAX_WAL_BYTES)) {
     return { kind: 'busy' }
   }
+  const vetoStarted = performance.now()
   const active = await isActive(started + budgetMs)
   if (active === 'timeout') {
     // A history too long to check in time would cost the full wait on every quit; count it as the one try.
@@ -194,6 +194,10 @@ export async function compactOrchestrationDb(
     return timedOut
   }
   if (active) {
+    // A slow check would repeat on every quit with agents running; it counts as the file's one try.
+    if (performance.now() - vetoStarted > SLOW_VETO_MS) {
+      await settlesWithin(claimAttempt(filename), MARKER_WRITE_MS)
+    }
     return { kind: 'active' }
   }
   // Claimed before the wait, so a quit cut off mid-attempt still counts as the one wait it paid. A disk
@@ -232,20 +236,6 @@ export async function compactOrchestrationDb(
     await runChild(filename, { recoverOnly: true }, Math.max(leftMs, 0))
   }
   return result
-}
-
-/** A macOS app update stops a headless server to replace the bundle; that stop must not wait on compaction. */
-export function isAppBundleParkedForInstall(): boolean {
-  try {
-    return (
-      openServeBundlePark({
-        executable: process.execPath,
-        label: ORCAD_BROWSER_PARK_LABEL
-      })?.holds() ?? false
-    )
-  } catch {
-    return true
-  }
 }
 
 /** Last step of a clean quit, after every other teardown settled: nothing else uses the file. */

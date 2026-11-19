@@ -32,7 +32,6 @@ import { restoreOrcadTerminalAuthority } from '../orcad/host-runtime/orcad-resto
 import { installOrcadFeatureReadiness } from '../runtime/rpc/startup/orcad-readiness'
 import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { installOrcadConnectorHost, installOrcadRelayAndAccount } from '../orcad/orcad-orca-account'
-import type { OrchestrationDbQuitOwner } from '../runtime/orchestration/db/maintenance/orchestration-db-compaction'
 
 export async function activateBackendRuntime(
   host: BackendCoreHost,
@@ -44,17 +43,6 @@ export async function activateBackendRuntime(
   const { time: timed, report: reportStartupTiming } = createOrcadStartupTiming()
   // Overlap login-shell probing with imports and store startup.
   const loginEnvironment = adoptWslHostLoginEnvironmentLogged()
-  let compactionOwner: OrchestrationDbQuitOwner | undefined
-  // Registered first, so it runs last, after every other cleanup; skipped when any of them failed.
-  registerCleanup(async ({ failed }) => {
-    if (!failed && compactionOwner) {
-      const { compactOrchestrationDbAtQuit, isAppBundleParkedForInstall } =
-        await import('../runtime/orchestration/db/maintenance/orchestration-db-compaction')
-      if (!isAppBundleParkedForInstall()) {
-        await compactOrchestrationDbAtQuit(compactionOwner)
-      }
-    }
-  })
   const { ready: daemonStartup } = await prepareBackendDaemon(
     loginEnvironment,
     timed,
@@ -206,7 +194,6 @@ export async function activateBackendRuntime(
       }
     }
   })
-  compactionOwner = runtime
   profileShutdown.paneGrids = runtime
   runtime.beginStructuredAgentSessionStartupOpen(chatJournal.maintenanceAfter, chatJournal.open)
 
