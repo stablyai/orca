@@ -73,8 +73,8 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
   }
 
   orchestrationDbFileForQuit(): string | null {
-    const filename = this.orchestrationDbPath()
-    return existsSync(filename) ? filename : null
+    // A missing file reads as not needing compaction, so no sync existence check on the quit path.
+    return this.orchestrationDbPath() || null
   }
 
   /** In-flight orchestration work, including Runs whose coordinator is still alive in a terminal;

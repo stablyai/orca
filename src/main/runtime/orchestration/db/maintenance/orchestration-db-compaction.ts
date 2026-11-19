@@ -154,7 +154,7 @@ async function writeDeferral(
 }
 
 export type OrchestrationDbQuitOwner = {
-  /** The database file, or null when there is none. */
+  /** The database file's path (it may not exist), or null when there is none. */
   orchestrationDbFileForQuit(): string | null
   /** Orchestration work in flight, including live coordinators only this process can see. */
   hasActiveOrchestrationWork(deadline: number): Promise<boolean | 'timeout'>
