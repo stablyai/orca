@@ -53,7 +53,7 @@ export function getCodexStatusActiveId(
 ): string | null {
   const selection = state.activeAccountIdsByRuntime
   if (target.runtime === 'host') {
-    return selection?.host ?? state.activeAccountId ?? null
+    return selection ? selection.host : (state.activeAccountId ?? null)
   }
   const distroSelection = selection?.wsl?.[getCodexStatusWslKey(target.wslDistro)]
   if (target.wslDistro || distroSelection) {

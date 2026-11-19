@@ -5,6 +5,7 @@ import {
   getOrcaManagedCodexHomePath,
   getSystemCodexHomePath,
   resolveOrcaManagedCodexHomePath,
+  getSystemCodexHomePath,
   syncSystemCodexResourcesIntoManagedHome
 } from '../../../codex/configuration/homes/codex-home-paths'
 import { syncSystemConfigIntoManagedCodexHome } from '../../../codex/configuration/settings/codex-config-mirror'
@@ -42,6 +43,11 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeWorkspaceRo
     launchEnv?: NodeJS.ProcessEnv,
     options?: CodexHomeLaunchOptions
   ): string | null {
+    if (this.workspaceUsesSystemDefault(options?.workspaceId)) {
+      return target?.runtime === 'wsl'
+        ? this.getWslSystemCodexHomePath(target, { probeHome: false })
+        : getSystemCodexHomePath()
+    }
     const workspaceAccount = this.workspaceAccount(options?.workspaceId, target)
     if (workspaceAccount) {
       const home = this.workspaceAccountHome(workspaceAccount, target)
@@ -113,6 +119,9 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeWorkspaceRo
     launchEnv?: NodeJS.ProcessEnv,
     workspaceId?: string
   ): string | null {
+    if (this.workspaceUsesSystemDefault(workspaceId)) {
+      return getSystemCodexHomePath()
+    }
     const workspaceAccount = this.workspaceAccount(workspaceId)
     if (workspaceAccount) {
       return this.workspaceAccountHome(workspaceAccount)
@@ -143,6 +152,17 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeWorkspaceRo
     launchEnv?: NodeJS.ProcessEnv,
     options?: CodexHomeLaunchOptions
   ): Promise<string | null> {
+    if (this.workspaceUsesSystemDefault(options?.workspaceId)) {
+      if (target?.runtime === 'wsl' && !(await blockedWslDistroForExec(target.wslDistro))) {
+        if (target.wslDistro) {
+          await getWslHomeAsync(target.wslDistro)
+        }
+      }
+      if (!this.workspaceUsesSystemDefault(options?.workspaceId)) {
+        throw new Error('The workspace Codex account changed during preparation. Launch again.')
+      }
+      return this.prepareForCodexLaunch(target, launchEnv, options)
+    }
     const workspaceAccount = this.workspaceAccount(options?.workspaceId, target)
     const sharing = isCodexHistorySharedAcrossAccounts(this.store.getSettings())
     if (workspaceAccount) {
@@ -190,6 +210,9 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeWorkspaceRo
     // A passive restore reaches this before its hold (#35813); the probe, drain, sync and bridge
     // below would each start a stopped distro (E9). A user act passes and does them all.
     if (await blockedWslDistroForExec(wslTarget.wslDistro)) {
+      if (this.workspaceUsesSystemDefault(options?.workspaceId)) {
+        throw new Error('The workspace Codex account changed during preparation. Launch again.')
+      }
       return this.getWslCodexHomePathForSelection(wslTarget, { probeHome: false })
     }
     const distro = wslTarget.wslDistro?.trim()
@@ -204,6 +227,7 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeWorkspaceRo
     await this.prepareWslAccountHistory(wslTarget, homePath)
     if (
       this.workspaceAccount(options?.workspaceId, target) ||
+      this.workspaceUsesSystemDefault(options?.workspaceId) ||
       sharing !== isCodexHistorySharedAcrossAccounts(this.store.getSettings())
     ) {
       throw new Error(

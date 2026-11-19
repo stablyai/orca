@@ -159,7 +159,9 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
       ? {
           configDir: eventDir,
           home: event.configDir ?? undefined,
-          provenance: `profile:${inactiveAccount.accountId}`
+          provenance: inactiveAccount.accountId.startsWith('system-default:host:')
+            ? 'system'
+            : `profile:${inactiveAccount.accountId}`
         }
       : activeSnapshot
     if (!snapshot || eventDir !== snapshot.configDir) {

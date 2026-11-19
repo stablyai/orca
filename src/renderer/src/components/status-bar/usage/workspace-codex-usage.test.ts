@@ -57,3 +57,24 @@ it('retains the owning host trust state when showing cached workspace usage', ()
   expect(result?.session).toBeNull()
   expect(result?.usageMetadata?.unverifiableOwner).toBe(true)
 })
+
+it('uses the real system-default quota rather than the managed host quota for that workspace', () => {
+  const state = createEmptyRateLimitState({
+    codex: reading('personal', 91),
+    inactiveCodexAccounts: [
+      {
+        accountId: 'system-default:host:["system@example.com","system-login"]',
+        rateLimits: reading('system-default:host:["system@example.com","system-login"]', 38),
+        updatedAt: 1,
+        isFetching: false
+      }
+    ]
+  })
+  expect(workspaceCodexUsage(state, 'system-default')?.session?.usedPercent).toBe(38)
+  expect(
+    workspaceCodexUsage(
+      createEmptyRateLimitState({ codex: reading('personal', 91) }),
+      'system-default'
+    )?.session
+  ).toBeNull()
+})

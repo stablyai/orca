@@ -25519,6 +25519,7 @@
       "failed": "Could not save the workspace {{provider}} account.",
       "title": "{{provider}} account",
       "agents": "Agent accounts",
+      "hostDefault": "Host default",
       "savedForNewSessions": "New sessions will use {{account}}. Running sessions keep their account.",
       "directSshUnavailable": "Account selection is unavailable on direct SSH hosts."
     }

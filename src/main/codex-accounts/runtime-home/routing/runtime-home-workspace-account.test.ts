@@ -74,6 +74,16 @@ it('launches workspace accounts in separate homes while other workspaces inherit
   expect(readFileSync(join(homeB, 'auth.json'), 'utf8')).toBe(authB)
   expect(store.getSettings().activeCodexManagedAccountId).toBe('account-a')
 
+  store.updateSettings({ codexWorkspaceAccounts: { 'folder:system': 'system-default' } })
+  expect(
+    await service.prepareForCodexLaunchAsync(undefined, undefined, { workspaceId: 'folder:system' })
+  ).toBe(join(testState.fakeHomeDir, '.codex'))
+  expect(service.resolveHostCodexHomePathForLaunchReadOnly(undefined, 'folder:system')).toBe(
+    join(testState.fakeHomeDir, '.codex')
+  )
+  expect(store.getSettings().activeCodexManagedAccountId).toBe('account-a')
+  store.updateSettings({ codexWorkspaceAccounts: { 'folder:client': 'account-b' } })
+
   store.updateSettings({
     codexManagedAccounts: store
       .getSettings()

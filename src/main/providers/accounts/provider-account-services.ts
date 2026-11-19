@@ -26,6 +26,7 @@ import { createAccountRuntimeTargetSettingsSync } from '../../rate-limits/servic
 import { normalizeCodexRuntimeSelection } from '../../codex-accounts/account-management/runtime-selection'
 import { normalizeClaudeRuntimeSelection } from '../../claude-accounts/selection/runtime-selection'
 import { CLAUDE_HOST_SYSTEM_DEFAULT_USAGE_ID } from '../../../shared/agent-accounts/claude/claude-system-default-usage'
+import { WORKSPACE_SYSTEM_DEFAULT_ACCOUNT_ID } from '../../../shared/agent-accounts/workspace-account-binding'
 import type { ClaudeStatusLineRateLimits } from '../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
 
 export type ProviderAccountServices = {
@@ -193,7 +194,23 @@ export function createProviderAccountServices(
         wslLinuxAuthPath: account.wslLinuxAuthPath
       }))
     // System default has no saved id, so it is read under its own key while a saved host account is selected.
-    return selection.host ? [...inactive, { id: CLAUDE_HOST_SYSTEM_DEFAULT_USAGE_ID }] : inactive
+    const previewSystemDefault =
+      selection.host !== null &&
+      Object.values(settings.claudeWorkspaceAccounts ?? {}).includes(
+        WORKSPACE_SYSTEM_DEFAULT_ACCOUNT_ID
+      )
+    const login = previewSystemDefault ? claudeRuntimeAuth.router.systemDefaultLogin(5_000) : null
+    return [
+      ...(selection.host ? [{ id: CLAUDE_HOST_SYSTEM_DEFAULT_USAGE_ID }] : []),
+      ...(previewSystemDefault
+        ? [
+            {
+              id: `system-default:host:${JSON.stringify([login?.email ?? null, login?.organizationUuid ?? null])}`
+            }
+          ]
+        : []),
+      ...inactive
+    ]
   })
   rateLimits.setInactiveCodexAccountsResolver(() => {
     const settings = store.getSettings()

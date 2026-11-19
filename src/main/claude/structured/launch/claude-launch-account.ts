@@ -29,8 +29,11 @@ export async function prepareClaudeLaunchAccount(
     { runtime: 'host' },
     true
   )
-  if (workspace?.readingAccount?.accountId) {
+  if (workspace) {
     applyClaudeEnvPatch(env, workspace.envPatch)
+    if (!workspace.readingAccount?.accountId) {
+      return { route: 'system', home: workspace.configDir, configDir: workspace.configDir }
+    }
     return {
       route: 'managed',
       accountId: workspace.readingAccount.accountId,

@@ -1,7 +1,14 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { UserRound } from 'lucide-react'
 import { toast } from 'sonner'
-import { notifyWorkspaceAccountSettingsChanged } from '@/runtime/provider-accounts/observations/workspace-account-settings-changes'
+import {
+  notifyWorkspaceAccountSettingsChanged,
+  subscribeWorkspaceAccountSettingsChanged
+} from '@/runtime/provider-accounts/observations/workspace-account-settings-changes'
+import {
+  fetchProviderAccountsSnapshot,
+  getProviderAccountsOwnerKey
+} from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import {
   DropdownMenuLabel,
   DropdownMenuSub,
@@ -9,8 +16,6 @@ import {
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
 import { WorkspaceAccountOptions } from './WorkspaceAccountOptions'
-import { getClaudeAccountLabel } from '@/lib/provider-accounts/claude-account-label'
-import { getCodexAccountDisplayLabel } from '../../../../../../shared/agent-accounts/codex-account-display-label'
 import { useTranslate } from '@/i18n/use-translate'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
@@ -18,11 +23,13 @@ import { useWorktreeRuntimeTarget } from '@/runtime/rpc/targets/use-worktree-run
 import { useAppStore } from '@/store/index'
 import { wslHostDistroForTarget } from '@/runtime/provider-accounts/ownership/wsl-host-account-owner'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type {
-  CodexRateLimitAccountsState,
-  ClaudeRateLimitAccountsState
-} from '../../../../../../shared/agent-accounts/managed-account-types'
-import { workspaceAccountKey } from '../../../../../../shared/agent-accounts/workspace-account-binding'
+import {
+  workspaceAccountKey,
+  WORKSPACE_SYSTEM_DEFAULT_ACCOUNT_ID
+} from '../../../../../../shared/agent-accounts/workspace-account-binding'
+import { buildCodexStatusSwitchGroups } from '@/components/status-bar/accounts/status-bar-codex-accounts'
+import { buildClaudeStatusSwitchGroups } from '@/components/status-bar/accounts/status-bar-claude-accounts'
+import { getCodexStatusRuntimeKey } from '@/components/status-bar/accounts/status-bar-runtime-targets'
 import { parseWslUncPath } from '../../../../../../shared/file-access/wsl-paths'
 
 type HostSettings = {
@@ -32,15 +39,7 @@ type HostSettings = {
   }
 }
 type Selection = {
-  accounts: {
-    id: string
-    label: string
-    runtime?: string
-    wslDistro?: string | null
-  }[]
-  activeAccountId: string | null
-  activeAccountIdsByRuntime?: CodexRateLimitAccountsState['activeAccountIdsByRuntime']
-  systemDefaultDetail?: string | null
+  accounts: { id: string; label: string; hostDefault: boolean; disabled?: boolean }[]
   bindings: Record<string, string>
 }
 
@@ -65,6 +64,8 @@ export function WorkspaceProviderAccountSubMenu({
   const [selection, setSelection] = useState<Selection | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [savingOwner, setSavingOwner] = useState<string | null>(null)
+  const [revision, setRevision] = useState(0)
+  const localSettings = useAppStore((state) => (target?.kind === 'local' ? state.settings : null))
   const environmentId = target?.kind === 'environment' ? target.environmentId : null
   const targetKind = target?.kind
   const ownerKey = `${targetKind ?? 'none'}:${environmentId ?? ''}:${worktree.id}:${provider}`
@@ -77,6 +78,33 @@ export function WorkspaceProviderAccountSubMenu({
     }
   }, [ownerKey])
   const key = workspaceAccountKey(worktree.id)
+  const distro = useAppStore((state) => {
+    const context =
+      target?.kind === 'local'
+        ? getLocalProjectExecutionRuntimeContext(state, worktree.id)
+        : undefined
+    if (context?.status === 'resolved' && context.runtime.kind === 'wsl') {
+      return context.runtime.distro
+    }
+    if (context?.status === 'repair-required') {
+      return context.repair.preferredRuntime.distro
+    }
+    return parseWslUncPath(worktree.path)?.distro
+  })
+
+  useEffect(() => {
+    if (!targetKind) {
+      return
+    }
+    const owner = environmentId
+      ? { kind: 'environment' as const, environmentId }
+      : { kind: 'local' as const }
+    return subscribeWorkspaceAccountSettingsChanged((changed) => {
+      if (getProviderAccountsOwnerKey(changed) === getProviderAccountsOwnerKey(owner)) {
+        setRevision((value) => value + 1)
+      }
+    })
+  }, [environmentId, targetKind])
 
   useEffect(() => {
     if (!targetKind || wslHost) {
@@ -90,16 +118,19 @@ export function WorkspaceProviderAccountSubMenu({
     setError(null)
     void Promise.all([
       callRuntimeRpc<HostSettings>(owner, 'settings.get', undefined),
-      callRuntimeRpc<{ codex: CodexRateLimitAccountsState; claude: ClaudeRateLimitAccountsState }>(
-        owner,
-        'accounts.list',
-        {
-          refreshUsage: false
-        }
-      )
+      fetchProviderAccountsSnapshot(owner)
     ]).then(
       ([settings, accounts]) => {
         if (!current) {
+          return
+        }
+        if (accounts.failedProviders?.includes(provider)) {
+          setError(
+            t(
+              'auto.components.settings.AccountsPane.loadAccountsFailed',
+              'Could not load provider accounts.'
+            )
+          )
           return
         }
         if (!settings.settings[bindingKey]) {
@@ -111,31 +142,30 @@ export function WorkspaceProviderAccountSubMenu({
           )
           return
         }
+        const runtimeTarget = distro
+          ? { runtime: 'wsl' as const, wslDistro: distro }
+          : { runtime: 'host' as const, wslDistro: null }
+        const groups =
+          provider === 'codex'
+            ? buildCodexStatusSwitchGroups(accounts.codex, runtimeTarget)
+            : buildClaudeStatusSwitchGroups(accounts.claude, runtimeTarget)
+        const group = groups.find((entry) => entry.key === getCodexStatusRuntimeKey(runtimeTarget))
         setSelection({
-          activeAccountId: accounts[provider].activeAccountId,
-          activeAccountIdsByRuntime: accounts[provider].activeAccountIdsByRuntime,
-          systemDefaultDetail:
-            provider === 'codex'
-              ? accounts.codex.systemDefault?.email
-                ? [accounts.codex.systemDefault.email, accounts.codex.systemDefault.workspaceLabel]
-                    .filter(Boolean)
-                    .join(' \u00b7 ')
-                : undefined
-              : accounts.claude.systemDefaultEmail,
-          accounts:
-            provider === 'codex'
-              ? accounts.codex.accounts.map((account) => ({
-                  id: account.id,
-                  label: getCodexAccountDisplayLabel(account, accounts.codex.accounts, 'inline'),
-                  runtime: account.managedHomeRuntime,
-                  wslDistro: account.wslDistro
-                }))
-              : accounts.claude.accounts.map((account) => ({
-                  id: account.id,
-                  label: getClaudeAccountLabel(accounts.claude, account.id),
-                  runtime: account.managedAuthRuntime,
-                  wslDistro: account.wslDistro
-                })),
+          accounts: (group?.targets ?? []).map((entry) => ({
+            id: entry.id ?? WORKSPACE_SYSTEM_DEFAULT_ACCOUNT_ID,
+            label: [
+              entry.label,
+              entry.id === null
+                ? 'detail' in entry
+                  ? entry.detail?.replaceAll('\n', ' \u00b7 ')
+                  : accounts.claude.systemDefaultEmail
+                : null
+            ]
+              .filter(Boolean)
+              .join(' \u00b7 '),
+            hostDefault: entry.active,
+            disabled: 'disabled' in entry ? entry.disabled : false
+          })),
           bindings: settings.settings[bindingKey]
         })
       },
@@ -148,7 +178,7 @@ export function WorkspaceProviderAccountSubMenu({
     return () => {
       current = false
     }
-  }, [environmentId, targetKind, wslHost, t, provider, bindingKey])
+  }, [environmentId, targetKind, wslHost, t, provider, bindingKey, localSettings, revision, distro])
 
   const save = async (value: string) => {
     if (!target || saving) {
@@ -159,7 +189,9 @@ export function WorkspaceProviderAccountSubMenu({
       const result = await callRuntimeRpc<HostSettings>(target, 'settings.update', {
         [provider === 'codex' ? 'codexWorkspaceAccount' : 'claudeWorkspaceAccount']: {
           workspaceId: worktree.id,
-          accountId: value === 'inherit' ? null : value
+          accountId: selection?.accounts.find((account) => account.id === value)?.hostDefault
+            ? null
+            : value
         }
       })
       if (ownerRef.current !== ownerKey) {
@@ -201,45 +233,14 @@ export function WorkspaceProviderAccountSubMenu({
     }
   }
 
-  const distro = useAppStore((state) => {
-    const context =
-      target?.kind === 'local'
-        ? getLocalProjectExecutionRuntimeContext(state, worktree.id)
-        : undefined
-    if (context?.status === 'resolved' && context.runtime.kind === 'wsl') {
-      return context.runtime.distro
-    }
-    if (context?.status === 'repair-required') {
-      return context.repair.preferredRuntime.distro
-    }
-    return parseWslUncPath(worktree.path)?.distro
-  })
-  const accounts =
-    selection?.accounts.filter((account) =>
-      distro
-        ? account.runtime === 'wsl' && account.wslDistro?.toLowerCase() === distro.toLowerCase()
-        : account.runtime !== 'wsl'
-    ) ?? []
-  const selectedId = selection?.bindings[key]
-  const hostAccountId = distro
-    ? Object.entries(selection?.activeAccountIdsByRuntime?.wsl ?? {}).find(
-        ([name]) => name.toLowerCase() === distro.toLowerCase()
-      )?.[1]
-    : selection?.activeAccountIdsByRuntime
-      ? selection.activeAccountIdsByRuntime.host
-      : selection?.activeAccountId
-  const hostDefaultDetail = hostAccountId
-    ? accounts.find((account) => account.id === hostAccountId)?.label
-    : !distro
-      ? selection?.systemDefaultDetail
-      : undefined
+  const accounts = selection?.accounts ?? []
+  const selectedId = selection?.bindings[key] ?? accounts.find((account) => account.hostDefault)?.id
 
   const options = (
     <WorkspaceAccountOptions
       provider={name}
       accounts={accounts}
       selectedId={selectedId}
-      hostDefaultDetail={hostDefaultDetail}
       loading={!selection && Boolean(target) && !wslHost}
       saving={saving || disabled || !target}
       error={

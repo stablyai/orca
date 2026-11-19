@@ -30,6 +30,7 @@ import {
 } from './status-bar-runtime-targets'
 import {
   buildClaudeStatusSwitchGroups,
+  findClaudeAccountUsage,
   signedInClaudeAccountCount,
   getClaudeStatusActiveId,
   normalizeClaudeStatusRuntimeTarget,
@@ -263,9 +264,7 @@ export function ClaudeSwitcherForOwner({
       hasActiveRuntimeEnvironment && target.id === null && target.runtimeTarget.runtime === 'wsl'
         ? { ...target, disabled: true }
         : target,
-    inactiveUsage: inactiveClaudeAccounts.find(
-      (a) => a.accountId === claudeInactiveUsageId(target)
-    ),
+    inactiveUsage: findClaudeAccountUsage(inactiveClaudeAccounts, target),
     // Why local only: the hidden sign-in runs on this device, not a remote server.
     signInId: target.needsSignIn && !hasActiveRuntimeEnvironment ? target.id : null
   }))

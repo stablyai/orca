@@ -28,3 +28,20 @@ it('rejects an account that does not belong to the host', () => {
     )
   ).toThrow('That Codex account no longer exists on this host.')
 })
+
+it('saves a real system-default assignment separately from inheriting the host account', () => {
+  expect(
+    assignCodexWorkspaceAccount({}, { workspaceId: 'folder:a', accountId: 'system-default' })
+  ).toEqual({
+    'folder:a': 'system-default'
+  })
+  expect(
+    assignCodexWorkspaceAccount(
+      { codexWorkspaceAccounts: { 'folder:a': 'system-default' } },
+      {
+        workspaceId: 'folder:a',
+        accountId: null
+      }
+    )
+  ).toEqual({})
+})

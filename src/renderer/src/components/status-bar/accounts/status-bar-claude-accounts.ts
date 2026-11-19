@@ -4,6 +4,7 @@ import {
 } from '../../../../../shared/agent-accounts/managed-account-display-names'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { ClaudeRateLimitAccountsState } from '../../../../../shared/agent-accounts/managed-account-types'
+import type { InactiveAccountUsage } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { translate } from '@/i18n/i18n'
 import {
   getCodexStatusRuntimeKey,
@@ -15,6 +16,18 @@ import {
 } from './status-bar-runtime-targets'
 
 type ClaudeStatusAccount = ClaudeRateLimitAccountsState['accounts'][number]
+
+export function findClaudeAccountUsage(
+  accounts: InactiveAccountUsage[],
+  target: { id: string | null; runtimeTarget: CodexStatusRuntimeTarget }
+) {
+  return accounts.find((entry) =>
+    target.id
+      ? entry.accountId === target.id
+      : target.runtimeTarget.runtime === 'host' &&
+        entry.accountId.startsWith('system-default:host:')
+  )
+}
 
 function getSingleConcreteClaudeWslDistro(state: ClaudeRateLimitAccountsState): string | null {
   const keys = new Set<string>()
@@ -49,7 +62,7 @@ export function getClaudeStatusActiveId(
 ): string | null {
   const selection = state.activeAccountIdsByRuntime
   if (target.runtime === 'host') {
-    return selection?.host ?? state.activeAccountId ?? null
+    return selection ? selection.host : (state.activeAccountId ?? null)
   }
   const distroSelection = selection?.wsl?.[getCodexStatusWslKey(target.wslDistro)]
   if (target.wslDistro || distroSelection) {
