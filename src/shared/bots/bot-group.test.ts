@@ -29,7 +29,7 @@ const room = (replyMode: BotGroup['replyMode']): Pick<BotGroup, 'members' | 'rep
 })
 
 describe('group invocation audience', () => {
-  it('keeps exactly three persistent defaults and overrides just one send', () => {
+  it('uses room defaults until an explicit mention or @everyone overrides a send', () => {
     const group = room({ kind: 'bot', botId: 'bot-0' })
     expect(botGroupAudience('hello', group, bots)).toEqual(['bot-0'])
     expect(botGroupAudience('@Forge @Sage compare plans', group, bots)).toEqual(['bot-1', 'bot-2'])
@@ -38,11 +38,11 @@ describe('group invocation audience', () => {
     expect(botGroupAudience('hello', room({ kind: 'all' }), bots)).toEqual(
       bots.map((bot) => bot.id)
     )
-  })
-  it('expands eight human-selected bots independently of the automatic peer budget', () => {
-    const group = room({ kind: 'mentions' })
     expect(
-      botGroupAudience('@everyone hello', group, [...bots, { id: 'future', name: 'Future' }])
+      botGroupAudience('@everyone hello', room({ kind: 'mentions' }), [
+        ...bots,
+        { id: 'future', name: 'Future' }
+      ])
     ).toEqual(bots.map((bot) => bot.id))
   })
   it('does not execute quoted, code or email prose as mentions', () => {
@@ -422,15 +422,16 @@ describe('group rooms', () => {
     threads: [{ id: 't', createdAt: 1, members: [{ botId: 'bot-0', sessionId: 'thread-0' }] }]
   }
 
-  it("finds a room tab's group and thread by its entity", () => {
-    expect(findBotGroupRoom([group], 'g')).toEqual({ group, threadId: undefined })
-    expect(findBotGroupRoom([group], 't')).toEqual({ group, threadId: 't' })
+  it('resolves room tabs to the main or thread member sessions', () => {
+    const main = findBotGroupRoom([group], 'g')
+    const thread = findBotGroupRoom([group], 't')
+    expect(main).toEqual({ group, threadId: undefined })
+    expect(thread).toEqual({ group, threadId: 't' })
+    expect(main && botGroupRoom(main.group, main.threadId).members[0]?.sessionId).toBe('main-0')
+    expect(thread && botGroupRoom(thread.group, thread.threadId).members[0]?.sessionId).toBe(
+      'thread-0'
+    )
     expect(findBotGroupRoom([group], 'gone')).toBeNull()
-  })
-
-  it('sees a thread through its own member sessions', () => {
-    expect(botGroupRoom(group, undefined).members[0]?.sessionId).toBe('main-0')
-    expect(botGroupRoom(group, 't').members[0]?.sessionId).toBe('thread-0')
     expect(() => botGroupRoom(group, 'gone')).toThrow(/no longer/)
   })
 })

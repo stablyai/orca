@@ -4,8 +4,25 @@ import { setTimeout } from 'node:timers/promises'
 
 // Windows AV/CLI file handles transiently cause EPERM/EACCES/EBUSY during replacement. Bound retries (~750ms) cover typical scans without hiding persistent permission errors (#1507).
 const DEFAULT_MAX_ATTEMPTS = 6
-export function renameFileWithWindowsRetry(source: string, target: string): void {
-  runFileOperationWithWindowsRetry(() => renameSync(source, target))
+export function renameFileWithWindowsRetry(
+  source: string,
+  target: string,
+  isCurrent: () => boolean = () => true
+): boolean {
+  for (let attempt = 1; ; attempt++) {
+    if (!isCurrent()) {
+      return false
+    }
+    try {
+      renameSync(source, target)
+      return true
+    } catch (error) {
+      if (!shouldRetryFileOperation(error, attempt, DEFAULT_MAX_ATTEMPTS)) {
+        throw error
+      }
+      sleepSync(attempt * 50)
+    }
+  }
 }
 
 /** `maxAttempts` raises the budget (attempt n waits n × 50 ms), e.g. for a just-killed process tree. */

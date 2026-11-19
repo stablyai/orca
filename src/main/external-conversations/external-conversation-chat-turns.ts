@@ -178,6 +178,11 @@ export class ChatTurns {
     return true
   }
 
+  /** The chat's running turn, once its conversation was told it started; null for any other. */
+  toldTurn(paneKey: string): number | null {
+    return this.told.has(paneKey) ? (this.startedAt.get(paneKey) ?? null) : null
+  }
+
   /** A turn starts when the lead starts working, except on resuming from an answered prompt. */
   observe(paneKey: string): void {
     const row = this.deps.readHookRow(paneKey)

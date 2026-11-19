@@ -29,6 +29,7 @@ import { AnsweredPrompts } from './external-conversation-answered-prompts'
 import { ShownPrompts, type SnapshotEntryTrace } from './external-conversation-snapshot-prompts'
 import type { StructuredAgentSessionPromptStanding } from '../native-chat/agent-session-wire/observations/structured-agent-session-prompt-standing'
 import type { ConversationWorkersDeps } from './external-conversation-workers'
+import { ConversationTurnActivity, type ActivityEvent } from './external-conversation-turn-activity'
 import {
   conversationPane,
   replyTargetOf,
@@ -77,6 +78,8 @@ export type ConversationEvent =
     })
   // Whether orchestration workers the chat started still run, told on each change.
   | (ConversationPane & { kind: 'workers'; running: boolean })
+  // What a heard turn is doing now (the tool it is inside), a few seconds apart at most.
+  | ActivityEvent
 
 export type ConversationSnapshot = {
   kind: 'snapshot'
@@ -127,7 +130,7 @@ export type ConversationEventsDeps = {
   runningTurnReported: (sessionId: string) => boolean
   /** The pull requests a bot conversation's work opened, read once per ended turn. */
   workLinks: (link: ExternalConversationLink) => Promise<ConnectorWorkLink[]>
-  workerActivity: ConversationWorkersDeps['workerActivity']
+  workerActivities: ConversationWorkersDeps['workerActivities']
   /** Whether the cloud routes a bot's prompts by who raised them (prompts.audience). */
   promptsAudience: () => boolean
   /** The ended turn's owner posts to its Slack thread, taken once; null when none posted. */
@@ -137,6 +140,7 @@ export type ConversationEventsDeps = {
   replyFill?: () => ConversationReplyFill | null
   /** The message that opened the chat's running turn; null when none runs. */
   turnOpener: (sessionId: string) => AgentJournalRenderItem | null
+  turnPlan?: ConstructorParameters<typeof ConversationTurnActivity>[0]['turnPlan']
   turnStartedAt?: (sessionId: string) => number | null
   resolvedPrompt?: (
     sessionId: string,
@@ -156,11 +160,19 @@ export class ConversationEvents {
     emit: (event) => this.emit(event),
     resolvedPrompt: (sessionId, itemId) => this.deps.resolvedPrompt?.(sessionId, itemId) ?? null
   })
+  // What each told turn is doing, from its status row's tool.
+  private readonly activity: ConversationTurnActivity
   // Outlives a watch, so a reconnect never withdraws a prompt the chat still holds.
   private readonly shown = new ShownPrompts()
   private release: (() => void) | null = null
 
   constructor(private readonly deps: ConversationEventsDeps) {
+    this.activity = new ConversationTurnActivity({
+      ...deps,
+      emit: (event) => this.emit(event),
+      toldTurn: (paneKey) => this.chats.toldTurn(paneKey),
+      linkedFor: (paneKey) => this.linkedFor(paneKey)
+    })
     this.chats = new ChatTurns({
       ...deps,
       linkedFor: (paneKey) => this.linkedFor(paneKey),
@@ -180,7 +192,8 @@ export class ConversationEvents {
   watch(listener: ConversationWatchListener): () => void {
     if (!this.release) {
       const unsubscribe = this.deps.onAgentPaneChange((change) => {
-        this.chats.observe(change.paneKey)
+        // The turn's start first, then what that turn is doing.
+        ;[this.chats, this.activity].forEach((watcher) => watcher.observe(change.paneKey))
         this.answered.settle(change.paneKey)
       })
       const releaseChats = this.deps.onChatNews((news) => this.chats.news(news))
@@ -243,6 +256,7 @@ export class ConversationEvents {
     this.release = null
     this.listeners.clear()
     this.chats.clear()
+    this.activity.clear()
     this.answered.clear()
     this.deps.onWatchDisposed?.()
   }

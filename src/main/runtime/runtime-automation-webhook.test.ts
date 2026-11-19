@@ -28,7 +28,13 @@ vi.mock('electron', () => ({
 
 const HOOK = 'wh_7Kx2pQ9mZbV4tL1r'
 const bot: AutomationBotTarget = { botId: 'bot-1', runsIn: 'new', resultsTo: 'chat' }
-const draft: AutomationWebhookTrigger = { id: '', source: 'webhook', event: 'call', rev: 0 }
+const draft: AutomationWebhookTrigger = {
+  id: '',
+  source: 'webhook',
+  event: 'call',
+  rev: 0,
+  where: [{ path: 'body.action', op: '=', values: ['opened'] }]
+}
 const create: RuntimeAutomationCreateInput = {
   name: 'Investigate',
   prompt: 'Look into it',
@@ -97,11 +103,11 @@ describe('an automation with a webhook', () => {
 
   it('gives the hook up when the save fails after the make', async () => {
     const { controller, webhooks } = await setup()
-    // Over the rule's share of the hello once its id is filled in.
+    // Each emoji takes four UTF-8 bytes, so the filters exceed the hello's rule limit.
     const where = Array.from({ length: 8 }, (_, index) => ({
       path: `body.f${index}`,
       op: 'in' as const,
-      values: Array.from({ length: 10 }, () => 'v'.repeat(60))
+      values: ['😀'.repeat(40), '🚀'.repeat(40)]
     }))
     await expect(controller.create({ ...create, on: [{ ...draft, where }] })).rejects.toThrow(
       "This hook's filters are too long"
@@ -118,6 +124,9 @@ describe('an automation with a webhook', () => {
       automationId: automation.id,
       current: { id: automation.id }
     })
+    await expect(
+      controller.update(automation.id, { on: [{ ...draft, pick: ['body.__proto__.x'] }] })
+    ).rejects.toThrow(`"body.__proto__.x" isn't a path`)
 
     const off = await setup(false)
     await expect(off.controller.create(create)).rejects.toThrow(

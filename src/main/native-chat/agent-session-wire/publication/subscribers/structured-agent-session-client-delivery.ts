@@ -210,13 +210,16 @@ export class StructuredAgentSessionClientDelivery {
 
   /** Publish generation-end evidence even without cleanup rows; wake queue without renewing idle time.
    * restate rebaselines readers after fence movement. */
-  publishGenerationEnded = (sessionId: string, options: { restate?: boolean } = {}): void => {
+  publishGenerationEnded = (
+    sessionId: string,
+    options: { restate?: boolean; settled?: boolean } = {}
+  ): void => {
     const session = this.sessions.get(sessionId)
     if (!session) {
       return
     }
     try {
-      this.requestFailures.generationEnded(sessionId)
+      this.requestFailures.generationEnded(sessionId, { settled: options.settled })
     } catch (error) {
       this.deps().logger.warn('observing a request death failed', {
         scope: 'request-outcomes',

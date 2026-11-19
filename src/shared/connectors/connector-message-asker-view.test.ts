@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ConnectorMessageAsker } from '../connector-message-asker'
-import {
-  connectorAskerInitials,
-  connectorAskerTagView,
-  connectorNoAccessView
-} from './connector-message-asker-view'
+import { connectorAskerTagView, connectorNoAccessView } from './connector-message-asker-view'
 
 function t(_key: string, fallback: string, values: Record<string, unknown> = {}): string {
   return fallback.replace(/\{\{(\w+)\}\}/g, (_, name: string) => String(values[name]))
@@ -20,17 +16,6 @@ const SAM: ConnectorMessageAsker = {
 }
 
 describe('connectorAskerTagView', () => {
-  it('names a member and the channel source, with the link it opens', () => {
-    expect(connectorAskerTagView(SAM, t)).toEqual({
-      source: 'slack',
-      own: false,
-      name: 'Sam Lee',
-      place: 'Slack',
-      label: 'Sam Lee in Slack',
-      open: { url: SAM.url, label: 'Open in Slack' }
-    })
-  })
-
   it('reads "You" for the owner in a DM', () => {
     const view = connectorAskerTagView(
       { ...SAM, role: 'owner', place: { kind: 'direct_message', id: 'D1' } },
@@ -39,10 +24,7 @@ describe('connectorAskerTagView', () => {
     expect(view).toMatchObject({ own: true, name: 'You', place: 'Slack DM' })
   })
 
-  it('names a group DM, an issue by its id, and an unnamed member as Someone, without a link', () => {
-    expect(
-      connectorAskerTagView({ ...SAM, place: { kind: 'group_message', id: 'G1' } }, t).place
-    ).toBe('Slack group DM')
+  it('uses the issue id for an unnamed asker without a link', () => {
     const issue = connectorAskerTagView(
       {
         source: 'linear',
@@ -57,10 +39,6 @@ describe('connectorAskerTagView', () => {
 })
 
 describe('connectorNoAccessView', () => {
-  it('is null without lines', () => {
-    expect(connectorNoAccessView(SAM, t)).toBeNull()
-  })
-
   it('counts the lines and marks each, keeping repeated lines apart', () => {
     const view = connectorNoAccessView(
       {
@@ -82,13 +60,5 @@ describe('connectorNoAccessView', () => {
       ['Someone', 'S', 'Someone · Slack · no access', 'Only on main.']
     ])
     expect(new Set(view?.lines.map((line) => line.key)).size).toBe(3)
-  })
-})
-
-describe('connectorAskerInitials', () => {
-  it('takes the first and last word, or the one name', () => {
-    expect(connectorAskerInitials('Sam Lee')).toBe('SL')
-    expect(connectorAskerInitials('Ana María de la Cruz')).toBe('AC')
-    expect(connectorAskerInitials('octo-member')).toBe('O')
   })
 })

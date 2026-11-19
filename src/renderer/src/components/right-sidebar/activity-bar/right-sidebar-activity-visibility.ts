@@ -26,6 +26,10 @@ export function getVisibleRightSidebarActivityItems(
     isPerforce = false
   }: RightSidebarActivityVisibilityState
 ): ActivityBarItem[] {
+  if (isGroupHome) {
+    // A group's page keeps its Items; its folder panels are always empty.
+    return items.filter((item) => item.botOnly)
+  }
   if (isBot) {
     // A bot's own tabs lead; Files comes last.
     return [

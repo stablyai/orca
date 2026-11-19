@@ -59,15 +59,16 @@ export function lookAroundNextAt(
   }
   // A usage limit holds looks until its reset, which then catches up a slot still owed that day.
   const until = usageLimitedUntil(state.runs)
-  if (until > now) {
-    // The reset, or the retry spacing after it when that ends later.
-    const ended = state.runs.findLast((run) => run.endedAt !== undefined)?.endedAt ?? 0
-    for (const at of [until, ended + ASLEEP_RETRY_AFTER_MS]) {
-      if (at >= until && lookAroundDueAt(setting, state, at) !== null) {
-        return at
-      }
-    }
-  }
   const after = Math.max(now, firstAllowedAt(setting, state.armedAt) - 1, until)
-  return nextAutomationOccurrenceAfter(lookAroundSchedule(setting), state.armedAt, after)
+  const next = nextAutomationOccurrenceAfter(lookAroundSchedule(setting), state.armedAt, after)
+  if (until === 0) {
+    return next
+  }
+  // The owed slot's catch-up: at the reset, or once its retry spacing ends, unless a new slot
+  // comes first.
+  const ended = state.runs.findLast((run) => run.endedAt !== undefined)?.endedAt ?? 0
+  const catchUp = [until, ended + ASLEEP_RETRY_AFTER_MS].find(
+    (at) => at > now && at >= until && at < next && lookAroundDueAt(setting, state, at) !== null
+  )
+  return catchUp ?? next
 }

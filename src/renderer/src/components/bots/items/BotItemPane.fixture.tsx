@@ -39,7 +39,8 @@ function Pane({
   offline = false,
   deleted = false,
   activity = events,
-  hasEarlier = false
+  hasEarlier = false,
+  tall = false
 }: {
   state: BotItemWalkState
   shown?: BotItem
@@ -47,9 +48,10 @@ function Pane({
   deleted?: boolean
   activity?: BotItemEvent[]
   hasEarlier?: boolean
+  tall?: boolean
 }): React.JSX.Element {
   return (
-    <div className="flex h-[420px] flex-col">
+    <div className={tall ? 'flex h-[860px] flex-col' : 'flex h-[420px] flex-col'}>
       <BotItemPaneFrame walk={state} offline={offline} onBack={() => {}}>
         {(comment) => (
           <BotItemBody
@@ -61,6 +63,7 @@ function Pane({
             view={{
               item: shown,
               events: activity,
+              eventsRead: true,
               hasEarlier,
               failed: false,
               deleted,
@@ -196,4 +199,80 @@ export const keyboard = defineFixture({
       hasEarlier
     />
   )
+})
+
+const AT = 1_700_000_000_000
+const named = { ...item, owner: { ...item.owner, name: 'Builder' } }
+const ASKER = { kind: 'bot', botId: fixtureCos.id, chatId: 'chat-home' } as const
+const OWNER = { kind: 'owner' } as const
+const QUESTION =
+  'Should I retry the help-text build on this computer, or write the text by hand in the PR?\n\nRetrying needs your shell token for `pnpm gen:types`, about 4 minutes. By hand skips the build here; CI still runs it.'
+const LOG = [
+  'The help-text worker failed before it wrote anything. Its log ends at the CLI build:',
+  '```\n$ pnpm build:cli\nsrc/cli/commands/post.ts:4:28\n  error TS2307: Cannot find module\n  ../generated/api-types\n ELIFECYCLE  Command failed with exit code 2.\n```',
+  'The generated types come from `pnpm gen:types`, which needs the team token. The worker sandbox does not have it, so the build cannot finish there.',
+  'Your shell has the token, so a retry here should get past this step.'
+].join('\n\n')
+const thread: BotItemEvent[] = [
+  {
+    id: 'e1',
+    kind: 'commented',
+    actor: OWNER,
+    data: {
+      text: "a few things for the help text while you're at it:\n\n- the example should use a real-looking handle, not `@someone`\n- `--to` takes an email or a user id, say both\n- mention the old limit is gone, people remember it from the old docs\n\nif the build fails, don't spend more than 10 min on it."
+    },
+    at: AT
+  },
+  { id: 'e2', kind: 'commented', actor: ASKER, data: { text: LOG }, at: AT + 60_000 },
+  { id: 'e3', kind: 'commented', actor: ASKER, data: { text: QUESTION }, at: AT + 120_000 },
+  {
+    id: 'e4',
+    kind: 'status',
+    actor: ASKER,
+    data: { from: 'working', to: 'needs_you' },
+    at: AT + 120_000
+  }
+]
+const answered: BotItemEvent[] = [
+  ...thread,
+  {
+    id: 'e5',
+    kind: 'commented',
+    actor: OWNER,
+    data: { text: 'retry here, cap it at 10 min', answers: 'e3' },
+    at: AT + 300_000
+  },
+  {
+    id: 'e6',
+    kind: 'status',
+    actor: OWNER,
+    data: { from: 'needs_you', to: 'working', cause: 'answer' },
+    at: AT + 300_000
+  },
+  {
+    id: 'e7',
+    kind: 'commented',
+    actor: ASKER,
+    data: { text: "Retrying here; I'll cap it at 10 minutes." },
+    at: AT + 360_000
+  }
+]
+
+/** The open question, outlined, under two long messages folded at 8 lines. */
+export const asking = defineFixture({
+  width: 400,
+  render: () => (
+    <Pane
+      state={walk(3, 14)}
+      shown={{ ...named, status: 'needs_you', question: { eventId: 'e3', text: QUESTION } }}
+      activity={thread}
+      tall
+    />
+  ),
+  interact: (frame) => scrollItem(frame, 'bottom')
+})
+/** The answer, recorded: it quotes the question, which shows Answered; no move row. */
+export const answeredQuestion = defineFixture({
+  ...asking,
+  render: () => <Pane state={walk(3, 14)} shown={named} activity={answered} tall />
 })

@@ -39,7 +39,10 @@ CREATE TABLE IF NOT EXISTS remote_placements (
   request_key        TEXT NOT NULL,
   prior_task_status  TEXT NOT NULL,
   dispatch_id        TEXT,
-  created_at         TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at         TEXT NOT NULL DEFAULT (datetime('now')),
+  -- Set when every send under request_key failed before leaving this Orca, so a cancel may retire
+  -- the reservation; a resend clears it first.
+  never_sent_at      TEXT
 );
 -- Closing a link visits only its own rows here and in remote_dispatches.
 CREATE INDEX IF NOT EXISTS idx_remote_placements_conversation ON remote_placements(conversation_id);
