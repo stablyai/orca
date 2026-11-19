@@ -66,7 +66,7 @@ export class TerminalCommandPaint {
   private startSeen = false
   /** A command finished or started since the reattach fence; lost output never erases it. */
   private boundarySinceReattach = false
-  // Lost output while the fence held could hide a boundary, so the retained frame can't be vouched.
+  // Output lost before this process was proven could hide a boundary, so its retained frame can't be vouched.
   private gapSinceReattach = false
   private repaintOffered = false
   /** The last read finished a command and started the next. Its reports are stamped after this
@@ -196,13 +196,15 @@ export class TerminalCommandPaint {
     this.reattach = 'vouched'
   }
 
-  /** Output was lost: paint and boundaries since are unknown. A reattach fence still awaiting its
-   *  command keeps holding; otherwise every report and any paint count, as with no markers, except
-   *  the reports a seen boundary already retired. */
+  /** Output was lost: paint and boundaries since are unknown. A reattached process's retained frame
+   *  is never vouched after one, and a fence still awaiting its command holds until a fresh paint;
+   *  otherwise every report and any paint count, as with no markers, except the reports a seen
+   *  boundary already retired. */
   noteGap(): void {
     this.scanner.reset()
+    this.gapSinceReattach ||= this.reattach !== 'vouched'
     if (this.awaitsReattachedCommand()) {
-      this.gapSinceReattach = true
+      this.awaitingPaint = true
       return
     }
     this.startedAt = null
@@ -259,11 +261,10 @@ export class TerminalCommandPaint {
 
   /** Whether the agent's own report at `observedAt` speaks for the command now running. */
   isCurrentReport(observedAt: number | null | undefined): boolean {
-    if (this.betweenCommands || this.startFollowsFinishInRead) {
-      return false
-    }
     return (
-      this.startedAt === null || (typeof observedAt === 'number' && observedAt >= this.startedAt)
+      !this.betweenCommands &&
+      !this.startFollowsFinishInRead &&
+      (this.startedAt === null || (typeof observedAt === 'number' && observedAt >= this.startedAt))
     )
   }
 
