@@ -58,6 +58,21 @@ const coordinator: AgentHibernationCoordinatorState = {
   now: () => Date.now()
 }
 
+/** Phones driving a PTY and this window's input stamps, which quiet checks read beside host attention. */
+export function collectAgentPaneInputEvidence(
+  state: AppState
+): Pick<AgentHibernationPlannerSnapshot, 'inUsePtyIds' | 'lastTerminalInputAtByPaneKey'> {
+  return {
+    inUsePtyIds: [...getAllDrivers()]
+      .filter(([, driver]) => driver.kind === 'mobile')
+      .map(([ptyId]) => ptyId),
+    // Why: input stamps are coalesced, so planning must see the not-yet-flushed keystroke.
+    lastTerminalInputAtByPaneKey: mergePendingTerminalInputActivity(
+      state.lastTerminalInputAtByPaneKey
+    )
+  }
+}
+
 function snapshotFromState(
   state: AppState,
   now: number,
@@ -81,15 +96,9 @@ function snapshotFromState(
         ...getRuntimeLivenessTargetWorktrees(state, targetWorktreeId).keys()
       ])
     ],
-    inUsePtyIds: [...getAllDrivers()]
-      .filter(([, driver]) => driver.kind === 'mobile')
-      .map(([ptyId]) => ptyId),
+    ...collectAgentPaneInputEvidence(state),
     agentStatusByPaneKey: state.agentStatusByPaneKey,
     sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey,
-    // Why: input stamps are coalesced, so planning must see the not-yet-flushed keystroke.
-    lastTerminalInputAtByPaneKey: mergePendingTerminalInputActivity(
-      state.lastTerminalInputAtByPaneKey
-    ),
     attentionByWorktreeId: hostEvidence.attentionByWorktreeId,
     foregroundTerminalLastSeenAtByTabId: getForegroundTerminalTabLastSeenAtById(),
     ptyBindingFirstSeenAtByPaneKey: getHibernationPtyBindingFirstSeenAtByPaneKey(),

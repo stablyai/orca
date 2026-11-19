@@ -7,7 +7,7 @@ import type {
   TerminalTab
 } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { parseRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { isAgentPaneQuiet } from './agent-pane-quiet'
+import { getAgentPaneQuietEvidence, isAgentPaneQuiet } from './agent-pane-quiet'
 import { isLiveResumeAnchorForCompletedAgent } from '../../../../../shared/agent-session/lifecycle/resume/live-resume-anchor-record'
 import type { AgentHibernationPlannerSnapshot } from './agent-hibernation-planner-snapshot'
 import type { RuntimeTerminalAttention } from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
@@ -123,18 +123,12 @@ export function getEligiblePane(args: {
   if (!livePtyIds.has(runtimePtyId)) {
     return null
   }
-  // Input from a paired client or phone reaches the host, not this window's own input stamps.
-  const inputAt = latestFinite(
+  const evidence = getAgentPaneQuietEvidence(
     lastTerminalInputAtByPaneKey[entry.paneKey],
-    attention?.lastInputAt ?? undefined
+    attention,
+    inUsePtyIds.has(runtimePtyId)
   )
-  if (
-    !isAgentPaneQuiet(entry, {
-      inputAt,
-      inUse: inUsePtyIds.has(runtimePtyId),
-      shownRemotely: Boolean(attention?.shownRemotely)
-    })
-  ) {
+  if (!isAgentPaneQuiet(entry, evidence)) {
     return null
   }
   return {
@@ -150,13 +144,6 @@ export function getEligiblePane(args: {
     state: entry.state,
     stateStartedAt: entry.stateStartedAt,
     effectiveIdleStart,
-    inputAt: inputAt ?? 0
+    inputAt: evidence.inputAt ?? 0
   }
-}
-
-function latestFinite(...values: (number | undefined)[]): number | null {
-  const finite = values.filter(
-    (value): value is number => typeof value === 'number' && Number.isFinite(value)
-  )
-  return finite.length > 0 ? Math.max(...finite) : null
 }
