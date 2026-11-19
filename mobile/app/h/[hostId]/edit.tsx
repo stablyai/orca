@@ -311,7 +311,7 @@ export default function EditHostScreen() {
 
             {saveError ? <Text style={styles.errorText}>{saveError}</Text> : null}
 
-            <HostOrcaVersionSection hostId={host.id} />
+            <HostOrcaVersionSection />
 
             <ListGroup style={styles.removeGroup}>
               <ListRow

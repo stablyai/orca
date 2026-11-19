@@ -250,7 +250,11 @@
       "hostNamePlaceholder": "Host name",
       "address": "Address",
       "addressHint": "Accepts IP, host:port, or ws:// / wss://. A wss:// URL without a port uses 443. Bare addresses keep the current port (or 6768).",
-      "connectionPreview": "Connects to {{endpoint}}"
+      "connectionPreview": "Connects to {{endpoint}}",
+      "updateStepsServiceManager": "This server can't update itself. Update Orca on it with its package manager if it came from a .deb or .rpm, otherwise through the service manager that starts it.",
+      "updateStepsSourceCheckout": "This is a development build. Update it from its source checkout.",
+      "updateStepsServer": "This server can't update itself. Update Orca on the server computer, then restart the server.",
+      "orcaVersion": "Orca version"
     }
   },
   "app": {
