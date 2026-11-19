@@ -41,7 +41,9 @@ import type {
   JournalAcpHistory,
   JournalAcpHistoryItems,
   JournalAcpHistoryItemsRead,
-  JournalAcpHistoryRead
+  JournalAcpHistoryRead,
+  JournalAcpHistoryRow,
+  JournalAcpHistoryRowsRead
 } from './journal-domain-acp-history'
 
 export type JournalSqlPointRead = {
@@ -63,6 +65,7 @@ export type JournalSqlPointRead = {
     | { kind: 'saved-item-ids'; itemIds: readonly string[] }
     | JournalAcpHistoryRead
     | JournalAcpHistoryItemsRead
+    | JournalAcpHistoryRowsRead
     | { kind: 'generation'; input: JournalGenerationRead }
     | { kind: 'observer'; input: JournalObserverRead }
     | { kind: 'work'; input: JournalSqlWorkRead }
@@ -110,6 +113,7 @@ export type JournalSqlPointReadResult =
   | { kind: 'saved-item-ids'; itemIds: string[] }
   | { kind: 'acp-history'; history: JournalAcpHistory }
   | ({ kind: 'acp-history-items' } & JournalAcpHistoryItems)
+  | { kind: 'acp-history-rows'; rows: JournalAcpHistoryRow[] }
   | { kind: 'generation'; generation: JournalGenerationResult }
   | { kind: 'observer'; observation: JournalObserverResult }
   | { kind: 'work'; answer: JournalSqlWorkResult }

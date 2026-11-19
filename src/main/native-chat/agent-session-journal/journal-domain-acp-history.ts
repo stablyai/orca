@@ -20,18 +20,23 @@ export type JournalAcpHistoryRead = {
   agent: string
   sessionId: string
   providerSessionId: string
-  /** Saved rows whose placement coverage matching needs. */
-  itemIds: readonly string[]
+  afterOrdinal: number
 }
 
+/** One page of turn facts, in admission order. */
 export type JournalAcpHistory = {
   /** The chat's own lifecycle rows in the provider session's turn namespace. */
   turns: { itemId: string; userItemId: string | null }[]
   natives: AcpNativeTurn[]
-  /** Rows adopted from the provider session, by record ID. */
-  adopted: [recordId: string, sequence: number][]
-  held: { itemId: string; turnItemId: string | null }[]
+  /** Whether any row was adopted from the provider session. */
+  adopted: boolean
+  nextOrdinal: number | null
 }
+
+export type JournalAcpHistoryRowsRead = { kind: 'acp-history-rows'; itemIds: readonly string[] }
+
+/** Visible rows among the named keys: position and placement only. */
+export type JournalAcpHistoryRow = { itemId: string; sequence: number; turnItemId: string | null }
 
 export type JournalAcpHistoryItemsRead = { kind: 'acp-history-items'; itemIds: readonly string[] }
 
@@ -45,7 +50,10 @@ export type JournalAcpHistoryItems = {
 /** The kinds ACP catch-up reads; every kind but Orca cards. */
 const KINDS = `('message','tool-call','diff','approval','question','status','turn')`
 
-/** Turn facts, adoption sequences and placements only; no saved output leaves the reader. */
+/** Turns scanned per page; each answers a few short strings. */
+const TURNS_PAGE = 1_024
+
+/** Turn facts only; no saved output leaves the reader. */
 export function readJournalDomainAcpHistory(
   scope: JournalSqlScope,
   read: JournalAcpHistoryRead
@@ -54,15 +62,19 @@ export function readJournalDomainAcpHistory(
   const namespace = `p:${providerTimelineKeyPart(read.providerSessionId)}:`
   const turns: JournalAcpHistory['turns'] = []
   const natives: AcpNativeTurn[] = []
+  let scanned = 0
+  let lastOrdinal = read.afterOrdinal
   const scoped =
     db.prepare(`SELECT item_id,kind FROM journal_items INDEXED BY journal_items_stop_turn
     WHERE session_id=? AND epoch=? AND hidden=0 AND turn_item_id=? AND kind IN ${KINDS}`)
   for (const row of db
-    .prepare(`SELECT item_id,sequence,turn_id,opener_item_id FROM journal_items
+    .prepare(`SELECT item_id,sequence,turn_id,opener_item_id,ordinal FROM journal_items
     INDEXED BY journal_items_named_turn
     WHERE session_id=? AND epoch=? AND hidden=0 AND turn_id IS NOT NULL AND turn_id>=? AND turn_id<?
-    ORDER BY ordinal`)
-    .iterate(...prefix, namespace, `${namespace.slice(0, -1)};`)) {
+    AND ordinal>? ORDER BY ordinal LIMIT ?`)
+    .iterate(...prefix, namespace, `${namespace.slice(0, -1)};`, read.afterOrdinal, TURNS_PAGE)) {
+    scanned++
+    lastOrdinal = Number(row.ordinal)
     const itemId = String(row.item_id)
     const identity = parseAgentJournalItemKey(itemId)
     if (
@@ -105,11 +117,10 @@ export function readJournalDomainAcpHistory(
     sessionId: read.providerSessionId,
     recordId: ''
   })
-  const adopted: JournalAcpHistory['adopted'] = []
+  let adopted = false
   for (const row of db
-    .prepare(`SELECT item_id,sequence FROM journal_items
-    WHERE session_id=? AND epoch=? AND item_id>=? AND item_id<? AND hidden=0 AND kind IN ${KINDS}
-    ORDER BY ordinal`)
+    .prepare(`SELECT item_id FROM journal_items
+    WHERE session_id=? AND epoch=? AND item_id>=? AND item_id<? AND hidden=0 AND kind IN ${KINDS}`)
     .iterate(...prefix, adoptedPrefix, `${adoptedPrefix.slice(0, -1)};`)) {
     const identity = parseAgentJournalItemKey(String(row.item_id))
     if (
@@ -117,16 +128,38 @@ export function readJournalDomainAcpHistory(
       identity.agent === read.agent &&
       identity.sessionId === read.providerSessionId
     ) {
-      adopted.push([identity.recordId, Number(row.sequence)])
+      adopted = true
+      break
     }
   }
-  const placement = db.prepare(`SELECT turn_item_id FROM journal_items
+  return {
+    turns,
+    natives,
+    adopted,
+    nextOrdinal: scanned === TURNS_PAGE ? lastOrdinal : null
+  }
+}
+
+/** Callers bound `itemIds`, so the reply scales with the replay, never the chat. */
+export function readJournalDomainAcpHistoryRows(
+  scope: JournalSqlScope,
+  itemIds: readonly string[]
+): JournalAcpHistoryRow[] {
+  const { db, prefix } = scope
+  const placement = db.prepare(`SELECT sequence,turn_item_id FROM journal_items
     WHERE session_id=? AND epoch=? AND item_id=? AND hidden=0 AND kind IN ${KINDS}`)
-  const held = read.itemIds.flatMap((itemId) => {
+  return itemIds.flatMap((itemId) => {
     const row = placement.get(...prefix, itemId)
-    return row ? [{ itemId, turnItemId: row.turn_item_id ? String(row.turn_item_id) : null }] : []
+    return row
+      ? [
+          {
+            itemId,
+            sequence: Number(row.sequence),
+            turnItemId: row.turn_item_id ? String(row.turn_item_id) : null
+          }
+        ]
+      : []
   })
-  return { turns, natives: natives.toSorted((a, b) => a.sequence - b.sequence), adopted, held }
 }
 
 /** Saved rows by key, paged and shortened as an item visit reads them; a lone larger row still goes. */

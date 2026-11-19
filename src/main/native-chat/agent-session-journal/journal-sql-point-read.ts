@@ -28,7 +28,8 @@ import { readJournalSqlQueue } from './journal-sql-queued-messages'
 import { readJournalDomainItems } from './journal-sql-item-reads'
 import {
   readJournalDomainAcpHistory,
-  readJournalDomainAcpHistoryItems
+  readJournalDomainAcpHistoryItems,
+  readJournalDomainAcpHistoryRows
 } from './journal-domain-acp-history'
 
 export type { JournalSqlPointRead, JournalSqlPointReadResult } from './journal-sql-point-read-types'
@@ -106,6 +107,11 @@ function read(
       return readJournalDomainPublication(scope, operation)
     case 'acp-history':
       return { kind: 'acp-history', history: readJournalDomainAcpHistory(scope, operation) }
+    case 'acp-history-rows':
+      return {
+        kind: 'acp-history-rows',
+        rows: readJournalDomainAcpHistoryRows(scope, operation.itemIds)
+      }
     case 'acp-history-items':
       return {
         kind: 'acp-history-items',

@@ -10,7 +10,10 @@ import {
   nativeCopyCoverage,
   journalImportTime
 } from '../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
-import type { JournalAcpHistory } from '../../native-chat/agent-session-journal/journal-domain-acp-history'
+import type {
+  JournalAcpHistory,
+  JournalAcpHistoryRow
+} from '../../native-chat/agent-session-journal/journal-domain-acp-history'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { StructuredAgentSessionHistoryJournal } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 import {
@@ -19,8 +22,12 @@ import {
 } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AcpHistoryScope } from './acp-history-translation'
-import type { AcpHistoryCandidate, AcpHistoryReadJournal } from './acp-history-turn-matching'
-import { acpHistoryHasOutput } from './acp-history-turn-content'
+import {
+  acpAdoptedRecordIds,
+  type AcpHistoryCandidate,
+  type AcpHistoryReadJournal
+} from './acp-history-turn-matching'
+import { acpHistoryHasOutput, type AcpNativeTurn } from './acp-history-turn-content'
 
 /** Keys named per keyed read; the reader also ends a page at its byte budget. */
 const SAVED_ITEMS_KEYS = 1_024
@@ -45,7 +52,11 @@ export function acpHistoryDividerKey(scope: AcpHistoryScope, turn: string): stri
 }
 
 /** Which saved rows coverage and ownership may consult: this session's turns, theirs, and adopted rows. */
-function admission(scope: AcpHistoryScope, journal: JournalAcpHistory, dividers: Set<string>) {
+function admission(
+  scope: AcpHistoryScope,
+  journal: Pick<JournalAcpHistory, 'turns'>,
+  dividers: Set<string>
+) {
   const turnKeys = new Set(journal.turns.map((turn) => turn.itemId))
   const userKeys = new Set(journal.turns.flatMap((turn) => turn.userItemId ?? []))
   const placed = (itemId: string, turnItemId: string | null) => {
@@ -112,7 +123,40 @@ function itemReader(saved: SavedItems, admits: (item: AgentJournalRenderItem) =>
   }
 }
 
-/** Coverage reads turn facts, placements and saved turn rows; no saved output reaches main. */
+/** Every page of turn facts; each page stays far below the reader reply limit. */
+async function turnFacts(history: StructuredAgentSessionHistoryJournal, scope: AcpHistoryScope) {
+  const turns: JournalAcpHistory['turns'] = []
+  const natives: AcpNativeTurn[] = []
+  let adopted = false
+  for (let afterOrdinal: number | null = -1; afterOrdinal !== null;) {
+    const page = await history.reads.acpHistory({
+      agent: scope.agent,
+      sessionId: scope.sessionId,
+      providerSessionId: scope.providerSessionId,
+      afterOrdinal
+    })
+    turns.push(...page.turns)
+    natives.push(...page.natives)
+    adopted ||= page.adopted
+    afterOrdinal = page.nextOrdinal
+  }
+  return { turns, natives: natives.toSorted((a, b) => a.sequence - b.sequence), adopted }
+}
+
+async function savedRows(
+  history: StructuredAgentSessionHistoryJournal,
+  keys: readonly string[]
+): Promise<JournalAcpHistoryRow[]> {
+  const rows: JournalAcpHistoryRow[] = []
+  for (let offset = 0; offset < keys.length; offset += SAVED_ITEMS_KEYS) {
+    rows.push(
+      ...(await history.reads.acpHistoryRows(keys.slice(offset, offset + SAVED_ITEMS_KEYS)))
+    )
+  }
+  return rows
+}
+
+/** Coverage reads paged turn facts, keyed placements and saved turn rows; replies scale with the replay. */
 export async function readAcpHistoryJournal(
   scope: AcpHistoryScope,
   history: StructuredAgentSessionHistoryJournal,
@@ -127,29 +171,47 @@ export async function readAcpHistoryJournal(
     const outputKeys = sourceItems.flatMap((item) =>
       acpHistoryHasOutput(item.body) ? [agentJournalItemKey(item.identity)] : []
     )
-    const [accepted, journal, turns, rawOrigin] = await Promise.all([
+    const adoptedKeys = new Map(
+      candidates.flatMap(({ source }) =>
+        acpAdoptedRecordIds(source.messageIds).map(
+          (recordId) =>
+            [
+              agentJournalItemKey({
+                provider: 'legacy',
+                agent: scope.agent,
+                sessionId: scope.providerSessionId,
+                recordId
+              }),
+              recordId
+            ] as const
+        )
+      )
+    )
+    const [accepted, facts, rows, turns, rawOrigin] = await Promise.all([
       history.reads.input({ kind: 'accepted-submissions' }),
-      history.reads.acpHistory({
-        agent: scope.agent,
-        sessionId: scope.sessionId,
-        providerSessionId: scope.providerSessionId,
-        itemIds: [...new Set(outputKeys)]
-      }),
+      turnFacts(history, scope),
+      savedRows(history, [...new Set([...outputKeys, ...adoptedKeys.keys()])]),
       savedItems(history, turnKeys),
       history.reads.historyOrigin()
     ])
     const dividers = new Set(
       candidates.map(({ source }) => acpHistoryDividerKey(scope, source.turn))
     )
-    const { placed, admits } = admission(scope, journal, dividers)
+    const { placed, admits } = admission(scope, facts, dividers)
     const placements = new Map(
-      journal.held.flatMap((held) =>
-        placed(held.itemId, held.turnItemId) ? [[held.itemId, held] as const] : []
+      rows.flatMap((row) =>
+        placed(row.itemId, row.turnItemId) ? [[row.itemId, row] as const] : []
       )
     )
     const saved: AcpHistoryReadJournal = {
-      natives: journal.natives,
-      adopted: new Map(journal.adopted),
+      natives: facts.natives,
+      adoptedAny: facts.adopted,
+      adopted: new Map(
+        rows.flatMap((row) => {
+          const recordId = adoptedKeys.get(row.itemId)
+          return recordId === undefined ? [] : [[recordId, row.sequence] as const]
+        })
+      ),
       item: itemReader(turns, admits),
       placement: (key) => placements.get(key) ?? null
     }

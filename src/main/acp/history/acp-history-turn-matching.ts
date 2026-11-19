@@ -15,12 +15,23 @@ export type AcpHistoryCandidate = { source: AcpIdentifiedHistoryTurn; items: Acp
 export type AcpHistoryReadJournal = {
   /** Chat-sent turns in sequence order. */
   natives: readonly AcpNativeTurn[]
-  /** Rows adopted from the provider session: record ID to sequence. */
+  /** Whether any row was adopted from the provider session. */
+  adoptedAny: boolean
+  /** Adopted rows a candidate names: record ID to sequence. */
   adopted: ReadonlyMap<string, number>
   /** Saved candidate turn rows and their openers. */
   item: (key: string) => AgentJournalRenderItem | null
   /** The turn a saved candidate row is placed in. */
   placement: (key: string) => { turnItemId: string | null } | null
+}
+
+/** The adopted record IDs that can stand for a replayed turn's messages. */
+export function acpAdoptedRecordIds(messageIds: readonly string[]): string[] {
+  return messageIds.flatMap((id) =>
+    ['', 'opencode:'].flatMap((prefix) =>
+      ['', ':reasoning', ':omission'].map((suffix) => `${prefix}${id}${suffix}`)
+    )
+  )
 }
 
 /** One source index supplies both exact coverage proof and the candidate bodies to reconcile. */
@@ -35,7 +46,7 @@ export function matchAcpHistoryTurns(
 ) {
   const { natives, adopted } = journal
   const nativeIndex = new Map(natives.map((native, index) => [native.itemId, index]))
-  if (scope.identity === 'prompt-id' && adopted.size > 0 && importedAt === null) {
+  if (scope.identity === 'prompt-id' && journal.adoptedAny && importedAt === null) {
     throw new Error('no-legacy-origin')
   }
   const kind = new Map<string, 'native' | 'imported' | 'adopted'>()
@@ -83,14 +94,10 @@ export function matchAcpHistoryTurns(
     } else if (heldTurn) {
       throw new Error('unowned-history-turn')
     } else {
-      const adoptedSequence = source.messageIds.flatMap((id) =>
-        ['', 'opencode:'].flatMap((prefix) =>
-          ['', ':reasoning', ':omission'].flatMap((suffix) => {
-            const sequence = adopted.get(`${prefix}${id}${suffix}`)
-            return sequence === undefined ? [] : [sequence]
-          })
-        )
-      )
+      const adoptedSequence = acpAdoptedRecordIds(source.messageIds).flatMap((recordId) => {
+        const sequence = adopted.get(recordId)
+        return sequence === undefined ? [] : [sequence]
+      })
       if (
         adoptedSequence.length ||
         (scope.identity === 'prompt-id' &&
