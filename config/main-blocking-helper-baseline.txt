@@ -84,10 +84,11 @@
 13 src/main/antigravity/native-windows-credentials.ts
 1 src/main/antigravity/native-wsl-credentials.ts
 6 src/main/artifacts/artifact-cloud-auth-context.ts
-10 src/main/artifacts/artifact-cloud-service.ts
-8 src/main/artifacts/artifact-create-intent-store.ts
-9 src/main/artifacts/artifact-publisher.ts
-12 src/main/artifacts/artifact-share-record-store.ts
+7 src/main/artifacts/artifact-cloud-service.ts
+2 src/main/artifacts/artifact-create-intent-store.ts # sign-out clear (bestEffortFsyncDirectorySync) plus writeArtifactFileWhileCurrent, whose only sync step is the fenced renameSync; was 8
+1 src/main/artifacts/artifact-guarded-secure-write.ts # per artifact write: writeSecureFileAsync keeps only its renameSync in the fence-check turn so a sign-out clear cannot land between; replaces sync reads, stage and fsync
+1 src/main/artifacts/artifact-publisher.ts
+8 src/main/artifacts/artifact-share-record-store.ts
 1 src/main/automations/bot-automation-service-wiring.ts
 1 src/main/automations/external-managers/external-manager-discovery.ts
 1 src/main/automations/external-managers/scoped-external-automations.ts
@@ -994,6 +995,7 @@
 3 src/main/orcad/native-runtime/orcad-native-preflight.ts
 9 src/main/orcad/native-runtime/orcad-runtime-native-preflight.ts
 1 src/main/orcad/orcad-connector.ts
+1 src/main/orcad/orcad-orca-account.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
 2 src/main/orcad/profile-state/orcad-host-identity-reset.ts
 3 src/main/orcad/profile-state/orcad-profile-state-startup.ts
 6 src/main/orcad/runtime-launch/orcad-bundled-runtime.ts
@@ -1429,6 +1431,7 @@
 1 src/main/startup/agent-accounts/codex-launch-preparation.ts
 1 src/main/startup/agent-accounts/codex-session-resume-launch.ts
 1 src/main/startup/agent-accounts/main-process-account-services.ts
+1 src/main/startup/cloud-startup/cloud-session-shutdown-flush.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
 1 src/main/startup/cloud-startup/main-process-connector-startup.ts
 7 src/main/startup/configure-process.ts
 1 src/main/startup/diagnostics/event-loop-stall-probe.ts
@@ -1458,7 +1461,7 @@
 5 src/main/startup/profile-startup/profile-state-recovery-preflight.ts
 2 src/main/startup/profile-startup/single-instance-lock.ts
 12 src/main/startup/pty-startup/main-process-pty-startup.ts
-2 src/main/startup/quit/main-process-quit.ts
+3 src/main/startup/quit/main-process-quit.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
 15 src/main/startup/runtime-startup/main-process-runtime-launch.ts
 4 src/main/startup/runtime-startup/main-process-runtime-service.ts
 1 src/main/startup/serve-launch/headless-serve-ssh-registration.ts
@@ -1517,7 +1520,7 @@
 3 src/main/webhooks/webhook-host-ledger.ts
 8 src/main/window/attach-main-window-services.ts
 1 src/main/window/clipboard/clipboard-ipc-handlers.ts
-2 src/main/window/createMainWindow.ts
+3 src/main/window/createMainWindow.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
 3 src/main/window/desktop-integration/app-icon.ts
 1 src/main/window/desktop-integration/custom-app-icon.ts
 2 src/main/window/desktop-integration/macos-press-and-hold-default.ts
@@ -1658,6 +1661,7 @@
 5 src/shared/remote-runtime/serve-supervisor/serve-bundle-park.ts
 2 src/shared/remote-runtime/serve-supervisor/serve-user-data-path.ts
 1 src/shared/secure-storage/bounded-secure-json-file.ts
+1 src/shared/secure-storage/secure-file-async-write.ts # Windows only: the ACL addon creates restricted files synchronously, so the async writer falls back to writeSecureFile there
 19 src/shared/secure-storage/secure-file.ts
 6 src/shared/secure-storage/secure-path-windows-acl.ts
 2 src/shared/secure-storage/windows-security-addon.ts

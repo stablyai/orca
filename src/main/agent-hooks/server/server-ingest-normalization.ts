@@ -13,6 +13,7 @@ import {
   restateHookRoot
 } from '../../../shared/agent-hook-listener/presence/agent-hook-owner-presence'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
+import { withStopTranscriptReadsSkipped } from '../../../shared/agent-hook-listener/transcript-lines'
 import {
   isAgentHookSource,
   type AgentHookSource
@@ -124,17 +125,21 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
     }
   }
 
+  /** Never scans a transcript on the event loop: a skipped Stop-text read comes back as a path. */
   protected normalizeLocalHookPayload(
     source: AgentHookSource,
     body: unknown,
     isReplay = false
   ): NormalizedLocalHook {
-    const normalized = this.normalizeLocalHookPayloadFor(source, body, isReplay)
-    retainTmuxHookWriterTopology(normalized.event, body)
-    return normalized
+    const { value, skipped } = withStopTranscriptReadsSkipped(() =>
+      this.normalizeLocalHookPayloadNow(source, body, isReplay)
+    )
+    retainTmuxHookWriterTopology(value.event, body)
+    const stopTranscriptPath = skipped.at(-1)
+    return stopTranscriptPath ? { ...value, stopTranscriptPath } : value
   }
 
-  private normalizeLocalHookPayloadFor(
+  private normalizeLocalHookPayloadNow(
     source: AgentHookSource,
     body: unknown,
     isReplay: boolean
@@ -237,10 +242,9 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       }
       this.recordCurrentAuthorityObservation(event)
       toolCallOwner = event
-      const enriched = this.applyObservedLocalHook(event, normalized.onAccepted)
+      const enriched = this.applyLocalHookAndReply(source, aliasedBody, event, normalized)
       if (enriched) {
         this.checkAgentPresenceAfterHook(event, enriched)
-        this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
         this.scheduleTranscriptPoll(source, aliasedBody, enriched)
       }
     }
@@ -308,7 +312,7 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
       this.observations.rebind(event.paneKey)
     }
     this.recordCurrentAuthorityObservation(event)
-    const enriched = this.applyObservedLocalHook(event, normalized.onAccepted, record.receivedAt)
+    const enriched = this.applyReplayedHookAndReply(event, normalized, record.receivedAt)
     // Replay defers children whose rollout path is unresolved; only the poll finds and reads them.
     if (enriched && record.source === 'codex') {
       this.requestReplayTranscriptPoll(body, enriched)

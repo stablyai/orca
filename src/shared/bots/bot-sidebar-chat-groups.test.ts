@@ -19,8 +19,15 @@ const chat = (chatId: string, extra: Partial<BotChatTreeChat> = {}): BotChatTree
 })
 
 describe('groupBotWorkspacesByChat', () => {
-  it('lists only chats with a tab, each with its workspaces; one with no chat goes under Home Chat', () => {
-    const home = chat('home', { origin: 'home', tab: true })
+  it('lists workspaces under their open chats, with waiting and running ones first', () => {
+    const home = chat('home', {
+      origin: 'home',
+      tab: true,
+      running: [
+        { key: 'running', title: 'Running', state: 'running', startedAt: 0, worktreeId: 'c' },
+        { key: 'waiting', title: 'Waiting', state: 'needs-you', startedAt: 0, worktreeId: 'd' }
+      ]
+    })
     const groups = groupBotWorkspacesByChat(
       [
         chat('slack', { origin: 'slack', tab: true }),
@@ -28,32 +35,12 @@ describe('groupBotWorkspacesByChat', () => {
         chat('untabbed', { tab: false }),
         chat('old', { closed: true })
       ],
-      [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }],
-      { a: 'slack', b: 'old', c: 'untabbed' }
+      [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }, { id: 'e' }, { id: 'f' }, { id: 'g' }],
+      { a: 'slack', b: 'old', f: 'untabbed' }
     )
     expect(groups.map((group) => [group.chat.chatId, group.workspaces.map((w) => w.id)])).toEqual([
-      ['home', ['d']],
+      ['home', ['d', 'c', 'e', 'g']],
       ['slack', ['a']]
     ])
-  })
-
-  it("lists a chat's waiting workspace first, then running ones, then the rest in given order", () => {
-    const running = (worktreeId: string, state: 'running' | 'needs-you') => ({
-      key: worktreeId,
-      title: worktreeId,
-      state,
-      startedAt: 0,
-      worktreeId
-    })
-    const home = chat('home', {
-      origin: 'home',
-      running: [running('c', 'running'), running('d', 'needs-you')]
-    })
-    const [group] = groupBotWorkspacesByChat(
-      [home],
-      [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }],
-      {}
-    )
-    expect(group.workspaces.map((w) => w.id)).toEqual(['d', 'c', 'a', 'b'])
   })
 })

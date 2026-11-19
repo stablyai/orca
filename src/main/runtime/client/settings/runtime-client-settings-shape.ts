@@ -20,6 +20,8 @@ export type RuntimeClientSettings = Pick<
   | 'deleteChatHistoryWithWorkspace'
   | 'claudeSubagentNavigationEnabled'
   | 'terminalCopyTrimsGutter'
+  | 'terminalScrollbackRows'
+  | 'terminalWordSeparator'
   | 'defaultTaskSource'
   | 'defaultTaskViewPreset'
   | 'visibleTaskProviders'

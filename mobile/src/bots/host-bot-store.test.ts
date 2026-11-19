@@ -55,15 +55,9 @@ describe('host bot store', () => {
     // A re-read keeps the list's status until the list rolls up again.
     act(() => publishHostBots(key, { bots: [bot()], hideBotCreated: true }))
     expect(result.current?.statusByBotId.get('atlas')).toBe('working')
-  })
 
-  it('keeps the same entry when the statuses did not change', () => {
-    const key = 'host-b\nlocal'
-    publishHostBots(key, { bots: [bot()], hideBotCreated: true })
-    publishHostBotStatuses(key, new Map([['atlas', 'active']]))
-    const { result } = renderHook(() => useHostBotsEntry(key))
     const before = result.current
-    act(() => publishHostBotStatuses(key, new Map([['atlas', 'active']])))
+    act(() => publishHostBotStatuses(key, new Map([['atlas', 'working']])))
     expect(result.current).toBe(before)
   })
 })

@@ -560,17 +560,6 @@ describe('a Google setup card in the chat', () => {
       show('connect')
     }
 
-    it('wakes the bot after Check again finds Google ready', async () => {
-      signedIn({ kind: 'check-failed', services: ['gmail'], actions: [{ id: 'check-again' }] })
-      await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: 'Check again' }))
-      })
-      expect(mocks.refresh).toHaveBeenCalledWith({ kind: 'local' }, { check: true })
-      expect(mocks.answer).toHaveBeenCalledWith(expect.objectContaining({ id: 'ivy' }), 'step', [
-        'resume'
-      ])
-    })
-
     it('leaves the bot asleep when Google still can’t be checked', async () => {
       mocks.refresh.mockResolvedValue({ status: 'failed', error: 'offline' })
       signedIn({ kind: 'check-failed', services: ['gmail'], actions: [{ id: 'check-again' }] })
@@ -606,6 +595,7 @@ describe('a Google setup card in the chat', () => {
       await act(async () => {
         fireEvent.click(screen.getByRole('button', { name: 'Check again' }))
       })
+      expect(mocks.refresh).toHaveBeenCalledWith({ kind: 'local' }, { check: true })
       expect(mocks.answer).toHaveBeenCalledWith(expect.objectContaining({ id: 'ivy' }), 'step', [
         'resume'
       ])
