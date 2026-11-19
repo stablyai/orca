@@ -198,13 +198,6 @@ afterEach(() => {
 })
 
 describe('SidebarBotsSection', () => {
-  it('shows the empty state before the first bot', () => {
-    renderSection()
-    expect(screen.getByText('Bots')).toBeTruthy()
-    expect(screen.getByText('Meet your AI teammate')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Create a bot' })).toBeTruthy()
-  })
-
   it('lists a bot by avatar and name and opens its home on click', () => {
     mocks.bots = [bot()]
     useAppStore.setState({ folderWorkspaces: [home()] })
@@ -232,18 +225,7 @@ describe('SidebarBotsSection', () => {
     }
   )
 
-  it('collapses its rows from the header', () => {
-    vi.stubGlobal('api', { ui: { set: vi.fn(() => Promise.resolve()) } })
-    mocks.bots = [bot()]
-    useAppStore.setState({ folderWorkspaces: [home()] })
-    renderSection()
-    fireEvent.click(screen.getByRole('button', { name: /^Collapse Bots,/ }))
-    expect(screen.queryByText('Reviewer')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: /^Expand Bots,/ }))
-    expect(screen.getByText('Reviewer')).toBeTruthy()
-  })
-
-  it('lets go of focus after a pointer click on the header, but keeps it from the keyboard', () => {
+  it('toggles rows from the header and preserves focus for keyboard activation', () => {
     vi.stubGlobal('api', { ui: { set: vi.fn(() => Promise.resolve()) } })
     mocks.bots = [bot()]
     useAppStore.setState({ folderWorkspaces: [home()] })
@@ -253,9 +235,11 @@ describe('SidebarBotsSection', () => {
     header.focus()
     fireEvent.click(header, { detail: 1 })
     expect(document.activeElement).not.toBe(header)
+    expect(screen.queryByText('Reviewer')).toBeNull()
     header.focus()
     fireEvent.click(header, { detail: 0 })
     expect(document.activeElement).toBe(header)
+    expect(screen.getByText('Reviewer')).toBeTruthy()
   })
 
   it('opens a bot from its face and unfolds the section; the rest of the header only folds', () => {
@@ -324,6 +308,8 @@ describe('SidebarBotsSection', () => {
   it('keeps New bot access while empty and folds the onboarding card away', () => {
     vi.stubGlobal('api', { ui: { set: vi.fn(() => Promise.resolve()) } })
     renderSection()
+    expect(screen.getByText('Bots')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Create a bot' })).toBeTruthy()
     // No count beside the title while there is nothing to count.
     expect(screen.queryByText('0')).toBeNull()
     const emptyHeader = screen.getByRole('button', { name: /^Collapse Bots, 0 bots/ })
