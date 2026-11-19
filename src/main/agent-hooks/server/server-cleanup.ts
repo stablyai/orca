@@ -131,10 +131,11 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
         | undefined
       const endedPresence =
         options?.endedPresence ??
-        // A proved process gets its exit from the presence probe, not a possibly newer row; a
-        // shared server (tmux, OpenCode) outlives the command that finished at the pane's shell.
+        // A process the presence probe reaches gets its exit from the probe, not a possibly newer
+        // row (WSL/SSH have no probe, so their mark stands); a shared server (tmux, OpenCode)
+        // outlives the command that finished at the pane's shell.
         (options?.confirmedExit &&
-        !previous?.agentPresence?.process &&
+        (!previous?.agentPresence?.process || previous.connectionId !== null) &&
         this.paneAgentIdentity(resolvedPaneKey)?.processTopology !== 'shared'
           ? previous
             ? endedPresenceOf(previous)
