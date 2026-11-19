@@ -5,6 +5,7 @@ import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environm
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { withCodexTerminalServerIsolationEnv } from '../../../../shared/agent-launch/startup/codex-terminal-server-isolation'
+import { withCodexStartupImageCommand } from '../../../../shared/agent-launch/startup/codex-startup-image-command'
 import { getLegacyOpenCodeEnvKeysToDelete } from '../../../opencode/status-hooks/legacy-shared-config-dir'
 import { prepareOpenCodePtyLaunch } from '../../../opencode/opencode-pty-launch'
 import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../../../pty/shell-startup/legacy-terminal-shim-dir'
@@ -153,7 +154,7 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
   })
   const settings = input.getSettings?.()
   const env = { ...openCodeLaunch.env }
-  applyTerminalImageEnvironment(
+  const inlineImagesEnabled = applyTerminalImageEnvironment(
     env,
     input.envToDelete,
     launchAgent,
@@ -192,7 +193,10 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
   })
   const command = noDaemonLaunch ? await noDaemonLaunch : launchCommand
   if (command !== undefined) {
-    spawnOptions.command = command
+    spawnOptions.command =
+      !connectionId && inlineImagesEnabled && !input.envToDelete.includes('KITTY_WINDOW_ID')
+        ? withCodexStartupImageCommand(command, shell)
+        : command
   }
   if (args.commandDelivery !== undefined) {
     spawnOptions.commandDelivery = args.commandDelivery

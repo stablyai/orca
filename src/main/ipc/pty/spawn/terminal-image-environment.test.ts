@@ -10,6 +10,16 @@ describe('terminal image advertisement', () => {
     expect(deletions).toEqual(['PATH', 'ORCA_IMAGE_PROTOCOL'])
   })
 
+  it('advertises Kitty without setting a window ID in the Codex pane', () => {
+    const env = {}
+    applyTerminalImageEnvironment(env, [], 'codex', true, false)
+    expect(env).toEqual({ ORCA_IMAGE_PROTOCOL: 'kitty' })
+
+    const explicit = { KITTY_WINDOW_ID: '42' }
+    applyTerminalImageEnvironment(explicit, [], 'codex', true, false)
+    expect(explicit).toEqual({ ORCA_IMAGE_PROTOCOL: 'kitty', KITTY_WINDOW_ID: '42' })
+  })
+
   it('uses the attached viewer when the host has no window', () => {
     vi.stubEnv('CLAUDE_CODE_FORCE_TERMINAL_IMAGES', undefined)
     try {

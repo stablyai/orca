@@ -48,9 +48,7 @@ export function getFishClaudeShellFunction(): string {
 set -l __orca_claude_type (type -t claude 2>/dev/null)
 if test "$__orca_claude_type" = file; and begin; test -n "$ORCA_CLAUDE_PROFILE_POINTER"; or test "$${ORCA_IMAGE_PROTOCOL_ENV}" = '${ORCA_IMAGE_PROTOCOL_VALUE}'; end
   function claude
-    if test "$${ORCA_IMAGE_PROTOCOL_ENV}" = '${ORCA_IMAGE_PROTOCOL_VALUE}'; and not set -q CLAUDE_CODE_FORCE_TERMINAL_IMAGES
-      set -fx CLAUDE_CODE_FORCE_TERMINAL_IMAGES 1
-    end
+    test "$${ORCA_IMAGE_PROTOCOL_ENV}" = '${ORCA_IMAGE_PROTOCOL_VALUE}'; and not set -q CLAUDE_CODE_FORCE_TERMINAL_IMAGES; and set -lx CLAUDE_CODE_FORCE_TERMINAL_IMAGES 1
     if test -z "$ORCA_CLAUDE_PROFILE_POINTER"
       command claude $argv
       return $status

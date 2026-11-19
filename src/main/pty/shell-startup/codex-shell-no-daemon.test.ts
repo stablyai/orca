@@ -11,6 +11,8 @@ import {
 import { resolveFishBinary } from '../../../shared/shell/testing/fish-binary-requirement'
 import { getPowerShellAgentWrappers } from '../../../shared/shell/launch/agents/powershell-agent-wrappers'
 import { REMOTE_VIEWER_CLIPBOARD_ENV } from '../../../shared/clipboard/remote-viewer-clipboard-env'
+import { withCodexStartupImageCommand } from '../../../shared/agent-launch/startup/codex-startup-image-command'
+import { hasCodexNativeDraftFlag } from '../../../shared/agent-launch/startup/codex-startup-delivery'
 
 const isWindows = process.platform === 'win32'
 const fishLookup = resolveFishBinary()
@@ -244,6 +246,47 @@ describe.concurrent('Codex terminal image compatibility', () => {
           'ARGV|direct|kitty=<unset>',
           'ARGV|existing|kitty=42',
           'ARGV|disabled|kitty=<unset>'
+        ])
+      }
+    )
+    it.skipIf(!available)(
+      `${shell} scopes Kitty for a managed path that bypasses the shell function`,
+      async ({ expect }) => {
+        const sandbox = makeSandbox(HELP_WITHOUT_FLAG)
+        const powerShell = isPowerShell(shell)
+        const direct = `${powerShell ? '& ' : ''}${quote(shell, sandbox.codex)}`
+        const command = `${direct} --prefill 'say hello'`
+        const scoped = withCodexStartupImageCommand(command, powerShell ? 'powershell' : 'posix')
+        if (!powerShell) {
+          expect(hasCodexNativeDraftFlag(scoped)).toBe(true)
+        }
+        const result = await run(
+          shell,
+          [
+            scoped,
+            `${direct} after`,
+            ...(powerShell
+              ? []
+              : [
+                  withCodexStartupImageCommand('env KITTY_WINDOW_ID=9 codex env-override', 'posix'),
+                  withCodexStartupImageCommand('env codex env-default', 'posix')
+                ]),
+            powerShell
+              ? "$env:KITTY_WINDOW_ID = '42'"
+              : shell === 'fish'
+                ? 'set -gx KITTY_WINDOW_ID 42'
+                : 'export KITTY_WINDOW_ID=42',
+            scoped
+          ].join('\n'),
+          sandbox,
+          { FAKE_CODEX_READ_IMAGE_ENV: '1', ORCA_IMAGE_PROTOCOL: 'kitty' }
+        )
+        expect(result.status, result.stderr).toBe(0)
+        expect(lines(result.stdout)).toEqual([
+          'ARGV|--prefill|say hello|kitty=0',
+          'ARGV|after|kitty=<unset>',
+          ...(powerShell ? [] : ['ARGV|env-override|kitty=9', 'ARGV|env-default|kitty=0']),
+          'ARGV|--prefill|say hello|kitty=42'
         ])
       }
     )

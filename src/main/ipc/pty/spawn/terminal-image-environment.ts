@@ -1,6 +1,5 @@
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
-  CODEX_KITTY_WINDOW_ID,
   ORCA_IMAGE_PROTOCOL_ENV,
   ORCA_IMAGE_PROTOCOL_VALUE,
   ORCA_TERMINAL_IMAGE_VIEWER_ENV
@@ -13,7 +12,7 @@ export function applyTerminalImageEnvironment(
   agent: TuiAgent | undefined,
   inlineImages: boolean | undefined,
   headlessHost: boolean | undefined
-): void {
+): boolean {
   const viewer = env[ORCA_TERMINAL_IMAGE_VIEWER_ENV]
   delete env[ORCA_TERMINAL_IMAGE_VIEWER_ENV]
   const enabled =
@@ -30,10 +29,7 @@ export function applyTerminalImageEnvironment(
     }
   }
 
-  // Managed launches can bypass the shell functions.
-  if (agent === 'codex' && enabled && !envToDelete.includes('KITTY_WINDOW_ID')) {
-    env.KITTY_WINDOW_ID ??= process.env.KITTY_WINDOW_ID ?? CODEX_KITTY_WINDOW_ID
-  }
+  // Managed Claude can bypass the shell function and reads this preference at startup.
   if (
     agent === 'claude' &&
     env.CLAUDE_CODE_FORCE_TERMINAL_IMAGES === undefined &&
@@ -42,4 +38,5 @@ export function applyTerminalImageEnvironment(
   ) {
     env.CLAUDE_CODE_FORCE_TERMINAL_IMAGES = enabled ? '1' : '0'
   }
+  return enabled
 }
