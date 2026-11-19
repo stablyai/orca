@@ -6,6 +6,10 @@ import { applyClaudeEnvPatch } from '../../../claude-accounts/runtime-auth/envir
 import { resolveStructuredClaudeAccountHomePath } from '../../../runtime/agent-session/environment/structured-agent-account-home'
 import { getClaudeWorkspaceProfiles } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
+import {
+  CLAUDE_USAGE_ACCOUNT_ID_ENV,
+  claudeSystemDefaultUsageAccountId
+} from '../../../../shared/agent-accounts/claude/claude-system-default-usage-account'
 
 /** Existing conversations keep their acquired account; fresh chats resolve the workspace selection. */
 export async function prepareClaudeLaunchAccount(
@@ -21,6 +25,21 @@ export async function prepareClaudeLaunchAccount(
     const acquired = record ? acquiredAgentSessionAccount(record)?.recipe : undefined
     recordHome = acquired?.home ?? recordHome
     const systemHome = router?.systemDefaultHome()
+    if (acquired?.route === 'managed') {
+      env[CLAUDE_USAGE_ACCOUNT_ID_ENV] = acquired.accountId
+    } else if (
+      systemHome &&
+      normalizeRuntimePathForComparison(recordHome) ===
+        normalizeRuntimePathForComparison(systemHome)
+    ) {
+      const login = router?.systemDefaultLogin()
+      env[CLAUDE_USAGE_ACCOUNT_ID_ENV] = claudeSystemDefaultUsageAccountId(
+        login?.email,
+        login?.organizationUuid
+      )
+    } else {
+      delete env[CLAUDE_USAGE_ACCOUNT_ID_ENV]
+    }
     if (
       !systemHome ||
       normalizeRuntimePathForComparison(recordHome) !==

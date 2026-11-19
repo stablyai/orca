@@ -87,7 +87,10 @@ export function configureLocalPtyProvider(args: {
     const skipCodexHomeEnv = ctx?.isWsl === true && !selectedCodexHomePath
     const unavailableWorkspaceAccount =
       baseEnv.ORCA_CODEX_LAUNCH_ERROR ?? baseEnv.ORCA_CLAUDE_LAUNCH_ERROR
-    if (unavailableWorkspaceAccount) {
+    if (
+      unavailableWorkspaceAccount &&
+      (ctx?.launchAgent === 'codex' || ctx?.launchAgent === 'claude')
+    ) {
       throw new Error(unavailableWorkspaceAccount)
     }
     const ptySettings = getSettings?.()

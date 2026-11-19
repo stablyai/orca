@@ -22,6 +22,32 @@ beforeEach(() => {
   setupRuntimeHomeTest()
   installFakeAppEnvironment({ getPath: () => testState.userDataDir })
 })
+
+it('refuses an explicitly assigned account that belongs to another launch runtime', async () => {
+  const settings = createSettings({
+    codexManagedAccounts: [
+      {
+        id: 'wsl-account',
+        email: 'wsl@example.com',
+        managedHomePath: join(testState.userDataDir, 'wsl-account'),
+        managedHomeRuntime: 'wsl',
+        wslDistro: 'Ubuntu',
+        wslLinuxHomePath: '/home/dev/.codex',
+        createdAt: 1,
+        updatedAt: 1,
+        lastAuthenticatedAt: 1
+      }
+    ],
+    codexWorkspaceAccounts: { 'folder:client': 'wsl-account' }
+  })
+  const { CodexRuntimeHomeService } = await import('../../runtime-home-service')
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture implements the store methods exercised by runtime-home routing.
+  const service = new CodexRuntimeHomeService(createStore(settings) as never)
+
+  expect(() =>
+    service.prepareForCodexLaunch(undefined, undefined, { workspaceId: 'folder:client' })
+  ).toThrow('incompatible with this runtime')
+})
 afterEach(() => teardownRuntimeHomeTest())
 
 it('launches workspace accounts in separate homes while other workspaces inherit the host account', async () => {

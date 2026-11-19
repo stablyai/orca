@@ -49,6 +49,11 @@ export class ClaudeWorkspaceProfiles {
   ): Promise<ClaudeRuntimeAuthPreparation | null> {
     const settings = this.settings()
     const id = workspaceAccountId(settings.claudeWorkspaceAccounts, workspaceId)
+    const ensureBindingUnchanged = () => {
+      if (workspaceAccountId(this.settings().claudeWorkspaceAccounts, workspaceId) !== id) {
+        throw new Error('The workspace Claude account changed during preparation. Launch again.')
+      }
+    }
     if (id === WORKSPACE_SYSTEM_DEFAULT_ACCOUNT_ID) {
       const distro = target.runtime === 'wsl' ? target.wslDistro : null
       const guestHomePath = distro
@@ -67,6 +72,7 @@ export class ClaudeWorkspaceProfiles {
         ? posix.join(guestHome, '.claude')
         : this.router.systemDefaultHome()
       const login = !distro ? this.router.systemDefaultLogin() : null
+      ensureBindingUnchanged()
       return {
         configDir: distro ? toWindowsWslPath(configDir, distro) : configDir,
         runtime: distro ? 'wsl' : 'host',
@@ -119,6 +125,7 @@ export class ClaudeWorkspaceProfiles {
         'The workspace Claude account is not signed in to its own profile. Sign in again or choose another account.'
       )
     }
+    ensureBindingUnchanged()
     return {
       configDir: folder.readPath,
       runtime: isWsl ? 'wsl' : 'host',

@@ -116,6 +116,36 @@ it('pins a system-default workspace to the real home while the host uses a manag
   expect(settings.activeClaudeManagedAccountId).toBe('personal')
 })
 
+it('refuses a launch when the workspace binding changes while the host environment resolves', async () => {
+  let releaseEnvironment!: () => void
+  Object.defineProperty(router, 'environmentReady', {
+    value: new Promise<void>((resolve) => {
+      releaseEnvironment = resolve
+    })
+  })
+  settings.claudeWorkspaceAccounts = { 'folder:client': 'system-default' }
+  const launch = profiles.resolve('folder:client', { runtime: 'host' }, true)
+  settings.claudeWorkspaceAccounts = { 'folder:client': 'work' }
+  releaseEnvironment()
+  await expect(launch).rejects.toThrow('changed during preparation')
+})
+
+it('clears an inherited usage identity when a resumed home cannot be mapped to the active account', async () => {
+  const env: Record<string, string> = {
+    CLAUDE_CONFIG_DIR: router.accountHome('work'),
+    ORCA_CLAUDE_USAGE_ACCOUNT_ID: 'stale-account',
+    ORCA_CLAUDE_PROFILE_POINTER: 'stale-pointer'
+  }
+  await prepareClaudeLaunchAccount(
+    router,
+    env,
+    router.accountHome('work'),
+    undefined,
+    'provider-session'
+  )
+  expect(env.ORCA_CLAUDE_USAGE_ACCOUNT_ID).toBeUndefined()
+})
+
 it('resolves a WSL system-default workspace to its guest home without using a host path', async () => {
   settings.claudeWorkspaceAccounts = { 'folder:client': 'system-default' }
   rememberWslHome('Ubuntu', '\\\\wsl.localhost\\Ubuntu\\home\\dev')
