@@ -138,6 +138,62 @@ export class CrewRelevance {
     }
   }
 
+  /** The relevance of several parties together. */
+  static union(parts: Iterable<CrewRelevance>): CrewRelevance {
+    const union = new CrewRelevance()
+    for (const part of parts) {
+      for (const key of RELEVANCE_SETS) {
+        for (const value of part[key]) {
+          union[key].add(value)
+        }
+      }
+    }
+    return union
+  }
+
+  /** Whether both hold the same entries. */
+  sameAs(other: CrewRelevance): boolean {
+    return RELEVANCE_SETS.every(
+      (key) =>
+        this[key].size === other[key].size && [...this[key]].every((value) => other[key].has(value))
+    )
+  }
+
+  /** Whether a change, already admitted for some crew, can change this party's rows. */
+  concerns(facets: CrewInvalidation): boolean {
+    const list = [...facets]
+    if (
+      (facets.paneKeys || facets.sessionIds) &&
+      list.every((facet) => facet === 'status' || facet === 'names')
+    ) {
+      return (
+        [...(facets.paneKeys ?? [])].some((pane) => this.hasPane(pane)) ||
+        [...(facets.sessionIds ?? [])].some((session) => this.sessions.has(session))
+      )
+    }
+    if (list.every((facet) => facet === 'traffic')) {
+      if (facets.trafficAddresses) {
+        return [...facets.trafficAddresses].some((address) => this.addresses.has(address))
+      }
+      if (facets.dispatchIds) {
+        return [...facets.dispatchIds].some(
+          (id) => this.dispatches.has(id) || this.addresses.has(`dispatch:${id}`)
+        )
+      }
+    }
+    if (
+      (facets.dispatchIds || facets.parties) &&
+      list.every((facet) => facet === 'topology' || facet === 'assignments')
+    ) {
+      return (
+        Boolean(facets.parties && this.showsParty(facets.parties)) ||
+        [...(facets.dispatchIds ?? [])].some((id) => this.dispatches.has(id))
+      )
+    }
+    // Broad and identity changes: every crew rereads.
+    return true
+  }
+
   /** Leaf ids survive a pane's break-out, as isEquivalentPaneKey matches them. */
   hasPane(pane: string): boolean {
     if (this.panes.has(pane)) {
@@ -181,6 +237,17 @@ export function crewIdentityFingerprint(
   }
   return JSON.stringify(facts)
 }
+
+const RELEVANCE_SETS = [
+  'panes',
+  'leaves',
+  'tabs',
+  'sessions',
+  'handles',
+  'runs',
+  'dispatches',
+  'addresses'
+] as const satisfies readonly (keyof CrewRelevance)[]
 
 /** Invalidation is synchronous; the existing stream scheduler reads only after the commit. */
 export class CrewChanges {

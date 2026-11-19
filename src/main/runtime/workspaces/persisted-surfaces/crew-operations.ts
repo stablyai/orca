@@ -62,7 +62,9 @@ export abstract class OrcaRuntimeWithCrewOperations extends OrcaRuntimeWithWebho
     return this.crewReadModel.read(party)
   }
 
-  watchOrchestrationCrew = (wake: () => void) => this.crewReadModel.subscribe(wake)
+  /** Wakes for changes `party`'s rows can show. */
+  watchOrchestrationCrew = (party: string) => (wake: () => void) =>
+    this.crewReadModel.subscribe(wake, party)
 
   /** A chat coordinator's worker approvals: its own mailbox and its Runs', read only on their changes. */
   subscribeOrchestrationWorkerApprovals(

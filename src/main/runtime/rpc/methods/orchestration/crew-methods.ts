@@ -56,7 +56,7 @@ export const ORCHESTRATION_CREW_METHODS = [
         () =>
           subscribeCrew(
             () => context.runtime.getOrchestrationCrewSnapshot(party),
-            context.runtime.watchOrchestrationCrew,
+            context.runtime.watchOrchestrationCrew(party),
             emit,
             view,
             deltas

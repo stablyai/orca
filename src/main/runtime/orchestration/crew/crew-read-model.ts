@@ -22,8 +22,10 @@ const STALE_CAP = 4096
 
 export class CrewReadModel {
   private host: CrewHostDerivation | undefined
-  /** What the current host's reads showed: reset when a rebuild may change who rows show, else only grown. */
+  /** What every mounted party's last read showed, together; a new object only when that changed. */
   private relevance: CrewRelevance | undefined
+  /** What each party's last read showed: a change wakes only the parties it concerns. */
+  private readonly partyRelevance = new Map<string, CrewRelevance>()
   /** Status wakes skipped since the host was built: a party subscribing later may show them. */
   private skipped: 'status' | undefined
   /** Dispatches whose writes were skipped since the host was built; a read that shows one rebuilds. */
@@ -34,7 +36,8 @@ export class CrewReadModel {
   private identity: string | undefined
   /** A skipped terminal record write: the next read captures the runtime's terminal records again. */
   private identitySkipped = false
-  private readonly listeners = new Set<() => void>()
+  /** Each listener with the party it reads, when it said. */
+  private readonly listeners = new Map<() => void, string | undefined>()
   private readonly renamed = new Set<string>()
   private readonly dirty = new Set<CrewFacet>()
   private readonly trafficAddresses = new Set<string>()
@@ -143,13 +146,18 @@ export class CrewReadModel {
     for (const facet of facets) {
       this.dirty.add(facet === 'identity' ? 'topology' : facet)
     }
-    for (const listener of this.listeners) {
-      listener()
+    // Admitted for some crew: wake only the parties whose own rows it can change.
+    for (const [listener, party] of this.listeners) {
+      const relevance = party === undefined ? undefined : this.partyRelevance.get(party)
+      if (!relevance || relevance.concerns(facets)) {
+        listener()
+      }
     }
   }
 
-  subscribe = (listener: () => void): (() => void) => {
-    this.listeners.add(listener)
+  /** `party` routes wakes: a change no row of that party shows does not wake it. */
+  subscribe = (listener: () => void, party?: string): (() => void) => {
+    this.listeners.set(listener, party)
     this.unwatch ??= this.watch(this.invalidate, this.readRelevance)
     // A party joining reads rows the skipped wakes may have changed; stale Dispatches it shows rebuild on read.
     if (this.skipped === 'status') {
@@ -158,11 +166,15 @@ export class CrewReadModel {
     this.skipped = undefined
     return () => {
       this.listeners.delete(listener)
+      if (party !== undefined && ![...this.listeners.values()].includes(party)) {
+        this.partyRelevance.delete(party)
+      }
       if (this.listeners.size === 0) {
         this.unwatch?.()
         this.unwatch = undefined
         this.host = undefined
         this.relevance = undefined
+        this.partyRelevance.clear()
         this.identity = undefined
         this.skipped = undefined
         this.stale.clear()
@@ -178,8 +190,9 @@ export class CrewReadModel {
   read = (address: string): OrchestrationCrewSnapshot => {
     const snapshot = this.readOnce(address)
     // A row now showing a Dispatch whose write was skipped reads stale assignments: rebuild once.
-    if (this.host && this.relevance && this.stale.size > 0) {
-      for (const id of this.relevance.dispatches) {
+    const shown = this.partyRelevance.get(address)
+    if (this.host && shown && this.stale.size > 0) {
+      for (const id of shown.dispatches) {
         if (this.stale.has(id)) {
           this.dirty.add('topology')
           return this.readOnce(address)
@@ -191,8 +204,6 @@ export class CrewReadModel {
 
   private rebuilt(host: CrewHostDerivation): CrewHostDerivation {
     this.stale.clear()
-    // Who the rows show may have changed: the next reads collect it afresh.
-    this.relevance = undefined
     return host
   }
 
@@ -296,14 +307,17 @@ export class CrewReadModel {
     if (dirty.has('traffic')) {
       this.host.sourceInputs.invalidateTraffic(trafficAddresses)
     }
-    // Kept across status, name and stage refreshes, so the session-write scope and its worktree cache hold.
-    this.relevance ??= new CrewRelevance()
-    const snapshot = buildCrewSnapshot(
-      address,
-      { ...this.host.deps, now },
-      this.host,
-      this.relevance
-    )
+    const shown = new CrewRelevance()
+    const snapshot = buildCrewSnapshot(address, { ...this.host.deps, now }, this.host, shown)
+    // A one-shot read beside the mounted ones routes nothing: only a listening party's read counts.
+    if ([...this.listeners.values()].some((party) => party === address || party === undefined)) {
+      this.partyRelevance.set(address, shown)
+    }
+    // Kept while unchanged, so the session-write scope and its worktree cache hold across wakes.
+    const union = CrewRelevance.union(this.partyRelevance.values())
+    if (!this.relevance?.sameAs(union)) {
+      this.relevance = union
+    }
     try {
       this.identity = crewIdentityFingerprint(this.relevance, this.host.deps)
     } catch {
