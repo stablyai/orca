@@ -23,7 +23,9 @@ export function journalSqlTimingOp(command: JournalSqlRequest['command']): strin
       return command.command.operation.kind
     case 'maintenance':
       return `maintenance:${command.operation.kind}`
-    default:
+    case 'effects':
+    case 'close':
+    case 'promote':
       return command.type
   }
 }

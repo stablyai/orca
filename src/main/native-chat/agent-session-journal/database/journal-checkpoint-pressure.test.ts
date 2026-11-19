@@ -197,9 +197,20 @@ it('admits a sending chat past WAL pressure while bulk waits, but never past a t
   expect(bulkAdmitted).toBe(false)
 
   worker.emit('message', { type: 'truncate-request', truncateId: 7 })
-  const sending = batch.run([4], insert, 'normal', true)
-  await new Promise((resolve) => setTimeout(resolve, 20))
-  expect(ids()).toEqual([{ id: 3 }])
+  let sendingAdmitted = false
+  const sending = batch.run(
+    [4],
+    (id) => {
+      sendingAdmitted = true
+      return insert(id)
+    },
+    'normal',
+    true
+  )
+  for (let turn = 0; turn < 5; turn++) {
+    await Promise.resolve()
+  }
+  expect(sendingAdmitted).toBe(false)
 
   worker.emit('message', {
     type: 'checked',
