@@ -1,5 +1,4 @@
-import type { Dirent } from 'node:fs'
-import { mkdir, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, sep } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
@@ -12,11 +11,13 @@ import {
 } from '../rollouts/codex-rollout-compressed-twin'
 import { parseCodexRolloutThreadId } from '../rollouts/codex-rollout-thread-id'
 import { isCodexSessionRolloutFileName } from '../rollouts/codex-session-file-listing'
+import { readEntries, StoreNames } from './codex-history-store-names'
 import { linkCodexSessionFileAsync } from '../rollouts/codex-session-link'
 import {
   hasUnsavedImportLedger,
   readImportLedger,
   writeImportLedger,
+  type ImportedFolder,
   type ImportedSource
 } from './codex-history-import-ledger'
 
@@ -30,17 +31,6 @@ export type CodexHistoryImportArgs = {
   ledgerPath: string
   indexPendingDir: string
   shouldStop: () => boolean
-}
-
-async function readEntries(folder: string): Promise<Dirent[]> {
-  try {
-    return await readdir(folder, { withFileTypes: true })
-  } catch (error) {
-    if (isDefinitiveAbsence(error)) {
-      return []
-    }
-    throw error
-  }
 }
 
 async function realpathIfPresent(path: string): Promise<string | null> {
@@ -114,33 +104,21 @@ async function unusableReason(importHome: string, storeHome: string): Promise<st
   return null
 }
 
-class StoreNames {
-  private readonly folders = new Map<string, Promise<Set<string>>>()
+type FolderResult = ImportedFolder & { linked: number; stopped: boolean }
 
-  constructor(private readonly storeHome: string) {}
-
-  names(folder: string): Promise<Set<string>> {
-    let names = this.folders.get(folder)
-    if (!names) {
-      names = readEntries(join(this.storeHome, folder)).then(
-        (entries) => new Set(entries.map((entry) => entry.name))
-      )
-      this.folders.set(folder, names)
+// Whether a plain rollout left waiting grew (or went) since: its folder's mtime doesn't show that.
+async function anyChanged(
+  folder: string,
+  waiting: Record<string, string> | undefined
+): Promise<boolean> {
+  for (const [name, mtimeNs] of Object.entries(waiting ?? {})) {
+    const current = await stat(join(folder, name), { bigint: true }).catch(() => null)
+    if (String(current?.mtimeNs) !== mtimeNs) {
+      return true
     }
-    return names
   }
-
-  /** Whether `folder` holds the rollout in either form. */
-  async holds(folder: string | null, name: string): Promise<boolean> {
-    if (folder === null) {
-      return false
-    }
-    const names = await this.names(folder)
-    return names.has(name) || names.has(rolloutTwinPath(name))
-  }
+  return false
 }
-
-type FolderResult = { mtimeNs?: string; linked: number; stopped: boolean }
 
 async function importFolder(
   args: CodexHistoryImportArgs,
@@ -160,14 +138,15 @@ async function importFolder(
     }
     throw error
   }
-  if (source.folders[folder]?.mtimeNs === String(before)) {
+  const previous = source.folders[folder]
+  if (previous?.mtimeNs === String(before) && !(await anyChanged(path, previous.waiting))) {
     return null
   }
   const archived = folder === ARCHIVED
   const target = archived ? ARCHIVED : folder
   let linked = 0
   let failed = false
-  let waiting = false
+  const waiting: Record<string, string> = {}
   let targetReady = false
   const names = (await readEntries(path))
     .filter((entry) => entry.isFile() && isCodexSessionRolloutFileName(entry.name))
@@ -188,8 +167,7 @@ async function importFolder(
     const twinInStore = !targetNames.has(name) && targetNames.has(rolloutTwinPath(name))
     const twinKept = twinInStore && (await isRolloutTwinKeptFromStore(from, to))
     if (twinKept && !name.endsWith(COMPRESSED_ROLLOUT_SUFFIX)) {
-      // A plain form no newer than the store's compressed one may still grow: read it again.
-      waiting = true
+      waiting[name] = String((await stat(from, { bigint: true })).mtimeNs)
     }
     // A conversation handled before joins again only as the newer plain form of a compressed copy
     // the store still holds; one the user deleted stays deleted whichever form Codex leaves here.
@@ -225,11 +203,12 @@ async function importFolder(
     }
   }
   const after = (await stat(path, { bigint: true })).mtimeNs
-  // A folder that changed while read, a link that failed or a form that may still grow is read again.
+  // A folder that changed while read, or a link that failed, is read again next time.
   return {
     linked,
     stopped: false,
-    ...(!failed && !waiting && after === before ? { mtimeNs: String(before) } : {})
+    ...(!failed && after === before ? { mtimeNs: String(before) } : {}),
+    ...(Object.keys(waiting).length > 0 ? { waiting } : {})
   }
 }
 
@@ -297,7 +276,10 @@ export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<
         continue
       }
       if (result) {
-        source.folders[folder] = result.mtimeNs ? { mtimeNs: result.mtimeNs } : {}
+        source.folders[folder] = {
+          ...(result.mtimeNs ? { mtimeNs: result.mtimeNs } : {}),
+          ...(result.waiting ? { waiting: result.waiting } : {})
+        }
         linked += result.linked
         unsaved += 1
         if (result.stopped) {

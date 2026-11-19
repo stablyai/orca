@@ -7,6 +7,11 @@ import { renameFileWithWindowsRetryAsync } from '../../../../shared/file-write/w
 export type ImportedFolder = {
   /** Its mtime when read; absent while it still needs another read. */
   mtimeNs?: string
+  /**
+   * Plain rollouts left out for a newer compressed copy in the store, by their mtime: Codex may
+   * still append to one, so a change to any reads the folder again.
+   */
+  waiting?: Record<string, string>
 }
 
 export type ImportedSource = {
@@ -49,7 +54,12 @@ function isImportedSource(value: unknown): value is ImportedSource {
     typeof source.folders === 'object' &&
     source.folders !== null &&
     Object.values(source.folders).every(
-      (folder) => folder?.mtimeNs === undefined || typeof folder.mtimeNs === 'string'
+      (folder) =>
+        (folder?.mtimeNs === undefined || typeof folder.mtimeNs === 'string') &&
+        (folder.waiting === undefined ||
+          (typeof folder.waiting === 'object' &&
+            folder.waiting !== null &&
+            Object.values(folder.waiting).every((mtime) => typeof mtime === 'string')))
     )
   )
 }

@@ -90,7 +90,8 @@ describe('importCodexHistory', () => {
     // Codex outside Orca archives it in the import folder, then compresses it.
     renameSync(join(importHome, DAY, NEW), join(importHome, 'archived_sessions', `${NEW}.zst`))
     writeFileSync(join(importHome, DAY, LATER), 'later\n')
-    const later = new Date(Date.now() + 5_000)
+    // Any mtime other than the one recorded marks the folders changed.
+    const later = new Date('2030-01-01T00:00:00Z')
     utimesSync(join(importHome, DAY), later, later)
     utimesSync(join(importHome, 'archived_sessions'), later, later)
 
