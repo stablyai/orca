@@ -13,6 +13,10 @@ import {
   requestHostCodexIndexHeal
 } from './codex-account-history-index'
 import { shareCodexAccountHistory, unshareCodexAccountHistory } from './codex-account-history-links'
+import {
+  CodexHistoryImportRunner,
+  type CodexHistoryImportSettings
+} from '../import/codex-history-import-runner'
 
 import { CodexHistoryPassRequests } from './codex-history-pass-queue'
 import { WRITER_LOCKS } from './codex-thread-writer-locks'
@@ -47,6 +51,28 @@ export class CodexAccountHistoryPasses {
   // Homes whose left-behind rollouts still await a content check, checked once no pass runs.
   private readonly owedChecks = new Map<string, { accountHome: string }>()
   private checking = false
+  // When each import folder last finished a pass this run.
+  private readonly imports = new CodexHistoryImportRunner({
+    indexPendingDir: INDEX_PENDING_DIR,
+    // Only publishing pauses the index heal: a frozen import folder must not hold it.
+    publish: (job) =>
+      this.requests.enqueue('host', async () => {
+        this.activePasses += 1
+        this.startedPasses += 1
+        try {
+          return await job()
+        } finally {
+          this.activePasses -= 1
+        }
+      }),
+    waitForLaunches: () => this.requests.whenNoLaunchWaiting('host'),
+    requestIndexHeal: () =>
+      requestHostCodexIndexHeal(INDEX_PENDING_DIR(), getSystemCodexHomePath(), this.passProgress),
+    imported: () => {
+      requestHostCodexIndexHeal(INDEX_PENDING_DIR(), getSystemCodexHomePath(), this.passProgress)
+      this.checkOwed()
+    }
+  })
   private startedPasses = 0
   private readonly passProgress = {
     isPaused: (): boolean => this.activePasses > 0,
@@ -99,6 +125,14 @@ export class CodexAccountHistoryPasses {
         this.checkOwed()
       }
     )
+  }
+
+  /** Copies the import folder's conversations that ~/.codex lacks into it (see the runner). */
+  importHistory(
+    getSettings: () => CodexHistoryImportSettings,
+    options: { settingChanged?: boolean } = {}
+  ): Promise<void> {
+    return this.imports.importHistory(getSettings, options)
   }
 
   private async runPass(key: string, accountHome: string, shared: boolean): Promise<void> {

@@ -61,6 +61,8 @@ export function isNativeChatFailureRowResolved(
 
 export type NativeChatSignIn = {
   signingIn: boolean
+  /** Signed in since this failure; nothing to press until the user sends again. */
+  signedIn?: boolean
   signIn: () => void
   loginCommand?: string
 }
@@ -81,6 +83,8 @@ export type NativeChatHostSetup = {
   host?: RuntimeClientTarget
   /** Rows whose failure no later successful turn resolved; absent when the transcript is unknown. */
   unresolvedFailureRows?: ReadonlySet<string>
+  /** The composer's notice shows Sign in, so transcript rows only say what wasn't sent. */
+  signInInComposer?: boolean
 }
 
 export const NativeChatHostSetupContext = createContext<NativeChatHostSetup | null>(null)
@@ -96,7 +100,7 @@ export function nativeChatSetupAction(
   t: Translate = translate
 ): { label: string; primary: true; disabled: boolean; onClick: () => void } | undefined {
   const signIn = setup?.signIn
-  if (signIn && isNativeChatSignInFailureKind(kind, signIn)) {
+  if (signIn && !signIn.signedIn && isNativeChatSignInFailureKind(kind, signIn)) {
     return {
       label: signIn.signingIn
         ? t('components.native-chat.claudeSignIn.signingIn', 'Signing in…')
@@ -121,7 +125,7 @@ export function nativeChatSetupAction(
   return undefined
 }
 
-/** Offer selected-account sign-in until successful, then suppress it until the failure or failure-row count changes. */
+/** Offer selected-account sign-in until successful, then report signed in until the failure or failure-row count changes. */
 function useManagedClaudeSignIn(
   accountId: string | null,
   failure: unknown,
@@ -152,7 +156,7 @@ function useManagedClaudeSignIn(
     signedInFor !== null && signedInFor.failure === failure && signedInFor.rows === failureRows
   // Why memoized: rows read it through context, and a chat re-renders on every streamed token.
   return useMemo(
-    () => (accountId && !signedInSinceFailure ? { signingIn, signIn } : null),
+    () => (accountId ? { signingIn, signedIn: signedInSinceFailure, signIn } : null),
     [accountId, signedInSinceFailure, signingIn, signIn]
   )
 }

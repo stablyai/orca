@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Text, View } from 'react-native'
 import {
   botLookAround,
@@ -151,6 +151,9 @@ export function MobileLookAroundPage(props: {
   bot: SheetBot
   save: SaveLookAround
   onBack: () => void
+  /** Offline: the choices and Save are off, and the typed text stays. */
+  disabled: boolean
+  banner: ReactNode
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
@@ -163,6 +166,9 @@ export function MobileLookAroundPage(props: {
   const [initialFocus] = useState(setting.focus)
   const [focus, setFocus] = useState(initialFocus)
   const saveFocus = () => {
+    if (props.disabled) {
+      return
+    }
     const typed = focus.trim()
     if (typed !== initialFocus) {
       props.save({ focus: typed })
@@ -179,9 +185,16 @@ export function MobileLookAroundPage(props: {
         title={title}
         onBack={{ label: t('bots.lookAround.back', 'Back to Settings'), onPress: props.onBack }}
         {...(props.page === 'focus'
-          ? { trailing: { label: t('bots.lookAround.save', 'Save'), onPress: saveFocus } }
+          ? {
+              trailing: {
+                label: t('bots.lookAround.save', 'Save'),
+                onPress: saveFocus,
+                disabled: props.disabled
+              }
+            }
           : {})}
       />
+      {props.banner}
       {props.page === 'every' ? (
         <ChoiceRows
           choices={LOOK_AROUND_EVERY_CHOICES.map((id) => ({
@@ -189,6 +202,7 @@ export function MobileLookAroundPage(props: {
             label: LOOK_AROUND_EVERY_LABELS[id]
           }))}
           selected={setting.every}
+          disabled={props.disabled}
           onSelect={(every) => {
             props.save({ every })
             props.onBack()

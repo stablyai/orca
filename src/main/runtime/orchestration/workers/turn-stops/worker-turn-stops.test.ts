@@ -132,6 +132,33 @@ describe('terminal worker turn stops', () => {
     expect(ctx.mail()).toHaveLength(0)
   })
 
+  it("reports a finish's reply that its transcript read adds within the quiet window", async () => {
+    const ctx = setup()
+    const current = { row: hookRow({ state: 'working' }) }
+    const quiet: (() => void)[] = []
+    const stops = terminal(ctx, current, {
+      setTimer: (run) => {
+        quiet.push(run)
+        return { cancel: () => {} }
+      }
+    })
+    stops.observe({
+      kind: 'observed',
+      paneKey: PANE,
+      workspace: { worktreeId: 'repo::/tmp/wt', sshHostId: null },
+      phase: 'working',
+      at: 1
+    })
+    current.row = hookRow({})
+    stops.observe(moved('working', 'done'))
+    current.row = hookRow({ lastAssistantMessage: 'All tests pass.' })
+    for (const run of quiet.splice(0)) {
+      run()
+    }
+    await settle()
+    expect(ctx.mail().map((m) => m.body)).toEqual([expect.stringContaining('All tests pass.')])
+  })
+
   it('never mails a capability or credential carried in why a worker went away', () => {
     const ctx = setup()
     const capability = 'dcap_0123456789abcdefghijKLMN'

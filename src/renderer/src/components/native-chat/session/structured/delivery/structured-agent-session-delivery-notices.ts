@@ -57,6 +57,9 @@ export function structuredAgentSessionDeliveryNotices(args: {
           : undefined
       notices.set(id, {
         failureKind: statedByRow ? undefined : fact?.kind,
+        ...(fact?.kind === 'notSignedIn' && !statedByRow
+          ? { signIn: { agentName, ...(fact.account ? { account: fact.account } : {}) } }
+          : {}),
         text: agentSessionWriteNoticeText(
           statedByRow
             ? agentSessionWriteNotDoneParts('send')

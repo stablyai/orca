@@ -27,6 +27,11 @@ export function unregisterPty(ptyId: string): void {
   }
 }
 
+/** The shell PID a PTY published at spawn or adoption; null when its host published none. */
+export function getRegisteredPtyPid(ptyId: string): number | null {
+  return registry.get(ptyId)?.pid ?? null
+}
+
 export function hasRegisteredPtyWithPid(): boolean {
   return registeredWithPid > 0
 }

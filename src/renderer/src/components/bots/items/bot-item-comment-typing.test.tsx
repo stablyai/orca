@@ -7,7 +7,7 @@ import { typeIntoBotItemComment } from './bot-item-comment-typing'
 afterEach(cleanup)
 
 // The item pane as BotItemPane wires it: a React key handler over the pane's own DOM.
-function renderPane(): { typed: ReturnType<typeof vi.fn> } {
+function renderPane(choices = 0): { typed: ReturnType<typeof vi.fn> } {
   const typed = vi.fn()
   function Pane(): React.JSX.Element {
     return (
@@ -19,6 +19,9 @@ function renderPane(): { typed: ReturnType<typeof vi.fn> } {
         <h2>Decide: should paused bots get mail?</h2>
         <input aria-label="Other input" />
         <button type="button">Reply</button>
+        {choices > 0 ? (
+          <div data-native-chat-prompt-card-focus data-native-chat-question-options={choices} />
+        ) : null}
       </div>
     )
   }
@@ -68,4 +71,14 @@ it('leaves a key the IME is composing alone', () => {
   expect(fireEvent.keyDown(heading, { key: 'a', keyCode: 229 })).toBe(true)
 
   expect(typed).not.toHaveBeenCalled()
+})
+
+it("leaves a digit naming one of the open card's choices to the card, and types any other", () => {
+  const { typed } = renderPane(2)
+  const heading = screen.getByRole('heading')
+
+  fireEvent.keyDown(heading, { key: '2' })
+  fireEvent.keyDown(heading, { key: '9' })
+
+  expect(typed.mock.calls).toEqual([['9']])
 })
