@@ -1,4 +1,6 @@
 import type { DropZone, ManagedPaneInternal, PaneExternalDropTarget } from '../pane-manager-types'
+import { addAppKeyListener, removeAppKeyListener } from '../../keyboard/app-keyboard-router'
+import { armKeyLifecycleGuard } from '../../keyboard/key-lifecycle-guard'
 import type { DragReorderCallbacks, DragReorderState } from './pane-drag-reorder'
 import {
   handlePaneDrop,
@@ -9,6 +11,20 @@ import {
 
 const DRAG_THRESHOLD = 5
 
+function isDragCancelKey(event: KeyboardEvent): boolean {
+  return (
+    event.key === 'Escape' &&
+    !event.repeat &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.altKey &&
+    !event.shiftKey &&
+    // An IME composition owns its own Escape.
+    !event.isComposing &&
+    event.keyCode !== 229
+  )
+}
+
 export function beginPaneDragFromPointerDown(
   handle: HTMLElement,
   paneId: number,
@@ -17,6 +33,8 @@ export function beginPaneDragFromPointerDown(
   e: PointerEvent
 ): (() => void) | null {
   let dragging = false
+  // Escape ended the drag; the pointer stays captured until release so nothing under it is clicked.
+  let cancelled = false
   let startX = 0
   let startY = 0
   let activePointerId: number | null = null
@@ -41,6 +59,7 @@ export function beginPaneDragFromPointerDown(
     window.removeEventListener('pointerup', onPointerUpOuter, true)
     window.removeEventListener('pointercancel', onPointerCancelOuter, true)
     window.removeEventListener('blur', onWindowBlur)
+    removeAppKeyListener('keydown', onKeyDown)
     activePointerId = null
     if (state.cleanupActiveDrag === cleanupDrag) {
       state.cleanupActiveDrag = null
@@ -57,6 +76,10 @@ export function beginPaneDragFromPointerDown(
     if (!dragging) {
       return
     }
+    endDragVisuals(commitDrop)
+  }
+
+  const endDragVisuals = (commitDrop: boolean): void => {
     dragging = false
     callbacks.getRoot().classList.remove('is-pane-dragging')
     callbacks.getPanes().get(paneId)?.container.classList.remove('is-drag-source')
@@ -84,7 +107,24 @@ export function beginPaneDragFromPointerDown(
     }
   }
 
+  const onKeyDown = (ev: KeyboardEvent): void => {
+    if (!dragging || !isDragCancelKey(ev)) {
+      return
+    }
+    // Why: the drag owns this Escape; reaching the terminal would interrupt a running agent.
+    ev.preventDefault()
+    ev.stopImmediatePropagation()
+    state.disarmKeyGuard?.()
+    state.disarmKeyGuard = armKeyLifecycleGuard(ev)
+    cancelled = true
+    removeAppKeyListener('keydown', onKeyDown)
+    endDragVisuals(false)
+  }
+
   const onPointerMoveOuter = (ev: PointerEvent): void => {
+    if (cancelled && ev.pointerId === activePointerId) {
+      return
+    }
     if (ev.pointerId !== activePointerId || callbacks.isDestroyed()) {
       if (callbacks.isDestroyed()) {
         cleanupDrag(false)
@@ -95,6 +135,8 @@ export function beginPaneDragFromPointerDown(
     const dy = ev.clientY - startY
     if (!dragging && Math.hypot(dx, dy) >= DRAG_THRESHOLD) {
       dragging = true
+      // First owner while dragging, ahead of dictation and pane/xterm listeners.
+      addAppKeyListener('keydown', onKeyDown, { first: true })
       state.dragSourcePaneId = paneId
       callbacks.getRoot().classList.add('is-pane-dragging')
       callbacks.onDragActiveChange?.(true)

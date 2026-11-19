@@ -14,21 +14,33 @@ import {
 } from '../../web-session-tabs-sync/identity/web-runtime-session-environment'
 import { refreshWebRuntimeSessionTabsSnapshot } from '../../web-session-tabs-sync/inventory/web-runtime-session-snapshot'
 
-/** The runtime that commits this worktree's pane moves itself; null keeps the move in this window. */
-export async function resolvePaneMoveHost(worktreeId: string): Promise<string | null> {
+/**
+ * Who commits a pane move for this worktree: its paired host, this window (local, direct SSH and
+ * twins), or nobody, when a host owns the tabs but cannot take the move now (no live session, or
+ * an older host without the capability), so a window-only move would be undone by its next snapshot.
+ */
+export type PaneMoveHostRoute =
+  | { kind: 'host'; environmentId: string }
+  | { kind: 'window' }
+  | { kind: 'unavailable' }
+
+export async function resolvePaneMoveHost(worktreeId: string): Promise<PaneMoveHostRoute> {
   const environmentId = runtimeEnvironmentIdUnlessTwin(
     useAppStore.getState(),
     worktreeId,
     'move a pane to a new tab on its host'
   )
-  if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
-    return null
+  if (!environmentId) {
+    return { kind: 'window' }
+  }
+  if (!isWebRuntimeSessionActive(environmentId)) {
+    return { kind: 'unavailable' }
   }
   const supported = await runtimeEnvironmentSupportsCapability(
     environmentId,
     SESSION_TABS_MOVE_PANE_TO_NEW_TAB_RUNTIME_CAPABILITY
   ).catch(() => false)
-  return supported ? environmentId : null
+  return supported ? { kind: 'host', environmentId } : { kind: 'unavailable' }
 }
 
 /** The host's answer to a move; `unknown` when the reply was lost, so the host may have committed. */
@@ -124,7 +136,9 @@ export async function settleHostPaneMove(
   request: TerminalLeafMoveRequest,
   outcome: HostPaneMoveOutcome,
   /** This window moved the pane before the answer. */
-  movedHere: boolean
+  movedHere: boolean,
+  /** Tells the user their move was undone; absent for a move another client asked for. */
+  onRefused?: () => void
 ): Promise<void> {
   const committed =
     outcome === 'unknown' ? await hostHoldsMovedPane(environmentId, request) : outcome === 'moved'
@@ -133,6 +147,7 @@ export async function settleHostPaneMove(
   }
   if (!committed && movedHere) {
     await revertRefusedPaneMove(environmentId, request)
+    onRefused?.()
     return
   }
   await refreshWebRuntimeSessionTabsSnapshot(environmentId, request.worktreeId, {

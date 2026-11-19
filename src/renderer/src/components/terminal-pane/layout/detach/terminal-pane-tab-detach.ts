@@ -19,6 +19,7 @@ import {
   settleHostPaneMove
 } from '@/runtime/hosted-terminals/actions/web-runtime-leaf-move'
 import { resolveHostTabDropTarget } from '@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-move'
+import { paneMoveReadiness } from './terminal-pane-move-readiness'
 
 export type TerminalPaneTabDetachStore = Pick<
   AppState,
@@ -28,6 +29,7 @@ export type TerminalPaneTabDetachStore = Pick<
   | 'reorderUnifiedTabs'
   | 'setActiveTab'
   | 'setActiveTabType'
+  | 'setTabCustomTitle'
   | 'setTabLayout'
   | 'syncPaneDetachPtyOwnership'
   | 'tabsByWorktree'
@@ -135,24 +137,37 @@ async function moveLeafToNewTab(
     initialStore.groupsByWorktree[args.worktreeId]?.some(
       (group) => group.id === args.targetGroupId
     ) ?? false
-  if (!args.manager || !targetGroupExists || args.manager.getPanes().length <= 1) {
+  if (!args.manager || !targetGroupExists) {
     return null
   }
   const persistedPtyId =
     initialStore.terminalLayoutsByTabId[args.sourceTabId]?.ptyIdsByLeafId?.[leafId]
-  const cwdDeferred = Boolean(
-    args.sourcePaneCwd?.pendingCwd || args.sourcePaneCwd?.deferredSplitSpawn
-  )
-  // A late source spawn would bind SOURCE:leaf and graft the moved leaf back beside its duplicate.
-  if ((cwdDeferred || args.sourceConnectPending) && !persistedPtyId && !args.livePtyId) {
+  const readiness = paneMoveReadiness({
+    paneCount: args.manager.getPanes().length,
+    livePtyId: args.livePtyId,
+    persistedPtyId,
+    sourcePaneCwd: args.sourcePaneCwd,
+    connectPending: args.sourceConnectPending ?? false
+  })
+  if (readiness !== 'ready') {
     return null
   }
 
   const livePtyId = args.livePtyId ?? persistedPtyId ?? null
-  const paneMoveHost =
-    !ORCA_LAYOUT_OWNER_IS_MAIN && livePtyId !== null && isWebTerminalSurfaceTabId(args.sourceTabId)
+  // A move another client asked for reports to that client; only this window's user gets a toast.
+  const userInitiated = !args.targetTabId
+  const hostRoute =
+    !ORCA_LAYOUT_OWNER_IS_MAIN && isWebTerminalSurfaceTabId(args.sourceTabId)
       ? await resolvePaneMoveHost(args.worktreeId)
-      : null
+      : ({ kind: 'window' } as const)
+  // Why: the host owns these tabs, so a window-only move would be undone by its next snapshot.
+  if (hostRoute.kind === 'unavailable' || (hostRoute.kind === 'host' && livePtyId === null)) {
+    if (userInitiated) {
+      reportMoveFailed()
+    }
+    return null
+  }
+  const paneMoveHost = hostRoute.kind === 'host' ? hostRoute.environmentId : null
   args.persistLayoutSnapshot()
   const request: TerminalLeafMoveRequest = {
     worktreeId: args.worktreeId,
@@ -177,7 +192,15 @@ async function moveLeafToNewTab(
     const hostMove = moveWebRuntimeLeafToNewTab(paneMoveHost, request, placement)
     const applied = applyMove(args, request, false, request.ptyId)
     void hostMove
-      .then((outcome) => settleHostPaneMove(paneMoveHost, request, outcome, applied !== null))
+      .then((outcome) =>
+        settleHostPaneMove(
+          paneMoveHost,
+          request,
+          outcome,
+          applied !== null,
+          userInitiated ? reportMoveFailed : undefined
+        )
+      )
       .catch((error: unknown) => console.warn('[terminal-pane-detach] move not settled', error))
     return applied
   }
@@ -207,7 +230,7 @@ async function moveLeafToNewTab(
   // Failed persistence rolls main back; unknown outcomes fault persistence and reload converges on main’s committed side.
   console.warn('[terminal-pane-detach] main did not move the pane', answer)
   // A move another client asked for is refused to that client; this window's user did not drag it.
-  if (!args.targetTabId) {
+  if (userInitiated) {
     reportMoveFailed()
   }
   return null
@@ -305,6 +328,12 @@ function applyMove(
   }
   afterCreateStore.setActiveTab(tab.id)
   afterCreateStore.setActiveTabType('terminal', worktreeId)
+  // The pane's own name is what made it findable, so its new tab starts with it (copied, not linked).
+  // The client that asked for the move names the tab; its rename reaches this window through the owner.
+  const paneTitle = detachedLayout.titlesByLeafId?.[leafId]?.trim()
+  if (paneTitle && !args.targetTabId && !tab.customTitle) {
+    afterCreateStore.setTabCustomTitle(tab.id, paneTitle, { recordInteraction: false })
+  }
 
   return { tab, leafId, ptyId }
 }
