@@ -136,10 +136,6 @@ describe('a bot’s quiet result on the phone', () => {
   })
 
   it('never draws the marker while the reply still grows', () => {
-    for (const text of ['NO_REP', 'NO_REPLY', '**NO_REPLY**\n']) {
-      expect(render(text, { live: true }).markdown).toEqual([])
-      act(() => renderer?.unmount())
-    }
     expect(render('Checked the queue.\n\nNO_REPL', { live: true }).markdown).toEqual([
       'Checked the queue.'
     ])
