@@ -60,7 +60,7 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
   protected classifyPtyTitleStatus(
     ptyId: string,
     rawTitle: string,
-    { includeProgramActivity = true } = {}
+    includeProgramActivity = true
   ): AgentStatus | null {
     const agent = this.getPaneTerminalAgent(ptyId)
     return (
@@ -126,9 +126,7 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
       status ?? (identityOnlyTitle ? null : this.classifyPtyTitleStatus(ptyId, rawTitle))
     if (
       status !== undefined ||
-      (!statusOnly &&
-        !identityOnlyTitle &&
-        this.classifyPtyTitleStatus(ptyId, rawTitle, { includeProgramActivity: false }) !== null)
+      (!statusOnly && !identityOnlyTitle && this.classifyPtyTitleStatus(ptyId, rawTitle, false))
     ) {
       this.orchestrationMailboxPointerDelivery.observeTerminal(ptyId, agentStatus ?? undefined)
     }

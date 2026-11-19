@@ -17,7 +17,7 @@ import { judgeTerminalForeground } from '../lifecycle/terminal-foreground-group'
 import { readTerminalProcessRows } from '../../../pty/process-retirement/terminal-process-rows'
 import { readProcessStartTimeMs } from '../../agent-session/ownership/agent-session-process-identity-probe'
 import { isTerminalForegroundObservation } from '../../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
-import { readLegacyPtyRootProcessId } from './legacy-pty-root-process'
+import { readTargetRootPid } from './legacy-owner-root'
 import { judgeLegacyMailboxRows, otherProgram } from './mailbox-foreground-judgment'
 
 /** agent permits writing; shell drops readiness; unknown proves neither. */
@@ -105,7 +105,8 @@ async function inspectLaunchedAgentForeground(
   expectedIncarnationId?: string,
   exact?: ExactAgentName,
   mailboxEvidence = false,
-  onAgent?: (agent: TuiAgent, process?: MailboxAgentProcess) => void
+  onAgent?: (agent: TuiAgent, process?: MailboxAgentProcess) => void,
+  adoptedRootPid?: number | null
 ): Promise<MailboxForeground> {
   if (!controller) {
     return 'unknown'
@@ -193,17 +194,10 @@ async function inspectLaunchedAgentForeground(
       }
     }
     if (!host.remote) {
-      const root = await readLegacyPtyRootProcessId(
-        controller,
-        ptyId,
-        expectedIncarnationId,
-        // Why mail only: its retries repeat the read; a launch check asks once.
-        mailboxEvidence
-      )
-      if (root === 'replaced') {
-        return 'unknown'
-      }
-      const rootPid = root
+      // Why mail reads the adopted root: an old owner lists every session to answer for one, and mail retries.
+      const rootPid = mailboxEvidence
+        ? (adoptedRootPid ?? undefined)
+        : await readTargetRootPid(controller, ptyId, expectedIncarnationId)
       const rows = rootPid ? await readTerminalProcessRows(rootPid) : null
       const verdict = rows && rootPid ? judgeTerminalForeground(rows, rootPid, agent) : 'unknown'
       if (mailboxEvidence && rows && rootPid && verdict !== 'unknown') {
@@ -306,7 +300,8 @@ export async function readMailboxForeground(
   host: { remote: boolean; windows: boolean },
   ptyId: string,
   expected?: TuiAgent,
-  expectedIncarnationId?: string
+  expectedIncarnationId?: string,
+  adoptedRootPid?: number | null
 ): Promise<MailboxForegroundInspection> {
   let agent: TuiAgent | undefined
   let process: MailboxAgentProcess | undefined
@@ -321,7 +316,8 @@ export async function readMailboxForeground(
     (value, row) => {
       agent = value
       process = row
-    }
+    },
+    adoptedRootPid
   )
   return foreground === 'agent'
     ? { foreground, agent: agent ?? expected, ...(process ? { process } : {}) }

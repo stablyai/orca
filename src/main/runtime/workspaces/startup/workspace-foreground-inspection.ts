@@ -91,12 +91,14 @@ export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWit
     const pty = this.ptysById.get(ptyId)
     const incarnation = pty?.incarnationId
     const controller = this.ptyController
+    const root = pty?.adoptedRootProcess
     const result = await readMailboxForeground(
       controller,
       this.launchedAgentHost(ptyId),
       ptyId,
       agent,
-      incarnation ?? undefined
+      incarnation ?? undefined,
+      root && root.incarnationId === incarnation ? root.pid : null
     )
     return this.ptyController === controller &&
       this.ptysById.get(ptyId) === pty &&
