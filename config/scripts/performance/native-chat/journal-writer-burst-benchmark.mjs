@@ -5,7 +5,15 @@
 //   [--seconds 60] [--arms base=<ref>,new=<ref>] [--rounds 2] [--cpu-load <workers>] [--readers <n>] [--out <json>]
 // Each arm bundles the writer from that git ref, so arms run back to back against the same seeded file.
 import { execFileSync, spawn } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -103,9 +111,13 @@ const stepsCommand = (sessionId, steps) => ({
 })
 
 async function seed(arm) {
-  const marker = `${filename}.seeded-${rows}`
+  // One marker per file, naming the row count it was seeded with.
+  const marker = `${filename}.seed`
   // An existing file (a clone, or an earlier seed) only needs this run's streaming chats.
-  if (args.db || existsSync(marker)) {
+  if (
+    args.db ||
+    (existsSync(filename) && existsSync(marker) && readFileSync(marker, 'utf8') === String(rows))
+  ) {
     const { db } = arm.openJournalDomainDatabase(filename)
     const chat = db.prepare(
       `INSERT OR IGNORE INTO journal_chat_state(workspace_id,session_id,epoch,last_sequence,highest_fence) VALUES('w',?,'epoch',1,1)`
@@ -183,11 +195,12 @@ async function seed(arm) {
   }
   raw.exec('PRAGMA wal_checkpoint(TRUNCATE)')
   raw.close()
-  writeFileSync(marker, new Date().toISOString())
+  writeFileSync(marker, String(rows))
 }
 
 /** One streaming chat: one write in flight, later text and items coalesced into the next, as the sink queue does. */
-function stream(owner, sessionId, stopAt, onWrite) {
+/** `tag` keeps item ids fresh per run, so every arm inserts rather than revising an earlier arm's rows. */
+function stream(owner, sessionId, tag, stopAt, onWrite) {
   let inflight = false
   let text = null
   let items = []
@@ -221,17 +234,19 @@ function stream(owner, sessionId, stopAt, onWrite) {
     setInterval(() => {
       length += 180
       if (length > 6000) {
-        items.push(message(`${sessionId}-m${turn}`, 'assistant', filler(6000, `m${turn}`), true))
+        items.push(
+          message(`${sessionId}-${tag}-m${turn}`, 'assistant', filler(6000, `m${turn}`), true)
+        )
         turn++
         length = 180
       }
-      text = message(`${sessionId}-m${turn}`, 'assistant', filler(length, `m${turn}`), false)
+      text = message(`${sessionId}-${tag}-m${turn}`, 'assistant', filler(length, `m${turn}`), false)
       pump()
     }, 80)
   )
   timers.push(
     setInterval(() => {
-      const id = `${sessionId}-t${tool++}`
+      const id = `${sessionId}-${tag}-t${tool++}`
       items.push(message(id, 'assistant', filler(3500, id), false))
       setTimeout(() => {
         items.push(message(id, 'assistant', filler(3800, id), true))
@@ -280,18 +295,26 @@ const summary = (values) => ({
   max: quantile(values, 1)
 })
 
-async function run(arm, sessions) {
+async function run(arm, sessions, round) {
   const owner = new arm.JournalSqlOwner(filename, dir, arm.workerPath)
   await owner.opened()
   const timings = []
   owner.onTiming = (roundTripMs, timing) => timings.push({ roundTripMs, ...timing })
   const streamWrites = []
   let failures = 0
-  const stopAt = Date.now() + seconds * 1000
+  const startedAt = Date.now()
+  const stopAt = startedAt + seconds * 1000
+  const tag = `${arm.name}-${sessions}-${round}-${startedAt}`
+  let inWindow = 0
   const stops = Array.from({ length: sessions }, (_, index) =>
-    stream(owner, `burst-${index}`, stopAt, (ms) =>
-      ms === null ? failures++ : streamWrites.push(ms)
-    )
+    stream(owner, `burst-${index}`, tag, stopAt, (ms) => {
+      if (ms === null) {
+        failures++
+        return
+      }
+      streamWrites.push(ms)
+      inWindow += Date.now() <= stopAt ? 1 : 0
+    })
   )
   const probe = []
   const chain = []
@@ -341,7 +364,8 @@ async function run(arm, sessions) {
     receiptMs: summary(chain),
     streamWriteMs: summary(streamWrites),
     // Counted from completions, so builds without writer timing still report throughput.
-    writesPerSecond: Math.round((streamWrites.length + 3 * probe.length) / seconds),
+    // Completions inside the measured window only; the drain and close after it are not counted.
+    writesPerSecond: Math.round((inWindow + 3 * probe.length) / seconds),
     failedWrites: failures,
     ...(instrumented
       ? {
@@ -380,7 +404,7 @@ try {
   for (let round = 0; round < rounds; round++) {
     for (const sessions of sessionCounts) {
       for (const arm of round % 2 === 0 ? bundled : bundled.toReversed()) {
-        const result = { round, ...(await run(arm, sessions)) }
+        const result = { round, ...(await run(arm, sessions, round)) }
         results.push(result)
         console.log(JSON.stringify(result))
       }

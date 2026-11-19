@@ -21,6 +21,7 @@ type Window = {
 /** One span per window in which a writer acknowledgement took over a second, naming where it waited. */
 export class JournalSqlWriterStallReport {
   private window: Window
+  private flushing: ReturnType<typeof setTimeout> | undefined
 
   constructor(private readonly now: () => number = Date.now) {
     this.window = this.open()
@@ -30,8 +31,13 @@ export class JournalSqlWriterStallReport {
     const window = this.window
     window.writes++
     window.maxRoundTripMs = Math.max(window.maxRoundTripMs, roundTripMs)
-    if (roundTripMs >= SLOW_MS) {
-      window.slow++
+    if (roundTripMs >= SLOW_MS && window.slow++ === 0) {
+      // A stall can be the window's last acknowledgement, so report it without waiting for another.
+      this.flushing = setTimeout(
+        () => this.flush(),
+        Math.max(0, WINDOW_MS - (this.now() - window.startedAt))
+      )
+      this.flushing.unref?.()
     }
     if (timing) {
       window.maxWaitMs = Math.max(window.maxWaitMs, timing.waitMs)
@@ -50,6 +56,8 @@ export class JournalSqlWriterStallReport {
   }
 
   private flush(): void {
+    clearTimeout(this.flushing)
+    this.flushing = undefined
     const window = this.window
     this.window = this.open()
     if (window.slow === 0) {
