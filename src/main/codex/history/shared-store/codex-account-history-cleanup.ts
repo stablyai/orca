@@ -32,6 +32,7 @@ import {
 } from './codex-account-left-behind-paths'
 import {
   CleanupBudget,
+  CleanupBudgetExceeded,
   emptyCleanupResult,
   type CodexHistoryCleanupResult
 } from './codex-history-cleanup-sweep-tally'
@@ -57,25 +58,29 @@ export async function cleanUpCodexHistoryLeftBehind(args: {
   now: number
   shouldStop: () => boolean
   policy: CodexHistoryCleanupSweepPolicy
+  /** The sweep's, already partly spent by its content check. */
+  budget?: CleanupBudget
 }): Promise<CodexHistoryCleanupResult> {
   const result = emptyCleanupResult()
-  const budget = new CleanupBudget(result)
+  const budget = args.budget ?? new CleanupBudget()
   const home = args.accountHome
   const { policy } = args
   const manifest = await readManifest(home)
   if (!manifest || manifest === 'newer' || manifest.storeHome !== args.storeHome) {
     return result
   }
+  const enforcing = (kind: CodexHistoryCleanupKind): boolean => policy[kind].mode === 'enforce'
   // A kill switch or a lapsed grant stops a kind at once; a widened one waits for the next sweep.
   const stopKind = (kind: CodexHistoryCleanupKind): boolean => {
     const live = policy.liveMode(kind)
-    return (
-      args.shouldStop() || live === 'off' || (policy[kind].mode === 'enforce' && live !== 'enforce')
-    )
+    const changed = live === 'off' || (enforcing(kind) && live !== 'enforce')
+    result.policyChanged ||= changed
+    return args.shouldStop() || changed
   }
   const deleted = new Set<string>()
   // Proven copies that couldn't be deleted, or no longer hash the same: their check stops counting
-  // as a match, so they aren't hashed or retried again until they change.
+  // as a match, so they aren't hashed or retried again until they change. Enforce only: report
+  // mode never changes what a later enforce sweep may delete.
   const voided = new Map<string, FileFacts>()
   const busy = new Map<string, { facts: FileFacts; failures: number }>()
   const remove =
@@ -108,7 +113,8 @@ export async function cleanUpCodexHistoryLeftBehind(args: {
             databases: leftBehindDatabases,
             now: args.now,
             minUnchangedDays: databaseRule.minUnchangedDays,
-            shouldStop: args.shouldStop
+            shouldStop: args.shouldStop,
+            budget
           })
         ).flatMap((group) => group.files)
       : []
@@ -134,10 +140,9 @@ export async function cleanUpCodexHistoryLeftBehind(args: {
       result.rollouts.skipped.open += 1
       continue
     }
-    if (budget.readExhausted()) {
-      break
+    if (!budget.fits(rollout.facts.bytes)) {
+      continue
     }
-    budget.takeBytes(rollout.facts.bytes)
     if (!(await settleRollout(rollout))) {
       break
     }
@@ -160,7 +165,7 @@ export async function cleanUpCodexHistoryLeftBehind(args: {
         mode: policy.databases.mode,
         tally: result.databases,
         shouldStop: args.shouldStop,
-        mayUnlink: () => !stopKind('databases'),
+        mayUnlink: () => !stopKind('databases') && !budget.pastDeadline(),
         remove: remove('databases')
       })
     }
@@ -191,6 +196,7 @@ export async function cleanUpCodexHistoryLeftBehind(args: {
       updatedAt: new Date(args.now).toISOString()
     }
   })
+  result.budgetHit = budget.hit
   return result
 
   // Each proof is the file itself and its store copy, so no pass can void it meanwhile. A random
@@ -216,10 +222,9 @@ export async function cleanUpCodexHistoryLeftBehind(args: {
     const offset = Math.floor(Math.random() * proven.length)
     const found: ReadyRollout[] = []
     for (const rollout of [...proven.slice(offset), ...proven.slice(0, offset)]) {
-      if (stopKind('rollouts') || budget.exhausted()) {
+      if (stopKind('rollouts') || !budget.startFiles()) {
         break
       }
-      budget.takeFile()
       try {
         const check = rollout.check!
         const file = await currentLeftBehindFile(home, rollout.path)
@@ -254,8 +259,10 @@ export async function cleanUpCodexHistoryLeftBehind(args: {
     const tally = result.rollouts
     try {
       // Size and a millisecond mtime can miss a same-size rewrite of the copy being deleted.
-      if ((await contentSha256(fromManifestPath(home, rollout.path))) !== rollout.sha256) {
-        voided.set(rollout.path, rollout.facts)
+      if ((await contentSha256(fromManifestPath(home, rollout.path), budget)) !== rollout.sha256) {
+        if (enforcing('rollouts')) {
+          voided.set(rollout.path, rollout.facts)
+        }
         tally.skipped.rehash_mismatch += 1
         return true
       }
@@ -271,12 +278,12 @@ export async function cleanUpCodexHistoryLeftBehind(args: {
         return false
       }
       tally.eligible += 1
-      if (policy.rollouts.mode !== 'enforce') {
+      if (!enforcing('rollouts')) {
         tally.deleted += 1
         tally.bytes += freedBy(rollout.stats)
         return true
       }
-      if (stopKind('rollouts')) {
+      if (stopKind('rollouts') || budget.pastDeadline()) {
         return false
       }
       await remove('rollouts')(rollout.path, rollout.stats).catch((error: unknown) => {
@@ -289,8 +296,9 @@ export async function cleanUpCodexHistoryLeftBehind(args: {
           tally.skipped[isTransientDeleteError(error) ? 'transient_capped' : 'unlink_failed'] += 1
         }
       })
-    } catch {
-      // Left for a later run.
+    } catch (error) {
+      // Left for a later run; a hash the budget cut short ends the sweep's rollouts.
+      return !(error instanceof CleanupBudgetExceeded)
     }
     return true
   }

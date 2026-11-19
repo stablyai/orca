@@ -13,7 +13,7 @@ import {
   freedBy,
   isLeftBehindPath
 } from './codex-account-left-behind-paths'
-import type { CleanupKindTally } from './codex-history-cleanup-sweep-tally'
+import type { CleanupBudget, CleanupKindTally } from './codex-history-cleanup-sweep-tally'
 
 type DatabaseGroup = { files: FileFacts[]; stats: BigIntStats[] }
 
@@ -26,6 +26,8 @@ export async function eligibleDatabaseGroups(args: {
   now: number
   minUnchangedDays: number
   shouldStop: () => boolean
+  /** Charged once, by the scan before the lock; the recheck under it re-reads the same files. */
+  budget?: CleanupBudget
 }): Promise<DatabaseGroup[]> {
   const groups = new Map<string, FileFacts[]>()
   for (const database of args.databases) {
@@ -39,6 +41,9 @@ export async function eligibleDatabaseGroups(args: {
   for (const [group, files] of groups) {
     if (args.shouldStop()) {
       return []
+    }
+    if (args.budget && !args.budget.startFiles(files.length)) {
+      break
     }
     try {
       const recorded = new Set(files.map((file) => file.path))

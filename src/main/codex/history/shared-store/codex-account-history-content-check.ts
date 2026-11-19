@@ -4,6 +4,7 @@ import { pipeline } from 'node:stream/promises'
 import { createZstdDecompress } from 'node:zlib'
 import { lstatIfPresent } from '../../../filesystem/merged-directory-link'
 import { COMPRESSED_ROLLOUT_SUFFIX } from '../rollouts/codex-rollout-compressed-twin'
+import { CleanupBudgetExceeded, type CleanupBudget } from './codex-history-cleanup-sweep-tally'
 import {
   factsOf,
   inventoryCodexHistoryLeftBehind,
@@ -16,40 +17,51 @@ import {
   type LeftBehindRollout
 } from './codex-account-history-cleanup-manifest'
 
-export async function contentSha256(path: string): Promise<string> {
+/** Throws `CleanupBudgetExceeded` once `budget` runs out while reading. */
+export async function contentSha256(path: string, budget?: CleanupBudget): Promise<string> {
   const hash = createHash('sha256')
   const raw = createReadStream(path, { highWaterMark: 1024 * 1024 })
+  const charged = async function* (content: AsyncIterable<Buffer>): AsyncGenerator<Buffer> {
+    for await (const chunk of content) {
+      budget?.read(chunk.length)
+      yield chunk
+    }
+  }
   const digest = async (content: AsyncIterable<Buffer>): Promise<void> => {
     for await (const chunk of content) {
       hash.update(chunk)
     }
   }
   await (path.endsWith(COMPRESSED_ROLLOUT_SUFFIX)
-    ? pipeline(raw, createZstdDecompress(), digest)
-    : pipeline(raw, digest))
+    ? pipeline(raw, charged, createZstdDecompress(), digest)
+    : pipeline(raw, charged, digest))
   return hash.digest('hex')
 }
 
 async function checkContent(
   accountHome: string,
   storeHome: string,
-  rollout: LeftBehindRollout
+  rollout: LeftBehindRollout,
+  budget: CleanupBudget | undefined
 ): Promise<ContentCheck | null> {
   if (!rollout.storePath) {
     return null
   }
   const store = await storeFileFacts(storeHome, rollout.storePath)
-  if (!store) {
+  if (!store || (budget && !budget.fits(rollout.bytes + store.bytes))) {
     return null
   }
   let sha256: string
   let storeSha256: string
   try {
     ;[sha256, storeSha256] = await Promise.all([
-      contentSha256(fromManifestPath(accountHome, rollout.path)),
-      contentSha256(fromManifestPath(storeHome, rollout.storePath))
+      contentSha256(fromManifestPath(accountHome, rollout.path), budget),
+      contentSha256(fromManifestPath(storeHome, rollout.storePath), budget)
     ])
   } catch (error) {
+    if (error instanceof CleanupBudgetExceeded) {
+      throw error
+    }
     // A corrupt `.zst` never matches; anything else (a moved file) is checked on a later pass.
     const code = (error as NodeJS.ErrnoException | null)?.code ?? ''
     if (!code.startsWith('ZSTD_')) {
@@ -75,12 +87,14 @@ const SAVE_INTERVAL_MS = 30_000
 
 /**
  * Rebuilds the home's left-behind inventory, then compares each unchecked rollout with its store
- * copy, saving progress as it goes. False when `shouldStop` cut it short.
+ * copy, saving progress as it goes. False when `shouldStop` cut it short; a `budget` that runs out
+ * ends it too, with the rest left for a later run.
  */
 export async function checkCodexHistoryLeftBehind(args: {
   accountHome: string
   storeHome: string
   shouldStop: () => boolean
+  budget?: CleanupBudget
 }): Promise<boolean> {
   if (!(await readManifest(args.accountHome))) {
     return true
@@ -121,7 +135,18 @@ export async function checkCodexHistoryLeftBehind(args: {
       finished = false
       break
     }
-    const check = await checkContent(args.accountHome, args.storeHome, rollout)
+    if (args.budget && !args.budget.startFiles()) {
+      break
+    }
+    let check: ContentCheck | null
+    try {
+      check = await checkContent(args.accountHome, args.storeHome, rollout, args.budget)
+    } catch (error) {
+      if (error instanceof CleanupBudgetExceeded) {
+        break
+      }
+      throw error
+    }
     if (check) {
       checks.set(rollout.path, { rollout, check })
     }

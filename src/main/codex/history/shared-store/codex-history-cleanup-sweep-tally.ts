@@ -15,6 +15,8 @@ export type CleanupKindTally = {
 
 export type CodexHistoryCleanupResult = Record<CodexHistoryCleanupKind, CleanupKindTally> & {
   budgetHit: boolean
+  /** A kill switch or lapsed grant stopped the sweep: its tally speaks for neither mode. */
+  policyChanged: boolean
 }
 
 export function emptyCleanupResult(): CodexHistoryCleanupResult {
@@ -27,47 +29,62 @@ export function emptyCleanupResult(): CodexHistoryCleanupResult {
       CODEX_HISTORY_CLEANUP_SKIP_REASONS.map((reason) => [reason, 0])
     ) as Record<CodexHistoryCleanupSkipReason, number>
   })
-  return { rollouts: tally(), databases: tally(), budgetHit: false }
+  return { rollouts: tally(), databases: tally(), budgetHit: false, policyChanged: false }
 }
 
 const BUDGET_FILES = 500
 const BUDGET_READ_BYTES = 256 * 1024 * 1024
 const BUDGET_MS = 10_000
 
+export class CleanupBudgetExceeded extends Error {}
+
 /**
- * One sweep's work in either mode: files examined, then bytes rehashed of those, and time. A file
- * starts while any is left, so one larger than the whole byte budget still gets its turn.
+ * One sweep's work in either mode, content check included: files examined, bytes read, and time.
+ * A read that would not fit what is left is skipped; one that overruns while reading is abandoned.
  */
 export class CleanupBudget {
   private files = 0
   private bytes = 0
-  private readonly startedAt = Date.now()
+  private readonly deadline = Date.now() + BUDGET_MS
+  private skippedLarge = false
+  /** Whether the budget ended the sweep's work early. */
+  ranOut = false
 
-  constructor(private readonly result: CodexHistoryCleanupResult) {}
-
-  /** Before examining another file. */
-  exhausted(): boolean {
-    return this.spent(this.files >= BUDGET_FILES)
+  /** Whether the budget left anything undone, a file too large for what was left included. */
+  get hit(): boolean {
+    return this.ranOut || this.skippedLarge
   }
 
-  /** Before rehashing one already examined. */
-  readExhausted(): boolean {
-    return this.spent(false)
+  /** Before examining `count` more files; false once any limit is reached. */
+  startFiles(count = 1): boolean {
+    if (this.files >= BUDGET_FILES || this.pastDeadline()) {
+      this.ranOut = true
+      return false
+    }
+    this.files += count
+    return true
   }
 
-  takeFile(): void {
-    this.files += 1
+  /** Whether reading `bytes` more fits what is left; one that doesn't is skipped, not started. */
+  fits(bytes: number): boolean {
+    const fits = this.bytes + bytes <= BUDGET_READ_BYTES && !this.pastDeadline()
+    this.skippedLarge ||= !fits
+    return fits
   }
 
-  takeBytes(bytes: number): void {
+  /** Charges bytes as they are read; throws once the bytes or the time run out. */
+  read(bytes: number): void {
     this.bytes += bytes
+    if (this.bytes > BUDGET_READ_BYTES || this.pastDeadline()) {
+      this.ranOut = true
+      throw new CleanupBudgetExceeded('cleanup budget reached')
+    }
   }
 
-  private spent(filesSpent: boolean): boolean {
-    const spent =
-      filesSpent || this.bytes >= BUDGET_READ_BYTES || Date.now() - this.startedAt >= BUDGET_MS
-    this.result.budgetHit ||= spent
-    return spent
+  pastDeadline(): boolean {
+    const past = Date.now() >= this.deadline
+    this.ranOut ||= past
+    return past
   }
 }
 

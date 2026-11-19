@@ -4,7 +4,7 @@ import { getOrcaUserDataPath } from '../../configuration/homes/codex-home-paths'
 import { codexHistoryCleanupSweepPolicy } from '../cleanup-policy/codex-history-cleanup-policy-live-update'
 import { cleanUpCodexHistoryLeftBehind } from './codex-account-history-cleanup'
 import { checkCodexHistoryLeftBehind } from './codex-account-history-content-check'
-import { describeCleanupSweep } from './codex-history-cleanup-sweep-tally'
+import { CleanupBudget, describeCleanupSweep } from './codex-history-cleanup-sweep-tally'
 
 /** Checks what the home left behind, then deletes (or reports) what the finished check proved. */
 export async function checkThenCleanUpCodexHistory(args: {
@@ -26,15 +26,28 @@ export async function checkThenCleanUpCodexHistory(args: {
   // returns: whatever it skipped is owed again rather than settled for this run.
   let stopped = false
   const shouldStop = (): boolean => (stopped ||= args.shouldStop())
+  // One budget for the whole sweep: what it leaves undone waits for the next run's sweep.
+  const budget = new CleanupBudget()
   // The content check proves only rollouts.
-  if (modes.rollouts !== 'off' && !(await checkCodexHistoryLeftBehind({ ...args, shouldStop }))) {
+  if (
+    modes.rollouts !== 'off' &&
+    !(await checkCodexHistoryLeftBehind({ ...args, shouldStop, budget }))
+  ) {
     return false
+  }
+  // Checks still owed make any tally partial: the sweep stops there, its progress saved.
+  if (budget.ranOut) {
+    console.info(
+      `[codex-account-history] Cleanup of ${args.accountHome}: budget reached while checking`
+    )
+    return true
   }
   const result = await cleanUpCodexHistoryLeftBehind({
     ...args,
     shouldStop,
     now: Date.now(),
-    policy
+    policy,
+    budget
   })
   if (result.rollouts.candidates + result.databases.candidates > 0) {
     console.info(
@@ -43,6 +56,10 @@ export async function checkThenCleanUpCodexHistory(args: {
   }
   if (shouldStop()) {
     return false
+  }
+  // A sweep the policy stopped partway speaks for neither its old mode nor the new one.
+  if (result.policyChanged) {
+    return true
   }
   await reportCodexHistoryCleanupOnce({
     markerPath: join(getOrcaUserDataPath(), 'codex-account-history', 'cleanup-telemetry-sent.json'),

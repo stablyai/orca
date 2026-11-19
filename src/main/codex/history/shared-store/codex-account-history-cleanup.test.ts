@@ -24,13 +24,14 @@ vi.mock('../../../filesystem/open-file-check', () => ({
   findOpenFiles: async () => new Set<string>()
 }))
 
-const busyPath = vi.hoisted(() => ({ value: null as string | null }))
+const busyPath = vi.hoisted(() => ({ value: null as string | null, attempts: 0 }))
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof FsPromises>()
   return {
     ...actual,
     unlink: async (path: string) => {
       if (path === busyPath.value) {
+        busyPath.attempts += 1
         throw Object.assign(new Error('busy'), { code: 'EBUSY' })
       }
       return actual.unlink(path)
@@ -71,6 +72,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers()
   busyPath.value = null
+  busyPath.attempts = 0
   Object.defineProperty(process, 'platform', { value: platform })
   for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
@@ -171,8 +173,8 @@ describe('cleanUpCodexHistoryLeftBehind', () => {
     const report = await cleanUp(NOW + 15 * DAY_MS, 'report')
 
     expect(report.rollouts).toMatchObject({ candidates: 2, eligible: 1, deleted: 1 })
-    expect(report.rollouts.bytes).toBe(process.platform === 'win32' ? 6 : 4096)
-    expect(report.databases).toMatchObject({ candidates: 2, eligible: 2, deleted: 2 })
+    expect(report.rollouts.bytes).toBe(6)
+    expect(report.databases).toMatchObject({ candidates: 2, eligible: 2, deleted: 2, bytes: 5 })
     expect(existsSync(join(aside, SAME))).toBe(true)
     expect(existsSync(join(account, 'thread_history_1.sqlite'))).toBe(true)
     expect(existsSync(join(account, 'thread_history_1.sqlite-wal'))).toBe(true)
@@ -183,8 +185,9 @@ describe('cleanUpCodexHistoryLeftBehind', () => {
     Object.defineProperty(process, 'platform', { value: 'win32' })
     busyPath.value = join(aside, SAME)
 
-    for (let run = 0; run < 3; run += 1) {
+    for (let run = 1; run <= 3; run += 1) {
       expect((await cleanUp(NOW)).rollouts.deleted).toBe(0)
+      expect(busyPath.attempts).toBe(run)
     }
     busyPath.value = null
 

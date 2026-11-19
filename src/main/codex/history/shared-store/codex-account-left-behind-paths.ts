@@ -17,12 +17,9 @@ import { parseCodexRolloutThreadId } from '../rollouts/codex-rollout-thread-id'
 // queues.
 const REBUILDABLE_DATABASE_FILE = /^(?:logs|thread_history)_\d+\.sqlite(?:-wal|-shm)?$/
 
-// The space a name frees: only its last link frees the blocks (Windows reports no block count).
+// The space a name frees, as its apparent size: only its last link frees anything.
 export function freedBy(stats: BigIntStats): number {
-  if (stats.nlink > 1n) {
-    return 0
-  }
-  return Number(process.platform === 'win32' ? stats.size : stats.blocks * 512n)
+  return stats.nlink > 1n ? 0 : Number(stats.size)
 }
 
 // A database goes with its WAL and shared memory or not at all; a file of it appearing since the

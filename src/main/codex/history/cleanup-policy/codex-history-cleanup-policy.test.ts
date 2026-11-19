@@ -34,7 +34,8 @@ describe('effectiveCodexHistoryCleanupMode', () => {
   ): string =>
     effectiveCodexHistoryCleanupMode({
       kind: 'rollouts',
-      fetched: { policy, at: NOW - HOUR_MS },
+      fetched: { policy, downloaded: policy, at: NOW - HOUR_MS },
+      cached: null,
       now: NOW,
       platform: 'darwin',
       installId: 'install-c',
@@ -42,9 +43,19 @@ describe('effectiveCodexHistoryCleanupMode', () => {
     })
 
   it('enforces only on a fresh download, an allowed platform and inside the cohort', () => {
+    const unknownMode = parsed(
+      '{"version":1,"revision":4,"kinds":{"rollouts":{"mode":"delete-all"}}}'
+    )
     expect(mode()).toBe('enforce')
     expect(mode({ fetched: null })).toBe('report')
-    expect(mode({ fetched: { policy, at: NOW - 25 * HOUR_MS } })).toBe('report')
+    expect(mode({ fetched: { policy, downloaded: policy, at: NOW - 25 * HOUR_MS } })).toBe('report')
+    // An older download the cache outranked renews nothing.
+    const older = parsed('{"version":1,"revision":2,"kinds":{"rollouts":{"mode":"report"}}}')
+    expect(mode({ fetched: { policy, downloaded: older, at: NOW } })).toBe('report')
+    expect(mode({ fetched: null, cached: policy })).toBe('report')
+    // A failed download keeps a cached kill switch.
+    const killed = parsed('{"version":1,"revision":9,"kinds":{"rollouts":{"mode":"off"}}}')
+    expect(mode({ fetched: null, cached: killed })).toBe('off')
     expect(mode({ installId: 'install-b' })).toBe('report')
     expect(mode({ installId: undefined })).toBe('report')
     expect(mode({ platform: 'win32' })).toBe('report')
@@ -52,21 +63,22 @@ describe('effectiveCodexHistoryCleanupMode', () => {
     expect(
       mode({
         fetched: {
-          policy: parsed('{"version":1,"revision":4,"kinds":{"rollouts":{"mode":"delete-all"}}}'),
+          policy: unknownMode,
+          downloaded: unknownMode,
           at: NOW
         }
       })
     ).toBe('report')
   })
 
-  it('clamps remote thresholds and falls back to the defaults', () => {
+  it('lets remote thresholds only tighten the reviewed ones', () => {
     const remote = parsed(
       '{"version":1,"revision":5,"kinds":{"databases":{"thresholds":{"minSharedDays":0,"maxSinceLastSharedDays":400,"minSharedPasses":"7"}}}}'
     )
     expect(codexHistoryCleanupThresholds(remote, 'databases')).toEqual({
-      minSharedDays: 1,
+      minSharedDays: 14,
       minSharedPasses: 5,
-      maxSinceLastSharedDays: 90,
+      maxSinceLastSharedDays: 30,
       minUnchangedDays: 14
     })
   })

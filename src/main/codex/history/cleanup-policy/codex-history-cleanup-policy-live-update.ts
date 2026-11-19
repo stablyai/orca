@@ -1,7 +1,11 @@
+import { join } from 'node:path'
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
+import { readNodeFileWithinLimit } from '../../../../shared/file-content/node-bounded-file-reader'
 import { getMainHttpClient } from '../../../network/http-client'
 import {
   ReleaseAssetPolicyLiveUpdater,
+  releaseAssetPolicyCacheFileName,
+  releaseAssetPolicyChannelForAppVersion,
   type ReleaseAssetPolicySpec
 } from '../../../remote-policies/release-asset-policy-live-update'
 import {
@@ -39,11 +43,15 @@ export type CodexHistoryCleanupSweepPolicy = {
 let updater: ReleaseAssetPolicyLiveUpdater<CodexHistoryCleanupPolicy> | null = null
 let readInstallId: () => string | undefined = () => undefined
 let refreshing: Promise<void> | null = null
+let cachePath: string | null = null
+// The cached policy as of the last sweep's start: only its `off` counts.
+let cached: CodexHistoryCleanupPolicy | null = null
 
 function liveMode(kind: CodexHistoryCleanupKind): CodexHistoryCleanupMode {
   return effectiveCodexHistoryCleanupMode({
     kind,
     fetched: updater?.lastFetched() ?? null,
+    cached,
     now: Date.now(),
     platform: process.platform,
     installId: readInstallId()
@@ -59,6 +67,13 @@ export function startCodexHistoryCleanupPolicyLiveUpdates(
   }
   const environment = getAppEnvironment()
   readInstallId = installId
+  const channel = releaseAssetPolicyChannelForAppVersion(environment.getVersion())
+  cachePath = channel
+    ? join(
+        environment.getPath('userData'),
+        releaseAssetPolicyCacheFileName(CODEX_HISTORY_CLEANUP_POLICY, channel)
+      )
+    : null
   updater = new ReleaseAssetPolicyLiveUpdater(CODEX_HISTORY_CLEANUP_POLICY, {
     userDataPath: environment.getPath('userData'),
     appVersion: environment.getVersion(),
@@ -79,7 +94,8 @@ export async function codexHistoryCleanupSweepPolicy(): Promise<CodexHistoryClea
     })
     await refreshing.catch(() => {})
   }
-  const policy = updater?.lastFetched()?.policy ?? null
+  cached = await readCachedPolicy()
+  const policy = updater?.lastFetched()?.policy ?? cached
   return {
     revision: policy?.revision ?? 0,
     rollouts: {
@@ -91,5 +107,22 @@ export async function codexHistoryCleanupSweepPolicy(): Promise<CodexHistoryClea
       thresholds: codexHistoryCleanupThresholds(policy, 'databases')
     },
     liveMode
+  }
+}
+
+async function readCachedPolicy(): Promise<CodexHistoryCleanupPolicy | null> {
+  if (!cachePath) {
+    return null
+  }
+  try {
+    const { buffer } = await readNodeFileWithinLimit(
+      cachePath,
+      CODEX_HISTORY_CLEANUP_POLICY_MAX_BYTES,
+      { regularFileOnly: true }
+    )
+    const parsed = parseCodexHistoryCleanupPolicy(buffer.toString('utf8'))
+    return parsed.ok ? parsed.policy : null
+  } catch {
+    return null
   }
 }

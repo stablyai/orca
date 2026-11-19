@@ -12,16 +12,16 @@ export const CLEANUP_ENFORCE_FRESH_MS = 24 * 60 * 60 * 1000
 export type CodexHistoryCleanupKind = 'rollouts' | 'databases'
 export type CodexHistoryCleanupMode = 'off' | 'report' | 'enforce'
 
-// [default, min, max]: a typo or a tampered asset can't loosen a bound review never accepted.
+// [default, min, max]: the reviewed values are the loosest, so a remote policy can only tighten.
 const THRESHOLD_BOUNDS = {
   rollouts: {
     minSharedPasses: [1, 1, 1000]
   },
   databases: {
-    minSharedDays: [14, 1, 365],
-    minSharedPasses: [5, 1, 1000],
-    maxSinceLastSharedDays: [30, 1, 90],
-    minUnchangedDays: [14, 1, 365]
+    minSharedDays: [14, 14, 365],
+    minSharedPasses: [5, 5, 1000],
+    maxSinceLastSharedDays: [30, 1, 30],
+    minUnchangedDays: [14, 14, 365]
   }
 } as const satisfies Record<CodexHistoryCleanupKind, Record<string, readonly number[]>>
 
@@ -93,21 +93,39 @@ export function codexHistoryCleanupBucket(installId: string): number {
   )
 }
 
-/** This install's mode for `kind`, from the last download that succeeded (`fetched`). */
+/**
+ * This install's mode for `kind`. `off` holds from the newest policy known, the cache included, so
+ * a failed download never undoes a kill switch; `enforce` only from a download that is itself the
+ * policy in force (not one the cache outranked), fetched within the day.
+ */
 export function effectiveCodexHistoryCleanupMode(args: {
   kind: CodexHistoryCleanupKind
-  fetched: { policy: CodexHistoryCleanupPolicy; at: number } | null
+  fetched: {
+    policy: CodexHistoryCleanupPolicy
+    downloaded: CodexHistoryCleanupPolicy
+    at: number
+  } | null
+  cached: CodexHistoryCleanupPolicy | null
   now: number
   platform: NodeJS.Platform
   installId: string | undefined
 }): CodexHistoryCleanupMode {
-  const rule = args.fetched?.policy.kinds[args.kind]
-  if (!rule || rule.mode !== 'enforce') {
-    return rule?.mode ?? 'report'
+  const known = args.fetched?.policy ?? args.cached
+  if (known?.kinds[args.kind]?.mode === 'off') {
+    return 'off'
+  }
+  const fetched = args.fetched
+  const rule = fetched?.policy.kinds[args.kind]
+  if (
+    !fetched ||
+    fetched.downloaded.revision < fetched.policy.revision ||
+    rule?.mode !== 'enforce'
+  ) {
+    return 'report'
   }
   const platformAllowed = rule.platforms === undefined || rule.platforms.includes(args.platform)
   return platformAllowed &&
-    args.now - args.fetched!.at <= CLEANUP_ENFORCE_FRESH_MS &&
+    args.now - fetched.at <= CLEANUP_ENFORCE_FRESH_MS &&
     Boolean(args.installId) &&
     codexHistoryCleanupBucket(args.installId!) < clamp(rule.enforcePermille, 0, 1000)
     ? 'enforce'
