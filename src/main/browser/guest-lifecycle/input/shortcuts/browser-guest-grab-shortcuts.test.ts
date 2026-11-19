@@ -118,4 +118,15 @@ describe('grab shortcut forwarding from a focused page', () => {
       key: 'alt-up'
     })
   })
+
+  it('releases Alt that went down while the app had focus and came up in the page', () => {
+    const { press, send } = setup(true)
+
+    press({ type: 'keyUp', key: 'Alt', code: 'AltLeft' })
+
+    expect(send).toHaveBeenLastCalledWith('browser:grabActionShortcut', {
+      browserPageId: 'page-1',
+      key: 'alt-up'
+    })
+  })
 })

@@ -26,9 +26,12 @@ export function setupGrabShortcutForwarding(args: {
     // Alt alone, held over the page while picking, fades the palette so what's under it can be picked. The page
     // still receives Alt; only its up/down edges are mirrored.
     if (input.key === 'Alt' && !input.isAutoRepeat) {
-      // A pick can end while Alt is held, so the key-up of a mirrored key-down is always sent.
+      // A pick can end while Alt is held, so the key-up of a mirrored key-down is always sent; a key-up during a
+      // pick is sent too, since Alt may have gone down while the app (not the page) had focus.
       const shouldMirror =
-        input.type === 'keyDown' ? hasActiveGrabOp(browserTabId) : altDownMirrored
+        input.type === 'keyDown'
+          ? hasActiveGrabOp(browserTabId)
+          : altDownMirrored || hasActiveGrabOp(browserTabId)
       if (shouldMirror) {
         altDownMirrored = input.type === 'keyDown'
         resolveRenderer(browserTabId)?.send('browser:grabActionShortcut', {

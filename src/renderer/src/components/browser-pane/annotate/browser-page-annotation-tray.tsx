@@ -136,59 +136,56 @@ export function BrowserPageAnnotationTray({
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
               {expanded
-                ? t(
-                    'auto.components.browser.pane.annotate.browser.page.annotation.tray.38d320108c',
-                    'Collapse annotations'
-                  )
-                : t(
-                    'auto.components.browser.pane.annotate.browser.page.annotation.tray.9f209891a7',
-                    'Expand annotations'
-                  )}
+                ? t('browser.annotatePalette.collapseNotes', 'Collapse notes')
+                : t('browser.annotatePalette.expandNotes', 'Expand notes')}
             </TooltipContent>
           </Tooltip>
-          <DropdownMenu
-            modal={false}
-            open={annotationTraySendOpen}
-            onOpenChange={handleAnnotationTraySendOpenChange}
-          >
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    size="xs"
-                    variant="outline"
-                    className="gap-1.5"
-                    disabled={!browserAnnotationsPrompt}
-                  >
-                    <Send className="size-3" />
-                    {t('auto.components.browser.pane.BrowserPane.ac39b9366b', 'Send')}
-                  </Button>
-                </DropdownMenuTrigger>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={6}>
-                {t(
-                  'auto.components.browser.pane.BrowserPane.95af781091',
-                  'Send feedback to an agent'
-                )}
-              </TooltipContent>
-            </Tooltip>
-            <DropdownMenuContent
-              align="end"
-              className="min-w-[180px]"
-              onInteractOutside={preventAgentSendTargetOutsideDismiss}
-              onPointerDownOutside={preventAgentSendTargetOutsideDismiss}
+          {/* In the annotate mode the palette's Send is the one Send. */}
+          {onDismiss ? null : (
+            <DropdownMenu
+              modal={false}
+              open={annotationTraySendOpen}
+              onOpenChange={handleAnnotationTraySendOpenChange}
             >
-              <BrowserAnnotationSendMenuContent
-                worktreeId={worktreeId}
-                groupId={activeGroupId ?? worktreeId}
-                prompt={browserAnnotationsPrompt}
-                includePageDetails={includePageDetails}
-                onIncludePageDetailsChange={handleIncludePageDetailsChange}
-                onPromptDelivered={handleBrowserAnnotationsSentToAgent}
-                onPromptHandedOff={handleBrowserAnnotationsHandedOff}
-              />
-            </DropdownMenuContent>
-          </DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      className="gap-1.5"
+                      disabled={!browserAnnotationsPrompt}
+                    >
+                      <Send className="size-3" />
+                      {t('auto.components.browser.pane.BrowserPane.ac39b9366b', 'Send')}
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>
+                  {t(
+                    'auto.components.browser.pane.BrowserPane.95af781091',
+                    'Send feedback to an agent'
+                  )}
+                </TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent
+                align="end"
+                className="min-w-[180px]"
+                onInteractOutside={preventAgentSendTargetOutsideDismiss}
+                onPointerDownOutside={preventAgentSendTargetOutsideDismiss}
+              >
+                <BrowserAnnotationSendMenuContent
+                  worktreeId={worktreeId}
+                  groupId={activeGroupId ?? worktreeId}
+                  prompt={browserAnnotationsPrompt}
+                  includePageDetails={includePageDetails}
+                  onIncludePageDetailsChange={handleIncludePageDetailsChange}
+                  onPromptDelivered={handleBrowserAnnotationsSentToAgent}
+                  onPromptHandedOff={handleBrowserAnnotationsHandedOff}
+                />
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button

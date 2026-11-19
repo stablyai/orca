@@ -631,7 +631,9 @@
       "noteCountOne": "1 note",
       "noteCount": "{{count}} notes",
       "drawingDiscarded": "Drawing discarded",
-      "undo": "Undo"
+      "undo": "Undo",
+      "collapseNotes": "Collapse notes",
+      "expandNotes": "Expand notes"
     }
   },
   "editor": {
@@ -18977,8 +18979,6 @@
                     "c16f932cb3": "Save",
                     "024467ceac": "Cancel",
                     "449d2c2629": "Annotation intent",
-                    "38d320108c": "Collapse annotations",
-                    "9f209891a7": "Expand annotations",
                     "includePageDetails": "Include page details",
                     "copyFeedback": "Copy feedback",
                     "copyFeedbackWithPageDetails": "Copy feedback with page details"
