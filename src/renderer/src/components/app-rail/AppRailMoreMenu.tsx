@@ -60,7 +60,10 @@ export function AppRailMoreMenu({
               <CircleHelp className="size-3.5" aria-hidden />
               {t('auto.components.sidebar.SidebarSettingsHelpMenu.2991a0106c', 'Help')}
             </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="w-52">{help.items}</DropdownMenuSubContent>
+            {/* Help folds in only when the window is short, so its rows must scroll within the window. */}
+            <DropdownMenuSubContent scrollable className="w-52">
+              {help.items}
+            </DropdownMenuSubContent>
           </DropdownMenuSub>
         ) : null}
         {includeSettings ? (
