@@ -1,4 +1,5 @@
-// Reparse unsettled blocks; cross-block definitions or HTML require the whole document.
+// Reparse unsettled blocks against the definitions settled ones made; HTML that can span blocks
+// requires the whole document.
 
 import type { Nodes, Root } from 'mdast'
 import remarkGfm from 'remark-gfm'
@@ -6,6 +7,13 @@ import remarkParse from 'remark-parse'
 import { remarkChatMath } from './chat-markdown-math'
 import { chatMathCodeFences } from './chat-markdown-math-nodes'
 import { unified } from 'unified'
+import {
+  collectDefinitions,
+  definitionContext,
+  definitionKey,
+  hasUnsharedDefinitions,
+  type MarkdownDefinition
+} from './markdown-block-definitions'
 
 export type MarkdownBlock = {
   /** Source offset, retained for settled blocks on append. */
@@ -26,6 +34,8 @@ export type MarkdownBlockSplit = {
   blocks: readonly MarkdownBlock[]
   /** Cross-block content requires whole-document rendering. */
   whole: boolean
+  /** Definitions the blocks make, with their absolute start, in document order. */
+  definitions: readonly MarkdownDefinition[]
 }
 
 /** The last block, which is still growing, and the one it may yet join. */
@@ -40,11 +50,8 @@ const VOID_TAG_PATTERN = /^<(?:br|hr|wbr|img)\b[^>]*>$/i
 /** HTML that rendering turns into text, such as Vec<T> in prose, never reaches the HTML parser. */
 export type HtmlRendersAsText = (html: string) => boolean
 
-/** References and non-void HTML can affect other blocks and require whole-document parsing. */
+/** Non-void HTML can affect other blocks and requires whole-document parsing. */
 function reachesAcrossBlocks(node: Nodes, rendersAsText?: HtmlRendersAsText): boolean {
-  if (node.type === 'definition' || node.type === 'footnoteDefinition') {
-    return true
-  }
   if (node.type === 'html') {
     return !VOID_TAG_PATTERN.test(node.value.trim()) && !rendersAsText?.(node.value)
   }
@@ -65,7 +72,12 @@ function hasLiteralMath(node: Nodes | undefined): boolean {
 }
 
 function wholeDocument(source: string, literalMath = false): MarkdownBlockSplit {
-  return { source, blocks: [{ start: 0, line: 1, text: source, literalMath }], whole: true }
+  return {
+    source,
+    blocks: [{ start: 0, line: 1, text: source, literalMath }],
+    whole: true,
+    definitions: []
+  }
 }
 
 export function splitMarkdownTopLevelBlocks(
@@ -102,13 +114,43 @@ export function splitMarkdownTopLevelBlocks(
   const base = reparsed?.start ?? 0
   const baseLine = reparsed?.line ?? 1
   const tail = source.slice(base)
-  const tree = parse ? parse(tail) : (math ? mathBlockParser : blockParser).parse(tail)
+  // Settled definitions are appended so the tail's references resolve; their nodes are dropped.
+  const settledDefinitions = grewFromPrevious
+    ? previous.definitions.filter((definition) => definition.start < base)
+    : []
+  const context = definitionContext(settledDefinitions)
+  const parsed = context ? `${tail}\n\n${context}` : tail
+  const tree = parse ? parse(parsed) : (math ? mathBlockParser : blockParser).parse(parsed)
+  tree.children = tree.children.filter(
+    (child) => (child.position?.start.offset ?? 0) < tail.length
+  )
   if (math) {
     chatMathCodeFences(tree, tail)
   }
-  if (reachesAcrossBlocks(tree, rendersAsText)) {
+  const tailDefinitions = collectDefinitions(tree, tail, base)
+  const definitions = [...settledDefinitions, ...tailDefinitions]
+  if (
+    reachesAcrossBlocks(tree, rendersAsText) ||
+    hasUnsharedDefinitions(tree) ||
+    // Without kept trees a block's references are unknown, so only the whole document numbers them.
+    (!parse && definitions.length > 0)
+  ) {
     const whole = wholeDocument(source, math && hasLiteralMath(tree))
-    return parse && base === 0 ? { ...whole, blocks: [{ ...whole.blocks[0], tree }] } : whole
+    return parse && base === 0 && !context
+      ? { ...whole, blocks: [{ ...whole.blocks[0], tree }] }
+      : whole
+  }
+  // A new definition can resolve references earlier blocks already parsed as text.
+  const known = new Set(
+    grewFromPrevious
+      ? previous.definitions.map(({ kind, identifier }) => definitionKey(kind, identifier))
+      : []
+  )
+  if (
+    settled.length > 0 &&
+    tailDefinitions.some(({ kind, identifier }) => !known.has(definitionKey(kind, identifier)))
+  ) {
+    return splitMarkdownTopLevelBlocks(source, null, math, parseTree, canReuse, rendersAsText)
   }
   // Each block runs to the next one's start, so the blank lines between stay in the source.
   const points = tree.children.map((child) =>
@@ -151,7 +193,7 @@ export function splitMarkdownTopLevelBlocks(
     }
     return block
   })
-  return { source, blocks: [...settled, ...blocks], whole: false }
+  return { source, blocks: [...settled, ...blocks], whole: false, definitions }
 }
 
 function shiftMarkdownPositions(node: Nodes, offset: number, lines: number): void {

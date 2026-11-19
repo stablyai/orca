@@ -34,6 +34,7 @@ import { htmlRendersAsText, remarkUnknownHtmlAsText } from './comment-markdown-u
 import { CommentMarkdownWords } from './CommentMarkdownWords'
 import {
   MemoizedMarkdown,
+  useMarkdownBlockReferences,
   useMarkdownBlocks,
   markdownBlockContent
 } from './comment-markdown-block-pipeline'
@@ -185,7 +186,7 @@ const CommentMarkdown = React.memo(
       const withExtension = extension ? [...withMath, ...extension.remarkPlugins] : withMath
       return githubRepo ? [...withExtension, remarkGitHubReferences(githubRepo)] : withExtension
     }, [extension, fileLinkExists, githubRepo, math, singleTildeStrikethrough, unknownHtmlAsText])
-    const blocks = useMarkdownBlocks(
+    const { blocks, definitions } = useMarkdownBlocks(
       content,
       growing,
       math,
@@ -193,6 +194,7 @@ const CommentMarkdown = React.memo(
       extension,
       unknownHtmlAsText ? unknownHtmlRendersAsText : undefined
     )
+    const references = useMarkdownBlockReferences(blocks, definitions)
     const [hadWordFade, setHadWordFade] = React.useState(fadeWords)
     if (fadeWords && !hadWordFade) {
       setHadWordFade(true)
@@ -219,30 +221,59 @@ const CommentMarkdown = React.memo(
               }}
               {...rest}
             >
-              {blocks.map((block, index) => (
-                <CommentMarkdownBlockLineContext.Provider key={block.start} value={block.line}>
-                  <MemoizedMarkdown
-                    block={block.tree ? block : undefined}
-                    remarkPlugins={activeRemarkPlugins}
-                    rehypePlugins={activeRehypePlugins}
-                    math={math}
-                    fadeWords={wrapsWords}
-                    components={wrapsWords ? fadingComponents : components}
-                    urlTransform={
-                      allowFileUriLinks
-                        ? commentMarkdownFileUriUrlTransform
-                        : commentMarkdownUrlTransform
-                    }
-                  >
-                    {growing && index === blocks.length - 1 && !block.literalMath
-                      ? remend(markdownBlockContent(block), {
-                          linkMode: 'text-only',
-                          ...(math ? { katex: false, inlineKatex: false } : {})
-                        })
-                      : markdownBlockContent(block)}
-                  </MemoizedMarkdown>
-                </CommentMarkdownBlockLineContext.Provider>
-              ))}
+              {blocks.map((block, index) => {
+                const blockReferences = references.blocks[index]
+                const repaired = growing && index === blocks.length - 1 && !block.literalMath
+                const source = repaired
+                  ? remend(markdownBlockContent(block), {
+                      linkMode: 'text-only',
+                      ...(math ? { katex: false, inlineKatex: false } : {})
+                    })
+                  : markdownBlockContent(block)
+                // A block parsed from its text needs the definitions to resolve its references.
+                const parsesText = repaired || !block.tree
+                return (
+                  <CommentMarkdownBlockLineContext.Provider key={block.start} value={block.line}>
+                    <MemoizedMarkdown
+                      block={block.tree ? block : undefined}
+                      references={blockReferences}
+                      remarkPlugins={activeRemarkPlugins}
+                      rehypePlugins={activeRehypePlugins}
+                      math={math}
+                      fadeWords={wrapsWords}
+                      components={wrapsWords ? fadingComponents : components}
+                      urlTransform={
+                        allowFileUriLinks
+                          ? commentMarkdownFileUriUrlTransform
+                          : commentMarkdownUrlTransform
+                      }
+                    >
+                      {blockReferences && parsesText
+                        ? `${source}\n\n${references.context}`
+                        : source}
+                    </MemoizedMarkdown>
+                  </CommentMarkdownBlockLineContext.Provider>
+                )
+              })}
+              {references.footer ? (
+                <MemoizedMarkdown
+                  key="footnotes"
+                  footer
+                  references={references.footer.references}
+                  remarkPlugins={activeRemarkPlugins}
+                  rehypePlugins={activeRehypePlugins}
+                  math={math}
+                  fadeWords={false}
+                  components={components}
+                  urlTransform={
+                    allowFileUriLinks
+                      ? commentMarkdownFileUriUrlTransform
+                      : commentMarkdownUrlTransform
+                  }
+                >
+                  {references.footer.source}
+                </MemoizedMarkdown>
+              ) : null}
             </div>
           </CommentMarkdownMermaidSourceContext.Provider>
         </CommentMarkdownMermaidContext.Provider>
