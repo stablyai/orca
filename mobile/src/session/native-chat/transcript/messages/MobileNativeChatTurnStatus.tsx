@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { MobileBotAvatar } from '../../../../bots/MobileBotAvatar'
+import { MobileNativeChatBotIdentityContext } from '../../mobile-native-chat-bot-identity'
+import { useContext, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
 import { nativeChatElapsedSeconds } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
@@ -22,12 +24,14 @@ function useElapsedSeconds(startedAt: number | null, counting: boolean): number 
 }
 
 export function MobileNativeChatTurnStatus({
+  pendingLabel,
   startedAt,
   workedSeconds,
   verdict,
   expanded = false,
   onToggleExpanded
 }: {
+  pendingLabel?: string
   startedAt: number | null
   workedSeconds?: number | null
   verdict?: AgentTurnOutcome
@@ -36,9 +40,18 @@ export function MobileNativeChatTurnStatus({
 }): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const settled = workedSeconds != null
+  const bot = useContext(MobileNativeChatBotIdentityContext)
+  const settled = workedSeconds != null || Boolean(pendingLabel)
   const elapsedSeconds = useElapsedSeconds(startedAt, !settled)
-  const label = formatMobileNativeChatTurnStatusLabel({ workedSeconds, elapsedSeconds, verdict }, t)
+  const label =
+    pendingLabel ??
+    formatMobileNativeChatTurnStatusLabel({ workedSeconds, elapsedSeconds, verdict }, t)
+
+  const identity = bot ? (
+    <View accessibilityRole="image" accessibilityLabel={bot.name}>
+      <MobileBotAvatar avatar={bot.avatar} size={24} />
+    </View>
+  ) : null
 
   if (settled && onToggleExpanded) {
     return (
@@ -48,8 +61,14 @@ export function MobileNativeChatTurnStatus({
         hitSlop={6}
         accessibilityRole="button"
         accessibilityState={{ expanded }}
-        accessibilityLabel={nativeChatTurnStatusCopy(t).toggleDetails}
+        accessibilityLabel={
+          bot
+            ? `${bot.name}, ${label}, ${nativeChatTurnStatusCopy(t).toggleDetails}`
+            : nativeChatTurnStatusCopy(t).toggleDetails
+        }
       >
+        {identity}
+        {bot?.showName ? <Text style={styles.label}>{bot.name}</Text> : null}
         <Text style={styles.label}>{label}</Text>
         <View style={expanded ? styles.caretOpen : undefined}>
           <ChevronRight size={14} color={colors.textMuted} strokeWidth={2} />
@@ -60,6 +79,8 @@ export function MobileNativeChatTurnStatus({
 
   return (
     <View style={[styles.row, styles.bar]}>
+      {identity}
+      {bot?.showName ? <Text style={styles.label}>{bot.name}</Text> : null}
       <Text style={styles.label} numberOfLines={1}>
         {label}
       </Text>

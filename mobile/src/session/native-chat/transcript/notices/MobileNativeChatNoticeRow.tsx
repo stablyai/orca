@@ -17,6 +17,7 @@ import {
   type NativeChatTextBlock
 } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { readWholeAgentSessionFailureFact } from '../../../../../../src/shared/agent-session/failures/agent-session-failure'
+import { isAgentSessionSetupFailureKind } from '../../../../../../src/shared/agent-session/failures/agent-session-visible-failures'
 import { agentSessionFailureDetailText } from '../../../../../../src/shared/agent-session/failures/agent-session-failure-quoted-detail'
 import { agentSessionFailureSentence } from '../../../../../../src/shared/agent-session/failures/agent-session-failure-words'
 import { agentSessionSignInCommand } from '../../../../../../src/shared/agent-session/lifecycle/launch/agent-session-setup-commands'
@@ -27,6 +28,8 @@ import {
   type MobileNativeChatNoticeView
 } from './mobile-native-chat-notice-context'
 import { MobileNativeChatMarkdown } from '../message-content/MobileNativeChatMarkdown'
+import { MobileNativeChatAutomationResultRow } from '../MobileNativeChatAutomationResultRow'
+import { MobileNativeChatDivider, mobileNativeChatDividerStyles } from '../MobileNativeChatDivider'
 import { INLINE_TEXT_SELECTION } from '../../../../platform/text-selection/inline-text-selection'
 import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
@@ -39,6 +42,7 @@ import { nativeChatUsageLimitText } from './native-chat-usage-limit-copy'
 import { sayMobileAgentSessionFailure } from '../../agent-session/agent-session-failure-copy'
 import type { Translate } from '../../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
+import { mobileNativeChatBotCard } from '../bot-cards/mobile-native-chat-bot-cards'
 import { NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION } from '../../../../../../src/shared/native-chat/transcript/pending-sends/native-chat-stopped-before-start'
 import { MONO_SIZE, TEXT_SIZE, scaledType } from '../messages/mobile-native-chat-message-styles'
 import { MobileNativeChatOwnedScrollView } from '../viewport/MobileNativeChatOwnedScrollView'
@@ -95,11 +99,14 @@ function noticeLineText(
 export function MobileNativeChatNoticeRow({
   blocks,
   fontScale,
-  onLongPress
+  onLongPress,
+  cardId
 }: {
   blocks: readonly NativeChatBlock[]
   fontScale: number
   onLongPress?: () => void
+  /** The row's message id, for a bot card's fold and answer. */
+  cardId?: string
 }): React.JSX.Element | null {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -121,12 +128,36 @@ export function MobileNativeChatNoticeRow({
       </Text>
     ) : null
   }
+  if (notice.automationResult) {
+    return (
+      <MobileNativeChatAutomationResultRow
+        note={notice.automationResult}
+        cleared={notice.automationResultCleared === true}
+        fontScale={fontScale}
+      />
+    )
+  }
+  const botCard = mobileNativeChatBotCard(notice, {
+    cardId: cardId ?? '',
+    timestamp: null,
+    fallback: notice.text,
+    fontScale
+  })
+  if (botCard) {
+    return botCard
+  }
   const look = nativeChatNoticeLook(notice)
   const lineText = noticeLineText(notice, names, t)
   const failure = readWholeAgentSessionFailureFact(notice.failure)
   const failureDetail = agentSessionFailureDetailText(failure)
+  // A setup failure a later successful turn resolved reads as history: muted, with no action.
+  const resolved =
+    isAgentSessionSetupFailureKind(failure?.kind) &&
+    cardId !== undefined &&
+    names.unresolvedFailureRows !== undefined &&
+    !names.unresolvedFailureRows.has(cardId)
   const signInCommand =
-    failure?.kind === 'notSignedIn'
+    failure?.kind === 'notSignedIn' && !resolved
       ? agentSessionSignInCommand(names.agentName, { account: failure.account, remote: true })
       : null
   const runInTerminal = names.onRunInTerminal
@@ -180,23 +211,15 @@ export function MobileNativeChatNoticeRow({
         </View>
       )
     }
-    case 'divider': {
-      const label = copy[look.label]
-      return (
-        <View style={styles.divider} accessibilityRole="text" accessibilityLabel={label}>
-          <View style={styles.rule} />
-          <Text style={styles.dividerLabel}>{label}</Text>
-          <View style={styles.rule} />
-        </View>
-      )
-    }
+    case 'divider':
+      return <MobileNativeChatDivider label={copy[look.label]} />
     case 'forked-from': {
       const { sourceName, sourceSessionId } = look
       return (
         // No label on the row: it would replace the text and hide the source link from screen readers.
-        <View style={styles.divider}>
-          <View style={styles.rule} />
-          <Text style={styles.dividerLabel}>
+        <View style={mobileNativeChatDividerStyles.divider}>
+          <View style={mobileNativeChatDividerStyles.rule} />
+          <Text style={mobileNativeChatDividerStyles.dividerLabel}>
             {copy.forkedFrom}{' '}
             {openForkSource ? (
               <Text
@@ -210,7 +233,7 @@ export function MobileNativeChatNoticeRow({
               sourceName
             )}
           </Text>
-          <View style={styles.rule} />
+          <View style={mobileNativeChatDividerStyles.rule} />
         </View>
       )
     }
@@ -266,7 +289,7 @@ export function MobileNativeChatNoticeRow({
       const textStyle = [
         styles.line,
         scaledType(TEXT_SIZE, fontScale),
-        look.tone && { color: toneColor(look.tone) }
+        look.tone && { color: toneColor(resolved ? 'notice' : look.tone) }
       ]
       const continuation = names.continuation
       const continueOffered =
@@ -320,10 +343,10 @@ export function MobileNativeChatNoticeRow({
       const Icon =
         look.tone === 'warning' ? AlertTriangle : look.tone === 'error' ? AlertCircle : Info
       return (
-        <View style={[styles.card, styles.toneCard]}>
+        <View style={resolved ? styles.toneCard : [styles.card, styles.toneCard]}>
           <Icon
             size={16 * fontScale}
-            color={toneColor(look.tone)}
+            color={toneColor(resolved ? 'notice' : look.tone)}
             strokeWidth={2}
             style={styles.toneIcon}
           />
@@ -335,21 +358,6 @@ export function MobileNativeChatNoticeRow({
 }
 
 const styles = themedStyleSheet(() => ({
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: spacing.sm
-  },
-  rule: {
-    flex: 1,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle
-  },
-  dividerLabel: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize
-  },
   dividerLink: {
     textDecorationLine: 'underline'
   },
@@ -375,7 +383,8 @@ const styles = themedStyleSheet(() => ({
   },
   toneCard: {
     flexDirection: 'row',
-    alignItems: 'flex-start'
+    alignItems: 'flex-start',
+    gap: spacing.sm
   },
   toneIcon: {
     marginTop: 2

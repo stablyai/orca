@@ -2,7 +2,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { chmod, mkdir, rename, rm, statfs } from 'node:fs/promises'
+import { chmod, lstat, mkdir, rename, rm, statfs } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import {
   excerptAgentFailureOutput,
@@ -11,13 +11,14 @@ import {
 } from '../../shared/source-control/ai/generation/commit-message-agent-output'
 import type { ManagedRuntimeOperation } from '../../shared/agent-launch/installation/managed-runtime-install'
 import { getMainHttpClient, type MainHttpClient } from '../network/http-client'
-import { redactString } from '../observability/redactor'
+import { redactString } from '../../shared/observability/redactor'
 import {
   resolveInstalledRuntimeRelease,
   ManagedRuntimeStartError,
   RUNTIME_RELEASE_RECEIPT,
   writeRuntimeReleaseReceipt,
   type ManagedRuntime,
+  type ManagedRuntimeMember,
   type ManagedRuntimePin,
   type ManagedRuntimeStartFailure
 } from './managed-runtime-release'
@@ -26,11 +27,15 @@ import { extractPinnedZipMembers } from './pinned-zip-members'
 import {
   downloadFailureMessage,
   downloadVerifiedArchive,
+  extractRuntimeArchive,
   RUNTIME_ARCHIVE_RETRY_DELAYS_MS
 } from './runtime-archive-download'
 
 const FREE_SPACE_MARGIN_BYTES = 256 * 1024 * 1024
 const PROGRESS_INTERVAL_MS = 250
+// Unpacked files aren't listed up front; packages unpack to about three times their download.
+const TAR_UNPACKED_RATIO = 3
+const TAR_EXTRACT_TIMEOUT_MS = 10 * 60_000
 
 export type RuntimeReleaseInstall = {
   agent: string
@@ -50,19 +55,25 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
   const folder = join(root, pin.version)
   await mkdir(root, { recursive: true })
   if (existsSync(folder)) {
+    const receiptCurrent = (): boolean =>
+      resolveInstalledRuntimeRelease(root, pin).release?.current === true
     publish({ phase: 'verifying' })
-    const whole = await verifyMembers(folder, pin, label, signal).then(
-      () => true,
-      (error: unknown) => {
-        signal.throwIfAborted()
-        console.warn(`[managed-runtime] ${agent} copy is damaged; repairing:`, error)
-        return false
-      }
-    )
+    // Without member hashes, only a receipt for this exact archive proves a copy whole.
+    const whole =
+      'members' in pin
+        ? await verifyMembers(folder, pin, label, signal).then(
+            () => true,
+            (error: unknown) => {
+              signal.throwIfAborted()
+              console.warn(`[managed-runtime] ${agent} copy is damaged; repairing:`, error)
+              return false
+            }
+          )
+        : receiptCurrent()
     if (whole) {
       await validate(input, folder)
       signal.throwIfAborted()
-      if (!resolveInstalledRuntimeRelease(root, pin).release?.current) {
+      if (!receiptCurrent()) {
         // Complete members without a valid receipt need repair to escape damaged status.
         await rm(join(folder, RUNTIME_RELEASE_RECEIPT), { force: true })
         await writeRuntimeReleaseReceipt(folder, pin)
@@ -77,9 +88,11 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
   })
   // A single-file release is renamed into place, so it never needs room for two copies.
   const needed =
-    pin.format === 'file'
-      ? pin.archiveBytes
-      : pin.members.reduce((sum, m) => sum + m.bytes, pin.archiveBytes)
+    pin.format === 'tar.gz'
+      ? pin.archiveBytes * (1 + TAR_UNPACKED_RATIO)
+      : pin.format === 'file'
+        ? pin.archiveBytes
+        : pin.members.reduce((sum, m) => sum + m.bytes, pin.archiveBytes)
   if (space && space.bavail * space.bsize < needed + FREE_SPACE_MARGIN_BYTES) {
     const megabytes = Math.ceil((needed + FREE_SPACE_MARGIN_BYTES) / 1024 ** 2)
     throw new Error(`${label} needs ${megabytes} MB of free disk space to install.`)
@@ -115,9 +128,11 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
       throw new Error(downloadFailureMessage(label, error), { cause: error })
     })
     publish({ phase: 'extracting', downloadedBytes: pin.archiveBytes })
-    await (pin.format === 'file'
-      ? rename(archive, join(release, onlyMember(pin).path))
-      : extractPinnedZipMembers(archive, release, pin.members, label, signal))
+    await (pin.format === 'tar.gz'
+      ? extractWholeTarGz(archive, release, label, signal)
+      : pin.format === 'file'
+        ? rename(archive, join(release, onlyMember(pin.members).path))
+        : extractPinnedZipMembers(archive, release, pin.members, label, signal))
     publish({ phase: 'verifying' })
     await verifyMembers(release, pin, label, signal)
     await validate(input, release)
@@ -133,14 +148,36 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
   }
 }
 
-function onlyMember(pin: ManagedRuntimePin): ManagedRuntimePin['members'][number] {
-  const [member, ...rest] = pin.members
+function onlyMember(members: readonly ManagedRuntimeMember[]): ManagedRuntimeMember {
+  const [member, ...rest] = members
   if (!member || rest.length > 0 || member.path.includes('/')) {
     throw new Error(
-      `A single-file release needs exactly one top-level member, not ${pin.members.length}.`
+      `A single-file release needs exactly one top-level member, not ${members.length}.`
     )
   }
   return member
+}
+
+async function extractWholeTarGz(
+  archive: string,
+  release: string,
+  label: string,
+  signal: AbortSignal
+): Promise<void> {
+  const result = await extractRuntimeArchive(
+    { label },
+    archive,
+    release,
+    signal,
+    TAR_EXTRACT_TIMEOUT_MS
+  )
+  signal.throwIfAborted()
+  if (result.code !== 0 || result.timedOut) {
+    const detail = (result.stderr || result.stdout).trim()
+    throw new Error(`Couldn't unpack the ${label} download.${detail ? ` ${detail}` : ''}`)
+  }
+  // The archive is no longer needed once unpacked; free its space before checking.
+  await rm(archive, { force: true })
 }
 
 export function installFailureText(label: string, error: unknown, deadline: AbortSignal): string {
@@ -196,6 +233,19 @@ async function verifyMembers(
   label: string,
   signal: AbortSignal
 ): Promise<void> {
+  if (!('members' in pin)) {
+    for (const executable of pin.executables) {
+      const path = join(root, ...executable.split('/'))
+      const file = await lstat(path).catch(() => null)
+      if (!file?.isFile()) {
+        throw new Error(`The ${label} download is missing ${executable}.`)
+      }
+      if (process.platform !== 'win32') {
+        await chmod(path, 0o755)
+      }
+    }
+    return
+  }
   for (const member of pin.members) {
     const path = join(root, ...member.path.split('/'))
     await verifyFileSha256(path, member.sha256, `${label} ${member.path}`, signal)

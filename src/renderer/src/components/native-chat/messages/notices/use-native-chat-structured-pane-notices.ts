@@ -88,6 +88,7 @@ export function useNativeChatStructuredPaneNotices({
           : undefined,
     failure: provisionalLaunch.failure,
     startFailures,
+    journalItems: controller.journalItems,
     onRechecked
   })
   const availability = useNativeChatAvailabilityNotice({

@@ -12,7 +12,7 @@ import { checkRuntimeGroupHooks } from '@/runtime/repo-hooks/runtime-hooks-clien
 import { useAppStore } from '@/store/index'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
-import { buildSetupAgentStartupHookSettings } from './setup-policy-decisions'
+import { buildSetupAgentStartupHookSettings } from '../../../../../shared/workspace-setup/repo-hook-settings-defaults'
 
 export function useProjectGroupSetup(group: ProjectGroup | null | undefined) {
   const t = useTranslate()

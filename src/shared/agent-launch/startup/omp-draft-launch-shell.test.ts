@@ -51,7 +51,12 @@ it.each(
         }
         const result = await runProcess({
           program: shell,
-          args: ['-c', (nounset ? 'set -u; ' : '') + define + plan.launchCommand + observe],
+          // fish reads the user's config even for -c; this machine's must not print into stderr.
+          args: [
+            ...(shell === 'fish' ? ['--no-config'] : []),
+            '-c',
+            (nounset ? 'set -u; ' : '') + define + plan.launchCommand + observe
+          ],
           cwd: root,
           env: { ...process.env, ...plan.env, ORCA_OMP_FRESH_CONFIG: config, CAPTURE: calls }
         })

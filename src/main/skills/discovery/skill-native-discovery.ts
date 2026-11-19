@@ -50,7 +50,7 @@ import {
 
 // Share fixed home-root scans across workspace panes to bound repeated filesystem walks.
 export const SKILL_ROOT_SCAN_TTL_MS = 10_000
-// A scan builds 17 fixed roots + 7/repo + cwd/plugin roots; the cache must hold whole scans or evict itself. Beyond capacity LRU degrades to repeated repo walks.
+// A scan builds 24 fixed roots + 14/repo + cwd/plugin roots; the cache must hold whole scans or evict itself. Beyond capacity LRU degrades to repeated repo walks.
 const MAX_CACHED_SKILL_ROOTS = 1_024
 // Cap logged root ids as repos grow; hashed ids avoid exposing names and paths.
 export const MAX_LOGGED_ROOT_IDS = 12

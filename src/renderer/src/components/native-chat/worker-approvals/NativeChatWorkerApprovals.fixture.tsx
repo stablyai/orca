@@ -240,13 +240,4 @@ export const twoOpenWithOwnPromptShort = defineFixture({
   render: () => pane([openBash, openDocs], true, 'h-[520px]')
 })
 
-// The click's outcome where the card was, for the moment before it moves into the transcript.
-export const settling = defineFixture({
-  width: 760,
-  render: () =>
-    pane([
-      closed('settled', { by: 'person', decision: 'allow', reason: null, reasonDelivered: false })
-    ])
-})
-
 export const receiptInPlace = defineFixture({ width: 760, render: () => pane([]) })
