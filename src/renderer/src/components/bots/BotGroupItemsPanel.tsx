@@ -11,6 +11,9 @@ import { botGroupSessionIds, type BotGroup } from '../../../../shared/bots/bot-g
 import { botGroupMemberBots } from '../../../../shared/bots/bot-sidebar-entries'
 import { BOT_ITEM_GROUP_IDS, type BotItemFilter } from '../../../../shared/bots/bot-item-groups'
 import type { BotItem } from '../../../../shared/bots/bot-items'
+import { cn } from '@/lib/class-names'
+import { botGroupFaces } from '../../../../shared/bots/bot-group-face-layout'
+import { BotGroupFaces } from './BotGroupFaces'
 import { BotGroupPanelHeader } from './BotGroupPanelHeader'
 import {
   BotItemsFilterButton,
@@ -18,6 +21,7 @@ import {
   sameChats,
   type BotItemFilterScope
 } from './items/BotItemsFilter'
+import { ALL_CLEAR_PICTURE, BotItemsAllClear } from './items/BotItemsAllClear'
 import { BotItemsList } from './items/BotItemsList'
 import { BotItemsLoading } from './items/BotItemsLoading'
 import { BotItemsReadFailed } from './items/BotItemsReadFailed'
@@ -27,6 +31,8 @@ import { useBotItemWalk } from './items/use-bot-item-walk'
 import { useBotGroupItems } from './use-bot-group-items'
 
 const GROUP_SCOPE = 'group'
+/** The all-clear picture's side, in px. */
+const ALL_CLEAR_SIZE = 40
 const ALL_SCOPE = 'all'
 
 function groupScopes(group: BotGroup, t: Translate): BotItemFilterScope[] {
@@ -131,6 +137,14 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
   const groupIds = new Set(scopes[0]!.chatIds)
   const placeOf = (item: BotItem): string | null =>
     filter.chatIds === null && !groupIds.has(item.chat.id) ? botItemChatName(item.chat, t) : null
+  // Offline says so elsewhere; the line leads the folded sections rather than trailing them.
+  const allClear =
+    merged.ready &&
+    rows &&
+    !named &&
+    !asking &&
+    !merged.offline &&
+    merged.list.groups.needs_you.length + merged.list.groups.working.length === 0
   const note = (): React.ReactNode => {
     if (members.length === 0) {
       return null
@@ -142,13 +156,7 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
       return rows ? null : <BotItemsLoading />
     }
     if (rows) {
-      return named ||
-        asking ||
-        merged.list.groups.needs_you.length + merged.list.groups.working.length > 0 ? null : (
-        <p className="px-6 py-6 text-center text-xs text-muted-foreground">
-          {t('bots.items.empty.allClear', 'Nothing needs you and nothing is running.')}
-        </p>
-      )
+      return null
     }
     if (named) {
       return (
@@ -238,6 +246,17 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
             }
           />
           <fieldset disabled={merged.offline} className="contents">
+            {allClear ? (
+              <BotItemsAllClear
+                picture={
+                  <BotGroupFaces
+                    faces={botGroupFaces(members, (bot) => bot.id)}
+                    slot={ALL_CLEAR_SIZE}
+                    className={cn('size-10', ALL_CLEAR_PICTURE)}
+                  />
+                }
+              />
+            ) : null}
             <BotItemsList
               bot={{
                 foldKey: `group:${group.id}`,
