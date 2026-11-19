@@ -39,17 +39,6 @@ describe('room transcript', () => {
     { kind: 'earlier', page: page([1, 2]) }
   )
 
-  it('keeps loaded history across a reply-mode change and later posts', () => {
-    expect(ids(loaded)).toEqual([1, 2, 3, 4])
-    const next = reduceBotGroupTranscript(loaded, {
-      kind: 'recent',
-      page: page([4, 5], { revision: 2 })
-    })
-    expect(ids(next)).toEqual([1, 2, 3, 4, 5])
-    expect(next?.group.revision).toBe(2)
-    expect(next?.hasEarlier).toBe(false)
-  })
-
   it('drops history that no longer joins the new page, or after a member left', () => {
     expect(ids(reduceBotGroupTranscript(loaded, { kind: 'recent', page: page([7, 8]) }))).toEqual([
       7, 8
@@ -61,14 +50,23 @@ describe('room transcript', () => {
     ).toEqual([4])
   })
 
-  it('upserts a sent message and a re-read row by id, in sequence order', () => {
+  it('keeps history and upserts matching rows when a recent page changes reply mode', () => {
+    expect(ids(loaded)).toEqual([1, 2, 3, 4])
     const sent = reduceBotGroupTranscript(loaded, { kind: 'sent', message: message(5) })
+    const read = page([4, 5], { revision: 2, hasEarlier: true })
     const reread = reduceBotGroupTranscript(sent, {
       kind: 'recent',
-      page: { ...page([4]), messages: [message(4, 'edited'), message(5)] }
+      page: {
+        ...read,
+        group: { ...read.group, replyMode: { kind: 'mentions' } },
+        messages: [message(4, 'edited'), message(5)]
+      }
     })
+
     expect(ids(reread)).toEqual([1, 2, 3, 4, 5])
     expect(reread?.messages[3].text).toBe('edited')
+    expect(reread?.group).toMatchObject({ revision: 2, replyMode: { kind: 'mentions' } })
+    expect(reread?.hasEarlier).toBe(false)
   })
 
   it('a member change saved locally still voids old rows, and late pages cannot roll it back', () => {

@@ -77,17 +77,14 @@ function renderClosed(): void {
 const closedRows = (): (string | null)[] =>
   [...document.querySelectorAll('[data-bot-item]')].map((row) => row.getAttribute('data-bot-item'))
 
-it('shows Closed open with its first five rows, then Show more', () => {
+it('shows Closed open with paging, then keeps the owner’s fold across remounts', () => {
   // Closed's flag from when it was folded by default meant the owner opened it.
   localStorage.setItem('orca.bots.panelFolds', JSON.stringify({ 'bot-a': ['items-closed'] }))
   renderClosed()
   expect(screen.getByRole('button', { name: /Closed/ }).getAttribute('aria-expanded')).toBe('true')
   expect(closedRows()).toEqual(['1', '2', '3', '4', '5'])
   expect(screen.getByRole('button', { name: 'Show 7 more' })).toBeTruthy()
-})
 
-it('keeps Closed folded once the owner folds it', () => {
-  renderClosed()
   fireEvent.click(screen.getByRole('button', { name: /Closed/ }))
   cleanup()
   renderClosed()

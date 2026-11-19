@@ -16,6 +16,12 @@ import {
 import { hookLeadTurnState } from '../wait/tui-idle-hook-lane'
 import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import { restoreFromReattachedReadyScreen } from '../wait/reattached-ready-screen'
+import {
+  admitRestoredTerminalReport,
+  hasCommandBoundarySinceReattach,
+  hasTerminalCommandPainted,
+  takeReattachedRepaintRequest
+} from '../input/terminal-command-paint'
 import type { RuledScreen } from '../wait/screen-input-veto'
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 
@@ -81,7 +87,8 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
   ): RuntimeHeadlessTerminal
   protected abstract applySeededAgentStatus(ptyId: string, title: string): void
 
-  serializeMainTerminalBuffer(
+  /** A model reseeded screen-only after dropped output lacks the history the provider kept. */
+  async serializeMainTerminalBuffer(
     ptyId: string,
     opts: { scrollbackRows?: number } = {}
   ): Promise<{
@@ -99,21 +106,10 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
     pendingEscapeTailAnsi?: string
     terminalOwner?: 'shell'
   } | null> {
-    return this.serializeHeadlessWithProviderHistory(ptyId, opts)
-  }
-
-  /** A model reseeded screen-only after dropped output lacks the history the provider kept. */
-  protected async serializeHeadlessWithProviderHistory(
-    ptyId: string,
-    opts: { scrollbackRows?: number }
-  ): ReturnType<OrcaRuntimeWithSerializeMainTerminalBuffer['serializeMainTerminalBuffer']> {
-    if (this.headlessTerminals.get(ptyId)?.historyFromProvider && (opts.scrollbackRows ?? 0) > 0) {
-      const providerSnapshot = await this.serializeProviderTerminalBuffer(ptyId, opts)
-      if (providerSnapshot) {
-        return providerSnapshot
-      }
-    }
-    return this.serializeHeadlessTerminalBuffer(ptyId, { ...opts, includeEmpty: true })
+    const wantsProvider =
+      this.headlessTerminals.get(ptyId)?.historyFromProvider && (opts.scrollbackRows ?? 0) > 0
+    const provider = wantsProvider ? await this.serializeProviderTerminalBuffer(ptyId, opts) : null
+    return provider ?? this.serializeHeadlessTerminalBuffer(ptyId, { ...opts, includeEmpty: true })
   }
 
   async serializeHiddenOutputRecoveryBuffer(
@@ -142,7 +138,7 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
       // The provider already declined above, and the hidden renderer missed the dropped output.
       return null
     }
-    const headlessSnapshot = await this.serializeHeadlessWithProviderHistory(ptyId, opts)
+    const headlessSnapshot = await this.serializeMainTerminalBuffer(ptyId, opts)
     if (headlessSnapshot) {
       return headlessSnapshot
     }
@@ -255,18 +251,10 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
       })
   }
 
-  /** A reattached live process may print nothing; its silence is observed quiet from the first attach of this generation. */
-  startReattachedOutputClock(ptyId: string): void {
-    const pty = this.ptysById.get(ptyId)
-    if (pty && pty.lastOutputAt === null) {
-      pty.outputObservedSince ??= Date.now()
-    }
-  }
-
   /** A surviving process main never saw live still has its agent's last own report, which the hook
-   *  server restores across restarts. Nothing can type into the terminal while main is down, so the
-   *  report is current as long as an agent, not a shell, still holds the process. Without a report,
-   *  a screen-ruled agent's own strong ready screen speaks for it: such agents may write no title at rest. */
+   *  server restores across restarts while its writer can still be the pane's agent. Without a report,
+   *  a screen-ruled agent's strong ready screen counts once that agent repaints it: such agents may
+   *  write no title at rest, and a retained frame may be an earlier program's. */
   restoreReattachedAgentStatus(ptyId: string): void {
     const pty = this.ptysById.get(ptyId)
     if (!pty?.connected || pty.lastAgentStatusObservedLive) {
@@ -280,7 +268,8 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
       pty.incarnationId === incarnationId &&
       this.getPtyLifecycleGeneration(ptyId) === generation &&
       pty.connected &&
-      !pty.lastAgentStatusObservedLive
+      !pty.lastAgentStatusObservedLive &&
+      !hasCommandBoundarySinceReattach(pty)
     const paneKeys = [...this.collectAgentStatusPaneKeysForPty(ptyId)]
     void Promise.all([
       this.ptyForegroundAgent.identifyForeground(ptyId),
@@ -300,6 +289,8 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
           agent,
           readScreen: () => this.readCaughtUpRuledScreen(ptyId),
           readOutputClockAt: () => this.readOutputClockAt(ptyId),
+          hasPaintedSinceReattach: () => hasTerminalCommandPainted(pty),
+          requestRepaint: () => this.requestReattachedRepaint(ptyId),
           isCurrent,
           applyIdle: () => this.applyReattachedAgentStatus(ptyId, 'idle')
         })
@@ -307,9 +298,19 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
     })
   }
 
-  private applyReattachedAgentStatus(ptyId: string, status: AgentStatus): void {
-    const title = this.ptysById.get(ptyId)?.lastOscTitle ?? ''
+  /** One repaint per reattach, whether restored status or a queued wait asks first. */
+  protected requestReattachedRepaint(ptyId: string): void {
+    if (takeReattachedRepaintRequest(this.ptysById.get(ptyId))) {
+      this.ptyController?.requestRepaint?.(ptyId)
+    }
+  }
+
+  /** The restored report speaks for the process now running, so it counts as current. */
+  protected applyReattachedAgentStatus(ptyId: string, status: AgentStatus): void {
+    const pty = this.ptysById.get(ptyId)
+    const title = pty?.lastOscTitle ?? ''
     this.applyTrackedPtyTitle(ptyId, title, title, undefined, { statusOnly: true, status })
+    admitRestoredTerminalReport(pty, Date.now())
   }
 
   protected readOutputClockAt(ptyId: string | null | undefined): number | null {

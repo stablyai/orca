@@ -226,6 +226,79 @@ describe('skill discovery', () => {
     ])
   })
 
+  it('keeps a relocated Claude or Grok home for its owner and the default one for Cursor', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const folders: [string, string][] = [
+      [join(home, '.claude', 'skills'), 'claude-default'],
+      [join(root, 'claude-config', 'skills'), 'claude-relocated'],
+      [join(home, '.grok', 'skills'), 'grok-default'],
+      [join(root, 'grok-home', 'skills'), 'grok-relocated']
+    ]
+    for (const [folder, name] of folders) {
+      await mkdir(join(folder, name), { recursive: true })
+      await writeFile(join(folder, name, 'SKILL.md'), `---\nname: ${name}\n---\n`)
+    }
+
+    // CLAUDE_CONFIG_DIR and GROK_HOME move their owners' skills; Cursor still joins ~/.claude and ~/.grok.
+    const result = await discoverSkills({
+      homeDir: home,
+      repos: [],
+      includeCwd: false,
+      providerRootOverrides: {
+        claude: join(root, 'claude-config', 'skills'),
+        grok: join(root, 'grok-home', 'skills')
+      }
+    })
+    const visibleTo = (agent: AgentType) =>
+      result.skills
+        .filter((skill) => isNativeChatSkillForAgent(agent, skill, result))
+        .map((skill) => skill.name)
+        .sort()
+
+    expect(visibleTo('claude')).toEqual(['claude-relocated'])
+    expect(visibleTo('grok')).toEqual(['grok-relocated'])
+    expect(visibleTo('cursor')).toEqual(['claude-default', 'grok-default'])
+
+    // A workspace at the home folder makes ~/.claude/skills Claude's project folder too.
+    const atHome = await discoverSkills({
+      homeDir: home,
+      cwd: home,
+      repos: [],
+      providerRootOverrides: { claude: join(root, 'claude-config', 'skills') }
+    })
+    expect(
+      atHome.skills
+        .filter((skill) => isNativeChatSkillForAgent('claude', skill, atHome))
+        .map((skill) => skill.name)
+        .sort()
+    ).toEqual(['claude-default', 'claude-relocated'])
+  })
+
+  it('scans a relocated Claude home that links to the default one once, for everyone', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const defaultSkills = join(home, '.claude', 'skills')
+    const accountSkills = join(root, 'account', 'skills')
+    await mkdir(join(defaultSkills, 'review'), { recursive: true })
+    await writeFile(join(defaultSkills, 'review', 'SKILL.md'), '# review')
+    await mkdir(join(root, 'account'), { recursive: true })
+    // A managed Claude account links its skills folder to the default one.
+    await symlink(defaultSkills, accountSkills, process.platform === 'win32' ? 'junction' : 'dir')
+
+    const result = await discoverSkills({
+      homeDir: home,
+      repos: [],
+      includeCwd: false,
+      providerRootOverrides: { claude: accountSkills }
+    })
+
+    expect(result.sources.filter((source) => source.owner === 'claude')).toHaveLength(1)
+    const review = result.skills.find((skill) => skill.name === 'review')!
+    expect(isNativeChatSkillForAgent('claude', review, result)).toBe(true)
+    expect(isNativeChatSkillForAgent('cursor', review, result)).toBe(true)
+  })
+
   it('records every contributing root when symlinked roots dedup to one skill', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
     const home = join(root, 'home')

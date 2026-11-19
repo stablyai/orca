@@ -103,17 +103,34 @@ export function readsSkillSource(
     NativeChatAgentProfile,
     'skillSourceOwner' | 'readsSkillFoldersOf' | 'readsProjectSkillFoldersOf'
   >,
-  source: Pick<SkillDiscoverySource, 'owner' | 'sourceKind'>,
+  source: Pick<SkillDiscoverySource, 'owner' | 'sourceKind' | 'readers'>,
   skill: Pick<DiscoveredSkill, 'sourceKind'>
 ): boolean {
-  if (source.owner === null || source.owner === profile.skillSourceOwner) {
+  if (source.owner === null) {
     return true
+  }
+  if (source.owner === profile.skillSourceOwner) {
+    return source.readers !== 'borrowers'
   }
   const borrowed =
     profile.readsSkillFoldersOf?.includes(source.owner) === true ||
     (source.sourceKind === 'repo' &&
       profile.readsProjectSkillFoldersOf?.includes(source.owner) === true)
-  return borrowed && source.sourceKind !== 'plugin' && skill.sourceKind !== 'bundled'
+  return (
+    borrowed &&
+    source.readers !== 'owner' &&
+    source.sourceKind !== 'plugin' &&
+    skill.sourceKind !== 'bundled'
+  )
+}
+
+const HOME_SKILL_FOLDER_OWNERS_OTHERS_READ: ReadonlySet<AgentType> = new Set(
+  Object.values(NATIVE_CHAT_AGENT_PROFILES).flatMap((profile) => profile?.readsSkillFoldersOf ?? [])
+)
+
+/** Whether another agent reads `owner`'s home skill folders, so its default home still matters. */
+export function isSkillFolderOwnerOthersRead(owner: AgentType): boolean {
+  return HOME_SKILL_FOLDER_OWNERS_OTHERS_READ.has(owner)
 }
 
 export function getNativeChatAgentProfile(

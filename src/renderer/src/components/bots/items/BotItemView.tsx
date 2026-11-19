@@ -1,7 +1,7 @@
 // One item, in the list's place: a frozen header (title, status, links), then the description
 // (clamped), chat, done means and activity scrolling under it, and a comment box that wakes its chat.
 // BotItemPane holds it under the back row and sends typing from anywhere in it to the comment box.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { ExternalLink, House, MessageSquare } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -35,6 +35,7 @@ import { BotItemHeader } from './BotItemHeader'
 import { setBotItemsStatus } from './use-bot-items'
 import { useBotItemSnoozing } from './BotItemSnooze'
 import { useBotItemView, type BotItemViewRead } from './use-bot-item-view'
+import { useBotItemPendingComments } from './use-bot-item-pending-comments'
 import { BotItemsReadFailed } from './BotItemsReadFailed'
 
 const NO_FOLDERS: never[] = []
@@ -42,18 +43,20 @@ const NO_FOLDERS: never[] = []
 export function BotItemView({
   bot,
   uid,
+  listed,
   takeFocus,
   commentRef,
   onGone
 }: {
   bot: Bot
   uid: string
+  listed?: BotItem
   commentRef?: React.RefObject<BotItemCommentBoxHandle | null>
   /** Whether the item should take focus as it shows (nothing else in the pane holds it). */
   takeFocus?: () => boolean
   onGone?: (uid: string) => void
 }): React.JSX.Element {
-  const view = useBotItemView(bot, uid)
+  const view = useBotItemView(bot, uid, listed)
   const { deleted } = view
   useEffect(() => {
     if (deleted) {
@@ -132,8 +135,11 @@ export function BotItemBody({
       toast.error(botErrorMessage(error))
     )
   const ChatIcon = item.chat.kind === 'home' ? House : MessageSquare
+  const pending = useBotItemPendingComments(bot, item.uid, view.events)
+  // The header and comment box paint first; the Activity, the costly part, renders right after.
+  const activityMounted = useDeferredValue(true, false)
   const { scrollRef, contentRef, scrollerProps, showJump, jumpToLatest } = useBotTranscriptFollow({
-    itemCount: view.events.length,
+    itemCount: view.events.length + pending.shown.length,
     isWorking: false,
     isVisible: true
   })
@@ -236,12 +242,15 @@ export function BotItemBody({
                             {t('bots.items.view.showEarlier', 'Show earlier')}
                           </Button>
                         ) : null}
-                        <BotItemActivityList
-                          bot={bot}
-                          item={item}
-                          events={view.events}
-                          onReply={() => comment.current?.focus()}
-                        />
+                        {/* From the list's row, the Activity shows once read: never a false "No comments". */}
+                        {view.eventsRead && activityMounted ? (
+                          <BotItemActivityList
+                            bot={bot}
+                            item={item}
+                            events={view.events}
+                            pending={pending}
+                          />
+                        ) : null}
                       </section>
                     </div>
                   </div>
@@ -261,7 +270,10 @@ export function BotItemBody({
                 bot={bot}
                 item={item}
                 attachTo={attachTo}
-                onSent={jumpToLatest}
+                onSend={(text, paths) => {
+                  pending.send(text, paths, view.events.at(-1)?.id ?? item.lastEventId)
+                  jumpToLatest()
+                }}
               />
             )}
           </NativeChatPaneFileDropSurface>

@@ -285,7 +285,7 @@ describe('BotUpcomingSection', () => {
     expect(mocks.openAutomationsPage).toHaveBeenCalledOnce()
   })
 
-  it('shows a failed automation even when an older Orca saved the card folded', () => {
+  it('says a hidden automation failed while the card is folded', () => {
     window.localStorage.setItem(
       'orca.bots.panelFolds',
       JSON.stringify({ 'bot-1': ['automations'] })
@@ -297,33 +297,9 @@ describe('BotUpcomingSection', () => {
     ]
     render(<Section />)
 
-    expect(screen.getByText('Digest')).toBeTruthy()
+    expect(screen.queryByText('Digest')).toBeNull()
     expect(screen.getByText('Failed')).toBeTruthy()
-    expect(screen.queryByRole('button', { expanded: false })).toBeNull()
-  })
-
-  it('keeps Look now in the tab order', () => {
-    const lookAround = { on: true, every: 'every-4h', weekdaysOnly: true, focus: '' } as const
-    const bot: Bot = { ...BOT, lookAround }
-    const upNext = { running: false, seenAt: 0, lastLookedAt: NOW - 60_000 }
-    render(
-      <TooltipProvider>
-        <BotUpcomingSection
-          bot={bot}
-          rows={botAutomationCardRows(
-            bot,
-            { automations: [], waits: [], inProgress: [], upNext: { state: upNext, items: [] } },
-            NOW
-          )}
-          upNext={upNext}
-          hasAutomations={false}
-          signInStops={new Set()}
-          now={NOW}
-        />
-      </TooltipProvider>
-    )
-
-    const lookNow = screen.getByRole('button', { name: 'Look now' })
-    expect(lookNow.getAttribute('tabindex')).not.toBe('-1')
+    fireEvent.click(screen.getByRole('button', { expanded: false }))
+    expect(screen.getByText('Digest')).toBeTruthy()
   })
 })

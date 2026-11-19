@@ -358,10 +358,14 @@ describe('BotLinearSetupDialog', () => {
     })
     mocks.readBots.mockReturnValue([
       inAcme('Scout'),
-      inAcme('Triage'),
-      // Paused bots do not answer, so they are not named.
+      inAcme('Triage', {
+        linearWorkspaces: undefined,
+        linear: { workspaceId: 'org-1', workspaceName: 'Acme', urlKey: 'acme' }
+      }),
       inAcme('Sleepy', { paused: true }),
-      { ...bot, id: 'elsewhere', name: 'Elsewhere' }
+      inAcme('Elsewhere', {
+        linearWorkspaces: [{ workspaceId: 'org-2', workspaceName: 'Beta', urlKey: 'beta' }]
+      })
     ])
     confirm.mockResolvedValue(false)
     api.botLinear.state.mockResolvedValue({ ok: true, value: state([workspace()]) })
