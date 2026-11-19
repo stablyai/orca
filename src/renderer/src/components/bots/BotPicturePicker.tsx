@@ -1,6 +1,6 @@
 import React, { useRef } from 'react'
 import { Trans } from 'react-i18next'
-import { ChevronLeft, ChevronRight, ImageUp } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ImageUp, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ColorPicker } from '@/components/ui/color-picker'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -213,15 +213,35 @@ function BotPictureColors({
           )}
         />
       ))}
-      <ColorPicker
-        value={current}
-        onChange={(next) => onChange(next.toLowerCase())}
-        label={t('bots.new.pictureColorCustom', 'Custom color')}
-        selected={isCustom}
-        showHexInTrigger={false}
-        triggerLabel={t('bots.new.pictureColorMore', 'Custom')}
-        className={cn('ml-0.5 h-5.5', !isCustom && '[&>span:first-child]:hidden')}
-      />
+      {isCustom ? (
+        <span
+          aria-hidden
+          style={{ backgroundColor: current }}
+          className="size-4 rounded-full border border-black/10 ring-2 ring-foreground ring-offset-2 ring-offset-popover dark:border-white/15"
+        />
+      ) : null}
+      <Tooltip>
+        <ColorPicker
+          value={current}
+          onChange={(next) => onChange(next.toLowerCase())}
+          label={t('bots.new.pictureColorCustom', 'Custom color')}
+          selected={isCustom}
+          trigger={
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label={t('bots.new.pictureColorCustom', 'Custom color')}
+                className="flex size-4 cursor-pointer items-center justify-center rounded-full border border-border bg-muted text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              >
+                <Plus className="size-3" />
+              </button>
+            </TooltipTrigger>
+          }
+        />
+        <TooltipContent side="bottom" sideOffset={4}>
+          {t('bots.new.pictureColorCustom', 'Custom color')}
+        </TooltipContent>
+      </Tooltip>
     </div>
   )
 }
