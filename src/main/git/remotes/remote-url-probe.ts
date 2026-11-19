@@ -6,7 +6,7 @@ import { requireReachableGitRoute } from '../../providers/execution-host-provide
 import { getConnectionExecutionHostId } from '../../../shared/execution-host/execution-host'
 
 import { REMOTE_URL_PROBE_TIMEOUT_MS } from './remote-git-probe-timeout'
-import { isRemoteListedAbsent } from './remote-name-listing'
+import { isRemoteListedAbsent, listCachedRemoteNames } from './remote-name-listing'
 
 export { REMOTE_URL_PROBE_TIMEOUT_MS }
 
@@ -74,13 +74,25 @@ async function readUncachedRemoteUrl(
   ) {
     throw new Error(`error: No such remote '${remoteName}'`)
   }
-  const { stdout } = await gitExecFileAsync(['remote', 'get-url', remoteName], {
-    cwd: context.repoPath,
-    timeout: REMOTE_URL_PROBE_TIMEOUT_MS,
-    ...(context.wslDistro ? { wslDistro: context.wslDistro } : {}),
-    ...(context.admissionTier ? { admissionTier: context.admissionTier } : {})
-  })
-  return stdout
+  try {
+    const { stdout } = await gitExecFileAsync(['remote', 'get-url', remoteName], {
+      cwd: context.repoPath,
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS,
+      ...(context.wslDistro ? { wslDistro: context.wslDistro } : {}),
+      ...(context.admissionTier ? { admissionTier: context.admissionTier } : {})
+    })
+    return stdout
+  } catch (error) {
+    // Sign a listing after a miss so later reads answer from it; WSL listings stay unsigned, so it would only add spawns.
+    if (!context.wslDistro && isStableMissingGitRemoteError(error)) {
+      await listCachedRemoteNames(
+        context.repoPath,
+        null,
+        context.admissionTier ? { admissionTier: context.admissionTier } : {}
+      ).catch(() => null)
+    }
+    throw error
+  }
 }
 
 const TRANSIENT_PROBE_PATTERNS = [
