@@ -1,6 +1,7 @@
-import { delimiter, dirname } from 'node:path'
+import { dirname } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { resolveCliCommandAsync } from '../../../shared/shell/command-resolution/node-cli-command-async-resolution'
+import { resolveCommandOnLocalPath } from '../../ipc/command-path/command-path-resolver'
 import { resolvePathEnvKey } from '../../pty/environment/windows-path-segment-merge'
 
 const LOCAL_AUTOMATION_COMMAND_TIMEOUT_MS = 30_000
@@ -9,7 +10,7 @@ const LOCAL_AUTOMATION_COMMAND_TIMEOUT_MS = 30_000
 function withProgramDirectoryOnPath(program: string): NodeJS.ProcessEnv {
   const env = { ...process.env }
   const pathKey = resolvePathEnvKey(env, process.platform)
-  const pathDelimiter = process.platform === 'win32' ? ';' : delimiter
+  const pathDelimiter = process.platform === 'win32' ? ';' : ':'
   const programDirectory = dirname(program)
   const isProgramDirectory = (entry: string): boolean =>
     process.platform === 'win32'
@@ -17,7 +18,8 @@ function withProgramDirectoryOnPath(program: string): NodeJS.ProcessEnv {
       : entry === programDirectory
   const inheritedEntries = (env[pathKey] ?? '')
     .split(pathDelimiter)
-    .filter((entry) => entry.length > 0 && !isProgramDirectory(entry))
+    // Empty entries are meaningful on POSIX (current directory), so keep them.
+    .filter((entry) => !isProgramDirectory(entry))
   env[pathKey] = [programDirectory, ...inheritedEntries].join(pathDelimiter)
   return env
 }
@@ -46,7 +48,12 @@ async function runLocalProviderCommand(
 
 export async function isExternalAutomationCommandOnPath(command: string): Promise<boolean> {
   try {
-    return (await resolveCliCommandAsync(command)) !== command
+    // A relative PATH entry can normalize a hit back to the bare name, so string inequality
+    // alone would miss it; the path resolver returns null only for a real miss.
+    return (
+      (await resolveCliCommandAsync(command)) !== command ||
+      (await resolveCommandOnLocalPath(command)) !== null
+    )
   } catch {
     return false
   }

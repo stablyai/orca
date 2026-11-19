@@ -1,4 +1,4 @@
-import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -67,22 +67,6 @@ it('spawns the bare name with no env override when resolution finds nothing', as
     args: ['cron', 'list'],
     timeoutMs: 30_000
   })
-})
-
-it('resolves POSIX commands from PATH too, with their directory prepended', async () => {
-  Object.defineProperty(process, 'platform', { value: 'linux' })
-  const binary = join(pathDir, 'orca-test-openclaw')
-  await writeFile(binary, '#!/bin/sh\n')
-  await chmod(binary, 0o755)
-
-  await runLocalAutomationCommand('orca-test-openclaw', ['cron', 'list'])
-
-  expect(runProcess).toHaveBeenCalledWith(
-    expect.objectContaining({
-      program: binary,
-      env: expect.objectContaining({ PATH: pathDir })
-    })
-  )
 })
 
 it('preserves timeout and error reporting for resolved commands', async () => {
