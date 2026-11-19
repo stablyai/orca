@@ -103,6 +103,18 @@ async function postHook(endpoint, pane, payload) {
   }
 }
 
+// Setup, not measured: a startup announcement traps focus (keys would land in it), so every window starts with none open.
+export async function closeStartupDialogs(page, incomplete) {
+  const open = () => page.evaluate(() => Boolean(document.querySelector('[role="dialog"]')))
+  for (let attempt = 0; attempt < 5 && (await open()); attempt += 1) {
+    await page.keyboard.press('Escape')
+    await sleep(500)
+  }
+  if (await open()) {
+    incomplete.push('a startup dialog stayed open: it would take the typed keys')
+  }
+}
+
 /**
  * Setup, not measured: answer the worktree-cards intro and keep classic cards. Builds that have the intro (#43028)
  * otherwise preview the new cards on a profile that never answered it, so OLD and NEW would click different things.
@@ -208,15 +220,6 @@ async function showTerminalWorkspace(page) {
     window.__store.getState().setActiveTabType?.('terminal', worktreeId)
   })
   await sleep(3_000)
-  // A startup announcement dialog traps focus, so keys would land in it instead of the terminal.
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    const open = await page.evaluate(() => Boolean(document.querySelector('[role="dialog"]')))
-    if (!open) {
-      break
-    }
-    await page.keyboard.press('Escape')
-    await sleep(500)
-  }
 }
 
 async function typeIntoComposer({ page, windowMs }) {
@@ -269,7 +272,7 @@ async function typeIntoComposer({ page, windowMs }) {
   })
   const focusHolder = await page.evaluate(() => {
     const active = document.activeElement
-    return active?.matches('[data-fleet-gate-input="1"]')
+    return active?.closest('[data-fleet-gate-input="1"], [contenteditable="true"], textarea')
       ? null
       : `${active?.tagName.toLowerCase() ?? 'nothing'}${active?.getAttribute('role') ? `[role=${active.getAttribute('role')}]` : ''}`
   })

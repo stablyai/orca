@@ -37,7 +37,12 @@ import {
   waitForLaunches,
   writeClaudeStub
 } from './fleet-gate-launch-burst.mjs'
-import { pinClassicWorktreeCards, SCENARIOS, seedAgentStatuses } from './fleet-gate-scenarios.mjs'
+import {
+  closeStartupDialogs,
+  pinClassicWorktreeCards,
+  SCENARIOS,
+  seedAgentStatuses
+} from './fleet-gate-scenarios.mjs'
 import {
   buildSyntheticFleetSeed,
   ensureFleetCorpus,
@@ -360,6 +365,7 @@ async function measureOnce({ arm, sha, buildDir, seedDir, options, runDir, outDi
       result.notes.push(`agent statuses: ${JSON.stringify(agents)}`)
     }
     await new Promise((resolve) => setTimeout(resolve, options.settleMs))
+    await closeStartupDialogs(page, result.incomplete)
     const cards = await pinClassicWorktreeCards(page)
     if (cards !== 'classic') {
       result.incomplete.push(
