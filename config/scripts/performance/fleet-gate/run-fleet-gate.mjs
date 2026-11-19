@@ -16,7 +16,6 @@ import {
   reapStaleRunDirs,
   hasRecords,
   recordCopyLaunch,
-  recordHelper,
   recordHelperLaunch,
   removeRunDir
 } from './fleet-gate-run-dirs.mjs'
@@ -455,9 +454,7 @@ async function main() {
     ensureFleetCorpus(path.join(CACHE_ROOT, 'corpus'))
   }
   installStopHandlers()
-  virtualDisplay = await startVirtualDisplay((pid, command) =>
-    recordHelper(gateRunDir, pid, command)
-  )
+  virtualDisplay = await startVirtualDisplay(recordHelperLaunch(gateRunDir))
   // Without a private display copies stay hidden and unpainted, so clicks and focus can't be driven.
   options.scenarios ??= virtualDisplay
     ? [...Object.keys(SCENARIOS), 'burst']

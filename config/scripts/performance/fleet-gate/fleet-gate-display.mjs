@@ -13,10 +13,11 @@ function findOnPath(binary) {
   return null
 }
 
-/** record(pid) runs right after the spawn, so a gate killed during Xvfb's startup still has it on file. */
-export async function startVirtualDisplay(record = () => () => {}) {
+/** tracker (recordHelperLaunch) marks Xvfb before it spawns, so a gate killed during its startup still has it on file. */
+export async function startVirtualDisplay(tracker = null) {
   const xvfb = process.platform === 'linux' ? findOnPath('Xvfb') : null
   if (!xvfb) {
+    tracker?.done()
     return null
   }
   // -displayfd: Xvfb picks a free display itself and reports it once ready, so two runs can't claim the same one.
@@ -24,15 +25,15 @@ export async function startVirtualDisplay(record = () => () => {}) {
     xvfb,
     ['-displayfd', '3', '-screen', '0', '1600x1000x24', '-nolisten', 'tcp'],
     {
-      stdio: ['ignore', 'ignore', 'ignore', 'pipe']
+      stdio: ['ignore', 'ignore', 'ignore', 'pipe'],
+      // Xvfb rejects unknown arguments, so its marker rides in the environment.
+      env: { ...process.env, ...tracker?.env }
     }
   )
-  let forget = () => {}
-  try {
-    forget = record(child.pid, xvfb)
-  } catch (error) {
-    child.kill('SIGKILL')
-    throw error
+  const recorded = tracker?.record(child.pid) ?? (() => {})
+  const forget = () => {
+    recorded()
+    tracker?.done()
   }
   const number = await new Promise((resolve) => {
     let text = ''

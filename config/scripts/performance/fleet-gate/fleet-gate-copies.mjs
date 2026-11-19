@@ -213,7 +213,11 @@ export async function stopCopyDaemons(userDataDir) {
       await new Promise((resolve) => setTimeout(resolve, 100))
     }
     // Escalate only on a fresh, successful read.
-    const latest = processStartTimes()
+    let latest = processStartTimes()
+    for (let attempt = 0; latest === null && attempt < 5; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      latest = processStartTimes()
+    }
     for (const pid of latest === null ? [] : pids.filter(same(latest))) {
       try {
         process.kill(pid, 'SIGKILL')

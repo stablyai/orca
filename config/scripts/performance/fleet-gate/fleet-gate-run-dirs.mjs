@@ -1,7 +1,7 @@
 // A copy's terminal daemon detaches into its own session, so a killed gate (SIGKILL, a timeout, a lost host) would leave
 // it running forever. Each gate's run folder therefore records its owner, every copy (before it launches) and every
 // helper process, and the next gate reaps folders whose owner is gone; a live gate also kills them on any exit.
-import { execFileSync, spawnSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -84,8 +84,9 @@ export function recordCopyLaunch(runDir, userDataDir) {
 }
 
 /**
- * Records a batch of helpers (CPU load) before they spawn, under a marker their command lines carry; record(pid) adds
- * each one for the exit kill, done() drops the marker once they are stopped.
+ * Records a batch of helpers (Xvfb, CPU load) before they spawn, under a marker each carries on its command line (arg)
+ * or, for a program that rejects unknown arguments, in its environment (env); record(pid) adds each one for the exit
+ * kill, done() drops the marker once they are stopped.
  */
 export function recordHelperLaunch(runDir) {
   const marker = randomUUID()
@@ -93,11 +94,12 @@ export function recordHelperLaunch(runDir) {
   writeRecord(pending, { marker })
   return {
     arg: `--fleet-gate-helper=${marker}`,
+    env: { FLEET_GATE_HELPER: marker },
     record: (pid) => {
       try {
-        return recordHelper(runDir, pid, process.execPath)
+        return recordHelper(runDir, pid)
       } catch {
-        // The marker on its command line still lets a reap find it.
+        // Its marker still lets a reap find it.
         return () => {}
       }
     },
@@ -106,17 +108,14 @@ export function recordHelperLaunch(runDir) {
 }
 
 /** Records a helper the gate spawned (Xvfb, CPU load); returns the call that forgets it once it is stopped. */
-export function recordHelper(runDir, pid, command) {
+function recordHelper(runDir, pid) {
   const file = path.join(ownerFolder(runDir), 'helpers', String(pid))
-  // Written before any ps call: until the start time is known, the command and launch time identify it.
-  writeRecord(file, { command: path.basename(command), after: Date.now() - 2_000 })
   let identity = processIdentity(pid)
   for (let attempt = 0; !identity && attempt < 10; attempt += 1) {
     Atomics.wait(sleeper, 0, 0, 100)
     identity = processIdentity(pid)
   }
   if (!identity) {
-    // Unrecorded, a gate killed later would leave it running for good.
     throw new Error(`can't read process ${String(pid)}'s start time with ps, so can't record it`)
   }
   writeRecord(file, { identity })
@@ -247,34 +246,38 @@ function readRecords(dir) {
     })
 }
 
-/** A helper recorded before its start time was known: killed only if its command and start fit; false if ps failed. */
-function killProvisional(pid, { command, after }) {
-  const r = spawnSync('ps', ['-o', 'comm=,lstart=', '-p', String(pid)], {
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'ignore'],
-    env: { ...process.env, LC_ALL: 'C', TZ: 'UTC' }
-  })
-  const out = typeof r.stdout === 'string' ? r.stdout.trim() : ''
-  if (r.error || r.signal || (r.status !== 0 && !(r.status === 1 && !out))) {
-    return false
+/** Linux: pids whose environment holds exactly this entry, or null when /proc can't be listed. */
+function pidsWithEnv(entry) {
+  let pids = []
+  try {
+    pids = fs.readdirSync('/proc').filter((name) => /^\d+$/.test(name))
+  } catch {
+    return process.platform === 'linux' ? null : []
   }
-  const match = /^(.*\S)\s+(\S+ \S+ +\d+ \S+ \d+)$/.exec(out)
-  const started = match ? Date.parse(`${match[2]} UTC`) : Number.NaN
-  if (
-    match &&
-    path.basename(match[1]) === command &&
-    started >= after &&
-    started <= after + 120_000
-  ) {
-    signal(pid, 'SIGKILL', false)
-  }
-  return true
+  return pids
+    .filter((pid) => {
+      try {
+        return fs.readFileSync(`/proc/${pid}/environ`, 'utf8').split('\0').includes(entry)
+      } catch {
+        // Exited, or another user's process (never ours).
+        return false
+      }
+    })
+    .map(Number)
 }
 
 function killByMarker(arg, group) {
   const pids = pidsCarrying(arg)
   for (const pid of pids ?? []) {
     signal(pid, 'SIGKILL', group)
+  }
+  return pids !== null
+}
+
+function killByEnvMarker(entry) {
+  const pids = pidsWithEnv(entry)
+  for (const pid of pids ?? []) {
+    signal(pid, 'SIGKILL', false)
   }
   return pids !== null
 }
@@ -313,10 +316,9 @@ async function reapFolderOrThrow(dir) {
   for (const record of readRecords(path.join(dir, 'helpers'))) {
     const pid = Number(record.name)
     const settled = record.name.startsWith('pending-')
-      ? killByMarker(`--fleet-gate-helper=${String(record.marker)}`, false)
-      : record.identity
-        ? killVerified(pid, record.identity, false)
-        : killProvisional(pid, record)
+      ? killByMarker(`--fleet-gate-helper=${String(record.marker)}`, false) &&
+        killByEnvMarker(`FLEET_GATE_HELPER=${String(record.marker)}`)
+      : killVerified(pid, record.identity, false)
     if (!settled) {
       return false
     }
