@@ -18,11 +18,13 @@ const mocks = vi.hoisted(() => {
   const state: {
     owner: RuntimeClientTarget | null
     distro: string | null
+    surface: string
     watchers: Watcher[]
     callRuntimeRpc: Mock
   } = {
     owner: { kind: 'local' },
     distro: null,
+    surface: 'repo:group-1:tab-1',
     watchers: [],
     callRuntimeRpc: vi.fn()
   }
@@ -32,6 +34,11 @@ const mocks = vi.hoisted(() => {
 vi.mock('@/runtime/provider-accounts/ownership/use-active-account-owner', () => ({
   useActiveAccountOwner: () =>
     mocks.owner ? { target: mocks.owner, wslHostDistro: mocks.distro } : null
+}))
+// Focus moves change the visible surface while the resolved owner stays the same.
+vi.mock('@/lib/workspace/ownership/visible-account-surface', () => ({
+  visibleAccountHostId: () => undefined,
+  visibleAccountSurfaceKey: () => mocks.surface
 }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: mocks.callRuntimeRpc
@@ -80,10 +87,65 @@ describe('useOwnerUsageRateLimits', () => {
   beforeEach(() => {
     mocks.owner = { kind: 'local' }
     mocks.distro = null
+    mocks.surface = 'repo:group-1:tab-1'
     mocks.watchers.length = 0
     mocks.callRuntimeRpc.mockReset()
   })
-  afterEach(() => cleanup())
+  afterEach(() => {
+    cleanup()
+    vi.useRealTimers()
+  })
+
+  it('keeps the live owner stream, its usage and a pending refresh across same-owner focus moves', async () => {
+    vi.useFakeTimers()
+    mocks.owner = { kind: 'environment', environmentId: 'mini' }
+    let resolveRefresh: (value: ProviderAccountsSnapshot) => void = () => {}
+    mocks.callRuntimeRpc.mockReturnValue(
+      new Promise<ProviderAccountsSnapshot>((resolve) => {
+        resolveRefresh = resolve
+      })
+    )
+    const { result, rerender } = renderHook(() => useOwnerUsageRateLimits(local))
+    const stream = mocks.watchers[0]
+    act(() =>
+      stream.handlers.onSnapshot(
+        snapshot(createEmptyRateLimitState({ claude: provider('claude', 40) }))
+      )
+    )
+    const pending = result.current.refreshRemote?.()
+    for (const surface of ['repo:group-1:tab-2', 'repo:group-2:tab-3', 'other:group-4:tab-5']) {
+      mocks.surface = surface
+      rerender()
+      expect(stream.closed).toBe(false)
+      expect(result.current.rateLimits.claude?.session?.usedPercent).toBe(40)
+      expect(result.current.accounts).not.toBeNull()
+    }
+    act(() =>
+      stream.handlers.onSnapshot(
+        snapshot(createEmptyRateLimitState({ claude: provider('claude', 41) }))
+      )
+    )
+    expect(result.current.rateLimits.claude?.session?.usedPercent).toBe(41)
+    await act(async () => {
+      resolveRefresh(snapshot(createEmptyRateLimitState({ claude: provider('claude', 42) })))
+      await pending
+    })
+    expect(result.current.rateLimits.claude?.session?.usedPercent).toBe(42)
+
+    // A lost stream still reconnects after the delay, and the new stream's usage shows.
+    act(() => stream.handlers.onError(new Error('offline')))
+    expect(result.current.rateLimits.claude?.session).toBeNull()
+    act(() => vi.advanceTimersByTime(5_000))
+    expect(stream.closed).toBe(true)
+    const reconnected = mocks.watchers.at(-1)!
+    expect(reconnected).not.toBe(stream)
+    act(() =>
+      reconnected.handlers.onSnapshot(
+        snapshot(createEmptyRateLimitState({ claude: provider('claude', 50) }))
+      )
+    )
+    expect(result.current.rateLimits.claude?.session?.usedPercent).toBe(50)
+  })
 
   it('never shows server A numbers under server B', () => {
     mocks.owner = { kind: 'environment', environmentId: 'mini' }

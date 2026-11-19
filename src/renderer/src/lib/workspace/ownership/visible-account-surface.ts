@@ -96,23 +96,3 @@ export function visibleAccountHostId(
   }
   return getResolvedExecutionHostIdForWorktree(state, workspaceId)
 }
-
-export function visibleAccountSurfaceKey(state: VisibleAccountSurfaceState): string {
-  const creationId = state.activePendingCreationId
-  if (
-    creationId &&
-    selectWorktreeCreationSurfaceShown(state) &&
-    state.pendingWorktreeCreations[creationId] &&
-    pendingCreationOpensNativeChat(state.pendingWorktreeCreations[creationId])
-  ) {
-    return `pending:${creationId}`
-  }
-  const workspaceId = state.activeWorktreeId
-  const group = workspaceId
-    ? focusedGroup(
-        state.groupsByWorktree?.[workspaceId],
-        state.activeGroupIdByWorktree?.[workspaceId]
-      )
-    : undefined
-  return `${workspaceId ?? ''}:${group?.id ?? ''}:${group?.activeTabId ?? ''}`
-}
