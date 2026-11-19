@@ -114,13 +114,17 @@ export class AgentHookServer extends AgentHookServerLifecycle {
   }
 
   /** A pane's agent that now reports a process its presence probe can check, became a shared
-   *  host's, or already ended is owed no shell proof. */
+   *  host's, or already ended is owed no shell proof. Only a local row's process is probed; a WSL
+   *  guest's PID is not main's to check. */
   private exitProofOwed(resolved: string): boolean {
     const identity = this.paneAgentIdentity(resolved)
     return (
       identity?.ended === false &&
       identity.executionHost !== 'shared' &&
-      !this.hasVerifiableAgentProcess(resolved)
+      !(
+        this.state.lastStatusByPaneKey.get(resolved)?.connectionId === null &&
+        this.hasVerifiableAgentProcess(resolved)
+      )
     )
   }
 
