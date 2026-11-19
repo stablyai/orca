@@ -1,8 +1,7 @@
 // oxfmt-ignore
-import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
-import { cloneWorkspaceSessionState } from '../../restoring-sessions/session-owner-fields'
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../../restoring-sessions/workspace-session-write-rollback'
 import { clearReplacedPaneBinding } from './replaced-pane-binding'
 
@@ -18,7 +17,11 @@ import {
 import { evaluatePtyBindingFastLane } from './pty-binding-fast-lane'
 import { durabilityOnlyBindingResult, isDurabilityOnlyMatch } from './pty-binding-durability-only'
 import { ptyBindingIsRefused } from './pty-binding-refusals'
-import { markPtyBindingSessionDirty, writePtyBinding } from './pty-binding-write'
+import {
+  markPtyBindingSessionDirty,
+  publishPtyBindingSession,
+  writePtyBinding
+} from './pty-binding-write'
 import {
   reportPtyBindingOwnerConflict,
   reportPtyBindingPlacement,
@@ -107,14 +110,7 @@ export class PtyBindingPersistenceOperations {
     const { runtime, sessions } = this[ptyBindingPersistenceOperationsContext]
     const resolved = resolveHostId(hostId)
     const publish = (session: WorkspaceSessionState): void => {
-      if (resolved === LOCAL_EXECUTION_HOST_ID) {
-        runtime.state.workspaceSession = session
-      } else {
-        runtime.state.workspaceSessionsByHostId = {
-          ...runtime.state.workspaceSessionsByHostId,
-          [resolved]: session
-        }
-      }
+      publishPtyBindingSession(runtime, resolved, session)
       markPtyBindingSessionDirty(runtime, resolved)
     }
     return runtime.runDurableMutation(() => {
@@ -137,12 +133,10 @@ export class PtyBindingPersistenceOperations {
       if (!session.tabsByWorktree[binding.worktreeId]?.some((tab) => tab.id === binding.tabId)) {
         return { value: false, persist: false, writtenHostIds: [] }
       }
-      const before = cloneWorkspaceSessionState(session)
       const retired = clearReplacedPaneBinding(session, { ...binding, parentTabId: binding.tabId })
       // Publish directly: renderer snapshot repair would revive the retired binding.
       publish(retired)
       bumpPtyBindingGeneration(runtime, resolved, binding.leafId)
-      const staged = cloneWorkspaceSessionState(retired)
       return {
         value: true,
         writtenHostIds: [resolved],
@@ -150,8 +144,8 @@ export class PtyBindingPersistenceOperations {
         rollback: () => {
           publish(
             rollbackWorkspaceSessionAfterFailedAsyncWrite(
-              before,
-              staged,
+              session,
+              retired,
               sessions.getWorkspaceSession(resolved)
             )
           )

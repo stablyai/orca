@@ -51,7 +51,7 @@ const relay = {
 }
 
 describe("a bot's tools file", () => {
-  it("gives its servers only to a Claude or Codex session in the bot's home folder", async () => {
+  it("gives its servers and token to any agent's session in the bot's home folder, and only there", async () => {
     const folder = tempDir('bot-tools-file-')
     await writeBotToolServers(folder, [notion])
     expect(await readBotToolServers(folder)).toEqual([notion])
@@ -61,13 +61,16 @@ describe("a bot's tools file", () => {
       provider,
       location: { workspaceId }
     })
-    const servers = async (provider: string, workspaceId: string) =>
+    const launch = async (provider: string, workspaceId: string) =>
       (await botSessionToolServers(bots, record(provider, workspaceId), folder, relay)).tools
-        .servers
-    expect(await servers('codex', home)).toEqual([notion])
-    expect(await servers('claude', home)).toEqual([notion])
-    expect(await servers('codex', 'repo-1')).toEqual([])
-    expect(await servers('grok', home)).toEqual([])
+    for (const agent of ['claude', 'codex', 'grok', 'opencode', 'omp', 'pi', 'antigravity']) {
+      const tools = await launch(agent, home)
+      expect(tools.servers).toEqual([notion])
+      expect({ ...tools.env, ...tools.commandEnv }).toEqual({ ORCA_BOT_TOOLS_TOKEN: 'bot-token' })
+    }
+    const elsewhere = await launch('grok', 'repo-1')
+    expect(elsewhere.servers).toEqual([])
+    expect({ ...elsewhere.env, ...elsewhere.commandEnv }).toEqual({})
   })
 
   it('keeps header values out of the file, sealed in the host store bound to the address', async () => {
@@ -256,6 +259,5 @@ describe('the tools a chat launched with', () => {
   it("records nothing for a chat that is not a bot's", async () => {
     const folder = tempDir('bot-tools-revision-')
     expect((await launch(folder, 'codex', folderWorkspaceKey('repo-1'))).launched).toBeNull()
-    expect((await launch(folder, 'grok')).launched).toBeNull()
   })
 })

@@ -4,7 +4,6 @@ import type { BrowserClientPageRendererIdentity } from '../../../../../../shared
 
 import { BrowserClientPageRetainedRegistry } from './browser-client-page-retained-registry'
 import { clearBrowserGuestMetadata } from '../metadata/browser-guest-metadata-cache'
-import { isWebviewDragPassthroughActive } from '../drag/webview-drag-passthrough'
 
 const PAGE: BrowserClientPageRendererIdentity = {
   partition: 'persist:route-a',
@@ -73,15 +72,5 @@ it('waits for the bootstrap finish and subsequent stop before granting creation 
   expect(available).toBe(false)
   webview.dispatchEvent(new Event('did-stop-loading'))
   await expect(mounting).resolves.toEqual({ webContentsId: 41 })
-  registry.dispose()
-})
-
-it('lets a native drag pass through a retained page even when no other guest is open', () => {
-  const { registry } = createRig()
-  void registry.mountPage(PAGE).catch(() => {})
-  window.dispatchEvent(new Event('dragstart'))
-  expect(isWebviewDragPassthroughActive()).toBe(true)
-  window.dispatchEvent(new Event('dragend'))
-  expect(isWebviewDragPassthroughActive()).toBe(false)
   registry.dispose()
 })

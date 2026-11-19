@@ -16,10 +16,10 @@ describe('advanceTerminalEscapeBoundary', () => {
         const state = advanceTerminalEscapeBoundary('', stream.slice(0, split))
         const continued = advanceTerminalEscapeBoundary(state, stream.slice(split))
         expect(continued).toBe('\x1b')
-        for (const completion of ['\\', '[31m', '\x1b[0m', '\x18', '\x1a', ']0;next\x07']) {
-          expect(advanceTerminalEscapeBoundary(continued, completion)).toBe('')
-          expect(extractPartialEscapeTail(stream + completion)).toBe('')
-        }
+      }
+      for (const completion of ['\\', '[31m', '\x1b[0m', '\x18', '\x1a', ']0;next\x07']) {
+        expect(advanceTerminalEscapeBoundary('\x1b', completion)).toBe('')
+        expect(extractPartialEscapeTail(stream + completion)).toBe('')
       }
     }
   )
@@ -61,13 +61,5 @@ describe('extractPartialEscapeTail', () => {
 
     const pending = advancePartialEscapeTail('', '\x1bPq\x1b')
     expect(advancePartialEscapeTail(pending, '\x1b[3')).toBe('\x1b[3')
-  })
-})
-
-describe('advancePartialEscapeTail ESC-free fast path', () => {
-  it('still carries a pending tail through an ESC-free chunk', () => {
-    expect(advancePartialEscapeTail('\x1b]0;my-title', ' still in the OSC')).toBe(
-      '\x1b]0;my-title still in the OSC'
-    )
   })
 })

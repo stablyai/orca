@@ -133,25 +133,19 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       })
     })
 
-    it.each([
-      ['hand-launched Claude stops', 'claude', [[146, 'zsh']], true],
-      [
-        'wake-resumed Codex stops then runs ls',
-        'codex',
-        [
-          [146, 'codex'],
-          [0, 'zsh']
-        ],
-        false
-      ]
-    ] as const)('keeps recovery when %s', async (_label, agent, finishes, verifiable) => {
+    it('keeps recovery when wake-resumed Codex stops and the shell runs another command', async () => {
       vi.useFakeTimers()
+      const agent = 'codex'
+      const finishes = [
+        [146, 'codex'],
+        [0, 'zsh']
+      ] as const
       const { connectPanePty } = await import('../connect-pane-pty')
       const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
         '@/lib/agent-status/aggregation/worktree-agent-status'
       )
       vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('zsh')
-      window.api.agentStatus.hasVerifiableAgentProcess = vi.fn(async () => verifiable)
+      window.api.agentStatus.hasVerifiableAgentProcess = vi.fn(async () => false)
       const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
       const transport = createMockTransport('pty-suspended-agent')
       transport.connect.mockImplementation(

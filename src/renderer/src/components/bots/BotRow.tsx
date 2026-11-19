@@ -223,7 +223,7 @@ function BotRowFoldToggle({
     : t('bots.chats.fold', 'Fold {{name}}', { name: botName })
   return (
     // The row's whole right edge, top to bottom, so it is easy to hit; a folded summary widens it
-    // leftward. Its tint shows on row hover or keyboard focus, never only on hover.
+    // leftward.
     <button
       type="button"
       className={cn(
@@ -231,8 +231,7 @@ function BotRowFoldToggle({
         // Negative margins cancel the row's padding so the strip spans its full height and right
         // edge; the row's rounded overflow clips its corners.
         '-mt-1.25 -mr-1.5 -mb-1.25 min-w-10 gap-0.5 self-stretch rounded-none px-1.5 text-xs tabular-nums',
-        // Over the toggle reads just darker than the row's own hover wash.
-        'group-hover/bot-row:bg-foreground/5 hover:bg-foreground/7 focus-visible:bg-foreground/7 focus-visible:ring-2 focus-visible:ring-inset dark:hover:bg-foreground/10 dark:focus-visible:bg-foreground/10',
+        'focus-visible:ring-2 focus-visible:ring-inset',
         // A narrow row keeps its width for the name and time where a pointer can hover: at rest the
         // strip shrinks to what it shows (nothing while unfolded), and widens on row hover or its own
         // focus. Touch keeps the full strip, since nothing would reveal it.

@@ -27,7 +27,7 @@
 10 src/main/agent-launch/trust/agent-trust-presets.ts
 2 src/main/agent-launch/trust/agent-workspace-trust-spawn.ts
 5 src/main/agent-launch/trust/agent-workspace-trust.ts
-3 src/main/agent-launch/trust/antigravity-workspace-trust-ownership.ts
+1 src/main/agent-launch/trust/antigravity-workspace-trust-ownership.ts
 12 src/main/agent-launch/trust/execution-host-workspace-trust.ts
 3 src/main/ai-vault-search/session-search-child-service.ts
 4 src/main/ai-vault-search/session-search-enablement.ts
@@ -1370,8 +1370,7 @@
 2 src/main/runtime/workspaces/removal/runtime-unregistered-worktree-removal.ts
 2 src/main/runtime/workspaces/removal/workspace-registration-removal.ts
 2 src/main/runtime/workspaces/removal/workspace-removal.ts
-1 src/main/runtime/workspaces/removal/worktree-removal-agent-trust-cleanup.ts
-2 src/main/runtime/workspaces/workspace-removal-target.ts
+1 src/main/runtime/workspaces/workspace-removal-target.ts
 1 src/main/server/serve-pairing-readiness.ts
 2 src/main/skills/cloud/skill-cloud-auth.ts
 1 src/main/skills/cloud/skill-cloud-package-service.ts
