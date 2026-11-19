@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs'
 import {
+  foldStoredRows,
   planFullRows,
   planRowPatch,
   parseOrNull,
@@ -16,7 +17,6 @@ import { hardenSqliteDatabaseFiles } from '../harden-database-files'
 import { classifyRowCacheFailure } from './row-cache-failure'
 import { readLegacyJsonSource, removeLegacyJsonSource } from './legacy-json-source'
 import { rowCacheWalCheckpoints, type RowCacheWalCheckpoints } from './row-cache-wal-checkpoints'
-import { readStoredRows } from './keyed-json-stored-rows'
 
 export type KeyedJsonRow = { key: string; json: string }
 
@@ -255,7 +255,7 @@ export class KeyedJsonRowCache {
         if (version?.value !== String(this.options.schemaVersion)) {
           return { kind: 'rows' as const, rows: [], receipt: undefined }
         }
-        const rows = [...readStoredRows(db).stored].map(([key, { json }]) => ({ key, json }))
+        const rows = [...readRows(db).stored].map(([key, { json }]) => ({ key, json }))
         const receipt = db.prepare('SELECT value FROM meta WHERE key = ?').get(RECEIPT_KEY)?.value
         return { kind: 'rows' as const, rows, receipt }
       } finally {
@@ -286,7 +286,7 @@ export class KeyedJsonRowCache {
   private readBaseline(db: SyncDatabase): void {
     this.dataVersion = undefined
     const version = db.pragma('data_version', { simple: true })
-    const { stored, maxSeq } = readStoredRows(db)
+    const { stored, maxSeq } = readRows(db)
     this.stored = stored
     this.maxSeq = maxSeq
     this.dataVersion = version
@@ -327,11 +327,9 @@ export class KeyedJsonRowCache {
       // Rows can hold prompts, PR titles and notification ids; keep them user-only.
       directoryMode: 0o700,
       sql: SCHEMA_SQL,
-      walAutocheckpoint: offMain ? 0 : undefined
+      walAutocheckpoint: offMain ? 0 : undefined,
+      synchronous: this.options.durable ? 'FULL' : undefined
     })
-    if (this.options.durable) {
-      db.pragma('synchronous = FULL')
-    }
     this.db = db
     this.walRegistration = this.walCheckpoints.attach(this.path, () => (this.reopen = true))
     hardenSqliteDatabaseFiles(this.path)
@@ -352,6 +350,13 @@ export class KeyedJsonRowCache {
     }
     this.db = null
   }
+}
+
+function readRows(db: SyncDatabase): { stored: Map<string, StoredRow>; maxSeq: number } {
+  // node:sqlite TEXT reads truncate embedded NULs in composite keys; BLOB preserves their bytes.
+  return foldStoredRows(
+    db.prepare('SELECT CAST(key AS BLOB) AS key, seq, value FROM rows ORDER BY seq').all()
+  )
 }
 
 function rollback(db: SyncDatabase): void {
