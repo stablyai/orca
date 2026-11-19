@@ -70,7 +70,15 @@ export function ColorPicker({
   }
 
   return (
-    <Popover defaultOpen={defaultOpen}>
+    <Popover
+      defaultOpen={defaultOpen}
+      onOpenChange={(open) => {
+        // Reopening starts from the current color, not a draft left from last time.
+        if (!open) {
+          setDraftState({ syncedColor: currentColor, draft: currentColor, isEditing: false })
+        }
+      }}
+    >
       <PopoverTrigger asChild>
         {trigger ?? (
           <Button

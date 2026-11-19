@@ -39,18 +39,20 @@ export function MobileBotAvatar({
   }
   // The mascot pictures are transparent: their tile color goes behind, and on a dark one the light rim.
   const color = avatar.color ?? DEFAULT_BOT_AVATAR_COLOR
+  // A bundled picture keeps its own pixel size unless told otherwise.
+  const layer = { width: size, height: size }
   return (
     <View style={[styles.tile, frame, { backgroundColor: color }]}>
       {isDarkBotAvatarColor(color) ? (
         <Image
           source={mobileBotMascotRimAsset(avatar.id)}
-          style={StyleSheet.absoluteFill}
+          style={[StyleSheet.absoluteFill, layer]}
           accessibilityIgnoresInvertColors
         />
       ) : null}
       <Image
         source={mobileBotMascotAsset(avatar.id)}
-        style={StyleSheet.absoluteFill}
+        style={[StyleSheet.absoluteFill, layer]}
         accessibilityIgnoresInvertColors
       />
     </View>

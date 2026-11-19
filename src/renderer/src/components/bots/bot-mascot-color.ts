@@ -92,13 +92,14 @@ export function useBotMascotSrcs(
   color: string | null | undefined
 ): Record<BotMascotId, string> {
   const ready = useSyncExternalStore(subscribe, readVersion, readVersion)
+  // Runs again as the cache changes, so a picture evicted while still shown is built again.
   useEffect(() => {
     if (!isDefaultColor(color)) {
       for (const id of ids) {
         loadRecolored(id, color)
       }
     }
-  }, [ids, color])
+  }, [ids, color, ready])
   return mascotSrcs(ids, color, ready)
 }
 
