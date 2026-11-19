@@ -272,7 +272,7 @@ function paintObserver(paint: TerminalCommandPaint): (chunks: readonly Chunk[]) 
     for (const chunk of chunks) {
       const normalized = normalizeTerminalChunk(chunk.data, pendingAnsi)
       pendingAnsi = normalized.pendingAnsi
-      paint.observe(chunk.data, normalized.text)
+      paint.observe(chunk.data, normalized.text, Date.now(), {})
     }
   }
 }

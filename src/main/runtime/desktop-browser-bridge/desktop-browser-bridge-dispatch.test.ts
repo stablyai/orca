@@ -193,6 +193,49 @@ describe('desktop browser bridge on orcad', () => {
     expect(localGoto).not.toHaveBeenCalled()
   })
 
+  it('assembles a result the desktop sends in chunks ahead of its settlement', async () => {
+    setDesktopBrowserBridgeHostEnabled(true)
+    const { runtime } = orcadRuntime()
+    const dispatcher = new RpcDispatcher({ runtime, methods: METHODS })
+    const { events } = await attachDesktop(dispatcher)
+    const ready = ReadyEvent.parse(events[0])
+
+    const call = cliCall(dispatcher, 'browser.goto', {
+      url: 'https://example.com',
+      worktree: 'path:/srv/app'
+    })
+    await vi.waitFor(() => expect(events).toHaveLength(2))
+    const forwarded = ForwardedEvent.parse(events[1])
+    expect(forwarded).toMatchObject({ stagedResults: true })
+    const identity = { attachmentId: ready.attachmentId, requestId: forwarded.requestId }
+    const desktopCall = (method: string, params: Record<string, unknown>) =>
+      dispatcher.dispatch({ id: method, authToken: 'bound', method, params }, DESKTOP)
+
+    for (const [offset, piece] of [
+      [0, '{"url":"https://exa'],
+      [19, 'mple.com/","title":"Big"}']
+    ] as const) {
+      await expect(
+        desktopCall('desktopBrowserBridge.resultChunk', {
+          ...identity,
+          offset,
+          contentBase64: Buffer.from(piece).toString('base64')
+        })
+      ).resolves.toMatchObject({ ok: true, result: { accepted: true } })
+    }
+    await desktopCall('desktopBrowserBridge.result', {
+      ...identity,
+      ok: true,
+      result: null,
+      stagedResultBytes: 44
+    })
+
+    await expect(call).resolves.toMatchObject({
+      ok: true,
+      result: { url: 'https://example.com/', title: 'Big' }
+    })
+  })
+
   it('detaching fails the waiting command and the next one names the setting', async () => {
     setDesktopBrowserBridgeHostEnabled(true)
     const { runtime, cleanups } = orcadRuntime()

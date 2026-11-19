@@ -110,3 +110,21 @@ it('publishes captures in ownership order despite slow staging, dispatched renam
   expect(await revoked).toBe('replaced')
   expect(await readFile(path, 'utf8')).toBe('queued successor')
 })
+
+it('sweeps week-old hand-offs and crashed parts, keeping recent ones', async () => {
+  const folder = contextSnapshots.agentSessionContextSnapshotRoot(root)
+  const recent = await contextSnapshots.writeAgentSessionContextSnapshot(root, 'recent', 'recent')
+  // The hand-off's own sweep, so the one below lists the files written next.
+  await contextSnapshots.sweepAgentSessionContextSnapshots(folder)
+  const stale = join(folder, 'deleted-chat.txt')
+  const part = join(folder, 'crashed.txt.x.part')
+  await actualFiles.writeFile(stale, 'stale')
+  await actualFiles.writeFile(part, 'part')
+  const longAgo = new Date('2020-01-01T00:00:00Z')
+  await actualFiles.utimes(stale, longAgo, longAgo)
+  await actualFiles.utimes(part, longAgo, longAgo)
+
+  await contextSnapshots.sweepAgentSessionContextSnapshots(folder)
+
+  expect(await actualFiles.readdir(folder)).toEqual([recent.slice(folder.length + 1)])
+})

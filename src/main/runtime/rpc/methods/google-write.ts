@@ -29,7 +29,7 @@ export const GOOGLE_WRITE_METHODS = [
     params: GmailDraftParams,
     handler: async (params, context) => {
       const api = googleApiForCaller(params, context)
-      const body = await attributedGoogleText(params.body, params.callerSessionId, context)
+      const body = await attributedGoogleText(params.body, params, context)
       return saveGmailDraft(api, { ...params, ...(body === undefined ? {} : { body }) })
     }
   }),
@@ -52,7 +52,7 @@ export const GOOGLE_WRITE_METHODS = [
     params: CalendarCreateParams,
     handler: async (params, context) => {
       const api = googleApiForCaller(params, context)
-      const body = await attributedGoogleText(params.body, params.callerSessionId, context)
+      const body = await attributedGoogleText(params.body, params, context)
       return createCalendarEvent(api, {
         ...params,
         ...(body === undefined ? {} : { body }),

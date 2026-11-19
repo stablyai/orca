@@ -57,6 +57,7 @@ import { useBotSidebarSearch } from './use-bot-sidebar-search'
 import { BotsCollapseAllButton } from './BotsCollapseAllButton'
 import { useBotsSidebarReveal } from './bots-sidebar-reveal'
 import { BotsRevealProvider } from './bots-sidebar-reveal-context'
+import { SidebarBotsEmptyState } from './SidebarBotsEmptyState'
 
 /** The sidebar's Bots section, its own top-level section above Projects: one row per bot, this computer's and each paired server's. */
 // The + menu's rows only: 28px tall (a 20px line in the item's own 4px padding), roomier than other menus.
@@ -103,8 +104,9 @@ export function SidebarBotsSection({ onOpenBot }: { onOpenBot: () => void }): Re
     () => entries.flatMap((entry) => (entry.kind === 'bot' ? [entry] : [])),
     [entries]
   )
-  const canCollapse = savedEntries.length > 0
-  const collapsed = canCollapse && savedCollapsed && !searchOpen
+  const hasEntries = savedEntries.length > 0
+  // Folds even while empty, so the onboarding card can be put away.
+  const collapsed = savedCollapsed && !searchOpen
   const collapseAll = useBotCollapseAll(entries, savedEntries)
   const facts = useBotPreviewFacts(rows)
   const preview = collapsedBotPreview(facts)
@@ -171,11 +173,9 @@ export function SidebarBotsSection({ onOpenBot }: { onOpenBot: () => void }): Re
       toggleBots()
     }
   }
-  const collapseLabel = !canCollapse
-    ? label
-    : collapsed
-      ? t('bots.section.expand', 'Expand Bots')
-      : t('bots.section.collapse', 'Collapse Bots')
+  const collapseLabel = collapsed
+    ? t('bots.section.expand', 'Expand Bots')
+    : t('bots.section.collapse', 'Collapse Bots')
 
   return (
     // The sidebar's SidebarBotsSplit owns this section's height cap.
@@ -187,7 +187,6 @@ export function SidebarBotsSection({ onOpenBot }: { onOpenBot: () => void }): Re
         sectionId="bots"
         fold={{
           collapsed,
-          disabled: !canCollapse,
           label: t(
             'bots.section.summary',
             '{{action}}, {{total}} bots, {{attention}} need you, {{unread}} unread, {{working}} working',
@@ -207,9 +206,12 @@ export function SidebarBotsSection({ onOpenBot }: { onOpenBot: () => void }): Re
             <BotCollapsedPreview facts={facts} onOpenBot={openFromFace} onExpand={toggleBots} />
           ) : (
             <span className="flex min-w-0 flex-1 items-center gap-0.5">
-              <span className="pointer-events-none text-left text-xs text-muted-foreground">
-                {entries.length}
-              </span>
+              {/* A 0 next to the onboarding card says nothing. */}
+              {entries.length > 0 ? (
+                <span className="pointer-events-none text-left text-xs text-muted-foreground">
+                  {entries.length}
+                </span>
+              ) : null}
               {collapseAll && !searchOpen ? (
                 <BotsCollapseAllButton collapseAll={collapseAll} />
               ) : null}
@@ -218,14 +220,14 @@ export function SidebarBotsSection({ onOpenBot }: { onOpenBot: () => void }): Re
         }
         actions={
           <>
-            {canCollapse ? (
+            {hasEntries ? (
               <BotSidebarSearchButton
                 open={searchOpen}
                 buttonRef={search.buttonRef}
                 onToggle={search.toggleOpen}
               />
             ) : null}
-            {canCollapse ? (
+            {hasEntries ? (
               <BotSidebarOptionsMenu collapseAll={searchOpen ? null : collapseAll} />
             ) : null}
             <DropdownMenu open={newMenuOpen} onOpenChange={setNewMenuOpen}>
@@ -247,7 +249,7 @@ export function SidebarBotsSection({ onOpenBot }: { onOpenBot: () => void }): Re
                   {newLabel}
                 </TooltipContent>
               </Tooltip>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent side="bottom" align="start" sideOffset={6}>
                 {/* New bot opens its dialog on click or Enter; hover or › shows the other ways to add one. */}
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger
@@ -340,17 +342,9 @@ export function SidebarBotsSection({ onOpenBot }: { onOpenBot: () => void }): Re
                 </div>
               )
             ) : entries.length === 0 ? (
-              <div className="px-4 pb-2 text-xs text-muted-foreground">
-                {t('bots.section.empty', 'No bots yet.')}{' '}
-                <Button
-                  type="button"
-                  variant="link"
-                  size="inlineText"
-                  onClick={() => openBotTemplates()}
-                >
-                  {t('bots.templates.browse', 'Browse templates')}
-                </Button>
-              </div>
+              collapsed ? null : (
+                <SidebarBotsEmptyState onNewBot={openNewBot} />
+              )
             ) : collapsed ? null : (
               <>
                 {entries.map((entry, index) => {

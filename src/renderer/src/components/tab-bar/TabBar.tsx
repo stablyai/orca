@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useMemo } from 'react'
 import { useTabStripOverflowNavigation } from './strip/tab-strip-overflow-navigation'
 import { useTabStripDragScrollHandlers } from './strip/tab-strip-drag-scroll'
 import type { TabBarProps } from './tab-bar-props'
@@ -94,13 +94,28 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     groupId: runtime.resolvedGroupId,
     groupActiveTabId: props.groupActiveTabId ?? null
   })
+  const clientHostedBrowserRows = props.clientHostedBrowserRows
+  const slotIds = useMemo(
+    () => [
+      ...itemProjection.sortableIds,
+      ...(clientHostedBrowserRows ?? []).map((row) => row.browserPageId)
+    ],
+    [clientHostedBrowserRows, itemProjection.sortableIds]
+  )
+  // Why memoized: the key spans every tab, and a windowed strip re-renders as it scrolls.
+  const stripLayoutKey = useMemo(
+    () =>
+      [
+        itemProjection.tabStripLayoutKey,
+        ...(clientHostedBrowserRows ?? []).map((row) => row.browserPageId)
+      ].join('|'),
+    [clientHostedBrowserRows, itemProjection.tabStripLayoutKey]
+  )
   const tabStripNavigation = useTabStripOverflowNavigation({
     activeVisibleTabId: itemProjection.activeVisibleTabId,
     activeDockSlotId: activeClientHostedBrowserRowId ?? itemProjection.activeVisibleTabId,
-    layoutKey: [
-      itemProjection.tabStripLayoutKey,
-      ...(props.clientHostedBrowserRows ?? []).map((row) => row.browserPageId)
-    ].join('|'),
+    layoutKey: stripLayoutKey,
+    slotIds,
     worktreeId
   })
   const attachFileDropOwner = useEditorGroupFileDropOwner({ worktreeId, groupId })

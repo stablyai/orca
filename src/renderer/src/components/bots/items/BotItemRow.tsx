@@ -1,4 +1,4 @@
-// One item in a bot's Items tab. Hover or focus on an open row swaps its age (a snoozed row's wake time)
+// One item in a bot's Items tab. Hover or keyboard focus on an open row swaps its age (a snoozed row's wake time)
 // for ✓ Done and ⋯ (Done, Snooze, Cancel); hovering its icon shows its checkbox, and once any row is checked every row shows one. A dot
 // marks a row that changed since the tab was last opened. A pointer-opened ⋯ menu closes when the
 // pointer leaves row and menu.
@@ -20,7 +20,9 @@ import {
   isBotItemLive,
   type BotItem
 } from '../../../../../shared/bots/bot-items'
+import type { Bot } from '../../../../../shared/bot-types'
 import { BotItemNumberColumn } from './BotItemNumberColumn'
+import { BotItemRowFace } from './BotItemRowFace'
 import { BotItemStatusIcon } from './BotItemStatusIcon'
 import { BOT_ITEM_ROW_HOVER_ACTIONS } from './bot-item-row-hover-actions'
 import {
@@ -41,7 +43,9 @@ export function BotItemRow({
   selecting,
   now,
   onSelect,
-  onAction
+  onAction,
+  face = null,
+  place = null
 }: {
   item: BotItem
   stale: boolean
@@ -55,11 +59,17 @@ export function BotItemRow({
   now: number
   onSelect: (selected: boolean, range: boolean) => void
   onAction: (action: BotItemRowAction) => void
+  /** Its bot, in a group's merged list. */
+  face?: Bot | null
+  /** Its chat's name, when the list shows chats beyond the one it is about. */
+  place?: string | null
 }): React.JSX.Element {
   const t = useTranslate()
   const closed = item.status === 'done' || item.status === 'canceled'
-  // Only Needs you has a second line, the bot's question; In progress's spinner is its live signal.
-  const line = !stale && !snoozed && item.status === 'needs_you' ? item.question?.text : null
+  // The second line is Needs you's question, after the chat when the list names it; In progress's
+  // spinner is its live signal.
+  const question = !stale && !snoozed && item.status === 'needs_you' ? item.question?.text : null
+  const line = place && question ? `${place} · ${question}` : (place ?? question)
   const checkbox = selecting || selected
   const { rowRef, triggerRef, ...menu } = useMenuPointerExitClose<
     HTMLDivElement,
@@ -71,7 +81,7 @@ export function BotItemRow({
       role="listitem"
       data-bot-item={item.number}
       className={cn(
-        'group/item relative flex min-w-0 items-start gap-2 rounded-sm px-2 py-1 hover:bg-accent focus-within:bg-accent has-[[data-state=open]]:bg-accent',
+        'group/item relative flex min-w-0 items-start gap-2 rounded-sm px-2 py-1 hover:bg-accent has-[:focus-visible]:bg-accent has-[[data-state=open]]:bg-accent',
         selected && 'bg-accent'
       )}
     >
@@ -93,6 +103,7 @@ export function BotItemRow({
           }}
         />
       </span>
+      {face ? <BotItemRowFace bot={face} /> : null}
       <button
         type="button"
         data-bot-item-open=""
@@ -117,7 +128,7 @@ export function BotItemRow({
                 className={cn(
                   'flex shrink-0 items-center gap-2',
                   !closed &&
-                    'group-focus-within/item:invisible group-hover/item:invisible group-has-[[data-state=open]]/item:invisible'
+                    'group-has-[:focus-visible]/item:invisible group-hover/item:invisible group-has-[[data-state=open]]/item:invisible'
                 )}
               >
                 {unseen ? (

@@ -130,8 +130,8 @@ const OWNER_GH: Pick<ConnectorAsker, 'userId' | 'name' | 'role'> = {
   role: 'owner'
 }
 
-/** A GitHub mention as Orca hands it to the bot: the asker's words, then the cloud's pointers
- *  (github-ingress.ts withPointers). */
+/** A GitHub mention as Orca hands it to the bot: the asker's words, then the cloud's pointers as
+ *  Orca's note (github-ingress.ts withPointers). */
 export function githubWake(repo: string, thread: EvalGithubThread, text: string): string {
   const thing = thread.pull ? 'pull request' : 'issue'
   const url = `https://github.com/${repo}/${thread.pull ? 'pull' : 'issues'}/${thread.number}`
@@ -152,7 +152,8 @@ export function githubWake(repo: string, thread: EvalGithubThread, text: string)
       kind: thread.pull ? 'pull_request' : 'issue',
       id: `${repo}#${thread.number}`
     },
-    text: `${text}\n\n---\n${pointers.join('\n')}`,
+    text,
+    note: pointers.join('\n'),
     context: []
   })
 }

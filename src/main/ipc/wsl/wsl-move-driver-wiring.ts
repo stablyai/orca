@@ -32,6 +32,7 @@ import type {
   WslMoveHost
 } from '../../persistence/moving-wsl-projects/execution/wsl-move-driver-ports'
 import { proveWslMoveTerminalsExited } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-exit-proof'
+import { wslMoveSleepFailures } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-sleep-failures'
 import {
   collectWslMoveGateInputs,
   listWslMovePanes,
@@ -194,11 +195,17 @@ export function createWslMoveDriverDeps(
         }
         // Main's pause barrier: keeps browser tabs and waits for the window's session to persist.
         const outcomes = await pauseWorkspacesForProjectMove(window, runtime, workspaceIds)
-        return {
-          failedWorktreeIds: outcomes
-            .filter((outcome) => outcome.failure || outcome.chatFailed || outcome.vmSuspendFailure)
-            .map((outcome) => outcome.worktreeId)
+        const failedWorktreeIds = await wslMoveSleepFailures(outcomes, {
+          store,
+          hasLiveTerminal: (worktreeId) => runtime.listWslMoveLiveTerminals([worktreeId]).length > 0
+        })
+        if (failedWorktreeIds.length > 0) {
+          console.warn(
+            '[wsl-move] Sleep left workspaces awake:',
+            outcomes.filter((outcome) => failedWorktreeIds.includes(outcome.worktreeId))
+          )
         }
+        return { failedWorktreeIds }
       },
       livePtyIds: (workspaceIds) =>
         runtime.listWslMoveLiveTerminals(workspaceIds).map((terminal) => terminal.ptyId),

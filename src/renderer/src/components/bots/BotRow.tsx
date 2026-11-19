@@ -35,6 +35,7 @@ import {
   useBotRowLine
 } from './BotRowActivityLine'
 import { BotSidebarRow } from './BotSidebarRow'
+import { usageLimitStopTip } from './BotUsageLimitMark'
 import { BotUpNextCount } from './BotUpNextCount'
 import { useBotHostLabel } from './use-bot-host-label'
 import { revealBotUpNext } from './bot-up-next-reveal'
@@ -77,7 +78,7 @@ export function BotRow({
   const offline = useBotHostOffline(bot.hostId)
   const isUnread = home.isUnread && !offline
   const upNextNew = useBotUpNextUnseen(bot)
-  const { line, now } = useBotRowLine(bot, home)
+  const { line, limit, now } = useBotRowLine(bot, home)
   const age = offline ? null : botRowLineAge(line, now)
   const hostPill = hostLabel ? <WorktreeHostContextBadge label={hostLabel} /> : null
   // With no recent activity the line falls back to what the bot is for, so the row never shows a blank line.
@@ -102,11 +103,12 @@ export function BotRow({
 
   return (
     <BotSidebarRow
-      avatar={<BotAvatar bot={bot} className="size-7 rounded-md text-sm" />}
+      avatar={<BotAvatar bot={bot} className="size-9 rounded-md text-sm" />}
       name={bot.name}
       workspaceId={workspaceId}
       hostId={bot.hostId}
       status={offline ? null : status}
+      stopTip={!offline && limit ? usageLimitStopTip(t, limit.stop) : null}
       isUnread={isUnread}
       isActive={isActive}
       expanded={fold ? !fold.folded : undefined}
@@ -124,9 +126,10 @@ export function BotRow({
       age={age}
       line={
         // Time by the name, Up next count under it; both end where the fold strip starts.
-        line || description || fold || upNextNew > 0 || hostPill || offline ? (
+        line || limit || description || fold || upNextNew > 0 || hostPill || offline ? (
           <BotRowLineView
             line={line}
+            limit={offline ? null : limit}
             fallback={description}
             unread={isUnread}
             now={now}
@@ -227,7 +230,7 @@ function BotRowFoldToggle({
         FOLD_TOGGLE_CLASS,
         // Negative margins cancel the row's padding so the strip spans its full height and right
         // edge; the row's rounded overflow clips its corners.
-        '-mt-1.25 -mr-1.5 -mb-1.5 min-w-10 gap-0.5 self-stretch rounded-none px-1.5 text-xs tabular-nums',
+        '-mt-1.25 -mr-1.5 -mb-1.25 min-w-10 gap-0.5 self-stretch rounded-none px-1.5 text-xs tabular-nums',
         // Over the toggle reads just darker than the row's own hover wash.
         'group-hover/bot-row:bg-foreground/5 hover:bg-foreground/7 focus-visible:bg-foreground/7 focus-visible:ring-2 focus-visible:ring-inset dark:hover:bg-foreground/10 dark:focus-visible:bg-foreground/10',
         // A narrow row keeps its width for the name and time where a pointer can hover: at rest the

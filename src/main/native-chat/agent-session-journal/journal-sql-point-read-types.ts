@@ -38,6 +38,14 @@ import type {
 import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
 import type { JournalSqlQueueRead, JournalSqlQueueReadResult } from './journal-sql-queued-messages'
 import type { JournalSqlItemRead, JournalSqlItemReadResult } from './journal-sql-item-reads'
+import type {
+  JournalAcpHistory,
+  JournalAcpHistoryItems,
+  JournalAcpHistoryItemsRead,
+  JournalAcpHistoryRead,
+  JournalAcpHistoryRow,
+  JournalAcpHistoryRowsRead
+} from './journal-domain-acp-history'
 
 export type JournalSqlPointRead = {
   sessionId: string
@@ -57,6 +65,9 @@ export type JournalSqlPointRead = {
     | { kind: 'history-source-items'; clientMessageIds: readonly string[] }
     | { kind: 'provider-turn-in-namespace'; namespace: string; sinceFence?: number }
     | { kind: 'saved-item-ids'; itemIds: readonly string[] }
+    | JournalAcpHistoryRead
+    | JournalAcpHistoryItemsRead
+    | JournalAcpHistoryRowsRead
     | { kind: 'generation'; input: JournalGenerationRead }
     | { kind: 'observer'; input: JournalObserverRead }
     | { kind: 'work'; input: JournalSqlWorkRead }
@@ -103,6 +114,9 @@ export type JournalSqlPointReadResult =
   | { kind: 'history-source-items'; items: AgentJournalRenderItem[] }
   | { kind: 'provider-turn-in-namespace'; present: boolean }
   | { kind: 'saved-item-ids'; itemIds: string[] }
+  | { kind: 'acp-history'; history: JournalAcpHistory }
+  | ({ kind: 'acp-history-items' } & JournalAcpHistoryItems)
+  | { kind: 'acp-history-rows'; rows: JournalAcpHistoryRow[] }
   | { kind: 'generation'; generation: JournalGenerationResult }
   | { kind: 'observer'; observation: JournalObserverResult }
   | { kind: 'work'; answer: JournalSqlWorkResult }

@@ -15,6 +15,7 @@ import {
 } from '../../../../../../../shared/agent-session/options/reconciliation/structured-agent-session-options-write-owner'
 import { structuredAgentSessionShownSnapshot } from '../../../../../../../shared/agent-session/options/view/structured-agent-session-option-view'
 import { useHostModelCatalogUpgrade } from '../catalog/use-host-model-catalog-upgrade'
+import { useAgentCliUpdate } from '@/components/agent-cli-update/use-agent-cli-update'
 import { useStructuredAgentSessionOptionState } from './use-structured-agent-session-option-state'
 import { agentSessionWriteFailureText } from '../../../messages/notices/agent-session-write-notice-text'
 import {
@@ -159,16 +160,45 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     },
     [launch?.explicitOptions, launchSeedOptions, optionStateRef, optionView, setStructuredOption]
   )
+  const cliUpdate = useAgentCliUpdate(target, agent)
+  const cliUpdatePhase = cliUpdate.run?.phase ?? 'idle'
+  const cliUpdateAgent = cliUpdate.update?.runnable ? cliUpdate.update.agent : null
+  const { start: runCliUpdate, openFailure: openCliUpdateFailure } = cliUpdate
+  const { demandModelCatalog } = hostCatalog
+  // The updated CLI lists its new models.
+  const startCliUpdate = useCallback(
+    () => void runCliUpdate().then((updated) => updated && demandModelCatalog()),
+    [runCliUpdate, demandModelCatalog]
+  )
   const optionSurface = useMemo<SessionOptionsSurface>(
     () => ({
       getSnapshot: () => optionSnapshot,
-      demandModelCatalog: hostCatalog.demandModelCatalog,
+      demandModelCatalog,
+      ...(cliUpdateAgent
+        ? {
+            cliUpdate: {
+              agent: cliUpdateAgent,
+              phase: cliUpdatePhase,
+              start: startCliUpdate,
+              openFailure: () => openCliUpdateFailure(startCliUpdate)
+            }
+          }
+        : {}),
       admits: writer.admits,
       setOption,
       invokeAction: async () => ({ snapshot: optionSnapshot }),
       subscribe: () => () => {}
     }),
-    [setOption, optionSnapshot, hostCatalog.demandModelCatalog, writer]
+    [
+      setOption,
+      optionSnapshot,
+      demandModelCatalog,
+      writer,
+      cliUpdateAgent,
+      cliUpdatePhase,
+      startCliUpdate,
+      openCliUpdateFailure
+    ]
   )
 
   return {

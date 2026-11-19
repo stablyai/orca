@@ -9,6 +9,7 @@ import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/provi
 import type { AiVaultListResult } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { filterAiVaultSessions } from '../../shared/ai-vault/session-display/ai-vault-session-filters'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import type { AgentSessionConversationKeys } from '../runtime/agent-session/records/agent-session-conversation-key-index'
 import {
   OPENS_EVERY_STRUCTURED_CHAT,
   projectStructuredAiVaultSessions
@@ -36,7 +37,9 @@ function install(records: readonly AgentSessionRecord[]): void {
         listRecords: () => records,
         hostId: 'local',
         getRecord: (id: string) => records.find((record) => record.sessionId === id) ?? null,
-        listConversations: () => records.map(agentSessionConversationView)
+        listConversations: () => records.map(agentSessionConversationView),
+        conversationsKeyedBy: (keys: AgentSessionConversationKeys, key: string) =>
+          records.map(agentSessionConversationView).filter((view) => keys(view).includes(key))
       }
     }
   } as never)

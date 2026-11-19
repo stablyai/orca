@@ -77,6 +77,15 @@ export function postConnectorReply(
   )
 }
 
+/** The reply outbox's drain while the cloud's hello leaves replies.outbox out: one /replies post,
+ *  retried by the outbox itself. It carries v like every other replies body. */
+export function postConnectorOutboxReply(
+  transport: ConnectorTransport,
+  body: ConnectorReplyBody
+): Promise<ConnectorResult<ConnectorReplyResponse>> {
+  return transport.call(CONNECTOR_PATHS.replies, { v: 1, ...body }, ConnectorReplyResponse)
+}
+
 /** A message a bot posts on its own, in a Slack channel or as a Linear issue comment; one postId posts once. */
 // turnFor: whom the run behind it acts for (bot-turn-for.ts); a Slack post's only.
 export type ConnectorBotPostBody =

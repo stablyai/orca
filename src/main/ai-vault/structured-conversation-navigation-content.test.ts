@@ -17,6 +17,7 @@ import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/ag
 import type { AiVaultListResult } from '../../shared/ai-vault/contracts/ai-vault-types'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import type { AgentSessionConversationKeys } from '../runtime/agent-session/records/agent-session-conversation-key-index'
 import {
   insertJournalRow,
   publishJournalSessionEpoch
@@ -44,7 +45,9 @@ beforeEach(() => {
       store: {
         getRecord: () => record,
         listRecords: () => [record],
-        listConversations: () => [agentSessionConversationView(record)]
+        listConversations: () => [agentSessionConversationView(record)],
+        conversationsKeyedBy: (keys: AgentSessionConversationKeys, key: string) =>
+          [agentSessionConversationView(record)].filter((view) => keys(view).includes(key))
       },
       journalDatabase: { db }
     }

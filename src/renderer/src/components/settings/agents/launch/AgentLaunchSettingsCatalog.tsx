@@ -1,4 +1,6 @@
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
+import { AgentCliUpdateButton } from '@/components/agent-cli-update/AgentCliUpdateButton'
+
 import { AgentLaunchChoiceEditor } from '@/components/agent/launch-settings/AgentLaunchChoiceEditor'
 import { agentChatPermissionModes } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import { savedChatPermissionMode } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
@@ -234,6 +236,9 @@ export function AgentLaunchSettingsCatalog({
     agent: (typeof catalog)[number],
     isDetected: boolean
   ): AgentCatalogRowProps => ({
+    cliUpdate: isDetected ? (
+      <AgentCliUpdateButton detectionTarget={detectionTarget} agent={agent.id} />
+    ) : undefined,
     agentId: agent.id,
     label: agent.label,
     homepageUrl: agent.homepageUrl,

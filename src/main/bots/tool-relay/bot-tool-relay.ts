@@ -25,6 +25,7 @@ import { answerSignInNeeded, answerUnavailable } from './bot-tool-relay-sign-in-
 import {
   sendUpstream,
   streamUpstreamResponse,
+  refusalProblem,
   type ReadyAnswer,
   type RelayFetch
 } from './bot-tool-relay-upstream'
@@ -69,6 +70,11 @@ export class BotToolRelay {
     }
     this.grants.set(hashToken(token), { botId, folder: resolve(folder) })
     return { origin: `http://127.0.0.1:${port}`, token }
+  }
+
+  /** The bot a token was granted to in this run of Orca; null once revoked or from another run. */
+  botOf(token: string): string | null {
+    return this.grants.get(hashToken(token))?.botId ?? null
   }
 
   /** A deleted bot's token stops working at once, and its open calls are cut. */
@@ -316,16 +322,6 @@ export class BotToolRelay {
     }
     await streamUpstreamResponse(res, upstream, signal)
   }
-}
-
-function refusalProblem(upstream: Response, answer: ReadyAnswer): string {
-  if (answer.bearer === undefined) {
-    return 'The tool’s server refused its saved values.'
-  }
-  // A 403 is about permission, not an expired token, so it's never refreshed.
-  return /error="?insufficient_scope/.test(upstream.headers.get('www-authenticate') ?? '')
-    ? 'The app needs more access than this sign-in allows.'
-    : 'The app refused this with the current sign-in.'
 }
 
 /** The owner's current Composio key, read per call so a changed or removed key applies to the next
