@@ -9,7 +9,11 @@ vi.mock('./command-path-directory-worker-client', async () => ({
     (await import('./command-path-directory')).readDetectionDirectory
   )
 }))
-import { findCommandsOnLocalPath, isCommandOnLocalPath } from './command-path-resolver'
+import {
+  findCommandsOnLocalPath,
+  isCommandOnLocalPath,
+  resolveCommandOnLocalPath
+} from './command-path-resolver'
 
 describe('isCommandOnLocalPath', () => {
   // POSIX semantics: executable bit + absolute-only + symlink follow.
@@ -45,6 +49,78 @@ describe('isCommandOnLocalPath', () => {
         isCommandOnLocalPath('runme', { platform: 'linux', env: { PATH: '.' }, cwd: dir })
       ).resolves.toBe(false)
     })
+  })
+})
+
+describe('win32 PATH lookup', () => {
+  let root = ''
+  let emptyCwd = ''
+  let quotedBin = ''
+  let dotBin = ''
+  beforeAll(async () => {
+    root = await mkdtemp(path.join(tmpdir(), 'cmd-resolver-win32-'))
+    emptyCwd = path.join(root, 'empty-cwd')
+    quotedBin = path.join(root, 'bin with spaces')
+    dotBin = path.join(root, 'node_modules', '.bin')
+    await Promise.all([
+      mkdir(emptyCwd, { recursive: true }),
+      mkdir(quotedBin, { recursive: true }),
+      mkdir(dotBin, { recursive: true })
+    ])
+    await Promise.all([
+      writeFile(path.join(quotedBin, 'tool'), '#!/bin/sh\n'),
+      writeFile(path.join(quotedBin, 'tool.cmd'), '@echo off\r\n'),
+      writeFile(path.join(quotedBin, 'format.v1'), '#!/bin/sh\n'),
+      writeFile(path.join(quotedBin, 'format.v1.cmd'), '@echo off\r\n'),
+      writeFile(path.join(dotBin, 'prettier'), '#!/bin/sh\n'),
+      writeFile(path.join(dotBin, 'prettier.cmd'), '@echo off\r\n')
+    ])
+  })
+  afterAll(async () => {
+    await rm(root, { recursive: true, force: true })
+  })
+
+  it('resolves commands from quoted Windows PATH entries in single and batch lookups', async () => {
+    const options = {
+      platform: 'win32' as const,
+      cwd: emptyCwd,
+      env: { PATH: `"${quotedBin}"`, PATHEXT: '.EXE;.cmd' }
+    }
+    await expect(resolveCommandOnLocalPath('tool', options)).resolves.toBe(
+      path.posix.join(quotedBin, 'tool.cmd')
+    )
+    await expect(findCommandsOnLocalPath(['tool'], options)).resolves.toEqual(new Set(['tool']))
+  })
+
+  it('keeps single quotes in Windows PATH entries literal', async () => {
+    const options = {
+      platform: 'win32' as const,
+      cwd: emptyCwd,
+      env: { PATH: `'${quotedBin}'`, PATHEXT: '.EXE;.cmd' }
+    }
+    await expect(resolveCommandOnLocalPath('tool', options)).resolves.toBeNull()
+    await expect(findCommandsOnLocalPath(['tool'], options)).resolves.toEqual(new Set())
+  })
+
+  it('ignores dots in parent directories so path-qualified lookups do not match POSIX siblings', async () => {
+    const target = path.join(dotBin, 'prettier')
+    await expect(
+      resolveCommandOnLocalPath(target, {
+        platform: 'win32',
+        cwd: emptyCwd,
+        env: { PATH: '', PATHEXT: '.EXE;.cmd' }
+      })
+    ).resolves.toBe(`${target}.cmd`)
+  })
+
+  it('keeps the exact-name-first match for dotted basenames', async () => {
+    await expect(
+      resolveCommandOnLocalPath('format.v1', {
+        platform: 'win32',
+        cwd: emptyCwd,
+        env: { PATH: quotedBin, PATHEXT: '.EXE;.cmd' }
+      })
+    ).resolves.toBe(path.posix.join(quotedBin, 'format.v1'))
   })
 })
 
