@@ -134,7 +134,7 @@ function parenthesizedClauses(
   const clauses: [string, string][] = []
   const code = sqlCodeMask(sql)
   for (let match = pattern.exec(sql); match; match = pattern.exec(sql)) {
-    if (!code[match.index]) {
+    if (!code[match.index + match[0].length - 1]) {
       continue
     }
     let depth = 1
