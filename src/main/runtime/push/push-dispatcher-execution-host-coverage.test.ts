@@ -22,9 +22,6 @@ function hosts(
   options: {
     hostUnreachable?: boolean
     hostResults?: PushSendResult[]
-    mirrorResults?: PushSendResult[]
-    /** How long the mirror's gateway takes to answer. */
-    mirrorGatewayMs?: number
   } = {}
 ) {
   const host = createHarness({
@@ -47,7 +44,6 @@ function hosts(
         pushRegistration: registration({ registrationId: 'a-mirror', tokenDigest: 'digest-mirror' })
       }
     ],
-    results: options.mirrorResults,
     coverage: {
       ask: async (executionHost, request) => {
         expect(executionHost).toBe('runtime:env-b')
@@ -55,10 +51,6 @@ function hosts(
           throw new Error('host unreachable')
         }
         return new Set(await host.dispatcher.coveredTokenDigests(request))
-      },
-      tell: (_executionHost, report) => {
-        vi.setSystemTime(Date.now() + (options.mirrorGatewayMs ?? 0))
-        void report.then((request) => host.dispatcher.recordMirrorPush(request))
       }
     }
   })
@@ -81,18 +73,12 @@ function hosts(
   }
 }
 
-it('pushes the shared phone once whether the host sends or the mirror asks first', async () => {
-  const hostFirst = hosts()
-  await hostFirst.hostSends()
-  await hostFirst.mirrorSends()
-  expect(hostFirst.sharedPhonePushes()).toEqual([1, 0])
-  expect(hostFirst.mirrorOnlyPhonePushes()).toBe(1)
-
-  const mirrorFirst = hosts()
-  await mirrorFirst.mirrorSends()
-  await mirrorFirst.hostSends()
-  expect(mirrorFirst.sharedPhonePushes()).toEqual([0, 1])
-  expect(mirrorFirst.mirrorOnlyPhonePushes()).toBe(1)
+it('pushes the shared phone once when the host pushed it first', async () => {
+  const h = hosts()
+  await h.hostSends()
+  await h.mirrorSends()
+  expect(h.sharedPhonePushes()).toEqual([1, 0])
+  expect(h.mirrorOnlyPhonePushes()).toBe(1)
 })
 
 it('leaves the shared phone to the mirror when the host does not push it', async () => {
@@ -112,13 +98,6 @@ it('leaves the shared phone to the mirror when the host does not push it', async
   expect(hostGatewayRefuses.sharedPhonePushes()).toEqual([1, 1])
 })
 
-it('keeps the host’s copy when the mirror’s push did not go out', async () => {
-  const h = hosts({ mirrorResults: refused('a-both') })
-  await h.mirrorSends()
-  await h.hostSends()
-  expect(h.sharedPhonePushes()).toEqual([1, 1])
-})
-
 it('collapses a burst across both hosts as the host collapses its own', async () => {
   const h = hosts()
   await h.hostSends()
@@ -133,14 +112,4 @@ it('pushes every phone when the host cannot answer', async () => {
   await h.mirrorSends()
   expect(h.sharedPhonePushes()).toEqual([0, 1])
   expect(h.mirrorOnlyPhonePushes()).toBe(1)
-})
-
-it('lets a late mirror report hold back only the burst of the alert it reports', async () => {
-  const h = hosts({ mirrorGatewayMs: 4_000 })
-  await h.hostSends({ desktopAllowed: false })
-  await h.mirrorSends()
-  vi.setSystemTime(NOW + 6_000)
-  await h.hostSends({ notificationId: 'agent:two', emittedAt: NOW + 6_000 })
-  await h.mirrorSends({ notificationId: 'agent:two', emittedAt: NOW + 6_000 })
-  expect(h.sharedPhonePushes()).toEqual([1, 1])
 })

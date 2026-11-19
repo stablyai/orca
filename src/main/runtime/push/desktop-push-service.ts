@@ -204,10 +204,6 @@ export class DesktopPushService {
     return this.dispatcher.coveredTokenDigests(request)
   }
 
-  recordMirrorPush(request: PushCoverageRequest): void {
-    this.dispatcher.recordMirrorPush(request)
-  }
-
   async unregister(deviceId: string): Promise<{ unregistered: boolean }> {
     return runKeyedSerializedOperation(this.deviceOperations, deviceId, async () =>
       this.unregisterCurrent(deviceId)

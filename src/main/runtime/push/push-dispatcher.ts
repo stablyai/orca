@@ -7,7 +7,6 @@ import {
 import type { MobileNotificationEvent } from './notifications/runtime-mobile-notification-controller'
 import {
   PushBurstSlots,
-  mirrorPushReport,
   pushBurstSubject,
   type ExecutionHostPushCoverage
 } from './push-burst-slots'
@@ -120,20 +119,9 @@ export class PushDispatcher {
 
   /** Of these phones, the ones a push the gateway took already holds the subject's slot for. */
   async coveredTokenDigests(request: PushCoverageRequest): Promise<string[]> {
-    return this.answersOtherHosts()
+    return !this.stopped && this.deliveryMode !== 'disabled'
       ? this.slots.coveredDigests(this.registry.listDevices(), request, Date.now())
       : []
-  }
-
-  /** A mirroring host pushed these phones, so this host's own copy for the subject stays back. */
-  recordMirrorPush(request: PushCoverageRequest): void {
-    if (this.answersOtherHosts()) {
-      this.slots.recordPushedElsewhere(this.registry.listDevices(), request, Date.now())
-    }
-  }
-
-  private answersOtherHosts(): boolean {
-    return !this.stopped && this.deliveryMode !== 'disabled'
   }
 
   private send(event: MobileNotificationEvent, covered: ReadonlySet<string>): void {
@@ -142,7 +130,6 @@ export class PushDispatcher {
       if (!plan) {
         return
       }
-      const pushedDigests: Promise<string | undefined>[] = []
       for (const sound of [true, false]) {
         const targets = plan.targets.filter(
           (target) => (target.registration.filter.sound !== false) === sound
@@ -154,21 +141,17 @@ export class PushDispatcher {
             { ...plan.notification, ...(!sound ? { sound: false } : {}) },
             0
           )
-          for (const target of batch) {
-            const pushed = queued.then((ids) =>
-              ids.has(target.registration.registrationId)
-                ? target.registration.tokenDigest
-                : undefined
-            )
-            if (target.slot) {
-              this.slots.recordDelivery(target.slot, pushed)
+          for (const { slot, registration } of batch) {
+            if (slot) {
+              this.slots.recordDelivery(
+                slot,
+                queued.then((ids) =>
+                  ids.has(registration.registrationId) ? registration.tokenDigest : undefined
+                )
+              )
             }
-            pushedDigests.push(pushed)
           }
         }
-      }
-      if (this.coverage && event.type === 'notification' && event.executionHost) {
-        this.coverage.tell(event.executionHost, mirrorPushReport(event, Promise.all(pushedDigests)))
       }
     } catch (error) {
       console.warn('[push] Failed to prepare a push notification:', error)

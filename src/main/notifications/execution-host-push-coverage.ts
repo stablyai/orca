@@ -32,16 +32,5 @@ export const executionHostPushCoverage: ExecutionHostPushCoverage = {
       await target.request('notifications.pushCoverage', request, PUSH_COVERAGE_TIMEOUT_MS)
     )
     return new Set(response.success ? response.data.result.coveredTokenDigests : [])
-  },
-  tell: (executionHost, report) => {
-    void report
-      .then(async (request) => {
-        const target = request.tokenDigests.length ? executionHostSocket(executionHost) : undefined
-        await target?.request('notifications.recordMirrorPush', request, PUSH_COVERAGE_TIMEOUT_MS)
-      })
-      .catch((error: unknown) => {
-        // Unheard, the host may push its own copy too: a duplicate, never a lost alert.
-        console.warn('[push] Could not tell the execution host which phones were pushed:', error)
-      })
   }
 }

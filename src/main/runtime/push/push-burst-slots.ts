@@ -2,44 +2,24 @@ import {
   NOTIFICATION_COOLDOWN_MS,
   reserveNotificationCooldown
 } from '../../../shared/notifications/notification-burst-cooldown'
-import {
-  NOTIFICATION_PUSH_COVERAGE_MAX_DIGESTS,
-  type NotificationPushCoverageRequest
-} from '../../../shared/rpc-contract/notifications/notifications-params'
+import type { NotificationPushCoverageRequest } from '../../../shared/rpc-contract/notifications/notifications-params'
 
 // Keyed news is announced once by its producer, so only its own repeat may collapse it.
 export function pushBurstSubject(event: { attentionKey?: string; worktreeId?: string }): string {
   return event.attentionKey ?? event.worktreeId ?? 'global'
 }
 
-/** A mirror's report once its gateway answered: the phones it took, and how long ago the alert fired. */
-export async function mirrorPushReport(
-  event: { attentionKey?: string; worktreeId?: string; emittedAt?: number },
-  pushed: Promise<readonly (string | undefined)[]>
-): Promise<NotificationPushCoverageRequest> {
-  const digests = await pushed
-  return {
-    tokenDigests: digests
-      .flatMap((digest) => digest ?? [])
-      .slice(0, NOTIFICATION_PUSH_COVERAGE_MAX_DIGESTS),
-    subject: pushBurstSubject(event),
-    ...(event.emittedAt !== undefined ? { ageMs: Math.max(0, Date.now() - event.emittedAt) } : {})
-  }
-}
-
 function slotKey(deviceId: string, subject: string): string {
   return JSON.stringify([deviceId, subject])
 }
 
-/** How a mirroring host and a mirrored session's execution host share each phone's burst slot. */
+/** How a mirroring host reads a mirrored session's execution host's burst slots. */
 export type ExecutionHostPushCoverage = {
   /** Token digests of phones the execution host already pushed; empty when it can't say. */
   ask: (
     executionHost: string,
     request: NotificationPushCoverageRequest
   ) => Promise<ReadonlySet<string>>
-  /** Tells the execution host which phones the gateway took this host's copy for. */
-  tell: (executionHost: string, report: Promise<NotificationPushCoverageRequest>) => void
 }
 
 type SlotDevice = { deviceId: string; pushRegistration?: { tokenDigest?: string } }
@@ -94,24 +74,5 @@ export class PushBurstSlots {
       return held && (await this.deliveries.get(slot)) === digest ? [digest] : []
     })
     return (await Promise.all(answers)).flat()
-  }
-
-  /** Another host's push the gateway took holds these phones' slots, so this host's copy stays back. */
-  recordPushedElsewhere(
-    devices: readonly SlotDevice[],
-    request: NotificationPushCoverageRequest,
-    now: number
-  ): void {
-    const firedAt = now - (request.ageMs ?? 0)
-    // A report that outlived the alert's burst must not hold back the next alert.
-    if (now - firedAt >= NOTIFICATION_COOLDOWN_MS) {
-      return
-    }
-    for (const { deviceId, digest } of askedDevices(devices, request)) {
-      // A held slot keeps its burst start; its own push may have failed, but the phone got this one.
-      const slot =
-        this.reserve(deviceId, request.subject, firedAt) ?? slotKey(deviceId, request.subject)
-      this.recordDelivery(slot, Promise.resolve(digest))
-    }
   }
 }

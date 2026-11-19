@@ -7,11 +7,7 @@ import { DeviceRegistry } from '../rpc/server/pairing/device-registry'
 import { RuntimeMobileNotificationController } from './notifications/runtime-mobile-notification-controller'
 import { setRuntimeDesktopSurface } from '../construction/runtime-desktop-surface'
 import { RuntimeSubscriptionRegistry } from '../client/runtime-subscription-registry'
-import {
-  pushCoverage,
-  recordMirrorPush,
-  reportDesktopPresence
-} from '../rpc/methods/notifications/notifications'
+import { pushCoverage, reportDesktopPresence } from '../rpc/methods/notifications/notifications'
 import { DESKTOP_PRESENCE_TTL_MS } from '../../../shared/app-lifecycle/presence/desktop-client-presence'
 import { DesktopPushService } from './desktop-push-service'
 import { PushUnregisterOutbox } from './push-unregister-outbox'
@@ -191,15 +187,14 @@ it('expires persisted registration at seven days despite host activity and renew
   expect(h.client.send).toHaveBeenCalledTimes(2)
 })
 
-it('answers a mirroring desktop from the phones this host pushed, and holds back for its pushes', async () => {
+it('answers a mirroring desktop from the phones this host pushed', async () => {
   const h = await pipeline()
   const digest = new DeviceRegistry(h.path).getDevice(h.device.deviceId)?.pushRegistration
     ?.tokenDigest
   const context = (clientKind: 'runtime' | 'mobile' = 'runtime') => ({
     clientKind,
     runtime: {
-      coveredMobilePushTokenDigests: h.controller.coveredPushTokenDigests.bind(h.controller),
-      recordMobileMirrorPush: h.controller.recordMirrorPush.bind(h.controller)
+      coveredMobilePushTokenDigests: h.controller.coveredPushTokenDigests.bind(h.controller)
     }
   })
   const request = (subject: string) => ({
@@ -227,13 +222,7 @@ it('answers a mirroring desktop from the phones this host pushed, and holds back
   expect(await pushCoverage(request('repo::pushed'), context())).toEqual({
     coveredTokenDigests: [digest]
   })
-  expect(await pushCoverage(request('repo::mirror-pushed'), context())).toEqual({
+  expect(await pushCoverage(request('repo::not-pushed'), context())).toEqual({
     coveredTokenDigests: []
   })
-  expect(recordMirrorPush(request('repo::mirror-pushed'), context('mobile'))).toEqual({
-    recorded: false
-  })
-  recordMirrorPush(request('repo::mirror-pushed'), context())
-  await finish('repo::mirror-pushed')
-  expect(h.client.send).toHaveBeenCalledTimes(1)
 })

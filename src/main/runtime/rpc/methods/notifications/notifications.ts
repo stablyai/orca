@@ -34,7 +34,7 @@ export function reportDesktopPresence(
 }
 
 type PushCoverageContext = Pick<RpcContext, 'clientKind'> & {
-  runtime: Pick<OrcaRuntimeService, 'coveredMobilePushTokenDigests' | 'recordMobileMirrorPush'>
+  runtime: Pick<OrcaRuntimeService, 'coveredMobilePushTokenDigests'>
 }
 
 /** A mirroring desktop skips the phones this host already pushed; a phone of its own still gets the alert. */
@@ -46,18 +46,6 @@ export async function pushCoverage(
     coveredTokenDigests:
       clientKind === 'runtime' ? await runtime.coveredMobilePushTokenDigests(params) : []
   }
-}
-
-/** Only a paired desktop's push can hold back this host's own copy. */
-export function recordMirrorPush(
-  params: z.infer<typeof NotificationPushCoverageParams>,
-  { runtime, clientKind }: PushCoverageContext
-): { recorded: boolean } {
-  if (clientKind !== 'runtime') {
-    return { recorded: false }
-  }
-  runtime.recordMobileMirrorPush(params)
-  return { recorded: true }
 }
 
 // Legacy callers retain filtered socket alerts; push clients opt into the full event stream.
@@ -131,12 +119,6 @@ export const NOTIFICATION_METHODS = [
     permission: 'workspace',
     params: NotificationPushCoverageParams,
     handler: async (params, context) => pushCoverage(params, context)
-  }),
-  defineMethod({
-    name: 'notifications.recordMirrorPush',
-    permission: 'workspace',
-    params: NotificationPushCoverageParams,
-    handler: async (params, context) => recordMirrorPush(params, context)
   }),
   defineMethod({
     name: 'notifications.registerPush',
