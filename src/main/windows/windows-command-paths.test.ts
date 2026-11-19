@@ -14,6 +14,15 @@ describe('getSystem32ExePath', () => {
     )
   })
 
+  it('prefers SystemRoot over windir regardless of key order', () => {
+    expect(getSystem32ExePath('reg.exe', { windir: 'E:\\Windows', SystemRoot: 'D:\\Win' })).toBe(
+      'D:\\Win\\System32\\reg.exe'
+    )
+    expect(getSystem32ExePath('reg.exe', { SystemRoot: '   ', windir: 'E:\\Windows' })).toBe(
+      'E:\\Windows\\System32\\reg.exe'
+    )
+  })
+
   it('falls back when the value is blank', () => {
     expect(getSystem32ExePath('reg.exe', { SystemRoot: '   ' })).toBe(
       'C:\\Windows\\System32\\reg.exe'
@@ -66,6 +75,23 @@ describeOnWindows('resolveWindowsCommand', () => {
     const shim = join(dir, 'git.cmd')
     writeFileSync(shim, '')
     expect(resolveWindowsCommand('git.cmd', { PATH: dir })).toBe(shim)
+  })
+
+  it('does not append suffixes to an explicitly extended command', () => {
+    const dir = tempDir()
+    writeFileSync(join(dir, 'git.exe.cmd'), '')
+    const shim = join(dir, 'git.exe')
+    writeFileSync(shim, '')
+    expect(resolveWindowsCommand('git.exe', { PATH: dir })).toBe(shim)
+  })
+
+  it('selects the PATH key that Node passes to the child', () => {
+    const stale = tempDir()
+    const active = tempDir()
+    writeFileSync(join(stale, 'tool.cmd'), '')
+    const shim = join(active, 'tool.cmd')
+    writeFileSync(shim, '')
+    expect(resolveWindowsCommand('tool', { Path: stale, PATH: active })).toBe(shim)
   })
 
   it('ignores a malformed PATH entry without throwing', () => {

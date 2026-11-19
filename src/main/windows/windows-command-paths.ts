@@ -4,7 +4,9 @@ import { delimiter, join, win32 } from 'node:path'
 /** Windows env key casing varies; a blank value is absent, not a search root. */
 function readEnv(env: NodeJS.ProcessEnv, ...names: string[]): string | undefined {
   const wanted = new Set(names.map((name) => name.toLowerCase()))
-  for (const [key, value] of Object.entries(env)) {
+  // Node sorts child env keys and keeps the first case-insensitive match.
+  for (const key of Object.keys(env).sort()) {
+    const value = env[key]
     if (wanted.has(key.toLowerCase()) && typeof value === 'string' && value.trim()) {
       return value.trim()
     }
@@ -14,7 +16,7 @@ function readEnv(env: NodeJS.ProcessEnv, ...names: string[]): string | undefined
 
 /** Absolute path because service-launched Electron can omit System32 from PATH. */
 export function getSystem32ExePath(exe: string, env: NodeJS.ProcessEnv = process.env): string {
-  const systemRoot = readEnv(env, 'SystemRoot', 'windir')
+  const systemRoot = readEnv(env, 'SystemRoot') ?? readEnv(env, 'windir')
   const root = systemRoot && /^[a-z]:[\\/]/i.test(systemRoot) ? systemRoot : 'C:\\Windows'
   return win32.join(root, 'System32', exe)
 }
@@ -55,12 +57,17 @@ export function resolveWindowsCommand(
     return command
   }
 
+  const hasExplicitExtension = /\.[a-z0-9]+$/i.test(command)
+  const names = hasExplicitExtension
+    ? [command]
+    : [`${command}.cmd`, `${command}.exe`, `${command}.bat`, command]
+
   for (const segment of pathEnv.split(delimiter)) {
     const directory = unquote(segment)
     if (!directory) {
       continue
     }
-    for (const name of [`${command}.cmd`, `${command}.exe`, `${command}.bat`, command]) {
+    for (const name of names) {
       const candidate = join(directory, name)
       if (isExecutableFile(candidate)) {
         return candidate
