@@ -29,7 +29,10 @@ it('starts at most six restart continuations at once on a many-core host', async
       })
     )
   )
-  await vi.waitFor(() => expect(running).toBeGreaterThanOrEqual(6))
+  // Admission is all promises: let it settle without any clock, real or fake.
+  for (let turn = 0; turn < 50 && running < 6; turn += 1) {
+    await new Promise((resolve) => setImmediate(resolve))
+  }
   open()
   await all
   expect(peak).toBe(6)
