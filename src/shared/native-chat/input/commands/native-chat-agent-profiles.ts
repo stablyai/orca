@@ -93,7 +93,9 @@ const NATIVE_CHAT_AGENT_PROFILES: Record<NativeChatAgent, NativeChatAgentProfile
   hermes: null,
   // Both report their user and project skills as `skill:<name>`, at rest too.
   kimi: null,
-  omp: null
+  omp: null,
+  // No folder scan until Gemini's ACP is checked to load a picked skill.
+  gemini: null
 }
 
 /** Whether `skill` under `source` reaches `profile`'s agent: shared roots, its own, and the skill
