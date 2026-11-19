@@ -6,7 +6,11 @@ import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-
 import { normalizeUsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../../../../../shared/status-bar/status-bar-usage-mode'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
-import { getVisibleUsageProvider, isUsageEmptyState } from './status-bar-provider-visibility'
+import {
+  getVisibleUsageProvider,
+  isAnyUsageProviderFetching,
+  isUsageEmptyState
+} from './status-bar-provider-visibility'
 import {
   getUsageProviderAccountsSectionId,
   usageRowSignInOpensSettings
@@ -46,8 +50,6 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   // Why: reuse the floating-button's unread dot so activity shows for either trigger location (see FloatingTerminalToggleButton).
   const hasFloatingUnread = useAppStore(selectFloatingWorkspaceHasUnread)
   const floatingTerminalEnabled = settings?.floatingTerminalEnabled === true
-  const floatingTerminalTriggerLocation =
-    settings?.floatingTerminalTriggerLocation ?? 'floating-button'
   // Why: gate per-CLI bars on PATH detection so an uninstalled agent isn't shown a noisy empty bar (auto re-shows when installed).
   const localDetectedAgentIds = useAppStore((s) => s.detectedAgentIds)
   // Why: PATH detection describes this viewer, not the remote host whose bars are shown.
@@ -111,8 +113,19 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     return null
   }
 
-  const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok, cursor, zcode } =
-    rateLimits
+  const {
+    claude,
+    codex,
+    gemini,
+    opencodeGo,
+    kimi,
+    antigravity,
+    minimax,
+    grok,
+    cursor,
+    zcode,
+    ollama
+  } = rateLimits
   const muse = rateLimits.muse
 
   // Antigravity has no saved credential; the checked item and detected CLI establish setup.
@@ -129,7 +142,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     opencodeGoApiKeyConfigured: rateLimits.opencodeGoApiKeyConfigured,
     grokAuthConfigured: rateLimits.grokAuthConfigured,
     cursorAuthConfigured: rateLimits.cursorAuthConfigured,
-    zcodePlanApiKeyConfigured: rateLimits.zcodePlanApiKeyConfigured
+    zcodePlanApiKeyConfigured: rateLimits.zcodePlanApiKeyConfigured,
+    ollamaApiKeyConfigured: rateLimits.ollamaApiKeyConfigured
   }
   const visibleClaude = getVisibleUsageProvider('claude', claude, usageSettings)
   const visibleCodex = getVisibleUsageProvider('codex', codex, usageSettings)
@@ -141,6 +155,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const visibleCursor = getVisibleUsageProvider('cursor', cursor, usageSettings)
   const visibleZcode = getVisibleUsageProvider('zcode', zcode, usageSettings)
   const visibleMuse = getVisibleUsageProvider('muse', muse, usageSettings)
+  const visibleOllama = getVisibleUsageProvider('ollama', ollama, usageSettings)
   const showClaude =
     visibleClaude !== null &&
     statusBarItems.includes('claude') &&
@@ -178,6 +193,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     visibleMuse !== null &&
     statusBarItems.includes('muse') &&
     isStatusBarItemAvailable('muse', detectedAgentIds)
+  const showOllama = visibleOllama !== null && statusBarItems.includes('ollama')
   // OpenCode Go usage can use web credentials independently of CLI detection.
   const visibleOpencodeGo = getVisibleUsageProvider('opencode-go', opencodeGo, usageSettings)
   const showOpencodeGo = visibleOpencodeGo !== null && statusBarItems.includes('opencode-go')
@@ -186,44 +202,8 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const showPorts = statusBarItems.includes('ports')
   const showGitBlame = statusBarItems.includes('git-blame')
   const showFloatingTerminalToggle =
-    floatingTerminalEnabled && floatingTerminalTriggerLocation === 'status-bar'
+    floatingTerminalEnabled && settings?.floatingTerminalTriggerLocation === 'status-bar'
   // Why: meter-only children (excludes resource-usage) so the % display callout anchors to a real meter cluster.
-  const hasVisibleUsageMeters =
-    showClaude ||
-    showCodex ||
-    showGemini ||
-    showOpencodeGo ||
-    showKimi ||
-    showAntigravity ||
-    showMiniMax ||
-    showGrok ||
-    showCursor ||
-    showZcode ||
-    showMuse
-  const anyVisible = hasVisibleUsageMeters || showResourceUsage
-  // Why: include Settings so durable managed accounts count — a configured user isn't shown the empty state while snapshots hydrate.
-  const isEmptyUsageState = isUsageEmptyState(rateLimits, usageSettings)
-  // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later.
-  const showEmptyUsageCta = isEmptyUsageState && !usageEmptyStateDismissed
-  const anyFetching =
-    claude?.status === 'fetching' ||
-    codex?.status === 'fetching' ||
-    gemini?.status === 'fetching' ||
-    opencodeGo?.status === 'fetching' ||
-    kimi?.status === 'fetching' ||
-    antigravity?.status === 'fetching' ||
-    minimax?.status === 'fetching' ||
-    grok?.status === 'fetching' ||
-    cursor?.status === 'fetching' ||
-    zcode?.status === 'fetching' ||
-    muse?.status === 'fetching'
-
-  const floatingTerminalActionLabel = floatingTerminalOpen
-    ? t('auto.components.status.bar.floatingWorkspace.minimize', 'Minimize Floating Workspace')
-    : t('auto.components.status.bar.floatingWorkspace.show', 'Show Floating Workspace')
-  const showFloatingWorkspaceAttentionDot = !floatingTerminalOpen && hasFloatingUnread
-
-  // Respect per-item visibility in the roster so its trigger cannot bypass hidden status items.
   const rosterProviders = [
     showClaude ? visibleClaude : null,
     showCodex ? visibleCodex : null,
@@ -235,11 +215,24 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showGrok ? visibleGrok : null,
     showCursor ? visibleCursor : null,
     showZcode ? visibleZcode : null,
-    showMuse ? visibleMuse : null
+    showMuse ? visibleMuse : null,
+    showOllama ? visibleOllama : null
   ]
     .filter((p): p is ProviderRateLimits => p !== null)
     // Why: the bar collapses chips from the end, so placeholders give way first.
     .sort((a, b) => Number(isOwnerNotSetUpPlaceholder(a)) - Number(isOwnerNotSetUpPlaceholder(b)))
+  const hasVisibleUsageMeters = rosterProviders.length > 0
+  const anyVisible = hasVisibleUsageMeters || showResourceUsage
+  // Why: include Settings so durable managed accounts count — a configured user isn't shown the empty state while snapshots hydrate.
+  // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later.
+  const isEmptyUsageState = isUsageEmptyState(rateLimits, usageSettings)
+  const showEmptyUsageCta = isEmptyUsageState && !usageEmptyStateDismissed
+  const anyFetching = isAnyUsageProviderFetching(rateLimits)
+
+  const floatingTerminalActionLabel = floatingTerminalOpen
+    ? t('auto.components.status.bar.floatingWorkspace.minimize', 'Minimize Floating Workspace')
+    : t('auto.components.status.bar.floatingWorkspace.show', 'Show Floating Workspace')
+  const showFloatingWorkspaceAttentionDot = !floatingTerminalOpen && hasFloatingUnread
 
   // Why: the shown accounts are the owning host's; without a scope Settings opens on the default host.
   const hostScope = getUsageOwnerHostScope(remoteOwner)

@@ -74,7 +74,9 @@ export abstract class RateLimitServiceResultPolicy extends RateLimitServiceFetch
     }
 
     const current = withoutResetWindows(previous, now)
-    if (!hasUsageWindows(current)) {
+    const hasOllamaUsage =
+      current.provider === 'ollama' && Boolean(current.extraUsage || current.ollamaUsageTotals)
+    if (!hasUsageWindows(current) && !hasOllamaUsage) {
       return fresh
     }
 

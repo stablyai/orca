@@ -1,0 +1,42 @@
+import type { ProviderRateLimits } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { NormalizedCodexAccountSelectionTarget } from '../../../shared/agent-accounts/codex/codex-selection-lane'
+import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth/runtime-auth-types'
+import type { NormalizedClaudeAccountSelectionTarget } from '../../claude-accounts/selection/runtime-selection'
+import type { SettledProviderResult } from './service-sibling-provider-result'
+import type { InternalRateLimitState } from './service-types'
+
+export type FetchAllCyclePrepared = {
+  claudeTarget: NormalizedClaudeAccountSelectionTarget
+  claudeGeneration: number
+  claudeAuthPreparation: ClaudeRuntimeAuthPreparation | undefined
+  claudeProvenance: string
+  codexTarget: NormalizedCodexAccountSelectionTarget
+  previousState: InternalRateLimitState
+  codexFetchGated: boolean
+  codexStateBeforeFetch: ProviderRateLimits | null
+  codexProvenance: string | null
+  codexHomePath: string | null
+  codexGeneration: number
+  opencodeConfigChanged: boolean
+  opencodeGeneration: number
+  miniMaxConfigChanged: boolean
+  miniMaxGeneration: number
+  zcodeConfigChanged: boolean
+  zcodeGeneration: number
+  ollamaGeneration: number
+  antigravityGeneration: number
+  claudeFetchGated: boolean
+  results: [
+    PromiseSettledResult<ProviderRateLimits>,
+    PromiseSettledResult<ProviderRateLimits>,
+    PromiseSettledResult<ProviderRateLimits>,
+    PromiseSettledResult<ProviderRateLimits>,
+    PromiseSettledResult<ProviderRateLimits>,
+    PromiseSettledResult<ProviderRateLimits>
+  ]
+  grokResultPromise: Promise<SettledProviderResult>
+  cursorResultPromise: Promise<SettledProviderResult>
+  zcodeResultPromise: Promise<SettledProviderResult>
+  ollamaResultPromise: Promise<SettledProviderResult>
+  antigravityResultPromise: Promise<SettledProviderResult>
+}

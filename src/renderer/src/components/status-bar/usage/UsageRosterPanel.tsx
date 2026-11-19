@@ -30,40 +30,9 @@ import {
 import { formatBareUsagePercentage, formatUsagePercentageLabel } from './usage-percentage-label'
 import { getUsageHealthTone } from './usage-health-tone'
 import { UsageBar, UsageDisplayToggle, UsageValue } from './usage-meter'
+import { DetailMetric, getOllamaUsageSummary } from './usage-roster-summary'
 
 type ProviderId = ProviderRateLimits['provider']
-
-function DetailMetric({
-  section,
-  label,
-  display,
-  title
-}: {
-  section: UsageSection
-  label: string
-  display: UsagePercentageDisplay
-  title?: string
-}): React.JSX.Element {
-  return (
-    <span
-      data-usage-window={section.label}
-      title={title}
-      className="flex shrink-0 items-center gap-1.5"
-    >
-      <span className="text-[10px] text-muted-foreground">{label}</span>
-      <UsageBar
-        usedPercent={section.window.usedPercent}
-        display={display}
-        className="h-[5px] w-7"
-      />
-      <UsageValue
-        usedPercent={section.window.usedPercent}
-        display={display}
-        className="text-[11px]"
-      />
-    </span>
-  )
-}
 
 /** Spells out what a Fable figure limits; MCP windows are not weekly, so they get no title. */
 function scopedUsageTitle(
@@ -118,12 +87,17 @@ function RowUsageSummary({
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const headline = getUsageHeadlineSection(p, t)
+  const ollamaUsageSummary = getOllamaUsageSummary(p, t, intlLocale)
   if (!headline) {
     // Why: a Fable/MCP-only reading is still a reading; show it where the value goes, at any level.
     const only = getTopScopedSection(p, t)
     return (
       <span className="ml-auto flex shrink-0 items-center gap-2">
-        {only ? (
+        {ollamaUsageSummary ? (
+          <span className="text-[11px] tabular-nums text-muted-foreground">
+            {ollamaUsageSummary}
+          </span>
+        ) : only ? (
           <span
             data-usage-scoped-only
             title={scopedUsageTitle(p, only, display, t)}
@@ -194,11 +168,12 @@ export function UsageRow({
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const sections = usedSections(p, t)
-  const hasUsage = sections.length > 0
+  const ollamaUsageSummary = getOllamaUsageSummary(p, t, intlLocale)
+  const hasUsage = sections.length > 0 || ollamaUsageSummary !== null
   const name = getProviderDisplayName(p.provider)
   const plan = formatPlanLabel(p.planType)
   // Why: Detailed lists every window below, so a top-right summary would repeat one of them.
-  const showDetails = hasUsage && mode === 'verbose'
+  const showDetails = sections.length > 0 && mode === 'verbose'
   const soonestReset = showDetails ? soonestResetLabel(sections, now, intlLocale, t) : null
 
   return (

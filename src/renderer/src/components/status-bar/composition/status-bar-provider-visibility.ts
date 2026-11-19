@@ -16,6 +16,7 @@ export type UsageProviderSettings = Pick<
   minimaxApiKeyConfigured: boolean
   // Main reports safeStorage plan-key presence so ZCode survives reload before the first poll.
   zcodePlanApiKeyConfigured: boolean
+  ollamaApiKeyConfigured?: boolean
   // Main reports OpenCode key presence because the renderer cannot inspect its environment or CLI store.
   opencodeGoApiKeyConfigured: boolean
   grokAuthConfigured: boolean
@@ -34,9 +35,29 @@ type UsageProviderSnapshots = {
   cursor: ProviderRateLimits | null | undefined
   zcode?: ProviderRateLimits | null
   muse?: ProviderRateLimits | null
+  ollama?: ProviderRateLimits | null
 }
 
 type UsageProviderId = ProviderRateLimits['provider']
+
+const USAGE_PROVIDER_KEYS = [
+  'claude',
+  'codex',
+  'gemini',
+  'opencodeGo',
+  'kimi',
+  'antigravity',
+  'minimax',
+  'grok',
+  'cursor',
+  'zcode',
+  'muse',
+  'ollama'
+] as const satisfies readonly (keyof UsageProviderSnapshots)[]
+
+export function isAnyUsageProviderFetching(providers: UsageProviderSnapshots): boolean {
+  return USAGE_PROVIDER_KEYS.some((provider) => providers[provider]?.status === 'fetching')
+}
 
 function isProviderSnapshotPending(provider: ProviderRateLimits | null | undefined): boolean {
   return provider == null || (provider.status === 'fetching' && !hasUsageData(provider))
@@ -70,7 +91,8 @@ export function hasUsageProviderSettings(
     settings?.minimaxApiKeyConfigured === true ||
     settings?.grokAuthConfigured === true ||
     settings?.cursorAuthConfigured === true ||
-    settings?.zcodePlanApiKeyConfigured === true
+    settings?.zcodePlanApiKeyConfigured === true ||
+    settings?.ollamaApiKeyConfigured === true
   )
 }
 
@@ -111,6 +133,9 @@ export function hasUsageProviderSettingsForProvider(
   }
   if (providerId === 'zcode') {
     return settings.zcodePlanApiKeyConfigured === true
+  }
+  if (providerId === 'ollama') {
+    return settings.ollamaApiKeyConfigured === true
   }
   return false
 }
@@ -168,7 +193,8 @@ export function isUsageEmptyState(
     isProviderSnapshotPending(providers.grok) ||
     isProviderSnapshotPending(providers.cursor) ||
     (providers.zcode !== undefined && isProviderSnapshotPending(providers.zcode)) ||
-    (providers.muse !== undefined && isProviderSnapshotPending(providers.muse))
+    (providers.muse !== undefined && isProviderSnapshotPending(providers.muse)) ||
+    (providers.ollama !== undefined && isProviderSnapshotPending(providers.ollama))
   ) {
     return false
   }
@@ -184,6 +210,7 @@ export function isUsageEmptyState(
     !isProviderConfigured(providers.grok) &&
     !isProviderConfigured(providers.cursor) &&
     !isProviderConfigured(providers.zcode) &&
-    !isProviderConfigured(providers.muse)
+    !isProviderConfigured(providers.muse) &&
+    !isProviderConfigured(providers.ollama)
   )
 }

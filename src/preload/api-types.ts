@@ -7,6 +7,7 @@ import type {
   MinimaxCredentialsApi,
   ZcodePlanCredentialsApi
 } from './api/agent-accounts/agent-account-api'
+import type { OllamaCloudCredentialsApi } from './api/ollama-cloud-credentials-api'
 import type { HooksApi } from './api/agent-hooks/agent-hook-api'
 import type { SkillsApi } from './api/skills/agent-skill-api'
 import type { AgentAwakeApi, AgentStatusApi } from './api/agent-status/agent-status-api'
@@ -182,6 +183,7 @@ export type PreloadApi = {
   }
   minimaxCredentials: MinimaxCredentialsApi
   zcodePlanCredentials: ZcodePlanCredentialsApi
+  ollamaCloudCredentials: OllamaCloudCredentialsApi
   grokAccounts: GrokAccountsApi
   cursorAccounts: CursorAccountsApi
   ssh: SshApi

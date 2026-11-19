@@ -26,4 +26,5 @@ export function registerRateLimitHandlers(
     rateLimits.fetchInactiveCodexAccountsOnOpen()
   )
   ipcMain.handle('rateLimits:refreshGrok', () => rateLimits.refreshGrok())
+  ipcMain.handle('rateLimits:refreshOllama', () => rateLimits.refreshOllama())
 }

@@ -87,6 +87,7 @@ import { rateLimitsApi } from './api/agent-usage/rate-limits-bridge'
 import { opencodeGoCredentialsApi } from './api/agent-accounts/opencode-go-credentials-bridge'
 import { minimaxCredentialsApi } from './api/agent-accounts/minimax-credentials-bridge'
 import { zcodePlanCredentialsApi } from './api/agent-accounts/zcode-plan-credentials-bridge'
+import { ollamaCloudCredentialsApi } from './api/ollama-cloud-credentials-bridge'
 import { grokAccountsApi } from './api/agent-accounts/grok-accounts-bridge'
 import { cursorAccountsApi } from './api/agent-accounts/cursor-accounts-bridge'
 import { sshApi } from './api/ssh/ssh-bridge'
@@ -201,6 +202,7 @@ const api = {
   opencodeGoCredentials: opencodeGoCredentialsApi,
   minimaxCredentials: minimaxCredentialsApi,
   zcodePlanCredentials: zcodePlanCredentialsApi,
+  ollamaCloudCredentials: ollamaCloudCredentialsApi,
   grokAccounts: grokAccountsApi,
   cursorAccounts: cursorAccountsApi,
   ssh: sshApi,

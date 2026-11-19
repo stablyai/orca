@@ -27,9 +27,9 @@ import {
   getAccountsAntigravitySearchEntries,
   getAccountsLocationSearchEntries,
   getAccountsMiniMaxSearchEntries,
-  getAccountsOpencodeSearchEntries,
-  getAccountsZcodePlanSearchEntries
+  getAccountsOpencodeSearchEntries
 } from './accounts-search'
+import { getAccountsZcodePlanSearchEntries } from './accounts-zcode-plan-search'
 import { getRemoteAccountsPaneScope } from '../../provider-accounts/provider-account-scope'
 import { ProviderHostScopeControl } from '../../provider-accounts/ProviderHostScopeControl'
 import { SettingsSectionStack } from '../section-layout/SettingsSectionStack'
@@ -47,6 +47,7 @@ import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/h
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { CursorAccountsSection } from './providers/CursorAccountsSection'
 import { ZcodePlanAccountsSection } from './usage/ZcodePlanAccountsSection'
+import { renderOllamaAccountsSection } from './accounts-pane-ollama-section'
 import type {
   AccountsPaneProps,
   AccountsPaneSectionModel,
@@ -409,7 +410,8 @@ export function AccountsPane({
         host={usageCredentialHost}
         usageSettings={usageHostSettings}
       />
-    ) : null
+    ) : null,
+    renderOllamaAccountsSection(searchQuery, accountOwnerKey, usageCredentialHost)
   ]
 
   return (

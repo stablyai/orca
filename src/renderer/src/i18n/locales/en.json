@@ -5984,6 +5984,9 @@
             "compact": "Compact",
             "detailedTooltip": "Full usage with bars, labels, and percentages",
             "compactTooltip": "Condensed usage: one summary per provider",
+            "ollamaBalance": "${{value0}} left",
+            "ollamaSpend": "${{value0}} spent (30d)",
+            "ollamaRequests": "{{value0}} requests (30d)",
             "footerDetailAria": "Usage footer detail",
             "notChecked": "Not checked",
             "modelWeeklyLimit": "{{model}} weekly limit: {{usage}}",
@@ -6358,7 +6361,8 @@
           "85457c02fe": "Claude",
           "b2cf4310ce": "Overview",
           "grokUsageTab": "Grok",
-          "trackingSince": "Tracking since {{value0}}"
+          "trackingSince": "Tracking since {{value0}}",
+          "ollamaUsageTab": "Ollama"
         },
         "UsageOverviewPane": {
           "33f7b043d2": "Providers",
@@ -6493,6 +6497,22 @@
           "remoteCaption": "Stats and usage recorded on {{value0}}. Enable and Refresh act on {{value0}}.",
           "tooOldTitle": "{{value0}} can't report usage yet",
           "tooOldBody": "It runs an older version of Orca. Update Orca on {{value0}} to see its token usage here."
+        },
+        "OllamaUsagePane": {
+          "title": "Ollama cloud usage",
+          "notConfiguredDescription": "Cloud subscription usage from ollama.com (API key from ollama.com/settings/keys). Same source as the status bar.",
+          "setupButton": "Set up in Accounts",
+          "description": "Cloud credits and 30-day usage from ollama.com. Same source as the status bar.",
+          "refreshLabel": "Refresh Ollama usage",
+          "refresh": "Refresh",
+          "includedCredits": "Included credits left",
+          "purchasedCredits": "Purchased credits",
+          "monthSpend": "30-day spend",
+          "periodReset": "Plan period resets",
+          "tokenTotals": "30-day tokens: {{value0}} in · {{value1}} cached · {{value2}} out across {{value3}} requests",
+          "accountSettings": "Ollama cloud account settings",
+          "sessionWindow": "5 hours used",
+          "weeklyWindow": "Weekly used"
         }
       },
       "sparse": {
@@ -10795,7 +10815,17 @@
             "54c541fc6e": "Codex accounts",
             "4518496456": "Active Codex account",
             "be3a748ebb": "Claude accounts",
-            "9b6ce52c36": "MiniMax usage"
+            "9b6ce52c36": "MiniMax usage",
+            "ollama": {
+              "title": "Ollama Cloud",
+              "description": "Track Ollama cloud subscription usage. Save the API key from ollama.com.",
+              "kw": {
+                "ollama": "ollama",
+                "cloud": "cloud",
+                "usage": "usage",
+                "rateLimit": "rate limit"
+              }
+            }
           }
         },
         "advanced": {
@@ -14783,6 +14813,42 @@
           "cancel": "Cancel",
           "confirm": "Remove",
           "unknownHost": "Unknown host"
+        },
+        "OllamaCloudAccountsSection": {
+          "title": "Ollama Cloud",
+          "subtitle": "Track Ollama cloud subscription usage in the status bar. Save the API key from ollama.com here.",
+          "consoleLink": "Get API key",
+          "detailsUnavailable": "Credential details are only readable on the computer running Orca.",
+          "keyStored": "API key saved",
+          "keyStoredHelp": "Stored locally and sent only to ollama.com for usage refreshes.",
+          "keyStoredOnHostHelp": "Stored on {{host}} and sent from there only to ollama.com for usage refreshes.",
+          "notConfigured": "No Ollama cloud subscription linked",
+          "notConfiguredHelp": "Save the API key from ollama.com below.",
+          "notConfiguredOnHostHelp": "Save the API key from ollama.com below in the desktop app on {{host}}.",
+          "refreshUsage": "Refresh usage",
+          "hostOnly": "Change the API key in the desktop app on the computer running Orca.",
+          "keyTitle": "API key",
+          "keyDescription": "Paste the API key from ollama.com/settings/keys. Stored locally, encrypted when the OS supports it, and sent only to ollama.com for usage refreshes.",
+          "keyOnHostDescription": "Paste the API key from ollama.com/settings/keys. Stored on {{host}} and sent from there only to ollama.com for usage refreshes.",
+          "saved": "Saved",
+          "notSaved": "Not saved",
+          "keyPlaceholder": "Paste your Ollama API key",
+          "save": "Save",
+          "replace": "Replace",
+          "forgetKey": "Forget key",
+          "keyHelp": "The same OLLAMA_API_KEY your launch tools use (ollama launch claude, codex, droid…). Sent only to ollama.com for usage checks.",
+          "keySaved": "Ollama cloud API key saved.",
+          "keySaveFailed": "Ollama cloud credential update failed.",
+          "keySealedElsewhere": "This key was saved by another Orca app on this computer. Forget it here, then save it again in this app.",
+          "keyUnreadable": "Orca cannot read the saved key. Forget it and save it again.",
+          "usageTitle": "Subscription usage",
+          "usageDescription": "Remaining credits and 30-day spend for the linked subscription, refreshed with the status bar usage cycle.",
+          "includedWithLimit": "Included credits: {{value0}} of {{value1}}",
+          "included": "Included credits: {{value0}}",
+          "monthSpend": "30-day cloud spend: ${{value0}} across {{value1}} requests",
+          "planLevel": "Plan: {{value0}}",
+          "purchasedCredits": "Purchased credits: ${{value0}}",
+          "monthTokens": "30-day tokens: {{value0}} in · {{value1}} cached · {{value2}} out"
         }
       },
       "right": {

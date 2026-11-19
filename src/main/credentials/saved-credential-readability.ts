@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { getSecretStore } from '../../shared/secure-storage/secret-store'
 
 export type SavedCredentialUnreadable =
@@ -10,6 +11,10 @@ export type SavedCredentialFile = {
   envelopePrefix: string
   /** Accept legacy files that have no envelope metadata to inspect. */
   legacyRaw?: boolean
+}
+
+function isFileNotFound(error: unknown): boolean {
+  return error instanceof Error && 'code' in error && error.code === 'ENOENT'
 }
 
 // Orcad can report encryption available before its host key is loaded; probe actual use.
@@ -38,6 +43,25 @@ export function savedCredentialUnreadable(
   } catch {
     return 'unreadable'
   }
+  return classifyCredentialText(file, text)
+}
+
+export async function savedCredentialUnreadableAsync(
+  file: SavedCredentialFile
+): Promise<SavedCredentialUnreadable | undefined> {
+  let text: string
+  try {
+    text = await readFile(file.path, 'utf8')
+  } catch (error) {
+    return isFileNotFound(error) ? undefined : 'unreadable'
+  }
+  return classifyCredentialText(file, text)
+}
+
+function classifyCredentialText(
+  file: SavedCredentialFile,
+  text: string
+): SavedCredentialUnreadable | undefined {
   if (!text.startsWith(file.envelopePrefix)) {
     return file.legacyRaw ? undefined : 'unreadable'
   }

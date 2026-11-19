@@ -1,5 +1,6 @@
 import React from 'react'
 import minimaxIconUrl from '../../../../../../resources/minimax-icon.svg?url'
+import ollamaIconUrl from '../../../../../shared/agent-icons/ollama.png?url'
 
 export function OpenAIIcon({
   size = 14,
@@ -313,6 +314,20 @@ export function OpenCodeGoIcon({ size = 14 }: { size?: number }): React.JSX.Elem
         </clipPath>
       </defs>
     </svg>
+  )
+}
+
+/** Official Ollama llama mark, bundled for offline use. */
+export function OllamaIcon({ size = 14 }: { size?: number }): React.JSX.Element {
+  return (
+    <img
+      src={ollamaIconUrl}
+      width={size}
+      height={size}
+      alt=""
+      aria-hidden
+      style={{ borderRadius: 2 }}
+    />
   )
 }
 

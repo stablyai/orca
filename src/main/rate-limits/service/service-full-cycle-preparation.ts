@@ -12,47 +12,10 @@ import { ZCODE_PLAN_SITE_BASE_URLS } from '../../../shared/agent-accounts/usage-
 import { fetchMiniMaxRateLimits } from '../providers/minimax/minimax-fetcher'
 import { createHash } from 'node:crypto'
 import { fetchOpenCodeGoUsage } from '../providers/opencode-go/opencode-go-usage-source-selection'
+import { prepareOllamaResultPromise } from '../../ollama/ollama-usage-cycle-preparation'
 import { RateLimitServiceAntigravityAccounts } from './service-antigravity-accounts'
-import type { SettledProviderResult } from './service-sibling-provider-result'
-import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth/runtime-auth-types'
-import type { InternalRateLimitState } from './service-types'
-import type { NormalizedClaudeAccountSelectionTarget } from '../../claude-accounts/selection/runtime-selection'
-import type { NormalizedCodexAccountSelectionTarget } from '../../../shared/agent-accounts/codex/codex-selection-lane'
+import type { FetchAllCyclePrepared } from './service-full-cycle-types'
 import type { ProviderRateLimits } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
-
-export type FetchAllCyclePrepared = {
-  claudeTarget: NormalizedClaudeAccountSelectionTarget
-  claudeGeneration: number
-  claudeAuthPreparation: ClaudeRuntimeAuthPreparation | undefined
-  claudeProvenance: string
-  codexTarget: NormalizedCodexAccountSelectionTarget
-  previousState: InternalRateLimitState
-  codexFetchGated: boolean
-  codexStateBeforeFetch: ProviderRateLimits | null
-  codexProvenance: string | null
-  codexHomePath: string | null
-  codexGeneration: number
-  opencodeConfigChanged: boolean
-  opencodeGeneration: number
-  miniMaxConfigChanged: boolean
-  miniMaxGeneration: number
-  zcodeConfigChanged: boolean
-  zcodeGeneration: number
-  antigravityGeneration: number
-  claudeFetchGated: boolean
-  results: [
-    PromiseSettledResult<ProviderRateLimits>,
-    PromiseSettledResult<ProviderRateLimits>,
-    PromiseSettledResult<ProviderRateLimits>,
-    PromiseSettledResult<ProviderRateLimits>,
-    PromiseSettledResult<ProviderRateLimits>,
-    PromiseSettledResult<ProviderRateLimits>
-  ]
-  grokResultPromise: Promise<SettledProviderResult>
-  cursorResultPromise: Promise<SettledProviderResult>
-  zcodeResultPromise: Promise<SettledProviderResult>
-  antigravityResultPromise: Promise<SettledProviderResult>
-}
 
 export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServiceAntigravityAccounts {
   protected async prepareFetchAllCycle(
@@ -144,6 +107,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       this.zcodeFetchGeneration += 1
     }
     const zcodeGeneration = this.zcodeFetchGeneration
+    const ollamaGeneration = this.ollamaFetchGeneration
     const zcodePlanCredential = zcodePlanApiKey
       ? {
           apiKey: zcodePlanApiKey,
@@ -173,7 +137,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       cursor: this.withFetchingStatus(previousState.cursor, 'cursor'),
       zcode: zcodeConfigChanged
         ? this.withFetchingStatus(null, 'zcode')
-        : this.withFetchingStatus(previousState.zcode, 'zcode')
+        : this.withFetchingStatus(previousState.zcode, 'zcode'),
+      ollama: this.withFetchingStatus(previousState.ollama, 'ollama')
     })
 
     // Async Keychain/worker DB reads must not delay other providers.
@@ -195,6 +160,8 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       (value) => ({ status: 'fulfilled', value }) as const,
       (reason) => ({ status: 'rejected', reason }) as const
     )
+
+    const ollamaResultPromise = prepareOllamaResultPromise(signal)
 
     // Hidden meters avoid the CLI spawn; the separate promise keeps other providers responsive.
     const antigravityResultPromise = (
@@ -309,6 +276,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       miniMaxGeneration,
       zcodeConfigChanged,
       zcodeGeneration,
+      ollamaGeneration,
       antigravityGeneration,
       claudeFetchGated,
       results: [
@@ -322,6 +290,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       grokResultPromise,
       cursorResultPromise,
       zcodeResultPromise,
+      ollamaResultPromise,
       antigravityResultPromise
     }
   }
