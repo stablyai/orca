@@ -1,5 +1,6 @@
 import type { MemorySnapshot } from '../../../../../../shared/diagnostics/process-stats-types'
 import type { PtyListedSession } from '../../../../../../shared/terminal/pty/lifecycle/pty-listed-session'
+import { isProgramStatusRow } from '../../../../../../shared/program-status/program-status-row'
 import { useAppStore } from '../../../../store/index'
 
 export type ResourceOwnerUsage = { cpu: number; memory: number }
@@ -51,6 +52,13 @@ export function splitSnapshotByOwner(
   }
 }
 
+/** Panes with a real agent; a finished program's kept result row is not one. */
 export function readAgentPaneKeys(): { has(paneKey: string): boolean } {
-  return useAppStore.getState().agentStatusByPaneKey
+  const statuses = useAppStore.getState().agentStatusByPaneKey
+  return {
+    has: (paneKey) => {
+      const entry = statuses.get(paneKey)
+      return entry !== undefined && !isProgramStatusRow(entry)
+    }
+  }
 }
