@@ -1,11 +1,4 @@
-import {
-  createContext,
-  useContext,
-  useMemo,
-  useRef,
-  type ComponentPropsWithoutRef,
-  type ReactNode
-} from 'react'
+import { createContext, useContext, type ComponentPropsWithoutRef, type ReactNode } from 'react'
 import type { ExtraProps } from 'react-markdown'
 import type { CommentMarkdownExtension } from '@/components/comment-markdown/CommentMarkdown'
 import { botGroupMentionSegments } from '../../../../shared/bots/bot-group-mentions'
@@ -18,11 +11,7 @@ import {
   SLACK_MENTION_HREF,
   type SlackPeople
 } from '../../../../shared/connectors/slack-message-markup'
-import {
-  scanSlackPeople,
-  showSlackMentionTokens,
-  type SlackPeopleScan
-} from '../../../../shared/connectors/slack-mention-tokens'
+import { showSlackMentionTokens } from '../../../../shared/connectors/slack-mention-tokens'
 
 /** Room member names whose `@Name` mentions render as chips in this chat's messages. */
 export const NativeChatMentionNamesContext = createContext<readonly string[] | null>(null)
@@ -211,18 +200,4 @@ export function createNativeChatMentionExtension(
     sanitizeAttributes: { span: [MENTION_PROPERTY, BOT_CHAT_PROPERTY] },
     components: { span: MentionSpan }
   }
-}
-
-/** The Slack people a chat's messages name. Streaming hands a new array per delta: reads only what it added, and keeps the map while
- *  no one new appears. */
-export function useNativeChatSlackPeople(
-  messages: Parameters<typeof scanSlackPeople>[0]
-): SlackPeople | null {
-  const scan = useRef<SlackPeopleScan | null>(null)
-  return useMemo(() => {
-    // react-doctor-disable-next-line react-doctor/no-ref-current-in-render
-    scan.current = scanSlackPeople(messages, scan.current)
-    // react-doctor-disable-next-line react-doctor/no-ref-current-in-render
-    return scan.current.people
-  }, [messages])
 }

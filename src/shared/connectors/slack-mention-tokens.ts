@@ -40,6 +40,20 @@ export function scanSlackPeople(
   return { first: messages[0], scanned: messages.length, people }
 }
 
+// The last scan of each chat, keyed by its first message: a chat's arrays keep that object.
+const lastScans = new WeakMap<AskedMessage, SlackPeopleScan>()
+
+/** `scanSlackPeople` against this chat's last scan: the same map back while no one new appears. */
+export function slackPeopleOf(messages: readonly AskedMessage[]): SlackPeople | null {
+  const first = messages[0]
+  if (!first) {
+    return null
+  }
+  const scan = scanSlackPeople(messages, lastScans.get(first) ?? null)
+  lastScans.set(first, scan)
+  return scan.people
+}
+
 function tokenNodes(
   value: string,
   people: SlackPeople,
