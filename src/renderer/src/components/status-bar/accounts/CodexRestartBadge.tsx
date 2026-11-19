@@ -32,7 +32,7 @@ export function CodexRestartBadge({ count }: { count: number }): React.JSX.Eleme
       role="img"
       aria-label={label}
       title={label}
-      className="inline-flex h-4 shrink-0 items-center gap-[3px] rounded-full bg-status-warning px-1.5 text-3xs font-bold leading-none tabular-nums text-status-warning-foreground"
+      className="inline-flex h-4 shrink-0 items-center gap-[3px] rounded-full bg-status-warning px-1.5 text-3xs font-bold leading-none tabular-nums text-status-warning-on-solid"
     >
       <RotateCcw aria-hidden className="size-[11px] text-current stroke-[2.25]!" />
       {count}
