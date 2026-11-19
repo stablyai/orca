@@ -58,10 +58,17 @@ export type OwnerUsageRateLimits = {
 
 /** Read provider usage from the focused workspace’s account owner, including that host’s own remote snapshot. */
 export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLimits {
+  // Why: route by the focused workspace's owner, never by the Active Server setting.
+  return useAccountOwnerUsage(useActiveAccountOwner(LOCAL_TARGET), local)
+}
+
+/** One owner's accounts and usage: this device's store, or the host's own accounts stream. */
+export function useAccountOwnerUsage(
+  owner: AccountOwner,
+  local: RateLimitState
+): OwnerUsageRateLimits {
   const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
-  // Why: route by the focused workspace's owner, never by the Active Server setting.
-  const owner = useActiveAccountOwner(LOCAL_TARGET)
   const ownerId = runtimeTargetEnvironmentId(owner.target)
   const ownerName = useAppStore(
     (s) => s.runtimeEnvironments.find((environment) => environment.id === ownerId)?.name ?? null

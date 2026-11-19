@@ -55,6 +55,7 @@ export function CodexSwitcherMenu({
     providerAccountHostLabel,
     reauthenticatingAccountId,
     resetConfirmOpen,
+    rosterKnown,
     resetCreditCount,
     resetCreditExpiry,
     selectedGroup,
@@ -143,8 +144,10 @@ export function CodexSwitcherMenu({
       )}
       variant="account"
       accountLabel={
-        activeTarget?.label ??
-        t('auto.components.status.bar.StatusBar.c676918adc', 'System default')
+        rosterKnown
+          ? (activeTarget?.label ??
+            t('auto.components.status.bar.StatusBar.c676918adc', 'System default'))
+          : undefined
       }
       panelFooter={
         resetCreditCount !== null ? (
@@ -198,30 +201,33 @@ export function CodexSwitcherMenu({
           : {})}
       />
       {open ? <CodexRestartStatusPrompt /> : null}
-      <AccountSwitchSection
-        heading={t('auto.components.status.bar.AccountSwitchList.accounts', 'Accounts')}
-        targets={selectedGroup?.targets ?? []}
-        panelShowsActiveAccount
-        onOpenSettings={() => {
-          openSettingsTarget({
-            pane: 'accounts',
-            repoId: null,
-            sectionId: 'accounts-codex',
-            hostScope: ownerUsage.owner.target
-          })
-          openSettingsPage()
-        }}
-      >
-        {rows.filter((row) => !row.showSignInAction).map(renderRow)}
-        {unavailableUsageRows.length > 0 ? (
-          <>
-            <DropdownMenuLabel className="mt-1">
-              {t('auto.components.status.bar.tooltip.f8b8dbed85', 'Usage unavailable')}
-            </DropdownMenuLabel>
-            {unavailableUsageRows.map(renderRow)}
-          </>
-        ) : null}
-      </AccountSwitchSection>
+      {/* Why: until the host lists its accounts, the empty roster's only row would claim "System default". */}
+      {rosterKnown ? (
+        <AccountSwitchSection
+          heading={t('auto.components.status.bar.AccountSwitchList.accounts', 'Accounts')}
+          targets={selectedGroup?.targets ?? []}
+          panelShowsActiveAccount
+          onOpenSettings={() => {
+            openSettingsTarget({
+              pane: 'accounts',
+              repoId: null,
+              sectionId: 'accounts-codex',
+              hostScope: ownerUsage.owner.target
+            })
+            openSettingsPage()
+          }}
+        >
+          {rows.filter((row) => !row.showSignInAction).map(renderRow)}
+          {unavailableUsageRows.length > 0 ? (
+            <>
+              <DropdownMenuLabel className="mt-1">
+                {t('auto.components.status.bar.tooltip.f8b8dbed85', 'Usage unavailable')}
+              </DropdownMenuLabel>
+              {unavailableUsageRows.map(renderRow)}
+            </>
+          ) : null}
+        </AccountSwitchSection>
+      ) : null}
     </ProviderDetailsMenu>
   )
 }
