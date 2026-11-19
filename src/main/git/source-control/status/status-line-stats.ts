@@ -15,8 +15,9 @@ import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { gitOptionalLocksDisabledEnv } from '../../command-runner/git-environment/git-process-env'
 import { resolveWorktreeFilesystemPath } from '../worktree-filesystem-path'
 import {
+  beginIncompleteNumstatFallbackRead,
   clearIncompleteNumstatFallback,
-  getIncompleteNumstatFallbackExpiry,
+  getIncompleteNumstatFallback,
   setIncompleteNumstatFallback,
   settledNumstatCache
 } from '../git-read-cache-invalidation'
@@ -66,23 +67,33 @@ async function runNumstat(
 // One retry subprocess per row is only affordable on a rare failure, so cap the rows retried.
 const MAX_NUMSTAT_RETRY_ENTRIES = 200
 
+type NumstatEntryPass = NumstatPass & { failedPaths: Set<string> }
+
 /** A locked file fails the whole pass on Windows; count each row alone so readable rows keep their stats. */
 async function runNumstatPerEntry(
   worktreePath: string,
   cached: boolean,
   detectRenames: boolean,
   entries: readonly GitStatusEntry[],
-  options: GitRuntimeOptions
-): Promise<NumstatPass | null> {
+  options: GitRuntimeOptions,
+  backoffPaths: ReadonlySet<string> = new Set()
+): Promise<NumstatEntryPass | null> {
   const area = cached ? 'staged' : 'unstaged'
   const areaEntries = entries.filter((entry) => entry.area === area)
   if (areaEntries.length === 0 || areaEntries.length > MAX_NUMSTAT_RETRY_ENTRIES) {
     return null
   }
   const stats = new Map<string, GitLineStats>()
+  const failedPaths = new Set<string>()
   let complete = true
   for (const entry of areaEntries) {
     options.signal?.throwIfAborted()
+    if (backoffPaths.has(entry.path)) {
+      // Back off only the path that failed; every readable row is recounted from current files.
+      complete = false
+      failedPaths.add(entry.path)
+      continue
+    }
     try {
       // Literal magic keeps a path with wildcard characters from matching other files.
       const pathspecs = [
@@ -99,9 +110,10 @@ async function runNumstatPerEntry(
       }
       // A still-unreadable row keeps empty stats; the pass stays incomplete.
       complete = false
+      failedPaths.add(entry.path)
     }
   }
-  return { stats, complete }
+  return { stats, complete, failedPaths }
 }
 
 async function readNumstatWithFallback(
@@ -112,9 +124,18 @@ async function readNumstatWithFallback(
   options: GitRuntimeOptions
 ): Promise<NumstatPass | null> {
   options.signal?.throwIfAborted()
-  const cachedFallback = getIncompleteNumstatFallbackExpiry(worktreePath, cached, detectRenames)
+  const readGeneration = beginIncompleteNumstatFallbackRead()
+  const cachedFallback = getIncompleteNumstatFallback(worktreePath, cached, detectRenames)
   if (cachedFallback !== null) {
-    return { stats: cachedFallback.stats, complete: false }
+    const pass = await runNumstatPerEntry(
+      worktreePath,
+      cached,
+      detectRenames,
+      entries,
+      options,
+      cachedFallback.failedPaths
+    )
+    return pass === null ? null : { stats: pass.stats, complete: false }
   }
   try {
     const pass = {
@@ -131,7 +152,13 @@ async function readNumstatWithFallback(
   }
   const fallback = await runNumstatPerEntry(worktreePath, cached, detectRenames, entries, options)
   if (!fallback?.complete) {
-    setIncompleteNumstatFallback(worktreePath, cached, detectRenames, fallback?.stats ?? new Map())
+    setIncompleteNumstatFallback(
+      worktreePath,
+      cached,
+      detectRenames,
+      fallback?.failedPaths ?? new Set(),
+      readGeneration
+    )
   } else {
     clearIncompleteNumstatFallback(worktreePath, cached, detectRenames)
   }

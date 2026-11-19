@@ -19,11 +19,17 @@ const gitFailures = vi.hoisted(
     pathspec: string | null
     wholeNumstatCalls: number
     pathspecCalls: number
+    blockPathspec: string | null
+    deferredStarted: (() => void) | null
+    releaseDeferred: (() => void) | null
   } => ({
     wholeNumstat: false,
     pathspec: null,
     wholeNumstatCalls: 0,
-    pathspecCalls: 0
+    pathspecCalls: 0,
+    blockPathspec: null,
+    deferredStarted: null,
+    releaseDeferred: null
   })
 )
 
@@ -38,6 +44,17 @@ vi.mock('../../command-runner/git-exec-file', async (importOriginal) => {
         if (gitFailures.wholeNumstat && pathspecStart === -1) {
           gitFailures.wholeNumstatCalls++
           return Promise.reject(new Error('error: cannot hash locked.txt'))
+        }
+        if (
+          pathspecStart !== -1 &&
+          gitFailures.blockPathspec !== null &&
+          args.includes(gitFailures.blockPathspec)
+        ) {
+          gitFailures.pathspecCalls++
+          return new Promise((_resolve, reject) => {
+            gitFailures.releaseDeferred = () => reject(new Error('error: cannot hash locked.txt'))
+            gitFailures.deferredStarted?.()
+          })
         }
         if (
           pathspecStart !== -1 &&
@@ -100,6 +117,9 @@ beforeEach(async () => {
   gitFailures.pathspec = null
   gitFailures.wholeNumstatCalls = 0
   gitFailures.pathspecCalls = 0
+  gitFailures.blockPathspec = null
+  gitFailures.deferredStarted = null
+  gitFailures.releaseDeferred = null
   vi.stubEnv('ORCA_GIT_STATUS_NUMSTAT_REUSE', '0')
   root = await mkdtemp(join(tmpdir(), 'orca-status-locked-'))
   repo = join(root, 'repo')
@@ -203,6 +223,73 @@ describe('per-path numstat fallback', () => {
     expect(await attachLineStats(repo, entries)).toBe(false)
     expect(gitFailures.wholeNumstatCalls).toBe(2)
     expect(gitFailures.pathspecCalls).toBe(2)
+  })
+
+  it('does not repopulate the fallback when invalidation happens during a pending read', async () => {
+    await commitBaseline({
+      'readable.txt': 'one\ntwo\nthree\n',
+      'locked.txt': 'red\ngreen\nblue\n'
+    })
+    await writeFile(join(repo, 'readable.txt'), 'one\ntwo\nthree\nfour\nfive\n')
+    await writeFile(join(repo, 'locked.txt'), 'red\ngreen\nblue\nyellow\n')
+    gitFailures.wholeNumstat = true
+    gitFailures.pathspec = ':(literal)locked.txt'
+    const entries: GitStatusEntry[] = [
+      { path: 'readable.txt', status: 'modified', area: 'unstaged' },
+      { path: 'locked.txt', status: 'modified', area: 'unstaged' }
+    ]
+
+    let markStarted!: () => void
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve
+    })
+    gitFailures.deferredStarted = markStarted
+    gitFailures.blockPathspec = gitFailures.pathspec
+
+    const pending = attachLineStats(repo, entries)
+    await started
+    invalidateGitReadCaches()
+    gitFailures.blockPathspec = null
+    gitFailures.releaseDeferred?.()
+    expect(await pending).toBe(false)
+
+    expect(await attachLineStats(repo, entries)).toBe(false)
+    expect(gitFailures.wholeNumstatCalls).toBe(2)
+  })
+
+  it('recounts readable files and new paths while only the failed path is backed off', async () => {
+    await commitBaseline({
+      'readable.txt': 'one\ntwo\nthree\n',
+      'extra.txt': 'alpha\nbeta\n',
+      'locked.txt': 'red\ngreen\nblue\n'
+    })
+    await writeFile(join(repo, 'readable.txt'), 'one\ntwo\nthree\nfour\nfive\n')
+    await writeFile(join(repo, 'locked.txt'), 'red\ngreen\nblue\nyellow\n')
+    gitFailures.wholeNumstat = true
+    gitFailures.pathspec = ':(literal)locked.txt'
+    vi.setSystemTime(2_000_000)
+    const entries: GitStatusEntry[] = [
+      { path: 'readable.txt', status: 'modified', area: 'unstaged' },
+      { path: 'locked.txt', status: 'modified', area: 'unstaged' }
+    ]
+
+    expect(await attachLineStats(repo, entries)).toBe(false)
+    expect(entries[0]).toMatchObject({ added: 2, removed: 0 })
+
+    await writeFile(
+      join(repo, 'readable.txt'),
+      ['one', 'two', 'three', ...Array.from({ length: 10 }, (_, i) => `added${i}`), ''].join('\n')
+    )
+    await writeFile(join(repo, 'extra.txt'), 'alpha\nbeta\ngamma\n')
+    entries.push({ path: 'extra.txt', status: 'modified', area: 'unstaged' })
+
+    expect(await attachLineStats(repo, entries)).toBe(false)
+    expect(gitFailures.wholeNumstatCalls).toBe(1)
+    expect(entries).toEqual([
+      { path: 'readable.txt', status: 'modified', area: 'unstaged', added: 10, removed: 0 },
+      { path: 'locked.txt', status: 'modified', area: 'unstaged' },
+      { path: 'extra.txt', status: 'modified', area: 'unstaged', added: 1, removed: 0 }
+    ])
   })
 })
 

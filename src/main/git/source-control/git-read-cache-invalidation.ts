@@ -1,6 +1,5 @@
 import type { GitDiffResult } from '../../../shared/git/diff/git-diff-compare-types'
 import type { GitStatusResult } from '../../../shared/git/status/git-status-types'
-import type { GitLineStats } from '../../../shared/git/status/git-uncommitted-line-stats'
 import { InFlightPromiseDedupe } from '../../../shared/concurrency/in-flight-promise-dedupe'
 import {
   clearGitStatusLineStatsCache,
@@ -33,9 +32,10 @@ export const settledNumstatCache = new SettledDiffCache(NUMSTAT_CACHE_LIMITS)
 export const INCOMPLETE_NUMSTAT_FALLBACK_TTL_MS = 5_000
 type IncompleteNumstatFallback = {
   expiresAt: number
-  stats: Map<string, GitLineStats>
+  failedPaths: Set<string>
 }
 const incompleteNumstatFallbackCache = new Map<string, IncompleteNumstatFallback>()
+let incompleteNumstatFallbackGeneration = 0
 
 function incompleteNumstatFallbackKey(
   worktreePath: string,
@@ -45,7 +45,12 @@ function incompleteNumstatFallbackKey(
   return JSON.stringify([worktreePath, cached, detectRenames])
 }
 
-export function getIncompleteNumstatFallbackExpiry(
+/** Capture before an async fallback read; invalidation during the read blocks the write. */
+export function beginIncompleteNumstatFallbackRead(): number {
+  return incompleteNumstatFallbackGeneration
+}
+
+export function getIncompleteNumstatFallback(
   worktreePath: string,
   cached: boolean,
   detectRenames: boolean,
@@ -66,12 +71,16 @@ export function setIncompleteNumstatFallback(
   worktreePath: string,
   cached: boolean,
   detectRenames: boolean,
-  stats: Map<string, GitLineStats>,
+  failedPaths: Set<string>,
+  readGeneration: number,
   now: number = Date.now()
 ): void {
+  if (readGeneration !== incompleteNumstatFallbackGeneration) {
+    return
+  }
   incompleteNumstatFallbackCache.set(
     incompleteNumstatFallbackKey(worktreePath, cached, detectRenames),
-    { expiresAt: now + INCOMPLETE_NUMSTAT_FALLBACK_TTL_MS, stats }
+    { expiresAt: now + INCOMPLETE_NUMSTAT_FALLBACK_TTL_MS, failedPaths }
   )
 }
 
@@ -93,6 +102,7 @@ export function invalidateGitReadCaches(): void {
   settledDiffCache.clear()
   settledNumstatCache.clear()
   incompleteNumstatFallbackCache.clear()
+  incompleteNumstatFallbackGeneration += 1
   statusReadLeaseOwner.invalidate()
   invalidateGitBranchLineTotalInFlight()
   invalidateGitUpstreamStatusReads()
