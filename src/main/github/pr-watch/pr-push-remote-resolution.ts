@@ -1,4 +1,4 @@
-import { classifyGitHubOwnerRepoFromRemoteUrl } from '../github-ssh-host-alias-resolution'
+import { classifyGitHubOwnerRepoFromRemoteUrl } from '../repositories/github-ssh-host-alias-resolution'
 import type { PushRemote } from './pr-chat-action-recorder'
 import type { PRPendingObligation } from './pr-pending-actions'
 import type { PRWatchWorkspace } from './pr-watch-types'

@@ -1,7 +1,8 @@
+import { RuntimeAgentStatusReadContract } from './runtime-agent-status-read-contract'
 import type { TerminalIdentityReadContext as IdentityRead } from '../terminal/query/terminal-identity-read-context'
 import type * as Calls from './runtime-host-service-calls'
-import type { selectFreshExplicitAgentStatus } from '../workspaces/process-listing/runtime-hook-agent-row-selection'
-import type { IPtyProvider } from '../../providers/pty-provider-contract'
+
+import type { IPtyProvider } from '../../providers/pty/provider-contract'
 import type {
   RuntimePtyWorktreeRecord,
   RuntimeHeadlessTerminal,
@@ -26,11 +27,11 @@ import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-pa
 import type {
   RuntimeTerminalShow,
   RuntimeTerminalSummary
-} from '../../../shared/runtime-terminal-contracts'
-import type { RuntimeSyncedLeaf } from '../../../shared/runtime-session-contracts'
+} from '../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimeSyncedLeaf } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { readOrchestrationFleetAgentStatusSnapshot } from '../orchestration/addressing/orchestration-fleet-agent-status-snapshot'
-import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { Repo } from '../../../shared/repo-types'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/execution-host/project-execution-runtime'
 import type { RuntimeWorktreeScanResult } from '../workspaces/catalog/repo-worktree-resolution-scan'
 import type { ProcessedAgentStatusChunk } from '../../../shared/agent-status/transport/agent-status-osc'
@@ -41,13 +42,13 @@ import type { OrchestrationMailboxPointerSubmitTarget } from '../orchestration/m
 import type { WriteSettlement } from '../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 import type { StructuredPointerTarget } from '../orchestration/mailbox/structured-pointer/structured-mailbox-pointer-delivery'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
-import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
+
 import type * as PtyControllerContract from '../terminal/lifecycle/runtime-pty-controller-contract'
 import type { RuntimeClientEventBus } from '../client/events/runtime-client-event-bus'
 import type { RuntimeRepoSelector } from '../workspaces/catalog/runtime-repo-selector'
 import type { PtyPane, PtyPaneSource } from '../terminal/surface/pty-pane-query'
 
-export abstract class RuntimeConstructionServices {
+export abstract class RuntimeConstructionServices extends RuntimeAgentStatusReadContract {
   abstract getOrchestrationDb(): OrchestrationDb
   abstract getExistingOrchestrationDb(): OrchestrationDb | null
   abstract listRepos(): Repo[]
@@ -56,6 +57,7 @@ export abstract class RuntimeConstructionServices {
   abstract notifyWorktreesChanged(repoId: string, options?: { invalidateGitScans?: boolean }): void
   protected abstract notifyReposChanged(): void
   protected abstract isPtyKnownExited(ptyId: string): boolean
+  protected abstract onPtyStopSettled(ptyId: string, stopped: boolean): void
 
   abstract getPtyLivenessVerdict(
     ...args: Calls.GetPtyLivenessVerdictArgs
@@ -69,6 +71,9 @@ export abstract class RuntimeConstructionServices {
   abstract resolveOrchestrationWorkerServer(
     ...args: Calls.ResolveOrchestrationWorkerServerArgs
   ): Calls.ResolveOrchestrationWorkerServerResult
+  abstract listOrchestrationWorkerServers(): Promise<
+    readonly { environmentId: string; name: string }[]
+  >
   abstract callOrchestrationWorkerServer(
     ...args: Calls.CallOrchestrationWorkerServerArgs
   ): Calls.CallOrchestrationWorkerServerResult
@@ -113,6 +118,8 @@ export abstract class RuntimeConstructionServices {
   protected abstract clearWaitBlockedStamp(ptyId: string): void
   protected abstract readRuledScreen(ptyId: string | null | undefined): RuledScreen | null
   protected abstract readOutputClockAt(ptyId: string | null | undefined): number | null
+  protected abstract requestReattachedRepaint(ptyId: string): void
+  protected abstract confirmReattachedRestTitle(ptyId: string, agent: TuiAgent): Promise<boolean>
   protected abstract headlessTerminals: Map<string, RuntimeHeadlessTerminal>
   protected abstract readHeadlessVisibleTerminalState(
     ptyId: string
@@ -210,7 +217,8 @@ export abstract class RuntimeConstructionServices {
   protected abstract selectReposBySelector(selector: string): Repo[]
   protected abstract listRepoWorktreesForListing(
     repo: Repo,
-    projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
+    projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>,
+    options?: { claimsHygiene?: boolean }
   ): Promise<RuntimeWorktreeScanResult>
   protected abstract listKnownExecutionHostIds(
     additionalHostIds?: Iterable<ExecutionHostId>,
@@ -274,11 +282,6 @@ export abstract class RuntimeConstructionServices {
   protected abstract getWorkspaceSessionForWorktree(
     worktreeId: string
   ): WorkspaceSessionState | null
-  protected abstract readonly getAgentStatusSnapshotForPaneFn:
-    | ((paneKey: string) => AgentStatusIpcPayload[])
-    | null
-  protected abstract readonly publicPaneStatusFn?: (paneKey: string) => AgentStatusIpcPayload[]
-  abstract readonly getAgentStatusSnapshotFn: (() => AgentStatusIpcPayload[]) | null
   protected abstract getTrackedDisplayTitleForPty(ptyId: string): string | null
   protected abstract getLeavesForPty(ptyId: string): readonly RuntimeLeafRecord[]
   abstract notifyMessageArrived(handle: string, messageType?: string): void
@@ -296,8 +299,4 @@ export abstract class RuntimeConstructionServices {
     retryStale?: boolean,
     inventoryOptions?: PtyControllerContract.PtyInventoryRefreshOptions
   ): Promise<PtyControllerContract.PtyControllerInventory | null>
-  protected abstract getFreshExplicitAgentStatusForHandle(
-    handle: string,
-    ptyId: string
-  ): ReturnType<typeof selectFreshExplicitAgentStatus>
 }

@@ -3,7 +3,7 @@ import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
   type AgentSessionTurnActivity
 } from '../../../../../shared/agent-session/agent-session-wire'
-import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
 import { subscriberHistoryReader } from '../history/agent-session-bounded-frames'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import {
@@ -14,13 +14,13 @@ import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up
 import type { Subscriber } from './agent-session-subscribe-input'
 
 /** Restatements cannot share a history page's already allocated byte budget. */
-export function refreshPublishedWork(
+export async function refreshPublishedWork(
   port: Pick<SubscriberDeliveryPort, 'emit' | 'isActive'>,
   subscriber: Subscriber,
   journal: AgentSessionJournal,
   work: AgentSessionPublishedWork | undefined,
   shared: { hostNow: number; activity?: AgentSessionTurnActivity | null }
-): void {
+): Promise<void> {
   if (!work || !port.isActive(subscriber)) {
     return
   }
@@ -29,8 +29,8 @@ export function refreshPublishedWork(
   const { budgetBytes } = subscriberHistoryReader(subscriber)
   let pending: AgentJournalSubmission[] = []
   let bytes = 0
-  const emit = (): void => {
-    port.emit(
+  const emit = async (): Promise<void> => {
+    await port.emit(
       subscriber,
       {
         type: 'batch',
@@ -51,7 +51,7 @@ export function refreshPublishedWork(
       pending.length > 0 &&
       (pending.length === AGENT_SESSION_HISTORY_MAX_LIMIT || bytes + submissionBytes > budgetBytes)
     ) {
-      emit()
+      await emit()
       if (!port.isActive(subscriber)) {
         return
       }
@@ -60,7 +60,7 @@ export function refreshPublishedWork(
     bytes += submissionBytes
   }
   // Empty work still owes its fields when ownership changed without a journal row.
-  emit()
+  await emit()
   if (port.isActive(subscriber)) {
     subscriber.workView = view
   }

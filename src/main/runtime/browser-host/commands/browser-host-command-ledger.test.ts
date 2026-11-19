@@ -31,6 +31,45 @@ describe('BrowserHostCommandLedger', () => {
       'browser_host_command_result_page_stale'
     )
   })
+
+  it('settles a chunked automation result as the value its chunks carried', async () => {
+    const ledger = new BrowserHostCommandLedger({ authority })
+    ledger.attach(vi.fn())
+    const created = ledger.issue({
+      browserPageId: 'page-a',
+      pageHostGeneration: 1,
+      command: { type: 'createPage', browserProfileId: 'default', executionHostKey: 'host-key-a' }
+    })
+    ledger.settle(resultParams(created.event, { status: 'completed' }))
+    const screenshot = ledger.issue({
+      browserPageId: 'page-a',
+      pageHostGeneration: 1,
+      command: {
+        type: 'automation',
+        method: 'browser.screenshot',
+        params: {},
+        stagedResults: true
+      }
+    })
+    const { result: _result, ...identity } = resultParams(screenshot.event, { status: 'completed' })
+    const json = Buffer.from('{"data":"iVBORw0KGgo=","format":"png"}')
+    ledger.stageResultChunk({
+      ...identity,
+      offset: 0,
+      contentBase64: json.subarray(0, 20).toString('base64')
+    })
+    ledger.stageResultChunk({
+      ...identity,
+      offset: 20,
+      contentBase64: json.subarray(20).toString('base64')
+    })
+    ledger.settle({ ...identity, result: { status: 'completed', stagedValueBytes: 38 } })
+
+    await expect(screenshot.result).resolves.toEqual({
+      status: 'completed',
+      value: { data: 'iVBORw0KGgo=', format: 'png' }
+    })
+  })
 })
 
 function resultParams(

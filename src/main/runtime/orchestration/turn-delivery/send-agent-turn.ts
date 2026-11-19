@@ -36,6 +36,8 @@ export type StructuredSessionTurn = {
   delivery: AgentTurnDelivery
   /** Host-local admission for an automated send. */
   beforeRun?: () => void
+  /** A person's text relayed by the host, so recovery keeps it as theirs. */
+  personsMessage?: true
 }
 
 export type StructuredSessionTurnSend = {
@@ -141,7 +143,11 @@ async function sendStructuredSessionTurn(
   })
   const result = await send.host.send(
     { callerKey: send.callerKey },
-    turn.beforeRun ? { ...message, beforeRun: turn.beforeRun } : message
+    {
+      ...message,
+      ...(turn.beforeRun ? { beforeRun: turn.beforeRun } : {}),
+      ...(turn.personsMessage ? { personsMessage: turn.personsMessage } : {})
+    }
   )
   if (!result.ok) {
     return { kind: 'refused', refusal: result.refusal }

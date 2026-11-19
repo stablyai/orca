@@ -91,7 +91,8 @@ export function primaryAgentCatalogEntries(): AgentCatalogEntry[] {
       label: translate('auto.lib.agent.catalog.dsh_label', 'DeepSeek Harness'),
       cmd: 'dsh-tui',
       searchAliases: ['deepseek', 'dsh', 'dst', 'deepseek harness'],
-      homepageUrl: 'https://deepseek-harness.github.io/deepseek-harness/'
+      // Why: Orca launches the community dsh-TUI; DeepSeek's site installs only `dsh`, and the unscoped npm `dsh-tui` is a dead prototype.
+      homepageUrl: 'https://github.com/ccch1mneyyy/dsh-TUI#quick-start'
     },
     {
       id: 'qoder',
@@ -141,6 +142,7 @@ export function primaryAgentCatalogEntries(): AgentCatalogEntry[] {
       id: 'antigravity',
       label: translate('auto.lib.agent.catalog.691dd11789', 'Antigravity'),
       cmd: 'agy',
+      searchAliases: ['agy'],
       homepageUrl: 'https://antigravity.google/docs/cli-overview'
     }
   ]

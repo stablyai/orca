@@ -1,18 +1,18 @@
 // Reproject dirty Store partitions and publish each workspace only from its owning partition.
 
-import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { loadWorkspaceLayoutWithoutReport } from '../../../../shared/workspace-layout/workspace-layout-load'
-import { stableJson } from '../../../../shared/workspace-layout/workspace-layout-load-report'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
+import { loadWorkspaceLayoutWithoutReport } from '../../../../shared/workspace-layout/persistence/workspace-layout-load'
+import { stableJson } from '../../../../shared/workspace-layout/persistence/workspace-layout-load-report'
 import type {
   LoadedWorkspaceLayout,
   WorkspaceLayoutLoadContext
-} from '../../../../shared/workspace-layout/workspace-layout-load-types'
-import { nameBasedLoadContext } from '../../../../shared/workspace-layout/workspace-layout-minted-ids'
+} from '../../../../shared/workspace-layout/persistence/workspace-layout-load-types'
+import { nameBasedLoadContext } from '../../../../shared/workspace-layout/persistence/workspace-layout-minted-ids'
 import {
   publishWorkspaceLayout,
   type PublishedWorkspaceLayout
-} from '../../../../shared/workspace-layout/workspace-layout-published'
+} from '../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 
 export type ProjectedLayout = { layout: PublishedWorkspaceLayout; json: string }

@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { resolveDocumentTheme } from '@/app-shell/appearance/document-theme'
-import { pluginAppThemeSlotUpdate } from '../../../../../shared/plugin-theme-settings'
+import { pluginAppThemeSlotUpdate } from '../../../../../shared/plugins/appearance/plugin-theme-settings'
 import {
   hasTerminalColorOverrides,
   TERMINAL_COLOR_OVERRIDES_SETTING
@@ -17,7 +17,7 @@ import {
   usePluginThemeStore,
   usePluginTerminalThemeStore
 } from '@/store/plugins/appearance/plugin-themes'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { PluginThemeRegistration } from '../../../../../shared/plugins/artifacts/plugin-theme-artifact'
 import type { PluginTerminalThemeRegistration } from '../../../../../shared/plugins/artifacts/plugin-terminal-theme-artifact'
 

@@ -1,51 +1,88 @@
-import { parseExecutionHostId } from '../../../../../../shared/execution-host'
-import type { AiVaultAgent } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
+import {
+  parseExecutionHostId,
+  type ExecutionHostScope
+} from '../../../../../../shared/execution-host/execution-host'
 import {
   assertAiVaultCopiedSessionStoreAllowed,
   buildAiVaultForkStartup,
-  resolveAiVaultCopiedSessionAgentArgs,
+  buildAiVaultLocalResumeStartup,
+  type AiVaultResumeLaunchSettings,
   type AiVaultResumeStartup
 } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-startup'
 import {
-  buildAiVaultResumeStartupForWorktree,
   resolveAiVaultResumeHost,
   type AiVaultResumeWorktreeArgs
 } from '@/lib/agent-session/resume/history/ai-vault-resume-command'
+import { readHostAgentStartupSettings } from '@/runtime/agent-launch-settings/agent-launch-settings-transport'
+import {
+  captureWebSessionIntentOwner,
+  matchesWebSessionIntentOwner
+} from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
+import type { WebSessionIntentOwner } from '@/runtime/web-session-tabs-sync/identity/web-session-intent-owner'
+import { translate } from '@/i18n/i18n'
 
-function sharedStartupArgs(args: AiVaultResumeWorktreeArgs) {
-  return {
-    session: args.session,
-    host: resolveAiVaultResumeHost(args),
-    settings: args.state.settings,
-    commandOverride: args.commandOverride
-  }
+type CliForkWorktreeArgs = Omit<AiVaultResumeWorktreeArgs, 'agentArgs' | 'commandOverride'>
+
+export function captureAiVaultCliForkOwner(
+  executionHostId: ExecutionHostScope | undefined
+): WebSessionIntentOwner | null {
+  const host = parseExecutionHostId(executionHostId)
+  return host?.kind === 'runtime' ? captureWebSessionIntentOwner(host.environmentId) : null
 }
 
-export function buildAiVaultForkStartupForWorktree(
-  args: AiVaultResumeWorktreeArgs
+export function conversationHostUnavailableError(): Error {
+  return new Error(
+    translate('auto.lib.nativeChatCliFork.hostUnavailable', 'The conversation host is unavailable.')
+  )
+}
+
+/** Read before preparing: a paired host's copy must not be made for a handoff that would be refused. */
+export async function readAiVaultCliForkLaunchSettings(args: {
+  owner: WebSessionIntentOwner | null
+  localSettings: AiVaultResumeLaunchSettings | null | undefined
+  signal?: AbortSignal
+}): Promise<AiVaultResumeLaunchSettings | null | undefined> {
+  const { owner } = args
+  if (!owner) {
+    return args.localSettings
+  }
+  const hostSettings = await readHostAgentStartupSettings(owner, args.signal)
+  if (!hostSettings || !matchesWebSessionIntentOwner(owner)) {
+    throw conversationHostUnavailableError()
+  }
+  return hostSettings
+}
+
+export function buildAiVaultCliForkStartupForWorktree(
+  args: CliForkWorktreeArgs & {
+    copied: boolean
+    owner: WebSessionIntentOwner | null
+    settings: AiVaultResumeLaunchSettings | null | undefined
+  }
 ): AiVaultResumeStartup | null {
-  return buildAiVaultForkStartup(sharedStartupArgs(args))
-}
-
-/** Keeps the history row's launch mode while the copied conversation opens with its actual CLI. */
-export function buildAiVaultCopiedSessionStartupForWorktree(
-  args: AiVaultResumeWorktreeArgs,
-  sourceAgent: AiVaultAgent
-): AiVaultResumeStartup {
-  const agentArgs = resolveAiVaultCopiedSessionAgentArgs({
-    ...sharedStartupArgs(args),
-    sourceAgent
-  })
-  return {
-    ...buildAiVaultResumeStartupForWorktree({ ...args, agentArgs }),
-    agent: args.session.agent
+  const { owner, session, settings } = args
+  if (owner && !matchesWebSessionIntentOwner(owner)) {
+    throw conversationHostUnavailableError()
   }
+  const startupArgs = { session, host: resolveAiVaultResumeHost(args), settings }
+  if (args.copied) {
+    assertAiVaultCopiedSessionLaunchAllowed(args)
+    return {
+      ...buildAiVaultLocalResumeStartup({ ...startupArgs, embedCwd: false }),
+      agent: session.agent
+    }
+  }
+  return buildAiVaultForkStartup(startupArgs)
 }
 
 /** Runtime hosts validate their own launch settings when making the copy. */
-export function assertAiVaultCopiedSessionLaunchAllowed(args: AiVaultResumeWorktreeArgs): void {
+export function assertAiVaultCopiedSessionLaunchAllowed(args: CliForkWorktreeArgs): void {
   if (parseExecutionHostId(args.session.executionHostId)?.kind === 'runtime') {
     return
   }
-  assertAiVaultCopiedSessionStoreAllowed(sharedStartupArgs(args))
+  assertAiVaultCopiedSessionStoreAllowed({
+    session: args.session,
+    host: resolveAiVaultResumeHost(args),
+    settings: args.state.settings
+  })
 }

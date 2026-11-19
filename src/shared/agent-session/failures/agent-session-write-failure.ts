@@ -1,14 +1,14 @@
 // Persist durable write-failure facts with queued cards; choose words at display via agent-session-refusal-notice.ts.
 
-import type { AgentSessionAccountKind } from '../agent-session-availability'
+import type { AgentSessionAccountKind } from './agent-session-availability'
 import {
   readAgentSessionRefusalDetails,
   type AgentSessionRefusalReason
 } from './agent-session-refusal-details'
-import type { AgentSessionRewindReason } from '../lifecycle/agent-session-rewind'
-import type { AgentSessionArgumentProblem } from '../agent-session-argument-problem'
+import type { AgentSessionRewindReason } from '../lifecycle/rewind/agent-session-rewind-reasons'
+import type { AgentSessionArgumentProblem } from './agent-session-argument-problem'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
-import type { CodexInstallationProblem } from '../../codex-cli-installation'
+import type { CodexInstallationProblem } from '../../agent-launch/startup/codex-cli-installation'
 import type { AgentCliInstallationProblem } from '../../agent-launch/catalog/agent-cli-installation-problem'
 import type { AgentSessionExpiredAttachment } from './agent-session-expired-attachments'
 import {
@@ -43,7 +43,10 @@ export function agentSessionWriteKindForMethod(
   fingerprintMethod: string,
   fields: Record<string, unknown>
 ): AgentSessionWriteKind {
-  if (fingerprintMethod === 'agentSession.send') {
+  if (
+    fingerprintMethod === 'agentSession.send' ||
+    fingerprintMethod === 'agentSession.queuedMessageSend'
+  ) {
     return 'send'
   }
   if (fingerprintMethod === 'agentSession.cancel') {
@@ -88,6 +91,7 @@ type DurableRefusalFacts = {
   agent_session_operation_unknown: { rewindReason?: AgentSessionRewindReason }
   /** A snapshot from when it was refused; see `agentSessionOwnerVerdictAllowsFreshOperationId`. */
   agent_session_ownership_unknown: { ownerVerdict?: AgentSessionOwnerVerdict }
+  agent_session_identity_required: { otherFolder?: true }
 }
 
 const DURABLE_FACT_KEYS: Partial<Record<AgentSessionWireRefusalCode, readonly string[]>> = {
@@ -101,7 +105,8 @@ const DURABLE_FACT_KEYS: Partial<Record<AgentSessionWireRefusalCode, readonly st
     'expiredAttachments'
   ],
   agent_session_operation_unknown: ['rewindReason'],
-  agent_session_ownership_unknown: ['ownerVerdict']
+  agent_session_ownership_unknown: ['ownerVerdict'],
+  agent_session_identity_required: ['otherFolder']
 } satisfies { [C in keyof DurableRefusalFacts]: readonly (keyof DurableRefusalFacts[C])[] }
 
 export type AgentSessionWriteRefusalDetails<C extends AgentSessionWireRefusalCode> = {

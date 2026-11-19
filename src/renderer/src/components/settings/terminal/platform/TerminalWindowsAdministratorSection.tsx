@@ -1,9 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -11,6 +10,7 @@ import {
   DialogTitle,
   DialogTrigger
 } from '../../../ui/dialog'
+import { DialogCancel, DialogError } from '../../../ui/dialog-parts'
 import { SettingsRow } from '../../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { getTerminalWindowsAdministratorSearchEntry } from './terminal-windows-search'
@@ -28,7 +28,6 @@ export function TerminalWindowsAdministratorSection(): React.JSX.Element {
   const [manualInstructions, setManualInstructions] = useState(false)
   const [restarting, setRestarting] = useState(false)
   const [restartError, setRestartError] = useState(false)
-  const cancelRef = useRef<HTMLButtonElement>(null)
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
   const setSettingsSearchQuery = useAppStore((state) => state.setSettingsSearchQuery)
   useEffect(() => {
@@ -127,38 +126,24 @@ export function TerminalWindowsAdministratorSection(): React.JSX.Element {
           }
         />
         <DialogContent
-          showCloseButton={!restarting}
-          onOpenAutoFocus={(event) => {
-            if (showConfirmation) {
-              event.preventDefault()
-              cancelRef.current?.focus()
-            }
-          }}
-          onPointerDownOutside={(event) => {
-            if (restarting) {
-              event.preventDefault()
-            }
-          }}
-          onEscapeKeyDown={(event) => {
-            if (restarting) {
-              event.preventDefault()
-            }
-          }}
+          size={showConfirmation ? 'confirm' : 'form'}
+          busy={restarting}
+          initialFocus={showConfirmation ? 'cancel' : undefined}
         >
           <DialogHeader>
             <DialogTitle>
               {showConfirmation
                 ? t(
-                    'settings.terminal.windows.confirmAdministratorRestart',
-                    'Restart as administrator?'
+                    'settings.terminal.windows.confirmOrcaAdministratorRestart',
+                    'Restart Orca as administrator?'
                   )
                 : helpLabel}
             </DialogTitle>
             <DialogDescription>
               {showConfirmation
                 ? t(
-                    'settings.terminal.windows.administratorApproval',
-                    'Windows will ask for approval. Use your usual account.'
+                    'settings.terminal.windows.administratorRestartSummary',
+                    'Local terminals and agents will close. Windows will ask you to approve.'
                   )
                 : t(
                     'settings.terminal.windows.administratorDialogScope',
@@ -166,24 +151,9 @@ export function TerminalWindowsAdministratorSection(): React.JSX.Element {
                   )}
             </DialogDescription>
           </DialogHeader>
-          {showConfirmation ? (
-            <div className="space-y-3">
-              <p className="text-sm">
-                {t(
-                  'settings.terminal.windows.administratorRestartConsequences',
-                  'Save your work first. After approval, terminals and agents on the current local terminal host close. Restored tabs open new administrator shells.'
-                )}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {t(
-                  'settings.terminal.windows.administratorPromptCancellation',
-                  'Canceling Windows’ prompt reopens Orca with its retained terminals. SSH and WSL permissions stay controlled on their hosts.'
-                )}
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <ol className="list-decimal space-y-3 pl-5 text-sm">
+          {showConfirmation ? null : (
+            <div className="space-y-3 text-[13px]">
+              <ol className="list-decimal space-y-2 pl-5">
                 <li>
                   {t(
                     'settings.terminal.windows.closeLocalSessions',
@@ -202,7 +172,7 @@ export function TerminalWindowsAdministratorSection(): React.JSX.Element {
                       )}
                 </li>
               </ol>
-              <p className="text-sm">
+              <p className="text-muted-foreground">
                 {t(
                   'settings.terminal.windows.retainedTerminalPermissions',
                   'If new terminals still use the previous permissions, open Manage Sessions and choose Restart daemon. This closes local terminals and their running commands.'
@@ -210,56 +180,58 @@ export function TerminalWindowsAdministratorSection(): React.JSX.Element {
               </p>
             </div>
           )}
-          {restartError && (
-            <p role="alert" className="text-sm text-destructive">
-              {t(
-                'settings.terminal.windows.administratorRestartFailed',
-                'Orca could not restart. Try again or use the manual instructions.'
-              )}
-            </p>
-          )}
-          <DialogFooter>
+          {restartError ? (
+            <DialogError onRetry={() => void restartAsAdministrator()}>
+              {t('settings.terminal.windows.orcaCouldNotRestart', 'Orca couldn’t restart.')}
+            </DialogError>
+          ) : null}
+          <DialogFooter
+            start={
+              showConfirmation ? (
+                <Button
+                  variant="link-muted"
+                  size="inline"
+                  disabled={restarting}
+                  onClick={() => {
+                    setManualInstructions(true)
+                    setRestartError(false)
+                  }}
+                >
+                  {t('settings.terminal.windows.manualAdministratorSteps', 'Manual steps')}
+                </Button>
+              ) : (
+                <Button
+                  variant="link-muted"
+                  size="inline"
+                  onClick={(event) =>
+                    openAppHttpLink('https://orca.dev/docs/terminal#windows-administrator-mode', {
+                      event
+                    })
+                  }
+                >
+                  {t('settings.terminal.windows.administratorDocumentation', 'Read the guide')}
+                </Button>
+              )
+            }
+          >
+            <DialogCancel>
+              {showConfirmation
+                ? t('settings.terminal.windows.cancelAdministratorRestart', 'Cancel')
+                : t('settings.terminal.windows.closeAdministratorHelp', 'Close')}
+            </DialogCancel>
             {showConfirmation ? (
               <Button
-                variant="link"
                 size="sm"
+                variant="destructive"
                 disabled={restarting}
-                onClick={() => {
-                  setManualInstructions(true)
-                  setRestartError(false)
-                }}
+                onClick={() => void restartAsAdministrator()}
               >
-                {t('settings.terminal.windows.manualAdministratorHelp', 'Manual instructions')}
-              </Button>
-            ) : (
-              <Button
-                variant="link"
-                size="sm"
-                onClick={(event) =>
-                  openAppHttpLink(
-                    'https://www.onorca.dev/docs/terminal#windows-administrator-mode',
-                    { event }
-                  )
-                }
-              >
-                {t('settings.terminal.windows.administratorDocumentation', 'Read the guide')}
-              </Button>
-            )}
-            <DialogClose asChild>
-              <Button variant="ghost" size="sm" ref={cancelRef} disabled={restarting}>
-                {showConfirmation
-                  ? t('settings.terminal.windows.cancelAdministratorRestart', 'Cancel')
-                  : t('settings.terminal.windows.closeAdministratorHelp', 'Close')}
-              </Button>
-            </DialogClose>
-            {showConfirmation ? (
-              <Button size="sm" disabled={restarting} onClick={() => void restartAsAdministrator()}>
                 {restarting
                   ? t('settings.terminal.windows.restartingAdministrator', 'Restarting…')
-                  : restartLabel}
+                  : t('settings.terminal.windows.restartOrca', 'Restart')}
               </Button>
             ) : (
-              <Button variant="outline" size="sm" onClick={openManageSessions}>
+              <Button size="sm" onClick={openManageSessions}>
                 {t('settings.terminal.windows.10aafff216', 'Open manage sessions')}
               </Button>
             )}

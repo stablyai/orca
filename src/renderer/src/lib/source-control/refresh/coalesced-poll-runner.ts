@@ -29,6 +29,7 @@ export function slowTaskRequiredIdleMs(
 export function createCoalescedPollRunner(
   task: () => Promise<void>,
   options?: {
+    onIdle?: () => void
     minIntervalMs?: number
     slowTaskBackoff?: SlowTaskBackoffOptions
   }
@@ -107,6 +108,8 @@ export function createCoalescedPollRunner(
         rerunTrigger = null
         if (trailingTrigger) {
           run(trailingTrigger)
+        } else if (!disposed) {
+          options?.onIdle?.()
         }
       })
   }

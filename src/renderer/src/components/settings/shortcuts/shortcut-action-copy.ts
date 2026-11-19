@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import { translateUnassignedLabel } from '@/i18n/unassigned-label'
-import type { KeybindingActionId } from '../../../../../shared/keybindings'
+import type { KeybindingActionId } from '../../../../../shared/keybindings/types'
 import { tuiAgentDisplayName } from '../../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import type { ShortcutFilter } from './ShortcutFilterRail'
 
@@ -15,7 +15,8 @@ const GROUP_KEYS: Record<string, string> = {
   Settings: 'settings.shortcuts.groups.settings',
   'Terminal Panes': 'settings.shortcuts.groups.terminalPanes',
   Agents: 'settings.shortcuts.groups.agents',
-  Chat: 'settings.shortcuts.groups.chat'
+  Chat: 'settings.shortcuts.groups.chat',
+  Bots: 'settings.shortcuts.groups.bots'
 }
 
 export function translateShortcutActionTitle(actionId: string, fallback: string): string {

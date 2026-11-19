@@ -1,5 +1,5 @@
 import { groupFederatedDispatches } from './federated-fleet-host-groups'
-import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
+import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import { ORCHESTRATION_FEDERATION_FLEET_SNAPSHOT_RUNTIME_CAPABILITY } from '../../../../shared/orchestration/orchestration-runtime-capabilities'
 import {
   refreshOrchestrationFleetLivenessAttention,
@@ -12,11 +12,13 @@ import { liveFederatedHomeAutoReleaseAt } from '../terminal-authority/release/wo
 import type { OrchestrationDb } from '../db/orchestration-db'
 import { OrchestrationError } from '../orchestration-error'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { resolvePinnedFederatedServer } from '../../rpc/methods/orchestration/worker/pinned-federated-server'
+import { resolvePinnedFederatedServer } from './pinned-federated-server'
 import { applyConfirmedFederatedReleaseHomeProjection } from './federated-worker-release'
 
-const FLEET_HOST_CONCURRENCY = 4
-const FLEET_HOST_TIMEOUT_MS = 3_000
+/** How many paired servers are asked at once. */
+export const FLEET_HOST_CONCURRENCY = 4
+/** How long one server's answer is waited for. */
+export const FLEET_HOST_TIMEOUT_MS = 3_000
 const FLEET_TOTAL_TIMEOUT_MS = 5_000
 
 export type FederatedFleetObservation = {
@@ -35,8 +37,14 @@ export type FederatedFleetHostError = {
   dispatchIds: string[]
 }
 
+/** What a snapshot read needs of the runtime: the paired servers and a call to one. */
+export type FederatedFleetRuntime = Pick<
+  OrcaRuntimeService,
+  'resolveOrchestrationWorkerServer' | 'callOrchestrationWorkerServer'
+>
+
 export async function readFederatedFleetSnapshots(args: {
-  runtime: OrcaRuntimeService
+  runtime: FederatedFleetRuntime
   db: OrchestrationDb
   dispatchIds: readonly string[]
 }): Promise<{
@@ -65,7 +73,7 @@ export async function readFederatedFleetSnapshots(args: {
     const cache = getOrchestrationPeerCapabilityCache(args.runtime)
     let observedCapabilityEpoch: string | null = null
     try {
-      const server = resolvePinnedFederatedServer(args.runtime, first)
+      const server = await resolvePinnedFederatedServer(args.runtime, first)
       // Shipped hosts serve this method without advertising it.
       const known = cache.knownSupport(
         first.peer_fingerprint,

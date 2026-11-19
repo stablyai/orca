@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { LinearApiKeyDialog } from '@/components/linear-api-key-dialog'
+import { LinearApiKeyDialog } from '@/components/integrations/task-trackers/linear-api-key-dialog'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store/index'
 import { ORCA_LINEAR_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'

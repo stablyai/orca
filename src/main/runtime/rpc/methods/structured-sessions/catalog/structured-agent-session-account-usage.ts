@@ -1,15 +1,16 @@
 import {
   supportsSessionAccountUsage,
   type AgentSessionAccountUsage
-} from '../../../../../../shared/agent-session/agent-session-account-usage'
+} from '../../../../../../shared/agent-session/lifecycle/accounts/agent-session-account-usage'
 import type { AgentSessionRecord } from '../../../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import { requireLegacyAgentSessionAccountHome } from '../../../../../../shared/agent-session/lifecycle/agent-session-account-home'
-import type { RateLimitState } from '../../../../../../shared/rate-limit-types'
-import { normalizeRuntimePathForComparison } from '../../../../../../shared/cross-platform-path'
-import { buildCodexResetCreditExpectedScope } from '../../../../../../shared/codex-reset-credit-scope'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
+import { requireLegacyAgentSessionAccountHome } from '../../../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import type { RateLimitState } from '../../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { normalizeRuntimePathForComparison } from '../../../../../../shared/file-access/cross-platform-path'
+import { buildCodexResetCreditExpectedScope } from '../../../../../../shared/agent-accounts/codex/codex-reset-credit-scope'
+import { getManagedAccountDisplayName } from '../../../../../../shared/agent-accounts/managed-account-display-names'
 import { getSystemCodexHomePath } from '../../../../../codex/configuration/homes/codex-home-paths'
-import { getSelectedCodexAccountIdForTarget } from '../../../../../codex-accounts/runtime-selection'
+import { getSelectedCodexAccountIdForTarget } from '../../../../../codex-accounts/account-management/runtime-selection'
 import {
   isCodexMethodNotFoundError,
   isCodexAppServerUnsupportedError
@@ -17,10 +18,10 @@ import {
 import { CodexUsageApiKeyAuthError } from '../../../../../rate-limits/providers/codex/codex-rpc-rate-limit-mapper'
 import { defineMethod } from '../../../core'
 import { requireInstalledStructuredHost } from '../creation/structured-agent-session-gate'
-import { OptionsParams } from '../../../../../../shared/rpc-contract/structured-agent-session-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-continue-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-rename-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-queued-edit-params'
+import { OptionsParams } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-continue-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-rename-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-queued-edit-params'
 
 export function sessionAccountUsageOffer(
   record: AgentSessionRecord,
@@ -30,6 +31,7 @@ export function sessionAccountUsageOffer(
       | 'codexManagedAccounts'
       | 'activeCodexManagedAccountId'
       | 'activeCodexManagedAccountIdsByRuntime'
+      | 'managedAccountDisplayNames'
     >
   >,
   state: RateLimitState | undefined
@@ -57,9 +59,12 @@ export function sessionAccountUsageOffer(
     ? buildCodexResetCreditExpectedScope({ target, account, limits: state.codex })
     : null
   const credits = scope ? state?.codex?.rateLimitResetCredits : undefined
+  const displayName = account
+    ? getManagedAccountDisplayName(settings.managedAccountDisplayNames, 'codex', account.id)
+    : undefined
   return {
     account: account
-      ? { kind: 'managed' as const, email: account.email }
+      ? { kind: 'managed' as const, email: account.email, ...(displayName ? { displayName } : {}) }
       : home === normalizeRuntimePathForComparison(getSystemCodexHomePath())
         ? { kind: 'system' as const }
         : null,

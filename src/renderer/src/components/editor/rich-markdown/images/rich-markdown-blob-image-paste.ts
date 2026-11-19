@@ -5,7 +5,7 @@ import { translate } from '@/i18n/i18n'
 import { blobToBase64, convertImageBlobToPng } from '@/lib/clipboard/images/image-blob-png'
 import { importExternalPathsToRuntime } from '@/runtime/files/imports/runtime-file-import-client'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { assertClipboardImageBase64LengthWithinLimit } from '../../../../../../shared/clipboard-image'
+import { assertClipboardImageBase64LengthWithinLimit } from '../../../../../../shared/clipboard/clipboard-image'
 import { getRichMarkdownImageResolverContextVersion } from './rich-markdown-image-context'
 import {
   captureRichMarkdownImageImportDestination,

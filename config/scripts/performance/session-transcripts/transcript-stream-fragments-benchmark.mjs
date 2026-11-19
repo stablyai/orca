@@ -6,7 +6,7 @@ import { performance } from 'node:perf_hooks'
 import { build } from 'esbuild'
 import { buildCounterbalancedSchedule } from '../measurement/counterbalanced-benchmark-schedule.mjs'
 
-const modulePath = 'src/main/native-chat/transcript-stream-lines.ts'
+const modulePath = 'src/main/native-chat/transcript-streaming/transcript-stream-lines.ts'
 const baselineSource = readFileSync(0, 'utf8')
 assert.ok(baselineSource.includes('decodeTranscriptStream'), 'Pipe the baseline module on stdin')
 const arms = {}

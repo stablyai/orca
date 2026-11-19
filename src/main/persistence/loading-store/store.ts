@@ -16,35 +16,38 @@ import {
   type StoreDomains,
   type StoreDomainOperations
 } from './store-domain-composition'
-import type { PersistedState } from '../../../shared/persisted-state-types'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { dropInvalidWorkspaceLayoutsAtLoad } from '../restoring-sessions/invalid-workspace-layout-purge'
 import {
   bindPersistedTabTerminalPanes,
   sweepPersistedUnattachedTerminalRows
 } from '../restoring-sessions/tab-terminal-pane-binding-repair'
-import { scheduleFullProfileSave, scheduleSave } from './write-scheduling'
+import { scheduleFullProfileSave, scheduleSave } from './profile-writing/write-scheduling'
 import {
   migrateLegacyOpenCodeGoApiKey,
   type OpenCodeGoApiKeyTarget
-} from './legacy-opencode-go-api-key-migration'
-import { enqueuePrimaryStateOperation, writeToDiskAsync } from './primary-state-writes'
-import type { ProfileStateDatabaseQuarantine } from '../profile-state/profile-state-database-quarantine'
+} from './profile-loading/legacy-opencode-go-api-key-migration'
+import {
+  enqueuePrimaryStateOperation,
+  writeToDiskAsync
+} from './profile-writing/primary-state-writes'
+import type { ProfileStateDatabaseQuarantine } from '../profile-state/recovery/profile-state-database-quarantine'
 import { writeVersionedProfileStateExport } from '../profile-state/legacy-json/profile-state-versioned-export'
-import { createInitialHomeWorkspaceState } from './initial-home-workspace'
+import { createInitialHomeWorkspaceState } from './profile-loading/initial-home-workspace'
 import {
   beginProfileStateMaintenance,
   freezeProfileStateWrites,
   freezeProfileStateWritesAsync,
   type ProfileStateMaintenanceOptions
-} from './profile-state-maintenance'
+} from './profile-writing/profile-state-maintenance'
 import type {
   AsyncProfileStateAuthority,
   ProfileStateAuthorityInitialState,
   ProfileStateStartupPaneAlias,
   ProfileStatePersistenceAuthority,
   ProfileStateMaintenance
-} from './profile-state-authority'
+} from './profile-writing/profile-state-authority'
 
 export type StoreOptions = StoreRuntimeOptions & {
   initializeHomeWorkspace?: boolean

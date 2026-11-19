@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getSecretStore, setSecretStore } from '../../shared/secret-store'
+import { getSecretStore, setSecretStore } from '../../shared/secure-storage/secret-store'
 import {
   createWorkerMaintenanceFixture,
   maintenanceBarrier
-} from './loading-store/profile-state-maintenance-fixture'
+} from './loading-store/profile-writing/profile-state-maintenance-fixture'
 import { Store } from './loading-store/store'
 
 vi.mock('../ssh/config/ssh-config-parser', () => ({

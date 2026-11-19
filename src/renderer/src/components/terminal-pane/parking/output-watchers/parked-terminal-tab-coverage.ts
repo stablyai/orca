@@ -1,10 +1,10 @@
 import { isTerminalNoticeLifetimeCurrent } from '../../provider-notices/terminal-notice-lifetime'
 import { useAppStore } from '@/store/index'
-import { sleepingAgentRecordIndex } from '@/store/terminals/sleeping-agent-record-index'
+import { sleepingAgentRecordIndex } from '@/store/terminals/sleep/sleeping-agent-record-index'
 import { isTerminalLeafId } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { isRemoteExecutionHostPtyId } from '../../../../../../shared/execution-host/remote-execution-host-pty-id'
-import { terminalProviderAllowsParking } from '../../../terminal/terminal-provider-snapshot-capability'
-import { terminalProviderSessionIsGone } from '../../../terminal/terminal-provider-gone-sessions'
+import { terminalProviderAllowsParking } from '../../../terminal/provider-snapshots/terminal-provider-snapshot-capability'
+import { terminalProviderSessionIsGone } from '../../../terminal/provider-snapshots/terminal-provider-gone-sessions'
 import { isParkRestorableTerminalPty } from '../retention/terminal-hidden-view-parking'
 import { selectPairedRuntimeParkingEnvironmentIds } from '../retention/paired-runtime-parking-capabilities'
 import {
@@ -16,7 +16,7 @@ import '../../layout/terminal-layout-leaf-traversal'
 import {
   collectLayoutLeafIdsInOrder,
   resolveRootlessTerminalLayoutLeafId
-} from '../../../../../../shared/workspace-layout/terminal-pane-tree'
+} from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import type { ParkedTerminalPaneCapture } from './terminal-parked-watcher-registry'
 import { launchAgentTabIds } from './parked-tab-agent-owner-index'
 

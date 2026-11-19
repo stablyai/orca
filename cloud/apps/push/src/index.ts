@@ -1,6 +1,6 @@
 import { startPushBackground } from './push-background.js'
 import { loadPushConfig } from './config.js'
-import { openPushDatabase } from './push-database.js'
+import { openPushDatabase } from './database/push-database.js'
 import { createPushServer } from './push-server.js'
 
 const config = loadPushConfig()

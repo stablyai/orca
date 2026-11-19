@@ -3,7 +3,7 @@ import {
   CalendarClock,
   Gauge,
   LayoutList,
-  Settings,
+  SquareTerminal,
   type LucideIcon
 } from 'lucide-react-native'
 import { useEffect, useState } from 'react'
@@ -15,7 +15,7 @@ import Animated, {
   withTiming
 } from 'react-native-reanimated'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { useReducedMotionEnabled } from '../../platform/use-reduced-motion'
+import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { colors, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
@@ -23,10 +23,10 @@ import { HOME_EASE_OUT, type HomeTabId } from './home-tabs'
 
 const TAB_ICONS: Record<HomeTabId, LucideIcon> = {
   feed: LayoutList,
-  agents: Bot,
+  bots: Bot,
+  agents: SquareTerminal,
   usage: Gauge,
-  automations: CalendarClock,
-  settings: Settings
+  automations: CalendarClock
 }
 
 export const HOME_TAB_BAR_HEIGHT = 52
@@ -37,20 +37,27 @@ export function MobileHomeTabBar(props: {
   bottomInset: number
   /** Agents that need you; shown on Agents. */
   agentsBadge: number
+  /** Bots' Needs you items; shown on Bots. */
+  botsBadge: number
   onSelect: (tab: HomeTabId) => void
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
   const labels: Record<HomeTabId, string> = {
     feed: t('home.tabs.feed', 'Feed'),
+    bots: t('home.tabs.bots', 'Bots'),
     agents: t('home.tabs.agents', 'Agents'),
     usage: t('home.tabs.usage', 'Usage'),
-    automations: t('home.tabs.automations', 'Automations'),
-    settings: t('common.settings', 'Settings')
+    automations: t('home.tabs.automations', 'Automations')
+  }
+  const badges: Partial<Record<HomeTabId, number>> = {
+    agents: props.agentsBadge,
+    bots: props.botsBadge
   }
   return (
     <View
-      style={[styles.bar, { paddingBottom: Math.max(props.bottomInset, spacing.sm) }]}
+      // Why lg: some Android tablets report a gesture inset smaller than the visible pill (#41969).
+      style={[styles.bar, { paddingBottom: Math.max(props.bottomInset, spacing.lg) }]}
       // Android has no 'tabbar' role and crashes on mount; iOS keeps its tab-bar trait.
       accessibilityRole={Platform.OS === 'ios' ? 'tabbar' : 'tablist'}
     >
@@ -60,7 +67,7 @@ export function MobileHomeTabBar(props: {
           icon={TAB_ICONS[tab]}
           label={labels[tab]}
           selected={tab === props.active}
-          badge={tab === 'agents' ? props.agentsBadge : 0}
+          badge={badges[tab] ?? 0}
           onPress={() => props.onSelect(tab)}
         />
       ))}

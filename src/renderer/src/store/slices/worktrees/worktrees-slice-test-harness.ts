@@ -1,4 +1,6 @@
+import { withAgentStatusOwnership } from '../agent-status/status-ownership/agent-status-ownership-boundary'
 import { createAgentStatusSlice } from '../agent-status/agent-status'
+import { createPaneForegroundAgentSlice } from '../agent-status/pane-authority/pane-foreground-agent'
 import { vi, type Mock } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../../types'
@@ -10,7 +12,7 @@ import {
   type RuntimeEnvironmentCallRequest
 } from '../../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../../runtime/rpc/compatibility/runtime-compatibility-cache'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import type {
   ForgetRemovedWorktreesForExecutionHostArgs,
   ForgetRemovedWorktreesForExecutionHostResult,
@@ -18,7 +20,7 @@ import type {
   HostQualifiedKnownWorktreeResult,
   ListKnownWorktreesForExecutionHostArgs,
   ListDetectedWorktreesArgs
-} from '../../../../../shared/detected-worktree-provider-contract'
+} from '../../../../../shared/worktree/catalog/detected-worktree-provider-contract'
 import { createWorktreeSlice } from './create-worktree-slice'
 import { resetAuthoritativelyRemovedWorktreeMemoryForTests } from './listing/authoritative-worktree-removal-memory'
 import { resetHostedReviewLinkMutationGenerationForTests } from './metadata/hosted-review-link-mutation'
@@ -130,85 +132,91 @@ export function resetRemoteRuntimeMocks() {
 /** Supplies the worktree slice with the minimal UI and runtime state needed to exercise creation and teardown. */
 export function createTestStore() {
   return create<AppState>()(
-    (...a) =>
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This slice fixture supplies the state read by worktree actions; unrelated slices are intentionally omitted.
-      ({
-        // Why: this test isolates the worktree slice, so it provides only the state surface createWorktreeSlice touches.
-        ...createWorktreeSlice(...a),
-        ...createWorkspaceAttentionSlice(...a),
-        ...createEphemeralVmLifecycleSlice(...a),
-        ...createAgentStatusSlice(...a),
-        trustedOrcaHooks: {},
-        sshConnectionStates: new Map([
-          [
-            TEST_SSH_AUTHORITY.targetId,
-            {
-              targetId: TEST_SSH_AUTHORITY.targetId,
-              status: 'connected',
-              error: null,
-              reconnectAttempt: 0,
-              providerEpoch: TEST_SSH_AUTHORITY.providerEpoch,
-              connectionGeneration: TEST_SSH_AUTHORITY.connectionGeneration
-            }
-          ]
-        ]),
-        repos: [],
-        projectHostSetups: [],
-        deleteProjectHostSetup: vi.fn().mockResolvedValue(null),
-        updateFolderWorkspace: vi.fn().mockResolvedValue(true),
-        updateSettings: vi.fn().mockResolvedValue(undefined),
-        openModal: vi.fn(),
-        shutdownWorktreeTerminals: vi.fn().mockResolvedValue(undefined),
-        shutdownWorktreeBrowsers: vi.fn().mockResolvedValue(undefined),
-        deleteManagedBrowserSessionProfile: vi.fn().mockResolvedValue(undefined),
-        ptyIdsByTabId: {},
-        terminalLayoutsByTabId: {},
-        lastKnownRelayPtyIdByTabId: {},
-        deferredSshSessionIdsByTabId: {},
-        pendingReconnectPtyIdByTabId: {},
-        tabsByWorktree: {},
-        tabBarOrderByWorktree: {},
-        pendingReconnectTabByWorktree: {},
-        activeTabIdByWorktree: {},
-        unifiedTabsByWorktree: {},
-        groupsByWorktree: {},
-        activeGroupIdByWorktree: {},
-        layoutByWorktree: {},
-        openFiles: [],
-        editorDrafts: {},
-        markdownViewMode: {},
-        markdownRichModeSizeOverride: {},
-        editorViewMode: {},
-        explorerDisplayRootByWorktree: {},
-        showDotfilesByWorktree: {},
-        expandedDirs: {},
-        gitStatusByWorktree: {},
-        gitStatusHeadByWorktree: {},
-        gitIgnoredPathsByWorktree: {},
-        gitConflictOperationByWorktree: {},
-        trackedConflictPathsByWorktree: {},
-        gitBranchChangesByWorktree: {},
-        gitBranchCompareSummaryByWorktree: {},
-        gitBranchCompareRequestKeyByWorktree: {},
-        gitBranchCompareRequestStatusHeadByWorktree: {},
-        activeFileIdByWorktree: {},
-        activeBrowserTabIdByWorktree: {},
-        browserTabsByWorktree: {},
-        recentlyClosedBrowserTabsByWorktree: {},
-        activeTabTypeByWorktree: {},
-        rightSidebarTab: 'explorer' as const,
-        rightSidebarTabByWorktree: {},
-        activeWorktreeId: null,
-        activeTabId: null,
-        activeFileId: null,
-        activeBrowserTabId: null,
-        activeTabType: 'terminal' as const,
-        reconcileWorktreeTabModel: vi.fn(() => ({
-          activeRenderableTabId: null,
-          renderableTabCount: 0
-        })),
-        refreshGitHubForWorktreeIfStale: vi.fn()
-      }) as unknown as AppState
+    withAgentStatusOwnership(
+      (...a) =>
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This slice fixture supplies the state read by worktree actions; unrelated slices are intentionally omitted.
+        ({
+          // Why: this test isolates the worktree slice, so it provides only the state surface createWorktreeSlice touches.
+          ...createWorktreeSlice(...a),
+          ...createWorkspaceAttentionSlice(...a),
+          ...createEphemeralVmLifecycleSlice(...a),
+          ...createAgentStatusSlice(...a),
+          ...createPaneForegroundAgentSlice(...a),
+          trustedOrcaHooks: {},
+          acknowledgedAgentsByPaneKey: {},
+          sshConnectionStates: new Map([
+            [
+              TEST_SSH_AUTHORITY.targetId,
+              {
+                targetId: TEST_SSH_AUTHORITY.targetId,
+                status: 'connected',
+                error: null,
+                reconnectAttempt: 0,
+                providerEpoch: TEST_SSH_AUTHORITY.providerEpoch,
+                connectionGeneration: TEST_SSH_AUTHORITY.connectionGeneration
+              }
+            ]
+          ]),
+          repos: [],
+          projectGroups: [],
+          projectHostSetups: [],
+          deleteProjectHostSetup: vi.fn().mockResolvedValue(null),
+          updateFolderWorkspace: vi.fn().mockResolvedValue(true),
+          updateSettings: vi.fn().mockResolvedValue(undefined),
+          openModal: vi.fn(),
+          shutdownWorktreeTerminals: vi.fn().mockResolvedValue(undefined),
+          shutdownWorktreeBrowsers: vi.fn().mockResolvedValue(undefined),
+          deleteManagedBrowserSessionProfile: vi.fn().mockResolvedValue(undefined),
+          ptyIdsByTabId: {},
+          terminalLayoutsByTabId: {},
+          lastKnownRelayPtyIdByTabId: {},
+          deferredSshSessionIdsByTabId: {},
+          pendingReconnectPtyIdByTabId: {},
+          tabsByWorktree: {},
+          tabBarOrderByWorktree: {},
+          pendingReconnectTabByWorktree: {},
+          activeTabIdByWorktree: {},
+          unifiedTabsByWorktree: {},
+          groupsByWorktree: {},
+          activeGroupIdByWorktree: {},
+          layoutByWorktree: {},
+          openFiles: [],
+          editorDrafts: {},
+          markdownViewMode: {},
+          markdownRichModeSizeOverride: {},
+          editorViewMode: {},
+          explorerDisplayRootByWorktree: {},
+          showDotfilesByWorktree: {},
+          notificationsMutedByWorktree: {},
+          expandedDirs: {},
+          gitStatusByWorktree: {},
+          gitStatusHeadByWorktree: {},
+          gitIgnoredPathsByWorktree: {},
+          gitConflictOperationByWorktree: {},
+          trackedConflictPathsByWorktree: {},
+          gitBranchChangesByWorktree: {},
+          gitBranchCompareSummaryByWorktree: {},
+          gitBranchCompareRequestKeyByWorktree: {},
+          gitBranchCompareRequestStatusHeadByWorktree: {},
+          activeFileIdByWorktree: {},
+          activeBrowserTabIdByWorktree: {},
+          browserTabsByWorktree: {},
+          recentlyClosedBrowserTabsByWorktree: {},
+          activeTabTypeByWorktree: {},
+          rightSidebarTab: 'explorer' as const,
+          rightSidebarTabByWorktree: {},
+          activeWorktreeId: null,
+          activeTabId: null,
+          activeFileId: null,
+          activeBrowserTabId: null,
+          activeTabType: 'terminal' as const,
+          reconcileWorktreeTabModel: vi.fn(() => ({
+            activeRenderableTabId: null,
+            renderableTabCount: 0
+          })),
+          refreshGitHubForWorktreeIfStale: vi.fn()
+        }) as unknown as AppState
+    )
   )
 }
 

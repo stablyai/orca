@@ -6,7 +6,7 @@ import { Switch } from '@/components/ui/switch'
 import { Toggle } from '@/components/ui/toggle'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { sortNativeChatSessionOptions } from '../../../../../../../shared/native-chat/input/native-chat-session-option-snapshot'
+import { sortNativeChatSessionOptions } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-snapshot'
 import {
   isReadOnlySessionOptionValue,
   type SessionOptionDescriptor,
@@ -19,11 +19,12 @@ import {
   nativeChatSessionOptionActionLabel,
   nativeChatSessionOptionDisabledReason,
   nativeChatSessionOptionLabel
-} from '../../../../../../../shared/native-chat/input/native-chat-session-option-labels'
+} from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-labels'
 import { sayNativeChatSessionOptionTranslated as say } from './native-chat-session-option-labels-text'
 import { NativeChatSessionOptionWriteGroup } from './NativeChatSessionOptionWriteGroup'
 import { NativeChatSessionSpeedButton } from './NativeChatSessionSpeedButton'
-import { speedButtonTiers } from '../../../../../../../shared/native-chat/input/native-chat-session-speed-tiers'
+import { speedButtonTiers } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-speed-tiers'
+import { orderEffortLevels } from '../../../../../../../shared/agent-session/options/view/effort-level-order'
 
 type NativeChatSessionOptionRowsProps = {
   /** The current model's options, in display order. */
@@ -60,6 +61,8 @@ function LevelSegment(props: {
   const shortLabel = nativeChatSessionChoiceShortLabel(choice, say, optionId)
   // What the segment's text leaves out: the full name behind an abbreviation, and the description.
   const detail = [label === shortLabel ? null : label, choice.description].filter(Boolean).join(' ')
+  // A choice with its own short text keeps its full label as the name, not only as a description.
+  const name = choice.shortLabel ? label : undefined
   if (!detail) {
     return <ToggleGroupItem value={choice.value}>{shortLabel}</ToggleGroupItem>
   }
@@ -69,7 +72,7 @@ function LevelSegment(props: {
       <TooltipTrigger asChild>
         <span className="inline-flex">
           {/* Link the full description directly; the tooltip links only its wrapper while open. */}
-          <ToggleGroupItem value={choice.value} aria-describedby={detailId}>
+          <ToggleGroupItem value={choice.value} aria-label={name} aria-describedby={detailId}>
             {shortLabel}
           </ToggleGroupItem>
           <span id={detailId} className="sr-only">
@@ -237,7 +240,10 @@ function OptionRow(props: {
         // Why -ml-2: a wrapped group lines its first label up under the row's.
         className={cn('flex-wrap', layout !== 'inline' && '-ml-2')}
       >
-        {descriptor.kind.choices.map((choice) => (
+        {(descriptor.category === 'thought_level'
+          ? orderEffortLevels(descriptor.kind.choices)
+          : descriptor.kind.choices
+        ).map((choice) => (
           <LevelSegment key={choice.value} optionId={descriptor.id} choice={choice} />
         ))}
       </ToggleGroup>

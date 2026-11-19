@@ -1,27 +1,27 @@
 import { describe, expect, it } from 'vitest'
-import { buildJiraPresetJql } from './jira-preset-jql'
-import { normalizeJiraQuickFilterState } from './jira-quick-filters'
-import { JiraIssueListFiltersParam } from '../rpc-contract/jira-quick-filter-params'
+import { searchJiraPreset } from './jira-preset-jql'
+import { restrictJiraQueryToProject } from './jira-project-reference'
 
-describe('Jira preset status predicates', () => {
-  it('escapes quoted status names without treating ORDER BY as syntax', () => {
-    expect(
-      buildJiraPresetJql('all', { statuses: ['Needs "QA" \\ Review', 'ORDER BY cleanup'] })
-    ).toBe(
-      'statusCategory != Done AND status in ("Needs \\"QA\\" \\\\ Review", "ORDER BY cleanup") ORDER BY updated DESC'
+const project = { id: '10000', key: 'OLD', name: 'Legacy', siteId: 'legacy' }
+
+describe('searchJiraPreset', () => {
+  it('retries a project-scoped preset with resolution when statusCategory is rejected', async () => {
+    const queries: string[] = []
+    const issues = await searchJiraPreset(
+      'reported',
+      { statuses: ['In Progress'], currentSprint: true },
+      async (jql) => {
+        const query = restrictJiraQueryToProject(jql, project)
+        queries.push(query)
+        if (query.includes('statusCategory')) {
+          throw new Error("Error 400: 字段 'statusCategory' 不存在")
+        }
+        return ['OLD-1']
+      }
     )
-  })
-  it('bounds persisted state while preserving actual status names', () => {
-    expect(
-      normalizeJiraQuickFilterState({
-        statuses: [' In Progress ', 'Done', 'Done', 42, '', 'x'.repeat(129)]
-      })
-    ).toEqual({ statuses: [' In Progress ', 'Done'] })
-    expect(normalizeJiraQuickFilterState(null)).toEqual({ statuses: [] })
-    expect(
-      JiraIssueListFiltersParam.safeParse({ statuses: Array.from({ length: 51 }, () => 'Open') })
-        .success
-    ).toBe(false)
-    expect(JiraIssueListFiltersParam.safeParse({ statuses: ['   '] }).success).toBe(false)
+    expect(issues).toEqual(['OLD-1'])
+    expect(queries[1]).toBe(
+      'project = "10000" AND (reporter = currentUser() AND resolution = Unresolved AND status in ("In Progress") AND sprint in openSprints()) ORDER BY updated DESC'
+    )
   })
 })

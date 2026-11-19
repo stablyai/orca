@@ -2,8 +2,8 @@ import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui
 import type { TerminalInputKind } from '../../../../../../shared/terminal/input/terminal-input-kind'
 import { TUI_AGENT_CONFIG } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS } from '../../../../../../shared/agent-launch/startup/agent-prompt-injection'
-import { resolveDraftPasteReadyTimeoutMs } from '../../../../../../shared/draft-paste-ready-timeout'
-import { resolvePasteReadySignal } from '../../../../../../shared/draft-paste-ready-scanner'
+import { resolveDraftPasteReadyTimeoutMs } from '../../../../../../shared/agent-launch/startup/readiness/draft-paste-ready-timeout'
+import { resolvePasteReadySignal } from '../../../../../../shared/agent-launch/startup/readiness/draft-paste-ready-scanner'
 import { useAppStore } from '@/store/index'
 import { inspectRuntimeTerminalProcess } from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
 import { sendRuntimePtyInputVerified } from '@/runtime/hosted-terminals/input/runtime-terminal-verified-input'
@@ -14,7 +14,7 @@ import { waitForAgentReady } from './agent-ready-wait'
 import { sendAgentDraftPasteContentNow } from './agent-draft-paste-content'
 import { agentDeliversDraftViaNativePrefill } from './agent-native-draft-prefill'
 import { waitForAgentDraftInputReady } from './agent-draft-readiness'
-import { isExpectedAgentProcess } from '../../../../../../shared/agent-status/process/agent-process-recognition'
+import { isAgentForegroundProcess } from '../../../../../../shared/agent-status/process/agent-process-recognition'
 
 // Bracketed paste keeps prompt insertion atomic; callers separately choose whether to submit with Enter.
 
@@ -68,8 +68,8 @@ export async function pasteDraftWhenAgentReady(args: {
   if (!readiness.ready) {
     // Early readiness bytes may precede this observer; process/title ownership allows best-effort fallback, but Codex may still own a startup dialog or discard provisional input.
     const fallbackReady =
-      agentConfig && agent !== 'codex'
-        ? await waitForAgentReady(tabId, agentConfig.expectedProcess, { timeoutMs: 1000 })
+      agent && agent !== 'codex'
+        ? await waitForAgentReady(tabId, agent, { timeoutMs: 1000 })
         : { ready: false }
     if (!fallbackReady.ready) {
       onTimeout?.()
@@ -114,9 +114,7 @@ export async function pasteDraftToAgentPtyWhenReady(args: {
   const ready = await waitForAgentDraftInputReady(ptyId, budget, readySignal)
   if (!ready) {
     const fallbackReady =
-      agentConfig && agent !== 'codex'
-        ? await waitForExpectedAgentOnPty(ptyId, agentConfig.expectedProcess, 1000)
-        : false
+      agent && agent !== 'codex' ? await waitForAgentOnPty(ptyId, agent, 1000) : false
     if (!fallbackReady) {
       onTimeout?.()
       return false
@@ -268,9 +266,9 @@ function waitForAgentDraftInputReadyOnTab(args: {
   })
 }
 
-async function waitForExpectedAgentOnPty(
+async function waitForAgentOnPty(
   ptyId: string,
-  expectedProcess: string,
+  agent: TuiAgent,
   timeoutMs: number
 ): Promise<boolean> {
   const deadline = Date.now() + timeoutMs
@@ -284,7 +282,7 @@ async function waitForExpectedAgentOnPty(
         return false
       }
       const foreground = process.foregroundProcess?.toLowerCase() ?? ''
-      if (isExpectedAgentProcess(foreground, expectedProcess)) {
+      if (isAgentForegroundProcess(foreground, agent)) {
         return true
       }
     } catch {

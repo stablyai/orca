@@ -1,4 +1,3 @@
-import '../native-chat-reasoning-order.spec'
 import { describe, expect, it } from 'vitest'
 import type {
   AgentJournalItemBody,
@@ -206,5 +205,65 @@ describe("a subagent's rows are not the conversation's", () => {
       'child-verdict',
       'answer'
     ])
+  })
+})
+
+describe('automation run rows', () => {
+  const facts = {
+    id: 'auto-1',
+    name: 'Merge when green',
+    enabled: true,
+    nextRunAt: 0,
+    updatedAt: 1,
+    dtstart: 1,
+    rrule: 'FREQ=DAILY',
+    workspaceId: 'folder:bot'
+  }
+  const ending = { kind: 'event' as const, at: 50 }
+  const run = {
+    runId: 'run-1',
+    automation: facts,
+    trigger: 'event' as const,
+    wait: ending,
+    instructionsLength: 5
+  }
+  const waitCard = () => row('wait', [], { waitEnded: { automation: facts, ending } })
+  const sent = () => row('sent', say('Merge'), { role: 'user', automationRun: run })
+  const notStarted = () =>
+    row('not-started', [], {
+      automationRunNotStarted: { run, actsFor: [], error: 'closed', text: 'Merge', at: 40 }
+    })
+  const ids = (rows: NativeChatMessage[]) => rows.map((message) => message.id)
+
+  it("drops a Wait over card once its run's row is in the chat, in either order", () => {
+    expect(ids(projectNativeChatTranscriptMessages([waitCard(), sent()]))).toEqual(['sent'])
+    expect(ids(projectNativeChatTranscriptMessages([sent(), waitCard()]))).toEqual(['sent'])
+    expect(ids(projectNativeChatTranscriptMessages([waitCard()]))).toEqual(['wait'])
+  })
+
+  it("tells a wait's creation row how it ended, from its run or its card, and leaves it in place", () => {
+    const made = () =>
+      row('made', [], {
+        role: 'system',
+        automationSaved: { change: 'created', automation: { ...facts, once: { by: 90 } } }
+      })
+    const [alone] = projectNativeChatTranscriptMessages([made()])
+    expect(alone!.savedWaitEnded).toBeUndefined()
+    const withRun = projectNativeChatTranscriptMessages([made(), sent()])
+    expect(ids(withRun)).toEqual(['made', 'sent'])
+    expect(withRun[0]!.savedWaitEnded).toEqual(ending)
+    const expired = { kind: 'expired' as const, at: 70 }
+    const [withCard] = projectNativeChatTranscriptMessages([
+      made(),
+      row('wait', [], { waitEnded: { automation: facts, ending: expired } })
+    ])
+    expect(withCard!.savedWaitEnded).toEqual(expired)
+  })
+
+  it("marks a Couldn't start row sent again once a message carries its run", () => {
+    const [alone] = projectNativeChatTranscriptMessages([notStarted()])
+    expect(alone!.automationRunNotStarted!.sentAgain).toBeUndefined()
+    const [card] = projectNativeChatTranscriptMessages([notStarted(), sent()])
+    expect(card!.automationRunNotStarted!.sentAgain).toBe(true)
   })
 })

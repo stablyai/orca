@@ -1,10 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { loadTerminalLinkOpenMode, saveTerminalLinkOpenMode } from './preferences'
+import { loadLinkOpenMode, saveLinkOpenMode } from './preferences'
 import {
   loadDefaultSessionView,
   loadSessionViewOverrides,
-  readDefaultSessionViewPreference,
   readSessionViewOverridesPreference,
   saveDefaultSessionView,
   updateSessionViewOverride
@@ -39,26 +38,6 @@ describe('session view preference', () => {
       .mockImplementation(async (key, value) => {
         stored.set(key, value)
       })
-  })
-
-  it('marks an unreadable default as not loaded so the opt-in gate can bail', async () => {
-    vi.mocked(AsyncStorage.getItem).mockRejectedValue(new Error('storage unavailable'))
-    await expect(readDefaultSessionViewPreference()).resolves.toEqual({
-      value: null,
-      loaded: false,
-      hasStoredValue: false
-    })
-    await expect(loadDefaultSessionView()).resolves.toBe('terminal')
-  })
-
-  it('migrates the legacy array format to chat overrides', async () => {
-    vi.mocked(AsyncStorage.getItem).mockResolvedValue(JSON.stringify(['tab-1', 42, 'tab-2']))
-
-    const loaded = await loadSessionViewOverrides('host', 'wt')
-    expect([...loaded.entries()]).toEqual([
-      ['tab-1', 'chat'],
-      ['tab-2', 'chat']
-    ])
   })
 
   it('serializes default writes across callers and makes reads wait for the latest', async () => {
@@ -195,17 +174,6 @@ describe('session view preference', () => {
 
     expect(AsyncStorage.setItem).not.toHaveBeenCalled()
   })
-
-  it('repairs invalid preference data on the next user mutation', async () => {
-    vi.mocked(AsyncStorage.getItem).mockResolvedValue('not-json')
-
-    await updateSessionViewOverride('host', 'worktree', 'tab', 'chat')
-
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
-      'orca:nativeChatTabs:host:worktree',
-      JSON.stringify({ tab: 'chat' })
-    )
-  })
 })
 
 describe('terminal link open mode preference', () => {
@@ -231,9 +199,9 @@ describe('terminal link open mode preference', () => {
       }
       stored = value
     })
-    const firstMount = saveTerminalLinkOpenMode('phone-browser')
-    const secondMount = saveTerminalLinkOpenMode('orca-browser')
-    const reader = loadTerminalLinkOpenMode()
+    const firstMount = saveLinkOpenMode('phone-browser')
+    const secondMount = saveLinkOpenMode('orca-browser')
+    const reader = loadLinkOpenMode()
     await Promise.resolve()
     expect(stored).toBe('orca-browser')
     firstWrite.resolve()

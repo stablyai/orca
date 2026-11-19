@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
-import type { GitHubOwnerRepo } from '../../../shared/github/pull-request-types'
-import type { GitHubPullRequestStateUpdate } from '../../../shared/issue-mutation-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../shared/github/repositories/repository-identity'
+import type { GitHubPullRequestStateUpdate } from '../../../shared/work-items/issue-mutation-types'
 import { markPRReadyForReview } from '../../github/client/update/pr-ready'
 import { mergePR } from '../../github/client/merge/merge-pr'
 import { removePRReviewers, requestPRReviewers } from '../../github/client/update/pr-reviewers'
@@ -67,6 +67,7 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
         args.method,
         getGitHubRepoConnectionId(repo),
         args.prRepo ?? null,
+        null,
         ...getGitHubLocalGitOptionArgs(store, repo)
       )
       broadcastSuccessfulPRMutation(result.ok, repo.path, repo.id, args.prNumber, event.sender.id)

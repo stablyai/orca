@@ -27,6 +27,18 @@ const SOURCE_ROOTS = ['src/', 'mobile/', 'tests/', 'config/']
 const TEST_FILE = /\.(?:test|spec|e2e|bench)\.[cm]?[jt]sx?$/
 const LOCALES = 'src/renderer/src/i18n/'
 
+const MAIN_BLOCKING_GRAPH_INPUTS = [
+  'src/main/',
+  'src/shared/',
+  'src/preload/',
+  'src/packages/',
+  'src/cli/',
+  'config/build-plugins/',
+  'config/main-blocking-worker-entries.json',
+  'config/scripts/static-analysis/process-boundaries/main-blocking-source-paths.mjs',
+  'config/scripts/workspace/source-exports/'
+]
+
 // Ratchets default to SOURCE_ROOTS; list narrower inputs only where a scan is clearly scoped.
 const RATCHET_INPUTS = {
   'check-daemon-blocking-call-ratchet.mjs': ['src/main/'],
@@ -35,8 +47,16 @@ const RATCHET_INPUTS = {
   'check-host-list-render-ratchet.mjs': ['src/renderer/src/'],
   'check-id-only-store-write-ratchet.mjs': ['src/main/persistence/'],
   'check-layout-writer-ratchets.mjs': ['src/main/', 'src/renderer/src/'],
-  'check-main-sync-fs-ratchet.mjs': ['src/main/', 'src/shared/'],
-  'check-main-sync-spawn-ratchet.mjs': ['src/main/'],
+  // Both build the event-loop import graph, so anything that changes graph edges selects them.
+  'check-main-blocking-helper-ratchet.mjs': MAIN_BLOCKING_GRAPH_INPUTS,
+  'check-main-sync-fs-ratchet.mjs': MAIN_BLOCKING_GRAPH_INPUTS,
+  'check-main-sync-spawn-ratchet.mjs': [
+    'src/main/',
+    'src/shared/',
+    'src/preload/',
+    'config/main-blocking-worker-entries.json',
+    'config/scripts/static-analysis/process-boundaries/main-blocking-source-paths.mjs'
+  ],
   'check-react-compiler-compat-ratchet.mjs': ['src/renderer/src/'],
   'check-recurring-timer-ratchet.mjs': [
     'src/main/',
@@ -47,6 +67,7 @@ const RATCHET_INPUTS = {
   'check-render-path-translate-ratchet.mjs': ['src/renderer/src/'],
   'check-repo-host-read-ratchet.mjs': ['src/cli/', 'src/main/', 'src/shared/'],
   'check-runtime-electron-ratchet.mjs': ['src/main/', 'src/cli/', 'src/shared/'],
+  'check-agent-status-map-ratchet.mjs': ['src/renderer/src/', 'tests/'],
   'check-tab-map-seam-ratchet.mjs': ['src/renderer/src/'],
   'check-terminal-parking-ownership-ratchet.mjs': ['src/renderer/src/'],
   'check-unproven-pty-retirement-ratchet.mjs': ['src/main/'],
@@ -140,7 +161,7 @@ export const VERIFY_CHECKS = [
       'mobile/web-entry/',
       'mobile/app.json',
       'mobile/locales/',
-      'src/shared/ui-locale',
+      'src/shared/i18n/ui-locale',
       'config/scripts/verify-mobile-localization',
       'config/scripts/localization/catalog-validation/verify-mobile-localization',
       'config/scripts/verify-localization-',
@@ -191,7 +212,7 @@ export const VERIFY_CHECKS = [
     name: 'node runtime pin',
     args: ['config/scripts/node-runtime/pin-policy/check-node-runtime-pin.mjs'],
     inputs: [
-      'src/shared/node-runtime-pin',
+      'src/shared/node-runtime/node-runtime-pin',
       'config/scripts/node-dist-archive-name',
       'config/scripts/node-runtime/archive-identity/node-dist-archive-name'
     ]
@@ -260,6 +281,10 @@ const TYPECHECK_INPUTS = [
   },
   { config: 'config/tsconfig.tc.cli.json', inputs: ['src/cli/', 'src/shared/', 'src/main/'] },
   {
+    config: 'config/tsconfig.tc.bot-evals.json',
+    inputs: ['src/cli/', 'src/shared/', 'src/main/', 'cloud/packages/connector-contract/']
+  },
+  {
     config: 'src/packages/process-host/tsconfig.test.json',
     inputs: ['src/packages/process-host/']
   }
@@ -293,10 +318,24 @@ export function selectTypecheckProjects(files) {
 // Shared analysis modules select every ratchet built on them.
 const RATCHET_SHARED_MODULES = {
   'config/scripts/static-analysis/process-boundaries/gated-call-use-collector.mjs': [
+    'check-main-blocking-api-ratchet.mjs',
+    'check-main-blocking-helper-ratchet.mjs',
     'check-daemon-blocking-call-ratchet.mjs',
     'check-main-sync-fs-ratchet.mjs',
     'check-main-sync-spawn-ratchet.mjs',
     'check-recurring-timer-ratchet.mjs'
+  ],
+  'config/scripts/static-analysis/process-boundaries/main-blocking-import-graph.mjs': [
+    'check-main-blocking-api-ratchet.mjs',
+    'check-main-blocking-helper-ratchet.mjs',
+    'check-main-sync-fs-ratchet.mjs'
+  ],
+  'config/scripts/static-analysis/process-boundaries/main-blocking-helper-propagation.mjs': [
+    'check-main-blocking-helper-ratchet.mjs'
+  ],
+  'config/scripts/static-analysis/process-boundaries/sqlite-call-use-collector.mjs': [
+    'check-main-blocking-api-ratchet.mjs',
+    'check-main-blocking-helper-ratchet.mjs'
   ],
   'config/scripts/static-analysis/ratchets/react-compiler/react-compiler-hazards.mjs': [
     'check-react-compiler-compat-ratchet.mjs'

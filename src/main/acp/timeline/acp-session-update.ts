@@ -3,6 +3,7 @@ import { acpWindowUsage } from './acp-context-usage'
 import type { AcpDialect } from '../acp-dialects/acp-dialect'
 import type { AcpBackgroundTaskTimeline } from './acp-background-task-timeline'
 import type { AcpSubagents } from './acp-subagents'
+import type { AcpTurnFailures } from './acp-turn-failures'
 import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { AcpToolTimeline } from './acp-tool-timeline'
 import type { SessionNotification } from '../generated/acp-protocol.generated'
@@ -27,6 +28,7 @@ export function acpSessionUpdate(
     dialect: AcpDialect
     backgroundTasks: AcpBackgroundTaskTimeline
     subagents: AcpSubagents
+    failures: AcpTurnFailures
     messageKey?: string
     scope?: AgentJournalTurnScope
   }
@@ -38,6 +40,10 @@ export function acpSessionUpdate(
       ...(turn === undefined ? {} : { turn }),
       ...(context.scope ? { scope: context.scope } : {})
     }
+  }
+  const retry = context.failures.retry(update, turn, at, join.join)
+  if (retry) {
+    return retry
   }
   switch (update.sessionUpdate) {
     case 'agent_message_chunk':
@@ -54,7 +60,17 @@ export function acpSessionUpdate(
                   : { stream: update.sessionUpdate },
               channel,
               text: update.content.text,
-              ...join
+              join: {
+                ...join.join,
+                ...(update.messageId
+                  ? {
+                      scopeItems: [
+                        acpNamedTextKey(update.messageId, 'assistant'),
+                        acpNamedTextKey(update.messageId, 'reasoning')
+                      ]
+                    }
+                  : {})
+              }
             }
           ]
         : [{ type: 'provider.frame', frameKind: update.sessionUpdate, payload: update, ...join }]
