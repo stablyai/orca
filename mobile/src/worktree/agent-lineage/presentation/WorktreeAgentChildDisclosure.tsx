@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight } from 'lucide-react-native'
+import { Bell, ChevronDown, ChevronRight } from 'lucide-react-native'
 import { Pressable, Text, View } from 'react-native'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { colors, pressedStyle, spacing } from '../../../theme/mobile-theme'
@@ -17,6 +17,8 @@ type ChildToggleProps = {
   expanded: boolean
   // Shown beside the collapsed count so hidden sub-agent work stays visible.
   signalState?: AgentDotState
+  /** A hidden descendant the desktop holds unread. */
+  unread?: boolean
   onToggle: () => void
 }
 
@@ -24,6 +26,7 @@ export function WorktreeAgentChildToggle({
   count,
   expanded,
   signalState,
+  unread,
   onToggle
 }: ChildToggleProps) {
   const t = useMobileTranslation()
@@ -48,7 +51,9 @@ export function WorktreeAgentChildToggle({
       style={({ pressed }) => [styles.toggle, pressed && pressedStyle]}
       hitSlop={CHILD_TOGGLE_HIT_SLOP}
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={
+        !expanded && unread ? `${label}, ${t('agents.list.unread', 'Unread')}` : label
+      }
       accessibilityState={{ expanded }}
       onPress={(event) => {
         event.stopPropagation()
@@ -58,6 +63,7 @@ export function WorktreeAgentChildToggle({
       {expanded ? null : (
         <>
           {signalState ? <AgentStateDot state={signalState} /> : null}
+          {unread ? <Bell size={12} color={colors.statusAmber} fill={colors.statusAmber} /> : null}
           <Text style={styles.count}>+{count}</Text>
         </>
       )}
