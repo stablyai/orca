@@ -269,15 +269,18 @@ export function setHostWorkspaceSession(
   session: WorkspaceSessionState,
   written?: WrittenWorkspaceScope
 ): void {
-  const persisted =
-    owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId?.[hostId]
+  const { runtime, bindingRecovery, scheduling } = owner[sessionHostPartitionOperationsContext]
+  const persisted = runtime.state.workspaceSessionsByHostId?.[hostId]
   const prior = persisted ? withRequiredWorkspaceSessionMaps(persisted) : undefined
+  const rewrites = membershipRewritesFor(written)
   // Empty host slices omit maps that retirement/rebase checks iterate.
   session = withRequiredWorkspaceSessionMaps(session)
   // Enforce at this shared boundary: quit staging bypasses per-caller normalization.
-  session = dropClosedTerminalTabs(preserveRuntimeAuthoredWorkspaceSessionFields(session, prior))
-  const { runtime } = owner[sessionHostPartitionOperationsContext]
-  const rewrites = membershipRewritesFor(written)
+  session = dropClosedTerminalTabs(
+    preserveRuntimeAuthoredWorkspaceSessionFields(session, prior),
+    undefined,
+    rewrites?.worktreeIds
+  )
   // Each host owns its topology fence; stale renderer snapshots rebase against that host only.
   session = keepRuntimePartitionRevisions(
     hostId,
@@ -288,30 +291,24 @@ export function setHostWorkspaceSession(
     ),
     prior
   )
-  session = preserveMissingWorkspaceSessionTerminalBindings(
-    session,
-    prior,
-    owner[sessionHostPartitionOperationsContext].bindingRecovery,
-    {
-      targetIdForWorktree: sshTargetIdForWorkspaceSessionHost(hostId),
-      executionHostId: hostId
-    }
-  )
-  const scrollbackKept = pruneLocalTerminalScrollbackBuffers(
-    session,
-    owner[sessionHostPartitionOperationsContext].runtime.state.repos
-  )
+  session = preserveMissingWorkspaceSessionTerminalBindings(session, prior, bindingRecovery, {
+    targetIdForWorktree: sshTargetIdForWorkspaceSessionHost(hostId),
+    executionHostId: hostId
+  })
+  const scrollbackKept = pruneLocalTerminalScrollbackBuffers(session, runtime.state.repos)
   // Strip redundant globals on every write so stale snapshots cannot reinject local-owned data.
   const pruned = withoutRedundantGlobalFields(
     pruneWorkspaceSessionBrowserHistory(scrollbackKept),
-    owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSession
+    runtime.state.workspaceSession
   )
-  owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId = {
-    ...owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId,
-    [hostId]: withRequiredWorkspaceSessionMaps(orderTerminalRowsByTabGroups(pruned))
+  runtime.state.workspaceSessionsByHostId = {
+    ...runtime.state.workspaceSessionsByHostId,
+    [hostId]: withRequiredWorkspaceSessionMaps(
+      orderTerminalRowsByTabGroups(pruned, rewrites?.worktreeIds)
+    )
   }
   scheduleSave(
-    owner[sessionHostPartitionOperationsContext].scheduling,
+    scheduling,
     ['workspaceSessionsByHostId'],
     hostId,
     // A prune can strip scrollback from workspaces the caller never named.

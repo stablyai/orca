@@ -48,6 +48,7 @@ export function setLocalWorkspaceSession(
 ): void {
   const context = getSessionSnapshotOperationsContext(owner)
   const prior = context.runtime.state.workspaceSession
+  const rewrites = membershipRewritesFor(written)
   // A prune can strip scrollback from workspaces the caller never named.
   let pruned = false
   const pruneScrollback = (next: WorkspaceSessionState): WorkspaceSessionState => {
@@ -57,8 +58,11 @@ export function setLocalWorkspaceSession(
   }
   session = keepWslMoveFrozenSessionsForStore(session, prior)
   // Quit staging bypasses caller guards; preserve runtime fields at the shared write boundary.
-  session = dropClosedTerminalTabs(preserveRuntimeAuthoredWorkspaceSessionFields(session, prior))
-  const rewrites = membershipRewritesFor(written)
+  session = dropClosedTerminalTabs(
+    preserveRuntimeAuthoredWorkspaceSessionFields(session, prior),
+    undefined,
+    rewrites?.worktreeIds
+  )
   session = sanitizeWorkspaceSessionTerminalRetirements(session, prior, rewrites)
   session = pruneWorkspaceSessionBrowserHistory(pruneScrollback(session))
 
@@ -130,7 +134,7 @@ export function setLocalWorkspaceSession(
     )
   }
   // Apply group ordering after prior steps finish rebasing stored rows.
-  session = orderTerminalRowsByTabGroups(session)
+  session = orderTerminalRowsByTabGroups(session, rewrites?.worktreeIds)
   context.runtime.state.workspaceSession = session
   if (deferSnapshotFiles) {
     enqueueTerminalScrollbackSnapshotWork(owner, prior, session)
