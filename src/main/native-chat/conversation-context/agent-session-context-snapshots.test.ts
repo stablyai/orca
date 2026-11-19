@@ -118,9 +118,9 @@ it('sweeps week-old hand-offs and crashed parts on publish, keeping recent ones'
   const part = join(folder, 'crashed.txt.x.part')
   await actualFiles.writeFile(stale, 'stale')
   await actualFiles.writeFile(part, 'part')
-  const eightDaysAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000)
-  await actualFiles.utimes(stale, eightDaysAgo, eightDaysAgo)
-  await actualFiles.utimes(part, eightDaysAgo, eightDaysAgo)
+  const longAgo = new Date('2020-01-01T00:00:00Z')
+  await actualFiles.utimes(stale, longAgo, longAgo)
+  await actualFiles.utimes(part, longAgo, longAgo)
 
   const current = await contextSnapshots.writeAgentSessionContextSnapshot(root, SESSION, 'current')
   await contextSnapshots.sweepAgentSessionContextSnapshots(folder)

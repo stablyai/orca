@@ -63,8 +63,9 @@ export async function writeAgentSessionContextSnapshot(
     }
     // Rename keeps the last write's time, which a paused capture can leave old; the sweep ages by this.
     const now = new Date()
-    publishedAt.set(path, now.getTime())
     await utimes(path, now, now).catch(() => undefined)
+    // After the update settles, however long it took; the claim covers the wait.
+    publishedAt.set(path, Date.now())
     void sweepAgentSessionContextSnapshots(root)
     return path
   } finally {
@@ -100,6 +101,11 @@ export function sweepAgentSessionContextSnapshots(root: string): Promise<void> {
 }
 
 async function sweepSnapshotFolder(root: string, now: number): Promise<void> {
+  for (const [path, at] of publishedAt) {
+    if (now - at >= SNAPSHOT_MAX_AGE_MS) {
+      publishedAt.delete(path)
+    }
+  }
   const files: { path: string; size: number; modified: number }[] = []
   for (const name of await readdir(root)) {
     const path = join(root, name)
@@ -113,7 +119,10 @@ async function sweepSnapshotFolder(root: string, now: number): Promise<void> {
       if (age > SNAPSHOT_MIN_AGE_MS && !staging.has(path)) {
         await rm(path, { force: true }).catch(() => undefined)
       }
-    } else if (age <= SNAPSHOT_MAX_AGE_MS || !(await removeSnapshot(path, now))) {
+    } else if (
+      age <= SNAPSHOT_MAX_AGE_MS ||
+      !(await removeSnapshot(path, now, SNAPSHOT_MAX_AGE_MS))
+    ) {
       files.push({ path, size: info.size, modified: info.mtimeMs })
     }
   }
@@ -122,21 +131,18 @@ async function sweepSnapshotFolder(root: string, now: number): Promise<void> {
     if (total <= SNAPSHOT_FOLDER_MAX_BYTES || now - file.modified < SNAPSHOT_MIN_AGE_MS) {
       return
     }
-    if (await removeSnapshot(file.path, now)) {
+    if (await removeSnapshot(file.path, now, SNAPSHOT_MIN_AGE_MS)) {
       total -= file.size
     }
   }
 }
 
 /** In the path's publication queue, so a hand-off republished since the scan is never taken. */
-function removeSnapshot(path: string, now: number): Promise<boolean> {
+function removeSnapshot(path: string, now: number, minAge: number): Promise<boolean> {
   return runKeyedSerializedOperation(publications, path, async () => {
     const info = await stat(path).catch(() => null)
     const published = Math.max(info?.mtimeMs ?? 0, publishedAt.get(path) ?? 0)
-    if (now - (publishedAt.get(path) ?? 0) >= SNAPSHOT_MIN_AGE_MS) {
-      publishedAt.delete(path)
-    }
-    if (claims.has(path) || !info || now - published < SNAPSHOT_MIN_AGE_MS) {
+    if (claims.has(path) || !info || now - published < minAge) {
       return false
     }
     // A file another process holds open (Windows) waits for a later sweep.
