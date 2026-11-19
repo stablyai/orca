@@ -7,7 +7,6 @@ import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-top
 import { paneKeyPtyId } from './key-state'
 import { ptyFallbackRootPidById, ptyIncarnationById } from '../provider/ownership-state'
 import { getRegisteredPtyPid } from '../../../memory/pty-registry'
-import { lastInputAtByPty } from '../delivery/visibility-state'
 import { isLocalHookConnectionId } from '../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import { getProviderForPty } from '../provider/registry'
 import { inspectPtyProviderProcess } from '../../../providers/pty/process-inspection'
@@ -146,9 +145,9 @@ async function paneShellAlone(
       return null
     }
     // Input during the proof (desktop, CLI or mobile) may start the next agent (`codex resume`)
-    // after the table was read.
-    const inputStamp = (ptyId: string): string =>
-      `${lastInputAtByPty.get(ptyId)}|${runtime.terminalRunFacts.readLastInputAt(ptyId)}`
+    // after the table was read; run facts skip a terminal's automatic query replies.
+    const inputStamp = (ptyId: string): number | null =>
+      runtime.terminalRunFacts.readLastInputAt(ptyId)
     const inputBefore = inputStamp(pane.ptyId)
     const shellAlone = await confirmShellAlone(pane.ptyId, pane.incarnationId ?? undefined, agent)
     const current = resolvePanePty(runtime, paneKey)

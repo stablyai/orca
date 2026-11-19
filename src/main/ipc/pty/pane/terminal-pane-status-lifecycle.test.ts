@@ -132,36 +132,30 @@ it.each([
   }
 )
 
-it.each(['desktop', 'CLI or mobile'] as const)(
-  'does not count a shell-alone proof once %s input reached the PTY while it ran',
-  async (source) => {
-    Object.defineProperty(process, 'platform', { value: 'darwin' })
-    const { lastInputAtByPty } = await import('../delivery/visibility-state')
-    let typed = false
-    let runtimeInputAt = 1
-    // The user sends `codex resume <id>` after the table was read but before the proof returns.
-    confirmRootShellAlone.mockImplementation(async () => {
-      if (typed && source === 'desktop') {
-        lastInputAtByPty.set('pty-1', performance.now())
-      } else if (typed) {
-        runtimeInputAt += 1
-      }
-      return true
-    })
-    getProviderForPty.mockReturnValue({
-      listProcesses: async () => [{ id: 'pty-1', rootProcessId: 4242 }]
-    })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the proof only resolves the pane and reads its input facts.
-    const runtime = {
-      resolveTerminalPane: () => ({ ptyId: 'pty-1', incarnationId: 'birth-1' }),
-      terminalRunFacts: { readLastInputAt: () => runtimeInputAt }
-    } as unknown as OrcaRuntimeService
-    bindTerminalPaneStatusLifecycle(runtime, undefined)
-    const lifecycle = setTerminalPaneLifecycle.mock.lastCall![0]
-    const paneKey = 'tab:11111111-1111-4111-8111-111111111111'
-    expect(await lifecycle.confirmShellAlone?.(paneKey, 'codex')).toBe(true)
-    typed = true
-    expect(await lifecycle.confirmShellAlone?.(paneKey, 'codex')).toBe(false)
-    lastInputAtByPty.delete('pty-1')
-  }
-)
+it('does not count a shell-alone proof once input reached the PTY while it ran', async () => {
+  Object.defineProperty(process, 'platform', { value: 'darwin' })
+  let typed = false
+  let lastInputAt = 1
+  // The user sends `codex resume <id>` (desktop, CLI or mobile) after the table was read but
+  // before the proof returns; a terminal's automatic query reply is not recorded as input.
+  confirmRootShellAlone.mockImplementation(async () => {
+    if (typed) {
+      lastInputAt += 1
+    }
+    return true
+  })
+  getProviderForPty.mockReturnValue({
+    listProcesses: async () => [{ id: 'pty-1', rootProcessId: 4242 }]
+  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the proof only resolves the pane and reads its input facts.
+  const runtime = {
+    resolveTerminalPane: () => ({ ptyId: 'pty-1', incarnationId: 'birth-1' }),
+    terminalRunFacts: { readLastInputAt: () => lastInputAt }
+  } as unknown as OrcaRuntimeService
+  bindTerminalPaneStatusLifecycle(runtime, undefined)
+  const lifecycle = setTerminalPaneLifecycle.mock.lastCall![0]
+  const paneKey = 'tab:11111111-1111-4111-8111-111111111111'
+  expect(await lifecycle.confirmShellAlone?.(paneKey, 'codex')).toBe(true)
+  typed = true
+  expect(await lifecycle.confirmShellAlone?.(paneKey, 'codex')).toBe(false)
+})

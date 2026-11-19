@@ -4,7 +4,11 @@ import { normalizeHookPayload } from '../../../shared/agent-hook-listener/normal
 import { parseFormEncodedBody } from '../../../shared/agent-hook-listener/request-body'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
-import { cliWriterTopology, type CliWriterObservation } from './cli-writer-observation'
+import {
+  cliWriterTopology,
+  retainTmuxWriterTopology,
+  type CliWriterObservation
+} from './cli-writer-observation'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
 import {
@@ -129,11 +133,16 @@ export class AgentHookServer extends AgentHookServerLifecycle {
    *  unproven, may have ended. Only a hook row or a tracked pane can hold one, so the mark of a
    *  plain shell, which lands on every prompt, skips the saved-record read. */
   protected noticeLaunchlessCommandMark(resolved: string): void {
-    if (!this.unprovenExits.has(resolved) && !this.state.lastStatusByPaneKey.has(resolved)) {
+    const row = this.state.lastStatusByPaneKey.get(resolved)
+    if (!this.unprovenExits.has(resolved) && !row) {
       return
     }
     const identity = this.paneAgentIdentity(resolved)
+    // Main ends no agent at a launchless mark; only a host that can prove the shell alone (local
+    // POSIX) may, so SSH, WSL and Windows panes aren't armed here.
     const unseen =
+      row?.connectionId === null &&
+      process.platform !== 'win32' &&
       identity?.ended === false &&
       identity.processTopology !== 'shared' &&
       !this.hasVerifiableAgentProcess(resolved)
@@ -213,6 +222,10 @@ export class AgentHookServer extends AgentHookServerLifecycle {
       paneKey
     )
     if (next) {
+      // The conversation moved, not its host: a tmux server still runs it.
+      if (cliWriterTopology(row) === 'shared') {
+        retainTmuxWriterTopology(next)
+      }
       this.applyNormalizedStatus(
         {
           ...row,
