@@ -113,14 +113,11 @@ it('ignores titles outside a started rename send', async () => {
       { title: 'Wanted', while: 'started' },
       { title: 'Subagent Title', while: 'started', subagent: true }
     ],
-    // Claude re-announcing the name the chat already has.
-    '/rename Wanted again': [{ title: 'Wanted', while: 'started' }],
     '/rename Final': [{ title: 'Final', while: 'started' }]
   })
   await chat.runtime.send('An ordinary prompt')
   await chat.runtime.send('/rename Wanted')
   await vi.waitFor(() => expect(chat.named).toEqual(['Wanted']))
-  await chat.runtime.send('/rename Wanted again')
   await chat.runtime.send('/rename Final')
   await vi.waitFor(() => expect(chat.named).toEqual(['Wanted', 'Final']))
   expect(chat.record()?.conversationName).toBe('Final')

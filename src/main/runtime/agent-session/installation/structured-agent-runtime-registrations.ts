@@ -153,7 +153,6 @@ function createClaudeAdapter(
       host()?.publishChildWorkEvidence(sessionId, evidence, producer),
     onDispatchSettledLate: followUps.onDispatchSettledLate,
     onUserRenamed: nameChatFromClaudeRename({
-      store,
       naming: deps.conversationNaming,
       logger: deps.logger
     }),
