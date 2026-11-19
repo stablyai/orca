@@ -1,4 +1,5 @@
-import React, { useLayoutEffect, useRef, useState } from 'react'
+import React, { useLayoutEffect, useRef, useState, useEffectEvent } from 'react'
+import { cn } from '@/lib/class-names'
 import type { StatusPillTone } from './workspace-cleanup-candidate-row-data'
 import { StatusPill } from './workspace-cleanup-status-pill'
 
@@ -32,8 +33,9 @@ export function countWholeGitStatusPills(
 }
 
 /**
- * Git pills in priority order. The status list's tooltip on the enclosing slot lists every label,
- * so "+N" needs no tooltip of its own; it is focusable so keyboard users reach the same content.
+ * Git pills in priority order. The status tooltip on the enclosing slot lists every label, so the
+ * "+N" chip and a truncated first pill need no tooltip of their own: keyboard focus on either one
+ * opens that single tooltip through the slot.
  */
 export function WorkspaceCleanupGitStatusPills({
   statuses
@@ -43,25 +45,31 @@ export function WorkspaceCleanupGitStatusPills({
   const groupRef = useRef<HTMLSpanElement>(null)
   const measureRef = useRef<HTMLSpanElement>(null)
   const [visibleCount, setVisibleCount] = useState(statuses.length)
+  const [firstTruncated, setFirstTruncated] = useState(false)
   const [resizeTick, setResizeTick] = useState(0)
+  const labelKey = statuses.map((status) => status.label).join('\n')
 
-  useLayoutEffect(() => {
+  const measure = useEffectEvent(() => {
     const group = groupRef.current
-    const measure = measureRef.current
-    if (!group || !measure) {
+    const measured = measureRef.current
+    if (!group || !measured) {
       return
     }
-    const measured = Array.from(measure.children).map(
-      (child) => child.getBoundingClientRect().width
-    )
-    const widths = measured.slice(0, statuses.length)
-    const chipWidth = measured[statuses.length] ?? 0
+    const children = Array.from(measured.children)
+    const widths = children
+      .slice(0, statuses.length)
+      .map((child) => child.getBoundingClientRect().width)
+    const chipWidth = children[statuses.length]?.getBoundingClientRect().width ?? 0
     const gap = Number.parseFloat(getComputedStyle(group).columnGap) || 0
     const next = countWholeGitStatusPills(widths, group.clientWidth, chipWidth, gap)
-    if (next !== visibleCount) {
-      setVisibleCount(next)
-    }
-  }, [statuses, visibleCount, resizeTick])
+    setVisibleCount(next)
+    const firstPill = group.firstElementChild
+    const label = firstPill instanceof HTMLElement ? firstPill.firstElementChild : null
+    setFirstTruncated(label instanceof HTMLElement && label.scrollWidth > label.clientWidth)
+  })
+  useLayoutEffect(() => {
+    measure()
+  }, [labelKey, visibleCount, resizeTick])
 
   useLayoutEffect(() => {
     const group = groupRef.current
@@ -80,20 +88,31 @@ export function WorkspaceCleanupGitStatusPills({
       ref={groupRef}
       className="relative flex h-5 min-w-0 flex-1 items-center gap-1.5 overflow-hidden"
     >
-      {shown.map((status, index) => (
-        <StatusPill
-          key={status.label}
-          tone={status.tone}
-          className={index === 0 ? 'min-w-16 shrink' : 'shrink-0'}
-        >
-          {status.label}
-        </StatusPill>
-      ))}
+      {shown.map((status, index) =>
+        index === 0 ? (
+          <StatusPill
+            key={status.label}
+            tone={status.tone}
+            tabIndex={firstTruncated ? 0 : undefined}
+            className={cn(
+              'min-w-16 shrink',
+              firstTruncated &&
+                'rounded-full outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring'
+            )}
+          >
+            {status.label}
+          </StatusPill>
+        ) : (
+          <StatusPill key={status.label} tone={status.tone} className="shrink-0">
+            {status.label}
+          </StatusPill>
+        )
+      )}
       {hidden.length > 0 ? (
         <span
           tabIndex={0}
           aria-label={hidden.map((status) => status.label).join(' · ')}
-          className="shrink-0 rounded-sm text-xs text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="shrink-0 rounded-sm text-xs text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         >
           +{hidden.length}
         </span>

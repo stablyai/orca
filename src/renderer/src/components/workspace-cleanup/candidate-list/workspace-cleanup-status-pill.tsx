@@ -6,16 +6,19 @@ export function StatusPill({
   children,
   tone = 'neutral',
   toneClassName,
-  className
+  className,
+  tabIndex
 }: {
   children: React.ReactNode
   tone?: StatusPillTone
   /** Overrides `tone` for pills whose color comes from a domain state (e.g. review state). */
   toneClassName?: string
   className?: string
+  tabIndex?: number
 }): React.JSX.Element {
   return (
     <span
+      tabIndex={tabIndex}
       className={cn(
         'inline-flex h-5 min-w-0 items-center rounded-full border px-2 text-[11px] font-medium',
         tone === 'neutral' && 'border-border bg-background text-muted-foreground',
