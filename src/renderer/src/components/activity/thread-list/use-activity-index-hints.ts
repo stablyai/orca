@@ -36,6 +36,8 @@ export type ActivityIndexHintViewport = {
   virtualItems: readonly ActivityVirtualItemDescriptor[]
   virtualRows: readonly Pick<VirtualItem, 'index' | 'start' | 'size'>[]
   scrollOffset: number
+  /** Null before the list is measured; then rendered rows stand in for the visible ones. */
+  viewportHeight: number | null
   /** Group headers pin to the top and cover the row under them. */
   stickyHeaders: boolean
 }
@@ -54,7 +56,7 @@ function firstUncoveredItemIndex({
   return virtualRows.find((row) => row.start >= top)?.index ?? 0
 }
 
-/** Numbers the first nine fully visible thread rows; badges show only while the chord is held. */
+/** Numbers the first nine fully visible thread rows, so a digit never selects a row off screen; badges show only while the chord is held. */
 export function useActivityIndexHints(
   enabled: boolean,
   viewport: ActivityIndexHintViewport
@@ -82,14 +84,18 @@ export function useActivityIndexHints(
   }, [enabled])
 
   const startIndex = firstUncoveredItemIndex(viewport)
-  const { virtualItems } = viewport
+  const { virtualItems, virtualRows, scrollOffset, viewportHeight } = viewport
+  const bottom = viewportHeight === null ? Infinity : scrollOffset + viewportHeight
   const indexHintThreads = useMemo(
     () =>
-      virtualItems
-        .slice(startIndex)
-        .flatMap((item) => (item.type === 'thread' ? [item.thread] : []))
+      virtualRows
+        .filter((row) => row.index >= startIndex && row.start + row.size <= bottom)
+        .flatMap((row) => {
+          const item = virtualItems[row.index]
+          return item?.type === 'thread' ? [item.thread] : []
+        })
         .slice(0, MAX_INDEX_HINTS),
-    [virtualItems, startIndex]
+    [virtualItems, virtualRows, startIndex, bottom]
   )
   const hintNumberByPaneKey = useMemo(
     () =>

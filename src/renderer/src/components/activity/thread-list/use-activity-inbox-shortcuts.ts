@@ -92,7 +92,7 @@ export function useActivityInboxShortcuts({
   virtualItems: ActivityIndexHintViewport['virtualItems']
   virtualizer: Pick<
     Virtualizer<HTMLDivElement, Element>,
-    'getVirtualItems' | 'scrollOffset' | 'scrollToIndex'
+    'getVirtualItems' | 'scrollOffset' | 'scrollRect' | 'scrollToIndex'
   >
   groupBy: ActivityGroupBy
   onMarkThreadsRead: (threads: readonly AgentPaneThread[]) => void
@@ -102,6 +102,7 @@ export function useActivityInboxShortcuts({
     virtualItems,
     virtualRows: virtualizer.getVirtualItems(),
     scrollOffset: virtualizer.scrollOffset ?? 0,
+    viewportHeight: virtualizer.scrollRect?.height ?? null,
     stickyHeaders: groupBy !== 'none'
   })
   const { scrollToIndex } = virtualizer
