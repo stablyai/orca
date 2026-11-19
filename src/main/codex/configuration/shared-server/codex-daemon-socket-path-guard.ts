@@ -95,8 +95,11 @@ export function stripCodexDaemonOverride(config: string): string {
   let featuresHeaderIndex = -1
   let removedFromFeatures = false
   const dropEmptyFeaturesTable = (): void => {
-    const body = kept.slice(featuresHeaderIndex + 1)
-    if (featuresHeaderIndex !== -1 && removedFromFeatures && body.every((l) => l.trim() === '')) {
+    // Why: copying the kept lines at every header made large configs quadratic.
+    if (featuresHeaderIndex === -1 || !removedFromFeatures) {
+      return
+    }
+    if (kept.slice(featuresHeaderIndex + 1).every((l) => l.trim() === '')) {
       kept.length = featuresHeaderIndex
       while (kept.at(-1)?.trim() === '') {
         kept.pop()
