@@ -302,8 +302,13 @@ async function run(arm, sessions, round) {
   // Every run starts from an empty WAL, so no arm inherits the WAL an earlier run left behind.
   const { DatabaseSync } = await import('node:sqlite')
   const raw = new DatabaseSync(filename)
-  raw.exec('PRAGMA wal_checkpoint(TRUNCATE)')
+  const truncated = raw.prepare('PRAGMA wal_checkpoint(TRUNCATE)').get()
   raw.close()
+  if (truncated.busy !== 0 || truncated.log !== 0) {
+    throw new Error(`could not empty the WAL before ${arm.name}: ${JSON.stringify(truncated)}`)
+  }
+  // Readers start with each run, after the WAL is empty, so none survives into the next arm.
+  const readers = startReaders(readerThreads)
   const owner = new arm.JournalSqlOwner(filename, dir, arm.workerPath)
   await owner.opened()
   const timings = []
@@ -322,8 +327,8 @@ async function run(arm, sessions, round) {
     if (Date.now() <= stopAt) {
       inWindow++
       maxGap = Math.max(maxGap, now - lastAck)
+      lastAck = now
     }
-    lastAck = now
   }
   const stops = Array.from({ length: sessions }, (_, index) =>
     stream(owner, `burst-${index}`, tag, stopAt, (ms) => {
@@ -372,9 +377,12 @@ async function run(arm, sessions, round) {
   }
   // Streams run the whole window, so throughput divides by the time it was measured over.
   await new Promise((resolve) => setTimeout(resolve, Math.max(0, stopAt - Date.now())))
+  // A stall still open at the window's end counts up to the boundary.
+  maxGap = Math.max(maxGap, performance.now() - lastAck)
   stops.forEach((stop) => stop())
   await new Promise((resolve) => setTimeout(resolve, 2000))
   await owner.close()
+  await Promise.all(readers.map((reader) => reader.terminate()))
   const frames = []
   for (let index = 1; index < timings.length; index++) {
     const delta = timings[index].walFrames - timings[index - 1].walFrames
@@ -428,7 +436,6 @@ const load = Array.from({ length: cpuLoad }, () =>
     { stdio: 'ignore' }
   )
 )
-const readers = startReaders(readerThreads)
 const results = []
 try {
   for (let round = 0; round < rounds; round++) {
@@ -442,7 +449,6 @@ try {
   }
 } finally {
   load.forEach((child) => child.kill('SIGKILL'))
-  await Promise.all(readers.map((reader) => reader.terminate()))
 }
 if (args.out) {
   writeFileSync(

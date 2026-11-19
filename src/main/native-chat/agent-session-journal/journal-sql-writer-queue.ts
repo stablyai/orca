@@ -9,6 +9,8 @@ export class JournalSqlWriterQueue {
   private readonly urgent: JournalSqlRequest[] = []
   /** Insertion-ordered by request id, so taking or promoting a request never splices. */
   private readonly bulk = new Map<number, JournalSqlRequest>()
+  /** Each chat's queued bulk request ids, so a send's promotion never walks other chats' work. */
+  private readonly bulkByChat = new Map<string, Set<number>>()
 
   get size(): number {
     return this.urgent.length + this.bulk.size
@@ -21,16 +23,22 @@ export class JournalSqlWriterQueue {
       return true
     }
     this.bulk.set(request.id, request)
+    const sessionId = sessionOf(request)
+    if (sessionId !== undefined) {
+      const ids = this.bulkByChat.get(sessionId) ?? new Set<number>()
+      ids.add(request.id)
+      this.bulkByChat.set(sessionId, ids)
+    }
     return false
   }
 
   /** A chat that starts sending lifts its writes already waiting as bulk; fork installs stay put. */
   promote(sessionId: string): boolean {
     let moved = false
-    // One pass per send; each chat's lane keeps at most one request queued.
-    for (const request of this.bulk.values()) {
-      if (sessionOf(request) === sessionId && !isForkInstall(request)) {
-        this.bulk.delete(request.id)
+    for (const id of this.bulkByChat.get(sessionId) ?? []) {
+      const request = this.bulk.get(id)!
+      if (!isForkInstall(request)) {
+        this.removeBulk(request)
         this.urgent.push({ ...request, urgent: true })
         moved = true
       }
@@ -56,9 +64,19 @@ export class JournalSqlWriterQueue {
     }
     const taken = takeJournalSqlReadyBatch(window)
     for (const request of taken) {
-      this.bulk.delete(request.id)
+      this.removeBulk(request)
     }
     return taken
+  }
+
+  private removeBulk(request: JournalSqlRequest): void {
+    this.bulk.delete(request.id)
+    const sessionId = sessionOf(request)
+    const ids = sessionId === undefined ? undefined : this.bulkByChat.get(sessionId)
+    ids?.delete(request.id)
+    if (sessionId !== undefined && ids?.size === 0) {
+      this.bulkByChat.delete(sessionId)
+    }
   }
 }
 
