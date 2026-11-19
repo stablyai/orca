@@ -30,6 +30,13 @@ export function isCodexPaneStale(args: {
 }): boolean {
   const state = useAppStore.getState()
   const { codexRestartNoticeByPtyId } = state
+  args = {
+    ...args,
+    panePtyId:
+      args.panePtyId ??
+      state.terminalLayoutsByTabId[args.tabId]?.ptyIdsByLeafId?.[args.leafId] ??
+      null
+  }
   if (args.panePtyId) {
     const request =
       state.pendingPaneAccountRestarts[`${args.tabId}:${args.leafId}`] ??

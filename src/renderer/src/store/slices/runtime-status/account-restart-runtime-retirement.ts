@@ -1,5 +1,8 @@
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import { isCodexAccountRestart } from '@/store/terminals/codex-account-restart-continuation'
+import {
+  isCodexAccountRestart,
+  reconcileRetiredCodexNotices
+} from '@/store/terminals/codex-account-restart-continuation'
 import { releaseRetiredAccountRestartSlots } from '@/components/terminal-pane/account-restart/detached/detached-pane-restart-slots'
 import type { RuntimeStatusStoreSetState, RuntimeStatusStoreState } from './runtime-status-types'
 
@@ -52,6 +55,20 @@ function retireChangedRuntimeRequests(
       }
       delete notices[request.oldPtyId]
     }
+  }
+  const next = { ...state, ...patch }
+  if (next.tabsByWorktree && next.terminalLayoutsByTabId && next.ptyIdsByTabId && originalNotices) {
+    notices = reconcileRetiredCodexNotices(
+      { pendingPaneAccountRestarts: state.pendingPaneAccountRestarts },
+      {
+        ...next,
+        tabsByWorktree: next.tabsByWorktree,
+        terminalLayoutsByTabId: next.terminalLayoutsByTabId,
+        ptyIdsByTabId: next.ptyIdsByTabId,
+        pendingPaneAccountRestarts: requests,
+        codexRestartNoticeByPtyId: originalNotices
+      }
+    )
   }
   return requests === state.pendingPaneAccountRestarts
     ? patch

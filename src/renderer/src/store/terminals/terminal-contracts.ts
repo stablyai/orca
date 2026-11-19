@@ -56,6 +56,7 @@ export type HydrateWorkspaceSessionOptions = {
 } & WorkspaceSessionHydrationOptions
 
 export type CodexAccountRestart = {
+  notDispatched?: true
   agent: 'codex'
   requestId: string
   attemptId: string

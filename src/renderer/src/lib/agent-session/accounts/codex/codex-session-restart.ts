@@ -265,11 +265,12 @@ export async function markRestoredStaleCodexSessionsForRestart(args?: {
   }
 
   const resolveAccountLabel = await createCodexAccountLabelResolver()
+  const scansByPtyId = new Map(scans.map((scan) => [scan.ptyId, scan]))
   const noticedPtyIds = useAppStore.getState().markCodexRestartNotices(
     stalePanes.map((pane) => ({
       ptyId: pane.ptyId,
-      origin: scans.find((scan) => scan.ptyId === pane.ptyId)?.origin,
-      incarnationId: scans.find((scan) => scan.ptyId === pane.ptyId)?.incarnationId,
+      origin: scansByPtyId.get(pane.ptyId)?.origin,
+      incarnationId: scansByPtyId.get(pane.ptyId)?.incarnationId,
       previousAccountLabel: resolveAccountLabel(pane.launchAccountId),
       nextAccountLabel: resolveAccountLabel(pane.activeAccountId),
       // Main decides staleness by ID; colliding labels cannot answer the store’s identity checks.

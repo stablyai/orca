@@ -58,11 +58,12 @@ export async function stopReplacedPaneOwner(
 export function swapReplacedPaneBinding(
   store: Store,
   binding: PersistPtyBindingArgs,
-  replaced: ReplacedPaneOwner
+  replaced: ReplacedPaneOwner,
+  hostId = replaced.pane?.hostId
 ): () => PersistPtyBindingArgs | null {
   return () => {
     const bound =
-      store.getWorkspaceSession().terminalLayoutsByTabId?.[binding.tabId]?.ptyIdsByLeafId?.[
+      store.getWorkspaceSession(hostId).terminalLayoutsByTabId?.[binding.tabId]?.ptyIdsByLeafId?.[
         binding.leafId
       ]
     // Unbound is ok: the renderer's pre-connect clear can withdraw it (split tab).

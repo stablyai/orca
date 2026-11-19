@@ -49,10 +49,6 @@ export function continueCodexAccountRestart(
   const bound = request.leafId
     ? state.terminalLayoutsByTabId[request.tabId]?.ptyIdsByLeafId?.[request.leafId]
     : undefined
-  if (result && bound && bound !== request.oldPtyId && bound !== result.id) {
-    state.updateCodexAccountRestart(token, null)
-    return false
-  }
   if (result && !result.incarnationId) {
     state.updateCodexAccountRestart(token, {
       resultPtyId: result.id,
@@ -61,8 +57,17 @@ export function continueCodexAccountRestart(
     })
     return false
   }
-  if (result && isObsoleteCodexRestartResult(request, result)) {
-    state.updateCodexAccountRestart(token, null)
+  if (
+    result &&
+    ((bound && bound !== request.oldPtyId && bound !== result.id) ||
+      isObsoleteCodexRestartResult(request, result))
+  ) {
+    state.updateCodexAccountRestart(token, {
+      resultPtyId: result.id,
+      resultIncarnationId: result.incarnationId ?? undefined,
+      phase: 'unresolved',
+      error: ACCOUNT_RESTART_OWNER_UNVERIFIED
+    })
     return false
   }
   if (result) {
@@ -131,6 +136,7 @@ export function failCodexAccountRestart(
         : settledPhase,
     condition,
     receipt,
+    notDispatched: !unknown && options.notDispatched === true ? true : undefined,
     error: message
   })
 }
@@ -149,7 +155,7 @@ export function dispatchCodexAccountRestart(
     return false
   }
   if (request.phase === 'claimed' || request.phase === 'preparing') {
-    state.updateCodexAccountRestart(token, { phase: 'dispatched' })
+    state.updateCodexAccountRestart(token, { phase: 'dispatched', notDispatched: undefined })
   }
   return currentCodexAccountRestart(useAppStore.getState(), token)?.phase === 'dispatched'
 }

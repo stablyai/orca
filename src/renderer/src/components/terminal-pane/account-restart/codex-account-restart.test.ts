@@ -30,6 +30,7 @@ import {
 import { codexAccountRestartToken } from '@/store/terminals/codex-account-restart-continuation'
 import {
   continueCodexAccountRestart,
+  dispatchCodexAccountRestart,
   prepareCodexAccountRestart,
   failCodexAccountRestart,
   retryCodexAccountRestarts,
@@ -324,6 +325,12 @@ describe('Codex account continuation', () => {
           }
         }
       }
+      let removedCommitHadRequest: boolean | undefined
+      const unsubscribe = useAppStore.subscribe((state, previous) => {
+        if (state.terminalLayoutsByTabId !== previous.terminalLayoutsByTabId) {
+          removedCommitHadRequest = key in state.pendingPaneAccountRestarts
+        }
+      })
       if (source === 'main frame') {
         const { showFramePatch } = await import('@/store/slices/tabs/moved-tab-selection')
         showFramePatch(useAppStore, patch)
@@ -332,6 +339,8 @@ describe('Codex account continuation', () => {
           await import('@/runtime/web-session-tabs-sync/snapshots/store-patch')
         applyWebSessionTabsStorePatch(() => patch, { frames: [] })
       }
+      unsubscribe()
+      expect(removedCommitHadRequest).toBe(false)
       failCodexAccountRestart(token, receipt(request, 'confirmed-retired', 'empty'))
       expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(0)
       expect(useAppStore.getState().terminalLayoutsByTabId.tab.ptyIdsByLeafId).toEqual({
@@ -416,7 +425,8 @@ describe('Codex account continuation', () => {
           status: createCompatibleRuntimeStatusResponse('runtime-after').result
         })
       }
-      expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(0)
+      expect(selectCodexRestartStatus(useAppStore.getState()).stalePtyIds).toEqual(['old'])
+      expect(selectCodexRestartStatus(useAppStore.getState()).failures).toEqual([])
       if (change === 'pairing') {
         useAppStore.getState().setRuntimeEnvironments([environment])
       } else {
@@ -731,7 +741,11 @@ describe('Codex account continuation', () => {
     expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(0)
     seed()
     const request = accepted()
-    await prepareCodexAccountRestart(request)
+    const condition = await prepareCodexAccountRestart(request)
+    if (!condition) {
+      throw new Error('missing condition')
+    }
+    expect(dispatchCodexAccountRestart(codexAccountRestartToken(request), condition)).toBe(true)
     failCodexAccountRestart(codexAccountRestartToken(request), 'rpc_timeout')
     useAppStore
       .getState()
@@ -788,14 +802,12 @@ describe('Codex account continuation', () => {
       Object.assign(session, { pendingSpawnDeferral: 'paused' })
       return undefined
     })
-    Object.assign(session, {
-      enterSpawnDeferredSleep: () => {
-        throw new Error('an unknown attempt must not schedule another create')
-      }
-    })
+    const enterSpawnDeferredSleep = vi.fn()
+    Object.assign(session, { enterSpawnDeferredSleep })
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mounted fixture supplies all fresh-spawn members used by the deferral route.
     bindStartFreshSpawn(session as never)
     await session.startFreshSpawn()
+    expect(enterSpawnDeferredSleep).not.toHaveBeenCalled()
     const attention = selectCodexRestartStatus(useAppStore.getState())
     expect(attention.failures[0].phase).toBe('unresolved')
     await retryCodexAccountRestarts(attention.failures)

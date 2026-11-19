@@ -22,6 +22,8 @@ import { paneResumeOwnershipElsewhere } from '../pty-connection/startup/pane-res
 import type { CodexAccountRestart } from '@/store/terminals/terminal-contracts'
 import type { ConnectPanePtySession } from '../pty-connection/connect-pane-pty-session'
 import type { FreshSpawnOptions } from '../pty-connection/startup/fresh-spawn-types'
+import { readTerminalSpawnDeferral } from '../../../../../shared/terminal/pty/admission/spawn-admission-contract'
+import { startDeferredSessionReattach } from '../pty-connection/reattach/deferred-session-reattach-connect'
 
 async function settleForeignResume(
   session: ConnectPanePtySession,
@@ -70,11 +72,14 @@ async function settleForeignResume(
         const remote = parseRemoteRuntimePtyId(ptyId)
         if (
           resolved?.snapshot.owner?.incarnationId === incarnation &&
+          'connected' in resolved.terminal &&
+          resolved.terminal.connected === true &&
           (remote
             ? 'handle' in resolved.terminal && resolved.terminal.handle === remote.handle
             : resolved.snapshot.owner.ptyId === ptyId) &&
           latest.agentStatusByPaneKey.get(candidate.paneKey) === entry &&
           latest.terminalLayoutsByTabId[pane.tabId]?.ptyIdsByLeafId?.[pane.leafId] === ptyId &&
+          latest.ptyIdsByTabId[pane.tabId]?.includes(ptyId) &&
           getTerminalNoticeLifetime(ptyId)?.incarnationId === incarnation
         ) {
           latest.updateCodexAccountRestart(token, null)
@@ -101,9 +106,49 @@ export function routeCodexAccountRestartWake(
   const token = context.token
   if (!token) {
     const retained = state.pendingPaneAccountRestarts[session.cacheKey]
-    return isCodexAccountRestart(retained) && isCurrentCodexAccountRestart(state, retained)
-      ? Promise.resolve(null)
-      : undefined
+    if (!isCodexAccountRestart(retained) || !isCurrentCodexAccountRestart(state, retained)) {
+      return undefined
+    }
+    const retainedToken = codexAccountRestartToken(retained)
+    if (
+      retained.phase === 'deferred' &&
+      retained.startup &&
+      retained.receipt?.outcome === 'terminal' &&
+      retained.receipt.stop !== 'unknown'
+    ) {
+      session.deps.accountRestartToken = retainedToken
+      session.enterSpawnDeferredSleep(
+        readTerminalSpawnDeferral(retained.error) ?? 'paused',
+        retained.startup,
+        options,
+        true
+      )
+    } else if (
+      retained.phase === 'failed' &&
+      retained.oldIncarnationId &&
+      (retained.notDispatched ||
+        (retained.receipt?.outcome === 'terminal' && retained.receipt.stop === 'not-started'))
+    ) {
+      const isCurrent = (result?: { id: string; incarnationId?: string | null }): boolean => {
+        const latest = useAppStore.getState()
+        return (
+          !session.disposed &&
+          session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport &&
+          currentCodexAccountRestart(latest, retainedToken)?.phase === 'failed' &&
+          latest.terminalLayoutsByTabId[retained.tabId]?.ptyIdsByLeafId?.[session.pane.leafId] ===
+            retained.oldPtyId &&
+          (!result ||
+            (result.id === retained.oldPtyId && result.incarnationId === retained.oldIncarnationId))
+        )
+      }
+      if (isCurrent()) {
+        return startDeferredSessionReattach(session, retained.oldPtyId, {
+          attachOnlyView: true,
+          shouldContinue: isCurrent
+        }).then(() => null)
+      }
+    }
+    return Promise.resolve(null)
   }
   let request = currentCodexAccountRestart(state, token)
   if (!request || session.disposed) {

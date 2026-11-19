@@ -303,6 +303,12 @@ export type IpcPtyTransportOptions = {
   keepTypeAheadForNewTerminal?: (phase: 'connect' | 'bind') => boolean
   /** Re-checked when held input would flush; false drops it (startup work appeared after the hold began). */
   releasePreconnectInput?: () => boolean
+  /** Rechecked at admission and delivery; automatic terminal replies remain independent. */
+  canSendInput?: (
+    ptyId: string | null,
+    inputKind: TerminalInputKind,
+    incarnationId?: string | null
+  ) => boolean
   /** Keys typed before a remote pane bound its terminal were dropped for safety, unsent. */
   onTypingDiscardedBeforeBind?: () => void
   /** Seed a fresh transport with input handed off from a remounted deferred split. */

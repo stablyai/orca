@@ -3,10 +3,14 @@ import { useAppStore } from '@/store/index'
 import { isCodexAccountRestart } from '@/store/terminals/codex-account-restart-continuation'
 import { collectLeafIds } from '../../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
+const EMPTY_READY_RESTARTS: string[] = []
 
 /** PTYs whose queued account restart this tab runs: any Codex at once, and this tab's own Claude panes. */
 export function selectReadyAccountRestartPtyIds(state: AppState, tabId: string): string[] {
   const pending = state.pendingPaneAccountRestarts
+  if (Object.keys(pending).length === 0) {
+    return EMPTY_READY_RESTARTS
+  }
   const layout = state.terminalLayoutsByTabId[tabId]
   const ready: string[] = collectLeafIds(layout?.root)
     .map((leafId) => makePaneKey(tabId, leafId))

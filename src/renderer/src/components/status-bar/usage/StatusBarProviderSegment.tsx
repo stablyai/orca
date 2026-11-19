@@ -148,7 +148,7 @@ export function UsageOverflowChip({
       title={t('auto.components.status.bar.StatusBar.hiddenUsageProviders', 'Also: {{value0}}', {
         value0: names
       })}
-      className="inline-grid h-4 items-center justify-items-center rounded-full border border-border px-1.5 text-[11px] font-medium tabular-nums text-foreground data-[tone=restart]:border-transparent data-[tone=restart]:bg-status-warning data-[tone=restart]:text-status-warning-foreground data-[usage-collapsed=true]:invisible data-[usage-collapsed=true]:absolute"
+      className="inline-grid h-4 items-center justify-items-center rounded-full border border-border px-1.5 text-[11px] font-medium tabular-nums text-foreground data-[tone=restart]:border-transparent data-[tone=restart]:bg-status-warning data-[tone=restart]:text-status-warning-on-solid data-[usage-collapsed=true]:invisible data-[usage-collapsed=true]:absolute"
     >
       {/* Why: count changes must not invalidate density measurements and restart probing. */}
       <span aria-hidden="true" className="invisible col-start-1 row-start-1">

@@ -100,6 +100,7 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
       ptyId: record?.ptyId ?? null,
       connected: pty?.connected === true,
       ...boundLaunchToken(pty, record?.ptyId),
+      ...(pty && pty.ptyId === record?.ptyId ? terminalLaunchFacts(pty) : {}),
       ...(worktreeId ? { worktreeId } : {}),
       ...this.getPtyExecutionHostMetadata(record?.ptyId ?? pty?.ptyId ?? null)
     }

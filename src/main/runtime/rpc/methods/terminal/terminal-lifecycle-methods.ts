@@ -137,7 +137,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
               ...(clientKind === 'runtime' ? { reopensPane: true as const } : {}),
               ...(preAllocatedHandle ? { preAllocatedHandle } : {})
             }),
-          { wslUserAct: true }
+          { wslUserAct: true, ...(params.accountRestart ? { accountRestart: true as const } : {}) }
         )
         // Switch point. A CLI start is work in the workspace; a window or phone tab is a person opening one.
         if (

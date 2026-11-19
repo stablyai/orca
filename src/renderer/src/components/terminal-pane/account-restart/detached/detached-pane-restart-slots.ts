@@ -6,6 +6,13 @@ import { cancelDeferredRestoreRetry } from '../../session-restore/spawn-deferral
 import type { PaneAccountRestart } from '@/store/terminals/terminal-contracts'
 
 const slots = new Map<string, () => void>()
+const capacityListeners = new Set<() => void>()
+export function subscribeDetachedRestartCapacity(listener: () => void): () => void {
+  capacityListeners.add(listener)
+  return () => {
+    capacityListeners.delete(listener)
+  }
+}
 const MAX_CONCURRENT_RESTARTS = 4
 export const STALLED_DETACHED_RESTART_MS = 90_000
 
@@ -19,6 +26,9 @@ export function holdDetachedRestartSlot(key: string, onStall: () => void): () =>
     clearTimeout(timer)
     if (slots.get(key) === release) {
       slots.delete(key)
+      for (const listener of capacityListeners) {
+        listener()
+      }
     }
   }
   const timer = setTimeout(() => {

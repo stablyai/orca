@@ -1370,6 +1370,7 @@ export function createRemoteRuntimePtyTransport(
     }
 
     return {
+      ...(matchesHostHandle(resolvedPane) ? terminalLaunchFacts(resolvedPane) : {}),
       id: remotePtyId,
       replay: '',
       isReattach: true,
@@ -1690,6 +1691,7 @@ export function createRemoteRuntimePtyTransport(
       return undefined
     }
     return {
+      ...terminalLaunchFacts(terminal),
       id: remotePtyId,
       replay: '',
       isReattach: true,
@@ -1895,6 +1897,9 @@ export function createRemoteRuntimePtyTransport(
   function inputBlocked(): boolean {
     return recoveryBlocksIo() && !subscriptionAcceptsInput()
   }
+  function canSendAccountInput(inputKind: TerminalInputKind = 'driving'): boolean {
+    return opts.canSendInput?.(remotePtyId, inputKind, authoritativePtyIncarnationId) !== false
+  }
 
   // Hold typing for the known terminal during binding/recovery and through bounded disconnected grace (#25784).
   function shouldHoldInput(): boolean {
@@ -2098,6 +2103,7 @@ export function createRemoteRuntimePtyTransport(
     resumeSequencedInput(stream, boundHandle)
     const active = recoveryInputHold.release(heldInputEndpoint(boundHandle), {
       isCurrent: () => connected && handle === boundHandle && !inputBlocked(),
+      canSendInput: canSendAccountInput,
       // Why: the 1 Mi-code-unit hold fits the 16 MiB ceiling; one journal batch survives a mid-send outage.
       sendInput: (data) => {
         const current = getCurrentMultiplexedStream(boundHandle)
@@ -2131,14 +2137,25 @@ export function createRemoteRuntimePtyTransport(
   ): Promise<boolean> {
     const signal = options?.signal
     const targetHandle = handle
-    if (!connected || !targetHandle || inputBlocked() || signal?.aborted) {
+    if (
+      !connected ||
+      !targetHandle ||
+      inputBlocked() ||
+      signal?.aborted ||
+      !canSendAccountInput(_inputKind)
+    ) {
       return false
     }
     if (!data) {
       return true
     }
     await inputBatcher.drain()
-    if (!connected || handle !== targetHandle || inputBlocked()) {
+    if (
+      !connected ||
+      handle !== targetHandle ||
+      inputBlocked() ||
+      !canSendAccountInput(_inputKind)
+    ) {
       return false
     }
     if (pendingViewportClaim && !getCurrentMultiplexedStream(targetHandle)) {
@@ -2227,7 +2244,12 @@ export function createRemoteRuntimePtyTransport(
   const sendUnacknowledgedInput = (text: string, queryReply = false): boolean => {
     const targetHandle = handle
     const targetLifecycleEpoch = lifecycleEpoch
-    if (!connected || !targetHandle || inputBlocked()) {
+    if (
+      !connected ||
+      !targetHandle ||
+      inputBlocked() ||
+      !canSendAccountInput(queryReply ? 'query-reply' : 'driving')
+    ) {
       return false
     }
     const stream = getCurrentMultiplexedStream(targetHandle)
@@ -2291,6 +2313,9 @@ export function createRemoteRuntimePtyTransport(
   const inputBatcher = createRemoteRuntimePtyTextBatcher(
     REMOTE_TERMINAL_INPUT_FLUSH_MS,
     (text) => {
+      if (!canSendAccountInput()) {
+        return
+      }
       if (!sendUnacknowledgedInput(text)) {
         holdUnsentInput(text)
       }
@@ -3493,7 +3518,7 @@ export function createRemoteRuntimePtyTransport(
   }
 
   function sendInputNow(data: string): boolean {
-    if (!connected || !handle || inputBlocked()) {
+    if (!connected || !handle || inputBlocked() || !canSendAccountInput()) {
       return false
     }
     if (!data) {
@@ -3773,31 +3798,33 @@ export function createRemoteRuntimePtyTransport(
             startupCommandDelivery: plan.startupCommandDelivery
           })
         }
-        const result = await createWithUnknownOutcomeRecovery(
-          'terminal',
-          (timeoutMs, reconcileExisting) => {
-            if (
-              accountRestart &&
-              (!isAccountRestartCurrent?.() ||
-                destroyed ||
-                lifecycleEpoch !== epoch ||
-                (onAccountRestartDispatch && !onAccountRestartDispatch()))
-            ) {
-              throw new Error('terminal_account_restart_view_changed')
-            }
-            return callRuntimeForEnvironment<{ terminal: RuntimeTerminalCreate }>(
-              createEnvironmentId,
-              'terminal.create',
-              {
-                ...legacyCreateParams,
-                ...(reconcileExisting ? { reconcileExisting: true } : {})
-              },
-              timeoutMs
-            )
-          },
-          createEnvironmentId,
-          epoch
-        )
+        const invoke = (
+          timeoutMs: number,
+          reconcileExisting: boolean
+        ): Promise<RemoteAgentSessionLaunchResult> => {
+          if (
+            accountRestart &&
+            (!isAccountRestartCurrent?.() ||
+              destroyed ||
+              lifecycleEpoch !== epoch ||
+              (onAccountRestartDispatch && !onAccountRestartDispatch()))
+          ) {
+            throw new Error('terminal_account_restart_view_changed')
+          }
+          return callRuntimeForEnvironment<{ terminal: RuntimeTerminalCreate }>(
+            createEnvironmentId,
+            'terminal.create',
+            {
+              ...legacyCreateParams,
+              ...(reconcileExisting ? { reconcileExisting: true } : {})
+            },
+            timeoutMs
+          )
+        }
+        // An account timeout belongs to its retained continuation; ordinary create recovery may create again.
+        const result = accountRestart
+          ? await invoke(15_000, false)
+          : await createWithUnknownOutcomeRecovery('terminal', invoke, createEnvironmentId, epoch)
         if (fallback) {
           promptPlan = fallback
         }
@@ -4061,7 +4088,7 @@ export function createRemoteRuntimePtyTransport(
           throw error
         }
       }
-      if (destroyed || !connected || !remotePtyId) {
+      if (destroyed || lifecycleEpoch !== connectLifecycleEpoch || !connected || !remotePtyId) {
         return
       }
 
@@ -4199,6 +4226,9 @@ export function createRemoteRuntimePtyTransport(
 
     // Why: the kind only gates the local hold; terminal.send gets no kind, so the host classifies desktop bytes itself.
     sendInput(data, inputKind): boolean {
+      if (!canSendAccountInput(inputKind)) {
+        return false
+      }
       if (releaseThenShouldHold(inputKind)) {
         if (!data) {
           return true
@@ -4217,6 +4247,9 @@ export function createRemoteRuntimePtyTransport(
     sendInputImmediate: (data: string): boolean => sendInputImmediateNow(data),
 
     sendInputAccepted(data, inputKind, options) {
+      if (!canSendAccountInput(inputKind)) {
+        return Promise.resolve(false)
+      }
       if (releaseThenShouldHold(inputKind) && data) {
         if (inputBatcher.hasPendingValidation()) {
           return holdAcceptedAfterValidation(data, inputKind, options)
