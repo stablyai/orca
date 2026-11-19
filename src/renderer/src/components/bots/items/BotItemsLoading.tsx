@@ -20,8 +20,8 @@ export function BotItemsLoading({
   const t = useTranslate()
   return (
     <div
+      // Why: no aria-busy; on the live region itself it lets assistive tech hold back this label.
       role="status"
-      aria-busy="true"
       className={cn(
         // Why: the list above stays mounted while loading, so the panel's gap-3.5 sits between it and these
         // bars. Empty, pulling up by that gap draws them where its first header lands; under the asks, by
