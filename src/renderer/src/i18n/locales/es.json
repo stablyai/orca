@@ -24262,9 +24262,7 @@
     "agentQueue": {
       "titleNext": "En cola · es la siguiente",
       "title": "En cola · {{ahead}} antes",
-      "waitConcurrency": "Ya hay {{running}} de {{max}} agentes trabajando en esta máquina.",
       "waitMemory": "Necesita ~{{need}} GB y hay {{free}} GB libres; Zotz siempre deja {{min}} GB para el sistema.",
-      "waitBudget": "Los agentes ya usan {{used}} de su presupuesto de {{budget}} GB.",
       "waitPressure": "La máquina tiene poca memoria; nada nuevo arranca hasta que se libere.",
       "waitStarting": "Revisando la memoria…",
       "autoStart": "El agente arranca solo cuando haya lugar. No se pierde nada si esperas.",
@@ -24275,7 +24273,7 @@
         "priorityRemote": "Remota",
         "priorityAutomation": "Automatización",
         "free": "{{free}} GB libres de {{total}} GB",
-        "limits": "{{running}} de {{max}} agentes · siempre deja {{min}} GB libres",
+        "keepsFree": "Siempre deja {{min}} GB libres",
         "minFreeMarker": "Siempre libre",
         "legendSystem": "Sistema y otras apps",
         "legendAgents": "Agentes",
@@ -24313,7 +24311,9 @@
       "settingDescription": "Los agentes arrancan solo cuando caben en memoria; los demás esperan su turno. Al apagarla arranca todo lo que esperaba.",
       "canceledNotice": "{{agent}} cancelado en la cola: no se inició.",
       "dismissCanceled": "Quitar aviso",
-      "canceledMark": "Cancelado"
+      "canceledMark": "Cancelado",
+      "queuedMark": "En cola",
+      "queuedFor": "En cola · {{minutes}} min"
     },
     "sidebar": {
       "home": "Inicio",

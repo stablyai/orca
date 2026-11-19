@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react'
-import { Ban, GitPullRequest } from 'lucide-react'
+import { Ban, GitPullRequest, Hourglass } from 'lucide-react'
+import { useNow } from '@/hooks/use-now'
 import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
@@ -21,16 +22,28 @@ import {
 } from '../pr-status/zotz-pr-status'
 import { archiveZotzConversation } from './zotz-archive'
 import { ZotzPrStatusIcon } from '../pr-status/ZotzPrStatusIcon'
+import { minutesSince } from '../agent-queue/zotz-memory-format'
 import type { Worktree } from '../../../../../shared/worktree/types'
 
 function StatusMark({
   status,
-  canceled
+  canceled,
+  queued
 }: {
   status: ZotzConversationStatus | null
   canceled: boolean
+  queued: boolean
 }): React.JSX.Element {
   const t = useTranslate()
+  if (queued) {
+    return (
+      <Hourglass
+        role="img"
+        aria-label={t('zotz.agentQueue.queuedMark', 'Queued')}
+        className="size-3 text-zotz-gh-pending"
+      />
+    )
+  }
   if (status && (status.state === 'working' || status.state === 'monitoring')) {
     return <ZotzWorkingRipple />
   }
@@ -97,7 +110,8 @@ export function ZotzConversationRow({
   repo,
   active,
   status,
-  canceled
+  canceled,
+  queuedSince
 }: {
   row: Row
   repo: Repo | undefined
@@ -105,8 +119,11 @@ export function ZotzConversationRow({
   status: ZotzConversationStatus | null
   /** Its only agent was canceled in the memory queue and never started. */
   canceled: boolean
+  /** When its oldest agent entered the memory queue; null when none waits. */
+  queuedSince: number | null
 }): React.JSX.Element {
   const t = useTranslate()
+  const now = useNow(30_000, queuedSince !== null)
   const pr = useZotzWorktreePr(row.worktree, repo)
   const prTone = pr ? zotzPrTone(pr.status) : null
   useArchiveOnMerge(row.worktree, pr?.status ?? null)
@@ -125,7 +142,7 @@ export function ZotzConversationRow({
       )}
     >
       <span className="mt-1 flex h-3 w-5 shrink-0 items-center justify-center">
-        <StatusMark status={status} canceled={canceled} />
+        <StatusMark status={status} canceled={canceled} queued={queuedSince !== null} />
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex min-w-0 items-center gap-2">
@@ -136,7 +153,16 @@ export function ZotzConversationRow({
           {row.branch && row.branch !== row.title ? (
             <span className="min-w-0 truncate font-mono">{row.branch}</span>
           ) : null}
-          {pr && prTone ? (
+          {queuedSince !== null ? (
+            <>
+              {row.branch && row.branch !== row.title ? <span aria-hidden>·</span> : null}
+              <span className="shrink-0 font-medium text-zotz-gh-pending">
+                {t('zotz.agentQueue.queuedFor', 'Queued · {{minutes}} min', {
+                  minutes: minutesSince(queuedSince, now)
+                })}
+              </span>
+            </>
+          ) : pr && prTone ? (
             <>
               {row.branch && row.branch !== row.title ? <span aria-hidden>·</span> : null}
               <GitPullRequest className="size-3 shrink-0" />

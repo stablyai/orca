@@ -13,11 +13,7 @@ const MINUTE = 60_000
 // A 16 GB machine with one agent running: 2.4 GB must stay free, so 6 GB available leaves 3.6 GB.
 const capacity: ZotzAgentCapacity = {
   availableBytes: 6 * GB,
-  minFreeBytes: 2.4 * GB,
-  agentBudgetBytes: 11.2 * GB,
-  committedAgentBytes: 2 * GB,
-  liveAgents: 1,
-  maxConcurrentAgents: 2
+  minFreeBytes: 2.4 * GB
 }
 
 function queueOf(
@@ -103,26 +99,5 @@ describe('scheduleNextZotzAgentTask', () => {
     }
     expect(admitted).toEqual(['s1', 's2', 's3'])
     expect(queue.tasks.map((task) => task.id)).toEqual(['big', 's4'])
-  })
-
-  it('does not pass the head when every slot is taken', () => {
-    const { decision } = scheduleNextZotzAgentTask(
-      queueOf([
-        ['a', 'manual', 1],
-        ['b', 'automation', 1]
-      ]),
-      { ...capacity, liveAgents: 2 },
-      0
-    )
-    expect(decision).toMatchObject({ kind: 'wait', head: { id: 'a' }, reason: 'concurrency' })
-  })
-
-  it('waits on the agents budget even when the machine has free memory', () => {
-    const { decision } = scheduleNextZotzAgentTask(
-      queueOf([['a', 'manual', 2]]),
-      { ...capacity, committedAgentBytes: 10 * GB },
-      0
-    )
-    expect(decision).toMatchObject({ kind: 'wait', reason: 'budget', reserved: false })
   })
 })

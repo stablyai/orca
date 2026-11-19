@@ -5,7 +5,7 @@ import { cn } from '@/lib/class-names'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { ZotzAgentQueueSnapshot } from '../../../../../shared/zotz/agent-queue/zotz-agent-queue-snapshot'
 import type { ZotzAgentTaskPriority } from '../../../../../shared/zotz/agent-queue/zotz-agent-queue'
-import { formatZotzGb } from './zotz-memory-format'
+import { formatZotzGb, minutesSince } from './zotz-memory-format'
 
 type Snapshot = ZotzAgentQueueSnapshot
 type Running = Snapshot['running'][number]
@@ -17,10 +17,6 @@ export type ZotzAgentQueueBoardProps = {
   onForceStart: (id: string) => void
   onCancel: (id: string) => void
   onOpenPane: (paneKey: string, worktreeId: string | null) => void
-}
-
-function minutesSince(from: number, to: number): number {
-  return Math.max(0, Math.round((to - from) / 60_000))
 }
 
 function priorityLabel(priority: ZotzAgentTaskPriority, t: Translate): string {
@@ -54,15 +50,9 @@ function MemoryBar({ snapshot }: { snapshot: Snapshot }): React.JSX.Element | nu
           })}
         </span>
         <span className="text-muted-foreground">
-          {t(
-            'zotz.agentQueue.board.limits',
-            '{{running}} of {{max}} agents · always keeps {{min}} GB free',
-            {
-              running: snapshot.running.length,
-              max: memory.maxConcurrentAgents,
-              min: formatZotzGb(memory.minFreeBytes)
-            }
-          )}
+          {t('zotz.agentQueue.board.keepsFree', 'Always keeps {{min}} GB free', {
+            min: formatZotzGb(memory.minFreeBytes)
+          })}
         </span>
       </div>
       <div className="relative flex h-2.5 overflow-hidden rounded-full bg-muted">

@@ -25888,9 +25888,7 @@
     "agentQueue": {
       "titleNext": "Queued · next to start",
       "title": "Queued · {{ahead}} ahead",
-      "waitConcurrency": "{{running}} of {{max}} agents are already working on this machine.",
       "waitMemory": "Needs ~{{need}} GB and {{free}} GB are free; Zotz always keeps {{min}} GB for the system.",
-      "waitBudget": "Agents already use {{used}} of their {{budget}} GB budget.",
       "waitPressure": "The machine is low on memory; nothing new starts until some is freed.",
       "waitStarting": "Checking memory…",
       "autoStart": "The agent starts on its own when there is room. Nothing is lost if you wait.",
@@ -25901,7 +25899,7 @@
         "priorityRemote": "Remote",
         "priorityAutomation": "Automation",
         "free": "{{free}} GB free of {{total}} GB",
-        "limits": "{{running}} of {{max}} agents · always keeps {{min}} GB free",
+        "keepsFree": "Always keeps {{min}} GB free",
         "minFreeMarker": "Always free",
         "legendSystem": "System and other apps",
         "legendAgents": "Agents",
@@ -25939,7 +25937,9 @@
       "settingDescription": "Agents start only when they fit in memory; the rest wait in line. Turning it off starts everything waiting.",
       "canceledNotice": "{{agent}} canceled in the queue: it did not start.",
       "dismissCanceled": "Dismiss",
-      "canceledMark": "Canceled"
+      "canceledMark": "Canceled",
+      "queuedMark": "Queued",
+      "queuedFor": "Queued · {{minutes}} min"
     },
     "sidebar": {
       "home": "Home",

@@ -11,9 +11,7 @@ export type ZotzAgentQueueSnapshot = {
     availableBytes: number
     pressure: ZotzMemoryPressure
     minFreeBytes: number
-    agentBudgetBytes: number
     perAgentMaxBytes: number
-    maxConcurrentAgents: number
     sampledAt: number
   } | null
   /** Agents with a live terminal; `state` splits In Progress (working) from Review (waiting on you). */

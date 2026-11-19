@@ -5,19 +5,14 @@ import {
   type ZotzQueuedAgentTask
 } from './zotz-agent-queue'
 
-/** What the machine can give agents right now. */
+/** What the machine can give agents right now: only memory limits them, never a head count. */
 export type ZotzAgentCapacity = {
-  /** Memory the OS reports as available now. */
+  /** Memory the OS reports as available now, minus what just-admitted agents will take. */
   availableBytes: number
   minFreeBytes: number
-  agentBudgetBytes: number
-  /** Memory held by live agents (running, paused or with a session still open in review). */
-  committedAgentBytes: number
-  liveAgents: number
-  maxConcurrentAgents: number
 }
 
-export type ZotzAgentWaitReason = 'concurrency' | 'memory' | 'budget'
+export type ZotzAgentWaitReason = 'memory'
 
 export type ZotzAgentSchedulingPolicy = {
   /** After waiting this long at the head, nothing may be admitted ahead of it. */
@@ -47,15 +42,7 @@ export function zotzAgentTaskWaitReason(
   task: Pick<ZotzQueuedAgentTask, 'estimatedBytes'>,
   capacity: ZotzAgentCapacity
 ): ZotzAgentWaitReason | null {
-  if (capacity.liveAgents >= capacity.maxConcurrentAgents) {
-    return 'concurrency'
-  }
-  if (capacity.availableBytes - task.estimatedBytes < capacity.minFreeBytes) {
-    return 'memory'
-  }
-  return capacity.committedAgentBytes + task.estimatedBytes > capacity.agentBudgetBytes
-    ? 'budget'
-    : null
+  return capacity.availableBytes - task.estimatedBytes < capacity.minFreeBytes ? 'memory' : null
 }
 
 function hasAged(
@@ -89,11 +76,9 @@ export function scheduleNextZotzAgentTask(
     }
   }
   const reserved = hasAged(head, policy, now)
-  // A full concurrency slot blocks every task alike, so passing the head would gain nothing.
-  const candidate =
-    reserved || headReason === 'concurrency'
-      ? undefined
-      : rest.find((task) => zotzAgentTaskWaitReason(task, capacity) === null)
+  const candidate = reserved
+    ? undefined
+    : rest.find((task) => zotzAgentTaskWaitReason(task, capacity) === null)
   if (!candidate) {
     return { decision: { kind: 'wait', head, reason: headReason, reserved }, queue }
   }

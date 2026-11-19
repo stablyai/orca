@@ -10,9 +10,7 @@ const SNAPSHOT: ZotzAgentQueueSnapshot = {
     availableBytes: 3.1 * GB,
     pressure: 'ok',
     minFreeBytes: 2.4 * GB,
-    agentBudgetBytes: 11.2 * GB,
     perAgentMaxBytes: 5.6 * GB,
-    maxConcurrentAgents: 2,
     sampledAt: 0
   },
   running: [
@@ -49,7 +47,7 @@ const task = (
   priority: 'manual' as const,
   label: 'zotz-docs',
   estimatedBytes: 3.1 * GB,
-  enqueuedAt: 0,
+  enqueuedAt: Date.now() - 20 * 60_000,
   position,
   waitReason
 })
@@ -66,11 +64,11 @@ export const nextWaitingForMemory = defineFixture({
   )
 })
 
-export const thirdWaitingForSlot = defineFixture({
+export const thirdUnderPressure = defineFixture({
   width: 520,
   render: () => (
     <ZotzQueuedPaneCard
-      task={task(3, 'concurrency')}
+      task={task(3, 'pressure')}
       snapshot={SNAPSHOT}
       onCancel={() => {}}
       onForceStart={() => {}}

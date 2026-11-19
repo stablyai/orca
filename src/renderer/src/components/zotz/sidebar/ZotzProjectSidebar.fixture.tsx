@@ -2,6 +2,7 @@ import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import ZotzProjectSidebar from './ZotzProjectSidebar'
+import { ZotzConversationRow } from './ZotzConversationRow'
 
 function repo(id: string, displayName: string): Repo {
   return { id, path: `/code/${id}`, displayName, badgeColor: '', addedAt: 1 }
@@ -65,6 +66,31 @@ export const projects = defineFixture({
   render: () => (
     <div className="flex h-[520px] flex-col bg-worktree-sidebar">
       <ZotzProjectSidebar />
+    </div>
+  )
+})
+
+const queuedWorktree = worktree('zotz', 'memory-limiter', 'Indicador de la cola')
+
+export const queuedConversation = defineFixture({
+  width: 300,
+  store: { repos: [zotz], worktreesByRepo: { zotz: [queuedWorktree] } },
+  render: () => (
+    <div className="bg-worktree-sidebar p-2">
+      <ZotzConversationRow
+        row={{
+          id: queuedWorktree.id,
+          worktree: queuedWorktree,
+          title: 'Indicador de la cola',
+          branch: 'memory-limiter',
+          lastActivityAt: 1
+        }}
+        repo={zotz}
+        active={false}
+        status={{ state: 'working', unread: false }}
+        canceled={false}
+        queuedSince={Date.now() - 20 * 60_000}
+      />
     </div>
   )
 })

@@ -4,3 +4,8 @@ const GIB = 1024 ** 3
 export function formatZotzGb(bytes: number): string {
   return (Math.max(0, bytes) / GIB).toFixed(1)
 }
+
+/** Whole minutes between two timestamps, never negative. */
+export function minutesSince(from: number, to: number): number {
+  return Math.max(0, Math.round((to - from) / 60_000))
+}
