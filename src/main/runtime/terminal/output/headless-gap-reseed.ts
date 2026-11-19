@@ -312,7 +312,7 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     state.recoveredHistoryCut ||=
       (snapshot.scrollbackLines ?? 0) >= this.providerHistoryLiveWindowRows()
     this.headlessHydrationState.set(ptyId, 'done')
-    this.providerSnapshotPreferredPtys.delete(ptyId)
+    this.endProviderScreenAuthority(ptyId)
     // No new text: observers confirm candidates that arrived while untrusted, with their own arrival times.
     this.observeHeadlessChunk(ptyId, state, '', Date.now())
     if (contextChangePending) {

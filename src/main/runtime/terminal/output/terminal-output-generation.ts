@@ -165,7 +165,7 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
       offset === previous ? (revision ?? 0) : (revision ?? 0) + 1
     )
     if (revision === undefined) {
-      if (offset !== previous) {
+      if (offset !== previous && this.providerSequenceInitializedPtys.has(ptyId)) {
         console.warn('[terminal] provider stream position re-anchored', {
           ptyId,
           drift: offset - previous
@@ -201,6 +201,10 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
         ? this.providerSequenceOffsetByPtyId.get(ptyId)
         : undefined
     const replacesExistingRuntimeGeneration = wasInitialized || sequenceAtSpawnStart > 0
+    // Early stamps of a continued session, or of a fresh spawn, belong to the stream being synced.
+    const keepsEarlyAnchor =
+      earlyAnchorOffset !== undefined &&
+      (providerSequence.generation === 'continued' || !replacesExistingRuntimeGeneration)
     const providerOffset =
       providerSequence.generation === 'reset'
         ? sequenceAtSpawnStart
@@ -244,8 +248,8 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
     this.ptyOutputSequenceById.set(ptyId, synchronizedSequence)
     this.providerSequenceInitializedPtys.add(ptyId)
     this.providerSequenceOffsetByPtyId.set(ptyId, providerOffset)
-    if (earlyAnchorOffset !== undefined && !replacesExistingRuntimeGeneration) {
-      // Early stamps belong to this spawn; rebase them by the same amount as its delivered bytes.
+    if (keepsEarlyAnchor) {
+      // Rebase early stamps by the same amount as the bytes they were counted against.
       this.providerSequenceOffsetByPtyId.set(
         ptyId,
         earlyAnchorOffset + synchronizedSequence - currentSequence
@@ -276,7 +280,7 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
         headless.outputSequence = synchronizedSequence
       })
     }
-    if (earlyAnchorOffset !== undefined && !replacesExistingRuntimeGeneration) {
+    if (keepsEarlyAnchor) {
       this.onProviderSequenceAnchored(ptyId)
     }
     return synchronizedSequence

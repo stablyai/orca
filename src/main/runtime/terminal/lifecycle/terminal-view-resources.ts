@@ -134,6 +134,13 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
 
   protected providerSnapshotsWithLiveModeTransition = new WeakSet<PtyProviderBufferSnapshot>()
 
+  /** A rebuilt model owns the screen again; a settled provider mode mirror would only rescan every chunk. */
+  protected endProviderScreenAuthority(ptyId: string): void {
+    this.providerSnapshotPreferredPtys.delete(ptyId)
+    this.providerModeTrackersByPtyId.delete(ptyId)
+    this.providerVisibleStateByPtyId.delete(ptyId)
+  }
+
   /** Forgets the provider frame facts of a PTY whose screen restarts or ends. */
   protected forgetProviderVisibleState(ptyId: string): void {
     this.providerVisibleStateByPtyId.delete(ptyId)
