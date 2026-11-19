@@ -655,6 +655,20 @@ import {
 } from './orchestration/orchestration-peer-mail-params'
 import { RequestShowParams } from './orchestration/orchestration-runs-mutation-request-show-params'
 import {
+  RoomBotCreateParams,
+  RoomCreateParams,
+  RoomDeleteParams,
+  RoomEnsureMainBotParams,
+  RoomListParams,
+  RoomLogParams,
+  RoomMemberAddParams,
+  RoomMemberModelParams,
+  RoomMemberRemoveParams,
+  RoomPostParams,
+  RoomSendParams,
+  RoomShowParams
+} from './orchestration-rooms-params'
+import {
   RunCreateParams,
   RunCurrentParams,
   RunListParams,
@@ -1838,6 +1852,18 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.reply': ReplyParams,
   'orchestration.requestShow': RequestShowParams,
   'orchestration.reset': ResetParams,
+  'orchestration.roomBotCreate': RoomBotCreateParams,
+  'orchestration.roomCreate': RoomCreateParams,
+  'orchestration.roomDelete': RoomDeleteParams,
+  'orchestration.roomEnsureMainBot': RoomEnsureMainBotParams,
+  'orchestration.roomList': RoomListParams,
+  'orchestration.roomLog': RoomLogParams,
+  'orchestration.roomMemberAdd': RoomMemberAddParams,
+  'orchestration.roomMemberRemove': RoomMemberRemoveParams,
+  'orchestration.roomMemberSetModel': RoomMemberModelParams,
+  'orchestration.roomPost': RoomPostParams,
+  'orchestration.roomSend': RoomSendParams,
+  'orchestration.roomShow': RoomShowParams,
   'orchestration.run': RunParams,
   'orchestration.runCreate': RunCreateParams,
   'orchestration.runCurrent': RunCurrentParams,

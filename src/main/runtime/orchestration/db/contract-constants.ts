@@ -6,4 +6,7 @@ export function federatedStubHomeRunId(dispatchId: string): string {
 
 export const LEGACY_CONTRACT_VERSION = 0
 
-export const SCHEMA_VERSION = 48
+// v49: group-chat rooms (rooms, room_members, room_log).
+// v50: rooms remember the worktree selector admin tools spawn new bots under.
+// v51: room members keep a durable busy/failed state for the chat UI.
+export const SCHEMA_VERSION = 51

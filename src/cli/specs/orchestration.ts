@@ -1,6 +1,7 @@
 import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
 import type { CommandSpec } from '../discovery/command-spec'
 import { ORCHESTRATION_GATE_COMMAND_SPECS } from './orchestration-gate-specs'
+import { ORCHESTRATION_ROOM_COMMAND_SPECS } from './orchestration-room-specs'
 import { ORCHESTRATION_WORKER_COMMAND_SPECS } from './orchestration-worker-specs'
 
 const REPLY_FLAGS = ['id', 'body', 'body-file', 'run', 'from', 'on', 'retry-request']
@@ -48,6 +49,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca orchestration run-show --id <run_id> [--removed] [--cursor <cursor>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'id', 'removed', 'cursor']
   },
+  ...ORCHESTRATION_ROOM_COMMAND_SPECS,
   {
     path: ['orchestration', 'send'],
     summary: 'Send an inter-agent message',

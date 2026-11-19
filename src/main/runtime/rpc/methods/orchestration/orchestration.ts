@@ -12,6 +12,7 @@ import { ORCHESTRATION_ASK_METHODS } from './messaging/ask-methods'
 import { ORCHESTRATION_GATE_METHODS } from './gates/gates'
 import { ORCHESTRATION_RESET_METHODS } from './runs/reset-methods'
 import { ORCHESTRATION_CALLER_METHODS } from './caller-show'
+import { ORCHESTRATION_ROOM_METHODS } from './rooms/room-methods'
 import type { OrchestrationMethodAccessDeclaration } from './access/orchestration-method-access'
 
 // Every orchestration method reads the authority restored at startup.
@@ -28,5 +29,6 @@ export const ORCHESTRATION_METHODS = requiringOrcadFeature('orchestration', [
   ...ORCHESTRATION_ASK_METHODS,
   ...ORCHESTRATION_GATE_METHODS,
   ...ORCHESTRATION_RESET_METHODS,
-  ...ORCHESTRATION_CALLER_METHODS
+  ...ORCHESTRATION_CALLER_METHODS,
+  ...ORCHESTRATION_ROOM_METHODS
 ] satisfies readonly { readonly orchestrationAccess: OrchestrationMethodAccessDeclaration }[])

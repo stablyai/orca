@@ -17,6 +17,9 @@ import { migrateV43 } from './migrate-v43'
 import { migrateV44 } from './migrate-v44'
 import { migrateV45 } from './migrate-v45'
 import { migrateV46 } from './migrate-v46'
+import { migrateV49 } from './migrate-v49'
+import { migrateV50 } from './migrate-v50'
+import { migrateV51 } from './migrate-v51'
 import { migrateV47 } from './migrate-v47'
 import { migrateV48 } from './migrate-v48'
 import { DROP_REMOVED_WORK_TRIGGERS_SQL } from '../reset/removed-orchestration-work-store'
@@ -53,6 +56,9 @@ export function migrate(this: OrchestrationDb): void {
     migrateV44.call(this, current)
     migrateV45.call(this, current)
     migrateV46.call(this, current)
+    migrateV49.call(this, current)
+    migrateV50.call(this, current)
+    migrateV51.call(this, current)
     migrateV47.call(this, current)
     migrateV48.call(this, current)
     this.createMailboxDeliveryIndexesIfPossible()
