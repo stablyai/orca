@@ -22508,8 +22508,8 @@
         "opensAntigravitySettings": "Opens Settings → Accounts → Antigravity",
         "signIn": "Sign in",
         "signsInClaudeAccount": "Signs in this Claude account",
-        "runsCommandThenSlash": "Runs {{command}} in a terminal. Type {{slashCommand}} there to sign in.",
-        "runsCommand": "Runs {{command}} in a terminal"
+        "runsCommand": "Runs {{command}} in a terminal",
+        "thenSlashCommand": "After Sign in, type {{slashCommand}} in the terminal."
       }
     },
     "tab": {

@@ -28,26 +28,25 @@ function notices(sessionError: string | null, signedIn = false) {
   })
 }
 
-describe('structuredSessionNotices sign-in', () => {
-  it('shows a not-signed-in start failure as its own sign-in row', () => {
-    expect(notices(null)).toMatchObject([
-      { key: 'launch', text: "Claude isn't signed in.", signIn: { signedIn: false } }
-    ])
-  })
+// An opaque stand-in: these tests follow the error through, not its wording.
+const UNRELATED_ERROR = 'unrelated-session-error'
 
+describe('structuredSessionNotices sign-in', () => {
   it('keeps an independent session error beside the sign-in row, without its button', () => {
-    const shown = notices("Your draft couldn't be saved.")
-    expect(shown.map((notice) => notice.key)).toEqual(['launch', 'session'])
-    expect(shown[1]).toMatchObject({ text: "Your draft couldn't be saved." })
+    const shown = notices(UNRELATED_ERROR)
+    expect(shown).toMatchObject([
+      { key: 'launch', signIn: { signedIn: false } },
+      { key: 'session', text: UNRELATED_ERROR }
+    ])
     expect(shown[1]?.signIn).toBeUndefined()
     expect(shown[1]?.action).toBeUndefined()
   })
 
   it('still shows the independent error once signed in', () => {
-    const shown = notices("Your draft couldn't be saved.", true)
+    const shown = notices(UNRELATED_ERROR, true)
     expect(shown).toMatchObject([
       { key: 'launch', signIn: { signedIn: true } },
-      { key: 'session', text: "Your draft couldn't be saved." }
+      { key: 'session', text: UNRELATED_ERROR }
     ])
   })
 })

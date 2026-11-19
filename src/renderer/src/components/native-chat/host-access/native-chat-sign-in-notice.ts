@@ -16,6 +16,8 @@ export type NativeChatSignInButton = {
 export type NativeChatSignInNoticeView = {
   signedIn: boolean
   button: NativeChatSignInButton | null
+  /** A step Sign in can't do itself, said in the row so it never hides in a tooltip. */
+  followUp?: string
 }
 
 export function nativeChatNotSignedInSentence(agentName: string, t: Translate = translate): string {
@@ -62,6 +64,9 @@ export function nativeChatSignInNoticeView(
   if (signIn.signedIn) {
     return { signedIn: true, button: null }
   }
+  // Pi and OMP open their CLI; the user still types its login command there.
+  const slashCommand =
+    signIn.loginCommand && entry && 'slashCommand' in entry ? entry.slashCommand : null
   return {
     signedIn: false,
     button: {
@@ -71,7 +76,16 @@ export function nativeChatSignInNoticeView(
       description: signInDescription(entry, signIn, t),
       busy: signIn.signingIn,
       onClick: signIn.signIn
-    }
+    },
+    ...(slashCommand
+      ? {
+          followUp: t(
+            'components.native-chat.signInNotice.thenSlashCommand',
+            'After Sign in, type {{slashCommand}} in the terminal.',
+            { slashCommand }
+          )
+        }
+      : {})
   }
 }
 
@@ -88,13 +102,7 @@ function signInDescription(
   }
   // Claude's system login is a wrapper script; name the command the user would recognize.
   const command = entry?.agent === 'claude' ? entry.loginCommand.join(' ') : signIn.loginCommand
-  return entry && 'slashCommand' in entry
-    ? t(
-        'components.native-chat.signInNotice.runsCommandThenSlash',
-        'Runs {{command}} in a terminal. Type {{slashCommand}} there to sign in.',
-        { command, slashCommand: entry.slashCommand }
-      )
-    : t('components.native-chat.signInNotice.runsCommand', 'Runs {{command}} in a terminal', {
-        command
-      })
+  return t('components.native-chat.signInNotice.runsCommand', 'Runs {{command}} in a terminal', {
+    command
+  })
 }

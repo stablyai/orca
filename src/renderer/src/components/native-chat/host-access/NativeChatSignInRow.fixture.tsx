@@ -7,7 +7,7 @@ import { MessageRow } from '../messages/rows/NativeChatMessageRow'
 import { NativeChatHostSetupContext, type NativeChatHostSetup } from './native-chat-host-setup'
 import type { AgentSessionAccountKind } from '../../../../../shared/agent-session/failures/agent-session-availability'
 
-type FixtureAgent = 'antigravity' | 'claude' | 'codex' | 'opencode'
+type FixtureAgent = 'antigravity' | 'claude' | 'codex' | 'opencode' | 'pi' | 'omp'
 type FixtureState = 'signedOut' | 'signingIn' | 'signedIn'
 
 const AGENTS: Record<
@@ -46,10 +46,31 @@ const AGENTS: Record<
     loginCommand: 'opencode auth login',
     states: ['signedOut', 'signingIn'],
     oldSentence: 'Sign in to OpenCode with `opencode auth login` on the computer running this chat.'
+  },
+  pi: {
+    label: 'Pi',
+    loginCommand: 'pi',
+    states: ['signedOut', 'signingIn'],
+    oldSentence:
+      'Sign in to Pi by running `pi` and using `/login` on the computer running this chat.'
+  },
+  omp: {
+    label: 'OMP',
+    loginCommand: 'omp',
+    states: ['signedOut', 'signingIn'],
+    oldSentence:
+      'Sign in to OMP by running `omp` and using `/login` on the computer running this chat.'
   }
 }
 
-const AGENT_IDS: readonly FixtureAgent[] = ['antigravity', 'claude', 'codex', 'opencode']
+const AGENT_IDS: readonly FixtureAgent[] = [
+  'antigravity',
+  'claude',
+  'codex',
+  'opencode',
+  'pi',
+  'omp'
+]
 
 function setupFor(agent: FixtureAgent, state: FixtureState): NativeChatHostSetup {
   const { loginCommand } = AGENTS[agent]
@@ -200,6 +221,15 @@ export const antigravity300 = defineFixture({
 export const claude300 = defineFixture({ width: 300, render: () => <Scene agent="claude" /> })
 export const codex300 = defineFixture({ width: 300, render: () => <Scene agent="codex" /> })
 export const opencode300 = defineFixture({ width: 300, render: () => <Scene agent="opencode" /> })
+
+export const pi520 = defineFixture({ width: 520, render: () => <Scene agent="pi" /> })
+export const omp520 = defineFixture({ width: 520, render: () => <Scene agent="omp" /> })
+export const pi300 = defineFixture({ width: 300, render: () => <Scene agent="pi" /> })
+export const omp300 = defineFixture({ width: 300, render: () => <Scene agent="omp" /> })
+export const pi300Text15 = defineFixture({
+  width: 300,
+  render: () => <Scene agent="pi" fontSize={15} />
+})
 
 export const antigravity300Text15 = defineFixture({
   width: 300,

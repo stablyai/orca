@@ -51,7 +51,9 @@ export function NativeChatSignInRow({
       >
         {view.signedIn
           ? t('components.native-chat.signInNotice.signedIn', 'Signed in. Send again.')
-          : sentence}
+          : view.followUp
+            ? `${sentence} ${view.followUp}`
+            : sentence}
       </p>
       {view.button && !view.signedIn ? <SignInButton button={view.button} /> : null}
     </div>
