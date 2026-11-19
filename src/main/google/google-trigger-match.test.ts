@@ -62,6 +62,8 @@ describe('Gmail from= rules match the real sender address', () => {
     expect(fromBoss('boss@gmail.com, attacker@gmail.com')).toBe(false)
     expect(fromBoss('Boss <boss@gmail.com>, Other <other@gmail.com>')).toBe(false)
     expect(fromBoss('boss@gmail.com, "other"@gmail.com')).toBe(false)
+    expect(fromBoss('boss@gmail.com, <attacker@gmail.com')).toBe(false)
+    expect(fromBoss('boss@gmail.com, "attacker')).toBe(false)
   })
 
   it('still needs Gmail to verify the sender', () => {

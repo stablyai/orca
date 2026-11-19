@@ -1,7 +1,8 @@
 // Address headers per RFC 5322: display names may be quoted (with \-escapes) and hold commas, @ and
 // <; (comments) and <angle-addrs> may hold commas too. Only the angle-addr, or a bare address, is real.
 
-type Scanned = { outside: string; lastAngle: string | null }
+// `blank`: nothing but whitespace and comments; `unclosed`: a quote, comment or <...> never ends.
+type Scanned = { outside: string; lastAngle: string | null; blank: boolean; unclosed: boolean }
 
 // Walks one header, dropping comments, keeping quoted text where it stands, and calling `at` for
 // each char outside quotes, comments and angle brackets.
@@ -11,6 +12,7 @@ function scan(text: string, at?: (index: number) => void): Scanned {
   let angle: string | null = null
   let quoted = false
   let comment = 0
+  let blank = true
   const keep = (part: string) => {
     if (angle === null) {
       outside += part
@@ -20,6 +22,9 @@ function scan(text: string, at?: (index: number) => void): Scanned {
   }
   for (let i = 0; i < text.length; i++) {
     const char = text[i]
+    if (comment === 0 && char !== '(' && char.trim()) {
+      blank = false
+    }
     if (comment > 0) {
       if (char === '\\') {
         i += 1
@@ -53,7 +58,7 @@ function scan(text: string, at?: (index: number) => void): Scanned {
       at?.(i)
     }
   }
-  return { outside, lastAngle }
+  return { outside, lastAngle, blank, unclosed: quoted || comment > 0 || angle !== null }
 }
 
 /** A comma-separated address list, commas inside quoted names kept: `"Lee, Kim" <lk@x.com>, a@x.com`. */
@@ -69,12 +74,7 @@ export function splitAddresses(header: string | undefined): string[] {
   })
   entries.push(text.slice(start))
   // RFC 5322 allows empty and comment-only entries; they name no one.
-  return entries
-    .map((entry) => entry.trim())
-    .filter((entry) => {
-      const { outside, lastAngle } = scan(entry)
-      return lastAngle !== null || outside.trim().length > 0
-    })
+  return entries.map((entry) => entry.trim()).filter((entry) => !scan(entry).blank)
 }
 
 /**
@@ -82,7 +82,10 @@ export function splitAddresses(header: string | undefined): string[] {
  * from the display name, so `"boss@x.com" <eve@x.com>` is eve@x.com.
  */
 export function mailboxAddress(entry: string): string | null {
-  const { outside, lastAngle } = scan(entry)
+  const { outside, lastAngle, unclosed } = scan(entry)
+  if (unclosed) {
+    return null
+  }
   // A group (`team: a@x.com;`) prefixes its name; an obsolete route (`<@relay:a@x.com>`) its hops.
   const raw = lastAngle ?? outside.replace(/;\s*$/, '')
   const address = raw
