@@ -386,6 +386,7 @@ import {
   FileSearch,
   FileTreePath,
   FileUnwatch,
+  PrepareAgentImages,
   ResolveTerminalPath,
   ServerDirectoryBrowse
 } from './filesystem/files-params'
@@ -1474,6 +1475,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'files.openDiff': FileOpenDiff,
   'files.pathsExist': FilePathsExist,
   'files.read': FileOpen,
+  'files.prepareAgentImages': PrepareAgentImages,
   'files.readChatImage': ChatImageRead,
   'files.readChunk': FileReadChunk,
   'files.readDir': FileDirRead,

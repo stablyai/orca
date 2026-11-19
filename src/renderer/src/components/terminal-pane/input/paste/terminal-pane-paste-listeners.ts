@@ -1,3 +1,4 @@
+import { prepareTerminalAgentImagePaths } from '@/runtime/files/agent-image-preparation'
 import { useAppStore } from '../../../../store/index'
 import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { resolveTerminalPasteRuntimeEnvironmentId } from './terminal-paste-runtime'
@@ -38,7 +39,8 @@ export function registerTerminalPanePasteListeners({
   isMac: boolean
   shortcutPlatform: NodeJS.Platform
 }): () => void {
-  const { keybindings, managerRef, paneTransportsRef, setTerminalError, worktreeId } = controller
+  const { keybindings, managerRef, paneTransportsRef, setTerminalError, worktreeId, tabId } =
+    controller
   const {
     createPaneClipboardCopiedFiles,
     executePanePasteText,
@@ -185,9 +187,20 @@ export function registerTerminalPanePasteListeners({
       worktreeId,
       paneTransportsRef.current.get(pane.id)
     )
+    const imageTargetPtyId = paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
     void pasteTerminalClipboard({
       readClipboardText: window.api.ui.readClipboardText,
       saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
+      prepareImagePath: async (path) =>
+        (
+          await prepareTerminalAgentImagePaths(
+            tabId,
+            pane.leafId,
+            imageTargetPtyId,
+            [path],
+            runtimeEnvironmentId
+          )
+        )[0] ?? path,
       copiedFiles: createPaneClipboardCopiedFiles(pane),
       connectionId,
       runtimeEnvironmentId,

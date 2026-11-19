@@ -1,3 +1,4 @@
+import { prepareTerminalAgentImagePaths } from '@/runtime/files/agent-image-preparation'
 import { useAppStore } from '../../../../store/index'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
@@ -152,9 +153,20 @@ export function createTerminalPanePasteExecution(
       paneTransportsRef.current.get(pane.id)
     )
     const activeElementAtDispatch = document.activeElement
+    const imageTargetPtyId = paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
     void pasteTerminalClipboard({
       readClipboardText,
       saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
+      prepareImagePath: async (path) =>
+        (
+          await prepareTerminalAgentImagePaths(
+            tabId,
+            pane.leafId,
+            imageTargetPtyId,
+            [path],
+            runtimeEnvironmentId
+          )
+        )[0] ?? path,
       copiedFiles: createPaneClipboardCopiedFiles(pane),
       connectionId,
       runtimeEnvironmentId,

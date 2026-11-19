@@ -33,6 +33,11 @@ import {
   whileStructuredAgentSessionHandingOver
 } from './structured-agent-session-handing-over'
 
+import {
+  AgentImageFitError,
+  fitAgentMessageImages
+} from '../../agent-images/agent-image-fit-client'
+
 /** One input operation runs provider work outside ordering and commits its result inside it. */
 export type StructuredAgentSessionPendingHandover = {
   run: (commit: (resolve: () => Promise<void>) => Promise<void>) => Promise<void>
@@ -249,10 +254,10 @@ async function dispatchSafely(
 ): Promise<AgentSessionDispatchOutcome> {
   const { admitFreshInput } = ctx
   try {
-    const outcome = await ctx.adapter.dispatch({
+    return await ctx.adapter.dispatch({
       sessionId: ctx.sessionId,
       clientMessageId,
-      body,
+      body: await fitAgentMessageImages(body, signal),
       ...(executionOptions ? { executionOptions } : {}),
       ...(signal ? { signal } : {}),
       ...(admitFreshInput
@@ -267,7 +272,6 @@ async function dispatchSafely(
       onInputPreparation: ctx.recordRanOptions?.prepareInput,
       onExecutionSnapshot: ctx.recordRanOptions?.checkpoint
     })
-    return outcome
   } catch (error) {
     if (error instanceof StructuredAgentSessionInputNotAdmitted) {
       throw error
@@ -275,6 +279,15 @@ async function dispatchSafely(
     // This signal affects preparation only; its original reason proves no provider write.
     if (isAbortSignalReason(signal, error)) {
       throw new StructuredAgentSessionInputNotAdmitted(cancelledDispatch(queued))
+    }
+    if (error instanceof AgentImageFitError) {
+      return {
+        state: 'rejected',
+        ...agentSessionFailureWords(agentSessionFailureFact('attachmentUnreadable'), {
+          ...ctx.failureTextContext,
+          surface: 'rejection'
+        })
+      }
     }
     if (isAgentSessionOptionRejectedError(error)) {
       return {

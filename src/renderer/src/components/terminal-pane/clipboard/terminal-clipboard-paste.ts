@@ -22,6 +22,7 @@ type PasteTerminalClipboardDeps = {
   readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
   saveClipboardImageAsTempFile: SaveClipboardImageAsTempFile
   copiedFiles?: TerminalClipboardCopiedFiles
+  prepareImagePath?: (path: string) => Promise<string>
   pasteText: (
     text: string,
     options?: TerminalPasteTextOptions
@@ -50,6 +51,7 @@ export async function pasteTerminalClipboard({
   readClipboardText,
   saveClipboardImageAsTempFile,
   copiedFiles,
+  prepareImagePath,
   pasteText,
   connectionId,
   runtimeEnvironmentId,
@@ -101,7 +103,8 @@ export async function pasteTerminalClipboard({
     if (!filePath) {
       return { status: 'skipped', reason: 'empty' }
     }
-    const result = await pasteText(filePath, {
+    const preparedPath = prepareImagePath ? await prepareImagePath(filePath) : filePath
+    const result = await pasteText(preparedPath, {
       // Generated image paths must bypass the Ctrl+C stale-text path.
       forceBracketedPaste: true,
       recoverImagePasteWebglAtlas: true

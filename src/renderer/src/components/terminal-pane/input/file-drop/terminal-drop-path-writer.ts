@@ -1,3 +1,4 @@
+import { prepareTerminalAgentImagePaths } from '@/runtime/files/agent-image-preparation'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { separateImagePasteFromFollowingText } from '../../../../../../shared/terminal/input/image-paste-following-text'
 import { shellEscapePath } from '../../../../../../shared/shell/launch/shell-path-quoting'
@@ -28,6 +29,7 @@ type TerminalDropPathWriteResult = {
 
 export async function writeTerminalDropPathsToCapturedTarget({
   dropTarget,
+  tabId,
   manager,
   paneTransports,
   paths,
@@ -35,12 +37,31 @@ export async function writeTerminalDropPathsToCapturedTarget({
   operationTimeoutMs = TERMINAL_PASTE_OPERATION_TIMEOUT_MS
 }: {
   dropTarget: CapturedTerminalDropTarget
+  tabId?: string
   manager: PaneManager
   paneTransports: Map<number, PtyTransport>
   paths: readonly string[]
   targetShell: TerminalTargetShell
   operationTimeoutMs?: number
 }): Promise<TerminalDropPathWriteResult> {
+  if (tabId && paths.some(isImageDropPath)) {
+    try {
+      paths = await prepareTerminalAgentImagePaths(
+        tabId,
+        dropTarget.leafId,
+        dropTarget.ptyId,
+        paths,
+        dropTarget.transport.getRuntimeEnvironmentId?.()
+      )
+    } catch {
+      return {
+        sentAnyPath: false,
+        targetCurrent: true,
+        pathsWritten: 0,
+        failureReason: 'write-rejected'
+      }
+    }
+  }
   let sentAnyPath = false
   let pathsWritten = 0
   for (const [index, path] of paths.entries()) {

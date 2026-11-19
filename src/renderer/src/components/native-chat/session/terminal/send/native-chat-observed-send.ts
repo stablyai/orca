@@ -18,7 +18,8 @@ export type NativeChatObservedWrite = {
 export function sendNativeChatObservedWrites(
   ptyId: string,
   writes: readonly NativeChatObservedWrite[],
-  options: NativeChatSendOptions & { stopOnUnconfirmed?: boolean; settleDelayMs?: number }
+  options: NativeChatSendOptions & { stopOnUnconfirmed?: boolean; settleDelayMs?: number },
+  prepareWrites?: () => Promise<readonly NativeChatObservedWrite[]>
 ) {
   // Dismiss answer cards only after provider acknowledgment.
   const writeOptions = options.onDeliverySettled
@@ -102,16 +103,36 @@ export function sendNativeChatObservedWrites(
           whenReady(write, send)
         }
       }
-      clearThenWrite(
-        ptyId,
-        options,
-        delay,
-        () => {
-          lineWasEmpty = readNativeChatInputLine(options.readInputLine) === ''
-          writeAt(0)
-        },
-        () => markSubmitted('not-submitted')
-      )
+      const begin = (): void => {
+        if (isCancelled()) {
+          return
+        }
+        clearThenWrite(
+          ptyId,
+          options,
+          delay,
+          () => {
+            lineWasEmpty = readNativeChatInputLine(options.readInputLine) === ''
+            writeAt(0)
+          },
+          () => markSubmitted('not-submitted')
+        )
+      }
+      if (prepareWrites) {
+        void prepareWrites().then(
+          (prepared) => {
+            writes = prepared
+            begin()
+          },
+          () => {
+            options.onWriteRejected?.()
+            options.onDeliverySettled?.(false)
+            markSubmitted('not-submitted')
+          }
+        )
+      } else {
+        begin()
+      }
     },
     { onCancelUnsubmitted: () => clearUnsubmittedAgentInput(ptyId, options) }
   )
