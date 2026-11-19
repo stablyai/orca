@@ -66,14 +66,13 @@ function tabArraysBuiltForAbsentSshTarget(worktrees: number): number {
     const tabs = sessionWithTabs(worktreeId, toAppSshPtyId('other-target', `pty-${index}`))
       .tabsByWorktree[worktreeId]!
     // Array#map reads `constructor` to build its result; plain iteration does not.
-    tabsByWorktree[worktreeId] = new Proxy(tabs, {
-      get(target, key, receiver) {
-        if (key === 'constructor') {
-          built += 1
-        }
-        return Reflect.get(target, key, receiver)
+    Object.defineProperty(tabs, 'constructor', {
+      get: () => {
+        built += 1
+        return Array
       }
     })
+    tabsByWorktree[worktreeId] = tabs
   }
   const session = { ...getDefaultWorkspaceSession(), tabsByWorktree }
   expect(migrateWorkspaceSessionSshTargetId(session, 'old-target', 'new-target')).toBeNull()
