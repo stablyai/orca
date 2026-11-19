@@ -12,11 +12,7 @@ import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import { sameAgentStatusTerminalOwner } from '../../../shared/agent-status/identity/agent-status-terminal-owner'
-import {
-  cliWriterTopology,
-  OPEN_CODE_WRITER_TOPOLOGY,
-  type CliWriterTopology
-} from './cli-writer-topology'
+import { cliWriterTopology, type CliWriterTopology } from './cli-writer-topology'
 import {
   readTmuxHookPane,
   readTmuxHookPaneHint
@@ -49,17 +45,12 @@ export function retainOpenCodeWriterTopology(
           ('opencodeTui' in body && body.opencodeTui === 1)
         ? 'shared'
         : 'unverifiable'
-  Object.defineProperty(event.providerSession, OPEN_CODE_WRITER_TOPOLOGY, { value: topology })
+  event.executionHost = topology
 }
 
 /** A tmux server outlives the pane it was started from, so nothing it publishes is pane-owned. */
 export function tmuxCliWriterEvent<T extends AgentHookEventPayload>(row: T): T {
-  if (!row.providerSession) {
-    return row
-  }
-  const providerSession = { ...row.providerSession }
-  retainTmuxWriterTopology(providerSession)
-  return { ...row, providerSession }
+  return row.providerSession ? { ...row, executionHost: 'shared' } : row
 }
 
 /** A hook that ran inside a tmux pane reaches this pane through a client; its server outlives the
@@ -79,17 +70,9 @@ export function retainTmuxHookWriterTopology(
   const inherited = readTmuxHookPaneHint(
     env.TMUX_PANE && env.TMUX ? `${env.TMUX_PANE} ${env.TMUX.split(',')[0]}` : undefined
   )
+  // A decided binding keeps its topology.
   if (tmux && !(inherited?.pane === tmux.pane && inherited.socket === tmux.socket)) {
-    retainTmuxWriterTopology(event.providerSession)
-  }
-}
-
-/** A binding the pane reaches through a tmux client; a decided binding keeps its topology. */
-export function retainTmuxWriterTopology(
-  binding: NonNullable<AgentHookEventPayload['providerSession']>
-): void {
-  if (!(OPEN_CODE_WRITER_TOPOLOGY in binding) && Object.isExtensible(binding)) {
-    Object.defineProperty(binding, OPEN_CODE_WRITER_TOPOLOGY, { value: 'shared' })
+    event.executionHost ??= 'shared'
   }
 }
 
@@ -131,7 +114,17 @@ export function deriveCliWriterTopology<T extends AgentHookEventPayload>(
   sender: AgentProcessIdentity | undefined = row.agentPresence?.process
 ): T {
   const binding = row.providerSession
-  if (!binding || !(OPEN_CODE_WRITER_TOPOLOGY in binding)) {
+  // The host follows the conversation's binding: a row that carries the baseline's own binding
+  // carries its host.
+  if (
+    binding &&
+    row.executionHost === undefined &&
+    baseline?.providerSession === binding &&
+    baseline.executionHost !== undefined
+  ) {
+    row = { ...row, executionHost: baseline.executionHost }
+  }
+  if (!binding || row.executionHost === undefined) {
     if (
       binding &&
       baseline &&
@@ -166,10 +159,12 @@ export function deriveCliWriterTopology<T extends AgentHookEventPayload>(
     return row
   }
   // A tmux host outlives an unverified writer too; only an unverified pane-owned claim is dropped.
-  if (binding[OPEN_CODE_WRITER_TOPOLOGY] === 'shared') {
+  if (row.executionHost === 'shared') {
     return row
   }
-  return { ...row, providerSession: { ...binding } }
+  const unverified = { ...row, providerSession: { ...binding } }
+  delete unverified.executionHost
+  return unverified
 }
 
-export { cliWriterTopology, OPEN_CODE_WRITER_TOPOLOGY }
+export { cliWriterTopology }

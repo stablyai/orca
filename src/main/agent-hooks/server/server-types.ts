@@ -84,8 +84,6 @@ export type PersistedAgentHookEventPayload = Omit<
   | 'replyCandidate'
 > & {
   launchTokenHash?: string
-  /** A tmux or shared server runs this conversation; restores the binding's topology on hydration. */
-  sharedHost?: true
 }
 
 export type PersistedAgentHookAuthorityCommitment = {

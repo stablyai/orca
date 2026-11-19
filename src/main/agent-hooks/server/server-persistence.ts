@@ -19,7 +19,6 @@ import { pruneAgentExits, serializeAgentExits } from './agent-exit-evidence'
 import { LastStatusStore } from './last-status-store'
 import { KeyedDeadlines } from '../../../shared/collections/keyed-deadlines'
 import { rowsOf, selectedStatusEntries } from './last-status-saved-rows'
-import { cliWriterTopology } from './cli-writer-topology'
 import { nextRetryDelayMs } from '../../sqlite/row-cache/row-cache-failure'
 
 export abstract class AgentHookServerPersistence extends AgentHookServerHydration {
@@ -90,6 +89,8 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         // Full replies serve this runtime's run records only.
         acceptedReply: _acceptedReply,
         launchToken: _launchToken,
+        // Only a shared host outlives the restart; a pane-owned claim is proven again by its hook.
+        executionHost: _executionHost,
         ...persistedPayload
       } = enrichedPayload
       const launchTokenHash = this.hydratedLaunchTokenHashByPaneKey.get(paneKey)
@@ -99,7 +100,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         ...persistedPayload,
         payload: persistedStatus,
         ...(launchTokenHash ? { launchTokenHash } : {}),
-        ...(cliWriterTopology(enrichedPayload) === 'shared' ? { sharedHost: true as const } : {})
+        ...(enrichedPayload.executionHost === 'shared' ? { executionHost: 'shared' as const } : {})
       }
       const commitment = this.toAuthorityEvidence(persistedPayload, launchTokenHash)
       if (commitment && !conflictedCommitments.has(paneKey)) {

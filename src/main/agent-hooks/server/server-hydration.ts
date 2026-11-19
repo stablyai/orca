@@ -1,4 +1,3 @@
-import { retainTmuxWriterTopology } from './cli-writer-observation'
 import {
   admitLegacyAgentStatus,
   clearLegacyAgentStatuses
@@ -99,15 +98,15 @@ export abstract class AgentHookServerHydration extends AgentHookServerTabCleanup
           : { ...(rawEntry as Record<string, unknown>), paneKey: resolvedPaneKey }
       const entry = sanitizeHydratedEntry(resolvedPaneKey, rawResolvedEntry)
       if (entry && (entry.paneSleep || entry.receivedAt >= ttlCutoff)) {
-        // The binding's topology is runtime metadata; a shared host still runs this conversation.
+        // A shared host still runs this conversation after the restart.
         if (
           entry.providerSession &&
           typeof rawResolvedEntry === 'object' &&
           rawResolvedEntry !== null &&
-          'sharedHost' in rawResolvedEntry &&
-          rawResolvedEntry.sharedHost === true
+          'executionHost' in rawResolvedEntry &&
+          rawResolvedEntry.executionHost === 'shared'
         ) {
-          retainTmuxWriterTopology(entry.providerSession)
+          entry.executionHost = 'shared'
         }
         const launchTokenHash = readPersistedLaunchTokenHash(rawResolvedEntry)
         if (launchTokenHash) {

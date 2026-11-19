@@ -5,11 +5,7 @@ import { normalizeHookPayload } from '../../../shared/agent-hook-listener/normal
 import { parseFormEncodedBody } from '../../../shared/agent-hook-listener/request-body'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
-import {
-  cliWriterTopology,
-  retainTmuxWriterTopology,
-  type CliWriterObservation
-} from './cli-writer-observation'
+import { cliWriterTopology, type CliWriterObservation } from './cli-writer-observation'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
 import {
@@ -249,10 +245,7 @@ export class AgentHookServer extends AgentHookServerLifecycle {
       paneKey
     )
     if (next) {
-      // The conversation moved, not its host: a tmux server still runs it.
-      if (cliWriterTopology(row) === 'shared') {
-        retainTmuxWriterTopology(next)
-      }
+      // The conversation moved, not its host: the row keeps its executionHost.
       this.applyNormalizedStatus(
         {
           ...row,

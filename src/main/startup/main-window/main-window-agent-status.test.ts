@@ -1,6 +1,5 @@
 import { expect, it, vi } from 'vitest'
 import type { BrowserWindow } from 'electron'
-import { retainTmuxWriterTopology } from '../../agent-hooks/server/cli-writer-observation'
 
 const { setListener, send } = vi.hoisted(() => ({ setListener: vi.fn(), send: vi.fn() }))
 vi.mock('../../agent-hooks/server/agent-hook-server', () => ({
@@ -18,9 +17,8 @@ it('tells the window that a tmux-hosted conversation is shared, so it writes no 
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the listener never reads the window it is given.
   const window = {} as BrowserWindow
   installMainWindowAgentStatusListeners({ window, onRecordAgentState: () => {} })
-  const providerSession = { key: 'session_id' as const, id: 'codex-in-tmux' }
-  retainTmuxWriterTopology(providerSession)
   setListener.mock.lastCall![0]({
+    executionHost: 'shared',
     paneKey: 'tab-1:pane-1',
     tabId: 'tab-1',
     worktreeId: 'wt-1',
@@ -28,7 +26,7 @@ it('tells the window that a tmux-hosted conversation is shared, so it writes no 
     receivedAt: 1,
     stateStartedAt: 1,
     payload: { state: 'done', prompt: '', agentType: 'codex' },
-    providerSession
+    providerSession: { key: 'session_id', id: 'codex-in-tmux' }
   })
   expect(send).toHaveBeenCalledWith(
     'agentStatus:set',

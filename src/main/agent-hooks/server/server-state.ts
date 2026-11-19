@@ -107,7 +107,7 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
           !row.agentPresence.ended
             ? { suspended: true as const }
             : {}),
-          // A shared host's conversation never leaves a saved record (sharedHost), so one is the pane's.
+          // A shared host's conversation never leaves a saved record, so one is the pane's.
           processTopology: row ? (legacy ? cliWriterTopology(row) : 'shared') : 'pane-owned'
         }
       : null
