@@ -365,6 +365,60 @@ describe('STA-4091 previously recoverable restore depth', () => {
       expect(snapshotText(restore ?? {})).toContain(FRESH_AFTER_CHECKPOINT)
     })
 
+    it('serves real history accumulated after pending-output overflow instead of pinning reads to live', async () => {
+      const { id } = await adapter.spawn({
+        cols: 80,
+        rows: 112,
+        sessionId: 'overflow-history-read',
+        cwd: '/tmp'
+      })
+      lastSubprocess.emitData('overflow\r\n'.repeat(240_000))
+      lastSubprocess.emitData('unrecorded after overflow\r\n')
+      const short = await adapter.getBufferSnapshot(id, { scrollbackRows: 5000 })
+      const screen = new HeadlessEmulator({ cols: 80, rows: 112, scrollback: 5000 })
+      try {
+        await screen.write(`${short?.scrollbackAnsi ?? ''}${short?.data ?? ''}`)
+        expect(screen.getBufferTailLines(6000).filter((row) => row.trim())).toHaveLength(1111)
+        expect(short?.historyLimited).toBe(true)
+        expect(
+          snapshotText(
+            (await new HistoryReader(historyDir).detectColdRestore(id, {
+              ignoreCleanEnd: true
+            })) ?? {}
+          )
+        ).toContain('unrecorded after overflow')
+        const delivered = new Promise<void>((resolve) => {
+          const stop = adapter.onData((event) => {
+            if (event.data.includes('LINE_06000')) {
+              stop()
+              resolve()
+            }
+          })
+        })
+        lastSubprocess.emitData(numberedOutput(6000))
+        await delivered
+        for (const { limit, count, first } of [
+          { limit: 1500, count: 1611, first: 'LINE_04390' },
+          { limit: 2000, count: 2111, first: 'LINE_03890' },
+          { limit: 5000, count: 5111, first: 'LINE_00890' }
+        ]) {
+          const deep = await adapter.getBufferSnapshot(id, { scrollbackRows: limit })
+          await screen.write('\x1bc')
+          await screen.write(`${deep?.scrollbackAnsi ?? ''}${deep?.data ?? ''}`)
+          const rows = screen
+            .getBufferTailLines(6000)
+            .map((row) => row.trimEnd())
+            .filter(Boolean)
+          expect(rows).toHaveLength(count)
+          expect(rows[0]).toBe(first)
+          expect(rows.at(-1)).toBe('LINE_06000')
+          expect(rows).not.toContain('overflow')
+        }
+      } finally {
+        screen.dispose()
+      }
+    })
+
     it('reanchors after a retryable durable checkpoint', async () => {
       const { id } = await adapter.spawn({
         cols: 80,

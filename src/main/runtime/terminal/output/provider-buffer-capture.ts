@@ -21,7 +21,7 @@ import {
 } from '../view/orca-runtime-terminal-projection'
 import { VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from './provider-snapshot-budget'
 import {
-  readSettledRecoveredHistory,
+  readRecoveredTerminalHistory,
   warnRecoveredHistoryUnavailable
 } from './recovered-terminal-history-read'
 import { isNativeWindowsConptyPty } from './terminal-model-query-authority'
@@ -191,15 +191,25 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     limit: number | undefined,
     providerSnapshot: RuntimeProviderSnapshotReadOptions
   ): Promise<RuntimeTerminalRead> {
+    const recoveredHistory =
+      this.readWholeScreenModel(ptyId)?.historyFromProvider && !providerSnapshot.visibleScreenOnly
     const projection = await this.readRenderedTerminalTailLines(ptyId, limit, providerSnapshot)
+    const lineLimit = terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT)
+    // A recovered read measures its own coverage, independently of the gapped stream or over-fetch.
+    const lines = recoveredHistory ? projection.lines.slice(-lineLimit) : projection.lines
+    const rows = recoveredHistory ? projection.tailRows?.slice(-lineLimit) : projection.tailRows
     // A recovered terminal's stream tail predates the rebuild: even a blank screen replaces it.
-    return projection.lines.length > 0 || projection.historyCut
+    return lines.length > 0 || projection.historyCut
       ? buildVisibleSnapshotReadFallback(
-          projection.historyCut ? { ...read, limited: true } : read,
-          projection.lines,
+          recoveredHistory
+            ? { ...read, limited: lines.length < lineLimit }
+            : projection.historyCut
+              ? { ...read, limited: true }
+              : read,
+          lines,
           limit,
           projection.draft,
-          projection.tailRows
+          rows
         )
       : read
   }
@@ -224,9 +234,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     // A model rebuilt screen-only after dropped output has no history; the provider kept it.
     const recoveredHistory = state.historyFromProvider && !providerSnapshot.visibleScreenOnly
     if (recoveredHistory) {
-      const size = this.getTerminalSize(ptyId)
-      const key = `${generation}:${this.getPtyOutputSequence(ptyId)}:${size?.cols}x${size?.rows}`
-      const provider = await readSettledRecoveredHistory(state, key, rowLimit, (rows, timeoutMs) =>
+      const provider = await readRecoveredTerminalHistory(rowLimit, (rows, timeoutMs) =>
         this.readProviderTerminalTailLines(ptyId, rows, { ...providerSnapshot, timeoutMs })
       )
       if (provider.lines.length > 0) {
@@ -286,7 +294,10 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     })
     try {
       await emulator.write(data)
-      const projection = projectTerminalTailLines(emulator, lineLimit)
+      const projection = {
+        ...projectTerminalTailLines(emulator, lineLimit),
+        ...(snapshot.historyLimited ? { historyCut: true as const } : {})
+      }
       return this.ptyLifecycleGenerationById.get(ptyId) === generation &&
         this.getPtyOutputSequence(ptyId) <= snapshot.seq
         ? projection

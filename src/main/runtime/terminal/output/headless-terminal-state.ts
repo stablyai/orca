@@ -16,7 +16,6 @@ import {
   type XtermConptyOptions
 } from '../../../../shared/terminal/pty/native-process/xterm-conpty-options'
 import { getRegisteredSshState } from '../../../ssh/targets/ssh-target-registry'
-import { forgetRecoveredHistory } from './recovered-terminal-history-read'
 
 export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer {
   /** SSH and paired-runtime panes run on their host's PTY, so the ConPTY model follows that machine. */
@@ -289,7 +288,6 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     }
     // Queue clears after earlier output so it cannot repopulate cleared mobile scrollback.
     state.writeChain = state.writeChain.then(() => state.emulator.clearScrollback())
-    forgetRecoveredHistory(state)
     await state.writeChain
   }
 

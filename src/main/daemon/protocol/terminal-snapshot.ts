@@ -20,6 +20,9 @@ export type TerminalSnapshot = {
   lastTitle?: string
   /** Optional because persisted snapshots and older v19 daemons lack it. */
   outputSequence?: number
+  /** Ephemeral daemon identity for mutations not counted by the output stream. */
+  historyRevision?: number
+  sessionIncarnationId?: string
   /** Ordered shell lifecycle evidence captured at this snapshot boundary. */
   terminalOwner?: TerminalOwner
 }

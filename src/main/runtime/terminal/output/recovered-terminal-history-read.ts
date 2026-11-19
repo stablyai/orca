@@ -3,6 +3,7 @@ import {
   VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS
 } from './provider-snapshot-budget'
 import { DAEMON_SESSION_SCROLLBACK_ROWS } from '../../../daemon/sessions/daemon-session-scrollback-window'
+import type { RuntimeHeadlessTerminal } from '../records/runtime-terminal-state-records'
 import type { RuntimeTerminalProjection } from './terminal-projection'
 
 /** Daemon history of a terminal rebuilt after dropped output. Above the daemon's live window the
@@ -34,36 +35,13 @@ export async function readRecoveredTerminalHistory(
   return { lines: [] }
 }
 
-type SettledHistory = { key: string; rows: number; projection: RuntimeTerminalProjection }
-// Durable history above the live window costs a full checkpoint compaction; unchanged output reuses it.
-const settledHistory = new WeakMap<object, SettledHistory>()
-
-/** `key` must change with the PTY lifecycle, output position and grid; clears call forgetRecoveredHistory. */
-export async function readSettledRecoveredHistory(
-  model: object,
-  key: string,
-  rowLimit: number,
-  read: (rows: number, timeoutMs: number) => Promise<RuntimeTerminalProjection>
-): Promise<RuntimeTerminalProjection> {
-  const settled = settledHistory.get(model)
-  if (settled && settled.key === key && settled.rows >= rowLimit) {
-    return settled.projection
-  }
-  const projection = await readRecoveredTerminalHistory(rowLimit, read)
-  if (projection.lines.length > 0 && !projection.historyCut) {
-    settledHistory.set(model, { key, rows: rowLimit, projection })
-  }
-  return projection
-}
-
-export function forgetRecoveredHistory(model: object): void {
-  settledHistory.delete(model)
-}
-
 // One warning per rebuilt model, not per read of a busy terminal.
-const warned = new WeakSet<object>()
+const warned = new WeakSet<RuntimeHeadlessTerminal>()
 
-export function warnRecoveredHistoryUnavailable(model: object, ptyId: string): void {
+export function warnRecoveredHistoryUnavailable(
+  model: RuntimeHeadlessTerminal,
+  ptyId: string
+): void {
   if (!warned.has(model)) {
     warned.add(model)
     console.warn('[terminal] recovered history unavailable; reading the visible screen:', ptyId)

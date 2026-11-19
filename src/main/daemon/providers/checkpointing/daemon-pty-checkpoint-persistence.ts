@@ -103,11 +103,17 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
     if (take?.snapshot && this.historyManager) {
       // Missing drainedRecords on older daemons cannot mean empty: snapshotting still drained their queue.
       // Teardown records repeat held bytes already emitted; use drainedRecords to avoid replaying them twice.
-      const durable =
+      let historyComplete = true
+      const usingLive =
         take.drainedRecords === undefined || opts.forceLiveSnapshot === true || take.overflowed
+      const durable =
+        take.drainedRecords === undefined || usingLive
           ? take.snapshot
           : await this.buildDurableHistorySnapshot(sessionId, take.snapshot, take.drainedRecords, {
               isFirstTake: take.seq === 1,
+              onIncomplete: () => {
+                historyComplete = false
+              },
               ...(opts.requireContinuityProof === true
                 ? { requiredPreviousPendingOutputSeq: take.seq - 1 }
                 : {})
@@ -115,9 +121,17 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
       // Set only inside an exclusive final pass (Sleep or quit), so no other checkpoint sees it.
       const probedCwd = this.probedShellCwds.get(sessionId)
       const snapshot = probedCwd ? { ...durable, cwd: probedCwd } : durable
-      const checkpoint = await this.historyManager.checkpoint(sessionId, snapshot, {
-        pendingOutputSeq: take.seq
-      })
+      const checkpoint = await this.historyManager
+        .checkpoint(sessionId, snapshot, {
+          pendingOutputSeq: take.seq
+        })
+        .catch((error: unknown) => {
+          // The take drained records; a failed write cannot prove older history on the next read.
+          this.incompleteHistorySessionIds.add(sessionId)
+          this.settledDurableHistory.delete(sessionId)
+          this.sessionsNeedingLiveCheckpoint.add(sessionId)
+          throw error
+        })
       if (checkpoint === 'retryable') {
         this.sessionsNeedingFullCheckpoint.add(sessionId)
         this.sessionsNeedingLiveCheckpoint.add(sessionId)
@@ -134,7 +148,16 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
       this.lastFullCheckpointAt.set(sessionId, Date.now())
       this.sessionsNeedingLiveCheckpoint.delete(sessionId)
       this.sessionsNeedingContinuityCheckpoint.delete(sessionId)
-      return { checkpoint: 'committed', snapshot }
+      historyComplete = historyComplete && !usingLive
+      if (!historyComplete) {
+        this.incompleteHistorySessionIds.add(sessionId)
+        this.settledDurableHistory.forgetSnapshot(sessionId)
+      }
+      return {
+        checkpoint: 'committed',
+        snapshot,
+        historyComplete: historyComplete && !this.incompleteHistorySessionIds.has(sessionId)
+      }
     }
     this.sessionsNeedingFullCheckpoint.delete(sessionId)
     this.sessionsNeedingLiveCheckpoint.delete(sessionId)
@@ -149,9 +172,11 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
     opts: {
       isFirstTake: boolean
       requiredPreviousPendingOutputSeq?: number
+      onIncomplete?: () => void
     }
   ): Promise<NonNullable<TakePendingOutputResult['snapshot']>> {
     if (!this.historyReader) {
+      opts.onIncomplete?.()
       return liveSnapshot
     }
     try {
@@ -165,6 +190,7 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
           restoreInfo?.pendingOutputSeq !== opts.requiredPreviousPendingOutputSeq)
       ) {
         console.warn('[history] durable continuity unproven; using live snapshot:', sessionId)
+        opts.onIncomplete?.()
         return liveSnapshot
       }
       return await buildDurableCheckpointSnapshot({
@@ -172,10 +198,12 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
         restoreInfo,
         pendingRecords,
         isFirstTake: opts.isFirstTake,
-        resizeModel: this.historyManager?.hostingResizeModel()
+        resizeModel: this.historyManager?.hostingResizeModel(),
+        onIncomplete: opts.onIncomplete
       })
     } catch (error) {
       console.warn('[history] durable history rebuild failed:', sessionId, error)
+      opts.onIncomplete?.()
       return liveSnapshot
     }
   }

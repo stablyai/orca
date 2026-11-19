@@ -1,3 +1,4 @@
+import { SettledDurableHistory } from '../checkpointing/settled-durable-history'
 import { DaemonClient } from '../../transport/client/daemon-client'
 import { DaemonPtyInputClosedIncarnations } from './daemon-pty-input-closed-incarnations'
 import { DaemonPtyInventoryObservation } from './daemon-pty-inventory-observation'
@@ -56,6 +57,7 @@ export type HistoryRecoveryContext = {
 }
 
 export type SnapshotCheckpointResult = {
+  historyComplete?: boolean
   checkpoint: HistoryCheckpointResult
   snapshot: NonNullable<TakePendingOutputResult['snapshot']> | null
 }
@@ -134,6 +136,8 @@ export abstract class DaemonPtyRuntimeState {
   protected pendingSpawnOperationsBySessionId = new Map<string, Set<PendingDaemonSpawnOperation>>()
   protected pendingClaimSpawnOperations = new Set<PendingDaemonSpawnOperation>()
   protected historySpawnLocks = new Map<string, Promise<void>>()
+  protected settledDurableHistory = new SettledDurableHistory()
+  protected incompleteHistorySessionIds = new Set<string>()
   protected dirtySessionVersions = new Map<string, number>()
   protected sessionsNeedingFullCheckpoint = new Set<string>()
   protected sessionsNeedingLiveCheckpoint = new Set<string>()
@@ -171,6 +175,13 @@ export abstract class DaemonPtyRuntimeState {
   protected abstract clearSessionAwaitingDaemonRecovery(sessionId: string): void
   protected abstract stopCheckpointTimerIfIdle(): void
 
+  protected invalidateSpawnHistory(sessionId: string, isNew: boolean): void {
+    this.settledDurableHistory.delete(sessionId)
+    if (isNew) {
+      this.incompleteHistorySessionIds.delete(sessionId)
+    }
+  }
+
   protected clearExitedSessionState(
     sessionId: string,
     exitCode: number,
@@ -181,6 +192,8 @@ export abstract class DaemonPtyRuntimeState {
     if (!this.ptyInventory.retire(sessionId, expectedIncarnationId)) {
       return
     }
+    this.settledDurableHistory.delete(sessionId)
+    this.incompleteHistorySessionIds.delete(sessionId)
     this.activeSessionIds.delete(sessionId)
     this.inputClosedIncarnations.delete(sessionId)
     this.clearSessionAwaitingDaemonRecovery(sessionId)
@@ -247,6 +260,7 @@ export abstract class DaemonPtyRuntimeState {
       this.protocolVersion >= SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION
     this.supportsStartupIngress = supportsPtyStartupIngress(this.protocolVersion)
     this.client.onDisconnected(() => {
+      this.settledDurableHistory.clear()
       this.ptyInventory.reset()
       if (!this.respawnAdoptionClosed) {
         this.writeRecoveryAttempted = false

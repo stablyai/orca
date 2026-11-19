@@ -24,6 +24,8 @@ import type { WriteSettlement } from '../../../shared/terminal/pty/lifecycle/pty
 
 export type PtyProviderBufferSnapshot = {
   data: string
+  /** Requested durable history was unavailable; this answer contains only live coverage. */
+  historyLimited?: true
   /** Live state that can be restored without an alternate-screen frame. */
   frameRestoreAnsi?: string
   /** Authoritative normal buffer captured beside an alternate-screen frame. */

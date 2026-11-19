@@ -170,6 +170,7 @@ export class DaemonPtyAdapter extends DaemonPtyPreservedHostLoss implements IPty
             : {})
         })
       } else if (event.event === 'dataGap') {
+        this.settledDurableHistory.delete(event.sessionId)
         this.emitBackgroundStreamEvent({
           id: event.sessionId,
           kind: 'dataGap',

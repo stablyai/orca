@@ -51,6 +51,7 @@ export abstract class DaemonPtyCheckpointScheduler extends DaemonPtyConnectionLi
   }
 
   protected markSessionDirty(sessionId: string): void {
+    this.settledDurableHistory.delete(sessionId)
     if (!this.activeSessionIds.has(sessionId)) {
       return
     }

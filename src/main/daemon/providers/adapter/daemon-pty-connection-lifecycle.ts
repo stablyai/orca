@@ -69,6 +69,7 @@ export abstract class DaemonPtyConnectionLifecycle extends DaemonPtyEventSubscri
     if (previous && sameEndpointIdentity(previous, current)) {
       return
     }
+    this.settledDurableHistory.clear()
     if (previous) {
       // Recheck capabilities for each incarnation: the replacement may support them.
       this.getSizeUnsupported = false

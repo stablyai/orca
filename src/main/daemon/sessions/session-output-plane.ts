@@ -43,6 +43,7 @@ export class SessionOutputPlane {
   private pendingOutputOverflowed = false
   private pendingOutputSeq = 0
   private _outputSequence = 0
+  private historyRevision = 0
   // Main counts a new session's stream from its first attach, so bytes emitted before it (ConPTY's startup preamble) stay out of the sequence.
   private streamOpened = false
   private deviceAttributesQueryFilter: StartupDeviceAttributesQueryFilter | null = null
@@ -106,6 +107,7 @@ export class SessionOutputPlane {
   }
 
   resize(cols: number, rows: number): void {
+    this.historyRevision++
     this.emulator.resize(cols, rows)
     // Preserve emulator apply order so recovery reflows at the same stream position.
     this.record({ kind: 'resize', cols, rows })
@@ -116,6 +118,7 @@ export class SessionOutputPlane {
       return
     }
     this.emulator.clearScrollback()
+    this.historyRevision++
     this.record({ kind: 'clear' })
     subprocess.clear?.()
     nudgePowerShellPromptRepaint({
@@ -131,6 +134,7 @@ export class SessionOutputPlane {
       return
     }
     this.emulator.write(ground)
+    this.historyRevision++
     this.record({ kind: 'output', data: ground })
   }
 
@@ -162,7 +166,8 @@ export class SessionOutputPlane {
     return {
       ...this.emulator.getSnapshot(opts),
       ...(terminalOwner ? { terminalOwner } : {}),
-      outputSequence: this._outputSequence
+      outputSequence: this._outputSequence,
+      historyRevision: this.historyRevision
     }
   }
 
@@ -207,6 +212,9 @@ export class SessionOutputPlane {
       this._outputSequence += rawLength
     }
     if (data.length > 0) {
+      if (!this.streamOpened) {
+        this.historyRevision++
+      }
       this.emulator.write(data)
       data = this.deviceAttributesQueryFilter?.accept(data) ?? data
     }

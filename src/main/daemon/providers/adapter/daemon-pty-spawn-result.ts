@@ -76,6 +76,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
     // Both ids: adoptSpawnResultSession may have rewritten sessionId to the claim owner.
     this.clearSessionAwaitingDaemonRecovery(requestedSessionId)
     this.clearSessionAwaitingDaemonRecovery(sessionId)
+    this.invalidateSpawnHistory(sessionId, result.isNew)
     this.ptyInventory.spawned(sessionId, result.incarnationId)
     const exitedResult = this.resultForExitBeforeSpawnReply(sessionId, result, operation)
     if (exitedResult) {
@@ -150,6 +151,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
         effectiveRows = restoreInfo.rows
         result = await createOrAttach(historySeedSegments)
         await adoptSpawnResultSession(result)
+        this.invalidateSpawnHistory(sessionId, result.isNew)
         this.ptyInventory.spawned(sessionId, result.incarnationId)
         const exitedRetryResult = this.resultForExitBeforeSpawnReply(sessionId, result, operation)
         if (exitedRetryResult) {
