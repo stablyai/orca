@@ -82,7 +82,10 @@ let eventsProjection: { inputs: ProjectionInputs; build: ActivityEventsBuild } |
 let currentInputs: ProjectionInputs | null = null
 let chatNames: StructuredChatTabNames | null = null
 let detach: (() => void) | null = null
-let releaseTimer: ReturnType<typeof setTimeout> | null = null
+const releaseTimers: Record<ActivityThreadMode, ReturnType<typeof setTimeout> | null> = {
+  all: null,
+  live: null
+}
 
 function listenerCount(): number {
   return listeners.all.size + listeners.live.size
@@ -125,23 +128,33 @@ function attach(): () => void {
   return () => stops.forEach((stop) => stop())
 }
 
-/** Release once no reader arrives: covers a render that never commits and a reader switching modes. */
-function scheduleRelease(): void {
-  if (releaseTimer !== null) {
+function releaseMode(mode: ActivityThreadMode): void {
+  threadProjections[mode] = createThreadProjection()
+  snapshots[mode] = null
+  // The shared events build stays only while an observed mode needs it.
+  if (listenerCount() === 0) {
+    releaseAll()
+  }
+}
+
+/** Each mode lives while observed; a read that never subscribes (an uncommitted render) or a reader switching modes is released after a short grace. */
+function scheduleRelease(mode: ActivityThreadMode): void {
+  if (releaseTimers[mode] !== null) {
     return
   }
-  releaseTimer = setTimeout(() => {
-    releaseTimer = null
-    if (listenerCount() === 0) {
-      releaseAll()
+  releaseTimers[mode] = setTimeout(() => {
+    releaseTimers[mode] = null
+    if (listeners[mode].size === 0) {
+      releaseMode(mode)
     }
   }, UNSUBSCRIBED_RELEASE_MS)
 }
 
-function cancelReleaseTimer(): void {
-  if (releaseTimer !== null) {
-    clearTimeout(releaseTimer)
-    releaseTimer = null
+function cancelRelease(mode: ActivityThreadMode): void {
+  const timer = releaseTimers[mode]
+  if (timer !== null) {
+    clearTimeout(timer)
+    releaseTimers[mode] = null
   }
 }
 
@@ -273,8 +286,8 @@ export function getActivityThreadSnapshot(mode: ActivityThreadMode): ActivityThr
     current = { inputs, snapshot }
     snapshots[mode] = current
   }
-  if (listenerCount() === 0) {
-    scheduleRelease()
+  if (listeners[mode].size === 0) {
+    scheduleRelease(mode)
   }
   return current.snapshot
 }
@@ -284,21 +297,19 @@ export function subscribeActivityThreads(
   mode: ActivityThreadMode,
   listener: () => void
 ): () => void {
-  cancelReleaseTimer()
+  cancelRelease(mode)
   listeners[mode].add(listener)
   detach ??= attach()
   return () => {
     listeners[mode].delete(listener)
-    if (listeners[mode].size === 0) {
-      // Switching the sidebar between list and badge keeps the shared events build warm.
-      threadProjections[mode] = createThreadProjection()
-      snapshots[mode] = null
-    }
     if (listenerCount() === 0) {
       detach?.()
       detach = null
       chatNames = null
-      scheduleRelease()
+    }
+    if (listeners[mode].size === 0) {
+      // The grace keeps the shared events build warm while the sidebar switches between list and badge.
+      scheduleRelease(mode)
     }
   }
 }
