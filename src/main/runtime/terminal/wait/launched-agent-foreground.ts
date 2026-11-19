@@ -167,13 +167,13 @@ async function inspectLaunchedAgentForeground(
           if (named) {
             return await identify(named)
           }
+          // Why no confirm for a plainly named program: only wrappers and version names need the host-wide read.
           if (
-            !agent &&
             observation.processName &&
             !isAgentForegroundWrapperProcess(observation.processName) &&
             !/(?:^|[/\\])v?\d+(?:\.\d+)+(?:[-+][\w.-]+)?$/i.test(observation.processName)
           ) {
-            return otherProgram(observation.stoppedAgents, undefined)
+            return otherProgram(observation.stoppedAgents, agent)
           }
           // Native version names and interpreter wrappers need the host's fresh executable read.
           const confirmed = recognizeForeground(

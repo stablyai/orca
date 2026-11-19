@@ -29,4 +29,7 @@ it('a running, exited or non-agent process is not a stopped agent', () => {
   expect(findStoppedAgents([row(5, 5, 'S', 'claude'), front], 7)).toEqual([])
   expect(findStoppedAgents([row(5, 5, 'TZ', 'claude'), front], 7)).toEqual([])
   expect(findStoppedAgents([row(5, 5, 'T', 'vim'), front], 7)).toEqual([])
+  expect(findStoppedAgents([row(5, 5, 'T', 'claude -p "summarize the diff"'), front], 7)).toEqual(
+    []
+  )
 })

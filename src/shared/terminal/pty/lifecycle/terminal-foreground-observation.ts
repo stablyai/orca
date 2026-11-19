@@ -1,3 +1,6 @@
+/** More than every agent kind Orca recognizes, so a full stopped list always fits. */
+export const MAX_STOPPED_AGENT_KINDS = 64
+
 /** Fresh recipient observation, never child-census or destructive-action evidence. */
 export type TerminalForegroundObservation = {
   ptyId: string
@@ -74,7 +77,7 @@ export function isTerminalForegroundObservation(
     (!('agentPid' in value) || (integer(value.agentPid) && value.agentPid > 0)) &&
     (!('stoppedAgents' in value) ||
       (Array.isArray(value.stoppedAgents) &&
-        value.stoppedAgents.length <= 16 &&
+        value.stoppedAgents.length <= MAX_STOPPED_AGENT_KINDS &&
         value.stoppedAgents.every(text)))
   )
 }

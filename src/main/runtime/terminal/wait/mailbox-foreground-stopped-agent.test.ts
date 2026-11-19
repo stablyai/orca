@@ -2,6 +2,7 @@ import { expect, it } from 'vitest'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { readMailboxForeground } from './launched-agent-foreground'
 
+const confirmations = { count: 0 }
 const read = (
   processName: string | null,
   stoppedAgents?: string[],
@@ -10,7 +11,10 @@ const read = (
   readMailboxForeground(
     {
       getForegroundProcess: async () => processName,
-      confirmForegroundProcess: async () => processName,
+      confirmForegroundProcess: async () => {
+        confirmations.count += 1
+        return processName
+      },
       supportsForegroundObservation: () => true,
       inspectProcess: async () => ({
         foregroundProcess: processName,
@@ -51,4 +55,12 @@ it('with no stopped agent here, a program in front may be relaying to the agent 
   await expect(read('sudo')).resolves.toMatchObject({ foreground: 'unknown' })
   await expect(read('cat', ['codex'])).resolves.toMatchObject({ foreground: 'unknown' })
   await expect(read('tmux', undefined, undefined)).resolves.toMatchObject({ foreground: 'unknown' })
+})
+
+it('a plainly named program in front is judged without a host-wide confirmation', async () => {
+  confirmations.count = 0
+  for (let terminal = 0; terminal < 100; terminal++) {
+    await expect(read('vim', ['claude'])).resolves.toMatchObject({ foreground: 'non-shell' })
+  }
+  expect(confirmations.count).toBe(0)
 })

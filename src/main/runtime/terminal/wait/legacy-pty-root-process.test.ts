@@ -124,3 +124,37 @@ it("another daemon's failed full listing falls back to this terminal's own owner
   }
   await expect(readLegacyPtyRootProcessId(controller, 'pty-own', 'incarnation-1')).resolves.toBe(42)
 })
+
+it("a terminal retired while its owner's targeted reply is in flight is not restored", async () => {
+  startTime.value = 1_000
+  const gates: (() => void)[] = []
+  const counts = { targeted: 0 }
+  const controller = {
+    listProcesses: async (_host?: string, opts?: { ptyIds?: readonly string[] }) => {
+      if (!opts?.ptyIds) {
+        throw new Error('unrelated daemon unreachable')
+      }
+      counts.targeted += 1
+      await new Promise<void>((resolve) => gates.push(resolve))
+      return [
+        {
+          id: 'pty-gone',
+          incarnationId: 'incarnation-1',
+          rootProcessId: process.pid,
+          cwd: '',
+          title: ''
+        }
+      ]
+    }
+  }
+  const pending = readLegacyPtyRootProcessId(controller, 'pty-gone', 'incarnation-1')
+  await vi.waitFor(() => expect(gates).toHaveLength(1))
+  forgetLegacyPtyRoot('pty-gone')
+  gates[0]()
+  await pending
+  const next = readLegacyPtyRootProcessId(controller, 'pty-gone', 'incarnation-1')
+  await vi.waitFor(() => expect(gates).toHaveLength(2))
+  gates[1]()
+  await next
+  expect(counts.targeted).toBe(2)
+})
