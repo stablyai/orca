@@ -21,8 +21,9 @@ export function createGitHubComposerLinkEventHandlers(onCloseLinkBubble: () => v
         return false
       }
       onCloseLinkBubble()
-      const modKey = isMac ? event.metaKey : event.ctrlKey
-      openAppHttpLink(href, { destination: event.shiftKey && modKey ? 'system' : 'orca' })
+      // No destination override: openAppHttpLink routes by the Link setting and the Shift
+      // escape modifier, so a disabled routing setting reaches the system browser here too (#44311).
+      openAppHttpLink(href, { event })
       return true
     },
     handleAuxClick: (view, event) => {
