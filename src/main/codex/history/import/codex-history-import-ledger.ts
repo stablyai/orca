@@ -41,26 +41,29 @@ function emptyLedger(): ImportLedger {
   return { version: 1, sources: {} }
 }
 
-function isImportedSource(value: unknown): value is ImportedSource {
-  if (typeof value !== 'object' || value === null) {
-    return false
-  }
-  const source = value as Partial<ImportedSource>
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isImportedFolder(value: unknown): value is ImportedFolder {
   return (
-    typeof source.identity === 'string' &&
-    (source.seeding === undefined || source.seeding === true) &&
-    Array.isArray(source.handled) &&
-    source.handled.every((name) => typeof name === 'string') &&
-    typeof source.folders === 'object' &&
-    source.folders !== null &&
-    Object.values(source.folders).every(
-      (folder) =>
-        (folder?.mtimeNs === undefined || typeof folder.mtimeNs === 'string') &&
-        (folder.waiting === undefined ||
-          (typeof folder.waiting === 'object' &&
-            folder.waiting !== null &&
-            Object.values(folder.waiting).every((mtime) => typeof mtime === 'string')))
-    )
+    isRecord(value) &&
+    (value.mtimeNs === undefined || typeof value.mtimeNs === 'string') &&
+    (value.waiting === undefined ||
+      (isRecord(value.waiting) &&
+        Object.values(value.waiting).every((mtime) => typeof mtime === 'string')))
+  )
+}
+
+function isImportedSource(value: unknown): value is ImportedSource {
+  return (
+    isRecord(value) &&
+    typeof value.identity === 'string' &&
+    (value.seeding === undefined || value.seeding === true) &&
+    Array.isArray(value.handled) &&
+    value.handled.every((name) => typeof name === 'string') &&
+    isRecord(value.folders) &&
+    Object.values(value.folders).every(isImportedFolder)
   )
 }
 
@@ -92,13 +95,8 @@ async function loadImportLedger(path: string): Promise<ImportLedger> {
     throw error
   }
   try {
-    const parsed = JSON.parse(text) as Partial<ImportLedger>
-    if (
-      parsed.version !== 1 ||
-      typeof parsed.sources !== 'object' ||
-      parsed.sources === null ||
-      Array.isArray(parsed.sources)
-    ) {
+    const parsed: unknown = JSON.parse(text)
+    if (!isRecord(parsed) || parsed.version !== 1 || !isRecord(parsed.sources)) {
       return { ...emptyLedger(), recovered: true }
     }
     const sources: Record<string, ImportedSource> = {}
