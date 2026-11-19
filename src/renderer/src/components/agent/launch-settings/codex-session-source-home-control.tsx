@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Info } from 'lucide-react'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
-import { normalizeGlobalWindowsRuntimeDefault } from '../../../../../shared/execution-host/project-runtime-preference'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
@@ -15,15 +14,11 @@ export type AgentSessionSourceHomeControl = {
 
 type UpdateSettings = (updates: Partial<GlobalSettings>) => void | Promise<void>
 
+// Only the host ~/.codex receives imports, so the control edits the host value under any runtime.
 export function buildCodexSessionSourceHomeControl(
-  settings: Pick<GlobalSettings, 'codexSessionSourceHome' | 'localWindowsRuntimeDefault'>,
+  settings: Pick<GlobalSettings, 'codexSessionSourceHome'>,
   updateSettings: UpdateSettings
-): AgentSessionSourceHomeControl | undefined {
-  const runtimeScope = normalizeGlobalWindowsRuntimeDefault(settings.localWindowsRuntimeDefault)
-  // Only the host ~/.codex receives imports, so a WSL distro's Codex wouldn't list them.
-  if (runtimeScope.kind === 'wsl' && runtimeScope.distro?.trim()) {
-    return undefined
-  }
+): AgentSessionSourceHomeControl {
   return {
     runtimeLabel: '~/.codex',
     value: settings.codexSessionSourceHome?.host ?? '',
