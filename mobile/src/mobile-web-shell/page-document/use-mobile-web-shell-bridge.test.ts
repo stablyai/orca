@@ -18,6 +18,7 @@ import type { PageHostSnapshot } from '../host-gates/use-page-host-snapshot'
 const doubles = vi.hoisted((): { client: FakeRpcClient | null } => ({ client: null }))
 
 // Stub Expo-dependent client lookup; the hook reads only identity.
+vi.mock('./use-page-app-presence', () => ({ usePageAppPresence: () => {} }))
 vi.mock('../../transport/connection/host-client-hooks', () => ({
   useHostClient: () => ({ client: doubles.client })
 }))
@@ -129,6 +130,7 @@ function Harness(props: {
     },
     onPageBackClaim: (claimed) => props.probe.backClaims.push(claimed),
     onPageLocation: () => {},
+    onPageSwapSafe: () => {},
     onTerminalKeyRailClaim: () => {}
   })
   props.probe.view = view

@@ -8,6 +8,7 @@ import {
   stubBotPanel
 } from '../../component-fixtures/fixture-bot-panel'
 import { stubSessionPrompts } from '../../component-fixtures/session-prompt-stubs'
+import { stubAwaitedQuestion } from '../../component-fixtures/awaited-question-stubs'
 import type { BotActivity, BotWorkerRow } from '../../../../shared/bots/bot-activity-model'
 import type { BotItem } from '../../../../shared/bots/bot-items'
 import { makeTestBotItem } from '../../../../shared/bots/bot-item.test-fixture'
@@ -222,4 +223,44 @@ export const signIn = defineFixture({
       />
     </div>
   )
+})
+
+const REVIEW_THREAD: BotNeedView = {
+  kind: 'session',
+  key: 'thread:t-review',
+  row: {
+    kind: 'thread',
+    key: 'thread:t-review',
+    title: 'Link-open default review',
+    source: 'slack',
+    dot: 'waiting',
+    sessionId: 't-review',
+    at: now - 40 * min
+  }
+}
+
+/** A chat waiting on a question it asked without stopping: the row says the question, with Skip. */
+export const olderQuestion = defineFixture({
+  width: 340,
+  setup: () =>
+    stubAwaitedQuestion(
+      't-review',
+      'ask-row',
+      'Should links from chat open in the app by default, or in your browser?'
+    ),
+  render: () => (
+    <div className="@container flex flex-col bg-sidebar px-2 py-3">
+      <BotNeedsYouSection
+        bot={fixtureCos}
+        asks={{ needs: [REVIEW_THREAD], stoppedForSignIn: [], itemOf: () => null }}
+      />
+    </div>
+  ),
+  interact: async (frame) => {
+    const row = await waitFor(() =>
+      frame.querySelector<HTMLButtonElement>('[data-need-key] button[aria-label]')
+    )
+    const options: FocusOptions & { focusVisible: boolean } = { focusVisible: true }
+    row.focus(options)
+  }
 })

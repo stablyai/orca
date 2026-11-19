@@ -1,7 +1,11 @@
-import type { HookDefinition } from '../../agent-hooks/installation/configuration/hook-config-schema'
+import type {
+  HookCommandConfig,
+  HookDefinition
+} from '../../agent-hooks/installation/configuration/hook-config-schema'
 import {
   claudeKnowsHookEvent,
   claudeKnowsStatusLine,
+  claudeRunsAsyncPromptHook,
   claudeVersionReaches,
   parseClaudeCliVersion
 } from '../cli-capabilities/claude-hook-event-versions'
@@ -105,6 +109,8 @@ export type ClaudeManagedHookPlan = {
   retire: readonly ManagedHookEvent[]
   /** Retire removes only Orca's entry; leave preserves the entire slot. */
   statusLine: 'install' | 'retire' | 'leave'
+  /** Events whose `async` the plan owns (true: Claude runs it without waiting; it only notifies Orca). */
+  asyncByEvent?: Readonly<Record<string, boolean>>
 }
 
 export function getClaudeManagedHookPlan(
@@ -123,7 +129,9 @@ export function getClaudeManagedHookPlan(
   return {
     install,
     retire,
-    statusLine: claudeKnowsStatusLine(claudeVersion) ? 'install' : 'retire'
+    statusLine: claudeKnowsStatusLine(claudeVersion) ? 'install' : 'retire',
+    // Claude holds the model request for a blocking prompt hook; the listener orders a prompt event that lands late.
+    asyncByEvent: { UserPromptSubmit: claudeRunsAsyncPromptHook(claudeVersion) }
   }
 }
 
@@ -132,4 +140,19 @@ export const OPENCLAUDE_MANAGED_HOOK_PLAN: ClaudeManagedHookPlan = {
   install: CLAUDE_EVENTS,
   retire: [CLAUDE_SESSION_END_EVENT, CLAUDE_POST_TOOL_BATCH_EVENT],
   statusLine: 'leave'
+}
+
+/** A plan-owned `async` replaces any earlier value, so a downgrade drops it; other events keep a user's choice. */
+export function withPlannedAsync(
+  plan: ClaudeManagedHookPlan,
+  eventName: string,
+  hook: HookCommandConfig,
+  keepPrevious: (hook: HookCommandConfig) => HookCommandConfig
+): HookCommandConfig {
+  const planned = plan.asyncByEvent?.[eventName]
+  if (planned === undefined) {
+    return keepPrevious(hook)
+  }
+  const { async: _async, ...rest } = hook
+  return planned ? { ...rest, async: true } : rest
 }

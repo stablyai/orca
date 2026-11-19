@@ -2,7 +2,7 @@
 // makes the bot from its instructions only, and says so here before Create.
 import { useTranslate } from '@/i18n/use-translate'
 import type { BotTemplate, BotTemplateSkill } from '../../../../shared/bots/bot-templates'
-import { BotTemplateComesWith } from './templates/BotTemplateComesWith'
+import { BotTemplateComesWith, BotTemplateComesWithHeading } from './templates/BotTemplateComesWith'
 
 export function NewBotTemplateParts({
   template,
@@ -21,9 +21,7 @@ export function NewBotTemplateParts({
   const t = useTranslate()
   return (
     <section className="border-t border-border pt-4">
-      <h3 className="mb-1.5 text-xs font-medium text-muted-foreground">
-        {t('bots.templates.comesWith', 'Comes with')}
-      </h3>
+      <BotTemplateComesWithHeading showNote={packages} />
       {packages ? (
         <BotTemplateComesWith template={template} kept={kept} onKeptChange={onKeptChange} />
       ) : (

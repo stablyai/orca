@@ -50,6 +50,8 @@ export const EXECUTION_HOST_METHODS = [
   'automation.runNow',
   'automation.runs',
   'browser.back',
+  // Gated on browser.certificate-trust.v1; older hosts refuse it here, which the phone treats as unavailable.
+  'browser.certificate.proceed',
   'browser.dialogAccept',
   'browser.dialogDismiss',
   'browser.forward',
@@ -61,6 +63,8 @@ export const EXECUTION_HOST_METHODS = [
   'browser.mouseMove',
   'browser.mouseUp',
   'browser.mouseWheel',
+  // Read-only list so the phone can name a tab's profile and offer the host's profiles for a new tab.
+  'browser.profileList',
   'browser.reload',
   'browser.screencast',
   'browser.screencast.ack',
@@ -102,6 +106,7 @@ export const EXECUTION_HOST_METHODS = [
   'git.bulkUnstage',
   'git.cancelGenerateCommitMessage',
   'git.cancelGeneratePullRequestFields',
+  'git.checkIgnored',
   'git.checkout',
   'git.commit',
   'git.commitCompare',
@@ -228,6 +233,7 @@ export const EXECUTION_HOST_METHODS = [
   'session.tabs.closeLifecycle',
   'session.tabs.createTerminal',
   'session.tabs.list',
+  'session.tabs.terminalShellChoices',
   'session.tabs.listAll',
   'session.tabs.move',
   'session.tabs.subscribe',

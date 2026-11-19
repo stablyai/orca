@@ -86,25 +86,41 @@ describe('the Google key downloaded on a setup page', () => {
     expect(setup([run({ steps: { client: { status: 'done', at: 2 } } })]).claim(KEY)).toBeNull()
   })
 
-  it('saves the key, finishes client and deletes the file', async () => {
+  it('cleans up refused downloads before reporting them and accepts a matching key on retry', async () => {
     const { claim, deps } = setup([run()])
-    const taken = claim(KEY)!
-    await download(taken, desktopKey())
-    await vi.waitFor(() => expect(deps.keyArrived).toHaveBeenCalledWith('ivy'))
-    expect(deps.importKey).toHaveBeenCalledWith(desktopKey())
-    expect(existsSync(taken.savePath)).toBe(false)
-  })
-
-  it("refuses a key for another project without replacing the host's app", async () => {
-    const { claim, deps } = setup([run()])
-    const taken = claim(KEY)!
-    await download(taken, desktopKey('someone-else'))
-    await vi.waitFor(() => expect(deps.keyRefused).toHaveBeenCalled())
-    expect(deps.keyRefused.mock.calls[0]).toEqual([
-      'ivy',
-      'the key is for project someone-else, not example-project-123.'
-    ])
+    const wrongProject = claim(KEY)!
+    await download(wrongProject, desktopKey('someone-else'))
+    await vi.waitFor(() =>
+      expect(deps.keyRefused).toHaveBeenCalledExactlyOnceWith(
+        'ivy',
+        'the key is for project someone-else, not example-project-123.'
+      )
+    )
+    expect(existsSync(wrongProject.savePath)).toBe(false)
     expect(deps.importKey).not.toHaveBeenCalled()
+
+    const held = Promise.withResolvers<void>()
+    deps.keyRefused.mockImplementationOnce(() => held.promise)
+    try {
+      const wrongKind = claim(KEY)!
+      await download(wrongKind, '{"web":{}}')
+      await vi.waitFor(() =>
+        expect(deps.keyRefused).toHaveBeenLastCalledWith(
+          'ivy',
+          expect.stringContaining('This is a Web app client.')
+        )
+      )
+      expect(existsSync(wrongKind.savePath)).toBe(false)
+      expect(deps.importKey).not.toHaveBeenCalled()
+    } finally {
+      held.resolve()
+    }
+
+    const matching = claim(KEY)!
+    await download(matching, desktopKey())
+    await vi.waitFor(() => expect(deps.keyArrived).toHaveBeenCalledWith('ivy'))
+    expect(deps.importKey).toHaveBeenCalledExactlyOnceWith(desktopKey())
+    expect(existsSync(matching.savePath)).toBe(false)
   })
 
   it('only deletes the file when the run that armed it was cancelled or started over', async () => {
@@ -123,16 +139,5 @@ describe('the Google key downloaded on a setup page', () => {
     expect(deps.importKey).not.toHaveBeenCalled()
     expect(deps.keyArrived).not.toHaveBeenCalled()
     expect(deps.keyRefused).not.toHaveBeenCalled()
-  })
-
-  it("deletes a refused key's file before telling the bot, however long that takes", async () => {
-    const { claim, deps } = setup([run()])
-    const held = Promise.withResolvers<void>()
-    deps.keyRefused.mockImplementation(() => held.promise)
-    const taken = claim(KEY)!
-    await download(taken, '{"web":{}}')
-    await vi.waitFor(() => expect(deps.keyRefused).toHaveBeenCalled())
-    expect(existsSync(taken.savePath)).toBe(false)
-    held.resolve()
   })
 })

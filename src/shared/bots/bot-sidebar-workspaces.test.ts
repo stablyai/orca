@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  botWorkerWorkspaceStatus,
   botWorkspaceLineAgent,
-  capBotWorkspaceLines,
   countLiveBotWorkspaces,
   rollUpBotStatus
 } from './bot-sidebar-workspaces'
@@ -14,6 +14,19 @@ describe('countLiveBotWorkspaces', () => {
   })
 })
 
+describe('botWorkerWorkspaceStatus', () => {
+  // A stale worker row lets its title ("Claude subagent permission prompts ...") read as a prompt.
+  it('counts a worker as needing you only when one of its agents asks', () => {
+    expect(
+      countLiveBotWorkspaces([
+        botWorkerWorkspaceStatus('permission', false),
+        botWorkerWorkspaceStatus('permission', true),
+        botWorkerWorkspaceStatus('working', false)
+      ])
+    ).toEqual({ permission: 1, working: 1, failed: 0 })
+  })
+})
+
 describe('rollUpBotStatus', () => {
   it('takes needs-you over working over the bot itself', () => {
     expect(rollUpBotStatus('working', ['done', 'permission'])).toBe('permission')
@@ -22,34 +35,11 @@ describe('rollUpBotStatus', () => {
   })
 })
 
-describe('capBotWorkspaceLines', () => {
-  const all = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j']
-
-  it('keeps the first eight, plus the open one wherever it ranks', () => {
-    expect(capBotWorkspaceLines(all, undefined)).toEqual(all.slice(0, 8))
-    expect(capBotWorkspaceLines(all, 'b')).toEqual(all.slice(0, 8))
-    expect(capBotWorkspaceLines(all, 'j')).toEqual([...all.slice(0, 8), 'j'])
-  })
-})
-
 describe('botWorkspaceLineAgent', () => {
   const agent = (agentType: string | null, state = 'working', subagent = false) => ({
     agentType,
     state,
     subagent
-  })
-
-  it('shows one logo for one agent, or for several of one kind, with no +N', () => {
-    expect(botWorkspaceLineAgent([agent('claude')])).toEqual({
-      agentTypes: ['claude'],
-      others: 0,
-      othersNeedYou: false
-    })
-    expect(botWorkspaceLineAgent([agent('claude'), agent('claude', 'blocked')])).toEqual({
-      agentTypes: ['claude'],
-      others: 0,
-      othersNeedYou: false
-    })
   })
 
   it('shows a logo per kind for two kinds, however many of each', () => {

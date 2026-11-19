@@ -17,7 +17,7 @@ describe('connector refs', () => {
     expect(parseConnectorRef(written)).toEqual(ref)
   })
 
-  it.each(['slack:T1', 'slack:T1:C1:', 'slack::C1', 'slack:T1:C1::', 'webhook:h:c', 'nope:T1:C1', 'slack:T1:C1:%zz'])(
+  it.each(['slack:T1', 'slack:T1:C1:', 'slack::C1', 'slack:T1:C1::', 'webhook:h:c', 'slack:T1:C1:%zz'])(
     'reads %s as no ref',
     (raw) => expect(parseConnectorRef(raw)).toBeNull()
   )

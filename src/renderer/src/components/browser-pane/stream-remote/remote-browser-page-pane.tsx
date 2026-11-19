@@ -1,3 +1,4 @@
+import { resolveRemoteFailureExternalUrl } from '../../../../../shared/browser/navigation/browser-url'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import '../../../../../shared/remote-runtime/protocol/protocol-version'
@@ -240,7 +241,8 @@ export function RemoteBrowserPagePane({
     handleRemotePointerDown,
     handleRemotePointerUp,
     handleRemoteScreenshotKeyDown,
-    handleRemoteScreenshotPaste
+    handleRemoteScreenshotPaste,
+    runRemoteEditCommand
   } = useRemoteBrowserPageInput({
     busy,
     imageRef,
@@ -326,35 +328,41 @@ export function RemoteBrowserPagePane({
       {contextMenu ? (
         <RemoteBrowserPageContextMenu
           contextMenu={contextMenu}
-          onDismiss={() => setContextMenu(null)}
-          history={history}
-          onOpenLinkInOrcaBrowser={() => {
-            const linkUrl = contextMenu.linkUrl!
+          onDismiss={() => {
             setContextMenu(null)
-            const sourceUnifiedTab = resolveBrowserSourceUnifiedTab(
-              useAppStore.getState(),
-              browserTab.id,
-              worktreeId
-            )
-            void openWorkspaceBrowserTab({
-              workspaceId: worktreeId,
-              url: linkUrl,
-              ...(sourceUnifiedTab ? { afterTabId: sourceUnifiedTab.id } : {}),
-              focusOnCreate: false,
-              selectWorktree: false,
-              intent: { kind: 'url' },
-              expectedRuntimeEnvironmentId: runtimeEnvironmentId,
-              placementPreference: 'server'
-            }).catch((error) => {
-              setPaneNotice({
-                kind: 'direct',
-                text: error instanceof Error ? error.message : String(error)
-              })
-            })
+            // Keys reach the page only through the frame, so edits like Select All need it focused again.
+            imageRef.current?.focus()
           }}
-          onNavigate={(method) => {
-            void runRemoteNavigation(method)
-            setContextMenu(null)
+          history={history}
+          actions={{
+            edit: runRemoteEditCommand,
+            openInNewTab: (url, activate) => {
+              const sourceUnifiedTab = resolveBrowserSourceUnifiedTab(
+                useAppStore.getState(),
+                browserTab.id,
+                worktreeId
+              )
+              void openWorkspaceBrowserTab({
+                workspaceId: worktreeId,
+                url,
+                ...(sourceUnifiedTab ? { afterTabId: sourceUnifiedTab.id } : {}),
+                focusOnCreate: activate,
+                selectWorktree: false,
+                intent: { kind: 'url' },
+                expectedRuntimeEnvironmentId: runtimeEnvironmentId,
+                placementPreference: 'server'
+              }).catch((error) => {
+                setPaneNotice({
+                  kind: 'direct',
+                  text: error instanceof Error ? error.message : String(error)
+                })
+              })
+            },
+            // The server's loopback address would open this machine's, not the page's.
+            externalUrl: resolveRemoteFailureExternalUrl,
+            goBack: () => void runRemoteNavigation('browser.back'),
+            goForward: () => void runRemoteNavigation('browser.forward'),
+            reload: () => void runRemoteNavigation('browser.reload')
           }}
         />
       ) : null}

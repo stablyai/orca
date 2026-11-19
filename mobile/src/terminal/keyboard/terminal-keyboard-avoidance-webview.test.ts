@@ -5,14 +5,13 @@ import { createTerminalDocumentScope } from '../document/document-scope'
 import { emitKeyboardAvoidanceMetrics } from '../document/viewport/keyboard-avoidance-metrics'
 import { commitFitScale } from '../document/viewport/fit-scale'
 
-function runMetricsOver(term: unknown, fitScale = 1): Record<string, unknown>[] {
+function runMetricsOver(term: Terminal): Record<string, unknown>[] {
   const notifications: Record<string, unknown>[] = []
   const scope = createTerminalDocumentScope({
     postToHost: (message) => notifications.push(message)
   })
-  scope.currentScale = fitScale
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each case's double implements the buffer members the scan reads, which is what the assertions check.
-  scope.term = term as typeof scope.term
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: xterm supplies the public buffer members read by the metrics scan.
+  scope.term = term as unknown as typeof scope.term
   emitKeyboardAvoidanceMetrics(scope)
   return notifications
 }
@@ -105,42 +104,30 @@ describe('terminal keyboard-avoidance WebView metrics', () => {
     }
   })
 
-  it('reports the row pitch as drawn, fit scale included, and none before a cell is measured', () => {
-    const buffer = { cursorY: 0, viewportY: 0, type: 'normal', getLine: () => undefined }
-    const measuredTerm = {
-      buffer: { active: buffer },
-      cols: 10,
-      rows: 47,
-      _core: { _renderService: { dimensions: { css: { cell: { width: 8, height: 15 } } } } }
-    }
-    const phone = runMetricsOver(measuredTerm)[0]
-    const desktop = runMetricsOver(measuredTerm, 0.5)[0]
-    const unmeasured = runMetricsOver({ buffer: { active: buffer }, cols: 10, rows: 47 })[0]
-    expect({
-      phone: phone?.rowPitch,
-      desktop: desktop?.rowPitch,
-      unmeasured: unmeasured?.rowPitch
-    }).toEqual({ phone: 15, desktop: 7.5, unmeasured: 0 })
-  })
-
-  it('reports again when a fit commits a new scale, carrying the new pitch', () => {
+  it('reports row pitch as cells are measured and the fit scale changes', () => {
     const notifications: Record<string, unknown>[] = []
     const scope = createTerminalDocumentScope({
       postToHost: (message) => notifications.push(message),
       viewportRect: () => ({ left: 0, top: 0, width: 320, height: 700 })
     })
     const buffer = { cursorY: 0, viewportY: 0, type: 'normal', getLine: () => undefined }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the double implements every member the fit and the metrics read, which the assertion checks.
+    const dimensions = { css: { cell: { width: 0, height: 0 } } }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the double implements every member the fit and the metrics read.
     scope.term = {
       buffer: { active: buffer },
       cols: 80,
       rows: 40,
       element: { scrollWidth: 640 },
-      _core: { _renderService: { dimensions: { css: { cell: { width: 8, height: 15 } } } } }
+      _core: { _renderService: { dimensions } }
     } as unknown as typeof scope.term
     scope.surface = document.createElement('div')
+
+    emitKeyboardAvoidanceMetrics(scope)
+    dimensions.css.cell = { width: 8, height: 15 }
+    emitKeyboardAvoidanceMetrics(scope)
     commitFitScale(scope, 'test', 0, 'test')
+
     const metrics = notifications.filter((message) => message.type === 'keyboard-avoidance-metrics')
-    expect(metrics.at(-1)?.rowPitch).toBe(7.5)
+    expect(metrics.map((message) => message.rowPitch)).toEqual([0, 15, 7.5])
   })
 })

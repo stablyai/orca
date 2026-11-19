@@ -31,33 +31,6 @@ export const optionStyles = themedStyleSheet(() => ({
   optionRowDisabled: {
     opacity: 0.5
   },
-  filterModalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.xs,
-    marginBottom: spacing.md
-  },
-  filterModalHeading: {
-    flexShrink: 1
-  },
-  filterModalTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  optionBack: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    alignSelf: 'flex-start',
-    paddingVertical: spacing.xs,
-    marginBottom: spacing.xs
-  },
-  optionBackText: {
-    fontSize: 14,
-    color: colors.textSecondary
-  },
   optionPageTitle: {
     paddingHorizontal: spacing.xs,
     marginBottom: spacing.md

@@ -17,7 +17,6 @@ export const BOT_TEMPLATES_RELEASES: readonly BotTemplate[] = [
       {
         id: 'readiness-list',
         when: 'Weekdays at 9 AM',
-        short: 'Weekdays 9 AM',
         what: 'Readiness list',
         rrule: '0 9 * * 1-5',
         prompt:
@@ -64,7 +63,6 @@ export const BOT_TEMPLATES_RELEASES: readonly BotTemplate[] = [
       {
         id: 'flaky-list',
         when: 'Mondays at 9 AM',
-        short: 'Mon 9 AM',
         what: 'Flaky checks',
         rrule: '0 9 * * 1',
         prompt:

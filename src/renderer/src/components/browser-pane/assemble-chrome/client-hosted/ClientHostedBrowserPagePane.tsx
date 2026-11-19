@@ -2,8 +2,6 @@ import { useClientHostedPageInitialization } from '../../navigate/use-client-hos
 import type { BrowserGuestMetadata } from '../../../../../../shared/browser/guest-lifecycle/browser-guest-metadata'
 import { useCallback, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
 import { useBrowserAgentCursor } from '../../agent-cursor/use-browser-agent-cursor'
-import { BrowserPageFeedbackBadge } from '../feedback/browser-page-feedback-badge'
-import { BrowserLinkStatusBubble } from '../feedback/browser-link-status-bubble'
 import { useAppStore } from '@/store/index'
 import { createBrowserClientPageLoadFailureHandler } from '../../navigate/browser-client-page-guest-metadata'
 import {
@@ -22,7 +20,7 @@ import { useClientHostedBrowserIntroTour } from './use-client-hosted-browser-int
 import { ClientHostedBrowserUnavailableNotice } from './client-hosted-browser-unavailable-notice'
 import { watchBrowserClientPageGuestLoss } from '../../host-guest/recovery/browser-client-page-guest-loss'
 import { useClientHostedBrowserMarkup } from '../../annotate/capture/use-client-hosted-browser-markup'
-import BrowserFind from '../find/BrowserFind'
+import { ClientHostedBrowserPageOverlays } from './client-hosted-browser-page-overlays'
 import { ClientHostedBrowserPageToolbar } from './client-hosted-browser-page-toolbar'
 import { bindBrowserClientPageChromeListeners } from './browser-client-page-chrome-listeners'
 import {
@@ -67,6 +65,7 @@ export function ClientHostedBrowserPagePane(props: Props) {
   const devToolsPageFlex = useBrowserDevToolsDockPageFlex(browserTab.id)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
+  const viewportContainerRef = useRef<HTMLDivElement | null>(null)
   const dismissAddressBarSuggestionsRef = useRef<(() => void) | null>(null)
   // Seed retained failures from the page: a fresh null on remount would clear both the error and its certificate record.
   const loadFailureRef = useRef<BrowserGuestMetadata['loadError']>(browserTab.loadError ?? null)
@@ -266,7 +265,8 @@ export function ClientHostedBrowserPagePane(props: Props) {
         ...(presentDocument && !activeLoadFailure ? {} : { url: current.url, title: current.title })
       })
       if (observeUrl || (state.kind === 'title' && presentDocument && !activeLoadFailure)) {
-        recordHistoryFromGuest(metadata.url, getBrowserDisplayTitle(metadata.title, metadata.url))
+        const title = getBrowserDisplayTitle(metadata.title, metadata.url)
+        recordHistoryFromGuest(metadata.url, title, current.faviconUrl)
       }
     }
     const onNavigate = (): void => setFindOpen(false)
@@ -363,6 +363,7 @@ export function ClientHostedBrowserPagePane(props: Props) {
       </div>
       <div className={BROWSER_DEVTOOLS_DOCK_SPLIT_CLASS_NAME}>
         <div
+          ref={viewportContainerRef}
           className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-background"
           style={devToolsPageFlex === null ? undefined : { flex: devToolsPageFlex }}
           {...fileDrop}
@@ -373,15 +374,16 @@ export function ClientHostedBrowserPagePane(props: Props) {
           >
             {markup.overlay}
           </ClientHostedBrowserPageBox>
-          <BrowserPageFeedbackBadge ref={zoom.feedbackBadgeRef} />
-          <BrowserFind
+          <ClientHostedBrowserPageOverlays
             browserPageId={browserTab.id}
-            isOpen={findOpen}
-            onClose={() => setFindOpen(false)}
+            isActive={isActive}
+            containerRef={viewportContainerRef}
             webviewRef={webviewRef}
+            feedbackBadgeRef={zoom.feedbackBadgeRef}
+            findOpen={findOpen}
+            onCloseFind={() => setFindOpen(false)}
             guestGeneration={pageHostGeneration}
           />
-          <BrowserLinkStatusBubble browserPageId={browserTab.id} />
           {initialization.showFailureOverlay ? (
             <ClientHostedBrowserLoadFailure
               browserTab={browserTab}

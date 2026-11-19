@@ -109,7 +109,9 @@ export function describeJournalReaderOperation(
       return { operation: operation.kind, chat: chatHash(operation.input.source.sessionId) }
     case 'conversion-prepare':
     case 'import-state':
+    case 'legacy-compare':
       return { operation: operation.kind, chat: chatHash(operation.sessionId) }
+    case 'legacy-proof':
     case 'fork-next':
     case 'fork-release':
     case 'conversion-page':
