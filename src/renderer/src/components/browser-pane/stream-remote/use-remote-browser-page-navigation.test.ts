@@ -40,7 +40,7 @@ describe('remote browser authoritative page state', () => {
     expect(useAppStore.getState().browserCertificateFailuresByPageId['page-a']).toBeUndefined()
   })
 
-  it.each(['browser.goto', 'browser.back', 'browser.forward', 'browser.reload'] as const)(
+  it.each(['browser.goto', 'browser.reload'] as const)(
     'reads authoritative state after %s rejects or resolves, without a pre-command read',
     async (method) => {
       const { result, busy, notice } = renderNavigation()

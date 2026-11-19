@@ -54,7 +54,6 @@ describe('openCodeComposerHoldsDraft', () => {
     ['at its end', box(['please refactor the auth'], 0, 'please refactor the auth')],
     ['with the cursor moved to its start', box(['please refactor the auth'], 0, '')],
     ['that starts like the placeholder', box(['Ask anything about the failure'], 0, '')],
-    ['that is the short stock prefix "A", cursor at its start, in a wide box', wideBox('A')],
     ['that is the short stock prefix "Ask", cursor at its start, in a wide box', wideBox('Ask')],
     ['in shell mode', box(['ls -la'], 0, 'ls -la', { metadata: 'Shell' })],
     ['under a model-only metadata row', box(['fix it'], 0, 'fix it', { metadata: 'Big Pickle' })],

@@ -27,6 +27,7 @@ import { WslCodexAccountHistoryLaunches } from '../../../codex/history/shared-st
 import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import type { CodexManagedAccount } from '../../../../shared/agent-accounts/managed-account-types'
 import { CodexRuntimeHomeSync } from '../runtime-home-service-sync'
+import type { CodexHomeLaunchOptions } from '../runtime-home-service-types'
 
 export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
   private readonly accountHistoryPasses = new CodexAccountHistoryPasses((home) => {
@@ -104,7 +105,7 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
   protected prepareSelfContainedManagedHomeForLaunch(
     account: CodexManagedAccount,
     unavailableManagedHomePath?: string,
-    deferConfigSync?: (syncConfig: () => boolean) => void
+    deferConfigSync?: CodexHomeLaunchOptions['deferConfigSync']
   ): string | null {
     const resolved = this.resolveSelfContainedManagedHome(account)
     if (resolved.kind === 'indeterminate') {
@@ -134,15 +135,14 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
     this.sharedAuthRefreshBlockedByManagedTransition = true
     this.markSharedRuntimeAuthManaged(account.id)
     syncSystemCodexResourcesIntoManagedHome(perAccountHome)
-    const syncConfig = (): boolean =>
-      syncSystemConfigIntoManagedCodexHome({
-        runtimeHomePath: perAccountHome,
-        systemHomePath: getSystemCodexHomePath()
-      })
+    const mirrorHomes = {
+      runtimeHomePath: perAccountHome,
+      systemHomePath: getSystemCodexHomePath()
+    }
     if (deferConfigSync) {
-      deferConfigSync(syncConfig)
+      deferConfigSync(mirrorHomes)
     } else {
-      syncConfig()
+      syncSystemConfigIntoManagedCodexHome(mirrorHomes)
     }
     return perAccountHome
   }

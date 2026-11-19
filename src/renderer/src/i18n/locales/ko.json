@@ -22375,7 +22375,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "워크트리 전환",
+      "worktreePalette": "전체 검색",
       "worktreeNavigateUp": "이전 워크트리",
       "worktreeNavigateDown": "다음 워크트리",
       "workspaceCreate": "워크트리 만들기",
@@ -22487,6 +22487,9 @@
       "45347db2a3": "탭 탐색",
       "aab2837fa5": "빠른 명령어",
       "3492a954c8": "터미널 창"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "워크트리 전환"
     }
   },
   "gpuFallback": {

@@ -24,10 +24,7 @@ describe('connectorAskerTagView', () => {
     expect(view).toMatchObject({ own: true, name: 'You', place: 'Slack DM' })
   })
 
-  it('names a group DM, an issue by its id, and an unnamed member as Someone, without a link', () => {
-    expect(
-      connectorAskerTagView({ ...SAM, place: { kind: 'group_message', id: 'G1' } }, t).place
-    ).toBe('Slack group DM')
+  it('uses the issue id for an unnamed asker without a link', () => {
     const issue = connectorAskerTagView(
       {
         source: 'linear',

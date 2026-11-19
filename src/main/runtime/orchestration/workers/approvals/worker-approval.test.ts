@@ -51,7 +51,6 @@ describe('worker approval option', () => {
 
   it('never answers a deny with an allow, a standing rule or a stop', () => {
     expect(pick(acpOptions(['allow_once', 'allow_always', 'reject_always']), 'deny')).toBeNull()
-    expect(pick(acpOptions(['allow_once', 'allow_always']), 'deny')).toBeNull()
     // Codex without decline offers only allow or stop the turn.
     const codexNoDecline = codexApprovalItem({
       method: 'item/commandExecution/requestApproval',

@@ -24017,6 +24017,7 @@
     },
     "botsTeammate": {
       "title": "Your AI teammate",
+      "itemsTitle": "Its work, in one list",
       "groupTitle": "Bots work together",
       "pageAnnounce": "Page {{number}} of {{count}}: {{title}}",
       "product": "Orca Bots",
@@ -24031,6 +24032,26 @@
       "groupAnswer": "Fixed the overlap. Ready for you:",
       "groupPr": "#1302 New settings page",
       "groupComposer": "Message {{group}}, @ to mention a bot",
+      "items": "Items",
+      "inProgress": "In progress",
+      "needsYou": "Needs you",
+      "itemMeta": "Item {{number}} · {{bot}} · now",
+      "activity": "Activity",
+      "activityAdded": "<b>{{bot}}</b> added this item",
+      "activityWorker": "Worker started: <b>{{name}}</b>",
+      "activityMoved": "<b>{{who}}</b> moved this to <b>{{status}}</b>",
+      "answering": "Answering:",
+      "addComment": "Add a comment…",
+      "now": "now",
+      "itemCsv": "Fix the CSV export",
+      "itemDocs": "Update the docs",
+      "idle": "Idle",
+      "inProgressCount": "{{count}} in progress",
+      "needsYouCount": "{{count}} needs you",
+      "itemsAsk": "Fix the CSV export, the Safari login bug and update the docs.",
+      "itemsReply": "On it. Tracking each one as an item.",
+      "askAnything": "Ask anything",
+      "closed": "Closed",
       "description": "Ask it in a thread. It runs the work, gets it reviewed and brings back a pull request.",
       "alwaysOnLead": "Always on.",
       "alwaysOn": "Picks up work while you’re away.",
@@ -24040,6 +24061,13 @@
       "learnsLead": "Learns as it goes.",
       "learns": "Remembers what you teach it.",
       "agents": "Works with the agents you use",
+      "itemsDescription": "Ask for a few things at once. It tracks each one as an item until it’s done.",
+      "itemsListLead": "One list of its work.",
+      "itemsList": "Every task you hand it.",
+      "itemsMovesLead": "Moves it along itself.",
+      "itemsMoves": "In progress, then closed.",
+      "itemsAsksLead": "Asks you on the item.",
+      "itemsAsks": "Reply there and it carries on.",
       "groupDescription": "Put a few bots in one group chat and give them one goal. They split the work and come back with one answer.",
       "groupChatLead": "Put bots in one chat.",
       "groupChat": "Mention one, or all of them.",
@@ -24072,6 +24100,9 @@
       "slackPrBody": "Desktop and mobile layouts, with updated screenshot tests.",
       "slackPrFiles": "6 files",
       "checksPassed": "Checks passed",
+      "question": "Sign everyone out once, or keep current sessions?",
+      "answer": "Keep current sessions.",
+      "itemSafari": "Fix the Safari login bug",
       "cta": "Create a bot"
     }
   },
@@ -25840,7 +25871,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "Switch worktree",
+      "worktreePalette": "Search everything",
       "worktreeNavigateUp": "Previous worktree",
       "worktreeNavigateDown": "Next worktree",
       "workspaceCreate": "Create worktree",
@@ -25956,6 +25987,9 @@
       "aab2837fa5": "Quick commands",
       "3492a954c8": "Terminal panes",
       "bots": "Bots"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "Switch worktree"
     }
   },
   "gpuFallback": {
@@ -28919,9 +28953,6 @@
     },
     "items": {
       "activity": {
-        "answered": "Answered",
-        "askedYou": "asked you",
-        "asksYou": "asks you",
         "canceled": "canceled this",
         "changed": "changed {{field}}",
         "closed": "marked this done",
@@ -28937,6 +28968,7 @@
         "retry": "Retry",
         "discard": "Discard",
         "reopened": "reopened this",
+        "waitingOnYou": "Waiting on you",
         "workerFailed": "Worker stopped:",
         "workerFinished": "Worker finished:",
         "workerStarted": "Worker started:",
@@ -28997,7 +29029,6 @@
       "chatFallback": "Chat",
       "comment": {
         "add": "Add a comment…",
-        "answering": "Answering:",
         "chatDeleted": "{{chat}} was deleted, so files can't be attached here.",
         "hostTooOld": "{{host}} needs an update to attach files to comments.",
         "label": "Comment",
@@ -29113,6 +29144,27 @@
         "inHours_one": "In {{count}} hours",
         "inHours_other": "In {{count}} hours",
         "pickCustom": "Pick a date and time"
+      },
+      "ask": {
+        "closed": "That question closed before your answer went. Your answer is kept on the item.",
+        "asks": "{{name}} asks",
+        "asksAt": "{{name}} asks · {{time}}",
+        "answeredInComment": "Answered in a comment",
+        "notAnswered": "Not answered",
+        "youAnswered": "You answered:",
+        "skipped": "Skipped",
+        "answeredEarlier": "You answered an earlier question",
+        "hostCannotRecord": "This Orca host can’t record answers yet, so nothing was sent. Update Orca on the bot’s computer; your answer is kept here.",
+        "answeredElsewhere": "Answered elsewhere before yours went. Your answer is kept here.",
+        "changed": "This question changed before your answer went. Your answer is kept here.",
+        "withdrawn": "This question closed before your answer went. Your answer is kept here.",
+        "copied": "Copied",
+        "copy": "Copy",
+        "toComment": "Put in the comment box",
+        "dismiss": "Dismiss",
+        "commentNotAnswer": "A comment, with any files, goes to the bot and moves this item to In progress, but isn’t recorded as your answer. Expand the question to answer it.",
+        "uncertain": "This question closed while your answer was being sent, and no reply came, so it may not have gone. Check Activity; your answer is kept here.",
+        "oursEditedAfter": "Your answer was recorded. Words of yours it didn’t include are kept here."
       }
     },
     "search": {
@@ -29415,7 +29467,8 @@
     "tryAgain": "Try again",
     "update": "Update",
     "versions": "{{installed}} → {{latest}}",
-    "modelRequires": "Requires {{product}} {{version}}",
+    "modelRequiresClaude": "Requires Claude Code CLI {{version}}",
+    "modelRequiresCodex": "Requires Codex CLI {{version}}",
     "claudeProduct": "Claude Code",
     "codexProduct": "Codex CLI",
     "commandCopied": "Command copied",
@@ -29434,6 +29487,7 @@
     "statusOne": "CLI update",
     "statusCount": "{{count}} CLI updates",
     "statusTooltip": "Newer agent CLI versions are out",
+    "failedButton": "Update failed",
     "failedChip": "update failed",
     "failedChipLabel": "Update failed: view error",
     "failedChipTooltip": "Update failed. Click to see details.",

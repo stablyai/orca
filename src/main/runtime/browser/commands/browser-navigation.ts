@@ -5,6 +5,8 @@ import type {
   BrowserReloadResult,
   BrowserStopResult
 } from '../../../../shared/browser/runtime/runtime-browser-contracts'
+import type { BrowserPageZoomDirection } from '../../../../shared/browser/site-settings/browser-page-zoom'
+import type { BrowserPageSiteDisplay } from '../../../../shared/browser/site-settings/browser-site-display'
 import type {
   BrowserCommandTargetParams,
   RuntimeBrowserCommandHost
@@ -77,6 +79,15 @@ export class RuntimeBrowserNavigation {
       this.targets.notifyRendererNavigation(pageId, result.url, result.title)
     }
     return result
+  }
+
+  async browserZoom(
+    params: { direction: BrowserPageZoomDirection } & BrowserCommandTargetParams
+  ): Promise<BrowserPageSiteDisplay | null> {
+    const target = await this.targets.resolveBrowserCommandTarget(params)
+    return this.targets
+      .requireAgentBrowserBridge()
+      .zoom(params.direction, target.worktreeId, target.browserPageId)
   }
 
   async browserStop(params: BrowserCommandTargetParams): Promise<BrowserStopResult> {
