@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useState, useSyncExternalStore, type MouseEvent } from 'react'
 import type { Terminal } from '@xterm/xterm'
 import { Image as ImageIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -11,6 +11,7 @@ import {
   getRevealInFileManagerLabel,
   revealInFileManager
 } from '@/lib/files/os-open/reveal-in-file-manager'
+import { KEEPS_FOCUS_ATTRIBUTE } from '@/lib/overlay-interaction/focus-keeping-press'
 import { basename } from '@/lib/path'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import { useAppStore } from '@/store'
@@ -23,6 +24,11 @@ import {
 } from '../input/recent-terminal-images'
 
 type ImageLocation = { worktreeId: string; worktreePath: string; sourceTabId: string }
+
+const keepFocusProps = {
+  [KEEPS_FOCUS_ATTRIBUTE]: '',
+  onMouseDown: (event: MouseEvent) => event.preventDefault()
+}
 
 export function TerminalRecentImages({
   pane,
@@ -40,7 +46,7 @@ export function TerminalRecentImages({
     return null
   }
   return (
-    <div className="flex min-w-0 items-center gap-1 overflow-hidden rounded-md bg-(--orca-pane-title-bg)">
+    <div className="pane-title-recent-images scrollbar-none ml-auto flex min-w-0 items-center gap-1 self-center overflow-x-auto rounded-md bg-(--orca-pane-title-bg)">
       {images.map((item) => (
         <TerminalImageChip key={item.path} image={item} terminal={terminal} location={location} />
       ))}
@@ -150,6 +156,7 @@ function TerminalImagePreview({
           type="button"
           variant="ghost"
           size="sm"
+          {...keepFocusProps}
           onClick={() => void window.api.ui.writeClipboardText(image.path)}
         >
           {t('terminal.recentImages.copyPath', 'Copy path')}
@@ -158,6 +165,7 @@ function TerminalImagePreview({
           type="button"
           variant="ghost"
           size="sm"
+          {...keepFocusProps}
           onClick={() => void revealInFileManager(image.path, getLocalPathOpenOwnerForRoute({}))}
         >
           {getRevealInFileManagerLabel(t)}

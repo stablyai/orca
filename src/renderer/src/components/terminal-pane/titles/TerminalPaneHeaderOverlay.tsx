@@ -145,7 +145,16 @@ export default function TerminalPaneHeaderOverlay({
             {...(isChromeless ? { 'data-chromeless': '' } : {})}
             {...(isEditing ? { 'data-editing': '' } : {})}
             onPointerDownCapture={
-              title || isEditing ? () => onActivatePaneTitleInteraction(pane.id) : undefined
+              title || isEditing
+                ? (event) => {
+                    if (
+                      event.target instanceof Node &&
+                      event.currentTarget.contains(event.target)
+                    ) {
+                      onActivatePaneTitleInteraction(pane.id)
+                    }
+                  }
+                : undefined
             }
             onContextMenuCapture={(event) => onPaneTitleContextMenu(event, pane.id)}
             style={{
@@ -186,30 +195,30 @@ export default function TerminalPaneHeaderOverlay({
               />
             ) : (
               <>
-                {paneCount > 1 && !isChromeless && (
-                  <div
-                    className="pane-title-drag-handle"
-                    aria-hidden="true"
-                    onPointerDown={(event) => {
-                      onBeginPaneDrag(pane.id, event.currentTarget, event.nativeEvent)
-                    }}
-                  />
-                )}
-                {title ? (
-                  <button
-                    type="button"
-                    className="pane-title-text"
-                    onClick={() => onStartRename(pane.id)}
-                    aria-label={t(
-                      'auto.components.terminal.pane.TerminalPane.cc5a2dc706',
-                      'Edit pane title: {{value0}}',
-                      { value0: title }
-                    )}
-                  >
-                    {title}
-                  </button>
-                ) : null}
-                <div className="pane-title-actions ml-auto flex min-w-0 items-center gap-0">
+                <div className="flex min-w-0 flex-1 self-stretch">
+                  {title ? (
+                    <button
+                      type="button"
+                      className="pane-title-text"
+                      onClick={() => onStartRename(pane.id)}
+                      aria-label={t(
+                        'auto.components.terminal.pane.TerminalPane.cc5a2dc706',
+                        'Edit pane title: {{value0}}',
+                        { value0: title }
+                      )}
+                    >
+                      {title}
+                    </button>
+                  ) : null}
+                  {paneCount > 1 && !isChromeless && (
+                    <div
+                      className="pane-title-drag-handle"
+                      aria-hidden="true"
+                      onPointerDown={(event) => {
+                        onBeginPaneDrag(pane.id, event.currentTarget, event.nativeEvent)
+                      }}
+                    />
+                  )}
                   {showAlwaysOnHeaders && !(isActivePane && canShowTerminal) && (
                     <TerminalRecentImages
                       pane={pane}
@@ -218,6 +227,8 @@ export default function TerminalPaneHeaderOverlay({
                       sourceTabId={tabId}
                     />
                   )}
+                </div>
+                <div className="pane-title-actions flex shrink-0 items-center">
                   {canContinueAgentSessionInNewSession && isActivePane ? (
                     <Tooltip>
                       <TooltipTrigger asChild>
