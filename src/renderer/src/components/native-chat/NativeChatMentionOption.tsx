@@ -35,8 +35,11 @@ export function NativeChatMentionOption({
             (member.unavailable || member.dimmed) && 'opacity-50'
           )}
         >
-          <span className="max-w-[60%] shrink-0 truncate">{member.name}</span>
-          {member.host ? <span className="flex shrink-0 self-center">{member.host}</span> : null}
+          {/* Name and pill shrink too, so a narrow row never pushes them past its text area. */}
+          <span className="max-w-[60%] min-w-0 truncate">{member.name}</span>
+          {member.host ? (
+            <span className="flex min-w-0 self-center overflow-hidden">{member.host}</span>
+          ) : null}
           {purpose ? (
             <span title={purpose} className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
               {purpose}
