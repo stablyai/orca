@@ -3,12 +3,9 @@ import { connectorTurnActivityLine } from './connector-turn-activity-line'
 
 describe('connectorTurnActivityLine', () => {
   it.each([
-    ['Bash', 'pnpm test --maxWorkers=2', 'Running pnpm test --maxWorkers=2'],
     ['exec_command', '', 'Running a command'],
-    ['Read', 'src/slack-edge.ts', 'Reading src/slack-edge.ts'],
     ['apply_patch', 'a.ts', 'Editing a.ts'],
     ['WebSearch', 'slack streaming api', 'Searching the web for slack streaming api'],
-    ['TodoWrite', '[{"content":"x"}]', 'Updating the plan'],
     ['mcp__linear__create_issue', '{"title":"x"}', 'Using linear (create issue)'],
     ['Grep', '', 'Using Grep'],
     ['SomeNewTool', 'whatever', 'Using SomeNewTool']

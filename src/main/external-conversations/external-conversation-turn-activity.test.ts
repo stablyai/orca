@@ -81,7 +81,7 @@ describe('ConversationTurnActivity', () => {
     expect(told).toEqual(['Running one', 'Running one'])
   })
 
-  it('reads the plan when the agent writes it, and tells it with every word after', async () => {
+  it('reports the plan with activity until the agent clears it', async () => {
     const { told, plans, tool, writes } = harness()
     writes([
       { content: 'Read the code', status: 'completed' },
@@ -97,19 +97,14 @@ describe('ConversationTurnActivity', () => {
     ]
     expect(told).toEqual(['Updating the plan', 'Updating the plan', 'Running pnpm test'])
     expect(plans).toEqual([undefined, steps, steps])
-  })
 
-  it('stops telling a plan the agent emptied', async () => {
-    const { plans, tool, writes } = harness()
-    writes([{ content: 'Fix it', status: 'in_progress' }])
-    tool('TodoWrite', 'one')
-    await vi.advanceTimersByTimeAsync(3_000)
-    tool('Bash', 'ls')
-    await vi.advanceTimersByTimeAsync(3_000)
     writes([])
     tool('TodoWrite', 'none')
     await vi.advanceTimersByTimeAsync(3_000)
-    expect(plans.at(-2)).toEqual([{ title: 'Fix it', status: 'in_progress' }])
+    expect(plans.at(-1)).toBeUndefined()
+    tool('Bash', 'ls')
+    await vi.advanceTimersByTimeAsync(3_000)
+    expect(told.at(-1)).toBe('Running ls')
     expect(plans.at(-1)).toBeUndefined()
   })
 
