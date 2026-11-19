@@ -4010,6 +4010,10 @@ export function createRemoteRuntimePtyTransport(
           incarnationId: createdTerminal.incarnationId
         })
       ) {
+        await options.verifyAccountRestartResult?.({
+          id: toRemoteRuntimePtyId(createdTerminal.handle, createEnvironmentId),
+          incarnationId: createdTerminal.incarnationId
+        })
         return
       }
       adoptExecutionMetadata(createdTerminal)
