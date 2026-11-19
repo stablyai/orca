@@ -46,6 +46,12 @@ it.skipIf(process.platform === 'win32').each([
     false
   ],
   [
+    'a login root, a stopped sudo whose argv was unreadable',
+    90,
+    [LOGIN, LOGIN_SHELL, { pid: 101, ppid: 100, stat: 'T', command: '(sudo)' }],
+    true
+  ],
+  [
     'a login root, an exited agent not yet reaped',
     90,
     [LOGIN, LOGIN_SHELL, { pid: 101, ppid: 100, stat: 'Z', command: '(codex)' }],

@@ -91,20 +91,21 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
   /** Shells without command marks need the owning host's process-tree proof. */
   async reconcilePaneProcessExit(paneKey: string): Promise<void> {
     const resolved = this.resolvePaneKeyAlias(paneKey)
-    // A verifiable process answers for itself (exited, stopped or live); the quiet shell proves nothing.
-    if (this.hasVerifiableAgentProcess(resolved)) {
-      await this.checkAgentPresence(resolved)
+    // A verifiable process answers for itself (exited, stopped or live); the quiet shell proves
+    // nothing. A command mark's proof owns a tracked pane; reconciling here would forget it.
+    const tracked = this.unprovenExits.has(resolved)
+    if (tracked || this.hasVerifiableAgentProcess(resolved)) {
+      await (tracked ? this.unprovenExits.settled(resolved) : this.checkAgentPresence(resolved))
       return
     }
     const row = this.state.lastStatusByPaneKey.get(resolved)
     const identity = this.paneAgentIdentity(resolved)
     const agent = identity?.status.agentType
-    // An ended agent needs no proof, and a command mark's proof already owns a tracked pane.
+    // An ended agent needs no proof.
     const confirmedExit =
       identity?.ended === false &&
       identity.processTopology !== 'shared' &&
       agent &&
-      !this.unprovenExits.has(resolved) &&
       (await this.terminalPaneLifecycle?.confirmProcessExit?.(resolved, agent))
     if (this.state.lastStatusByPaneKey.get(resolved) !== row) {
       return

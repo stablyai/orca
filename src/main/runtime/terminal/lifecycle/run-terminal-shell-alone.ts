@@ -14,15 +14,17 @@ import type { TerminalProcessInspection } from '../../../../shared/terminal/pty/
 
 /** The pane's agent (any agent when unknown) still alive under the shell, stopped or in the
  *  background, keeps its exit unproven; a stopped editor or another agent suspended before it does
- *  not. A live process whose argv the host couldn't read (`(comm)`) may be the agent, so it does. */
+ *  not. */
 export function paneAgentProcess(
   agent?: string
 ): (row: { command: string; stat?: string }) => boolean {
   return (row) => {
-    if (/^\(.*\)$/.test(row.command.trim())) {
-      return row.stat?.includes('Z') !== true
+    // A live process whose argv the host couldn't read shows as `(comm)`; its name still tells.
+    const unreadable = /^\((.*)\)$/.exec(row.command.trim())
+    if (unreadable && row.stat?.includes('Z')) {
+      return false
     }
-    const recognized = recognizeAgentProcessFromCommandLine(row.command)
+    const recognized = recognizeAgentProcessFromCommandLine(unreadable?.[1] ?? row.command)
     return recognized !== null && (!agent || recognized.agent === agent)
   }
 }
