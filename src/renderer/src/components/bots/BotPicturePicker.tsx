@@ -220,7 +220,7 @@ function BotPictureColors({
         selected={isCustom}
         showHexInTrigger={false}
         triggerLabel={t('bots.new.pictureColorMore', 'Custom')}
-        className={cn('ml-0.5 h-5.5 gap-1 px-1.5', !isCustom && '[&>span:first-child]:hidden')}
+        className={cn('ml-0.5 h-5.5', !isCustom && '[&>span:first-child]:hidden')}
       />
     </div>
   )

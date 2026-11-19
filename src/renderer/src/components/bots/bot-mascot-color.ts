@@ -31,6 +31,10 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener)
 }
 
+function readVersion(): number {
+  return version
+}
+
 function recoloredKey(id: BotMascotId, color: string): string {
   return `${id}${color}`
 }
@@ -49,8 +53,9 @@ function loadRecolored(id: BotMascotId, color: string): void {
         key,
         `data:image/svg+xml;charset=utf-8,${encodeURIComponent(recolorMascotSvg(svg, color))}`
       )
-      if (recolored.size > MAX_RECOLORED) {
-        recolored.delete(recolored.keys().next().value as string)
+      const oldest = recolored.keys().next()
+      if (recolored.size > MAX_RECOLORED && !oldest.done) {
+        recolored.delete(oldest.value)
       }
       version += 1
       for (const listener of listeners) {
@@ -86,7 +91,7 @@ export function useBotMascotSrcs(
   ids: readonly BotMascotId[],
   color: string | null | undefined
 ): Record<BotMascotId, string> {
-  const ready = useSyncExternalStore(subscribe, () => version)
+  const ready = useSyncExternalStore(subscribe, readVersion, readVersion)
   useEffect(() => {
     if (!isDefaultColor(color)) {
       for (const id of ids) {
