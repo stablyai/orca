@@ -1,4 +1,4 @@
-import { MessageSquarePlus, RefreshCw } from 'lucide-react'
+import { RefreshCw, SquareMousePointer } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
@@ -114,7 +114,7 @@ export function RemoteBrowserPageToolbar({
               event.preventDefault()
             }}
           >
-            <MessageSquarePlus className="size-3.5" />
+            <SquareMousePointer className="size-3.5" />
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={4}>

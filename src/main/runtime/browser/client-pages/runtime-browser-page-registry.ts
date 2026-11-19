@@ -24,6 +24,8 @@ export type RuntimeBrowserClientPage = Readonly<{
   loading: boolean
   canGoBack: boolean
   canGoForward: boolean
+  /** Remote-safe icon the hosting desktop reported; null until it reports one. */
+  faviconUrl?: string | null
   active: boolean
   metadataRevision: number
 }>
@@ -52,7 +54,7 @@ type RuntimeBrowserPageUpdate = Partial<
 
 type RuntimeBrowserPageMetadata = Pick<
   RuntimeBrowserClientPage,
-  'url' | 'title' | 'loading' | 'canGoBack' | 'canGoForward' | 'metadataRevision'
+  'url' | 'title' | 'loading' | 'canGoBack' | 'canGoForward' | 'faviconUrl' | 'metadataRevision'
 >
 
 export class RuntimeBrowserPageRegistry {

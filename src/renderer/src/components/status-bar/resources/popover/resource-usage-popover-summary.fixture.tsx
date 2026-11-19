@@ -7,12 +7,17 @@ import {
   getResourceCommitMetricCopy
 } from './resource-memory-metric-copy'
 
+const fixtureOwnerSplit = {
+  orca: { memory: 987842478 },
+  agents: { memory: 6023725056 },
+  yourProcesses: { memory: 2029359923 }
+}
+
 export const metricDetails = defineFixture({
   width: 420,
   render: () =>
     renderResourceUsageSummary({
-      totalCpu: 138,
-      totalMemory: 2147483648,
+      ownerSplit: fixtureOwnerSplit,
       memoryMetricCopy: getResourceMemoryMetricCopy('working-set'),
       commitBadgeLabel: '3 GB',
       commitMetricCopy: getResourceCommitMetricCopy(),
@@ -24,14 +29,27 @@ export const metricDetails = defineFixture({
   }
 })
 
+export const ownerBreakdown = defineFixture({
+  // Popover is 26rem wide; the frame adds 16px padding on each side.
+  width: 448,
+  render: () =>
+    renderResourceUsageSummary({
+      ownerSplit: fixtureOwnerSplit,
+      memoryMetricCopy: getResourceMemoryMetricCopy('footprint'),
+      commitBadgeLabel: null,
+      commitMetricCopy: null,
+      commitToneClass: null,
+      orphanCount: 2
+    })
+})
+
 export const narrowMetricDetails = defineFixture({ ...metricDetails, width: 280 })
 
 export const orphanSummary = defineFixture({
   width: 420,
   render: () =>
     renderResourceUsageSummary({
-      totalCpu: 138,
-      totalMemory: 2147483648,
+      ownerSplit: fixtureOwnerSplit,
       memoryMetricCopy: getResourceMemoryMetricCopy('footprint'),
       commitBadgeLabel: null,
       commitMetricCopy: null,

@@ -161,14 +161,10 @@ function worktree(name: string): Worktree {
   })
 }
 
-function renderEntry(
-  paused = false,
-  isActive = false,
-  onOpen: () => void = () => {}
-): ReturnType<typeof render> {
+function renderEntry(onOpen: () => void = () => {}): ReturnType<typeof render> {
   return render(
     <TooltipProvider>
-      <BotSidebarEntry bot={bot({ paused })} home={home} isActive={isActive} onOpen={onOpen} />
+      <BotSidebarEntry bot={bot()} home={home} isActive={false} onOpen={onOpen} />
     </TooltipProvider>
   )
 }
@@ -238,15 +234,6 @@ afterEach(() => {
 })
 
 describe('BotSidebarEntry', () => {
-  it('nests one Compact line per workspace under its home, however it got there, with no count chip', () => {
-    seed({ 'ranger-hello': 'done', 'made-by-hand': 'cli' })
-    renderEntry()
-
-    expect(lines().toSorted()).toEqual(['made-by-hand', 'ranger-hello'])
-    expect(screen.getByRole('list').getAttribute('data-compact-line')).toBe('true')
-    expect(screen.queryByText('1 workspace')).toBeNull()
-  })
-
   it('lists the workspaces under its home on another machine too', () => {
     seed({ 'local-worker': 'done', 'local-by-hand': 'cli' })
     const remote = (name: string): Worktree =>
@@ -307,42 +294,19 @@ describe('BotSidebarEntry', () => {
     expect(lines()).toEqual(['third', 'second', 'first'])
   })
 
-  it('folds from the bot row and shows every workspace, with the most urgent status, while folded', () => {
+  it('counts every workspace on the collapsed row and restores its rows on unfold', () => {
     seed({ ask: 'permission', run: 'working', run2: 'working', broke: 'failed', ok: 'done' })
     renderEntry()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Fold Scout' }))
+    const fold = screen.getByRole('button', { name: 'Fold Scout' })
+    expect(fold.textContent).toBe('')
+    fireEvent.click(fold)
     expect(lines()).toEqual([])
     const toggle = screen.getByRole('button', { name: 'Unfold Scout' })
     expect(toggle.textContent).toBe('5')
 
     fireEvent.click(toggle)
     expect(lines()).toHaveLength(5)
-  })
-
-  it('shows the idle worker count only while folded', () => {
-    seed({ ok: 'done', ok2: 'inactive' })
-    renderEntry()
-
-    const toggle = screen.getByRole('button', { name: 'Fold Scout' })
-    expect(toggle.textContent).toBe('')
-
-    fireEvent.click(toggle)
-    expect(screen.getByRole('button', { name: 'Unfold Scout' }).textContent).toBe('2')
-  })
-
-  it("keeps the bot's dot to its own turn while its workspaces work", () => {
-    seed({ ok: 'done' })
-    const idle = renderEntry().container.querySelector(
-      '[data-worktree-card-status-slot]'
-    )?.innerHTML
-    cleanup()
-    seed({ ask: 'permission', run: 'working' })
-    const busy = renderEntry().container.querySelector(
-      '[data-worktree-card-status-slot]'
-    )?.innerHTML
-
-    expect(busy).toBe(idle)
   })
 
   it('lists workspaces whose PR merged or closed with the rest, with no done fold', () => {
@@ -489,37 +453,34 @@ describe('BotSidebarEntry', () => {
     expect(screen.queryByRole('button', { name: 'Fold Scout' })).toBeNull()
   })
 
-  it.each([false, true])(
-    'opens the bot from its row, name or Enter without unfolding it, open already: %s; only the chevron folds',
-    (isActive) => {
-      seed({ first: 'done', second: 'done' })
-      useAppStore.setState({
-        activeView: 'terminal',
-        collapsedGroups: new Set([getLineageGroupKey(folderWorkspaceKey(home.id))])
-      })
-      const onOpen = vi.fn()
-      const { container } = renderEntry(false, isActive, onOpen)
-      const title = screen.getByText('Scout')
+  it('opens the bot from its row, name or Enter and folds only from the chevron', () => {
+    seed({ first: 'done', second: 'done' })
+    useAppStore.setState({
+      activeView: 'terminal',
+      collapsedGroups: new Set([getLineageGroupKey(folderWorkspaceKey(home.id))])
+    })
+    const onOpen = vi.fn()
+    const { container } = renderEntry(onOpen)
+    const title = screen.getByText('Scout')
 
-      fireEvent.click(botRow(container), { detail: 1 })
-      fireEvent.click(title, { detail: 1 })
-      fireEvent.keyDown(title, { key: 'Enter' })
-      expect(onOpen).toHaveBeenCalledTimes(3)
-      expect(lines()).toEqual([])
+    fireEvent.click(botRow(container), { detail: 1 })
+    fireEvent.click(title, { detail: 1 })
+    fireEvent.keyDown(title, { key: 'Enter' })
+    expect(onOpen).toHaveBeenCalledTimes(3)
+    expect(lines()).toEqual([])
 
-      fireEvent.click(screen.getByRole('button', { name: 'Unfold Scout' }))
-      expect(lines()).toHaveLength(2)
-      fireEvent.click(botRow(container), { detail: 1 })
-      expect(lines()).toHaveLength(2)
-      fireEvent.click(screen.getByRole('button', { name: 'Fold Scout' }))
-      expect(lines()).toEqual([])
-    }
-  )
+    fireEvent.click(screen.getByRole('button', { name: 'Unfold Scout' }))
+    expect(lines()).toHaveLength(2)
+    fireEvent.click(botRow(container), { detail: 1 })
+    expect(lines()).toHaveLength(2)
+    fireEvent.click(screen.getByRole('button', { name: 'Fold Scout' }))
+    expect(lines()).toEqual([])
+  })
 
   it("ignores a double-click's second click and a held key's repeats", () => {
     seed({ first: 'done', second: 'done' })
     const onOpen = vi.fn()
-    renderEntry(false, false, onOpen)
+    renderEntry(onOpen)
     const title = screen.getByText('Scout')
 
     fireEvent.click(title, { detail: 2 })

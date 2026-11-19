@@ -26,11 +26,8 @@ import {
 } from '../../../../../shared/bots/bot-items'
 import { BotItemLinkChips } from './BotItemLinkChips'
 import { BotItemStatusIcon } from './BotItemStatusIcon'
-import {
-  BotItemSnoozeMenuItems,
-  formatBotItemSnoozeTime,
-  type BotItemSnoozing
-} from './BotItemSnooze'
+import { BotItemSnoozeMenuItems, type BotItemSnoozing } from './BotItemSnooze'
+import { formatBotItemSnoozeTime } from './bot-item-snooze-time'
 import { botItemStatusName } from './bot-item-status-name'
 
 const WHEN = { weekday: 'short', hour: 'numeric', minute: '2-digit' } as const

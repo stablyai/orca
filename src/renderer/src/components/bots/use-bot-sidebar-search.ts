@@ -148,7 +148,7 @@ export function useBotSidebarSearch({
       return false
     }
     setOpen(false)
-    // A section folded before search opened just goes back to folded.
+    // Search opens only from the unfolded header; a fold another writer saved mid-search just stays.
     return savedCollapsed
   }
 

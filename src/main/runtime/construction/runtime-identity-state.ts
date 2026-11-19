@@ -36,7 +36,7 @@ import type { PtyIncarnationId } from '../../../shared/terminal/pty/lifecycle/pt
 import type { KeyedTrailingEdgeCoalescer } from '../client/events/keyed-trailing-edge-coalescer'
 import { createMobileSessionTabsNotifyCoalescer } from '../session-lifecycle/publication/mobile-session-tabs-notify-coalescer'
 
-import type { MobileSessionTabsAgentStatusHeartbeat } from '../session-lifecycle/publication/mobile-session-tabs-agent-status-heartbeat'
+import { MobileSessionSnapshotsByWorktree } from '../session-tabs/publication/mobile-session-snapshots-by-worktree'
 import { createMobileSessionTabsAgentStatusHeartbeat } from '../session-lifecycle/publication/mobile-session-tabs-agent-status-heartbeat'
 import { TerminalFocusNavigationCoalescer } from '../terminal/focus/terminal-focus-navigation-coalescer'
 import type {
@@ -139,7 +139,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHoo
 
   protected legacyStructuredSessionTabIds: readonly string[] = []
 
-  mobileSessionTabsByWorktree = new Map<string, RuntimeMobileSessionTabsSnapshot>()
+  mobileSessionTabsByWorktree = new MobileSessionSnapshotsByWorktree()
 
   abstract storeMobileSessionSnapshot(
     worktreeId: string,
@@ -269,9 +269,9 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHoo
       this.flushScheduledMobileSessionTabsChanged(worktreeId)
     )
 
-  protected readonly mobileSessionTabsAgentStatusHeartbeat: MobileSessionTabsAgentStatusHeartbeat =
+  protected readonly mobileSessionTabsAgentStatusHeartbeat =
     createMobileSessionTabsAgentStatusHeartbeat(
-      (ptyId) => this.getMobileSessionWorktreeIdsForPty(ptyId),
+      (ptyId) => this.mobileSessionTabsByWorktree.worktreeIdsForPty(ptyId),
       (worktreeId) => this.touchMobileSessionTabsForWorktree(worktreeId)
     )
 
