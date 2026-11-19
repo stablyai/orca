@@ -15,8 +15,8 @@ const WINDOWS_EXCLUSIVE_OPEN = 0x10000000
 type Target = { path: string; ino: bigint; dev: bigint }
 
 // Every readable process's open files, from the /proc fd links: reading a link never touches the
-// file's own filesystem, so a dead network mount can't stall it. Processes Orca can't read are
-// skipped, and so are other users' (their descriptors are unreadable anyway).
+// file's own filesystem, so a dead network mount can't stall it. Other users' processes are
+// skipped (their descriptors are unreadable anyway); one of ours we can't read makes it unknown.
 async function openOnLinux(
   targets: Target[],
   firstOnly: boolean,
@@ -35,7 +35,14 @@ async function openOnLinux(
     if (!owner || (uid !== undefined && owner.uid !== uid)) {
       continue
     }
-    const fds = await readdir(join('/proc', pid, 'fd')).catch(() => [])
+    // A process of ours whose descriptors we can't read (Codex marks itself undumpable) may hold
+    // any of the files: the answer is unknown, not "closed". One that exited is simply gone.
+    const fds = await readdir(join('/proc', pid, 'fd')).catch((error: unknown) =>
+      isDefinitiveAbsence(error) ? [] : null
+    )
+    if (fds === null) {
+      return null
+    }
     for (const fd of fds) {
       // Checked per descriptor: one process can hold tens of thousands.
       if (Date.now() > deadline || shouldStop()) {

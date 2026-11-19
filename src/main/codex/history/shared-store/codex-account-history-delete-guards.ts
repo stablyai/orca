@@ -54,6 +54,7 @@ export function isTransientDeleteError(error: unknown): boolean {
 // Homes whose open-file check couldn't tell this run (too many processes, a slow lsof): asking
 // again would repeat the same scan with the same answer, so nothing there is deleted until restart.
 const openCheckUnknown = new Set<string>()
+const SLOW_OPEN_CHECK_MS = 2_000
 
 export async function openFilesOnce(
   home: string,
@@ -63,8 +64,11 @@ export async function openFilesOnce(
   if (openCheckUnknown.has(home)) {
     return null
   }
+  const startedAt = Date.now()
   const open = await findOpenFiles(targets, { shouldStop })
-  if (!open && !shouldStop()) {
+  // Only a slow answer is remembered: a quick "can't tell" (a Codex running whose descriptors
+  // can't be read) is cheap to ask again, and may well be answerable later this run.
+  if (!open && !shouldStop() && Date.now() - startedAt >= SLOW_OPEN_CHECK_MS) {
     openCheckUnknown.add(home)
   }
   return open
