@@ -88,9 +88,9 @@ export function readHostStructuredAgents(
 /** Agents the host publishes Orca's managed runtime for; undefined until its agents are read. */
 export function readHostManagedRuntimeAgents(
   executionHostId: string,
-  state: { runtimeStatusByEnvironmentId: HostStructuredAgentsStatuses }
+  statuses: HostStructuredAgentsStatuses
 ): readonly string[] | undefined {
-  return readHostStructuredAgents(executionHostId, state.runtimeStatusByEnvironmentId)
+  return readHostStructuredAgents(executionHostId, statuses)
     ?.filter(({ managedRuntime }) => managedRuntime)
     .map(({ agent }) => agent)
 }

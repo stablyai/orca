@@ -1,3 +1,4 @@
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { resolveHostCapabilities } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { workspaceKindForWorktreeId } from '../../../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import {
@@ -51,7 +52,9 @@ export function resolveAiVaultSessionResumeInChatForWorkspace(args: {
     args.session.agent !== 'pi' &&
     aiVaultSessionResumeInChatWorkspaceMatters(args.session.agent) &&
     !aiVaultSessionCwdMatchesWorkspace(args.session.cwd, targetWorkspacePath)
-  const capabilities = targetOwner ? resolveHostCapabilities(state, targetOwner) : null
+  const capabilities = targetOwner
+    ? resolveHostCapabilities({ hostStatuses: readRuntimeStatuses() }, targetOwner)
+    : null
   return resolveAiVaultSessionResumeInChatEligibility({
     session: args.session,
     targetWorkspaceId,

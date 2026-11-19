@@ -4,7 +4,7 @@ import {
 } from '../../../../../shared/work-items/task-source-context'
 import { RUNTIME_CONNECTION_CHANGED_MESSAGE } from '../../../web/runtime/client/web-runtime-request-registry'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import type { AppState } from '../../../store/types'
+import type { RuntimeStatuses } from '../../../store/slices/runtime-status/views/runtime-status-owner'
 import type { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
 import { GITHUB_COMPLETE_PR_CHECK_OBSERVATION_CAPABILITY } from '../../../../../shared/source-control/runtime/source-control-runtime-capabilities'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
@@ -13,7 +13,7 @@ import { getRuntimeEnvironmentRevision } from '../../../runtime/rpc/environment-
 import { getRuntimeEnvironmentConnectionGeneration } from '../../../store/slices/runtime-status/runtime-status-connection-generation'
 
 export function capturePRCheckContract(
-  get: () => AppState,
+  readStatuses: () => RuntimeStatuses,
   target: RuntimeClientTarget,
   source?: TaskSourceContext | null
 ) {
@@ -30,7 +30,7 @@ export function capturePRCheckContract(
           ) === true
       }
     }
-    const entry = get().runtimeStatusByEnvironmentId?.get(target.environmentId)
+    const entry = readStatuses().get(target.environmentId)
     const status = lastVerifiedRuntimeStatus(entry)
     const revision = getRuntimeEnvironmentRevision(target.environmentId)
     const generation = getRuntimeEnvironmentConnectionGeneration(target.environmentId)

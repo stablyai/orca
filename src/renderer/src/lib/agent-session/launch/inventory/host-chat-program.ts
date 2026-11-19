@@ -16,6 +16,7 @@ import {
 import {
   buildAgentLaunchRouteInput,
   resolveAgentLaunchHost,
+  routeHostStatuses,
   type AgentLaunchRouteStore,
   type ProspectiveWorkspace
 } from '../routing/agent-launch-route-input'
@@ -38,7 +39,7 @@ import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/sessi
 import { getResolvedExecutionHostIdForWorktree } from '../../../workspace/ownership/resolved-worktree-execution-host'
 
 export type ChatProgramObservation = AgentSessionChatProgram | 'unlearned'
-type HostFactsStore = Pick<AgentLaunchRouteStore, 'runtimeStatusByEnvironmentId'>
+type HostFactsStore = Pick<AgentLaunchRouteStore, 'hostStatuses'>
 
 function hostContext(
   store: HostFactsStore,
@@ -46,7 +47,7 @@ function hostContext(
 ) {
   const parsed = parseExecutionHostId(host.executionHostId)
   const environmentId = parsed?.kind === 'runtime' ? parsed.environmentId : undefined
-  const entry = environmentId ? store.runtimeStatusByEnvironmentId?.get(environmentId) : undefined
+  const entry = environmentId ? routeHostStatuses(store).get(environmentId) : undefined
   const runtimeId = parsed?.kind === 'local' ? null : lastVerifiedRuntimeStatus(entry)?.runtimeId
   const pairingRevision = environmentId ? getRuntimeEnvironmentRevision(environmentId) : undefined
   const identity = JSON.stringify([host.executionHostId, runtimeId, pairingRevision])
@@ -182,7 +183,7 @@ export function agentsOfferedForLaunch(
   preferredChatAgent?: TuiAgent
 ): TuiAgent[] {
   const { executionHostId } = resolveChatProgramContext(store, workspace)
-  const chats = chatProviderAgents(executionHostId, store.runtimeStatusByEnvironmentId)
+  const chats = chatProviderAgents(executionHostId, routeHostStatuses(store))
   const opens = chats.filter((agent) =>
     agentChoiceOpensAsChat(
       store,

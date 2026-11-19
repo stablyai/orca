@@ -1,3 +1,7 @@
+import {
+  readRuntimeStatuses,
+  subscribeRuntimeStatuses
+} from '@/store/slices/runtime-status/views/runtime-status-owner'
 // Tell each paired host which of its workspaces hold this window's unsaved edits, so its cleanup keeps them.
 import { useEffect } from 'react'
 import { errorMessage } from '../../../../shared/errors/error-message'
@@ -120,12 +124,10 @@ export function installRemoteUnsavedEditorReport(): () => void {
 
   // A reloaded window must clear what its previous renderer reported over main's still-open socket.
   const known = new Set<string>()
-  const noteEnvironments = (
-    state: Pick<AppState, 'runtimeStatusByEnvironmentId' | 'runtimeEnvironments'>
-  ): void => {
+  const noteEnvironments = (state: Pick<AppState, 'runtimeEnvironments'>): void => {
     // Statuses can outlive a removed host; only configured hosts get a report.
     const configured = new Set(state.runtimeEnvironments.map((environment) => environment.id))
-    for (const environmentId of state.runtimeStatusByEnvironmentId.keys()) {
+    for (const environmentId of readRuntimeStatuses().keys()) {
       if (configured.has(environmentId) && !known.has(environmentId)) {
         known.add(environmentId)
         sent.set(environmentId, UNKNOWN)
@@ -135,9 +137,7 @@ export function installRemoteUnsavedEditorReport(): () => void {
   noteEnvironments(useAppStore.getState())
   sync(useAppStore.getState())
   const stopStore = useAppStore.subscribe((state, previous) => {
-    const environmentsChanged =
-      state.runtimeStatusByEnvironmentId !== previous.runtimeStatusByEnvironmentId ||
-      state.runtimeEnvironments !== previous.runtimeEnvironments
+    const environmentsChanged = state.runtimeEnvironments !== previous.runtimeEnvironments
     if (environmentsChanged) {
       noteEnvironments(state)
     }
@@ -151,8 +151,14 @@ export function installRemoteUnsavedEditorReport(): () => void {
       sync(state)
     }
   })
+  const stopStatuses = subscribeRuntimeStatuses(() => {
+    const state = useAppStore.getState()
+    noteEnvironments(state)
+    sync(state)
+  })
   return () => {
     stopStore()
+    stopStatuses()
     for (const stop of stopWatches.values()) {
       stop()
     }

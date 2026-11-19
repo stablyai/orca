@@ -1,5 +1,6 @@
 import { useDeferredValue, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
 import { buildActivityEvents } from '../events/activity-event-builder'
 import { createActivityEventBuildCache } from '@/components/activity/events/activity-event-build-cache'
@@ -158,15 +159,15 @@ export function useAgentPaneThreads(args: {
   const runtimeEnvironments = useAppStore((s) =>
     s.agentsHideWorkspacesFromOtherDevices ? s.runtimeEnvironments : null
   )
-  const runtimeStatusByEnvironmentId = useAppStore((s) =>
-    s.agentsHideWorkspacesFromOtherDevices ? s.runtimeStatusByEnvironmentId : null
+  const pairedHostStatuses = useAppStoreWithHostStatuses((s, statuses) =>
+    s.agentsHideWorkspacesFromOtherDevices ? statuses : null
   )
   const pairedDeviceIdsByEnvironment = useMemo(
     () =>
-      runtimeEnvironments && runtimeStatusByEnvironmentId
-        ? getPairedDeviceIdsByEnvironment(runtimeEnvironments, runtimeStatusByEnvironmentId)
+      runtimeEnvironments && pairedHostStatuses
+        ? getPairedDeviceIdsByEnvironment(runtimeEnvironments, pairedHostStatuses)
         : EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
-    [runtimeEnvironments, runtimeStatusByEnvironmentId]
+    [runtimeEnvironments, pairedHostStatuses]
   )
   const { storeData: unscopedStoreData, allThreads } = useAllAgentPaneThreads({ badgeOnly })
   const defaultHostId = useAgentPaneThreadsDefaultHostId()

@@ -7,6 +7,11 @@ import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import {
+  readRuntimeStatuses,
+  subscribeRuntimeStatuses,
+  type RuntimeStatuses
+} from '@/store/slices/runtime-status/views/runtime-status-owner'
+import {
   loadHostStructuredAgents,
   readHostStructuredAgentsForRuntime,
   retainHostStructuredAgents
@@ -37,7 +42,7 @@ async function syncLocalHost(settings: AppState['settings']): Promise<void> {
   )
 }
 
-function syncPairedHosts(statuses: AppState['runtimeStatusByEnvironmentId']): void {
+function syncPairedHosts(statuses: RuntimeStatuses): void {
   const hostIds = new Set<string>([LOCAL_EXECUTION_HOST_ID])
   for (const [environmentId, entry] of statuses) {
     const executionHostId = toRuntimeExecutionHostId(environmentId)
@@ -55,7 +60,7 @@ export function installHostStructuredAgentsSync(): () => void {
   const initial = useAppStore.getState()
   void syncLocalHost(initial.settings)
   if (launchesMayOpenChats(initial)) {
-    syncPairedHosts(initial.runtimeStatusByEnvironmentId)
+    syncPairedHosts(readRuntimeStatuses())
   }
   const stopLocal = subscribeLocalRuntimeCapabilitiesKnown(() => {
     if (!readHostStructuredAgentsForRuntime(LOCAL_EXECUTION_HOST_ID, null)) {
@@ -63,22 +68,20 @@ export function installHostStructuredAgentsSync(): () => void {
     }
   })
   const stopStore = useAppStore.subscribe((state, previousState) => {
-    const on = launchesMayOpenChats(state)
-    const turnedOn = on && !launchesMayOpenChats(previousState)
-    if (turnedOn) {
+    if (launchesMayOpenChats(state) && !launchesMayOpenChats(previousState)) {
       void syncLocalHost(state.settings)
+      syncPairedHosts(readRuntimeStatuses())
     }
-    if (
-      on &&
-      (turnedOn ||
-        state.runtimeStatusByEnvironmentId !== previousState.runtimeStatusByEnvironmentId)
-    ) {
-      syncPairedHosts(state.runtimeStatusByEnvironmentId)
+  })
+  const stopStatuses = subscribeRuntimeStatuses(() => {
+    if (launchesMayOpenChats(useAppStore.getState())) {
+      syncPairedHosts(readRuntimeStatuses())
     }
   })
   return () => {
     stopLocal()
     stopStore()
+    stopStatuses()
   }
 }
 

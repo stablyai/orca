@@ -4,6 +4,7 @@ import type {
   AiVaultSessionTitlesResult
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-session-title'
 import type { AppState } from '@/store/types'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import {
   collectAiVaultTitleRequests,
   type AiVaultTitleRequest
@@ -42,6 +43,10 @@ type SyncDependencies = {
   getState: () => AppState
   resolveSessionTitles: (args: AiVaultSessionTitlesArgs) => Promise<AiVaultSessionTitlesResult>
   subscribe: (listener: (state: AppState, previous: AppState) => void) => () => void
+  readStatuses: () => RuntimeStatuses
+  subscribeStatusChanges: (
+    listener: (statuses: RuntimeStatuses, previous: RuntimeStatuses) => void
+  ) => () => void
   scheduleReconcile?: (callback: () => void) => () => void
   setTimer?: (callback: () => void, delay: number) => ReturnType<typeof setTimeout> | number
   clearTimer?: (timer: ReturnType<typeof setTimeout> | number) => void
@@ -163,6 +168,7 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
     }
 
     const state = dependencies.getState()
+    const statuses = dependencies.readStatuses()
     const { requests, byKey: currentKeys } = currentRequests(state)
     for (const key of lastSettledAttemptAt.keys()) {
       if (!currentKeys.has(key)) {
@@ -193,8 +199,8 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
         (request.refresh &&
           (dirty.has(aiVaultTitleRequestKey(request)) ||
             now - last! >=
-              titleRefreshInterval(state, request, stored) /
-                (supportsSessionTitleRefresh(state, request) ? 2 : 1)))
+              titleRefreshInterval(statuses, request, stored) /
+                (supportsSessionTitleRefresh(statuses, request) ? 2 : 1)))
       )
     })
 
@@ -225,6 +231,7 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
       schedule()
     } else if (!stopped) {
       const currentState = dependencies.getState()
+      const currentStatuses = dependencies.readStatuses()
       const { requests: currentRequestList } = currentRequests(currentState)
       const currentStoredTitles = storedAiVaultTitles(currentState, currentRequestList)
       const delays = currentRequestList
@@ -233,7 +240,7 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
           Math.max(
             0,
             (lastSettledAttemptAt.get(aiVaultTitleRequestKey(request)) ?? Date.now()) +
-              titleRefreshInterval(currentState, request, currentStoredTitles(request)) -
+              titleRefreshInterval(currentStatuses, request, currentStoredTitles(request)) -
               Date.now()
           )
         )
@@ -262,20 +269,32 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
       return
     }
     if (state.runtimePaneTitlesByTabId !== previous.runtimePaneTitlesByTabId) {
-      for (const key of changedOwningPaneTitleRequests(state, previous)) {
+      for (const key of changedOwningPaneTitleRequests(
+        state,
+        previous,
+        dependencies.readStatuses()
+      )) {
         dirty.add(key)
       }
     }
     if (dirty.size > 0 || aiVaultTitleSyncInputsChanged(state, previous)) {
       schedule()
+    }
+  })
+  const unsubscribeStatuses = dependencies.subscribeStatusChanges((statuses, previous) => {
+    if (writing) {
+      return
+    }
+    if (dirty.size > 0) {
+      schedule()
       return
     }
     // Why: host-status pings are frequent and usually leave capabilities alone; walking every saved tab on each
     // one stalled typing in large workspaces, so only collect when some host's title-refresh support flipped.
-    const changedHosts = changedTitleRefreshHosts(state, previous)
+    const changedHosts = changedTitleRefreshHosts(statuses, previous)
     if (
       changedHosts.size > 0 &&
-      collectAiVaultTitleRequests(state).some((request) =>
+      collectAiVaultTitleRequests(dependencies.getState()).some((request) =>
         changedHosts.has(request.executionHostId)
       )
     ) {
@@ -288,6 +307,7 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
     stopped = true
     snapshot = null
     unsubscribe()
+    unsubscribeStatuses()
     cancelScheduled?.()
     cancelScheduled = null
     if (refreshTimer !== null) {

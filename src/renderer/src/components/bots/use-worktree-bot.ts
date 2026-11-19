@@ -1,7 +1,8 @@
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useBots } from '@/lib/bot-catalog'
 import { isHome } from '../../../../shared/bots/bot-homes'
-import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import type { Bot } from '../../../../shared/bot-types'
@@ -17,9 +18,9 @@ const NO_FOLDERS: readonly FolderWorkspace[] = []
 /** The bot whose home this workspace sits under, while Hide bot workspaces is off and it shows in its project too. */
 export function useWorktreeBot(worktree: BotWorkerRow, botsEnabled: boolean): Bot | null {
   // One subscription per card; absent reads as on, like the persisted default.
-  const folders = useAppStore((s) =>
+  const folders = useAppStoreWithHostStatuses((s, statuses) =>
     botsEnabled && s.hideBotCreatedWorkspaces === false
-      ? selectFolderAncestors(s, worktree)
+      ? selectFolderAncestors(s, statuses, worktree)
       : NO_FOLDERS
   )
   return botOfFolders(folders, useBots(folders.length > 0))
@@ -42,9 +43,13 @@ export function botOfFolders(
 /** The folder workspaces the sidebar nests this workspace beneath, nearest first. */
 export function selectFolderAncestors(
   state: AppState,
+  statuses: RuntimeStatuses,
   worktree: BotWorkerRow
 ): readonly FolderWorkspace[] {
-  return selectFolderAncestorsByIdentity(state).get(getWorktreeHostIdentity(worktree)) ?? NO_FOLDERS
+  return (
+    selectFolderAncestorsByIdentity(state, statuses).get(getWorktreeHostIdentity(worktree)) ??
+    NO_FOLDERS
+  )
 }
 
 let lastFolderAncestors: {
@@ -54,9 +59,10 @@ let lastFolderAncestors: {
 
 // One index over the sidebar's parents, shared by every card.
 function selectFolderAncestorsByIdentity(
-  state: AppState
+  state: AppState,
+  statuses: RuntimeStatuses
 ): ReadonlyMap<string, readonly FolderWorkspace[]> {
-  const parents = selectSidebarLineageParentIdentities(state)
+  const parents = selectSidebarLineageParentIdentities(state, statuses)
   const inputs = [parents, selectFolderWorkspaces(state)]
   const previous = lastFolderAncestors
   if (previous && inputs.every((input, index) => input === previous.inputs[index])) {
