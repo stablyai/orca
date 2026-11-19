@@ -102,14 +102,21 @@ function claudeUserRenamedSession(
   return claudeText(message.title)
 }
 
+type ClaudeFrameSendFacts = { startedSend?: ClaudeStartedSend; renamedTo?: string }
+// Most frames carry neither fact; this runs on every frame, streaming deltas included.
+const NO_SEND_FACTS: ClaudeFrameSendFacts = Object.freeze({})
+
 /** Send facts read when the frame arrives: its delivery can run after the send's echo settles it. */
 export function claudeFrameSendFacts(
   session: ClaudeSession | null,
   message: Record<string, unknown>,
   startsTurn: boolean
-): { startedSend?: ClaudeStartedSend; renamedTo?: string } {
+): ClaudeFrameSendFacts {
   const startedSend = !startsTurn && session ? claudeStartedUnechoedSend(session) : null
   const renamedTo = claudeUserRenamedSession(session, message)
+  if (!startedSend && !renamedTo) {
+    return NO_SEND_FACTS
+  }
   return { ...(startedSend ? { startedSend } : {}), ...(renamedTo ? { renamedTo } : {}) }
 }
 
