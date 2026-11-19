@@ -15,6 +15,8 @@ type SheetProps = {
   onChangeText: (value: string) => void
   placeholder?: string
   submitLabel?: string
+  /** The back-out's label, when "Cancel" would read as the submit itself. */
+  cancelLabel?: string
   selectTextOnFocus?: boolean
   allowEmpty?: boolean
   keyboardType?: KeyboardTypeOptions
@@ -81,6 +83,7 @@ export function TextInputSheetContent({
   onChangeText,
   placeholder,
   submitLabel,
+  cancelLabel,
   selectTextOnFocus = false,
   allowEmpty = false,
   keyboardType,
@@ -137,7 +140,7 @@ export function TextInputSheetContent({
           style={({ pressed }) => [styles.cancelButton, pressed && styles.buttonPressed]}
           onPress={onCancel}
         >
-          <Text style={styles.cancelText}>{t('common.cancel', 'Cancel')}</Text>
+          <Text style={styles.cancelText}>{cancelLabel ?? t('common.cancel', 'Cancel')}</Text>
         </Pressable>
         <Pressable
           style={({ pressed }) => [

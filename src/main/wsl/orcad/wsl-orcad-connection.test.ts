@@ -20,6 +20,7 @@ import {
   checkOrcadStdioBridge,
   openOrcadStdioBridgeChannel
 } from '../../managed-server/lifecycle/orcad-stdio-bridge'
+import { ORCAD_STDIO_BRIDGE_MAX_CHANNELS } from '../../managed-server/lifecycle/orcad-stdio-bridge-listener'
 import { startEchoServer } from '../../managed-server/lifecycle/orcad-stdio-bridge-test-channel'
 import {
   fakeWslBridgeChildren,
@@ -159,6 +160,19 @@ describe('WslOrcadConnectionManager', () => {
     await staleClosed
     expect(await roundTrip(after, 'new')).toBe('new')
     expect(children.commands.at(-1)).toContain(` ${second.port}; fi; done;`)
+  })
+
+  it('does not hold long-lived sockets to the SSH session cap', async () => {
+    const { manager, children } = setup()
+    const connection = await manager.ensure('Ubuntu')
+    const count = ORCAD_STDIO_BRIDGE_MAX_CHANNELS + 4
+    const sockets = await Promise.all(
+      Array.from({ length: count }, () => dial(connection.localPort))
+    )
+    await vi.waitFor(() => expect(children.live()).toBe(count))
+    expect(await Promise.all(sockets.map((socket, i) => echoOf(socket, `m${i}`)))).toEqual(
+      sockets.map((_, i) => `m${i}`)
+    )
   })
 
   it('drops a connect that a close overtook', async () => {

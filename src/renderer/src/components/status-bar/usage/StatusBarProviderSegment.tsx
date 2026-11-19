@@ -19,12 +19,12 @@ import { ProviderIcon } from './provider-usage-panel'
 import { USAGE_WARNING_PERCENT } from './usage-health-tone'
 import { UsageBar } from './usage-meter'
 import { getProviderDisplayName } from '../../../../../shared/agent-usage/display/usage-provider-windows'
-import { getOwnerNotSetUpLabelParts } from './owner-not-set-up-copy'
+import { getOwnerNotSetUpLabelParts } from '../../../../../shared/agent-usage/status-copy/owner-not-set-up-copy'
 import {
   getProviderUsageErrorMessage,
   getProviderUsageStatusLabel,
   isClaudeUsageWaitingForClaude
-} from './usage-error-copy'
+} from '../../../../../shared/agent-usage/status-copy/usage-error-copy'
 import { getTightestUsageSection, getUsageHeadlineSection } from './usage-headline-sections'
 import { formatBareUsagePercentage, formatUsagePercentageLabel } from './usage-percentage-label'
 import { translate } from '@/i18n/i18n'

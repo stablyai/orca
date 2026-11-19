@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { RpcContext } from '../../../core'
 import { RpcDispatcher } from '../../../dispatcher'
@@ -11,6 +12,7 @@ import { openDecisionGateFromMessage } from '../../../../orchestration/coordinat
 import { applyEscalationToDispatch } from '../../../../orchestration/coordinator/escalation/coordinator-escalation-triage'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
+import { reconcileLifecycleMessage } from '../../../../orchestration/workers/lifecycle/lifecycle-reconciliation'
 
 describe('orchestration.send Dispatch authority', () => {
   const harness = createOrchestrationRpcHarness()
@@ -90,6 +92,42 @@ describe('orchestration.send Dispatch authority', () => {
     expect(result.message.type).toBe('status')
     expect(db.getTask(task.id)?.status).toBe('dispatched')
     expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
+  })
+
+  it("rejects a caller claiming a paired server's relayed worker_done", async () => {
+    setup()
+    const task = db.createTask({ spec: 'remote work' })
+    const { dispatch } = db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      taskId: task.id,
+      startOptions: {},
+      federation: {
+        environmentId: 'environment-worker',
+        environmentName: 'worker',
+        peerFingerprint: 'peer-worker',
+        protocolVersion: 3
+      }
+    })
+
+    const result = await send({
+      from: `dispatch:${dispatch.id}`,
+      type: 'worker_done',
+      subject: 'Spoof relayed report',
+      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id, outcome: 'succeeded' })
+    })
+
+    expect(result).toMatchObject({
+      lifecycle: { action: 'rejected', code: 'sender_not_assignee' }
+    })
+    const messageId = z.object({ message: z.object({ id: z.string() }) }).parse(result).message.id
+    const stored = db.getMessageById(messageId)
+    expect(stored).toBeDefined()
+    // Mail delivery rereads it; the refusal must outlast the relay sender's exemption there.
+    expect(stored && reconcileLifecycleMessage(db, stored)).toMatchObject({
+      action: 'rejected',
+      code: 'sender_not_assignee'
+    })
   })
 
   it.each(['escalation', 'decision_gate'] as const)(
@@ -308,5 +346,119 @@ describe('orchestration.send to a settled Dispatch mailbox', () => {
       .prepare('SELECT COUNT(*) AS count FROM messages WHERE to_handle = ?')
       .get(`dispatch:${dispatch.id}`) as { count: number }
     expect(stranded.count).toBe(0)
+  })
+})
+
+describe("orchestration.send: a follow-up's report quoting a Task id", () => {
+  const harness = createOrchestrationRpcHarness()
+  let db: OrchestrationDb
+
+  afterEach(() => {
+    harness.cleanup()
+  })
+
+  /** A worker that reported task_first, then took a follow-up Task on the same terminal. */
+  function setupFollowUp() {
+    const setup = harness.setup()
+    db = setup.db
+    const first = db.createTask({ spec: 'first assignment' })
+    const firstDispatch = createRootDispatch(db, first.id, 'term_worker')
+    db.completeDispatch(firstDispatch.id)
+    const followUp = db.createTask({ spec: 'follow-up assignment' })
+    const followUpDispatch = createRootDispatch(db, followUp.id, 'term_worker')
+    db.db
+      .prepare('UPDATE dispatch_contexts SET follow_up_of_dispatch_id = ? WHERE id = ?')
+      .run(firstDispatch.id, followUpDispatch.id)
+    const send = (params: Record<string, unknown>) =>
+      harness.call('orchestration.send', params, setup.ctx)
+    return { first, followUp, followUpDispatch, send }
+  }
+
+  const storedPayload = (result: unknown) => {
+    const id = z.object({ message: z.object({ id: z.string() }) }).parse(result).message.id
+    return z
+      .object({ taskId: z.string() })
+      .parse(JSON.parse(db.getMessageById(id)?.payload ?? '{}'))
+  }
+
+  it("settles the follow-up's Task when worker_done quotes the earlier Task, with a note", async () => {
+    const { first, followUp, followUpDispatch, send } = setupFollowUp()
+
+    const result = await send({
+      from: 'term_worker',
+      type: 'worker_done',
+      subject: 'Done',
+      payload: JSON.stringify({
+        taskId: first.id,
+        dispatchId: followUpDispatch.id,
+        outcome: 'succeeded'
+      })
+    })
+
+    expect(result).toMatchObject({
+      lifecycle: { action: 'completed', taskId: followUp.id, dispatchId: followUpDispatch.id },
+      warnings: [expect.objectContaining({ code: 'stale_task_id' })]
+    })
+    expect(db.getTask(followUp.id)?.status).toBe('completed')
+    expect(storedPayload(result).taskId).toBe(followUp.id)
+  })
+
+  it('names the follow-up Task on an escalation that quotes the earlier Task', async () => {
+    const { first, followUp, followUpDispatch, send } = setupFollowUp()
+
+    const result = await send({
+      from: 'term_worker',
+      type: 'escalation',
+      subject: 'Blocked',
+      payload: JSON.stringify({ taskId: first.id, dispatchId: followUpDispatch.id })
+    })
+
+    expect(result).toMatchObject({
+      message: { type: 'escalation' },
+      warnings: [expect.objectContaining({ code: 'stale_task_id' })]
+    })
+    expect(result).not.toHaveProperty('lifecycle')
+    expect(storedPayload(result).taskId).toBe(followUp.id)
+  })
+
+  it('still rejects a worker_done quoting a Task outside its follow-up chain', async () => {
+    const { followUp, followUpDispatch, send } = setupFollowUp()
+    const unrelated = db.createTask({ spec: 'someone else' })
+    createRootDispatch(db, unrelated.id, 'term_other')
+
+    const result = await send({
+      from: 'term_worker',
+      type: 'worker_done',
+      subject: 'Done',
+      payload: JSON.stringify({
+        taskId: unrelated.id,
+        dispatchId: followUpDispatch.id,
+        outcome: 'succeeded'
+      })
+    })
+
+    expect(result).toMatchObject({
+      lifecycle: { action: 'rejected', code: 'task_dispatch_mismatch' }
+    })
+    expect(db.getTask(followUp.id)?.status).toBe('dispatched')
+    expect(db.getTask(unrelated.id)?.status).toBe('dispatched')
+  })
+
+  it('settles a matching Task id without a note', async () => {
+    const { followUp, followUpDispatch, send } = setupFollowUp()
+
+    const result = await send({
+      from: 'term_worker',
+      type: 'worker_done',
+      subject: 'Done',
+      payload: JSON.stringify({
+        taskId: followUp.id,
+        dispatchId: followUpDispatch.id,
+        outcome: 'succeeded'
+      })
+    })
+
+    expect(result).toMatchObject({ lifecycle: { action: 'completed', taskId: followUp.id } })
+    expect(result).not.toHaveProperty('warnings')
   })
 })

@@ -24,7 +24,7 @@ import {
   assertWslMoveRepoWritable
 } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { activeNestedRepoScans, runNestedRepoScanForIpc } from './nested-repo-scan-ipc'
-import { visibleProjectGroups } from '../../persistence/migrating-orcad-catalog/source/catalog/orcad-source-visibility'
+import { runtimeVisibleProjectGroups } from '../../runtime/workspaces/catalog/runtime-visible-catalog'
 
 export function registerProjectGroupHandlers(
   mainWindow: BrowserWindow,
@@ -39,7 +39,7 @@ export function registerProjectGroupHandlers(
     )
     return runtime.checkProjectGroupHooks(args.groupId, { background: args.background })
   })
-  ipcMain.handle('projectGroups:list', () => visibleProjectGroups(store))
+  ipcMain.handle('projectGroups:list', () => runtimeVisibleProjectGroups(store))
 
   ipcMain.handle('projectGroups:create', (_event, rawArgs: unknown): ProjectGroup => {
     const args = parseProjectGroupIpcArgs(

@@ -93,7 +93,15 @@ async function runMove(
   const { distro } = request
   deps.progress({ distro, step: 'preparing' })
   const startedAt = deps.now()
-  const prepared = await prepareWslMove(deps, request, migrationId, startedAt, 'finish-now')
+  // The start re-reads the mapped drives and refuses if they moved since the preview showed them.
+  const prepared = await prepareWslMove(
+    deps,
+    request,
+    migrationId,
+    startedAt,
+    'finish-now',
+    request.mappedDrives ?? []
+  )
   if ('outcome' in prepared) {
     return prepared
   }
@@ -116,7 +124,8 @@ async function runMove(
     distro,
     migrationId,
     scope.workspaceIds,
-    request.sleptPanes
+    request.sleptPanes,
+    prepared.plan.mappedDrives
   )
   try {
     const journaled = await journalSleptWslMove(deps, prepared, migrationId, startedAt, slept)
@@ -149,11 +158,13 @@ async function runMove(
             detail: pauseDetail(quiesced.reason, quiesced.detail)
           })
     }
-    try {
-      return await moveQuiesced(deps, host, quiesced.cutover, prepared, running, slept)
-    } catch (error) {
-      return await putBack(deps, host, migrationId, describe(error))
-    }
+    const result = await moveQuiesced(deps, host, quiesced.cutover, prepared, running, slept).catch(
+      (error: unknown) => putBack(deps, host, migrationId, describe(error))
+    )
+    // The projects the preview showed that this start left say why in the result.
+    return result.outcome === 'moved' && prepared.droppedForDrives
+      ? { ...result, droppedForMappedDrives: prepared.droppedForDrives }
+      : result
   } finally {
     slept.dispose()
   }
@@ -241,6 +252,7 @@ async function proveStillExited(
 ): Promise<void> {
   const proof = await deps.quiesce.proveExited({
     distro: quiesced.manifest.source.distro,
+    mappedDrives: quiesced.mappedDrives ?? [],
     workspaceKeys: prepared.scope.workspaceKeys,
     sessionIds: new Set(quiesced.provenExitedSessionIds)
   })

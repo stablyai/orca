@@ -2,6 +2,7 @@ import type {
   DiffComment,
   DiffReviewScope
 } from '../../../../../src/shared/file-review/diff-comment-types'
+import { DiffCommentSchema } from '../../../../../src/shared/file-review/diff-comment-schema'
 import {
   mobileDiffReviewCommentMatchesItem,
   type MobileDiffReviewQueueItem
@@ -42,39 +43,40 @@ export function normalizeMobileDiffComments(value: unknown, worktreeId: string):
     const lineNumber = typeof candidate.lineNumber === 'number' ? candidate.lineNumber : Number.NaN
     const body = typeof candidate.body === 'string' ? candidate.body.trim() : ''
     const createdAt = typeof candidate.createdAt === 'number' ? candidate.createdAt : Date.now()
-    if (!id || !filePath || !Number.isFinite(lineNumber) || lineNumber < 0 || !body) {
+    if (!id || !filePath || !body) {
       return []
     }
-    return [
-      {
-        id,
-        worktreeId: typeof candidate.worktreeId === 'string' ? candidate.worktreeId : worktreeId,
-        filePath,
-        source: candidate.source === 'markdown' ? 'markdown' : 'diff',
-        selectedText:
-          typeof candidate.selectedText === 'string' ? candidate.selectedText : undefined,
-        startLine: typeof candidate.startLine === 'number' ? candidate.startLine : undefined,
-        lineNumber,
-        body,
-        createdAt,
-        updatedAt: typeof candidate.updatedAt === 'number' ? candidate.updatedAt : undefined,
-        sentAt: typeof candidate.sentAt === 'number' ? candidate.sentAt : undefined,
-        scope: normalizeScope(candidate.scope),
-        oldPath: typeof candidate.oldPath === 'string' ? candidate.oldPath : undefined,
-        diffIdentity:
-          typeof candidate.diffIdentity === 'string' ? candidate.diffIdentity : undefined,
-        side: 'modified'
-      }
-    ]
+    return hostAcceptedNote({
+      id,
+      worktreeId: typeof candidate.worktreeId === 'string' ? candidate.worktreeId : worktreeId,
+      filePath,
+      source: candidate.source === 'markdown' ? 'markdown' : 'diff',
+      selectedText: typeof candidate.selectedText === 'string' ? candidate.selectedText : undefined,
+      startLine: typeof candidate.startLine === 'number' ? candidate.startLine : undefined,
+      lineNumber,
+      body,
+      createdAt,
+      updatedAt: typeof candidate.updatedAt === 'number' ? candidate.updatedAt : undefined,
+      sentAt: typeof candidate.sentAt === 'number' ? candidate.sentAt : undefined,
+      scope: normalizeScope(candidate.scope),
+      oldPath: typeof candidate.oldPath === 'string' ? candidate.oldPath : undefined,
+      diffIdentity: typeof candidate.diffIdentity === 'string' ? candidate.diffIdentity : undefined,
+      side: 'modified'
+    })
   })
+}
+
+// Why: the host refuses a note list holding any note its schema rejects, so keep only notes it accepts.
+function hostAcceptedNote(comment: DiffComment): DiffComment[] {
+  return DiffCommentSchema.safeParse(comment).success ? [comment] : []
 }
 
 export function createMobileDiffComment(input: CreateMobileDiffCommentInput): DiffComment | null {
   const body = input.body.trim()
-  if (!body || !Number.isFinite(input.lineNumber) || input.lineNumber < 0) {
+  if (!body) {
     return null
   }
-  return {
+  const [comment] = hostAcceptedNote({
     id: input.id,
     worktreeId: input.worktreeId,
     filePath: input.filePath,
@@ -89,7 +91,8 @@ export function createMobileDiffComment(input: CreateMobileDiffCommentInput): Di
     scope: input.scope,
     diffIdentity: input.diffIdentity,
     side: 'modified'
-  }
+  })
+  return comment ?? null
 }
 
 export function addMobileDiffComment(
@@ -101,6 +104,16 @@ export function addMobileDiffComment(
     return { comments: [...comments], comment: null }
   }
   return { comments: [...comments, comment], comment }
+}
+
+/** Whether a note this save added is missing from the list the host answered with. */
+export function droppedAddedMobileDiffComment(
+  base: readonly DiffComment[],
+  sent: readonly DiffComment[],
+  saved: readonly DiffComment[]
+): boolean {
+  const known = new Set([...base, ...saved].map((comment) => comment.id))
+  return sent.some((comment) => !known.has(comment.id))
 }
 
 export function removeMobileDiffComments(

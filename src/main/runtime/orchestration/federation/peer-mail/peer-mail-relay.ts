@@ -66,12 +66,14 @@ export class PeerMailRelay {
     private readonly transport: () => OrchestrationEnvironmentTransport | null
   ) {}
 
-  ensure(): void {
+  ensure(targetEnvironmentId?: string): void {
     if (!this.transport()) {
       return
     }
     const db = this.runtime.getOrchestrationDb()
-    for (const environmentId of peerMailRelayEnvironments(db)) {
+    for (const environmentId of targetEnvironmentId === undefined
+      ? peerMailRelayEnvironments(db)
+      : [targetEnvironmentId]) {
       const current = this.loops.get(environmentId)
       if (current && !current.stopped && current.db === db) {
         continue
@@ -304,22 +306,22 @@ export class PeerMailRelay {
     const handle = peerMailLocalRecipient(this.runtime, conversation)
     // Peer-mail replies come home to this Orca's own sender handle, never a terminal agent's id.
     const recipient = resolveBareOrchestrationRecipient({ runtime: this.runtime, db, handle })
-    const presented = presentImportedPeerItem({
+    const { from, body, ...carried } = presentImportedPeerItem({
       kind: 'peer_mail',
-      senderLabel: payload.data.senderLabel,
-      body: payload.data.body
+      ...payload.data
     })
     const stored = db.insertPeerMailMessage({
       conversationId: conversation.conversation_id,
       remoteParty: payload.data.fromAddress,
       message: {
         id: item.messageId,
-        from: presented.from,
+        from,
         to: recipient.ok ? recipient.to : handle,
         subject: payload.data.subject,
-        body: presented.body,
+        body,
         threadId: payload.data.threadId ?? undefined,
-        runId: recipient.ok ? recipient.runId : undefined
+        runId: recipient.ok ? recipient.runId : undefined,
+        ...carried
       }
     })
     return stored.duplicate ? undefined : stored.message

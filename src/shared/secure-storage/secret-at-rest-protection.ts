@@ -16,3 +16,15 @@ export function classifyUnenvelopedCredential(raw: Buffer): SecretAtRestProtecti
   // oxlint-disable-next-line no-control-regex -- Sealed payloads are binary, so control bytes are the signal.
   return /[\u0000-\u0008\u000E-\u001F]/.test(text) ? 'sealed' : 'plaintext'
 }
+
+export const MOCK_KEYCHAIN_CIPHERTEXT_PREFIX = Buffer.from('orca-mock-keychain-v1\0')
+
+export function isMockKeychainCiphertext(raw: Buffer): boolean {
+  return raw
+    .subarray(0, MOCK_KEYCHAIN_CIPHERTEXT_PREFIX.length)
+    .equals(MOCK_KEYCHAIN_CIPHERTEXT_PREFIX)
+}
+
+export function encryptedCredentialProtection(raw: Buffer): SecretAtRestProtection {
+  return isMockKeychainCiphertext(raw) ? 'plaintext' : 'sealed'
+}

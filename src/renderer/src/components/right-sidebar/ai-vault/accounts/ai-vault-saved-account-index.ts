@@ -1,7 +1,7 @@
 import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { normalizeRuntimePathForComparison } from '../../../../../../shared/file-access/cross-platform-path'
 import { structuralValuesEqual } from '../../../../../../shared/collections/structural-value-equality'
-import { normalizeCodexAccountEmail } from '@/lib/provider-accounts/codex-account-display-label'
+import { normalizeCodexAccountEmail } from '../../../../../../shared/agent-accounts/codex-account-display-label'
 import { accountRuntimeScope } from './ai-vault-account-binding'
 import type { NativeAccountEvidence } from './ai-vault-native-account-index'
 import { AccountDisplayPeers } from './ai-vault-account-display'

@@ -211,8 +211,8 @@ export function useMobileStructuredQueuedMessageControls(args: {
       }
       const card = cards.find((candidate) => candidate.messageId === messageId)
       // Copy before Delete so refusal or lost reply cannot lose text; failed deletion leaves both copies visible.
-      // Never delete without a copy, and never turn command text into an editable message draft.
-      if (!card || card.command || !appendComposerText?.(card.text)) {
+      // Never delete without a copy, and never turn a command or a run into the owner's draft.
+      if (!card || card.notEditable || !appendComposerText?.(card.text)) {
         return false
       }
       onCopied?.()

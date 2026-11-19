@@ -1,11 +1,9 @@
 import type React from 'react'
 import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { ChatAccountAction } from './ProviderAccountChatButton'
-import { useAppStore } from '../../../store/index'
-import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
-import { useActiveAccountOwner } from '@/runtime/provider-accounts/ownership/use-active-account-owner'
 import { ClaudeSwitcherForOwner } from './ClaudeSwitcherForOwner'
-import { getProviderAccountsOwnerKey } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
+import { getAccountOwnerKey } from './owner-account-rows'
+import type { OwnerUsageRateLimits } from '../usage/use-owner-usage-rate-limits'
 
 export type ClaudeSwitcherMenuProps = {
   claude: ProviderRateLimits | null
@@ -13,29 +11,15 @@ export type ClaudeSwitcherMenuProps = {
   iconOnly: boolean
   asSubmenu?: boolean
   triggerContent?: React.ReactNode
-  chatAction?: ChatAccountAction
-}
+} & (
+  | { chatAction: ChatAccountAction; ownerUsage?: never }
+  /** The status bar's owner observation: rows list that owner's accounts and readings. */
+  | { ownerUsage: OwnerUsageRateLimits; chatAction?: never }
+)
 
 export function ClaudeSwitcherMenu(props: ClaudeSwitcherMenuProps): React.JSX.Element | null {
-  return props.chatAction ? (
-    <ClaudeSwitcherForOwner
-      {...props}
-      key={getProviderAccountsOwnerKey(props.chatAction.target)}
-      owner={{ target: props.chatAction.target, wslHostDistro: null }}
-    />
-  ) : (
-    <FocusedClaudeSwitcher {...props} />
-  )
-}
-
-function FocusedClaudeSwitcher(props: ClaudeSwitcherMenuProps): React.JSX.Element | null {
-  const settings = useAppStore((s) => s.settings)
-  const owner = useActiveAccountOwner(defaultScopeHost(settings))
-  return (
-    <ClaudeSwitcherForOwner
-      key={`${getProviderAccountsOwnerKey(owner.target)}:${owner.wslHostDistro ?? ''}`}
-      {...props}
-      owner={owner}
-    />
-  )
+  const owner = props.chatAction
+    ? { target: props.chatAction.target, wslHostDistro: null }
+    : props.ownerUsage.owner
+  return <ClaudeSwitcherForOwner {...props} key={getAccountOwnerKey(owner)} owner={owner} />
 }

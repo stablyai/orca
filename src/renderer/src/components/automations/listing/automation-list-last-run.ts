@@ -12,14 +12,10 @@ import {
   formatAutomationRelativeTime,
   getAutomationRunStatusLabel
 } from '../automation-page-parts'
-
-export type AutomationLastRunTone =
-  | 'failed'
-  | 'succeeded'
-  | 'running'
-  | 'skipped'
-  | 'never'
-  | 'unknown'
+import {
+  getToneForAutomationRunStatus,
+  type AutomationLastRunTone
+} from '../../../../../shared/automation-last-run'
 
 export type AutomationLastRunSnapshot = {
   at: number | null
@@ -36,35 +32,6 @@ const EXTERNAL_SUCCEEDED_STATUSES = new Set([
   'done',
   'healthy'
 ])
-
-export function indexLatestAutomationRuns(
-  runs: readonly AutomationRun[]
-): ReadonlyMap<string, AutomationRun> {
-  const latest = new Map<string, AutomationRun>()
-  for (const run of runs) {
-    const existing = latest.get(run.automationId)
-    if (!existing || run.createdAt > existing.createdAt) {
-      latest.set(run.automationId, run)
-    }
-  }
-  return latest
-}
-
-export function getToneForAutomationRunStatus(status: AutomationRunStatus): AutomationLastRunTone {
-  if (status === 'dispatch_failed') {
-    return 'failed'
-  }
-  if (status === 'completed') {
-    return 'succeeded'
-  }
-  if (status === 'pending' || status === 'dispatching' || status === 'dispatched') {
-    return 'running'
-  }
-  if (status.startsWith('skipped')) {
-    return 'skipped'
-  }
-  return 'unknown'
-}
 
 /** Use the authority-projected newest retained run without fetching history; legacy servers fall back to stored lastRunAt alone. */
 export function getAutomationRowLastRunSnapshot(

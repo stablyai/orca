@@ -40,7 +40,7 @@ export async function writeIssueRelation(params: {
   try {
     params.signal?.throwIfAborted()
     const client = params.signal
-      ? createLinearClient({ apiKey: entry.apiKey, signal: params.signal })
+      ? createLinearClient({ ...entry.credential, signal: params.signal })
       : entry.client
     const existing = await findExistingRelation(client, params)
     params.signal?.throwIfAborted()

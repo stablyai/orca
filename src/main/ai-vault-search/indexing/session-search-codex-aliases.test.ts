@@ -1,6 +1,16 @@
 import type * as TranscriptFs from '../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
-import { copyFile, mkdir, writeFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import {
+  appendFile,
+  copyFile,
+  link,
+  mkdir,
+  readFile,
+  rm,
+  utimes,
+  writeFile
+} from 'node:fs/promises'
+import { zstdCompressSync } from 'node:zlib'
+import { basename, dirname, join } from 'node:path'
 import { Readable } from 'node:stream'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { resetSessionParseCacheForTests } from '../../ai-vault/parse-cache/session-parse-cache-store'
@@ -208,4 +218,105 @@ it('keeps a successfully excluded canonical rollout excluded on unchanged sweeps
   await sweep()
   expect(io.paths).toEqual([])
   expect(matches()).toEqual([])
+})
+
+it('keeps one indexed copy after a preferred archive appears beside an indexed account copy', async () => {
+  io.failed = ''
+  await rm(real)
+  await sweep()
+  await writeFile(`${real}.zst`, zstdCompressSync(await readFile(managed)))
+  const archivedAt = new Date(2026, 6, 1)
+  await utimes(managed, archivedAt, archivedAt)
+  await utimes(`${real}.zst`, archivedAt, archivedAt)
+  await sweep()
+  await sweep()
+  expect(matches()).toEqual([{ user_text: 'readablealiasneedle' }])
+  expect(index.db.prepare('SELECT path FROM files').all()).toEqual([{ path: `${real}.zst` }])
+})
+
+it('keeps an indexed account copy whose mtime differs from the preferred archive', async () => {
+  io.failed = ''
+  await rm(real)
+  const archived = zstdCompressSync(await readFile(managed))
+  await appendFile(
+    managed,
+    `${JSON.stringify({
+      type: 'response_item',
+      payload: {
+        type: 'message',
+        role: 'user',
+        content: [{ type: 'input_text', text: 'appendedaliasneedle' }]
+      }
+    })}\n`
+  )
+  await utimes(managed, new Date(2026, 0, 1), new Date(2026, 0, 1))
+  await sweep()
+  await writeFile(`${real}.zst`, archived)
+  await utimes(`${real}.zst`, new Date(2026, 2, 1), new Date(2026, 2, 1))
+  await sweep()
+  await sweep()
+  expect(
+    index.db
+      .prepare("SELECT user_text FROM messages_fts WHERE messages_fts MATCH 'appendedaliasneedle'")
+      .all()
+  ).toEqual([{ user_text: 'appendedaliasneedle' }])
+})
+
+it.each([
+  ['a hardlink of the account copy', 'canonical', 'hardlink'],
+  ['an old-style named copy', 'legacy', 'copy']
+] as const)(
+  'keeps one indexed copy after %s appears in the preferred home',
+  async (_label, naming, share) => {
+    io.failed = ''
+    const name = naming === 'legacy' ? 'rollout-2026-07-01T10-00-00-oldstyle.jsonl' : basename(real)
+    const preferred = join(dirname(real), name)
+    const account = join(dirname(managed), name)
+    const transcript = await readFile(real)
+    await rm(real)
+    await rm(managed)
+    await writeFile(account, transcript)
+    await sweep()
+    if (share === 'hardlink') {
+      await link(account, preferred)
+    } else {
+      await writeFile(preferred, transcript)
+      const movedAt = new Date(2026, 6, 1)
+      await utimes(account, movedAt, movedAt)
+      await utimes(preferred, movedAt, movedAt)
+    }
+    await sweep()
+    await sweep()
+    expect(matches()).toEqual([{ user_text: 'readablealiasneedle' }])
+    expect(index.db.prepare('SELECT path FROM files').all()).toEqual([{ path: preferred }])
+  }
+)
+
+it('keeps an indexed account copy with extra messages when a shorter preferred copy shares its mtime', async () => {
+  io.failed = ''
+  const shorter = await readFile(managed)
+  await rm(real)
+  await appendFile(
+    managed,
+    `${JSON.stringify({
+      type: 'response_item',
+      payload: {
+        type: 'message',
+        role: 'user',
+        content: [{ type: 'input_text', text: 'appendedaliasneedle' }]
+      }
+    })}\n`
+  )
+  const sharedAt = new Date(2026, 0, 1)
+  await utimes(managed, sharedAt, sharedAt)
+  await sweep()
+  await writeFile(real, shorter)
+  await utimes(real, sharedAt, sharedAt)
+  await sweep()
+  await sweep()
+  expect(
+    index.db
+      .prepare("SELECT user_text FROM messages_fts WHERE messages_fts MATCH 'appendedaliasneedle'")
+      .all()
+  ).toEqual([{ user_text: 'appendedaliasneedle' }])
 })
