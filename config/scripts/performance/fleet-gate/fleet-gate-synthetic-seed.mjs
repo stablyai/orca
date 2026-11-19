@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { lockCacheEntry } from './fleet-gate-cache-lock.mjs'
+import { copyProfile } from './fleet-gate-copies.mjs'
 
 export const SEED_SHAPE = { worktrees: 1_800, folders: 100, chats: 1_800, terminals: 200 }
 const SEED_FORMAT = 2
@@ -228,16 +229,20 @@ export async function readFleetCensus(page) {
   })
 }
 
-/** Seeds through a launched app; launch() returns { app, page } with page session-ready, close() quits it gracefully. */
-export async function buildSyntheticFleetSeed({ seedDir, corpusDir, builtBy, launch }) {
+/**
+ * Seeds through a launched app; launch() returns { app, page } with page session-ready, close() quits it gracefully.
+ * The app runs on workDir inside the gate's run folder, never the shared seed cache, so a reap of this gate never
+ * touches another gate's seed; the finished profile is copied into seedDir.
+ */
+export async function buildSyntheticFleetSeed({ seedDir, workDir, corpusDir, builtBy, launch }) {
   ensureFleetCorpus(corpusDir)
-  fs.rmSync(seedDir, { recursive: true, force: true })
-  fs.mkdirSync(seedDir, { recursive: true })
+  fs.rmSync(workDir, { recursive: true, force: true })
+  fs.mkdirSync(workDir, { recursive: true })
   fs.writeFileSync(
-    path.join(seedDir, 'orca-data.json'),
+    path.join(workDir, 'orca-data.json'),
     `${JSON.stringify(completedOnboardingProfile(), null, 2)}\n`
   )
-  const { page, close } = await launch(seedDir)
+  const { page, close } = await launch(workDir)
   try {
     const workspaces = await addWorkspaces(page, corpusDir)
     const chats = await seedChats(page, SEED_SHAPE.chats)
@@ -250,6 +255,8 @@ export async function buildSyntheticFleetSeed({ seedDir, corpusDir, builtBy, lau
       throw new Error(`seed is short of ${short.join(', ')}: ${JSON.stringify(receipt)}`)
     }
     await close()
+    fs.rmSync(seedDir, { recursive: true, force: true })
+    copyProfile(workDir, seedDir)
     fs.writeFileSync(
       path.join(seedDir, '.fleet-seed.json'),
       `${JSON.stringify(receipt, null, 2)}\n`

@@ -49,7 +49,7 @@ async function until(check) {
 }
 
 /** A run folder holding one copy (an app process plus its daemon), as a launched copy leaves it. */
-async function runFolderWithCopy(dir) {
+async function runFolderWithCopy(dir, marker) {
   const userDataDir = path.join(dir, 'old-0', 'user-data')
   fs.mkdirSync(path.join(userDataDir, 'daemon'), { recursive: true })
   const pidRecord = path.join(userDataDir, 'daemon', 'daemon.pid')
@@ -64,28 +64,43 @@ async function runFolderWithCopy(dir) {
     path.join(dir, 'apps', String(app.pid)),
     JSON.stringify({ identity: processIdentity(app.pid), userDataDir })
   )
-  return { app, daemon }
+  // A copy whose launch never returned (the gate died mid-launch) and a helper such as Xvfb.
+  const launching = sleeper(`--fleet-gate-copy=${marker}`)
+  const helper = sleeper()
+  await until(() => processIdentity(launching.pid) && processIdentity(helper.pid))
+  fs.writeFileSync(
+    path.join(dir, 'apps', `pending-${marker}`),
+    JSON.stringify({ marker, userDataDir })
+  )
+  fs.writeFileSync(
+    path.join(dir, 'helpers', String(helper.pid)),
+    JSON.stringify({ identity: processIdentity(helper.pid) })
+  )
+  return [app, daemon, launching, helper].map((child) => child.pid)
 }
 
 // The gate is Mac and Linux only; it reads process start times with ps.
 it.skipIf(process.platform === 'win32')(
-  "reaps a dead gate's copy and daemon but leaves a live gate's run alone",
+  "reaps a dead gate's copies, daemon and helpers but leaves live and starting gates alone",
   async () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'fleet-gate-runs-test-'))
     const dead = createRunDir('gate', root)
     // A gate killed with SIGKILL: its owner record names a process that no longer exists.
     fs.writeFileSync(path.join(dead, 'owner'), '999999 Thu Jan  1 00:00:00 1970')
-    const deadCopy = await runFolderWithCopy(dead)
+    const deadCopy = await runFolderWithCopy(dead, 'marker-dead')
     const live = createRunDir('gate', root)
-    const liveCopy = await runFolderWithCopy(live)
+    const liveCopy = await runFolderWithCopy(live, 'marker-live')
+    // Another gate is creating this one right now: its owner file isn't written yet.
+    const starting = fs.mkdtempSync(path.join(root, 'gate-'))
 
     expect(await reapStaleRunDirs(root)).toBe(1)
 
-    await until(() => !alive(deadCopy.app.pid) && !alive(deadCopy.daemon.pid))
-    expect([alive(deadCopy.app.pid), alive(deadCopy.daemon.pid)]).toEqual([false, false])
+    await until(() => deadCopy.every((pid) => !alive(pid)))
+    expect(deadCopy.map(alive)).toEqual([false, false, false, false])
     expect(fs.existsSync(dead)).toBe(false)
-    expect([alive(liveCopy.app.pid), alive(liveCopy.daemon.pid)]).toEqual([true, true])
+    expect(liveCopy.map(alive)).toEqual([true, true, true, true])
     expect(fs.existsSync(live)).toBe(true)
+    expect(fs.existsSync(starting)).toBe(true)
   },
   30_000
 )

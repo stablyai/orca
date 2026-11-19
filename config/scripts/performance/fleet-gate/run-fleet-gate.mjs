@@ -11,9 +11,10 @@ import { lockCacheEntryAsync, releaseHeldLocks } from './fleet-gate-cache-lock.m
 import { copyProfile, stopCopyDaemons } from './fleet-gate-copies.mjs'
 import {
   createRunDir,
-  killLiveCopiesNow,
+  killLiveNow,
   reapStaleRunDirs,
-  registerCopy
+  recordCopyLaunch,
+  recordHelper
 } from './fleet-gate-run-dirs.mjs'
 import { startVirtualDisplay } from './fleet-gate-display.mjs'
 import { waitForAppWindow } from './fleet-gate-app-ready.mjs'
@@ -54,6 +55,8 @@ const STOP_BUDGET_MS = 60_000
 
 // Hidden windows never paint, so clicks and screenshots stall; on Linux the copy gets its own Xvfb, never a real desktop.
 let virtualDisplay = null
+// This gate's folder under the cache: every copy, temp file and helper record lives here (see fleet-gate-run-dirs.mjs).
+let gateRunDir = null
 
 function launchArgs(buildDir) {
   const keychain = ['--password-store=basic', '--use-mock-keychain']
@@ -77,9 +80,8 @@ function launchArgs(buildDir) {
 
 function isolatedEnv(runDir, userDataDir) {
   const home = path.join(runDir, 'home')
-  // Temp files stay in the run folder, which the gate (or the next gate's reap) deletes.
-  const tmp = path.join(runDir, 'tmp')
-  fs.mkdirSync(tmp, { recursive: true })
+  // Temp files stay in the gate's folder, which the gate (or the next gate's reap) deletes.
+  const tmp = path.join(gateRunDir, 'tmp')
   for (const dir of [
     '',
     '.config',
@@ -140,22 +142,24 @@ async function launchCopy({ buildDir, runDir, userDataDir, label, outDir, extraE
   const executablePath = createRequire(path.join(buildDir, 'package.json'))('electron')
   // Counted until its close is registered, so a stop signal waits for a copy that is still starting.
   launchesInFlight += 1
+  const launchRecord = recordCopyLaunch(runDir, userDataDir)
   let app
   try {
     app = await electron.launch({
       executablePath,
-      args: launchArgs(buildDir),
+      args: [launchRecord.arg, ...launchArgs(buildDir)],
       env: { ...isolatedEnv(runDir, userDataDir), ...extraEnv },
       timeout: 180_000
     })
   } catch (error) {
     launchesInFlight -= 1
     await stopCopyDaemons(userDataDir)
+    launchRecord.forget()
     throw error
   }
   // Captured now: app.process() throws once the app object is closed.
   const child = app.process()
-  const forget = registerCopy(runDir, child.pid, userDataDir)
+  launchRecord.commit(child.pid)
   const stderrTail = []
   let ownershipText = ''
   child.stderr?.on('data', (chunk) => {
@@ -181,7 +185,7 @@ async function launchCopy({ buildDir, runDir, userDataDir, label, outDir, extraE
       child.kill('SIGKILL')
     }
     await stopCopyDaemons(userDataDir)
-    forget()
+    launchRecord.forget()
     liveCleanups.delete(close)
   }
   liveCleanups.add(close)
@@ -225,7 +229,7 @@ async function burstOnce({ arm, sha, buildDir, seedDir, runDir, outDir, repoRoot
     stderrOwnership += first.ownershipText()
     await first.close()
   }
-  const stopLoad = startCpuLoad(repoRoot)
+  const stopLoad = startCpuLoad(repoRoot, (pid) => recordHelper(gateRunDir, pid))
   liveCleanups.add(stopLoad)
   try {
     const second = await copy('restart')
@@ -295,10 +299,11 @@ async function seedUnderLock({ seedsDir, seedDir, oldSha, oldBuild, outDir }) {
     return { seedDir, receipt: existing }
   }
   console.log(`[fleet-gate] seeding a synthetic fleet with ${oldSha.slice(0, 12)}`)
-  const runDir = createRunDir('seed')
+  const runDir = path.join(gateRunDir, 'seed')
   try {
     const receipt = await buildSyntheticFleetSeed({
       seedDir,
+      workDir: path.join(runDir, 'user-data'),
       corpusDir: path.join(CACHE_ROOT, 'corpus'),
       builtBy: oldSha,
       launch: (userDataDir) =>
@@ -424,6 +429,7 @@ async function main() {
   if (reaped > 0) {
     console.log(`[fleet-gate] reaped ${String(reaped)} run folder(s) a stopped gate left behind`)
   }
+  gateRunDir = createRunDir('gate')
   // Synchronous cache work comes first, before stop handlers exist, so a stop signal still ends it at once.
   const builds = { old: ensureBuild(repoRoot, oldSha), new: ensureBuild(repoRoot, newSha) }
   if (!options.seed) {
@@ -431,6 +437,9 @@ async function main() {
   }
   installStopHandlers()
   virtualDisplay = await startVirtualDisplay()
+  if (virtualDisplay) {
+    virtualDisplay.forget = recordHelper(gateRunDir, virtualDisplay.pid)
+  }
   // Without a private display copies stay hidden and unpainted, so clicks and focus can't be driven.
   options.scenarios ??= virtualDisplay
     ? [...Object.keys(SCENARIOS), 'burst']
@@ -441,53 +450,50 @@ async function main() {
   const shas = { old: oldSha, new: newSha }
   const runs = []
   const schedule = buildCounterbalancedSchedule(options.runs, 'old', 'new')
-  const runsRoot = createRunDir('gate')
+  const runsRoot = gateRunDir
   const windowScenarios = options.scenarios.filter((name) => name !== 'burst')
   const bursts = []
-  try {
-    for (const pair of windowScenarios.length > 0 ? schedule : []) {
-      for (const arm of pair) {
-        runs.push(
-          await measureOnce({
-            arm,
-            sha: shas[arm],
-            buildDir: builds[arm],
-            seedDir: seed.seedDir,
-            options: {
-              ...options,
-              scenarios: windowScenarios,
-              fullFleet: seed.receipt
-                ? {
-                    workspaces: SEED_SHAPE.worktrees + SEED_SHAPE.folders,
-                    chatTabs: SEED_SHAPE.chats,
-                    terminalTabs: SEED_SHAPE.terminals
-                  }
-                : null
-            },
-            outDir,
-            runDir: path.join(runsRoot, `${arm}-${runs.length}`)
-          })
-        )
-      }
+  // Each run removes its own copy; the gate's folder (runsRoot) goes when the gate exits.
+  for (const pair of windowScenarios.length > 0 ? schedule : []) {
+    for (const arm of pair) {
+      runs.push(
+        await measureOnce({
+          arm,
+          sha: shas[arm],
+          buildDir: builds[arm],
+          seedDir: seed.seedDir,
+          options: {
+            ...options,
+            scenarios: windowScenarios,
+            fullFleet: seed.receipt
+              ? {
+                  workspaces: SEED_SHAPE.worktrees + SEED_SHAPE.folders,
+                  chatTabs: SEED_SHAPE.chats,
+                  terminalTabs: SEED_SHAPE.terminals
+                }
+              : null
+          },
+          outDir,
+          runDir: path.join(runsRoot, `${arm}-${runs.length}`)
+        })
+      )
     }
-    if (options.scenarios.includes('burst')) {
-      for (const arm of ['old', 'new']) {
-        bursts.push(
-          await burstOnce({
-            arm,
-            sha: shas[arm],
-            buildDir: builds[arm],
-            seedDir: seed.seedDir,
-            outDir,
-            repoRoot,
-            minWorkspaces: seed.receipt ? SEED_SHAPE.worktrees + SEED_SHAPE.folders : 0,
-            runDir: path.join(runsRoot, `burst-${arm}`)
-          })
-        )
-      }
+  }
+  if (options.scenarios.includes('burst')) {
+    for (const arm of ['old', 'new']) {
+      bursts.push(
+        await burstOnce({
+          arm,
+          sha: shas[arm],
+          buildDir: builds[arm],
+          seedDir: seed.seedDir,
+          outDir,
+          repoRoot,
+          minWorkspaces: seed.receipt ? SEED_SHAPE.worktrees + SEED_SHAPE.folders : 0,
+          runDir: path.join(runsRoot, `burst-${arm}`)
+        })
+      )
     }
-  } finally {
-    fs.rmSync(runsRoot, { recursive: true, force: true })
   }
   const census = runs.find((entry) => entry.census)?.census
   const rows = [...compareRuns(runs, windowScenarios), ...burstRows(bursts)]
@@ -554,8 +560,13 @@ function installStopHandlers() {
   }
 }
 
-// Last resort for any exit path that skipped the graceful closes.
-process.on('exit', killLiveCopiesNow)
+// Last resort for any exit path that skipped the graceful closes (a thrown error, a stop signal's process.exit).
+process.on('exit', () => {
+  killLiveNow()
+  if (gateRunDir) {
+    fs.rmSync(gateRunDir, { recursive: true, force: true })
+  }
+})
 
 // Exit explicitly: a launched copy's driver handles otherwise keep the process (and its qa-gate slot) alive.
 main()

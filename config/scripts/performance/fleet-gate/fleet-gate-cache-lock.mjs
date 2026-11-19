@@ -1,5 +1,5 @@
 // Gate runs on one machine share ~/.cache/orca-fleet-gate; a lock keeps two runs from building the same entry at once.
-import { execFileSync } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
@@ -8,19 +8,43 @@ const POLL_MS = 5_000
 const sleeper = new Int32Array(new SharedArrayBuffer(4))
 const held = new Set()
 
-/** pid plus its start time, so a reused pid never passes for the run that made a lock. */
-export function processIdentity(pid) {
-  try {
-    // LC_ALL=C: every run must print a given start time the same way.
-    const started = execFileSync('ps', ['-o', 'lstart=', '-p', String(pid)], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-      env: { ...process.env, LC_ALL: 'C' }
-    })
-    return started.trim() ? `${String(pid)} ${started.trim()}` : null
-  } catch {
-    return null
+/**
+ * pid plus its start time, so a reused pid never passes for the run that recorded it: 'alive' with that identity,
+ * 'gone' when ps ran and found no such process, 'unknown' when ps itself failed (a busy host is no proof of death).
+ */
+export function probeProcess(pid) {
+  // LC_ALL and TZ: every process must print a given start time the same way.
+  const r = spawnSync('ps', ['-o', 'lstart=', '-p', String(pid)], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+    env: { ...process.env, LC_ALL: 'C', TZ: 'UTC' }
+  })
+  const started = typeof r.stdout === 'string' ? r.stdout.trim() : ''
+  if (r.error || r.signal) {
+    return { state: 'unknown' }
   }
+  if (r.status === 0 && started) {
+    return { state: 'alive', identity: `${String(pid)} ${started}` }
+  }
+  return r.status === 1 && !started ? { state: 'gone' } : { state: 'unknown' }
+}
+
+export function processIdentity(pid) {
+  const probe = probeProcess(pid)
+  return probe.state === 'alive' ? probe.identity : null
+}
+
+/** 'alive', 'dead' (gone or a different process now) or 'unknown' for a recorded identity. */
+export function identityState(identity) {
+  const pid = Number(String(identity).split(' ')[0])
+  if (!Number.isInteger(pid) || pid <= 1) {
+    return 'dead'
+  }
+  const probe = probeProcess(pid)
+  if (probe.state === 'unknown') {
+    return 'unknown'
+  }
+  return probe.state === 'alive' && probe.identity === identity ? 'alive' : 'dead'
 }
 
 const ownIdentity = processIdentity(process.pid)
@@ -58,7 +82,12 @@ function tryLock(entryDir) {
       // Released between our rename and this read: just try again.
       return null
     }
-    if (owner === null || processIdentity(Number(owner.split(' ')[0])) !== owner) {
+    const state = owner === null ? 'dead' : identityState(owner)
+    if (state === 'unknown') {
+      // ps failed: try again on the next poll rather than calling a live owner dead.
+      return null
+    }
+    if (state === 'dead') {
       throw new Error(
         `stale cache lock ${lockDir} (owner ${owner ?? 'unknown'} is no longer running). ` +
           `If no gate run is using ${entryDir}, remove it: rm -rf '${lockDir}' '${entryDir}'`

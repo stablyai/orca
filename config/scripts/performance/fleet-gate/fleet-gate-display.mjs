@@ -47,5 +47,13 @@ export async function startVirtualDisplay() {
     child.kill('SIGKILL')
     return null
   }
-  return { display: `:${number}`, stop: () => child.kill('SIGTERM') }
+  return {
+    display: `:${number}`,
+    pid: child.pid,
+    forget: () => {},
+    stop() {
+      child.kill('SIGTERM')
+      this.forget()
+    }
+  }
 }
