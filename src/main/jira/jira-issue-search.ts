@@ -179,7 +179,7 @@ async function runIssueSearch(
           }
           const authFailure = isAuthError(error)
           if (authFailure) {
-            clearToken(entry.site.id)
+            clearToken(entry)
           }
           if (surfaceSiteFailure) {
             throw toIssueSearchFailureError(error)

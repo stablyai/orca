@@ -197,7 +197,20 @@ export async function testConnection(
   }
 }
 
-export function clearToken(siteId: string): void {
+export function clearToken(failedClient: JiraClientForSite): void {
+  const siteId = failedClient.site.id
+  let currentClient: JiraClientForSite | undefined
+  try {
+    currentClient = getClients(siteId)[0]
+  } catch (error) {
+    if (error instanceof CredentialDecryptionError) {
+      return
+    }
+    throw error
+  }
+  if (!currentClient || currentClient.authorization !== failedClient.authorization) {
+    return
+  }
   deleteToken(siteId)
   clearAttachmentImagesForSite(siteId)
   const file = getSiteFile()
