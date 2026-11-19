@@ -29,6 +29,7 @@ import type {
   RuntimeTerminalPresentation
 } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { PreloadApi } from '../../api-types'
+import type { TerminalViewMode } from '../../../shared/terminal-view-mode.ts'
 
 export const uiTerminalAndSessionTabsApi = {
   onCreateTerminal: (
@@ -42,7 +43,7 @@ export const uiTerminalAndSessionTabsApi = {
       resumeProviderSession?: AgentProviderSessionMetadata
       launchToken?: string
       launchAgent?: TuiAgent
-      viewMode?: 'terminal' | 'chat'
+      viewMode?: TerminalViewMode
       targetGroupId?: string
       afterTabId?: string
       shellOverride?: string
@@ -72,7 +73,7 @@ export const uiTerminalAndSessionTabsApi = {
         resumeProviderSession?: AgentProviderSessionMetadata
         launchToken?: string
         launchAgent?: TuiAgent
-        viewMode?: 'terminal' | 'chat'
+        viewMode?: TerminalViewMode
         targetGroupId?: string
         afterTabId?: string
         shellOverride?: string

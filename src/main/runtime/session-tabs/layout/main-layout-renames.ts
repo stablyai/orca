@@ -10,6 +10,7 @@ import type { WindowLayoutCommand } from '../../terminal/layout/runtime-layout-a
 import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
 import { startedMainTerminalSurfaces } from '../../terminal/surface/main-terminal-surfaces'
 import { paneTitlesForDesktopWindow } from '../publication/desktop-pane-title-forwarding'
+import type { TerminalViewMode } from '../../../../shared/terminal-view-mode.ts'
 
 type MainOwnedPane = {
   worktreeId: string
@@ -133,7 +134,7 @@ export abstract class OrcaRuntimeWithMainLayoutRenames extends OrcaRuntimeWithMa
     props: {
       color?: string | null
       isPinned?: boolean
-      viewMode?: 'terminal' | 'chat'
+      viewMode?: TerminalViewMode
       customTitle?: string | null
     }
   ): Promise<boolean> {

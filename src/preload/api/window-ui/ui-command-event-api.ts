@@ -199,7 +199,7 @@ export type UiCommandEventApi = {
       resumeProviderSession?: AgentProviderSessionMetadata
       launchToken?: string
       launchAgent?: TuiAgent
-      viewMode?: 'terminal' | 'chat'
+      viewMode?: 'terminal' | 'chat' | 'map'
       targetGroupId?: string
       afterTabId?: string
       shellOverride?: string
