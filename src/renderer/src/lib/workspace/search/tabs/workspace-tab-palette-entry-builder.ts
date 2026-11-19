@@ -275,9 +275,7 @@ export function buildWorktreeTabEntries(
     const file = files.find(
       (candidate) =>
         candidate.worktreeId === worktree.id &&
-        (!(
-          hasOpenFileExecutionHostEvidence(candidate) || ambiguousWorktreeIds.has(worktree.id)
-        ) ||
+        (!(hasOpenFileExecutionHostEvidence(candidate) || ambiguousWorktreeIds.has(worktree.id)) ||
           isOpenFileOwnedByWorktree(candidate, worktree))
     )
     if (!file) {
@@ -317,4 +315,3 @@ export function buildSearchableWorkspaceTabEntries(
   }
   return entries
 }
-

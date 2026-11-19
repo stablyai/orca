@@ -101,7 +101,10 @@ function changedWorkspaceIds(
   return changed
 }
 
-type PaletteDocumentCache = Map<string, { input: PaletteTabDocumentInput; document: PaletteDocument }>
+type PaletteDocumentCache = Map<
+  string,
+  { input: PaletteTabDocumentInput; document: PaletteDocument }
+>
 
 function cachedDocument(
   documents: PaletteDocumentCache,
@@ -123,6 +126,10 @@ function cachedDocument(
   return value.document
 }
 
+function sameItems<T>(a: readonly T[], b: readonly T[]): boolean {
+  return a.length === b.length && a.every((item, index) => item === b[index])
+}
+
 /** One open palette owns the derived index; closing it drops every cached entry. */
 export function createWorkspaceTabPaletteIndex() {
   const agents = createWorkspaceTabAgentIndex()
@@ -130,63 +137,55 @@ export function createWorkspaceTabPaletteIndex() {
   let entries: SearchableWorkspaceTab[] = []
   // One segment per position in `worktrees`, each built on its own; flattening drops a tab an earlier segment listed.
   let segments: SearchableWorkspaceTab[][] = []
+  // Each segment entry's position in `entries`, or -1 when an earlier segment listed the same tab.
+  let flatPositions: number[][] = []
+  // Every segment entry of a terminal, listed or not, so a status update keeps a hidden copy current too.
+  let terminalEntries = new Map<string, [segment: number, offset: number][]>()
   let documents: PaletteDocumentCache = new Map()
-  let terminalEntries = new Map<string, number[]>()
-  // Where each flat entry lives: segment and offset, so a status update reaches both.
-  let origins: [number, number][] = []
   let terminalTabs = new Map<string, Map<string, TerminalTab>>()
-  let ambiguousWorktreeIds: ReadonlySet<string> = new Set()
+  // Built by the last full pass; the workspace-scoped pass runs only while its inputs are unchanged.
+  let scope: WorkspaceTabBuildScope | null = null
 
-  const rebuildSegment = (
+  const buildSegment = (
     options: BuildSearchableWorkspaceTabsOptions,
-    scope: WorkspaceTabBuildScope,
-    position: number
+    buildScope: WorkspaceTabBuildScope,
+    position: number,
+    prior: ReadonlyMap<string, SearchableWorkspaceTab>
   ): SearchableWorkspaceTab[] => {
-    const prior = new Map((segments[position] ?? []).map((entry) => [entryIdentity(entry), entry]))
     const built: SearchableWorkspaceTab[] = []
-    buildWorktreeTabEntries(options.worktrees[position], options, scope, new Set(), built)
+    buildWorktreeTabEntries(options.worktrees[position], options, buildScope, new Set(), built)
     return built.map((entry) => {
       const before = prior.get(entryIdentity(entry))
       return before && sameEntry(before, entry) ? before : entry
     })
   }
 
-  const indexTerminals = (
-    options: BuildSearchableWorkspaceTabsOptions,
-    next: SearchableWorkspaceTab[],
-    worktreeIds: Iterable<string>
-  ) => {
-    for (const worktreeId of worktreeIds) {
-      terminalTabs.set(
-        worktreeId,
-        new Map((options.tabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab]))
-      )
-    }
-    terminalEntries = new Map()
-    next.forEach((entry, position) => {
-      if (entry.tab.contentType !== 'terminal') {
-        return
-      }
-      const positions = terminalEntries.get(entry.tab.entityId) ?? []
-      positions.push(position)
-      terminalEntries.set(entry.tab.entityId, positions)
-    })
+  const indexTerminalTabs = (options: BuildSearchableWorkspaceTabsOptions, worktreeId: string) => {
+    terminalTabs.set(
+      worktreeId,
+      new Map((options.tabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab]))
+    )
   }
 
   const flatten = (): SearchableWorkspaceTab[] => {
     const next: SearchableWorkspaceTab[] = []
     const seen = new Set<string>()
-    origins = []
-    segments.forEach((segment, segmentIndex) => {
-      segment.forEach((entry, offset) => {
-        const identity = entryIdentity(entry)
-        if (!seen.has(identity)) {
-          seen.add(identity)
-          next.push(entry)
-          origins.push([segmentIndex, offset])
+    terminalEntries = new Map()
+    flatPositions = segments.map((segment, segmentIndex) =>
+      segment.map((entry, offset) => {
+        if (entry.tab.contentType === 'terminal') {
+          const located = terminalEntries.get(entry.tab.entityId) ?? []
+          located.push([segmentIndex, offset])
+          terminalEntries.set(entry.tab.entityId, located)
         }
+        const identity = entryIdentity(entry)
+        if (seen.has(identity)) {
+          return -1
+        }
+        seen.add(identity)
+        return next.push(entry) - 1
       })
-    })
+    )
     return next
   }
 
@@ -223,36 +222,49 @@ export function createWorkspaceTabPaletteIndex() {
       previous &&
       Object.keys(options).length === Object.keys(previous).length &&
       shallow(stableEntryInputs(previous), stableEntryInputs(options))
-    const changedWorkspaces = workspaceScoped && previous ? changedWorkspaceIds(previous, options) : null
+    const changedWorkspaces =
+      workspaceScoped && previous ? changedWorkspaceIds(previous, options) : null
     previous = options
-    if (changedWorkspaces && addressed && dirtyTabs !== null) {
+    if (scope && changedWorkspaces && addressed && dirtyTabs !== null) {
       let next = entries
       if (changedWorkspaces.size > 0) {
-        const scope = createWorkspaceTabBuildScope(options, {
-          agentIndex: agents.index,
-          document: (identity, input) => cachedDocument(documents, documents, identity, input)
-        })
-        segments = segments.slice()
+        const partialScope: WorkspaceTabBuildScope = {
+          ...scope,
+          documentFor: (identity, input) => cachedDocument(documents, documents, identity, input)
+        }
+        let rebuilt = false
         options.worktrees.forEach((worktree, position) => {
-          if (changedWorkspaces.has(worktree.id)) {
-            const before = segments[position] ?? []
-            const after = rebuildSegment(options, scope, position)
-            const kept = new Set(after.map(entryIdentity))
-            for (const entry of before) {
-              const identity = entryIdentity(entry)
-              if (!kept.has(identity)) {
-                documents.delete(identity)
-              }
-            }
-            segments[position] = after
+          if (!changedWorkspaces.has(worktree.id)) {
+            return
           }
+          const before = segments[position]
+          const prior = new Map(before.map((entry) => [entryIdentity(entry), entry]))
+          const after = buildSegment(options, partialScope, position, prior)
+          if (sameItems(before, after)) {
+            return
+          }
+          const kept = new Set(after.map(entryIdentity))
+          for (const identity of prior.keys()) {
+            if (!kept.has(identity)) {
+              documents.delete(identity)
+            }
+          }
+          if (!rebuilt) {
+            segments = segments.slice()
+            rebuilt = true
+          }
+          segments[position] = after
         })
-        next = flatten()
-        indexTerminals(options, next, changedWorkspaces)
+        for (const worktreeId of changedWorkspaces) {
+          indexTerminalTabs(options, worktreeId)
+        }
+        if (rebuilt) {
+          next = flatten()
+        }
       }
       for (const tabId of dirtyTabs) {
-        for (const position of terminalEntries.get(tabId) ?? []) {
-          const entry = next[position]
+        for (const [segmentIndex, offset] of terminalEntries.get(tabId) ?? []) {
+          const entry = segments[segmentIndex][offset]
           const terminal = terminalTabs.get(entry.worktree.id)?.get(tabId)
           const updated = {
             ...entry,
@@ -260,7 +272,7 @@ export function createWorkspaceTabPaletteIndex() {
               agents.index,
               tabId,
               entry.worktree,
-              ambiguousWorktreeIds
+              scope.ambiguousWorktreeIds
             ),
             occupantAgent: resolveOpenTabOccupantAgent({
               tabId,
@@ -273,45 +285,41 @@ export function createWorkspaceTabPaletteIndex() {
               paneForegroundAgentByPaneKey: options.paneForegroundAgentByPaneKey
             })
           }
-          if (!sameEntry(entry, updated)) {
+          if (sameEntry(entry, updated)) {
+            continue
+          }
+          segments[segmentIndex][offset] = updated
+          const position = flatPositions[segmentIndex][offset]
+          if (position >= 0) {
             if (next === entries) {
               next = entries.slice()
             }
             next[position] = updated
-            const [segmentIndex, offset] = origins[position]
-            segments[segmentIndex][offset] = updated
           }
         }
       }
-      if (!shallow(entries, next)) {
-        entries = next
-      }
+      entries = next
       return entries
     }
     const nextDocuments: PaletteDocumentCache = new Map()
-    const scope = createWorkspaceTabBuildScope(options, {
+    scope = createWorkspaceTabBuildScope(options, {
       agentIndex: agents.index,
       document: (identity, input) => cachedDocument(documents, nextDocuments, identity, input)
     })
     const priorEntries = new Map(entries.map((entry) => [entryIdentity(entry), entry]))
-    segments = options.worktrees.map((worktree) => {
-      const built: SearchableWorkspaceTab[] = []
-      buildWorktreeTabEntries(worktree, options, scope, new Set(), built)
-      return built.map((entry) => {
-        const prior = priorEntries.get(entryIdentity(entry))
-        return prior && sameEntry(prior, entry) ? prior : entry
-      })
-    })
-    documents = nextDocuments
-    ambiguousWorktreeIds = scope.ambiguousWorktreeIds
-    terminalTabs = new Map()
-    const next = flatten()
-    indexTerminals(
-      options,
-      next,
-      options.worktrees.map((worktree) => worktree.id)
+    const fullScope = scope
+    segments = options.worktrees.map((_worktree, position) =>
+      buildSegment(options, fullScope, position, priorEntries)
     )
-    if (!shallow(entries, next)) {
+    documents = nextDocuments
+    terminalTabs = new Map()
+    for (const worktree of options.worktrees) {
+      if (!terminalTabs.has(worktree.id)) {
+        indexTerminalTabs(options, worktree.id)
+      }
+    }
+    const next = flatten()
+    if (!sameItems(entries, next)) {
       entries = next
     }
     return entries
