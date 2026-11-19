@@ -197,6 +197,7 @@ function projectActivityEvents(inputs: ProjectionInputs): ActivityEventsBuild {
     return eventsProjection.build
   }
   const { storeData } = inputs
+  const unifiedTabsByWorktree = storeData.activityTabs
   // Global history caps affect live-thread unread and search state.
   const build = buildActivityEvents(
     {
@@ -206,7 +207,7 @@ function projectActivityEvents(inputs: ProjectionInputs): ActivityEventsBuild {
       migrationUnsupportedByPtyId: storeData.migrationUnsupportedByPtyId,
       tabsByWorktree: storeData.tabsByWorktree,
       ptyIdsByTabId: storeData.ptyIdsByTabId,
-      unifiedTabsByWorktree: storeData.activityTabs,
+      unifiedTabsByWorktree,
       worktreeMap: storeData.worktreeMap,
       repoMap: storeData.repoMap,
       repos: storeData.repos,
