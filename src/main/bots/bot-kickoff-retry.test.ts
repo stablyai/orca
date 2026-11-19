@@ -99,7 +99,7 @@ describe('a new bot whose kickoff ended silent', () => {
     }
   })
 
-  it('is left alone while the kickoff runs, once it greeted, or once anything else was sent', () => {
+  it('leaves a running, greeted or not-yet-started kickoff alone', () => {
     expect(
       kickoffNeedsRetry(CHAT, {
         submissions: [kickoff],
