@@ -4,12 +4,17 @@ import { slackTokenSegment, type SlackPeople } from './slack-message-markup'
 /** A parsed markdown node, as much of mdast as this reads. */
 type MarkdownNode = { type: string; value?: string; url?: string; children?: MarkdownNode[] }
 
-// Mentions, channels, user groups and broadcasts; other `<…>` text stays as written. A label's
-// `&lt;…&gt;` reaches text nodes decoded, so a label may hold `<`, and `>` closing one.
+// Mentions, channels, user groups and broadcasts; other `<…>` text stays as written. As the cloud
+// reads them, a label never holds `<`, `>`, `|`, a backtick or a backslash once decoded; a token
+// whose label does stays as written.
 const MENTION_TOKEN =
-  /<((?:@[UW][A-Z0-9]+|#[CG][A-Z0-9]+|!subteam\^[A-Z0-9]+|!(?:here|channel|everyone))(?:\|(?:[^<>]|<[^<>]*>|<)*)?)>/g
+  /<((?:@[UW][A-Z0-9]+|#[CG][A-Z0-9]+|!subteam\^[A-Z0-9]+|!(?:here|channel|everyone))(?:\|[^<>|`\\]*)?)>/g
+const LEADING_TOKEN = new RegExp(`^${MENTION_TOKEN.source}`)
+// Raw HTML keeps a label's entities; decoded, these are characters a label never holds.
+const ENCODED_BRACKET = /&(?:lt|gt);/
+const CODE_SPAN = /(`+)([\s\S]*?[^`])\1(?!`)/g
 // `<@U…|a@b.com>`: markdown links the email, leaving `<@U…|` and `>` around it.
-const OPEN_MENTION = /<@[UW][A-Z0-9]+\|[^<>]*$/
+const OPEN_MENTION = /<@[UW][A-Z0-9]+\|[^<>|`\\]*$/
 const BLOCK_PARENTS = new Set(['root', 'blockquote', 'listItem', 'footnoteDefinition'])
 
 type AskedMessage = { asker?: Pick<ConnectorMessageAsker, 'source' | 'userId' | 'name'> }
@@ -65,9 +70,13 @@ function tokenNodes(
     if (match.index > last) {
       nodes.push({ type: 'text', value: value.slice(last, match.index) })
     }
-    const segment = slackTokenSegment(match[0], match[1]!, people)
+    const segment = ENCODED_BRACKET.test(match[1]!)
+      ? null
+      : slackTokenSegment(match[0], match[1]!, people)
     nodes.push(
-      segment.kind === 'mention' ? mention(segment.text) : { type: 'text', value: segment.text }
+      segment?.kind === 'mention'
+        ? mention(segment.text)
+        : { type: 'text', value: segment?.text ?? match[0] }
     )
     last = match.index + match[0].length
   }
@@ -77,11 +86,22 @@ function tokenNodes(
   return nodes
 }
 
-// A line markdown read as HTML is left whole if it holds other HTML or code it never split out.
-function onlyBroadcastTokens(html: string): boolean {
-  return (
-    html.startsWith('<!') && !html.includes('`') && !html.replace(MENTION_TOKEN, '').includes('<')
-  )
+// A line that starts with `<!here>` parses as one raw HTML block, which the chat would drop: it reads
+// as text instead, its mentions and `code` spans drawn, anything else as written.
+function htmlLineNodes(
+  html: string,
+  people: SlackPeople,
+  mention: (text: string) => MarkdownNode
+): MarkdownNode[] {
+  const nodes: MarkdownNode[] = []
+  let last = 0
+  for (const match of html.matchAll(CODE_SPAN)) {
+    nodes.push(...tokenNodes(html.slice(last, match.index), people, mention))
+    nodes.push({ type: 'inlineCode', value: match[2]!.replace(/^ (.*) $/s, '$1') })
+    last = match.index + match[0].length
+  }
+  nodes.push(...tokenNodes(html.slice(last), people, mention))
+  return nodes
 }
 
 function plainText(node: MarkdownNode): string {
@@ -130,8 +150,8 @@ export function showSlackMentionTokens(
       return tokenNodes(child.value, people, mention)
     }
     // `<!here>` and `<!subteam^…>` parse as HTML; at a line's start, the whole line does.
-    if (child.type === 'html' && onlyBroadcastTokens(child.value ?? '')) {
-      const nodes = tokenNodes(child.value!, people, mention)
+    if (child.type === 'html' && LEADING_TOKEN.test(child.value ?? '')) {
+      const nodes = htmlLineNodes(child.value!, people, mention)
       return BLOCK_PARENTS.has(node.type) ? [{ type: 'paragraph', children: nodes }] : nodes
     }
     showSlackMentionTokens(child, people, mention)

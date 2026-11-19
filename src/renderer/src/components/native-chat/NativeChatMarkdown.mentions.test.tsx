@@ -128,6 +128,17 @@ describe("Slack mention tokens in an agent's reply", () => {
     expect(container.textContent).toContain('<@U2>')
   })
 
+  it('draws a line led by <!here> with its code span, never dropping it', () => {
+    const { container } = render(
+      <NativeChatSlackPeopleContext value={new Map()}>
+        <NativeChatMarkdown content="<!here> run `pnpm test` before merging" variant="document" />
+      </NativeChatSlackPeopleContext>
+    )
+    expect(chips(container)).toEqual(['@here'])
+    expect(container.querySelector('code')?.textContent).toBe('pnpm test')
+    expect(container.textContent).toContain('before merging')
+  })
+
   it('keeps them as names in a chat whose repo links #123', () => {
     const { container } = render(
       <NativeChatLinkPeekContext

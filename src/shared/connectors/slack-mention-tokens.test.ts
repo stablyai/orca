@@ -13,8 +13,8 @@ function shown(markdown: string): string {
   const tree: Node = unified().use(remarkParse).use(remarkGfm).parse(markdown)
   showSlackMentionTokens(tree, PEOPLE, (text) => ({ type: 'mention', value: `[${text}]` }))
   const flat = (node: Node): string =>
-    node.type === 'html'
-      ? `{html:${node.value}}`
+    node.type === 'html' || node.type === 'inlineCode'
+      ? `{${node.type}:${node.value}}`
       : (node.value ?? node.children!.map(flat).join(''))
   return flat(tree)
 }
@@ -34,13 +34,17 @@ describe('showSlackMentionTokens', () => {
   it('reads the shapes markdown misparses: HTML and an email label', () => {
     expect(shown('<!here> please look **now**')).toBe('[@here] please look **now**')
     expect(shown('cc <@U1|ann@x.dev> today')).toBe('cc [@ann@x.dev] today')
-    expect(shown('cc <@U1|Ann &lt;QA&gt;> and <@U2|a &lt; b>')).toBe('cc [@Ann <QA>] and [@a < b]')
+    expect(shown('<!here> run `pnpm test` before <b>merging</b>')).toBe(
+      '[@here] run {inlineCode:pnpm test} before <b>merging</b>'
+    )
   })
 
   it('leaves code, math, HTML and other angle text as written', () => {
-    expect(shown('`<@U05BRPQSABY>` stays')).toBe('<@U05BRPQSABY> stays')
+    expect(shown('`<@U05BRPQSABY>` stays')).toBe('{inlineCode:<@U05BRPQSABY>} stays')
     expect(shown('```\n<!here>\n```')).toBe('<!here>')
-    expect(shown('<!here> see `<@U1>`')).toBe('{html:<!here> see `<@U1>`}')
+    expect(shown('ping <@U1|Ann &lt;3> then <@U2|Bob>')).toBe('ping <@U1|Ann <3> then [@Bob]')
+    expect(shown('a <!subteam^S1|x &lt;y> b')).toBe('a <!subteam^S1|x &lt;y> b')
+    expect(shown('<@U1|a`b> or <@U1|a\\b>')).toBe('<@U1|a`b> or <@U1|a\\b>')
     expect(shown('<!-- <!here> --> <b>x</b>')).toBe('{html:<!-- <!here> --> <b>x</b>}')
     expect(shown('a <!-- note --> <b>x</b> <https://x.dev> <word>')).toBe(
       'a {html:<!-- note -->} {html:<b>}x{html:</b>} https://x.dev {html:<word>}'
