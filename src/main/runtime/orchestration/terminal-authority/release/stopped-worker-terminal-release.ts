@@ -6,14 +6,13 @@ import {
 import type { WorkerTerminalResourceRow } from './worker-terminal-ownership'
 import { archiveWorkerOutputBeforeStop } from '../../../rpc/methods/orchestration/worker/stop/worker-stop-archive'
 import type { OrchestrationDb } from '../../db/orchestration-db'
+import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 
 const PAGE_ROWS = 50
-// Rows examined per sweep, qualifying or not; the rest wait for the next one.
-const MAX_ROWS_PER_SWEEP = 1000
+// Rows examined between yields, qualifying or not, so a long history never holds main for long.
+const ROWS_PER_SLICE = 1000
 
 const activeSweeps = new WeakMap<WorkerTerminalReleaseRuntime, Promise<void>>()
-// Where the next sweep resumes, so rows that never resolve can't hold back the ones after them.
-const sweepCursors = new WeakMap<OrchestrationDb, number>()
 
 /** Run after a terminal inventory, when an absent process reads as exited rather than not yet found. */
 export function sweepStoppedWorkerTerminals(
@@ -57,9 +56,9 @@ async function releaseExitedWorkerTerminals(
   // Timestamps are whole seconds: only rows written before the sweep's second are listed.
   const fence = readSqliteNow(db)
   // Every row is listed before any host is: a process alive when its row was read is in the listing.
+  // Yields while listing are fine: the fence keeps out rows written since, and hosts are listed after.
   const candidates: { resource: WorkerTerminalResourceRow; processIncarnation: string }[] = []
-  let after = sweepCursors.get(db) ?? 0
-  for (let examined = 0; examined < MAX_ROWS_PER_SWEEP; examined += PAGE_ROWS) {
+  for (let after = 0, examined = 0; ;) {
     const page = db.listSettledWorkerTerminalsStillOwned(after, PAGE_ROWS, fence)
     for (const resource of page) {
       after = resource.row_id
@@ -70,11 +69,16 @@ async function releaseExitedWorkerTerminals(
       }
     }
     if (page.length < PAGE_ROWS) {
-      after = 0
       break
     }
+    examined += page.length
+    if (examined % ROWS_PER_SLICE === 0) {
+      await yieldToEventLoop()
+      if (stopped()) {
+        return 0
+      }
+    }
   }
-  sweepCursors.set(db, after)
   const inventories = new Map<string, Promise<WorkerTerminalProcessIndex | null>>()
   const exited: {
     requestingDispatchId: string
