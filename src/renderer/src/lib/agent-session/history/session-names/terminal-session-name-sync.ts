@@ -4,7 +4,10 @@ import {
   ownerInputsChanged,
   relevantRecordEqual
 } from '../title-sync/ai-vault-tab-title-sync-inputs'
-import { reconcileTerminalSessionNames } from './terminal-session-name-recording'
+import {
+  reconcileTerminalSessionNames,
+  terminalTabNameUnsettled
+} from './terminal-session-name-recording'
 
 type SyncDependencies = {
   getState: () => AppState
@@ -45,8 +48,8 @@ export function terminalTabNamesChanged(current: AppState, previous: AppState): 
   return false
 }
 
-/** Some tab in `previous` is gone from `current`. */
-export function terminalTabsClosed(current: AppState, previous: AppState): boolean {
+/** A tab in `previous` that is gone from `current` has a name the last pass has not settled. */
+export function unsettledTerminalTabsClosed(current: AppState, previous: AppState): boolean {
   const open = new Set<string>()
   for (const tabs of Object.values(current.tabsByWorktree)) {
     for (const tab of tabs) {
@@ -54,7 +57,7 @@ export function terminalTabsClosed(current: AppState, previous: AppState): boole
     }
   }
   return Object.values(previous.tabsByWorktree).some((tabs) =>
-    tabs.some((tab) => !open.has(tab.id))
+    tabs.some((tab) => !open.has(tab.id) && terminalTabNameUnsettled(tab))
   )
 }
 
@@ -140,7 +143,7 @@ export function startTerminalSessionNameSync(dependencies: SyncDependencies): ()
 
   const unsubscribe = dependencies.subscribe((state, previous) => {
     const tabNamesChanged = terminalTabNamesChanged(state, previous)
-    if (tabNamesChanged && cancelScheduled && terminalTabsClosed(state, previous)) {
+    if (tabNamesChanged && cancelScheduled && unsettledTerminalTabsClosed(state, previous)) {
       // A waiting pass never sees tabs that close before it runs, so a name that just arrived
       // from another client would be lost; settle names from the state the tabs closed in.
       try {

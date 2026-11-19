@@ -112,12 +112,12 @@ export function recordTerminalTabRename(
   const conversation = collectAgentPaneConversations(state, isAiVaultAgent, {
     tab: { worktreeId, tabId }
   })[0]
-  if (conversation?.providerSession.id) {
-    renamedFromByTabId.delete(tabId)
-  } else {
-    // Renames before the session is known count from the first name the tab showed (a resume's
-    // own naming of an unnamed tab leaves none, so the seeded name counts).
-    renamedFromByTabId.set(tabId, renamedFromByTabId.get(tabId) || previousName)
+  // Renames before the session is known count from the first name the tab showed (a resume's own
+  // naming of an unnamed tab leaves none, so the seeded name counts). The next pass that sees the
+  // session consumes it; only a saved name can ever match it.
+  const shownFirst = renamedFromByTabId.get(tabId) || previousName
+  if (!conversation?.providerSession.id && hasTerminalSessionNames()) {
+    renamedFromByTabId.set(tabId, shownFirst)
   }
   // Only a person's rename may later name a session whose host was not known yet; a name a tab was
   // created with, or a session bound after the rename, keeps the normal rules.
@@ -127,7 +127,7 @@ export function recordTerminalTabRename(
   const resolved = bindingOf(state, conversation)
   const binding = resolved === 'host-unknown' ? null : resolved
   if (!name) {
-    forgetTerminalSessionNames(namesClearedBy(state, tabId, binding, previousName))
+    forgetTerminalSessionNames(namesClearedBy(state, tabId, binding, shownFirst))
     return
   }
   if (binding) {
@@ -139,6 +139,13 @@ export function recordTerminalTabRename(
       title: name
     })
   }
+}
+
+/** A closing tab whose name the last pass has not settled (it changed since, or was never seen). */
+export function terminalTabNameUnsettled(tab: { id: string; customTitle: string | null }): boolean {
+  const name = normalizeTerminalSessionName(tab.customTitle)
+  const seen = lastSeenByTabId.get(tab.id)
+  return seen ? seen.name !== name : name !== '' || renamedFromByTabId.has(tab.id)
 }
 
 export type TerminalSessionNamePassResult = {

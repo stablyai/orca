@@ -6,10 +6,12 @@ import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-owners
 import {
   agentSessionBindingsChanged,
   startTerminalSessionNameSync,
-  terminalTabNamesChanged
+  terminalTabNamesChanged,
+  unsettledTerminalTabsClosed
 } from './terminal-session-name-sync'
 import {
   LOCAL_TAB_NAME_WRITE_GRACE_MS,
+  reconcileTerminalSessionNames,
   recordTerminalTabRename,
   resetTerminalSessionNameRecordingForTest
 } from './terminal-session-name-recording'
@@ -167,6 +169,21 @@ describe('terminal session name sync', () => {
     sync.set(makeTerminalNamesState([]))
     expect(getSavedTerminalSessionName('local', 'claude', 's1')).toBe('From phone')
     sync.stop()
+  })
+
+  it('settles on close only for tabs whose name the last pass has not seen', () => {
+    const settled = makeTerminalNamesState([
+      { id: 'tab-1', sessionId: 's1', customTitle: 'A' },
+      { id: 'tab-2', sessionId: 's2' }
+    ])
+    reconcileTerminalSessionNames(settled, 10_000_000_000_000)
+    const none = makeTerminalNamesState([])
+    // Closing tabs a pass already saw, as a bulk close does, needs no settling.
+    expect(unsettledTerminalTabsClosed(none, settled)).toBe(false)
+    // A name that arrived after the pass does.
+    expect(unsettledTerminalTabsClosed(none, withTabTitle(settled, { customTitle: 'B' }))).toBe(
+      true
+    )
   })
 
   it('retries tabs skipped for an unknown host when owner facts change', () => {
