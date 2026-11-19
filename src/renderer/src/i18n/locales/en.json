@@ -29090,16 +29090,15 @@
         "menu": "Snooze",
         "pick": "Pick a time…",
         "pickTitle": "Snooze until",
-        "pickWhy": "It leaves its group until then and keeps its status. A new question or a close from the bot brings it back sooner.",
-        "date": "Date",
         "time": "Time",
         "back": "Back",
-        "confirm": "Snooze until {{when}}",
         "later": "Later today",
         "tomorrow": "Tomorrow",
         "monday": "Monday",
+        "week": "In a week",
         "inHours_one": "In {{count}} hours",
-        "inHours_other": "In {{count}} hours"
+        "inHours_other": "In {{count}} hours",
+        "pickCustom": "Pick a date and time"
       }
     },
     "search": {
@@ -29432,5 +29431,11 @@
     "title": "Some background work paused after crashing repeatedly",
     "description": "Claude chat recovery is off until you retry. Copy, rewind and Space scans resume when you start them again.",
     "retry": "Retry"
+  },
+  "ui": {
+    "monthCalendar": {
+      "previous": "Previous month",
+      "next": "Next month"
+    }
   }
 }
