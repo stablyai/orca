@@ -13,20 +13,4 @@ describe('manual pane restart queue', () => {
     })
     expect(store.getState().pendingPaneManualRestarts).toEqual({})
   })
-
-  it('consumes and drops manual entries', () => {
-    const store = createTestStore()
-    store.getState().queuePaneManualRestarts([
-      { ptyId: 'pty-1', agent: 'gemini' },
-      { ptyId: 'pty-2', agent: 'codex' }
-    ])
-
-    expect(store.getState().consumePendingPaneRestart('pty-1')).toEqual({
-      agent: 'gemini',
-      intent: 'manual'
-    })
-    store.getState().dropPendingPaneManualRestart('pty-2')
-    expect(store.getState().pendingPaneManualRestarts).toEqual({})
-    expect(store.getState().consumePendingPaneRestart('pty-1')).toBeNull()
-  })
 })

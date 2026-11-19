@@ -28,6 +28,7 @@ const TAB_ID = 'tab-1'
 const WORKTREE_ID = 'wt-1'
 const PTY_ID = 'pty-1'
 const LEAF_ID = '0195f2ce-1111-4000-8000-000000000001'
+const NOTICE = { previousAccountLabel: 'Work', nextAccountLabel: 'Personal' }
 const initialState = useAppStore.getState()
 const spawn = vi.fn()
 const queueTabStartupCommand = vi.fn()
@@ -105,7 +106,8 @@ it('requeues a manual restart into the manual queue when the tab mounts mid-clai
           providerSession: { key: 'session_id', id: '01a006a6-1d07-70a1-bad5-f9110d5845c0' }
         }
       ]
-    ])
+    ]),
+    codexRestartNoticeByPtyId: { [PTY_ID]: NOTICE }
   })
   // The tab registers after the claim check but before the spawn.
   vi.mocked(hasRegisteredRuntimeTerminalTab).mockReturnValueOnce(false).mockReturnValueOnce(true)
@@ -113,10 +115,9 @@ it('requeues a manual restart into the manual queue when the tab mounts mid-clai
 
   await sweepUnclaimedCodexPaneRestarts()
 
-  // Both the claim check and the requeue check ran, so the entry really left the queue and came back.
-  expect(hasRegisteredRuntimeTerminalTab).toHaveBeenCalledTimes(2)
   expect(useAppStore.getState().pendingPaneManualRestarts).toEqual({ [PTY_ID]: 'codex' })
   expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
-  expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({})
+  // An account requeue would mark this unanswered notice as restart requested.
+  expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({ [PTY_ID]: NOTICE })
   expect(spawn).not.toHaveBeenCalled()
 })

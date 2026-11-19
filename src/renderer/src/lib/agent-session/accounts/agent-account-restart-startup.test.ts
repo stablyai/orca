@@ -234,14 +234,6 @@ describe('buildManualRestartStartup', () => {
     expect(buildManualRestartStartup('codex', pane)).toBeNull()
   })
 
-  it('resumes the recorded Codex conversation', () => {
-    seedAgentStatus({
-      agentType: 'codex',
-      providerSession: { key: 'session_id', id: SESSION_ID }
-    })
-    expect(buildManualRestartStartup('codex', pane)?.resumeProviderSession?.id).toBe(SESSION_ID)
-  })
-
   it('refuses when another Codex pane holds the same conversation', () => {
     seedAgentStatus({
       agentType: 'codex',

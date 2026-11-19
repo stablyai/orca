@@ -184,6 +184,9 @@ describe('localAgentRestartCandidates', () => {
   })
 
   it("keeps a Claude session when the host's account folders cannot be read", async () => {
+    vi.stubGlobal('window', {
+      api: { claudeAccounts: { list: () => Promise.reject(new Error('main unavailable')) } }
+    })
     seedPane({
       agentType: 'claude',
       providerSession: { ...SESSION, transcriptPath: transcriptUnder(SELECTED_FOLDER) },
