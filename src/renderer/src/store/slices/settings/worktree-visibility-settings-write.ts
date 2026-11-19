@@ -49,7 +49,7 @@ export async function persistVisibilityAwareSettings(args: {
         ? ((await window.api.settings.set(localUpdates)) as GlobalSettings)
         : currentSettings
     if (Object.keys(localUpdates).length > 0) {
-      applyArrivedLinkFields(set as never, localSettings)
+      applyArrivedLinkFields(set, localSettings)
     }
     let nextSettings = localSettings
     if (target.environmentId === supportedRuntimeEnvironmentId) {
@@ -101,7 +101,9 @@ export async function persistVisibilityAwareSettings(args: {
       const stillFocused =
         currentTarget.kind === 'environment' && currentTarget.environmentId === target.environmentId
       return {
-        settings: stillFocused ? withCurrentLinkFields(nextSettings, state.settings) : state.settings,
+        settings: stillFocused
+          ? withCurrentLinkFields(nextSettings, state.settings)
+          : state.settings,
         worktreeVisibilityDefaultsByHost:
           target.environmentId === supportedRuntimeEnvironmentId &&
           nextSettings?.worktreeVisibilityDefaults
@@ -116,7 +118,7 @@ export async function persistVisibilityAwareSettings(args: {
     return
   }
   const nextSettings = await window.api.settings.set(normalizedUpdates)
-  applyArrivedLinkFields(set as never, nextSettings)
+  applyArrivedLinkFields(set, nextSettings)
   onAcknowledged?.(nextSettings)
   if (!shouldPublish()) {
     return

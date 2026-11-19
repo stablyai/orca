@@ -76,7 +76,7 @@ export async function fetchSettingsWithOwnerHydration(args: {
   let ownerHydrationStarted = false
   try {
     const localSettings = (await window.api.settings.get()) as GlobalSettings
-    applyArrivedLinkFields(args.set as never, localSettings)
+    applyArrivedLinkFields(args.set, localSettings)
     if (!shouldPublishSettings()) {
       return
     }

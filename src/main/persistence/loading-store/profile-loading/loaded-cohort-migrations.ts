@@ -246,7 +246,7 @@ function mapLinkOpenMode(
 /** Seeds a raw profile root that is absent or exactly telemetry-only; returns undefined for anything else. */
 export function seedNewProfileLinkMode(
   root: Record<string, unknown> | undefined
-): Record<string, unknown> | undefined {
+): (Record<string, unknown> & { settings: Record<string, unknown> }) | undefined {
   if (root !== undefined && !isTelemetryOnlyProfile(root)) {
     return undefined
   }

@@ -132,7 +132,10 @@ export function updateAgentHookSettingsFromProfileState(
 
 function seededDefaultState(): Record<string, unknown> {
   const defaults = getDefaultPersistedState(homedir())
-  return { ...defaults, settings: { ...defaults.settings, ...seedNewProfileLinkMode(undefined)?.settings } }
+  return {
+    ...defaults,
+    settings: { ...defaults.settings, ...seedNewProfileLinkMode(undefined)?.settings }
+  }
 }
 
 export function assertOfflineProfileStateMutationRuntime(): void {

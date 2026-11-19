@@ -11,6 +11,7 @@ import {
   noteIncomingLinkPatch,
   noteLinkFieldsArrived
 } from '@/lib/links/preferences/link-preference-operation'
+import { linkFieldsOf } from '@/lib/links/preferences/link-preference-publication'
 
 function getShortcutPlatform(): NodeJS.Platform {
   if (navigator.userAgent.includes('Mac')) {
@@ -117,7 +118,7 @@ export function registerSettingsAndSidebarIpcBridge(unsubs: (() => void)[]): voi
       if (!store.settings) {
         return
       }
-      noteIncomingLinkPatch(updates, store.settings as never)
+      noteIncomingLinkPatch(updates, store.settings)
       const { worktreeVisibilityDefaults, ...activeOwnerUpdates } = updates
       const settingsUpdates = store.settings.activeRuntimeEnvironmentId
         ? activeOwnerUpdates
@@ -140,7 +141,7 @@ export function registerSettingsAndSidebarIpcBridge(unsubs: (() => void)[]): voi
             }
           : {})
       })
-      noteLinkFieldsArrived(useAppStore.getState().settings as never)
+      noteLinkFieldsArrived(linkFieldsOf(useAppStore.getState().settings))
       if ('worktreeVisibilityDefaults' in updates) {
         void store.fetchAllWorktrees({ visibilityOwnerHostId: 'local' })
       }

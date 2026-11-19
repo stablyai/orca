@@ -10,7 +10,9 @@ type HttpLinkModeSettings = Pick<
 >
 
 /** Desktop plain-click mode for HTTP links; a missing or invalid value falls back to the terminal choice. */
-export function httpLinkModeFor(settings: Partial<HttpLinkModeSettings> | null | undefined): HttpLinkMode {
+export function httpLinkModeFor(
+  settings: Partial<HttpLinkModeSettings> | null | undefined
+): HttpLinkMode {
   const stored = settings?.httpLinkClickBehavior
   if (stored === 'ask' || stored === 'open') {
     return stored

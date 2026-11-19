@@ -23,7 +23,10 @@ import type {
   HttpLinkActionDestinations
 } from '@/lib/browser/navigation/http-link-destinations'
 import { captureLinkActionContext } from '@/lib/links/preferences/link-action-context'
-import { canRememberLinkChoice, rememberOnAdmission } from '@/lib/links/preferences/link-remember-choice'
+import {
+  canRememberLinkChoice,
+  rememberOnAdmission
+} from '@/lib/links/preferences/link-remember-choice'
 import { httpLinkModeFor, usesHttpLinkMode } from '@/lib/links/preferences/http-link-mode'
 import type { DashboardCard } from '../../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'

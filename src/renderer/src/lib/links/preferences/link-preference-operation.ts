@@ -26,7 +26,11 @@ let latestId = 0
 const notIssued = new Set<LinkPreferenceOperation>()
 let visible: { opId: number; requested: LinkPreferenceFields } | null = null
 
-const LINK_KEYS = ['openLinksInApp', 'httpLinkClickBehavior', 'openLinksInAppPreferencePrompted'] as const
+const LINK_KEYS = [
+  'openLinksInApp',
+  'httpLinkClickBehavior',
+  'openLinksInAppPreferencePrompted'
+] as const
 
 function matches(fields: LinkPreferenceFields, requested: LinkPreferenceFields): boolean {
   return LINK_KEYS.every((key) => !(key in requested) || fields[key] === requested[key])
@@ -77,12 +81,13 @@ export function beginLinkPreferenceOperation(
 
 /** Another window or main accepted a different link choice; a choice not yet written yields to it (E2). */
 export function noteIncomingLinkPatch(
-  patch: Partial<GlobalSettings>,
+  patch: Readonly<Record<string, unknown>>,
   before: Partial<GlobalSettings> | null
 ): void {
   const changed =
     ('openLinksInApp' in patch && patch.openLinksInApp !== before?.openLinksInApp) ||
-    ('httpLinkClickBehavior' in patch && patch.httpLinkClickBehavior !== before?.httpLinkClickBehavior)
+    ('httpLinkClickBehavior' in patch &&
+      patch.httpLinkClickBehavior !== before?.httpLinkClickBehavior)
   if (!changed) {
     return
   }

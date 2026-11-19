@@ -13,9 +13,15 @@ import {
   type HttpLinkDestination,
   type LinkActionContext
 } from '@/lib/browser/navigation/http-link-destinations'
-import type { HttpLinkAdmission, HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
+import type {
+  HttpLinkAdmission,
+  HttpLinkSourceOwner
+} from '@/lib/browser/navigation/http-link-routing'
 import { captureLinkActionContext } from '@/lib/links/preferences/link-action-context'
-import { canRememberLinkChoice, rememberOnAdmission } from '@/lib/links/preferences/link-remember-choice'
+import {
+  canRememberLinkChoice,
+  rememberOnAdmission
+} from '@/lib/links/preferences/link-remember-choice'
 import type { HttpLinkMode } from '@/lib/links/preferences/http-link-mode'
 
 export type NativeChatWebLinkDeps = {
@@ -116,7 +122,11 @@ export function handleNativeChatWebLink(
       deps.destinations,
       (destination, choice) => {
         const onAdmission = destination ? rememberOnAdmission(destination, choice) : undefined
-        openNativeChatWebLink(url, { ...chooserDeps, ...(onAdmission ? { onAdmission } : {}) }, destination)
+        openNativeChatWebLink(
+          url,
+          { ...chooserDeps, ...(onAdmission ? { onAdmission } : {}) },
+          destination
+        )
       },
       {
         ...deps,

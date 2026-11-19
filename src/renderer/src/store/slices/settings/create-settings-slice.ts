@@ -271,7 +271,7 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
       const nextSettings = await window.api.settings.setActiveRuntimeEnvironmentPreference({
         environmentId: nextId
       })
-      applyArrivedLinkFields(set as never, nextSettings as GlobalSettings | undefined)
+      applyArrivedLinkFields(set, nextSettings)
       bumpProviderRuntimeSessionGeneration()
       // Why: this is a focus change, so keep other host state while hydrating only the new owner's default.
       const focusedSettings =

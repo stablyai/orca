@@ -1,5 +1,3 @@
-import { BrowserOpenLinksSetting } from './routing/BrowserOpenLinksSetting'
-import { usesHttpLinkMode } from '@/lib/links/preferences/http-link-mode'
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
@@ -315,16 +313,12 @@ export function BrowserPane({
           {showSitePermissions ? <BrowserSitePermissionsSetting /> : null}
 
           {showLinkRouting ? (
-            usesHttpLinkMode() ? (
-              <BrowserOpenLinksSetting settings={settings} isMac={isMac} />
-            ) : (
-              <BrowserLinkRoutingSetting
-                settings={settings}
-                linkRoutingDescription={linkRoutingDescription}
-                isMac={isMac}
-                updateSettings={updateSettings}
-              />
-            )
+            <BrowserLinkRoutingSetting
+              settings={settings}
+              linkRoutingDescription={linkRoutingDescription}
+              isMac={isMac}
+              updateSettings={updateSettings}
+            />
           ) : null}
 
           {showLinkRoutingModifier ? (

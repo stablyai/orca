@@ -2,7 +2,10 @@ import type { GlobalSettings } from '../../../../../shared/settings/global-setti
 import { noteLinkFieldsArrived } from './link-preference-operation'
 
 export type LinkPreferenceFields = Partial<
-  Pick<GlobalSettings, 'openLinksInApp' | 'httpLinkClickBehavior' | 'openLinksInAppPreferencePrompted'>
+  Pick<
+    GlobalSettings,
+    'openLinksInApp' | 'httpLinkClickBehavior' | 'openLinksInAppPreferencePrompted'
+  >
 >
 
 const LINK_PREFERENCE_KEYS = [
@@ -11,7 +14,9 @@ const LINK_PREFERENCE_KEYS = [
   'openLinksInAppPreferencePrompted'
 ] as const
 
-export function linkFieldsOf(settings: Partial<GlobalSettings> | null | undefined): LinkPreferenceFields {
+export function linkFieldsOf(
+  settings: Partial<GlobalSettings> | null | undefined
+): LinkPreferenceFields {
   const fields: LinkPreferenceFields = {}
   if (!settings) {
     return fields

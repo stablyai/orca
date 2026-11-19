@@ -37,7 +37,10 @@ function fieldsForChoice(choice: OpenLinksChoice): LinkPreferenceFields {
 
 /** Every link-preference write here starts a new operation, which supersedes any pending Remember. */
 function writeChoice(fields: LinkPreferenceFields): void {
-  void writeLinkPreference(beginLinkPreferenceOperation('settings', fields), storeLinkPreferenceWriter)
+  void writeLinkPreference(
+    beginLinkPreferenceOperation('settings', fields),
+    storeLinkPreferenceWriter
+  )
 }
 
 // Controls sit under their label so long localized options wrap instead of crushing the description.
@@ -98,7 +101,10 @@ export function BrowserOpenLinksSetting({
             size="sm"
             wrap
             options={[
-              { value: 'ask', label: t('components.settings.browser.openLinks.ask', 'Ask each time') },
+              {
+                value: 'ask',
+                label: t('components.settings.browser.openLinks.ask', 'Ask each time')
+              },
               { value: 'orca', label: orcaLabel },
               { value: 'system', label: systemLabel }
             ]}
@@ -119,7 +125,10 @@ export function BrowserOpenLinksSetting({
             <SettingsSegmentedControl<HttpLinkDestination>
               value={settings.openLinksInApp ? 'orca' : 'system'}
               onChange={(value) =>
-                writeChoice({ openLinksInApp: value === 'orca', openLinksInAppPreferencePrompted: true })
+                writeChoice({
+                  openLinksInApp: value === 'orca',
+                  openLinksInAppPreferencePrompted: true
+                })
               }
               ariaLabelledBy={labelId}
               ariaDescribedBy={descriptionId}

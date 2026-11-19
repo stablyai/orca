@@ -197,6 +197,9 @@ export type RoutedHttpLinkOptions = {
   modifierHeld?: boolean
   forceDestination?: HttpLinkDestination
   requestOpenLinksInAppPreference?: HttpLinkRoutingPreferenceRequester
+  /** Present for chooser actions: the click-time capture wins over anything read now. */
+  actionContext?: LinkActionContext
+  onAdmission?: OpenHttpLinkOptions['onAdmission']
 }
 
 export function openRoutedHttpLink(url: string, routed: RoutedHttpLinkOptions): void {
@@ -274,9 +277,10 @@ export function openRoutedHttpLink(url: string, routed: RoutedHttpLinkOptions): 
         worktreeId: deps.worktreeId,
         forceSystemBrowser: !openInOrca,
         sourceOwner,
-        ...(deps.onBrowserOpenComplete ? { onBrowserOpenComplete: deps.onBrowserOpenComplete } : {}),
-        ...(deps.onAdmission ? { onAdmission: deps.onAdmission } : {}),
-      ...(deps.onAdmission ? { onAdmission: deps.onAdmission } : {})
+        ...(deps.onBrowserOpenComplete
+          ? { onBrowserOpenComplete: deps.onBrowserOpenComplete }
+          : {}),
+        ...(deps.onAdmission ? { onAdmission: deps.onAdmission } : {})
       })
     })
     .catch(() => {
@@ -286,9 +290,10 @@ export function openRoutedHttpLink(url: string, routed: RoutedHttpLinkOptions): 
         worktreeId: deps.worktreeId,
         forceSystemBrowser: true,
         sourceOwner,
-        ...(deps.onBrowserOpenComplete ? { onBrowserOpenComplete: deps.onBrowserOpenComplete } : {}),
-        ...(deps.onAdmission ? { onAdmission: deps.onAdmission } : {}),
-      ...(deps.onAdmission ? { onAdmission: deps.onAdmission } : {})
+        ...(deps.onBrowserOpenComplete
+          ? { onBrowserOpenComplete: deps.onBrowserOpenComplete }
+          : {}),
+        ...(deps.onAdmission ? { onAdmission: deps.onAdmission } : {})
       })
     })
 }

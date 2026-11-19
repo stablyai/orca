@@ -9,7 +9,7 @@ import {
   openClientWorkspaceBrowserLink,
   prepareRuntimeBrowserLink,
   materializedBrowserLinkOutcome,
-  ownsRuntimeBrowserRoute
+  remoteLinkDispatchGuard
 } from './workspace-browser-link-open'
 import { createWebRuntimeSessionBrowserTab } from '@/runtime/browser/creation/web-runtime-browser-creation'
 import { resolveWebRuntimeBrowserClientTargetGroup } from '@/runtime/browser/creation/web-runtime-browser-client-target-group'
@@ -253,24 +253,7 @@ export async function openWorkspaceBrowserTab(
       ...(destination ? { profileId: destination.sessionProfileId } : {}),
       ...(request.linkContext ? { isCurrentRequest: request.linkContext.isCurrentRequest } : {}),
       ...(destination
-        ? {
-            admitDispatch: () => {
-              const current = useAppStore.getState()
-              if (request.linkContext?.isCurrentRequest?.() === false) {
-                request.onLinkOutcome?.({ status: 'superseded' })
-                return false
-              }
-              if (
-                !ownsRuntimeBrowserRoute(current, request, destination) ||
-                (capturedHost &&
-                  !createBrowserLinkHostMatcher(current, request.workspaceId, destination.executionHostId)(capturedHost))
-              ) {
-                request.onLinkOutcome?.({ status: 'refused' })
-                return false
-              }
-              return true
-            }
-          }
+        ? { admitDispatch: remoteLinkDispatchGuard(request, destination, capturedHost) }
         : {}),
       ...(destination
         ? {

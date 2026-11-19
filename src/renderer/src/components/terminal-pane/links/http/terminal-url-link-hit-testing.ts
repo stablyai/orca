@@ -24,7 +24,10 @@ import {
   type TerminalLinkActionContext
 } from '../terminal-link-action-request'
 import { captureLinkActionContext } from '@/lib/links/preferences/link-action-context'
-import { canRememberLinkChoice, rememberOnAdmission } from '@/lib/links/preferences/link-remember-choice'
+import {
+  canRememberLinkChoice,
+  rememberOnAdmission
+} from '@/lib/links/preferences/link-remember-choice'
 
 type UrlLinkHitTestDeps = {
   worktreeId: string

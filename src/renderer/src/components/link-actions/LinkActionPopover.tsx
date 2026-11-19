@@ -125,13 +125,12 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
       request.restoreFocus()
       return
     }
-    const items = Array.from(
-      event.currentTarget.querySelectorAll<HTMLElement>(MENU_ITEM_SELECTOR)
-    )
+    const items = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(MENU_ITEM_SELECTOR))
     if (items.length === 0) {
       return
     }
-    const current = items.findIndex((item) => item === document.activeElement)
+    const active = document.activeElement
+    const current = active instanceof HTMLElement ? items.indexOf(active) : -1
     const next =
       event.key === 'ArrowDown'
         ? (current + 1) % items.length

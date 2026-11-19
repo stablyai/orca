@@ -39,16 +39,36 @@ export function getBrowserOpenLinksCopy(
       'Links in chat, terminals and buttons.'
     ),
     keywords: [
-      ...translateSearchKeyword('auto.components.settings.browser.search.2d2d995c58', 'browser', undefined, t),
-      ...translateSearchKeyword('auto.components.settings.browser.search.bea27bac4b', 'links', undefined, t),
-      ...translateSearchKeyword('components.settings.browser.openLinks.search.ask', 'ask', undefined, t),
+      ...translateSearchKeyword(
+        'auto.components.settings.browser.search.2d2d995c58',
+        'browser',
+        undefined,
+        t
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.browser.search.bea27bac4b',
+        'links',
+        undefined,
+        t
+      ),
+      ...translateSearchKeyword(
+        'components.settings.browser.openLinks.search.ask',
+        'ask',
+        undefined,
+        t
+      ),
       ...translateSearchKeyword(
         'components.settings.browser.openLinks.search.system',
         'system browser',
         undefined,
         t
       ),
-      ...translateSearchKeyword('auto.components.settings.browser.search.90425d313c', 'shift', undefined, t),
+      ...translateSearchKeyword(
+        'auto.components.settings.browser.search.90425d313c',
+        'shift',
+        undefined,
+        t
+      ),
       platform.isMac ? 'cmd' : 'ctrl'
     ]
   }

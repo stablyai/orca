@@ -16,18 +16,28 @@ export type LinkPreferenceNoticeKind =
 export function openLinkSettings(): void {
   const { openSettingsTarget, openSettingsPage } = useAppStore.getState()
   openSettingsPage()
-  openSettingsTarget({ pane: 'browser', repoId: null, sectionId: BROWSER_OPEN_LINKS_SETTINGS_TARGET_ID })
+  openSettingsTarget({
+    pane: 'browser',
+    repoId: null,
+    sectionId: BROWSER_OPEN_LINKS_SETTINGS_TARGET_ID
+  })
 }
 
 function noticeTitle(notice: LinkPreferenceNoticeKind): string {
   if (notice.kind === 'saved') {
     return notice.openLinksInApp
       ? translate('components.link.preferences.savedOrca', 'Links will open in the Orca browser')
-      : translate('components.link.preferences.savedSystem', 'Links will open in your system browser')
+      : translate(
+          'components.link.preferences.savedSystem',
+          'Links will open in your system browser'
+        )
   }
   return notice.kind === 'failed'
     ? translate('components.link.preferences.saveFailed', "Couldn't save your choice.")
-    : translate('components.link.preferences.saveUnknown', "Couldn't confirm your choice was saved.")
+    : translate(
+        'components.link.preferences.saveUnknown',
+        "Couldn't confirm your choice was saved."
+      )
 }
 
 /** One notice slot; showing replaces the previous notice and its timer. */
