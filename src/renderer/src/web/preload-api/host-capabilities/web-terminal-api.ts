@@ -25,7 +25,7 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     // Likewise terminal.resetInputModes.
     resetInputModes: () => {},
     kill: () => Promise.resolve(),
-    sleepAdmitted: () => Promise.resolve(true),
+    sleepAdmitted: () => Promise.resolve({ admitted: true, terminalHandle: null }),
     killFenced: () => Promise.resolve({ outcome: 'refused', reason: 'unsupported' }),
     ackColdRestore: () => {},
     // Web panes never transit main's hidden-delivery gate, so there is no drop latch.

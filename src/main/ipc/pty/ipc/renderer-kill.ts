@@ -46,12 +46,13 @@ export function installPtyKillIpcHandler(deps: PtyKillIpcDeps): void {
     stopFencedRendererPty(deps, args)
   )
   // Agent Sleep asks before capturing anything; the kill itself still enforces it.
-  getPtyIpc().handle('pty:sleepAdmitted', (_event, args: { id: string }) => {
+  getPtyIpc().handle('pty:sleepAdmitted', (_event, args: { id: string; paneKey: string }) => {
+    const terminalHandle = deps.runtime?.getTerminalHandleForPaneKey(args.paneKey) ?? null
     try {
       deps.runtime?.assertAgentSleepAdmitted(args.id)
-      return true
+      return { admitted: true, terminalHandle }
     } catch {
-      return false
+      return { admitted: false, terminalHandle }
     }
   })
 }

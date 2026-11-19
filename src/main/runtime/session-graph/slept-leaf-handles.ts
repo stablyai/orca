@@ -5,6 +5,7 @@ import {
   makePaneKey,
   parsePaneKey
 } from '../../../shared/workspace-layout/stable-pane-id'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
@@ -12,6 +13,7 @@ import type {
 
 /** An Agent-slept pane keeps its handle while it has no process, so its resume answers to the same name. */
 export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdmitWindowPublisher {
+  protected abstract sleepingMailRecord(paneKey: string): SleepingAgentSessionRecord | null
   /** Per slept leaf, its handle and the process it named; kept across graph reloads so the pane keeps its name. */
   protected readonly sleptLeafHandles = new Map<string, { handle: string; ptyId: string }>()
 
@@ -151,7 +153,7 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
   }
 
   /** A restart or renderer reload drops parked handles; main's kept sleep row still marks the pane.
-   *  The agent's own exported handle is reused so mail and worker-list still name it. */
+   *  The handle saved on its sleep record is reused so mail and worker-list still name it. */
   private restoreSleptLeafHandle(
     leaf: RuntimeLeafRecord,
     leafKey: string,
@@ -176,10 +178,12 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
     ) {
       return null
     }
-    // The slept agent's own hook row carries the handle it answered to; a pane's older Dispatch may name another conversation.
     const handle =
-      [parked, sleepRow?.terminalHandle].find((kept) => kept && !this.handles.has(kept)) ??
-      `term_${randomUUID()}`
+      [
+        parked,
+        this.sleepingMailRecord(paneKey)?.terminalHandle,
+        this.dispatchedSleptHandle(paneKey, sleepRow?.paneSleep)
+      ].find((kept) => kept && !this.handles.has(kept)) ?? `term_${randomUUID()}`
     this.terminalIdentity.addSynthetic(handle)
     this.terminalIdentity.setHandle(handle, {
       handle,
@@ -194,6 +198,19 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
     this.terminalIdentity.bindLeaf(leafKey, handle)
     this.sleptLeafHandles.set(leafKey, { handle, ptyId: sleptPtyId })
     return handle
+  }
+
+  /** Records the sleep kept before they carried a handle: the pane's Dispatch handle, only when that
+   *  Dispatch's recorded process is the exact one Agent Sleep stopped (an older conversation's is not). */
+  private dispatchedSleptHandle(
+    paneKey: string,
+    stopped: { ptyId: string; incarnationId?: string } | undefined
+  ): string | undefined {
+    const dispatch = this._orchestrationDb?.getLatestDispatchForTerminal('', paneKey)
+    return stopped?.incarnationId &&
+      dispatch?.process_incarnation === `${stopped.ptyId}:${stopped.incarnationId}`
+      ? (dispatch.assignee_handle ?? undefined)
+      : undefined
   }
 
   protected isSleptAgentLeaf(leaf: RuntimeLeafRecord): boolean {
