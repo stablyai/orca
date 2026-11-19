@@ -1,6 +1,28 @@
 import { agentChoiceCliApply } from '../../../agent-launch/choices/agent-choice-cli-apply'
 import type { AgentSessionOptionCatalog, CatalogOption } from './agent-session-option-catalog-types'
 
+/** agy lists each level of a model family as "<family>-<level>", e.g. gemini-3.8-flash-low. */
+export const ANTIGRAVITY_EFFORT_LEVELS = [
+  'none',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max'
+] as const
+
+export const ANTIGRAVITY_LEVEL_SUFFIX = new RegExp(
+  `^(.+)-(${ANTIGRAVITY_EFFORT_LEVELS.join('|')})$`
+)
+
+/** Why: agy rejects a leveled id whose level conflicts with --effort, and its TUI then silently
+ *  runs the default model (#39556). The family with --effort picks that level, as ACP does. */
+export function composeAntigravityLaunchModel(modelId: string, effort: unknown): string {
+  const match = ANTIGRAVITY_LEVEL_SUFFIX.exec(modelId)
+  return typeof effort === 'string' && match && match[2] !== effort ? match[1] : modelId
+}
+
 const ANTIGRAVITY_EFFORT: CatalogOption = {
   id: 'effort',
   label: 'Reasoning effort',
@@ -48,5 +70,6 @@ export const ANTIGRAVITY_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     ),
     midSession: { kind: 'agent-picker', command: '/model' }
   },
-  unknownModelOptions: [ANTIGRAVITY_EFFORT]
+  unknownModelOptions: [ANTIGRAVITY_EFFORT],
+  composeModelValue: (modelId, values) => composeAntigravityLaunchModel(modelId, values.effort)
 }
