@@ -18,6 +18,7 @@ import { readTerminalProcessRows } from '../../../pty/process-retirement/termina
 import { readProcessStartTimeMs } from '../../agent-session/ownership/agent-session-process-identity-probe'
 import { isTerminalForegroundObservation } from '../../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
 import { readLegacyPtyRootProcessId } from './legacy-pty-root-process'
+import { isTerminalRelayClient } from '../../../../shared/agent-status/process/terminal-relay-process'
 
 /** agent permits writing; shell drops readiness; unknown proves neither. */
 export type LaunchedAgentForeground = 'agent' | 'shell' | 'unknown'
@@ -93,6 +94,11 @@ type ForegroundController = Pick<
   | 'listProcesses'
 > | null
 
+/** Another program reading the terminal's input holds mail; an unread name or a relay to an unseen agent proves nothing. */
+function otherProgram(processName: string | null): MailboxForeground {
+  return processName && !isTerminalRelayClient(processName) ? 'non-shell' : 'unknown'
+}
+
 async function inspectLaunchedAgentForeground(
   controller: ForegroundController,
   host: { remote: boolean; windows: boolean },
@@ -161,13 +167,12 @@ async function inspectLaunchedAgentForeground(
             !isAgentForegroundWrapperProcess(observation.processName) &&
             !/(?:^|[/\\])v?\d+(?:\.\d+)+(?:[-+][\w.-]+)?$/i.test(observation.processName)
           ) {
-            return 'non-shell'
+            return otherProgram(observation.processName)
           }
           // Native version names and interpreter wrappers need the host's fresh executable read.
-          const confirmed = recognizeForeground(
-            (await controller.confirmForegroundProcess?.(ptyId)) ?? null
-          )
-          return confirmed ? await identify(confirmed) : 'non-shell'
+          const confirmedName = (await controller.confirmForegroundProcess?.(ptyId)) ?? null
+          const confirmed = recognizeForeground(confirmedName)
+          return confirmed ? await identify(confirmed) : otherProgram(confirmedName)
         }
         // Local launch policy admits non-shell user wrappers independently of mail's identity proof.
         if (!host.remote) {
@@ -209,7 +214,11 @@ async function inspectLaunchedAgentForeground(
           )
           return 'agent'
         }
-        return verdict === 'agent' ? 'non-shell' : verdict
+        if (verdict === 'agent') {
+          const front = rows?.filter((row) => row.pgid === group) ?? []
+          return front.some((row) => isTerminalRelayClient(row.command)) ? 'unknown' : 'non-shell'
+        }
+        return verdict
       }
       return !agent && verdict === 'agent' ? 'unknown' : verdict
     }
