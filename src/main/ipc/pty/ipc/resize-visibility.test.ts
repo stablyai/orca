@@ -59,6 +59,7 @@ afterEach(() => {
   setPtyHostBindings({})
   listeners.clear()
   send.mockReset()
+  vi.restoreAllMocks()
   visibleRendererPtys.clear()
   _resetHiddenRendererPtyDeliveryGateForTest()
 })
@@ -78,6 +79,17 @@ describe('pty:setRendererPtyVisible', () => {
     expect(unhideMarkers()).toHaveLength(1)
 
     emit('pty:setHiddenRendererPty', { id: PTY_ID, hidden: true })
+    emit('pty:setHiddenRendererPty', { id: PTY_ID, hidden: false })
+
+    expect(unhideMarkers()).toHaveLength(2)
+  })
+
+  it("resends the marker on the pane's release when the visible report's send failed", () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    send.mockImplementationOnce(() => {
+      throw new Error('Render frame was disposed')
+    })
+    emit('pty:setRendererPtyVisible', { id: PTY_ID, visible: true })
     emit('pty:setHiddenRendererPty', { id: PTY_ID, hidden: false })
 
     expect(unhideMarkers()).toHaveLength(2)
