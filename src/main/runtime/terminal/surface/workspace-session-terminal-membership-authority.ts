@@ -193,10 +193,14 @@ export function rebaseWorkspaceSessionTerminalMembership(
     }
     rebasedMembership = true
     const currentTabs = prior.tabsByWorktree[worktreeId] ?? []
-    rebased.push({
-      worktreeId,
-      tabIds: [...currentTabs, ...(incoming.tabsByWorktree[worktreeId] ?? [])].map((tab) => tab.id)
-    })
+    if (rewrites) {
+      rebased.push({
+        worktreeId,
+        tabIds: [...currentTabs, ...(incoming.tabsByWorktree[worktreeId] ?? [])].map(
+          (tab) => tab.id
+        )
+      })
+    }
     const candidateTabsById = new Map(
       (incoming.tabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab])
     )
