@@ -20,14 +20,14 @@ vi.mock('./composer/pickers/use-native-chat-mention-files', () => ({
   })
 }))
 
-const chat = (id: string, title: string): NativeChatMentionChat => ({
+const chat = (id: string, title: string, plain = false): NativeChatMentionChat => ({
   id,
   title,
   search: title,
   icon: null,
   line: '',
   time: null,
-  plain: false
+  plain
 })
 const picker: NativeChatBotChatPicker = {
   offers: () => true,
@@ -41,11 +41,18 @@ const picker: NativeChatBotChatPicker = {
     avatar: null,
     chats: {
       status: 'ready',
-      chats: [chat('two', 'Two words here'), chat('words', 'More two words')]
+      chats: [
+        chat('home', 'Home Chat', true),
+        chat('two', 'Two words here'),
+        chat('words', 'More two words')
+      ]
     }
   },
   retry: () => {},
-  token: (botId, picked) => `[Bot: Perf bot](bot-chat:${botId}/${picked?.id})`,
+  token: (botId, picked) =>
+    picked && !picked.plain
+      ? `[Bot: Perf bot](bot-chat:${botId}/${picked.id})`
+      : `[Bot: Perf bot](bot:${botId})`,
   pick: () => ({ state: 'ok' }),
   title: () => null
 }
@@ -101,8 +108,16 @@ function mount() {
   return { ...view, completeMention }
 }
 
-it('goes back to the bots on Esc after a filter with spaces, and a bot picked then replaces it all', () => {
+it('goes back to the bots on Left or Escape without editing the draft', () => {
   const { result, rerender, completeMention } = mount()
+  act(() => {
+    result.current.handleKey(key('ArrowRight'), 0)
+  })
+  act(() => {
+    expect(result.current.handleKey(key('ArrowLeft'), 0)).toBe(true)
+  })
+  expect(result.current.mentionFiles.files).toEqual(['Perf bot', 'src/main.ts'])
+  expect(completeMention).not.toHaveBeenCalled()
   act(() => {
     result.current.handleKey(key('ArrowRight'), 0)
   })
@@ -119,8 +134,16 @@ it('goes back to the bots on Esc after a filter with spaces, and a bot picked th
   expect(completeMention).toHaveBeenCalledWith('Perf bot', '[Bot: Perf bot](bot:perf)', 4)
 })
 
-it("names the highlighted chat as the list's active option while a bot's chats show", () => {
-  const { result, rerender } = mount()
+it('picks the highlighted chat after a spaced filter and uses a plain mention for Home Chat', () => {
+  const { result, rerender, completeMention } = mount()
+  act(() => {
+    result.current.handleKey(key('ArrowRight'), 0)
+  })
+  expect(completeMention).not.toHaveBeenCalled()
+  act(() => {
+    expect(result.current.handleKey(key('Enter'), 0)).toBe(true)
+  })
+  expect(completeMention).toHaveBeenCalledExactlyOnceWith('', '[Bot: Perf bot](bot:perf)', 4)
   act(() => {
     result.current.handleKey(key('ArrowRight'), 0)
   })
@@ -130,6 +153,10 @@ it("names the highlighted chat as the list's active option while a bot's chats s
   })
   expect(result.current.listed.files).toEqual(['two', 'words'])
   expect(result.current.activeIndex).toBe(1)
+  act(() => {
+    expect(result.current.handleKey(key('Enter'), 1)).toBe(true)
+  })
+  expect(completeMention).toHaveBeenLastCalledWith('', '[Bot: Perf bot](bot-chat:perf/words)', 4)
 })
 
 it('puts a file picked from the bots, back from a filter with spaces, over the `@` and that filter', () => {
