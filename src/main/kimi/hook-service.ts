@@ -118,11 +118,6 @@ function readConfigToml(configPath: string): string | null {
   }
 }
 
-// Share atomic publication, symlink resolution, and Windows-safe rolling backups with other hook writers.
-function writeConfigToml(configPath: string, text: string): void {
-  writeHooksJson(configPath, {}, { serialized: text, preserveMode: true, defaultMode: 0o600 })
-}
-
 function buildStatus(present: Set<string>, configPath: string): AgentHookInstallStatus {
   const missing = KIMI_HOOK_EVENTS.filter((event) => !present.has(event))
   let state: AgentHookInstallState
@@ -180,7 +175,11 @@ export class KimiHookService {
     }
     // A refused merge still writes the repaired text that drops a stale duplicate block.
     if (next) {
-      writeConfigToml(configPath, next.text)
+      writeHooksJson(
+        configPath,
+        {},
+        { serialized: next.text, preserveMode: true, defaultMode: 0o600 }
+      )
     }
     if (!next?.installed) {
       console.warn(
@@ -255,7 +254,11 @@ export class KimiHookService {
     }
     const { text: nextText, changed } = removeManagedKimiHooks(text, isManagedKimiCommand)
     if (changed) {
-      writeConfigToml(configPath, nextText)
+      writeHooksJson(
+        configPath,
+        {},
+        { serialized: nextText, preserveMode: true, defaultMode: 0o600 }
+      )
     }
     return this.getStatus()
   }
