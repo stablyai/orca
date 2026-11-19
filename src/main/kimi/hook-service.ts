@@ -115,11 +115,6 @@ function readConfigToml(configPath: string): string | null {
   }
 }
 
-// Share atomic publication, symlink resolution, and Windows-safe rolling backups with other hook writers.
-function writeConfigToml(configPath: string, text: string): void {
-  writeHooksJson(configPath, {}, { serialized: text, preserveMode: true, defaultMode: 0o600 })
-}
-
 function buildStatus(present: Set<string>, configPath: string): AgentHookInstallStatus {
   const missing = KIMI_HOOK_EVENTS.filter((event) => !present.has(event))
   let state: AgentHookInstallState
@@ -173,7 +168,15 @@ export class KimiHookService {
     const command = getManagedCommand(scriptPath)
     // Write the script first so config.toml never points at a missing script.
     writeManagedScript(scriptPath, getManagedScript())
-    writeConfigToml(configPath, applyManagedKimiHooks(text, command, isManagedKimiCommand))
+    writeHooksJson(
+      configPath,
+      {},
+      {
+        serialized: applyManagedKimiHooks(text, command, isManagedKimiCommand),
+        preserveMode: true,
+        defaultMode: 0o600
+      }
+    )
     return this.getStatus()
   }
 
@@ -229,7 +232,11 @@ export class KimiHookService {
     }
     const { text: nextText, changed } = removeManagedKimiHooks(text, isManagedKimiCommand)
     if (changed) {
-      writeConfigToml(configPath, nextText)
+      writeHooksJson(
+        configPath,
+        {},
+        { serialized: nextText, preserveMode: true, defaultMode: 0o600 }
+      )
     }
     return this.getStatus()
   }
