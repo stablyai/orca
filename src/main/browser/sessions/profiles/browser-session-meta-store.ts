@@ -124,18 +124,29 @@ function parseBrowserSessionMeta(data: unknown, defaultPartition: string): Brows
   }
 }
 
+// Paths whose last read failed for a reason other than a missing file or invalid JSON.
+const unreadableMetaPaths = new Set<string>()
+
 // Resolve the path inside the load error boundary.
 export function loadBrowserSessionMeta(
   resolveMetadataPath: () => string,
   defaultPartition: string
 ): BrowserSessionMeta {
+  let path: string | undefined
   try {
-    const path = resolveMetadataPath()
+    path = resolveMetadataPath()
     const meta = parseBrowserSessionMeta(JSON.parse(readFileSync(path, 'utf-8')), defaultPartition)
+    unreadableMetaPaths.delete(path)
     // Only a read that worked is kept: a brief lock must not read as "nothing enabled" for the run.
     enabledExtensionIdsByPath.set(path, copyIdLists(meta.enabledExtensionIdsByProfileId))
     return meta
-  } catch {
+  } catch (error) {
+    // A file that reads but isn't JSON may be overwritten as it always was; one we couldn't read may not.
+    if (path !== undefined && !isMissingFileError(error) && !(error instanceof SyntaxError)) {
+      unreadableMetaPaths.add(path)
+    } else if (path !== undefined) {
+      unreadableMetaPaths.delete(path)
+    }
     return emptyBrowserSessionMeta()
   }
 }
@@ -178,19 +189,14 @@ export function persistBrowserSessionMeta(
 ): void {
   try {
     const path = resolveMetadataPath()
-    let existing = emptyBrowserSessionMeta()
-    try {
-      existing = parseBrowserSessionMeta(JSON.parse(readFileSync(path, 'utf-8')), defaultPartition)
-    } catch (error) {
-      // A file that reads but isn't JSON is overwritten as it always was. One we couldn't read may
-      // hold saved site lists, so it is never replaced blind.
-      if (!isMissingFileError(error) && !(error instanceof SyntaxError)) {
-        if (!warnedUnreadablePaths.has(path)) {
-          warnedUnreadablePaths.add(path)
-          console.warn('[browser] session metadata is unreadable; not saving over it:', error)
-        }
-        return
+    const existing = loadBrowserSessionMeta(() => path, defaultPartition)
+    // An unreadable file may hold saved site lists, so it is never replaced blind.
+    if (unreadableMetaPaths.has(path)) {
+      if (!warnedUnreadablePaths.has(path)) {
+        warnedUnreadablePaths.add(path)
+        console.warn('[browser] session metadata is unreadable; not saving over it')
       }
+      return
     }
     const tmpPath = `${path}.tmp`
     mkdirSync(dirname(path), { recursive: true })
