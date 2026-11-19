@@ -1,6 +1,5 @@
 import { useAppStore } from '@/store/index'
 import { subscribeMountedTerminalTabChanges } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
-import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 import {
   resetDetachedCodexPaneRestartClaimsForTests,
   sweepUnclaimedCodexPaneRestarts
@@ -11,8 +10,8 @@ let executorGeneration = 0
 let sweepQueued = false
 
 export function hasAddedPendingCodexPaneRestart(
-  current: Record<string, AccountRestartAgent>,
-  previous: Record<string, AccountRestartAgent>
+  current: Record<string, string>,
+  previous: Record<string, string>
 ): boolean {
   if (current === previous) {
     return false
@@ -29,13 +28,22 @@ export function installCodexDetachedPaneRestartExecutor(): () => void {
       hasAddedPendingCodexPaneRestart(
         state.pendingPaneAccountRestarts,
         previousState.pendingPaneAccountRestarts
+      ) ||
+      hasAddedPendingCodexPaneRestart(
+        state.pendingPaneManualRestarts,
+        previousState.pendingPaneManualRestarts
       )
     ) {
       scheduleClaimSweep()
     }
   })
   const unsubscribeMountedTabs = subscribeMountedTerminalTabChanges(() => {
-    if (!sweepQueued && Object.keys(useAppStore.getState().pendingPaneAccountRestarts).length > 0) {
+    const { pendingPaneAccountRestarts, pendingPaneManualRestarts } = useAppStore.getState()
+    if (
+      !sweepQueued &&
+      (Object.keys(pendingPaneAccountRestarts).length > 0 ||
+        Object.keys(pendingPaneManualRestarts).length > 0)
+    ) {
       scheduleClaimSweep()
     }
   })

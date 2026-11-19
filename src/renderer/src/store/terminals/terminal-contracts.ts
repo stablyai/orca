@@ -1,5 +1,8 @@
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  ResumableTuiAgent
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace/persistence/workspace-session-hydration-keys'
 import type { HostSessionSlices } from '@/lib/workspace/persistence/workspace-session-host-split'
@@ -24,7 +27,10 @@ export type AutomaticAgentResumeClaim = {
 /** Agents whose panes restart in place onto a newly selected account. */
 export type AccountRestartAgent = 'codex' | 'claude'
 
-export type PaneRestartIntent = 'account' | 'manual'
+/** A claimed pane restart; only manual restarts reach agents beyond the account-switch pair. */
+export type PendingPaneRestart =
+  | { agent: AccountRestartAgent; intent: 'account' }
+  | { agent: ResumableTuiAgent; intent: 'manual' }
 
 export type CodexRestartNotice = {
   previousAccountLabel: string

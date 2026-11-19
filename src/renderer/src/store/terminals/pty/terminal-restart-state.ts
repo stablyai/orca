@@ -1,6 +1,5 @@
 import { isSameCodexRestartNoticeAccount } from './codex-restart-notice-account-identity'
-import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import type { AccountRestartAgent, PaneRestartIntent } from '../terminal-contracts'
+import type { AccountRestartAgent, PendingPaneRestart } from '../terminal-contracts'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from '../terminal-state'
 
 // Why: Codex notice cleanup shares this map with Claude switch restarts and must not drop them.
@@ -102,7 +101,7 @@ export function createTerminalRestartActions(
       }))
     },
     consumePendingPaneRestart: (ptyId) => {
-      let result: { agent: TuiAgent; intent: PaneRestartIntent } | null = null
+      let result: PendingPaneRestart | null = null
       set((s) => {
         const accountAgent = s.pendingPaneAccountRestarts[ptyId]
         const manualAgent = s.pendingPaneManualRestarts[ptyId]

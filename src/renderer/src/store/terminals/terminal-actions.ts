@@ -33,7 +33,7 @@ import type {
 } from './retirement/terminal-tab-retirement'
 import type {
   AccountRestartAgent,
-  PaneRestartIntent,
+  PendingPaneRestart,
   TerminalCreationExecutionFacts,
   AutomaticAgentResumeClaim,
   CodexRestartNotice,
@@ -193,9 +193,7 @@ export type TerminalActions = {
   consumePendingPaneAccountRestart: (ptyId: string) => AccountRestartAgent | null
   queuePaneManualRestarts: (entries: { ptyId: string; agent: ResumableTuiAgent }[]) => void
   /** Account entries win and clear a same-pane manual entry. */
-  consumePendingPaneRestart: (
-    ptyId: string
-  ) => { agent: TuiAgent; intent: PaneRestartIntent } | null
+  consumePendingPaneRestart: (ptyId: string) => PendingPaneRestart | null
   dropPendingPaneManualRestart: (ptyId: string) => void
   markCodexRestartNotices: (
     notices: (Pick<CodexRestartNotice, 'previousAccountLabel' | 'nextAccountLabel'> &
