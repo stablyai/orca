@@ -63,7 +63,8 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
 
   private async confirmCommandFinishedExit(resolved: string): Promise<boolean> {
     const row = this.state.lastStatusByPaneKey.get(resolved)
-    const agent = this.paneAgentIdentity(resolved)?.status.agentType
+    const identity = this.paneAgentIdentity(resolved)
+    const agent = identity?.status.agentType
     const alone = await this.terminalPaneLifecycle?.confirmShellAlone?.(resolved, agent)
     // A newer row may be the same conversation's; only a later proof can settle it.
     if (this.state.lastStatusByPaneKey.get(resolved) !== row) {
@@ -74,7 +75,8 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
     }
     this.reconcileEndedProcessForPaneKeys([resolved], {
       preserveResumeIdentity: true,
-      confirmedExit: true
+      confirmedExit: true,
+      known: { paneKey: resolved, identity }
     })
     return true
   }
@@ -108,7 +110,8 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
     }
     this.reconcileEndedProcessForPaneKeys([resolved], {
       preserveResumeIdentity: true,
-      confirmedExit: confirmedExit === true
+      confirmedExit: confirmedExit === true,
+      known: { paneKey: resolved, identity }
     })
   }
 

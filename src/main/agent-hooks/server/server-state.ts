@@ -113,10 +113,13 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
       : null
   }
 
-  protected recordPaneAgentExit(paneKey: string, endedPresence: AgentProcessPresence): void {
+  protected recordPaneAgentExit(
+    paneKey: string,
+    endedPresence: AgentProcessPresence,
+    status = this.paneAgentIdentity(paneKey)?.status
+  ): void {
     const paneKeys = this.paneKeysWithAliases(paneKey)
     const exitedAt = Date.now()
-    const status = this.paneAgentIdentity(paneKey)?.status
     recordAgentExit(this.agentExitedAtByPaneKey, paneKeys, endedPresence, exitedAt)
     this.retirePaneResume(paneKeys, status, exitedAt)
   }
@@ -169,21 +172,11 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
 
   /** A stopping pane's agent keeps its row for the sleep gate, whatever shape it rests in. */
   protected preservesStoppingAgent(paneKey: string): boolean {
-    const resolved = this.resolvePaneKeyAlias(paneKey)
-    // A saved record never rests in sleep, so only a stopping pane reads it.
-    if (
-      !this.state.lastStatusByPaneKey.has(resolved) &&
-      !this.getTmuxSelectedStatus(resolved) &&
-      this.terminalPaneLifecycle?.isStopping(paneKey) !== true
-    ) {
-      return false
-    }
-    const identity = this.paneAgentIdentity(paneKey)
+    // A saved record never rests in sleep, so only a stopping pane reads one.
+    const stopping = this.terminalPaneLifecycle?.isStopping(paneKey) === true
+    const identity = this.paneAgentIdentity(paneKey, stopping ? undefined : null)
     return (
-      identity !== null &&
-      !identity.ended &&
-      (identity.status.paneSleep !== undefined ||
-        this.terminalPaneLifecycle?.isStopping(paneKey) === true)
+      identity !== null && !identity.ended && (identity.status.paneSleep !== undefined || stopping)
     )
   }
   protected canWriteLegacyStatusRow(entry: AgentHookEventPayload): boolean {

@@ -36,10 +36,7 @@ export abstract class AgentHookServerPaneSleep extends AgentHookServerAuthorityF
       | EnrichedAgentHookEventPayload
       | undefined
     // Only a live or tmux row can be shared; a saved record never is, so a plain spawn reads none.
-    if (
-      (row ?? this.getTmuxSelectedStatus(resolved)) &&
-      this.paneAgentIdentity(resolved)?.processTopology === 'shared'
-    ) {
+    if (this.paneAgentIdentity(resolved, null)?.processTopology === 'shared') {
       this.dropStatusEntry(resolved, { preserveResumeIdentity: false })
       this.emitPaneStatusCleared({ paneKey: resolved })
       return

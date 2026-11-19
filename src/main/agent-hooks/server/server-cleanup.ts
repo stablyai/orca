@@ -24,6 +24,8 @@ export type EndedProcessReconciliationOptions = {
   confirmedExit?: boolean
   /** Keep resume identity when the pane survives the agent. */
   preserveResumeIdentity?: boolean
+  /** One pane's identity, already read while its row stayed unchanged. */
+  known?: { paneKey: string; identity: ReturnType<AgentHookServerCleanup['paneAgentIdentity']> }
 }
 
 export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
@@ -129,6 +131,10 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
       const previous = this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
         | EnrichedAgentHookEventPayload
         | undefined
+      let identity =
+        options?.known?.paneKey === resolvedPaneKey ? options.known.identity : undefined
+      const identityOf = () =>
+        identity === undefined ? (identity = this.paneAgentIdentity(resolvedPaneKey)) : identity
       const endedPresence =
         options?.endedPresence ??
         // A process the presence probe reaches gets its exit from the probe, not a possibly newer
@@ -136,16 +142,13 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
         // outlives the command that finished at the pane's shell.
         (options?.confirmedExit &&
         (!previous?.agentPresence?.process || previous.connectionId !== null) &&
-        this.paneAgentIdentity(resolvedPaneKey)?.processTopology !== 'shared'
+        identityOf()?.processTopology !== 'shared'
           ? previous
             ? endedPresenceOf(previous)
-            : {
-                agent: this.paneAgentIdentity(resolvedPaneKey)?.status.agentType ?? 'unknown',
-                ended: true
-              }
+            : { agent: identityOf()?.status.agentType ?? 'unknown', ended: true }
           : undefined)
       if (endedPresence) {
-        this.recordPaneAgentExit(paneKey, endedPresence)
+        this.recordPaneAgentExit(paneKey, endedPresence, identityOf()?.status)
       }
       if (!this.hasLiveClaimsForPaneKey(resolvedPaneKey)) {
         untouched.push(resolvedPaneKey)
