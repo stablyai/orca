@@ -344,12 +344,11 @@ export function BotAppsCatalog({
     const shown = view === 'all' ? categories : categories.filter((c) => c.category === view)
     return (
       <>
-        {shown.map(({ category, count }) => (
+        {shown.map(({ category }) => (
           <section key={category} aria-label={botAppCategoryName(category)}>
             <BotAppCaption
               icon={<BotAppCategoryIcon category={category} />}
               title={botAppCategoryName(category)}
-              count={count}
             />
             <ul className="flex flex-col">
               {direct.filter((row) => row.app.category === category).map(directRow)}
