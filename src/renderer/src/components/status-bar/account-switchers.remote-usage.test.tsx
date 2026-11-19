@@ -13,6 +13,7 @@ import {
 } from './usage/use-owner-usage-rate-limits'
 import { CodexSwitcherMenu } from './accounts/CodexSwitcherMenu'
 import { ClaudeSwitcherMenu } from './accounts/ClaudeSwitcherMenu'
+import { TooltipProvider } from '@/components/ui/tooltip'
 
 const mocks = vi.hoisted(() => {
   const watchers: Parameters<typeof ProviderAccountsClient.watchProviderAccounts>[1][] = []
@@ -321,5 +322,57 @@ describe('Claude account usage on a paired host', () => {
     const active = screen.getByRole('menuitem', { name: /active@laptop.test/ })
     expect(within(active).getByRole('img').getAttribute('aria-label')).toContain('4%')
     expect(screen.queryByRole('img', { name: /99%|91%/ })).toBeNull()
+  })
+})
+
+describe('Claude account rows outside the status bar owner', () => {
+  function claudeOwner(): ReturnType<typeof ownerUsage> {
+    const owned = ownerUsage()
+    owned.accounts.claude = {
+      accounts: [
+        claudeAccount('active-id', 'active@laptop.test'),
+        claudeAccount('same-id', 'other@laptop.test')
+      ],
+      activeAccountId: 'active-id',
+      activeAccountIdsByRuntime: { host: 'active-id', wsl: {} }
+    }
+    owned.rateLimits.inactiveClaudeAccounts = [
+      {
+        accountId: 'same-id',
+        rateLimits: { ...usage(25), provider: 'claude' },
+        updatedAt: 1,
+        isFetching: false
+      }
+    ]
+    return owned
+  }
+
+  beforeEach(() => {
+    mocks.state.mockReturnValue({
+      ...localState(),
+      fetchInactiveClaudeAccountUsage: vi.fn(),
+      refreshClaudeRateLimitsForTarget: vi.fn()
+    })
+  })
+
+  it("shows a server chat's per-account usage from that server", async () => {
+    render(
+      <TooltipProvider>
+        <ClaudeSwitcherMenu
+          claude={null}
+          compact
+          iconOnly
+          chatAction={{ target: mocks.owner, canSwitch: async () => true }}
+        />
+      </TooltipProvider>
+    )
+    const snapshot = claudeOwner().accounts
+    act(() => mocks.watchers.forEach((watcher) => watcher.onSnapshot(snapshot)))
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Switch account' }), {
+      button: 0,
+      ctrlKey: false
+    })
+    const other = await screen.findByRole('menuitem', { name: /other@laptop.test/ })
+    expect(within(other).getByRole('img').getAttribute('aria-label')).toContain('25%')
   })
 })
