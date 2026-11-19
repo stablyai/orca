@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { findStoppedAgentProcess } from './stopped-agent-process'
+import { findStoppedAgents } from './stopped-agent-process'
 
 const row = (pid: number, pgid: number, stat: string, command: string) => ({
   pid,
@@ -9,14 +9,24 @@ const row = (pid: number, pgid: number, stat: string, command: string) => ({
   stat,
   command
 })
+const shell = row(1, 1, 'Ss', '-zsh')
+const front = row(7, 7, 'S+', 'cat')
 
-it('finds the agent that job control stopped behind the foreground program', () => {
-  const rows = [row(1, 1, 'Ss', '-zsh'), row(5, 5, 'T', 'claude'), row(7, 7, 'S+', 'cat')]
-  expect(findStoppedAgentProcess(rows, 7)).toEqual({ pid: 5, agent: 'claude' })
+it('finds every agent kind that job control stopped behind the foreground program', () => {
+  expect(findStoppedAgents([shell, row(5, 5, 'T', 'claude'), front], 7)).toEqual(['claude'])
+  expect(
+    findStoppedAgents([shell, row(5, 5, 'T', 'claude'), row(6, 6, 'T', 'codex'), front], 7)
+  ).toEqual(['claude', 'codex'])
+  expect(
+    findStoppedAgents(
+      [shell, row(5, 5, 'T', '/Users/me/.local/share/claude/versions/2.1.323'), front],
+      7
+    )
+  ).toEqual(['claude'])
 })
 
 it('a running, exited or non-agent process is not a stopped agent', () => {
-  expect(findStoppedAgentProcess([row(5, 5, 'S', 'claude'), row(7, 7, 'S+', 'cat')], 7)).toBeNull()
-  expect(findStoppedAgentProcess([row(5, 5, 'TZ', 'claude'), row(7, 7, 'S+', 'cat')], 7)).toBeNull()
-  expect(findStoppedAgentProcess([row(5, 5, 'T', 'vim'), row(7, 7, 'S+', 'cat')], 7)).toBeNull()
+  expect(findStoppedAgents([row(5, 5, 'S', 'claude'), front], 7)).toEqual([])
+  expect(findStoppedAgents([row(5, 5, 'TZ', 'claude'), front], 7)).toEqual([])
+  expect(findStoppedAgents([row(5, 5, 'T', 'vim'), front], 7)).toEqual([])
 })

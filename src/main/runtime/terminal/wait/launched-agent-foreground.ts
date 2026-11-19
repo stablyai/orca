@@ -18,7 +18,7 @@ import { readTerminalProcessRows } from '../../../pty/process-retirement/termina
 import { readProcessStartTimeMs } from '../../agent-session/ownership/agent-session-process-identity-probe'
 import { isTerminalForegroundObservation } from '../../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
 import { readLegacyPtyRootProcessId } from './legacy-pty-root-process'
-import { findStoppedAgentProcess } from '../../../../shared/agent-status/process/stopped-agent-process'
+import { findStoppedAgents } from '../../../../shared/agent-status/process/stopped-agent-process'
 
 /** agent permits writing; shell drops readiness; unknown proves neither. */
 export type LaunchedAgentForeground = 'agent' | 'shell' | 'unknown'
@@ -94,12 +94,14 @@ type ForegroundController = Pick<
   | 'listProcesses'
 > | null
 
-/** Another program in front holds mail only in place of the stopped agent; otherwise it may relay to the agent elsewhere. */
+/** Another program in front holds mail only in place of a stopped agent; otherwise it may relay to the agent elsewhere. */
 function otherProgram(
-  stoppedAgent: string | undefined,
+  stoppedAgents: readonly string[] | undefined,
   agent: TuiAgent | undefined
 ): MailboxForeground {
-  return stoppedAgent && (!agent || stoppedAgent === agent) ? 'non-shell' : 'unknown'
+  return stoppedAgents?.length && (!agent || stoppedAgents.includes(agent))
+    ? 'non-shell'
+    : 'unknown'
 }
 
 async function inspectLaunchedAgentForeground(
@@ -171,7 +173,7 @@ async function inspectLaunchedAgentForeground(
             !isAgentForegroundWrapperProcess(observation.processName) &&
             !/(?:^|[/\\])v?\d+(?:\.\d+)+(?:[-+][\w.-]+)?$/i.test(observation.processName)
           ) {
-            return 'non-shell'
+            return otherProgram(observation.stoppedAgents, undefined)
           }
           // Native version names and interpreter wrappers need the host's fresh executable read.
           const confirmed = recognizeForeground(
@@ -179,7 +181,7 @@ async function inspectLaunchedAgentForeground(
           )
           return confirmed
             ? await identify(confirmed)
-            : otherProgram(observation.stoppedAgent, agent)
+            : otherProgram(observation.stoppedAgents, agent)
         }
         // Local launch policy admits non-shell user wrappers independently of mail's identity proof.
         if (!host.remote) {
@@ -222,7 +224,7 @@ async function inspectLaunchedAgentForeground(
           return 'agent'
         }
         if (verdict === 'agent') {
-          return otherProgram(rows ? findStoppedAgentProcess(rows, group)?.agent : undefined, agent)
+          return otherProgram(rows ? findStoppedAgents(rows, group) : undefined, agent)
         }
         return verdict
       }

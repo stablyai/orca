@@ -11,7 +11,7 @@ import {
   type ProcessTableRow
 } from '../../../shared/process-observation/tables/process-table-snapshot'
 import { isShellProcess } from '../../../shared/agent-status/process/shell-process-detection'
-import { findStoppedAgentProcess } from '../../../shared/agent-status/process/stopped-agent-process'
+import { findStoppedAgents } from '../../../shared/agent-status/process/stopped-agent-process'
 import type { TerminalForegroundSample } from '../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
 import { isRetiredPtyMaster } from './node-pty-master-fd-retirement'
 import { readPtsName } from './node-pty-pts-name'
@@ -90,7 +90,7 @@ export function resolvePtyForegroundMembers(
     (row) =>
       !isShellProcess(name(row)) || recognizeAgentProcessFromCommandLine(row.command) !== null
   )
-  const stopped = findStoppedAgentProcess(candidates, group)
+  const stoppedAgents = findStoppedAgents(rows, group)
   const ordinary = [...(nonShell.length ? nonShell : foreground)].sort(
     (a, b) => b.depth - a.depth
   )[0]
@@ -106,7 +106,7 @@ export function resolvePtyForegroundMembers(
           ? null
           : name(ordinary) || null,
     ...(selected ? { agentPid: selected.candidate.pid } : {}),
-    ...(stopped ? { stoppedAgent: stopped.agent, stoppedAgentPid: stopped.pid } : {})
+    ...(stoppedAgents.length ? { stoppedAgents } : {})
   }
 }
 

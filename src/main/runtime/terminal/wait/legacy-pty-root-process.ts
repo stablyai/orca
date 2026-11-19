@@ -11,8 +11,12 @@ type RememberedRoot = {
   startedAtMs?: number | null
 }
 
+const FULL_LISTING_RETRY_MS = 60_000
 const rootByPtyId = new Map<string, RememberedRoot>()
 let sharedListing: Promise<void> | null = null
+// Why: a listing taken before a terminal retired must not restore its root.
+const retiredDuringListing = new Set<string>()
+let fullListingUnavailableUntil = 0
 
 /** A local terminal's root process, or 'replaced' when the PTY is no longer the expected incarnation.
  * Why remembered: an older daemon lists every session to answer for one, and the root never changes within an incarnation. */
@@ -27,17 +31,24 @@ export async function readLegacyPtyRootProcessId(
   }
   let remembered = rootByPtyId.get(ptyId)
   if (!remembered || !matchesIncarnation(remembered, expectedIncarnationId)) {
-    // Why one shared listing: each cold terminal listing every session alone costs terminals × sessions.
-    sharedListing ??= rememberAllRoots(controller).finally(() => {
-      sharedListing = null
-    })
-    await sharedListing
-    remembered = rootByPtyId.get(ptyId)
-    if (!remembered) {
-      return null
+    if (Date.now() >= fullListingUnavailableUntil) {
+      // Why one shared listing: each cold terminal listing every session alone costs terminals × sessions.
+      sharedListing ??= rememberAllRoots(controller).finally(() => {
+        sharedListing = null
+        retiredDuringListing.clear()
+      })
+      // Why fall back: an unrelated daemon's failure must not blind this terminal's own owner.
+      await sharedListing.catch(() => {
+        fullListingUnavailableUntil = Date.now() + FULL_LISTING_RETRY_MS
+      })
     }
-    if (!matchesIncarnation(remembered, expectedIncarnationId)) {
-      return 'replaced'
+    remembered = rootByPtyId.get(ptyId)
+    if (!remembered || !matchesIncarnation(remembered, expectedIncarnationId)) {
+      const root = await readTargetRoot(controller, ptyId, expectedIncarnationId)
+      if (typeof root === 'number') {
+        rootByPtyId.set(ptyId, { incarnationId: expectedIncarnationId, pid: root })
+      }
+      return root
     }
   }
   const startedAtMs = await readProcessStartTimeMs(remembered.pid)
@@ -59,6 +70,9 @@ export async function readLegacyPtyRootProcessId(
 /** The root lives as long as its terminal: bounded by live PTYs, not a size cap that would thrash. */
 export function forgetLegacyPtyRoot(ptyId: string): void {
   rootByPtyId.delete(ptyId)
+  if (sharedListing) {
+    retiredDuringListing.add(ptyId)
+  }
 }
 
 function matchesIncarnation(root: RememberedRoot, expected: string | undefined): boolean {
@@ -67,13 +81,22 @@ function matchesIncarnation(root: RememberedRoot, expected: string | undefined):
 }
 
 async function rememberAllRoots(controller: ListingController): Promise<void> {
+  const listed = new Map<string, { incarnationId: string | undefined; pid: number }>()
   for (const pane of (await controller.listProcesses?.(LOCAL_EXECUTION_HOST_ID)) ?? []) {
-    const known = rootByPtyId.get(pane.id)
-    if (
-      pane.rootProcessId &&
-      (known?.pid !== pane.rootProcessId || known.incarnationId !== pane.incarnationId)
-    ) {
-      rootByPtyId.set(pane.id, { incarnationId: pane.incarnationId, pid: pane.rootProcessId })
+    if (pane.rootProcessId && !retiredDuringListing.has(pane.id)) {
+      listed.set(pane.id, { incarnationId: pane.incarnationId, pid: pane.rootProcessId })
+    }
+  }
+  // Why prune: a session gone from the full listing has ended, whether or not this runtime saw it exit.
+  for (const ptyId of rootByPtyId.keys()) {
+    if (!listed.has(ptyId)) {
+      rootByPtyId.delete(ptyId)
+    }
+  }
+  for (const [ptyId, root] of listed) {
+    const known = rootByPtyId.get(ptyId)
+    if (known?.pid !== root.pid || known.incarnationId !== root.incarnationId) {
+      rootByPtyId.set(ptyId, root)
     }
   }
 }

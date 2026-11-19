@@ -75,3 +75,52 @@ it('a root that exited with an unreadable start time is not trusted', async () =
   await readLegacyPtyRootProcessId(controller, 'pty-dead-root-0', 'incarnation-1')
   expect(controller.counts.requests).toBe(2)
 })
+
+it('a listing that finishes after a terminal retired does not restore its root', async () => {
+  startTime.value = 1_000
+  const gates: (() => void)[] = []
+  const counts = { full: 0 }
+  const row = {
+    id: 'pty-late',
+    incarnationId: 'incarnation-1',
+    rootProcessId: process.pid,
+    cwd: '',
+    title: ''
+  }
+  const controller = {
+    listProcesses: async (_host?: string, opts?: { ptyIds?: readonly string[] }) => {
+      if (!opts?.ptyIds) {
+        counts.full += 1
+        await new Promise<void>((resolve) => gates.push(resolve))
+        return [row]
+      }
+      // The retired terminal's own owner no longer lists it.
+      return []
+    }
+  }
+  const pending = readLegacyPtyRootProcessId(controller, 'pty-late', 'incarnation-1')
+  await vi.waitFor(() => expect(gates).toHaveLength(1))
+  forgetLegacyPtyRoot('pty-late')
+  gates[0]()
+  await expect(pending).resolves.toBeNull()
+  const next = readLegacyPtyRootProcessId(controller, 'pty-late', 'incarnation-1')
+  await vi.waitFor(() => expect(gates).toHaveLength(2))
+  gates[1]()
+  await next
+  expect(counts.full).toBe(2)
+})
+
+it("another daemon's failed full listing falls back to this terminal's own owner", async () => {
+  startTime.value = 1_000
+  const controller = {
+    listProcesses: async (_host?: string, opts?: { ptyIds?: readonly string[] }) => {
+      if (!opts?.ptyIds) {
+        throw new Error('unrelated daemon unreachable')
+      }
+      return [
+        { id: 'pty-own', incarnationId: 'incarnation-1', rootProcessId: 42, cwd: '', title: '' }
+      ]
+    }
+  }
+  await expect(readLegacyPtyRootProcessId(controller, 'pty-own', 'incarnation-1')).resolves.toBe(42)
+})

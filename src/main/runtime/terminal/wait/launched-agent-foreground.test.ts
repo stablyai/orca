@@ -128,7 +128,7 @@ describe('owner-held recipient observations', () => {
         undefined,
         'inc'
       )
-    ).toEqual({ foreground: 'non-shell' })
+    ).toEqual({ foreground: 'unknown' })
   })
 
   it('keeps an unresolved owner unknown and never fills a fresh unavailable result with cached identity', async () => {
