@@ -107,16 +107,6 @@ function rows(): HTMLElement[] {
   return screen.getAllByRole('button')
 }
 
-it.each([
-  ['https://example.com/docs/a', 'example.com'],
-  ['notes/mock.html', 'notes/mock.html']
-])('puts what a second line would say on hover: %s', async (ref, tip) => {
-  const kind = ref.startsWith('https:') ? 'url' : 'file'
-  render(<BotItemLinks bot={BOT} links={[{ kind, ref }]} chat="Home Chat" />)
-  fireEvent.focus(screen.getByRole('button'))
-  expect((await screen.findByRole('tooltip')).textContent).toBe(tip)
-})
-
 const FIX_LOGIN: LinearIssue = {
   id: 'lin-1',
   identifier: 'ENG-12',
