@@ -22824,7 +22824,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "Worktree değiştir",
+      "worktreePalette": "Her şeyde ara",
       "worktreeNavigateUp": "Önceki worktree",
       "worktreeNavigateDown": "Sonraki worktree",
       "workspaceCreate": "Worktree oluştur",
@@ -22936,6 +22936,9 @@
       "45347db2a3": "Sekmeler arası gezinme",
       "aab2837fa5": "Hızlı komutlar",
       "3492a954c8": "Terminal bölmeleri"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "Worktree değiştir"
     }
   },
   "gpuFallback": {

@@ -23081,7 +23081,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "Changer de worktree",
+      "worktreePalette": "Tout rechercher",
       "worktreeNavigateUp": "Worktree précédent",
       "worktreeNavigateDown": "Worktree suivant",
       "workspaceCreate": "Créer un worktree",
@@ -23193,6 +23193,9 @@
       "45347db2a3": "Navigation entre onglets",
       "aab2837fa5": "Commandes rapides",
       "3492a954c8": "Volets du terminal"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "Changer de worktree"
     }
   },
   "gpuFallback": {

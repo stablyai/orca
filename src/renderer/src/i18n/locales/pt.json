@@ -23619,7 +23619,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "Alternar worktree",
+      "worktreePalette": "Buscar tudo",
       "worktreeNavigateUp": "Worktree anterior",
       "worktreeNavigateDown": "Próximo worktree",
       "workspaceCreate": "Criar worktree",
@@ -23732,6 +23732,9 @@
       "45347db2a3": "Navegação entre abas",
       "aab2837fa5": "Comandos Rápidos",
       "3492a954c8": "Painéis do terminal"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "Alternar worktree"
     }
   },
   "gpuFallback": {
