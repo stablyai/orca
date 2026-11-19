@@ -92,6 +92,11 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
               tab.leafId === pane.leafId &&
               tab.isActive
           ) === true
+      // Before stillCurrent (the last awaited check) and the stop, whose exit clears the hook rows:
+      // a failed replacement still resumes from it.
+      const resumeRecord = await this.sleepResumeRecords
+        .capture(pty.worktreeId, new Set([ptyId]))
+        .catch(() => null)
       if (
         !(await Promise.resolve()
           .then(stillCurrent)
@@ -103,10 +108,6 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
       if (await this.isProviderSessionLiveInAnotherPane(session, ownPaneKey).catch(() => true)) {
         return refuse('busy')
       }
-      // Before the stop, whose exit clears the hook rows: a failed replacement still resumes from it.
-      const resumeRecord = await this.sleepResumeRecords
-        .capture(pty.worktreeId, new Set([ptyId]))
-        .catch(() => null)
       // The awaits above let the pane move, change process or gain a viewer: checked again with no
       // await before the stop.
       const current = this.ptysById.get(ptyId)
@@ -124,6 +125,15 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
       let stopped = false
       // Left as a slept pane is: its next view starts it afresh and resumes the conversation.
       const failedStart = async (): Promise<AgentPaneRestartResult> => {
+        // A closed tab or a successor terminal owns the pane now: its saved state stays theirs.
+        const bound = this.storedPaneBinding({
+          worktreeId: pty.worktreeId,
+          tabId,
+          leafId: pane.leafId
+        })
+        if (bound === null || (bound !== undefined && bound !== ptyId)) {
+          return { ok: false, reason: 'create_failed' }
+        }
         if (resumeRecord) {
           await this.sleepResumeRecords.persist(pty.worktreeId, resumeRecord, [ptyId])
         }
@@ -151,8 +161,8 @@ export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntime
           pane: { worktreeId: pty.worktreeId, tabId, leafId: pane.leafId, hostId: undefined }
         })
         if (!released) {
-          claim.settleFailure(false)
-          return await failedStart()
+          // Another terminal or a close took the pane meanwhile: nothing is left to resume.
+          return refuse('create_failed')
         }
         const created = await this.createRuntimeOwnedMobileSessionTerminal(
           pty.worktreeId,
