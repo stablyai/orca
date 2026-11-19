@@ -1,13 +1,13 @@
 // How an agent's question looks on its item page, in one place so the look can change without touching
-// behavior: the open ask's amber rim, tint and lift with its "Waiting on you" flag (amber means exactly
+// behavior: the open ask's amber rim and lift with its "Waiting on you" flag (amber means exactly
 // that, nowhere else), the answered ask's quiet card, and the question's words clamped with Show more.
 import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatQuestionText } from '../../native-chat/prompts/NativeChatQuestionText'
 import { BotItemClampedText } from './BotItemClampedText'
 
-/** The open ask's card body: outer ring, amber-edged border, tinted surface and lift. */
+/** The open ask's card body: outer ring, amber-edged border and lift on the plain card surface. */
 export const BOT_ITEM_OPEN_ASK_SURFACE =
-  'border-[color-mix(in_srgb,var(--item-ask-open)_45%,var(--question-card-border))] bg-[color-mix(in_srgb,var(--item-ask-open)_6%,var(--chat-composer-surface))] shadow-[0_0_0_2px_color-mix(in_srgb,var(--item-ask-open)_55%,transparent),0_4px_14px_rgb(0_0_0/0.12)]'
+  'border-[color-mix(in_srgb,var(--item-ask-open)_45%,var(--question-card-border))] shadow-[0_0_0_2px_color-mix(in_srgb,var(--item-ask-open)_55%,transparent),0_4px_14px_rgb(0_0_0/0.12)]'
 
 /** A closed ask's card: the plain question card, dimmed to read as history. */
 export const BOT_ITEM_CLOSED_ASK_SURFACE =
