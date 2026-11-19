@@ -197,7 +197,7 @@ function BotPictureColors({
     <div
       role="group"
       aria-label={t('bots.new.pictureColor', 'Background color')}
-      className="mt-1.5 mb-1 flex flex-wrap items-center justify-center gap-1"
+      className="mt-2 flex flex-wrap items-center justify-center gap-1"
     >
       {BOT_AVATAR_COLORS.map((swatch) => (
         <button
@@ -324,6 +324,9 @@ export function BotPicturePicker({
           }
         }}
       />
+      {onColorChange && !showingCustom ? (
+        <BotPictureColors color={color} onChange={onColorChange} />
+      ) : null}
       <BotPictureIntakeLine
         line={line}
         onUndo={() => {
@@ -363,9 +366,6 @@ export function BotPicturePicker({
           </Tooltip>
         )}
       </BotPictureIntakeLine>
-      {onColorChange && !showingCustom ? (
-        <BotPictureColors color={color} onChange={onColorChange} />
-      ) : null}
       <input
         ref={fileRef}
         type="file"
