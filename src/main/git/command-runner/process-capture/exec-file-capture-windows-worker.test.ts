@@ -89,6 +89,48 @@ afterEach(() => {
 })
 
 describe('Windows process creation off the calling loop', () => {
+  it.each(['abort', 'deadline'] as const)(
+    'settles %s while tree cleanup is still queued, retaining the child lifetime until close',
+    async (reason) => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      try {
+        const child = new WorkerThreadChildProcess(1, () => true)
+        worker.spawn.mockReturnValue(child)
+        const controller = new AbortController()
+        const timeoutError = new Error('Git deadline expired')
+        const terminated = vi.fn()
+        const outcome = execFileCapture('git', ['status'], {
+          signal: controller.signal,
+          timeout: 100,
+          createTimeoutError: () => timeoutError,
+          onChildTerminated: terminated
+        }).catch((error: unknown) => error)
+        child.receive({ type: 'spawn', id: 1, pid: 4242 })
+
+        if (reason === 'abort') {
+          controller.abort()
+        } else {
+          await vi.advanceTimersByTimeAsync(100)
+        }
+
+        await Promise.resolve()
+        const result = await Promise.race([outcome, Promise.resolve('still waiting for worker')])
+        if (reason === 'abort') {
+          expect(result).toMatchObject({ name: 'AbortError' })
+        } else {
+          expect(result).toBe(timeoutError)
+        }
+        expect(terminated).not.toHaveBeenCalled()
+
+        treeKills.killers[0]!.emit('close', 0)
+        child.receive({ type: 'close', id: 1, code: null, signal: 'SIGTERM' })
+        expect(terminated).toHaveBeenCalledOnce()
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
+
   it('starts the command on the worker with the current environment', async () => {
     worker.spawn.mockReturnValue(finishedWorkerChild(0, 'origin\n', ''))
     const result = await execFileCapture('git', ['remote'], { encoding: 'utf8' })
