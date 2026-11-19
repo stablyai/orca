@@ -2,7 +2,7 @@ import {
   AGENT_IMAGE_MAX_BYTES,
   AGENT_IMAGE_MAX_LONG_EDGE,
   clipboardImageSizeWithinEdge,
-  encodeClipboardImageWithinLimit,
+  encodeAgentImageWithinLimit,
   type ClipboardImageDimensions
 } from '../../../../src/shared/clipboard/clipboard-image'
 import { base64DecodedByteLength } from '../../../../src/shared/agent-session/agent-session-attachments'
@@ -63,11 +63,10 @@ export async function fitMobileAgentImageBase64(data: string, mimeHint?: string)
   ) {
     return base64
   }
-  return encodeClipboardImageWithinLimit(
-    size,
+  return encodeAgentImageWithinLimit(
+    source,
     (target) => encodeJpegBase64(image, target),
-    base64DecodedByteLength,
-    AGENT_IMAGE_MAX_BYTES
+    base64DecodedByteLength
   )
 }
 

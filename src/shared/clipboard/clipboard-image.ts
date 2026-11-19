@@ -8,6 +8,19 @@ export const CLIPBOARD_IMAGE_TOO_LARGE_ERROR = 'Clipboard image is too large'
 export const AGENT_IMAGE_MAX_LONG_EDGE = 2000
 export const AGENT_IMAGE_MAX_BYTES = Math.floor(((5 * 1024 * 1024) / 4) * 3)
 
+export function encodeAgentImageWithinLimit<T>(
+  source: ClipboardImageDimensions,
+  encode: (size: ClipboardImageDimensions) => T | Promise<T>,
+  byteLength: (encoded: T) => number
+): Promise<T> {
+  return encodeClipboardImageWithinLimit(
+    clipboardImageSizeWithinEdge(source, AGENT_IMAGE_MAX_LONG_EDGE),
+    encode,
+    byteLength,
+    AGENT_IMAGE_MAX_BYTES
+  )
+}
+
 export type ClipboardImageDimensions = {
   height: number
   width: number
