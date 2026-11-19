@@ -15,7 +15,7 @@ export abstract class RuntimeAgentStatusSources extends OrcaRuntimeWithTerminalD
 
   readPaneAgentIdentity(
     paneKey: string,
-    savedRecord?: SleepingAgentSessionRecord,
+    savedRecord?: SleepingAgentSessionRecord | null,
     row?: AgentStatusIpcPayload
   ) {
     return this.getPaneAgentIdentityFn
@@ -27,7 +27,7 @@ export abstract class RuntimeAgentStatusSources extends OrcaRuntimeWithTerminalD
             this.getAgentProviderSessionRowsForPaneFn?.(paneKey).find(
               (row) => row.paneKey === paneKey
             ),
-          savedRecord,
+          savedRecord: savedRecord ?? undefined,
           worktreeId: savedRecord?.worktreeId
         })
   }

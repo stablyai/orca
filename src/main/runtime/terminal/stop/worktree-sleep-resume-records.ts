@@ -45,9 +45,10 @@ export async function captureWorktreeSleepResumeRecords(args: {
   /** Read after each presence probe, so a conversation started during it is the one captured. */
   readRowsForPane: (paneKey: string) => readonly AgentStatusIpcPayload[]
   readSavedRecord?: (paneKey: string) => Promise<SleepingAgentSessionRecord | undefined>
+  /** `savedRecord` null: read and absent. */
   readIdentity?: (
     paneKey: string,
-    savedRecord?: SleepingAgentSessionRecord
+    savedRecord?: SleepingAgentSessionRecord | null
   ) => ReturnType<typeof paneAgentIdentity>
   checkAgentPresence:
     | ((paneKey: string, exitedSince?: number) => Promise<AgentProcessVerdict | null>)
@@ -71,7 +72,7 @@ export async function captureWorktreeSleepResumeRecords(args: {
         .catch(() => null)
       const savedRecord = await args.readSavedRecord?.(paneKey)
       const identity = args.readIdentity
-        ? args.readIdentity(paneKey, savedRecord)
+        ? args.readIdentity(paneKey, savedRecord ?? (args.readSavedRecord ? null : undefined))
         : paneAgentIdentity({
             paneKey,
             row: args.readRowsForPane(paneKey).find((candidate) => candidate.paneKey === paneKey),

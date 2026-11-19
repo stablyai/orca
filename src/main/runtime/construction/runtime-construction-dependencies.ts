@@ -39,9 +39,10 @@ export type RuntimeConstructionDependencies = {
   onTerminalProgramStatusFacet?: (event: RuntimeTerminalProgramStatusFacetEvent) => void
   onTerminalSideEffects?: (batch: TerminalSideEffectBatch) => void
   onClaudeTerminalEvidence?: (paneKey: string, evidence: ClaudeTerminalEvidence) => void
+  /** `savedRecord` null: the caller already read it and found none. */
   getPaneAgentIdentity?: (
     paneKey: string,
-    savedRecord?: SleepingAgentSessionRecord
+    savedRecord?: SleepingAgentSessionRecord | null
   ) => ReturnType<typeof paneAgentIdentity>
   getAgentStatusSnapshot?: () => AgentStatusIpcPayload[]
   getAgentStatusSnapshotForPane?: (paneKey: string) => AgentStatusIpcPayload[]

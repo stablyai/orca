@@ -69,20 +69,22 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
     this.terminalPaneLifecycle = lifecycle
   }
 
-  /** Which agent conversation this pane holds; see paneAgentIdentity. */
+  /** Which agent conversation this pane holds; see paneAgentIdentity. A null `savedRecord` was
+   *  already read and found absent, so it isn't read again. */
   paneAgentIdentity(
     paneKey: string,
-    savedRecord?: SleepingAgentSessionRecord,
-    worktreeId = savedRecord?.worktreeId
+    passedRecord?: SleepingAgentSessionRecord | null,
+    worktreeId = passedRecord?.worktreeId
   ): PaneAgentIdentity | null {
+    let savedRecord = passedRecord ?? undefined
     const resolved = this.resolvePaneKeyAlias(paneKey)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this server stores enriched accepted rows in the listener's base-typed cache.
     const legacy = this.state.lastStatusByPaneKey.get(resolved) as
       | EnrichedAgentHookEventPayload
       | undefined
     const row = legacy ?? this.getTmuxSelectedStatus(resolved)
-    if (!row) {
-      savedRecord ??= this.terminalPaneLifecycle?.readSavedRecord?.(resolved)
+    if (!row && passedRecord === undefined) {
+      savedRecord = this.terminalPaneLifecycle?.readSavedRecord?.(resolved)
     }
     worktreeId ??= savedRecord?.worktreeId
     const exit =
