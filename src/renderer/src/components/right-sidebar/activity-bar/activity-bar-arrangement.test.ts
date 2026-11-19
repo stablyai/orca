@@ -3,7 +3,7 @@ import {
   activityOrderForPage,
   arrangeActivityItems,
   mergeActivityOrder,
-  moveActivityInShownList,
+  moveStripActivity,
   reorderActivityOrders
 } from './activity-bar-arrangement'
 import { getDefaultRightSidebarActivityItems } from './right-sidebar-default-activity-items'
@@ -204,11 +204,12 @@ describe('activity bar arrangement', () => {
       'plugin:test/panel'
     ])
   })
-  it('drags a strip tab inside the full shown list so tabs under More keep their places', () => {
+  it('moves a strip tab among the strip and lists More after it, with nothing saved', () => {
     const shown = ['explorer', 'checks', 'source-control', 'ports', 'vault', 'plugin:test/panel']
-    // Drag Checks over Explorer, with nothing saved: the strip shows only Explorer and Checks.
-    const dragged = moveActivityInShownList(shown, 'checks', 'explorer')
-    expect(dragged).toEqual([
+    const strip = new Set(['explorer', 'checks'])
+    // Move Checks left with the strip showing only Explorer and Checks.
+    const moved = moveStripActivity(shown, strip, 'checks', 'explorer')
+    expect(moved).toEqual([
       'checks',
       'explorer',
       'source-control',
@@ -216,10 +217,34 @@ describe('activity bar arrangement', () => {
       'vault',
       'plugin:test/panel'
     ])
-    expect(reorderActivityOrders({ order: [], botOrder: [] }, false, dragged ?? []).order).toEqual(
-      dragged
+    expect(reorderActivityOrders({ order: [], botOrder: [] }, false, moved ?? []).order).toEqual(
+      moved
     )
-    expect(moveActivityInShownList(shown, 'explorer', 'explorer')).toBeNull()
-    expect(moveActivityInShownList(shown, 'missing', 'explorer')).toBeNull()
+    expect(moveStripActivity(shown, strip, 'explorer', 'explorer')).toBeNull()
+    expect(moveStripActivity(shown, strip, 'vault', 'explorer')).toBeNull()
+  })
+
+  it('keeps a pinned active tab in the strip when another strip tab moves past it', () => {
+    // Strip shows Explorer, Checks and the pinned Worktrees (active); Source Control, Ports, Agents sit under More.
+    const shown = ['explorer', 'checks', 'source-control', 'ports', 'vault', 'workspaces']
+    const strip = new Set(['explorer', 'checks', 'workspaces'])
+    // Move Checks right, past the pinned tab.
+    expect(moveStripActivity(shown, strip, 'checks', 'workspaces')).toEqual([
+      'explorer',
+      'workspaces',
+      'checks',
+      'source-control',
+      'ports',
+      'vault'
+    ])
+    // Drag Explorer onto the pinned tab.
+    expect(moveStripActivity(shown, strip, 'explorer', 'workspaces')).toEqual([
+      'checks',
+      'workspaces',
+      'explorer',
+      'source-control',
+      'ports',
+      'vault'
+    ])
   })
 })
