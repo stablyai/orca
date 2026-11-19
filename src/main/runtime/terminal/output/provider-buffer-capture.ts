@@ -188,6 +188,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     providerSnapshot: RuntimeProviderSnapshotReadOptions
   ): Promise<RuntimeTerminalRead> {
     const state = this.readWholeScreenModel(ptyId)
+    const recovering = Boolean(this.headlessTerminals.get(ptyId)?.gapReseed)
     const projection = await this.readRenderedTerminalTailLines(ptyId, limit, providerSnapshot)
     const lineLimit = terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT)
     const limited =
@@ -200,7 +201,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
           projection.draft,
           projection.tailRows
         )
-      : this.headlessTerminals.get(ptyId)?.gapReseed
+      : recovering || this.headlessTerminals.get(ptyId)?.gapReseed
         ? buildVisibleSnapshotReadFallback({ ...read, limited: true }, [], limit)
         : read
   }

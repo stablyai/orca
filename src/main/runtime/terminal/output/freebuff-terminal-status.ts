@@ -48,6 +48,6 @@ export function observeFreebuffTerminalStatus(
   return trackerFor(emulator, startupCommand, launchAgent).observe(
     data,
     () => ({ lines: emulator.getVisibleLines(), alternate: emulator.isAlternateScreen }),
-    screenTrusted
+    screenTrusted && !emulator.isSynchronizedOutput
   )
 }

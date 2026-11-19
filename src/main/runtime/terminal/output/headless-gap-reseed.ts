@@ -55,8 +55,7 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
       return
     }
     if (!this.providerSequenceAnchorRevisions.has(ptyId)) {
-      // No stamp places a provider snapshot in this stream: start over from the kept output, as before
-      // recovery existed. The stream's first stamp starts recovery.
+      // Unstamped providers keep the suffix as before; the first stamp starts recovery.
       this.gapRecoveryAwaitingStamp.add(ptyId)
       this.disposeHeadlessTerminal(ptyId)
       return
@@ -92,14 +91,13 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
   }
 
   protected override onProviderSequenceAnchored(ptyId: string): void {
-    if (
-      this.gapRecoveryAwaitingStamp.delete(ptyId) &&
-      this.ptysById.get(ptyId)?.connected !== false
-    ) {
+    if (this.gapRecoveryAwaitingStamp.has(ptyId) && this.ptysById.get(ptyId)?.connected !== false) {
       const state = this.getOrCreateHeadlessTerminal(ptyId)
       if (!state.gapReseed) {
-        this.countGap(ptyId)
-        this.startGapRecovery(ptyId, state)
+        this.reseedHeadlessTerminalAfterDataGap(ptyId)
+      } else if (this.providerSequenceInitializedPtys.has(ptyId)) {
+        this.gapRecoveryAwaitingStamp.delete(ptyId)
+        void this.runGapRecovery(ptyId, state, state.gapReseed)
       }
     }
   }
@@ -129,6 +127,12 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     this.providerSnapshotPreferredPtys.add(ptyId)
     // Why: the hidden renderer missed the dropped bytes too, so it must not seed this model.
     this.headlessHydrationState.set(ptyId, 'pending')
+    if (!this.providerSequenceInitializedPtys.has(ptyId)) {
+      // Early stamped output is already untrusted; capture waits for the spawn domain.
+      this.gapRecoveryAwaitingStamp.add(ptyId)
+      return
+    }
+    this.gapRecoveryAwaitingStamp.delete(ptyId)
     void this.runGapRecovery(ptyId, state, recovery)
   }
 
@@ -304,6 +308,7 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
   ): void {
     const contextChangePending = state.gapReseed?.contextChangePending === true
     state.gapReseed = undefined
+    this.clearHeadlessReflowAfterRepaint(ptyId, state, snapshot)
     state.recoveredHistoryCut ||=
       (snapshot.scrollbackLines ?? 0) >= this.providerHistoryLiveWindowRows()
     this.headlessHydrationState.set(ptyId, 'done')
@@ -323,10 +328,8 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
   /** A retired model's recovery leaves the capture line at once instead of holding it until a slot frees. */
   protected leaveGapCaptureLine(ptyId: string): void {
     const grant = this.gapCaptureWaiters.get(ptyId)
-    if (grant) {
-      this.gapCaptureWaiters.delete(ptyId)
-      grant(false)
-    }
+    this.gapCaptureWaiters.delete(ptyId)
+    grant?.(false)
   }
 
   private acquireGapCaptureSlot(ptyId: string): Promise<boolean> {

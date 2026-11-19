@@ -262,6 +262,23 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
     }
   }
 
+  protected clearHeadlessReflowAfterRepaint(
+    ptyId: string,
+    state: RuntimeHeadlessTerminal,
+    snapshot: PtyProviderBufferSnapshot
+  ): void {
+    const liveGrid = this.getTerminalSize(ptyId)
+    const appliedGrid = state.emulator.getAppliedSize()
+    if (
+      liveGrid?.cols === snapshot.cols &&
+      liveGrid.rows === snapshot.rows &&
+      appliedGrid.cols === snapshot.cols &&
+      appliedGrid.rows === snapshot.rows
+    ) {
+      state.unrepaintedReflowGrid = undefined
+    }
+  }
+
   /** Reflow to provider-proven size after early live bytes used default geometry; preserve renderer restore baselines because no pane was measured. */
   reflowHeadlessTerminalToPtyGrid(ptyId: string, cols: number, rows: number): void {
     if (cols <= 0 || rows <= 0) {
