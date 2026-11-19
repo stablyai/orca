@@ -167,6 +167,16 @@ export function getCachedBrowserExtensionEnabledIds(
   return byProfileId ? [...(byProfileId[profileId] ?? [])] : null
 }
 
+/** False when the file exists but can't be read or parsed: rewriting it would drop whatever it holds, such as saved site lists. */
+function isMetaFileSafeToRewrite(path: string): boolean {
+  try {
+    JSON.parse(readFileSync(path, 'utf-8'))
+    return true
+  } catch (error) {
+    return isMissingFileError(error)
+  }
+}
+
 // Write to a temporary file so an interrupted write leaves the existing metadata intact.
 export function persistBrowserSessionMeta(
   resolveMetadataPath: () => string,
@@ -174,6 +184,9 @@ export function persistBrowserSessionMeta(
   updates: Partial<BrowserSessionMeta>
 ): void {
   try {
+    if (!isMetaFileSafeToRewrite(resolveMetadataPath())) {
+      return
+    }
     const existing = loadBrowserSessionMeta(resolveMetadataPath, defaultPartition)
     const tmpPath = `${resolveMetadataPath()}.tmp`
     mkdirSync(dirname(resolveMetadataPath()), { recursive: true })
