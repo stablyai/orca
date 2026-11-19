@@ -50,10 +50,6 @@ export function createCodexJournalTranslatorWriters(deps: CodexJournalTranslator
       commands.compacted(turnId)
     ),
     goals: new CodexJournalGoals(deps.sink, attributionFor),
-    prompts: new CodexJournalPrompts(
-      producerDeps,
-      (threadId, itemId) => items.detailFor(threadId, itemId),
-      activeTurn
-    )
+    prompts: new CodexJournalPrompts(producerDeps, items, activeTurn)
   }
 }

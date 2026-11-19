@@ -22,6 +22,7 @@ import {
 import type { CodexPendingJournalPrompt } from './codex-structured-journal-settlement'
 import { readCodexTurnId } from '../../app-server/codex-structured-thread-facts'
 import type { CodexRowAttribution } from '../background-work/codex-subagent-linkage'
+import type { CodexJournalItems } from './codex-structured-journal-items'
 import '../../../native-chat/agent-session-journal/writing/journal-row-builders'
 import { journalLifecycleItemMutation } from '../../../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
 
@@ -34,7 +35,7 @@ export class CodexJournalPrompts {
     private readonly deps: Pick<CodexJournalTranslatorDeps, 'sink' | 'bindPromptItemId'> & {
       attributionFor: CodexRowAttribution
     },
-    private readonly detailFor: (threadId: string, itemId: string) => string | null,
+    private readonly announced: Pick<CodexJournalItems, 'detailFor' | 'changesFor'>,
     private readonly activeTurn: (threadId: string) => string | null
   ) {}
 
@@ -87,7 +88,8 @@ export class CodexJournalPrompts {
       codexApprovalItem({
         method: event.method,
         params: event.params,
-        detail: this.detailFor(event.threadId, event.codexItemId)
+        detail: this.announced.detailFor(event.threadId, event.codexItemId),
+        announcedChanges: this.announced.changesFor(event.threadId, event.codexItemId)
       })
     )
     const admission = this.admit(event, turnId, [{ identity, body }])

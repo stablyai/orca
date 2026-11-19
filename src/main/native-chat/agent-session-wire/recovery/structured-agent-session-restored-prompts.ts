@@ -13,6 +13,7 @@ import type {
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { refuse } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { AGENT_SESSION_RESTART_CONTINUATION_NOTE } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-continuation'
 import {
   AGENT_EXIT_PROMPT_ENDING,
   restoredPromptContinuationMessage
@@ -167,8 +168,14 @@ export class StructuredAgentSessionRestoredPrompts {
     }
     const actionAt = host.now()
     const continuationId = `${Math.trunc(actionAt).toString().padStart(13, '0')}-${hex16([sessionId, params.itemId])}${hex16([sessionId, params.itemId, randomUUID()])}`
+    const base = continuationDeps(host, async () => true)
     const deps = {
-      ...continuationDeps(host, async () => true),
+      ...base,
+      // The answered card already says why the agent resumed; failure notes still land.
+      note: (id: string, text: string, tone?: 'error' | 'warning') =>
+        text === AGENT_SESSION_RESTART_CONTINUATION_NOTE
+          ? Promise.resolve()
+          : base.note(id, text, tone),
       answerAtAcceptance: true as const,
       send: (input: Parameters<typeof host.send>[0]) =>
         host.send({ ...input, continuation: true, beforeRun: commit })
@@ -185,13 +192,13 @@ export class StructuredAgentSessionRestoredPrompts {
         void started.verdict().then(
           async (outcome) => {
             if (outcome.outcome === 'refused') {
-              await this.undo(journal, sessionId, params)
+              await this.undo(journal, params, committed.revision)
             }
           },
           () => this.holds.drop(sessionId)
         )
       } else if (started.done.outcome === 'refused') {
-        this.holds.drop(sessionId)
+        await this.undo(journal, params, committed.revision)
         return {
           ok: false,
           refusal: refuse(
@@ -203,7 +210,7 @@ export class StructuredAgentSessionRestoredPrompts {
       }
     } catch (error) {
       if (!(error instanceof RestartContinuationSupersededError)) {
-        this.holds.drop(sessionId)
+        await this.undo(journal, params, committed.revision)
         throw error
       }
     }
@@ -243,21 +250,22 @@ export class StructuredAgentSessionRestoredPrompts {
     return this.accepted(sessionId, journal, item.itemId, item.revision, resolution, replayed)
   }
 
-  /** The agent could not be started: the answer never reached it, so the card asks again. */
+  /** The agent could not be started: an answer recorded for it never reached it, so the card
+   *  asks again. */
   private async undo(
     journal: RestoredPromptJournal,
-    sessionId: string,
-    params: PromptParams
+    params: PromptParams,
+    revision: number | undefined
   ): Promise<void> {
+    const { sessionId } = params.envelope
     this.holds.drop(sessionId)
-    const item = await journal.reads.item(params.itemId)
-    if (!item) {
+    if (revision === undefined) {
       return
     }
     await journal
       .mutatePrompt({
         itemId: params.itemId,
-        expectedRevision: item.revision,
+        expectedRevision: revision,
         kind: params.kind,
         resolution: {
           state: 'cancelled',

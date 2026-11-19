@@ -24,38 +24,46 @@ export function isAgentExitPromptBody(body: AgentJournalRenderItem['body']): bod
   )
 }
 
+const isPrompt = (item: AgentJournalRenderItem): boolean =>
+  item.body.kind === 'approval' || item.body.kind === 'question'
+
+const turnOf = (item: AgentJournalRenderItem): string | null =>
+  item.turnScope?.kind === 'turn' ? item.turnScope.turnItemId : null
+
 /** The chat's last prompt, when its agent exited waiting on it and nothing has happened since.
- *  Callers also require that no agent is running for the chat. */
+ *  Walks back from the end only through the last turn. Callers also require no running agent. */
 export function restoredAgentJournalPrompt(
   items: readonly AgentJournalRenderItem[]
 ): RestoredAgentJournalPrompt | null {
-  const index = items.findLastIndex(
-    (item) => item.body.kind === 'approval' || item.body.kind === 'question'
-  )
+  let index = items.length - 1
+  const laterTurns = new Set<string>()
+  for (; index >= 0 && !isPrompt(items[index]!); index -= 1) {
+    const later = items[index]!
+    // A send after the prompt means the chat moved on.
+    if (later.body.kind === 'message' && later.body.role === 'user') {
+      return null
+    }
+    if (readAgentJournalTurn(later.body) !== null) {
+      laterTurns.add(later.itemId)
+    }
+  }
   const item = items[index]
   if (!item || !isAgentExitPromptBody(item.body)) {
     return null
   }
-  const turnItemId = item.turnScope?.kind === 'turn' ? item.turnScope.turnItemId : null
-  // Two waiting in one turn (grouped questions, parallel calls) can't be told apart on resume.
-  const previous = items.findLast(
-    (other, at) => at < index && (other.body.kind === 'approval' || other.body.kind === 'question')
-  )
-  if (
-    previous &&
-    isAgentExitPromptBody(previous.body) &&
-    previous.turnScope?.kind === 'turn' &&
-    previous.turnScope.turnItemId === turnItemId
-  ) {
+  const turnItemId = turnOf(item)
+  // Another turn after the prompt also means the chat moved on.
+  if ([...laterTurns].some((turn) => turn !== turnItemId)) {
     return null
   }
-  for (const later of items.slice(index + 1)) {
-    // A send or another turn after the prompt means the chat moved on.
-    if (
-      (later.body.kind === 'message' && later.body.role === 'user') ||
-      (readAgentJournalTurn(later.body) !== null && later.itemId !== turnItemId)
-    ) {
-      return null
+  // Two waiting in one turn (grouped questions, parallel calls) can't be told apart on resume.
+  for (let at = index - 1; at >= 0 && items[at]!.itemId !== turnItemId; at -= 1) {
+    const previous = items[at]!
+    if (isPrompt(previous)) {
+      if (isAgentExitPromptBody(previous.body) && turnOf(previous) === turnItemId) {
+        return null
+      }
+      break
     }
   }
   return { ...item, body: item.body }

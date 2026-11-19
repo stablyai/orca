@@ -50,7 +50,7 @@ function approval(
   }
 }
 
-function rig({ startRejected = false } = {}) {
+function rig({ startRejected = false, sendRefused = false } = {}) {
   const items = new Map<string, AgentJournalRenderItem>([
     ['old', approval('old', 'digest-a', 'cancelled')]
   ])
@@ -83,6 +83,9 @@ function rig({ startRejected = false } = {}) {
       now: () => 1_000,
       send: async (input) => {
         await input.beforeRun?.()
+        if (sendRefused) {
+          return REFUSED
+        }
         running = true
         const block = input.body.blocks[0]
         sent.push(block?.type === 'text' ? block.text : '')
@@ -269,5 +272,15 @@ describe('answering a prompt whose agent exited before the restart', () => {
     })
     await r.reask('new', 'digest-a')
     expect(r.respond).not.toHaveBeenCalled()
+  })
+
+  it('puts the card back when the send is refused after the answer was recorded', async () => {
+    const r = rig({ sendRefused: true })
+    const result = await r.answer('allow')
+
+    expect(result.ok).toBe(false)
+    expect(r.items.get('old')!.body).toMatchObject({
+      resolution: { state: 'cancelled', selectedOptionId: null, endedBy: 'agent_exit' }
+    })
   })
 })

@@ -93,28 +93,37 @@ function present(value: unknown): boolean {
       : typeof value === 'object' && value !== null && Object.keys(value).length > 0
 }
 
-/** What the request asks to do, named field by field, never ids, timestamps or the model's reason.
- *  Null when the request doesn't carry its whole subject: such a card is only ever answered live. */
+// Routing ids, the request's clock, the model's reason and the offered decisions differ between
+// two asks for the same thing. Every other field, including any a newer Codex adds, is hashed, so
+// an unknown field can only stop a match, never widen one.
+const UNHASHED_REQUEST_KEYS = new Set([
+  'threadId',
+  'turnId',
+  'itemId',
+  'approvalId',
+  'startedAtMs',
+  'reason',
+  'availableDecisions'
+])
+
+const requestFields = (params: Record<string, unknown>): Record<string, unknown> =>
+  Object.fromEntries(Object.entries(params).filter(([key]) => !UNHASHED_REQUEST_KEYS.has(key)))
+
+/** What the request asks to do. Null when it doesn't carry its subject (a command, or the diff):
+ *  such a card is only ever answered live. */
 function codexRequestSubject(
   method: string,
   params: Record<string, unknown>
 ): Record<string, unknown> | null {
   if (method === CODEX_COMMAND_APPROVAL_METHOD) {
-    return present(params.command)
-      ? {
-          command: params.command,
-          cwd: params.cwd,
-          amendment: params.proposedExecpolicyAmendment,
-          network: params.networkApprovalContext
-        }
-      : null
+    return present(params.command) ? requestFields(params) : null
   }
   if (method === CODEX_FILE_CHANGE_APPROVAL_METHOD) {
-    return present(params.changes) ? { changes: params.changes, grantRoot: params.grantRoot } : null
+    return present(params.changes) ? requestFields(params) : null
   }
   if (method === CODEX_USER_INPUT_METHOD) {
     return Array.isArray(params.questions) && params.questions.length === 1
-      ? { questions: params.questions }
+      ? requestFields(params)
       : null
   }
   return null
@@ -133,6 +142,8 @@ export function codexApprovalItem(input: {
   params: unknown
   /** Fallback from the announced item when the approval request omits its detail. */
   detail: string | null
+  /** The announced item's full diff, hashed when the request omits its own. */
+  announcedChanges?: unknown
 }): AgentJournalApprovalItem {
   const params = readParams(input.params)
   if (input.method === CODEX_MCP_ELICITATION_METHOD) {
@@ -150,7 +161,10 @@ export function codexApprovalItem(input: {
         codexFileChangeApprovalDetail(params.changes) ?? input.detail
       ),
       options: codexApprovalOptions(input.params),
-      ...codexRequestDigest(input.method, params),
+      ...codexRequestDigest(
+        input.method,
+        present(params.changes) ? params : { ...params, changes: input.announcedChanges }
+      ),
       resolution: { ...PENDING }
     }
   }

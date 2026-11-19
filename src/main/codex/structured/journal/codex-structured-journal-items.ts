@@ -82,6 +82,12 @@ export class CodexJournalItems {
       : (this.details.get(key) ?? null)
   }
 
+  /** The announced file change's full diff, which the approval request itself doesn't carry. */
+  changesFor(threadId: string, itemId: string): unknown {
+    const item = this.activeItems.get(codexStructuredItemKey(threadId, itemId))?.item
+    return item?.type === 'fileChange' ? item.changes : undefined
+  }
+
   handle(
     event: { threadId: string; method: string; params: unknown; observedAt?: number },
     source: 'live' | 'history' = 'live'
