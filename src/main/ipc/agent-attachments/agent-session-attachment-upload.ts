@@ -144,14 +144,30 @@ export async function uploadPasteToAgentSessionAttachments(
   return stored.path
 }
 
+type AppendSlice = (contentBase64: string, offset: number) => Promise<void>
+
+/** Stores one file whose bytes `writeBody` streams; returns where the agent's host keeps it. */
+export type ExternalFileStore = (
+  file: { name: string; byteLength: number },
+  writeBody: (appendSlice: AppendSlice) => Promise<void>
+) => Promise<string>
+
 /** Upload files in input order; folders are unsupported. */
-export async function uploadExternalPathsToAgentSessionAttachments(
-  context: UploadContext,
-  paths: readonly string[]
+export async function uploadExternalPaths(
+  paths: readonly string[],
+  limit: {
+    maxBytes: number
+    label: string
+    signal?: AbortSignal
+    /** Files past this total for the whole call are refused; absent, only each file is limited. */
+    total?: { maxBytes: number; reason: (name: string) => string }
+  },
+  store: ExternalFileStore
 ): Promise<AgentSessionAttachmentPathUploadResult> {
   const result: AgentSessionAttachmentPathUploadResult = { uploaded: [], skipped: [], failed: [] }
+  let sentBytes = 0
   for (const sourcePath of paths) {
-    context.signal?.throwIfAborted()
+    limit.signal?.throwIfAborted()
     // Reject folders before staging walks and opens their contents.
     if (await isDirectory(sourcePath)) {
       result.skipped.push({ sourcePath, reason: 'unsupported' })
@@ -173,34 +189,38 @@ export async function uploadExternalPathsToAgentSessionAttachments(
       result.skipped.push({ sourcePath, reason: 'unsupported' })
       continue
     }
-    if (entry.byteLength > AGENT_SESSION_ATTACHMENT_MAX_BYTES) {
+    if (entry.byteLength > limit.maxBytes) {
       result.failed.push({
         sourcePath,
         reason:
           `'${basename(sourcePath)}' is ${formatByteCeiling(entry.byteLength)}, over the ` +
-          `${formatByteCeiling(AGENT_SESSION_ATTACHMENT_MAX_BYTES)} chat attachment limit`
+          `${formatByteCeiling(limit.maxBytes)} ${limit.label}`
       })
       continue
     }
+    if (limit.total && sentBytes + entry.byteLength > limit.total.maxBytes) {
+      result.failed.push({ sourcePath, reason: limit.total.reason(basename(sourcePath)) })
+      continue
+    }
+    sentBytes += entry.byteLength
     try {
-      const stored = await uploadAttachment(
-        context,
+      const path = await store(
         { name: staged.name, byteLength: entry.byteLength },
         async (appendSlice) => {
           await streamExternalFileSlices({
             sourceRootPath: sourcePath,
             entryRelativePath: '',
             expected: entry,
-            signal: context.signal,
-            maxFileBytes: AGENT_SESSION_ATTACHMENT_MAX_BYTES,
-            limitLabel: 'chat attachment limit',
+            signal: limit.signal,
+            maxFileBytes: limit.maxBytes,
+            limitLabel: limit.label,
             writeSlice: appendSlice
           })
         }
       )
-      result.uploaded.push({ sourcePath, path: stored.path })
+      result.uploaded.push({ sourcePath, path })
     } catch (error) {
-      if (context.signal?.aborted) {
+      if (limit.signal?.aborted) {
         throw error
       }
       result.failed.push({
@@ -210,4 +230,20 @@ export async function uploadExternalPathsToAgentSessionAttachments(
     }
   }
   return result
+}
+
+/** Upload client files into a structured chat's attachment store on its paired server. */
+export function uploadExternalPathsToAgentSessionAttachments(
+  context: UploadContext,
+  paths: readonly string[]
+): Promise<AgentSessionAttachmentPathUploadResult> {
+  return uploadExternalPaths(
+    paths,
+    {
+      maxBytes: AGENT_SESSION_ATTACHMENT_MAX_BYTES,
+      label: 'chat attachment limit',
+      signal: context.signal
+    },
+    async (file, writeBody) => (await uploadAttachment(context, file, writeBody)).path
+  )
 }

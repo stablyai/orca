@@ -84,3 +84,12 @@ export function detectImageFileExtension(buffer: Uint8Array): ImageFileExtension
   }
   return null
 }
+
+/** A file's name with its image suffix added when it has none, so chat intake still sees an image. */
+export function withSniffedImageExtension(name: string, bytes: Uint8Array): string {
+  if (/\.[^./\\]+$/.test(name)) {
+    return name
+  }
+  const signature = detectImageFileSignature(bytes)
+  return signature ? `${name}.${signature.extension}` : name
+}

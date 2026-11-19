@@ -12,13 +12,15 @@ import {
   uploadNativeChatSessionAttachmentPaths
 } from '../uploads/native-chat-session-attachment-upload'
 import type { NativeChatRuntimeSessionAttachmentOwner } from '../uploads/native-chat-attachment-owner'
+import type { AgentSessionAttachmentPathUploadResult } from '../../../../../../shared/agent-session/agent-session-attachments'
 
 export type NativeChatPendingAttachmentOptions = NativeChatAttachmentFocusOptions & {
   insertReferences?: ((paths: string[]) => void) | null
 }
 
 export type NativeChatPendingAttachmentChips = {
-  begin: (previewUrl?: string, pendingName?: string) => string | null
+  /** `serverOwned`: the file will live on the remote target, so a remote terminal may take it. */
+  begin: (previewUrl?: string, pendingName?: string, serverOwned?: boolean) => string | null
   resolve: (
     id: string,
     path: string,
@@ -30,7 +32,8 @@ export type NativeChatPendingAttachmentChips = {
   /** Persist @path references in the draft through IME composition and remounts. */
   attachReferences: (
     references: { id: string; path: string }[],
-    options?: NativeChatPendingAttachmentOptions
+    options?: NativeChatPendingAttachmentOptions,
+    serverOwned?: boolean
   ) => boolean
 }
 
@@ -39,18 +42,70 @@ export type NativeChatReservedAttachment = { path: string; chipId: string }
 /** One named pending chip per file; a path without one was refused and the composer said why. */
 export function reserveNativeChatAttachmentChips(
   chips: NativeChatPendingAttachmentChips,
-  paths: string[]
+  paths: string[],
+  serverOwned = false
 ): NativeChatReservedAttachment[] {
   return paths.flatMap((path) => {
-    const chipId = chips.begin(undefined, basename(path))
+    const chipId = chips.begin(undefined, basename(path), serverOwned)
     return chipId ? [{ path, chipId }] : []
   })
 }
 
+/** Uploads client paths and reports where each one landed, or a notice when nothing can be sent. */
+type NativeChatAttachmentPathUpload = (
+  paths: string[]
+) => Promise<
+  { ok: true; result: AgentSessionAttachmentPathUploadResult } | { ok: false; notice: string }
+>
+
 /** Upload paired-server files behind pending chips; Send waits, and removed chips must never attach. */
-export async function attachNativeChatSessionAttachmentPaths(args: {
+export function attachNativeChatSessionAttachmentPaths(args: {
   pending: NativeChatReservedAttachment[]
   owner: NativeChatRuntimeSessionAttachmentOwner
+  chips: NativeChatPendingAttachmentChips
+  options?: NativeChatAttachmentFocusOptions
+  isAbandoned: () => boolean
+  ownerStillCurrent: () => boolean
+  setNotice: (notice: string | null) => void
+}): Promise<void> {
+  const { owner, ...rest } = args
+  return attachNativeChatUploadedPaths({
+    ...rest,
+    upload: async (paths) => {
+      const prepared = await prepareNativeChatSessionAttachmentUpload(owner)
+      return prepared.ok
+        ? { ok: true, result: await uploadNativeChatSessionAttachmentPaths(paths, prepared.target) }
+        : prepared
+    }
+  })
+}
+
+/** Upload client files to the server's temp folder for a terminal-backed chat running there. */
+export function attachNativeChatRuntimeTempPaths(args: {
+  pending: NativeChatReservedAttachment[]
+  environmentId: string
+  chips: NativeChatPendingAttachmentChips
+  options?: NativeChatAttachmentFocusOptions
+  isAbandoned: () => boolean
+  ownerStillCurrent: () => boolean
+  setNotice: (notice: string | null) => void
+}): Promise<void> {
+  const { environmentId, ...rest } = args
+  return attachNativeChatUploadedPaths({
+    ...rest,
+    serverOwned: true,
+    upload: async (paths) => ({
+      ok: true,
+      result: await window.api.fs.uploadPathsToRuntimeTempFiles({ environmentId, paths })
+    })
+  })
+}
+
+/** Upload reserved files, then settle each chip: images as images, other files as path references. */
+async function attachNativeChatUploadedPaths(args: {
+  pending: NativeChatReservedAttachment[]
+  upload: NativeChatAttachmentPathUpload
+  serverOwned?: boolean
   chips: NativeChatPendingAttachmentChips
   options?: NativeChatAttachmentFocusOptions
   isAbandoned: () => boolean
@@ -69,16 +124,13 @@ export async function attachNativeChatSessionAttachmentPaths(args: {
   let stored: Map<string, string>
   let reasons: Map<string, string>
   try {
-    const prepared = await prepareNativeChatSessionAttachmentUpload(args.owner)
-    if (!prepared.ok) {
+    const uploaded = await args.upload(pending.map(({ path }) => path))
+    if (!uploaded.ok) {
       dropAll()
-      args.setNotice(prepared.notice)
+      args.setNotice(uploaded.notice)
       return
     }
-    const result = await uploadNativeChatSessionAttachmentPaths(
-      pending.map(({ path }) => path),
-      prepared.target
-    )
+    const { result } = uploaded
     stored = new Map(result.uploaded.map(({ sourcePath, path }) => [sourcePath, path]))
     reasons = new Map([
       ...result.skipped.map(({ sourcePath, reason }): [string, string] => [
@@ -119,7 +171,11 @@ export async function attachNativeChatSessionAttachmentPaths(args: {
   }
   // Insertions clear notices, so report failures afterward.
   if (references.length > 0) {
-    args.chips.attachReferences(references, args.options)
+    if (args.serverOwned) {
+      args.chips.attachReferences(references, args.options, true)
+    } else {
+      args.chips.attachReferences(references, args.options)
+    }
   }
   if (notAttached.length > 0) {
     const [first] = notAttached

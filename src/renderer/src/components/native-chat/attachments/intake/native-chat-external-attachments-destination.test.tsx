@@ -459,3 +459,40 @@ describe('captured edit picker and menu destination', () => {
     }
   )
 })
+
+describe('a terminal chat on a paired server', () => {
+  it('puts picked files the server stored into the draft: the image as a chip, the document as a path', async () => {
+    mocks.owner = { kind: 'remote', clipboardImageEnvironmentId: 'env-1' }
+    mocks.remoteTarget = true
+    composing = false
+    const uploadToRuntime = vi.fn(async () => ({
+      uploaded: [
+        { sourcePath: '/Users/me/shot.png', path: '/tmp/orca-paste-a/shot.png' },
+        { sourcePath: '/Users/me/notes.md', path: '/tmp/orca-paste-b/notes.md' }
+      ],
+      skipped: [],
+      failed: []
+    }))
+    window.api.fs.uploadPathsToRuntimeTempFiles = uploadToRuntime
+    window.api.shell = {
+      ...window.api.shell,
+      pickAttachments: async () => ['/Users/me/shot.png', '/Users/me/notes.md']
+    }
+    await render('workspace-1')
+    await act(async () => {
+      latest().pickAttachments()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(uploadToRuntime).toHaveBeenCalledExactlyOnceWith({
+      environmentId: 'env-1',
+      paths: ['/Users/me/shot.png', '/Users/me/notes.md']
+    })
+    expect(readNativeChatComposerDraft('drop-test').images.map(({ path }) => path)).toEqual([
+      '/tmp/orca-paste-a/shot.png'
+    ])
+    expect(container.querySelector('[data-draft]')?.textContent).toBe(
+      '@/tmp/orca-paste-b/notes.md '
+    )
+    expect(container.querySelector('[data-notice]')?.textContent).toBe('')
+  })
+})
