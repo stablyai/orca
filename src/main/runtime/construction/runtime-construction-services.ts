@@ -95,7 +95,6 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
 
   protected abstract handleGraphReloadTimeout(windowId: number): void
   protected abstract flushScheduledMobileSessionTabsChanged(worktreeId: string): void
-  protected abstract getMobileSessionWorktreeIdsForPty(ptyId: string): string[]
   abstract touchMobileSessionTabsForWorktree(
     worktreeId: string,
     options?: {
