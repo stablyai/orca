@@ -1,10 +1,12 @@
 import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { worktreeIdentityKey } from '../../../shared/worktree/id'
+import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import { listClientUnsavedEditorWorktreeIds } from './workspace-cleanup-client-unsaved-editors'
 import { runtimeVisibleRepos } from '../../runtime/workspaces/catalog/runtime-visible-catalog'
 import { scanWorkspaceCleanup } from '../../ipc/workspace-cleanup/workspace-cleanup-scan'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
+import { isWorktreeRetiredByRemoval } from '../../../shared/worktree/removal/removal-visibility'
 import type { Repo } from '../../../shared/repository/repo-types'
 import {
   isRepoOnCatalogHost,
@@ -39,6 +41,8 @@ export type WorkspaceCleanupWorkspace = {
   input: WorkspaceCleanupEvaluationInput
   paneAgentStates: WorkspaceCleanupPaneAgentStates
   removing: boolean
+  /** The other worktrees its folder workspace lists, on any host; a re-check of one id lists none. */
+  folderSiblingIds: string[]
 }
 
 /** Repos whose checkouts this process owns; a host served by its own orcad is that server's to clean. */
@@ -59,6 +63,55 @@ function isOwnedSummary(summary: RuntimeWorktreePsSummary, repos: Map<string, Re
     hostId === LOCAL_EXECUTION_HOST_ID &&
     summary.workspaceKind !== 'folder-workspace'
   )
+}
+
+/** Each listed worktree's folder siblings: the others its folder workspace's Source Control lists,
+ * attached worktrees and their lineage children alike, as getFolderWorkspaceChildWorktrees nests them. */
+function folderSiblingIdsByWorktree(
+  summaries: readonly RuntimeWorktreePsSummary[]
+): (summary: RuntimeWorktreePsSummary) => string[] {
+  const byIdentity = new Map(
+    summaries.map((summary) => [
+      composeWorktreeHostIdentity(summary.hostId, summary.worktreeId),
+      summary
+    ])
+  )
+  // An archived ancestor hides its subtree from the folder; a retired one passes its children up.
+  const folderOf = (summary: RuntimeWorktreePsSummary): string | null => {
+    const visited = new Set<RuntimeWorktreePsSummary>()
+    let row: RuntimeWorktreePsSummary | undefined = summary
+    while (row && !row.isArchived && !visited.has(row)) {
+      if (row.workspaceLineage) {
+        return row.workspaceLineage.parentWorkspaceKey
+      }
+      visited.add(row)
+      row = row.parentWorktreeId
+        ? byIdentity.get(composeWorktreeHostIdentity(row.hostId, row.parentWorktreeId))
+        : undefined
+    }
+    return null
+  }
+  const folderByMember = new Map<RuntimeWorktreePsSummary, string>()
+  const membersByFolder = new Map<string, string[]>()
+  for (const summary of summaries) {
+    const folderKey =
+      summary.workspaceKind === 'folder-workspace' || isWorktreeRetiredByRemoval(summary)
+        ? null
+        : folderOf(summary)
+    if (folderKey) {
+      folderByMember.set(summary, folderKey)
+      membersByFolder.set(folderKey, [
+        ...(membersByFolder.get(folderKey) ?? []),
+        summary.worktreeId
+      ])
+    }
+  }
+  return (summary) => {
+    const folderKey = folderByMember.get(summary)
+    return folderKey
+      ? membersByFolder.get(folderKey)!.filter((id) => id !== summary.worktreeId)
+      : []
+  }
 }
 
 function summaryActivityAt(summary: RuntimeWorktreePsSummary): number {
@@ -187,6 +240,7 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
     throw new Error('Could not list every workspace on this host.')
   }
   const summaries = ps.worktrees.filter((summary) => isOwnedSummary(summary, repos))
+  const folderSiblingIdsOf = folderSiblingIdsByWorktree(ps.worktrees)
   const policies = new Map<string, ResolvedWorkspaceCleanupPolicy>()
   for (const summary of summaries) {
     if (!policies.has(summary.repoId)) {
@@ -238,7 +292,8 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
         dirtyEditors.has(worktreeIdentityKey(summary.worktreeId))
       ),
       paneAgentStates,
-      removing: summary.removing === true
+      removing: summary.removing === true,
+      folderSiblingIds: folderSiblingIdsOf(summary)
     }
   })
 }

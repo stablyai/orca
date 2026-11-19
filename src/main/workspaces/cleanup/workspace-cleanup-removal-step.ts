@@ -8,7 +8,9 @@ import { getEffectiveHooks } from '../../workspace-hooks/hooks'
 import { errorMessage } from '../../../shared/errors/error-message'
 import {
   evaluateWorkspaceCleanup,
-  type WorkspaceCleanupEvaluation
+  keepFolderWorkspaceSiblings,
+  type WorkspaceCleanupEvaluation,
+  type WorkspaceCleanupFolderVerdict
 } from '../../../shared/workspace-cleanup/workspace-cleanup-evaluation'
 import type { WorkspaceCleanupRules } from '../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import type { WorkspaceCleanupRunRow } from '../../../shared/workspace-cleanup/workspace-cleanup-run'
@@ -24,7 +26,7 @@ function selectorFor(workspace: WorkspaceCleanupWorkspace): string {
 }
 
 /** The evaluator's verdict plus the checks only a live host can make; any doubt keeps the workspace. */
-export async function decideWorkspaceCleanup(
+async function decideWorkspaceCleanup(
   runtime: OrcaRuntimeService,
   workspace: WorkspaceCleanupWorkspace,
   now: number
@@ -62,6 +64,23 @@ export async function decideWorkspaceCleanup(
   )
 }
 
+/** Every workspace's verdict, in order; a folder workspace's worktrees go together or not at all. */
+export async function decideWorkspaceCleanups(
+  runtime: OrcaRuntimeService,
+  workspaces: readonly WorkspaceCleanupWorkspace[],
+  now: number
+): Promise<WorkspaceCleanupEvaluation[]> {
+  const verdicts: WorkspaceCleanupFolderVerdict[] = []
+  for (const workspace of workspaces) {
+    verdicts.push({
+      worktreeId: workspace.ref.worktreeId,
+      folderSiblingIds: workspace.folderSiblingIds,
+      evaluation: await decideWorkspaceCleanup(runtime, workspace, now)
+    })
+  }
+  return keepFolderWorkspaceSiblings(verdicts)
+}
+
 function describeRemovalError(error: unknown): string {
   return errorMessage(error).split(/\r?\n/)[0] || 'Removal failed.'
 }
@@ -71,31 +90,58 @@ type RemovalOutcome = Pick<
   'outcome' | 'reason' | 'keepCause' | 'waiting' | 'keptOnRecheck' | 'branchKept' | 'error'
 >
 
-/** Re-reads every piece of evidence right before removing one workspace; removal itself goes through the lifecycle queue. */
-export async function removeWorkspaceForCleanup(args: {
+type RemovalArgs = {
   runtime: OrcaRuntimeService
   store: RuntimeStore
   globalRules: () => WorkspaceCleanupRules
   workspace: WorkspaceCleanupWorkspace
   now: () => number
   signal?: AbortSignal
-}): Promise<RemovalOutcome> {
-  const { runtime, store, workspace } = args
+}
+
+/** The workspace, then the folder siblings the scan saw that are still listed. One no longer listed
+ * was removed since: the scan already kept every group with a sibling this host could not judge. */
+async function recollectWorkspaceCleanupGroup(
+  args: RemovalArgs
+): Promise<WorkspaceCleanupWorkspace[]> {
+  const group: WorkspaceCleanupWorkspace[] = []
+  for (const worktreeId of [args.workspace.ref.worktreeId, ...args.workspace.folderSiblingIds]) {
+    const [row] = await collectWorkspaceCleanupWorkspaces({
+      store: args.store,
+      runtime: args.runtime,
+      globalRules: args.globalRules(),
+      now: args.now(),
+      worktreeId,
+      signal: args.signal
+    })
+    if (row) {
+      group.push(row)
+    } else if (group.length === 0) {
+      return []
+    }
+  }
+  return group
+}
+
+/** Re-reads every piece of evidence, its folder siblings' too, right before removing one workspace;
+ * removal itself goes through the lifecycle queue. */
+export async function removeWorkspaceForCleanup(args: RemovalArgs): Promise<RemovalOutcome> {
+  const { runtime, workspace } = args
   const selector = selectorFor(workspace)
   try {
     // Earlier removals in this run took time: decide on what is true now, not what the scan saw.
-    const [fresh] = await collectWorkspaceCleanupWorkspaces({
-      store,
-      runtime,
-      globalRules: args.globalRules(),
-      now: args.now(),
-      worktreeId: workspace.ref.worktreeId,
-      signal: args.signal
-    })
+    const [fresh, ...siblings] = await recollectWorkspaceCleanupGroup(args)
     if (!fresh) {
       return { outcome: 'kept', keepCause: 'git-unknown', keptOnRecheck: true }
     }
-    const recheck = await decideWorkspaceCleanup(runtime, fresh, args.now())
+    const [recheck] = await decideWorkspaceCleanups(
+      runtime,
+      [
+        { ...fresh, folderSiblingIds: siblings.map((sibling) => sibling.ref.worktreeId) },
+        ...siblings
+      ],
+      args.now()
+    )
     if (recheck.action === 'keep') {
       return { ...keptRunOutcome(recheck), keptOnRecheck: true }
     }
