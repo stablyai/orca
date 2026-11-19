@@ -37,6 +37,9 @@ export type SidebarAgentsListProps = {
   scrollTopRef?: React.MutableRefObject<number>
 }
 
+// Selection follows the focused pane, so clearing the last row leaves nothing to deselect.
+const keepFocusedPaneSelection = (): void => {}
+
 export default function SidebarAgentsList({
   active = true,
   badgeTarget,
@@ -109,6 +112,8 @@ function SidebarAgentsListBody({
   const showChildAgents = useAppStore((s) => s.agentsShowChildAgents)
   const setShowChildAgents = useAppStore((s) => s.setAgentsShowChildAgents)
   const activityFilterInputRef = useRef<HTMLInputElement | null>(null)
+  // The Activity page owns the triage shortcuts while it is open; one owner keeps a chord to one move.
+  const ownsInboxShortcuts = useAppStore((s) => s.activeView !== 'activity')
 
   const handleShowSearchChange = useCallback(
     (visible: boolean) => {
@@ -225,6 +230,7 @@ function SidebarAgentsListBody({
         showOptionsMenu={false}
         showInlineActions={false}
         scrollTopRef={scrollTopRef}
+        onInboxDeselect={ownsInboxShortcuts ? keepFocusedPaneSelection : undefined}
       />
       {optionsTarget
         ? createPortal(

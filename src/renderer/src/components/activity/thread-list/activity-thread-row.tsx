@@ -14,6 +14,7 @@ import { EventTime, ThreadAgentStateIndicator } from './activity-thread-controls
 import { ActivityThreadHoverCard } from '../thread-preview/activity-thread-hover-card'
 import { activityThreadRowCopy } from '../threads/activity-thread-presentation'
 import type { AgentPaneThread } from '../threads/activity-thread-types'
+import { ActivityThreadIndexHint } from './activity-thread-index-hint'
 import type { ActivityThreadClickEvent } from './use-activity-thread-selection'
 
 function ActivityThreadRowAction({
@@ -69,7 +70,8 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
   compactMode,
   disableMarkUnread = false,
   showJumpAction = true,
-  previewSuppressed = false
+  previewSuppressed = false,
+  indexHint
 }: {
   thread: AgentPaneThread
   selected: boolean
@@ -85,6 +87,8 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
   disableMarkUnread?: boolean
   showJumpAction?: boolean
   previewSuppressed?: boolean
+  /** Select-by-index number, shown in place of the time while its chord is held. */
+  indexHint?: number
 }): React.JSX.Element {
   const t = useTranslate()
   useUiLanguageRevision()
@@ -134,11 +138,15 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
               >
                 {taskTitle}
               </button>
-              <EventTime
-                timestamp={thread.latestTimestamp}
-                compact
-                className="shrink-0 whitespace-nowrap py-0.5 text-xs font-medium text-foreground/60 hover:text-foreground/60"
-              />
+              {indexHint !== undefined ? (
+                <ActivityThreadIndexHint number={indexHint} />
+              ) : (
+                <EventTime
+                  timestamp={thread.latestTimestamp}
+                  compact
+                  className="shrink-0 whitespace-nowrap py-0.5 text-xs font-medium text-foreground/60 hover:text-foreground/60"
+                />
+              )}
             </div>
 
             {statusLine ? (
