@@ -689,3 +689,42 @@ it('offers back words typed before the first send that the answer left out', asy
 
   expect(screen.getByRole('status').textContent).toContain('ask Ops first')
 })
+
+it('keeps focus in the item, with its arrows, when it is deleted while its comment box has focus', () => {
+  const nothingFocused = (): boolean =>
+    document.activeElement === null || document.activeElement === document.body
+  const nav = <button type="button">Next item</button>
+  show(3)
+  const view = render(<BotItemView bot={BOT} uid="uid-6" takeFocus={nothingFocused} nav={nav} />)
+  const box = screen.getByRole('textbox', { name: 'Comment' })
+  box.focus()
+  expect(document.activeElement).toBe(box)
+
+  read.current = { ...read.current!, deleted: true }
+  view.rerender(<BotItemView bot={BOT} uid="uid-6" takeFocus={nothingFocused} nav={nav} />)
+  expect(screen.queryByRole('textbox', { name: 'Comment' })).toBeNull()
+  expect(document.activeElement).toBe(document.querySelector('[data-bot-item-focus-home]'))
+  expect(screen.getByRole('button', { name: 'Next item' })).toBeTruthy()
+})
+
+it("keeps the arrows below an open question's card, and puts them back in the comment box when it folds", () => {
+  show(3, OPEN_ASK)
+  const nav = <button type="button">Next item</button>
+  render(
+    <TooltipProvider>
+      <BotItemView bot={BOT} uid="uid-6" nav={nav} />
+    </TooltipProvider>
+  )
+  // Hidden ones too: the box behind the card must not hold a second, unseen set.
+  const arrows = (): HTMLElement[] =>
+    screen.getAllByRole('button', { name: 'Next item', hidden: true })
+  expect(screen.queryByRole('textbox', { name: 'Comment' })).toBeNull()
+  expect(arrows()).toHaveLength(1)
+  expect(arrows()[0].closest('[data-native-chat-composer-scope]')).toBeNull()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Collapse' }))
+  expect(arrows()).toHaveLength(1)
+  expect(arrows()[0].closest('[data-native-chat-composer-scope]')).toBe(
+    screen.getByRole('textbox', { name: 'Comment' }).closest('[data-native-chat-composer-scope]')
+  )
+})

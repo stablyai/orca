@@ -50,6 +50,8 @@ import type { Bot } from '../../../../../shared/bot-types'
 import { BOT_ITEM_LIMITS, type BotItem } from '../../../../../shared/bots/bot-items'
 import { botRefKey } from '@/lib/bot-hosts'
 import { useKeepFloatingTerminalTriggerClear } from '../../floating-terminal/trigger/floating-terminal-trigger-keep-clear'
+import { BOT_ITEM_TOOL_ROW_TOUCH_FIT } from './BotItemStepper'
+import { cn } from '@/lib/class-names'
 import {
   useBotItemCommentAttachments,
   type BotItemCommentAttachTarget
@@ -57,6 +59,8 @@ import {
 
 export type BotItemCommentBoxHandle = {
   focus: () => void
+  /** Focus the box with the caret after its text, as when coming back to a draft. */
+  focusEnd: () => void
   /** Focus the box and type `text` at its caret. */
   type: (text: string) => void
 }
@@ -72,6 +76,7 @@ export function BotItemCommentBox({
   attachTo,
   onSend,
   hidden = false,
+  nav,
   ref
 }: {
   bot: Bot
@@ -82,6 +87,8 @@ export function BotItemCommentBox({
   onSend: (text: string, paths: readonly string[]) => void
   /** Behind the open question's card: files dropped on the pane are not taken into its hidden draft. */
   hidden?: boolean
+  /** The item pane's previous / next arrows, between the attach and mic buttons. */
+  nav?: React.ReactNode
   ref?: Ref<BotItemCommentBoxHandle>
 }): React.JSX.Element {
   const t = useTranslate()
@@ -206,6 +213,11 @@ export function BotItemCommentBox({
 
   useImperativeHandle(ref, () => ({
     focus: () => input.current?.focus(),
+    focusEnd: () => {
+      const node = input.current
+      node?.focus()
+      node?.setSelectionRange(node.value.length, node.value.length)
+    },
     type: (typed) => void composer.current?.insertTypedText(typed)
   }))
 
@@ -368,13 +380,14 @@ export function BotItemCommentBox({
       />
       {/* The send circle sets the row's height; the ghost buttons overhang it, so their glyphs sit on
           the text's left edge and level with the send. */}
-      <div className="mt-2 flex items-center gap-1">
+      <div className={cn('mt-2 flex items-center gap-1', nav ? BOT_ITEM_TOOL_ROW_TOUCH_FIT : null)}>
         {access.session ? (
           <span className="-my-1 -ml-2 flex">
             <NativeChatAttachButton onAttach={fileDrops.pickAttachments} />
           </span>
         ) : null}
-        <span className="-my-1 ml-auto flex">
+        {nav}
+        <span className={cn('-my-1 flex', nav ? null : 'ml-auto')}>
           <NativeChatDictationButton
             disabled={dictation.dictationDisabled}
             isDictating={dictation.isDictating}

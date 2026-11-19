@@ -25937,7 +25937,9 @@
       "e9da9f872a": "Send review notes to agent",
       "1524825c2c": "Toggle workspace board",
       "d286d1ab85": "Clear pane title",
-      "botItemBack": "Back to items"
+      "botItemBack": "Back to items",
+      "botItemPrevious": "Previous item",
+      "botItemNext": "Next item"
     },
     "group": {
       "global": "Global",
@@ -29084,6 +29086,12 @@
         "next": "Next item",
         "previous": "Previous item",
         "place": "{{index}} / {{total}}",
+        "placeOf": "{{index}} of {{total}}",
+        "navigation": "Item {{index}} of {{total}}",
+        "loadingNext": "Loading next item",
+        "shown": "Item {{index}} of {{total}}: {{title}}",
+        "firstItem": "First item",
+        "lastItem": "Last item",
         "deleted": "This item was deleted.",
         "moreLinks": "{{count}} more links"
       },
