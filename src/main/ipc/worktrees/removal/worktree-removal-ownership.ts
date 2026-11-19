@@ -14,6 +14,7 @@ import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import { removeWorktreeMetaRow } from '../../../persistence/host-qualified-worktree-meta'
 import { pruneWorktreePRRefreshAliases } from '../../../github/pull-requests/refresh/pr-refresh-coordinator'
+import { dropOrcaCreatedAgentTrustForRemovedWorktree } from '../../../runtime/workspaces/removal/worktree-removal-agent-trust-cleanup'
 import {
   dropRemovedWorktreeProcessState,
   pruneRemovedWorktreeSnapshots
@@ -78,8 +79,10 @@ export function removeWorktreeMetadataAndTransientState(
   },
   worktreeId: string,
   hostId?: ExecutionHostId,
-  snapshotPruneBatchId?: string
-): void {
+  snapshotPruneBatchId?: string,
+  // Why: forget and folder removal keep the directory on disk, so only checkout deletes drop trust.
+  options: { dropAgentTrust?: boolean } = {}
+): Promise<void> {
   const persistedHostId = store.getWorktreeMeta(worktreeId)?.hostId
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   const preservesSameIdOwner = Boolean(
@@ -91,7 +94,11 @@ export function removeWorktreeMetadataAndTransientState(
   removeWorktreeMetaRow(store, worktreeId, hostId)
   // Status retirement is host/pane-scoped, even when another owner keeps the same workspace ID.
   agentHookServer.dropStatusEntriesForRemovedWorktree(worktreeId, hostId ?? persistedHostId)
+  let pretrustDrop: Promise<void> | undefined
   if (!preservesSameIdOwner) {
+    pretrustDrop = options.dropAgentTrust
+      ? dropOrcaCreatedAgentTrustForRemovedWorktree(worktreeId)
+      : undefined
     dropRemovedWorktreeProcessState(worktreeId)
     // Keep Electron-dependent desktop PR cleanup outside the runtime-shared drop.
     pruneWorktreePRRefreshAliases(worktreeId)
@@ -103,5 +110,24 @@ export function removeWorktreeMetadataAndTransientState(
     worktreeId,
     hostId,
     snapshotPruneBatchId
+  )
+  return pretrustDrop ?? Promise.resolve()
+}
+
+/** The purge for removals that deleted the checkout; also drops the workspace trust Orca wrote for it. */
+export function removeDeletedCheckoutMetadataAndTransientState(
+  context: Parameters<typeof removeWorktreeMetadataAndTransientState>[0],
+  worktreeId: string,
+  hostId?: ExecutionHostId,
+  snapshotPruneBatchId?: string
+): Promise<void> {
+  return removeWorktreeMetadataAndTransientState(
+    context,
+    worktreeId,
+    hostId,
+    snapshotPruneBatchId,
+    {
+      dropAgentTrust: true
+    }
   )
 }

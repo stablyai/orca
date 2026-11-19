@@ -733,7 +733,7 @@
 1 src/main/ipc/worktrees/removal/remove-registered-local-worktree.ts
 2 src/main/ipc/worktrees/removal/remove-unregistered-worktree.ts
 1 src/main/ipc/worktrees/removal/worktree-removal-filesystem.ts
-1 src/main/ipc/worktrees/removal/worktree-removal-ownership.ts
+2 src/main/ipc/worktrees/removal/worktree-removal-ownership.ts # +1: checkout-deleting removals drop Orca-written agent trust, as the runtime purge does; once per removal, Codex part on the trust worker
 6 src/main/ipc/worktrees/worktree-remote.ts
 1 src/main/ipc/wsl/wsl-drive-project-handlers.ts
 4 src/main/ipc/wsl/wsl-drive-unc-conversion-handlers.ts
