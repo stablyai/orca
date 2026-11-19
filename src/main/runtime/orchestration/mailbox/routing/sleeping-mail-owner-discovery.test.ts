@@ -77,7 +77,7 @@ it.each([10, 100])(
         work.clear()
         const visited = new Set<string>()
         const found = Array.from({ length: k }, (_, i) =>
-          sleepingMailOwnerMailboxes(db, key(i), undefined, () => true, visited)
+          sleepingMailOwnerMailboxes(db, key(i), visited)
         ).flat()
         expect(found).toEqual(relevant.slice(0, k).flatMap((owner) => owner.mailboxes))
         expect(work.owners).toHaveLength(5 * k)
@@ -114,57 +114,6 @@ it.each([10, 100])(
           })
         )
       }
-      for (const address of ['term_0', 'orca_session_id:session-0']) {
-        work.clear()
-        const found = sleepingMailOwnerMailboxes(db, null, address, (pane) => pane === key(0))
-        expect(found).toEqual(
-          address.startsWith('term_') ? relevant[0]!.mailboxes : relevant[0]!.mailboxes.slice(0, 2)
-        )
-        expect(work.owners).toHaveLength(address.startsWith('term_') ? 6 : 3)
-        expect(work.probes).toHaveLength(address.startsWith('term_') ? 4 : 3)
-        expect(work.messages).toHaveLength(address.startsWith('term_') ? 3 : 2)
-        expect(
-          work.plans.filter((detail) => /SCAN (?!CONSTANT ROW)|MATERIALIZE/.test(detail))
-        ).toEqual([])
-        expect(work.plans).toEqual(
-          expect.arrayContaining([
-            expect.stringContaining(
-              address.startsWith('term_')
-                ? 'idx_runs_current_coordinator_handle'
-                : 'idx_runs_coordinator_orca_session_id'
-            ),
-            expect.stringContaining(
-              address.startsWith('term_')
-                ? 'idx_dispatch_assignee_handle'
-                : 'idx_dispatch_assignee_orca_session_id'
-            )
-          ])
-        )
-        console.info(
-          'address-range-proof',
-          JSON.stringify({
-            n,
-            address,
-            ownerRows: work.owners.length,
-            probes: work.probes.length,
-            messageRows: work.messages.length,
-            plans: [...new Set(work.plans)]
-          })
-        )
-        work.clear()
-        expect(sleepingMailOwnerMailboxes(db, null, address, () => false)).toEqual([])
-        expect(work.probes).toEqual([])
-      }
-      // Duplicate pane/current-address identities share exact mailbox probes, including negative existence.
-      work.clear()
-      const seen = new Set<string>()
-      sleepingMailOwnerMailboxes(db, key(0), undefined, () => true, seen)
-      const before = work.probes.length
-      expect(sleepingMailOwnerMailboxes(db, null, 'term_0', () => true, seen)).toEqual([])
-      expect(
-        sleepingMailOwnerMailboxes(db, null, 'orca_session_id:session-0', () => true, seen)
-      ).toEqual([])
-      expect(work.probes).toHaveLength(before)
       work.stop()
       const first = relevant[0]!
       const select = (
@@ -188,9 +137,6 @@ it.each([10, 100])(
         })
       ).toBeDefined()
       expect(select()).toBeUndefined()
-      // Historical aliases grant no authority: a different current handle cannot discover these inboxes.
-      db.rememberRunCoordinatorHandle(first.run.id, 'term_former')
-      expect(sleepingMailOwnerMailboxes(db, null, 'term_former')).toEqual([])
     } finally {
       vi.restoreAllMocks()
       db.close()

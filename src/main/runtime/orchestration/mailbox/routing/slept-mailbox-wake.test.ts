@@ -1,6 +1,5 @@
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
-import { createRootDispatch } from '../../db/root-dispatch-test-fixture'
 import { ORCHESTRATION_REPLY_METHOD } from '../../../rpc/methods/orchestration/messaging/reply-method'
 import { restoreUndispatchedMailWake } from '../../../session-lifecycle/projection/retained-mail-wake-attempt'
 import { OrcaRuntimeService } from '../../../orca-runtime'
@@ -286,146 +285,6 @@ it('suppresses a definitively confirmed late wake only for its obligation and re
   }
 })
 
-it.each([10, 100])(
-  'keeps status visits and addressed mail queries bounded with %i saved sleepers',
-  async (count) => {
-    const db = new OrchestrationDb(':memory:')
-    let visits = 0
-    let statusChanged: (key: string) => void = () => {}
-    let sessionWritten: (host: ExecutionHostId | null) => void = () => {}
-    const records: Record<string, SleepingAgentSessionRecord> = {}
-    const mailboxes: string[] = []
-    const isRecordProperty = (
-      target: SleepingAgentSessionRecord,
-      property: string | symbol
-    ): property is keyof SleepingAgentSessionRecord =>
-      typeof property === 'string' && Object.hasOwn(target, property)
-    const countRecordVisits: ProxyHandler<SleepingAgentSessionRecord> = {
-      get(target, property) {
-        visits++
-        return isRecordProperty(target, property) ? target[property] : undefined
-      }
-    }
-    for (let i = 0; i < count; i++) {
-      const key = `tab-${i}:11111111-1111-4111-8111-${String(i).padStart(12, '0')}`
-      records[key] = new Proxy<SleepingAgentSessionRecord>(
-        {
-          ...record,
-          paneKey: key,
-          tabId: `tab-${i}`,
-          origin: 'quit',
-          restoreOnTabOpenOnly: true,
-          mailWake: {
-            id: `custody-${i}`,
-            capturedAt: 1,
-            startedAt: 100,
-            attempt: {
-              ptyId: `pty-${i}`,
-              incarnationId: `inc-${i}`,
-              launchToken: `token-${i}`,
-              startedAt: 100
-            }
-          }
-        },
-        countRecordVisits
-      )
-      const run = db.createRun({
-        objective: 'scale',
-        coordinatorHandle: `term_${i}`,
-        coordinatorPaneKey: key
-      })
-      const mailbox = `run:${run.id}`
-      mailboxes.push(mailbox)
-      for (let j = 0; j < 5; j++) {
-        db.insertMessage({ runId: run.id, from: 'worker', to: mailbox, subject: 'done' })
-      }
-    }
-    const task = db.createTask({ spec: 'local completion', runId: mailboxes[0]!.slice(4) })
-    const dispatch = createRootDispatch(
-      db,
-      task.id,
-      'term_local_worker',
-      'tab-0:11111111-1111-4111-8111-000000000000'
-    )
-    let session = { ...getDefaultWorkspaceSession(), sleepingAgentSessionsByPaneKey: records }
-    const readSession = vi.fn(() => session)
-    const runtime = new OrcaRuntimeService(
-      partialRuntimeStore({
-        getWorkspaceSession: readSession,
-        getWorkspaceSessionHostIds: () => ['local'],
-        onWorkspaceSessionWritten: (listener) => {
-          sessionWritten = listener
-          return () => {}
-        }
-      }),
-      undefined,
-      {
-        subscribeAgentStatusRowChanges: (listener) => {
-          statusChanged = listener
-          return () => {}
-        }
-      }
-    )
-    try {
-      runtime.setOrchestrationDb(db)
-      runtime.retrySleptMailboxWakes()
-      await settled()
-      visits = 0
-      readSession.mockClear()
-      statusChanged('unrelated:11111111-1111-4111-8111-111111111111')
-      expect(visits).toBe(0)
-      statusChanged('tab-0:11111111-1111-4111-8111-000000000000')
-      // A status event needs only this pane's attempt and PTY identity; no session inventory.
-      expect(visits).toBeLessThanOrEqual(4)
-      expect(readSession).not.toHaveBeenCalled()
-      const inventory = vi.spyOn(db, 'getUndeliveredUnreadMailboxHandles')
-      const fullRows = vi.spyOn(db, 'getUndeliveredUnreadMessages')
-      const newest = vi.spyOn(db, 'getUndeliveredUnreadSequence')
-      db.completeDispatch(dispatch.id)
-      await settled()
-      expect(inventory).not.toHaveBeenCalled()
-      expect(fullRows).not.toHaveBeenCalled()
-      expect(newest.mock.calls.filter(([mailbox]) => mailbox !== mailboxes[0])).toEqual([])
-      // One Run: refresh (1), custody validation (2), queue/start admission (4).
-      expect(newest.mock.calls.length).toBeLessThanOrEqual(7)
-      expect(newest).toHaveBeenCalled()
-      newest.mockClear()
-      runtime.retrySleptMailboxWakes('tab-0:11111111-1111-4111-8111-000000000000')
-      await settled()
-      expect(inventory).not.toHaveBeenCalled()
-      expect(newest.mock.calls.filter(([mailbox]) => mailbox !== mailboxes[0])).toEqual([])
-      expect(newest.mock.calls.length).toBeLessThanOrEqual(7)
-      session = {
-        ...session,
-        sleepingAgentSessionsByPaneKey: Object.fromEntries(
-          Object.keys(records).map((key) => [
-            key,
-            new Proxy<SleepingAgentSessionRecord>({ ...record, paneKey: key }, countRecordVisits)
-          ])
-        )
-      }
-      sessionWritten('local')
-      await settled()
-      visits = 0
-      readSession.mockClear()
-      statusChanged('tab-0:11111111-1111-4111-8111-000000000000')
-      expect(visits).toBe(0)
-      expect(readSession).not.toHaveBeenCalled()
-      session = { ...session, sleepingAgentSessionsByPaneKey: {} }
-      sessionWritten('local')
-      await settled()
-      inventory.mockClear()
-      newest.mockClear()
-      db.completeDispatch(dispatch.id)
-      await settled()
-      expect(inventory).not.toHaveBeenCalled()
-      expect(newest).not.toHaveBeenCalled()
-    } finally {
-      db.close()
-    }
-  }
-)
-
 it('holds unknown dispatch custody but retries a positively undispatched wake on the record availability edge', async () => {
   const db = new OrchestrationDb(':memory:')
   const retained: SleepingAgentSessionRecord = {
@@ -561,19 +420,10 @@ it('clears the original workspace hold and custody when another terminal replies
       resuming: false
     })
     expect(bell).toHaveBeenLastCalledWith(['folder:workspace'])
-    const inventory = vi.spyOn(db, 'getUndeliveredUnreadMailboxHandles')
-    const originalInvalidation = vi.fn()
-    const unwatch = db.crewChanges.subscribe((event) => {
-      if (event.trafficAddresses?.has(mailbox)) {
-        originalInvalidation(db.getMessageById(original.id)?.read)
-      }
-    })
     db.db.exec('BEGIN IMMEDIATE')
     db.markAsRead([original.id])
-    expect(originalInvalidation).not.toHaveBeenCalled()
     db.db.exec('ROLLBACK')
     await settled()
-    expect(originalInvalidation).not.toHaveBeenCalled()
     expect(await runtime.readSleepingMailHold(mailbox)).not.toBeNull()
     await ORCHESTRATION_REPLY_METHOD.handler(
       ORCHESTRATION_REPLY_METHOD.params.parse({
@@ -584,12 +434,9 @@ it('clears the original workspace hold and custody when another terminal replies
       { runtime }
     )
     await settled()
-    unwatch()
-    expect(originalInvalidation).toHaveBeenCalledWith(1)
     expect(db.getMessageById(original.id)?.read).toBe(1)
     expect(await runtime.readSleepingMailHold(mailbox)).toBeNull()
     expect(session.sleepingAgentSessionsByPaneKey?.[paneKey]?.mailWake).toBeUndefined()
-    expect(inventory).not.toHaveBeenCalled()
     expect(bell).toHaveBeenLastCalledWith([], ['reply-custody'])
   } finally {
     runtime.setNotifier(null)

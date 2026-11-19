@@ -55,7 +55,6 @@ function invocation(record: SleepingAgentSessionRecord | undefined): string | nu
 export class SleepingMailRecordIndex {
   readonly records = new Map<string, SleepingAgentSessionRecord>()
   readonly custody = new Map<string, SleepingAgentSessionRecord>()
-  readonly changed = new Set<string>()
   private readonly hosts = new Map<string, Map<string, SleepingAgentSessionRecord>>()
 
   affectedHosts(host: string | null, current: readonly string[]): Iterable<string> {
@@ -83,7 +82,6 @@ export class SleepingMailRecordIndex {
         this.records.delete(pane)
         this.custody.delete(pane)
         if (mailWakeObligation(before)) {
-          this.changed.add(pane)
           maintained.add(pane)
           changed(pane)
         }
@@ -104,11 +102,7 @@ export class SleepingMailRecordIndex {
       if (before === record) {
         continue
       }
-      const ownershipChanged = ownership(before) !== ownership(record)
-      if (ownershipChanged) {
-        this.changed.add(pane)
-      }
-      if (ownershipChanged || invocation(before) !== invocation(record)) {
+      if (ownership(before) !== ownership(record) || invocation(before) !== invocation(record)) {
         maintained.add(pane)
         changed(pane)
       }

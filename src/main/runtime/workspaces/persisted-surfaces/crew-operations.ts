@@ -32,9 +32,7 @@ export abstract class OrcaRuntimeWithCrewOperations extends OrcaRuntimeWithWebho
       this.crewChanges.notify(facets)
     })
     this.orchestrationDbChanges.notify()
-    this.crewChanges.notify(
-      Object.assign(new Set(['topology'] as const), { mailGlobal: true as const })
-    )
+    this.crewChanges.notify()
   }
 
   private readonly crewReadModel = new CrewReadModel(

@@ -1,4 +1,3 @@
-import { CrewMailMutationScope } from './crew-mail-mutation-scope'
 import type { CrewInvalidation } from './crew-changes'
 import type { OrchestrationDb } from '../db/orchestration-db'
 
@@ -90,13 +89,10 @@ export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationP
   if (hasDomainMethod(prototype, 'settleWorkerTerminalRelease')) {
     const release = prototype.settleWorkerTerminalRelease
     prototype.settleWorkerTerminalRelease = function (this: OrchestrationDb, resourceId) {
-      const scope = new CrewMailMutationScope(this)
-      scope.capture('settleWorkerTerminalRelease', [resourceId])
       const before = this.getWorkerTerminalResource(resourceId)?.release_state
       const result = release.call(this, resourceId)
       if (before !== result.release_state) {
-        scope.row(result)
-        this.crewChanges.notify(Object.assign(new Set(['topology'] as const), scope.notice))
+        this.crewChanges.notify(new Set(['topology']))
       }
       return result
     }
@@ -104,13 +100,10 @@ export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationP
   if (hasDomainMethod(prototype, 'settleDeadWorkerTerminalRelease')) {
     const release = prototype.settleDeadWorkerTerminalRelease
     prototype.settleDeadWorkerTerminalRelease = function (this: OrchestrationDb, params) {
-      const scope = new CrewMailMutationScope(this)
-      scope.row(params)
       const before = this.getWorkerTerminalResource(params.resourceId)?.release_state
       const result = release.call(this, params)
       if (before !== result.resource.release_state) {
-        scope.row(result)
-        this.crewChanges.notify(Object.assign(new Set(['topology'] as const), scope.notice))
+        this.crewChanges.notify(new Set(['topology']))
       }
       return result
     }
@@ -118,12 +111,9 @@ export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationP
   if (hasDomainMethod(prototype, 'commitLegacyCompatibilityPrincipal')) {
     const commit = prototype.commitLegacyCompatibilityPrincipal
     prototype.commitLegacyCompatibilityPrincipal = function (this: OrchestrationDb, params) {
-      const scope = new CrewMailMutationScope(this)
-      scope.row(params)
       const result = commit.call(this, params)
       if (!result.duplicate) {
-        scope.row(result)
-        this.crewChanges.notify(Object.assign(new Set(['topology'] as const), scope.notice))
+        this.crewChanges.notify(new Set(['topology']))
       }
       return result
     }
@@ -133,9 +123,7 @@ export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationP
     const known = this.localMutationCallerFingerprint
     const result = sourceIdentity.call(this)
     if (!known) {
-      this.crewChanges.notify(
-        Object.assign(new Set(['topology'] as const), { trafficAddresses: new Set<string>() })
-      )
+      this.crewChanges.notify()
     }
     return result
   }
@@ -145,9 +133,7 @@ export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationP
     if (result.type !== 'heartbeat') {
       const notice: CrewInvalidation =
         result.delivery_contract === 'legacy_direct'
-          ? Object.assign(new Set(['topology'] as const), {
-              trafficAddresses: new Set([result.from_handle, result.to_handle])
-            })
+          ? new Set(['topology'])
           : Object.assign(new Set(['traffic'] as const), {
               trafficAddresses: new Set([result.from_handle, result.to_handle])
             })
@@ -164,18 +150,7 @@ export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationP
       configurable: true,
       writable: true,
       value(this: OrchestrationDb, ...args: unknown[]) {
-        const before = new CrewMailMutationScope(this)
-        before.capture(name, args)
         const result = original.apply(this, args)
-        const after = new CrewMailMutationScope(this)
-        after.capture(name, args)
-        after.row(result)
-        for (const address of before.trafficAddresses) {
-          after.trafficAddresses.add(address)
-        }
-        for (const owner of before.mailboxOwners) {
-          after.mailboxOwners.add(owner)
-        }
         if (
           typeof result === 'object' &&
           result !== null &&
@@ -185,13 +160,7 @@ export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationP
         ) {
           return result
         }
-        this.crewChanges.notify(
-          Object.assign(
-            new Set([trafficMutations.has(name) ? 'traffic' : 'topology'] as const),
-            after.notice,
-            name.startsWith('reset') ? { mailGlobal: true as const } : {}
-          )
-        )
+        this.crewChanges.notify(new Set([trafficMutations.has(name) ? 'traffic' : 'topology']))
         return result
       }
     })
