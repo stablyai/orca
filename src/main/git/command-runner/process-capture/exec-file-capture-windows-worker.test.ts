@@ -185,7 +185,7 @@ describe('Windows process creation off the calling loop', () => {
       expect(workerLost).toHaveBeenCalledOnce()
       expect(treeKills.args).toEqual([['/pid', '4242', '/t', '/f']])
       const rootAlive = vi.spyOn(process, 'kill').mockImplementation(() => true)
-      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
       try {
         treeKills.killers[0]!.emit('close', 1)
         await vi.advanceTimersByTimeAsync(1_000)
@@ -193,7 +193,7 @@ describe('Windows process creation off the calling loop', () => {
         rootAlive.mockImplementation(() => {
           throw Object.assign(new Error('kill ESRCH'), { code: 'ESRCH' })
         })
-        await vi.advanceTimersByTimeAsync(1_000)
+        await vi.advanceTimersByTimeAsync(2_000)
         expect(terminated).toHaveBeenCalledOnce()
       } finally {
         vi.useRealTimers()

@@ -66,7 +66,7 @@ export async function execFileCaptureToTermination(
               spec,
               options.onWorkerLost,
               reportTerminated,
-              options.workerLossEndsLifetime === true
+              options.workerLossEndsLifetime === true || !options.onChildTerminated
             )
         }),
     ...(options.stdin === undefined ? {} : { input: options.stdin })

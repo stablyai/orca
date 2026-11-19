@@ -63,7 +63,8 @@ export function killAbandonedWorkerChildTree(
   return kill
 }
 
-const ABANDONED_ROOT_POLL_MS = 1_000
+const ABANDONED_ROOT_FIRST_CHECK_MS = 1_000
+const ABANDONED_ROOT_MAX_CHECK_MS = 30_000
 
 function processIsGone(pid: number): boolean {
   try {
@@ -85,13 +86,17 @@ export function reportWhenAbandonedRootEnds(
       onTerminated()
       return
     }
-    const poll = setInterval(() => {
-      if (processIsGone(pid)) {
-        clearInterval(poll)
-        onTerminated()
-      }
-    }, ABANDONED_ROOT_POLL_MS)
-    poll.unref?.()
+    // Backs off: a root that outlives the first checks (or a reused pid) costs little while it lasts.
+    const checkAfter = (delayMs: number): void => {
+      setTimeout(() => {
+        if (processIsGone(pid)) {
+          onTerminated()
+        } else {
+          checkAfter(Math.min(delayMs * 2, ABANDONED_ROOT_MAX_CHECK_MS))
+        }
+      }, delayMs).unref?.()
+    }
+    checkAfter(ABANDONED_ROOT_FIRST_CHECK_MS)
   })
 }
 
