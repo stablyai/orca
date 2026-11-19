@@ -1,4 +1,7 @@
-import { getBrowserProcessUserAgentIdentity } from '../../../identity/browser-process-user-agent'
+import {
+  getBrowserProcessUserAgentIdentity,
+  isBrowserProcessUserAgentInitialized
+} from '../../../identity/browser-process-user-agent'
 import type { BrowserSessionRequestUserAgentResolver } from '../../../identity/requests/browser-session-ua'
 import {
   desktopUserAgentMetadata,
@@ -112,6 +115,10 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
 
   /** At commit, and after CDP detach drops a mobile identity: the committed page's own demand. */
   protected settleUserAgentDemand(guest: Electron.WebContents, frames: 'keep' | 'clear'): void {
+    // Commit and CDP detach can fire before startup sets the identity; nothing rewrites yet.
+    if (!isBrowserProcessUserAgentInitialized()) {
+      return
+    }
     const url = guest.getURL()
     setBrowserGuestPageUserAgentDemand(
       guest.session,
