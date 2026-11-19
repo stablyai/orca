@@ -1,4 +1,4 @@
-import React, { useRef } from 'react'
+import React, { useRef, useState } from 'react'
 import { Trans } from 'react-i18next'
 import { ChevronLeft, ChevronRight, ImageUp, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,7 @@ import { BOT_AVATAR_ACCEPT } from './bot-avatar-intake'
 import { botMascotSrcs } from './bot-mascot-color'
 import { BotPictureIntakeLine, BotPictureVeil, LineAction } from './BotPictureIntakeLine'
 import { useBotAvatarIntake } from './use-bot-avatar-intake'
+import { AvatarPictureTabs, type AvatarPictureTab } from './AvatarPictureTabs'
 
 type BotPictureFace = { key: string; src: string | null; fallback: string }
 
@@ -288,19 +289,20 @@ export function BotPicturePicker({
     ? custom.after + 1
     : mascotIndex + (custom && mascotIndex > custom.after ? 1 : 0)
   // A new picture replaces the custom one in place, or lands beside the mascot shown.
+  const [tab, setTab] = useState<AvatarPictureTab>('choose')
   const intake = useBotAvatarIntake({
     rootRef,
-    onPicture: (png) => onUpload(png, showingCustom ? custom.after : mascotIndex),
+    onPicture: (png) => {
+      // Paste or drop on Generate still lands; Choose shows it with its Undo.
+      setTab('choose')
+      onUpload(png, showingCustom ? custom.after : mascotIndex)
+    },
     undoable: onUndo !== undefined
   })
   const { line } = intake
   const dropping = line.kind === 'drop'
-  return (
-    <div
-      ref={rootRef}
-      data-dropping={(dropping && intake.outlinePicker) || undefined}
-      className="relative before:pointer-events-none before:absolute before:-inset-x-2.5 before:-top-2.5 before:-bottom-1.5 before:hidden before:rounded-[14px] before:border-[1.5px] before:border-dashed before:border-foreground/35 data-dropping:before:block"
-    >
+  const choose = (
+    <>
       <BotPictureCarousel
         faces={faces}
         index={faceIndex}
@@ -366,6 +368,21 @@ export function BotPicturePicker({
           </Tooltip>
         )}
       </BotPictureIntakeLine>
+    </>
+  )
+  return (
+    <div
+      ref={rootRef}
+      data-dropping={(dropping && intake.outlinePicker) || undefined}
+      className="relative before:pointer-events-none before:absolute before:-inset-x-2.5 before:-top-2.5 before:-bottom-1.5 before:hidden before:rounded-[14px] before:border-[1.5px] before:border-dashed before:border-foreground/35 data-dropping:before:block"
+    >
+      <AvatarPictureTabs
+        tab={tab}
+        onTabChange={setTab}
+        choose={choose}
+        backgroundColor={color}
+        onImage={intake.take}
+      />
       <input
         ref={fileRef}
         type="file"

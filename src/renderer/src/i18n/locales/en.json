@@ -27240,6 +27240,25 @@
         "saved": "Picture updated",
         "undo": "Undo",
         "drop": "Drop to use"
+      },
+      "generate": {
+        "chooseTab": "Choose",
+        "tab": "Generate",
+        "placeholder": "Describe your avatar…",
+        "describe": "Avatar description",
+        "button": "Generate",
+        "running": "Generating with {{agent}}…",
+        "cancel": "Cancel",
+        "edit": "Change description",
+        "again": "Generate again",
+        "realPerson": "Avatars can't show real people. Describe a character instead.",
+        "signedOut": "{{agent}} isn't signed in. Sign in to it, then try again.",
+        "usageLimit": "{{agent}} hit its usage limit. Try again later.",
+        "noImage": "{{agent}} didn't make an image. Try rewording your description.",
+        "timedOut": "{{agent}} took too long. Try again.",
+        "unavailable": "No installed agent can make images.",
+        "failed": "{{agent}} couldn't make an image. Try again.",
+        "use": "Use this"
       }
     },
     "linear": {
