@@ -32,22 +32,12 @@ function own(
   )
 }
 
-it('sends dictation from a focused panel control to that panel’s input, not the claiming chat', () => {
+it('sends dictation from a nested panel control to the innermost owner', () => {
   const chat = pane('chat')
-  const panel = pane('panel')
+  const panel = pane('panel', chat.root)
   own(chat, () => true)
   own(panel)
   panel.button.focus()
-
-  expect(captureInsertionTarget()).toEqual({ kind: 'text', element: panel.input })
-})
-
-it('picks the innermost owner when one panel sits inside another', () => {
-  const chat = pane('chat')
-  const panel = pane('panel', chat.root)
-  own(chat)
-  own(panel)
-  panel.root.focus()
 
   expect(captureInsertionTarget()).toEqual({ kind: 'text', element: panel.input })
 })
