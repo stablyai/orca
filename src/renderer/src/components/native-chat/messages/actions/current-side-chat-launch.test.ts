@@ -7,19 +7,23 @@ import {
   isDrawnTabHeld,
   isDrawnGroupLayoutHeld
 } from '@/runtime/workspace-layout/intents/layout-owner-drawn-tab-holds'
-import type { NativeChatForkRequest } from './native-chat-fork-launch'
+import type { NativeChatForkRequest, NativeChatForkOutcome } from './native-chat-fork-launch'
 import { removeStructuredLaunchSlot } from '@/lib/agent-session/launch/structured-agent-session-launch-slot'
 import { newGroupSplitOf } from '@/runtime/workspace-layout/commands/layout-owner-new-group-split'
 import { reserveStructuredLaunchSlot } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 
-const mocks = vi.hoisted(() => ({
-  store: null as ReturnType<typeof createTestStore> | null,
-  launch: vi.fn()
-}))
+const mocks = vi.hoisted(() => {
+  const store: { current: ReturnType<typeof createTestStore> | null } = { current: null }
+  return {
+    store,
+    launch: vi.fn<(request: NativeChatForkRequest) => Promise<NativeChatForkOutcome>>()
+  }
+})
 vi.mock('@/store/index', () => ({
   useAppStore: {
-    getState: () => mocks.store!.getState(),
-    subscribe: (...args: unknown[]) => Reflect.apply(mocks.store!.subscribe, mocks.store, args)
+    getState: () => mocks.store.current!.getState(),
+    subscribe: (...args: Parameters<ReturnType<typeof createTestStore>['subscribe']>) =>
+      mocks.store.current!.subscribe(...args)
   }
 }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), info: vi.fn(), success: vi.fn() } }))
@@ -51,12 +55,12 @@ createTabsSliceMockApi()
 const WORKSPACE = 'repo1::/tmp/side-chat'
 
 beforeEach(() => {
-  mocks.store = createTestStore()
+  mocks.store.current = createTestStore()
   mocks.launch.mockReset()
 })
 
 it('keeps the requested side pane through a host frame while the fork is pending', async () => {
-  const store = mocks.store!
+  const store = mocks.store.current!
   const parent = store.getState().createUnifiedTab(WORKSPACE, 'agent-session', {
     id: 'agent-session:parent',
     entityId: 'parent',
@@ -78,7 +82,7 @@ it('keeps the requested side pane through a host frame while the fork is pending
     return fork.promise
   })
   const opening = openCurrentSideChat(WORKSPACE, parent.id)
-  const request = mocks.launch.mock.calls[0]![0] as NativeChatForkRequest
+  const request = mocks.launch.mock.calls[0]![0]
   const destination = request.surfaceAddress.targetGroupId
   try {
     expect(destination).not.toBe(parent.groupId)
