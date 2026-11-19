@@ -42,7 +42,12 @@ const STORES: Record<FloorCheckedStore, { file: string; open: (path: string) => 
   }
 }
 
-export const FLOOR_CHECKED_STORES = Object.keys(STORES) as FloorCheckedStore[]
+export const FLOOR_CHECKED_STORES: readonly FloorCheckedStore[] = [
+  'profileState',
+  'chatJournal',
+  'chatDomain',
+  'orchestration'
+]
 
 /** Recreate the floor build's empty store from its CREATE statements. */
 function writeFloorShapedStore(path: string, schema: FloorStoreSchema): void {
@@ -87,28 +92,41 @@ export function readFloorStoreSchema(dir: string, schema: FloorStoreSchema): Sto
 
 const SCHEMA_ORDER: Record<string, number> = { table: 0, view: 1, index: 2, trigger: 3 }
 
+/** A TEXT column of a row read from SQLite. */
+function textColumn(row: unknown, column: string): string {
+  const value: unknown = typeof row === 'object' && row !== null ? Reflect.get(row, column) : null
+  if (typeof value !== 'string') {
+    throw new Error(`expected a TEXT ${column}`)
+  }
+  return value
+}
+
 /** Every CREATE statement and seeded row of a store, so a later build can recreate it exactly. */
 function readStoreCreateStatements(db: Database.Database): FloorStoreSchema {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: sqlite_schema rows have these TEXT columns.
   const rows = db
     .prepare(
       "SELECT type, name, sql FROM sqlite_schema WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%'"
     )
-    .all() as { type: string; name: string; sql: string }[]
+    .all()
+    .map((row) => ({
+      type: textColumn(row, 'type'),
+      name: textColumn(row, 'name'),
+      sql: textColumn(row, 'sql')
+    }))
   rows.sort((a, b) => SCHEMA_ORDER[a.type] - SCHEMA_ORDER[b.type] || a.name.localeCompare(b.name))
   const inserts: string[] = []
   for (const { name } of rows.filter((row) => row.type === 'table')) {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: table_info rows carry a TEXT name.
-    const columns = (
-      db.prepare('SELECT name FROM pragma_table_info(?)').all(name) as { name: string }[]
-    ).map((column) => `"${column.name}"`)
+    const columns = db
+      .prepare('SELECT name FROM pragma_table_info(?)')
+      .all(name)
+      .map((column) => `"${textColumn(column, 'name')}"`)
     const values = db
       .prepare(
         `SELECT ${columns.map((column) => `quote(${column})`).join(" || ',' || ")} AS v FROM "${name}"`
       )
-      .all() as { v: string }[]
-    for (const { v } of values) {
-      inserts.push(`INSERT INTO "${name}" (${columns.join(', ')}) VALUES (${v})`)
+      .all()
+    for (const row of values) {
+      inserts.push(`INSERT INTO "${name}" (${columns.join(', ')}) VALUES (${textColumn(row, 'v')})`)
     }
   }
   return {

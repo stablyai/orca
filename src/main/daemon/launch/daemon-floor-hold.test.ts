@@ -19,10 +19,11 @@ import {
 const FLOOR_PID_FILE = /^daemon-v(\d+)\.pid$/
 const floorPid = (contents: string): { pid: number; startedAtMs: number | null } | null => {
   const parsed: unknown = JSON.parse(contents.trim())
-  if (typeof parsed !== 'object' || parsed === null || !('pid' in parsed)) {
+  if (typeof parsed !== 'object' || parsed === null) {
     return null
   }
-  const { pid, startedAtMs } = parsed as { pid: unknown; startedAtMs?: unknown }
+  const pid: unknown = Reflect.get(parsed, 'pid')
+  const startedAtMs: unknown = Reflect.get(parsed, 'startedAtMs')
   return typeof pid === 'number'
     ? { pid, startedAtMs: typeof startedAtMs === 'number' ? startedAtMs : null }
     : null
