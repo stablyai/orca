@@ -49,17 +49,13 @@ describe('Agent-slept window pane wake', () => {
         leafId: LEAF_ID,
         incarnationId: 'woken-incarnation'
       })
-      slept.rows = [{ paneKey: PANE_KEY, receivedAt: 2 } as AgentStatusIpcPayload]
+      slept.rows = [statusRow({ receivedAt: 2 })]
       await runtime.syncWindowGraph(1, graph(WOKEN_PTY_ID))
       runtime.onPtyData(WOKEN_PTY_ID, '\x1b]0;Codex done\x07', 1)
       await runtime.serializeMainTerminalBuffer(WOKEN_PTY_ID)
       return true
     })
-    runtime.setNotifier(
-      new Proxy({ resumeSleepingAgents: resume } as Record<string, unknown>, {
-        get: (target, key: string) => target[key] ?? vi.fn()
-      }) as unknown as RuntimeNotifier
-    )
+    runtime.setNotifier(wakeNotifier(resume))
 
     const first = runtime.wakeSleptAgentHandle(handle, { timeoutMs: 5_000 })
     await vi.waitFor(() => expect(resume).toHaveBeenCalled())
@@ -120,17 +116,34 @@ describe('Agent-slept window pane wake', () => {
 /** An idle agent pane that Agent Sleep stopped: main marked the exact process, and the pane has none. */
 async function sleptPane() {
   const db = createDatabase('orca-slept-wake-')
-  const slept = { db, rows: [] as AgentStatusIpcPayload[] }
+  const slept: { db: typeof db; rows: AgentStatusIpcPayload[] } = { db, rows: [] }
   const { runtime } = await createRuntime(db, { getAgentStatusSnapshotForPane: () => slept.rows })
   await driveToLiveIdle(runtime)
   const handle = runtime.getTerminalHandleForPaneKey(PANE_KEY)!
-  slept.rows = [
-    { paneKey: PANE_KEY, receivedAt: 1, paneSleep: { ptyId: PTY_ID } } as AgentStatusIpcPayload
-  ]
+  slept.rows = [statusRow({ receivedAt: 1, paneSleep: { ptyId: PTY_ID } })]
   const settleStop = runtime.intentionalPtyStops.mark(PTY_ID, 'reversible', 'mailbox-incarnation')
   await runtime.onPtyExit(PTY_ID, 0, 'mailbox-incarnation', { providerExitObserved: true })
   settleStop(true)
   await runtime.syncWindowGraph(1, graph(null))
   expect(runtime.sleptAgentHandleForPane(PANE_KEY)).toBe(handle)
   return Object.assign(slept, { runtime, handle })
+}
+
+/** A pane status row; the slept-pane paths read only paneKey, receivedAt and paneSleep from it. */
+function statusRow(
+  fields: Pick<AgentStatusIpcPayload, 'receivedAt' | 'paneSleep'>
+): AgentStatusIpcPayload {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the slept-pane paths under test read only paneKey, receivedAt and paneSleep.
+  return { paneKey: PANE_KEY, ...fields } as AgentStatusIpcPayload
+}
+
+/** A notifier whose only live member is the pane resume; every other notification is a no-op. */
+function wakeNotifier(
+  resumeSleepingAgents: RuntimeNotifier['resumeSleepingAgents']
+): RuntimeNotifier {
+  const members: Partial<RuntimeNotifier> = { resumeSleepingAgents }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every member the runtime calls is either resumeSleepingAgents or answered by a no-op stub.
+  return new Proxy(members, {
+    get: (_target, key) => (key === 'resumeSleepingAgents' ? resumeSleepingAgents : vi.fn())
+  }) as RuntimeNotifier
 }
