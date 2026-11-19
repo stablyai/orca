@@ -10,6 +10,7 @@ const contracts = [
   'src/main/codex-usage/codex-rollout-file-lifetime.test.ts',
   'src/main/codex-usage/scanner-incremental-append.test.ts',
   'src/main/usage/source-input/jsonl/jsonl-file-reader.test.ts',
+  'src/main/native-chat/agent-session-journal/journal-text-tail-wal.test.ts',
   'config/scripts/static-analysis/oxlint-contracts/app-store-performance-plugin.test.mjs',
   'config/scripts/static-analysis/oxlint-contracts/quadratic-buffer-concat-plugin.test.mjs'
 ]

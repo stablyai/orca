@@ -143,7 +143,7 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
 
   writeSerializedDomains(
     replacements: readonly ProfileStateDomainReplacement[],
-    automationRunsAfter?: readonly unknown[]
+    changes: Partial<Parameters<typeof writeProfileStateDomains>[1]> = {}
   ): void {
     this.assertActive()
     if (this.observedRevision === undefined) {
@@ -153,9 +153,9 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     const opened = this.openWritableDatabase()
     this.legacyDocuments.catchUp(this.writableDatabase?.db)
     this.observedRevision = writeProfileStateDomains(opened.db, {
+      ...changes,
       expectedRevision: this.observedRevision ?? 0,
-      replacements,
-      automationRunsAfter
+      replacements
     }).revision
     this.legacyDocuments.afterWrite(() => this.writableDatabase?.db)
   }
@@ -171,7 +171,7 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     replacements: readonly ProfileStateDomainReplacement[],
     runs: readonly unknown[]
   ): void {
-    this.writeSerializedDomains(replacements, runs)
+    this.writeSerializedDomains(replacements, { automationRunsAfter: runs })
   }
 
   writeSerializedState(payload: Buffer): void {

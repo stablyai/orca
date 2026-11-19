@@ -21,9 +21,8 @@ const connect = vi.hoisted(() => ({
   checkAccounts: vi.fn(async () => [{ email: 'ada@acme.dev' }])
 }))
 vi.mock('../../../google/google-connect', () => ({ getGoogleConnect: () => connect }))
-vi.mock('../../../bots/bot-session-tabs', () => ({
-  botOfSession: (bots: { list: () => Bot[] }, sessionId: string) =>
-    sessionId === 'bot-chat' ? (bots.list()[0] ?? null) : null
+vi.mock('../../../bots/tool-relay/bot-tool-relay', () => ({
+  botToolRelay: { botOf: (token: string) => (token === 'scout-token' ? 'b1' : null) }
 }))
 
 const request = (method: string, params: unknown): RpcRequest => ({
@@ -73,13 +72,10 @@ describe('google.* owner-only changes', () => {
     ['google.client.export', {}],
     ['google.signIn.start', {}],
     ['google.bot.set', { botId: 'b1', on: true }]
-  ])('%s is refused from a bot’s chat and a look-around run', async (method, params) => {
+  ])('%s is refused from a bot’s token, even an ended one', async (method, params) => {
     const { dispatcher, updates } = googleRuntime([makeTestBot({ id: 'b1', name: 'Scout' })])
-    for (const callerSessionId of ['bot-chat', 'look']) {
-      const response = await dispatcher.dispatch(
-        request(method, { ...params, callerSessionId }),
-        OWNER
-      )
+    for (const botToken of ['scout-token', 'deleted-bot-token']) {
+      const response = await dispatcher.dispatch(request(method, { ...params, botToken }), OWNER)
       expect(response).toMatchObject({ ok: false })
       expect(JSON.stringify(response)).toContain('Only your owner can change Google')
     }
@@ -93,10 +89,12 @@ describe('google.* owner-only changes', () => {
     ['google.client.export', {}],
     ['google.signIn.start', {}],
     ['google.bot.set', { botId: 'b1', on: true }]
-  ])('%s works from an agent’s CLI that sends no session', async (method, params) => {
+  ])('%s works from the owner’s terminal, which holds no bot token', async (method, params) => {
     const { dispatcher } = googleRuntime([makeTestBot({ id: 'b1', name: 'Scout' })])
     expect(
-      await dispatcher.dispatch(request(method, params), { caller: LOCAL_CLI_RPC_CALLER })
+      await dispatcher.dispatch(request(method, { ...params, callerSessionId: 'look' }), {
+        caller: LOCAL_CLI_RPC_CALLER
+      })
     ).toMatchObject({ ok: true })
   })
 

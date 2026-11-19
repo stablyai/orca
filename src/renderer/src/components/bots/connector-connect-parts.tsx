@@ -3,8 +3,9 @@ import { ExternalLink, Loader2, Plus } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { BotHowToAsk } from './BotHowToAsk'
+import { BotHowToAsk, HOW_TO_ASK_ESCAPED } from './BotHowToAsk'
 import type { BotConnector } from './bot-connectors'
 import { BotAppBrandLogo } from './apps/BotAppBrandLogo'
 import { BotAppLogoBadge } from './apps/BotAppStepParts'
@@ -182,6 +183,17 @@ export function ConnectorWorkspacePicker({
  * A connector setup dialog's header: the service's mark on its tile (checked once the bot is on),
  * the title, and one line: what turning it on does, or who signed in.
  */
+/** A setup header's line under "Connect <service>": which bot, and on which host. */
+export function connectorSetupFor(bot: { name: string }, hostName: string | null): string {
+  return hostName
+    ? translate('bots.setup.forOnHost', 'for {{name}} on {{host}}', {
+        name: bot.name,
+        host: hostName,
+        ...HOW_TO_ASK_ESCAPED
+      })
+    : translate('bots.setup.for', 'for {{name}}', { name: bot.name, ...HOW_TO_ASK_ESCAPED })
+}
+
 export function ConnectorSetupHeader({
   connector,
   title,
@@ -211,7 +223,9 @@ export function ConnectorSetupHeader({
             </span>
           </DialogTitle>
           <DialogDescription asChild>
-            <div className="break-words">{line ?? <BotHowToAsk text={intro} />}</div>
+            <div className="break-words">
+              {line ?? (intro ? <BotHowToAsk text={intro} /> : null)}
+            </div>
           </DialogDescription>
         </div>
       </div>

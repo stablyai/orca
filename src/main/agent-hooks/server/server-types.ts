@@ -181,6 +181,8 @@ export type AgentPromptSentDedupeEntry = {
 export type NormalizedLocalHook = {
   event: AgentHookEventPayload | null
   onAccepted?: () => void
+  /** A Stop without its text whose transcript normalize skipped; read it off the event loop. */
+  stopTranscriptPath?: string
 }
 
 export type ServerStatusLineListener = ((event: ClaudeStatusLineRateLimits) => void) | null

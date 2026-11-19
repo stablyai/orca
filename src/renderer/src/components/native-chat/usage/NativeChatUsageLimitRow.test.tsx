@@ -271,15 +271,41 @@ describe('usage-limit row over time', () => {
     expect(screen.queryByRole('menuitem', { name: 'Auto-continue settings…' })).toBeNull()
   })
 
-  it('offers the auto-continue setting while waiting even with no published state', () => {
+  it('turns auto-continue on in place while waiting, even with no published state', () => {
     const openSettingsPage = vi.fn()
-    useAppStore.setState({ openSettingsPage, openSettingsTarget: vi.fn() })
+    const updateSettings = vi.fn(async () => {})
+    useAppStore.setState({
+      openSettingsPage,
+      openSettingsTarget: vi.fn(),
+      updateSettings,
+      settings: {
+        ...useAppStore.getState().settings!,
+        nativeChatAutoContinueAfterUsageLimit: false
+      }
+    })
     const view = render(row({ resetsAt: start + HOUR, auto: null }))
-    fireEvent.click(screen.getByRole('button', { name: 'Auto-continue settings' }))
-    expect(openSettingsPage).toHaveBeenCalledTimes(1)
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Continue automatically when limits reset' })
+    )
+    expect(updateSettings).toHaveBeenCalledWith({ nativeChatAutoContinueAfterUsageLimit: true })
+    expect(openSettingsPage).not.toHaveBeenCalled()
     // Nothing to schedule against without a reset time.
     view.rerender(row({ resetsAt: undefined, auto: null }))
-    expect(screen.queryByRole('button', { name: 'Auto-continue settings' })).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: 'Continue automatically when limits reset' })
+    ).toBeNull()
+  })
+
+  it('opens Settings when the host reports off while the setting is already on', () => {
+    const openSettingsPage = vi.fn()
+    useAppStore.setState({
+      openSettingsPage,
+      openSettingsTarget: vi.fn(),
+      settings: { ...useAppStore.getState().settings!, nativeChatAutoContinueAfterUsageLimit: true }
+    })
+    render(row({ resetsAt: start + HOUR, auto: { kind: 'off' } }))
+    fireEvent.click(screen.getByRole('button', { name: 'Auto-continue settings' }))
+    expect(openSettingsPage).toHaveBeenCalledTimes(1)
   })
 
   it('keeps a preparing Hand off focusable but inert', () => {

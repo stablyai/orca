@@ -1,3 +1,4 @@
+import { boundedStoredJson, boundedStoredJsonSql } from './journal-stored-json-bounds'
 import { readJournalStoredItem } from './journal-stored-output-rows'
 import type Database from '../../sqlite/sync-database'
 import {
@@ -115,7 +116,7 @@ export function readJournalDomainItems(
         items: readJournalHistoryItems(
           {
             canonicalItemId: canonical,
-            item: (itemId) => visibleItem(db, prefix, itemId),
+            item: (itemId) => journalVisibleItem(db, prefix, itemId),
             presentationRemoved: (key) => Boolean(removed.get(...prefix, canonical(key))!.removed),
             ...(operation.options?.includeOpeners
               ? {
@@ -142,7 +143,7 @@ export function readJournalDomainItems(
         context: readJournalDomainContinuationContext(db, target)
       }
     case 'message-options': {
-      const body = visibleItem(
+      const body = journalVisibleItem(
         db,
         prefix,
         agentJournalSubmissionKey(operation.clientMessageId)
@@ -240,16 +241,16 @@ export function journalCanonicalItemId(db: Database.Database, prefix: Prefix) {
   }
 }
 
-function visibleItem(
+export function journalVisibleItem(
   db: Database.Database,
   prefix: Prefix,
   itemId: string
 ): AgentJournalRenderItem | null {
   const row = db
-    .prepare(`SELECT payload_json FROM journal_items
+    .prepare(`SELECT ${boundedStoredJsonSql('payload_json', 'payload_json')} FROM journal_items
     WHERE session_id=? AND epoch=? AND item_id=? AND hidden=0`)
     .get(...prefix, itemId)
-  return row ? readJournalStoredItem(db, prefix, row.payload_json) : null
+  return row ? readJournalStoredItem(db, prefix, boundedStoredJson(row, 'payload_json')) : null
 }
 
 /** The input order's newest turn: latest position, then the greatest item ID among ties. */

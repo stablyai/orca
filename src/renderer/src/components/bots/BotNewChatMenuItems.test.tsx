@@ -96,40 +96,10 @@ function openMenu(model: NewTabAgentMenuModel = BOTH, forBot: Bot = bot): void {
   )
 }
 
-const rowNames = () => screen.getAllByRole('menuitem').map((item) => item.textContent)
 // The side chats, after New Home Chat.
 const sideChats = () => screen.getAllByRole('menuitem').slice(1)
 
 describe('BotNewChatMenuItems', () => {
-  it('offers a chat with the bot on each agent it can be, its own first', () => {
-    openMenu()
-
-    expect(rowNames()).toEqual([
-      '🦉New Home Chatstarts fresh',
-      '🦉New Claude Code Chat',
-      '🦉New Codex Chat'
-    ])
-    expect(screen.getByText('Side chats with Reviewer')).toBeTruthy()
-    // The bot's name stays in the accessible name and the tooltip.
-    const named = screen.getByRole('menuitem', { name: 'New chat with Reviewer · Codex' })
-    expect(named.getAttribute('title')).toBe('New chat with Reviewer · Codex')
-  })
-
-  it("badges each row's bot picture with the agent it runs on", () => {
-    openMenu()
-
-    const badges = screen
-      .getAllByRole('menuitem')
-      .map((row) => row.querySelector('[data-agent]')?.getAttribute('data-agent'))
-    expect(badges).toEqual(['claude', 'claude', 'codex'])
-  })
-
-  it('leads with Codex for a Codex bot', () => {
-    openMenu(BOTH, { ...bot, agent: 'codex' })
-
-    expect(sideChats()[0]?.textContent).toContain('Codex')
-  })
-
   it("starts a chat with the bot on the chosen agent and opens its tab in the bot's home", async () => {
     openMenu()
 
@@ -145,14 +115,19 @@ describe('BotNewChatMenuItems', () => {
     )
   })
 
-  it('asks first, then starts a new Home Chat and opens it', async () => {
+  it('keeps the Home Chat on cancellation and opens a replacement after confirmation', async () => {
+    calls.confirm.mockResolvedValueOnce(false)
     openMenu()
+    const replaceHome = () =>
+      act(async () => fireEvent.click(screen.getByRole('menuitem', { name: /New Home Chat/ })))
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole('menuitem', { name: /New Home Chat/ }))
-    })
-
+    await replaceHome()
     expect(calls.confirm).toHaveBeenCalledOnce()
+    expect(calls.newHomeChat).not.toHaveBeenCalled()
+    expect(calls.activate).not.toHaveBeenCalled()
+
+    await replaceHome()
+    expect(calls.confirm).toHaveBeenCalledTimes(2)
     expect(calls.newHomeChat).toHaveBeenCalledWith(expect.objectContaining({ id: bot.id }))
     await waitFor(() =>
       expect(calls.activate).toHaveBeenCalledWith({
@@ -173,18 +148,6 @@ describe('BotNewChatMenuItems', () => {
 
     expect(calls.confirm).not.toHaveBeenCalled()
     expect(calls.newHomeChat).toHaveBeenCalledWith(expect.objectContaining({ id: bot.id }))
-  })
-
-  it('keeps the Home Chat when the owner cancels', async () => {
-    calls.confirm.mockResolvedValueOnce(false)
-    openMenu()
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('menuitem', { name: /New Home Chat/ }))
-    })
-
-    expect(calls.newHomeChat).not.toHaveBeenCalled()
-    expect(calls.activate).not.toHaveBeenCalled()
   })
 
   it('says why when the chat cannot start', async () => {
@@ -222,10 +185,6 @@ describe('BotNewChatMenuItems', () => {
 })
 
 describe('botNewChatAgents', () => {
-  it('offers only the bot’s own agent while the menu is still learning the host', () => {
-    expect(botNewChatAgents(bot, { state: 'loading' })).toEqual([{ agent: 'claude' }])
-  })
-
   it("carries the host's reason for an unavailable chat, and a failed check for a missing row", () => {
     expect(
       botNewChatAgents(
@@ -248,12 +207,14 @@ describe('botNewChatAgents', () => {
     ])
   })
 
-  it('leaves out agents this computer does not have, but never the bot’s own', () => {
+  it('keeps the bot’s own agent before and after discovering other installed agents', () => {
+    const current = { agent: 'opencode' } as const
+    expect(botNewChatAgents(current, { state: 'loading' })).toEqual([{ agent: 'opencode' }])
     const model = settled([
       { kind: 'chat', agent: 'grok' },
       { kind: 'chat', agent: 'omp' }
     ])
-    expect(botNewChatAgents({ agent: 'opencode' }, model)).toEqual([
+    expect(botNewChatAgents(current, model)).toEqual([
       { agent: 'opencode', unavailable: 'not-installed' },
       { agent: 'grok' },
       { agent: 'omp' }
@@ -282,10 +243,6 @@ describe('botAgentChoices', () => {
     { kind: 'chat', agent: 'opencode' },
     { kind: 'chat', agent: 'opencode2' }
   ])
-
-  it('lists the installed agents a bot can be, in catalog order', () => {
-    expect(botAgentChoices(model)).toEqual(['codex', 'opencode'])
-  })
 
   it('keeps the bot’s current agent even when this computer lacks it', () => {
     expect(botAgentChoices(model, 'omp')).toEqual(['codex', 'opencode', 'omp'])

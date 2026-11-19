@@ -234,7 +234,7 @@ export async function withCheckedBotChat(
     return target
   }
   if (saved?.chat && target.chat.sessionId === saved.chat.sessionId) {
-    // Clients can't send homeIfGone, so the saved chat keeps the host's choice.
+    // Clients can't send homeIfGone or toConversation, so the saved chat keeps the host's choice.
     return { ...target, chat: saved.chat }
   }
   const { sessionId } = target.chat
@@ -247,7 +247,8 @@ export async function withCheckedBotChat(
     chat: {
       sessionId,
       ...(chat.title ? { title: chat.title } : {}),
-      ...(target.chat.homeIfGone ? { homeIfGone: true as const } : {})
+      ...(target.chat.homeIfGone ? { homeIfGone: true as const } : {}),
+      ...(target.chat.toConversation ? { toConversation: true as const } : {})
     }
   }
 }

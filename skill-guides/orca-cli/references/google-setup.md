@@ -12,10 +12,11 @@ When someone asks why this is needed, say: "You create your own Google app, so y
 
 ## Flow
 
-1. `ORCA bot google-setup start`, then end your turn. Do nothing else until the path card's answer reaches you: don't open Google Cloud, and don't post about the card, which already asks. If `start` answers that Google is already set up (a Connect card, or already on), there is nothing to set up: end your turn, and don't run the steps below.
+1. `ORCA bot google-setup start`, then end your turn. Do nothing else until your owner has answered both the path card and the services card that follows it: don't open Google Cloud, and don't post about the cards, which already ask. The services answer is the one that wakes you (an imported setup file has no services card). If the path is recorded and the services aren't yet, end your turn. If `start` answers that Google is already set up (a Connect card, or already on), there is nothing to set up: end your turn, and don't run the steps below.
 2. Account:
    - In do-it-for-me and guide-here, open Google Cloud and read the account (see Browser). In guide-browser, ask for it (see Paths).
-   - Record it with `ORCA bot google-setup set --account <email> --kind <work|personal> --services <gmail,calendar,files>`.
+   - Record it with `ORCA bot google-setup set --account <email> --kind <work|personal>`.
+   - The services are your owner's answer on the services card; `show` prints them as `Services:`. Never ask for them again, in chat or a question. If `show` has none yet, end your turn and wait for that card's answer.
    - Work or personal: an email ending in gmail.com or googlemail.com is personal. Otherwise it's work when Branding lets you choose the Internal audience. Ask only if that's still unclear.
 3. Go through the steps in order: account, project, apis, branding, links, publish, client, connect.
    - Personal accounts do all of them.

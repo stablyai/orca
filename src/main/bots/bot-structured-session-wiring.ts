@@ -19,6 +19,7 @@ import { botSessionToolServers, currentBotToolsRevision } from './bot-tools-file
 import { botToolsEpoch, type BotLaunchedTools } from './bot-tools-revision'
 import { botOfHomeWorkspace } from '../../shared/bots/bot-homes'
 import { createBotTurnContext } from './bot-turn-context'
+import type { TurnEndedVerdict } from '../native-chat/agent-session-wire/structured-agent-session-turn-context'
 import type { BotChatJournal } from './bot-turn-rows'
 import type { BotRecentChatsSection } from './bot-recent-chats'
 import { BOT_FIRST_RUN_RULES } from './bot-preamble'
@@ -55,7 +56,7 @@ export function botStructuredSessionWiring(deps: {
   work: Pick<BotWorkRecord, 'turnNote' | 'handedOver' | 'turnEnded'>
   lookAround: Pick<BotLookAroundStore, 'botOfLook' | 'botOfTidyUp' | 'lookTurnIsQuiet'>
   /** A turn ended: one that worked on another bot's request and left it unanswered tells that bot. */
-  requestTurnEnded?: (sessionId: string) => void
+  requestTurnEnded?: (sessionId: string, ended?: TurnEndedVerdict) => void
   /** The bots the host holds when this is installed; none when it has no store yet. */
   botsAtInstall?: readonly Bot[]
   /** What the bot's other chats did lately, as a turn of this chat may hear of it. */
@@ -293,9 +294,9 @@ export function botStructuredSessionWiring(deps: {
         deps.work.handedOver(sessionId, message)
         turnContext.handedOver?.(sessionId, message)
       },
-      turnEnded: (sessionId, turnId, readItems, writeNote) => {
+      turnEnded: (sessionId, turnId, readItems, writeNote, ended) => {
         deps.work.turnEnded(sessionId)
-        deps.requestTurnEnded?.(sessionId)
+        deps.requestTurnEnded?.(sessionId, ended)
         turnContext.turnEnded?.(sessionId, turnId, readItems, writeNote)
       }
     },
@@ -306,7 +307,8 @@ export function botStructuredSessionWiring(deps: {
         : deps.lookAround.botOfTidyUp(sessionId) !== null
           ? 'reply-only'
           : null,
-    quietTurnEnd: (sessionId, outcome) => deps.lookAround.lookTurnIsQuiet(sessionId, outcome),
+    quietTurnEnd: (sessionId, outcome, usageLimited) =>
+      deps.lookAround.lookTurnIsQuiet(sessionId, outcome, usageLimited === true),
     isBotHome: (workspaceId) => botOfHomeWorkspace(bots(), workspaceId) !== null
   }
 }

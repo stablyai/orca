@@ -23,8 +23,9 @@ export type AutomationBotTarget = {
   runsIn: AutomationBotRunsIn
   /** With runsIn 'chat': the one of the bot's chats runs continue instead of its Home Chat, and its
    *  title when saved. A run whose chat is gone fails rather than going to the Home Chat, unless
-   *  homeIfGone: set when Orca chose the chat (a wait runs in the chat that made it), not a person. */
-  chat?: { sessionId: string; title?: string; homeIfGone?: true }
+   *  homeIfGone: set when Orca chose the chat (a wait runs in the chat that made it), not a person.
+   *  toConversation: that wait was made by a turn its chat's thread owns, so its run answers there. */
+  chat?: { sessionId: string; title?: string; homeIfGone?: true; toConversation?: true }
   resultsTo: AutomationBotResultsTo
   /** Results to the bot's Chat start a turn, as a message the bot answers; off, they wait there as a
    *  note it reads with the person's next message. Older hosts drop it and always start one. */

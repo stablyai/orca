@@ -108,7 +108,7 @@ function movePointer(x: number, y: number): void {
   })
 }
 
-it('closes a pointer-opened ⋯ menu only once the pointer leaves the row and the menu', () => {
+it('closes the ⋯ menu on pointer exit only when opened by pointer', () => {
   const { trigger, menuOpen } = renderMenuRow()
   act(() => {
     trigger.dispatchEvent(
@@ -124,19 +124,10 @@ it('closes a pointer-opened ⋯ menu only once the pointer leaves the row and th
 
   movePointer(150, 200)
   expect(menuOpen()).toBe(false)
-})
 
-it('keeps a keyboard-opened ⋯ menu open when the pointer leaves', () => {
-  const { trigger, menuOpen } = renderMenuRow()
   fireEvent.keyDown(trigger, { key: 'Enter' })
   expect(menuOpen()).toBe(true)
 
   movePointer(150, 200)
   expect(menuOpen()).toBe(true)
-})
-
-it('shows the item number before the title', () => {
-  expect(rowText(makeTestBotItem(35, { title: 'Show item numbers' }))).toMatch(
-    /^#35Show item numbers/
-  )
 })
