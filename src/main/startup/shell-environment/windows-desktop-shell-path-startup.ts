@@ -1,4 +1,5 @@
-const WINDOWS_FIRST_WINDOW_LOAD_FALLBACK_MS = 2_000
+// A first launch after an update loaded 1.7s after the window was created on an 8-core laptop.
+const WINDOWS_FIRST_WINDOW_LOAD_FALLBACK_MS = 5_000
 
 export type WindowsDesktopStartupServices = {
   firstWindowReady: Promise<void>
@@ -8,7 +9,8 @@ export type WindowsDesktopStartupServices = {
 
 type WindowsDesktopShellPathStartupOptions<TWindow> = {
   bindServices: (services: Promise<WindowsDesktopStartupServices>) => void
-  openWindow: (onLoaded: () => void) => TWindow
+  /** Call `onLoadSettled` once the first document has loaded or failed to load. */
+  openWindow: (onLoadSettled: () => void) => TWindow
   shellPathReady: Promise<void>
   startServices: () => WindowsDesktopStartupServices
 }

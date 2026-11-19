@@ -305,8 +305,12 @@ export async function initializeMainProcessRuntimeLaunch(
   if (process.platform === 'win32' && app.isPackaged && !serveOptions) {
     const desktopStartup = startWindowsDesktopBeforeShellPathReady({
       bindServices: bindTerminalRuntimeStartupServices,
-      openWindow: (onLoaded) =>
-        options.openMainWindow({ revealOnDidFinishLoad: true, loadObserver: { onLoaded } }),
+      openWindow: (onLoadSettled) =>
+        options.openMainWindow({
+          revealOnDidFinishLoad: true,
+          // A failed load has nothing left to protect, so terminals should not wait out the fallback.
+          loadObserver: { onLoaded: onLoadSettled, onError: onLoadSettled }
+        }),
       shellPathReady,
       startServices: startTerminalRuntimeStartupServices
     })
