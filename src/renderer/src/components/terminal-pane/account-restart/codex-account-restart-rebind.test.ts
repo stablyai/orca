@@ -157,6 +157,8 @@ it('allows normal handle recovery after successful restart but refuses its obsol
   expect(obsolete?.()).toBe(false)
   expect(connection.continue({ id: 'remote:env@@late-old', incarnationId: 'inc-late' })).toBe(false)
   expect(options.isAccountRestartCurrent).toBeUndefined()
+  connection.settle(null, 1, options, () => false)
+  expect(options.shouldContinue?.()).toBe(true)
 })
 
 it.each(['matching', 'different owner', 'same ID successor', 'disconnected'] as const)(

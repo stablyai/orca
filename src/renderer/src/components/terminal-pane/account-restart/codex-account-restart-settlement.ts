@@ -24,10 +24,11 @@ export function settleCodexAccountRestart(
 ): void {
   const state = useAppStore.getState()
   const retireOptions = (): void => {
-    if (session.deps.accountRestartToken === token) {
-      session.deps.accountRestartToken = undefined
-      session.deps.accountRestart = undefined
+    if (session.deps.accountRestartToken !== token) {
+      return
     }
+    session.deps.accountRestartToken = undefined
+    session.deps.accountRestart = undefined
     outcome.retireOptions()
   }
   const request = currentCodexAccountRestart(state, token)
