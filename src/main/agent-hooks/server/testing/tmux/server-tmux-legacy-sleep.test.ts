@@ -227,6 +227,9 @@ it('proves a tmux-hosted pane only from a complete process picture', async () =>
   // An unreadable job might be the pane's own agent.
   runningPane(4050, CLIENT, [4080, 101, 4080, '(claude)', 'T'], ...TMUX)
   await expect(readPaneTmuxHost(io, pane)).resolves.toBe(false)
+  // tmux resolves an unambiguous prefix, so `att` attaches.
+  runningPane(4050, [4050, 101, 4050, 'tmux -L qa att -t cl', 'S+'], ...TMUX)
+  await expect(readPaneTmuxHost(io, pane)).resolves.toBe(true)
   // A foreground tmux command that attaches no session hosts nothing.
   runningPane(4050, [4050, 101, 4050, 'tmux wait-for build-ready', 'S+'], ...TMUX)
   await expect(readPaneTmuxHost(io, pane)).resolves.toBe(false)

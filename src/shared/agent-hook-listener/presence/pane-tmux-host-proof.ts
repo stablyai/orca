@@ -21,14 +21,12 @@ export type PaneTmuxHostReader = (request: {
 }) => Promise<boolean>
 
 const TMUX_OPTIONS_WITH_VALUE = new Set(['-L', '-S', '-f', '-T'])
-const TMUX_ATTACHING_COMMANDS = new Set([
-  'attach',
-  'attach-session',
-  'a',
-  'at',
-  'new',
-  'new-session'
-])
+// tmux aliases, plus the unambiguous prefixes tmux resolves to these commands (`att`, `new-s`).
+const TMUX_ATTACHING_ALIASES = new Set(['a', 'at', 'new'])
+const isAttachingTmuxCommand = (command: string): boolean =>
+  TMUX_ATTACHING_ALIASES.has(command) ||
+  (command.length >= 3 && 'attach-session'.startsWith(command)) ||
+  (command.length >= 5 && 'new-session'.startsWith(command))
 
 /** Only a client attached to a session shows that server's panes; `wait-for` or `-c` do not. */
 function isAttachingTmuxClient(row: ProcessTableRow): boolean {
@@ -43,7 +41,7 @@ function isAttachingTmuxClient(row: ProcessTableRow): boolean {
     }
     index += TMUX_OPTIONS_WITH_VALUE.has(args[index]) ? 2 : 1
   }
-  return args[index] === undefined || TMUX_ATTACHING_COMMANDS.has(args[index])
+  return args[index] === undefined || isAttachingTmuxCommand(args[index])
 }
 
 export async function readPaneTmuxHost(
