@@ -423,32 +423,6 @@ describe('Bots search', () => {
     expect(outside).not.toHaveBeenCalled()
   })
 
-  it('shows a folded section while open, and folds it back when cancelled', () => {
-    threeBots()
-    useAppStore.setState({ collapsedGroups: new Set(['bots']) })
-    renderSection()
-    expect(screen.queryByText('Scout')).toBeNull()
-    openSearch()
-    expect(screen.getByText('Scout')).toBeTruthy()
-    // Tab from the field reaches a real row, which stays.
-    rowTitle('bot-1').focus()
-    expect(document.activeElement).toBe(rowTitle('bot-1'))
-    fireEvent.click(searchToggle())
-    expect(screen.queryByText('Scout')).toBeNull()
-    expect(useAppStore.getState().collapsedGroups.has('bots')).toBe(true)
-  })
-
-  it('unfolds a folded section for good when a result opens, and focuses its row', async () => {
-    threeBots()
-    useAppStore.setState({ collapsedGroups: new Set(['bots']) })
-    renderSection()
-    const field = openSearch()
-    type(field, 'scout')
-    fireEvent.click(document.querySelector('[data-bot-search-result="local/bot-2"]')!)
-    expect(useAppStore.getState().collapsedGroups.has('bots')).toBe(false)
-    await vi.waitFor(() => expect(document.activeElement).toBe(rowTitle('bot-2')))
-  })
-
   it('tells about paused bots the list hides, and shows them on request', () => {
     mocks.bots = [
       bot(),
@@ -487,7 +461,6 @@ describe('Bots search', () => {
 
   it('leaves the search alone when focus moves away while a group opens', async () => {
     withCrew()
-    useAppStore.setState({ collapsedGroups: new Set(['bots']) })
     const finish = deferGroupOpen()
     renderSection()
     const field = openSearch()
@@ -499,7 +472,6 @@ describe('Bots search', () => {
     expect(document.activeElement).toBe(options)
     expect(screen.getByRole('searchbox')).toBe(field)
     expect(field.value).toBe('crew')
-    expect(useAppStore.getState().collapsedGroups.has('bots')).toBe(true)
     expect(mocks.onOpenBot).not.toHaveBeenCalled()
   })
 
@@ -520,7 +492,6 @@ describe('Bots search', () => {
 
   it('ignores a group that opens after its last bot went away and came back', async () => {
     withCrew()
-    useAppStore.setState({ collapsedGroups: new Set(['bots']) })
     const finish = deferGroupOpen()
     renderSection()
     const field = openSearch()
@@ -531,7 +502,6 @@ describe('Bots search', () => {
     act(() => useAppStore.setState({ folderWorkspaces: homes }))
     await act(async () => finish())
     expect(mocks.onOpenBot).not.toHaveBeenCalled()
-    expect(useAppStore.getState().collapsedGroups.has('bots')).toBe(true)
   })
 
   it('says nothing when a group fails to open after the search was closed', async () => {
@@ -606,7 +576,6 @@ describe('Bots search', () => {
     threeBots()
     mocks.groups = [group()]
     useAppStore.setState({
-      collapsedGroups: new Set(['bots']),
       folderWorkspaces: [...useAppStore.getState().folderWorkspaces, home({ id: 'fw-g' })]
     })
     let finish: () => void = () => {}
@@ -619,7 +588,6 @@ describe('Bots search', () => {
     await act(async () => finish())
     // The underlying room open cannot be cancelled; its stale callback leaves the current view alone.
     expect(mocks.onOpenBot).not.toHaveBeenCalled()
-    expect(useAppStore.getState().collapsedGroups.has('bots')).toBe(true)
   })
 })
 

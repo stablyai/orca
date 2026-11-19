@@ -11,6 +11,7 @@ import {
 import { ConfirmationDialogProvider } from '../dismiss/confirmation/confirmation-dialog'
 import { SidebarBotsSection } from '../bots/SidebarBotsSection'
 import { SidebarBotsSplit, SidebarProjectsListSlot } from './SidebarBotsSplit'
+import { BOTS_GROUP_KEY } from '../../../../shared/sidebar-list/sections/group-keys'
 
 function bot(id: string, name: string, mascot: BotMascotId, sidebarOrder: number): Bot {
   return {
@@ -57,11 +58,12 @@ function ProjectsStandIn(): React.JSX.Element {
   )
 }
 
-function splitAt(sidebarBotsHeight: number | null) {
+function splitAt(sidebarBotsHeight: number | null, { folded = false } = {}) {
   return defineFixture({
     width: 300,
     store: {
       sidebarBotsHeight,
+      ...(folded ? { collapsedGroups: new Set([BOTS_GROUP_KEY]) } : {}),
       // An active row paints its full width.
       activeWorkspaceKey: folderWorkspaceKey('fw-builder'),
       folderWorkspaces: BOTS.map((owner) =>
@@ -97,6 +99,8 @@ function splitAt(sidebarBotsHeight: number | null) {
 export const draggedMin = splitAt(80)
 export const draggedMid = splitAt(170)
 export const draggedMax = splitAt(4000)
+/** Folded: the header row is just the title and the faces, without its controls. */
+export const folded = splitAt(170, { folded: true })
 
 const MANY_BOTS = [
   ...BOTS,

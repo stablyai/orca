@@ -285,6 +285,41 @@ describe('SidebarBotsSection', () => {
     expect(mocks.activate).not.toHaveBeenCalled()
   })
 
+  it('leaves the folded header without its controls, so Tab cannot reach them', () => {
+    vi.stubGlobal('api', { ui: { set: vi.fn(() => Promise.resolve()) } })
+    threeUnplacedBots()
+    useAppStore.setState({ collapsedGroups: new Set(['bots']) })
+    renderSection()
+    const controls = (): (HTMLElement | null)[] => [
+      screen.queryByRole('button', { name: 'Search bots' }),
+      screen.queryByRole('button', { name: /^Bot options/ }),
+      screen.queryByRole('button', { name: 'New bot or group' })
+    ]
+    expect(controls()).toEqual([null, null, null])
+    // The fold button and the faces stay; the folded summary still counts the rest.
+    expect(screen.getByRole('button', { name: /^Expand Bots,/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Show 3 more bots' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: /^Expand Bots,/ }))
+    expect(controls().every(Boolean)).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: /^Collapse Bots,/ }))
+    expect(controls()).toEqual([null, null, null])
+  })
+
+  it('keeps the + menu shut on unfold after a fold it never saw', () => {
+    vi.stubGlobal('api', { ui: { set: vi.fn(() => Promise.resolve()) } })
+    mocks.bots = [bot()]
+    useAppStore.setState({ folderWorkspaces: [home()] })
+    renderSection()
+    fireEvent.keyDown(screen.getByRole('button', { name: 'New bot or group' }), { key: 'Enter' })
+    expect(screen.getByRole('menuitem', { name: 'New bot' })).toBeTruthy()
+    // A store write folds the section without the menu's own dismissal.
+    act(() => useAppStore.getState().toggleCollapsedGroup('bots'))
+    act(() => useAppStore.getState().toggleCollapsedGroup('bots'))
+    expect(screen.getByRole('button', { name: 'New bot or group' })).toBeTruthy()
+    expect(screen.queryByRole('menuitem', { name: 'New bot' })).toBeNull()
+  })
+
   it('saves the order a drag gives, on the host, for every bot it places', async () => {
     threeUnplacedBots()
     renderSection()
