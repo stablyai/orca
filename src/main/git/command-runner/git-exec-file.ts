@@ -33,6 +33,7 @@ import { trackGitWorktreeMutation } from './git-worktree-mutation-state'
 import { trackGitRefMutation } from './git-ref-mutation-state'
 import { routeLocalGitOptions, runAdmittedWslGit } from './host-routing/local-git-runtime-route'
 import { gitRunsIn } from './host-routing/git-runs-in'
+import { isAbandonedWorkerChildError } from '../../worker-thread-child-process/worker-thread-child-process'
 
 async function gitExecFileAsyncUnlocked(
   args: string[],
@@ -108,8 +109,12 @@ async function gitExecFileAsyncUnlocked(
           // Admission already passed; the capture rechecks at the spawn call itself.
           ...(options.canStart ? { canStart: options.canStart } : {}),
           onChildTerminated: reportTerminated,
-          // A lost worker's child returns its permit now; mutation fences keep waiting on termination.
-          onWorkerLost: grant.release,
+          // A lost worker's child returns its permit now; mutation fences and termination observers keep
+          // waiting on its end, so only an unobserved read ends with the worker.
+          onWorkerLost:
+            classifyGitCommand(args) === 'read' && !options.observeChildTermination
+              ? reportTerminated
+              : grant.release,
           ...(options.onStderr ? { onStderr: options.onStderr } : {}),
           ...(timeoutMs === undefined
             ? {}
@@ -173,6 +178,10 @@ async function gitExecFileAsyncUnlocked(
         }
         return await runCapturedCommand()
       } catch (error) {
+        // Its permit already returned and its end is unproven: never replay over a lost worker's child.
+        if (isAbandonedWorkerChildError(error)) {
+          throw error
+        }
         return await retryGitFetchRefRace(
           args,
           error,
