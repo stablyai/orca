@@ -153,11 +153,11 @@ async function seed(arm) {
     .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`)
     .all()
     .map(({ name }) => ({
-      name,
+      name: String(name),
       columns: raw
         .prepare(`SELECT name FROM pragma_table_info(?)`)
-        .all(name)
-        .map((column) => column.name)
+        .all(String(name))
+        .map((column) => String(column.name))
     }))
     .filter(({ columns }) => columns.includes('session_id'))
   const copies = Math.ceil(rows / TEMPLATE_ITEMS)
