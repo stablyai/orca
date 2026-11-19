@@ -251,7 +251,6 @@
 2 src/renderer/src/components/native-chat/queue/use-structured-agent-session-queued-reorder.ts
 1 src/renderer/src/components/native-chat/selection-quotes/AddToChatMenu.tsx
 1 src/renderer/src/components/native-chat/session/goals/use-structured-agent-session-thread-goal.ts
-1 src/renderer/src/components/native-chat/session/options/controls/NativeChatSessionOptionPickers.tsx
 1 src/renderer/src/components/native-chat/session/options/controls/NativeChatSessionOptionRows.tsx
 1 src/renderer/src/components/native-chat/session/options/structured/use-structured-agent-session-options.ts
 1 src/renderer/src/components/native-chat/session/options/terminal/use-native-chat-session-option-command.ts

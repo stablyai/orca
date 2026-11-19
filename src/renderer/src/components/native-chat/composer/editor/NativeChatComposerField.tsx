@@ -72,6 +72,7 @@ export function NativeChatComposerField({
   onSteerPreview,
   onStop,
   sessionOptionsSurface,
+  modelPresetScope,
   sessionOptionsSnapshot,
   contextUsage,
   sessionOptionsPickerRequest,
@@ -334,6 +335,7 @@ export function NativeChatComposerField({
                 onSteerPreview={runSteerPreview}
                 onStop={onStop ? stop : undefined}
                 sessionOptionsSurface={sessionOptionsSurface}
+                modelPresetScope={modelPresetScope}
                 sessionOptionsSnapshot={sessionOptionsSnapshot}
                 contextUsage={contextUsage}
                 sessionOptionsPickerRequest={sessionOptionsPickerRequest}

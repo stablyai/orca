@@ -22312,6 +22312,27 @@
         "finished": "Sign-in finished",
         "finishedWith": "Sign-in finished · {{message}}"
       },
+      "modelPresets": {
+        "slot": "Slot {{slot}}",
+        "saveSlot": "Save current settings as preset {{slot}}",
+        "clearSlot": "Clear preset {{slot}}",
+        "saveFailed": "Could not save model preset",
+        "modelUnavailable": "This preset model is unavailable in the current session.",
+        "effortUnavailable": "The model changed, but its saved effort is unavailable. Choose an effort in the model picker.",
+        "title": "Quick presets",
+        "applySlot": "Use preset {{slot}}",
+        "save": "Use current settings",
+        "clear": "Clear",
+        "editHintMac": "Hold Option and click to save",
+        "editHintCtrl": "Hold Ctrl and click to save",
+        "empty": "Not configured",
+        "unconfiguredSlot": "Preset {{slot}} has no model assigned",
+        "assignTitle": "Set preset",
+        "speedUnavailable": "The model changed, but its saved speed is unavailable. Choose a speed in the model picker.",
+        "fastOn": "Fast on",
+        "fastOff": "Fast off",
+        "ctrl": "Ctrl"
+      },
       "offerCard": {
         "dismiss": "Dismiss",
         "notSent": "Couldn't send that to the bot. Try again."
@@ -25918,6 +25939,10 @@
       "terminalEqualizePaneSizes": "Equalize pane sizes",
       "terminalExpandPane": "Expand / collapse pane",
       "chatFind": "Find in chat",
+      "chatOpenModelPicker": "Open model picker",
+      "chatModelPreset1": "Use model preset 1",
+      "chatModelPreset2": "Use model preset 2",
+      "chatModelPreset3": "Use model preset 3",
       "terminalToggleNativeChat": "Switch between Chat UI and terminal",
       "terminalClosePane": "Close active pane",
       "terminalCopySessionId": "Copy Session ID",

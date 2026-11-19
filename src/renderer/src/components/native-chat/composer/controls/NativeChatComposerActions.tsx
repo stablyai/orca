@@ -56,6 +56,7 @@ export type NativeChatComposerActionsProps = {
   onSteerPreview?: () => void
   onStop?: () => void
   sessionOptionsSurface: SessionOptionsSurface | null
+  modelPresetScope?: string
   sessionOptionsSnapshot: SessionOptionDescriptor[]
   sessionOptionsPickerRequest?: NativeChatOptionPickerRequest | null
   focusComposer?: () => void
@@ -92,6 +93,7 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
   onSteerPreview,
   onStop,
   sessionOptionsSurface,
+  modelPresetScope,
   sessionOptionsSnapshot,
   sessionOptionsPickerRequest,
   onExitGoalMode,
@@ -246,6 +248,7 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
           surface={sessionOptionsSurface}
           snapshot={sessionOptionsSnapshot}
           isWorking={isWorking}
+          presetScope={modelPresetScope}
           pickerRequest={sessionOptionsPickerRequest}
           focusComposer={focusComposer}
         />

@@ -50,6 +50,7 @@ export function useNativeChatComposerSessionOptions({
   }
   surface: SessionOptionsSurface | null
   snapshot: SessionOptionDescriptor[]
+  presetScope?: string
 } {
   const { dispatch, isDispatching } = useNativeChatSessionOptionCommand({
     agent,
@@ -89,6 +90,11 @@ export function useNativeChatComposerSessionOptions({
       onCommandSent
     },
     surface: structuredTransport?.optionsSurface ?? pty.surface,
+    presetScope: structuredTransport
+      ? JSON.stringify([agent, structuredTransport.runtimeEnvironmentId ?? 'local'])
+      : pty.hostKey
+        ? JSON.stringify([agent, pty.hostKey])
+        : undefined,
     snapshot: structuredTransport?.optionSnapshot ?? pty.snapshot
   }
 }

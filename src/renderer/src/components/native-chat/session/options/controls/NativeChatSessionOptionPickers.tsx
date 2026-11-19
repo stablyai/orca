@@ -1,10 +1,11 @@
+import {
+  NativeChatModelPickerTrigger,
+  nativeChatModelPillAccessibleName
+} from './NativeChatModelPickerTrigger'
 import { memo, useEffect, useRef, useState } from 'react'
-import { ChevronDown, SlidersHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { Popover, PopoverContent } from '@/components/ui/popover'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { sortNativeChatSessionOptions } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-snapshot'
 import {
@@ -30,11 +31,22 @@ import { NativeChatModelCombobox } from './NativeChatModelCombobox'
 import { useNativeChatPickerFocusReturn } from '../../../composer/focus/native-chat-picker-focus-return'
 import { NativeChatSessionOptionRows } from './NativeChatSessionOptionRows'
 import { NativeChatSessionOptionWriteGroup } from './NativeChatSessionOptionWriteGroup'
+import { NativeChatModelPresets } from './NativeChatModelPresets'
+import { useNativeChatModelShortcuts } from './use-native-chat-model-shortcuts'
+import {
+  applyNativeChatModelPreset,
+  currentNativeChatModelPreset,
+  useNativeChatModelPresets,
+  type ModelPresetSlot,
+  type NativeChatModelPreset
+} from './native-chat-model-presets'
+import { toast } from 'sonner'
 
 export type NativeChatSessionOptionPickersProps = {
   surface: SessionOptionsSurface | null
   snapshot: SessionOptionDescriptor[]
   isWorking: boolean
+  presetScope?: string
   pickerRequest?: NativeChatOptionPickerRequest | null
   /** Where focus lands after a visit that changed something; see `useNativeChatPickerFocusReturn`. */
   focusComposer?: () => void
@@ -69,84 +81,9 @@ function withPendingValue(
   return descriptor
 }
 
-// Keep visible value text inside the accessible name for voice control (WCAG 2.5.3).
-function pillAccessibleName(title: string, value: string, t: Translate = translate): string {
-  return value === title
-    ? title
-    : t('components.native-chat.composer.pillAccessibleName', '{{value0}} {{value1}}', {
-        value0: title,
-        value1: value
-      })
-}
-
-function PickerTrigger(props: {
-  modelLabel: string
-  /** The options' values, shown after the model; empty when there are none to show. */
-  optionsLabel: string
-  accessibleName: string
-  tooltipLabel: string
-  disabled: boolean
-  disabledReason: string | null
-  dispatched: boolean
-  triggerRef: React.Ref<HTMLButtonElement>
-  onKeyDown: React.KeyboardEventHandler<HTMLButtonElement>
-}): React.JSX.Element {
-  const t = useTranslate()
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <PopoverTrigger asChild>
-          <Button
-            ref={props.triggerRef}
-            type="button"
-            variant="ghost"
-            size="xs"
-            aria-label={props.accessibleName}
-            aria-disabled={props.disabled || undefined}
-            className="max-w-64"
-            onClick={(event) => {
-              if (props.disabled) {
-                event.preventDefault()
-              }
-            }}
-            onKeyDown={(event) => {
-              if (props.disabled) {
-                if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown') {
-                  event.preventDefault()
-                }
-                return
-              }
-              props.onKeyDown(event)
-            }}
-          >
-            <span data-composer-label className="flex min-w-0 items-center gap-1">
-              <span className="truncate text-chat-foreground">{props.modelLabel}</span>
-              {props.optionsLabel ? <span className="shrink-0">{props.optionsLabel}</span> : null}
-              <ChevronDown className="size-3" />
-            </span>
-            <SlidersHorizontal data-composer-compact-icon className="hidden size-3.5" />
-          </Button>
-        </PopoverTrigger>
-      </TooltipTrigger>
-      <TooltipContent side="top" sideOffset={4}>
-        <div className="space-y-0.5">
-          <div className="line-clamp-2 max-w-64 break-words">{props.tooltipLabel}</div>
-          {props.disabledReason ? <div>{props.disabledReason}</div> : null}
-          {props.dispatched ? (
-            <div>
-              {t(
-                'components.native-chat.composer.sentNotConfirmed',
-                'Sent to the agent — not confirmed'
-              )}
-            </div>
-          ) : null}
-        </div>
-      </TooltipContent>
-    </Tooltip>
-  )
-}
-
 function SessionOptionPopover(props: {
+  presetScope?: string
+  onApplyPreset: (preset: NativeChatModelPreset) => Promise<void>
   demandModelCatalog?: () => void
   cliUpdate?: SessionOptionsCliUpdate
   model: SessionOptionDescriptor
@@ -161,9 +98,16 @@ function SessionOptionPopover(props: {
 }): React.JSX.Element {
   const t = useTranslate()
   const { model, options, pendingIds, demandModelCatalog } = props
+  const { presets, save } = useNativeChatModelPresets(props.presetScope)
+  const currentPreset = currentNativeChatModelPreset([model, ...options])
+  const [applyingPreset, setApplyingPreset] = useState(false)
+  const applyingRef = useRef(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
   const canOpen = [model, ...options].some(
     (descriptor) =>
       descriptor.settable &&
+      !applyingPreset &&
       !pendingIds.has(descriptor.id) &&
       (!props.isWorking || descriptor.transport === 'agent-session')
   )
@@ -187,6 +131,43 @@ function SessionOptionPopover(props: {
     wasOpen.current = open
   }, [open, demandModelCatalog])
   const focusReturn = useNativeChatPickerFocusReturn(props.focusComposer)
+  const applyPreset = (slot: ModelPresetSlot): void => {
+    if (!canOpen || applyingRef.current || pendingIds.size > 0) {
+      return
+    }
+    const preset = presets[slot - 1]
+    if (!preset) {
+      toast.info(
+        t(
+          'components.native-chat.modelPresets.unconfiguredSlot',
+          'Preset {{slot}} has no model assigned',
+          { slot }
+        )
+      )
+      return
+    }
+    focusReturn.notePick()
+    setOpen(false)
+    runSessionOptionSurfaceCall(
+      true,
+      (pending) => {
+        applyingRef.current = Boolean(pending)
+        setApplyingPreset(Boolean(pending))
+      },
+      () => props.onApplyPreset(preset)
+    )
+  }
+  useNativeChatModelShortcuts({
+    enabled: Boolean(props.presetScope),
+    rootRef,
+    contentRef,
+    open: () => {
+      if (canOpen) {
+        setOpen(true)
+      }
+    },
+    apply: applyPreset
+  })
   const modelTitle = t('components.native-chat.composer.model', 'Model')
   const modelLabel = nativeChatModelPillLabel(model, say)
   const effort = options.find((option) => option.id === 'effort')
@@ -201,7 +182,9 @@ function SessionOptionPopover(props: {
         })
       : modelLabel
     : t('components.native-chat.composer.modelAndEffort', 'Model and effort')
-  const modelName = knownModel ? pillAccessibleName(modelTitle, tooltipLabel, t) : tooltipLabel
+  const modelName = knownModel
+    ? nativeChatModelPillAccessibleName(modelTitle, tooltipLabel, t)
+    : tooltipLabel
   const optionsTitle = nativeChatOptionsPillTitle(options, say)
   const optionsLabel = nativeChatOptionValuesLabel(options, say)
   const modelReason = nativeChatSessionOptionDisabledReason(model.disabledReason, say)
@@ -212,7 +195,7 @@ function SessionOptionPopover(props: {
 
   // Different descriptors can save together; hold only a repeat of the same pick.
   const set = (descriptor: SessionOptionDescriptor, value: SessionOptionValue): void => {
-    if (pendingIds.has(descriptor.id)) {
+    if (applyingRef.current || pendingIds.has(descriptor.id)) {
       return
     }
     focusReturn.notePick()
@@ -229,7 +212,7 @@ function SessionOptionPopover(props: {
     }
   }
   const act = (descriptor: SessionOptionDescriptor): void => {
-    if (pendingIds.has(descriptor.id)) {
+    if (applyingRef.current || pendingIds.has(descriptor.id)) {
       return
     }
     // Why: agent-picker opens the TUI, and that picker owns focus.
@@ -241,106 +224,137 @@ function SessionOptionPopover(props: {
   }
 
   return (
-    <Popover open={open} onOpenChange={(next) => setOpen(next && canOpen)}>
-      <PickerTrigger
-        modelLabel={modelLabel}
-        optionsLabel={optionsLabel}
-        tooltipLabel={tooltipLabel}
-        accessibleName={
-          optionsLabel
-            ? `${modelName}, ${pillAccessibleName(optionsTitle, optionsLabel, t)}`
-            : modelName
-        }
-        disabled={!canOpen}
-        disabledReason={modelReason ?? optionsReason}
-        dispatched={
-          sessionOptionDispatchUnconfirmed(model) || options.some(sessionOptionDispatchUnconfirmed)
-        }
-        triggerRef={focusReturn.triggerRef}
-        // Why: a popover trigger opens on Enter and Space only; a menu also takes ArrowDown.
-        onKeyDown={(event) => {
-          if (event.key === 'ArrowDown' && canOpen) {
-            event.preventDefault()
-            setOpen(true)
+    <div ref={rootRef}>
+      <Popover open={open} onOpenChange={(next) => setOpen(next && canOpen)}>
+        <NativeChatModelPickerTrigger
+          modelLabel={modelLabel}
+          optionsLabel={optionsLabel}
+          tooltipLabel={tooltipLabel}
+          accessibleName={
+            optionsLabel
+              ? `${modelName}, ${nativeChatModelPillAccessibleName(optionsTitle, optionsLabel, t)}`
+              : modelName
           }
-        }}
-      />
-      <PopoverContent
-        // Why end: the pill's label changes under an open picker; only its right edge stays put.
-        align="end"
-        side="top"
-        collisionPadding={8}
-        className="flex w-96 max-w-(--radix-popover-content-available-width) flex-col"
-        onOpenAutoFocus={(event) => {
-          const content = event.currentTarget
-          const optionId = requestedOptionId
-          setRequestedOptionId(null)
-          if (!optionId || !(content instanceof HTMLElement)) {
-            return
+          disabled={!canOpen}
+          disabledReason={modelReason ?? optionsReason}
+          dispatched={
+            sessionOptionDispatchUnconfirmed(model) ||
+            options.some(sessionOptionDispatchUnconfirmed)
           }
-          const row = content.querySelector(`[data-option-id="${CSS.escape(optionId)}"]`)
-          const control =
-            row?.querySelector<HTMLElement>('[aria-checked="true"]:not(:disabled)') ??
-            row?.querySelector<HTMLElement>('button:not(:disabled)')
-          if (control) {
-            event.preventDefault()
-            control.focus()
-          }
-        }}
-        onInteractOutside={focusReturn.onInteractOutside}
-        onCloseAutoFocus={focusReturn.onCloseAutoFocus}
-        // Close through a level tooltip’s first Escape; let Radix handle search Escape after IME.
-        // Escape from a portaled child (the speed list) closes only that child.
-        onKeyDown={(event) => {
-          if (
-            event.key === 'Escape' &&
-            !(event.target instanceof HTMLInputElement) &&
-            event.target instanceof Node &&
-            event.currentTarget.contains(event.target)
-          ) {
-            setOpen(false)
-          }
-        }}
-      >
-        {model.kind.type === 'select' && !model.action ? (
-          <NativeChatModelCombobox
-            choices={model.kind.choices}
-            currentValue={model.kind.currentValue}
-            readOnly={!model.settable}
-            readOnlyReason={modelReason}
-            busy={pendingIds.has(model.id)}
-            onSelect={(value) => set(model, value)}
-            cliUpdate={props.cliUpdate}
-          />
-        ) : (
-          <NativeChatSessionOptionWriteGroup
-            busy={pendingIds.has(model.id)}
-            className="flex flex-col p-1"
-          >
-            {modelReason && !model.settable ? (
-              <div className="px-2 py-1 text-xs text-muted-foreground">{modelReason}</div>
-            ) : null}
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
-              disabled={!model.settable}
-              className="w-full justify-start"
-              onClick={() => act(model)}
-            >
-              {nativeChatSessionOptionActionLabel(model, say)}
-            </Button>
-          </NativeChatSessionOptionWriteGroup>
-        )}
-        <NativeChatSessionOptionRows
-          options={options}
-          shownReason={model.settable ? null : modelReason}
-          pendingIds={pendingIds}
-          onSet={set}
-          onAction={act}
+          triggerRef={focusReturn.triggerRef}
+          // Why: a popover trigger opens on Enter and Space only; a menu also takes ArrowDown.
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowDown' && canOpen) {
+              event.preventDefault()
+              setOpen(true)
+            }
+          }}
         />
-      </PopoverContent>
-    </Popover>
+        <PopoverContent
+          ref={contentRef}
+          // Why end: the pill's label changes under an open picker; only its right edge stays put.
+          align="end"
+          side="top"
+          collisionPadding={8}
+          className="flex w-96 max-w-(--radix-popover-content-available-width) flex-col"
+          onOpenAutoFocus={(event) => {
+            const content = event.currentTarget
+            setRequestedOptionId(null)
+            if (!requestedOptionId || !(content instanceof HTMLElement)) {
+              return
+            }
+            const row = content.querySelector(`[data-option-id="${CSS.escape(requestedOptionId)}"]`)
+            const control =
+              row?.querySelector<HTMLElement>('[aria-checked="true"]:not(:disabled)') ??
+              row?.querySelector<HTMLElement>('button:not(:disabled)')
+            if (control) {
+              event.preventDefault()
+              control.focus()
+            }
+          }}
+          onInteractOutside={focusReturn.onInteractOutside}
+          onCloseAutoFocus={focusReturn.onCloseAutoFocus}
+          // Close through a level tooltip’s first Escape; let Radix handle search Escape after IME.
+          // Escape from a portaled child (the speed list) closes only that child.
+          onKeyDown={(event) => {
+            if (
+              event.key === 'Escape' &&
+              !(event.target instanceof HTMLInputElement) &&
+              event.target instanceof Node &&
+              event.currentTarget.contains(event.target)
+            ) {
+              setOpen(false)
+            }
+          }}
+        >
+          {model.kind.type === 'select' && !model.action ? (
+            <NativeChatModelCombobox
+              choices={model.kind.choices}
+              currentValue={model.kind.currentValue}
+              readOnly={!model.settable}
+              readOnlyReason={modelReason}
+              busy={pendingIds.has(model.id)}
+              onSelect={(value) => set(model, value)}
+              cliUpdate={props.cliUpdate}
+            />
+          ) : (
+            <NativeChatSessionOptionWriteGroup
+              busy={pendingIds.has(model.id)}
+              className="flex flex-col p-1"
+            >
+              {modelReason && !model.settable ? (
+                <div className="px-2 py-1 text-xs text-muted-foreground">{modelReason}</div>
+              ) : null}
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                disabled={!model.settable}
+                className="w-full justify-start"
+                onClick={() => act(model)}
+              >
+                {nativeChatSessionOptionActionLabel(model, say)}
+              </Button>
+            </NativeChatSessionOptionWriteGroup>
+          )}
+          <NativeChatSessionOptionRows
+            options={options}
+            shownReason={model.settable ? null : modelReason}
+            pendingIds={pendingIds}
+            onSet={set}
+            onAction={act}
+          />
+          {props.presetScope ? (
+            <NativeChatModelPresets
+              presets={presets}
+              currentPreset={currentPreset}
+              busy={applyingPreset || pendingIds.size > 0 || !canOpen}
+              onApply={applyPreset}
+              onSave={(slot) => {
+                if (currentPreset && !save(slot, currentPreset)) {
+                  toast.error(
+                    t(
+                      'components.native-chat.modelPresets.saveFailed',
+                      'Could not save model preset'
+                    )
+                  )
+                }
+              }}
+              onClear={(slot) => {
+                if (!save(slot, null)) {
+                  toast.error(
+                    t(
+                      'components.native-chat.modelPresets.saveFailed',
+                      'Could not save model preset'
+                    )
+                  )
+                }
+              }}
+            />
+          ) : null}
+        </PopoverContent>
+      </Popover>
+    </div>
   )
 }
 
@@ -348,6 +362,7 @@ function NativeChatSessionOptionPickersInner({
   surface,
   snapshot,
   isWorking,
+  presetScope,
   pickerRequest,
   focusComposer
 }: NativeChatSessionOptionPickersProps): React.JSX.Element | null {
@@ -379,6 +394,8 @@ function NativeChatSessionOptionPickersInner({
   return (
     <div className="flex min-w-0 items-center text-chat-foreground-faint">
       <SessionOptionPopover
+        presetScope={presetScope}
+        onApplyPreset={(preset) => applyNativeChatModelPreset(surface, preset, isWorking)}
         demandModelCatalog={surface.demandModelCatalog}
         cliUpdate={surface.cliUpdate}
         model={model}
