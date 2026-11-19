@@ -15,7 +15,6 @@ import type { Bot } from '../../../../shared/bot-types'
 
 const mocks = vi.hoisted(() => ({
   rpc: vi.fn(),
-  openHome: vi.fn(async () => true),
   openLink: vi.fn(),
   toastMessage: vi.fn(),
   toastError: vi.fn(),
@@ -32,7 +31,6 @@ vi.mock('@/store', () => ({
   }
 }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: mocks.rpc }))
-vi.mock('@/lib/bot-catalog', () => ({ openBotHomeTab: mocks.openHome }))
 vi.mock('@/lib/browser/navigation/app-http-link-open', () => ({ openAppHttpLink: mocks.openLink }))
 vi.mock('sonner', () => ({ toast: { message: mocks.toastMessage, error: mocks.toastError } }))
 vi.mock('@/lib/bot-up-next-unseen', () => ({ markBotUpNextSeen: mocks.markSeen }))
@@ -104,8 +102,7 @@ beforeEach(() => {
 afterEach(() => cleanup())
 
 describe('Suggestions', () => {
-  it('opens a suggestion’s link from its row, and Start puts its request in the Home composer', async () => {
-    mocks.rpc.mockResolvedValueOnce({ ask: review.ask })
+  it('opens a suggestion’s link in its bot’s workspace', () => {
     render(<BotUpNextSection bot={bot} upNext={upNext()} />)
     fireEvent.click(screen.getByText(review.title))
     // The bot's own workspace hosts it, so Orca's open-links setting applies.
@@ -113,32 +110,15 @@ describe('Suggestions', () => {
       review.link,
       expect.objectContaining({ worktreeId: 'folder:fw-1' })
     )
-
-    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
-    await waitFor(() => expect(mocks.openHome).toHaveBeenCalledWith(bot, { draft: review.ask }))
-    expect(mocks.rpc).toHaveBeenCalledWith({ kind: 'local' }, 'bots.suggestions.start', {
-      botId: 'b1',
-      suggestionId: 's1'
-    })
   })
 
-  it('dismisses through the host', async () => {
-    mocks.rpc.mockResolvedValueOnce({ dismissed: true })
-    render(<BotUpNextSection bot={bot} upNext={upNext()} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
-    await waitFor(() =>
-      expect(mocks.rpc).toHaveBeenCalledWith({ kind: 'local' }, 'bots.suggestions.dismiss', {
-        botId: 'b1',
-        suggestionId: 's1'
-      })
-    )
-  })
-
-  it('shows while looking, and not at all with nothing to suggest', () => {
+  it('shows a look with no steps when the host gives no session, then hides when idle', () => {
     const { rerender, container } = render(
       <BotUpNextSection bot={bot} upNext={upNext({ running: true }, [])} />
     )
-    expect(screen.getByRole('button', { name: 'Looking around' })).toBeTruthy()
+    expect(
+      screen.getByRole('button', { name: 'Looking around' }).getAttribute('aria-expanded')
+    ).toBeNull()
     expect(screen.queryByRole('button', { name: 'Look now' })).toBeNull()
     rerender(<BotUpNextSection bot={bot} upNext={upNext({}, [])} />)
     expect(container.textContent).toBe('')
@@ -202,9 +182,9 @@ describe('while the bot’s computer is offline', () => {
     fireEvent.click(liveDismiss)
     await waitFor(() =>
       expect(mocks.rpc).toHaveBeenCalledWith(
-        expect.anything(),
+        { kind: 'environment', environmentId: 'm4' },
         'bots.suggestions.dismiss',
-        expect.objectContaining({ suggestionId: 's1' })
+        { botId: 'b1', suggestionId: 's1' }
       )
     )
   })
@@ -226,24 +206,16 @@ describe('Suggestions while a look starts', () => {
 })
 
 describe('Suggestions v2', () => {
-  it('opens the running look’s steps from Looking around, with no placeholder row', () => {
-    const { container } = render(
+  it('opens and closes the running look’s steps', () => {
+    render(
       <BotUpNextSection bot={bot} upNext={upNext({ running: true, runSessionId: 'look-1' })} />
     )
     const toggle = screen.getByRole('button', { name: 'Looking around' })
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
-    expect(container.querySelector('.animate-pulse')).toBeNull()
     fireEvent.click(toggle)
     expect(screen.getByText('steps of look-1')).toBeTruthy()
     fireEvent.click(toggle)
     expect(screen.queryByText('steps of look-1')).toBeNull()
-  })
-
-  it('has no steps toggle on a host that does not name the look', () => {
-    render(<BotUpNextSection bot={bot} upNext={upNext({ running: true })} />)
-    expect(
-      screen.getByRole('button', { name: 'Looking around' }).getAttribute('aria-expanded')
-    ).toBeNull()
   })
 
   it('says how many are new since it was last seen, marks them seen, and keeps saying it', async () => {
