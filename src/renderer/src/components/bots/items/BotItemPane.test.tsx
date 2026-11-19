@@ -111,7 +111,7 @@ it('goes back on unclaimed Escape or the Back chord inside the pane', () => {
 it('offline, disables the arrows but keeps Back', () => {
   const onBack = pane(walk(), true)
   expect(screen.getByRole('button', { name: 'Next item' }).hasAttribute('disabled')).toBe(true)
-  fireEvent.click(screen.getByRole('button', { name: 'Items' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Home' }))
   expect(onBack).toHaveBeenCalledOnce()
 })
 

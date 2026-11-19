@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label'
 import { i18n } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
+import { HostRowIcon } from '@/components/host-picker/host-row-icon'
 import { type BotAgent, botFolderName, newBotName } from '../../../../shared/bot-types'
 import { useHostBots } from '@/lib/bot-catalog'
 import type { NewTabAgentMenuModel } from '../agent/launch-menu/new-tab-agent-menu-model'
@@ -50,6 +51,7 @@ export function BotRunsOnPicker({
   model,
   choices,
   onSetupChange,
+  onAddHost,
   name,
   variant = 'row'
 }: {
@@ -62,9 +64,10 @@ export function BotRunsOnPicker({
   /** The agents that computer has. */
   choices: readonly BotAgent[]
   onSetupChange: (setup: BotAgentSetup) => void
+  onAddHost?: (mode: 'ssh' | 'server') => void
   /** The bot's name, for its folder. */
   name?: string
-  /** `row` is a boxed summary row; `caption` puts the two pickers in the sentence. */
+  /** `row` is a boxed summary; `caption` centers the summary above the fields. */
   variant?: 'row' | 'caption'
 }): React.JSX.Element {
   const t = useTranslate()
@@ -76,7 +79,20 @@ export function BotRunsOnPicker({
     t
   )
   const chosen = setup.agent
-  const inline = variant === 'caption'
+  const caption = variant === 'caption'
+  const computerHint =
+    blockedHint ??
+    (otherAccount
+      ? t('bots.new.computerAccountHint', 'Where the bot runs, signed in to Orca as {{account}}.', {
+          account: otherAccount
+        })
+      : caption
+        ? null
+        : t('bots.new.computerHint', 'Where the bot runs.'))
+  const noAgents = model.state === 'settled' && choices.length === 0
+  const noAgentsHint = noAgents
+    ? t('bots.new.noChatAgents', 'No chat agents available on this computer.')
+    : null
   const modelId = setup.launch?.model
   const listed = usePickedAgentModel(chosen, host.hostId, modelId)
   const effort = setup.launch?.options?.effort
@@ -92,96 +108,89 @@ export function BotRunsOnPicker({
   ]
     .filter(Boolean)
     .join(' · ')
-  const computerPicker = <BotComputerPicker hostChoice={hostChoice} inline={inline} />
-  const agentPicker = (
-    <BotAgentLaunchPicker
-      key={host.hostId}
-      model={model}
-      choices={inline || choices.length ? choices : [chosen]}
-      value={setup}
-      onChange={onSetupChange}
-      inline={inline}
-    />
-  )
   const runsOn = (
     <Trans
       i18n={i18n}
       defaults={
-        otherAccount && !inline
+        otherAccount
           ? t('bots.new.runsOnAs', 'Runs on <host/>, as <account/>, with <agent/>')
           : t('bots.new.runsOn', 'Runs on <host/> with <agent/>')
       }
       components={{
-        host: inline ? (
-          computerPicker
-        ) : (
-          <span className="font-medium text-foreground">{host.label}</span>
+        host: (
+          <span className="inline-flex items-center gap-1 font-medium text-foreground">
+            <HostRowIcon
+              hostId={host.hostId}
+              className={caption ? 'size-3 shrink-0 text-muted-foreground' : undefined}
+            />
+            {host.label}
+          </span>
         ),
         account: (
           <span className="min-w-0 break-all font-medium text-foreground">{otherAccount}</span>
         ),
-        agent: inline ? (
-          agentPicker
-        ) : (
+        agent: (
           <span className="inline-flex items-center gap-1 font-medium text-foreground">
-            <AgentIcon agent={chosen} size={14} />
-            {botAgentLabel(chosen)}
+            {noAgents ? null : <AgentIcon agent={chosen} size={caption ? 12 : 14} />}
+            {noAgents ? t('bots.new.agent', 'Agent') : botAgentLabel(chosen)}
           </span>
         )
       }}
     />
   )
-  if (inline) {
-    const hint =
-      blockedHint ??
-      (model.state === 'settled' && !choices.length
-        ? t('bots.new.noChatAgents', 'No chat agents available on this computer.')
-        : otherAccount
-          ? t(
-              'bots.new.computerAccountHint',
-              'Where the bot runs, signed in to Orca as {{account}}.',
-              {
-                account: otherAccount
-              }
-            )
-          : null)
-    return (
-      <div className="space-y-1">
-        <div className="flex items-center justify-center gap-1.5 text-center text-xs whitespace-nowrap text-muted-foreground">
-          {runsOn}
-        </div>
-        {picked || hint ? (
-          <p className="text-center text-2xs [overflow-wrap:anywhere] text-muted-foreground">
-            {picked}
-            {hint ? <span className="block">{hint}</span> : null}
-          </p>
-        ) : null}
-      </div>
-    )
-  }
   const controls = (
     <>
       <div className="space-y-1">
         <Label>{t('bots.new.computer', 'Computer')}</Label>
-        {computerPicker}
-        <p className="text-2xs text-muted-foreground">
-          {blockedHint ??
-            (otherAccount
-              ? t(
-                  'bots.new.computerAccountHint',
-                  'Where the bot runs, signed in to Orca as {{account}}.',
-                  { account: otherAccount }
-                )
-              : t('bots.new.computerHint', 'Where the bot runs.'))}
-        </p>
+        <BotComputerPicker hostChoice={hostChoice} onAddHost={onAddHost} />
+        {computerHint ? <p className="text-2xs text-muted-foreground">{computerHint}</p> : null}
       </div>
       <div className="space-y-1">
         <Label>{t('bots.new.agent', 'Agent')}</Label>
-        {agentPicker}
+        {noAgentsHint ? (
+          <p className="text-2xs text-muted-foreground">{noAgentsHint}</p>
+        ) : (
+          <BotAgentLaunchPicker
+            key={host.hostId}
+            model={model}
+            choices={choices.length ? choices : [chosen]}
+            value={setup}
+            onChange={onSetupChange}
+            showChatDefaultHint={!caption}
+          />
+        )}
       </div>
-      <BotFolderPreview name={name ?? ''} host={host} />
+      {name !== undefined ? <BotFolderPreview name={name} host={host} /> : null}
     </>
   )
+  if (caption) {
+    const status = blockedHint ?? noAgentsHint
+    return (
+      <Collapsible className="group/runs-on">
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            className="group mx-auto flex flex-wrap items-center justify-center gap-x-1 rounded-md px-2 py-1 text-xs text-muted-foreground outline-none hover:bg-accent/50 focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            {runsOn}
+            {picked ? <span>({picked})</span> : null}
+            <span aria-hidden>·</span>
+            <span className="underline decoration-current/40 underline-offset-2 group-hover:decoration-current">
+              {t('bots.new.change', 'Change')}
+            </span>
+          </button>
+        </CollapsibleTrigger>
+        {status ? (
+          <p className="mt-1 text-center text-2xs text-muted-foreground group-data-[state=open]/runs-on:hidden">
+            {status}
+          </p>
+        ) : null}
+        <CollapsibleContent animation="height">
+          <div className="mt-3 space-y-3 border-t border-border pt-3">{controls}</div>
+        </CollapsibleContent>
+      </Collapsible>
+    )
+  }
   return (
     <Collapsible>
       <div className="rounded-lg border border-border">

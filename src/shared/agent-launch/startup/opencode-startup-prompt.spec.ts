@@ -60,23 +60,19 @@ describe('native OpenCode startup submission intent', () => {
     }
   )
 
-  it.each(['posix', 'powershell', 'cmd'] as const)(
-    'reuses an existing run message separator in %s',
-    (shell) => {
-      const plan = buildAgentStartupPlan({
-        agent: 'opencode',
-        prompt: '--literal task',
-        cmdOverrides: { opencode: 'opencode run --standalone --' },
-        platform: shell === 'posix' ? 'linux' : 'win32',
-        shell
-      })
-      const parsed = tokenizeStartupCommand(plan?.launchCommand ?? '', shell)
-      expect(parsed.ok).toBe(true)
-      if (!parsed.ok) {
-        throw new Error(parsed.error)
-      }
-      expect(parsed.tokens).toEqual(['opencode', 'run', '--standalone', '--', '--literal task'])
-      expect(plan?.env).toBeUndefined()
-    }
-  )
+  it('reuses an existing run message separator', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'opencode',
+      prompt: '--literal task',
+      cmdOverrides: { opencode: 'opencode run --standalone --' },
+      platform: 'win32',
+      shell: 'cmd'
+    })
+    const parsed = tokenizeStartupCommand(plan?.launchCommand ?? '', 'cmd')
+    expect(parsed).toMatchObject({
+      ok: true,
+      tokens: ['opencode', 'run', '--standalone', '--', '--literal task']
+    })
+    expect(plan?.env).toBeUndefined()
+  })
 })

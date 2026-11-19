@@ -12,10 +12,9 @@ import { resolveWorkspaceCreationTarget } from '@/lib/workspace/creation/project
 import { isGitRepoKind } from '../../../../../shared/repository/repo-kind'
 import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
 import { getLocalRepoProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
-import {
-  resolveExecutionHostAgentStartupShell,
-  resolveRepoExecutionHostPlatform
-} from '@/runtime/hosts/platform/execution-host-facts'
+// oxfmt-ignore
+import { resolveExecutionHostAgentStartupShell, resolveRepoExecutionHostPlatform } from '@/runtime/hosts/platform/execution-host-facts'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store/index'
 import { repoIsRemote } from '../../../../../shared/agent-launch/startup/agent-launch-remote'
 import { buildProjectHostSetupOptions } from '@/lib/workspace/creation/project-host-setup-options'
@@ -156,7 +155,7 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     : null
 
   const sshStateByEnvironment = useAppStore((s) => s.sshStateByEnvironment)
-  const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const runtimeStatusByEnvironmentId = useRuntimeStatusByEnvironmentId()
   // Quote for the repo execution host’s OS, not the client’s (#22204).
   const selectedRepoAgentLaunchFact = useMemo((): ExecutionHostPlatformFact => {
     if (!selectedRepo) {

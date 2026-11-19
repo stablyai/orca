@@ -6,6 +6,8 @@ export type HostedWorkerThread = {
   ref(): void
   unref(): void
   terminate(): Promise<number>
+  /** Relayed bytes main has not released yet; only a hosted worker under a relay budget has any. */
+  readonly unreleasedBytes?: number
   on(event: string, listener: (...args: any[]) => void): unknown
   once(event: string, listener: (...args: any[]) => void): unknown
   off(event: string, listener: (...args: any[]) => void): unknown

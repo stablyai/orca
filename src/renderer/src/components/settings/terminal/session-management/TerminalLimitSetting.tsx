@@ -10,6 +10,7 @@ import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import type { SettingsHostScope } from '../../host-scope/settings-host-scope'
 import { readTerminalLimit, saveTerminalLimit } from './terminal-limit-transport'
 import { useAppStore } from '@/store/index'
+import { useRuntimeHostStatusSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import {
   captureHostIdentityFence,
@@ -23,19 +24,20 @@ import { getTerminalLimitSearchKeywords } from '../platform/terminal-advanced-pl
 
 export function TerminalLimitSetting({ scope }: { scope: SettingsHostScope }): React.JSX.Element {
   const environmentId = scope.target.kind === 'environment' ? scope.target.environmentId : null
-  const revision = useAppStore((state) => {
+  const pairing = useAppStore((state) => {
     const host = state.runtimeEnvironments.find((item) => item.id === environmentId)
-    const pairing = host?.pairingRevision ?? host?.createdAt ?? 0
-    const connection = environmentId ? getRuntimeEnvironmentConnectionGeneration(environmentId) : 0
-    const contactEpoch =
-      state.runtimeStatusByEnvironmentId.get(environmentId ?? '')?.hostContactEpoch ?? 0
-    return `${pairing}:${connection}:${contactEpoch}`
+    return host?.pairingRevision ?? host?.createdAt ?? 0
   })
-  const contacted = useAppStore(
-    (state) =>
-      environmentId === null ||
-      runtimeHostContactForEntry(state.runtimeStatusByEnvironmentId.get(environmentId)).verdict ===
-        'live'
+  // The connection generation advances with this host's status writes, so it is read with its entry.
+  const contact = useRuntimeHostStatusSelector(
+    environmentId,
+    (entry) =>
+      `${environmentId ? getRuntimeEnvironmentConnectionGeneration(environmentId) : 0}:${entry?.hostContactEpoch ?? 0}`
+  )
+  const revision = `${pairing}:${contact}`
+  const contacted = useRuntimeHostStatusSelector(
+    environmentId,
+    (entry) => environmentId === null || runtimeHostContactForEntry(entry).verdict === 'live'
   )
   const available = scope.available && contacted
   return (

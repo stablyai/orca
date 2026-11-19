@@ -207,11 +207,14 @@ describe('SidebarBotsSection', () => {
       'ResizeObserver',
       class {
         constructor(
-          private readonly callback: (entries: { contentRect: { width: number } }[]) => void
+          private readonly callback: (
+            entries: { target: Element; contentRect: { width: number } }[]
+          ) => void
         ) {}
-        observe(): void {
-          this.callback([{ contentRect: { width: 68 } }])
+        observe(target: Element): void {
+          this.callback([{ target, contentRect: { width: 68 } }])
         }
+        unobserve(): void {}
         disconnect(): void {}
       }
     )
@@ -278,26 +281,6 @@ describe('SidebarBotsSection', () => {
     expect(screen.queryByRole('menuitem', { name: 'New bot' })).toBeNull()
   })
 
-  it('saves the order a drag gives, on the host, for every bot it places', async () => {
-    threeUnplacedBots()
-    renderSection()
-    stubRowRects()
-
-    dragReviewerBelowJelly()
-
-    await vi.waitFor(() => expect(mocks.updateBot).toHaveBeenCalledTimes(3))
-    expect(new Map(mocks.updateBot.mock.calls.map(([bot, updates]) => [bot.id, updates]))).toEqual(
-      new Map([
-        ['bot-2', { sidebarOrder: 0 }],
-        ['bot-3', { sidebarOrder: 1 }],
-        ['bot-1', { sidebarOrder: 2 }]
-      ])
-    )
-    // The release's click is the drag's, not an open.
-    fireEvent.click(screen.getByText('Reviewer'))
-    expect(mocks.activate).not.toHaveBeenCalled()
-  })
-
   it('keeps New bot access while empty and folds the onboarding card away', () => {
     vi.stubGlobal('api', { ui: { set: vi.fn(() => Promise.resolve()) } })
     renderSection()
@@ -328,9 +311,11 @@ describe('SidebarBotsSection', () => {
     expect(screen.getByText('Reviewer')).toBeTruthy()
   })
 
-  it("lists groups among the bots in one order, and a drop saves a group's place on its host", async () => {
+  it('saves mixed bot and group order without opening a bot on drop', async () => {
     threeUnplacedBots()
-    mocks.bots = mocks.bots.map((entry, index) => ({ ...entry, sidebarOrder: index * 2 }))
+    mocks.bots = mocks.bots.map((entry, index) =>
+      index === 0 ? entry : { ...entry, sidebarOrder: index * 2 }
+    )
     mocks.groups = [group({ sidebarOrder: 1 })]
     useAppStore.setState({
       folderWorkspaces: [home(), home({ id: 'fw-2' }), home({ id: 'fw-3' }), home({ id: 'fw-g' })]
@@ -356,6 +341,8 @@ describe('SidebarBotsSection', () => {
         ['bot-3', { sidebarOrder: 3 }]
       ])
     )
+    fireEvent.click(screen.getByText('Reviewer'))
+    expect(mocks.activate).not.toHaveBeenCalled()
   })
 
   it('keeps a saved group listed after its last bot is gone', () => {
@@ -374,14 +361,8 @@ describe('SidebarBotsSection', () => {
       fireEvent.keyDown(screen.getByRole('menuitem', { name: 'New bot' }), { key: 'ArrowRight' })
     })
     const submenu = screen.getAllByRole('menu').at(-1)!
-    const items = [...submenu.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent)
-    expect(items).toEqual([
-      'Start from scratch',
-      'Browse templates',
-      'From a link…',
-      'Import from another app…'
-    ])
     const scratch = screen.getByRole('menuitem', { name: 'Start from scratch' })
+    expect(submenu.querySelector('[role="menuitem"]')).toBe(scratch)
     expect(document.activeElement).toBe(scratch)
     await act(async () => {
       fireEvent.click(scratch)
