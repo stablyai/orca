@@ -60,7 +60,7 @@ export function applyClaudeEnvPatch(
     CLAUDE_USAGE_ACCOUNT_ID_ENV
   ] as const) {
     const value = patch[key]
-    if (value) {
+    if (value !== undefined && (value !== '' || key === CLAUDE_PROFILE_POINTER_ENV)) {
       baseEnv[key] = value
     }
   }
