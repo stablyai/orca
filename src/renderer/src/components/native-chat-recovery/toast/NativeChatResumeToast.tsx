@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { AlertCircle, CheckCircle2, Loader2, RotateCcw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -146,6 +146,14 @@ export function NativeChatResumeToast({
   const titleId = useId()
   const listId = useId()
   const busy = view.phase === 'resuming'
+  const listRef = useRef<HTMLUListElement>(null)
+  const [moreBelow, setMoreBelow] = useState(false)
+  const rowCount = view.rows.length
+  useEffect(() => {
+    if (expanded && listRef.current) {
+      setMoreBelow(hasMoreBelow(listRef.current))
+    }
+  }, [expanded, rowCount])
   const offering = view.phase === 'offer'
   const showResume = offering && view.resumable.length > 0
   const showDismissAll = onDismissAll !== undefined && offering
@@ -209,26 +217,34 @@ export function NativeChatResumeToast({
         </Button>
       </div>
       <div id={listId} hidden={!expanded} className="border-t border-border">
-        <ul
-          aria-label={t('auto.components.NativeChatResumeToast.listLabel', 'Chats')}
-          className="scrollbar-sleek max-h-64 overflow-y-auto p-1"
-        >
-          {view.rows.map((row) => (
-            <NativeChatResumeToastRow
-              key={row.candidate.sessionId}
-              row={row}
-              name={nameFor(
-                row.candidate.sessionId,
-                firstLine(row.candidate.latestPrompt) ||
-                  t('auto.components.NativeChatResumeToast.untitled', 'Untitled chat')
-              )}
-              age={formatShortTimeAgo(row.candidate.recordedAt, listedAt)}
-              busy={busy}
-              remote={machineName !== undefined}
-              onAction={onRowAction}
-            />
-          ))}
-        </ul>
+        <div className="relative">
+          <ul
+            ref={listRef}
+            aria-label={t('auto.components.NativeChatResumeToast.listLabel', 'Chats')}
+            className="scrollbar-sleek max-h-64 overflow-y-auto p-1"
+            onScroll={(event) => setMoreBelow(hasMoreBelow(event.currentTarget))}
+          >
+            {view.rows.map((row) => (
+              <NativeChatResumeToastRow
+                key={row.candidate.sessionId}
+                row={row}
+                name={nameFor(
+                  row.candidate.sessionId,
+                  firstLine(row.candidate.latestPrompt) ||
+                    t('auto.components.NativeChatResumeToast.untitled', 'Untitled chat')
+                )}
+                age={formatShortTimeAgo(row.candidate.recordedAt, listedAt)}
+                busy={busy}
+                remote={machineName !== undefined}
+                onAction={onRowAction}
+              />
+            ))}
+          </ul>
+          {/* The cap hides rows; a fade says the list goes on until it is scrolled to the end. */}
+          {moreBelow && (
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-popover to-transparent" />
+          )}
+        </div>
         <div className="space-y-1.5 border-t border-border px-3.5 py-2.5 text-xs text-muted-foreground">
           <p>
             {offering
@@ -272,4 +288,8 @@ export function NativeChatResumeToast({
 
 function firstLine(text: string): string {
   return text.trim().split('\n', 1)[0]?.trim() ?? ''
+}
+
+function hasMoreBelow(list: HTMLElement): boolean {
+  return list.scrollTop + list.clientHeight < list.scrollHeight - 2
 }

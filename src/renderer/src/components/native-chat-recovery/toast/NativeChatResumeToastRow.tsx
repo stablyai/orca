@@ -1,4 +1,4 @@
-import { AlertCircle, CheckCircle2, Circle, Loader2 } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import {
@@ -35,6 +35,18 @@ function actionLabel(action: ResumeFailureAction, row: ResumeToastRow, t: Transl
 
 function StateMark({ row }: { row: ResumeToastRow }): React.JSX.Element {
   const t = useTranslate()
+  if (row.state === 'stopped') {
+    // A plain dot: an empty circle would read as a checkbox, and nothing here is selectable.
+    return (
+      <span
+        role="img"
+        aria-label={t('auto.components.NativeChatResumeToast.stateStopped', 'Stopped')}
+        className="mt-0.5 inline-flex size-3.5 shrink-0 items-center justify-center"
+      >
+        <span className="size-1.5 rounded-full bg-muted-foreground/60" />
+      </span>
+    )
+  }
   const [Icon, className, label] =
     row.state === 'resumed'
       ? [
@@ -48,17 +60,11 @@ function StateMark({ row }: { row: ResumeToastRow }): React.JSX.Element {
             'text-status-warning',
             t('auto.components.NativeChatResumeToast.stateNeedsYou', 'Needs you')
           ]
-        : row.state === 'resuming'
-          ? [
-              Loader2,
-              'animate-spin text-muted-foreground motion-reduce:animate-none',
-              t('auto.components.NativeChatResumeToast.stateResuming', 'Resuming')
-            ]
-          : [
-              Circle,
-              'text-muted-foreground',
-              t('auto.components.NativeChatResumeToast.stateStopped', 'Stopped')
-            ]
+        : [
+            Loader2,
+            'animate-spin text-muted-foreground motion-reduce:animate-none',
+            t('auto.components.NativeChatResumeToast.stateResuming', 'Resuming')
+          ]
   return (
     <span role="img" aria-label={label} className="mt-0.5 inline-flex shrink-0">
       <Icon className={`size-3.5 ${className}`} />
