@@ -1,4 +1,4 @@
-import { open, rm, stat, statfs, writeFile } from 'node:fs/promises'
+import { open, stat, statfs, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { potentiallyLiveRemoteAttachmentSql } from '../federation/remote-attachment-liveness'
@@ -113,7 +113,7 @@ async function readHeaderCounts(filename: string): Promise<PageCounts | null> {
   }
 }
 
-/** Present once an attempt started; quit pays the wait for a file at most once. */
+/** Present once an attempt started, and never removed; quit pays the wait for a file at most once. */
 function attemptMarker(filename: string): string {
   return `${filename}-compaction-deferred`
 }
@@ -221,10 +221,9 @@ export async function compactOrchestrationDb(
           result: { kind: 'timed-out' as const, ms: Math.round(performance.now() - started) },
           heldLock: false
         }
-  // Only success clears the marker: every spawned attempt may have cost a wait, busy and active included.
-  if (result.kind === 'compacted') {
-    await rm(attemptMarker(filename), { force: true }).catch(() => {})
-  } else if (heldLock && (result.kind === 'timed-out' || result.kind === 'failed')) {
+  // The marker stays whatever the result: a compacted file never qualifies again, and any other attempt
+  // may already have cost the user its one wait.
+  if (heldLock && (result.kind === 'timed-out' || result.kind === 'failed')) {
     // A VACUUM stopped under its exclusive lock leaves its copy in the WAL; clear it now, after the
     // windows closed, rather than on the next launch's first open.
     const leftMs = budgetMs + EXIT_GRACE_MS + RECOVERY_MS - (performance.now() - started)
