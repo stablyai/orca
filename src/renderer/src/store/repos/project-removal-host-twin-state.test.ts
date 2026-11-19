@@ -6,6 +6,10 @@ import { makeOpenFile } from '../slices/editor/types/open-file.test-fixture'
 import { makeTab } from '../terminals/testing/terminal-tab.test-fixture'
 import { makeTabGroup, makeUnifiedTab } from '../slices/tabs/tab-group.test-fixture'
 import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
+import {
+  admitTerminalNoticeLifetime,
+  retireTerminalNoticeLifetime
+} from '@/components/terminal-pane/provider-notices/terminal-notice-lifetime'
 import type { CodexAccountRestart } from '../terminals/terminal-contracts'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import {
@@ -320,6 +324,53 @@ describe('removing a remote project keeps its local twin', () => {
       },
       pendingPaneAccountRestarts: { [key]: request }
     }))
+    const protectedWorktreeId = 'protected-repo::/work/protected'
+    const protectedTabId = 'protected-tab'
+    const protectedKey = `${protectedTabId}:${leaf}`
+    const protectedRequest: CodexAccountRestart = {
+      ...request,
+      worktreeId: protectedWorktreeId,
+      tabId: protectedTabId,
+      oldPtyId: 'protected-old',
+      resultPtyId,
+      resultIncarnationId: 'foreign-incarnation',
+      phase: 'unresolved'
+    }
+    if (transition === 'result') {
+      store.setState((state) => ({
+        repos: [...state.repos, { ...localRow, id: 'protected-repo', executionHostId: hostId }],
+        worktreesByRepo: {
+          ...state.worktreesByRepo,
+          'protected-repo': [
+            makeWorktree({ id: protectedWorktreeId, repoId: 'protected-repo', hostId })
+          ]
+        },
+        tabsByWorktree: {
+          ...state.tabsByWorktree,
+          [protectedWorktreeId]: [
+            makeTab({
+              id: protectedTabId,
+              worktreeId: protectedWorktreeId,
+              createdAt: request.tabCreatedAt
+            })
+          ]
+        },
+        terminalLayoutsByTabId: {
+          ...state.terminalLayoutsByTabId,
+          [protectedTabId]: {
+            root: { type: 'leaf', leafId: leaf },
+            activeLeafId: leaf,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [leaf]: 'protected-successor' }
+          }
+        },
+        ptyIdsByTabId: { ...state.ptyIdsByTabId, [protectedTabId]: ['protected-successor'] },
+        pendingPaneAccountRestarts: {
+          ...state.pendingPaneAccountRestarts,
+          [protectedKey]: protectedRequest
+        }
+      }))
+    }
     let resume!: () => void
     let entered!: () => void
     const held = new Promise<void>((resolve) => {
@@ -333,8 +384,14 @@ describe('removing a remote project keeps its local twin', () => {
       await held
     }
     const removal = store.getState().removeProject(PROJECT_ID, { hostId })
-    await started
+    let resultLifetime: ReturnType<typeof admitTerminalNoticeLifetime> | undefined
     try {
+      await Promise.race([
+        started,
+        removal.then(() => {
+          throw new Error('Removal completed before reaching the held host operation')
+        })
+      ])
       const layout = store.getState().terminalLayoutsByTabId[tab.id]
       store
         .getState()
@@ -343,6 +400,10 @@ describe('removing a remote project keeps its local twin', () => {
       expect(store.getState().pendingPaneAccountRestarts[key]).toBe(request)
       expect(store.getState().terminalLayoutsByTabId[tab.id].ptyIdsByLeafId?.[leaf]).toBeUndefined()
       if (transition === 'result') {
+        resultLifetime = admitTerminalNoticeLifetime(resultPtyId, {
+          incarnationId: 'result-incarnation',
+          fresh: true
+        })
         store.getState().updateCodexAccountRestart(
           {
             key,
@@ -361,12 +422,19 @@ describe('removing a remote project keeps its local twin', () => {
       }
     } finally {
       resume()
+      await removal
+      if (resultLifetime) {
+        retireTerminalNoticeLifetime(resultLifetime)
+      }
     }
-    await removal
     expect(store.getState().pendingPaneAccountRestarts[key]).toBeUndefined()
     expect(store.getState().ptyIdsByTabId[tab.id]).toEqual(
       transition === 'result' ? [otherPtyId, resultPtyId] : [otherPtyId]
     )
+    if (transition === 'result') {
+      expect(store.getState().pendingPaneAccountRestarts[protectedKey]).toBe(protectedRequest)
+      expect(store.getState().ptyIdsByTabId[protectedTabId]).toEqual(['protected-successor'])
+    }
     if (transition === 'result' && hostId === LOCAL_HOST) {
       expect(ptyKill.mock.calls).toEqual([[resultPtyId]])
     } else {
