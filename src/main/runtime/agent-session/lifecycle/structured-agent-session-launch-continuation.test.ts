@@ -122,6 +122,21 @@ describe('continuing interrupted chats at launch', () => {
     )
   })
 
+  it('takes on its own only what this start recorded when the last run is unknown', async () => {
+    const { result, restartResume, deps } = launch(true)
+    await result
+    await continueStructuredAgentSessionsAtLaunch({
+      ...deps,
+      previousRunStartedAt: async () => undefined
+    })
+    expect(restartResume.continueAfterRestart).toHaveBeenLastCalledWith(
+      undefined,
+      STRUCTURED_AGENT_SESSION_LAUNCH_CONTINUATION_OWNER,
+      undefined,
+      expect.objectContaining({ recordedSince: 5 })
+    )
+  })
+
   it('keeps what it continued when passing over the rest fails', async () => {
     const { result, restartResume, deps } = launch(true)
     await result

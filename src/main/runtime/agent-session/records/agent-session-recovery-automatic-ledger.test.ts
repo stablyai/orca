@@ -104,7 +104,13 @@ it('takes nothing on its own while the ledger of what it took cannot be read', a
   await capsule.record([marker({ recordedAt: NOW })], NOW)
   await writeFile(join(directory, 'agent-session-recovery-automatic.json'), '{not json')
   expect(await capsule.beginResume(undefined, 'automatic', NOW, true)).toEqual([])
-  expect(await capsule.beginResume(undefined, 'person', NOW)).toHaveLength(1)
+  // Neither a pass-over nor a dismissal replaces it with an empty one.
+  await capsule.passOverAutomatic(NOW, NOW)
+  await capsule.record([marker({ sessionId: 'second', recordedAt: NOW })], NOW)
+  await capsule.dismiss(['second'], NOW)
+  await capsule.record([marker({ sessionId: 'third', recordedAt: NOW + MINUTE })], NOW + MINUTE)
+  expect(await capsule.beginResume(undefined, 'next launch', NOW + MINUTE, true)).toEqual([])
+  expect(await capsule.beginResume(undefined, 'person', NOW + MINUTE)).toHaveLength(2)
 })
 
 it('undoes an automatic reservation it could not record', async () => {

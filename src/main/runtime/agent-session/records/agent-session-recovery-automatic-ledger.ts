@@ -40,15 +40,8 @@ function ledgerPath(capsulePath: string): string {
   return join(dirname(capsulePath), LEDGER_FILE)
 }
 
-/** A missing ledger is empty. An unreadable one reads as empty for writes, which then replace it. */
-export async function readAutomaticRestartLedger(
-  capsulePath: string
-): Promise<AutomaticRestartLedger> {
-  return (await readLedger(capsulePath)) ?? EMPTY
-}
-
-/** For an automatic reservation: null when the ledger cannot be read, so nothing is taken rather
- *  than forgetting what was. */
+/** A missing ledger is empty; null when it cannot be read, so nothing is taken automatically and
+ *  nothing replaces it. */
 export async function readAutomaticReservationLedger(
   capsulePath: string
 ): Promise<AutomaticRestartLedger | null> {
@@ -116,12 +109,16 @@ export function dismissedOffer(
   return ledger.dismissed.includes(offerKey(marker))
 }
 
-/** Call under the capsule's lock. */
+/** Call under the capsule's lock. An unreadable ledger is left as it is: replacing it would forget
+ *  what Orca already continued on its own. */
 export async function recordDismissedOffers(
   capsulePath: string,
   markers: readonly AgentSessionResumeMarker[]
 ): Promise<void> {
-  const ledger = await readAutomaticRestartLedger(capsulePath)
+  const ledger = await readAutomaticReservationLedger(capsulePath)
+  if (!ledger) {
+    return
+  }
   const keys = markers.map(offerKey)
   const kept = ledger.dismissed.filter((key) => !keys.includes(key))
   await writeAutomaticRestartLedger(capsulePath, {

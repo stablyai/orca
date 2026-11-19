@@ -20,7 +20,6 @@ import {
   dismissedOffer,
   passOverAutomaticOffers,
   recordDismissedOffers,
-  readAutomaticRestartLedger,
   readAutomaticReservationLedger,
   recordAutomaticContinuations,
   writeAutomaticRestartLedger
@@ -65,11 +64,11 @@ export class AgentSessionRecoveryCapsule {
       const bySession = new Map(entries.map((entry) => [entry.marker.sessionId, entry]))
       const failedBySession = new Map(failed.map((failure) => [failure.marker.sessionId, failure]))
       const dismissedAt = state.dismissedAt
-      const ledger = await readAutomaticRestartLedger(this.filePath)
+      const ledger = await readAutomaticReservationLedger(this.filePath)
       for (const marker of markers) {
         if (
           (dismissedAt !== undefined && marker.recordedAt <= dismissedAt) ||
-          dismissedOffer(ledger, marker)
+          (ledger !== null && dismissedOffer(ledger, marker))
         ) {
           continue
         }
@@ -158,11 +157,13 @@ export class AgentSessionRecoveryCapsule {
   passOverAutomatic(recordedBy: number, now: number): Promise<void> {
     return withFileTransactionLock(this.filePath, async () => {
       const { entries } = normalizeState(await this.readState(), now)
-      const ledger = await readAutomaticRestartLedger(this.filePath)
-      await writeAutomaticRestartLedger(
-        this.filePath,
-        passOverAutomaticOffers(ledger, entries, recordedBy)
-      )
+      const ledger = await readAutomaticReservationLedger(this.filePath)
+      if (ledger) {
+        await writeAutomaticRestartLedger(
+          this.filePath,
+          passOverAutomaticOffers(ledger, entries, recordedBy)
+        )
+      }
     })
   }
 

@@ -166,13 +166,17 @@ export async function previousAgentSessionRuntimeStartedAt(
           join(directory, name),
           MAX_RUNTIME_RECORD_BYTES
         )
-        return parseRecord(buffer.toString('utf8'), other)?.startedAt
+        return parseRecord(buffer.toString('utf8'), other)?.startedAt ?? null
       } catch {
-        return undefined
+        return null
       }
     })
   )
-  const known = starts.filter((startedAt) => startedAt !== undefined)
+  // An unreadable record may be the newest run's: then which run came last is unknown.
+  if (starts.includes(null)) {
+    return undefined
+  }
+  const known = starts.filter((startedAt) => startedAt !== undefined && startedAt !== null)
   return known.length > 0 ? Math.max(...known) : undefined
 }
 

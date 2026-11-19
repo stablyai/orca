@@ -88,8 +88,9 @@ export async function continueStructuredAgentSessionsAtLaunch(
       undefined,
       STRUCTURED_AGENT_SESSION_LAUNCH_CONTINUATION_OWNER,
       undefined,
-      // Only the run that just ended cut what this start may continue on its own.
-      { automatic: true, onReserved, recordedSince: since }
+      // Only the run that just ended cut what this start may continue on its own; with that run
+      // unknown, only what this start itself recorded from a crash.
+      { automatic: true, onReserved, recordedSince: since ?? deps.startedAt }
     )
     const continued = new Set(
       answer.continued.flatMap((outcome) =>

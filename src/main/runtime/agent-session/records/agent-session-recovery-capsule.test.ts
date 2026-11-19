@@ -56,6 +56,18 @@ describe('durable restart offers', () => {
     expect((await capsule.list(NOW)).map((offer) => offer.trigger)).toEqual(['crash'])
   })
 
+  it.each(['selected', 'all'] as const)(
+    'does not name as abandoned a failure being retried, dismissing %s',
+    async (which) => {
+      await capsule.record([marker()], NOW)
+      await fileFailure()
+      expect(await capsule.beginResume([SESSION], 'retry', NOW)).toHaveLength(1)
+      const dismissed =
+        which === 'all' ? await capsule.clearAll(NOW) : await capsule.dismiss([SESSION], NOW)
+      expect(dismissed.abandoned).toEqual([])
+    }
+  )
+
   it('names as abandoned only the offers a dismissal removed that nothing was continuing', async () => {
     await capsule.record([marker(), marker({ sessionId: 'second' })], NOW)
     await capsule.beginResume([SESSION], 'operation-a', NOW)

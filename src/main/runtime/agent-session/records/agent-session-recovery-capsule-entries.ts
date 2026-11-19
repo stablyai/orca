@@ -240,14 +240,21 @@ export function removeOffers(
   }
 }
 
-/** The offers a removal abandons: pending ones and failures, never one being continued. */
+/** The offers a removal abandons: pending ones and failures, never one being continued or retried. */
 function abandonedBy(
   state: Pick<RecoveryCapsuleState, 'entries' | 'failed'>,
   removed: KeepRecord
 ): RecoveryDismissal {
+  const continuing = new Set(
+    state.entries.flatMap((entry) =>
+      entry.state === 'in-progress' ? [entry.marker.sessionId] : []
+    )
+  )
   const abandoned = [
     ...state.entries.filter((entry) => entry.state === 'pending' && removed(entry.marker)),
-    ...state.failed.filter((failure) => removed(failure.marker))
+    ...state.failed.filter(
+      (failure) => removed(failure.marker) && !continuing.has(failure.marker.sessionId)
+    )
   ].map((record) => record.marker)
   const sessions = [...state.entries, ...state.failed].filter(({ marker }) => removed(marker))
   return {
