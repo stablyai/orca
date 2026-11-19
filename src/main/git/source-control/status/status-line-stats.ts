@@ -19,39 +19,102 @@ import { readStampedGitConfig, type StampedGitConfig } from '../input-stamps/sta
 import { addGitattributesStampPaths } from '../input-stamps/gitattributes-stamp-paths'
 import { readWorktreePathsDiffStamp } from '../input-stamps/worktree-diff-stamp'
 
+/** A numstat pass; `complete` false means some rows could not be counted, so it must not be cached. */
+type NumstatPass = {
+  stats: Map<string, GitLineStats>
+  complete: boolean
+}
+
+function numstatArgs(
+  cached: boolean,
+  detectRenames: boolean,
+  pathspecs?: readonly string[]
+): string[] {
+  return [
+    '-c',
+    'core.quotePath=false',
+    '-c',
+    'diff.autoRefreshIndex=false',
+    'diff',
+    '-z',
+    ...(cached ? ['--cached'] : []),
+    '--numstat',
+    detectRenames ? '-M' : '--no-renames',
+    ...(pathspecs?.length ? ['--', ...pathspecs] : [])
+  ]
+}
+
 async function runNumstat(
   worktreePath: string,
   cached: boolean,
   detectRenames: boolean,
-  options: GitRuntimeOptions = {}
-): Promise<Map<string, GitLineStats> | null> {
-  try {
-    const { stdout } = await gitExecFileAsync(
-      [
-        '-c',
-        'core.quotePath=false',
-        '-c',
-        'diff.autoRefreshIndex=false',
-        'diff',
-        '-z',
-        ...(cached ? ['--cached'] : []),
-        '--numstat',
-        detectRenames ? '-M' : '--no-renames'
-      ],
-      {
-        ...gitReadOptionsForWorktree(worktreePath, options),
-        env: gitOptionalLocksDisabledEnv()
+  options: GitRuntimeOptions = {},
+  pathspecs?: readonly string[]
+): Promise<Map<string, GitLineStats>> {
+  const { stdout } = await gitExecFileAsync(numstatArgs(cached, detectRenames, pathspecs), {
+    ...gitReadOptionsForWorktree(worktreePath, options),
+    env: gitOptionalLocksDisabledEnv()
+  })
+  return parseNumstat(stdout)
+}
+
+// One retry subprocess per row is only affordable on a rare failure, so cap the rows retried.
+const MAX_NUMSTAT_RETRY_ENTRIES = 200
+
+/** A locked file fails the whole pass on Windows; count each row alone so readable rows keep their stats. */
+async function runNumstatPerEntry(
+  worktreePath: string,
+  cached: boolean,
+  detectRenames: boolean,
+  entries: readonly GitStatusEntry[],
+  options: GitRuntimeOptions
+): Promise<NumstatPass | null> {
+  const area = cached ? 'staged' : 'unstaged'
+  const areaEntries = entries.filter((entry) => entry.area === area)
+  if (areaEntries.length === 0 || areaEntries.length > MAX_NUMSTAT_RETRY_ENTRIES) {
+    return null
+  }
+  const stats = new Map<string, GitLineStats>()
+  let complete = true
+  for (const entry of areaEntries) {
+    options.signal?.throwIfAborted()
+    try {
+      // Literal magic keeps a path with wildcard characters from matching other files.
+      const pathspecs = [
+        `:(literal)${entry.path}`,
+        ...(entry.oldPath === undefined ? [] : [`:(literal)${entry.oldPath}`])
+      ]
+      const entryStats = await runNumstat(worktreePath, cached, detectRenames, options, pathspecs)
+      for (const [entryPath, lineStats] of entryStats) {
+        stats.set(entryPath, lineStats)
       }
-    )
-    return parseNumstat(stdout)
+    } catch (error) {
+      if (options.signal?.aborted) {
+        throw error
+      }
+      // A still-unreadable row keeps empty stats; the pass stays incomplete.
+      complete = false
+    }
+  }
+  return { stats, complete }
+}
+
+async function readNumstatWithFallback(
+  worktreePath: string,
+  cached: boolean,
+  detectRenames: boolean,
+  entries: readonly GitStatusEntry[],
+  options: GitRuntimeOptions
+): Promise<NumstatPass | null> {
+  try {
+    return { stats: await runNumstat(worktreePath, cached, detectRenames, options), complete: true }
   } catch (error) {
     // Propagate cancellation; ordinary numstat failures may degrade to uncounted rows.
     if (options.signal?.aborted) {
       throw error
     }
-    // null marks the pass incomplete and uncacheable; an empty map would imply success.
-    return null
   }
+  return runNumstatPerEntry(worktreePath, cached, detectRenames, entries, options)
 }
 
 // Statting more files than this costs about as much as the numstat it would skip.
@@ -98,13 +161,13 @@ async function readNumstatThroughSettledCache(
   entries: readonly GitStatusEntry[],
   configRead: Promise<StampedGitConfig | null>,
   options: GitRuntimeOptions
-): Promise<Map<string, GitLineStats> | null> {
+): Promise<NumstatPass | null> {
   const readGeneration = settledNumstatCache.beginRead()
   const stampPaths = numstatStampPaths(entries, cached)
   // Null config means reuse is off or Git reads config and attributes the host cannot stamp (WSL).
   const config = stampPaths ? await configRead : null
   if (!stampPaths || !config) {
-    return runNumstat(worktreePath, cached, detectRenames, options)
+    return readNumstatWithFallback(worktreePath, cached, detectRenames, entries, options)
   }
   const stamp = await readWorktreePathsDiffStamp(worktreePath, stampPaths, options, [
     ...config.files,
@@ -113,13 +176,13 @@ async function readNumstatThroughSettledCache(
   const readKey = JSON.stringify([worktreePath, cached, detectRenames])
   const reused = settledNumstatCache.get(readKey, stamp)
   if (reused) {
-    return reused
+    return { stats: reused, complete: true }
   }
-  const stats = await runNumstat(worktreePath, cached, detectRenames, options)
-  if (stats) {
-    settledNumstatCache.set(readKey, stamp, stats, readGeneration)
+  const pass = await readNumstatWithFallback(worktreePath, cached, detectRenames, entries, options)
+  if (pass?.complete) {
+    settledNumstatCache.set(readKey, stamp, pass.stats, readGeneration)
   }
-  return stats
+  return pass
 }
 
 /** Returns false when a numstat pass failed, so callers skip caching it. */
@@ -134,13 +197,14 @@ export async function attachLineStats(
   const { hasStaged, hasUnstaged, hasStagedRenames, hasUnstagedRenames, untrackedPaths } =
     collectGitStatusLineStatInputs(entries)
   const emptyStats = new Map<string, GitLineStats>()
+  const noEntriesPass: NumstatPass = { stats: emptyStats, complete: true }
   // One config read serves both passes.
   const configRead =
     (hasStaged || hasUnstaged) && isNumstatReuseEnabled()
       ? readStampedGitConfig(worktreePath, options)
       : Promise.resolve(null)
   // Approximates status's rename policy: -M only for areas where status reported a rename.
-  const [stagedStats, unstagedStats, untrackedStats] = await Promise.all([
+  const [stagedPass, unstagedPass, untrackedStats] = await Promise.all([
     hasStaged
       ? readNumstatThroughSettledCache(
           worktreePath,
@@ -150,7 +214,7 @@ export async function attachLineStats(
           configRead,
           options
         )
-      : Promise.resolve(emptyStats),
+      : Promise.resolve(noEntriesPass),
     hasUnstaged
       ? readNumstatThroughSettledCache(
           worktreePath,
@@ -160,7 +224,7 @@ export async function attachLineStats(
           configRead,
           options
         )
-      : Promise.resolve(emptyStats),
+      : Promise.resolve(noEntriesPass),
     // Node reads need host paths even when Git runs in WSL.
     collectUntrackedAdditions(
       resolveWorktreeFilesystemPath(worktreePath, options),
@@ -173,11 +237,11 @@ export async function attachLineStats(
     applyLineStats(
       entry,
       area === 'staged'
-        ? (stagedStats ?? emptyStats).get(entry.path)
+        ? (stagedPass?.stats ?? emptyStats).get(entry.path)
         : area === 'unstaged'
-          ? (unstagedStats ?? emptyStats).get(entry.path)
+          ? (unstagedPass?.stats ?? emptyStats).get(entry.path)
           : untrackedStats.get(entry.path)
     )
   }
-  return stagedStats !== null && unstagedStats !== null
+  return stagedPass?.complete === true && unstagedPass?.complete === true
 }
