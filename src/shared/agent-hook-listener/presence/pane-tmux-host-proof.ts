@@ -20,7 +20,6 @@ export type PaneTmuxHostReader = (request: {
   process?: AgentProcessIdentity
 }) => Promise<boolean>
 
-const TMUX_OPTIONS_WITH_VALUE = new Set(['-L', '-S', '-f', '-T'])
 // tmux aliases, plus the unambiguous prefixes tmux resolves to these commands (`att`, `new-s`).
 const TMUX_ATTACHING_ALIASES = new Set(['a', 'at', 'new'])
 const isAttachingTmuxCommand = (command: string): boolean =>
@@ -36,10 +35,14 @@ function isAttachingTmuxClient(row: ProcessTableRow): boolean {
   const args = tokenizeCommandLine(row.command).slice(1)
   let index = 0
   while (args[index]?.startsWith('-')) {
-    if (args[index] === '-c') {
+    // Flags may be grouped (`-vc`); the rest of a group after -L/-S/-f/-T is that flag's value.
+    const flags = args[index].slice(1)
+    const valueAt = flags.search(/[LSfT]/)
+    const shellAt = flags.indexOf('c')
+    if (shellAt !== -1 && (valueAt === -1 || shellAt < valueAt)) {
       return false
     }
-    index += TMUX_OPTIONS_WITH_VALUE.has(args[index]) ? 2 : 1
+    index += valueAt !== -1 && valueAt === flags.length - 1 ? 2 : 1
   }
   return args[index] === undefined || isAttachingTmuxCommand(args[index])
 }
