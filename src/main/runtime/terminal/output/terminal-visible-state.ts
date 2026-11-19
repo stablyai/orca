@@ -18,7 +18,7 @@ import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fall
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
 
 export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptureProviderTerminalBuffer {
-  /** `isStale` is true once a renderer-sourced preview stops being trustworthy; check it right before use. */
+  /** `isStale` is true once the preview's source stops being trustworthy; check it right before use. */
   protected async visibleSnapshotPreview(
     ptyId: string,
     preview: string
@@ -30,7 +30,9 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
     if (!providerModeUnknown && !knownAlternateScreen && !this.headlessTerminals.has(ptyId)) {
       return fresh
     }
+    const gaps = this.ptyGapCounts.get(ptyId)
     const visibleState = await this.readVisibleTerminalState(ptyId)
+    const model = this.headlessTerminals.get(ptyId)
     if (!knownAlternateScreen && !visibleState?.isAlternateScreen) {
       return fresh
     }
@@ -45,7 +47,12 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
     return {
       preview: buildPreview(projection.lines, ''),
       isStale: () =>
-        rendererToken !== undefined && this.rendererScreenToken(ptyId) !== rendererToken
+        rendererToken !== undefined
+          ? this.rendererScreenToken(ptyId) !== rendererToken
+          : // A model screen: a gap or a replaced model since the read makes it older than the terminal.
+            this.headlessTerminals.get(ptyId) !== model ||
+            model?.gapReseed !== undefined ||
+            this.ptyGapCounts.get(ptyId) !== gaps
     }
   }
 

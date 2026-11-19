@@ -84,7 +84,7 @@ describe('TerminalHost PTY owner backend', () => {
 
     expect(subprocess.write).toHaveBeenCalledWith(reply)
     expect(onData).toHaveBeenCalledWith('', query.length, true, query.length)
-    expect(onData).not.toHaveBeenCalledWith(conptyEcho, undefined, false, expect.any(Number))
+    expect(onData.mock.calls.map(([data]) => data)).not.toContain(conptyEcho)
   })
 
   it('treats an actually spawned WSL shell as wsl.exe, not ConPTY', async () => {
