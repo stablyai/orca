@@ -219,9 +219,17 @@ export function loadWorkspaceLayoutParts(
   const layouts = new Map<string, TerminalLayoutSnapshot>()
   const recordedLeafId = createRecordedLeafReader(session)
   const canonicalTabIdBySubsumedTabId = new Map(subsumedElsewhere)
-  const subsumedByKey = new Map<string, ReadonlyMap<string, string>>()
+  const subsumedByKey = new Map<string, Map<string, string>>()
+  let loadingKey = ''
+  const subsumed = {
+    set(tabId: string, canonicalTabId: string): void {
+      canonicalTabIdBySubsumedTabId.set(tabId, canonicalTabId)
+      const own = subsumedByKey.get(loadingKey) ?? new Map<string, string>()
+      subsumedByKey.set(loadingKey, own.set(tabId, canonicalTabId))
+    }
+  }
   for (const key of workspaceKeys(session)) {
-    const subsumed = new Map<string, string>()
+    loadingKey = key
     layout.workspaces[key] = loadWorkspace(
       {
         session,
@@ -236,10 +244,6 @@ export function loadWorkspaceLayoutParts(
       },
       recordedLeafId
     )
-    if (subsumed.size > 0) {
-      subsumedByKey.set(key, subsumed)
-      subsumed.forEach((canonical, tabId) => canonicalTabIdBySubsumedTabId.set(tabId, canonical))
-    }
   }
   followSubsumedTabSelections(desktopView, canonicalTabIdBySubsumedTabId)
   const carried: CarriedSessionFields = {

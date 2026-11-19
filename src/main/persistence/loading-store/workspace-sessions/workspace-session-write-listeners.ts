@@ -3,6 +3,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/l
 import type { StoreRuntimeState } from '../store-runtime-state'
 import { refileEditorViews } from './layout-editor-views'
 import { WORKSPACE_SESSION_DOMAINS } from '../../workspace-session-domains'
+import { hasWslMoveFrozenSessions } from '../../moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
 /** Null means any partition may have changed; absent workspaces mean any workspace of that partition. */
 export type WorkspaceSessionWriteListener = (
@@ -60,8 +61,10 @@ export function notifyWorkspaceSessionOperationEnded(
   if (hostIds === null) {
     notifyWorkspaceSessionWritten(runtime)
   }
+  // Writes re-add WSL-move-frozen workspaces last, reordering the partition beyond the reported workspaces.
+  const scoped = hasWslMoveFrozenSessions() ? undefined : workspaces
   for (const hostId of hostIds ?? []) {
-    notifyWorkspaceSessionWritten(runtime, undefined, hostId, workspaces?.get(hostId))
+    notifyWorkspaceSessionWritten(runtime, undefined, hostId, scoped?.get(hostId))
   }
   for (const listener of runtime.workspaceSessionOperationListeners) {
     // Committed writes must survive a failed observer and still notify the remaining observers.

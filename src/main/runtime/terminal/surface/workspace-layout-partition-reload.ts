@@ -44,14 +44,24 @@ function hasEntries(record: object | undefined): boolean {
   return record !== undefined && Object.keys(record).length > 0
 }
 
+function hasRowWithoutLayout(session: WorkspaceSessionState): boolean {
+  return Object.values(session.tabsByWorktree ?? {}).some((rows) =>
+    rows.some((row) => !session.terminalLayoutsByTabId?.[row.id])
+  )
+}
+
 export function loadWholePartition(
   hostId: ExecutionHostId,
   session: WorkspaceSessionState,
   context: WorkspaceLayoutLoadContext
 ): PartitionLoad {
   const { loaded, subsumedByKey } = loadWorkspaceLayoutParts(hostId, session, context)
-  // Window-owned builds and legacy surface tombstones keep whole loads.
-  if (!ORCA_LAYOUT_OWNER_IS_MAIN || hasEntries(session.terminalSurfaceTombstonesByPaneKey)) {
+  // Window-owned builds, legacy surface tombstones and rows saved before pane layouts keep whole loads.
+  if (
+    !ORCA_LAYOUT_OWNER_IS_MAIN ||
+    hasEntries(session.terminalSurfaceTombstonesByPaneKey) ||
+    hasRowWithoutLayout(session)
+  ) {
     return { loaded }
   }
   const membership = new Map<string, number>()

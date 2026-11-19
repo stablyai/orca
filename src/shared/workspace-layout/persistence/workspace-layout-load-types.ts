@@ -52,5 +52,5 @@ export type WorkspaceLoadArgs = {
   /** Terminal tab id → its stored pane layout (a legacy row's built one). */
   layouts: Map<string, TerminalLayoutSnapshot>
   /** A dropped row's id → the tab-bar terminal that holds its terminals. */
-  canonicalTabIdBySubsumedTabId: Map<string, string>
+  canonicalTabIdBySubsumedTabId: { set(tabId: string, canonicalTabId: string): void }
 }
