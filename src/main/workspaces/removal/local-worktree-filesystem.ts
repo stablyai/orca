@@ -3,7 +3,7 @@ import { throwIfSignalAborted } from '../../../shared/concurrency/abort-signal-r
 import { runProcess } from '@orca/process-host'
 import { lstat, stat, readFile, realpath } from 'node:fs/promises'
 import { buildWslExecArgs } from '../../../shared/shell/wsl/wsl-login-shell-command'
-import { removeHostTree } from '../../filesystem/host-tree-removal'
+import { removeHostCheckout, removeHostTree } from '../../filesystem/host-tree-removal'
 import {
   guestUncPath,
   resolveWslGuestPaths,
@@ -150,5 +150,27 @@ export async function removeLocalWorktreePath(
   await runWslCommand(
     distro,
     guestCommand(targetPath, (target) => `rm -rf -- ${target}`)
+  )
+}
+
+/** Delete a checkout Git no longer registers, `.git` last, so a failure keeps the link that proves whose folder it is. */
+export async function removeUnregisteredLocalCheckout(
+  targetPath: string,
+  options: LocalWorktreeFilesystemOptions = {},
+  signal?: AbortSignal
+): Promise<void> {
+  const distro = options.wslDistro?.trim()
+  if (!shouldUseWslFilesystem(options) || !distro) {
+    throwIfSignalAborted(signal)
+    await removeHostCheckout(targetPath, async () => true, signal)
+    return
+  }
+  await runWslCommand(
+    distro,
+    guestCommand(
+      targetPath,
+      (target) =>
+        `find ${target} -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} + && rm -f -- ${target}/.git && rmdir -- ${target}`
+    )
   )
 }

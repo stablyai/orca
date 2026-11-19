@@ -15,7 +15,6 @@ import {
 } from '../../../workspaces/removal/worktree-removal-repo-owner'
 import type { RuntimePreservedBranchCleanup } from '../../repositories/runtime-preserved-branch-cleanup'
 import { listWorktreesSharedStrict as listWorktreesStrict } from '../../../git/worktrees/catalog/worktree-scan-cache'
-import { cleanupUnusedWorktreePushTargetRemote } from '../../../ipc/worktrees/worktree-remote'
 import {
   authorizeWindowsCheckout,
   usesNativeWindowsRemoval
@@ -28,12 +27,18 @@ import {
 import { getErrorCode } from '../../../git/worktrees/worktree-operation-options'
 import { areWorktreePathsEqual } from '../../../git/worktrees/catalog/worktree-path-comparison'
 import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
-import { findRegisteredDeletableWorktree } from '../../../workspaces/removal/worktree-removal-safety'
+import {
+  findRegisteredDeletableWorktree,
+  ORPHANED_WORKTREE_DIRECTORY_MESSAGE
+} from '../../../workspaces/removal/worktree-removal-safety'
 import {
   assertUnregisteredCheckoutGone,
+  assertUnregisteredLeftoverRemovable,
+  isProvenOrphanLeftover,
   isRecordedCheckout,
   differentCheckoutAtPathError
 } from '../../../workspaces/removal/worktree-removal-leftover'
+import { unregisteredFolderRefusal } from '../../../../shared/worktree/removal/removal'
 import {
   CLIENT_REMOVAL_HOME,
   getPathOps
@@ -41,6 +46,7 @@ import {
 import { removeStaleLocalWorktreeRegistration } from '../../../workspaces/removal/local-worktree-removal-recovery'
 import {
   getLocalWorktreePathAccess,
+  removeUnregisteredLocalCheckout,
   type LocalWorktreeFilesystemOptions
 } from '../../../workspaces/removal/local-worktree-filesystem'
 import type { WorktreeRemovalRecord } from '../../../workspaces/removal/worktree-removal-records'
@@ -107,19 +113,7 @@ export function interruptedLocalWorktreeRemovalJob(
       host.onRemoved(record)
       return result
     },
-    publish: () => host.publish(record.repoId),
-    cleanupPushTargetRemote: async () => {
-      const repo = localRemovalRepo(host.store, record.repoId)
-      if (repo) {
-        await cleanupUnusedWorktreePushTargetRemote(
-          repo.path,
-          record.worktreeId,
-          resolveRemovedPushTarget(),
-          host.store,
-          getLocalProjectWorktreeGitOptions(host.store, repo)
-        )
-      }
-    }
+    publish: () => host.publish(record.repoId)
   }
 }
 
@@ -211,8 +205,17 @@ async function finishInterruptedLocalWorktreeRemoval(
     deletable = undefined
   }
   // Check before teardown so refused folders retain terminals/watchers.
-  if (!native && !deletable) {
-    await assertUnregisteredCheckoutGone(record.worktreePath, worktrees)
+  const leftover =
+    !native &&
+    !deletable &&
+    (await assertUnregisteredLeftoverRemovable(
+      repo.path,
+      record.worktreePath,
+      worktrees,
+      localOptions
+    ))
+  if (leftover && !record.force) {
+    throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
   }
   if (native) {
     await authorizeWindowsCheckout(
@@ -253,6 +256,13 @@ async function finishInterruptedLocalWorktreeRemoval(
         localOptions
       )
     } else {
+      if (leftover) {
+        // Re-prove after teardown waits; only this repo's orphaned checkout is deleted.
+        if (!(await isProvenOrphanLeftover(repo.path, record.worktreePath, localOptions))) {
+          throw unregisteredFolderRefusal(record.worktreePath)
+        }
+        await removeUnregisteredLocalCheckout(record.worktreePath, localOptions, args.stopSignal)
+      }
       result = await finishUnregisteredWorktreeRemoval(
         repo.path,
         record.worktreePath,
