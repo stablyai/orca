@@ -178,6 +178,52 @@ describe('readZCodeInteractiveCapability', () => {
     ).toBe('missing-tui')
   })
 
+  it('preserves an explicitly empty PATH instead of falling back to process.env.PATH', async () => {
+    const hostPathDir = join(root, 'host-path')
+    const emptyHome = join(root, 'empty-home')
+    mkdirSync(hostPathDir, { recursive: true })
+    mkdirSync(emptyHome, { recursive: true })
+    const commandName = 'zcode-empty-path-probe'
+    const hostBinary = join(
+      hostPathDir,
+      process.platform === 'win32' ? `${commandName}.cmd` : commandName
+    )
+    writeFileSync(hostBinary, process.platform === 'win32' ? '@echo off\r\n' : '#!/bin/sh\n')
+    if (process.platform !== 'win32') {
+      chmodSync(hostBinary, 0o755)
+    }
+
+    const pathKey = Object.keys(process.env).find((key) => key.toLowerCase() === 'path') ?? 'PATH'
+    const previousPath = process.env[pathKey]
+    process.env[pathKey] = hostPathDir
+    try {
+      // Sanity check: omitted PATH uses process.env.PATH and finds the host binary.
+      expect(await resolveZCodeExecutable(commandName, { env: {}, homePath: emptyHome })).toBe(
+        hostBinary
+      )
+      const emptyEnv =
+        process.platform === 'win32'
+          ? { ...process.env, PATH: '', Path: '' }
+          : { ...process.env, PATH: '' }
+      expect(
+        await resolveZCodeExecutable(commandName, { env: emptyEnv, homePath: emptyHome })
+      ).toBe(null)
+      const whitespaceEnv =
+        process.platform === 'win32'
+          ? { ...process.env, PATH: ' ; ', Path: ' ; ' }
+          : { ...process.env, PATH: ' : ' }
+      expect(
+        await resolveZCodeExecutable(commandName, { env: whitespaceEnv, homePath: emptyHome })
+      ).toBe(null)
+    } finally {
+      if (previousPath === undefined) {
+        delete process.env[pathKey]
+      } else {
+        process.env[pathKey] = previousPath
+      }
+    }
+  })
+
   it('does not cache unknown verdicts when the target binary is missing and retries once it exists', async () => {
     const missing = join(root, process.platform === 'win32' ? 'late-zcode.cmd' : 'late-zcode')
     expect(await readZCodeInteractiveCapability(missing)).toBe('unknown')

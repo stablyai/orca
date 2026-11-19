@@ -71,18 +71,22 @@ function normalizePathEnv(
   cwd: string,
   platform: NodeJS.Platform
 ): string | null {
-  if (!pathEnv) {
+  if (pathEnv === null) {
     return null
   }
   const pathApi = platform === 'win32' ? win32 : posix
   const pathDelimiter = platform === 'win32' ? ';' : ':'
   // Resolve relative PATH entries like `.` so `path.join('.', name)` cannot collapse a valid hit back to a bare name.
+  // Keep an explicitly empty PATH as `''` rather than `null`, which cliCommandLookup would replace with process.env.PATH.
   const entries = pathEnv
     .split(pathDelimiter)
-    .map((entry) => entry.trim())
+    .map((entry) => {
+      const trimmed = entry.trim()
+      return platform === 'win32' ? trimmed.replace(/^"(.*)"$/, '$1').trim() : trimmed
+    })
     .filter(Boolean)
     .map((entry) => (pathApi.isAbsolute(entry) ? entry : pathApi.resolve(cwd, entry)))
-  return entries.length > 0 ? entries.join(pathDelimiter) : null
+  return entries.join(pathDelimiter)
 }
 
 /** Resolve bare names through PATH and standard CLI install dirs so Windows `.cmd` shims keep their extension for process-host's `shell: false` spawn. Returns null when no file exists so missing `.cmd` paths cannot spawn `cmd.exe` and be misclassified as interactive. */
