@@ -91,10 +91,18 @@ describe('installStdioWriteErrorSink', () => {
 
 const originalListeners = process.listeners('uncaughtException')
 
-function installedHandler(): (error: unknown) => void {
+function guardListener(): NodeJS.UncaughtExceptionListener | undefined {
   return process
     .listeners('uncaughtException')
-    .find((listener) => !originalListeners.includes(listener)) as (error: unknown) => void
+    .find((listener) => !originalListeners.includes(listener))
+}
+
+function fire(error: Error): void {
+  const listener = guardListener()
+  if (!listener) {
+    throw new Error('uncaughtException guard is not installed')
+  }
+  listener(error, 'uncaughtException')
 }
 
 describe('installUncaughtPipeErrorGuard', () => {
@@ -111,7 +119,7 @@ describe('installUncaughtPipeErrorGuard', () => {
     const crash = vi.fn()
     installUncaughtPipeErrorGuard(crash)
 
-    installedHandler()(new TypeError('boom'))
+    fire(new TypeError('boom'))
 
     expect(crash).toHaveBeenCalled()
     expect(recordDurableCrashBreadcrumbMock).toHaveBeenCalledWith(
@@ -119,15 +127,15 @@ describe('installUncaughtPipeErrorGuard', () => {
       expect.objectContaining({ errorName: 'TypeError', errorMessage: 'boom' }),
       'main_uncaught_exception'
     )
-    expect(installedHandler()).toBeDefined()
+    expect(guardListener()).toBeDefined()
   })
 
   it('keeps running after a broken pipe or a dead local PTY', () => {
     const crash = vi.fn()
     installUncaughtPipeErrorGuard(crash)
 
-    installedHandler()(Object.assign(new Error('write EPIPE'), { code: 'EPIPE' }))
-    installedHandler()(new Error('Pty process exited'))
+    fire(Object.assign(new Error('write EPIPE'), { code: 'EPIPE' }))
+    fire(new Error('Pty process exited'))
 
     expect(crash).not.toHaveBeenCalled()
   })
@@ -141,7 +149,7 @@ describe('installUncaughtPipeErrorGuard', () => {
       }
     })
 
-    installedHandler()(hostile)
+    fire(hostile)
 
     expect(crash).toHaveBeenCalled()
   })
