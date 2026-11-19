@@ -1768,10 +1768,6 @@
       "waitingForHost": "Reloads when the SSH host reconnects",
       "waitingForNetwork": "Reloads when you're back online",
       "waitingForServer": "Reloads when the server starts"
-    },
-    "loadStall": {
-      "waitingForConnection_one": "Waiting for a free connection to {{host}}. 1 hidden tab on this site may be holding them.",
-      "waitingForConnection_other": "Waiting for a free connection to {{host}}. {{count}} hidden tabs on this site may be holding them."
     }
   },
   "browserExtensions": {

@@ -1,4 +1,3 @@
-import { webContents } from 'electron'
 import type {
   BrowserLoadStall,
   BrowserLoadStallPhase
@@ -30,15 +29,55 @@ function webOrigin(rawUrl: string): URL | null {
   }
 }
 
-function countHiddenSameOriginPages(guest: Electron.WebContents, origin: string): number {
+// Watched guests by session and committed origin, so a stall counts only same-site pages.
+const committedGuests = new Map<Electron.Session, Map<string, Set<Electron.WebContents>>>()
+
+function indexCommittedOrigin(
+  session: Electron.Session,
+  guest: Electron.WebContents,
+  previous: string | null,
+  next: string | null
+): void {
+  if (previous === next) {
+    return
+  }
+  const bySession = committedGuests.get(session)
+  if (previous && bySession) {
+    const guests = bySession.get(previous)
+    guests?.delete(guest)
+    if (guests?.size === 0) {
+      bySession.delete(previous)
+    }
+    if (bySession.size === 0) {
+      committedGuests.delete(session)
+    }
+  }
+  if (next) {
+    let target = committedGuests.get(session)
+    if (!target) {
+      target = new Map()
+      committedGuests.set(session, target)
+    }
+    let guests = target.get(next)
+    if (!guests) {
+      guests = new Set()
+      target.set(next, guests)
+    }
+    guests.add(guest)
+  }
+}
+
+function countHiddenSameOriginPages(
+  session: Electron.Session,
+  guest: Electron.WebContents,
+  origin: string
+): number {
   let count = 0
-  for (const other of webContents.getAllWebContents()) {
+  for (const other of committedGuests.get(session)?.get(origin) ?? []) {
     if (
       other !== guest &&
       !other.isDestroyed() &&
-      other.session === guest.session &&
-      readBrowserGuestSemanticVisibility(other) === false &&
-      webOrigin(other.getURL())?.origin === origin
+      readBrowserGuestSemanticVisibility(other) === false
     ) {
       count++
     }
@@ -56,7 +95,16 @@ export function installBrowserNavigationStallWatchdog(
   guest: Electron.WebContents,
   report: (stall: BrowserLoadStall | null) => void
 ): () => void {
+  // Read once: a destroyed guest throws on .session, and dispose can run after destruction.
+  const session = guest.session
   let pending: PendingLoad | null = null
+  let committedOrigin: string | null = null
+  const recordCommit = (): void => {
+    const next = guest.isDestroyed() ? null : (webOrigin(guest.getURL())?.origin ?? null)
+    indexCommittedOrigin(session, guest, committedOrigin, next)
+    committedOrigin = next
+  }
+  recordCommit()
 
   const finish = (outcome: 'committed' | 'failed' | 'stopped' | 'replaced' | 'closed'): void => {
     const load = pending
@@ -84,7 +132,7 @@ export function installBrowserNavigationStallWatchdog(
     phase: load.phase,
     scheme: load.url.protocol === 'https:' ? 'https' : 'http',
     host: load.url.host,
-    hiddenSameOriginPages: countHiddenSameOriginPages(guest, load.origin)
+    hiddenSameOriginPages: countHiddenSameOriginPages(session, guest, load.origin)
   })
 
   const stall = (load: PendingLoad): void => {
@@ -145,9 +193,9 @@ export function installBrowserNavigationStallWatchdog(
     }
   }
 
-  const stopRequests = observeBrowserGuestRequests(guest.id, (session, event, details) => {
+  const stopRequests = observeBrowserGuestRequests(guest.id, (requestSession, event, details) => {
     const load = pending
-    if (!load || details.resourceType !== 'mainFrame' || session !== guest.session) {
+    if (!load || details.resourceType !== 'mainFrame' || requestSession !== session) {
       return
     }
     if (event === 'onBeforeRequest') {
@@ -158,7 +206,10 @@ export function installBrowserNavigationStallWatchdog(
     }
   })
 
-  const committed = (): void => finish('committed')
+  const committed = (): void => {
+    recordCommit()
+    finish('committed')
+  }
   const failed = (
     _event: Electron.Event,
     _code: number,
@@ -187,6 +238,8 @@ export function installBrowserNavigationStallWatchdog(
   return () => {
     finish('closed')
     stopRequests()
+    indexCommittedOrigin(session, guest, committedOrigin, null)
+    committedOrigin = null
     if (!guest.isDestroyed()) {
       guest.off('did-start-navigation', started)
       guest.off('did-redirect-navigation', redirected)

@@ -1,3 +1,4 @@
+import type { BrowserLoadStall } from '../../../../shared/browser/guest-lifecycle/browser-guest-events'
 import { BrowserGrabSessionController } from '../../element-grab/browser-grab-session-controller'
 import type { BrowserCertificateTrustController } from '../../certificate-trust/browser-certificate-trust-controller'
 import type { BrowserSiteDisplayController } from '../../site-settings/display/browser-site-display-controller'
@@ -69,6 +70,7 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     event: PendingPermissionEvent
   ): void
   protected abstract flushPendingLoadFailure(browserTabId: string, guestWebContentsId: number): void
+  protected abstract flushPendingLoadStall(browserTabId: string, guestWebContentsId: number): void
   protected abstract flushPendingPermissionEvents(
     browserTabId: string,
     guestWebContentsId: number
@@ -186,6 +188,7 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     number,
     { code: number; description: string; validatedUrl: string }
   >()
+  protected readonly pendingLoadStallsByGuestId = new Map<number, BrowserLoadStall>()
   protected readonly pendingPermissionEventsByGuestId = new Map<number, PendingPermissionEvent[]>()
   protected readonly pendingPopupEventsByGuestId = new Map<number, PendingPopupEvent[]>()
   protected readonly pendingDownloadIdsByGuestId = new Map<number, string[]>()

@@ -598,8 +598,7 @@
       "profile": "Profile"
     },
     "loadStall": {
-      "waitingForConnection_one": "Waiting for a free connection to {{host}}. 1 hidden tab on this site may be holding them.",
-      "waitingForConnection_other": "Waiting for a free connection to {{host}}. {{count}} hidden tabs on this site may be holding them.",
+      "waitingForConnection": "Waiting for a free connection to {{host}}. {{pages}} hidden tabs on this site may be holding them.",
       "waitingForHost": "Waiting for {{host}}…"
     }
   },

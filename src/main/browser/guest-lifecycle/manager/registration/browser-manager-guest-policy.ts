@@ -20,7 +20,6 @@ import {
 } from './browser-guest-discard-protection'
 import { readBrowserMemoryPageDiscardProtection } from '../../browser-page-memory'
 import { installBrowserNavigationStallWatchdog } from '../navigation/browser-navigation-stall-watchdog'
-import type { BrowserLoadStallEvent } from '../../../../../shared/browser/guest-lifecycle/browser-guest-events'
 
 export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestCleanup {
   attachGuestPolicies(
@@ -49,13 +48,17 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     // Cleanup unmaps a replaced guest before disposing it, so the clear goes to the page that saw the stall.
     let stalledPageId: string | undefined
     const disposeStallWatchdog = installBrowserNavigationStallWatchdog(guest, (stall) => {
-      const browserPageId = stall ? this.tabIdByWebContentsId.get(guest.id) : stalledPageId
+      const mappedPageId = this.tabIdByWebContentsId.get(guest.id)
+      if (stall && !mappedPageId) {
+        // Registration replays it, like a load failure that precedes it.
+        this.pendingLoadStallsByGuestId.set(guest.id, stall)
+        return
+      }
+      this.pendingLoadStallsByGuestId.delete(guest.id)
+      const browserPageId = stall ? mappedPageId : (stalledPageId ?? mappedPageId)
       stalledPageId = stall ? browserPageId : undefined
       if (browserPageId) {
-        this.resolveRendererForBrowserTab(browserPageId)?.send('browser:load-stall', {
-          browserPageId,
-          stall
-        } satisfies BrowserLoadStallEvent)
+        this.sendLoadStall(browserPageId, guest.id, stall)
       }
     })
     const invalidate = (): void => this.invalidateGuestMemoryProtection(guest)

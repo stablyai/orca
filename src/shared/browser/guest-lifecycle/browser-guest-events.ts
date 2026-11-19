@@ -26,6 +26,8 @@ export type BrowserLoadStall = {
 
 export type BrowserLoadStallEvent = {
   browserPageId: string
+  /** The guest that stalled; a clear from a replaced guest must not clear its successor's stall. */
+  webContentsId: number
   /** Null once the load commits, fails, stops or is replaced. */
   stall: BrowserLoadStall | null
 }
