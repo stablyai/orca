@@ -18,7 +18,8 @@ import {
 } from '../../../agent-session/launch/structured-agent-launch-support'
 import { isPathInsideOrEqual } from '../../../../../shared/file-access/cross-platform-path'
 import { defineMethod, defineStreamingMethod } from '../../core'
-import { isAbsolute } from 'node:path'
+import { delimiter, isAbsolute } from 'node:path'
+import { homedir } from 'node:os'
 import {
   isManagedAgentCli,
   MANAGED_AGENT_CLI_IDS,
@@ -98,6 +99,9 @@ function agentCliInstallation(
   runtime: OrcaRuntimeService
 ): ManagedRuntimeInstallation {
   const managedRuntime = managedAgentCli(agent).runtime
+  const dataDirectory = getProfileUserDataPath()
+  // ACP agents name their own program and search their installers' folders after PATH, as launches do.
+  const spec = acpLaunchSpecFor(agent)
   const findExternal = async (): Promise<boolean> => {
     const settings = runtime.requireStore().getSettings()
     if (hasExplicitTuiLaunchCommand(settings, agent)) {
@@ -105,15 +109,21 @@ function agentCliInstallation(
     }
     const env = await resolveHostStructuredAgentLaunchEnvironment(agent, settings)
     const homePath = env.HOME ?? env.USERPROFILE
-    const resolved = await resolveCliCommandAsync(agent, {
-      pathEnv: env.PATH ?? env.Path ?? null,
+    const path = env.PATH ?? env.Path ?? null
+    const dirs = spec?.installDirectories({ env, homePath: homePath ?? homedir() }) ?? []
+    const resolved = await resolveCliCommandAsync(spec?.command ?? agent, {
+      pathEnv: dirs.length > 0 ? [path, ...dirs].filter(Boolean).join(delimiter) : path,
       ...(homePath ? { homePath } : {})
     })
     // A WSL host can't run a Windows-drive copy, so it isn't the user's own install there.
-    return isAbsolute(resolved) && !WINDOWS_DRIVE_MOUNT.test(resolved)
+    return (
+      isAbsolute(resolved) &&
+      !WINDOWS_DRIVE_MOUNT.test(resolved) &&
+      !isPathInsideOrEqual(managedRuntime.root(dataDirectory), resolved)
+    )
   }
   return new ManagedRuntimeInstallation(agent, managedRuntime, {
-    dataDirectory: getProfileUserDataPath(),
+    dataDirectory,
     findExternal,
     onRelease: (folder) => rememberManagedAgentRelease(agent, folder),
     // No launch gate tracks these processes; stopping the agent's chats first is the closest fence.

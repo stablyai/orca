@@ -23,7 +23,8 @@ import { journalGapRecoveryChunk } from './gap-recovery-journal'
 
 export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntimeWithSerializeMainTerminalBuffer {
   protected abstract getOrCreateHeadlessTerminal(ptyId: string): RuntimeHeadlessTerminal
-  protected abstract markPaneLiveTitlesDirty(): void
+  /** `ref` is the terminal whose title changed or the pane key whose start facts did. */
+  protected abstract markPaneLiveTitlesDirty(ref: string): void
   protected abstract settleLostAgentSession(ptyId: string): void
   abstract readLaunchedAgentForeground(
     ptyId: string,
@@ -191,7 +192,7 @@ export abstract class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends Or
         leaf.lastAgentStatus = status
       }
     }
-    this.markPaneLiveTitlesDirty()
+    this.markPaneLiveTitlesDirty(ptyId)
   }
 
   /** Capture reply ownership synchronously at ingestion; never re-read it when the queued write runs. */

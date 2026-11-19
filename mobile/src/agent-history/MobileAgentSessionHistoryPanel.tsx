@@ -1,6 +1,7 @@
 import { openMobileAgentHistoryChat } from './open-mobile-agent-history-chat'
 import { mobileStructuredSessionOpenMessage } from '../session/native-chat/agent-session/mobile-structured-session-open-message'
 import { prepareMobileHistoryResumeTarget } from './mobile-history-resume-target-preparation'
+import { useResumedHistoryTerminalOpener } from './open-resumed-history-terminal'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -15,7 +16,6 @@ import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { useWorkspaceClient } from '../worktree/execution-hosts/use-workspace-client'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
-import { useSessionScreenHandlers } from '../session/session-screen-handlers'
 import { getWorktreeLabel } from '../worktree/row-presentation/worktree-label'
 import {
   buildMobileAiVaultResumeLaunch,
@@ -85,7 +85,7 @@ function MobileAgentSessionHistoryPanelContent({
   const t = useMobileTranslation()
   // Use handoff, not useRouter: resumed session is a native route outside this single-document page.
   const router = useWorkspaceRouteHandoff()
-  const sessionBelow = useSessionScreenHandlers(hostId, worktreeId)
+  const openResumedTerminal = useResumedHistoryTerminalOpener(hostId, worktreeId)
   const { client, state: connState } = useWorkspaceClient(hostId)
   const claimResumeOwnership = useMobileResumeOperationOwnership(
     hostId,
@@ -254,15 +254,11 @@ function MobileAgentSessionHistoryPanelContent({
           return
         }
         setResumeMessage(t('agentHistory.panel.sessionQueued', 'Agent session queued.'))
-        // From a session screen the same workspace is the screen below; otherwise the session takes this screen's place.
-        if (origin === 'session' && target.worktreeId === worktreeId) {
-          sessionBelow?.onResumedTerminal(resumed.terminal)
-          router.back()
-        } else {
-          router.replace(
-            `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(target.worktreeId)}`
-          )
-        }
+        openResumedTerminal({
+          worktreeId: target.worktreeId,
+          resumed,
+          fromSession: origin === 'session' && target.worktreeId === worktreeId
+        })
       } catch (err) {
         triggerError()
         setResumeMessage(
@@ -280,7 +276,7 @@ function MobileAgentSessionHistoryPanelContent({
       connState,
       hostId,
       origin,
-      sessionBelow,
+      openResumedTerminal,
       router,
       worktreeId,
       worktrees,

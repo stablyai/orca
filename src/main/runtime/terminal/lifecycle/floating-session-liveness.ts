@@ -128,6 +128,7 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     this.providerSequenceOffsetByPtyId.delete(ptyId)
     this.providerSequenceAnchorRevisions.delete(ptyId)
     this.gapRecoveryAwaitingStamp.delete(ptyId)
+    this.reattachedProviderSequenceByPtyId.delete(ptyId)
     this.providerSnapshotPreferredPtys.delete(ptyId)
     this.providerModeTrackersByPtyId.delete(ptyId)
     this.providerModeSnapshotScansByPtyId.delete(ptyId)

@@ -38,18 +38,23 @@ export function formatBotTools(
   tools: BotTools,
   problems: Readonly<Record<string, BotToolProblem>> = {}
 ): string {
-  if ('unsupported' in tools) {
-    return `This bot's tools come from its ${tools.agent} setup; Orca adds tools only to Claude Code and Codex bots.`
-  }
   const own = tools.own.map((tool: BotOwnTool) => {
     const problem = problems[tool.name]
     return `${tool.name}  ${tool.detail}${problem ? `  (${problemText(problem)})` : ''}`
   })
+  // Only Claude Code's and Codex's own config is read for the tools a bot inherits.
+  const agent = AGENT_NAMES[tools.agent]
   return [
     ...(own.length > 0 ? own : ['No tools of its own yet.']),
-    `${tools.inherited.length} more from your ${AGENT_NAMES[tools.agent] ?? tools.agent}${
-      tools.inherited.length > 0 ? `: ${tools.inherited.map((tool) => tool.name).join(', ')}` : ''
-    }`
+    ...(agent
+      ? [
+          `${tools.inherited.length} more from your ${agent}${
+            tools.inherited.length > 0
+              ? `: ${tools.inherited.map((tool) => tool.name).join(', ')}`
+              : ''
+          }`
+        ]
+      : [])
   ].join('\n')
 }
 

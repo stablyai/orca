@@ -52,7 +52,7 @@ export function useBotGroupComposerRoom(
           })),
           {
             name: 'everyone',
-            icon: <Users className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+            icon: <Users className="size-4 shrink-0 text-muted-foreground" />
           }
         ],
         placeholder: t('bots.groups.composerPlaceholder', 'Message the group, @ to mention a bot')

@@ -8,6 +8,7 @@ import {
   BotItemsSet
 } from '../../../../shared/rpc-contract/bots-items-params'
 
+import { botItemAskAdvice } from '../../../../shared/bots/bot-item-ask-advice'
 import { linksOutsideLinkedChains } from '../../../bots/bot-item-dispatch-facts'
 import { defineMethod } from '../core'
 import { addItem } from './bots-items-add'
@@ -29,13 +30,17 @@ const SET = defineMethod({
     const writer = writerOf(params, context)
     const store = context.runtime.botItems.store()
     const item = await resolveItem(store, params.item)
-    const { title, description, doneMeans, status, note, reason, comment } = params
-    const changes = { title, description, doneMeans, status, note, reason, comment }
+    const { title, description, doneMeans, status, note, reason, comment, ask } = params
+    const changes = { title, description, doneMeans, status, note, reason, comment, ask }
     const defined = Object.fromEntries(
       Object.entries(changes).filter(([, value]) => value !== undefined)
     )
     const outcome = await store.set(item.uid, defined, writer.actor)
-    return writeResult(context.runtime, outcome, writer)
+    const result = await writeResult(context.runtime, outcome, writer)
+    // A tip back to the bot when its ask may be hard to read; the ask is already posted as written.
+    const advice =
+      status === 'needs_you' && result.eventId !== null ? botItemAskAdvice({ comment, ask }) : null
+    return advice ? { ...result, advice } : result
   }
 })
 

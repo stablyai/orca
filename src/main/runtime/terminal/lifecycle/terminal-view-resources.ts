@@ -109,6 +109,9 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
   /** Gapped before the stream stamped its position: recovery starts at the first stamp. */
   protected readonly gapRecoveryAwaitingStamp = new Set<string>()
 
+  /** The daemon's output count when main reattached to a running process, in the daemon's numbering. */
+  protected reattachedProviderSequenceByPtyId = new Map<string, number>()
+
   protected providerSnapshotPreferredPtys = new Set<string>()
 
   protected providerModeTrackersByPtyId = new Map<string, TerminalKittyKeyboardModeTracker>()

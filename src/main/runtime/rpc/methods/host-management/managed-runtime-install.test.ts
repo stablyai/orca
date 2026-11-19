@@ -35,7 +35,7 @@ vi.mock(
     ...(await actual<object>()),
     getStructuredAgentSessionHost: () => ({
       loadedSessionIds: () => [...chats.loaded],
-      sessionAgent: () => 'opencode',
+      sessionAgent: () => 'hermes',
       close: async (id: string) => {
         chats.closed.push(id)
         chats.loaded = chats.loaded.filter((loaded) => loaded !== id)
@@ -104,7 +104,7 @@ it('pushes a snapshot, then the install another client starts, until the transpo
 
 it('removes the files only once every chat and unclosed child that may run them is stopped', async () => {
   host.dataDirectory = await mkdtemp(join(tmpdir(), 'orca-runtime-remove-rpc-'))
-  const agent = 'opencode'
+  const agent = 'hermes'
   const spec = acpLaunchSpecFor(agent)
   const pin = spec?.managedRuntime?.pin()
   if (!spec?.launchGate || !pin) {

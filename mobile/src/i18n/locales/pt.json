@@ -675,15 +675,6 @@
       "imageTooLarge": "Imagem grande demais para anexar",
       "permissionDenied": "Permissão de acesso às fotos negada"
     },
-    "agentMessage": {
-      "handedOffToAgent": "Entregue a um agente",
-      "startedAgent": "Agente iniciado",
-      "startedWorker": "Worker iniciado",
-      "taskFromCoordinator": "Tarefa do coordenador",
-      "messageFromCoordinator": "Mensagem do coordenador",
-      "updateFromWorker": "Atualização do worker",
-      "messageFrom": "Mensagem de"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "A resposta do anexo não pode ser lida. Tente novamente.",
       "incompleteReply": "O anexo foi alterado ou a resposta estava incompleta. Feche-o e tente novamente.",
@@ -1794,7 +1785,7 @@
       "addressHint": "Aceita IP, host:port ou ws:// / wss://. Uma URL wss:// sem porta usa a porta 443. Endereços sem protocolo mantêm a porta atual (ou 6768).",
       "connectionPreview": "Conecta a {{endpoint}}",
       "goBack": "Voltar",
-      "help": "Altere o nome de exibição ou o endereço de conexão. Deixe o nome em branco para usar o nome informado pelo desktop. Alterar o endereço só muda onde este celular se conecta — não refaz o pareamento. Use esta opção quando o mesmo desktop estiver acessível por outro IP (por exemplo, pela LAN doméstica ou pelo Tailscale).",
+      "help": "Altere o nome de exibição ou o endereço de conexão. Deixe o nome em branco para usar o nome informado pelo host. Alterar o endereço só muda onde este celular se conecta — não refaz o pareamento. Use esta opção quando o mesmo host estiver acessível por outro IP (por exemplo, pela LAN doméstica ou pelo Tailscale).",
       "hostNamePlaceholder": "Nome do host",
       "hostRemoved": "Este host foi removido deste celular.",
       "loadFailed": "Falha ao carregar o host.",
@@ -2655,6 +2646,7 @@
       "providerUnavailable": "{{agent}} não conseguiu responder porque o serviço está ocupado. Escolha outro modelo ou aguarde um pouco e envie novamente.",
       "providerSafetyStopped": "{{agent}} interrompeu esta resposta após uma verificação de segurança. Revise sua solicitação e envie novamente.",
       "providerResponseFailed": "{{agent}} não conseguiu concluir esta resposta. Abra os detalhes para obter mais informações.",
+      "providerResponseFailedQuoted": "{{agent}} não conseguiu concluir esta resposta: {{detail}}.",
       "selectedModel": "o modelo selecionado",
       "providerRejected": "{{agent}} não aceitou esta mensagem.",
       "providerRejectedQuoted": "{{agent}} não aceitou esta mensagem: {{detail}}.",
@@ -5065,7 +5057,7 @@
   "bots": {
     "link": {
       "pairTitle": "Emparelhar um computador",
-      "pairRequired": "Para abrir este link, emparelhe este telefone com um computador.",
+      "pairRequired": "Para abrir este link, emparelhe este telefone com um computador e abra o link novamente.",
       "pairAction": "Emparelhar um computador",
       "openFailed": "Não foi possível abrir este link",
       "ambiguous": "Este bot está em {{names}}. Abra a conversa no Orca no computador que você quiser.",

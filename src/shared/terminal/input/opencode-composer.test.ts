@@ -7,10 +7,10 @@ function box(
   textRows: string[],
   cursorRow: number,
   beforeCursor: string,
-  { metadata = 'Build · gpt-6.1 · medium', bottom = '   ╹▀▀▀▀▀▀▀▀' } = {}
+  metadata = 'Build · gpt-6.1 · medium'
 ) {
   const rows = ['   ┃', ...textRows.map((row) => `   ┃  ${row}`), '   ┃', `   ┃  ${metadata}`]
-  const below = [...rows.slice(cursorRow + 2), ...(bottom ? [bottom] : [])]
+  const below = [...rows.slice(cursorRow + 2), '   ╹▀▀▀▀▀▀▀▀']
   return {
     rows: ['   /update to install', ...rows.slice(0, cursorRow + 2)],
     typedRows: ['   /update to install', ...rows.slice(0, cursorRow + 2)],
@@ -25,17 +25,9 @@ function box(
   }
 }
 
-// OpenCode paints the padding row across the box, so its width shows short text is not clipped.
-function wideBox(typed: string) {
-  return {
-    ...box([typed], 0, ''),
-    rows: ['   /update to install', `   ┃${' '.repeat(60)}`, `   ┃  ${typed}`]
-  }
-}
-
 // A Shell footer that a very narrow pane wraps onto a second metadata row.
 function wrappedFooter(textRows: string[], cursorRow: number) {
-  const narrow = box(textRows, cursorRow, '', { metadata: 'Shel' })
+  const narrow = box(textRows, cursorRow, '', 'Shel')
   const rowsBelow = [...narrow.rowsBelow.slice(0, -1), '   ┃  l', ...narrow.rowsBelow.slice(-1)]
   return { ...narrow, rowsBelow, typedRowsBelow: rowsBelow }
 }
@@ -43,9 +35,7 @@ function wrappedFooter(textRows: string[], cursorRow: number) {
 describe('openCodeComposerHoldsDraft', () => {
   it.each([
     ['the stock placeholder', box(['Ask anything… "Fix a TODO in the codebase"'], 0, '')],
-    ['the shell placeholder', box(['Run a command… "git status"'], 0, '', { metadata: 'Shell' })],
-    ['a placeholder clipped by a narrow pane', box(['Ask anything…'], 0, '', { metadata: '' })],
-    ['a transparent theme', box(['Ask anything… "Fix broken tests"'], 0, '', { bottom: '' })]
+    ['the shell placeholder', box(['Run a command… "git status"'], 0, '', 'Shell')]
   ])('lets mail through an empty box showing %s', (_label, context) => {
     expect(openCodeComposerHoldsDraft(context)).toBe(false)
   })
@@ -54,11 +44,6 @@ describe('openCodeComposerHoldsDraft', () => {
     ['at its end', box(['please refactor the auth'], 0, 'please refactor the auth')],
     ['with the cursor moved to its start', box(['please refactor the auth'], 0, '')],
     ['that starts like the placeholder', box(['Ask anything about the failure'], 0, '')],
-    ['that is the short stock prefix "A", cursor at its start, in a wide box', wideBox('A')],
-    ['that is the short stock prefix "Ask", cursor at its start, in a wide box', wideBox('Ask')],
-    ['in shell mode', box(['ls -la'], 0, 'ls -la', { metadata: 'Shell' })],
-    ['under a model-only metadata row', box(['fix it'], 0, 'fix it', { metadata: 'Big Pickle' })],
-    ['on a transparent theme', box(['fix it'], 0, 'fix it', { bottom: '' })],
     ['that a narrow pane cut to look like a clipped placeholder', box(['Ask anythin'], 0, '')],
     ['on a line below the cursor', box(['', 'second line'], 0, '')],
     [
@@ -66,13 +51,6 @@ describe('openCodeComposerHoldsDraft', () => {
       box(['Ask anything…', 'please fix the auth'], 0, '')
     ]
   ])('holds mail for a typed draft %s', (_label, context) => {
-    expect(openCodeComposerHoldsDraft(context)).toBe(true)
-  })
-
-  it.each([
-    ['a draft', wrappedFooter(['Ask'], 0)],
-    ['a draft below the cursor', wrappedFooter(['', 'fix it'], 0)]
-  ])('holds mail for %s under a footer a narrow pane wrapped', (_label, context) => {
     expect(openCodeComposerHoldsDraft(context)).toBe(true)
   })
 

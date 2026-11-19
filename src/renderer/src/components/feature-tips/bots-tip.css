@@ -1,0 +1,1280 @@
+/* The bots announcement card: its own surfaces (the Slack thread, the miniature Orca window's chrome,
+   the mascots and the page nav). App pieces inside it are the app's components; the window is a .dark
+   scope so they draw as the dark app does. Cues: `data-on` shows a piece, `data-state` picks a step. */
+
+/* ===== Pages: copy changes in place, visuals crossfade; the column never moves. ===== */
+[data-feature-tip='bots'] .bt-copy-stack {
+  display: grid;
+  padding-bottom: 4px;
+}
+[data-feature-tip='bots'] .bt-copy-stack > .bt-layer {
+  grid-area: 1 / 1;
+}
+[data-feature-tip='bots'] .bt-copy-stack > .bt-layer:not(.bt-cur) {
+  pointer-events: none;
+}
+[data-feature-tip='bots'] .bt-pg-el {
+  transition:
+    opacity 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+[data-feature-tip='bots'] .bt-pg-el[data-step='1'] {
+  transition-delay: 40ms;
+}
+[data-feature-tip='bots'] .bt-pg-el[data-step='2'] {
+  transition-delay: 80ms;
+}
+[data-feature-tip='bots'] .bt-pg-el[data-step='3'] {
+  transition-delay: 120ms;
+}
+[data-feature-tip='bots'] .bt-copy-stack > .bt-layer:not(.bt-cur) .bt-pg-el {
+  opacity: 0;
+  transform: translateY(-4px);
+  transition-duration: 140ms;
+  transition-timing-function: ease-in;
+  transition-delay: 0ms;
+}
+[data-feature-tip='bots'] .bt-copy-stack > .bt-layer.bt-pre .bt-pg-el {
+  transform: translateY(4px);
+  transition: none;
+}
+[data-feature-tip='bots'] .bt-visual-stack {
+  position: relative;
+  height: 100%;
+}
+[data-feature-tip='bots'] .bt-visual-stack > .bt-layer {
+  position: absolute;
+  inset: 0;
+  transition: opacity 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+[data-feature-tip='bots'] .bt-visual-stack > .bt-layer:not(.bt-cur) {
+  opacity: 0;
+  pointer-events: none;
+  transition-duration: 140ms;
+  transition-timing-function: ease-in;
+}
+/* A page that starts again snaps to its first frame instead of animating back. */
+[data-feature-tip='bots'] .bt-snap,
+[data-feature-tip='bots'] .bt-snap * {
+  transition: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-feature-tip='bots'] .bt-pg-el,
+  [data-feature-tip='bots'] .bt-copy-stack > .bt-layer:not(.bt-cur) .bt-pg-el,
+  [data-feature-tip='bots'] .bt-copy-stack > .bt-layer.bt-pre .bt-pg-el {
+    transform: none;
+    transition: opacity 200ms ease;
+  }
+  [data-feature-tip='bots'] .bt-visual-stack > .bt-layer,
+  [data-feature-tip='bots'] .bt-visual-stack > .bt-layer:not(.bt-cur) {
+    transition: opacity 200ms ease;
+  }
+}
+
+/* ===== Copy ===== */
+[data-feature-tip='bots'] .bt-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  line-height: 16px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+[data-feature-tip='bots'] .bt-new {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 9999px;
+  font-size: 11.5px;
+  color: #1d4ed8;
+  background: rgba(37, 99, 235, 0.1);
+}
+.dark [data-feature-tip='bots'] .bt-new {
+  color: #93c5fd;
+  background: rgba(96, 165, 250, 0.16);
+}
+[data-feature-tip='bots'] .bt-ask-chip {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: #fff;
+  color: #0a0a0a;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+[data-feature-tip='bots'] .bt-ask-chip.bt-dark-tile {
+  background: #0a0a0a;
+  color: #fff;
+  box-shadow: none;
+}
+.dark [data-feature-tip='bots'] .bt-ask-chip {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+[data-feature-tip='bots'] .bt-ask-chip > * {
+  width: 11px;
+  height: 11px;
+  display: block;
+}
+[data-feature-tip='bots'] .bt-agents-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 0 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted-foreground);
+}
+[data-feature-tip='bots'] .bt-agents-marks {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+[data-feature-tip='bots'] .bt-agents-marks > span {
+  display: inline-flex;
+  color: var(--foreground);
+}
+
+/* ===== Footer: arrows round the page dots; the current dot is a pill that fills as its page plays. ===== */
+[data-feature-tip='bots'] .bt-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+[data-feature-tip='bots'] .bt-dots {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0 2px;
+}
+[data-feature-tip='bots'] .bt-dot {
+  position: relative;
+  overflow: hidden;
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 9999px;
+  cursor: pointer;
+  outline: none;
+  background: color-mix(in srgb, var(--foreground) 22%, transparent);
+  transition:
+    width 240ms ease,
+    background-color 200ms ease;
+}
+[data-feature-tip='bots'] .bt-dot:not([aria-current='true']):hover {
+  background: color-mix(in srgb, var(--foreground) 40%, transparent);
+}
+[data-feature-tip='bots'] .bt-dot:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 55%, transparent);
+}
+[data-feature-tip='bots'] .bt-dot[aria-current='true'] {
+  width: 32px;
+  background: color-mix(in srgb, var(--foreground) 30%, transparent);
+  cursor: default;
+}
+/* The current page's pill fills as the page plays. */
+[data-feature-tip='bots'] .bt-dot-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--foreground);
+  transform-origin: 0 50%;
+}
+[data-feature-tip='bots'] .bt-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  padding: 0;
+}
+[data-feature-tip='bots'] .bt-arrow:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--foreground);
+}
+[data-feature-tip='bots'] .bt-arrow:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+/* The faces sit 10px in from the button's edge, closer than its 16px label padding. */
+[data-feature-tip='bots'] .bt-faces {
+  margin-left: -6px;
+  display: inline-flex;
+  position: relative;
+  width: 34px;
+  height: 18px;
+  flex: none;
+}
+[data-feature-tip='bots'] .bt-faces img {
+  position: absolute;
+  top: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  box-shadow: 0 0 0 1.5px var(--primary);
+}
+[data-feature-tip='bots'] .bt-faces img:nth-child(1) {
+  left: 0;
+  z-index: 3;
+}
+[data-feature-tip='bots'] .bt-faces img:nth-child(2) {
+  left: 8px;
+  z-index: 2;
+}
+[data-feature-tip='bots'] .bt-faces img:nth-child(3) {
+  left: 16px;
+  z-index: 1;
+}
+
+/* ===== Mascots: a pair peeking over the dialog's top edge, bodies behind it, paws over its edge. ===== */
+[data-feature-tip='bots'] .bt-mascot-bodies {
+  /* The dialog's border box: its 1px border sits outside the box these are placed in. */
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  bottom: calc(100% + 1px);
+  height: 90px;
+  overflow: hidden;
+  pointer-events: none;
+}
+[data-feature-tip='bots'] .bt-mascot-paws {
+  position: absolute;
+  inset: -1px -1px auto -1px;
+  height: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+[data-feature-tip='bots'] .bt-mk {
+  position: absolute;
+  display: block;
+  transform: rotate(var(--bt-rot, 0deg));
+  transition:
+    opacity 500ms ease-out,
+    transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+[data-feature-tip='bots'] [data-mascots]:not([data-on]) .bt-mk {
+  opacity: 0;
+  transform: translateY(14px) rotate(var(--bt-rot, 0deg));
+}
+[data-feature-tip='bots'] [data-mascots] .bt-mk-penguin,
+[data-feature-tip='bots'] [data-mascots] .bt-mk-penguin-paws {
+  transition-delay: 250ms;
+}
+[data-feature-tip='bots'] .bt-mk img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+/* Bodies sit in a box that ends at the dialog's top edge, so their tops are 90px - offset. */
+[data-feature-tip='bots'] .bt-mk-monkey {
+  width: 150px;
+  left: 92px;
+  top: 11px;
+}
+[data-feature-tip='bots'] .bt-mk-penguin {
+  width: 132px;
+  left: 250px;
+  top: 12px;
+  --bt-rot: -5deg;
+}
+[data-feature-tip='bots'] .bt-mk-monkey-paws {
+  left: 100px;
+  top: -8px;
+  width: 112px;
+  height: 20px;
+}
+[data-feature-tip='bots'] .bt-mk-penguin-paws {
+  left: 364px;
+  top: -7px;
+  width: 30px;
+  height: 18px;
+}
+[data-feature-tip='bots'] .bt-lid {
+  position: absolute;
+  border-radius: 50%;
+  transform: scaleY(0);
+  transform-origin: 50% 0;
+  animation: bt-blink 5.2s infinite;
+}
+@keyframes bt-blink {
+  0%,
+  93%,
+  100% {
+    transform: scaleY(0);
+  }
+  95.5% {
+    transform: scaleY(1);
+  }
+}
+[data-feature-tip='bots'] .bt-paw {
+  position: absolute;
+  display: block;
+}
+[data-feature-tip='bots'] .bt-paw-press {
+  position: absolute;
+  inset: 0;
+  display: block;
+  transition: transform 120ms ease-out;
+}
+[data-feature-tip='bots'] .bt-paw[data-state='tap'] .bt-paw-press {
+  transform: translateY(2px);
+}
+[data-feature-tip='bots'] .bt-paw-sheen {
+  stroke: rgba(255, 255, 255, 0.18);
+}
+[data-feature-tip='bots'] .bt-paw svg {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 1px 0.5px rgba(0, 0, 0, 0.18));
+}
+[data-feature-tip='bots'] .bt-paw-shadow {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 55%;
+  height: 70%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.22), transparent);
+}
+.dark [data-feature-tip='bots'] .bt-paw-shadow {
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.5), transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-feature-tip='bots'] .bt-lid {
+    animation: none;
+  }
+  [data-feature-tip='bots'] .bt-mk,
+  [data-feature-tip='bots'] .bt-paw-press {
+    transition: none;
+  }
+  /* The still frame sits 12px lower: less of each body shows and the paws rest on the edge. */
+  [data-feature-tip='bots'] [data-mascots][data-on] .bt-mk {
+    transform: translateY(12px) rotate(var(--bt-rot, 0deg));
+  }
+}
+
+/* ===== Timeline pieces ===== */
+[data-feature-tip='bots'] .bt-in,
+[data-feature-tip='bots'] .bt-grow {
+  transition:
+    opacity 400ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 400ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+[data-feature-tip='bots'] .bt-in:not([data-on]) {
+  opacity: 0;
+  transform: translateY(6px);
+}
+/* Grows its height open, so the rows above it move up as in a chat. */
+[data-feature-tip='bots'] .bt-grow {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition:
+    grid-template-rows 450ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 400ms ease-out,
+    transform 400ms ease-out;
+}
+[data-feature-tip='bots'] .bt-grow:not([data-on]) {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transform: translateY(6px);
+}
+[data-feature-tip='bots'] .bt-grow > * {
+  min-height: 0;
+  overflow: hidden;
+}
+/* A chat scrolled to its end: new rows push older ones up under a faded top edge. */
+[data-feature-tip='bots'] .bt-scroll {
+  position: relative;
+  overflow: hidden;
+  flex: 1;
+  min-height: 0;
+  mask-image: linear-gradient(to bottom, transparent 0, #000 22px);
+}
+[data-feature-tip='bots'] .bt-scroll-inner {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+}
+
+/* ===== Page 1: a Slack thread. ===== */
+[data-feature-tip='bots'] .bt-slack {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 28.5rem;
+  height: 25rem;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--background);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.12),
+    0 1px 2px rgba(0, 0, 0, 0.06);
+  border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+}
+/* Slack's own dark theme: a grey message pane and attachments, not the app's near-black. */
+.dark [data-feature-tip='bots'] .bt-slack {
+  --background: #151515;
+  --foreground: #d1d2d3;
+  --muted-foreground: #ababad;
+  --border: #35373b;
+  --muted: #2c2e33;
+  background: #151515;
+  border-color: #35373b;
+  color: #d1d2d3;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+[data-feature-tip='bots'] .bt-slack-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 650;
+  flex: none;
+}
+[data-feature-tip='bots'] .bt-slack-head small {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted-foreground);
+}
+[data-feature-tip='bots'] .bt-slack-head svg {
+  width: 13px;
+  height: 13px;
+}
+[data-feature-tip='bots'] .bt-slack .bt-scroll-inner {
+  padding: 4px 14px 12px;
+}
+[data-feature-tip='bots'] .bt-sl-msg {
+  display: flex;
+  gap: 9px;
+  padding: 7px 0;
+}
+[data-feature-tip='bots'] .bt-sl-msg > div {
+  min-width: 0;
+  flex: 1;
+}
+[data-feature-tip='bots'] .bt-sl-av {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  flex: none;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+[data-feature-tip='bots'] .bt-sl-av img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+[data-feature-tip='bots'] .bt-sl-av.bt-person {
+  background: var(--muted);
+  color: var(--muted-foreground);
+}
+[data-feature-tip='bots'] .bt-sl-av.bt-person svg {
+  width: 55%;
+  height: 55%;
+}
+[data-feature-tip='bots'] .bt-sl-name {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--foreground);
+}
+.dark [data-feature-tip='bots'] .bt-sl-name {
+  color: #e8e8e8;
+}
+[data-feature-tip='bots'] .bt-sl-tag {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+  background: color-mix(in srgb, var(--foreground) 8%, transparent);
+  border-radius: 3px;
+  padding: 1px 4px;
+  margin-left: 5px;
+  vertical-align: 1px;
+  letter-spacing: 0.02em;
+}
+.dark [data-feature-tip='bots'] .bt-sl-tag {
+  background: #2c2e33;
+  color: #ababad;
+}
+[data-feature-tip='bots'] .bt-sl-time {
+  font-size: 10px;
+  color: var(--muted-foreground);
+  margin-left: 6px;
+}
+[data-feature-tip='bots'] .bt-sl-text {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--foreground);
+}
+[data-feature-tip='bots'] .bt-sl-mention {
+  color: #1264a3;
+  background: rgba(29, 155, 209, 0.1);
+  border-radius: 3px;
+  padding: 0 2px;
+  margin: 0 -2px;
+}
+.dark [data-feature-tip='bots'] .bt-sl-mention {
+  color: #4aa3df;
+  background: rgba(29, 155, 209, 0.18);
+}
+[data-feature-tip='bots'] .bt-sl-typing {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  color: var(--muted-foreground);
+  padding: 2px 0 6px 35px;
+}
+[data-feature-tip='bots'] .bt-sl-dots {
+  display: inline-flex;
+  gap: 3px;
+}
+[data-feature-tip='bots'] .bt-sl-dots i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--muted-foreground);
+  animation: bt-bounce 1.2s infinite ease-in-out;
+}
+[data-feature-tip='bots'] .bt-sl-dots i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+[data-feature-tip='bots'] .bt-sl-dots i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes bt-bounce {
+  0%,
+  60%,
+  100% {
+    opacity: 0.35;
+    transform: none;
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+[data-feature-tip='bots'] .bt-sl-card {
+  margin-top: 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--background);
+  overflow: hidden;
+}
+.dark [data-feature-tip='bots'] .bt-sl-card,
+.dark [data-feature-tip='bots'] .bt-sl-chip {
+  background: #1e1e1e;
+  border-color: #34363a;
+}
+[data-feature-tip='bots'] .bt-sl-agent {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 9px;
+  font-size: 11.5px;
+}
+[data-feature-tip='bots'] .bt-sl-agent + .bt-sl-agent {
+  border-top: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+[data-feature-tip='bots'] .bt-sl-agent > svg,
+[data-feature-tip='bots'] .bt-sl-agent > span:first-child {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+[data-feature-tip='bots'] .bt-sl-agent-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-feature-tip='bots'] .bt-sl-agent-state {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+[data-feature-tip='bots'] .bt-sl-pr {
+  display: flex;
+  gap: 8px;
+  padding: 8px 10px;
+}
+[data-feature-tip='bots'] .bt-sl-pr-bar {
+  width: 3px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--foreground) 22%, transparent);
+  flex: none;
+}
+[data-feature-tip='bots'] .bt-sl-pr-src {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  color: var(--muted-foreground);
+}
+[data-feature-tip='bots'] .bt-sl-pr-src svg {
+  width: 11px;
+  height: 11px;
+  color: var(--foreground);
+}
+[data-feature-tip='bots'] .bt-sl-pr-title {
+  font-size: 12px;
+  font-weight: 650;
+  color: #1264a3;
+  margin: 2px 0;
+}
+.dark [data-feature-tip='bots'] .bt-sl-pr-title {
+  color: #4aa3df;
+}
+[data-feature-tip='bots'] .bt-sl-pr-desc {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  line-height: 1.45;
+}
+[data-feature-tip='bots'] .bt-sl-pr-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 10.5px;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+[data-feature-tip='bots'] .bt-sl-added {
+  color: var(--git-decoration-added, var(--status-success));
+}
+[data-feature-tip='bots'] .bt-sl-removed {
+  color: var(--git-decoration-deleted, #c0392b);
+}
+[data-feature-tip='bots'] .bt-sl-ok {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--status-success);
+}
+[data-feature-tip='bots'] .bt-sl-ok svg {
+  width: 11px;
+  height: 11px;
+}
+[data-feature-tip='bots'] .bt-sl-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  font-size: 10.5px;
+  color: var(--muted-foreground);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 7px;
+  background: var(--background);
+}
+[data-feature-tip='bots'] .bt-sl-chip svg {
+  width: 11px;
+  height: 11px;
+  color: var(--foreground);
+}
+
+/* ===== A miniature Orca window, framed by a camera that moves over it. ===== */
+[data-feature-tip='bots'] .bt-stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+[data-feature-tip='bots'] .bt-cam {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 860px;
+  height: 560px;
+  transform-origin: 0 0;
+  transition: transform 1100ms cubic-bezier(0.65, 0, 0.35, 1);
+}
+[data-feature-tip='bots'] .bt-cam[data-state='full'] {
+  transform: translate(10px, 100px) scale(0.65);
+}
+[data-feature-tip='bots'] .bt-cam[data-state='view'] {
+  transform: translate(-256px, 34px) scale(1);
+}
+[data-feature-tip='bots'] .bt-cam[data-state='group'] {
+  transform: translate(27px, 35px) scale(0.8);
+}
+[data-feature-tip='bots'] .bt-win {
+  position: relative;
+  display: flex;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--chat-pane);
+  color: var(--foreground);
+  font-size: 13px;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.1),
+    0 30px 80px rgba(0, 0, 0, 0.55);
+}
+[data-feature-tip='bots'] .bt-win-items {
+  width: 744px;
+  height: 440px;
+}
+[data-feature-tip='bots'] .bt-win-group {
+  width: 560px;
+  height: 520px;
+}
+[data-feature-tip='bots'] .bt-center {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+[data-feature-tip='bots'] .bt-tabs {
+  height: 36px;
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  background: #171717;
+  border-bottom: 1px solid var(--border);
+}
+[data-feature-tip='bots'] .bt-lights {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px 0 12px;
+  border-right: 1px solid var(--border);
+}
+[data-feature-tip='bots'] .bt-light {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+[data-feature-tip='bots'] .bt-lights > svg {
+  margin-left: 6px;
+  color: rgba(255, 255, 255, 0.38);
+}
+[data-feature-tip='bots'] .bt-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--foreground);
+  background: var(--chat-pane);
+  border-right: 1px solid var(--border);
+  margin-bottom: -1px;
+}
+[data-feature-tip='bots'] .bt-tab-faces {
+  position: relative;
+  width: 22px;
+  height: 14px;
+  flex: none;
+}
+[data-feature-tip='bots'] .bt-tab-faces img {
+  position: absolute;
+  top: 1px;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  box-shadow: 0 0 0 1.5px var(--chat-pane);
+}
+[data-feature-tip='bots'] .bt-tab-faces img:nth-child(2) {
+  left: 5px;
+}
+[data-feature-tip='bots'] .bt-tab-faces img:nth-child(3) {
+  left: 10px;
+}
+[data-feature-tip='bots'] .bt-chat {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+[data-feature-tip='bots'] .bt-chat .bt-scroll-inner {
+  left: 14px;
+  right: 14px;
+  padding-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+[data-feature-tip='bots'] .bt-group-chat .bt-scroll-inner {
+  padding-bottom: 8px;
+}
+[data-feature-tip='bots'] .bt-composer {
+  flex: none;
+  margin: 8px 16px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(240, 240, 240, 0.09);
+  background: rgba(240, 240, 240, 0.04);
+  padding: 6px;
+}
+[data-feature-tip='bots'] .bt-composer-ph {
+  height: 40px;
+  padding: 4px 8px;
+  font-size: 13px;
+  color: #929292;
+}
+[data-feature-tip='bots'] .bt-composer-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px;
+  color: #929292;
+}
+[data-feature-tip='bots'] .bt-send {
+  margin-left: auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #3a3a3a;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #f0f0f0;
+}
+
+[data-feature-tip='bots'] .bt-composer-model {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 500;
+  color: #c0c0c0;
+}
+[data-feature-tip='bots'] .bt-composer-model + .bt-send {
+  margin-left: 0;
+}
+/* Page 2's right panel: the bot's Items, and one item's view over it. */
+[data-feature-tip='bots'] .bt-right {
+  width: 340px;
+  flex: none;
+  background: var(--sidebar);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+}
+[data-feature-tip='bots'] .bt-rtabs {
+  height: 36px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 4px;
+  border-bottom: 1px solid var(--border);
+}
+[data-feature-tip='bots'] .bt-rtab {
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #929292;
+}
+[data-feature-tip='bots'] .bt-rtab.bt-on {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--foreground);
+}
+[data-feature-tip='bots'] .bt-rtab-count {
+  display: inline-flex;
+  height: 16px;
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 99px;
+  background: var(--foreground);
+  color: var(--background);
+  font-size: 10px;
+  font-weight: 500;
+  align-items: center;
+  justify-content: center;
+}
+[data-feature-tip='bots'] .bt-rbody {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+[data-feature-tip='bots'] .bt-rhead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px 8px;
+}
+[data-feature-tip='bots'] .bt-rname {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+}
+[data-feature-tip='bots'] .bt-rsub {
+  font-size: 12px;
+  color: #929292;
+  line-height: 16px;
+}
+[data-feature-tip='bots'] .bt-ilist {
+  padding: 2px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+[data-feature-tip='bots'] .bt-ghead {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  padding: 4px 4px 0;
+  font-size: 12px;
+  color: #929292;
+}
+[data-feature-tip='bots'] .bt-gcount {
+  font-variant-numeric: tabular-nums;
+  margin-left: 2px;
+}
+[data-feature-tip='bots'] .bt-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition:
+    background 500ms,
+    box-shadow 500ms;
+}
+[data-feature-tip='bots'] .bt-item[data-state='q'] {
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+[data-feature-tip='bots'] .bt-item-glyph {
+  width: 16px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+[data-feature-tip='bots'] .bt-item-number {
+  font-size: 13px;
+  line-height: 20px;
+  color: #929292;
+  width: 30px;
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+[data-feature-tip='bots'] .bt-item-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+  line-height: 20px;
+}
+[data-feature-tip='bots'] .bt-item-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-feature-tip='bots'] .bt-item.bt-closed .bt-item-title {
+  color: #929292;
+}
+[data-feature-tip='bots'] .bt-item-ask {
+  display: block;
+  font-size: 12px;
+  line-height: 16px;
+  color: #acacac;
+}
+[data-feature-tip='bots'] .bt-item-when {
+  font-size: 12px;
+  line-height: 20px;
+  color: #929292;
+  flex: none;
+}
+[data-feature-tip='bots'] .bt-view {
+  position: absolute;
+  inset: 0;
+  background: var(--sidebar);
+  display: flex;
+  flex-direction: column;
+  transition: opacity 250ms ease;
+}
+[data-feature-tip='bots'] .bt-view:not([data-on]) {
+  opacity: 0;
+  pointer-events: none;
+}
+[data-feature-tip='bots'] .bt-vhead {
+  padding: 6px 14px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+[data-feature-tip='bots'] .bt-vback {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+  color: #929292;
+  margin: 0 0 4px -4px;
+}
+[data-feature-tip='bots'] .bt-vtitle {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 21px;
+}
+[data-feature-tip='bots'] .bt-vtitle span {
+  font-weight: 400;
+  color: #929292;
+  font-variant-numeric: tabular-nums;
+}
+[data-feature-tip='bots'] .bt-vsub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+[data-feature-tip='bots'] .bt-vstatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 6px;
+  margin-left: -6px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  flex: none;
+}
+[data-feature-tip='bots'] .bt-vstatus > svg {
+  color: #929292;
+}
+[data-feature-tip='bots'] .bt-vmeta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  color: #929292;
+  white-space: nowrap;
+}
+[data-feature-tip='bots'] .bt-vscroll {
+  padding: 0 14px;
+  mask-image: linear-gradient(to bottom, transparent 0, #000 36px);
+}
+[data-feature-tip='bots'] .bt-vscroll .bt-scroll-inner {
+  left: 14px;
+  right: 14px;
+  padding-top: 8px;
+  transition: transform 500ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+[data-feature-tip='bots'] .bt-vh3 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 400;
+  color: #929292;
+}
+[data-feature-tip='bots'] .bt-rail {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 6px;
+}
+[data-feature-tip='bots'] .bt-rail::before {
+  content: '';
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 9.5px;
+  width: 1px;
+  background: rgba(240, 240, 240, 0.12);
+}
+[data-feature-tip='bots'] .bt-act {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: #929292;
+}
+[data-feature-tip='bots'] .bt-act b {
+  font-weight: 500;
+  color: var(--foreground);
+}
+[data-feature-tip='bots'] .bt-act-icon {
+  width: 20px;
+  height: 18px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sidebar);
+  color: #929292;
+}
+[data-feature-tip='bots'] .bt-cbox {
+  flex: none;
+  margin: 6px 12px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(240, 240, 240, 0.12);
+  background: var(--chat-pane);
+  padding: 6px;
+}
+[data-feature-tip='bots'] .bt-answering {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 6px;
+  font-size: 11px;
+  color: #929292;
+  white-space: nowrap;
+  overflow: hidden;
+}
+[data-feature-tip='bots'] .bt-answering b {
+  font-weight: 500;
+  color: rgba(240, 240, 240, 0.8);
+}
+[data-feature-tip='bots'] .bt-cinput {
+  padding: 4px 4px 2px;
+  font-size: 13px;
+  line-height: 19px;
+  min-height: 19px;
+}
+/* A text input's caret: a thin bar after the typed text, so in an empty box it sits before the placeholder. */
+[data-feature-tip='bots'] .bt-caret {
+  display: inline-block;
+  width: 1.5px;
+  height: 15px;
+  background: #f0f0f0;
+  vertical-align: -3px;
+  margin: 0 1px 0 0;
+  animation: bt-caret 1s steps(1) infinite;
+}
+@keyframes bt-caret {
+  50% {
+    opacity: 0;
+  }
+}
+[data-feature-tip='bots'] .bt-cph {
+  color: #929292;
+}
+[data-feature-tip='bots'] .bt-crow {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 2px;
+  color: #929292;
+}
+[data-feature-tip='bots'] .bt-csend {
+  margin-left: auto;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #3a3a3a;
+  color: #929292;
+  transition:
+    background 200ms,
+    color 200ms;
+}
+[data-feature-tip='bots'] .bt-csend[data-on] {
+  background: #f0f0f0;
+  color: #151515;
+}
+[data-feature-tip='bots'] .bt-pointer {
+  position: absolute;
+  z-index: 5;
+  width: 16px;
+  height: 16px;
+  left: 0;
+  top: 0;
+  transition:
+    transform 800ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 300ms;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
+}
+/* A system arrow pointer: white with a dark outline on any surface. */
+[data-feature-tip='bots'] .bt-pointer path {
+  fill: #fff;
+  stroke: #111;
+}
+
+/* The group page: each bot's turn under its picture and name; hand-offs centred between turns. */
+[data-feature-tip='bots'] .bt-you {
+  margin-left: auto;
+  width: fit-content;
+}
+[data-feature-tip='bots'] .bt-mention {
+  color: #8ab4f8;
+}
+[data-feature-tip='bots'] .bt-turn {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+[data-feature-tip='bots'] .bt-turn > img {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  flex: none;
+}
+[data-feature-tip='bots'] .bt-turn-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  line-height: 20px;
+  color: #d4d4d4;
+}
+[data-feature-tip='bots'] .bt-turn-body > b {
+  font-weight: 500;
+  color: #f0f0f0;
+}
+[data-feature-tip='bots'] .bt-turn-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+[data-feature-tip='bots'] .bt-pr-link {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 5px;
+  vertical-align: middle;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 6px;
+  background: rgba(240, 240, 240, 0.06);
+  color: #e4e4e4;
+  font-size: 12px;
+}
+[data-feature-tip='bots'] .bt-pr-link svg {
+  color: #a78bfa;
+}

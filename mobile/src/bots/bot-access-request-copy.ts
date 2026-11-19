@@ -1,11 +1,17 @@
 // The desktop's Request access wording, from the shared table, for the phone's bot sheet.
-import { BOT_ACCESS_FROM_PHONE, botAccessCopy } from '../../../src/shared/bots/bot-access-copy'
+import {
+  botAccessPlace,
+  botAccessCopy,
+  type BotAccessHost
+} from '../../../src/shared/bots/bot-access-copy'
 import {
   accessRequestIdentity,
   accessRequestPerson
 } from '../../../src/shared/bots/bot-access-request'
 import type { ConnectorAccessRequest } from '../../../src/shared/connector-bot-access-contract'
 import { CONNECTOR_SOURCE_NAMES } from '../../../src/shared/connectors/external-conversation-link'
+import type { HostStatusReply } from '../transport/hosts/host-status-reply-schema'
+import { normalizeMachineName } from '../../../src/shared/remote-runtime/host-metadata/machine-name'
 import type { AgentChatPermissionMode } from '../../../src/shared/agent-launch/permissions/agent-chat-permission-mode'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { isTuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent-config'
@@ -19,13 +25,19 @@ import {
 /** What the phone knows of a bot's access. */
 export type PhoneAccessBot = {
   name: string
+  accessHost?: BotAccessHost
   agent: string
   permissionMode?: AgentChatPermissionMode
   google?: boolean
 }
 
-/** The desktop's What it can reach list, from the shared model, as the phone words it: the computer
- *  is "your computer", and Google's services can't be read here. */
+export function phoneAccessHost(status: HostStatusReply | undefined): BotAccessHost {
+  return {
+    kind: 'unknown',
+    name: normalizeMachineName(status?.machineName) || null
+  }
+}
+
 export function phoneBotReachLines(bot: PhoneAccessBot): { title: string; detail?: string }[] {
   const permission = botStartingPermission(bot, null)
   return botAccessReach({
@@ -37,7 +49,7 @@ export function phoneBotReachLines(bot: PhoneAccessBot): { title: string; detail
     botReachLineText(line, {
       name: bot.name,
       agentLabel: isTuiAgent(bot.agent) ? TUI_AGENT_DISPLAY_NAMES[bot.agent] : bot.agent,
-      place: BOT_ACCESS_FROM_PHONE,
+      place: botAccessPlace(bot.accessHost ?? { kind: 'unknown', name: null }),
       mode: (mode) => agentChatPermissionModeCopy(bot.agent, mode)
     })
   )
@@ -75,7 +87,7 @@ export function accessGrantConfirmCopy(
         person,
         name,
         place: accessRequestPlace(request),
-        ...BOT_ACCESS_FROM_PHONE
+        ...botAccessPlace(bot.accessHost ?? { kind: 'unknown', name: null })
       }),
       identity
         ? botAccessCopy('account', { connector: CONNECTOR_SOURCE_NAMES[request.source], identity })
@@ -84,7 +96,10 @@ export function accessGrantConfirmCopy(
       ...phoneBotReachLines(bot).map((line) =>
         line.detail ? `${line.title}. ${line.detail}` : `${line.title}.`
       ),
-      botAccessCopy('yourAccess', { name, ...BOT_ACCESS_FROM_PHONE }),
+      botAccessCopy('yourAccess', {
+        name,
+        ...botAccessPlace(bot.accessHost ?? { kind: 'unknown', name: null })
+      }),
       botAccessCopy('removeAnyTime')
     ]
       .filter(Boolean)

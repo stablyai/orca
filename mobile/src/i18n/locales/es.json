@@ -655,10 +655,6 @@
       "imageTooLarge": "Imagen demasiado grande para adjuntarla",
       "permissionDenied": "Permiso de acceso a las fotos denegado"
     },
-    "agentMessage": {
-      "handedOffToAgent": "Entregado a un agente",
-      "startedAgent": "Agente iniciado"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "La respuesta del adjunto no se puede leer. Inténtalo de nuevo.",
       "incompleteReply": "El adjunto cambió o su respuesta estaba incompleta. Ciérralo e inténtalo de nuevo.",
@@ -1653,7 +1649,7 @@
       "addressHint": "Acepta IP, host:port o ws:// / wss://. Una URL wss:// sin puerto usa el puerto 443. Las direcciones sin protocolo ni puerto conservan el puerto actual (o 6768).",
       "connectionPreview": "Se conecta a {{endpoint}}",
       "goBack": "Volver",
-      "help": "Cambia el nombre que se muestra o la dirección de conexión. Deja el nombre vacío para usar el que indica el escritorio. Cambiar la dirección solo modifica adónde se conecta este teléfono; no se repite el emparejamiento. Usa esta opción cuando el mismo escritorio sea accesible desde otra IP (por ejemplo, la LAN de casa o Tailscale).",
+      "help": "Cambia el nombre que se muestra o la dirección de conexión. Deja el nombre vacío para usar el que indica el host. Cambiar la dirección solo modifica adónde se conecta este teléfono; no se repite el emparejamiento. Usa esta opción cuando el mismo host sea accesible desde otra IP (por ejemplo, la LAN de casa o Tailscale).",
       "hostNamePlaceholder": "Nombre del host",
       "hostRemoved": "Este host se eliminó de este teléfono.",
       "loadFailed": "No se pudo cargar el host.",
@@ -2291,6 +2287,7 @@
       "providerUnavailable": "{{agent}} no pudo responder porque el servicio está ocupado. Elige otro modelo o espera un poco y vuelve a enviar el mensaje.",
       "providerSafetyStopped": "{{agent}} detuvo esta respuesta tras una comprobación de seguridad. Revisa tu solicitud y vuelve a enviarla.",
       "providerResponseFailed": "{{agent}} no pudo terminar esta respuesta. Abre los detalles para obtener más información.",
+      "providerResponseFailedQuoted": "{{agent}} no pudo terminar esta respuesta: {{detail}}.",
       "selectedModel": "el modelo seleccionado",
       "providerRejected": "{{agent}} no aceptó este mensaje.",
       "providerRejectedQuoted": "{{agent}} no aceptó este mensaje: {{detail}}.",
@@ -4485,7 +4482,7 @@
   "bots": {
     "link": {
       "pairTitle": "Vincular un ordenador",
-      "pairRequired": "Para abrir este enlace, vincula este teléfono con un ordenador.",
+      "pairRequired": "Para abrir este enlace, vincula este teléfono con un ordenador y vuelve a abrir el enlace.",
       "pairAction": "Vincular un ordenador",
       "openFailed": "No se pudo abrir este enlace",
       "ambiguous": "Este bot está en {{names}}. Abre el chat en Orca en el ordenador que quieras.",

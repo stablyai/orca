@@ -1,6 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import {
+  AGENT_CLI_UPDATE_AGENTS,
   AGENT_CLI_UPDATE_RUNTIME_CAPABILITY,
   type AgentCliUpdate,
   type AgentCliUpdateAgent,
@@ -55,7 +56,8 @@ function sameUpdates(a: readonly AgentCliUpdate[], b: readonly AgentCliUpdate[])
         other.installedVersion === update.installedVersion &&
         other.latestVersion === update.latestVersion &&
         other.command === update.command &&
-        other.runnable === update.runnable
+        other.runnable === update.runnable &&
+        JSON.stringify(other.models ?? []) === JSON.stringify(update.models ?? [])
       )
     })
   )
@@ -99,7 +101,9 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
       let check = checks.get(key)
       if (!check) {
         checkedAt.set(key, Date.now())
-        check = callRuntimeRpc<{ updates: AgentCliUpdate[] }>(target, 'agentCliUpdate.check')
+        check = callRuntimeRpc<{ updates: AgentCliUpdate[] }>(target, 'agentCliUpdate.check', {
+          agents: AGENT_CLI_UPDATE_AGENTS
+        })
           .then(({ updates }) => {
             // An unchanged answer leaves the store alone, so the status bar doesn't re-render.
             if (!sameUpdates(get().agentCliUpdates.get(key)?.updates ?? [], updates)) {

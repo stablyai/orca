@@ -349,12 +349,11 @@ describe('WslHostService', () => {
       installLockWait: { takeoverInMs: 14 * 60_000 + 1, givesUpInMs: 16 * 60_000 }
     })
     expect(addProgress).toEqual([
-      {
+      expect.objectContaining({
         distro: 'Ubuntu',
-        detail: expect.stringContaining('takes over in about 15 minutes'),
         detailCode: 'installLockWait',
         detailParams: { count: 15 }
-      }
+      })
     ])
     // No host exists yet, so nothing reaches the host list.
     expect(published).toEqual([])
@@ -369,8 +368,8 @@ describe('WslHostService', () => {
     expect(service.getStatuses()).toEqual([
       expect.objectContaining({
         state: 'connecting',
-        detail: expect.stringContaining('Orca stops waiting in about 2 minutes'),
-        detailCode: 'installLockWaitGivesUp'
+        detailCode: 'installLockWaitGivesUp',
+        detailParams: { count: 2 }
       })
     ])
     // A gone holder is taken over within seconds, not "about 1 minute".
@@ -380,7 +379,6 @@ describe('WslHostService', () => {
     })
     expect(service.getStatuses()).toEqual([
       expect.objectContaining({
-        detail: expect.stringContaining('takes over in a few seconds'),
         detailCode: 'installLockWaitHolderGone'
       })
     ])

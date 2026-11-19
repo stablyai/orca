@@ -616,10 +616,6 @@
       "imageTooLarge": "圖片太大，無法附加",
       "permissionDenied": "照片存取權限遭拒"
     },
-    "agentMessage": {
-      "handedOffToAgent": "已交接給代理程式",
-      "startedAgent": "已啟動代理程式"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "無法讀取附件回應。請重試。",
       "incompleteReply": "附件已變更或回應不完整。請關閉後重試。",
@@ -1608,7 +1604,7 @@
       "addressHint": "可輸入 IP、host:port 或 ws:// / wss://。wss:// URL 未指定連接埠時會使用 443。僅輸入位址時，會保留目前的連接埠（或使用 6768）。",
       "connectionPreview": "將連線至 {{endpoint}}",
       "goBack": "返回",
-      "help": "變更顯示名稱或連線位址。名稱留空時，會使用電腦回報的名稱。變更位址只會切換這支手機的連線位址，不會重新配對。適用於透過不同 IP 連線至同一台電腦的情況（例如家用區域網路或 Tailscale）。",
+      "help": "變更顯示名稱或連線位址。名稱留空時，會使用主機回報的名稱。變更位址只會切換這支手機的連線位址，不會重新配對。適用於透過不同 IP 連線至同一台主機的情況（例如家用區域網路或 Tailscale）。",
       "hostNamePlaceholder": "主機名稱",
       "hostRemoved": "此主機已從這支手機移除。",
       "loadFailed": "無法載入主機資料。",
@@ -2214,6 +2210,7 @@
       "providerUnavailable": "{{agent}} 因服務忙碌而無法回覆。請選擇其他模型，或稍候片刻後重新傳送。",
       "providerSafetyStopped": "{{agent}} 在安全檢查後停止了此次回覆。請檢查您的請求後重新傳送。",
       "providerResponseFailed": "{{agent}} 未能完成此回覆。開啟詳細資料以取得更多資訊。",
+      "providerResponseFailedQuoted": "{{agent}} 未能完成此回覆：{{detail}}。",
       "selectedModel": "所選模型",
       "providerRejected": "{{agent}} 未接受此訊息。",
       "providerRejectedQuoted": "{{agent}} 未接受此訊息：{{detail}}。",
@@ -4376,7 +4373,7 @@
   "bots": {
     "link": {
       "pairTitle": "配對電腦",
-      "pairRequired": "若要開啟此連結，請將這部手機與電腦配對。",
+      "pairRequired": "若要開啟此連結，請將這部手機與電腦配對，然後重新開啟該連結。",
       "pairAction": "配對電腦",
       "openFailed": "無法開啟此連結",
       "ambiguous": "此機器人位於 {{names}}。請在你想用的電腦上透過 Orca 開啟聊天。",

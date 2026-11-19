@@ -208,7 +208,7 @@ function registerPassiveStatusHandler(getUserDataPath: () => string): void {
     'runtimeEnvironments:getStatus',
     async (
       _event,
-      args: { selector: string; timeoutMs?: number; observeOnly?: true }
+      args: { selector: string; timeoutMs?: number; observeOnly?: true; force?: true }
     ): Promise<RuntimeRpcResponse<RuntimeStatus>> => {
       const environment = await resolveEnvironment(getUserDataPath(), args.selector)
       if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
@@ -218,7 +218,7 @@ function registerPassiveStatusHandler(getUserDataPath: () => string): void {
         getUserDataPath(),
         environment.id,
         args.timeoutMs,
-        args.observeOnly ? { observeOnly: true } : undefined
+        { observeOnly: args.observeOnly, force: args.force }
       )
       observeWslOrcadHostResponse(environment.id, 'status.get', response)
       return isRuntimeEnvironmentManuallyDisconnected(environment.id)

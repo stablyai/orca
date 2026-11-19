@@ -64,7 +64,7 @@ it("opens an answer's file link and navigates between its answer and question", 
   render(
     <NativeChatFileLinkExistenceContext value={existence}>
       <NativeChatLinkClickContext value={opened}>
-        <BotItemActivityList bot={BOT} item={makeTestBotItem(6)} events={events} />
+        <BotItemActivityList bot={BOT} item={makeTestBotItem(6)} events={events} askShown={false} />
       </NativeChatLinkClickContext>
     </NativeChatFileLinkExistenceContext>
   )
@@ -79,4 +79,79 @@ it("opens an answer's file link and navigates between its answer and question", 
 
   fireEvent.click(screen.getByRole('button', { name: /^Answered at .+\. Go to the answer$/ }))
   expect(document.activeElement?.getAttribute('data-bot-item-comment-id')).toBe('e4')
+})
+
+it('renders linked references without their stored prefixes', () => {
+  const events: BotItemEvent[] = [
+    {
+      id: 'e2',
+      kind: 'linked',
+      actor: ASKER,
+      data: {
+        links: [
+          'url:https://example.invalid/reviews/a-long-reference?view=full',
+          'file:/workspace/sample/notes.md'
+        ]
+      },
+      at: 200
+    }
+  ]
+  render(
+    <BotItemActivityList bot={BOT} item={makeTestBotItem(6)} events={events} askShown={false} />
+  )
+
+  const row = screen.getByText(/linked/).closest('div')!
+  expect(row.textContent).toContain(
+    'linked https://example.invalid/reviews/a-long-reference?view=full, /workspace/sample/notes.md'
+  )
+  expect(row.textContent).not.toMatch(/url:|file:/)
+})
+
+it("replies to an open question the page can't answer in its own card, from the card itself", () => {
+  const reply = vi.fn()
+  const item = makeTestBotItem(6, {
+    status: 'needs_you',
+    question: { eventId: 'e2', text: 'Retry it here?\n\nOr write it by hand.' }
+  })
+  render(
+    <BotItemActivityList
+      bot={BOT}
+      item={item}
+      events={ASKED}
+      askShown={false}
+      onReplyToQuestion={reply}
+    />
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Reply' }))
+  const box = screen.getByRole('textbox', { name: 'Reply' })
+  expect(document.activeElement).toBe(box)
+  fireEvent.keyDown(box, { key: 'Enter' })
+  expect(reply).not.toHaveBeenCalled()
+
+  fireEvent.change(box, { target: { value: '  b, by hand  ' } })
+  fireEvent.keyDown(box, { key: 'Enter' })
+
+  expect(reply).toHaveBeenCalledExactlyOnceWith('b, by hand')
+  expect(screen.queryByRole('textbox', { name: 'Reply' })).toBeNull()
+})
+
+it('offers no Reply where the card below takes the answer, or where the item takes no comment', () => {
+  const item = makeTestBotItem(6, {
+    status: 'needs_you',
+    question: { eventId: 'e2', text: 'Retry it here?', answerable: true }
+  })
+  const view = render(
+    <BotItemActivityList
+      bot={BOT}
+      item={item}
+      events={ASKED}
+      askShown
+      onReplyToQuestion={vi.fn()}
+    />
+  )
+  expect(screen.queryByRole('button', { name: 'Reply' })).toBeNull()
+
+  view.rerender(<BotItemActivityList bot={BOT} item={item} events={ASKED} askShown={false} />)
+  expect(screen.queryByRole('button', { name: 'Reply' })).toBeNull()
 })

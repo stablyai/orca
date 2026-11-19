@@ -11,6 +11,11 @@ import {
   DAEMON_SESSION_SCROLLBACK_ROWS,
   resolveDaemonSessionScrollbackRows
 } from '../../../daemon/sessions/daemon-session-scrollback-window'
+import {
+  reattachedPaintEntry,
+  reattachedPaintLedger,
+  retainedFrameIsProven
+} from '../wait/reattached-paint-ledger'
 
 export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector {
   private readonly ptyLifecycleCancellation = new Map<string, AbortController>()
@@ -178,6 +183,32 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
   /** The stream's first stamp since sync: from here a provider snapshot can be placed in it. */
   protected onProviderSequenceAnchored(_ptyId: string): void {}
 
+  /** For quit: lets the next run read each agent's retained frame as the paint this run saw. */
+  saveReattachedPaintLedger(): Promise<void> {
+    const entries = new Map(
+      [...this.ptysById].flatMap(([ptyId, pty]) => {
+        const offset = this.providerSequenceOffsetByPtyId.get(ptyId) ?? 0
+        const sequence = this.providerSequenceInitializedPtys.has(ptyId)
+          ? this.getPtyOutputSequence(ptyId) - offset
+          : undefined
+        const entry = reattachedPaintEntry(pty, sequence)
+        return entry ? [[ptyId, entry] as const] : []
+      })
+    )
+    // A terminal this run never attached keeps the entry its last quit saved.
+    return reattachedPaintLedger().save(entries, new Set(this.providerSequenceInitializedPtys))
+  }
+
+  /** Whether the quit ledger proves the reattached frame is this agent's own last paint. */
+  protected async isRetainedFrameProven(ptyId: string, agent: string): Promise<boolean> {
+    const entry = await reattachedPaintLedger().read(ptyId)
+    return retainedFrameIsProven(entry, {
+      incarnationId: this.ptysById.get(ptyId)?.incarnationId ?? null,
+      reattachedSequence: this.reattachedProviderSequenceByPtyId.get(ptyId),
+      agent
+    })
+  }
+
   synchronizePtyOutputSequenceFromProvider(
     ptyId: string,
     providerSequence: { value: number; generation: 'continued' | 'reset' },
@@ -236,6 +267,11 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
           ? currentSequence
           : providerBaseline + postSpawnSequence
     this.ptyOutputSequenceById.set(ptyId, synchronizedSequence)
+    if (providerSequence.generation === 'continued' && !wasInitialized) {
+      this.reattachedProviderSequenceByPtyId.set(ptyId, baseline)
+    } else if (providerSequence.generation === 'reset') {
+      this.reattachedProviderSequenceByPtyId.delete(ptyId)
+    }
     this.providerSequenceInitializedPtys.add(ptyId)
     this.providerSequenceOffsetByPtyId.set(ptyId, providerOffset)
 
