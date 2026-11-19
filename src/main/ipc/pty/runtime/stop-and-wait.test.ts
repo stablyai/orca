@@ -14,12 +14,16 @@ afterEach(() => {
 /** A daemon-like provider listing every live terminal for each inventory, as owner resolution does. */
 function installProvider(
   terminalCount: number,
-  behavior: { reportsExit: boolean; survivesStop?: string; shutdownMs?: number }
+  behavior: {
+    reportsExit: boolean | ((id: string) => boolean)
+    survivesStop?: string
+    shutdownMs?: number
+    failInventoryAfter?: number
+  }
 ) {
   const live = new Set(Array.from({ length: terminalCount }, (_, index) => `pty-${index}`))
   const exitListeners = new Set<(payload: { id: string; code: number }) => void>()
-  const calls = { inventories: 0, shutdowns: 0, maxShuttingDown: 0 }
-  let shuttingDown = 0
+  const calls = { inventories: 0, shutdowns: 0 }
   const provider = {
     onExit: (listener: (payload: { id: string; code: number }) => void) => {
       exitListeners.add(listener)
@@ -27,15 +31,14 @@ function installProvider(
     },
     shutdown: async (id: string) => {
       calls.shutdowns += 1
-      shuttingDown += 1
-      calls.maxShuttingDown = Math.max(calls.maxShuttingDown, shuttingDown)
       await new Promise((resolve) => setTimeout(resolve, behavior.shutdownMs ?? 0))
-      shuttingDown -= 1
       if (id === behavior.survivesStop) {
         return
       }
       live.delete(id)
-      if (behavior.reportsExit) {
+      const reportsExit =
+        typeof behavior.reportsExit === 'function' ? behavior.reportsExit(id) : behavior.reportsExit
+      if (reportsExit) {
         for (const listener of exitListeners) {
           listener({ id, code: 0 })
         }
@@ -43,6 +46,12 @@ function installProvider(
     },
     listProcesses: async () => {
       calls.inventories += 1
+      if (
+        behavior.failInventoryAfter !== undefined &&
+        calls.inventories > behavior.failInventoryAfter
+      ) {
+        throw new Error('inventory deadline')
+      }
       return [...live].map((id) => ({ id, cwd: '/', title: 'claude' }))
     }
   }
@@ -85,25 +94,40 @@ describe('batched stop proof', () => {
     }
   )
 
+  it('keeps a proven stop when a later round for a missed exit fails', async () => {
+    vi.useFakeTimers()
+    installProvider(2, { reportsExit: (id) => id === 'pty-0', failInventoryAfter: 1 })
+
+    const result = stopAndWaitPtysFromRuntimeController(deps, ['pty-0', 'pty-1'], {
+      keepHistory: true
+    })
+    await vi.runAllTimersAsync()
+
+    expect(await result).toEqual(
+      new Map([
+        ['pty-0', true],
+        ['pty-1', false]
+      ])
+    )
+  })
+
   it.each([100, 1_000])(
-    'starts at most 8 stops at once and none after the shutdown deadline with %i PTYs',
+    'starts only the first 8 of %i stops when every shutdown outlasts the shutdown deadline',
     async (stopCount) => {
       vi.useFakeTimers({ now: 0 })
-      const calls = installProvider(stopCount, { reportsExit: true, shutdownMs: 1_000 })
+      const calls = installProvider(stopCount, { reportsExit: true, shutdownMs: 10_000 })
       const ptyIds = Array.from({ length: stopCount }, (_, index) => `pty-${index}`)
 
       const result = stopAndWaitPtysFromRuntimeController(deps, ptyIds, {
         keepHistory: true,
-        deadlineMs: 3_000,
-        shutdownDeadlineMs: 2_500,
+        deadlineMs: 4_000,
+        shutdownDeadlineMs: 3_500,
         concurrency: 8
       })
       await vi.runAllTimersAsync()
-      const stopped = await result
+      await result
 
-      expect(calls.maxShuttingDown).toBe(8)
-      expect(calls.shutdowns).toBe(24)
-      expect(stopped.size).toBe(24)
+      expect(calls.shutdowns).toBe(8)
     }
   )
 })

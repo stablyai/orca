@@ -175,7 +175,10 @@ export type RuntimePtyController = {
   ): Promise<boolean>
   /** `stopAndWait` for each admitted PTY, proving the batch's exits with one provider inventory per
    *  round; resolves each admitted PTY's verdict. */
-  stopAndWaitMany?(ptyIds: readonly string[], opts: PtyStopBatchOptions): Promise<Map<string, boolean>>
+  stopAndWaitMany?(
+    ptyIds: readonly string[],
+    opts: PtyStopBatchOptions
+  ): Promise<Map<string, boolean>>
   getCwd?(ptyId: string): Promise<string | null>
   getForegroundProcess(ptyId: string): Promise<string | null>
   inspectProcess?(

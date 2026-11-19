@@ -15,7 +15,10 @@ import {
   PtyRetirementWithoutProof,
   type PtyRetirementEvidence
 } from '../../../pty/process-retirement/pty-exit-proof'
-import { closeLegacyRelayPane, isLegacyRelayBridgedPty } from '../../../ssh/legacy-relay/bridge/legacy-relay-bridge-registry'
+import {
+  closeLegacyRelayPane,
+  isLegacyRelayBridgedPty
+} from '../../../ssh/legacy-relay/bridge/legacy-relay-bridge-registry'
 
 // Bounds the wait for an observed exit to reach the runtime record when the caller set no deadline.
 export const OBSERVED_EXIT_RECORD_WAIT_MS = 10_000

@@ -166,7 +166,10 @@ export abstract class OrcaRuntimeWithQuitIdleAgentStops extends OrcaRuntimeWithW
             return false
           }
           // Reversible: the exit must not retire the saved conversation the next launch resumes.
-          settleStops.set(ptyId, this.intentionalPtyStops.mark(ptyId, 'reversible', target.incarnationId))
+          settleStops.set(
+            ptyId,
+            this.intentionalPtyStops.mark(ptyId, 'reversible', target.incarnationId)
+          )
           return true
         }
       })

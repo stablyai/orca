@@ -79,12 +79,13 @@ export async function isProviderAgentSessionOwnerLive(
 
 export type PtyStopAwaitingVerification = { ptyId: string; exitObserved: boolean }
 
-/** Whether each stopped PTY is gone; each round reads one inventory for every PTY it still checks. */
+/** Whether each stopped PTY is gone; each round reads one inventory for every PTY it still checks.
+ *  A failed later round leaves only the PTYs it was checking out of `stopped`, with its `error`. */
 export async function verifyPtysStopped(
   provider: IPtyProvider,
   stops: readonly PtyStopAwaitingVerification[],
   opts: { keepHistory?: boolean; deadlineMs?: number } | undefined
-): Promise<Map<string, boolean>> {
+): Promise<{ stopped: Map<string, boolean>; error?: unknown }> {
   const stopped = new Map<string, boolean>()
   const live = await listLiveProviderPtyIds(
     provider,
@@ -103,7 +104,7 @@ export async function verifyPtysStopped(
     }
   }
   if (unsettled.length === 0) {
-    return stopped
+    return { stopped }
   }
   const settleDeadline = Date.now() + KEEP_HISTORY_STOP_SETTLE_MS
   // Polling must remain within the caller's absolute teardown deadline.
@@ -114,7 +115,12 @@ export async function verifyPtysStopped(
     if (Date.now() >= deadline) {
       break
     }
-    const stillLive = await listLiveProviderPtyIds(provider, unsettled, deadline)
+    let stillLive: Set<string>
+    try {
+      stillLive = await listLiveProviderPtyIds(provider, unsettled, deadline)
+    } catch (error) {
+      return { stopped, error }
+    }
     for (const ptyId of stillLive) {
       stopped.set(ptyId, false)
     }
@@ -123,7 +129,7 @@ export async function verifyPtysStopped(
   for (const ptyId of unsettled) {
     stopped.set(ptyId, true)
   }
-  return stopped
+  return { stopped }
 }
 
 /** Returns the retired incarnation, or `null` when the proof names a different incarnation than

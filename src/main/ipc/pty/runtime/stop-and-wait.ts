@@ -9,7 +9,10 @@ import {
 import { delay, isPtyAlreadyGoneError, verifyPtysStopped } from '../provider/liveness'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import { errorMessage } from '../../../../shared/errors/error-message'
-import { PtyExitProof, PtyRetirementWithoutProof } from '../../../pty/process-retirement/pty-exit-proof'
+import {
+  PtyExitProof,
+  PtyRetirementWithoutProof
+} from '../../../pty/process-retirement/pty-exit-proof'
 import {
   isLegacyRelayBridgedPty,
   stopLegacyRelayPaneAndWait
@@ -125,20 +128,37 @@ async function proveAndFinishPtyStops(
   opts: PtyStopOptions,
   settle: (ptyId: string, verdict: PtyStopVerdict) => void
 ): Promise<void> {
-  let absent: Map<string, boolean>
-  try {
-    absent = await verifyPtysStopped(provider, stops, opts)
-  } catch (err) {
-    const subject = stops.length === 1 ? `PTY ${stops[0].ptyId}` : `${stops.length} PTYs`
+  const warnUnverified = (unverified: readonly PtyStopAwaitingProof[], err: unknown): void => {
+    if (unverified.length === 0) {
+      return
+    }
+    const subject =
+      unverified.length === 1 ? `PTY ${unverified[0].ptyId}` : `${unverified.length} PTYs`
     console.warn(`[pty] Failed to verify ${subject} stopped: ${errorMessage(err)}`)
-    for (const stop of stops) {
+    for (const stop of unverified) {
       settle(stop.ptyId, { stopped: false })
     }
+  }
+  let proof: Awaited<ReturnType<typeof verifyPtysStopped>>
+  try {
+    proof = await verifyPtysStopped(provider, stops, opts)
+  } catch (err) {
+    warnUnverified(stops, err)
     return
   }
+  const { stopped: absent, error: pollError } = proof
+  // A later round's failure leaves its PTYs unproven; verdicts already proven still stand.
+  warnUnverified(
+    stops.filter((stop) => !absent.has(stop.ptyId)),
+    pollError
+  )
   await Promise.all(
     stops.map(async (stop) => {
-      if (absent.get(stop.ptyId) !== true) {
+      const gone = absent.get(stop.ptyId)
+      if (gone === undefined) {
+        return
+      }
+      if (!gone) {
         deps.runtime?.markPtyLivenessLive?.(stop.ptyId)
         settle(stop.ptyId, { stopped: false })
         return
