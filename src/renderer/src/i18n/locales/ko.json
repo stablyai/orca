@@ -17910,47 +17910,15 @@
         "description": "Orca에서 직접 Google에 로그인하세요."
       },
       "NativeChatResumeOnRestartModal": {
-        "title": "중단된 채팅을 재개하시겠습니까?",
-        "body": "이 채팅은 Orca가 종료될 때 작업 중이었습니다. 재개하면 각 채팅이 전체 컨텍스트와 함께 중지된 지점에서 복원되고, 계속하기 전에 에이전트에게 하던 작업을 확인하도록 요청합니다. 귀하의 메시지는 다시 전송되지 않습니다.",
-        "updateBody": "이 채팅은 Orca가 업데이트를 설치할 때 작업 중이었습니다. 재개하면 각 채팅이 전체 컨텍스트와 함께 중지된 지점에서 복원되고, 계속하기 전에 에이전트에게 하던 작업을 확인하도록 요청합니다. 귀하의 메시지는 다시 전송되지 않습니다.",
-        "resuming": "재개 중…",
-        "untitled": "제목 없는 채팅",
-        "listLabel": "재개될 채팅",
-        "dontAskAgain": "다시 묻지 않음(자동으로 재개)",
-        "dontAskAgainHint": "설정 → 채팅 → 동작에서 이 기능을 끌 수 있습니다.",
-        "selectAgent": "{{value2}}에서 {{value0}} 채팅 \"{{value1}}\" 재개",
-        "dismissAll": "모두 닫기",
-        "viewChats": "채팅 보기",
-        "review": "확인",
         "activityUnnamed": "이름 없음",
         "activityApproval": "승인 대기 중: {{value0}}",
         "activityQuestion": "답변 대기 중: {{value0}}",
         "activityMidReply": "응답 중이었음",
         "activitySubagentOne": "하위 에이전트 실행 중: {{value0}}",
         "activityMonitorOne": "모니터링 중: {{value0}}",
-        "selectWorkspace": "{{value0}}의 채팅 모두 선택",
         "workspaceSelectedCount": "{{value0}}/{{value1}}",
-        "selectAll": "모든 채팅 선택",
-        "selectAllLabel": "모두 선택",
-        "selectedCount": "{{value1}}개 중 {{value0}}개 선택됨",
-        "selectProject": "{{value0}}의 채팅 모두 선택",
         "collapseNode": "{{value0}} 접기",
         "expandNode": "{{value0}} 확장",
-        "selectMachine": "{{value0}}의 채팅 모두 선택",
-        "sshHost": "SSH",
-        "done": "완료",
-        "resultListLabel": "이번에 재개한 채팅",
-        "serverTitle": "{{machine}}이(가) 다시 시작됨",
-        "serverBody": "{{machine}}의 Orca가 다시 시작될 때 이 채팅들은 작업 중이었습니다. 재개하면 각 채팅이 중단된 위치에서 복원되고 에이전트에게 계속 진행하도록 요청합니다. 사용자의 프롬프트는 다시 전송되지 않습니다.",
-        "serverDismiss": "닫기",
-        "serverResumeAll": "{{machine}}에서 {{count}}개 모두 재개",
-        "resumeChats_one": "채팅 {{count}}개 재개",
-        "resumeChats_other": "채팅 {{count}}개 재개",
-        "serverResumeHereCount_other": "여기서 시작한 채팅 {{count}}개 재개",
-        "continuedCount_other": "채팅 {{count}}개 재개됨",
-        "notContinuedCount_other": "채팅 {{count}}개를 재개할 수 없습니다",
-        "notConfirmedCount_other": "채팅 {{count}}개의 재개 여부를 확인할 수 없습니다",
-        "notConfirmedOtherCount_other": "다른 채팅 {{count}}개의 재개 여부를 확인할 수 없습니다",
         "activitySubagentCount_other": "하위 에이전트 {{count}}개 실행 중",
         "activityMonitorCount_other": "백그라운드 작업 {{count}}개 모니터링 중"
       },
@@ -18079,26 +18047,6 @@
         "3d8e5f1b9c": "비공개 링크 뒤에 있는 기술을 공유하고 사용하는 모든 컴퓨터에 설치하세요.",
         "c5b3e8a17d": "Orca에 로그인"
       },
-      "NativeChatResumeOutcomeRow": {
-        "openChat": "채팅 열기",
-        "retry": "다시 시도",
-        "dismiss": "닫기",
-        "unconfirmed": "채팅이 재개되었는지 확인하지 못했습니다",
-        "failed": "재개하지 못했습니다",
-        "statusFor": "{{value0}}: {{value1}}",
-        "dismissChat": "\"{{value0}}\"({{value1}}) 닫기",
-        "toResume": "재개할 항목:"
-      },
-      "NativeChatResumeFailureGuidance": {
-        "unconfirmed": "Orca가 “continue” 메시지가 전달되었는지 확인하지 못했습니다. 다른 메시지를 보내기 전에 채팅을 열어 확인하세요.",
-        "superseded": "채팅을 열고 답장하세요. 다시 시작한 직후 새 작업이 도착해서 Orca가 “continue” 메시지를 보내지 않았습니다.",
-        "conflict": "이 채팅은 다른 Orca 창이나 터미널에서 열려 있습니다. 그곳에서 닫은 다음 다시 시도하세요.",
-        "ownershipUnknown": "이 채팅은 아직 재개할 준비가 되지 않았습니다. 잠시 기다린 다음 다시 시도하세요.",
-        "notAttached": "채팅이 다시 연결되지 않았습니다. 다시 시도하거나 열어서 새 턴을 시작하세요.",
-        "dispatchRejected": "에이전트가 “continue” 메시지를 거부했습니다. 채팅을 열어 직접 보내세요.",
-        "unsupported": "이 채팅은 Orca에서 재개할 수 없습니다. 열어서 중단된 위치를 확인하세요.",
-        "fallback": "Orca가 이 채팅을 재개하지 못했습니다. 열어서 수동으로 계속하세요."
-      },
       "web": {
         "preloadApi": {
           "cursorAccounts": {
@@ -18109,39 +18057,6 @@
             "claudeWslDefaultUnavailable": "WSL 계정을 시스템 기본값으로 다시 전환하는 작업은 데스크톱 앱에서만 사용할 수 있습니다."
           }
         }
-      },
-      "NativeChatResumeRunPanel": {
-        "description": "각 채팅은 전체 컨텍스트와 함께 복원되며, 멈춘 지점을 확인하도록 요청됩니다. 이 창을 닫아도 상태 표시줄에서 진행 상황을 계속 볼 수 있습니다.",
-        "finished": "이 채팅들은 Orca가 종료될 때 작업 중이었습니다. Orca는 각 채팅을 멈춘 지점에서 전체 컨텍스트와 함께 복원하고, 계속하기 전에 하던 작업을 확인하도록 에이전트에게 요청했습니다. 사용자의 프롬프트는 다시 전송되지 않았습니다.",
-        "finishedUpdate": "이 채팅들은 Orca가 업데이트를 설치할 때 작업 중이었습니다. Orca는 각 채팅을 멈춘 지점에서 전체 컨텍스트와 함께 복원하고, 계속하기 전에 하던 작업을 확인하도록 에이전트에게 요청했습니다. 사용자의 프롬프트는 다시 전송되지 않았습니다.",
-        "finishedPartial": "이 채팅들은 Orca가 종료될 때 작업 중이었습니다. Orca가 재개한 채팅은 멈춘 지점에서 전체 컨텍스트와 함께 복원되었고, 계속하기 전에 하던 작업을 확인하도록 요청받았습니다. 사용자의 프롬프트는 다시 전송되지 않았습니다. 아직 확인이 필요하거나 재개할 수 있는 채팅은 목록에서 확인하세요.",
-        "finishedPartialUpdate": "이 채팅들은 Orca가 업데이트를 설치할 때 작업 중이었습니다. Orca가 재개한 채팅은 멈춘 지점에서 전체 컨텍스트와 함께 복원되었고, 계속하기 전에 하던 작업을 확인하도록 요청받았습니다. 사용자의 프롬프트는 다시 전송되지 않았습니다. 아직 확인이 필요하거나 재개할 수 있는 채팅은 목록에서 확인하세요.",
-        "resumedOfTotal_other": "채팅 {{count}}개 중 {{resumed}}개 재개됨",
-        "resumingCount_other": "채팅 {{count}}개 재개 중"
-      },
-      "NativeChatResumeRunStatusIcon": {
-        "waitingForReply": "응답 대기 중",
-        "starting": "시작 중",
-        "waitingToStart": "시작 대기 중",
-        "inFlight": "{{value0}} · {{value1}}",
-        "resumed": "재개됨"
-      },
-      "NativeChatResumeRunSummary": {
-        "done": "{{value1}}개 중 {{value0}}개 완료",
-        "starting": "{{value0}}개 시작 중",
-        "waitingForReply": "{{value0}}개 응답 대기 중",
-        "waitingToStart": "{{value0}}개 시작 대기 중",
-        "all": "전체",
-        "inProgress": "진행 중",
-        "resumed": "재개됨",
-        "attention": "확인 필요",
-        "running": "경과 {{value0}}",
-        "filter": "표시할 채팅"
-      },
-      "NativeChatResumeAutoNote": {
-        "resuming": "다시 시작한 후 자동으로 재개하는 중입니다.",
-        "resumed": "다시 시작한 후 자동으로 재개했습니다.",
-        "changeInSettings": "설정에서 변경"
       },
       "TaskPageJiraSavedFilters": {
         "6c381858a1": "Saved filters",
@@ -18283,6 +18198,46 @@
         "setting-global-off": "에이전트 설정에서 폴더 신뢰가 꺼져 있으므로 에이전트가 항상 확인을 요청합니다.",
         "keyword-trust": "신뢰",
         "keyword-hooks": "훅"
+      },
+      "NativeChatResumeToast": {
+        "resumingOn_other": "{{machine}}에서 채팅 {{count}}개를 재개하는 중…",
+        "resuming_other": "채팅 {{count}}개를 재개하는 중…",
+        "resumedOn_other": "{{machine}}에서 채팅 {{count}}개를 재개했습니다.",
+        "resumedUpdate_other": "업데이트 후 채팅 {{count}}개를 재개했습니다.",
+        "resumedRestart_other": "재시작 후 채팅 {{count}}개를 재개했습니다.",
+        "partial_other": "채팅 {{total}}개 중 {{resumed}}개를 재개했습니다. {{count}}개는 확인이 필요합니다.",
+        "stoppedOn_other": "{{machine}}에서 채팅 {{count}}개가 중지되었습니다.",
+        "stoppedUpdate_other": "Orca 업데이트로 채팅 {{count}}개가 중지되었습니다.",
+        "stoppedRestart_other": "Orca 종료로 채팅 {{count}}개가 중지되었습니다.",
+        "promptsNotResent": "재개해도 프롬프트는 다시 전송되지 않습니다.",
+        "promptsNotSent": "프롬프트는 다시 전송되지 않았습니다.",
+        "resume": "재개",
+        "details": "세부 정보",
+        "close": "닫기",
+        "listLabel": "채팅",
+        "untitled": "제목 없는 채팅",
+        "willAsk": "Orca가 계속하도록 요청합니다. 대기 중인 메시지가 전송될 수 있습니다.",
+        "asked": "Orca가 계속하도록 요청했습니다. 대기 중인 메시지가 전송될 수 있습니다.",
+        "resumedAutomatically": "자동으로 재개했습니다.",
+        "changeInSettings": "설정에서 변경",
+        "dismissAll": "모두 무시",
+        "open": "열기",
+        "dismiss": "무시",
+        "retry": "다시 시도",
+        "stateResumed": "재개됨",
+        "stateNeedsYou": "확인 필요",
+        "stateResuming": "재개 중",
+        "stateStopped": "중지됨"
+      },
+      "NativeChatResumeFailureGuidance": {
+        "fallbackShort": "재개하지 못했습니다.",
+        "unconfirmedShort": "계속 진행을 확인하지 못했습니다.",
+        "supersededShort": "재시작 후 새 작업이 도착했습니다.",
+        "conflictShort": "다른 창이나 터미널에서 열려 있습니다.",
+        "ownershipUnknownShort": "아직 재개할 준비가 되지 않았습니다.",
+        "notAttachedShort": "다시 연결되지 않았습니다.",
+        "dispatchRejectedShort": "에이전트가 계속하기를 거부했습니다.",
+        "unsupportedShort": "Orca가 이 채팅을 재개할 수 없습니다."
       }
     },
     "i18n": {
