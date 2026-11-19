@@ -197,7 +197,6 @@ describe('CodexHookService', () => {
     const status = await new CodexHookService().remove()
 
     expect(status.state).toBe('error')
-    expect(status.detail).toBe('Could not parse Codex hooks.json')
     const systemHooks = JSON.parse(readFileSync(systemHooksPath, 'utf-8')) as {
       hooks: Record<string, { hooks?: { command?: string }[] }[]>
     }

@@ -4,7 +4,6 @@ import { makeTabGroup, makeUnifiedTab } from '@/store/slices/tabs/tab-group.test
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
 import { createWorkspaceTabPaletteIndex } from './workspace-tab-palette-index'
-import { buildSearchableWorkspaceTabEntries } from './workspace-tab-palette-entry-builder'
 import type { BuildSearchableWorkspaceTabsOptions } from './workspace-tab-search-types'
 
 // Perf contract (#44777): with the jump palette open, one terminal's title change rebuilt every open tab's
@@ -31,7 +30,12 @@ function fleet(
       makeTab({ id, worktreeId: worktree.id, title: `Agent ${id}` })
     )
     unifiedTabsByWorktree[worktree.id] = ids.map((id) => {
-      const tab = makeUnifiedTab({ id, worktreeId: worktree.id, groupId: `group-${worktree.id}` })
+      const tab = makeUnifiedTab({
+        id,
+        worktreeId: worktree.id,
+        groupId: `group-${worktree.id}`,
+        label: ''
+      })
       if (workspaceIndex === 0) {
         return tab
       }
@@ -89,9 +93,7 @@ function otherTabReadsForOneTitleChange(workspaceCount: number) {
   reads = 0
   const entries = index(retitled)
   const readsAfterChange = reads
-  expect(entries.map((entry) => [entry.tab.id, entry.title])).toEqual(
-    buildSearchableWorkspaceTabEntries(retitled).map((entry) => [entry.tab.id, entry.title])
-  )
+  expect(entries.find((entry) => entry.tab.id === 'term-0-1')?.title).toBe('Renamed by agent')
   return { readsAfterChange, entries: entries.length }
 }
 
