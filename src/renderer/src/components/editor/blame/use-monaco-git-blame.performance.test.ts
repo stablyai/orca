@@ -54,6 +54,8 @@ function fakeEditor(id: string): editor.IStandaloneCodeEditor {
   } as unknown as editor.IStandaloneCodeEditor
 }
 
+// Perf contract (#43883): hidden worktrees and inactive splits keep editors mounted, and each one ran git blame on
+// mount and on every HEAD change; only the front editor may.
 it('runs git blame only for the front editor among many mounted ones', async () => {
   blame.mockResolvedValue({ kind: 'unavailable' })
   const fileIds = Array.from({ length: 10 }, (_, index) => `file-${index}.ts`)
