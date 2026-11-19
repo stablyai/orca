@@ -17,8 +17,7 @@ import {
 } from 'lucide-react-native'
 import {
   botItemActivity,
-  type BotItemActivityEntry,
-  type BotItemQuestionState
+  type BotItemActivityEntry
 } from '../../../../src/shared/bots/bot-item-activity'
 import { botItemActorName } from '../../../../src/shared/bots/bot-item-actor-name'
 import { botItemStatusName } from '../../../../src/shared/bots/bot-item-status-name'
@@ -33,10 +32,12 @@ import { MobileMarkdown } from '../../components/markdown/MobileMarkdown'
 import { formatPhoneSnoozeTime } from './bot-item-snooze-time'
 import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { mobileBotItemAnsweredLine, mobileBotItemQuote } from './mobile-bot-item-answered-line'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { MobileBotItemReplyQuote } from './MobileBotItemReplyQuote'
 import { MobileBotItemStatusIcon } from './MobileBotItemStatusIcon'
 
 const ICON = 13
@@ -216,7 +217,9 @@ function WorkerLine({ entry }: { entry: Extract<BotItemActivityEntry, { kind: 'w
   )
 }
 
-function EntryIcon({ entry }: { entry: Exclude<BotItemActivityEntry, { kind: 'comment' }> }) {
+type LineEntry = Exclude<BotItemActivityEntry, { kind: 'comment' | 'answer' }>
+
+function EntryIcon({ entry }: { entry: LineEntry }) {
   if (entry.kind === 'worker') {
     if (entry.phase === 'started') {
       return <Play size={ICON} color={colors.textMuted} />
@@ -250,16 +253,18 @@ function EntryIcon({ entry }: { entry: Exclude<BotItemActivityEntry, { kind: 'co
 
 function CommentCard({
   item,
-  event,
-  question,
+  entry,
   onReply
 }: {
   item: BotItem
-  event: BotItemEvent
-  question: BotItemQuestionState | null
+  entry: Extract<BotItemActivityEntry, { kind: 'comment' | 'answer' }>
   onReply: () => void
 }) {
   const t = useMobileTranslation()
+  const { event } = entry
+  const question = entry.kind === 'comment' ? entry.question : null
+  const replyTo = mobileBotItemQuote(entry)
+  const answered = mobileBotItemAnsweredLine(t, entry)
   const mine = event.actor.kind === 'owner'
   const text = commentText(event.data)
   return (
@@ -295,7 +300,9 @@ function CommentCard({
         ) : null}
         <Text style={styles.meta}>{timeOf(event.at)}</Text>
       </View>
+      {replyTo ? <MobileBotItemReplyQuote text={replyTo.text} /> : null}
       <MobileMarkdown content={text} />
+      {answered ? <Text style={styles.meta}>{answered}</Text> : null}
     </View>
   )
 }
@@ -315,14 +322,8 @@ export function MobileBotItemActivity({
   return (
     <View>
       {entries.map((entry) =>
-        entry.kind === 'comment' ? (
-          <CommentCard
-            key={entry.key}
-            item={item}
-            event={entry.event}
-            question={entry.question}
-            onReply={onReply}
-          />
+        entry.kind === 'comment' || entry.kind === 'answer' ? (
+          <CommentCard key={entry.key} item={item} entry={entry} onReply={onReply} />
         ) : (
           <View key={entry.key} style={styles.event}>
             <View style={styles.eventIcon}>

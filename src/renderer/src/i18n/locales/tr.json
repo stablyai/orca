@@ -4701,7 +4701,6 @@
             "27a74f91f0": "Şu anda çalışan bir şey yok",
             "298f4be7f2": "CPU",
             "2aa2de6cb9": "Ad",
-            "1fedf94eae": "Birleşik CPU yükü. %100'ün üzerindeki değerler, aynı anda birden fazla çekirdeğin çalıştığı anlamına gelir.",
             "e7cf14ec78": "Terminal oturumları kullanılamıyor. Liste güncel olmayabilir.",
             "93b0de3c21": "Yeniden Başlat",
             "f85af9cda6": "Kaynak anlık görüntüleri ve terminal oturumları kullanılamıyor.",
@@ -5104,8 +5103,6 @@
                 "copy": {
                   "terminalSessionCount_one": "{{count}} terminal oturumu",
                   "terminalSessionCount_other": "{{count}} terminal oturumu",
-                  "memoryUnavailable": "bellek bilgisi yok",
-                  "tooltipSummary": "Kaynak Yöneticisi - {{memory}} - {{sessions}}",
                   "spaceScanReady": "Alan taraması hazır",
                   "sessionsGroupedByWorkspace": "Terminal oturumları çalışma alanına göre gruplandırılır.",
                   "noTerminalSessions": "Henüz terminal oturumu yok.",
@@ -6525,7 +6522,6 @@
         },
         "SidebarWorkspaceOptionsMenu": {
           "hosts": "Host'lar",
-          "showSection": "Göster",
           "allHostsDetail": "Tüm host'ları göster",
           "configuredSshHost": "Yapılandırılmış SSH",
           "projectSshHost": "Proje SSH",
@@ -6575,7 +6571,6 @@
           "219ebf1961": "Branch adı",
           "folderPathIdentity": "Branch / klasör yolu",
           "cli": "Orca CLI",
-          "workspaceOptions": "Çalışma alanı seçenekleri",
           "optionsActiveFilters_one": "Çalışma alanı seçenekleri ({{count}} etkin filtre)",
           "optionsActiveFilters_other": "Çalışma alanı seçenekleri ({{count}} etkin filtre)",
           "optionsFilterCount_one": "Çalışma alanı seçenekleri ({{count}} filtre)",
@@ -13717,10 +13712,8 @@
             "f61af83316": "Yeni Klasör",
             "37c875d827": "Yeni Dosya",
             "b3e288bf41": "'{{value0}}' indirilemedi.",
-            "f729bcd97d": "'{{value0}}' klasörü indirilemedi.",
             "1a3df04ae1": "Aç",
             "bce4d4e44f": "'{{value0}}' indirildi",
-            "a4029c996b": "'{{value0}}' klasörü indirildi",
             "e26010014a": ".gitignore tarafından yok sayılıyor",
             "a06551beee": "Enter",
             "66a29dde82": "Göreli Yolu Kopyala",
@@ -19359,7 +19352,6 @@
         "sendAgainToTryOnceMore": "Tekrar denemek için mesajınızı yeniden gönderin.",
         "couldNotStart": "{{agent}} başlatılamadı.",
         "couldNotRestart": "{{agent}} yeniden başlatılamadı.",
-        "cliTooOld": "{{agent}} {{installedVersion}} sürümü sohbetler için çok eski. {{minimumVersion}} veya daha yeni bir sürüme güncelleyin.",
         "startTimedOut": "{{agent}} başlatılırken zaman aşımı oluştu ({{seconds}} saniye boyunca {{method}} için yanıt alınamadı).",
         "startTimedOutKeepsHappening": "Bu durum tekrarlanıyorsa bu sohbetin çalıştığı bilgisayar aşırı yük altında olabilir.",
         "notSignedIn": "{{agent}} oturum açmamış.",
@@ -19396,6 +19388,7 @@
         "providerUnavailable": "Hizmet meşgul olduğu için {{agent}} yanıt veremedi. Başka bir model seçin veya biraz bekleyip yeniden gönderin.",
         "providerSafetyStopped": "{{agent}}, bir güvenlik kontrolünden sonra bu yanıtı durdurdu. İsteğinizi gözden geçirip yeniden gönderin.",
         "providerResponseFailed": "{{agent}} bu yanıtı tamamlayamadı. Daha fazla bilgi için ayrıntıları açın.",
+        "providerResponseFailedQuoted": "{{agent}} bu yanıtı tamamlayamadı: {{detail}}.",
         "modelUnavailable": "{{agent}}, {{detail}} modelini kullanamadı. Başka bir model seçip yeniden gönderin.",
         "selectedModel": "seçilen modeli",
         "providerRejected": "{{agent}} bu mesajı kabul etmedi.",
@@ -20016,7 +20009,7 @@
       "rewind": {
         "unsupported": "Bu sohbette önceki bir mesaja dönülemiyor.",
         "historyNotPaginated": "Bu eski Codex sohbetinde önceki bir mesaja dönülemiyor. Buraya geri dön özelliğini kullanmak için yeni bir sohbet başlatın.",
-        "busy": "Ajan boşta olduğunda ve sohbette sizden yanıt bekleyen bir işlem kalmadığında kullanılabilir.",
+        "busy": "Sohbet boştayken kullanılabilir",
         "staleEpoch": "Sohbet değişti. Son mesajları inceleyip yeniden deneyin.",
         "invalidTarget": "Sohbette bu mesaja dönülemiyor. Hiçbir şey değiştirilmedi.",
         "historyLimit": "Bu sohbet geri dönülemeyecek kadar uzun. Hiçbir şey değiştirilmedi.",
@@ -20049,14 +20042,7 @@
         "unreported": "Bu oturum için bağlam kullanımı bilgisi mevcut değil."
       },
       "agentMessage": {
-        "messageFrom": "Mesajı gönderen",
         "unnamedSender": "bir ajan",
-        "messageFromCoordinator": "Koordinatörden mesaj",
-        "startedWorker": "Çalışan başlatıldı",
-        "handedOffToAgent": "Ajana devredildi",
-        "startedAgent": "Ajan başlatıldı",
-        "taskFromCoordinator": "Koordinatörden görev",
-        "updateFromWorker": "Çalışandan güncelleme",
         "senderReplaced": "{{name}} artık kendi terminalinde çalışmıyor; orada şimdi başka bir ajan çalışıyor. Gerekirse terminali kenar çubuğundan açın.",
         "senderAmbiguous": "Orca, {{name}} adlı ajanın hangi terminalde çalıştığını belirleyemiyor. Terminali kenar çubuğundan açın.",
         "senderNotRunning": "{{name}} artık çalışmıyor. İşine devam etmek için kenar çubuğundan yeni bir ajan başlatın.",
@@ -22348,9 +22334,7 @@
     "updateFailed": "Proje alanı güncellenemedi"
   },
   "mediaPreview": {
-    "unavailable": "Bu medya dosyası oynatılamıyor. Dosya kullanılamıyor olabilir veya desteklenmeyen bir codec kullanıyor olabilir.",
-    "openFailed": "Bu dosya varsayılan uygulamada açılamadı.",
-    "openDefault": "Varsayılan uygulamada aç"
+    "unavailable": "Bu medya dosyası oynatılamıyor. Dosya kullanılamıyor olabilir veya desteklenmeyen bir codec kullanıyor olabilir."
   },
   "workspace": {
     "branchChoice": {
@@ -22840,7 +22824,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "Worktree değiştir",
+      "worktreePalette": "Her şeyde ara",
       "worktreeNavigateUp": "Önceki worktree",
       "worktreeNavigateDown": "Sonraki worktree",
       "workspaceCreate": "Worktree oluştur",
@@ -22952,6 +22936,9 @@
       "45347db2a3": "Sekmeler arası gezinme",
       "aab2837fa5": "Hızlı komutlar",
       "3492a954c8": "Terminal bölmeleri"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "Worktree değiştir"
     }
   },
   "gpuFallback": {
@@ -23827,8 +23814,7 @@
     },
     "upcoming": {
       "tidyNightAfter": "Her gece {{from}} sonrasında veya bu bilgisayar uyandığında",
-      "tidyWeekAfter": "Haftada bir, {{from}} sonrasında veya bu bilgisayar uyandığında",
-      "lookDueNow": "Şimdi zamanı · {{every}}"
+      "tidyWeekAfter": "Haftada bir, {{from}} sonrasında veya bu bilgisayar uyandığında"
     },
     "palette": {
       "placeholder": "Botlarda, sohbetlerde, terminallerde, çalışma alanlarında, görevlerde, ayarlarda ve işlemlerde ara...",

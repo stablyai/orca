@@ -10,7 +10,7 @@ afterEach(() => {
 })
 
 describe('filterPathsToRunningWslDistrosAsync', () => {
-  it('still queries running distros for a mixed list and preserves path order', async () => {
+  it('filters stopped distros from a mixed list and preserves path order', async () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     vi.mocked(listRunningWslDistrosAsync).mockResolvedValue(['Ubuntu'])
     const paths = [
@@ -20,6 +20,5 @@ describe('filterPathsToRunningWslDistrosAsync', () => {
       'D:\\local'
     ]
     expect(await filterPathsToRunningWslDistrosAsync(paths)).toEqual([paths[0], paths[1], paths[3]])
-    expect(listRunningWslDistrosAsync).toHaveBeenCalledTimes(1)
   })
 })

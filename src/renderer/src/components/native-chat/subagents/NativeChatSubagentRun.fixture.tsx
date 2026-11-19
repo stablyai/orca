@@ -39,13 +39,21 @@ const block: NativeChatSubagentGroupBlock = {
       model: 'claude-haiku-4-5-20251001',
       lastMessage:
         'Refresh happens in **two** places:\n- `middleware.ts` retries once on 401\n- the client refreshes on a timer 60 s before expiry'
+    },
+    {
+      id: 'a4',
+      label: 'Bump the session cookie lifetime',
+      state: 'failed',
+      startedAt: now - 70_000,
+      settledAt: now - 50_000,
+      lastMessage: 'Could not write `config/session.ts`: the file is read-only in this workspace.'
     }
   ]
 }
 
 function Roster() {
   return (
-    <div className="native-chat-appearance p-4 pt-36">
+    <div className="native-chat-appearance p-4">
       <NativeChatSubagentRun block={block} onOpenSubagent={() => {}} />
     </div>
   )
@@ -56,13 +64,20 @@ export const enriched = defineFixture({
   render: () => <Roster />
 })
 
-export const hovered = defineFixture({
+export const opened = defineFixture({
   width: 560,
   render: () => <Roster />,
   interact: async (frame) => {
-    frame
-      .querySelector('[data-native-chat-subagent-entry="a1"] > button')
-      ?.dispatchEvent(new PointerEvent('pointerover', { bubbles: true, pointerType: 'mouse' }))
-    await new Promise((resolve) => setTimeout(resolve, 500))
+    for (const toggle of frame.querySelectorAll<HTMLButtonElement>(
+      'button[aria-expanded="false"]'
+    )) {
+      toggle.click()
+    }
+    await new Promise((resolve) => setTimeout(resolve, 300))
   }
+})
+
+export const narrow = defineFixture({
+  width: 320,
+  render: () => <Roster />
 })

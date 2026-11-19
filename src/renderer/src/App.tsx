@@ -14,7 +14,6 @@ import RunningTerminalCloseDialog from './components/terminal-pane/layout/close/
 import WorktreeBaseFallbackDialog from './components/sidebar/workspace-creation/base-ref-update/WorktreeBaseFallbackDialog'
 import ClaudeAccountPromptDialog from './components/claude-account-prompt/ClaudeAccountPromptDialog'
 import ClaudeAccountSwitchDialog from './components/provider-accounts/claude/ClaudeAccountSwitchDialog'
-import { useUnreadDockBadge } from './attention/unread/useUnreadDockBadge'
 import { AppBackgroundServices } from './app-shell/AppBackgroundServices'
 import { AppRootSurfaces } from './app-shell/AppRootSurfaces'
 import { AppWorkspaceShell } from './app-shell/AppWorkspaceShell'
@@ -49,7 +48,6 @@ function App(): React.JSX.Element {
   const layout = useAppChromeLayout()
   const floatingWorkspace = useFloatingWorkspacePanel()
   const onboardingGate = useOnboardingAndFeatureTips()
-  const clearUnreadDockBadge = useUnreadDockBadge(floatingWorkspace.open)
 
   useAppShellServices()
   // Load drafts before the startup chain so no failed step can skip them.
@@ -82,10 +80,9 @@ function App(): React.JSX.Element {
       // Cancel chrome cleanup work when the App root unmounts.
       if (!node) {
         cancelReturnFocusFrame()
-        clearUnreadDockBadge()
       }
     },
-    [cancelReturnFocusFrame, clearUnreadDockBadge]
+    [cancelReturnFocusFrame]
   )
 
   return (

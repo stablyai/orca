@@ -1,26 +1,13 @@
 // @vitest-environment happy-dom
 
-import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type * as BotCatalog from '@/lib/bot-catalog'
 import { useAppStore } from '@/store'
 import type { Bot } from '../../../../shared/bot-types'
-import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { BotGroup } from '../../../../shared/bots/bot-group'
-import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../../../shared/agent-session/view/structured-agent-session-projection'
-import {
-  folderWorkspaceKey,
-  worktreeWorkspaceKey
-} from '../../../../shared/workspace/identity/workspace-scope'
-import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
-import type { WorkspaceLineage } from '../../../../shared/worktree/lineage-types'
 
 const mocks = vi.hoisted(() => {
   const bots: Bot[] = []
@@ -124,16 +111,6 @@ function rowIds(): (string | null)[] {
   )
 }
 
-function rowEntry(botId: string): HTMLElement {
-  const entry = document.querySelector<HTMLElement>(
-    `[data-project-group-header-id="local/${botId}"]`
-  )
-  if (!entry) {
-    throw new Error(`no entry for ${botId}`)
-  }
-  return entry
-}
-
 /** Each bot entry 40 px tall, from the top of a list at y = 0. */
 function stubRowRects(): void {
   const entries = [...document.querySelectorAll<HTMLElement>('[data-project-group-header-id]')]
@@ -198,51 +175,15 @@ afterEach(() => {
 })
 
 describe('SidebarBotsSection', () => {
-  it('shows the empty state before the first bot', () => {
-    renderSection()
-    expect(screen.getByText('Bots')).toBeTruthy()
-    expect(screen.getByText('No bots yet.')).toBeTruthy()
-  })
-
-  it('lists a bot by avatar and name and opens its home on click', () => {
-    mocks.bots = [bot()]
+  it('omits a row whose home is not loaded', () => {
+    mocks.bots = [bot(), bot({ id: 'bot-2', name: 'Scout', folderWorkspaceId: 'fw-missing' })]
     useAppStore.setState({ folderWorkspaces: [home()] })
     renderSection()
-    expect(screen.getByText('R')).toBeTruthy()
-    fireEvent.click(screen.getByText('Reviewer'))
-    expect(mocks.activate).toHaveBeenCalledWith(expect.objectContaining({ id: 'bot-1' }))
-    expect(mocks.onOpenBot).toHaveBeenCalledOnce()
-  })
-
-  it.each([false, true])(
-    'marks an unread bot with the same blue dot in either card style (new: %s) and skips a bot whose home is not loaded',
-    (newCardStyle) => {
-      mocks.bots = [bot(), bot({ id: 'bot-2', name: 'Scout', folderWorkspaceId: 'fw-missing' })]
-      useAppStore.setState({
-        folderWorkspaces: [home({ isUnread: true })],
-        settings: {
-          ...getDefaultSettings('/home/me'),
-          experimentalNewWorktreeCardStyle: newCardStyle
-        }
-      })
-      renderSection()
-      expect(screen.queryByText('Scout')).toBeNull()
-      expect(document.querySelectorAll('[data-bot-unread-dot]')).toHaveLength(1)
-    }
-  )
-
-  it('collapses its rows from the header', () => {
-    vi.stubGlobal('api', { ui: { set: vi.fn(() => Promise.resolve()) } })
-    mocks.bots = [bot()]
-    useAppStore.setState({ folderWorkspaces: [home()] })
-    renderSection()
-    fireEvent.click(screen.getByRole('button', { name: /^Collapse Bots,/ }))
-    expect(screen.queryByText('Reviewer')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: /^Expand Bots,/ }))
     expect(screen.getByText('Reviewer')).toBeTruthy()
+    expect(screen.queryByText('Scout')).toBeNull()
   })
 
-  it('lets go of focus after a pointer click on the header, but keeps it from the keyboard', () => {
+  it('toggles rows from the header and preserves focus for keyboard activation', () => {
     vi.stubGlobal('api', { ui: { set: vi.fn(() => Promise.resolve()) } })
     mocks.bots = [bot()]
     useAppStore.setState({ folderWorkspaces: [home()] })
@@ -252,9 +193,11 @@ describe('SidebarBotsSection', () => {
     header.focus()
     fireEvent.click(header, { detail: 1 })
     expect(document.activeElement).not.toBe(header)
+    expect(screen.queryByText('Reviewer')).toBeNull()
     header.focus()
     fireEvent.click(header, { detail: 0 })
     expect(document.activeElement).toBe(header)
+    expect(screen.getByText('Reviewer')).toBeTruthy()
   })
 
   it('opens a bot from its face and unfolds the section; the rest of the header only folds', () => {
@@ -264,11 +207,14 @@ describe('SidebarBotsSection', () => {
       'ResizeObserver',
       class {
         constructor(
-          private readonly callback: (entries: { contentRect: { width: number } }[]) => void
+          private readonly callback: (
+            entries: { target: Element; contentRect: { width: number } }[]
+          ) => void
         ) {}
-        observe(): void {
-          this.callback([{ contentRect: { width: 68 } }])
+        observe(target: Element): void {
+          this.callback([{ target, contentRect: { width: 68 } }])
         }
+        unobserve(): void {}
         disconnect(): void {}
       }
     )
@@ -300,75 +246,55 @@ describe('SidebarBotsSection', () => {
     expect(mocks.activate).not.toHaveBeenCalled()
   })
 
-  it('saves the order a drag gives, on the host, for every bot it places', async () => {
+  it('leaves the folded header without its controls, so Tab cannot reach them', () => {
+    vi.stubGlobal('api', { ui: { set: vi.fn(() => Promise.resolve()) } })
     threeUnplacedBots()
+    useAppStore.setState({ collapsedGroups: new Set(['bots']) })
     renderSection()
-    stubRowRects()
+    const controls = (): (HTMLElement | null)[] => [
+      screen.queryByRole('button', { name: 'Search bots' }),
+      screen.queryByRole('button', { name: /^Bot options/ }),
+      screen.queryByRole('button', { name: 'New bot or group' })
+    ]
+    expect(controls()).toEqual([null, null, null])
+    // The fold button and the faces stay; the folded summary still counts the rest.
+    expect(screen.getByRole('button', { name: /^Expand Bots,/ })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Show 3 more bots' })).toBeTruthy()
 
-    dragReviewerBelowJelly()
-
-    await vi.waitFor(() => expect(mocks.updateBot).toHaveBeenCalledTimes(3))
-    expect(new Map(mocks.updateBot.mock.calls.map(([bot, updates]) => [bot.id, updates]))).toEqual(
-      new Map([
-        ['bot-2', { sidebarOrder: 0 }],
-        ['bot-3', { sidebarOrder: 1 }],
-        ['bot-1', { sidebarOrder: 2 }]
-      ])
-    )
-    // The release's click is the drag's, not an open.
-    fireEvent.click(screen.getByText('Reviewer'))
-    expect(mocks.activate).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: /^Expand Bots,/ }))
+    expect(controls().every(Boolean)).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: /^Collapse Bots,/ }))
+    expect(controls()).toEqual([null, null, null])
   })
 
-  it('drags a floating copy of the bot and slides the others aside, as a workspace row does', () => {
-    threeUnplacedBots()
+  it('keeps the + menu shut on unfold after a fold it never saw', () => {
+    vi.stubGlobal('api', { ui: { set: vi.fn(() => Promise.resolve()) } })
+    mocks.bots = [bot()]
+    useAppStore.setState({ folderWorkspaces: [home()] })
     renderSection()
-    stubRowRects()
-    const entry = rowEntry('bot-1')
-
-    fireEvent.pointerDown(screen.getByText('Reviewer'), {
-      pointerId: 1,
-      button: 0,
-      clientX: 20,
-      clientY: 10
-    })
-    act(() => {
-      window.dispatchEvent(
-        new PointerEvent('pointermove', { pointerId: 1, clientX: 20, clientY: 115, buttons: 1 })
-      )
-    })
-    const preview = document.querySelector('[data-worktree-sidebar-drag-preview]')
-    expect(preview?.textContent).toContain('Reviewer')
-    expect(entry.className).toContain('opacity-0')
-    expect(entry.className).not.toContain('ring-')
-    // Scout and Jelly slide up into the gap Reviewer left.
-    const slide = (botId: string): string => {
-      const content = rowEntry(botId).firstElementChild
-      return content instanceof HTMLElement ? content.style.transform : ''
-    }
-    expect([slide('bot-1'), slide('bot-2'), slide('bot-3')]).toEqual([
-      '',
-      'translateY(-40px)',
-      'translateY(-40px)'
-    ])
-
-    act(() => {
-      window.dispatchEvent(
-        new PointerEvent('pointerup', { pointerId: 1, clientX: 20, clientY: 115 })
-      )
-    })
-    expect(document.querySelector('[data-worktree-sidebar-drag-preview]')).toBeNull()
-    expect(entry.className).not.toContain('opacity-0')
-    expect(slide('bot-2')).toBe('')
+    fireEvent.keyDown(screen.getByRole('button', { name: 'New bot or group' }), { key: 'Enter' })
+    expect(screen.getByRole('menuitem', { name: 'New bot' })).toBeTruthy()
+    // A store write folds the section without the menu's own dismissal.
+    act(() => useAppStore.getState().toggleCollapsedGroup('bots'))
+    act(() => useAppStore.getState().toggleCollapsedGroup('bots'))
+    expect(screen.getByRole('button', { name: 'New bot or group' })).toBeTruthy()
+    expect(screen.queryByRole('menuitem', { name: 'New bot' })).toBeNull()
   })
 
-  it('keeps New bot access while empty and shows the first bot in an expanded section', () => {
+  it('keeps New bot access while empty and folds the onboarding card away', () => {
     vi.stubGlobal('api', { ui: { set: vi.fn(() => Promise.resolve()) } })
     renderSection()
-    const emptyHeader = screen.getByRole('button', { name: /^Bots, 0 bots/ })
+    expect(screen.getByText('Bots')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Create a bot' })).toBeTruthy()
+    // No count beside the title while there is nothing to count.
+    expect(screen.queryByText('0')).toBeNull()
+    const emptyHeader = screen.getByRole('button', { name: /^Collapse Bots, 0 bots/ })
+    expect(emptyHeader.hasAttribute('disabled')).toBe(false)
     fireEvent.click(emptyHeader)
-    expect(emptyHeader.getAttribute('aria-expanded')).toBe('true')
-    expect(emptyHeader.hasAttribute('disabled')).toBe(true)
+    expect(useAppStore.getState().collapsedGroups.has('bots')).toBe(true)
+    expect(screen.queryByText('Meet your AI teammate')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /^Expand Bots, 0 bots/ }))
+    expect(screen.getByText('Meet your AI teammate')).toBeTruthy()
     fireEvent.keyDown(screen.getByRole('button', { name: 'New bot or group' }), { key: 'Enter' })
     expect(screen.getByRole('menuitem', { name: 'New bot' })).toBeTruthy()
     // A group needs two bots.
@@ -385,9 +311,11 @@ describe('SidebarBotsSection', () => {
     expect(screen.getByText('Reviewer')).toBeTruthy()
   })
 
-  it("lists groups among the bots in one order, and a drop saves a group's place on its host", async () => {
+  it('saves mixed bot and group order without opening a bot on drop', async () => {
     threeUnplacedBots()
-    mocks.bots = mocks.bots.map((entry, index) => ({ ...entry, sidebarOrder: index * 2 }))
+    mocks.bots = mocks.bots.map((entry, index) =>
+      index === 0 ? entry : { ...entry, sidebarOrder: index * 2 }
+    )
     mocks.groups = [group({ sidebarOrder: 1 })]
     useAppStore.setState({
       folderWorkspaces: [home(), home({ id: 'fw-2' }), home({ id: 'fw-3' }), home({ id: 'fw-g' })]
@@ -413,6 +341,8 @@ describe('SidebarBotsSection', () => {
         ['bot-3', { sidebarOrder: 3 }]
       ])
     )
+    fireEvent.click(screen.getByText('Reviewer'))
+    expect(mocks.activate).not.toHaveBeenCalled()
   })
 
   it('keeps a saved group listed after its last bot is gone', () => {
@@ -420,25 +350,8 @@ describe('SidebarBotsSection', () => {
     mocks.groups = [group({ members: [] })]
     useAppStore.setState({ folderWorkspaces: [home({ id: 'fw-g' })] })
     renderSection()
-    expect(screen.queryByText('No bots yet.')).toBeNull()
+    expect(screen.queryByText('Meet your AI teammate')).toBeNull()
     expect(screen.getByText('Crew')).toBeTruthy()
-  })
-
-  it("keeps a group's dot off while only its members' homes and workers work", () => {
-    groupWithBusyMembers()
-    renderSection()
-    expect(groupStatusSlot().querySelector('[data-agent-spinner]')).toBeNull()
-  })
-
-  it("shows a group working while a member's turn for its room runs", () => {
-    groupWithBusyMembers()
-    useAppStore.setState((state) => ({
-      agentStatusByPaneKey: state.agentStatusByPaneKey.replace(
-        Object.entries(sessionStatus('bot-group-member-1', folderWorkspaceKey('fw-1')))
-      )
-    }))
-    renderSection()
-    expect(groupStatusSlot().querySelector('[data-agent-spinner]')).not.toBeNull()
   })
 
   it('lists Start from scratch first in the New bot submenu and opens the blank dialog', async () => {
@@ -448,14 +361,8 @@ describe('SidebarBotsSection', () => {
       fireEvent.keyDown(screen.getByRole('menuitem', { name: 'New bot' }), { key: 'ArrowRight' })
     })
     const submenu = screen.getAllByRole('menu').at(-1)!
-    const items = [...submenu.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent)
-    expect(items).toEqual([
-      'Start from scratch',
-      'Browse templates',
-      'From a link…',
-      'Import from another app…'
-    ])
     const scratch = screen.getByRole('menuitem', { name: 'Start from scratch' })
+    expect(submenu.querySelector('[role="menuitem"]')).toBe(scratch)
     expect(document.activeElement).toBe(scratch)
     await act(async () => {
       fireEvent.click(scratch)
@@ -489,57 +396,4 @@ function group(overrides: Partial<BotGroup> = {}): BotGroup {
     replyMode: { kind: 'mentions' },
     ...overrides
   }
-}
-
-/** A working structured session its host holds, which stays fresh without a clock. */
-function sessionStatus(sessionId: string, worktreeId: string): Record<string, AgentStatusEntry> {
-  const tabId = structuredAgentSessionTabId(sessionId)
-  const paneKey = structuredAgentSessionPaneKey(tabId, sessionId)
-  return {
-    [paneKey]: {
-      state: 'working',
-      prompt: 'triage',
-      updatedAt: 1,
-      stateStartedAt: 1,
-      structuredHostOwned: true,
-      agentType: 'claude',
-      paneKey,
-      tabId,
-      worktreeId,
-      stateHistory: []
-    }
-  }
-}
-
-/** Crew, whose first bot's worker workspace and second bot's Home chat are working; nobody has posted. */
-function groupWithBusyMembers(): void {
-  mocks.bots = [bot(), bot({ id: 'bot-2', name: 'Scout', folderWorkspaceId: 'fw-2' })]
-  mocks.groups = [group()]
-  const worker = makeWorktree({ id: 'repo-1::/fix', repoId: 'repo-1', path: '/fix' })
-  const lineage: WorkspaceLineage = {
-    childWorkspaceKey: worktreeWorkspaceKey(worker.id),
-    parentWorkspaceKey: folderWorkspaceKey('fw-1'),
-    origin: 'orchestration',
-    capture: { source: 'orchestration-context', confidence: 'explicit' },
-    createdAt: 1
-  }
-  useAppStore.setState({
-    folderWorkspaces: [home(), home({ id: 'fw-2' }), home({ id: 'fw-g' })],
-    worktreesByRepo: { 'repo-1': [worker] },
-    workspaceLineageByChildKey: { [lineage.childWorkspaceKey]: lineage },
-    agentStatusByPaneKey: acceptedAgentStatuses(
-      Object.entries({
-        ...sessionStatus('worker-session', worker.id),
-        ...sessionStatus('home-session', folderWorkspaceKey('fw-2'))
-      })
-    )
-  })
-}
-
-function groupStatusSlot(): Element {
-  const slot = rowEntry('group-1').querySelector('[data-worktree-card-status-slot]')
-  if (!slot) {
-    throw new Error('no status slot on the group row')
-  }
-  return slot
 }

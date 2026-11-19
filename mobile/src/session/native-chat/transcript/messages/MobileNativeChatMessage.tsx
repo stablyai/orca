@@ -47,7 +47,7 @@ import { MobileNativeChatVisualContext } from '../../visual/mobile-native-chat-v
 import { useMobileNativeChatFullMessage } from '../message-content/MobileNativeChatFullContent'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { MobileNativeChatPacedProse } from '../message-content/MobileNativeChatPacedProse'
+import { MobileNativeChatAnswerProse } from '../message-content/MobileNativeChatAnswerProse'
 import { Prose, userProseText } from '../message-content/MobileNativeChatProse'
 import * as Marks from './MobileNativeChatUserMessageMarks'
 
@@ -78,8 +78,6 @@ function MobileNativeChatMessageImpl({
   unsentNotice,
   receipt,
   awaiting,
-  subagentGroupsOpen,
-  onToggleSubagentGroup,
   userMessageOpen,
   onToggleUserMessage
 }: {
@@ -115,8 +113,6 @@ function MobileNativeChatMessageImpl({
   unsentNotice?: string
   receipt?: NativeChatResolvedPrompt
   awaiting?: boolean
-  subagentGroupsOpen?: ReadonlySet<string>
-  onToggleSubagentGroup?: (groupId: string) => void
   userMessageOpen?: boolean
   onToggleUserMessage?: (messageId: string) => void
 }): React.JSX.Element {
@@ -263,8 +259,7 @@ function MobileNativeChatMessageImpl({
       <MobileNativeChatSubagentGroup
         key={`subagent-group:${block.groupId}`}
         block={block}
-        open={subagentGroupsOpen?.has(block.groupId) === true}
-        onToggle={onToggleSubagentGroup}
+        fontScale={fontScale}
       />
     ) : isSystem ? null : isUser && structuredActivityUi && Chat.isTextBlock(block) ? (
       <View key={textKey}>
@@ -320,6 +315,7 @@ function MobileNativeChatMessageImpl({
                 <MobileNativeChatPullRequestEventLine
                   block={pullRequestEvent}
                   messageId={message.id}
+                  timestamp={message.timestamp}
                   fontScale={fontScale}
                   onLongPress={onLongPress}
                 />
@@ -346,14 +342,15 @@ function MobileNativeChatMessageImpl({
                   </MobileNativeChatUserMessageFold>
                 </>
               ) : (
-                <MobileNativeChatPacedProse
+                <MobileNativeChatAnswerProse
                   rowKey={message.id}
                   blocks={drawnProse}
                   growingBlock={growingBlock}
                   paced={message.role === 'assistant'}
+                  fontScale={fontScale}
                 >
                   {(block, index, shown) => proseRow(block, index, shown.text, shown.revealing)}
-                </MobileNativeChatPacedProse>
+                </MobileNativeChatAnswerProse>
               )}
               {isUser ? null : showFull}
             </>

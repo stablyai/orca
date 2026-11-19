@@ -46,7 +46,6 @@ export const BOT_TEMPLATES_OPS: readonly BotTemplate[] = [
       {
         id: 'weekly-handoff',
         when: 'Fridays at 4 PM',
-        short: 'Fri 4 PM',
         what: 'Handoff',
         rrule: '0 16 * * 5',
         prompt:
@@ -80,7 +79,6 @@ export const BOT_TEMPLATES_PERSONAL: readonly BotTemplate[] = [
       {
         id: 'daily-owed',
         when: 'Daily at 4 PM',
-        short: 'Daily 4 PM',
         what: 'What you still owe',
         rrule: '0 16 * * *',
         prompt:
@@ -110,7 +108,6 @@ export const BOT_TEMPLATES_PERSONAL: readonly BotTemplate[] = [
       {
         id: 'daily-notes',
         when: 'Weekdays at 9 AM',
-        short: 'Weekdays 9 AM',
         what: 'Standup notes',
         rrule: '0 9 * * 1-5',
         prompt:
@@ -140,7 +137,6 @@ export const BOT_TEMPLATES_PERSONAL: readonly BotTemplate[] = [
       {
         id: 'morning',
         when: 'Weekdays at 9 AM',
-        short: 'Weekdays 9 AM',
         what: 'Emails that need you',
         rrule: '0 9 * * 1-5',
         prompt:
@@ -149,7 +145,6 @@ export const BOT_TEMPLATES_PERSONAL: readonly BotTemplate[] = [
       {
         id: 'afternoon',
         when: 'Weekdays at 2 PM',
-        short: 'Weekdays 2 PM',
         what: 'Emails that need you',
         rrule: '0 14 * * 1-5',
         prompt:

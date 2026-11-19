@@ -90,6 +90,8 @@ export function RecipesSubmenuRow({
 /** Pin Add host so scrolling, filtering and empty results cannot hide it. */
 export function AddHostSubmenuRow({
   open,
+  focusOnOpen,
+  onReturnFocus,
   onOpenChange,
   armed,
   optionId,
@@ -98,6 +100,8 @@ export function AddHostSubmenuRow({
   onAddRemoteServer
 }: {
   open: boolean
+  focusOnOpen: boolean
+  onReturnFocus: () => void
   onOpenChange: (open: boolean) => void
   armed: boolean
   optionId: string | undefined
@@ -107,6 +111,16 @@ export function AddHostSubmenuRow({
 }): React.JSX.Element {
   const t = useTranslate()
   const [hoveredKey, setHoveredKey] = React.useState<string | null>(null)
+  const listRef = React.useRef<HTMLDivElement>(null)
+  React.useEffect(() => {
+    if (open && focusOnOpen) {
+      listRef.current?.querySelector<HTMLElement>('[role="option"]')?.focus()
+    }
+  }, [open, focusOnOpen])
+  const backToPicker = (): void => {
+    onOpenChange(false)
+    onReturnFocus()
+  }
   const addHostLabel = t('auto.components.NewWorkspaceComposerCard.addHost', 'Add host')
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
@@ -141,9 +155,39 @@ export function AddHostSubmenuRow({
         align="end"
         sideOffset={6}
         className={SUBMENU_CONTENT}
-        onOpenAutoFocus={(event) => event.preventDefault()}
+        onOpenAutoFocus={(event) => {
+          event.preventDefault()
+          if (focusOnOpen) {
+            listRef.current?.querySelector<HTMLElement>('[role="option"]')?.focus()
+          }
+        }}
+        onCloseAutoFocus={(event) => event.preventDefault()}
+        onEscapeKeyDown={(event) => {
+          if (focusOnOpen) {
+            event.preventDefault()
+            backToPicker()
+          }
+        }}
       >
-        <div role="listbox" aria-label={addHostLabel} onMouseLeave={() => setHoveredKey(null)}>
+        <div
+          ref={listRef}
+          role="listbox"
+          aria-label={addHostLabel}
+          onMouseLeave={() => setHoveredKey(null)}
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowLeft') {
+              event.preventDefault()
+              backToPicker()
+            } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+              event.preventDefault()
+              const items = [
+                ...event.currentTarget.querySelectorAll<HTMLElement>('[role="option"]')
+              ]
+              const next = event.key === 'ArrowDown' ? items.at(-1) : items[0]
+              next?.focus()
+            }
+          }}
+        >
           {onAddSshHost ? (
             <RunTargetRow
               icon={<Server className="size-3.5 shrink-0 text-muted-foreground" />}
@@ -154,6 +198,7 @@ export function AddHostSubmenuRow({
               )}
               armed={hoveredKey === 'ssh'}
               current={false}
+              keyboardFocusable
               stacked
               optionId={undefined}
               onArm={() => setHoveredKey('ssh')}
@@ -173,6 +218,7 @@ export function AddHostSubmenuRow({
               )}
               armed={hoveredKey === 'remote'}
               current={false}
+              keyboardFocusable
               stacked
               optionId={undefined}
               onArm={() => setHoveredKey('remote')}

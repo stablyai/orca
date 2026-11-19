@@ -11,7 +11,7 @@ import {
 } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   refusedBy,
-  verdictOf,
+  settledVerdict,
   type ContinuationSubmission
 } from './structured-agent-session-continuation-verdict'
 import {
@@ -61,6 +61,10 @@ export type StructuredAgentSessionContinuationHost = {
     sessionId: string,
     clientMessageId: string
   ) => Promise<{ value: AgentSessionSendResult } | undefined>
+  awaitSendDispatched: (
+    sessionId: string,
+    clientMessageId: string
+  ) => Promise<{ value: AgentSessionSendResult } | undefined>
   logger: StructuredAgentSessionLogger
   now: () => number
   /** Recheck under acceptance serialization so the first post-restart message wins. */
@@ -91,6 +95,10 @@ export function continuationDeps(
     awaitHandedOver: async (sessionId, clientMessageId) =>
       agentSessionSendSubmission(
         (await host.awaitSendHandedOver(sessionId, clientMessageId))?.value
+      ),
+    awaitDispatched: async (sessionId, clientMessageId) =>
+      agentSessionSendSubmission(
+        (await host.awaitSendDispatched(sessionId, clientMessageId))?.value
       ),
     logger: host.logger,
     note: restartNoteWriter(host),
@@ -159,6 +167,11 @@ export type StructuredAgentSessionContinuationDeps = {
   ) => Promise<ContinuationSubmission | undefined>
   /** Wait for handover/rejection; undefined means the wait ended without proof. */
   awaitHandedOver: (
+    sessionId: string,
+    clientMessageId: string
+  ) => Promise<ContinuationSubmission | undefined>
+  /** Provider's own answer, past a turn that ended without taking the send; undefined proves nothing. */
+  awaitDispatched: (
     sessionId: string,
     clientMessageId: string
   ) => Promise<ContinuationSubmission | undefined>
@@ -300,14 +313,8 @@ async function sendContinuation(
   }
   const clientMessageId = envelope.clientOperationId
   const handOver = () => deps.awaitHandedOver(sessionId, clientMessageId).catch(() => undefined)
-  const settle = async (handedOver: ContinuationSubmission | undefined) =>
-    verdictOf(
-      sessionId,
-      // Initial acceptance is usually pending; settled provider state decides.
-      (await deps.awaitSettlement(sessionId, clientMessageId).catch(() => undefined)) ??
-        handedOver ??
-        sent.value?.submission
-    )
+  const settle = (handedOver: ContinuationSubmission | undefined) =>
+    settledVerdict(deps, sessionId, clientMessageId, handedOver ?? sent.value?.submission)
   if (deps.answerAtAcceptance) {
     // Startup may outlast the client’s wait; verdict notes report later refusal.
     return { verdict: async () => settle(await handOver()) }

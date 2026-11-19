@@ -8,6 +8,7 @@ import { journalDomainQueueRow } from './journal-domain-queue-rows'
 import { journalDomainContextHead } from './journal-sql-continuation-context'
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
+import { readOperationWindowItems } from './journal-operation-window-rows'
 
 /** Where a reader's interest starts; the window runs from a turn ahead of the earliest to the head. */
 export type JournalOperationWindowAnchors = {
@@ -101,16 +102,7 @@ export function readJournalDomainOperationWindow(
     }
     start = next
   }
-  const items =
-    start === null
-      ? []
-      : scope.db
-          .prepare(`SELECT ${anchors.withoutToolOutput ? WITHOUT_TOOL_OUTPUT : 'payload_json'} AS payload_json
-          FROM journal_items INDEXED BY journal_items_visible_position
-          WHERE session_id=? AND epoch=? AND hidden=0 AND sequence>=? ${anchors.turnShape ? TURN_SHAPE : ''}
-          ORDER BY sequence,sequence_index,ordinal`)
-          .all(...scope.prefix, start)
-          .map((row) => scope.decode<AgentJournalRenderItem>(scope.examined(row).payload_json))
+  const items = start === null ? [] : readOperationWindowItems(scope, start, anchors)
   const first = scope.db
     .prepare(`SELECT MIN(sequence) AS sequence FROM journal_items INDEXED BY journal_items_visible_position
     WHERE session_id=? AND epoch=? AND hidden=0`)
@@ -125,14 +117,6 @@ export function readJournalDomainOperationWindow(
     complete: first === null || first === undefined || (start !== null && start <= Number(first))
   }
 }
-
-// A Diff call's patch, and so the files it edited, is its output: that one is kept.
-const WITHOUT_TOOL_OUTPUT = `CASE WHEN kind='tool-call' AND json_valid(payload_json)
-  AND json_extract(payload_json,'$.body.name') IS NOT 'Diff'
-  THEN json_replace(payload_json,'$.body.output.head','','$.body.output.truncated',json('true'))
-  ELSE payload_json END`
-
-const TURN_SHAPE = `AND (kind IN ('message','turn','status') OR turn_scope_kind='unknown')`
 
 /** Every current send's selectors and where its rows sit; payloads are decoded only for those kept. */
 function sendHeads(scope: JournalSqlScope): Send[] {

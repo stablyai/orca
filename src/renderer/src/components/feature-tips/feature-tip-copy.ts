@@ -26,9 +26,9 @@ const FEATURE_TIP_COPY: Record<
     description: () =>
       translate(
         'featureTips.botsTeammate.description',
-        'It works where your team works, takes on tasks from anyone, and sees them through. It remembers everything you teach it.'
+        'Ask it in a thread. It runs the work, gets it reviewed and brings back a pull request.'
       ),
-    ctaLabel: () => translate('featureTips.botsTeammate.cta', 'Create your first bot')
+    ctaLabel: () => translate('featureTips.botsTeammate.cta', 'Create a bot')
   },
   'agent-session-search': {
     eyebrow: () => translate('auto.components.feature.tips.feature.tip.copy.1fcdfc5fe8', 'New'),

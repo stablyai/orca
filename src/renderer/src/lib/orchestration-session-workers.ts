@@ -74,6 +74,7 @@ function sameWorker(a: OrchestrationSessionWorker, b: OrchestrationSessionWorker
     a.liveness === b.liveness &&
     a.host === b.host &&
     a.worktreeId === b.worktreeId &&
+    a.address === b.address &&
     a.paneKey === b.paneKey &&
     a.chatSessionId === b.chatSessionId &&
     a.startedAt === b.startedAt &&

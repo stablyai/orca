@@ -38,12 +38,15 @@ type Poster = { name: string; avatar: React.ReactNode }
 export function BotSlackPostAs({
   bot,
   slack,
-  setupState
+  setupState,
+  className
 }: {
   bot: Bot
   slack: Installed
   /** The after-install pick's install link state: its pick applies at once. */
   setupState?: string
+  /** E.g. the card's inset, to line up under its Who can ask rows. */
+  className?: string
 }): React.JSX.Element | null {
   const t = useTranslate()
   const hostLabel = useBotHostLabel(bot.hostId)
@@ -150,7 +153,7 @@ export function BotSlackPostAs({
   }
 
   return (
-    <div className="mt-3 px-3 text-xs leading-5 text-muted-foreground">
+    <div className={cn('text-xs leading-5 text-muted-foreground', className)}>
       <Popover open={open} onOpenChange={setOpen}>
         <Trans
           i18n={i18n}

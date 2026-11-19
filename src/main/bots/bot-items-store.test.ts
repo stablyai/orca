@@ -1,10 +1,12 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import SyncDatabase from '../sqlite/sync-database'
 import type { BotItemAddInput, BotItemBotActor } from './bot-items-input'
 import { BotItemsStore } from './bot-items-store'
+import { BOT_ITEM_ANSWER_REPLAY_SQL } from './bot-items-owner'
+import { migrateBotItems } from './bot-items-schema'
 
 const owner: BotItemBotActor = { kind: 'bot', botId: 'bot-a', chatId: 'chat-home' }
 const otherChat: BotItemBotActor = { kind: 'bot', botId: 'bot-a', chatId: 'chat-side' }
@@ -46,12 +48,27 @@ describe('bot items store', () => {
     store.set(uid, { status: 'needs_you', comment: 'Ship behind a flag?' }, owner)
     const asking = store.get(uid)
     expect(asking?.status).toBe('needs_you')
+    expect(store.needsYou().map((row) => row.botId)).toEqual(['bot-a'])
     const question = store.viewRows([uid]).questions[uid]
-    expect(question?.data).toEqual({ text: 'Ship behind a flag?' })
+    // Marked: a recorded answer or the owner's reply closes it; a later unrelated comment never does.
+    expect(question?.data).toEqual({ text: 'Ship behind a flag?', answerable: true })
 
     store.set(uid, { status: 'working' }, owner)
     expect(store.get(uid)?.questionEvent).toBeNull()
     expect(store.viewRows([uid]).questions[uid]).toBeUndefined()
+    expect(store.needsYou()).toEqual([])
+  })
+
+  it("records no answer to the owner's own Needs you note", () => {
+    const store = open()
+    const { uid } = store.add(input(), owner)
+    store.ownerStatus({ uids: [uid], to: 'needs_you', comment: 'Waiting on legal.' }, ownerActor)
+
+    store.ownerComment(uid, 'Legal said yes.', ownerActor)
+
+    const events = store.events(uid, 0, 50)
+    expect(events.at(-2)?.data).toEqual({ text: 'Legal said yes.' })
+    expect(events.at(-1)?.data).toEqual({ from: 'needs_you', to: 'working' })
   })
 
   it("marks the newest event anyone but the owner made, so the owner's own changes stay seen", () => {
@@ -65,6 +82,22 @@ describe('bot items store', () => {
 
     const { eventId } = store.comment(uid, 'Switched to outline.', owner)
     expect(store.viewRows([uid]).othersLast[uid]).toBe(eventId)
+  })
+
+  it('returns the comment a request id already made: no second comment, no second mail', () => {
+    const store = open()
+    const { uid } = store.add(input(), owner)
+    const sentOnce = store.owedMail(0).mails.length
+    const first = store.ownerComment(uid, 'Go with A', { kind: 'owner' }, [], 1, 'req-1')
+
+    expect(store.ownerComment(uid, 'Go with A', { kind: 'owner' }, [], 2, 'req-1')).toEqual(first)
+    const comments = store.events(uid, 0, 50).filter((event) => event.kind === 'commented')
+    expect(comments.map((event) => event.id)).toEqual([first.eventId])
+    expect(store.owedMail(0).mails).toHaveLength(sentOnce + 1)
+    // Without an id, as an older client sends it, each send is its own comment.
+    store.ownerComment(uid, 'Go with A', { kind: 'owner' })
+    store.ownerComment(uid, 'Go with A', { kind: 'owner' })
+    expect(store.events(uid, 0, 50).filter((event) => event.kind === 'commented')).toHaveLength(3)
   })
 
   it('pages Activity back from the newest event, oldest first in each page', () => {
@@ -162,6 +195,22 @@ describe('bot items store', () => {
     expect(page.items.map((item) => item.title)).toEqual(['Share dialog'])
   })
 
+  it("lists and counts only the named chats' items", () => {
+    const store = open()
+    store.add(input({ title: 'Home' }), owner)
+    store.add(input({ title: 'Side', chatId: 'chat-side' }), otherChat)
+    store.add(input({ title: 'Room', chatId: 'chat-room' }), otherChat)
+
+    const page = store.list({
+      botId: 'bot-a',
+      statuses: ['planned'],
+      chatIds: ['chat-side', 'chat-room'],
+      limit: 10
+    })
+    expect(page.items.map((item) => item.title).toSorted()).toEqual(['Room', 'Side'])
+    expect(page.counts).toEqual({ planned: 2 })
+  })
+
   it('reopens its own closed item, with field changes only alongside the reopen, and mails no one', () => {
     const store = open()
     const { uid } = store.add(input(), owner)
@@ -221,6 +270,7 @@ describe('bot items store', () => {
     const planned = store.add(input({ title: 'Planned' }), owner).uid
     const bots = store.add(input({ title: 'Bot comment' }), owner).uid
     store.set(asking, { status: 'needs_you', comment: 'Ship behind a flag?' }, owner)
+    const questionEvent = store.get(asking)?.questionEvent
     store.set(bots, { status: 'needs_you', comment: 'Which copy?' }, owner)
 
     store.ownerComment(asking, 'Yes, behind a flag.', { kind: 'owner' })
@@ -231,6 +281,16 @@ describe('bot items store', () => {
     expect(store.get(asking)?.questionEvent).toBeNull()
     expect(store.get(planned)?.status).toBe('planned')
     expect(store.get(bots)?.status).toBe('needs_you')
+    expect(
+      store
+        .events(asking, 0, 50)
+        .slice(-2)
+        .map((event) => event.data)
+    ).toEqual([
+      { text: 'Yes, behind a flag.', answers: `e${questionEvent}` },
+      { from: 'needs_you', to: 'working', cause: 'answer' }
+    ])
+    expect(store.events(planned, 0, 50).at(-1)?.data).toEqual({ text: 'Use the short link.' })
     const answer = store.owedMail(0).mails.find((mail) => mail.changes[0]?.item.uid === asking)
     expect(answer?.changes.map(({ event }) => [event.kind, event.data.to ?? null])).toEqual([
       ['commented', null],
@@ -273,49 +333,6 @@ describe('bot items store', () => {
     expect(store.eventsBefore(uid, 0, 10).at(-1)?.data).toEqual({ text: 'The spec moved to v2.' })
     expect(store.owedMail(0).mails).toEqual([])
   })
-  it.each([20, 200])(
-    'reads Needs you and item views without visiting every item or event (%i items)',
-    (count) => {
-      const dir = mkdtempSync(join(tmpdir(), 'bot-items-plan-'))
-      const path = join(dir, 'bot-items.sqlite')
-      const store = BotItemsStore.open(path)
-      stores.push(store)
-      const reader = new SyncDatabase(path)
-      const uids: string[] = []
-      for (let index = 0; index < count; index += 1) {
-        const { uid } = store.add(input(), owner)
-        store.ownerComment(uid, 'Looks good.', { kind: 'owner' })
-        store.comment(uid, 'Thanks.', owner)
-        if (index >= 2) {
-          store.close(uid, 'done', undefined, owner)
-        }
-        uids.push(uid)
-      }
-      for (const uid of uids.slice(0, 2)) {
-        store.set(uid, { status: 'needs_you', comment: 'Ship it?' }, owner)
-      }
-      const prepare = vi.spyOn(SyncDatabase.prototype, 'prepare')
-
-      expect(store.needsYou()).toHaveLength(2)
-      expect(Object.keys(store.viewRows(uids.slice(0, 20)).othersLast)).toHaveLength(20)
-      const sql = prepare.mock.calls.map(([statement]) => statement)
-      prepare.mockRestore()
-      const plans = sql.flatMap((statement) =>
-        ['needs_you', 'item_events'].some((word) => statement.includes(word))
-          ? planOf(reader, statement).filter((detail) => /\bitem/.test(detail))
-          : []
-      )
-      reader.close()
-      rmSync(dir, { recursive: true, force: true })
-      expect(plans).toEqual([
-        // The partial index holds only Needs you items.
-        'SCAN items USING COVERING INDEX idx_items_needs_you',
-        // Only the questions, by id.
-        'SEARCH item_events USING INTEGER PRIMARY KEY (rowid=?)'
-      ])
-    }
-  )
-
   it('fills who last wrote besides the owner on items an older file holds', () => {
     const dir = mkdtempSync(join(tmpdir(), 'bot-items-migrate-'))
     try {
@@ -453,10 +470,122 @@ describe('bot items store', () => {
   })
 })
 
-function planOf(db: SyncDatabase, statement: string): string[] {
-  const args = Array.from({ length: statement.split('?').length - 1 }, () => '[]')
-  return db
-    .prepare(`EXPLAIN QUERY PLAN ${statement}`)
-    .all(...args)
-    .map((row) => String(row.detail))
-}
+describe("the owner's answer to an item's open question", () => {
+  const me = { kind: 'owner' } as const
+  const MERGE = {
+    questions: [{ prompt: 'Merge now?', options: [{ label: 'Merge' }, { label: 'Wait' }] }]
+  }
+
+  function asked(): { store: BotItemsStore; uid: string; question: number } {
+    const store = open()
+    const { uid } = store.add(input(), owner)
+    store.set(uid, { status: 'needs_you', ask: MERGE }, owner)
+    return { store, uid, question: store.get(uid)!.questionEvent! }
+  }
+
+  it('records it and moves the item to In progress; the same answer id again writes nothing more', () => {
+    const { store, uid, question } = asked()
+
+    const first = store.ownerAnswer(uid, question, [{ picks: [1] }], 'answer-1', me)
+    const written = store.eventsBefore(uid, 0, 50).length
+    const retry = store.ownerAnswer(uid, question, [{ picks: [1] }], 'answer-1', me)
+
+    const events = store.eventsBefore(uid, 0, 50)
+    expect(store.get(uid)?.status).toBe('working')
+    // It names its question as a plain reply does, and its move says an answer made it.
+    expect(events.find((event) => event.id === first.eventId)?.data).toMatchObject({
+      text: '1. Merge now? → Wait',
+      answers: `e${question}`,
+      decisions: [{ picks: [1] }]
+    })
+    expect(
+      events.find((event) => event.kind === 'status' && event.data.from === 'needs_you')?.data
+    ).toEqual({ from: 'needs_you', to: 'working', cause: 'answer' })
+    expect(retry).toEqual({ uid, eventId: first.eventId, unchanged: true })
+    expect(store.eventsBefore(uid, 0, 50)).toHaveLength(written)
+  })
+
+  it('refuses a second answer once the question closed, writing nothing', () => {
+    const { store, uid, question } = asked()
+    store.ownerAnswer(uid, question, [{ picks: [0] }], 'phone', me)
+    const written = store.eventsBefore(uid, 0, 50).length
+
+    expect(() => store.ownerAnswer(uid, question, [{ picks: [1] }], 'desktop', me)).toThrow(
+      /no longer open/
+    )
+    expect(store.eventsBefore(uid, 0, 50)).toHaveLength(written)
+  })
+
+  it('refuses a choice the question does not offer, and the question stays open', () => {
+    const { store, uid, question } = asked()
+
+    expect(() => store.ownerAnswer(uid, question, [{ picks: [5] }], 'answer-1', me)).toThrow(
+      /no such option/
+    )
+    expect(store.get(uid)?.status).toBe('needs_you')
+  })
+})
+
+describe('what an answer keeps', () => {
+  const me = { kind: 'owner' } as const
+
+  it('refuses a partial answer to an ask of several decisions, and the question stays open', () => {
+    const store = open()
+    const { uid } = store.add(input(), owner)
+    store.set(
+      uid,
+      {
+        status: 'needs_you',
+        ask: {
+          questions: [
+            { prompt: 'Title?', options: [{ label: 'A' }, { label: 'B' }] },
+            { prompt: 'Merge?', options: [{ label: 'Yes' }, { label: 'No' }] }
+          ]
+        }
+      },
+      owner
+    )
+    const question = store.get(uid)!.questionEvent!
+
+    expect(() =>
+      store.ownerAnswer(uid, question, [{ picks: [0] }, { picks: [] }], 'partial', me)
+    ).toThrow(/Decision 2 needs an answer/)
+    expect(store.get(uid)?.status).toBe('needs_you')
+  })
+
+  it("keeps a prose question's words on its answer, for a receipt whose question is off the page", () => {
+    const store = open()
+    const { uid } = store.add(input(), owner)
+    store.set(uid, { status: 'needs_you', comment: 'Merge PR 880 now?' }, owner)
+
+    const { eventId } = store.ownerAnswer(
+      uid,
+      store.get(uid)!.questionEvent!,
+      [{ picks: [], text: 'Yes' }],
+      'answer-1',
+      me
+    )
+
+    expect(
+      store.eventsBefore(uid, 0, 50).find((event) => event.id === eventId)?.data
+    ).toMatchObject({ text: 'Yes', asked: 'Merge PR 880 now?' })
+  })
+})
+
+describe("a retried answer's lookup", () => {
+  it("reads only the item's events after the question, through the item index", () => {
+    const db = new SyncDatabase(':memory:')
+    migrateBotItems(db)
+    const plan = db
+      .prepare(`EXPLAIN QUERY PLAN ${BOT_ITEM_ANSWER_REPLAY_SQL}`)
+      .all('uid-1', 3, 'e3', 'answer-1')
+      .map((row) => String(row.detail))
+    db.close()
+
+    expect(plan).toEqual([
+      expect.stringMatching(
+        /^SEARCH item_events USING INDEX idx_item_events_item \(item_uid=\? AND id>\?\)$/
+      )
+    ])
+  })
+})

@@ -5,6 +5,7 @@ import type {
   AgentJournalMessageItem,
   AgentJournalPlainStatusItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionTurnCompletion } from '../../../shared/agent-session/view/agent-session-turn-completion-wire'
 import type { JournalSqlReads } from '../agent-session-journal/journal-sql-reads'
 import { readJournalTurnOpenerRows } from '../agent-session-journal/journal-turn-opener-rows'
 
@@ -55,9 +56,13 @@ export type StructuredAgentSessionTurnContext = {
      *  turns' openers resolved; never the whole journal. */
     readItems: (since: number | null) => Promise<TurnEndedRows>,
     /** Writes a note into the conversation for its clients; the same id again revises it. */
-    writeNote?: (clientMessageId: string, body: AgentJournalPlainStatusItem) => Promise<void>
+    writeNote?: (clientMessageId: string, body: AgentJournalPlainStatusItem) => Promise<void>,
+    /** How the turn ended, as its completion says. */
+    ended?: TurnEndedVerdict
   ) => void
 }
+
+export type TurnEndedVerdict = Pick<AgentSessionTurnCompletion, 'outcome'>
 
 /** A turn end's rows, and the journal's head when they were read (absent: their newest row's). */
 export type TurnEndedRows = AgentJournalTurnOpenerRows & { head?: number }

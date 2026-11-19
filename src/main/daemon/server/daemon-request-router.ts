@@ -42,6 +42,9 @@ export class DaemonRequestRouter {
   async route(clientId: string, request: DaemonRequest): Promise<unknown> {
     const client = this.options.connections.get(clientId)
     switch (request.type) {
+      case 'probeProviderCwd':
+      case 'spawnProvider':
+        throw new Error('Provider requests are answered before routing')
       case 'startHistorySeedTransfer': {
         if (!client?.authenticatedPairEstablished || client.streamSocket === null) {
           throw new Error('Daemon client connection is incomplete; reconnect')
@@ -162,7 +165,8 @@ export class DaemonRequestRouter {
         this.options.host.resetInputModes(request.payload.sessionId)
         return {}
       case 'reportFocusLost':
-        this.options.host.reportFocusLost(request.payload.sessionId)
+      case 'requestRepaint':
+        this.options.host[request.type](request.payload.sessionId)
         return {}
       case 'listSessions':
         return { sessions: this.options.host.listSessions() }
@@ -257,11 +261,7 @@ export class DaemonRequestRouter {
     return { snapshot }
   }
 
-  private async shutdown(
-    clientId: string,
-    requestId: string,
-    killSessions: boolean
-  ): Promise<Record<string, never>> {
+  private async shutdown(clientId: string, requestId: string, killSessions: boolean) {
     this.options.log.log('shutdown', {
       reason: 'rpc',
       killSessions: killSessions === true
