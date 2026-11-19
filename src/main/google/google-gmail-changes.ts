@@ -2,7 +2,7 @@
 // check. When Gmail no longer has that point (history expired, about a week but sometimes hours), the
 // checker starts again from now and fires nothing old.
 import { z } from 'zod'
-import { mailboxAddresses } from '../../shared/google/email-address-list'
+import { mailboxAddress, splitAddresses } from '../../shared/google/email-address-list'
 import { parseGoogleJson, type GoogleApi } from './google-api-client'
 import { header, MessageSchema, sentAt, type Message } from './google-gmail-message'
 import { inBatches } from './google-gmail-read'
@@ -142,8 +142,8 @@ function newMailOf(message: Message): NewMail {
 
 /** The one real From address, or none when the header names several or none. */
 export function senderAddress(from: string): string | undefined {
-  const addresses = mailboxAddresses(from)
-  return addresses.length === 1 ? addresses[0] : undefined
+  const mailboxes = splitAddresses(from)
+  return (mailboxes.length === 1 && mailboxAddress(mailboxes[0])) || undefined
 }
 
 const domainOf = (address: string) => address.slice(address.lastIndexOf('@') + 1)

@@ -37,6 +37,7 @@ describe('Gmail from= rules match the real sender address', () => {
     expect(fromBoss('"\\"boss@gmail.com\\" <x>" <attacker@gmail.com>')).toBe(false)
     expect(fromBoss('attacker@gmail.com (boss@gmail.com)')).toBe(false)
     expect(fromBoss('boss@gmail.com attacker@gmail.com')).toBe(false)
+    expect(fromBoss('<attacker@gmail.com (><boss@gmail.com>)>')).toBe(false)
   })
 
   it('matches the real address with any display name, bare, or uppercase', () => {
@@ -46,6 +47,7 @@ describe('Gmail from= rules match the real sender address', () => {
     expect(fromBoss('boss@gmail.com')).toBe(true)
     expect(fromBoss('BOSS@Gmail.COM')).toBe(true)
     expect(fromBoss('The Boss <BOSS@GMAIL.COM>')).toBe(true)
+    expect(fromBoss('<boss@gmail.com (Boss, <x@y.com>)>')).toBe(true)
     expect(gmailRuleMatches(rule(['gmail.com']), mail('"x@acme.com" <boss@gmail.com>'), null)).toBe(
       true
     )
@@ -58,6 +60,7 @@ describe('Gmail from= rules match the real sender address', () => {
   it('never matches a From header with several addresses', () => {
     expect(fromBoss('boss@gmail.com, attacker@gmail.com')).toBe(false)
     expect(fromBoss('Boss <boss@gmail.com>, Other <other@gmail.com>')).toBe(false)
+    expect(fromBoss('boss@gmail.com, "other"@gmail.com')).toBe(false)
   })
 
   it('still needs Gmail to verify the sender', () => {

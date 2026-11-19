@@ -3,23 +3,42 @@
 
 type Scanned = { outside: string; lastAngle: string | null }
 
-// Walks one header, calling `at` for each char outside quotes, comments and angle brackets.
+// Walks one header, dropping comments, keeping quoted text where it stands, and calling `at` for
+// each char outside quotes, comments and angle brackets.
 function scan(text: string, at?: (index: number) => void): Scanned {
   let outside = ''
   let lastAngle: string | null = null
   let angle: string | null = null
   let quoted = false
   let comment = 0
+  const keep = (part: string) => {
+    if (angle === null) {
+      outside += part
+    } else {
+      angle += part
+    }
+  }
   for (let i = 0; i < text.length; i++) {
     const char = text[i]
-    if (char === '\\' && (quoted || comment > 0)) {
-      i += 1
-      continue
-    }
-    if (quoted) {
-      quoted = char !== '"'
-    } else if (comment > 0) {
-      comment += char === '(' ? 1 : char === ')' ? -1 : 0
+    if (comment > 0) {
+      if (char === '\\') {
+        i += 1
+      } else {
+        comment += char === '(' ? 1 : char === ')' ? -1 : 0
+      }
+    } else if (quoted) {
+      if (char === '\\') {
+        keep(text.slice(i, i + 2))
+        i += 1
+      } else {
+        keep(char)
+        quoted = char !== '"'
+      }
+    } else if (char === '(') {
+      comment = 1
+    } else if (char === '"') {
+      quoted = true
+      keep(char)
     } else if (angle !== null) {
       if (char === '>') {
         lastAngle = angle
@@ -27,10 +46,6 @@ function scan(text: string, at?: (index: number) => void): Scanned {
       } else {
         angle += char
       }
-    } else if (char === '"') {
-      quoted = true
-    } else if (char === '(') {
-      comment = 1
     } else if (char === '<') {
       angle = ''
     } else {
@@ -68,7 +83,7 @@ export function mailboxAddress(entry: string): string | null {
     .slice(raw.lastIndexOf(':') + 1)
     .trim()
     .toLowerCase()
-  return /^[^\s@]+@[^\s@]+$/.test(address) ? address : null
+  return /^[^\s@]+@[^\s@"]+$/.test(address) ? address : null
 }
 
 /** The real addresses in an address header, lowercased. */
