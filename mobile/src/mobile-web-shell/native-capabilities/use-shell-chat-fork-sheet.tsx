@@ -187,7 +187,9 @@ async function runOnOtherHost(
 function wireTarget(
   target: ChatForkRunTarget
 ): Extract<BridgeChatForkResult, { outcome: 'here' }>['target'] {
-  const { hostCapabilities, ...rest } = target
+  // The page's bridge has no name field; a fork it runs keeps its default name.
+  const { hostCapabilities, name, ...rest } = target
+  void name
   return hostCapabilities ? { ...rest, hostCapabilities: [...hostCapabilities] } : rest
 }
 

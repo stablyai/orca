@@ -19981,7 +19981,11 @@
         "markedName": "{{mark}} {{name}}",
         "accessibleName": "Rama: {{name}}",
         "sourceTooltip": "Rama de {{name}}",
-        "unknownSourceTooltip": "Rama de otro chat"
+        "unknownSourceTooltip": "Rama de otro chat",
+        "window": {
+          "chatNameLabel": "Nombre del chat",
+          "chatNameDefault": "{{name}} (Rama)"
+        }
       },
       "cardKindHidden": {
         "description": "Puedes cambiar esto en cualquier momento en",

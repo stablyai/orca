@@ -3666,7 +3666,9 @@
         "context": "Context",
         "contextCurrent": "Current context (since the last compact or clear)",
         "contextHistory": "Full history up to here",
-        "recapNoCopy": "An exact copy can’t reach this host or kind, so {{agent}} starts with a recap of this chat up to here."
+        "recapNoCopy": "An exact copy can’t reach this host or kind, so {{agent}} starts with a recap of this chat up to here.",
+        "name": "Chat name",
+        "nameDefault": "{{name}} (Fork)"
       },
       "mark": "Fork ·",
       "markedName": "{{mark}} {{name}}",

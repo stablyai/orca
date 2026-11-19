@@ -73,6 +73,8 @@ export async function launchNativeChatTerminalFork(input: {
   throughItemId: string
   destinationWorktreeId?: string
   draft?: string
+  /** The copy's name, shown on its tab and given to Claude. */
+  name?: string
 }): Promise<NativeChatForkOutcome> {
   const state = useAppStore.getState()
   const worktreeId = input.destinationWorktreeId ?? input.source.worktreeId
@@ -117,7 +119,8 @@ export async function launchNativeChatTerminalFork(input: {
       ...(forked.filePath ? { filePath: forked.filePath } : {}),
       cwd: worktree?.path ?? '',
       executionHostId,
-      ...(input.draft ? { draft: input.draft } : {})
+      ...(input.draft ? { draft: input.draft } : {}),
+      ...(input.name ? { name: input.name } : {})
     })
   } catch (error) {
     failure(error)
@@ -133,6 +136,8 @@ export async function resumeClaudeCopyInNewTerminalTab(input: {
   cwd: string
   executionHostId: ExecutionHostId
   draft?: string
+  /** The copy's name, shown on its tab and given to Claude. */
+  name?: string
 }): Promise<void> {
   // The copy launches with the settings of the host that runs it, like any other CLI fork.
   const owner = captureAiVaultCliForkOwner(input.executionHostId)
@@ -153,7 +158,8 @@ export async function resumeClaudeCopyInNewTerminalTab(input: {
     },
     copied: true,
     owner,
-    settings
+    settings,
+    ...(input.name ? { displayName: input.name } : {})
   })
   if (!startup) {
     throw new Error(
@@ -168,6 +174,9 @@ export async function resumeClaudeCopyInNewTerminalTab(input: {
     worktreeId: input.worktreeId,
     ...startup
   })
+  if (tabId && input.name) {
+    useAppStore.getState().setTabCustomTitle(tabId, input.name, { recordInteraction: false })
+  }
   if (tabId && input.draft) {
     leaveDraftInNewTab(tabId, input.draft)
   }

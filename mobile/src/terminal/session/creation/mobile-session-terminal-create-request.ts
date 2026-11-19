@@ -7,7 +7,7 @@ export type MobileSessionTerminalCreateOptions = MobileQuickCommandLaunch['optio
   onPromptSent?: () => void
   errorToast?: string
   /** With throughEntryId, a terminal Claude chat's fork cut at that transcript entry. */
-  sourceChatFork?: { sessionId: string; agent: string; throughEntryId?: string }
+  sourceChatFork?: { sessionId: string; agent: string; throughEntryId?: string; name?: string }
   /** Show the tab as a terminal even when the agent it runs would open as a chat. */
   terminalView?: boolean
   /** One of desktop's Windows shell entries; only sent to hosts that take a shell pick. */
@@ -34,6 +34,8 @@ export function requestMobileSessionTerminalCreate(args: {
   options?: MobileQuickCommandLaunch['options']
   shell?: string
   sourceChatFork?: { sessionId: string; throughEntryId?: string }
+  /** A fork's session name, for CLIs that take one. */
+  forkName?: string
 }) {
   const {
     client,
@@ -43,7 +45,8 @@ export function requestMobileSessionTerminalCreate(args: {
     agent,
     options,
     shell,
-    sourceChatFork
+    sourceChatFork,
+    forkName
   } = args
   const params = {
     worktree: `id:${worktreeId}`,
@@ -57,6 +60,7 @@ export function requestMobileSessionTerminalCreate(args: {
     ...(agent ? { agent } : {}),
     ...(shell ? { shell } : {}),
     ...(sourceChatFork ? { sourceChatFork } : {}),
+    ...(sourceChatFork && forkName ? { forkName } : {}),
     activate: false,
     select: true,
     navigation: 'caller' as const

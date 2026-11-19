@@ -48,6 +48,7 @@ export async function runNativeChatRecapFork(input: {
   openAs: ChatForkSurface
   worktreeId: string
   draft?: string
+  name?: string
   signal?: AbortSignal
 }): Promise<boolean> {
   const { recap } = input
@@ -66,6 +67,7 @@ export async function runNativeChatRecapFork(input: {
     },
     launchSource: 'native_chat',
     keepPromptUnsent: true,
+    ...(input.name ? { name: input.name } : {}),
     ...(input.signal ? { signal: input.signal } : {})
   })
 }

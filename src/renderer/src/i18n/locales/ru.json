@@ -20877,7 +20877,11 @@
         "markedName": "{{mark}} {{name}}",
         "accessibleName": "Форк: {{name}}",
         "sourceTooltip": "Ответвление от {{name}}",
-        "unknownSourceTooltip": "Ответвление от другого чата"
+        "unknownSourceTooltip": "Ответвление от другого чата",
+        "window": {
+          "chatNameLabel": "Название чата",
+          "chatNameDefault": "{{name}} (Форк)"
+        }
       },
       "cardKindHidden": {
         "description": "Вы можете изменить это в любое время в разделе",

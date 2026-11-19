@@ -20362,7 +20362,11 @@
         "markedName": "{{mark}} {{name}}",
         "accessibleName": "Çatal: {{name}}",
         "sourceTooltip": "{{name}} sohbetinin çatalı",
-        "unknownSourceTooltip": "Başka bir sohbetin çatalı"
+        "unknownSourceTooltip": "Başka bir sohbetin çatalı",
+        "window": {
+          "chatNameLabel": "Sohbet adı",
+          "chatNameDefault": "{{name}} (Çatal)"
+        }
       },
       "cardKindHidden": {
         "description": "Bunu istediğiniz zaman şuradan değiştirebilirsiniz:",

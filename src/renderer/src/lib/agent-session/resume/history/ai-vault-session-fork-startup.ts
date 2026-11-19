@@ -58,13 +58,15 @@ export function buildAiVaultCliForkStartupForWorktree(
     copied: boolean
     owner: WebSessionIntentOwner | null
     settings: AiVaultResumeLaunchSettings | null | undefined
+    /** The copy's display name, for agents whose CLI takes one. */
+    displayName?: string
   }
 ): AiVaultResumeStartup | null {
-  const { owner, session, settings } = args
+  const { owner, session, settings, displayName } = args
   if (owner && !matchesWebSessionIntentOwner(owner)) {
     throw conversationHostUnavailableError()
   }
-  const startupArgs = { session, host: resolveAiVaultResumeHost(args), settings }
+  const startupArgs = { session, host: resolveAiVaultResumeHost(args), settings, displayName }
   if (args.copied) {
     assertAiVaultCopiedSessionLaunchAllowed(args)
     return {

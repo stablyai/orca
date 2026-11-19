@@ -22200,7 +22200,9 @@
           "contextCurrent": "Current context (since the last compact or clear)",
           "recapNoCopy": "Only a Claude chat’s exact history can be copied, so the fork gets a recap.",
           "recapSourceHost": "This chat’s host can’t export an exact copy (update Orca there), so the fork gets a recap.",
-          "recapTargetHost": "{{host}} can’t take an exact copy (update Orca there), so the fork gets a recap."
+          "recapTargetHost": "{{host}} can’t take an exact copy (update Orca there), so the fork gets a recap.",
+          "chatNameLabel": "Chat name",
+          "chatNameDefault": "{{name}} (Fork)"
         },
         "host": {
           "copying": "Copying chat to {{host}}… {{percent}}%",

@@ -10,10 +10,12 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { useTranslate } from '@/i18n/use-translate'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
+import { AGENT_SESSION_CONVERSATION_NAME_MAX_LENGTH } from '../../../../../../../shared/agent-session/conversation-naming/agent-session-conversation-name'
 import type { NativeChatWorktreeForkDialog } from '../use-native-chat-fork'
 import type { NativeChatForkWindowSource } from './native-chat-fork-window-source'
 import { runNativeChatForkWindow } from './native-chat-fork-window-run'
@@ -66,7 +68,14 @@ function ForkWindow({
 }): React.JSX.Element {
   const t = useTranslate()
   const id = useId()
-  const state = useNativeChatForkWindowState(source, dialog.mode)
+  const defaultChatName = t(
+    'components.native-chat.fork.window.chatNameDefault',
+    '{{name}} (Fork)',
+    {
+      name: source.label.trim() || getAgentLabel(source.agent)
+    }
+  )
+  const state = useNativeChatForkWindowState(source, dialog.mode, defaultChatName)
   const [busy, setBusy] = useState(false)
   const busyRef = useRef(false)
   const abortRef = useRef<AbortController | null>(null)
@@ -166,6 +175,19 @@ function ForkWindow({
                     )}
             </p>
           ) : null}
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={`${id}-chat-name`}>
+              {t('components.native-chat.fork.window.chatNameLabel', 'Chat name')}
+            </Label>
+            <Input
+              id={`${id}-chat-name`}
+              value={state.chatName}
+              disabled={busy}
+              maxLength={AGENT_SESSION_CONVERSATION_NAME_MAX_LENGTH}
+              placeholder={defaultChatName}
+              onChange={(event) => state.setChatName(event.target.value)}
+            />
+          </div>
           <NativeChatForkWindowTargetFields
             id={id}
             busy={busy}

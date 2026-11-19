@@ -161,7 +161,8 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
         agent,
         options,
         shell: options?.shell,
-        ...(sourceFork ? { sourceChatFork: chatForkRequestSource(sourceFork) } : {})
+        ...(sourceFork ? { sourceChatFork: chatForkRequestSource(sourceFork) } : {}),
+        ...(sourceFork?.name ? { forkName: sourceFork.name } : {})
       })
       if (!isCurrent()) {
         return sourceOutcome('accepted')

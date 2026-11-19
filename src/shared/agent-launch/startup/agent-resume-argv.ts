@@ -93,6 +93,15 @@ export function getAgentResumeArgv(
   }
 }
 
+/** The display name a launch gives its session, for agents whose CLI takes one. */
+export function getAgentSessionNameArgv(
+  agent: ResumableTuiAgent,
+  name: string | null | undefined
+): string[] {
+  const trimmed = name?.trim()
+  return trimmed && agent === 'claude' ? ['--name', trimmed] : []
+}
+
 /** CLI fork creates a new conversation ID so chat and terminal cannot write the same one. */
 const FORK_ARGV: Partial<
   Record<ResumableTuiAgent, (providerSession: AgentProviderSessionMetadata) => string[] | null>

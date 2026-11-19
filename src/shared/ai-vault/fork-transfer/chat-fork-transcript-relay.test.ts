@@ -126,4 +126,25 @@ describe('relayChatForkTranscript', () => {
     expect(result.placed.sessionId).toBe(PLACED_SESSION)
     expect(calls).not.toContain('target aiVault.cancelChatForkImport')
   })
+
+  it('names the copy with the chosen title instead of the source chat’s', async () => {
+    const { sourceCall, targetCall } = hosts()
+    const begun: Record<string, unknown>[] = []
+    await relayChatForkTranscript({
+      source: { terminal: { sessionId: SOURCE_SESSION, throughEntryId: 'entry-1' } },
+      targetWorktree: 'id:wt-target',
+      sourceCall: async (method, params) => {
+        const reply = await sourceCall(method, params)
+        return method === 'aiVault.exportChatFork' ? { ...Object(reply), title: 'DevOps' } : reply
+      },
+      targetCall: (method, params) => {
+        if (method === 'aiVault.beginChatForkImport') {
+          begun.push(params)
+        }
+        return targetCall(method, params)
+      },
+      title: 'DevOps (Fork)'
+    })
+    expect(begun[0]?.title).toBe('DevOps (Fork)')
+  })
 })

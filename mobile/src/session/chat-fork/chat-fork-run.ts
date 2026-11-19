@@ -34,14 +34,16 @@ export type ChatForkRunDeps = {
   createFork: (
     agent: TuiAgent,
     forkFrom: StructuredAgentSessionForkSource,
-    recap?: string
+    recap?: string,
+    name?: string
   ) => Promise<void>
   createWorktreeFork: (
     agent: TuiAgent,
     forkFrom: StructuredAgentSessionForkSource,
     mode: MobileWorktreeForkMode,
     recap?: string,
-    openIn?: (client: RpcClient, worktreeId: string) => Promise<ChatForkLaunchOutcome>
+    openIn?: (client: RpcClient, worktreeId: string) => Promise<ChatForkLaunchOutcome>,
+    name?: string
   ) => Promise<void>
   /** Holds a connection to a host for the whole transfer and launch. */
   acquireHost: (hostId: string) => { client: RpcClient | null; release: () => void }
@@ -60,6 +62,8 @@ export type ChatForkRunTarget = {
   path: ChatForkPath
   openAs: ChatForkSurface
   recapScope: ChatForkRecapScope
+  /** The fork's name; absent, it keeps the name its host gives it. */
+  name?: string
 }
 
 type Report = (message: string) => void
@@ -92,6 +96,7 @@ async function openForkIn(
         sourceWorktreeId: source.worktreeId,
         forkFrom,
         targetWorktreeId: worktreeId,
+        ...(target.name ? { name: target.name } : {}),
         onProgress: (done, total) =>
           deps.onProgress(
             chatForkCopy.copying(target.hostLabel, total > 0 ? Math.floor((done / total) * 100) : 0)
@@ -115,7 +120,8 @@ async function openForkIn(
     placedIn,
     target.agent,
     launch,
-    target.hostCapabilities
+    target.hostCapabilities,
+    target.name
   ).catch((): ChatForkLaunchOutcome => ({ kind: 'unconfirmed' }))
 }
 
@@ -145,16 +151,22 @@ export async function runChatFork(
   if (workspace.kind === 'new') {
     const mode = target.runAs === 'subagent' ? 'subagent' : 'worktree'
     if (ownPath) {
-      return deps.createWorktreeFork(target.agent, forkFrom, mode, recap)
+      return deps.createWorktreeFork(target.agent, forkFrom, mode, recap, undefined, target.name)
     }
-    return deps.createWorktreeFork(target.agent, forkFrom, mode, recap, (client, worktreeId) =>
-      openForkIn(source, deps, target, forkFrom, client, worktreeId, recap, report).then(
-        (outcome) => outcome ?? { kind: 'reported' }
-      )
+    return deps.createWorktreeFork(
+      target.agent,
+      forkFrom,
+      mode,
+      recap,
+      (client, worktreeId) =>
+        openForkIn(source, deps, target, forkFrom, client, worktreeId, recap, report).then(
+          (outcome) => outcome ?? { kind: 'reported' }
+        ),
+      target.name
     )
   }
   if (workspace.kind === 'this' && ownPath) {
-    return deps.createFork(target.agent, forkFrom, recap)
+    return deps.createFork(target.agent, forkFrom, recap, target.name)
   }
   const sameHost = target.hostId === source.hostId
   const held = sameHost

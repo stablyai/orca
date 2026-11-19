@@ -691,7 +691,11 @@
       "unsupported": "Auf diesem Host läuft eine ältere Orca-Version. Aktualisiere Orca auf dem Host und versuche es erneut.",
       "mark": "Zweig ·",
       "markedName": "{{mark}} {{name}}",
-      "accessibleName": "Zweig: {{name}}"
+      "accessibleName": "Zweig: {{name}}",
+      "sheet": {
+        "name": "Chatname",
+        "nameDefault": "{{name}} (Zweig)"
+      }
     },
     "selectionQuote": {
       "action": "Zitieren",

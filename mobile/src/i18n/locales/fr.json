@@ -726,7 +726,11 @@
       "unsupported": "Cet hôte utilise une ancienne version d’Orca. Mettez Orca à jour sur l’hôte, puis réessayez.",
       "mark": "Branche ·",
       "markedName": "{{mark}} {{name}}",
-      "accessibleName": "Branche : {{name}}"
+      "accessibleName": "Branche : {{name}}",
+      "sheet": {
+        "name": "Nom de la discussion",
+        "nameDefault": "{{name}} (Branche)"
+      }
     },
     "selectionQuote": {
       "action": "Citer",

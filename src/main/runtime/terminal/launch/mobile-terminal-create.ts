@@ -29,6 +29,7 @@ export type MobileTerminalCreateOptions = {
   afterTabId?: string
   sourceChatFork?: { sessionId: string; throughEntryId?: string }
   sourceChatImport?: ChatForkImportLaunchRef
+  forkName?: string
   targetGroupId?: string
   command?: string
   shellOverride?: string
@@ -104,6 +105,7 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
       afterTabId?: string
       sourceChatFork?: { sessionId: string; throughEntryId?: string }
       sourceChatImport?: ChatForkImportLaunchRef
+      forkName?: string
       targetGroupId?: string
       command?: string
       shellOverride?: string

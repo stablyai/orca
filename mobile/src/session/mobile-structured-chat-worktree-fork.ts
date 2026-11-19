@@ -20,6 +20,7 @@ import { createMobileStructuredAgentSession } from './native-chat/agent-session/
 import { sessionTabCreateTerminal } from './tabs/mobile-session-tab-write-operations'
 import { randomV4Uuid } from '../platform/random-v4-uuid'
 import type { ChatForkLaunchOutcome } from './chat-fork/chat-fork-workspace-launch'
+import { nameMobileForkedChat } from './chat-fork/chat-fork-name'
 
 /** A worktree you drive, or a background subagent that reports back to the chat it came from. */
 export type MobileWorktreeForkMode = 'worktree' | 'subagent'
@@ -128,6 +129,8 @@ export async function forkMobileStructuredChatIntoWorktree(input: {
   sourceLabel?: string
   /** Another agent's fork: the new chat starts from this recap instead of a copy. */
   recap?: string
+  /** The forked chat's name (not the worktree's). */
+  chatName?: string
   /** Opens the fork in the created worktree instead: a relayed copy, or a recap in a terminal. */
   openIn?: (client: RpcClient, worktreeId: string) => Promise<ChatForkLaunchOutcome>
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
@@ -221,6 +224,7 @@ export async function forkMobileStructuredChatIntoWorktree(input: {
             sessionId: input.forkFrom.sessionId,
             throughEntryId: input.forkFrom.throughItemId
           },
+          ...(input.chatName ? { forkName: input.chatName } : {}),
           activate: false,
           select: true,
           navigation: 'caller' as const
@@ -249,6 +253,7 @@ export async function forkMobileStructuredChatIntoWorktree(input: {
         ? subagentFirstMessage(task, input.forkFrom.sessionId, input.sourceLabel ?? input.agent)
         : undefined)
   ).catch(() => ({ kind: 'unknown' as const }))
+  nameMobileForkedChat(client, result, input.chatName)
   // A subagent works in the background; you stay in this chat.
   if (task) {
     if (result.kind === 'created') {

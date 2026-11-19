@@ -2,6 +2,8 @@ import { toast } from 'sonner'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { ensureDetectedAgentsForWorktree } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
+import type { LaunchAgentInNewTabResult } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-host-agents'
+import { nameForkedStructuredChat } from '@/runtime/native-chat/naming/structured-chat-fork-name'
 
 import { createNonSecureContextUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { useAppStore } from '@/store/index'
@@ -39,6 +41,8 @@ type LaunchAgentSessionContinuationArgs = {
   agentArgs?: string | null
   /** Leaves the prompt in the new session's composer for you to edit and send. */
   keepPromptUnsent?: boolean
+  /** The new session's name, on its tab or as its chat's own name. */
+  name?: string
 }
 
 /** Detected agents, then those that open as a chat on the workspace's host without their CLI. */
@@ -111,7 +115,8 @@ export async function launchAgentSessionContinuation({
   sessionOptions,
   chatSessionOptions,
   agentArgs,
-  keepPromptUnsent
+  keepPromptUnsent,
+  name
 }: LaunchAgentSessionContinuationArgs): Promise<boolean> {
   const label = getAgentLabel(agent)
   // Blind PTY writes do not prove prompt delivery; claiming success can hide a lost handoff (#22479).
@@ -190,6 +195,9 @@ export async function launchAgentSessionContinuation({
       return false
     }
   }
+  if (name) {
+    nameContinuation(result, name, executionHostId)
+  }
 
   if (result.promptDeliveryResult) {
     void result.promptDeliveryResult
@@ -204,6 +212,25 @@ export async function launchAgentSessionContinuation({
       })
   }
   return true
+}
+
+/** A terminal tab this window opened takes the name; a chat saves it as its own name once created. */
+function nameContinuation(
+  result: NonNullable<LaunchAgentInNewTabResult>,
+  name: string,
+  executionHostId: string | undefined
+): void {
+  if (result.surface.kind === 'local-terminal') {
+    useAppStore
+      .getState()
+      .setTabCustomTitle(result.surface.tabId, name, { recordInteraction: false })
+    return
+  }
+  void result.structuredSettlement?.then((settled) => {
+    if (settled.kind === 'structured' && executionHostId) {
+      void nameForkedStructuredChat(executionHostId, settled.sessionId, name)
+    }
+  })
 }
 
 function notifyDeliveryFailed(agentLabel: string, prompt: string): void {

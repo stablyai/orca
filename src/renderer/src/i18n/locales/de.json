@@ -20215,7 +20215,11 @@
         "markedName": "{{mark}} {{name}}",
         "accessibleName": "Zweig: {{name}}",
         "sourceTooltip": "Abgezweigt von {{name}}",
-        "unknownSourceTooltip": "Von einem anderen Chat abgezweigt"
+        "unknownSourceTooltip": "Von einem anderen Chat abgezweigt",
+        "window": {
+          "chatNameLabel": "Chatname",
+          "chatNameDefault": "{{name}} (Zweig)"
+        }
       },
       "cardKindHidden": {
         "description": "Das kannst du jederzeit hier ändern:",

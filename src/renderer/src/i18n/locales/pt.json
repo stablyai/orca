@@ -21671,7 +21671,11 @@
         "markedName": "{{mark}} {{name}}",
         "accessibleName": "Fork: {{name}}",
         "sourceTooltip": "Ramificação de {{name}}",
-        "unknownSourceTooltip": "Ramificação de outro chat"
+        "unknownSourceTooltip": "Ramificação de outro chat",
+        "window": {
+          "chatNameLabel": "Nome do chat",
+          "chatNameDefault": "{{name}} (Fork)"
+        }
       },
       "cardKindHidden": {
         "description": "Você pode alterar isso a qualquer momento em",

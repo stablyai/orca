@@ -761,7 +761,11 @@
       "unsupported": "На этом хосте установлена старая версия Orca. Обновите Orca на хосте и повторите попытку.",
       "mark": "Форк ·",
       "markedName": "{{mark}} {{name}}",
-      "accessibleName": "Форк: {{name}}"
+      "accessibleName": "Форк: {{name}}",
+      "sheet": {
+        "name": "Название чата",
+        "nameDefault": "{{name}} (Форк)"
+      }
     },
     "selectionQuote": {
       "action": "Цитировать",

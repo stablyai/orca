@@ -43,7 +43,8 @@ import { useNativeChatForkAgents } from './use-native-chat-fork-window-agents'
 /** Every field of the Fork window: what was picked, else its default, kept valid as other picks change. */
 export function useNativeChatForkWindowState(
   source: NativeChatForkWindowSource,
-  preset: NativeChatForkWindowPreset
+  preset: NativeChatForkWindowPreset,
+  defaultChatName: string
 ) {
   const sourceHostId = getRuntimeTargetHostId(source.target)
   const [start] = useState(() => nativeChatForkWindowStart(preset, source.newWorktreeOffered))
@@ -55,6 +56,7 @@ export function useNativeChatForkWindowState(
   const [name, setName] = useState(plan?.name ?? '')
   const [base, setBase] = useState<NativeChatWorktreeForkBase>('main')
   const [task, setTask] = useState('')
+  const [chatName, setChatName] = useState(defaultChatName)
   const [surfacePick, setSurfacePick] = useState<ChatForkSurface | undefined>(undefined)
   const [recapScope, setRecapScope] = useState<ChatForkRecapScope>('history')
   const preferred = useAppStore((state) => state.settings?.defaultTuiAgent)
@@ -169,7 +171,8 @@ export function useNativeChatForkWindowState(
       displayName: slug === plan?.name ? plan.displayName : name.trim(),
       base
     },
-    task: task.trim()
+    task: task.trim(),
+    chatName: chatName.trim() || defaultChatName
   })
   return {
     route,
@@ -220,6 +223,8 @@ export function useNativeChatForkWindowState(
     },
     task,
     setTask,
+    chatName,
+    setChatName,
     ready,
     selection
   }

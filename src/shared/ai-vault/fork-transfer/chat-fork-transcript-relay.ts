@@ -12,6 +12,7 @@ import {
   CHAT_FORK_TRANSFER_CHUNK_BYTES,
   chatForkTransferErrorCode
 } from './chat-fork-transfer-limits'
+import { sliceAtCodeUnitLimit } from '../../text/surrogate-safe-text-slice'
 
 /** One RPC to a host; the relay parses every reply, trusting neither side. */
 export type ChatForkRelayCall = (
@@ -25,6 +26,8 @@ export type ChatForkTranscriptRelayInput = {
   targetWorktree: string
   sourceCall: ChatForkRelayCall
   targetCall: ChatForkRelayCall
+  /** The copy's name on the target; absent, the source chat's own title. */
+  title?: string
   signal?: AbortSignal
   onProgress?: (doneBytes: number, totalBytes: number) => void
 }
@@ -49,6 +52,7 @@ export async function relayChatForkTranscript(
     await sourceCall('aiVault.exportChatFork', input.source)
   )
   const total = exported.byteLength
+  const title = sliceAtCodeUnitLimit(input.title?.trim() ?? '', 200) || exported.title
   let importId: string | null = null
   let committed = false
   try {
@@ -60,7 +64,7 @@ export async function relayChatForkTranscript(
         byteLength: total,
         sha256: exported.sha256,
         sourceSessionId: exported.sourceSessionId,
-        ...(exported.title ? { title: exported.title } : {})
+        ...(title ? { title } : {})
       })
     )
     importId = begun.importId

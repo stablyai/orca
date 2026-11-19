@@ -38,7 +38,8 @@ export function chatForkSheetSource(
       capabilities?.includes(AI_VAULT_CHAT_FORK_EXPORT_CAPABILITY) === true,
     canCopy: fork.copyOffered(),
     canNewWorktree: fork.worktreeForkOffered(),
-    canSubagent: !terminal && mobileSubagentForkAvailable(capabilities)
+    canSubagent: !terminal && mobileSubagentForkAvailable(capabilities),
+    ...(controller.activeSessionTab?.title ? { label: controller.activeSessionTab.title } : {})
   }
 }
 

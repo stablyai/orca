@@ -687,7 +687,11 @@
       "unsupported": "이 호스트에서 이전 버전의 Orca가 실행 중입니다. 호스트의 Orca를 업데이트하고 다시 시도하세요.",
       "mark": "분기 ·",
       "markedName": "{{mark}} {{name}}",
-      "accessibleName": "분기: {{name}}"
+      "accessibleName": "분기: {{name}}",
+      "sheet": {
+        "name": "채팅 이름",
+        "nameDefault": "{{name}} (분기)"
+      }
     },
     "selectionQuote": {
       "action": "인용",

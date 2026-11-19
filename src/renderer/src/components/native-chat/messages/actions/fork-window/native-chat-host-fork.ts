@@ -17,6 +17,7 @@ import { createNonSecureContextUuid } from '../../../../../../../shared/identifi
 import type { ExecutionHostId } from '../../../../../../../shared/execution-host/execution-host'
 import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { resumeClaudeCopyInNewTerminalTab } from '../native-chat-terminal-fork-launch'
+import { nameForkedStructuredChat } from '@/runtime/native-chat/naming/structured-chat-fork-name'
 import type { NativeChatForkWindowSource } from './native-chat-fork-window-source'
 import type { ChatForkSurface } from '../../../../../../../shared/native-chat/chat-fork-path'
 
@@ -32,6 +33,8 @@ type HostForkInput = {
   /** The copy resumes in a terminal (Claude's CLI) or as a chat, whatever kind the source was. */
   openAs: ChatForkSurface
   draft?: string
+  /** The copy's name: its tab, its chat's own name, and Claude's session name. */
+  name?: string
   signal?: AbortSignal
 }
 
@@ -94,7 +97,8 @@ async function launchPlacedCopy(
       filePath: placed.filePath,
       cwd: placed.cwd,
       executionHostId: input.targetHostId,
-      ...(input.draft ? { draft: input.draft } : {})
+      ...(input.draft ? { draft: input.draft } : {}),
+      ...(input.name ? { name: input.name } : {})
     })
     return
   }
@@ -107,6 +111,9 @@ async function launchPlacedCopy(
     ...(input.draft ? { prompt: input.draft, promptDelivery: 'draft' as const } : {})
   })
   await launch.launchResult
+  if (input.name) {
+    void nameForkedStructuredChat(launch.executionHostId, launch.sessionId, input.name)
+  }
 }
 
 /** Copies the chat's exact history through the fork point to a workspace on any host (this one too,
@@ -163,6 +170,7 @@ export async function runNativeChatHostFork(input: HostForkInput): Promise<boole
       targetWorktree: toRuntimeWorktreeSelector(input.targetWorktreeId),
       sourceCall: relayCall(source.target, input.signal),
       targetCall: relayCall(targetTarget, input.signal),
+      ...(input.name ? { title: input.name } : {}),
       ...(input.signal ? { signal: input.signal } : {}),
       onProgress: (done, total) => toast.loading(copying(done, total), { id: toastId })
     })

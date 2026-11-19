@@ -10,6 +10,8 @@ import {
   SectionHeader
 } from '../../components/list/ListGroup'
 import { MobileAgentIcon } from '../../components/icons/MobileAgentIcon'
+import { TextField } from '../../components/composer-input/TextField'
+import { AGENT_SESSION_CONVERSATION_NAME_MAX_LENGTH } from '../../../../src/shared/agent-session/conversation-naming/agent-session-conversation-name'
 import { newWorktreeFormStyles as styles } from '../../new-workspace/creation/forms/new-worktree-form-styles'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { SheetPrimaryButton } from '../../components/sheets/SheetPrimaryButton'
@@ -33,6 +35,7 @@ import {
   MobileChatForkPickers,
   type ChatForkPickerView
 } from './MobileChatForkPickers'
+import { defaultChatForkName } from './chat-fork-name'
 import { useChatForkHosts } from './use-chat-fork-hosts'
 import { useChatForkTargetAgents, useChatForkWorkspaceRows } from './use-chat-fork-target'
 
@@ -40,6 +43,8 @@ export type MobileChatForkSheetSource = ChatForkSource & {
   worktreeId: string
   client: RpcClient | null
   capabilities: readonly string[] | undefined
+  /** The chat's shown name, which the fork's default name starts from. */
+  label?: string
 }
 
 /** One Fork sheet: host, workspace, agent and how it runs, each with a default, so Fork works at once. */
@@ -58,6 +63,10 @@ export function MobileChatForkSheet(props: {
   const { source } = props
   const [picks, setPicks] = useState<ChatForkPicks>({})
   const [view, setView] = useState<ChatForkPickerView | null>(null)
+  const defaultName = defaultChatForkName(
+    source.label?.trim() || TUI_AGENT_DISPLAY_NAMES[source.agent]
+  )
+  const [name, setName] = useState(defaultName)
   const hosts = useChatForkHosts({
     currentHostId: source.hostId,
     currentClient: source.client,
@@ -104,7 +113,8 @@ export function MobileChatForkSheet(props: {
       runAs: selection.runAs,
       path: selection.path,
       openAs: selection.openAs,
-      recapScope: selection.recapScope
+      recapScope: selection.recapScope,
+      name: name.trim() || defaultName
     })
   }
   const usageLimitNote =
@@ -151,6 +161,16 @@ export function MobileChatForkSheet(props: {
             }}
           />
         </View>
+        <SectionHeader title={t('chat.fork.sheet.name', 'Chat name')} />
+        <TextField
+          value={name}
+          onChangeText={setName}
+          placeholder={defaultName}
+          editable={!props.busy}
+          maxLength={AGENT_SESSION_CONVERSATION_NAME_MAX_LENGTH}
+          autoCapitalize="sentences"
+          returnKeyType="done"
+        />
         <SectionHeader title={t('chat.fork.sheet.host', 'Host')} />
         <ListGroup>
           <ListRow

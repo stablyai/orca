@@ -167,6 +167,8 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
     .optional(),
   // A chat another host exported and this host placed (aiVault.commitChatForkImport).
   sourceChatImport: z.object({ importId: z.uuid() }).strict().optional(),
+  // A fork's session name, given to CLIs that take one. Older hosts strip it.
+  forkName: z.string().trim().min(1).max(200).optional(),
   afterTabId: z.string().optional(),
   targetGroupId: z.string().optional(),
   command: z.string().optional(),

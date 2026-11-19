@@ -69,6 +69,8 @@ type AiVaultResumeStartupArgs = {
   host: AiVaultResumeHostShell
   settings: AiVaultResumeLaunchSettings | null | undefined
   commandOverride?: string | null
+  /** The session's display name, for agents whose CLI takes one. */
+  displayName?: string | null
 }
 
 export function getAiVaultAgentProviderSession(
@@ -158,6 +160,7 @@ export function buildAiVaultLocalResumeStartup(
         ...managedDataAccountResumeEnv(session)
       },
       resumeInLaunchCwd: true,
+      displayName: args.displayName,
       ...(session.agent === 'omp' && resumeFilePath ? { ompResumeFilePath: resumeFilePath } : {})
     })
     if (startupPlan) {
@@ -239,6 +242,7 @@ export function buildAiVaultForkStartup(
     ),
     agentEnv: resolveTuiAgentLaunchEnv(session.agent, settings, platform),
     resumeInLaunchCwd: true,
+    displayName: args.displayName,
     fork: true
   })
   if (!plan) {

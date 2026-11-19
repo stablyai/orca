@@ -54,7 +54,9 @@ export type NativeChatForkRowAction = {
     throughItemId: string,
     side?: NativeChatSideChatRequest,
     destination?: NativeChatForkDestination,
-    draft?: string
+    draft?: string,
+    /** The fork's name; absent, it keeps the name its host gives it. */
+    name?: string
   ) => Promise<NativeChatForkOutcome | undefined>
   /** Opens the Fork window with a menu item's starting choices. */
   openWorktreeFork?: (
@@ -150,7 +152,8 @@ export function useNativeChatFork(input: {
       throughItemId: string,
       side?: NativeChatSideChatRequest,
       destination?: NativeChatForkDestination,
-      draft?: string
+      draft?: string,
+      name?: string
     ): Promise<NativeChatForkOutcome | undefined> => {
       const { agent, sessionId, tabId, target, worktreeId } = latest.current
       if (inFlight.current || !worktreeId || !isTuiAgent(agent)) {
@@ -182,7 +185,8 @@ export function useNativeChatFork(input: {
           ? captureStructuredLaunchSurfaceAddress(destination.worktreeId)
           : nativeChatForkSurfaceAddress(worktreeId, tabId),
         ...(side ? { side } : {}),
-        ...(draft ? { draft } : {})
+        ...(draft ? { draft } : {}),
+        ...(name ? { name } : {})
       })
         .then((launched) => (outcome = launched))
         .finally(() => {

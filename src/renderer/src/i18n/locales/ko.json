@@ -19471,7 +19471,11 @@
         "markedName": "{{mark}} {{name}}",
         "accessibleName": "분기: {{name}}",
         "sourceTooltip": "{{name}}에서 분기",
-        "unknownSourceTooltip": "다른 채팅에서 분기"
+        "unknownSourceTooltip": "다른 채팅에서 분기",
+        "window": {
+          "chatNameLabel": "채팅 이름",
+          "chatNameDefault": "{{name}} (분기)"
+        }
       },
       "cardKindHidden": {
         "description": "다음에서 언제든 변경할 수 있습니다:",

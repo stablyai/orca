@@ -8,6 +8,7 @@ import { sessionTabCreateTerminal } from '../tabs/mobile-session-tab-write-opera
 import { chatForkRelayCallFor } from './chat-fork-transfer-operations'
 import type { ChatForkSurface } from '../../../../src/shared/native-chat/chat-fork-path'
 import { launchAgentInExistingWorkspace } from '../agent-launch/mobile-existing-agent-launch'
+import { nameMobileForkedChat } from './chat-fork-name'
 
 /** What opens in an existing workspace: a copy cut on this host, a copy placed by a relay, or a recap
  *  sent as the first message of a chat or of a CLI in a terminal. */
@@ -34,10 +35,12 @@ export async function launchChatForkInWorkspace(
   agent: TuiAgent,
   launch: ChatForkWorkspaceLaunch,
   /** The host's advertised capabilities; a terminal recap launches through agent.launch. */
-  hostCapabilities?: readonly string[]
+  hostCapabilities?: readonly string[],
+  /** The fork's name: a chat's own name, or the session name a Claude terminal takes. */
+  name?: string
 ): Promise<ChatForkLaunchOutcome> {
   if (launch.kind === 'imported-terminal' || (launch.kind === 'copy' && launch.terminal)) {
-    return createForkTerminal(client, worktreeId, launch)
+    return createForkTerminal(client, worktreeId, launch, name)
   }
   if (launch.kind === 'recap' && launch.surface === 'terminal') {
     return launchRecapTerminal(client, worktreeId, agent, launch.recap, hostCapabilities)
@@ -51,6 +54,7 @@ export async function launchChatForkInWorkspace(
     launch.kind === 'recap' ? launch.recap : undefined,
     launch.kind === 'imported-chat' ? { providerSessionId: launch.providerSessionId } : undefined
   ).catch(() => ({ kind: 'unknown' as const }))
+  nameMobileForkedChat(client, result, name)
   return result.kind === 'created'
     ? { kind: 'opened' }
     : result.kind === 'unknown'
@@ -90,7 +94,8 @@ async function launchRecapTerminal(
 async function createForkTerminal(
   client: RpcClient,
   worktreeId: string,
-  launch: Extract<ChatForkWorkspaceLaunch, { kind: 'copy' | 'imported-terminal' }>
+  launch: Extract<ChatForkWorkspaceLaunch, { kind: 'copy' | 'imported-terminal' }>,
+  name: string | undefined
 ): Promise<ChatForkLaunchOutcome> {
   let response
   try {
@@ -107,6 +112,7 @@ async function createForkTerminal(
               }
             }
           : { sourceChatImport: { importId: launch.importId } }),
+        ...(name ? { forkName: name } : {}),
         activate: false,
         select: true,
         navigation: 'caller' as const
@@ -136,6 +142,8 @@ export async function relayChatForkToHost(input: {
   sourceWorktreeId: string
   forkFrom: StructuredAgentSessionForkSource
   targetWorktreeId: string
+  /** The copy's name on the target; absent, the source chat's own title. */
+  name?: string
   signal?: AbortSignal
   onProgress: (doneBytes: number, totalBytes: number) => void
 }): Promise<{ launch: ChatForkWorkspaceLaunch; worktreeId: string }> {
@@ -153,6 +161,7 @@ export async function relayChatForkToHost(input: {
     targetWorktree: `id:${input.targetWorktreeId}`,
     sourceCall: chatForkRelayCallFor(input.sourceClient, input.signal),
     targetCall: chatForkRelayCallFor(input.targetClient, input.signal),
+    ...(input.name ? { title: input.name } : {}),
     signal: input.signal,
     onProgress: input.onProgress
   })

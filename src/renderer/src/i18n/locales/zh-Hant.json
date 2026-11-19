@@ -19903,7 +19903,11 @@
         "markedName": "{{mark}} {{name}}",
         "accessibleName": "分支：{{name}}",
         "sourceTooltip": "{{name}} 的分支",
-        "unknownSourceTooltip": "另一個聊天的分支"
+        "unknownSourceTooltip": "另一個聊天的分支",
+        "window": {
+          "chatNameLabel": "聊天名稱",
+          "chatNameDefault": "{{name}}（分支）"
+        }
       },
       "cardKindHidden": {
         "description": "你可以隨時在此處變更",

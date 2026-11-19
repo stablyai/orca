@@ -117,7 +117,8 @@ export abstract class OrcaRuntimeWithMobileChatForkCreate extends OrcaRuntimeWit
           buildMobileTerminalChatFork({
             prepared,
             settings,
-            runtime: launchRuntime
+            runtime: launchRuntime,
+            ...(opts.forkName ? { displayName: opts.forkName } : {})
           }),
           opts.terminalImageViewerSupported
         )

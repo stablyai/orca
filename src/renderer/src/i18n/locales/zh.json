@@ -20562,7 +20562,11 @@
         "unknownSourceTooltip": "另一个聊天的分支",
         "commandDescription": "从最新回复为此聊天创建分支",
         "commandNothing": "还没有可用于创建分支的回复",
-        "commandTakesNoText": "请单独发送 /fork，然后在新聊天中输入内容"
+        "commandTakesNoText": "请单独发送 /fork，然后在新聊天中输入内容",
+        "window": {
+          "chatNameLabel": "聊天名称",
+          "chatNameDefault": "{{name}}（分支）"
+        }
       },
       "cardKindHidden": {
         "description": "你可以随时在此处更改",

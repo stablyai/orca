@@ -33,6 +33,8 @@ export type NativeChatForkWindowSelection = {
   runAs: NativeChatForkRunAs
   newWorktree: { name: string; displayName: string; base: NativeChatWorktreeForkBase }
   task: string
+  /** The forked chat's name, never empty. */
+  chatName: string
 }
 
 /** The exact copy on the chat's own host: the paths the fork menu always took. */
@@ -40,11 +42,11 @@ async function runSameHostFork(
   source: NativeChatForkWindowSource,
   selection: NativeChatForkWindowSelection
 ): Promise<boolean> {
-  const { throughItemId, draft, workspace } = selection
+  const { throughItemId, draft, workspace, chatName } = selection
   const report = { target: source.target, sessionId: source.sessionId, label: source.label }
   const subagent = selection.runAs === 'subagent'
   if (workspace.kind === 'this') {
-    void source.request(throughItemId, undefined, undefined, draft)
+    void source.request(throughItemId, undefined, undefined, draft, chatName)
     return true
   }
   if (workspace.kind === 'new-worktree') {
@@ -57,6 +59,7 @@ async function runSameHostFork(
       name: selection.newWorktree.name,
       displayName: selection.newWorktree.displayName,
       mode: subagent ? 'subagent' : 'worktree',
+      chatName,
       ...(draft ? { draft } : {}),
       ...(subagent ? { subagent: { ...report, task: selection.task } } : {})
     })
@@ -64,11 +67,11 @@ async function runSameHostFork(
   const destination = { worktreeId: workspace.worktreeId }
   if (subagent) {
     const question = await nativeChatSubagentFirstMessage(selection.task, report)
-    void source.request(throughItemId, { question }, destination)
+    void source.request(throughItemId, { question }, destination, undefined, chatName)
     return true
   }
   activateAndRevealWorktree(workspace.worktreeId, { sidebarRevealBehavior: 'auto' })
-  void source.request(throughItemId, undefined, destination, draft)
+  void source.request(throughItemId, undefined, destination, draft, chatName)
   return true
 }
 
@@ -124,6 +127,7 @@ export async function runNativeChatForkWindow(
           hostLabel: selection.hostLabel,
           targetWorktreeId: worktreeId,
           openAs: selection.openAs,
+          name: selection.chatName,
           ...(selection.draft ? { draft: selection.draft } : {}),
           ...(signal ? { signal } : {})
         })
@@ -133,6 +137,7 @@ export async function runNativeChatForkWindow(
           hostId: selection.hostId,
           openAs: selection.openAs,
           worktreeId,
+          name: selection.chatName,
           ...(selection.draft ? { draft: selection.draft } : {}),
           ...(signal ? { signal } : {})
         })

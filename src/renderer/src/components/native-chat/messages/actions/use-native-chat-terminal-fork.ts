@@ -71,7 +71,8 @@ export function useNativeChatTerminalFork(input: {
       throughItemId: string,
       _side?: NativeChatSideChatRequest,
       destination?: NativeChatForkDestination,
-      draft?: string
+      draft?: string,
+      name?: string
     ) => {
       const { source, cutHost } = latest.current
       if (inFlight.current || !source || cutHost !== 'supported') {
@@ -84,7 +85,8 @@ export function useNativeChatTerminalFork(input: {
           throughItemId:
             terminalForkTurnEnd(latest.current.messages, throughItemId) ?? throughItemId,
           ...(destination ? { destinationWorktreeId: destination.worktreeId } : {}),
-          ...(draft ? { draft } : {})
+          ...(draft ? { draft } : {}),
+          ...(name ? { name } : {})
         })
       )
     },
