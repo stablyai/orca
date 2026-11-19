@@ -10,6 +10,7 @@ export type DrawnWorktreeCardStyleState = Pick<AppState, 'settings' | 'worktreeC
 export function selectDrawsNewWorktreeCards(state: DrawnWorktreeCardStyleState): boolean {
   return (
     state.worktreeCardsIntroChoice === 'new' ||
-    state.settings?.experimentalNewWorktreeCardStyle === true
+    (state.settings?.compactWorktreeHeader !== true &&
+      state.settings?.experimentalNewWorktreeCardStyle === true)
   )
 }
