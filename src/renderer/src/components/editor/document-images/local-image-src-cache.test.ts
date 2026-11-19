@@ -5,6 +5,7 @@ import {
   blobUrlCache,
   cacheLocalImageBlob,
   getLocalImageCacheGeneration,
+  inFlightBlobUrlLoads,
   invalidateLocalImageCache,
   resetLocalImageCacheState,
   subscribeToLocalImageCacheInvalidation
@@ -41,6 +42,26 @@ describe('local-image-src-cache', () => {
     expect(blobUrlCache.has('client\0\0local\0\0\0\0\0\0roots\0\0/worktree/fig.png')).toBe(false)
     expect(blobUrlCache.get('client\0\0local\0\0\0\0\0\0roots\0\0/worktree/other.png')).toBe(
       'blob:other-1'
+    )
+  })
+
+  it('drops unrelated in-flight loads on targeted invalidation so re-runs start fresh reads', () => {
+    const unrelatedKey = 'client\0\0local\0\0\0\0\0\0roots\0\0/worktree/b.png'
+    const pending = new Promise<string | null>(() => undefined)
+    inFlightBlobUrlLoads.set(unrelatedKey, pending)
+    cacheLocalImageBlob(
+      unrelatedKey.replace('/worktree/b.png', '/worktree/cached.png'),
+      'blob:c',
+      100
+    )
+
+    invalidateLocalImageCache('/worktree/a.avif')
+
+    // The generation bump rejects every in-flight load; keeping unrelated entries
+    // would make listener re-runs reuse a promise doomed to resolve null (blank image).
+    expect(inFlightBlobUrlLoads.has(unrelatedKey)).toBe(false)
+    expect(blobUrlCache.get('client\0\0local\0\0\0\0\0\0roots\0\0/worktree/cached.png')).toBe(
+      'blob:c'
     )
   })
 

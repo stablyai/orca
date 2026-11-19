@@ -163,11 +163,10 @@ export function invalidateLocalImageCache(targetPath?: string): void {
         staleUrls.push(url)
       }
     }
-    for (const key of inFlightBlobUrlLoads.keys()) {
-      if (matchesCacheKeyPath(key, targetPath)) {
-        inFlightBlobUrlLoads.delete(key)
-      }
-    }
+    // The generation bump below rejects every in-flight load, not just matching
+    // keys. Drop them all so listener re-runs start fresh reads instead of
+    // reusing promises that are doomed to resolve null (blank unrelated images).
+    inFlightBlobUrlLoads.clear()
   }
   cacheGeneration += 1
   for (const listener of cacheListeners) {
