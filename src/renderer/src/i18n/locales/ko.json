@@ -19129,14 +19129,7 @@
         "unreported": "이 세션에서는 컨텍스트 사용량을 확인할 수 없습니다."
       },
       "agentMessage": {
-        "messageFrom": "보낸 사람:",
         "unnamedSender": "Agent",
-        "messageFromCoordinator": "코디네이터의 메시지",
-        "startedWorker": "워커 시작됨",
-        "handedOffToAgent": "에이전트에게 넘김",
-        "startedAgent": "에이전트 시작됨",
-        "taskFromCoordinator": "코디네이터의 작업",
-        "updateFromWorker": "워커의 업데이트",
         "senderReplaced": "{{name}}이(가) 더 이상 해당 터미널에서 실행되지 않습니다. 현재 다른 에이전트가 실행 중입니다. 필요하면 사이드바에서 해당 터미널을 여세요.",
         "senderAmbiguous": "Orca가 {{name}}이(가) 실행 중인 터미널을 확인할 수 없습니다. 사이드바에서 여세요.",
         "senderNotRunning": "{{name}}이(가) 더 이상 실행되지 않습니다. 작업을 계속하려면 사이드바에서 새 에이전트를 시작하세요.",

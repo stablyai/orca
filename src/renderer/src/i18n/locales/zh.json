@@ -20226,21 +20226,12 @@
         "unreported": "此会话无法提供上下文用量"
       },
       "agentMessage": {
-        "messageFrom": "消息来自",
         "unnamedSender": "一个代理",
-        "messageFromCoordinator": "来自协调者的消息",
-        "startedWorker": "已启动工作者",
-        "handedOffToAgent": "已移交给智能体",
-        "startedAgent": "已启动智能体",
-        "taskFromCoordinator": "来自协调者的任务",
-        "updateFromWorker": "来自工作者的更新",
         "senderReplaced": "{{name}} 已不在其终端中运行；现在有另一个智能体在该终端中运行。如有需要，请从侧边栏打开该终端。",
         "senderAmbiguous": "Orca 无法确定 {{name}} 在哪个终端中运行。请从侧边栏打开终端。",
         "senderNotRunning": "{{name}} 已停止运行。请从侧边栏启动新智能体以继续其工作。",
         "unnamedSenderSubject": "一个智能体",
-        "goToAgent": "转到智能体",
-        "reopenedWorker": "已重新打开工作者",
-        "sentFollowUpToWorker": "已向工作者发送后续消息"
+        "goToAgent": "转到智能体"
       },
       "goal": {
         "placeholder": "描述您的目标，定义可衡量的结果以获得最佳结果",

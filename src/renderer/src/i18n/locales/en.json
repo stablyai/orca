@@ -21675,21 +21675,22 @@
         "unreported": "Context usage is not available for this session."
       },
       "agentMessage": {
-        "messageFrom": "Message from",
         "unnamedSender": "an agent",
         "goToAgent": "Go to agent",
-        "messageFromCoordinator": "Message from coordinator",
-        "startedWorker": "Started worker",
-        "reopenedWorker": "Reopened worker",
-        "sentFollowUpToWorker": "Sent follow-up to worker",
-        "handedOffToAgent": "Handed off to agent",
-        "startedAgent": "Started agent",
-        "taskFromCoordinator": "Task from coordinator",
-        "updateFromWorker": "Update from worker",
         "senderReplaced": "{{name}} is no longer running in its terminal; another agent is running there now. Open that terminal from the sidebar if you need it.",
         "senderAmbiguous": "Orca can't tell which terminal {{name}} is running in. Open it from the sidebar.",
         "senderNotRunning": "{{name}} is no longer running. Start a new agent from the sidebar to continue its work.",
-        "unnamedSenderSubject": "An agent"
+        "unnamedSenderSubject": "An agent",
+        "open": "Open {{name}}",
+        "row": {
+          "started": "Started",
+          "reopened": "Reopened",
+          "followedUp": "Sent follow-up to",
+          "handedOff": "Handed off to",
+          "task": "Task from",
+          "update": "Update from",
+          "message": "Message from"
+        }
       },
       "goal": {
         "placeholder": "Describe your goal, define measurable outcomes for best results",
@@ -22491,7 +22492,9 @@
       },
       "eventRow": {
         "showLess": "Show less",
-        "showMore": "Show more"
+        "showMore": "Show more",
+        "running": "Running",
+        "failed": "Failed"
       }
     },
     "tab": {
