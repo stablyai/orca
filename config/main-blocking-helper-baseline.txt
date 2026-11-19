@@ -358,6 +358,7 @@
 1 src/main/codex/structured/launch/codex-structured-orca-hooks-off.ts
 3 src/main/codex/structured/session-lifecycle/codex-provider-session-rename.ts
 1 src/main/codex/structured/session-lifecycle/codex-session-account-usage.ts
+1 src/main/codex/structured/session-lifecycle/codex-session-hooks.ts # /hooks review starts the app server like the grandfathered /mcp and /usage siblings; the sync step is resolveHiddenProbeCwd's mkdirSync
 1 src/main/codex/structured/session-lifecycle/codex-session-mcp.ts
 1 src/main/codex/structured/session-lifecycle/codex-structured-session-adapter.ts
 5 src/main/codex/trust/grants/codex-hook-trust-grant.ts

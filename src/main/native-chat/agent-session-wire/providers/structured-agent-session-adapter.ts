@@ -1,3 +1,4 @@
+import type * as hooks from '../../../../shared/agent-session/options/protocol/agent-session-hooks'
 import type { StructuredMessageSteeringInputs } from '../../../../shared/agent-session/options/codex-message-compiler'
 import type {
   AgentSessionMcpOperation,
@@ -181,6 +182,11 @@ export type StructuredAgentSessionSetOptionInput = {
 type AdapterControls = StructuredAgentSessionAdapterStop & StructuredAgentSessionAdapterPermission
 
 export type StructuredAgentSessionAdapter = AdapterControls & {
+  reviewHooks?(
+    record: AgentSessionRecord,
+    trust: hooks.AgentSessionHookTrust | undefined,
+    signal: AbortSignal
+  ): Promise<hooks.AgentSessionHooks>
   readAccountUsage?(record: AgentSessionRecord, signal: AbortSignal): Promise<CodexAccountUsageRead>
   /** The `/mcp` panel's read or action on the chat's MCP servers; never enters the mutation queue. */
   manageMcp?(

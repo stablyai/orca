@@ -28,7 +28,8 @@ export function withNativeChatResumeCommand(
   commands: readonly SlashCommandSuggestion[],
   accountUsage = false,
   fork = false,
-  t: Translate = translate
+  t: Translate = translate,
+  hooks = false
 ): SlashCommandSuggestion[] {
   const resume: SlashCommandSuggestion = {
     name: NATIVE_CHAT_RESUME_COMMAND,
@@ -38,6 +39,19 @@ export function withNativeChatResumeCommand(
     ),
     argumentHint: t('components.native-chat.resumeCommand.argumentHint', '[search]'),
     orcaOwned: true
+  }
+  if (hooks) {
+    commands = [
+      {
+        name: 'hooks',
+        description: t(
+          'components.native-chat.hooks.description',
+          'Review and trust this chat’s Codex hooks'
+        ),
+        orcaOwned: true
+      },
+      ...commands.filter((command) => command.name !== 'hooks')
+    ]
   }
   if (accountUsage) {
     commands = [
@@ -96,7 +110,7 @@ export function useNativeChatResumeCommand(args: {
   structuredTransport:
     | Pick<
         NativeChatStructuredComposerTransport,
-        'worktreeId' | 'accountUsage' | 'fork' | 'mcpPanel'
+        'worktreeId' | 'accountUsage' | 'fork' | 'hooks' | 'mcpPanel'
       >
     | undefined
   agent: AgentType
@@ -119,6 +133,7 @@ export function useNativeChatResumeCommand(args: {
   const structuredWorktreeId = structuredTransport?.worktreeId
   // A room's history spans its members' agents; with no chat agent, nothing replaces the room.
   const ownConversation = useContext(NativeChatSessionHistoryScopeContext) === 'conversation'
+  const hooks = structuredTransport?.hooks
   const usage = structuredTransport?.accountUsage
   const fork = structuredTransport?.fork
   const mcp = structuredTransport?.mcpPanel
@@ -225,10 +240,11 @@ export function useNativeChatResumeCommand(args: {
       !isPickedSkill(draft) &&
       (parseNativeChatResumeDraft(draft) !== null ||
         (usage !== undefined && /^\/usage\s*$/i.test(draft)) ||
+        (hooks !== undefined && /^\/hooks\s*$/i.test(draft)) ||
         // Before goal mode too, so `/mcp` never becomes an objective.
         (mcp !== undefined && MCP_DRAFT.test(draft)) ||
         (fork !== undefined && FORK_DRAFT.test(draft.trim()))),
-    [fork, isPickedSkill, mcp, structured, usage]
+    [fork, hooks, isPickedSkill, mcp, structured, usage]
   )
   const consume = useCallback(
     (draft: string): boolean => {
@@ -237,6 +253,8 @@ export function useNativeChatResumeCommand(args: {
       }
       if (/^\/usage\s*$/i.test(draft)) {
         openPanel(draft, usage)
+      } else if (/^\/hooks\s*$/i.test(draft)) {
+        openPanel(draft, hooks)
       } else if (MCP_DRAFT.test(draft)) {
         openPanel(draft, mcp)
       } else if (fork && FORK_DRAFT.test(draft.trim())) {
@@ -246,7 +264,7 @@ export function useNativeChatResumeCommand(args: {
       }
       return true
     },
-    [fork, matchesDraft, mcp, open, openPanel, runFork, usage]
+    [fork, hooks, matchesDraft, mcp, open, openPanel, runFork, usage]
   )
 
   const interceptPick = useCallback(
@@ -258,6 +276,7 @@ export function useNativeChatResumeCommand(args: {
           if (
             item.name !== 'resume' &&
             !(item.name === 'usage' && usage) &&
+            !(item.name === 'hooks' && hooks) &&
             !(item.name === 'mcp' && mcp) &&
             !(item.name === 'fork' && fork)
           ) {
@@ -265,8 +284,11 @@ export function useNativeChatResumeCommand(args: {
             return
           }
           clearSkillOrigin()
-          if (item.name === 'usage' || item.name === 'mcp') {
-            openPanel(textareaRef.current?.value ?? '', item.name === 'usage' ? usage : mcp)
+          if (item.name === 'usage' || item.name === 'hooks' || item.name === 'mcp') {
+            openPanel(
+              textareaRef.current?.value ?? '',
+              item.name === 'usage' ? usage : item.name === 'hooks' ? hooks : mcp
+            )
             return
           }
           if (item.name === 'fork') {
@@ -281,7 +303,7 @@ export function useNativeChatResumeCommand(args: {
         }
         pick(item)
       },
-    [autocomplete, clearSkillOrigin, fork, mcp, open, openPanel, runFork, textareaRef, usage]
+    [autocomplete, clearSkillOrigin, fork, hooks, mcp, open, openPanel, runFork, textareaRef, usage]
   )
 
   return { consume, interceptPick, matchesDraft }

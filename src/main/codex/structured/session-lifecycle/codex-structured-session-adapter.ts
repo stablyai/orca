@@ -1,4 +1,5 @@
 import { copyCodexConversation } from '../../codex-conversation-copy'
+import { reviewCodexSessionHooks } from './codex-session-hooks'
 import { readCodexSessionAccountUsage } from './codex-session-account-usage'
 import { manageCodexSessionMcp } from './codex-session-mcp'
 import * as permission from '../turns/codex-structured-turn-permission'
@@ -16,6 +17,7 @@ import { dispatchCodexTurn } from '../turns/codex-structured-turn-start'
 import { isCodexTurnOptionKey } from '../turns/codex-turn-option-keys'
 import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../../../shared/execution-host/execution-host'
 import { CodexStructuredSessionTeardown } from './codex-structured-session-teardown'
+import { deliverCodexAcquisitionEvent } from './codex-structured-session-delivery'
 import {
   applyCodexStructuredSessionOption,
   readLiveCodexSessionOptions
@@ -24,7 +26,6 @@ import * as messageOptions from '../turns/codex-structured-message-options'
 import {
   CodexAcquisitionRegistry,
   requireLiveCodexSession,
-  type CodexAcquisitionAttempt,
   type CodexSession,
   type CodexStructuredSessionAdapterDeps,
   type CodexStructuredSessionEvent
@@ -84,6 +85,8 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
 
   copyConversation: NonNullable<SessionAdapter['copyConversation']> = (input) =>
     copyCodexConversation(input, this.deps.providerInvocation)
+  reviewHooks = reviewCodexSessionHooks(this.sessions, () => this.deps.providerInvocation)
+
   readAccountUsage = readCodexSessionAccountUsage(this.sessions, () => this.deps.providerInvocation)
   manageMcp = manageCodexSessionMcp(this.sessions, () => this.deps.providerInvocation)
   approveAutoReviewDenial = approveCodexAutoReviewDenial(this.sessions)
@@ -115,7 +118,7 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
       acquisitions: this.acquisitions,
       notificationRetries: this.notificationRetries,
       deliver: (acquisition, sessionId, event, retainedBytes) =>
-        this.deliver(acquisition, sessionId, event, retainedBytes),
+        deliverCodexAcquisitionEvent(this.sessions, acquisition, sessionId, event, retainedBytes),
       handleServerRequest: (sessionId, request) => this.handleServerRequest(sessionId, request),
       handleUnhandledFrame: (sessionId, kind, payload) =>
         this.handleUnhandledFrame(sessionId, kind, payload),
@@ -126,24 +129,6 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
     })
 
   open: SessionAdapter['open'] = (input) => openCodexStart(this.acquisitions, input)
-
-  /** Buffers pre-publication events and drops events from superseded children. */
-  private deliver(
-    acquisition: CodexAcquisitionAttempt['window'],
-    sessionId: string,
-    event: () => unknown,
-    retainedBytes?: number
-  ): void {
-    if (acquisition.buffer(event, retainedBytes)) {
-      return
-    }
-    if (this.sessions.get(sessionId)?.connection === acquisition.connection) {
-      event()
-    } else if (acquisition.isOverflowed) {
-      // Overflow fails acquisition; close the child so callers can retry.
-      void acquisition.connection?.close()
-    }
-  }
 
   /** Journal first so observers never see an event ahead of its durable row. */
   private emit(

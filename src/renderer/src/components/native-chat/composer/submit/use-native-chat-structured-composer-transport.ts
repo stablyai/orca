@@ -1,3 +1,4 @@
+import { openNativeChatHooksModal } from '@/components/native-chat/hooks/native-chat-hooks-modal'
 import { openNativeChatAccountUsageModal } from '@/components/native-chat/usage/native-chat-account-usage-modal'
 import { useNativeChatMcpTray } from '@/components/native-chat/mcp/use-native-chat-mcp-tray'
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
@@ -146,6 +147,13 @@ export function useNativeChatStructuredComposerTransport(args: {
             : Promise.resolve(false)
       : null
     return {
+      hooks:
+        controller.hookTrust === true
+          ? {
+              open: () =>
+                openNativeChatHooksModal({ sessionId: props.sessionId, target: props.target })
+            }
+          : undefined,
       accountUsage:
         controller.accountUsage === true
           ? {

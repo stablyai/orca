@@ -853,6 +853,7 @@ import { ReadVisualParams } from './structured-agent-session/agent-session-visua
 import { SkipAsyncQuestionsParams } from './structured-agent-session/skip-async-questions-params'
 import { AutoReviewApprovalParams } from './structured-agent-session/structured-agent-session-auto-review-params'
 import { ContinueInterruptedParams } from './structured-agent-session/structured-agent-session-continue-params'
+import { HooksParams } from './structured-agent-session/structured-agent-session-hooks-params'
 import { ContinuationContextParams } from './structured-agent-session/structured-agent-session-identifiers'
 import { AgentSessionMcpParams } from './structured-agent-session/structured-agent-session-mcp-params'
 import {
@@ -1101,6 +1102,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.handoffStatus': HandoffStatusParams,
   'agentSession.history': HistoryParams,
   'agentSession.hold': HoldParams,
+  'agentSession.hooks': HooksParams,
   'agentSession.item': ItemParams,
   'agentSession.mcp': AgentSessionMcpParams,
   'agentSession.modelCatalog': ModelCatalogParams,

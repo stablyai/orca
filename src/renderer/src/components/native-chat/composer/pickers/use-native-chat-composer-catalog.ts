@@ -28,6 +28,7 @@ export function useNativeChatComposerCatalog(
   const interactionModeSupported =
     structuredTransport?.optionSnapshot.some((entry) => entry.id === 'interactionMode') === true
   const accountUsage = structuredTransport?.accountUsage !== undefined
+  const hooks = structuredTransport?.hooks !== undefined
   const mcpPanel = structuredTransport?.mcpPanel !== undefined
   const fork = structuredTransport?.fork !== undefined
   const sideChat = structuredTransport?.sideChat !== undefined
@@ -46,11 +47,14 @@ export function useNativeChatComposerCatalog(
         mcpPanel
       ),
       accountUsage,
-      fork
+      fork,
+      undefined,
+      hooks
     )
     return sideChat ? withNativeChatSideChatRows(commands, sideChatNotReady) : commands
   }, [
     accountUsage,
+    hooks,
     agent,
     fork,
     sideChat,

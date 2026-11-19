@@ -67,6 +67,7 @@ const NodeDistMirrorDialog = lazy(
 const AiVaultSessionHistoryDialog = lazy(
   () => import('../components/right-sidebar/ai-vault/session-list/AiVaultSessionHistoryDialog')
 )
+const ChatHooksDialog = lazy(() => import('../components/native-chat/hooks/NativeChatHooksDialog'))
 const NativeChatAccountUsageDialog = lazy(
   () => import('../components/native-chat/usage/NativeChatAccountUsageDialog')
 )
@@ -209,6 +210,11 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
         {activeModal === 'agent-session-history' ? (
           <ModalBoundary boundaryId="modal.agent-session-history" resetKey>
             <AiVaultSessionHistoryDialog />
+          </ModalBoundary>
+        ) : null}
+        {activeModal === 'chat-hooks' ? (
+          <ModalBoundary boundaryId="modal.chat-hooks" resetKey>
+            <ChatHooksDialog />
           </ModalBoundary>
         ) : null}
         {activeModal === 'chat-account-usage' ? (
