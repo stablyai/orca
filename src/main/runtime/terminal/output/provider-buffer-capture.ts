@@ -209,8 +209,12 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
       terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT) +
       (this.getTerminalSize(ptyId)?.rows ?? 0)
     const state = this.readWholeScreenModel(ptyId)
+    const generation = this.getPtyLifecycleGeneration(ptyId)
     // A model rebuilt screen-only after dropped output has no history; the provider kept it.
-    if (!state || (state.historyFromProvider && !providerSnapshot.visibleScreenOnly)) {
+    const fromProvider =
+      !state || (state.historyFromProvider && !providerSnapshot.visibleScreenOnly)
+    // A busy terminal can outrun one snapshot; a few attempts bound the daemon reads.
+    for (let attempt = 0; fromProvider && attempt < (state ? 3 : 1); attempt++) {
       const provider = await this.readProviderTerminalTailLines(ptyId, rowLimit, {
         timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
         ...providerSnapshot
@@ -219,7 +223,9 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
         return provider
       }
     }
-    const generation = this.getPtyLifecycleGeneration(ptyId)
+    if (!state) {
+      return { lines: [] }
+    }
     await state.writeChain
     // The same model can turn untrusted while the read waited: a gap keeps it rather than replacing it.
     if (
