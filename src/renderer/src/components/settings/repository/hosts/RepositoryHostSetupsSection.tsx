@@ -9,6 +9,7 @@ import { buildExecutionHostRegistry } from '../../../../../../shared/execution-h
 import { getHostDisplayLabelOverrides } from '../../../../../../shared/execution-host/host-setting-overrides'
 import type { ProjectHostSetup } from '../../../../../../shared/project/project-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '../../../../store/index'
 import { getProjectHostSetupProjectionFromState } from '../../../../store/projects/project-host-setup-selector'
 import { cn } from '../../../../lib/class-names'
@@ -79,7 +80,7 @@ export function RepositoryHostSetupsSection({
   const sshConnectionStates = useAppStore((state) => state.sshConnectionStates)
   const settings = useAppStore((state) => state.settings)
   const runtimeEnvironments = useAppStore((state) => state.runtimeEnvironments)
-  const runtimeStatusByEnvironmentId = useAppStore((state) => state.runtimeStatusByEnvironmentId)
+  const runtimeStatusByEnvironmentId = useRuntimeStatusByEnvironmentId()
   const sshStateByEnvironment = useAppStore((state) => state.sshStateByEnvironment)
   const removedSshTargetLabels = useAppStore((state) => state.removedSshTargetLabels)
   const sshTargetsHydrated = useAppStore((state) => state.sshTargetsHydrated)

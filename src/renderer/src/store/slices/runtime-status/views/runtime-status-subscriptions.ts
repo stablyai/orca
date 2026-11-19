@@ -18,6 +18,8 @@ type ConnectionSubscription = {
 
 export function createRuntimeStatusSubscriptions(store: RuntimeStatusStore) {
   const connections = new Map<string, ConnectionSubscription>()
+  const entryListeners = new Map<string, Set<Listener>>()
+  const statusesListeners = new Set<Listener>()
   const parkingListeners = new Set<Listener>()
   let selectParking = createPairedRuntimeParkingEnvironmentIdsSelector()
   let parkingSnapshot: ReadonlySet<string> | null = null
@@ -49,6 +51,17 @@ export function createRuntimeStatusSubscriptions(store: RuntimeStatusStore) {
       }
       previousStatuses = statuses
       const pending: { listeners: Set<Listener>; listener: Listener }[] = []
+      for (const listener of statusesListeners) {
+        pending.push({ listeners: statusesListeners, listener })
+      }
+      // Each host's subscribers compare that host's entry, so one host's write never wakes another's readers.
+      for (const [environmentId, listeners] of entryListeners) {
+        if (statuses.get(environmentId) !== previous?.get(environmentId)) {
+          for (const listener of listeners) {
+            pending.push({ listeners, listener })
+          }
+        }
+      }
       for (const [environmentId, subscription] of connections) {
         if (statuses.get(environmentId) === previous?.get(environmentId)) {
           continue
@@ -81,7 +94,12 @@ export function createRuntimeStatusSubscriptions(store: RuntimeStatusStore) {
   }
 
   function releaseIfUnused(): void {
-    if (connections.size > 0 || parkingListeners.size > 0) {
+    if (
+      connections.size > 0 ||
+      parkingListeners.size > 0 ||
+      entryListeners.size > 0 ||
+      statusesListeners.size > 0
+    ) {
       return
     }
     unsubscribeStore?.()
@@ -135,5 +153,46 @@ export function createRuntimeStatusSubscriptions(store: RuntimeStatusStore) {
     }
   }
 
-  return { getConnectionSnapshot, subscribeConnection, getParkingSnapshot, subscribeParking }
+  /** Wakes when this host's status entry changes; another host's change never reaches it. */
+  function subscribeEntry(environmentId: string | null, listener: Listener): () => void {
+    if (environmentId === null) {
+      return () => {}
+    }
+    ensureSubscription()
+    let listeners = entryListeners.get(environmentId)
+    if (!listeners) {
+      listeners = new Set()
+      entryListeners.set(environmentId, listeners)
+    }
+    const registered = () => listener()
+    listeners.add(registered)
+    const owned = listeners
+    return () => {
+      owned.delete(registered)
+      if (owned.size === 0 && entryListeners.get(environmentId) === owned) {
+        entryListeners.delete(environmentId)
+      }
+      releaseIfUnused()
+    }
+  }
+
+  /** Wakes when any host's status changes, and on nothing else. */
+  function subscribeStatuses(listener: Listener): () => void {
+    ensureSubscription()
+    const registered = () => listener()
+    statusesListeners.add(registered)
+    return () => {
+      statusesListeners.delete(registered)
+      releaseIfUnused()
+    }
+  }
+
+  return {
+    getConnectionSnapshot,
+    subscribeConnection,
+    getParkingSnapshot,
+    subscribeParking,
+    subscribeEntry,
+    subscribeStatuses
+  }
 }

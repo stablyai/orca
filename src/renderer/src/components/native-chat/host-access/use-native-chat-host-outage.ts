@@ -1,5 +1,6 @@
 import { useCallback, useContext, useMemo, useState, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
+import { useRuntimeHostStatusSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useNativeChatPaneLifetimeEffect } from '../pane/ownership/native-chat-pane-lifetime'
 import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { runtimeHostContactFromSnapshot } from '../../../../../shared/remote-runtime/host-status/runtime-host-contact'
@@ -25,15 +26,12 @@ export type {
 /** Use host connection state; the chat stream cannot establish host availability. */
 export function useNativeChatHostOutage(target: RuntimeClientTarget): NativeChatHostOutage | null {
   const environmentId = target.kind === 'environment' ? target.environmentId : null
-  const kind = useAppStore((s) =>
+  const kind = useRuntimeHostStatusSelector(environmentId, (entry) =>
     environmentId === null
       ? null
-      : nativeChatHostOutageKind(
-          runtimeHostConnectionStateForEntry(s.runtimeStatusByEnvironmentId.get(environmentId))
-        )
+      : nativeChatHostOutageKind(runtimeHostConnectionStateForEntry(entry))
   )
-  const refused = useAppStore((s) => {
-    const entry = environmentId === null ? null : s.runtimeStatusByEnvironmentId.get(environmentId)
+  const refused = useRuntimeHostStatusSelector(environmentId, (entry) => {
     return entry?.snapshot
       ? runtimeHostContactFromSnapshot(entry.snapshot, entry.status).verdict === 'refused'
       : false
