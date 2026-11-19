@@ -4,7 +4,9 @@ export const GRAB_GUEST_FOUNDATION_SCRIPT = `(function() {
   // Replace page-supplied grab state so extraction uses the newly installed implementation.
   if (window.__orcaGrab) {
     try {
-      if (typeof window.__orcaGrab.cleanup === 'function') {
+      if (typeof window.__orcaGrab.cancelAwait === 'function') {
+        window.__orcaGrab.cancelAwait();
+      } else if (typeof window.__orcaGrab.cleanup === 'function') {
         window.__orcaGrab.cleanup();
       }
     } catch(e) {}

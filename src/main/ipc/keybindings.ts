@@ -1,6 +1,7 @@
 import { BrowserWindow, ipcMain, shell } from 'electron'
 import type { KeybindingActionId, KeybindingFileSnapshot } from '../../shared/keybindings/types'
 import type { KeybindingService } from '../keybindings/keybinding-service'
+import { refreshGrabShortcutPolicies } from '../browser/guest-lifecycle/input/shortcuts/browser-guest-grab-shortcuts'
 import { rebuildAppMenu } from '../menu/register-app-menu'
 
 function broadcastKeybindingsChanged(snapshot: KeybindingFileSnapshot): void {
@@ -9,6 +10,7 @@ function broadcastKeybindingsChanged(snapshot: KeybindingFileSnapshot): void {
       window.webContents.send('keybindings:changed', snapshot)
     }
   }
+  refreshGrabShortcutPolicies()
   rebuildAppMenu()
 }
 

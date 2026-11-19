@@ -31,7 +31,7 @@ type ToolItem = {
   label: string
 }
 
-function toolItems(t: Translate = translate): ToolItem[] {
+export function markupToolItems(t: Translate = translate): ToolItem[] {
   return [
     {
       kind: 'pen',
@@ -107,7 +107,7 @@ export const MarkupToolbar = React.memo(function MarkupToolbar({
   return (
     <TooltipProvider>
       <div className="flex flex-wrap items-center justify-center gap-1 rounded-md border border-border bg-card/95 px-1.5 py-1 shadow-md backdrop-blur">
-        {toolItems(t).map((item) => (
+        {markupToolItems(t).map((item) => (
           <IconButton
             key={item.kind}
             label={item.label}

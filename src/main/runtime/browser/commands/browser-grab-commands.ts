@@ -1,6 +1,10 @@
 import { BrowserError } from '../../../browser/browser-error'
 import { browserManager } from '../../../browser/guest-lifecycle/manager/browser-manager'
-import { setBrowserGrabMode } from '../../../browser/element-grab/browser-grab-mode-sequencer'
+import {
+  setBrowserGrabMode,
+  cancelBrowserGrabMode,
+  isCurrentBrowserGrabRequest
+} from '../../../browser/element-grab/browser-grab-mode-sequencer'
 import { watchBrowserGuestDocument } from '../../../browser/element-grab/watch-browser-guest-document'
 import type { BrowserGuestDocumentEvent } from '../../../../shared/browser/annotations/browser-guest-document-event'
 import type {
@@ -52,14 +56,16 @@ export class RuntimeBrowserGrab {
   }
 
   async browserGrabSetMode(
-    params: BrowserCommandTargetParams & { enabled: boolean }
+    params: BrowserCommandTargetParams & { enabled: boolean; requestId?: string }
   ): Promise<BrowserSetGrabModeResult> {
     const { browserPageId, resolveGuest } = await this.resolveGrabGuest(params)
-    return setBrowserGrabMode(browserPageId, params.enabled, resolveGuest)
+    return setBrowserGrabMode(browserPageId, params.enabled, resolveGuest, undefined, {
+      requestId: params.requestId
+    })
   }
 
   async browserGrabAwait(
-    params: BrowserCommandTargetParams & { opId: string },
+    params: BrowserCommandTargetParams & { opId: string; requestId?: string },
     signal?: AbortSignal
   ): Promise<BrowserGrabResult> {
     const { browserPageId, resolveGuest } = await this.resolveGrabGuest(params)
@@ -67,11 +73,11 @@ export class RuntimeBrowserGrab {
     if (!guest) {
       return { opId: params.opId, kind: 'error', reason: 'Guest not ready' }
     }
+    if (!isCurrentBrowserGrabRequest(browserPageId, guest, params.requestId, 'runtime'))
+      return { opId: params.opId, kind: 'cancelled', reason: 'navigation' }
     // A viewer that disconnects or gives up must not leave the page armed until the grab times out.
     const abandon = (): void => {
-      if (browserManager.hasActiveGrabOp(browserPageId)) {
-        browserManager.cancelGrabOp(browserPageId, 'user')
-      }
+      cancelBrowserGrabMode(browserPageId, resolveGuest, params.requestId, 'runtime')
     }
     if (signal?.aborted) {
       return { opId: params.opId, kind: 'cancelled', reason: 'user' }
@@ -84,17 +90,31 @@ export class RuntimeBrowserGrab {
     }
   }
 
-  async browserGrabCancel(params: BrowserCommandTargetParams): Promise<{ cancelled: boolean }> {
+  async browserGrabCancel(
+    params: BrowserCommandTargetParams & { requestId?: string }
+  ): Promise<{ cancelled: boolean }> {
     const { browserPageId, resolveGuest } = await this.resolveGrabGuest(params)
-    if (!resolveGuest()) {
-      return { cancelled: false }
+    return {
+      cancelled: cancelBrowserGrabMode(browserPageId, resolveGuest, params.requestId, 'runtime')
     }
-    browserManager.cancelGrabOp(browserPageId, 'user')
-    return { cancelled: true }
+  }
+
+  async browserGrabPickedPresent(
+    params: BrowserCommandTargetParams & { selectionId: string; interactive?: boolean }
+  ): Promise<boolean | null> {
+    const { resolveGuest } = await this.resolveGrabGuest(params)
+    const guest = resolveGuest()
+    return guest
+      ? browserManager.isGrabPickedElementPresent(
+          params.selectionId,
+          guest,
+          params.interactive === true
+        )
+      : null
   }
 
   async browserGrabCaptureSelection(
-    params: BrowserCommandTargetParams & { rect: BrowserGrabRect }
+    params: BrowserCommandTargetParams & { rect: BrowserGrabRect; selectionId?: string }
   ): Promise<BrowserCaptureSelectionScreenshotResult> {
     const { browserPageId, resolveGuest } = await this.resolveGrabGuest(params)
     const guest = resolveGuest()
@@ -104,6 +124,7 @@ export class RuntimeBrowserGrab {
     const screenshot = await browserManager.captureSelectionScreenshot(
       browserPageId,
       params.rect,
+      params.selectionId,
       guest
     )
     return screenshot

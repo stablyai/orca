@@ -2,6 +2,8 @@ import { defineMethod, defineStreamingMethod } from '../../core'
 import { BrowserTarget } from '../../../../../shared/rpc-contract/rpc-param-primitives'
 import {
   GrabAwait,
+  GrabCancel,
+  GrabPickedPresent,
   GrabCaptureSelection,
   GrabSetMode,
   GrabViewportBridge
@@ -24,8 +26,14 @@ export const BROWSER_GRAB_METHODS = [
   defineMethod({
     name: 'browser.grab.cancel',
     permission: 'workspace',
-    params: BrowserTarget,
+    params: GrabCancel,
     handler: async (params, { runtime }) => runtime.browserGrabCancel(params)
+  }),
+  defineMethod({
+    name: 'browser.grab.pickedPresent',
+    permission: 'workspace',
+    params: GrabPickedPresent,
+    handler: async (params, { runtime }) => runtime.browserGrabPickedPresent(params)
   }),
   defineMethod({
     name: 'browser.grab.captureSelection',

@@ -1,10 +1,16 @@
+import { useBrowserAnnotateKeys } from '../host-guest/input/use-browser-annotate-keys'
 import { useEffect } from 'react'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { useAppStore } from '@/store'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings/matching'
 import { browserChromeShortcutOwnsEvent } from '../describe-page/browser-overlay-shortcut-target'
 import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-types'
-import type { GrabIntent } from '../../../../../shared/browser/element-grab/browser-grab-types'
+import {
+  isBrowserGrabActionKey,
+  isBrowserGuestToolKey,
+  type BrowserAnnotateToolKey,
+  type GrabIntent
+} from '../../../../../shared/browser/element-grab/browser-grab-types'
 import { isEditableKeyboardTarget } from '../host-guest/input/browser-keyboard'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import type { BrowserGuestToolsTransport } from './browser-guest-tools-transport'
@@ -20,7 +26,8 @@ export function useBrowserGrabShortcuts({
   toolsDisabled = false,
   startGrabIntent,
   handleGrabActionShortcut,
-  grabIsInteractive
+  grabIsInteractive,
+  palette
 }: {
   enabled?: boolean
   transport: Pick<BrowserGuestToolsTransport, 'onGrabModeToggle' | 'onGrabActionShortcut'>
@@ -32,6 +39,7 @@ export function useBrowserGrabShortcuts({
   startGrabIntent: (intent: GrabIntent) => void
   handleGrabActionShortcut: (key: 'c' | 's') => void
   grabIsInteractive: boolean
+  palette?: { isActive: boolean; active: boolean; onToolKey: (key: BrowserAnnotateToolKey) => void }
 }): void {
   const keybindings = useAppStore((state) => state.keybindings)
 
@@ -109,7 +117,7 @@ export function useBrowserGrabShortcuts({
   ])
 
   useEffect(() => {
-    if (!enabled || !grabIsInteractive) {
+    if (!enabled || !grabIsInteractive || palette) {
       return
     }
     const handleKeyDown = (e: KeyboardEvent): void => {
@@ -129,17 +137,29 @@ export function useBrowserGrabShortcuts({
     }
     addAppKeyListener('keydown', handleKeyDown)
     return () => removeAppKeyListener('keydown', handleKeyDown)
-  }, [enabled, grabIsInteractive, handleGrabActionShortcut])
+  }, [enabled, grabIsInteractive, handleGrabActionShortcut, palette])
 
   useEffect(() => {
-    if (!enabled || !grabIsInteractive) {
+    if (!enabled || !grabIsInteractive || palette) {
       return
     }
     return transport.onGrabActionShortcut(({ browserPageId, key }) => {
       if (browserPageId !== browserTabId) {
         return
       }
-      handleGrabActionShortcut(key)
+      if (isBrowserGuestToolKey(key) && isBrowserGrabActionKey(key)) handleGrabActionShortcut(key)
     })
-  }, [browserTabId, enabled, grabIsInteractive, handleGrabActionShortcut, transport])
+  }, [browserTabId, enabled, grabIsInteractive, handleGrabActionShortcut, transport, palette])
+  useBrowserAnnotateKeys({
+    browserTabId,
+    isActive: enabled && palette?.isActive === true,
+    grabIsInteractive,
+    markupIsActive,
+    annotateToolOn: palette?.active ?? false,
+    handleAnnotateToolKey: palette?.onToolKey ?? ignoreToolKey,
+    handleGrabActionShortcut,
+    transport
+  })
 }
+
+function ignoreToolKey(): void {}

@@ -19,10 +19,7 @@ import {
 } from '../../browser/guest-lifecycle/browser-page-idle-discard'
 import { registerBrowserDictationHandlers } from './browser-dictation-ipc'
 import { registerBrowserGrabHandlers } from './browser-grab-ipc'
-import {
-  disposeGrabModeStateForPage,
-  resetGrabModeState
-} from '../../browser/element-grab/browser-grab-mode-sequencer'
+import { disposeGrabModeStateForPage, resetGrabModeState } from './browser-grab-ipc'
 import { registerBrowserSessionProfileHandlers } from './browser-session-profile-ipc'
 import type { BrowserCertificateProceedResult } from '../../../shared/browser/workspaces/browser-workspace-types'
 import {

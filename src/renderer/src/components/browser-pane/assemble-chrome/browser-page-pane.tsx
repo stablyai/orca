@@ -1,3 +1,7 @@
+import { useWebviewInputLock } from '../host-guest/input/use-webview-input-lock'
+import { useBrowserAnnotateToolSwitch } from '../annotate/palette/use-browser-annotate-tool-switch'
+import { browserPageDocumentIdentity } from '../annotate/palette/browser-page-document-identity'
+import { useBrowserGrabShortcuts } from '../annotate/use-browser-grab-shortcuts'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/class-names'
@@ -170,7 +174,7 @@ export function BrowserPagePane({
     trackingContainer: pageViewport?.container ?? null,
     trackingScroller: pageViewport?.scroller ?? null,
     currentDocumentUrl: browserTab.url,
-    shortcuts: { workspaceId, chromeShortcutScope }
+    shortcuts: { workspaceId, chromeShortcutScope, bind: false }
   })
   const nav = useBrowserPageNavigationDownloads({
     browserTabId: browserTab.id,
@@ -188,7 +192,7 @@ export function BrowserPagePane({
     addressBarInputRef,
     browserTabUrl: browserTab.url
   })
-  useBrowserPageWebviewLifecycle({
+  const { documentGeneration } = useBrowserPageWebviewLifecycle({
     browserTabId: browserTab.id,
     browserTabUrl: browserTab.url,
     browserTabLoading: browserTab.loading,
@@ -254,6 +258,32 @@ export function BrowserPagePane({
     chromeShortcutScope,
     setFindOpen
   })
+  const toolSwitch = useBrowserAnnotateToolSwitch({
+    grab,
+    grabIntent: grabAnnotations.grabIntent,
+    startGrabIntent: grabAnnotations.startGrabIntent,
+    cancelPendingBrowserCapture: grabAnnotations.cancelPendingBrowserCapture,
+    markup,
+    canPickElements: !isBlankTab && !browserTab.loadError,
+    toolTargetId: browserTab.id,
+    ...browserPageDocumentIdentity(browserTab, documentGeneration)
+  })
+  useBrowserGrabShortcuts({
+    transport: grab.transport,
+    browserTabId: browserTab.id,
+    workspaceId,
+    chromeShortcutScope,
+    markupIsActive: false,
+    toolsDisabled: isBlankTab || Boolean(browserTab.loadError),
+    startGrabIntent: toolSwitch.toggleTool,
+    handleGrabActionShortcut: grabAnnotations.handleGrabActionShortcut,
+    grabIsInteractive: grab.state !== 'idle' && grab.state !== 'error',
+    palette: {
+      isActive,
+      active: toolSwitch.activeTool !== null,
+      onToolKey: toolSwitch.selectToolByKey
+    }
+  })
   useBrowserPageWebviewShortcuts({
     browserTabId: browserTab.id,
     workspaceId,
@@ -275,14 +305,7 @@ export function BrowserPagePane({
   const failureExternalUrl = normalizeExternalBrowserUrl(failedNavigationUrl)
   const showFailureOverlay = Boolean(browserTab.loadError) && !isBlankTab
 
-  useEffect(() => {
-    const webview = webviewRef.current
-    if (!webview) {
-      return
-    }
-    // Why: Electron webviews keep receiving native input under a React overlay unless their own hit testing is disabled.
-    webview.style.pointerEvents = inputLocked ? 'none' : 'auto'
-  }, [inputLocked])
+  useWebviewInputLock(webviewRef, inputLocked)
 
   useEffect(() => {
     const webview = webviewRef.current
@@ -332,12 +355,12 @@ export function BrowserPagePane({
         grab={grab}
         grabAnnotations={grabAnnotations}
         annotationSend={annotationSend}
-        elementTools={elementTools}
+        elementTools={{ ...elementTools, onStartIntent: toolSwitch.toggleTool }}
         notes={notes}
         onOpenFind={() => setFindOpen(true)}
         markupIsActive={markup.isActive}
-        markupStart={markup.start}
-        markupCancel={markup.cancel}
+        markupStart={async () => toolSwitch.selectTool('draw')}
+        markupCancel={toolSwitch.exit}
         shareableArtifactFile={shareableArtifactFile}
         currentBrowserUrl={currentBrowserUrl}
         externalUrl={externalUrl}
@@ -350,6 +373,8 @@ export function BrowserPagePane({
             <BrowserPageViewportOverlays
               isActive={isActive}
               markup={markup}
+              toolSwitch={toolSwitch}
+              canPickElements={!isBlankTab && !browserTab.loadError}
               feedbackBadgeRef={zoom.feedbackBadgeRef}
               findOpen={findOpen}
               setFindOpen={setFindOpen}

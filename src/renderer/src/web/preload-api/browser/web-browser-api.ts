@@ -66,6 +66,8 @@ export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> 
         )
       }),
     cancelGrab: () => Promise.resolve(false),
+    setGrabLabelAvoidArea: () => Promise.resolve(false),
+    grabPickedElementPresent: () => Promise.resolve(null),
     captureSelectionScreenshot: () =>
       Promise.resolve({
         ok: false,
@@ -83,6 +85,7 @@ export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> 
         )
       }),
     onGrabModeToggle: () => noopUnsubscribe,
+    onGrabPolicyRetired: () => noopUnsubscribe,
     onGrabActionShortcut: () => noopUnsubscribe,
     onGuestEscape: () => noopUnsubscribe,
     sessionListProfiles: () => Promise.resolve([]),

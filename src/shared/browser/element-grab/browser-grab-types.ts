@@ -10,6 +10,7 @@ export type BrowserGrabPageContext = {
   scrollY: number
   devicePixelRatio: number
   capturedAt: string
+  selectionId?: string
 }
 
 /** Accessibility metadata for the selected element. */
@@ -93,6 +94,52 @@ export type BrowserAnnotationPayload = Omit<BrowserGrabPayload, 'screenshot'> & 
 
 export type GrabIntent = 'copy' | 'annotate'
 
+/** Bare keys that copy (C) or screenshot (S) the hovered or picked element while Grab is on. */
+export type BrowserGrabActionKey = 'c' | 's'
+
+/** Bare keys that switch the annotate palette's tool: Annotate, Grab, Draw. */
+export type BrowserAnnotateToolKey = 'a' | 'g' | 'd'
+
+/** Bare keys a focused page forwards to the renderer while a grab op runs. */
+export type BrowserGuestToolKey = BrowserGrabActionKey | BrowserAnnotateToolKey
+
+/** Alt held over a focused page fades the palette so the element under it can be picked. */
+export type BrowserGuestSeeThroughKey = 'alt-down' | 'alt-up'
+
+/** Payload of the guest → renderer tool-key forward. */
+export type BrowserGrabActionShortcutArgs = {
+  browserPageId: string
+  key: BrowserGuestToolKey | BrowserGuestSeeThroughKey
+}
+
+const BROWSER_GUEST_TOOL_KEYS: ReadonlySet<string> = new Set(['c', 's', 'a', 'g', 'd'])
+
+export function isBrowserGuestToolKey(key: string): key is BrowserGuestToolKey {
+  return BROWSER_GUEST_TOOL_KEYS.has(key)
+}
+
+/**
+ * The tool letter a key press means. A Latin-script letter (QWERTY, AZERTY, Dvorak, Colemak, and accented letters
+ * like ü or ą) is taken as typed, so the key labelled "C" copies wherever it sits and ü never means anything. Only a
+ * letter from another script (Cyrillic, Greek…) falls back to the physical key so the keys still work there.
+ * Dead keys and other non-letters return "", which matches no tool.
+ */
+export function browserGuestToolKeyFromEvent(event: { code?: string; key: string }): string {
+  const typed = event.key
+  if ([...typed].length !== 1 || !/\p{L}/u.test(typed)) {
+    return ''
+  }
+  if (/\p{Script=Latin}/u.test(typed)) {
+    return typed.toLowerCase()
+  }
+  const code = event.code ?? ''
+  return code.startsWith('Key') && code.length === 4 ? code.slice(3).toLowerCase() : ''
+}
+
+export function isBrowserGrabActionKey(key: BrowserGuestToolKey): key is BrowserGrabActionKey {
+  return key === 'c' || key === 's'
+}
+
 /** Why a grab operation was cancelled before the user selected an element. */
 export type BrowserGrabCancelReason = 'user' | 'tab-inactive' | 'navigation' | 'evicted' | 'timeout'
 
@@ -105,6 +152,7 @@ export type BrowserGrabResult =
 
 export type BrowserSetGrabModeArgs = {
   browserPageId: string
+  requestId?: string
   enabled: boolean
 }
 
@@ -115,19 +163,91 @@ export type BrowserGrabRejectReason =
   | 'already-active'
   | 'injection-failed'
 
-export type BrowserSetGrabModeResult = { ok: true } | { ok: false; reason: BrowserGrabRejectReason }
+export type BrowserSetGrabModeResult =
+  | { ok: true; clean?: boolean }
+  | { ok: false; reason: BrowserGrabRejectReason }
+
+/**
+ * Where Orca's annotate palette and its hint cover a page, in Orca's pixels relative to the page frame's top-left,
+ * with the frame's size so the page can convert to its own (zoomed) pixels. The picker keeps its label clear of it.
+ */
+export type BrowserGrabLabelAvoidArea = {
+  x: number
+  y: number
+  width: number
+  height: number
+  frameWidth: number
+  frameHeight: number
+}
+
+export type BrowserSetGrabLabelAvoidAreaArgs = {
+  browserPageId: string
+  area: BrowserGrabLabelAvoidArea | null
+}
+
+const GRAB_LABEL_AVOID_MAX_PX = 100_000
+
+/** Validates a renderer-sent area: finite, bounded numbers and a non-empty frame, or null. Undefined means invalid. */
+export function parseGrabLabelAvoidArea(
+  value: unknown
+): BrowserGrabLabelAvoidArea | null | undefined {
+  if (value === null) {
+    return null
+  }
+  if (typeof value !== 'object') {
+    return undefined
+  }
+  const record: Record<string, unknown> = { ...value }
+  const read = (key: keyof BrowserGrabLabelAvoidArea): number | undefined => {
+    const n = record[key]
+    return typeof n === 'number' && Number.isFinite(n) && Math.abs(n) <= GRAB_LABEL_AVOID_MAX_PX
+      ? n
+      : undefined
+  }
+  const x = read('x')
+  const y = read('y')
+  const width = read('width')
+  const height = read('height')
+  const frameWidth = read('frameWidth')
+  const frameHeight = read('frameHeight')
+  if (
+    x === undefined ||
+    y === undefined ||
+    width === undefined ||
+    height === undefined ||
+    frameWidth === undefined ||
+    frameHeight === undefined ||
+    width < 0 ||
+    height < 0 ||
+    frameWidth <= 0 ||
+    frameHeight <= 0
+  ) {
+    return undefined
+  }
+  return { x, y, width, height, frameWidth, frameHeight }
+}
+
+/** Is the element a held pick was made on still in the page (after a same-document route change)? */
+export type BrowserGrabPickedElementPresentArgs = {
+  browserPageId: string
+  selectionId: string
+  interactive?: boolean
+}
 
 export type BrowserAwaitGrabSelectionArgs = {
   browserPageId: string
+  requestId?: string
   opId: string
 }
 
 export type BrowserCancelGrabArgs = {
   browserPageId: string
+  requestId?: string
 }
 
 export type BrowserCaptureSelectionScreenshotArgs = {
   browserPageId: string
+  selectionId?: string
   rect: BrowserGrabRect
 }
 

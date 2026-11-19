@@ -1,9 +1,15 @@
+import { GRAB_PICK_CONTROL_SCRIPT } from './grab-guest-pick-control-script'
 import { BROWSER_GRAB_SELECTED_ATTRIBUTE } from '../../../shared/browser/annotations/browser-annotation-viewport-bridge'
+
+import { GRAB_GUEST_LABEL_PLACEMENT_SCRIPT } from './grab-guest-overlay-helpers-script'
+
+export { buildGrabLabelAvoidScript } from './grab-guest-overlay-helpers-script'
 
 export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('div');
   host.id = '__orca-grab-host';
   host.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2147483647;pointer-events:all;cursor:crosshair;';
   document.documentElement.appendChild(host);
+
 
   var shadow = host.attachShadow({ mode: 'closed' });
 
@@ -23,7 +29,7 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
   overlay.appendChild(hoverLabel);
 
   var currentEl = null;
-
+${GRAB_GUEST_LABEL_PLACEMENT_SCRIPT}
   function updateHighlight(el) {
     if (!el || el === document.documentElement || el === document.body) {
       highlightBox.style.display = 'none';
@@ -50,14 +56,11 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
     if (text) parts.push('"' + text + '"');
     parts.push(w + 'x' + h);
     hoverLabel.textContent = parts.join('  ');
-
-    var labelY = rect.bottom + 6;
-    if (labelY + 28 > window.innerHeight) {
-      labelY = rect.top - 28;
-    }
-    hoverLabel.style.left = Math.max(4, rect.x) + 'px';
-    hoverLabel.style.top = labelY + 'px';
+    // Shown before placing, so its width is measurable.
     hoverLabel.style.display = 'block';
+    var place = placeLabel(rect);
+    hoverLabel.style.left = place.left + 'px';
+    hoverLabel.style.top = place.top + 'px';
   }
 
   function onPointerMove(e) {
@@ -153,10 +156,18 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
     previousSelectedValue = null;
   }
 
+  ${GRAB_PICK_CONTROL_SCRIPT}
+
   var grab = window.__orcaGrab = {
     host: host,
     extractPayload: extractPayload,
+    pickControl: pickControl,
     getCurrentElement: function() { return currentEl; },
+    // Orca's palette moved, resized or closed: re-place the label for the hovered element.
+    setLabelAvoidArea: function(area) {
+      labelAvoidArea = area;
+      if (currentEl && selectedEl === null) updateHighlight(currentEl);
+    },
     // Release pointer events while preserving the selection outline for the copy menu.
     freezeHighlight: function(selectionId) {
       stopPointerInput();
@@ -192,10 +203,18 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
       window.removeEventListener('toggle', raiseOverlay, true);
       window.removeEventListener('fullscreenchange', raiseOverlay, true);
       stopTrackingSelection();
+      currentEl = null;
       try { host.remove(); } catch(e) {}
       delete window.__orcaGrab;
     }
   };
 
-  return true;
+  return function(action) {
+    if (action === 'teardown') {
+      if (grab.cancelAwait) grab.cancelAwait();
+      else grab.cleanup();
+      return true;
+    }
+    return false;
+  };
 })()`

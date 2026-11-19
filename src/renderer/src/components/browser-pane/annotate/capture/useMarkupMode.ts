@@ -40,6 +40,15 @@ export type MarkupModeController = {
   start: () => Promise<void>
   cancel: () => void
   complete: (input: MarkupCompleteInput) => Promise<void>
+  /** The frozen page of the open drawing, so a discarded drawing can be reopened as it was. */
+  snapshot: () => MarkupResumeSnapshot | null
+  /** Reopen a discarded drawing on its original frozen page, without capturing again. */
+  resume: (snapshot: MarkupResumeSnapshot) => void
+}
+
+export type MarkupResumeSnapshot = {
+  baseImage: MarkupBaseImage
+  context: MarkupCaptureContext
 }
 
 export function useMarkupMode({
@@ -149,12 +158,26 @@ export function useMarkupMode({
     [onDeliver, reset, reportError]
   )
 
+  const snapshot = useCallback((): MarkupResumeSnapshot | null => {
+    const context = contextRef.current
+    return baseImage && context && state === 'drawing' ? { baseImage, context } : null
+  }, [baseImage, state])
+
+  const resume = useCallback((saved: MarkupResumeSnapshot) => {
+    captureTokenRef.current += 1
+    contextRef.current = saved.context
+    setBaseImage(saved.baseImage)
+    setState('drawing')
+  }, [])
+
   return {
     state,
     isActive: state !== 'idle',
     baseImage,
     start,
     cancel,
-    complete
+    complete,
+    snapshot,
+    resume
   }
 }

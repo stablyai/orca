@@ -1,5 +1,9 @@
 import type { KeybindingActionId, KeybindingInput, ModifierToken, ParsedKeybinding } from './types'
-import { DIGIT_INDEX_KEY_PATTERN, getKeybindingPlatform, isDigitIndexActionId } from './definitions'
+import {
+  DIGIT_INDEX_KEY_PATTERN,
+  getKeybindingPlatform,
+  isDigitIndexActionId
+} from './definitions-support'
 import { hasModifier, parseKeybinding } from './parser'
 import {
   canFallBackToPhysicalCode,
@@ -8,7 +12,7 @@ import {
   numpadCodeKeyTokenFromInput,
   shouldUseMacOptionComposedCaptureFallback,
   isPunctuationKeyToken
-} from './input'
+} from './input-key-identities'
 
 export function platformModifiers(
   parsed: ParsedKeybinding,

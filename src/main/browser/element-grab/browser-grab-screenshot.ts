@@ -1,92 +1,128 @@
+import { randomUUID } from 'node:crypto'
 import type {
   BrowserGrabRect,
   BrowserGrabScreenshot
 } from '../../../shared/browser/element-grab/browser-grab-types'
 import { GRAB_BUDGET } from '../../../shared/browser/element-grab/browser-grab-types'
-import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
+import { grabDocumentScope, requestGrabExecution, restoreGrabCapture } from './grab-guest-execution'
 
-// A hidden host window can stop compositing and leave capturePage pending forever.
-const CAPTURE_TIMEOUT_MS = 10_000
+type Snapshot = BrowserGrabRect & { viewportWidth: number }
+const capturing = new WeakSet<Electron.WebContents>()
 
-const HIDE_BROWSER_GRAB_OVERLAY_SCRIPT = `(function(){
-  var g = window.__orcaGrab;
-  if (g && g.host) g.host.style.display = 'none';
-  document.querySelectorAll('[data-orca-browser-annotation-overlay]').forEach(function(el) {
-    el.setAttribute('data-orca-previous-display', el.style.display || '');
-    el.style.display = 'none';
-  });
-})()`
-
-const RESTORE_BROWSER_GRAB_OVERLAY_SCRIPT = `(function(){
-  var g = window.__orcaGrab;
-  if (g && g.host) g.host.style.display = '';
-  document.querySelectorAll('[data-orca-browser-annotation-overlay]').forEach(function(el) {
-    el.style.display = el.getAttribute('data-orca-previous-display') || '';
-    el.removeAttribute('data-orca-previous-display');
-  });
-})()`
+function readSnapshot(value: unknown): Snapshot | null {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+  if (
+    !('x' in value) ||
+    !('y' in value) ||
+    !('width' in value) ||
+    !('height' in value) ||
+    !('viewportWidth' in value)
+  ) {
+    return null
+  }
+  const { x, y, width, height, viewportWidth } = value
+  const finite = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n)
+  return finite(x) &&
+    finite(y) &&
+    finite(width) &&
+    finite(height) &&
+    finite(viewportWidth) &&
+    width > 0 &&
+    height > 0 &&
+    viewportWidth > 0
+    ? { x, y, width, height, viewportWidth }
+    : null
+}
 
 export async function captureSelectionScreenshot(
-  rect: BrowserGrabRect,
-  guest: Electron.WebContents
+  _rect: BrowserGrabRect,
+  guest: Electron.WebContents,
+  selectionId?: string
 ): Promise<BrowserGrabScreenshot | null> {
+  if (!selectionId || capturing.has(guest) || guest.isDestroyed()) {
+    return null
+  }
+  capturing.add(guest)
+  const scope = grabDocumentScope(guest)
+  const captureId = randomUUID()
+  let physical: Promise<unknown> | null = null
+  let timer: ReturnType<typeof setTimeout> | undefined
   try {
-    // Normalize nonfinite IPC coordinates before passing them to image.crop().
-    const safeN = (n: unknown, fallback = 0): number =>
-      typeof n === 'number' && Number.isFinite(n) ? n : fallback
-    const safeRect = {
-      x: safeN(rect.x),
-      y: safeN(rect.y),
-      width: safeN(rect.width),
-      height: safeN(rect.height)
-    }
-
-    // Hide selection overlays during capture and attempt restoration even if capture fails.
-    await guest.executeJavaScript(HIDE_BROWSER_GRAB_OVERLAY_SCRIPT).catch(() => {})
-    let image: Electron.NativeImage | null
-    try {
-      image = await withTimeout(guest.capturePage(), CAPTURE_TIMEOUT_MS, null)
-    } finally {
-      await guest.executeJavaScript(RESTORE_BROWSER_GRAB_OVERLAY_SCRIPT).catch(() => {})
-    }
-    if (!image || image.isEmpty()) {
+    const prepared = await requestGrabExecution(guest, '', {
+      scope,
+      loadedOnly: true,
+      pick: { selectionId, operation: 'prepareCapture', captureId }
+    })
+    const rect = prepared.ok ? readSnapshot(prepared.value) : null
+    if (!rect || !scope.current || guest.isDestroyed()) {
       return null
     }
-
-    const bitmapSize = image.getSize()
-    // Derive bitmap/CSS scaling from this guest, avoiding primary-display DPI assumptions.
-    const viewportCSSWidth: number = await guest.executeJavaScript('window.innerWidth')
-    if (!viewportCSSWidth || viewportCSSWidth <= 0) {
+    const capture = guest.capturePage().then(
+      (image) => image,
+      () => null
+    )
+    physical = capture
+    const image = await Promise.race([
+      capture,
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), 2_000)
+      })
+    ])
+    clearTimeout(timer)
+    if (!image || image.isEmpty() || !scope.current || guest.isDestroyed()) {
       return null
     }
-    const scaleFactor = bitmapSize.width / viewportCSSWidth
-
-    const cropX = Math.max(0, Math.round(safeRect.x * scaleFactor))
-    const cropY = Math.max(0, Math.round(safeRect.y * scaleFactor))
-    const cropW = Math.min(bitmapSize.width - cropX, Math.round(safeRect.width * scaleFactor))
-    const cropH = Math.min(bitmapSize.height - cropY, Math.round(safeRect.height * scaleFactor))
-
-    if (cropW <= 0 || cropH <= 0) {
+    const checked = await requestGrabExecution(guest, '', {
+      scope,
+      loadedOnly: true,
+      pick: { selectionId, operation: 'snapshot' }
+    })
+    const current = checked.ok ? readSnapshot(checked.value) : null
+    if (
+      !current ||
+      !scope.current ||
+      current.x !== rect.x ||
+      current.y !== rect.y ||
+      current.width !== rect.width ||
+      current.height !== rect.height ||
+      current.viewportWidth !== rect.viewportWidth
+    ) {
       return null
     }
-
-    const cropped = image.crop({ x: cropX, y: cropY, width: cropW, height: cropH })
-    const pngBuffer = cropped.toPNG()
-
-    if (pngBuffer.byteLength > GRAB_BUDGET.screenshotMaxBytes) {
+    const bitmap = image.getSize()
+    const scale = bitmap.width / rect.viewportWidth
+    if (!Number.isFinite(scale) || scale <= 0) {
       return null
     }
-
-    const dataUrl = `data:image/png;base64,${pngBuffer.toString('base64')}`
-    // Report CSS dimensions to match the selection rectangles.
+    const x = Math.max(0, Math.round(rect.x * scale))
+    const y = Math.max(0, Math.round(rect.y * scale))
+    const width = Math.min(bitmap.width - x, Math.round(rect.width * scale))
+    const height = Math.min(bitmap.height - y, Math.round(rect.height * scale))
+    if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) {
+      return null
+    }
+    const png = image.crop({ x, y, width, height }).toPNG()
+    if (png.byteLength > GRAB_BUDGET.screenshotMaxBytes) {
+      return null
+    }
     return {
       mimeType: 'image/png',
-      dataUrl,
-      width: Math.round(cropW / scaleFactor),
-      height: Math.round(cropH / scaleFactor)
+      dataUrl: `data:image/png;base64,${png.toString('base64')}`,
+      width: Math.round(width / scale),
+      height: Math.round(height / scale)
     }
   } catch {
-    // The guest or compositor surface may disappear during capture.
     return null
+  } finally {
+    clearTimeout(timer)
+    restoreGrabCapture(scope, captureId)
+    // A timed-out native capture still occupies its one physical slot until Electron settles it.
+    if (physical) {
+      void physical.finally(() => capturing.delete(guest))
+    } else {
+      capturing.delete(guest)
+    }
   }
 }

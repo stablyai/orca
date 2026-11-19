@@ -14,6 +14,8 @@ export function setupGuestEscapeForwarding(args: {
       input.type !== 'keyDown' ||
       input.key !== 'Escape' ||
       input.isAutoRepeat ||
+      // Esc during IME composition only ends the composition.
+      input.isComposing ||
       input.meta ||
       input.control ||
       input.alt ||

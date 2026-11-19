@@ -52,7 +52,7 @@ export type AttachBrowserPageWebviewArgs = {
   faviconUrlRef: MutableRefObject<string | null>
   addressBarInputRef: RefObject<HTMLInputElement | null>
   lastKnownWebviewUrlRef: MutableRefObject<string | null>
-  invalidateBrowserAnnotationDocumentRef: MutableRefObject<() => void>
+  invalidateBrowserAnnotationDocumentRef: MutableRefObject<(newDocument?: boolean) => void>
   onSetUrlRef: MutableRefObject<BrowserPageUrlSetter>
   setBrowserOverlayViewport: Dispatch<SetStateAction<BrowserOverlayViewport>>
   setAddressBarValue: Dispatch<SetStateAction<string>>
@@ -113,7 +113,7 @@ export function attachBrowserPageWebview(
   if (!container || !webviewContainer) {
     return
   }
-  args.invalidateBrowserAnnotationDocumentRef.current()
+  args.invalidateBrowserAnnotationDocumentRef.current(true)
   const webview = ensuredWebview.webview
   const needsInitialNavigation = ensuredWebview.created
   seedLiveBrowserUrl(browserTabId, redactKagiSessionToken(browserTabUrlRef.current))

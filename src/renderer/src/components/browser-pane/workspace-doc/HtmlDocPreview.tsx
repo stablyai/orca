@@ -66,6 +66,7 @@ export function HtmlDocPreview({
   }, [isActive])
   const reloadRef = useRef<(() => void) | null>(null)
   const [state, setState] = useState<PreviewState>('loading')
+  const [documentGeneration, setDocumentGeneration] = useState(0)
   const [failureReason, setFailureReason] = useState<DocPreviewFileFailureReason | null>(null)
   const [assetFailures, setAssetFailures] = useState<DocPreviewFileFailure[]>([])
   const [downloadBlocked, setDownloadBlocked] = useState(false)
@@ -129,13 +130,16 @@ export function HtmlDocPreview({
     browserOverlayViewport,
     handleAnnotationViewportMessage,
     resetBrowserOverlayViewport,
-    elementTools
+    elementTools,
+    toolSwitch
   } = useDocPreviewGuestTools({
+    documentGeneration,
     previewId,
     worktreeId,
     grantId,
     webviewRef,
     containerRef,
+    isActive,
     toolsReady: state === 'ready' && !isUnavailable
   })
   const previewDocument = useMemo(
@@ -149,6 +153,7 @@ export function HtmlDocPreview({
     let unsubscribeExternalLinks: (() => void) | undefined
     let loadFailed = false
     const onLoadStarted = (): void => {
+      setDocumentGeneration((generation) => generation + 1)
       resetBrowserOverlayViewport()
       loadFailed = false
       setFailureReason(null)
@@ -345,7 +350,7 @@ export function HtmlDocPreview({
         onOpenExternally={() => openDocPreviewExternally(previewDocument)}
         elementTools={elementTools}
         markupActive={markup.isActive}
-        onToggleMarkup={() => (markup.isActive ? markup.cancel() : void markup.start())}
+        onToggleMarkup={() => toolSwitch.toggleTool('draw')}
         // Nothing has painted yet on a loading or failed preview, so there is nothing to draw on.
         markupDisabled={isUnavailable || state !== 'ready' || grab.state !== 'idle'}
         shareControl={buildDocPreviewShareControl(filePath, grant?.location ?? null)}
@@ -380,6 +385,10 @@ export function HtmlDocPreview({
           guestSurfaceRef={webviewRef}
           browserOverlayViewport={browserOverlayViewport}
           worktreeId={worktreeId}
+          currentUrl={history.currentUrl}
+          toolSwitch={toolSwitch}
+          canPickElements={state === 'ready' && !isUnavailable}
+          showPaletteKeyHints={true}
         />
         {state === 'loading' && failureReason === null ? (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-editor-surface">

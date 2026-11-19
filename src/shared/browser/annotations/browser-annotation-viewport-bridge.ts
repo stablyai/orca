@@ -127,16 +127,7 @@ ${COMPOSED_TREE_SCRIPT}
     scrollY: toNumber(window.scrollY, toNumber(window.pageYOffset, 0))
   });
 
-  const findMarked = (root) =>
-    Array.from(root.querySelectorAll('[' + selectedAttribute + ']')).filter(
-      (candidate) => candidate.getAttribute(selectedAttribute) === selectionId
-    );
-
-  // Document queries stop at shadow roots, so open ones are walked when the light DOM has no match.
-  const findMarkedInShadowRoots = (root) =>
-    Array.from(root.querySelectorAll('*')).flatMap((element) =>
-      element.shadowRoot ? findMarked(element.shadowRoot).concat(findMarkedInShadowRoots(element.shadowRoot)) : []
-    );
+${GRAB_SELECTED_ELEMENT_LOOKUP_SCRIPT}
 
   // Why: the card must follow the element itself, not a click-time copy; the grab overlay
   // marks it in the shared DOM because this world cannot see the page's objects.
@@ -325,3 +316,16 @@ ${COMPOSED_TREE_SCRIPT}
   return true;
 })();`
 }
+
+export const GRAB_SELECTED_ELEMENT_LOOKUP_SCRIPT = `  const findMarked = (root) =>
+    Array.from(root.querySelectorAll('[' + selectedAttribute + ']')).filter(
+      (candidate) => candidate.getAttribute(selectedAttribute) === selectionId
+    );
+
+  // Document queries stop at shadow roots, so open ones are walked when the light DOM has no match.
+  const findMarkedInShadowRoots = (root) =>
+    Array.from(root.querySelectorAll('*')).flatMap((element) =>
+      element.shadowRoot ? findMarked(element.shadowRoot).concat(findMarkedInShadowRoots(element.shadowRoot)) : []
+    );
+
+`

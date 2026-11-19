@@ -18,27 +18,31 @@ export const AWAIT_CLICK_SCRIPT = `(async function() {
       }
     }
 
-    // The overlay blocks the press and hands it here; a later await replaces this one.
+    if (grab.cancelAwait) grab.cancelAwait(false);
     grab.onPick = function(e) {
       grab.onPick = null;
+      grab.cancelAwait = null;
       var el = grab.getCurrentElement();
       if (!el) {
         grab.cleanup();
-        reject(new Error('cancelled'));
+        resolve({ __orcaCancelled: true });
         return;
       }
       var payload = extractSelectedPayload(el);
       if (!payload) return;
       // Keep the selected element outlined while the renderer shows its copy menu.
+      var control = grab.pickControl(el, payload, e.type === 'contextmenu');
       grab.freezeHighlight(payload.page.capturedAt);
       // The marker opens the action menu instead of auto-copying.
-      resolve(e.type === 'contextmenu' ? { __orcaContextMenu: true, payload: payload } : payload);
+      resolve(control);
     };
 
-    grab.cancelAwait = function() {
-      grab.cleanup();
+    grab.cancelAwait = function(removeOverlay) {
+      grab.onPick = null;
+      grab.cancelAwait = null;
+      if (removeOverlay !== false) grab.cleanup();
       // Resolve cancellation to avoid guest-console errors during normal teardown.
-      resolve({ __orcaCancelled: true });
+      resolve({ __orcaCancelled: true, __orcaPreserveOverlay: removeOverlay === false });
     };
   });
 })()`
@@ -68,7 +72,7 @@ export const EXTRACT_HOVER_SCRIPT = `(function() {
   var el = grab.getCurrentElement();
   if (!el) return null;
   try {
-    return grab.extractPayload(el);
+    return grab.pickControl(el, grab.extractPayload(el), false);
   } catch (e) {
     return null;
   }

@@ -7,6 +7,18 @@ import type {
 import { formatGrabPayloadAsText } from './GrabConfirmationSheet'
 import type { GrabModeHook } from './useGrabMode'
 import type { BrowserPageGrabToastState } from '../../describe-page/browser-page-types'
+import { translate } from '@/i18n/i18n'
+
+/** Snapshot of the picker's target at action start; true while the same Grab session on the same page is on. */
+export function grabHoverStillCurrent(
+  sessionRef: MutableRefObject<number>,
+  mountedRef: MutableRefObject<boolean>
+): () => boolean {
+  // The session number moves on every exit, intent change and page change, so leaving and re-entering Grab
+  // while a read is in flight (A→B→A) still counts as stale.
+  const startedSession = sessionRef.current
+  return () => mountedRef.current && sessionRef.current === startedSession
+}
 
 export function runBrowserGrabActionShortcut({
   key,
@@ -16,7 +28,8 @@ export function runBrowserGrabActionShortcut({
   toolTargetIdRef,
   recordFeatureInteraction,
   showGrabToast,
-  copyGrabScreenshot
+  copyGrabScreenshot,
+  isStillCurrent = () => true
 }: {
   key: 'c' | 's'
   grabIntent: GrabIntent
@@ -30,6 +43,8 @@ export function runBrowserGrabActionShortcut({
     payload?: BrowserGrabPayload | null
   ) => void
   copyGrabScreenshot: (dataUrl: string, payload: BrowserGrabPayload) => void
+  /** False once the user left Grab or the page changed; a late hover result is then dropped. */
+  isStillCurrent?: () => boolean
 }): void {
   if (grabIntent === 'annotate') {
     return
@@ -37,9 +52,7 @@ export function runBrowserGrabActionShortcut({
   const operationToken = grab.getOperationToken()
   const toolTargetId = toolTargetIdRef.current
   const copyFromPayload = (payload: BrowserGrabPayload): void => {
-    if (!grab.isCurrentOperationToken(operationToken)) {
-      return
-    }
+    if (!grab.isCurrentOperationToken(operationToken)) return
     if (key === 'c') {
       const text = formatGrabPayloadAsText(payload)
       void window.api.ui.writeClipboardText(text)
@@ -57,20 +70,40 @@ export function runBrowserGrabActionShortcut({
   }
 
   if (grab.state === 'confirming') {
-    // Why: right-click (contextMenu) skips the left-click auto-copy, so C must still work here.
-    if (grab.contextMenu && key === 'c') {
-      const currentPayload = grabPayloadRef.current
-      if (currentPayload) {
-        copyFromPayload(currentPayload)
-      }
-      grab.rearm()
-    } else if (key === 's') {
-      const currentPayload = grabPayloadRef.current
-      if (currentPayload) {
-        copyFromPayload(currentPayload)
-      }
-      grab.rearm()
+    if (!(grab.contextMenu && key === 'c') && key !== 's') {
+      return
     }
+    const payload = grabPayloadRef.current
+    if (!payload) {
+      return
+    }
+    void grab.transport
+      .grabPickedElementPresent({
+        browserPageId: toolTargetId,
+        selectionId: payload.page.selectionId ?? payload.page.capturedAt,
+        interactive: true
+      })
+      .then((present) => {
+        if (!isStillCurrent() || grabPayloadRef.current !== payload) {
+          return
+        }
+        if (present !== true) {
+          if (present === false) {
+            grab.cancel()
+          }
+          if (present === null) {
+            showGrabToast(translate('components.ui.dialog.tryAgain', 'Try again'), 'error', payload)
+          }
+          return
+        }
+        copyFromPayload(payload)
+        grab.rearm()
+      })
+      .catch(() => {
+        if (isStillCurrent()) {
+          showGrabToast(translate('components.ui.dialog.tryAgain', 'Try again'), 'error', payload)
+        }
+      })
   } else {
     // armed/awaiting — extract hovered element via IPC without clicking
     void (async () => {
@@ -80,14 +113,13 @@ export function runBrowserGrabActionShortcut({
           browserPageId: toolTargetId
         })
       } catch {
-        if (!grab.isCurrentOperationToken(operationToken)) {
-          return
-        }
         // Why: the guest can be destroyed or the IPC channel torn down mid-shortcut; surface it like a miss instead of an unhandled rejection.
-        showGrabToast('Could not read the hovered element', 'error')
+        if (isStillCurrent()) {
+          showGrabToast('Could not read the hovered element', 'error')
+        }
         return
       }
-      if (!grab.isCurrentOperationToken(operationToken)) {
+      if (!isStillCurrent() || !grab.isCurrentOperationToken(operationToken)) {
         return
       }
       if (!result.ok) {
@@ -100,16 +132,17 @@ export function runBrowserGrabActionShortcut({
         try {
           const ssResult = await grab.transport.captureSelectionScreenshot({
             browserPageId: toolTargetId,
-            rect: payload.target.rectViewport
+            rect: payload.target.rectViewport,
+            selectionId: payload.page.selectionId
           })
-          if (!grab.isCurrentOperationToken(operationToken)) {
-            return
-          }
           if (ssResult.ok) {
             payload.screenshot = ssResult.screenshot as BrowserGrabScreenshot
           }
         } catch {
           // Screenshot failure is non-fatal for the copy flow
+        }
+        if (!isStillCurrent() || !grab.isCurrentOperationToken(operationToken)) {
+          return
         }
       }
 

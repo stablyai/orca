@@ -4437,3 +4437,8 @@ body:has([data-contextual-tour-target='tab-create-menu'][data-state='open'])
     animation: none;
   }
 }
+
+/* Holding Alt fades the browser annotate palette so the page under it can be picked; its tooltips go too. */
+:root[data-browser-annotate-see-through] [data-slot='tooltip-content'] {
+  display: none;
+}
