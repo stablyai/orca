@@ -11,6 +11,11 @@ import {
 import { listWorkerTerminalResources } from '../worker-terminal/worker-terminal-listing'
 import { listFederatedDispatchesByIds } from '../../legacy-remote-home/federated-dispatch-store'
 import type { FederatedDispatchRow } from '../orchestration-records'
+import { getWorkerTerminalResourceByProcessIncarnation } from '../worker-terminal/worker-terminal-resource-store'
+import { hasRecordedStructuredWorkerSession } from '../dispatch-context/dispatch-lookup'
+import { parseOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
+import { structuredWorkerProcessIncarnation } from '../../terminal-authority/structured-sessions/structured-worker-identity'
+import type { WorkerTerminalResourceRow } from '../../terminal-authority/release/worker-terminal-ownership'
 
 export type ConnectorWorkerRow = ReturnType<typeof listWorkerTerminalResources>[number]
 
@@ -20,6 +25,14 @@ const LISTING_CHUNK = 500
 export type ConnectorWorkerCandidates = {
   candidates: ConnectorWorkerCandidate[]
   federated: FederatedDispatchRow[]
+  /** For each chat a candidate is assigned to, the two rows that name its party. */
+  chatParties: ChatPartyRows[]
+}
+
+export type ChatPartyRows = {
+  sessionId: string
+  resource: WorkerTerminalResourceRow | null
+  recordedWorker: boolean
 }
 
 /** A worker that may still run, with what its live projection needs from the database. */
@@ -50,7 +63,7 @@ export function readConnectorWorkerCandidates(
   sessionIds: readonly string[],
   now: number
 ): ConnectorWorkerCandidates {
-  const none = { candidates: [], federated: [] }
+  const none = { candidates: [], federated: [], chatParties: [] }
   if (sessionIds.length === 0) {
     return none
   }
@@ -92,8 +105,30 @@ export function readConnectorWorkerCandidates(
     federated: listFederatedDispatchesByIds.call(
       connection,
       candidates.map((candidate) => candidate.row.dispatchId)
-    )
+    ),
+    chatParties: readChatParties(connection, candidates)
   }
+}
+
+// What resolveOrcaSessionParty reads for a chat assignee; a chat is no worker, so both usually miss.
+function readChatParties(
+  connection: OrchestrationDbConnection,
+  candidates: readonly ConnectorWorkerCandidate[]
+): ChatPartyRows[] {
+  const sessions = new Set(
+    candidates.flatMap(({ row }) => {
+      const chat = row.agentTerminalHandle ? parseOrcaSessionAddress(row.agentTerminalHandle) : null
+      return chat ? [chat] : []
+    })
+  )
+  return [...sessions].map((sessionId) => {
+    const process = structuredWorkerProcessIncarnation(sessionId)
+    return {
+      sessionId,
+      resource: getWorkerTerminalResourceByProcessIncarnation.call(connection, process) ?? null,
+      recordedWorker: hasRecordedStructuredWorkerSession.call(connection, sessionId, process)
+    }
+  })
 }
 
 // The settled half of sessionWorkerState, which no liveness verdict overrides.

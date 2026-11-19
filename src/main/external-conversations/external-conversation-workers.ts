@@ -168,6 +168,7 @@ export class ConversationWorkers {
         for (const entry of batch.values()) {
           settle(entry)
         }
+        this.schedule()
       }
     }
     this.reading = false

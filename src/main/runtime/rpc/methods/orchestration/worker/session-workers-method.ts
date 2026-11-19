@@ -16,6 +16,7 @@ import { SessionWorkersParams } from '../../../../../../shared/rpc-contract/orch
 import { chatAssigneeSessionId } from '../../../../orchestration/workers/lifecycle/chat-assignee'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { FederatedDispatchRow } from '../../../../orchestration/db/orchestration-records'
+import type { SessionPartyReader } from '../../../../orchestration/addressing/session-party-reader'
 import { exposeUtcTimestamp } from '../../../../orchestration/db/utc-timestamp'
 import { defineOrchestrationMethod } from '../access/orchestration-method-access'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
@@ -120,10 +121,14 @@ export async function projectDispatchFleet(
   rows: ReturnType<OrchestrationDb['listWorkerTerminalResources']>,
   attentionFacts: ReturnType<OrchestrationDb['getWorkerAttentionFactsForDispatches']>,
   now: number,
-  federatedRows?: readonly FederatedDispatchRow[]
+  read: {
+    federatedRows?: readonly FederatedDispatchRow[]
+    evidence?: DispatchFleetEvidence
+    parties?: SessionPartyReader
+  } = {}
 ) {
   const db = runtime.getOrchestrationDb()
-  const statuses = runtime.getOrchestrationFleetAgentStatusSnapshot()
+  const { statuses, chatStatusRows } = read.evidence ?? readDispatchFleetEvidence(runtime)
   await ensureSessionWorkerRecords(runtime, rows)
   const fleet = projectWorkerFleet({
     rows,
@@ -132,7 +137,7 @@ export async function projectDispatchFleet(
     limit: rows.length,
     now,
     completeProjection: true,
-    observeSession: createSessionWorkerLivenessReader(db, statuses)
+    observeSession: createSessionWorkerLivenessReader(db, statuses, undefined, read.parties)
   })
   // This machine's statuses cover only its own panes; a paired host's worker needs that host's verdict.
   const openIds = new Set(
@@ -143,15 +148,25 @@ export async function projectDispatchFleet(
     db,
     dispatchIds: rows.map((row) => row.dispatchId),
     isOpen: (dispatchId) => openIds.has(dispatchId),
-    ...(federatedRows ? { federatedRows } : {})
+    ...(read.federatedRows ? { federatedRows: read.federatedRows } : {})
   })
   if (federated) {
     applyFederatedFleetObservations(fleet, federated, fleet.durable)
   }
-  const chatStatusRows = latestLiveAgentStatusRowsByPaneKey(
-    runtime.getAgentStatusSnapshotFn?.() ?? []
-  )
   return { fleet, chatStatusRows }
+}
+
+/** This machine's agent statuses, once for any number of projections. */
+export type DispatchFleetEvidence = {
+  statuses: ReturnType<SessionWorkersRuntime['getOrchestrationFleetAgentStatusSnapshot']>
+  chatStatusRows: ReturnType<typeof latestLiveAgentStatusRowsByPaneKey>
+}
+
+export function readDispatchFleetEvidence(runtime: SessionWorkersRuntime): DispatchFleetEvidence {
+  return {
+    statuses: runtime.getOrchestrationFleetAgentStatusSnapshot(),
+    chatStatusRows: latestLiveAgentStatusRowsByPaneKey(runtime.getAgentStatusSnapshotFn?.() ?? [])
+  }
 }
 
 /** The worker asked its coordinator, or awaits its decision. */
