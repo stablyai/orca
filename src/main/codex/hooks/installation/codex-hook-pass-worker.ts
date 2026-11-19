@@ -120,8 +120,9 @@ function runGuarded(request: CodexHookPassWorkerRequest): CodexHookPassWorkerRes
         agent: 'codex',
         state: 'error',
         configPath: getConfigPath(request.runtimeHomePath),
-        managedHooksPresent: false,
-        detail: `Codex hooks could not be written: ${conflict} kept changing`
+        // A stripped pass published nothing, so Orca's hooks may still be there until the next pass.
+        managedHooksPresent: request.mode === 'strip',
+        detail: `Codex hooks could not be ${request.mode === 'strip' ? 'removed' : 'written'}: ${conflict} kept changing`
       }
     }
   }
