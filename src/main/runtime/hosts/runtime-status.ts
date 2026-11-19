@@ -1,6 +1,7 @@
 import {
   BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY,
   BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
+  BROWSER_STOP_HARD_RELOAD_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_HEADLESS_RUNTIME_CAPABILITY,
   BROWSER_IDENTITY_RUNTIME_CAPABILITY,
@@ -110,7 +111,10 @@ export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEve
     capabilities.push(...advertisedOrcadMigrationDestinationCapabilities())
     // Certificate proceed belongs to whichever process hosts the page, renderer or offscreen.
     if (canBrowse) {
-      capabilities.push(BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY)
+      capabilities.push(
+        BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
+        BROWSER_STOP_HARD_RELOAD_RUNTIME_CAPABILITY
+      )
     }
     capabilities.push(...orcaAccountRuntimeCapabilities())
     capabilities.push(...googleRuntimeCapabilities())

@@ -1,9 +1,13 @@
-import { Image, Text, View } from 'react-native'
+import { Image, StyleSheet, Text, View } from 'react-native'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { colors } from '../theme/mobile-theme'
 import type { MobileBotAvatarSource } from './host-bot-row-facts'
-import { mobileBotMascotAsset } from './mobile-bot-mascot-assets'
+import { mobileBotMascotAsset, mobileBotMascotRimAsset } from './mobile-bot-mascot-assets'
+import {
+  DEFAULT_BOT_AVATAR_COLOR,
+  isDarkBotAvatarColor
+} from '../../../src/shared/bots/bot-avatar-color'
 
 /** The bot's picture as the desktop sidebar draws it: a mascot, its upload, or its emoji or initial. */
 export function MobileBotAvatar({
@@ -24,12 +28,34 @@ export function MobileBotAvatar({
       </View>
     )
   }
+  if (avatar.kind === 'image') {
+    return (
+      <Image
+        source={{ uri: avatar.uri }}
+        style={[styles.tile, frame]}
+        accessibilityIgnoresInvertColors
+      />
+    )
+  }
+  // The mascot pictures are transparent: their tile color goes behind, and on a dark one the light rim.
+  const color = avatar.color ?? DEFAULT_BOT_AVATAR_COLOR
+  // A bundled picture keeps its own pixel size unless told otherwise.
+  const layer = { width: size, height: size }
   return (
-    <Image
-      source={avatar.kind === 'mascot' ? mobileBotMascotAsset(avatar.id) : { uri: avatar.uri }}
-      style={[styles.tile, frame]}
-      accessibilityIgnoresInvertColors
-    />
+    <View style={[styles.tile, frame, { backgroundColor: color }]}>
+      {isDarkBotAvatarColor(color) ? (
+        <Image
+          source={mobileBotMascotRimAsset(avatar.id)}
+          style={[StyleSheet.absoluteFill, layer]}
+          accessibilityIgnoresInvertColors
+        />
+      ) : null}
+      <Image
+        source={mobileBotMascotAsset(avatar.id)}
+        style={[StyleSheet.absoluteFill, layer]}
+        accessibilityIgnoresInvertColors
+      />
+    </View>
   )
 }
 

@@ -168,16 +168,18 @@ export function SidebarBotsSplit({
   )
 
   return (
-    // min-h-10 keeps the Bots header when a short sidebar shrinks the section.
-    // While Bots search is open the section keeps room for the field and two rows instead,
+    // min-h-12 keeps the Bots header and its gap when a short sidebar shrinks the section.
+    // While Bots search is open the section keeps room for the field and one or two rows,
     // and holds the height it opened with (holdSidebarBotsHeightForSearch).
     // The border is the Bots/Projects divider, drawn whether or not the seam can be dragged.
+    // pb-2 matches the Projects header's mt-2; the sidebar viewport's 4px right padding is bled over to its edge.
     <div
       ref={containerRef}
       data-sidebar-bots-split=""
       className={cn(
-        'relative flex min-h-10 scroll-mb-1 flex-col border-b border-worktree-sidebar-divider',
-        'has-[[data-bot-sidebar-search]]:min-h-45',
+        'relative flex min-h-12 scroll-mb-1 flex-col border-b border-worktree-sidebar-border pb-2',
+        '[[data-sidebar-content-viewport]>&]:-mr-1 [[data-sidebar-content-viewport]>&]:pr-1',
+        'has-[[data-bot-sidebar-search=single-row]]:min-h-34 has-[[data-bot-sidebar-search=multiple-rows]]:min-h-47',
         SPLIT_SCROLL_GUTTER,
         fillsSidebar ? 'flex-1' : 'max-h-[40%]'
       )}

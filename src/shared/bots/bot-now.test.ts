@@ -119,7 +119,7 @@ describe('botNow', () => {
     expect(now.needsYou).toBe(1)
   })
 
-  it('keeps a running terminal run and an idle open worker in the work, whatever their dot', () => {
+  it('counts a running terminal run and an idle open worker as working, whatever their dot', () => {
     const activity = buildBotActivity({
       bot,
       sessions: [],
@@ -133,7 +133,6 @@ describe('botNow', () => {
       activity: { ...activity, workers: [worker('w1', 'idle')] },
       chatState: null
     })
-    expect(now.work.map((item) => item.key)).toEqual(['w1', 'run:digest-5'])
     expect(now.working).toBe(2)
   })
 

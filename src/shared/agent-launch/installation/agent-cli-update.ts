@@ -8,6 +8,14 @@ export function isAgentCliUpdateAgent(agent: string): agent is AgentCliUpdateAge
   return AGENT_CLI_UPDATE_AGENTS.some((known) => known === agent)
 }
 
+/** A model on Orca's list that the installed CLI is too old to offer. */
+export type AgentCliModelRequirement = {
+  /** As the CLI lists it once supported. */
+  id: string
+  name: string
+  minVersion: string
+}
+
 /** The user's own CLI on a host, with a newer release out; Orca's own copies never appear here. */
 export type AgentCliUpdate = {
   agent: AgentCliUpdateAgent
@@ -16,6 +24,8 @@ export type AgentCliUpdate = {
   /** What Update runs, or, when `runnable` is false, what the user runs themselves. */
   command: string
   runnable: boolean
+  /** Newest first, each brought by the latest release; absent from hosts that predate it. */
+  models?: AgentCliModelRequirement[]
 }
 
 export type AgentCliUpdateRunResult =
