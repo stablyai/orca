@@ -46,8 +46,11 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     const disposeDiscardProtection = installBrowserGuestDiscardProtection(guest, () =>
       this.invalidateGuestMemoryProtection(guest)
     )
+    // Cleanup unmaps a replaced guest before disposing it, so the clear goes to the page that saw the stall.
+    let stalledPageId: string | undefined
     const disposeStallWatchdog = installBrowserNavigationStallWatchdog(guest, (stall) => {
-      const browserPageId = this.tabIdByWebContentsId.get(guest.id)
+      const browserPageId = stall ? this.tabIdByWebContentsId.get(guest.id) : stalledPageId
+      stalledPageId = stall ? browserPageId : undefined
       if (browserPageId) {
         this.resolveRendererForBrowserTab(browserPageId)?.send('browser:load-stall', {
           browserPageId,

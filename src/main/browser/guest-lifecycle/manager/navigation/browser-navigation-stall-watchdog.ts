@@ -80,24 +80,30 @@ export function installBrowserNavigationStallWatchdog(
     report(null)
   }
 
+  const describe = (load: PendingLoad): BrowserLoadStall => ({
+    phase: load.phase,
+    scheme: load.url.protocol === 'https:' ? 'https' : 'http',
+    host: load.url.host,
+    hiddenSameOriginPages: countHiddenSameOriginPages(guest, load.origin)
+  })
+
   const stall = (load: PendingLoad): void => {
     load.timer = null
     if (pending !== load || guest.isDestroyed()) {
       return
     }
     load.stalled = true
-    const hiddenSameOriginPages = countHiddenSameOriginPages(guest, load.origin)
-    const scheme = load.url.protocol === 'https:' ? 'https' : 'http'
+    const current = describe(load)
     startSpan('browser.loadStalled', {
       attributes: {
-        'browser.load.phase': load.phase,
-        'browser.load.scheme': scheme,
+        'browser.load.phase': current.phase,
+        'browser.load.scheme': current.scheme,
         'browser.load.local': isEligibleLocalCertificateHost(load.url.hostname),
-        'browser.load.port': Number(load.url.port) || (load.url.protocol === 'https:' ? 443 : 80),
-        'browser.load.hiddenSameOriginPages': hiddenSameOriginPages
+        'browser.load.port': Number(load.url.port) || (current.scheme === 'https' ? 443 : 80),
+        'browser.load.hiddenSameOriginPages': current.hiddenSameOriginPages
       }
     }).end()
-    report({ phase: load.phase, scheme, host: load.url.host, hiddenSameOriginPages })
+    report(current)
   }
 
   const started = (
@@ -134,7 +140,7 @@ export function installBrowserNavigationStallWatchdog(
       pending.url = url
       pending.origin = url.origin
       if (pending.stalled) {
-        stall(pending)
+        report(describe(pending))
       }
     }
   }
