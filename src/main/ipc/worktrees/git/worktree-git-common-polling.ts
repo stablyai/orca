@@ -20,6 +20,7 @@ import {
 } from './worktree-git-common-entry-snapshot'
 
 // Ungated backstops bound missed same-granule index writes on coarse-timestamp filesystems.
+// Plain polling also re-reads known entries only on these ticks: a 2 s walk of a large fleet kept main busy at idle.
 const INDEX_BACKSTOP_TICKS = 15
 
 // Match existing probe pools to bound fleet stat fanout without flooding libuv (#17828).
@@ -61,7 +62,8 @@ async function snapshotGitCommon(
   statusRefPaths = new Set<string>(),
   statInPlaceLeaves = false,
   onDirGateMiss?: () => void,
-  onRootMissing?: () => void
+  onRootMissing?: () => void,
+  walkKnownEntries = true
 ): Promise<GitCommonSnapshot> {
   const worktreesDir = join(commonDirPath, 'worktrees')
   const [worktreesDirSignature, primarySignatures, statusRefSignatures] = await Promise.all([
@@ -88,6 +90,10 @@ async function snapshotGitCommon(
   const entries = new Map<string, GitCommonEntrySnapshot>()
   await forEachWithConcurrency(entryPaths, GIT_COMMON_SNAPSHOT_CONCURRENCY, async (entryPath) => {
     const previousEntry = previous?.entries.get(entryPath)
+    if (previousEntry && !walkKnownEntries) {
+      entries.set(entryPath, previousEntry)
+      return
+    }
     entries.set(
       entryPath,
       await snapshotGitCommonEntry(
@@ -189,7 +195,8 @@ export async function startGitCommonPolling(
         // A present-to-missing edge already retires through the normal diff.
         snapshot.worktreesDirSignature === 'missing'
           ? () => options.onRootMissing?.(false)
-          : undefined
+          : undefined,
+        isReconciliation || shouldForceFullScan
       )
       if (disposed) {
         return
