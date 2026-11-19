@@ -18,18 +18,11 @@ import {
   type DashboardCard
 } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-icon'
-import { translate } from '@/i18n/i18n'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { useTranslate } from '@/i18n/use-translate'
 import { DashboardHostBadge } from './DashboardHostBadge'
 import { dashboardCardAgeLabel, dashboardCardSurfaceClass } from './dashboard-card-presentation'
 import { AgentCardLastMessages, hasAgentCardLastMessages } from './AgentCardLastMessages'
-
-function formatSubagentCount(count: number, t: Translate = translate): string {
-  return t('dashboardPopout.card.subagents', '{{count}} subagents', {
-    count,
-    defaultValue_one: '{{count}} subagent'
-  })
-}
+import { DashboardSubagentList, formatSubagentCount } from './DashboardSubagentList'
 
 function sameSubagents(a: DashboardCard['subagents'], b: DashboardCard['subagents']): boolean {
   if (a === b) {
@@ -250,19 +243,7 @@ export const AgentKanbanCard = memo(
               />
               {formatSubagentCount(card.subagents.length, t)}
             </button>
-            {subagentsOpen ? (
-              <div className="ml-1 flex flex-col gap-1 border-l border-border pl-2">
-                {card.subagents.map((subagent) => (
-                  <div
-                    key={subagent.id}
-                    className="flex items-center gap-1.5 py-0.5 text-[11px] text-muted-foreground"
-                  >
-                    <AgentStateDot state={subagent.dotState} />
-                    <span className="truncate">{subagent.name}</span>
-                  </div>
-                ))}
-              </div>
-            ) : null}
+            {subagentsOpen ? <DashboardSubagentList subagents={card.subagents} /> : null}
           </>
         ) : null}
 

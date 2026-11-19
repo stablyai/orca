@@ -12,6 +12,7 @@ import {
   dashboardCardSurfaceClass
 } from '../board/dashboard-card-presentation'
 import { FleetNodeLocation } from './FleetNodeLocation'
+import { FleetNodeSubagents } from './FleetNodeSubagents'
 import { fleetCardTitle } from './fleet-card-title'
 import type { FleetProject } from './fleet-view-model'
 
@@ -59,6 +60,7 @@ export function FleetNetworkNode({
           {card.lastAgentMessage}
         </span>
       ) : null}
+      {card.subagents?.length ? <FleetNodeSubagents subagents={card.subagents} /> : null}
       <span className="flex w-full min-w-0 items-center gap-1.5 text-2xs text-muted-foreground">
         <FleetNodeLocation card={card} project={project} />
         {ageLabel ? <span className="ml-auto shrink-0 pl-1 tabular-nums">{ageLabel}</span> : null}

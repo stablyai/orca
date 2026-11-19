@@ -1,5 +1,6 @@
 import type {
   DashboardCard,
+  DashboardCardSubagent,
   DashboardSnapshot
 } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-icon'
@@ -53,7 +54,12 @@ function toCard(agent: MockAgent, now: number): DashboardCard {
     startedAt: ago(agent.startedMinutesAgo),
     finishedAt: agent.finishedMinutesAgo === undefined ? null : ago(agent.finishedMinutesAgo),
     stateChangedAt: ago(agent.changedMinutesAgo),
-    unseen: agent.unseen ?? false
+    unseen: agent.unseen ?? false,
+    subagents: agent.subagents?.map(([name, dotState], index): DashboardCardSubagent => ({
+      id: `${agent.id}-sub-${index}`,
+      name,
+      dotState
+    }))
   }
 }
 

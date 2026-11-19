@@ -20391,7 +20391,8 @@
         "projects": "프로젝트",
         "teams": "팀"
       },
-      "agentCount_other": "에이전트 {{count}}개"
+      "agentCount_other": "에이전트 {{count}}개",
+      "moreSubagents_other": "+{{count}}개 더"
     }
   },
   "dashboard": {

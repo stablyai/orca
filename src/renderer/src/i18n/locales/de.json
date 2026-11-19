@@ -21131,7 +21131,9 @@
         "teams": "Teams"
       },
       "agentCount_one": "{{count}} Agent",
-      "agentCount_other": "{{count}} Agenten"
+      "agentCount_other": "{{count}} Agenten",
+      "moreSubagents_one": "+{{count}} weiterer",
+      "moreSubagents_other": "+{{count}} weitere"
     }
   },
   "dashboard": {

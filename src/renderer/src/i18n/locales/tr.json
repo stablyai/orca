@@ -21273,7 +21273,9 @@
         "teams": "Takımlar"
       },
       "agentCount_one": "{{count}} ajan",
-      "agentCount_other": "{{count}} ajan"
+      "agentCount_other": "{{count}} ajan",
+      "moreSubagents_other": "+{{count}} tane daha",
+      "moreSubagents_one": "+{{count}} tane daha"
     }
   },
   "dashboard": {

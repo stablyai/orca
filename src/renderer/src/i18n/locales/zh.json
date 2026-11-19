@@ -22163,7 +22163,8 @@
         "projects": "项目",
         "teams": "团队"
       },
-      "agentCount_other": "{{count}} 个智能体"
+      "agentCount_other": "{{count}} 个智能体",
+      "moreSubagents_other": "另有 {{count}} 个"
     }
   },
   "dashboard": {

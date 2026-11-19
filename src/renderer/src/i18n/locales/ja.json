@@ -21766,7 +21766,8 @@
         "projects": "プロジェクト",
         "teams": "チーム"
       },
-      "agentCount_other": "{{count}} 個の Agent"
+      "agentCount_other": "{{count}} 個の Agent",
+      "moreSubagents_other": "ほか {{count}} 件"
     }
   },
   "dashboard": {

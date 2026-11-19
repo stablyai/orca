@@ -1113,7 +1113,10 @@
       },
       "agentCount_one": "{{count}} agente",
       "agentCount_many": "{{count}} agentes",
-      "agentCount_other": "{{count}} agentes"
+      "agentCount_other": "{{count}} agentes",
+      "moreSubagents_one": "+{{count}} a mais",
+      "moreSubagents_other": "+{{count}} a mais",
+      "moreSubagents_many": "+{{count}} a mais"
     }
   },
   "browser": {

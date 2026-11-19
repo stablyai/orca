@@ -28,6 +28,7 @@ export type MockAgent = {
   finishedMinutesAgo?: number
   changedMinutesAgo: number
   host?: MockHost
+  subagents?: readonly [name: string, dotState: DashboardCardDotState][]
 }
 
 export const FLEET_MOCK_AGENTS: readonly MockAgent[] = [
@@ -84,7 +85,11 @@ export const FLEET_MOCK_AGENTS: readonly MockAgent[] = [
     title: 'Audit the location line on every node',
     message: 'Dispatched two checkers; merging their findings into one list.',
     startedMinutesAgo: 84,
-    changedMinutesAgo: 10
+    changedMinutesAgo: 10,
+    subagents: [
+      ['Explore: node location markup', 'done'],
+      ['Explore: host badge rules', 'working']
+    ]
   },
   {
     id: 5,
@@ -155,7 +160,14 @@ export const FLEET_MOCK_AGENTS: readonly MockAgent[] = [
     message: 'Hosted fields render in all three themes; wiring the error states now.',
     startedMinutesAgo: 150,
     changedMinutesAgo: 4,
-    host: BUILD_BOX
+    host: BUILD_BOX,
+    subagents: [
+      ['Find every card form import', 'done'],
+      ['Map hosted field events to form errors', 'working'],
+      ['Check the dark theme contrast', 'working'],
+      ['Draft the migration note', 'idle'],
+      ['Review the error copy', 'waiting']
+    ]
   },
   {
     id: 10,

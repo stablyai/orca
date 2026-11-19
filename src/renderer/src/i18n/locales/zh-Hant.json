@@ -20810,7 +20810,8 @@
         "projects": "專案",
         "teams": "團隊"
       },
-      "agentCount_other": "{{count}} 個代理程式"
+      "agentCount_other": "{{count}} 個代理程式",
+      "moreSubagents_other": "另有 {{count}} 個"
     }
   },
   "dashboard": {

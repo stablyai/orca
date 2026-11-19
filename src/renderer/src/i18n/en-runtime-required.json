@@ -2695,7 +2695,9 @@
     },
     "fleet": {
       "agentCount_one": "{{count}} agent",
-      "agentCount_other": "{{count}} agents"
+      "agentCount_other": "{{count}} agents",
+      "moreSubagents_one": "+{{count}} more",
+      "moreSubagents_other": "+{{count}} more"
     }
   },
   "editor": {

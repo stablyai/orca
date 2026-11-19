@@ -20979,7 +20979,10 @@
       },
       "agentCount_one": "{{count}} agente",
       "agentCount_many": "{{count}} agentes",
-      "agentCount_other": "{{count}} agentes"
+      "agentCount_other": "{{count}} agentes",
+      "moreSubagents_one": "+{{count}} más",
+      "moreSubagents_other": "+{{count}} más",
+      "moreSubagents_many": "+{{count}} más"
     }
   },
   "dashboard": {

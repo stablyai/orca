@@ -21254,7 +21254,10 @@
       },
       "agentCount_one": "{{count}} agent",
       "agentCount_many": "{{count}} agents",
-      "agentCount_other": "{{count}} agents"
+      "agentCount_other": "{{count}} agents",
+      "moreSubagents_one": "+{{count}} de plus",
+      "moreSubagents_other": "+{{count}} de plus",
+      "moreSubagents_many": "+{{count}} de plus"
     }
   },
   "dashboard": {

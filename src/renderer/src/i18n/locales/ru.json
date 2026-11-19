@@ -21816,7 +21816,11 @@
       "agentCount_one": "{{count}} агент",
       "agentCount_few": "{{count}} агента",
       "agentCount_many": "{{count}} агентов",
-      "agentCount_other": "{{count}} агента"
+      "agentCount_other": "{{count}} агента",
+      "moreSubagents_one": "+{{count}} ещё",
+      "moreSubagents_few": "+{{count}} ещё",
+      "moreSubagents_many": "+{{count}} ещё",
+      "moreSubagents_other": "+{{count}} ещё"
     }
   },
   "dashboard": {
