@@ -8,6 +8,7 @@ import { subscribeCrew } from './crew-stream'
 import { watchCrewRuntimeSources } from './crew-runtime-watch'
 import { fixture } from './crew-read-model.test-fixture'
 import { crewStatusRowChange } from './crew-changes'
+import { createCrewNotifiedTerminalIdentity } from '../../terminal/identity/terminal-identity-crew-notice'
 
 const flush = async () => {
   for (let i = 0; i < 4; i++) {
@@ -145,7 +146,7 @@ function mountedCrew() {
   }
 }
 
-it('reads nothing and sends nothing for unrelated status, title, status-row, run and federation writes', async () => {
+it('reads nothing and sends nothing for unrelated status, title, status-row, terminal-record, run and federation writes', async () => {
   const crew = mountedCrew()
   try {
     await flush()
@@ -193,6 +194,16 @@ it('reads nothing and sends nothing for unrelated status, title, status-row, run
     })
     crew.f.db.updateTaskStatus(task.id, 'completed', 'done')
     crew.reset()
+    await flush()
+    expect(crew.counts).toEqual({ sql: 0, statusReads: 0, frames: 0 })
+
+    // Renderer graph publishes and layout syncs rewrite terminal records no crew row resolves through.
+    const records = createCrewNotifiedTerminalIdentity(crew.f.db.crewChanges)
+    for (let index = 0; index < 50; index++) {
+      records.advanceGraphSequence()
+      records.replaceLeaves(new Map())
+      records.addSynthetic(`term_synthetic${index}`)
+    }
     await flush()
     expect(crew.counts).toEqual({ sql: 0, statusReads: 0, frames: 0 })
 
