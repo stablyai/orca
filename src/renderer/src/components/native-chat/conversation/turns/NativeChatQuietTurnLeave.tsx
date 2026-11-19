@@ -11,7 +11,7 @@ export function NativeChatQuietTurnLeave({
   children: ReactNode
 }): React.JSX.Element {
   return (
-    <div className="native-chat-quiet-turn-leave" data-gap={gap} aria-hidden>
+    <div className="native-chat-quiet-turn-leave" data-gap={gap} aria-hidden inert>
       <div className="min-h-0 overflow-hidden">{children}</div>
     </div>
   )

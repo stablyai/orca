@@ -26,17 +26,16 @@ export function useNativeChatQuietTurnLeave({
   const watched = useRef<string | undefined>(undefined)
   // Before paint, so the settled frame still draws the rows that now fade.
   useLayoutEffect(() => {
+    // Before taking the next live turn, which can start in the same render the watched one settles.
+    const key = watched.current
+    if (key !== undefined && quietTurnKeys.has(key)) {
+      watched.current = undefined
+      if (!reduceMotion) {
+        setLeaving((turns) => new Set([...turns, key]))
+      }
+    }
     if (working && liveTurnKey !== undefined) {
       watched.current = liveTurnKey
-      return
-    }
-    const key = watched.current
-    if (key === undefined || !quietTurnKeys.has(key)) {
-      return
-    }
-    watched.current = undefined
-    if (!reduceMotion) {
-      setLeaving((turns) => new Set([...turns, key]))
     }
   }, [liveTurnKey, quietTurnKeys, reduceMotion, setLeaving, working])
   // Once the last one has faded, they all go.
