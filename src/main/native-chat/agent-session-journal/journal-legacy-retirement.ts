@@ -169,6 +169,7 @@ export class JournalLegacyRetirement {
     await this.eligibility.present()
     await this.eligibility.check(this.filename, this.stopped.signal)
     this.proof.observe(observation)
+    this.proof.resume(saved.retirement, observation)
     await this.proof.run(observation)
     // Every early return below waits out the backoff: no helper or full-sync commit each minute.
     if (!(await this.matches(observation))) {

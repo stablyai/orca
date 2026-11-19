@@ -11,11 +11,18 @@ export type LegacyProofFrontier = {
   page?: LegacyProofPage
   session: number
   pending: boolean
+  /** Pages finished this run, for pacing progress saves. */
+  pages: number
 }
 
-export function createLegacyProofFrontier(): LegacyProofFrontier {
-  return { cursor: { table: 0, after: null }, session: 0, pending: false }
+export function createLegacyProofFrontier(
+  cursor: LegacyProofCursor = { table: 0, after: null }
+): LegacyProofFrontier {
+  return { cursor, session: 0, pending: false, pages: 0 }
 }
+
+/** Progress is saved every this many pages, so a later launch repeats at most these. */
+const LEGACY_PROOF_PROGRESS_PAGES = 16
 
 export async function completeJournalLegacyProof(
   readers: Pick<JournalSqlReaderPool, 'legacyProof' | 'importState'>,
@@ -24,7 +31,8 @@ export async function completeJournalLegacyProof(
   boundary: () => Promise<boolean>,
   signal: AbortSignal,
   rest: (started: number) => Promise<void>,
-  frontier = createLegacyProofFrontier()
+  frontier = createLegacyProofFrontier(),
+  progress: (cursor: LegacyProofCursor) => Promise<void> = async () => {}
 ): Promise<void> {
   const admit = async () => {
     signal.throwIfAborted()
@@ -49,12 +57,14 @@ export async function completeJournalLegacyProof(
     const originals = page.sessions.flatMap(({ sessionId, original }) =>
       original === undefined ? [] : [{ sessionId, ...original }]
     )
+    const writing = performance.now()
     if (originals.length > 0) {
       await writer.maintain({ kind: 'legacy-originals-keep', originals })
     }
     if (page.claims?.length) {
       await writer.maintain({ kind: 'legacy-claims-absorb', claims: page.claims })
     }
+    await rest(writing)
     // A copy converts from its original chat like any unconverted chat.
     const chats = page.copies
       ? page.copies.map((sessionId) => ({
@@ -67,16 +77,19 @@ export async function completeJournalLegacyProof(
       : page.sessions
     while (frontier.session < chats.length) {
       await admit()
+      // Each chat's conversion check is paced like a page read, not only the reads.
+      const started = performance.now()
       const source = chats[frontier.session]!
       // A chat deleted here, or one that never held anything, is not converted back.
       if (!source.convert) {
         frontier.session++
         continue
       }
+      let converted: string | null = null
       if (!frontier.pending) {
         frontier.pending = true
         try {
-          await conversions.ensure(source.sessionId, false)
+          converted = await conversions.ensure(source.sessionId, false)
         } catch (error) {
           // The next attempt reads this page again from its start (a copies page shrinks as copies
           // convert), so a failure recorded since is seen, and converts the chat again.
@@ -100,7 +113,11 @@ export async function completeJournalLegacyProof(
           throw error
         }
       }
-      let state = await readers.importState(source.sessionId)
+      // A conversion that returned its epoch is committed; only an unknown one is read back.
+      let state =
+        converted === null
+          ? await readers.importState(source.sessionId)
+          : { state: 'ready' as const, epoch: converted }
       if (state.state !== 'ready' && source.empty) {
         const epoch = await writer.maintain({
           kind: 'import-finish',
@@ -130,10 +147,14 @@ export async function completeJournalLegacyProof(
       }
       frontier.session++
       frontier.pending = false
+      await rest(started)
     }
     frontier.cursor = page.next
     frontier.page = undefined
     frontier.session = 0
+    if (frontier.cursor && ++frontier.pages % LEGACY_PROOF_PROGRESS_PAGES === 0) {
+      await progress(frontier.cursor)
+    }
   }
   signal.throwIfAborted()
 }

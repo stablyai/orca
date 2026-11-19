@@ -1,3 +1,4 @@
+import { JOURNAL_DOMAIN_PROFILE_TABLES } from './database/journal-domain-profile-columns'
 import type Database from '../../sqlite/sync-database'
 import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
 import type { LegacyProofCursor, LegacyProofPage } from './journal-legacy-source-proof'
@@ -29,6 +30,26 @@ export function assertLegacyChatSettled(store: Database.Database, sessionId: str
     meta(store, `${JOURNAL_LEGACY_COPY_DUE}${sessionId}`) !== undefined
   ) {
     throw new JournalLegacyRetentionError('an older Orca chat is still being compared')
+  }
+}
+
+/** The store has every table the proof writes, and no compare due for a chat the original holds. */
+export function assertLegacyStoreReady(
+  source: Database.Database,
+  store: Database.Database,
+  tables: boolean
+): void {
+  assertNoLegacyComparesDue(source, store)
+  for (const { name, columns } of tables ? JOURNAL_DOMAIN_PROFILE_TABLES : []) {
+    const present = new Set(
+      store
+        .prepare(`PRAGMA table_info(${name})`)
+        .all()
+        .map((column) => column.name)
+    )
+    if (columns.some((column) => !present.has(column))) {
+      throw new Error(`legacy proof requires complete destination table ${name}`)
+    }
   }
 }
 

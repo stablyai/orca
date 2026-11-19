@@ -44,6 +44,64 @@ export type LegacySourceRetiring = {
   store: string
 }
 
+/**
+ * How far the proof of this original into this store got, so a later launch resumes there instead
+ * of walking every chat again. Not durable: a lost write only repeats work.
+ */
+export type LegacySourceProving = {
+  version: 2
+  phase: 'proving'
+  proof: string
+  store: string
+  cursor: { table: number; after: string | null; epoch?: string }
+}
+
+export function decodeLegacySourceProving(value: string | null): LegacySourceProving | null {
+  let data: unknown
+  try {
+    data = value ? JSON.parse(value) : null
+  } catch {
+    return null
+  }
+  if (
+    !data ||
+    typeof data !== 'object' ||
+    !('phase' in data) ||
+    data.phase !== 'proving' ||
+    !('version' in data) ||
+    data.version !== 2 ||
+    !('proof' in data) ||
+    typeof data.proof !== 'string' ||
+    !('store' in data) ||
+    typeof data.store !== 'string' ||
+    !('cursor' in data) ||
+    !data.cursor ||
+    typeof data.cursor !== 'object'
+  ) {
+    return null
+  }
+  const cursor: object = data.cursor
+  const table = 'table' in cursor ? cursor.table : undefined
+  const after = 'after' in cursor ? cursor.after : undefined
+  const epoch = 'epoch' in cursor ? cursor.epoch : undefined
+  if (
+    typeof table !== 'number' ||
+    !Number.isInteger(table) ||
+    table < 0 ||
+    (after !== null && typeof after !== 'string') ||
+    (epoch !== undefined && typeof epoch !== 'string')
+  ) {
+    return null
+  }
+  return {
+    version: 2,
+    phase: 'proving',
+    proof: data.proof,
+    store: data.store,
+    cursor: { table, after, ...(epoch === undefined ? {} : { epoch }) }
+  }
+}
+
 export function decodeLegacySourceRefusal(value: string | null): LegacySourceRefusal | null {
   let data: unknown
   try {

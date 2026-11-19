@@ -4,10 +4,13 @@ import {
   createLegacyProofFrontier
 } from './journal-legacy-proof-frontier'
 import {
+  decodeLegacySourceProving,
   decodeLegacySourceRefusal,
   LEGACY_SOURCE_REFUSAL_POLICY,
+  type LegacySourceProving,
   type LegacySourceRefusal
 } from './journal-legacy-retirement-state'
+import type { LegacyProofCursor } from './journal-legacy-source-proof'
 import type { JournalSqlOwner } from './journal-sql-owner'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
 import type { JournalSqlConversions } from './journal-sql-conversions'
@@ -46,6 +49,23 @@ export class JournalLegacyProof {
     }
   }
 
+  /**
+   * Picks up where an earlier launch's proof of this same original into this same store stopped.
+   * Pages already proven stay proven: the original is unchanged and a store only keeps what it
+   * converted. Compares due are the one thing that can appear since, so they are checked again.
+   */
+  resume(saved: string | null, observation: LegacyProofObservation): void {
+    const proving = decodeLegacySourceProving(saved)
+    const fresh =
+      this.frontier.pages === 0 &&
+      !this.frontier.page &&
+      this.frontier.cursor?.table === 0 &&
+      this.frontier.cursor.after === null
+    if (fresh && proving?.proof === observation.proof && proving.store === observation.store) {
+      this.frontier = createLegacyProofFrontier({ ...proving.cursor, check: true })
+    }
+  }
+
   /** True when this exact original was refused before; the proof isn't run again for it. */
   refused(saved: string | null, observation: LegacyProofObservation): boolean {
     // An unsaved refusal proves again, which saves it; only a saved one ends this process's attempts.
@@ -73,7 +93,8 @@ export class JournalLegacyProof {
         this.boundary,
         this.signal,
         this.rest,
-        this.frontier
+        this.frontier,
+        (cursor) => this.saveProgress(observation, cursor)
       )
     } catch (error) {
       if (error instanceof JournalLegacyRetentionError && error.reason) {
@@ -90,6 +111,24 @@ export class JournalLegacyProof {
       throw error
     }
     this.proven = true
+  }
+
+  private async saveProgress(
+    observation: LegacyProofObservation,
+    { check: _check, ...cursor }: LegacyProofCursor
+  ): Promise<void> {
+    const proving: LegacySourceProving = {
+      version: 2,
+      phase: 'proving',
+      proof: observation.proof,
+      store: observation.store,
+      cursor
+    }
+    await this.writer.maintain({
+      kind: 'legacy-retirement-save',
+      value: JSON.stringify(proving),
+      durable: false
+    })
   }
 
   private async saveRefusal(): Promise<void> {

@@ -591,3 +591,36 @@ it('converts the copies the reconcile keeps, and keeps the original while a chat
   expect(stale.errors).toEqual([])
   expect(companions(stale.filename)).toEqual([])
 })
+
+it('resumes the proof where an earlier launch stopped, not from the first chat', async () => {
+  // More drafts than 16 proof pages hold, so the first launch saves progress before it stops.
+  const many = await profile({
+    seed: (legacy) => {
+      const insert = legacy.prepare('INSERT INTO agent_session_records VALUES(?,?)')
+      for (let draft = 0; draft < 600; draft++) {
+        const id = `draft-${String(draft).padStart(3, '0')}`
+        insert.run(id, JSON.stringify({ sessionId: id }))
+      }
+    }
+  })
+  const read = many.readers.legacyProof
+  const cursors: Parameters<typeof read>[0][] = []
+  let stopAfter = 17
+  many.readers.legacyProof = async (cursor) => {
+    cursors.push(cursor)
+    if (cursors.length > stopAfter) {
+      throw new Error('Orca quit')
+    }
+    return read(cursor)
+  }
+  await many.launch().run()
+  expect(companions(many.filename)).toContain(many.filename)
+  // The next launch starts at the saved page and checks compares due again; then it finishes.
+  cursors.length = 0
+  stopAfter = Number.POSITIVE_INFINITY
+  await many.launch().run()
+  expect(cursors[0]).toMatchObject({ table: 0, check: true })
+  expect(cursors[0]!.after).not.toBeNull()
+  expect(many.errors.at(-1)).toMatchObject({ message: 'Orca quit' })
+  expect(companions(many.filename)).toEqual([])
+})
