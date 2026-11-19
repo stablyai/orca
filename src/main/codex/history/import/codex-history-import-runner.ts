@@ -14,8 +14,10 @@ import { forgetStoreFoldersWithoutHardLinks } from './codex-history-import-stagi
 
 // Launches and selections within this of the last import don't read the folder again.
 const IMPORT_INTERVAL_MS = 10 * 60_000
-// A pause this long between publishes lets the index heal run.
+// A pause this long between publishes lets the index heal run, at most once a minute: each heal
+// may start a Codex app-server.
 const PUBLISH_HEAL_DELAY_MS = 2_000
+const PUBLISH_HEAL_INTERVAL_MS = 60_000
 // Names this run's staged copies, so a sweep never removes one still to be published.
 const IMPORT_RUN_ID = randomUUID().replaceAll('-', '').slice(0, 12)
 const IMPORT_LEDGER_PATH = (): string =>
@@ -54,6 +56,7 @@ export class CodexHistoryImportRunner {
   private importing: Promise<void> | null = null
   private importAgain = false
   private publishHealTimer: ReturnType<typeof setTimeout> | undefined
+  private publishHealAt = -Infinity
 
   constructor(private readonly host: CodexHistoryImportHost) {}
 
@@ -119,6 +122,13 @@ export class CodexHistoryImportRunner {
   // folder can't leave earlier conversations out of the index.
   private healAfterPublishes(): void {
     clearTimeout(this.publishHealTimer)
-    this.publishHealTimer = setTimeout(this.host.requestIndexHeal, PUBLISH_HEAL_DELAY_MS)
+    const wait = Math.max(
+      PUBLISH_HEAL_DELAY_MS,
+      this.publishHealAt + PUBLISH_HEAL_INTERVAL_MS - Date.now()
+    )
+    this.publishHealTimer = setTimeout(() => {
+      this.publishHealAt = Date.now()
+      this.host.requestIndexHeal()
+    }, wait)
   }
 }
