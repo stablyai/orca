@@ -1,3 +1,4 @@
+import { setRendererUiLanguage } from '@/i18n/i18n'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type { ResumeCandidate, ResumeFailure } from '../tree/native-chat-resume-on-restart-grouping'
 import type { ResumeRun } from '../runs/native-chat-resume-run'
@@ -158,3 +159,31 @@ export const remoteServer = defineFixture({
     />
   )
 })
+
+/** The toaster's narrowest width, min(26rem, 100vw - 2rem) in a 360 px window, in a long locale. */
+const NARROWEST = 328
+
+function twelveOneNeedsYouIn(language: 'de' | 'ru') {
+  return defineFixture({
+    width: NARROWEST,
+    render: () => (
+      <NativeChatResumeToast
+        view={resumeToastView(
+          finishedRun(twelve, 'launch'),
+          [],
+          new Map([[notAttached.sessionId, notAttached]])
+        )}
+        listedAt={NOW}
+        defaultExpanded
+        {...actions}
+      />
+    ),
+    interact: async () => {
+      await setRendererUiLanguage(language)
+      await new Promise((resolve) => setTimeout(resolve, 300))
+    }
+  })
+}
+
+export const twelveOneNeedsYouGerman = twelveOneNeedsYouIn('de')
+export const twelveOneNeedsYouRussian = twelveOneNeedsYouIn('ru')

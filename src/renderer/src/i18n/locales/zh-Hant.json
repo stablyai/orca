@@ -18494,16 +18494,6 @@
         "3d8e5f1b9c": "透過不公開列出的連結分享技能，並在你使用的任何電腦安裝。",
         "c5b3e8a17d": "登入 Orca"
       },
-      "NativeChatResumeFailureGuidance": {
-        "unconfirmed": "Orca 無法確認「繼續」訊息已送達。請開啟聊天進行檢查，確認後再傳送其他訊息。",
-        "superseded": "請開啟聊天並回覆。重新啟動後隨即有新的工作傳入此聊天，因此 Orca 未傳送「繼續」訊息。",
-        "conflict": "此聊天已在另一個 Orca 視窗或終端機中開啟。請在那裡關閉後重試。",
-        "ownershipUnknown": "此聊天尚未準備好恢復。請稍等片刻後重試。",
-        "notAttached": "聊天未能重新連線。請重試，或將其開啟以開始新的輪次。",
-        "dispatchRejected": "代理程式拒絕了「繼續」訊息。請開啟聊天並自行傳送一則。",
-        "unsupported": "此聊天無法由 Orca 恢復。請將其開啟以檢視停止位置。",
-        "fallback": "Orca 無法恢復此聊天。請將其開啟以手動繼續。"
-      },
       "web": {
         "preloadApi": {
           "cursorAccounts": {

@@ -18047,16 +18047,6 @@
         "3d8e5f1b9c": "비공개 링크 뒤에 있는 기술을 공유하고 사용하는 모든 컴퓨터에 설치하세요.",
         "c5b3e8a17d": "Orca에 로그인"
       },
-      "NativeChatResumeFailureGuidance": {
-        "unconfirmed": "Orca가 “continue” 메시지가 전달되었는지 확인하지 못했습니다. 다른 메시지를 보내기 전에 채팅을 열어 확인하세요.",
-        "superseded": "채팅을 열고 답장하세요. 다시 시작한 직후 새 작업이 도착해서 Orca가 “continue” 메시지를 보내지 않았습니다.",
-        "conflict": "이 채팅은 다른 Orca 창이나 터미널에서 열려 있습니다. 그곳에서 닫은 다음 다시 시도하세요.",
-        "ownershipUnknown": "이 채팅은 아직 재개할 준비가 되지 않았습니다. 잠시 기다린 다음 다시 시도하세요.",
-        "notAttached": "채팅이 다시 연결되지 않았습니다. 다시 시도하거나 열어서 새 턴을 시작하세요.",
-        "dispatchRejected": "에이전트가 “continue” 메시지를 거부했습니다. 채팅을 열어 직접 보내세요.",
-        "unsupported": "이 채팅은 Orca에서 재개할 수 없습니다. 열어서 중단된 위치를 확인하세요.",
-        "fallback": "Orca가 이 채팅을 재개하지 못했습니다. 열어서 수동으로 계속하세요."
-      },
       "web": {
         "preloadApi": {
           "cursorAccounts": {

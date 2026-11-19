@@ -98,10 +98,7 @@ export function NativeChatResumeToastRow({
   const t = useTranslate()
   const actions = rowActions(row, remote, t)
   const reason = row.openOnly
-    ? t(
-        'auto.components.NativeChatResumeToast.refusedNoRecord',
-        'Orca couldn’t resume this chat. Open it to continue.'
-      )
+    ? t('auto.components.NativeChatResumeFailureGuidance.fallbackShort', 'Couldn’t resume.')
     : row.failure
       ? resumeFailureGuidance(row.failure, t).text
       : row.state === 'needs-you' || row.state === 'stopped'
@@ -118,7 +115,13 @@ export function NativeChatResumeToastRow({
           <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{age}</span>
         </div>
         {reason && (
-          <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{reason}</p>
+          // One line beside the buttons; a long activity label truncates, its full text on hover.
+          <p
+            className="mt-0.5 truncate text-[11px] leading-snug text-muted-foreground"
+            title={reason}
+          >
+            {reason}
+          </p>
         )}
         {actions.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-1">
@@ -127,6 +130,12 @@ export function NativeChatResumeToastRow({
                 key={action}
                 variant={action === actions[0] ? 'outline' : 'ghost'}
                 size="xs"
+                // Dismiss deletes the offer, so it sits apart and quieter than the ways to continue.
+                className={
+                  action === 'dismiss'
+                    ? 'ml-auto text-muted-foreground hover:text-foreground'
+                    : undefined
+                }
                 // Open is read-only, so it stays available while a resume runs.
                 disabled={busy && action !== 'open'}
                 aria-label={`${actionLabel(action, row, t)}: ${name}`}

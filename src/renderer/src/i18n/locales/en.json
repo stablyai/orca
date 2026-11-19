@@ -20277,14 +20277,14 @@
         "c5b3e8a17d": "Sign in to Orca"
       },
       "NativeChatResumeFailureGuidance": {
-        "unconfirmed": "Orca couldn’t confirm the “continue” message was delivered. Open the chat and check before sending another.",
-        "superseded": "Open the chat and reply. New work arrived in it right after the restart, so Orca didn’t send its “continue” message.",
-        "conflict": "This chat is open in another Orca window or terminal. Close it there, then retry.",
-        "ownershipUnknown": "This chat isn’t ready to resume yet. Wait a moment, then retry.",
-        "notAttached": "The chat didn’t reconnect. Retry, or open it to start a fresh turn.",
-        "dispatchRejected": "The agent refused the “continue” message. Open the chat and send one yourself.",
-        "unsupported": "This chat can’t be resumed by Orca. Open it to see where it stopped.",
-        "fallback": "Orca couldn’t resume this chat. Open it to continue manually."
+        "fallbackShort": "Couldn’t resume.",
+        "unconfirmedShort": "Couldn’t confirm it continued.",
+        "supersededShort": "New work arrived after the restart.",
+        "conflictShort": "Open in another window.",
+        "ownershipUnknownShort": "Not ready to resume yet.",
+        "notAttachedShort": "Didn’t reconnect.",
+        "dispatchRejectedShort": "The agent declined to continue.",
+        "unsupportedShort": "Orca can’t resume this chat."
       },
       "web": {
         "preloadApi": {
@@ -20525,8 +20525,7 @@
         "stateResumed": "Resumed",
         "stateNeedsYou": "Needs you",
         "stateResuming": "Resuming",
-        "stateStopped": "Stopped",
-        "refusedNoRecord": "Orca couldn’t resume this chat. Open it to continue."
+        "stateStopped": "Stopped"
       }
     },
     "i18n": {

@@ -18895,16 +18895,6 @@
         "3d8e5f1b9c": "Becerileri listelenmemiş bir bağlantının arkasında paylaşın ve kullandığınız herhangi bir makineye kurun.",
         "c5b3e8a17d": "Orca'da oturum aç"
       },
-      "NativeChatResumeFailureGuidance": {
-        "unconfirmed": "Orca, “devam et” mesajının iletildiğini doğrulayamadı. Başka bir mesaj göndermeden önce sohbeti açıp kontrol edin.",
-        "superseded": "Sohbeti açıp yanıt verin. Yeniden başlatmanın hemen ardından sohbete yeni bir iş geldiği için Orca “devam et” mesajını göndermedi.",
-        "conflict": "Bu sohbet başka bir Orca penceresinde veya terminalinde açık. Orada kapatıp yeniden deneyin.",
-        "ownershipUnknown": "Bu sohbet henüz devam etmeye hazır değil. Biraz bekleyip yeniden deneyin.",
-        "notAttached": "Sohbet yeniden bağlanamadı. Tekrar deneyin veya yeni bir tur başlatmak için sohbeti açın.",
-        "dispatchRejected": "Ajan “devam et” mesajını reddetti. Sohbeti açıp kendiniz bir mesaj gönderin.",
-        "unsupported": "Orca bu sohbete devam edemiyor. Nerede kaldığını görmek için açın.",
-        "fallback": "Orca bu sohbete devam edemedi. Elle devam etmek için açın."
-      },
       "web": {
         "preloadApi": {
           "cursorAccounts": {

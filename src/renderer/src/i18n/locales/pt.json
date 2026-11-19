@@ -20154,16 +20154,6 @@
         "moreHosts_other": "Mais {{count}} hosts. Busque pelo nome para encontrar um.",
         "moreHosts_many": "Mais {{count}} hosts. Busque pelo nome para encontrar um."
       },
-      "NativeChatResumeFailureGuidance": {
-        "unconfirmed": "O Orca não conseguiu confirmar a entrega da mensagem “continuar”. Abra o chat e confira antes de enviar outra.",
-        "superseded": "Abra o chat e responda. Novas tarefas chegaram logo após a reinicialização, por isso o Orca não enviou sua mensagem “continuar”.",
-        "conflict": "Este chat está aberto em outra janela ou terminal do Orca. Feche-o lá e tente novamente.",
-        "ownershipUnknown": "Este chat ainda não está pronto para ser retomado. Aguarde um momento e tente novamente.",
-        "notAttached": "O chat não se reconectou. Tente novamente ou abra-o para iniciar uma nova interação.",
-        "dispatchRejected": "O agente recusou a mensagem “continuar”. Abra o chat e envie uma você mesmo.",
-        "unsupported": "Este chat não pode ser retomado pelo Orca. Abra-o para ver onde parou.",
-        "fallback": "O Orca não conseguiu retomar este chat. Abra-o para continuar manualmente."
-      },
       "web": {
         "preloadApi": {
           "cursorAccounts": {

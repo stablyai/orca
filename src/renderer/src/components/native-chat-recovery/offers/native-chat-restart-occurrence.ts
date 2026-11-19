@@ -13,6 +13,7 @@ import {
   beginResumeRun,
   resumeRunInFlight,
   resumeRunPendingIds,
+  withoutResumeRunSessions,
   type ResumeRun,
   type ResumeRunStarter
 } from '../runs/native-chat-resume-run'
@@ -288,6 +289,10 @@ export function createNativeChatRestartOccurrence(
       // Only a dismissal the host took ends the mark; a failed one leaves the chat shown as failed.
       forgetUnsentResumes(sessionIds)
       if (result) {
+        // A settled run's own outcomes would otherwise bring a dismissed refusal back as a row.
+        if (run && !run.inFlight) {
+          setRun(withoutResumeRunSessions(run, sessionIds))
+        }
         publishAnswer(result)
       } else {
         await refreshNativeChatRestartOffer()

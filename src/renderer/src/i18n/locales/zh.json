@@ -19049,16 +19049,6 @@
         "3d8e5f1b9c": "通过非公开链接分享技能，并在你使用的任何计算机上安装",
         "c5b3e8a17d": "登录 Orca"
       },
-      "NativeChatResumeFailureGuidance": {
-        "unconfirmed": "Orca 无法确认“continue”消息已送达，请打开聊天进行检查，确认后再发送其他消息",
-        "superseded": "请打开聊天并回复，重启后紧接着有新的工作到达，因此 Orca 未发送其“continue”消息",
-        "conflict": "此聊天已在另一个 Orca 窗口或终端中打开，请在那里关闭后重试",
-        "ownershipUnknown": "此聊天尚未准备好恢复，请稍等片刻后重试",
-        "notAttached": "聊天未能重新连接，请重试，或将其打开以开始新的轮次",
-        "dispatchRejected": "代理拒绝了“continue”消息，请打开聊天并自行发送一条",
-        "unsupported": "此聊天无法由 Orca 恢复，请将其打开以查看停止位置",
-        "fallback": "Orca 无法恢复此聊天，请将其打开以手动继续"
-      },
       "web": {
         "preloadApi": {
           "cursorAccounts": {

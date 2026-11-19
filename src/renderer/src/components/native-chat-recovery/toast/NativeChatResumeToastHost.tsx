@@ -61,7 +61,7 @@ function NativeChatResumeToastHost({
     }
     // Only the person's own dismissal snoozes; this effect's cleanup must not consume a later request.
     let owned = true
-    toast.custom(() => <ConnectedResumeToast store={store} />, {
+    toast.custom(() => <ConnectedResumeToast store={store} toastId={id} />, {
       id,
       duration: Infinity,
       closeButton: false,
@@ -86,11 +86,18 @@ function snoozeResumeToast(store: NativeChatRestartStore): void {
   store.releaseFinishedNativeChatRestartRun()
 }
 
+/** The toaster measures a toast only when it is issued; re-issuing in place keeps its state. */
+function remeasureResumeToast(store: NativeChatRestartStore, toastId: string): void {
+  toast.custom(() => <ConnectedResumeToast store={store} toastId={toastId} />, { id: toastId })
+}
+
 function ConnectedResumeToast({
-  store
+  store,
+  toastId
 }: {
   store: NativeChatRestartStore
-}): React.JSX.Element | null {
+  toastId: string
+}): React.JSX.Element {
   const { candidates, failed, listedAt } = useNativeChatRestartOffer(true, store)
   const run = useNativeChatRestartRun(store)
   const failureBySession = useMemo(() => resumeRunFailures(run, failed), [run, failed])
@@ -119,6 +126,24 @@ function ConnectedResumeToast({
 
   // A clean report leaves on its own unless the person reached for it.
   const touched = useRef(false)
+  // Details and row changes resize it; without a fresh measure it would grow off the screen.
+  const root = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const node = root.current
+    if (!node) {
+      return
+    }
+    let height = node.getBoundingClientRect().height
+    const observer = new ResizeObserver(() => {
+      const next = node.getBoundingClientRect().height
+      if (Math.abs(next - height) > 0.5) {
+        height = next
+        remeasureResumeToast(store, toastId)
+      }
+    })
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [store, toastId])
   const transient = view.phase === 'finished' && view.counts.needsYou === 0
   useEffect(() => {
     if (!transient) {
@@ -160,40 +185,43 @@ function ConnectedResumeToast({
       : activateAiVaultStructuredSession(session))
   }
 
-  if (view.rows.length === 0) {
-    return null
-  }
+  // The wrapper always renders, so its size is observed from the first paint.
   return (
     <div
+      ref={root}
+      // Unstyled toasts aren't given the toaster's width; fill it rather than shrink to the text.
+      className="w-[var(--width,100%)] max-w-full"
       onPointerEnter={() => (touched.current = true)}
       onFocusCapture={() => (touched.current = true)}
     >
-      <NativeChatResumeToast
-        view={view}
-        machineName={remote ? machineName : undefined}
-        listedAt={listedAt}
-        nameFor={nameFor}
-        onResume={(ids) => void store.continueNativeChatRestartOffer(ids)}
-        onRowAction={onRowAction}
-        onDismissAll={
-          remote
-            ? undefined
-            : () => {
-                close()
-                void store.dismissNativeChatRestartOffer()
-              }
-        }
-        onOpenSettings={() => {
-          close()
-          openSettingsPage()
-          openSettingsTarget({
-            pane: 'chat',
-            repoId: null,
-            sectionId: NATIVE_CHAT_RESUME_SETTING_SECTION_ID
-          })
-        }}
-        onClose={close}
-      />
+      {view.rows.length > 0 && (
+        <NativeChatResumeToast
+          view={view}
+          machineName={remote ? machineName : undefined}
+          listedAt={listedAt}
+          nameFor={nameFor}
+          onResume={(ids) => void store.continueNativeChatRestartOffer(ids)}
+          onRowAction={onRowAction}
+          onDismissAll={
+            remote
+              ? undefined
+              : () => {
+                  close()
+                  void store.dismissNativeChatRestartOffer()
+                }
+          }
+          onOpenSettings={() => {
+            close()
+            openSettingsPage()
+            openSettingsTarget({
+              pane: 'chat',
+              repoId: null,
+              sectionId: NATIVE_CHAT_RESUME_SETTING_SECTION_ID
+            })
+          }}
+          onClose={close}
+        />
+      )}
     </div>
   )
 }

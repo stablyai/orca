@@ -84,3 +84,23 @@ const NONE: readonly string[] = []
 export function resumeRunPendingIds(run: ResumeRun | null): readonly string[] {
   return run?.inFlight ? run.entries.map((entry) => entry.candidate.sessionId) : NONE
 }
+
+/** Drops dismissed chats from a settled run; no ids means every chat was dismissed. */
+export function withoutResumeRunSessions(
+  run: ResumeRun,
+  sessionIds: readonly string[] | undefined
+): ResumeRun | null {
+  if (sessionIds === undefined) {
+    return null
+  }
+  const dismissed = new Set(sessionIds)
+  const entries = run.entries.filter((entry) => !dismissed.has(entry.candidate.sessionId))
+  if (entries.length === 0) {
+    return null
+  }
+  return {
+    ...run,
+    entries,
+    continued: run.continued?.filter((entry) => !dismissed.has(entry.sessionId))
+  }
+}

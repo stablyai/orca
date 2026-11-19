@@ -18746,16 +18746,6 @@
         "3d8e5f1b9c": "Skills über einen nicht gelisteten Link teilen und auf allen verwendeten Computern installieren.",
         "c5b3e8a17d": "Bei Orca anmelden"
       },
-      "NativeChatResumeFailureGuidance": {
-        "unconfirmed": "Orca konnte die Zustellung der Nachricht „Fortsetzen“ nicht bestätigen. Den Chat öffnen und prüfen, bevor eine weitere Nachricht gesendet wird.",
-        "superseded": "Den Chat öffnen und antworten. Direkt nach dem Neustart kam darin neue Arbeit an, daher hat Orca seine Nachricht „Fortsetzen“ nicht gesendet.",
-        "conflict": "Dieser Chat ist in einem anderen Orca-Fenster oder Terminal geöffnet. Dort schließen und erneut versuchen.",
-        "ownershipUnknown": "Dieser Chat ist noch nicht zum Fortsetzen bereit. Einen Moment warten und erneut versuchen.",
-        "notAttached": "Der Chat wurde nicht erneut verbunden. Erneut versuchen oder den Chat öffnen, um eine neue Runde zu starten.",
-        "dispatchRejected": "Der Agent hat die Nachricht „Fortsetzen“ abgelehnt. Den Chat öffnen und selbst eine Nachricht senden.",
-        "unsupported": "Dieser Chat kann von Orca nicht fortgesetzt werden. Den Chat öffnen, um zu sehen, wo er aufgehört hat.",
-        "fallback": "Orca konnte diesen Chat nicht fortsetzen. Den Chat öffnen, um manuell fortzufahren."
-      },
       "web": {
         "preloadApi": {
           "cursorAccounts": {
@@ -18911,6 +18901,55 @@
         "setting-global-off": "Das Ordnervertrauen ist in den Agenten-Einstellungen ausgeschaltet, daher fragen Agenten immer nach.",
         "keyword-trust": "vertrauen",
         "keyword-hooks": "Hooks"
+      },
+      "NativeChatResumeToast": {
+        "resumingOn_one": "{{count}} Chat auf {{machine}} wird fortgesetzt…",
+        "resumingOn_other": "{{count}} Chats auf {{machine}} werden fortgesetzt…",
+        "resuming_one": "{{count}} Chat wird fortgesetzt…",
+        "resuming_other": "{{count}} Chats werden fortgesetzt…",
+        "resumedOn_one": "{{count}} Chat auf {{machine}} fortgesetzt.",
+        "resumedOn_other": "{{count}} Chats auf {{machine}} fortgesetzt.",
+        "resumedUpdate_one": "{{count}} Chat nach dem Update fortgesetzt.",
+        "resumedUpdate_other": "{{count}} Chats nach dem Update fortgesetzt.",
+        "resumedRestart_one": "{{count}} Chat nach dem Neustart fortgesetzt.",
+        "resumedRestart_other": "{{count}} Chats nach dem Neustart fortgesetzt.",
+        "partial_one": "{{resumed}} von {{total}} Chats fortgesetzt. {{count}} braucht dich.",
+        "partial_other": "{{resumed}} von {{total}} Chats fortgesetzt. {{count}} brauchen dich.",
+        "stoppedOn_one": "{{count}} Chat auf {{machine}} angehalten.",
+        "stoppedOn_other": "{{count}} Chats auf {{machine}} angehalten.",
+        "stoppedUpdate_one": "{{count}} Chat beim Orca-Update angehalten.",
+        "stoppedUpdate_other": "{{count}} Chats beim Orca-Update angehalten.",
+        "stoppedRestart_one": "{{count}} Chat beim Beenden von Orca angehalten.",
+        "stoppedRestart_other": "{{count}} Chats beim Beenden von Orca angehalten.",
+        "promptsNotResent": "Beim Fortsetzen werden deine Prompts nicht erneut gesendet.",
+        "promptsNotSent": "Deine Prompts wurden nicht erneut gesendet.",
+        "resume": "Fortsetzen",
+        "details": "Details",
+        "close": "Schließen",
+        "listLabel": "Chats",
+        "untitled": "Chat ohne Titel",
+        "willAsk": "Orca bittet jeden Chat weiterzumachen. Nachrichten in der Warteschlange werden ggf. gesendet.",
+        "asked": "Orca hat jeden Chat gebeten weiterzumachen. Nachrichten in der Warteschlange werden ggf. gesendet.",
+        "resumedAutomatically": "Automatisch fortgesetzt.",
+        "changeInSettings": "In den Einstellungen ändern",
+        "dismissAll": "Alle verwerfen",
+        "open": "Öffnen",
+        "dismiss": "Verwerfen",
+        "retry": "Wiederholen",
+        "stateResumed": "Fortgesetzt",
+        "stateNeedsYou": "Braucht dich",
+        "stateResuming": "Wird fortgesetzt",
+        "stateStopped": "Angehalten"
+      },
+      "NativeChatResumeFailureGuidance": {
+        "fallbackShort": "Nicht fortgesetzt.",
+        "unconfirmedShort": "Fortsetzen nicht bestätigt.",
+        "supersededShort": "Nach dem Neustart kam neue Arbeit.",
+        "conflictShort": "In einem anderen Fenster offen.",
+        "ownershipUnknownShort": "Noch nicht bereit.",
+        "notAttachedShort": "Keine Verbindung.",
+        "dispatchRejectedShort": "Der Agent hat abgelehnt.",
+        "unsupportedShort": "Orca kann ihn nicht fortsetzen."
       }
     },
     "i18n": {

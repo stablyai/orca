@@ -18776,16 +18776,6 @@
         "3d8e5f1b9c": "Partagez vos compétences derrière un lien non répertorié et installez-les sur n'importe quelle machine que vous utilisez.",
         "c5b3e8a17d": "Connectez-vous à Orca"
       },
-      "NativeChatResumeFailureGuidance": {
-        "unconfirmed": "Orca n'a pas pu confirmer que le message “continue” a été livré. Ouvrez le chat et vérifiez avant d'en envoyer un autre.",
-        "superseded": "Ouvrez le chat et répondez. Du nouveau travail est arrivé juste après le redémarrage, donc Orca n'a pas envoyé son message “continue”.",
-        "conflict": "Ce chat est ouvert dans une autre fenêtre Orca ou un terminal. Fermez-le là-bas, puis réessayez.",
-        "ownershipUnknown": "Ce chat n’est pas encore prêt à reprendre. Patientez un instant, puis réessayez.",
-        "notAttached": "Le chat ne s'est pas reconnecté. Réessayez ou ouvrez-le pour démarrer un nouveau tour.",
-        "dispatchRejected": "L'agent a refusé le message “continue”. Ouvrez le chat et envoyez-en un vous-même.",
-        "unsupported": "Orca ne peut pas reprendre ce chat. Ouvrez-le pour voir où il s'est arrêté.",
-        "fallback": "Orca n'a pas pu reprendre ce chat. Ouvrez-le pour continuer manuellement."
-      },
       "web": {
         "preloadApi": {
           "cursorAccounts": {
