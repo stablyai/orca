@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "revision": 1,
+  "kinds": {
+    "rollouts": { "mode": "report", "enforcePermille": 0 },
+    "databases": { "mode": "report", "enforcePermille": 0 }
+  }
+}

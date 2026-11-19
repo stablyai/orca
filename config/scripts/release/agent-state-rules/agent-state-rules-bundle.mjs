@@ -1,11 +1,14 @@
 // Assemble rules accepted by the app loader and enforce channel publishing constraints.
 // Usage: build <out> [--bundled-only] | publish-next [--bundled-only] | promote-stable.
 
-import { spawnSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import {
+  downloadChannelAsset,
+  putChannelAsset,
+  runGh
+} from '../publication/channel-release-asset.mjs'
 import { agentStateRulesTag } from '../versioning/release-tag-patterns.mjs'
 
 const RULES_DIR = join(import.meta.dirname, '../../..', '..', 'src/main/runtime/agent-state-rules')
@@ -28,41 +31,12 @@ export function buildAgentStateRulesBundle({ bundledOnly = false } = {}) {
   return `${JSON.stringify(bundle, null, 2)}\n`
 }
 
-function runGh(args) {
-  const result = spawnSync('gh', args, { encoding: 'utf8' })
-  return { status: result.status ?? 1, stdout: result.stdout ?? '', stderr: result.stderr ?? '' }
-}
-
-function ghOrThrow(gh, args) {
-  const result = gh(args)
-  if (result.status !== 0) {
-    throw new Error(`gh ${args.join(' ')} failed: ${result.stderr.trim()}`)
-  }
-  return result.stdout
-}
-
 /** The file on `tag`'s release, or null when there is no release yet. */
 function downloadPublished(gh, repo, tag) {
-  const args = [
-    'release',
-    'download',
-    tag,
-    '--repo',
-    repo,
-    '-p',
-    AGENT_STATE_RULES_ASSET,
-    '-O',
-    '-'
-  ]
-  const result = gh(args)
-  if (result.status === 0) {
-    return result.stdout
-  }
-  // Why throw on anything else, a missing asset included: that means an earlier upload broke.
-  if (/release not found/i.test(result.stderr)) {
-    return null
-  }
-  throw new Error(`gh ${args.join(' ')} failed: ${result.stderr.trim()}`)
+  return (
+    downloadChannelAsset({ gh, repo, tag, asset: AGENT_STATE_RULES_ASSET })?.toString('utf8') ??
+    null
+  )
 }
 
 /**
@@ -80,29 +54,17 @@ export function publishAgentStateRules({ repo, channel, text, target, gh = runGh
       `version ${candidate.version} is not higher than the published ${published}; bump agent-state-rules-release.json`
     )
   }
-  const file = join(mkdtempSync(join(tmpdir(), 'agent-state-rules-')), AGENT_STATE_RULES_ASSET)
-  writeFileSync(file, text)
-  if (published === null) {
-    ghOrThrow(gh, [
-      'release',
-      'create',
-      tag,
-      file,
-      '--repo',
-      repo,
-      '--target',
-      target,
-      '--prerelease',
-      '--latest=false',
-      '--title',
-      `Agent state rules (${channel})`,
-      '--notes',
-      'Agent state rules for Orca. Running apps download this file; it is not an app release.'
-    ])
-  } else {
-    // Keep fixed channel URL with --clobber; mid-upload 404 retains the app’s last good copy.
-    ghOrThrow(gh, ['release', 'upload', tag, file, '--repo', repo, '--clobber'])
-  }
+  putChannelAsset({
+    gh,
+    repo,
+    tag,
+    asset: AGENT_STATE_RULES_ASSET,
+    bytes: text,
+    exists: published !== null,
+    target,
+    title: `Agent state rules (${channel})`,
+    notes: 'Agent state rules for Orca. Running apps download this file; it is not an app release.'
+  })
   return { tag, version: candidate.version }
 }
 

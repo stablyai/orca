@@ -1,0 +1,41 @@
+name: Publish Codex history cleanup policy
+
+# Maintainer-only publisher: dispatch main to next, soak, then promote identical bytes to stable; emergency-off turns every kind off on both channels at once. Use GITHUB_TOKEN so release-policy accepts bot-authored prereleases.
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'publish-next publishes config/remote-policies/codex-history-cleanup-policy.json to next; promote-stable copies the next file to stable; emergency-off publishes it with every kind off to next and stable'
+        required: true
+        type: choice
+        options:
+          - publish-next
+          - promote-stable
+          - emergency-off
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codex-history-cleanup-policy-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: codex-history-cleanup-policy
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      # The publisher validates with the app's own parser, which needs the app's dependencies.
+      - uses: ./.github/actions/install-node-dependencies
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACTION: ${{ inputs.action }}
+        run: node config/scripts/release/codex-history-cleanup-policy/codex-history-cleanup-policy-publish.mjs "$ACTION"

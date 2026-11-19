@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { isAgentStateRulesTag } from '../../config/scripts/release/versioning/release-tag-patterns.mjs'
+import { isRemotePolicyTag } from '../../config/scripts/release/versioning/release-tag-patterns.mjs'
 
 const repository = process.env.GITHUB_REPOSITORY ?? 'stablyai/orca'
 const token = process.env.GITHUB_TOKEN
@@ -26,12 +26,12 @@ async function fetchJson(url) {
   return response.json()
 }
 
-// Why rules releases are excluded: every running app fetches them every few hours, so they
+// Why remote policy releases are excluded: every running app fetches them every few hours, so they
 // count fetches, not installs.
 export function countReleaseDownloads(releases) {
   let total = 0
   for (const release of releases) {
-    if (release.draft || isAgentStateRulesTag(release.tag_name ?? '')) {
+    if (release.draft || isRemotePolicyTag(release.tag_name ?? '')) {
       continue
     }
 
