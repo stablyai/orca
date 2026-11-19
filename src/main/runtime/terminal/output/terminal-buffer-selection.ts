@@ -8,7 +8,7 @@ import { AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from './provider-snapshot-
 export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState extends OrcaRuntimeWithHeadlessGapReseed {
   protected abstract captureProviderTerminalBuffer(
     ptyId: string,
-    opts: { scrollbackRows?: number },
+    opts: { scrollbackRows?: number; signal?: AbortSignal },
     generation: number
   ): Promise<PtyProviderBufferSnapshot | null>
 
@@ -167,24 +167,30 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
     const captureOptions = capped ? { ...opts, scrollbackRows } : opts
     let acquisition = this.providerBufferAcquisitionsByPtyId.get(ptyId)
     if (
-      acquisition?.generation === generation &&
-      acquisition.mutationEpoch === mutationEpoch &&
-      acquisition.timedOut &&
-      (!capped || acquisition.scrollbackRows <= liveWindow)
+      acquisition &&
+      (acquisition.generation !== generation ||
+        acquisition.mutationEpoch !== mutationEpoch ||
+        acquisition.scrollbackRows < scrollbackRows ||
+        (capped && acquisition.scrollbackRows > liveWindow))
     ) {
-      return { snapshot: null, late: acquisition.promise }
+      // Keep ownership until settlement, including providers that delay acknowledging abort.
+      return { snapshot: null, late: null }
     }
-    if (
-      !acquisition ||
-      acquisition.generation !== generation ||
-      acquisition.mutationEpoch !== mutationEpoch ||
-      acquisition.scrollbackRows < scrollbackRows ||
-      (capped && acquisition.scrollbackRows > liveWindow)
-    ) {
-      const promise = this.captureProviderTerminalBuffer(ptyId, captureOptions, generation).then(
-        (snapshot) => (isCurrent() ? snapshot : null)
-      )
-      acquisition = { generation, mutationEpoch, scrollbackRows, promise, timedOut: false }
+    if (!acquisition) {
+      const abortController = new AbortController()
+      const promise = this.captureProviderTerminalBuffer(
+        ptyId,
+        { ...captureOptions, signal: abortController.signal },
+        generation
+      ).then((snapshot) => (isCurrent() ? snapshot : null))
+      acquisition = {
+        abortController,
+        generation,
+        mutationEpoch,
+        scrollbackRows,
+        promise,
+        timedOut: false
+      }
       this.providerBufferAcquisitionsByPtyId.set(ptyId, acquisition)
       void promise.finally(() => {
         if (this.providerBufferAcquisitionsByPtyId.get(ptyId) === acquisition) {

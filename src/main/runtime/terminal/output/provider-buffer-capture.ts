@@ -54,7 +54,8 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
       // Why: daemon PTYs survive an app relaunch before any renderer mounts.
       // Mobile still needs their retained history without navigating desktop.
       const snapshot = await this.ptyController?.serializeProviderBuffer?.(ptyId, opts)
-      if (!snapshot || this.ptyLifecycleGenerationById.get(ptyId) !== generation) {
+      const retired = opts.signal?.aborted || !liveModeTrackers.has(liveModeTracker)
+      if (!snapshot || retired || this.ptyLifecycleGenerationById.get(ptyId) !== generation) {
         return null
       }
       const snapshotModeTracker = new TerminalKittyKeyboardModeTracker()
@@ -80,10 +81,9 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
         this.providerModeTrackersByPtyId.set(ptyId, modeTracker)
         effectiveAlternateScreen = modeTracker.isAlternateScreen
       }
-      const providerOffset = this.providerSequenceOffsetByPtyId.get(ptyId) ?? 0
       const reconciledSnapshot = this.preferTrackedLastTitle(ptyId, {
         ...snapshot,
-        seq: providerOffset + snapshot.seq,
+        seq: (this.providerSequenceOffsetByPtyId.get(ptyId) ?? 0) + snapshot.seq,
         ...(effectiveAlternateScreen !== undefined
           ? { alternateScreen: effectiveAlternateScreen }
           : {})

@@ -128,6 +128,7 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
 
   protected advancePtyBufferMutationEpoch(ptyId: string): void {
     this.ptyBufferMutationEpochById.set(ptyId, this.getPtyBufferMutationEpoch(ptyId) + 1)
+    this.providerBufferAcquisitionsByPtyId.get(ptyId)?.abortController.abort()
     const scans = this.providerModeSnapshotScansByPtyId.get(ptyId)
     for (const [tracker, kind] of scans ?? []) {
       if (kind === 'reader') {

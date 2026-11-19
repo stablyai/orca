@@ -209,6 +209,7 @@ export type ProviderTerminalBufferWait = {
 }
 
 export type ProviderBufferAcquisition = {
+  abortController: AbortController
   generation: number
   mutationEpoch: number
   scrollbackRows: number

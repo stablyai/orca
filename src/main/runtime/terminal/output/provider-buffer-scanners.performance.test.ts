@@ -3,8 +3,8 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
 import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 
-// Perf contract (#43889): delayed provider replies must not retain a scanner for every obsolete reader epoch.
-it.each([10, 100])('bounds live capture scanners across %i held gap/read pairs', async (pairs) => {
+// Perf contract (#43889): obsolete reader epochs must not accumulate scanners or pending requests.
+it.each([10, 100])('bounds provider captures across %i held gap/read pairs', async (pairs) => {
   vi.useFakeTimers()
   const runtime = new OrcaRuntimeService()
   const ptyId = 'pty-held-readers'
@@ -13,6 +13,8 @@ it.each([10, 100])('bounds live capture scanners across %i held gap/read pairs',
   const recoveryReply = Promise.withResolvers<PtyProviderBufferSnapshot | null>()
   const readerReplies: ((snapshot: PtyProviderBufferSnapshot) => void)[] = []
   const reads: ReturnType<OrcaRuntimeService['serializeTerminalBuffer']>[] = []
+  let pendingReaders = 0
+  let abortedReaders = 0
   let released = false
   const snapshot = (data: string): PtyProviderBufferSnapshot => ({
     data,
@@ -33,7 +35,12 @@ it.each([10, 100])('bounds live capture scanners across %i held gap/read pairs',
       if (released) {
         return snapshot('fresh screen')
       }
-      return new Promise<PtyProviderBufferSnapshot>((resolve) => readerReplies.push(resolve))
+      pendingReaders++
+      opts?.signal?.addEventListener('abort', () => abortedReaders++, { once: true })
+      // Hold settlement even after abort to exercise admission against an unresponsive provider.
+      return new Promise<PtyProviderBufferSnapshot>((resolve) => {
+        readerReplies.push(resolve)
+      }).finally(() => pendingReaders--)
     }
   })
   const scans = vi.spyOn(TerminalKittyKeyboardModeTracker.prototype, 'scan')
@@ -52,10 +59,14 @@ it.each([10, 100])('bounds live capture scanners across %i held gap/read pairs',
       // The recovery scanner survives; the previous reader's scanner retires before another read.
       expect(ingestAndCountScanners()).toBe(1)
       reads.push(runtime.serializeTerminalBuffer(ptyId, { scrollbackRows: 1000 }))
-      expect(ingestAndCountScanners()).toBe(2)
+      expect(pendingReaders).toBe(1)
+      expect(abortedReaders).toBe(pair === 0 ? 0 : 1)
+      expect(ingestAndCountScanners()).toBe(pair === 0 ? 2 : 1)
     }
     runtime.notePtyDataGap(ptyId, 1)
     expect(ingestAndCountScanners()).toBe(1)
+    expect(pendingReaders).toBe(1)
+    expect(abortedReaders).toBe(1)
     released = true
     for (const reply of readerReplies) {
       reply(snapshot('STALE IMAGE'))
@@ -63,6 +74,7 @@ it.each([10, 100])('bounds live capture scanners across %i held gap/read pairs',
     for (const image of await Promise.all(reads)) {
       expect(image).toBeNull()
     }
+    expect(pendingReaders).toBe(0)
     expect((await runtime.serializeTerminalBuffer(ptyId, { scrollbackRows: 1000 }))?.data).toBe(
       'fresh screen'
     )

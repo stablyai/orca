@@ -701,6 +701,8 @@ it('caps mid-recovery acquisitions and never falls back to the stale stream', as
     const old = reads.serializeProviderTerminalBuffer('pty-mid', { scrollbackRows: 5000 })
     recovering = true
     runtime.notePtyDataGap('pty-mid', 9)
+    replyOld?.({ data: 'stale-old-acquisition', ...grid, seq: 100, source: 'headless' })
+    expect(await old).toBeNull()
     const result = await reads.withVisibleSnapshotFallback(
       'pty-mid',
       {
@@ -720,8 +722,6 @@ it('caps mid-recovery acquisitions and never falls back to the stale stream', as
     ).toBeNull()
     expect(await reads.serializeTerminalBufferFromAvailableState('pty-mid', {})).toBeNull()
     expect(requests).toEqual([1000, 1000, 1000])
-    replyOld?.({ data: 'stale-old-acquisition', ...grid, seq: 100, source: 'headless' })
-    expect(await old).toBeNull()
   } finally {
     vi.unstubAllEnvs()
     clearNativeWindowsConptyPty('pty-mid')

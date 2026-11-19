@@ -108,12 +108,12 @@ it.each(['gap snapshot', 'clear snapshot', 'clear text'] as const)(
       } else {
         await runtime.clearHeadlessTerminalBuffer('pty-reader')
       }
+      release(oldSnapshot)
+      expect(await old).toBeNull()
       const requested =
         path === 'clear text'
           ? read({ limit: 500 })
           : serializeBudgetedRequestedSnapshot(runtime, 'pty-reader', 1000)
-      release(oldSnapshot)
-      expect(await old).toBeNull()
       const result = await requested
       assert(result)
       if ('tail' in result) {
@@ -158,5 +158,54 @@ it('reports the actual shared acquisition window on capped publications', async 
     expect((await smaller)?.scrollbackRows).toBe(1000)
   } finally {
     await runtime.onPtyExit('pty-window', 0)
+  }
+})
+
+it('preserves the live normal-screen mode when a retired alternate-screen reply arrives', async () => {
+  const runtime = createRuntime()
+  const ptyId = 'pty-retired-mode'
+  const reply = Promise.withResolvers<PtyProviderBufferSnapshot>()
+  const started = Promise.withResolvers<void>()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: inherited protected runtime method retains this signature.
+  const reader = runtime as unknown as {
+    serializeProviderTerminalBuffer(ptyId: string): Promise<PtyProviderBufferSnapshot | null>
+  }
+  let held = false
+  const alternateSnapshot: PtyProviderBufferSnapshot = {
+    data: 'alternate screen',
+    ...grid,
+    seq: 0,
+    source: 'headless',
+    alternateScreen: true
+  }
+  runtime.setPtyController({
+    write: () => true,
+    kill: () => true,
+    getForegroundProcess: async () => null,
+    getSize: () => grid,
+    serializeProviderBuffer: async () => {
+      if (!held) {
+        return alternateSnapshot
+      }
+      started.resolve()
+      return reply.promise
+    }
+  })
+  try {
+    anchorStream(runtime, ptyId)
+    expect((await reader.serializeProviderTerminalBuffer(ptyId))?.alternateScreen).toBe(true)
+    expect(runtime.isTerminalAlternateScreen(ptyId)).toBe(true)
+    held = true
+    const old = reader.serializeProviderTerminalBuffer(ptyId)
+    await started.promise
+    await runtime.clearHeadlessTerminalBuffer(ptyId)
+    runtime.onPtyData(ptyId, '\x1b[?1049l', 1)
+    expect(runtime.isTerminalAlternateScreen(ptyId)).toBe(false)
+    reply.resolve(alternateSnapshot)
+    expect(await old).toBeNull()
+    expect(runtime.isTerminalAlternateScreen(ptyId)).toBe(false)
+  } finally {
+    reply.resolve(alternateSnapshot)
+    await runtime.onPtyExit(ptyId, 0)
   }
 })
