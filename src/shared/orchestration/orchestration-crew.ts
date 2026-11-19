@@ -7,7 +7,9 @@ export const CrewParty = z.string().refine(isPublicOrchestrationAddress)
 export const CrewSubscribeParams = z.object({
   party: CrewParty,
   /** `summary` sends counts alone until rows are asked for; older hosts ignore it and send rows. */
-  view: z.enum(['summary', 'rows']).optional()
+  view: z.enum(['summary', 'rows']).optional(),
+  /** Rows after the first snapshot arrive as changes; older hosts ignore it and resend every row. */
+  deltas: z.boolean().optional()
 })
 const CrewRowApproval = z.object({
   approval: WorkerApprovalPayloadSchema,
@@ -62,6 +64,17 @@ export const CrewFrame = z.discriminatedUnion('type', [
     rows: z.array(CrewRow)
   }),
   z.object({ type: z.literal('complete') }),
+  // Sent only to a `deltas` subscriber after its first snapshot: every section's party keys in order,
+  // then `rows` frames for the rows that changed or are new, then `complete`.
+  z.object({
+    type: z.literal('delta'),
+    status: z.enum(['ok', 'unknown']),
+    order: z.object({
+      managedBy: z.array(z.string()),
+      managing: z.array(z.string()),
+      talkingWith: z.array(z.string())
+    })
+  }),
   z.object({ type: z.literal('end') }),
   // Sent only to a `summary` subscriber, so clients that never ask never see it.
   z.object({
@@ -86,6 +99,17 @@ export const WorkerApprovalsFrame = z.discriminatedUnion('type', [
   // One approval per frame: a frame stays small whatever the count.
   z.object({ type: z.literal('approval'), entry: WorkerApprovalEntry }),
   z.object({ type: z.literal('complete') }),
+  // Sent only to a `deltas` subscriber after its first snapshot: every section's party keys in order,
+  // then `rows` frames for the rows that changed or are new, then `complete`.
+  z.object({
+    type: z.literal('delta'),
+    status: z.enum(['ok', 'unknown']),
+    order: z.object({
+      managedBy: z.array(z.string()),
+      managing: z.array(z.string()),
+      talkingWith: z.array(z.string())
+    })
+  }),
   z.object({ type: z.literal('end') })
 ])
 export type OrchestrationWorkerApprovalsFrame = z.infer<typeof WorkerApprovalsFrame>

@@ -7,6 +7,7 @@ import {
   CrewFrame,
   crewSummary,
   emptyCrew,
+  type OrchestrationCrewRow,
   type OrchestrationCrewSnapshot,
   type OrchestrationCrewSummary
 } from '../../../../shared/orchestration/orchestration-crew'
@@ -27,11 +28,47 @@ export const UNKNOWN_CREW_STATE: CrewState = Object.freeze({
   rows: null
 })
 
+type CrewSection = keyof OrchestrationCrewSnapshot['sections']
+
+/** The shown rows with a delta applied; unchanged rows keep their identity. Null when a row is missing. */
+function applyCrewDelta(
+  base: OrchestrationCrewSnapshot | null,
+  delta: {
+    status: OrchestrationCrewSnapshot['status']
+    order: Record<CrewSection, string[]>
+    changed: ReadonlyMap<string, OrchestrationCrewRow>
+  }
+): OrchestrationCrewSnapshot | null {
+  if (!base) {
+    return null
+  }
+  const next = emptyCrew(delta.status)
+  for (const section of Object.keys(next.sections) as CrewSection[]) {
+    const held = new Map(base.sections[section].map((row) => [row.partyKey, row]))
+    for (const partyKey of delta.order[section]) {
+      const row = delta.changed.get(`${section}\0${partyKey}`) ?? held.get(partyKey)
+      if (!row) {
+        return null
+      }
+      next.sections[section].push(row)
+    }
+  }
+  return next
+}
+
 export class CrewSubscription {
   snapshot: CrewState = UNKNOWN_CREW_STATE
   readonly listeners = new Set<() => void>()
   state: 'idle' | 'running' | 'waiting' | 'parked' = 'idle'
   private pending: OrchestrationCrewSnapshot | undefined
+  /** A change to the shown rows: each section's order, and the rows that changed. */
+  private pendingDelta:
+    | {
+        status: OrchestrationCrewSnapshot['status']
+        order: Record<CrewSection, string[]>
+        changed: Map<string, OrchestrationCrewRow>
+      }
+    | undefined
   private stop: (() => void) | undefined
   private started = false
   /** Readers that need rows (an open list or `@` menu); otherwise the host sends counts alone. */
@@ -60,6 +97,7 @@ export class CrewSubscription {
     const stop = this.stop
     this.stop = undefined
     this.pending = undefined
+    this.pendingDelta = undefined
     this.runningView = undefined
     this.state = 'parked'
     stop?.()
@@ -88,6 +126,7 @@ export class CrewSubscription {
     const stop = this.stop
     this.stop = undefined
     this.pending = undefined
+    this.pendingDelta = undefined
     this.state = 'idle'
     stop?.()
     this.start()
@@ -175,9 +214,30 @@ export class CrewSubscription {
         const { type: _type, ...summary } = frame
         this.publish({ summary, rows: null })
       } else if (frame.type === 'begin') {
+        this.pendingDelta = undefined
         this.pending = emptyCrew(frame.status)
+      } else if (frame.type === 'delta') {
+        this.pending = undefined
+        this.pendingDelta = { status: frame.status, order: frame.order, changed: new Map() }
       } else if (frame.type === 'rows') {
-        this.pending?.sections[frame.section].push(...frame.rows)
+        if (this.pendingDelta) {
+          for (const row of frame.rows) {
+            this.pendingDelta.changed.set(`${frame.section}\0${row.partyKey}`, row)
+          }
+        } else {
+          this.pending?.sections[frame.section].push(...frame.rows)
+        }
+      } else if (frame.type === 'complete' && this.pendingDelta) {
+        const delta = this.pendingDelta
+        this.pendingDelta = undefined
+        const complete = applyCrewDelta(this.snapshot.rows, delta)
+        if (!complete) {
+          // A change against rows this reader no longer holds: resubscribe for a whole snapshot.
+          fail()
+          return
+        }
+        this.source.completed()
+        this.publish({ summary: crewSummary(complete), rows: complete })
       } else if (frame.type === 'complete' && this.pending) {
         const complete = this.pending
         this.pending = undefined
@@ -190,7 +250,7 @@ export class CrewSubscription {
     let request: Promise<{ unsubscribe: () => void }>
     if (!initial && this.source.target.kind === 'environment' && source.retry) {
       const attempt = createRuntimeCrewSubscriptionAttempt(
-        { ...source.retry, params: { party: this.party, view } },
+        { ...source.retry, params: { party: this.party, view, deltas: true } },
         {
           onResponse: (response) => (response.ok ? onEvent(response.result) : fail(response.error)),
           onError: fail,
@@ -203,7 +263,7 @@ export class CrewSubscription {
       request = subscribeRuntimeRpc(
         this.source.target,
         'orchestration.crewSubscribe',
-        { party: this.party, view },
+        { party: this.party, view, deltas: true },
         { onEvent, onError: fail, onClose: () => fail() }
       )
     }
