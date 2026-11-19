@@ -1,3 +1,4 @@
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import { OrcaRuntimeWithCreatePtyHeadlessTerminalState } from './headless-terminal-state'
 import type {
   GapRecovery,
@@ -202,14 +203,7 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
       { scrollbackRows: 0, signal: capture.signal, recovery: true },
       this.getPtyLifecycleGeneration(ptyId)
     )
-    let deadlineTimer: ReturnType<typeof setTimeout> | undefined
-    const snapshot = await Promise.race([
-      pending,
-      new Promise<null>((resolve) => {
-        deadlineTimer = setTimeout(() => resolve(null), GAP_RESEED_CAPTURE_TIMEOUT_MS)
-      })
-    ])
-    clearTimeout(deadlineTimer)
+    const snapshot = await withTimeout(pending, GAP_RESEED_CAPTURE_TIMEOUT_MS, null)
     if (!snapshot) {
       // The slot bounds live captures: cancel a timed-out one before giving the slot back.
       stopGapJournal(recovery)
