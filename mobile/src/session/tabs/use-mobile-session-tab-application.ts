@@ -1,4 +1,9 @@
-import { keepsTerminalPaneVisible } from '../../terminal/session/pane-layout/mobile-terminal-pane-layout'
+import {
+  followTerminalRows,
+  keepsTerminalPaneVisible,
+  withReplacedTerminalHandles,
+  type TerminalRowHandles
+} from '../../terminal/session/pane-layout/mobile-terminal-pane-layout'
 import { orphanedMarkdownDraftTabs } from '../../files/session-documents/orphaned-markdown-draft-tabs'
 import {
   pendingSelectionHandle,
@@ -65,9 +70,11 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
     lastKnownTerminalCountRef,
     clientRef,
     creatingTerminalRef,
-    setCreating
+    setCreating,
+    setSplitTerminalHandles
   } = scope
   const draftOwnershipRef = useRef<DraftTabOwnership | null>(null)
+  const terminalRowHandlesRef = useRef<TerminalRowHandles>(new Map())
   const applySessionTabs = useCallback(
     (result: SessionTabsResult): SessionTabsApplyOutcome<MobileSessionTab> => {
       const diagnostics = terminalDiagnosticsRef.current
@@ -141,6 +148,11 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
       }
       sessionTabsRef.current = nextTabs
       initialSessionAutoCreateRef.current.sawSessionTabs ||= nextTabs.length > 0
+      const terminalRows = followTerminalRows(terminalRowHandlesRef.current, nextTabs)
+      terminalRowHandlesRef.current = terminalRows.handles
+      if (terminalRows.replaced.size > 0) {
+        setSplitTerminalHandles((pair) => withReplacedTerminalHandles(pair, terminalRows.replaced))
+      }
       // Avoid identical snapshot state updates that would tear down and replay subscriptions.
       setSessionTabs((prev) => (mobileSessionTabsEqual(prev, nextTabs) ? prev : nextTabs))
       const terminalTabs = getTerminalRecordsFromSessionTabs(nextTabs)
@@ -285,7 +297,7 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
       }
       return outcome
     },
-    [hostId, worktreeId, subscribeToTerminal, unsubscribeTerminal]
+    [hostId, worktreeId, subscribeToTerminal, unsubscribeTerminal, setSplitTerminalHandles]
   )
   return {
     applySessionTabs

@@ -1,4 +1,4 @@
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { useChecksDetailTimer } from './use-checks-detail-timer'
 import {
   ChecksDetailPollingPolicy,
@@ -22,7 +22,7 @@ import {
 } from '../review-data/gitlab-review-client'
 import { checksPanelLoadErrorMessage } from '../review-data/checks-panel-forge-owner'
 import { forgeOwnerHostIdForWorkspace } from '@/runtime/source-control/forge/forge-credential-target'
-import { isWslDistroNotRunningRefusal } from '../../../../../../shared/wsl-distro-not-running-refusal'
+import { isWslDistroNotRunningRefusal } from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-distro-not-running-refusal'
 import { translate } from '@/i18n/i18n'
 
 export type ChecksPanelPollingInput = Pick<

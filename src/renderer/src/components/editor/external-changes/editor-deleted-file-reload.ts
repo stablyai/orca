@@ -5,7 +5,7 @@ import { WORKTREE_OWNER_NOT_READY_ERROR } from '../loading/editor-panel-content-
 import type { Dispatch, SetStateAction } from 'react'
 import { useAppStore } from '@/store/index'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import { normalizeRuntimePathForComparison } from '../../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../../shared/file-access/cross-platform-path'
 import type { FileContent } from '../loading/editor-panel-content-types'
 
 // IPC/RPC preserve fs syscall/path text; match through the last quote because filenames can contain apostrophes.

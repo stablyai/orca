@@ -1,10 +1,12 @@
 import { BROWSER_EXPECT_URL_RUNTIME_CAPABILITY } from '../../shared/browser/runtime/browser-runtime-capabilities'
-import type { RuntimeStatus } from '../../shared/runtime-types'
+import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { getOptionalStringFlag, getPresentStringFlag } from '../arguments/flags'
 import type { RuntimeClient } from '../runtime/client'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { assertLocalCwdWorktreeSelector } from '../hosts/local-environment-selector'
 import { quoteCliCommandArgument } from '../arguments/shell-command-quote'
+import { hasStructuredSessionMarker } from '../../shared/agent-launch/environment/structured-session-marker'
+import { readInjectedAgentSessionId } from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import {
   getBrowserWorktreeSelector,
   normalizeWorktreeSelectorForCaller,
@@ -47,14 +49,29 @@ async function getEnforceableExpectUrl(
   return expectUrl
 }
 
-/** A paired server's fallback is the tab a person is looking at, so a remote command must name its target. */
+/** Unscoped commands fall back to the tab a person is looking at, so remote callers and chat agents must name their target. */
 export async function getScopedBrowserWorktreeSelector(
   flags: Map<string, string | boolean>,
   cwd: string,
   client: RuntimeClient
 ): Promise<string | undefined> {
   const worktree = await getBrowserWorktreeSelector(flags, cwd, client)
-  if (worktree === undefined && client.isRemote) {
+  if (worktree !== undefined) {
+    return worktree
+  }
+  // Why: chat agents have no terminal workspace (#41282), so outside a workspace folder they would drive the user's tab.
+  if (!client.isRemote && (hasStructuredSessionMarker() || readInjectedAgentSessionId())) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      'This browser command names no workspace or page, so it would act on the tab the user is looking at. Nothing was sent.',
+      {
+        nextSteps: [
+          'Run it from your workspace folder or pass --worktree <selector>; page commands also take --page <browserPageId> from `orca tab list --json`.'
+        ]
+      }
+    )
+  }
+  if (client.isRemote) {
     const environment = client.environmentSelector
     const remote = environment
       ? ` --environment ${quoteCliCommandArgument(environment)}`

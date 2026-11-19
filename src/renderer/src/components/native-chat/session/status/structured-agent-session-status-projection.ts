@@ -19,7 +19,7 @@ import {
   type AgentSubagentSnapshot
 } from '../../../../../../shared/agent-status/contracts/agent-status-subagent-snapshot'
 import { mainAgentStatusEqual } from '../../../../../../shared/agent-status/lifecycle/main-agent-status'
-import { structuredChildWorkLegacySubagents } from '../../../../../../shared/agent-session/structured-agent-session-child-work-legacy'
+import { structuredChildWorkLegacySubagents } from '../../../../../../shared/agent-session/background-tasks/structured-agent-session-child-work-legacy'
 import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { structuredAgentSessionAgentStatus } from '../../../../../../shared/agent-session/view/structured-agent-session-agent-status'
 import {
@@ -27,7 +27,7 @@ import {
   structuredAgentSessionRowStateStartedAt
 } from '../../../../../../shared/agent-session/view/structured-agent-session-status-started-at'
 import { agentMainAgentVerdict } from '../../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
-import type { AgentStatusBatchTransaction } from '@/store/slices/agent-status/agent-status-contract'
+import type { AgentStatusBatchTransaction } from '@/store/slices/agent-status/contracts/agent-status-contract'
 import type { StructuredTab } from './structured-agent-session-tabs'
 
 /** Copy modern child views verbatim; convert legacy host task lists and retain the legacy live-agent roster. */
@@ -56,7 +56,7 @@ function projectFailedStart(
   failedAt: number
 ): void {
   const store = transaction.getState()
-  const current = store.agentStatusByPaneKey?.[paneKey]
+  const current = store.agentStatusByPaneKey.get(paneKey)
   if (
     current?.state === 'done' &&
     agentMainAgentVerdict(current) === 'failure' &&
@@ -103,7 +103,7 @@ export function projectStatus(
   if (!summary?.status) {
     if (launchFailedAt !== null) {
       projectFailedStart(transaction, tab, paneKey, launchFailedAt)
-    } else if (store.agentStatusByPaneKey?.[paneKey]) {
+    } else if (store.agentStatusByPaneKey.get(paneKey)) {
       store.removeAgentStatus(paneKey)
     }
     return
@@ -114,9 +114,10 @@ export function projectStatus(
     status: summary.status,
     childWork: children ?? summary.backgroundTasks,
     turnOutcome: summary.turnOutcome,
-    ...(summary.stopping ? { stopping: summary.stopping } : {})
+    ...(summary.stopping ? { stopping: summary.stopping } : {}),
+    ...(summary.awaitsAnswer ? { awaitsAnswer: summary.awaitsAnswer } : {})
   })
-  const current = store.agentStatusByPaneKey?.[paneKey]
+  const current = store.agentStatusByPaneKey.get(paneKey)
   // Same continuity rule as the host ingest, on the main agent's own clock.
   const mainAgent = continueMainAgentStatus(
     current?.mainAgent,

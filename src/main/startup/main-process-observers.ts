@@ -1,10 +1,13 @@
 import { BackendSupervisor } from '../backend-desktop/backend-supervisor'
-import { app, powerMonitor } from 'electron'
+import { provideHostUsageAnalytics } from '../usage/host-usage-analytics'
+import { BACKEND_PUBLIC_USAGE_METHOD } from '../../shared/backend/backend-service-contract'
+import { app, powerMonitor, powerSaveBlocker } from 'electron'
 import { join } from 'node:path'
 import { AgentAwakeService } from '../power/agent-awake-service'
-import { normalizeComputerAwakeMode } from '../../shared/computer-awake-mode'
+import { normalizeComputerAwakeMode } from '../../shared/app-lifecycle/computer-awake-mode'
 import { registerSystemResumeBroadcast } from '../power/system-resume-broadcast'
 import { recordWakeSignal } from '../power/wake-signal-clock'
+import { installBackgroundRunAwakeHold } from '../power/background-run-awake-hold'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
 import {
   listCapableSharedControlSockets,
@@ -54,6 +57,15 @@ export function initializeMainProcessObservers(): void {
   if (process.platform === 'darwin') {
     state.unsubscribeWakeSignalClock = feedWakeSignalClock()
   }
+  // Bots' Tidy-up and Look around hold off idle sleep while they run; display sleep is fine.
+  installBackgroundRunAwakeHold(() => {
+    const id = powerSaveBlocker.start('prevent-app-suspension')
+    return () => {
+      if (powerSaveBlocker.isStarted(id)) {
+        powerSaveBlocker.stop(id)
+      }
+    }
+  })
   state.stopDesktopPresenceReporter = startDesktopPresenceReporter({
     readAway: () => readDesktopAwayState(powerMonitor),
     listTargets: listCapableSharedControlSockets,
@@ -83,9 +95,30 @@ export function initializeMainProcessObservers(): void {
     isQuitting: () => state.isQuitting,
     getWorkingAgentCount: () => state.agentAwakeService?.getWorkingAgentCount() ?? 0
   })
-  const unsubscribeStatusChanges = agentHookServer.subscribeStatusChanges((statuses) => {
-    state.agentAwakeService?.setStatuses(statuses)
-  })
+  const unsubscribeStatusChanges = agentHookServer.subscribeStatusRowMutations(
+    ({ before, after }) => {
+      for (const paneKey of new Set([before?.paneKey, after?.paneKey])) {
+        if (!paneKey) {
+          continue
+        }
+        const row = agentHookServer
+          .getStatusSnapshotForPane(paneKey)
+          .find((row) => !row.providerSessionOnly)
+        state.agentAwakeService?.updateStatus(
+          paneKey,
+          row
+            ? {
+                paneKey,
+                state: row.state,
+                receivedAt: row.receivedAt,
+                observedInCurrentRuntime:
+                  row.isReplay !== true && row.restoredUnconfirmed !== true && !row.paneSleep
+              }
+            : undefined
+        )
+      }
+    }
+  )
   const unsubscribeStatusFreshness = agentHookServer.subscribeStatusFreshness((status) => {
     state.agentAwakeService?.observeStatusFreshness(status)
   })
@@ -181,7 +214,10 @@ export function initializeMainProcessObservers(): void {
     join(getCanonicalUserDataPath(), 'orca-usage-worktree-history.json')
   )
   state.usageWorktreeHistory = usageWorktrees
-  state.backend = new BackendSupervisor(usageWorktrees)
+  const backend = new BackendSupervisor(usageWorktrees)
+  state.backend = backend
+  // Paired clients get a renderer's usage privileges, never the automation-only methods.
+  provideHostUsageAnalytics((call) => backend.callControl(BACKEND_PUBLIC_USAGE_METHOD, call))
   state.claudeUsage = state.backend.automationClient('claudeUsage')
   state.codexUsage = state.backend.automationClient('codexUsage')
 }

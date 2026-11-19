@@ -1,16 +1,16 @@
 import type { IpcRenderer } from 'electron'
-import { ORCA_RENDERER_UNLOAD_PREVENTED_EVENT } from '../../../shared/renderer-shutdown-events'
+import { ORCA_RENDERER_UNLOAD_PREVENTED_EVENT } from '../../../shared/app-lifecycle/shutdown/renderer-shutdown-events'
 import {
   prepareRendererForAppRestart,
   type UpdaterQuitAbortRelay
-} from '../../../shared/renderer-restart-preparation'
-import type { UpdateStatus } from '../../../shared/update-status-types'
+} from '../../../shared/app-lifecycle/shutdown/renderer-restart-preparation'
+import type { UpdateStatus } from '../../../shared/updater/update-status-types'
 import {
   ORCA_APP_RESTART_ABORTED_EVENT,
   ORCA_APP_RESTART_STARTED_EVENT,
   ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT,
   ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT
-} from '../../../shared/updater-renderer-events'
+} from '../../../shared/updater/updater-renderer-events'
 
 type AppRestartState = { committed: boolean; pending: boolean }
 const appRestartStates = new WeakMap<EventTarget, AppRestartState>()
@@ -73,7 +73,8 @@ export async function prepareAndInvokeAppRestart<T>(
   eventTarget: EventTarget,
   invoke: () => Promise<T>,
   awaitCheckpoint: () => Promise<void>,
-  willRestart: (result: T) => boolean = () => true
+  willRestart: (result: T) => boolean = () => true,
+  isCanceled?: () => boolean
 ): Promise<T> {
   const state = appRestartState(eventTarget)
   if (state.pending) {
@@ -85,7 +86,8 @@ export async function prepareAndInvokeAppRestart<T>(
       await prepareRendererForAppRestart(eventTarget, {
         startedEventName: ORCA_APP_RESTART_STARTED_EVENT,
         abortedEventName: ORCA_APP_RESTART_ABORTED_EVENT,
-        awaitCheckpoint
+        awaitCheckpoint,
+        isCanceled
       })
     }
     try {

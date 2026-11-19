@@ -36,6 +36,7 @@ vi.mock('../../sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: {
     listProfiles: () => [{ id: 'default' }, { id: 'work' }],
     getProfile: (id: string) => ({ id }),
+    attachExtensions: () => {},
     getEnabledExtensionIds: (profileId: string) => state.enabled[profileId] ?? [],
     updateEnabledExtensionIds: (
       update: (value: Record<string, string[]>) => Record<string, string[]>
@@ -50,7 +51,9 @@ vi.mock('../profile-sessions/browser-extension-session-loader', () => ({
   loadBrowserExtensionIntoProfile: (profileId: string, extension: InstalledBrowserExtension) =>
     state.load(profileId, extension),
   unloadBrowserExtensionEverywhere: vi.fn(),
-  unloadBrowserExtensionFromProfile: vi.fn()
+  unloadBrowserExtensionFromProfile: vi.fn(),
+  getBrowserExtensionProfile: () => null,
+  whenBrowserExtensionProfileUnloaded: () => Promise.resolve()
 }))
 
 let key: CrxTestKey

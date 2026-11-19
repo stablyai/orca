@@ -1,9 +1,12 @@
-import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../../../shared/skills'
+import type {
+  SkillDiscoveryResult,
+  SkillDiscoveryTarget
+} from '../../../shared/skills/discovery/skills'
 import type {
   SkillCloudOperation,
   SkillCloudOwnedShare,
   SkillCloudPackageDetails
-} from '../../../shared/skill-cloud-contract'
+} from '../../../shared/skills/sharing/skill-cloud-contract'
 import type {
   ManagedSkillInstallListOperation,
   SkillBundleInstallPreviewInput,
@@ -25,20 +28,20 @@ import type {
   SkillSharePublishInput,
   SkillSharePublishOperation,
   SkillShareResolvedOperation
-} from '../../../shared/skill-sharing-contract'
+} from '../../../shared/skills/sharing/skill-sharing-contract'
 import type {
   BundledSkillAutoUpdateRequest,
   LocalBundledSkillExecuteRequest,
   BundledSkillInstallResult,
   BundledSkillPlan,
   LocalBundledSkillPlanRequest
-} from '../../../shared/bundled-skill-plan'
+} from '../../../shared/skills/bundled/bundled-skill-plan'
 
 import type {
   SkillDeletePlan,
   SkillDeleteRequest,
   SkillDeleteResult
-} from '../../../shared/skill-delete-contract'
+} from '../../../shared/skills/deletion/skill-delete-contract'
 
 export type SkillsApi = {
   discover: (target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>

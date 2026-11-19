@@ -1,24 +1,28 @@
 /** Address any host-local chat by Orca session id, including /clear ancestors.
  * Unbound mail belongs to the root mailbox and points at the live session. Released leases may restart; closed/foreign/unknown chats refuse before storage. */
 
-import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../../shared/orca-session-address-prefix'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../../shared/agent-session/identity/orca-session-address-prefix'
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId,
   parseOrcaSessionAddress,
   type OrcaSessionAddress,
   type OrcaSessionId
-} from '../../../../../../shared/orca-session-address'
+} from '../../../../../../shared/agent-session/identity/orca-session-address'
 // The caller codes, reused: each names the same fact about a session, whichever side of the mail it is on.
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../../shared/orchestration/orchestration-session-caller-codes'
 import {
   lookupOrcaAgentSession,
-  structuredSessionMailReach
+  structuredSessionMailReach,
+  structuredSessionMailReachWith,
+  type StructuredSessionMailReach,
+  type StructuredSessionReachContext
 } from '../../../../orchestration/mailbox/routing/structured-session-mail-address'
 import {
   readAgentSessionRecordStore,
   type AgentSessionRecordReader
 } from '../../../../orchestration/addressing/session-lineage/structured-session-lineage'
+import type { AgentSessionConversationView } from '../../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { canonicalOrcaSessionId } from '../../../../orchestration/addressing/session-lineage/canonical-orca-session-id'
 import { agentHookServer } from '../../../../../agent-hooks/server/agent-hook-server'
@@ -26,9 +30,14 @@ import { agentHookServer } from '../../../../../agent-hooks/server/agent-hook-se
 /** `address` is the named session's own spelling; the mailbox mail lands in is its identity address. */
 export type SessionRecipient = { sessionId: OrcaSessionId; address: OrcaSessionAddress }
 
+/** Why a known chat takes no mail, as a picker words it: closed, run elsewhere, or not checkable. */
+export type SessionRecipientUnreachable = 'ended' | 'other-host' | 'unverifiable'
+
 export type SessionRecipientRefusal = {
   code: (typeof CODES)[keyof typeof CODES]
   message: string
+  /** Set by the reach check alone, so a chat list can say why without parsing the message. */
+  unreachable?: SessionRecipientUnreachable
 }
 
 /** Whether a recipient may name a session, so the caller can install the session host first. */
@@ -118,16 +127,49 @@ export function refuseUndeliverableSessionRecipient(
   terminalRecipient: TerminalAgentRecipient,
   noEffect = 'No message was sent.'
 ): SessionRecipientRefusal | null {
-  const { sessionId } = recipient
   // Before the host check: terminal-only users have no agent-session host to blame.
-  const terminal = terminalAgentRefusal(sessionId, terminalRecipient, noEffect)
+  const terminal = terminalAgentRefusal(recipient.sessionId, terminalRecipient, noEffect)
   if (terminal) {
     return terminal
   }
+  return refuseUnreachableSessionRecipient(
+    recipient,
+    store,
+    (records, found) => structuredSessionMailReach(records, found, db),
+    noEffect
+  )
+}
+
+/** The same refusal, with lineage walks and party resolutions shared across one pass over many chats. */
+export function refuseUndeliverableSessionRecipientWith(
+  context: StructuredSessionReachContext,
+  recipient: SessionRecipient,
+  store: AgentSessionRecordReader | null,
+  noEffect = 'No message was sent.'
+): SessionRecipientRefusal | null {
+  return refuseUnreachableSessionRecipient(
+    recipient,
+    store,
+    (records, found) => structuredSessionMailReachWith(context, records, found),
+    noEffect
+  )
+}
+
+function refuseUnreachableSessionRecipient(
+  recipient: SessionRecipient,
+  store: AgentSessionRecordReader | null,
+  reach: (
+    records: AgentSessionRecordReader,
+    found: AgentSessionConversationView
+  ) => StructuredSessionMailReach,
+  noEffect: string
+): SessionRecipientRefusal | null {
+  const { sessionId } = recipient
   if (!store) {
     return {
       code: CODES.unknown,
-      message: `Agent session ${sessionId} cannot be verified: this Orca is not running its agent-session host. ${noEffect}`
+      message: `Agent session ${sessionId} cannot be verified: this Orca is not running its agent-session host. ${noEffect}`,
+      unreachable: 'unverifiable'
     }
   }
   const found = lookupOrcaAgentSession(store, sessionId)
@@ -137,29 +179,33 @@ export function refuseUndeliverableSessionRecipient(
   if (found.kind === 'unknown') {
     return {
       code: CODES.unknown,
-      message: `No Orca agent session ${sessionId} exists on this host. ${noEffect}`
+      message: `No Orca agent session ${sessionId} exists on this host. ${noEffect}`,
+      unreachable: 'unverifiable'
     }
   }
-  const reach = structuredSessionMailReach(store, found.record, db)
-  if (reach.kind === 'other-host') {
+  const reached = reach(store, found.record)
+  if (reached.kind === 'other-host') {
     return {
       code: CODES.hostBoundary,
-      message: `Agent session ${sessionId} runs on another host; mail reaches a session only on the host that runs it. Send from that host. ${noEffect}`
+      message: `Agent session ${sessionId} runs on another host; mail reaches a session only on the host that runs it. Send from that host. ${noEffect}`,
+      unreachable: 'other-host'
     }
   }
-  if (reach.kind === 'unverifiable') {
+  if (reached.kind === 'unverifiable') {
     return {
       code: CODES.notLive,
-      message: `The session continuing agent session ${sessionId} after a /clear cannot be verified: ${reach.reason} ${noEffect}`
+      message: `The session continuing agent session ${sessionId} after a /clear cannot be verified: ${reached.reason} ${noEffect}`,
+      unreachable: 'unverifiable'
     }
   }
-  if (reach.kind === 'ended') {
+  if (reached.kind === 'ended') {
     return {
       code: CODES.notLive,
       message:
-        reach.reason === 'worker-identity-lost'
+        reached.reason === 'worker-identity-lost'
           ? `Agent session ${sessionId} is a structured worker whose worker identity this host no longer has, so it can never read that mail. ${noEffect}`
-          : `Agent session ${sessionId} has ended: its chat was closed. ${noEffect}`
+          : `Agent session ${sessionId} has ended: its chat was closed. ${noEffect}`,
+      unreachable: reached.reason === 'worker-identity-lost' ? 'unverifiable' : 'ended'
     }
   }
   return null

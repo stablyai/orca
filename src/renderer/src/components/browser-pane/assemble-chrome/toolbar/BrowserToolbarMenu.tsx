@@ -4,12 +4,12 @@ import { emitBrowserCookieImportToast } from '@/lib/browser/cookies/browser-cook
 import { useAppStore } from '@/store/index'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { shouldShowBrowserImportHint } from '../profile-routing/browser-import-hint-visibility'
-import type { BrowserViewportPresetId } from '../../../../../../shared/browser-workspace-types'
+import type { BrowserViewportPresetId } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import type {
   BrowserPageSiteDisplay,
   BrowserSiteColorScheme
-} from '../../../../../../shared/browser-site-display'
-import type { BrowserPageZoomDirection } from '../../../../../../shared/browser-page-zoom'
+} from '../../../../../../shared/browser/site-settings/browser-site-display'
+import type { BrowserPageZoomDirection } from '../../../../../../shared/browser/site-settings/browser-page-zoom'
 import {
   addBrowserPageSiteDisplayListener,
   publishBrowserPageSiteDisplay
@@ -29,7 +29,6 @@ type BrowserToolbarMenuProps = {
   workspaceId: string
   browserPageId: string
   viewportPresetId: BrowserViewportPresetId | null
-  onDestroyWebview: () => void
   isActive: boolean
   extensionDiscoveryTarget?: boolean
   /** A blank tab shows the import hint on its new tab page, so the tour points there instead. */
@@ -37,6 +36,8 @@ type BrowserToolbarMenuProps = {
   pageActions: BrowserToolbarPageActions
   /** The Extensions › submenu, built by the toolbar that owns the pinned buttons. */
   extensionsSub: React.ReactNode
+  /** False where the page's session isn't one of this desktop's profiles, so switching and cookie import can't reach it. */
+  showProfiles?: boolean
   overflow: BrowserChromeOverflowMenuProps
 }
 
@@ -45,12 +46,12 @@ export function BrowserToolbarMenu({
   workspaceId,
   browserPageId,
   viewportPresetId,
-  onDestroyWebview,
   isActive,
   extensionDiscoveryTarget = false,
   isBlankTab,
   pageActions,
   extensionsSub,
+  showProfiles = true,
   overflow
 }: BrowserToolbarMenuProps): React.JSX.Element {
   const t = useTranslate()
@@ -70,7 +71,8 @@ export function BrowserToolbarMenu({
   // Force the menu open for the tour unless a new tab page is already showing the Import hint.
   const importHintOnPage =
     isBlankTab && shouldShowBrowserImportHint({ persistedUIReady, browserImportHintHidden })
-  const shouldForceMenuOpen = browserCookieTourStepActive && isActive && !importHintOnPage
+  const shouldForceMenuOpen =
+    showProfiles && browserCookieTourStepActive && isActive && !importHintOnPage
 
   const [newProfileDialogOpen, setNewProfileDialogOpen] = useState(false)
   const [newProfileName, setNewProfileName] = useState('')
@@ -152,8 +154,6 @@ export function BrowserToolbarMenu({
     }
     const targetId = pendingSwitchProfileId ?? 'default'
     const profile = browserSessionProfiles.find((p) => p.id === targetId)
-    // Destroy before updating the store; otherwise the stable registry key would reclaim the old partition.
-    onDestroyWebview()
     // Persist the partition with the profile so stale renderer mirrors cannot weaken tab isolation.
     switchBrowserTabProfile(workspaceId, pendingSwitchProfileId, profile?.partition ?? null)
     toast.success(
@@ -194,7 +194,6 @@ export function BrowserToolbarMenu({
       setNewProfileDialogOpen(false)
       setNewProfileName('')
 
-      onDestroyWebview()
       switchBrowserTabProfile(workspaceId, profile.id, profile.partition)
       toast.success(
         t(
@@ -268,20 +267,24 @@ export function BrowserToolbarMenu({
         browserPageId={browserPageId}
         menuOpen={menuOpen}
         onMenuOpenChange={handleMenuOpenChange}
-        profile={{
-          browserPageId,
-          allProfiles,
-          effectiveProfileId,
-          onSwitchProfile: handleSwitchProfile,
-          onNewProfile: () => setNewProfileDialogOpen(true),
-          detectedBrowsers,
-          onFetchDetectedBrowsers: () => void fetchDetectedBrowsers(),
-          browserSessionImportState,
-          onImportFromBrowser: (browserFamily, browserProfile) =>
-            void handleImportFromBrowser(browserFamily, browserProfile),
-          onImportFromFile: () => void handleImportFromFile(),
-          forceOpen: shouldForceMenuOpen
-        }}
+        profile={
+          showProfiles
+            ? {
+                browserPageId,
+                allProfiles,
+                effectiveProfileId,
+                onSwitchProfile: handleSwitchProfile,
+                onNewProfile: () => setNewProfileDialogOpen(true),
+                detectedBrowsers,
+                onFetchDetectedBrowsers: () => void fetchDetectedBrowsers(),
+                browserSessionImportState,
+                onImportFromBrowser: (browserFamily, browserProfile) =>
+                  void handleImportFromBrowser(browserFamily, browserProfile),
+                onImportFromFile: () => void handleImportFromFile(),
+                forceOpen: shouldForceMenuOpen
+              }
+            : null
+        }
         pageActions={pageActions}
         extensionsSub={extensionsSub}
         viewportPresetId={viewportPresetId}

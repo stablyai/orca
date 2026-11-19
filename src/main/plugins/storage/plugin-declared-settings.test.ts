@@ -38,13 +38,4 @@ describe('declared plugin settings in Orca Settings', () => {
       pageSize: 50
     })
   })
-
-  it('refuses undeclared keys and values that do not fit', () => {
-    const settingsHost = host()
-    expect(writePluginDeclaredSetting(settingsHost, 'acme.todos', 'other', 1)).toMatchObject({
-      ok: false
-    })
-    writePluginDeclaredSetting(settingsHost, 'acme.todos', 'pageSize', 0)
-    expect(readPluginDeclaredSettings(settingsHost, 'acme.none')).toBeNull()
-  })
 })

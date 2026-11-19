@@ -8,7 +8,7 @@ const LATE_FOCUS_RECHECK_MS = 50
 const ABANDONED_GUARD_MS = 30_000
 
 const releasesByToken = new Map<string, () => void>()
-// Refuse agent presses during composition; blurring would commit unfinished text into the terminal shell.
+// Refuse agent presses and guest focus moves during composition; either ends the user's unfinished text.
 let composingElement: EventTarget | null = null
 // Overlapping guards share the first user element; later activeElement values may belong to agent-focused guests.
 let inFlight = 0
@@ -19,6 +19,11 @@ function settle(): void {
   if (inFlight === 0) {
     userElement = null
   }
+}
+
+/** Agent input bounces window blur/focus through its guest while a guard is open; the user did not leave the window. */
+export function isAgentInputMovingFocus(): boolean {
+  return inFlight > 0
 }
 
 function isUserComposing(): boolean {

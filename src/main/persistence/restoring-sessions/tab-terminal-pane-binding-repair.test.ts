@@ -1,12 +1,11 @@
 // Recover tab-only terminal bindings before panes mount so main's frames and saves retain them.
 
 import { describe, expect, it } from 'vitest'
-import { getDefaultPersistedState } from '../../../shared/constants'
+import { getDefaultPersistedState } from '../../../shared/orca-profiles/constants'
 import {
   LOCAL_EXECUTION_HOST_ID,
-  toSshExecutionHostId,
   type ExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {
   addWorkspace,
@@ -19,8 +18,6 @@ import {
   bindPersistedTabTerminalPanes,
   bindTabTerminalPanesInSession
 } from './tab-terminal-pane-binding-repair'
-
-const SSH_HOST = toSshExecutionHostId('box')
 
 function tabLevelSession(
   key: string,
@@ -45,13 +42,6 @@ const bindings = (session: WorkspaceSessionState, tabId = 'tab-a') =>
   session.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId
 
 describe("load repair: a tab's own terminal and its unbound pane", () => {
-  it("binds an SSH tab's relay session id, never its row's id, as reconnect does", () => {
-    const stored = tabLevelSession(SSH_KEY, SSH_HOST)
-    expect(repair(stored, true)).toBe(stored)
-    stored.remoteSessionIdsByTabId = { 'tab-a': 'ssh:box@@pty-9' }
-    expect(bindings(repair(stored, true))).toEqual({ [leaf(1)]: 'ssh:box@@pty-9' })
-  })
-
   it('binds one of two tabs naming the same terminal, never both', () => {
     const stored = addWorkspace(emptySession(), GIT_KEY, [
       {

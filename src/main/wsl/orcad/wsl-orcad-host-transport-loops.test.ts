@@ -64,6 +64,24 @@ describe.runIf(posix)('WSL transport command loops', () => {
     expect(specs[1]?.args?.[5]).toContain('cat')
   })
 
+  it('runs a fence before every command of a fenced transport, sharing its loop', async () => {
+    const { transport, specs } = localTransport()
+    const fenced = transport.withCommandFence?.('[ -n "$FENCE_OK" ] || exit 75;')
+    if (!fenced) {
+      throw new Error('WSL transport has no command fence')
+    }
+    await expect(execCommand(fenced, 'echo loop')).rejects.toThrow(/exit 75/)
+    expect(
+      await execCommand(transport.withCommandFence?.('FENCE_OK=1;') ?? fenced, 'echo loop')
+    ).toBe('loop\n')
+    await expect(
+      execCommand(fenced, 'cat', { stdin: Readable.from([Buffer.from('piped')]) })
+    ).rejects.toThrow(/exit 75/)
+    // The unfenced transport is unchanged, and all stdin-free commands shared one loop.
+    expect(await execCommand(transport, 'echo plain')).toBe('plain\n')
+    expect(specs.filter((spec) => spec.args?.[6] === 'orca-wsl-exec-loop')).toHaveLength(1)
+  })
+
   it('falls back to one wsl.exe per command when the loop cannot start', async () => {
     const specs: PipedProcessSpec[] = []
     const transport = createWslOrcadHostTransport({

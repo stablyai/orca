@@ -1,5 +1,5 @@
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from '../browser-slice-contract'
-import type { BrowserCookieImportResult } from '../../../../../../shared/browser-workspace-types'
+import type { BrowserCookieImportResult } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import type { BrowserDetectProfilesResult } from '../../../../../../shared/browser/runtime/runtime-browser-contracts'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { translate } from '@/i18n/i18n'

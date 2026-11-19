@@ -1,4 +1,4 @@
-import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
+import type { OrcaHooks } from '../../../../shared/workspace-setup/orca-yaml-hook-types'
 
 /** The environment recipe commands a vmRecipe trust approval covers. */
 export function getVmRecipeTrustContent(yamlHooks: OrcaHooks | null): string {

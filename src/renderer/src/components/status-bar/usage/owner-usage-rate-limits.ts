@@ -4,8 +4,8 @@ import type {
   RateLimitState,
   UsageRateLimitFailureKind,
   UsageRateLimitMetadata
-} from '../../../../../shared/rate-limit-types'
-import { createEmptyRateLimitState } from '../../../../../shared/rate-limit-state-factory'
+} from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { createEmptyRateLimitState } from '../../../../../shared/agent-usage/rate-limits/rate-limit-state-factory'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import {
@@ -13,8 +13,8 @@ import {
   hasUsageProviderSettingsForProvider,
   isProviderConfigured
 } from '../composition/status-bar-provider-visibility'
-import { hasUsageData } from '../../../../../shared/usage-provider-windows'
-import { describeOwnerNotSetUp } from './owner-not-set-up-copy'
+import { hasUsageData } from '../../../../../shared/agent-usage/display/usage-provider-windows'
+import { describeOwnerNotSetUp } from '../../../../../shared/agent-usage/status-copy/owner-not-set-up-copy'
 
 /** Whose usage the status bar shows: this device, or the remote host that owns the accounts. */
 export type OwnerUsageState =
@@ -206,7 +206,7 @@ function addNotSetUpPlaceholders(
       if (!ownerNotSetUp) {
         return remote[key]
       }
-      return ownerPlaceholderSnapshot(key, describeOwnerNotSetUp(ownerNotSetUp), {
+      return ownerPlaceholderSnapshot(key, describeOwnerNotSetUp(ownerNotSetUp, translate), {
         ownerNotSetUp
       })
     })

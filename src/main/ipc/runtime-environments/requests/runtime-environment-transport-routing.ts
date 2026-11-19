@@ -1,14 +1,17 @@
+import {
+  markEnvironmentUsedFromResponse,
+  shouldUseCachedRequestConnection
+} from './runtime-environment-usage-response'
 import { getRuntimeEnvironmentStatus } from '../status/runtime-environment-status-probe'
 import { getPreferredPairedRuntimeConnection } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities'
 import { resolveEnvironment } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { prepareFencedRuntimeRequest } from './runtime-environment-request-preparation'
 import {
   requireWslHostWithoutStart,
   type ManagedRuntimeCallPreparation
 } from '../managed-orcad/runtime-environment-managed-tunnel'
-import { recordRuntimeEnvironmentUsage } from '../../../../shared/remote-runtime/host-store/runtime-environment-usage-record'
-import type * as Rpc from '../../../../shared/runtime-rpc-envelope'
+import type * as Rpc from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import '../../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import { withRuntimeUnreachableHint } from './runtime-environment-unreachable-hint'
 import { enqueueRuntimeCall } from './runtime-environment-call-queue'
@@ -35,10 +38,13 @@ export async function callRuntimeEnvironment(
   expectedEnvironmentPairingRevision?: number,
   envelope?: Rpc.RuntimeOrchestrationEnvelope,
   options?: {
+    prepareGuard?: Rpc.RuntimeRequestGuard
     prepareRequest?: Rpc.RuntimeRequestPreparation
     signal?: AbortSignal
     expectedEnvironmentRuntimeId?: string
     preparation?: ManagedRuntimeCallPreparation
+    /** Support-routed reply budget once the host is reachable; timeoutMs still bounds connect and handshake. */
+    responseTimeoutMs?: number
   }
 ): Promise<Rpc.RuntimeRpcResponse<unknown>> {
   if (method === 'status.get') {
@@ -49,7 +55,7 @@ export async function callRuntimeEnvironment(
       await requireWslHostWithoutStart(userDataPath, selector, preparation)
       statusOptions = rest
     }
-    const environment = resolveEnvironment(userDataPath, selector)
+    const environment = await resolveEnvironment(userDataPath, selector)
     const failure = runtimeEnvironmentRevisionFailure(
       environment,
       expectedEnvironmentPairingRevision,
@@ -66,7 +72,7 @@ export async function callRuntimeEnvironment(
       )
     )
   }
-  const environment = resolveEnvironment(userDataPath, selector)
+  const environment = await resolveEnvironment(userDataPath, selector)
   // Connect failures reject; retain the dispatched endpoint for hints because queued re-pairing can change it.
   let endpoint = getPreferredPairedRuntimeConnection(environment).endpoint
   try {
@@ -98,6 +104,7 @@ export async function callRuntimeEnvironment(
           params,
           timeoutMs: effectiveTimeoutMs,
           signal: options?.signal,
+          prepareGuard: options?.prepareGuard,
           prepareRequest: options?.prepareRequest
         }
         if (envelope && !sharedControlEnvelope) {
@@ -109,7 +116,11 @@ export async function callRuntimeEnvironment(
           markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
           return response
         }
-        if (shouldUseCachedRequestConnection(method)) {
+        if (
+          shouldUseCachedRequestConnection(method) &&
+          !options?.prepareGuard &&
+          !options?.prepareRequest
+        ) {
           const response = await sendRemoteRuntimeConnectionRequestAbortable(
             currentEnvironment.id,
             pairedConnection,
@@ -126,6 +137,7 @@ export async function callRuntimeEnvironment(
             userDataPath,
             environment: currentEnvironment,
             ...call,
+            responseTimeoutMs: options?.responseTimeoutMs,
             expectedPairingRevision: expected.pairingRevision,
             expectedRuntimeId: expected.runtimeId,
             envelope: sharedControlEnvelope
@@ -140,7 +152,8 @@ export async function callRuntimeEnvironment(
           sharedControlEnvelope,
           options?.signal,
           ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-          options?.prepareRequest
+          options?.prepareRequest,
+          options?.prepareGuard
         )
         markEnvironmentUsedFromResponse(userDataPath, currentEnvironment.id, response)
         return response
@@ -157,19 +170,3 @@ export async function callRuntimeEnvironment(
 }
 
 export { subscribeRuntimeEnvironment } from './runtime-environment-subscription-routing'
-
-function markEnvironmentUsedFromResponse(
-  userDataPath: string,
-  environmentId: string,
-  response: Rpc.RuntimeRpcResponse<unknown>
-): void {
-  if (response.ok === true) {
-    recordRuntimeEnvironmentUsage(userDataPath, environmentId, {
-      runtimeId: response._meta.runtimeId
-    })
-  }
-}
-
-function shouldUseCachedRequestConnection(method: string): boolean {
-  return method === 'terminal.send' || method === 'terminal.updateViewport'
-}

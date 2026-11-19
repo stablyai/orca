@@ -4,9 +4,11 @@ import { mobileForkAccessibleName } from '../session/fork/mobile-fork-marked-nam
 import { Fragment, memo, useCallback, useState } from 'react'
 import { Alert, Pressable, Text, View } from 'react-native'
 import { formatAgentTypeLabel } from '../../../src/shared/agent-status/presentation/agent-type-label'
-import type { WorktreeStatus } from '../../../src/shared/worktree-status-rollup'
+import type { WorktreeStatus } from '../../../src/shared/worktree/row-display/worktree-status-rollup'
 import { AgentSpinner, agentStatusColors } from './presentation/AgentSpinner'
 import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
+import { MobileBotAvatar } from '../bots/MobileBotAvatar'
+import { mobileBotAvatarSource } from '../bots/host-bot-row-facts'
 import { SwipeRowActions } from '../components/list/SwipeRowActions'
 import { HOME_ROW_TEXT_INSET, homeListStyles } from '../home/home-list-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -292,7 +294,14 @@ const MobileAgentListRow = memo(function MobileAgentListRow(props: {
               </Text>
             ) : null}
             <View style={styles.footer}>
-              {agent.agentType ? <MobileAgentIcon agentId={agent.agentType} size={13} /> : null}
+              {row.entry.bot && props.footer === 'workspace' ? (
+                <MobileBotAvatar
+                  avatar={mobileBotAvatarSource(row.entry.bot, undefined)}
+                  size={13}
+                />
+              ) : agent.agentType ? (
+                <MobileAgentIcon agentId={agent.agentType} size={13} />
+              ) : null}
               <Text style={styles.place} numberOfLines={1}>
                 {place}
               </Text>

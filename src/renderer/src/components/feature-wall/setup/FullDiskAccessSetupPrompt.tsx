@@ -5,7 +5,7 @@ import type {
   DeveloperPermissionId,
   DeveloperPermissionState,
   DeveloperPermissionStatus
-} from '../../../../../shared/developer-permissions-types'
+} from '../../../../../shared/app-lifecycle/permissions/developer-permissions-types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'

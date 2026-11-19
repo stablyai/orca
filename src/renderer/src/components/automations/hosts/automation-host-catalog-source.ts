@@ -1,9 +1,9 @@
 /** Build catalog input only from mirrored store state. Fold query results into the separate health projection so cache commits cannot trigger generation changes/cancellation. */
 
-import { translateLocalExecutionHostLabel } from '@/components/sidebar/execution-host-label'
+import { translateLocalExecutionHostLabel } from '@/runtime/hosts/display/execution-host-label'
 import { AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY } from '../../../../../shared/automations/automation-runtime-capabilities'
-import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
-import type { SshConnectionStatus } from '../../../../../shared/ssh-types'
+import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { SshConnectionStatus } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 import type { StableAutomationAuthorityRef } from '../../../../../shared/automations/ownership/automation-owner-ref'
 import type {
   AutomationAuthorityHealth,

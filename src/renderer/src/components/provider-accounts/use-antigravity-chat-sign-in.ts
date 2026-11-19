@@ -12,11 +12,11 @@ import {
   subscribeAntigravityChatSignIns,
   type AntigravityChatSignInView
 } from '../../runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type {
   AntigravityChatAuth,
   AntigravityChatSignInState
-} from '../../../../shared/antigravity-account-types'
+} from '../../../../shared/agent-accounts/antigravity/antigravity-account-types'
 
 /** A running flow another client started: the host tells only its starter the id. */
 const otherClients = (flow: AntigravityChatSignInState | null): boolean =>
@@ -80,7 +80,8 @@ const NOT_FOLLOWED: AntigravityChatSignInView = {
   flow: null,
   auth: 'unknown',
   error: null,
-  openFailed: false
+  openFailed: false,
+  retryIntent: 'signIn'
 }
 
 export function useAntigravityChatSignIn(
@@ -148,7 +149,8 @@ export function useAntigravityChatSignInControls(props: {
     copyLabel: t('accounts.antigravity.chatCopyLink', 'Copy sign-in link'),
     signInDisabled: props.disabled || pending || status !== 'known' || otherClients(flow),
     recoveryDisabled: props.disabled || pending || otherClients(flow),
-    start: () => act(() => startAntigravityChatSignIn(owner)),
+    start: () =>
+      act(() => startAntigravityChatSignIn(owner, action === 'retry' ? view.retryIntent : action)),
     cancel: () => act(() => cancelAntigravityChatSignIn(owner)),
     send: (callbackUrl: string, refused: (message: string) => void) =>
       act(async () => {

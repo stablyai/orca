@@ -2,7 +2,10 @@
 import { StrictMode } from 'react'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
+import type {
+  BrowserPage,
+  BrowserWorkspace
+} from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import { REMOTE_BROWSER_STREAM_LIVE } from '../stream-remote/remote-browser-stream-status'
 
 // Drive pane adoption with inert runtime machinery while keeping the address-bar lifecycle real.
@@ -131,14 +134,14 @@ vi.mock('../stream-remote/remote-browser-page-viewport', () => ({
   }) => <div ref={remoteViewportRef} tabIndex={-1} data-testid="streamed-viewport" />
 }))
 
-vi.mock('../browser-client-page-renderer-installation', () => ({
+vi.mock('../host-guest/client-pages/browser-client-page-renderer-installation', () => ({
   attachBrowserClientPageToViewport: mocks.attach
 }))
 
 import { useAppStore } from '@/store/index'
 import { annotateBrowserPageHandles } from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { installClientHostedPaneApi } from '../client-hosted-browser-pane-test-rig'
+import { installClientHostedPaneApi } from './client-hosted/client-hosted-browser-pane-test-rig'
 import { clearBrowserAddressBarEditSession } from './address-bar/browser-address-bar-edit-session'
 import { clearBrowserPageDeferredNavigation } from '../navigate/browser-page-deferred-navigation'
 import BrowserPane from './browser-workspace-pane'

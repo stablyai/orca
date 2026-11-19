@@ -1,4 +1,4 @@
-import type { OrcaCloudSignInProgress } from '../../../shared/orca-profiles'
+import type { OrcaCloudSignInProgress } from '../../../shared/orca-profiles/orca-profiles'
 
 type ProgressListener = (progress: OrcaCloudSignInProgress | null) => void
 

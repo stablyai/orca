@@ -7,7 +7,7 @@ import { runtimeWorktreeAgentRowForked } from './runtime-worktree-agent-row-fork
 import type {
   RuntimeWorktreeAgentRow,
   RuntimeWorktreePsSummary
-} from '../../../../shared/runtime-worktree-contracts'
+} from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type {
   AgentListPublication,
   AgentListVerdict
@@ -23,11 +23,26 @@ import {
 } from './runtime-worktree-summary-paths'
 import type { RuntimeTerminalTitleEvidence } from './runtime-worktree-ps-activity'
 import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
+import { structuredAgentSessionIdFromTabId } from '../../../../shared/agent-session/view/structured-agent-session-tab-id'
+import {
+  formatOrcaSessionAddress,
+  isOrcaSessionId
+} from '../../../../shared/agent-session/identity/orca-session-address'
 
 type OrchestrationDisplay = {
   taskTitle?: string | null
   displayName?: string | null
   parentPaneKey?: string | null
+}
+
+/** A terminal agent by its handle; a chat by its Orca session address. */
+function agentAddress(source: RuntimeWorktreeAgentSource): string | undefined {
+  if (source.terminalHandle) {
+    return source.terminalHandle
+  }
+  const sessionId =
+    source.structuredHost && source.tabId ? structuredAgentSessionIdFromTabId(source.tabId) : null
+  return sessionId && isOrcaSessionId(sessionId) ? formatOrcaSessionAddress(sessionId) : undefined
 }
 
 const UNLISTED: AgentListVerdict = { listed: false }
@@ -41,6 +56,25 @@ function agentListVerdict(
     agentList.verdicts[source.paneKey] ??
     (source.updatedAt > agentList.publishedAt ? undefined : UNLISTED)
   )
+}
+
+/** A row's names as `worktree.ps` lists them. `parent`: the listed pane its orchestration names
+ *  as parent, if any. */
+export function runtimeWorktreeAgentRowNames<T extends Pick<RuntimeWorktreeAgentSource, 'tabId'>>(
+  source: T,
+  orchestration: OrchestrationDisplay | undefined,
+  parent: Pick<RuntimeWorktreeAgentSource, 'tabId'> | undefined,
+  conversationName: ((source: T) => string | null) | undefined
+): Pick<RuntimeWorktreeAgentRow, 'taskTitle' | 'displayName'> & {
+  conversationName: string | null
+} {
+  return {
+    taskTitle: orchestration?.taskTitle ?? null,
+    displayName: orchestration?.displayName ?? null,
+    // Like desktop lineage, a listed child running in its parent's tab does not own that tab's name.
+    conversationName:
+      parent && parent.tabId === source.tabId ? null : (conversationName?.(source) ?? null)
+  }
 }
 
 export function attachRuntimeWorktreeAgentRows(args: {
@@ -71,20 +105,24 @@ export function attachRuntimeWorktreeAgentRows(args: {
     }
     const orchestration = args.orchestrationByPaneKey?.[source.paneKey]
     const parentPaneKey = orchestration?.parentPaneKey ?? null
-    // Like desktop lineage, a listed child running in its parent's tab does not own that tab's name.
-    const parent = parentPaneKey ? rowSources.get(parentPaneKey) : undefined
-    const conversationName =
-      parent && parent.tabId === source.tabId ? null : args.conversationName?.(source)
+    const { taskTitle, displayName, conversationName } = runtimeWorktreeAgentRowNames(
+      source,
+      orchestration,
+      parentPaneKey ? rowSources.get(parentPaneKey) : undefined,
+      args.conversationName
+    )
+    const address = agentAddress(source)
     const row: RuntimeWorktreeAgentRow = {
       paneKey: source.paneKey,
+      ...(address ? { address } : {}),
       ...(source.orcaSessionId ? { orcaSessionId: source.orcaSessionId } : {}),
       parentPaneKey,
       state: source.state,
       ...(source.workingMode ? { workingMode: source.workingMode } : {}),
       agentType: source.agentType,
       prompt: source.prompt,
-      taskTitle: orchestration?.taskTitle ?? null,
-      displayName: orchestration?.displayName ?? null,
+      taskTitle,
+      displayName,
       ...(conversationName ? { conversationName } : {}),
       ...(conversationName && forked(source.tabId) ? { conversationForked: true as const } : {}),
       lastAssistantMessage: source.lastAssistantMessage,

@@ -28,6 +28,9 @@ export function wireStructuredAgentSessionQueuedMessages(
 ) {
   const drain = new StructuredAgentSessionQueuedMessageDrain({
     sessions,
+    assertQueuedMessageAllowed: (sessionId, messageId) =>
+      context().deps.assertQueuedMessageAllowed?.(sessionId, messageId),
+    getRecord: (sessionId) => context().deps.store.getRecord(sessionId),
     serialize: (sessionId, task) => context().serialize(sessionId, task),
     conversationFence: (sessionId) =>
       structuredAgentSessionConversationFence(context().deps.store, sessionId),
@@ -65,7 +68,9 @@ export function wireStructuredAgentSessionQueuedMessages(
       }
     },
     submissionReceipt: (sessionId) => context().deps.store.submissionReceipt(sessionId),
-    owed: (sessionId, from) => context().deps.queuedAgentMessageOwed?.(sessionId, from) ?? 'owed',
+    queuedAgentMessageOwed: (sessionId, from) =>
+      context().deps.queuedAgentMessageOwed?.(sessionId, from) ?? 'owed',
+    onMessageAdmitted: (message) => context().deps.onMessageAdmitted?.(message),
     logger: deferredStructuredAgentSessionLogger(() => context().deps.logger)
   })
   /** Sessions with a republish waiting in their lane: more wakes before it runs add nothing. */

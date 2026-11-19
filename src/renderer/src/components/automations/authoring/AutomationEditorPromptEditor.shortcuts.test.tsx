@@ -2,7 +2,7 @@
 
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { KeybindingOverrides } from '../../../../../shared/keybindings'
+import type { KeybindingOverrides } from '../../../../../shared/keybindings/types'
 import { AutomationEditorPromptEditor } from './AutomationEditorPromptEditor'
 
 const shortcutState = vi.hoisted(

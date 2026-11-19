@@ -3,8 +3,11 @@ import type { Translate } from '@/i18n/use-translate'
 import {
   parseExecutionHostId,
   toRuntimeExecutionHostId
-} from '../../../../../shared/execution-host'
-import type { SessionMemory, WorktreeMemory } from '../../../../../shared/process-stats-types'
+} from '../../../../../shared/execution-host/execution-host'
+import type {
+  SessionMemory,
+  WorktreeMemory
+} from '../../../../../shared/diagnostics/process-stats-types'
 import type { RuntimeHostResourceSample } from '../resources/workspace-attribution/resource-usage-merge-types'
 
 export type RuntimeHostResourceResult =

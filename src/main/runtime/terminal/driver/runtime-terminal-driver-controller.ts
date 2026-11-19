@@ -1,4 +1,4 @@
-import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeTerminalDriverState } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { notifyRuntimeListeners } from '../../events/runtime-listener-delivery'
 
 type RuntimeTerminalDriverDependencies = {

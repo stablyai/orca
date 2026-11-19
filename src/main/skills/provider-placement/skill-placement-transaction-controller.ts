@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { basename, dirname, join, resolve } from 'node:path'
-import { isSkillInstallProviderId } from '../../../shared/skill-install-providers'
+import { isSkillInstallProviderId } from '../../../shared/skills/installation/skill-install-providers'
 import {
   nativeSkillInstallFilesystem,
   type SkillInstallFilesystem

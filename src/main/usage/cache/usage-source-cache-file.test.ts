@@ -1,6 +1,7 @@
 import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { gunzipSync } from 'node:zlib'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   readUsageSourceCache,
@@ -45,7 +46,7 @@ describe('usage source cache file', () => {
     })
   })
 
-  it('preserves large ownership records, JSON values and Unicode across encoded boundaries', async () => {
+  it('gzips large ownership records and still reads plain files, preserving JSON values and Unicode', async () => {
     const ref = {
       path: join(directory, 'sources.json'),
       schemaVersion: 7,
@@ -67,7 +68,9 @@ describe('usage source cache file', () => {
       }
     ]
     await writeUsageSourceCache(ref, sources)
-    const saved = readFileSync(ref.path, 'utf8')
+    const written = readFileSync(ref.path)
+    expect([...written.subarray(0, 2)]).toEqual([0x1f, 0x8b])
+    const saved = gunzipSync(written).toString('utf8')
     expect(saved).not.toContain('optional')
     expect(JSON.parse(saved).sources[0].extra).toEqual([null, null])
     expect(await readUsageSourceCache(ref)).toEqual([

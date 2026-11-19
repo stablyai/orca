@@ -1,7 +1,10 @@
 /** Real Win32-OpenSSH cells provisioned by config/ci/windows-ssh-provider/ and run by ssh-windows-hosts.yml. */
 import { readFileSync } from 'node:fs'
-import { isWindowsServerTarget, type WindowsServerTarget } from '../../../shared/node-runtime-pin'
-import type { SshTarget } from '../../../shared/ssh-types'
+import {
+  isWindowsServerTarget,
+  type WindowsServerTarget
+} from '../../../shared/node-runtime/node-runtime-pin'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 
 /** Pinned node.exe lifecycle under each DefaultShell. */
 const WINDOWS_ORCAD_CELL_IDS = ['orcad-cmd', 'orcad-powershell'] as const
@@ -14,7 +17,7 @@ export function isWindowsOrcadCellId(id: string): id is WindowsOrcadCellId {
 /** Relay-to-managed conversion through the app (tests/e2e). */
 const WINDOWS_CONVERT_CELL_ID = 'orcad-convert'
 
-/** Bundled CLI cells: tests/e2e/ssh-orcad-windows-cli-matrix.spec.ts. */
+/** Descriptor compatibility for the retired bundled CLI cells. */
 const WINDOWS_CLI_MATRIX_CELL_IDS = ['orcad-cli-managed', 'orcad-cli-convert'] as const
 type WindowsCliMatrixCellId = (typeof WINDOWS_CLI_MATRIX_CELL_IDS)[number]
 

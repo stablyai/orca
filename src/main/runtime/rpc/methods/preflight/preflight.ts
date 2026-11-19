@@ -6,7 +6,7 @@ import {
 } from '../../../../preflight/installed-agent-detection'
 import { resolveQualifiedAgentDetectionHost } from './preflight-workspace-target'
 import { runPreflightCheck } from '../../../../preflight/agent-detection'
-import { detectRemoteWindowsTerminalCapabilities } from '../../../../ipc/preflight-remote-windows-terminal-capabilities'
+import { detectRemoteWindowsTerminalCapabilities } from '../../../../ipc/preflight/preflight-remote-windows-terminal-capabilities'
 
 import {
   assertAgentDetectionHostRunning,
@@ -22,7 +22,7 @@ import {
 } from '../../../../../shared/rpc-contract/preflight/preflight-params'
 
 /** This host's command overrides, so a configured CLI outside PATH is listed like a detected one. */
-function hostDetectionOptions(
+export function hostDetectionOptions(
   runtime: OrcaRuntimeService
 ): InstalledAgentDetectionOptions | undefined {
   try {

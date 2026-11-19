@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
 import type { AgentType } from '../../../../../../src/shared/agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
-import { withoutPullRequestEventMessages } from '../../../../../../src/shared/native-chat/native-chat-pull-request-event'
+import { withoutPullRequestEventMessages } from '../../../../../../src/shared/native-chat/transcript/notices/native-chat-pull-request-event'
 import { projectMobileNativeChatMessages } from './mobile-native-chat-projection'
+import { foldAutomationRunCards } from '../../../../../../src/shared/native-chat/transcript/native-chat-transcript-projection'
 
 /** The rows the chat draws. CI result lines leave after projection, so a setting flip rebuilds nothing. */
 export function useMobileNativeChatProjection(
@@ -11,7 +12,9 @@ export function useMobileNativeChatProjection(
   scope: readonly unknown[],
   showsCiResultLines: boolean
 ): NativeChatMessage[] {
-  const rows = useProjectedRows(messages, agent, scope)
+  const projected = useProjectedRows(messages, agent, scope)
+  // Across the whole chat: a wait's rows and a run's twin card sit in different fold units.
+  const rows = useMemo(() => foldAutomationRunCards(projected), [projected])
   return useMemo(
     () => (showsCiResultLines ? rows : withoutPullRequestEventMessages(rows)),
     [rows, showsCiResultLines]

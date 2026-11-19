@@ -10,15 +10,15 @@ import {
   partialRuntimeStore,
   storeRepo,
   storeWorktreeMeta
-} from '../../../orca-runtime-tests/runtime-store-partial-fixture'
+} from '../../../construction/test-context/runtime-store-partial-fixture'
 import type { WorktreeMeta } from '../../../../../shared/worktree/meta-types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { HostWorktreeTarget } from '../../../../../shared/worktree/host-qualified-identity'
 
-import * as appEnvironment from '../../../../../shared/app-environment'
-import type { SshTarget } from '../../../../../shared/ssh-types'
+import * as appEnvironment from '../../../../../shared/app-lifecycle/app-environment'
+import type { SshTarget } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 
-import { getRuntimeMetadataPath } from '../../../../../shared/runtime-bootstrap'
+import { getRuntimeMetadataPath } from '../../../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 
 import { UnixSocketTransport } from '../../transports/unix-socket-transport'
 import { RpcDispatcher } from '../../dispatcher'
@@ -27,7 +27,7 @@ import { STATUS_METHODS } from '../host-management/status'
 import type { RpcRequest } from '../../core'
 import { WorkspaceLifecycleQueue } from '../../../workspaces/lifecycle/workspace-lifecycle-queue'
 import { installRealWorkerThreadChildProcesses } from '../../../../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
-import { removeTree } from '../../../../../shared/windows-transient-lock-removal'
+import { removeTree } from '../../../../../shared/file-write/windows-transient-lock-removal'
 import {
   _resetPendingWorktreeRemovalsForTests,
   _settlePendingWorktreeRemovalsForTests,
@@ -170,8 +170,16 @@ it.each<{ flags: string[]; deleted: boolean }>([
     // Existing branches have preservation metadata; explicit opt-in must override it.
     meta[id].preserveBranchOnDelete = flags.includes('--delete-branch')
     const head = await git('rev-parse', 'task')
+    // A shared runtime keeps another test's exit code; this run's own is what it checks.
+    process.exitCode = undefined
+    const output: string[] = []
+    const capture = (chunk: string | Uint8Array) => (output.push(String(chunk)), true)
+    vi.spyOn(process.stdout, 'write').mockImplementation(capture)
+    vi.spyOn(process.stderr, 'write').mockImplementation(capture)
     await main(['worktree', 'rm', '--worktree', `id:${id}`, ...flags, '--json'], repoPath)
-    expect(process.exitCode).not.toBe(1)
+    vi.mocked(process.stdout.write).mockRestore()
+    vi.mocked(process.stderr.write).mockRestore()
+    expect(process.exitCode, output.join('')).not.toBe(1)
     await _settlePendingWorktreeRemovalsForTests()
     expect(existsSync(checkout)).toBe(false)
     expect(await git('for-each-ref', '--format=%(refname:short)', 'refs/heads/task')).toBe(

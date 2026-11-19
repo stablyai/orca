@@ -1,6 +1,6 @@
 import type { FreshWorkspaceAgentLaunch } from '@/lib/workspace/creation/worktree-startup-payload'
 import type { TerminalState } from './terminal-state'
-import type { Tab } from '../../../../shared/tab-types'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { TabSplitTarget } from '../slices/tabs/tabs-slice-contract'
 import type {
   TerminalLayoutSnapshot,
@@ -25,7 +25,7 @@ import type {
   NativeChatLaunchDraft,
   NativeChatLaunchPrompt
 } from '@/components/native-chat/drafts/native-chat-launch-prompt'
-import type { AgentStatusWorktreeShutdownReason } from '../slices/agent-status/agent-status-contract'
+import type { AgentStatusWorktreeShutdownReason } from '../slices/agent-status/contracts/agent-status-contract'
 import type {
   TerminalTabCloseReason,
   TerminalTabRetirementPlan

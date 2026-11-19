@@ -1,7 +1,7 @@
 import { OrcaRuntimeWithSplitTerminal } from './terminal-split'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
-import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
-import type { RuntimeTerminalSplit } from '../../../../shared/runtime-terminal-contracts'
+import type { TerminalPaneSplitSource } from '../../../../shared/feature-education/feature-education-telemetry'
+import type { RuntimeTerminalSplit } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   recordPtySurface,
@@ -12,7 +12,7 @@ import { runtimeSplitPlacement } from '../layout/runtime-terminal-spawn-placemen
 import { ownerSurfacing } from './terminal-presentation'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { spawnInAdmittedPane, withdrawRuntimePane } from './runtime-pane-admission'
-import { UNMEASURED_PTY_SIZE } from '../../../ipc/pty/pty-first-size'
+import { UNMEASURED_PTY_SIZE } from '../../../ipc/pty/delivery/pty-first-size'
 import { resolveLaunchCommandPaneAgent } from './runtime-agent-launch-resolution'
 import { recordFreshLaunch } from './launch-evidence'
 // Rejected splits need only a quick teardown verdict before fallback kill; unreachable hosts must not stall rejection.
@@ -30,6 +30,8 @@ export type TerminalSplitOptions = {
   telemetrySource?: TerminalPaneSplitSource
   /** The user's own act (a CLI or window split); without it a stopped WSL distro holds the start. */
   wslUserAct?: true
+  /** The new terminal's handle, drawn by a caller that must know it before the process starts. */
+  preAllocatedHandle?: string
 }
 
 export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitTerminal {
@@ -68,7 +70,7 @@ export abstract class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeW
     const sourceIncarnationId =
       sourceAuthority.liveIncarnationId ?? sourceAuthority.persistedIncarnationId
     const leafId = randomUUID()
-    const preAllocatedHandle = this.createPreAllocatedTerminalHandle()
+    const preAllocatedHandle = opts.preAllocatedHandle ?? this.createPreAllocatedTerminalHandle()
     const paneKey = makePaneKey(parentTabId, leafId)
     const splitArgs: Parameters<typeof spawnInAdmittedPane>[2] = {
       // Why unmeasured: a new split pane has no size of its own until the window lays it out.

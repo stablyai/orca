@@ -2,7 +2,7 @@ import { openTestAgentSessionDatabase } from '../../../../runtime/agent-session/
 import type {
   MobileQueuedEditHostFixtureModule,
   MobileCommandMenuHostFixtureModule
-} from '../../../../../shared/mobile-queued-edit-host.test-fixture-contract'
+} from '../../../../../shared/native-chat/input/queued-messages/mobile-queued-edit-host.test-fixture-contract'
 import {
   QueuedMessageEditHoldParams,
   QueuedMessageUpdateParams

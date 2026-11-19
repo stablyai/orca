@@ -12,6 +12,7 @@ import {
   aliasFromCandidate,
   automaticDueAt,
   candidateReadRequest,
+  freshRetryAt,
   isBudgetedBackground,
   isMergeabilityPendingOutcome,
   refreshKey,
@@ -90,7 +91,11 @@ export class PRRefreshQueueScheduler {
       return
     }
     const followUpCandidate = this.visibility.candidate(key, refreshed)
-    const regularDueAt = automaticDueAt(followUpCandidate) ?? Number.POSITIVE_INFINITY
+    // Before this outcome goes stale, a follow-up would only be served it again from the exact cache.
+    const regularDueAt = Math.max(
+      automaticDueAt(followUpCandidate) ?? Number.POSITIVE_INFINITY,
+      freshRetryAt(visibleCandidateAfterOutcome(followUpCandidate, outcome)) ?? 0
+    )
     const pendingDueAt =
       options?.pendingMergeabilityDelayMs !== undefined && isMergeabilityPendingOutcome(outcome)
         ? outcome.fetchedAt + options.pendingMergeabilityDelayMs

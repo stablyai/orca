@@ -21,8 +21,8 @@ import {
   type HookRootAcquisition,
   type HookRootCompletion
 } from './hook-root-attempts'
-import { readTmuxHookPane, readTmuxHookPaneHint } from '../../tmux-client-attachment'
-import { prefetchJcodeHelperSession } from '../../jcode-helper-sessions'
+import { readTmuxHookPane, readTmuxHookPaneHint } from './tmux-client-attachment'
+import { prefetchJcodeHelperSession } from '../providers/jcode/jcode-helper-sessions'
 
 function recordedOwner(
   previous: AgentHookEventPayload | undefined

@@ -1,5 +1,5 @@
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import type { PersistedState } from '../../../../shared/persisted-state-types'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import { toWorkspaceLineageRow } from '../../../../shared/worktree/lineage/worktree-lineage-workspace-row'
@@ -8,7 +8,7 @@ import {
   parseWorkspaceKey,
   worktreeWorkspaceKey,
   type WorkspaceKey
-} from '../../../../shared/workspace-scope'
+} from '../../../../shared/workspace/identity/workspace-scope'
 import { folderParentDefeatsInferredParent } from '../../loading-store/workspace-lineage/folder-parent-lineage-persistence'
 import { ownsRawIdBucket } from '../../loading-store/workspace-lineage/metadata-lineage-operations'
 

@@ -17,7 +17,7 @@ export async function stopRemoteWorker(
   forward: RemoteForwardKey | undefined
 ): Promise<unknown> {
   const db = runtime.getOrchestrationDb()
-  const server = remoteServerName(runtime, link.environment_id)
+  const server = await remoteServerName(runtime, link.environment_id)
   const owed = oweRemoteDispatchStop(db, dispatchId, forward?.key ?? `stop:${randomUUID()}`)
   if (!owed) {
     throw new OrchestrationError(
@@ -38,17 +38,17 @@ export async function stopRemoteWorker(
     if (!serverNeverAnswered(error) || !getOpenRemoteRunLink(db, link.conversation_id)) {
       throw inServerTerms(error, { server, forward: stopKey, link: link })
     }
-    return settleUnansweredStop(runtime, link, dispatchId)
+    return await settleUnansweredStop(runtime, link, dispatchId)
   }
 }
 
 /** The server did not answer a stop: the Task half runs here at once, as a local stop's does, and the stop stays owed until the server proves it. */
-function settleUnansweredStop(
+async function settleUnansweredStop(
   runtime: OrcaRuntimeService,
   link: RemoteRunLinkRow,
   dispatchId: string
 ) {
-  const server = remoteServerName(runtime, link.environment_id)
+  const server = await remoteServerName(runtime, link.environment_id)
   settleRemoteAttemptHere(runtime.getOrchestrationDb(), dispatchId, 'stopped')
   return {
     dispatchId,
@@ -62,12 +62,12 @@ function settleUnansweredStop(
  * The server did not answer an abandon: as a local abandon, nothing is stopped; the Task half runs
  * here at once, so the Task can be retried, and the worker there is left to run.
  */
-export function settleUnansweredAbandon(
+export async function settleUnansweredAbandon(
   runtime: OrcaRuntimeService,
   link: RemoteRunLinkRow,
   dispatchId: string
 ) {
-  const server = remoteServerName(runtime, link.environment_id)
+  const server = await remoteServerName(runtime, link.environment_id)
   settleRemoteAttemptHere(runtime.getOrchestrationDb(), dispatchId, 'abandoned')
   return {
     dispatchId,

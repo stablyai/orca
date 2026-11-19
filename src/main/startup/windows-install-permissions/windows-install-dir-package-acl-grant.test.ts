@@ -5,9 +5,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   resetWindowsSecurityLoadForTests,
   setWindowsSecurityForTests,
-  type GrantAccessOptions,
   type WindowsSecurityAddon
-} from '../../../shared/windows-security-addon'
+} from '../../../shared/secure-storage/windows-security-addon'
+import type { GrantAccessOptions } from '@orca/windows-security'
 
 import { grantInstallDirPackageTree } from './windows-install-dir-package-acl-grant'
 

@@ -1,10 +1,10 @@
-import { isClaudeToolResultContent } from '../../../../claude-tool-content'
+import { isClaudeToolResultContent } from './claude-tool-content'
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import type {
   ClaudeTranscriptCursor,
   ClaudeTranscriptApplication
 } from './claude-transcript-cursor'
-import { isKnownHarnessInjectedUserTurnText } from '../../../../harness-injected-user-turns'
+import { isKnownHarnessInjectedUserTurnText } from '../../../../agent-session/journal/harness-injected-user-turns'
 
 export type ClaudeHelperTranscriptEvidence = {
   observedAt: number
