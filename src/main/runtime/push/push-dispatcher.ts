@@ -7,6 +7,7 @@ import {
 import type { MobileNotificationEvent } from './notifications/runtime-mobile-notification-controller'
 import {
   PushBurstSlots,
+  mirrorPushReport,
   pushBurstSubject,
   type ExecutionHostPushCoverage
 } from './push-burst-slots'
@@ -167,7 +168,7 @@ export class PushDispatcher {
         }
       }
       if (this.coverage && event.type === 'notification' && event.executionHost) {
-        this.coverage.tell(event.executionHost, pushBurstSubject(event), Promise.all(pushedDigests))
+        this.coverage.tell(event.executionHost, mirrorPushReport(event, Promise.all(pushedDigests)))
       }
     } catch (error) {
       console.warn('[push] Failed to prepare a push notification:', error)

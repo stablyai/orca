@@ -1,7 +1,6 @@
 import { z } from 'zod'
 import { parseExecutionHostId } from '../../shared/execution-host/execution-host'
 import { NOTIFICATIONS_PUSH_COVERAGE_RUNTIME_CAPABILITY } from '../../shared/remote-runtime/protocol/mobile-runtime-capabilities'
-import { NOTIFICATION_PUSH_COVERAGE_MAX_DIGESTS } from '../../shared/rpc-contract/notifications/notifications-params'
 import type { ExecutionHostPushCoverage } from '../runtime/push/push-burst-slots'
 import { listCapableSharedControlSockets } from './desktop-presence-reporter'
 
@@ -34,16 +33,11 @@ export const executionHostPushCoverage: ExecutionHostPushCoverage = {
     )
     return new Set(response.success ? response.data.result.coveredTokenDigests : [])
   },
-  tell: (executionHost, subject, pushedTokenDigests) => {
-    void pushedTokenDigests
-      .then(async (pushed) => {
-        const tokenDigests = pushed.flatMap((digest) => digest ?? [])
-        const target = tokenDigests.length > 0 ? executionHostSocket(executionHost) : undefined
-        await target?.request(
-          'notifications.recordMirrorPush',
-          { tokenDigests: tokenDigests.slice(0, NOTIFICATION_PUSH_COVERAGE_MAX_DIGESTS), subject },
-          PUSH_COVERAGE_TIMEOUT_MS
-        )
+  tell: (executionHost, report) => {
+    void report
+      .then(async (request) => {
+        const target = request.tokenDigests.length ? executionHostSocket(executionHost) : undefined
+        await target?.request('notifications.recordMirrorPush', request, PUSH_COVERAGE_TIMEOUT_MS)
       })
       .catch((error: unknown) => {
         // Unheard, the host may push its own copy too: a duplicate, never a lost alert.

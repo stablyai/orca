@@ -63,7 +63,9 @@ export const NotificationPushCoverageParams = z.object({
     .array(z.string().min(1).max(MOBILE_PUSH_TOKEN_DIGEST_MAX_CHARS))
     .max(NOTIFICATION_PUSH_COVERAGE_MAX_DIGESTS),
   /** The alert's burst-cooldown subject on the host: its attention key, else its workspace id. */
-  subject: z.string().min(1).max(4096)
+  subject: z.string().min(1).max(4096),
+  /** A mirror push report: how long ago the alert fired, so its slot ends with the alert's burst. */
+  ageMs: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional()
 })
 
 export type NotificationPushCoverageRequest = z.infer<typeof NotificationPushCoverageParams>

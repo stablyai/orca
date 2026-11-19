@@ -23,6 +23,8 @@ function hosts(
     hostUnreachable?: boolean
     hostResults?: PushSendResult[]
     mirrorResults?: PushSendResult[]
+    /** How long the mirror's gateway takes to answer. */
+    mirrorGatewayMs?: number
   } = {}
 ) {
   const host = createHarness({
@@ -54,13 +56,9 @@ function hosts(
         }
         return new Set(await host.dispatcher.coveredTokenDigests(request))
       },
-      tell: (_executionHost, subject, pushed) => {
-        void pushed.then((digests) =>
-          host.dispatcher.recordMirrorPush({
-            subject,
-            tokenDigests: digests.flatMap((digest) => digest ?? [])
-          })
-        )
+      tell: (_executionHost, report) => {
+        vi.setSystemTime(Date.now() + (options.mirrorGatewayMs ?? 0))
+        void report.then((request) => host.dispatcher.recordMirrorPush(request))
       }
     }
   })
@@ -135,4 +133,14 @@ it('pushes every phone when the host cannot answer', async () => {
   await h.mirrorSends()
   expect(h.sharedPhonePushes()).toEqual([0, 1])
   expect(h.mirrorOnlyPhonePushes()).toBe(1)
+})
+
+it('lets a late mirror report hold back only the burst of the alert it reports', async () => {
+  const h = hosts({ mirrorGatewayMs: 4_000 })
+  await h.hostSends({ desktopAllowed: false })
+  await h.mirrorSends()
+  vi.setSystemTime(NOW + 6_000)
+  await h.hostSends({ notificationId: 'agent:two', emittedAt: NOW + 6_000 })
+  await h.mirrorSends({ notificationId: 'agent:two', emittedAt: NOW + 6_000 })
+  expect(h.sharedPhonePushes()).toEqual([1, 1])
 })
