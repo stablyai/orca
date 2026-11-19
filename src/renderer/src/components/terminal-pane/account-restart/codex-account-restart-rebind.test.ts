@@ -3,7 +3,10 @@ import { useAppStore } from '@/store'
 import type { ConnectPanePtySession } from '../pty-connection/connect-pane-pty-session'
 import { installActivePanePtyBinding } from '../pty-connection/lifecycle/active-pane-pty-binding'
 import { captureCodexAccountRestartConnection } from './codex-account-restart-connection'
-import { prepareCodexAccountRestart } from './codex-account-restart-execution'
+import {
+  prepareCodexAccountRestart,
+  retryCodexAccountRestarts
+} from './codex-account-restart-execution'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { formatAccountRestartFailure } from '../../../../../shared/terminal/pty/lifecycle/account-restart-contract'
 import {
@@ -215,3 +218,87 @@ it.each(['matching', 'different owner', 'same ID successor', 'disconnected'] as 
     }
   }
 )
+
+it('does not publish attach success when account settlement rejects a mismatched incarnation', async () => {
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  vi.stubGlobal('window', {
+    api: {
+      runtime: {
+        call: vi.fn().mockResolvedValue(snapshot({ ptyId: 'old', incarnationId: 'inc-old' }))
+      }
+    }
+  })
+  seed()
+  useAppStore.getState().queuePaneAccountRestarts(['old'], 'codex')
+  const request = useAppStore.getState().claimCodexAccountRestart(key)
+  if (!request) {
+    throw new Error('restart was not accepted')
+  }
+  await prepareCodexAccountRestart(request)
+  const value = mountedSpawnSession(request, new Map(), async () => undefined, 'inc-successor')
+  value.transport.getPtyId = () => 'created'
+  const settled = vi.fn()
+  value.settlePaneAttachAttempt = settled
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture supplies the connection settlement ports under test.
+  const connection = captureCodexAccountRestartConnection(value as unknown as ConnectPanePtySession)
+  if (!connection) {
+    throw new Error('restart was not captured')
+  }
+  const options = { url: '', callbacks: {}, ...connection.options(() => true) }
+  connection.continue({ id: 'created', incarnationId: 'inc-created' })
+  connection.settle('created', 1, options, () => true)
+  expect(settled).not.toHaveBeenCalled()
+  expect(useAppStore.getState().pendingPaneAccountRestarts[key]).toMatchObject({
+    phase: 'unresolved',
+    resultPtyId: 'created'
+  })
+})
+
+it('keeps a disconnected committed result available until its exact owner reconnects', async () => {
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  const call = vi.fn().mockResolvedValue(snapshot({ ptyId: 'old', incarnationId: 'inc-old' }))
+  vi.stubGlobal('window', { api: { runtime: { call } } })
+  seed()
+  useAppStore.getState().queuePaneAccountRestarts(['old'], 'codex')
+  const request = useAppStore.getState().claimCodexAccountRestart(key)
+  if (!request) {
+    throw new Error('restart was not accepted')
+  }
+  await prepareCodexAccountRestart(request)
+  const value = mountedSpawnSession(request, new Map(), async () => undefined)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture supplies the captured connection ports exercised here.
+  const connection = captureCodexAccountRestartConnection(value as unknown as ConnectPanePtySession)
+  if (!connection) {
+    throw new Error('restart was not captured')
+  }
+  const options = { url: '', callbacks: {}, ...connection.options(() => true) }
+  options.onAccountRestartDispatch?.()
+  connection.continue({ id: 'created', incarnationId: 'inc-created' })
+  value.disposed = true
+  connection.settle(null, 1, options, () => false)
+  const answer = snapshot({ ptyId: 'created', incarnationId: 'inc-created' }, 1)
+  for (const connected of [false, true]) {
+    call.mockResolvedValue({
+      ...answer,
+      result: {
+        terminal: {
+          ...answer.result.terminal,
+          ptyId: 'created',
+          connected,
+          launchToken: request.attemptId
+        }
+      }
+    })
+    const current = useAppStore.getState().pendingPaneAccountRestarts[key]
+    if (typeof current !== 'object') {
+      throw new Error('committed result was lost')
+    }
+    await retryCodexAccountRestarts([current])
+    expect(useAppStore.getState().pendingPaneAccountRestarts[key]).toMatchObject({
+      phase: connected ? 'accepted' : 'unresolved',
+      resultPtyId: 'created',
+      resultIncarnationId: 'inc-created'
+    })
+  }
+  expect(useAppStore.getState().terminalLayoutsByTabId.tab.ptyIdsByLeafId?.[leaf]).toBe('old')
+})

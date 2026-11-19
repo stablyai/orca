@@ -238,3 +238,49 @@ it.each(['fresh', 'attach-only'] as const)(
     }
   }
 )
+
+it('rechecks the leaf after async verification before adopting an account result', async () => {
+  const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+  const hostCall = runtimeCall.getMockImplementation()
+  runtimeCall.mockImplementation((request: { method: string }) =>
+    request.method === 'terminal.resolvePane'
+      ? Promise.resolve({
+          ok: true,
+          result: { terminal: { handle: 'terminal-1', incarnationId: 'inc-1', connected: true } }
+        })
+      : hostCall?.(request)
+  )
+  const verification = Promise.withResolvers<boolean>()
+  const entered = Promise.withResolvers<void>()
+  let ownsLeaf = true
+  const spawned = vi.fn()
+  const transport = createRemoteRuntimePtyTransport('env-1', {
+    worktreeId: 'wt-1',
+    tabId: 'host-tab-1',
+    leafId: 'pane:1',
+    onPtySpawn: spawned
+  })
+  try {
+    const connecting = transport.connect({
+      url: '',
+      sessionId: 'remote:env-1@@terminal-1',
+      attachOnlyView: true,
+      isAccountRestartCurrent: () => true,
+      shouldContinue: () => ownsLeaf,
+      verifyAccountRestartResult: () => {
+        entered.resolve()
+        return verification.promise
+      },
+      callbacks: {}
+    })
+    await entered.promise
+    ownsLeaf = false
+    verification.resolve(true)
+    expect(await connecting).toBeUndefined()
+    expect(transport.getPtyId()).toBeNull()
+    expect(spawned).not.toHaveBeenCalled()
+  } finally {
+    verification.resolve(false)
+    transport.disconnect()
+  }
+})
