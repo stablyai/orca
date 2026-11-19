@@ -75,13 +75,18 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
             ? {
                 ...fresh,
                 session:
-                  newerLive.session !== liveAtStart?.session ? newerLive.session : fresh.session,
-                weekly: newerLive.weekly !== liveAtStart?.weekly ? newerLive.weekly : fresh.weekly,
+                  newerLive.session !== (liveAtStart?.session ?? null)
+                    ? newerLive.session
+                    : fresh.session,
+                weekly:
+                  newerLive.weekly !== (liveAtStart?.weekly ?? null)
+                    ? newerLive.weekly
+                    : fresh.weekly,
                 updatedAt: Math.max(fresh.updatedAt, newerLive.updatedAt),
                 usageMetadata: {
                   ...fresh.usageMetadata,
-                  ...(newerLive.session !== liveAtStart?.session ||
-                  newerLive.weekly !== liveAtStart?.weekly
+                  ...(newerLive.session !== (liveAtStart?.session ?? null) ||
+                  newerLive.weekly !== (liveAtStart?.weekly ?? null)
                     ? newerLive.usageMetadata
                     : {})
                 }

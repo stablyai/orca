@@ -45,6 +45,9 @@ if typeset -f codex >/dev/null 2>&1; then
     __orca_codex_user_definition="$(typeset -f codex)"
     eval "function __orca_codex_user {\${__orca_codex_user_definition#*{}"
     unset __orca_codex_user_definition
+    if [[ -n "\${BASH_VERSION:-}" ]] && declare -fx codex >/dev/null 2>&1; then
+      export -f __orca_codex_user
+    fi
   fi
   function codex {
     if [ -n "\${ORCA_CODEX_LAUNCH_ERROR:-}" ]; then printf '%s\\n' "\${ORCA_CODEX_LAUNCH_ERROR}" >&2; return 1; fi

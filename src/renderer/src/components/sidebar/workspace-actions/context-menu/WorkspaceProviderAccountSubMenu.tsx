@@ -158,7 +158,9 @@ export function WorkspaceProviderAccountSubMenu({
               entry.id === null
                 ? 'detail' in entry
                   ? entry.detail?.replaceAll('\n', ' \u00b7 ')
-                  : accounts.claude.systemDefaultEmail
+                  : runtimeTarget.runtime === 'host'
+                    ? accounts.claude.systemDefaultEmail
+                    : null
                 : null
             ]
               .filter(Boolean)

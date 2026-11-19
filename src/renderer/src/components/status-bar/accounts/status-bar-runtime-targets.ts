@@ -54,7 +54,7 @@ export type StatusSwitchGroupOptions = {
 }
 
 export function getCodexStatusWslKey(wslDistro: string | null | undefined): string {
-  const trimmed = wslDistro?.trim()
+  const trimmed = wslDistro?.trim().toLocaleLowerCase('en-US')
   return trimmed ? trimmed : '__default__'
 }
 

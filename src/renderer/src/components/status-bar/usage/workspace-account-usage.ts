@@ -27,7 +27,10 @@ export function workspaceAccountUsage(
   )
   const reading = (
     systemDefault
-      ? primary && !primary.usageMetadata?.readingAccount?.accountId
+      ? primary &&
+        !primary.usageMetadata?.readingAccount?.accountId &&
+        (primary.usageMetadata?.authProvenance === 'system' ||
+          !primary.usageMetadata?.authProvenance)
       : primary?.usageMetadata?.readingAccount?.accountId === accountId
   )
     ? primary

@@ -26,7 +26,7 @@ Accounts belong to the host running the workspace. A missing or incompatible ass
 
 When an older Claude profile still shares history through directory links, its first workspace-bound setup snapshots the history it could already see into independent private directories before removing those links. Existing transcripts and companion files remain available; later writes are no longer shared. Stop active Claude writers before migrating legacy shared profiles so a turn cannot append to the old store after its snapshot.
 
-Restarting a terminal uses the workspace's current compatible account binding, then the host default when the workspace inherits it. A conversation opened with an explicit History account choice retains that choice instead. Changing a binding while launch preparation is running refuses that launch and asks you to try again.
+Restarting a terminal uses the workspace's current compatible account binding, then the host default when the workspace inherits it. If an explicitly assigned account is incompatible with the launch runtime, restart fails and asks you to change the workspace binding; Orca does not fall back to another account. A conversation opened with an explicit History account choice retains that choice instead. Changing a binding while launch preparation is running refuses that launch and asks you to try again.
 
 ## Swap accounts
 

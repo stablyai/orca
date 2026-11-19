@@ -1,6 +1,9 @@
 import { expect, it } from 'vitest'
 import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
-import { resolveCodexStatusAccountState } from './status-bar-codex-accounts'
+import {
+  buildCodexStatusSwitchGroups,
+  resolveCodexStatusAccountState
+} from './status-bar-codex-accounts'
 import type { CodexRateLimitAccountsState } from '../../../../../shared/agent-accounts/managed-account-types'
 
 it('retains the live System default identity while local settings select a managed account', () => {
@@ -27,4 +30,28 @@ it('retains the live System default identity while local settings select a manag
   expect(
     resolveCodexStatusAccountState(settings, runtime, 'remote-owner').activeAccountId
   ).toBeNull()
+})
+
+it('keeps WSL accounts available when the distro name differs only by case', () => {
+  const groups = buildCodexStatusSwitchGroups(
+    {
+      accounts: [
+        {
+          id: 'wsl-account',
+          email: 'wsl@example.test',
+          managedHomeRuntime: 'wsl',
+          wslDistro: 'Ubuntu',
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeAccountId: 'wsl-account',
+      activeAccountIdsByRuntime: { host: null, wsl: { Ubuntu: 'wsl-account' } }
+    },
+    { runtime: 'wsl', wslDistro: 'ubuntu' }
+  )
+  expect(
+    groups.find((group) => group.key === 'wsl:ubuntu')?.targets.map((target) => target.id)
+  ).toContain('wsl-account')
 })

@@ -21,7 +21,9 @@ export abstract class CodexRuntimeHomeWorkspaceRouting extends CodexRuntimeHomeR
       )
     }
     if ((account.managedHomeRuntime === 'wsl') !== (target?.runtime === 'wsl')) {
-      return null
+      throw new Error(
+        'The workspace Codex account is incompatible with this runtime. Change the workspace account binding.'
+      )
     }
     return account
   }
