@@ -24,7 +24,7 @@ import { ROOT_PROJECT_GROUP_HEADER_BUCKET } from '@/components/sidebar/worktree-
 import { BotRow } from './BotRow'
 import { BotSidebarChats } from './BotSidebarChats'
 import { botListsUnderRow } from '../../../../shared/bots/bot-sidebar-tree'
-import { useBotChatTree } from './use-bot-chat-tree'
+import { useBotOwnChatTree } from './use-bot-chat-tree'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
 import { useBotHostOffline } from '@/lib/bot-host-views'
 import { useBotWorkspaceOrder } from './use-bot-workspace-order'
@@ -37,9 +37,9 @@ import type { ExecutionHostId } from '../../../../shared/execution-host/executio
 import { useBotsRevealSettle } from './bots-sidebar-reveal-context'
 
 // The bot row's status lane and gap, so a line's status glyph lands under the bot's avatar.
-export const BOT_WORKSPACE_LINE_INDENT = 18
+export const BOT_WORKSPACE_LINE_INDENT = 21
 // The new card style's wider lane; the line itself is always a Compact card.
-const BOT_WORKSPACE_LINE_INDENT_NEW_CARD_STYLE = 26
+const BOT_WORKSPACE_LINE_INDENT_NEW_CARD_STYLE = 29
 
 /** A bot's row with the workspaces its workers made, one Compact line each under the bot's avatar. */
 /** The Bots section's reorder, which measures each entry, workspaces included, by these attributes. */
@@ -197,7 +197,7 @@ function BotSidebarList({
   onOpen: () => void
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const chatTree = useBotChatTree(bot)
+  const chatTree = useBotOwnChatTree(bot)
   const entryKey = botSidebarEntryKey(bot)
   useEffect(() => {
     if (chatTree.state === 'ready') {

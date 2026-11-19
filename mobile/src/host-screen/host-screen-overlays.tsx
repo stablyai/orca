@@ -1,8 +1,6 @@
 import { useState } from 'react'
 import { openExternalLink } from '../platform/external-links/external-link'
 import { Pressable, Text, View } from 'react-native'
-import { Edit3, Moon, Pin, PinOff } from 'lucide-react-native'
-import { buildWorktreeNavigationActions } from '../agent-history/worktree-navigation-actions'
 import { workspaceRouteHref } from '../navigation/workspace-execution-host'
 import { useWorkspaceServer } from '../worktree/execution-hosts/workspace-server'
 import { ActionSheetContent } from '../components/sheets/ActionSheetModal'
@@ -12,7 +10,6 @@ import { ConfirmModal } from '../components/sheets/ConfirmModal'
 import { OrcaHookTrustDrawer } from '../components/hook-trust/OrcaHookTrustDrawer'
 import { NewWorktreeModalController } from '../new-workspace/creation/modal/NewWorktreeModalController'
 import { hostNewWorktreeSessionRoute } from '../host-new-worktree-session-route'
-import { isWorktreePinned } from '../worktree/workspace-list/workspace-list-sections'
 import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { hostScreenStyles as styles } from './host-screen-styles'
@@ -20,6 +17,8 @@ import { WorkspaceOptionsSheet } from './workspace-options/workspace-options-she
 import { HostNewBotSheet } from './host-new-bot-sheet'
 import { WorkspaceDetailsSheet } from './workspace-actions/workspace-details-sheet'
 import { WorkspaceRenameSheet } from './workspace-actions/workspace-rename-sheet'
+import { WorkspaceStatusSheet } from './workspace-actions/workspace-status-sheet'
+import { useWorkspaceRowMenuActions } from './workspace-actions/use-workspace-row-menu-actions'
 import type { HostScreenController } from './use-host-screen-controller'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
@@ -40,8 +39,10 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
   const actionTarget = state.actionTarget
   // Tied to the menu's row, so a menu closed elsewhere never reopens on the rename sheet.
   const [renameTarget, setRenameTarget] = useState<Worktree | null>(null)
+  const [statusTarget, setStatusTarget] = useState<Worktree | null>(null)
   const closeActionSheet = () => {
     setRenameTarget(null)
+    setStatusTarget(null)
     state.setConfirmDelete(null)
     state.setActionTarget(null)
   }
@@ -51,6 +52,13 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
     connState,
     desktopCapabilities: hostCapabilities,
     executionHost: actionTarget?.hostId
+  })
+  const rowMenuActions = useWorkspaceRowMenuActions({
+    controller,
+    row: actionTarget,
+    server: actionServer,
+    onRename: setRenameTarget,
+    onMoveToStatus: setStatusTarget
   })
 
   return (
@@ -131,72 +139,15 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
               blockedOffline={actions.workspaceRenameWrite.blockedOffline}
               onClose={closeActionSheet}
             />
+          ) : actionTarget && statusTarget === actionTarget ? (
+            <WorkspaceStatusSheet
+              row={actionTarget}
+              statuses={state.view.workspaceStatuses}
+              onPick={actions.setWorktreeStatus}
+              onClose={closeActionSheet}
+            />
           ) : (
-            <ActionSheetContent
-              actions={
-                actionTarget
-                  ? [
-                      ...buildWorktreeNavigationActions({
-                        hostId,
-                        worktreeId: actionTarget.worktreeId,
-                        worktreeName: actionTarget.displayName || actionTarget.repo,
-                        executionHost: actionServer.routeHost,
-                        hostCapabilities:
-                          actionServer.server?.gates.hostCapabilities ?? hostCapabilities,
-                        navigate: actions.navigateFromHostList,
-                        onDone: () => state.setActionTarget(null)
-                      }),
-                      {
-                        id: 'rename',
-                        label: t('hostScreen.hostScreenOverlays.rename', 'Rename'),
-                        icon: Edit3,
-                        onPress: () => setRenameTarget(actionTarget)
-                      },
-                      // Server sleep is not offered yet; the desktop would sleep its own id.
-                      ...(actionServer.server
-                        ? []
-                        : [
-                            {
-                              id: 'sleep',
-                              label: t('hostScreen.hostScreenOverlays.sleep', 'Sleep'),
-                              icon: Moon,
-                              onPress: () => {
-                                actions.putWorktreeToSleep(actionTarget)
-                                state.setActionTarget(null)
-                              }
-                            }
-                          ]),
-                      {
-                        id: 'togglePin',
-                        label: isWorktreePinned(actionTarget, state.pinnedIds)
-                          ? t('hostScreen.hostScreenOverlays.unpin', 'Unpin')
-                          : t('hostScreen.hostScreenOverlays.pin', 'Pin'),
-                        icon: isWorktreePinned(actionTarget, state.pinnedIds) ? PinOff : Pin,
-                        onPress: () => {
-                          actions.togglePin(actionTarget)
-                          state.setActionTarget(null)
-                        }
-                      },
-                      {
-                        id: 'delete',
-                        label: t('common.delete', 'Delete'),
-                        destructive: true,
-                        onPress: () => state.setConfirmDelete(actionTarget),
-                        // Like desktop, git can't remove a primary checkout; older hosts omit the flag.
-                        ...(actionTarget.isMainWorktree === true
-                          ? {
-                              disabled: true,
-                              hint: t(
-                                'hostScreen.hostScreenOverlays.primaryWorktreeDeleteHint',
-                                "Primary worktree — can't be deleted. Remove the project instead."
-                              )
-                            }
-                          : {})
-                      }
-                    ]
-                  : []
-              }
-            >
+            <ActionSheetContent actions={rowMenuActions}>
               {actionTarget ? (
                 <WorkspaceDetailsSheet
                   row={actionTarget}

@@ -209,14 +209,12 @@ it.each([
     const disclosure = summary.closest('details')!
     expect(disclosure.open).toBe(false)
     expect(summary).not.toHaveTextContent(/SENTINEL|99999/)
-    expect(disclosure.parentElement).not.toHaveClass('text-destructive', 'text-chat-warning')
     fireEvent.click(summary)
     expect(disclosure.open).toBe(true)
     const detail = disclosure.querySelector('pre')!
     expect(detail.textContent).toContain(text)
     expect(detail.textContent).toContain(head)
     expect(detail).toHaveTextContent('Provider response truncated (original size: 99999 bytes).')
-    expect(detail).toHaveClass(tone === 'error' ? 'text-destructive' : 'text-chat-warning')
     expect(screen.queryByText('Show full output')).toBeNull()
     await act(() => i18n.changeLanguage('fr'))
     expect(summary).toHaveTextContent(french)

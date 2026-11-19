@@ -61,7 +61,10 @@ export function NativeChatStructuredTranscript({
         view={continuation}
       >
         <NativeChatHostSetupContext.Provider value={setup}>
-          <NativeChatWorkerApprovalTimeline party={nativeChatWorkerApprovalParty(pane)}>
+          <NativeChatWorkerApprovalTimeline
+            party={nativeChatWorkerApprovalParty(pane)}
+            target={pane.target}
+          >
             {(timedRows) => (
               <NativeChatSubagentTranscripts
                 {...props}

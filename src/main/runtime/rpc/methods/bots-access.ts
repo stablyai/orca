@@ -7,6 +7,7 @@ import {
   redeemHostAccessRequest
 } from '../../../bots/bot-access-host'
 import { defineMethod } from '../core'
+import { ownerOnly } from './bots-caller-gates'
 
 // Requests to be let onto a bot's Who can ask list.
 export const BOT_ACCESS_METHODS = [
@@ -23,7 +24,9 @@ export const BOT_ACCESS_METHODS = [
     name: 'bots.access.decide',
     permission: 'workspace',
     params: BotAccessDecide,
-    handler: async (params, { runtime, pairedDeviceId }) => {
+    handler: async (params, context) => {
+      ownerOnly(context, 'Only your owner answers access requests, in Orca.')
+      const { runtime, pairedDeviceId } = context
       const result = await decideHostAccessRequest(
         accessHost(runtime),
         params,

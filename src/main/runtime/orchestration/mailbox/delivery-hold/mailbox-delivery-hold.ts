@@ -1,5 +1,7 @@
 import { orchestrationCheckRunFlag } from '../formatting/message-formatting'
 import type { OrchestrationCliCommand } from '../../workers/launch/orchestration-cli-command'
+import type { AgentSessionUsageLimitContinue } from '../../../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue-wire'
+import { formatUsageLimitResetClock } from '../../../../../shared/agent-session/failures/agent-session-usage-limit'
 
 /** Why mail to a worker is not delivered right now, read from the same gates that hold it, so a send
  *  receipt says only what is true at send time. Null means delivery would go ahead. */
@@ -31,11 +33,31 @@ export type MailboxDeliveryHold =
   | { kind: 'detached' }
   /** The chat refuses new messages for now. */
   | { kind: 'refused'; reason: string }
+  /** The chat's last turn failed; agent mail waits for its next turn. `usageLimit` is set when that
+   *  turn stopped at a usage limit, with Orca's automatic continue as the host publishes it. */
+  | { kind: 'failed-turn'; usageLimit?: UsageLimitHold }
+
+/** A usage-limited chat's automatic continue; `state: 'none'` when Orca has none to promise.
+ *  `off` names why: the setting, a sleeping workspace (which continues once it wakes), or neither. */
+export type UsageLimitHold =
+  | (Pick<AgentSessionUsageLimitContinue, 'state' | 'resetsAt' | 'continueAt'> & {
+      off?: UsageLimitContinueOff
+    })
+  | { state: 'none' }
+
+export type UsageLimitContinueOff = 'setting' | 'asleep' | 'other'
 
 /** What a chat's mail admission would do with a message now; null when the chat cannot be read. */
 export type ChatMailAdmitFacts =
   | { attached: false }
-  | { attached: true; fenced: boolean; refusal: string | null; behindPrompt: boolean }
+  | {
+      attached: true
+      fenced: boolean
+      refusal: string | null
+      behindPrompt: boolean
+      /** Agent mail is held behind the chat's failed last turn (see `failed-turn`). */
+      failedTurn?: { usageLimit?: UsageLimitHold }
+    }
 
 export type MailboxDeliveryHoldReaders = {
   /** The chat a mailbox's mail reaches, if a chat holds it. */
@@ -54,7 +76,10 @@ export function chatMailHold(facts: ChatMailAdmitFacts): MailboxDeliveryHold | n
   if (facts.refusal) {
     return { kind: 'refused', reason: facts.refusal }
   }
-  return facts.behindPrompt ? { kind: 'behind-prompt' } : null
+  if (facts.behindPrompt) {
+    return { kind: 'behind-prompt' }
+  }
+  return facts.failedTurn ? { kind: 'failed-turn', ...facts.failedTurn } : null
 }
 
 export async function readMailboxDeliveryHold(
@@ -104,6 +129,8 @@ export function describeMailboxDeliveryHold(
       return `Queued. ${recipient}'s chat is not attached to its agent; delivery waits until it is.`
     case 'refused':
       return `Queued. ${recipient}'s chat refuses new messages for now (${hold.reason}); delivery is retried when that changes.`
+    case 'failed-turn':
+      return describeFailedTurnHold(recipient, hold.usageLimit)
   }
 }
 
@@ -113,4 +140,29 @@ function mailboxOwnerRole(mailbox: string): string {
     : mailbox.startsWith('dispatch:')
       ? `its Task's mail (${mailbox})`
       : 'only its own mail'
+}
+
+function describeFailedTurnHold(recipient: string, limit: UsageLimitHold | undefined): string {
+  if (!limit) {
+    return `Queued. ${recipient}'s last turn failed; delivery waits until a person continues the chat.`
+  }
+  if (limit.state === 'scheduled') {
+    const at = formatUsageLimitResetClock(limit.continueAt ?? limit.resetsAt)
+    return `Queued. ${recipient} stopped at its usage limit; Orca continues it at ${at}, then delivers this.`
+  }
+  if (limit.state === 'none') {
+    return `Queued. ${recipient} stopped at its usage limit and Orca has no reset time to promise; delivery waits until the chat continues.`
+  }
+  if (limit.state === 'off' && limit.off === 'asleep') {
+    return `Queued. ${recipient} stopped at its usage limit while its workspace sleeps; Orca can continue it once the workspace wakes, then delivers this.`
+  }
+  if (limit.state === 'off' && limit.off !== 'setting') {
+    return `Queued. ${recipient} stopped at its usage limit and Orca has not scheduled a continue for it; delivery waits until the chat continues.`
+  }
+  const why = {
+    off: 'automatic continue is off in Settings',
+    cancelled: 'automatic continue was cancelled for this chat',
+    failed: 'automatic continue gave up on this chat'
+  }[limit.state]
+  return `Queued. ${recipient} stopped at its usage limit and Orca will not continue it on its own (${why}); delivery waits until a person continues the chat.`
 }

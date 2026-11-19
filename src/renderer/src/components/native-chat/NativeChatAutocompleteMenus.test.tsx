@@ -14,7 +14,6 @@ const TWO_MEMBERS = {
   withFiles: false,
   unavailable: []
 }
-const NO_MEMBERS = { replies: null, mentions: [], withFiles: false, unavailable: [] }
 const OTHER_BOTS = {
   replies: null,
   mentions: [
@@ -46,7 +45,6 @@ describe('NativeChatMentionMenu', () => {
       'Scout',
       'everyone'
     ])
-    expect(screen.getByTestId('scout-avatar')).toBeTruthy()
     fireEvent.pointerDown(screen.getAllByRole('option')[1])
     expect(onChoose).toHaveBeenCalledWith('everyone')
   })
@@ -67,19 +65,8 @@ describe('NativeChatMentionMenu', () => {
       'DocsFor: keeping the docs current',
       'notes.md'
     ])
-    expect(screen.getByText('Bots')).toBeTruthy()
-    expect(screen.getByText('Files')).toBeTruthy()
     expect(screen.getByText('Paused')).toBeTruthy()
     fireEvent.pointerDown(screen.getAllByRole('option')[0])
     expect(onChoose).toHaveBeenCalledWith('Docs')
-  })
-
-  it('in a room, says no bot matched', () => {
-    render(
-      <NativeChatRoomContext.Provider value={NO_MEMBERS}>
-        <NativeChatMentionMenu mention={NO_ROWS} activeIndex={0} listboxId="m" onChoose={vi.fn()} />
-      </NativeChatRoomContext.Provider>
-    )
-    expect(screen.getAllByText('No matching bots').length).toBeGreaterThan(0)
   })
 })

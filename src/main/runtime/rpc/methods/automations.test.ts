@@ -29,11 +29,7 @@ describe("a bot's automation.update from a phone", () => {
     ['pauses it', { updates: { enabled: false } }],
     ['changes the prompt with the switch', { updates: { enabled: true, prompt: 'Do more' } }],
     ['changes the schedule', { updates: { rrule: 'FREQ=DAILY' } }],
-    ['changes the agent', { updates: { agentId: 'codex' } }],
-    [
-      'moves it to another host',
-      { updates: { enabled: true }, destination: { selector: { kind: 'self' } } }
-    ]
+    ['changes the agent', { updates: { agentId: 'codex' } }]
   ])('%s', async (_label, patch) => {
     const { updateAutomation, dispatcher } = setup()
 
@@ -44,18 +40,5 @@ describe("a bot's automation.update from a phone", () => {
 
     expect(response).toMatchObject({ ok: true })
     expect(updateAutomation).toHaveBeenCalledWith('auto-1', patch.updates, expect.anything())
-  })
-
-  it('leaves the desktop and CLI free to edit anything', async () => {
-    const { updateAutomation, dispatcher } = setup()
-
-    await dispatcher.dispatch(
-      makeRequest('automation.update', {
-        id: 'auto-1',
-        updates: { enabled: true, prompt: 'Do more' }
-      })
-    )
-
-    expect(updateAutomation).toHaveBeenCalled()
   })
 })

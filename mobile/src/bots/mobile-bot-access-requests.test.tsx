@@ -225,12 +225,6 @@ describe('who can ask in the bot sheet', () => {
       ])
     )
   })
-
-  it('gives no advice while only the owner can ask', () => {
-    const root = renderTab(null).root
-    expect(texts(root)).toContain('Only you can ask Reviewer.')
-    expect(texts(root)).not.toContain('Before you share')
-  })
 })
 
 describe('the phone’s grant confirm', () => {

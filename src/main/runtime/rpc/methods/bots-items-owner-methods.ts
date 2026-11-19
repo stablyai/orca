@@ -46,7 +46,9 @@ const LIST = defineMethod({
     ownerActor(context)
     const { botItems } = context.runtime
     const store = botItems.store()
-    const chat = params.chatId !== undefined ? { chatId: params.chatId } : {}
+    // An older client names one chat; a group's panel names its rooms' member sessions.
+    const chatIds = params.chatIds ?? (params.chatId !== undefined ? [params.chatId] : undefined)
+    const chat = chatIds ? { chatIds } : {}
     // Every open item, however many, then closed ones a page at a time.
     const open: BotItemRecord[] = []
     let cursor: { at: number; number: number } | undefined
@@ -152,9 +154,19 @@ const COMMENT = defineMethod({
       params.text,
       params.images ?? []
     )
-    const outcome = await store.ownerComment(item.uid, params.text, actor, images)
+    const outcome = await store.ownerComment(
+      item.uid,
+      params.text,
+      actor,
+      images,
+      undefined,
+      params.requestId
+    )
     botItems.changed([item.ownerBotId])
-    await botItems.sendOwedMail()
+    // The comment is stored and its mail owed: the reply never waits on the chat taking it.
+    void botItems
+      .sendOwedMail()
+      .catch((error: unknown) => console.warn('[bots] items: mailing a comment failed', error))
     return { eventId: outcome.eventId === null ? null : botItemEventId(outcome.eventId) }
   }
 })

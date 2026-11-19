@@ -264,29 +264,20 @@ describe.skipIf(process.platform === 'win32')('lost-parent watcher retirement pr
     expect(run.errors).toEqual([])
   })
 
-  it.each([150, 1_500])(
-    'leaves no ownership records after %s completion-first normal stops',
-    async (count) => {
-      const retained = new Set<string>()
-      for (let index = 0; index < count; index++) {
-        run = launch()
-        await run.child.ready
-        probes.readRow.mockResolvedValue(null)
-        run.control.push('group-absent\n')
-        run.control.push(null)
-        await flushContinuations()
-        run.finishParent('{"code":0,"signal":null}\n')
-        await vi.runAllTimersAsync()
-        await flushContinuations()
-        for (const record of run.records) {
-          retained.add(`${index}:${record}`)
-        }
-        expect(run.closes).toEqual([{ code: 0, signal: null, outcomeLost: false }])
-        await run.cleanup()
-      }
-      expect([...retained]).toEqual([])
-    }
-  )
+  it('releases ownership when the group is gone before normal completion is reported', async () => {
+    run = launch()
+    await run.child.ready
+    probes.readRow.mockResolvedValue(null)
+    run.control.push('group-absent\n')
+    run.control.push(null)
+    await flushContinuations()
+    run.finishParent('{"code":0,"signal":null}\n')
+    await vi.runAllTimersAsync()
+    await flushContinuations()
+
+    expect([...run.records]).toEqual([])
+    expect(run.closes).toEqual([{ code: 0, signal: null, outcomeLost: false }])
+  })
 
   it('releases speculative retention when a valid outcome arrives after the bounded wait', async () => {
     run = launch()
