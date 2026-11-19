@@ -224,10 +224,10 @@ describe('the Chats tab', () => {
     expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
   })
 
-  it('sends an older host to Activity, where its work still shows', () => {
+  it('sends an older host to Home, where its work still shows', () => {
     showTree({ state: 'unsupported' })
     renderPanel()
-    fireEvent.click(screen.getByRole('button', { name: 'See its work in Items' }))
+    fireEvent.click(screen.getByRole('button', { name: 'See its work in Home' }))
     expect(useAppStore.getState().rightSidebarTab).toBe('bot-activity')
   })
 })

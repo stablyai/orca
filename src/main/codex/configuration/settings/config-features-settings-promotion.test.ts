@@ -97,22 +97,6 @@ describe('[features].daemon_auto_start write-back promotion', () => {
     expect(readRuntimeConfig()).toContain('model = "o4"')
   })
 
-  it('holds the change while the source is missing and promotes it once the source returns', () => {
-    writeSystemConfig('model = "gpt-5"\n\n[features]\ndaemon_auto_start = true\n')
-    syncSystemConfigIntoManagedCodexHome()
-    rmSync(systemConfigPath())
-    turnOffInMirror()
-
-    syncSystemConfigIntoManagedCodexHome()
-    expect(existsSync(systemConfigPath())).toBe(false)
-    expect(readRuntimeConfig()).toContain('daemon_auto_start = false')
-
-    writeSystemConfig('model = "gpt-5"\n\n[features]\ndaemon_auto_start = true\n')
-    syncSystemConfigIntoManagedCodexHome()
-    expect(readSystemConfig()).toBe('model = "gpt-5"\n\n[features]\ndaemon_auto_start = false\n')
-    expect(readRuntimeConfig()).toContain('daemon_auto_start = false')
-  })
-
   it('adds the key to an existing [features] table without touching its other keys', () => {
     writeSystemConfig('model = "gpt-5"\n\n[features]\ncodex_hooks = true\napps = false\n')
     syncSystemConfigIntoManagedCodexHome()

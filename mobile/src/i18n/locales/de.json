@@ -620,10 +620,6 @@
       "imageTooLarge": "Bild zum Anhängen zu groß",
       "permissionDenied": "Zugriff auf Fotos verweigert"
     },
-    "agentMessage": {
-      "handedOffToAgent": "An Agenten übergeben",
-      "startedAgent": "Agent gestartet"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "Die Antwort zum Anhang ist nicht lesbar. Erneut versuchen.",
       "incompleteReply": "Der Anhang wurde geändert oder die Antwort war unvollständig. Schließen und erneut versuchen.",

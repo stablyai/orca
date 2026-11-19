@@ -82,7 +82,7 @@ function ChatsReadNote({
     <p className={NOTE}>
       {t('bots.chats.unsupported', "This bot's computer runs an older Orca that can't list chats.")}{' '}
       <Button variant="link" size="inlineText" onClick={() => setRightSidebarTab('bot-activity')}>
-        {t('bots.chats.seeItems', 'See its work in Items')}
+        {t('bots.chats.seeItems', 'See its work in Home')}
       </Button>
     </p>
   )

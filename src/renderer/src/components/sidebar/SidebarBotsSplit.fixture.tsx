@@ -11,6 +11,8 @@ import {
 import { ConfirmationDialogProvider } from '../dismiss/confirmation/confirmation-dialog'
 import { SidebarBotsSection } from '../bots/SidebarBotsSection'
 import { SidebarBotsSplit, SidebarProjectsListSlot } from './SidebarBotsSplit'
+import { SidebarContentViewport } from './SidebarContentViewport'
+import SidebarHeader from './chrome/SidebarHeader'
 import { BOTS_GROUP_KEY } from '../../../../shared/sidebar-list/sections/group-keys'
 
 function bot(id: string, name: string, mascot: BotMascotId, sidebarOrder: number): Bot {
@@ -58,6 +60,26 @@ function ProjectsStandIn(): React.JSX.Element {
   )
 }
 
+// The sidebar's own viewport and Projects header, so the seam's spacing and reach match the app.
+function SidebarFrame(): React.JSX.Element {
+  return (
+    <div
+      className="flex flex-col bg-worktree-sidebar text-worktree-sidebar-foreground"
+      style={{ height: 520 }}
+    >
+      <SidebarContentViewport>
+        <SidebarBotsSplit>
+          <SidebarBotsSection onOpenBot={() => {}} />
+        </SidebarBotsSplit>
+        <SidebarHeader collapsible onWorkspaceBoardMenuOpenChange={() => {}} />
+        <SidebarProjectsListSlot botsShown>
+          <ProjectsStandIn />
+        </SidebarProjectsListSlot>
+      </SidebarContentViewport>
+    </div>
+  )
+}
+
 function splitAt(sidebarBotsHeight: number | null, { folded = false } = {}) {
   return defineFixture({
     width: 300,
@@ -78,18 +100,7 @@ function splitAt(sidebarBotsHeight: number | null, { folded = false } = {}) {
     setup: () => stubBots(BOTS),
     render: () => (
       <ConfirmationDialogProvider>
-        <div
-          className="flex flex-col bg-worktree-sidebar text-worktree-sidebar-foreground"
-          style={{ height: 520 }}
-        >
-          <SidebarBotsSplit>
-            <SidebarBotsSection onOpenBot={() => {}} />
-          </SidebarBotsSplit>
-          <div className="px-4 py-2 text-xs text-muted-foreground">Projects</div>
-          <SidebarProjectsListSlot botsShown>
-            <ProjectsStandIn />
-          </SidebarProjectsListSlot>
-        </div>
+        <SidebarFrame />
       </ConfirmationDialogProvider>
     )
   })
@@ -144,18 +155,7 @@ export const overflowWithWorkspaces = defineFixture({
   setup: () => stubBots(MANY_BOTS),
   render: () => (
     <ConfirmationDialogProvider>
-      <div
-        className="flex flex-col bg-worktree-sidebar text-worktree-sidebar-foreground"
-        style={{ height: 520 }}
-      >
-        <SidebarBotsSplit>
-          <SidebarBotsSection onOpenBot={() => {}} />
-        </SidebarBotsSplit>
-        <div className="px-4 py-2 text-xs text-muted-foreground">Projects</div>
-        <SidebarProjectsListSlot botsShown>
-          <ProjectsStandIn />
-        </SidebarProjectsListSlot>
-      </div>
+      <SidebarFrame />
     </ConfirmationDialogProvider>
   )
 })
