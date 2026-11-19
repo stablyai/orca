@@ -306,6 +306,8 @@ Pair with your desktop app to monitor and steer your agents from your phone.
 
 Want to contribute or run locally? See our [CONTRIBUTING.md](.github/CONTRIBUTING.md) guide.
 
+For isolated mobile-rendering experiments, see [experimental browser raster rendering](docs/agents-md-refs/experimental-browser-raster.md).
+
 <a href="https://github.com/stablyai/orca/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=stablyai/orca&max=500&columns=30" alt="Orca contributors" />
 </a>
