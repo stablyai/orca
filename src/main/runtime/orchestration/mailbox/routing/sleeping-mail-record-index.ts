@@ -47,6 +47,7 @@ function invocation(record: SleepingAgentSessionRecord | undefined): string | nu
 export class SleepingMailRecordIndex {
   readonly records = new Map<string, SleepingAgentSessionRecord>()
   private readonly hosts = new Map<string, Map<string, SleepingAgentSessionRecord>>()
+  private readonly inputs = new Map<string, Readonly<Record<string, SleepingAgentSessionRecord>>>()
 
   affectedHosts(host: string | null, current: readonly string[]): Iterable<string> {
     return host === null ? new Set([...current, ...this.hosts.keys()]) : [host]
@@ -57,6 +58,11 @@ export class SleepingMailRecordIndex {
     records: Readonly<Record<string, SleepingAgentSessionRecord>>,
     changed: (pane: string) => void
   ): Set<string> {
+    // Session writes that left this host's records untouched keep the same map.
+    if (this.inputs.get(host) === records) {
+      return new Set()
+    }
+    this.inputs.set(host, records)
     const previous = this.hosts.get(host) ?? new Map<string, SleepingAgentSessionRecord>()
     const next = new Map(Object.values(records).map((record) => [record.paneKey, record]))
     const maintained = new Set<string>()

@@ -1,4 +1,5 @@
 import type { OrchestrationDb } from '../../db/orchestration-db'
+import type { SleptMailboxWake } from './slept-mailbox-wake'
 import {
   RUN_PANE_KEY_MATCH_SUFFIX_SQL,
   DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL,
@@ -74,4 +75,49 @@ export function sleepingMailOwnerMailboxes(
     }
   }
   return found
+}
+
+/** Re-derives tracked mailboxes and every given sleeping pane's owned inboxes from current rows. */
+export function reconcileSleepingMail(
+  wake: SleptMailboxWake,
+  db: OrchestrationDb,
+  panes: Iterable<string>
+): void {
+  const mailboxes = new Set(wake.trackedMailboxes())
+  const visited = new Set(mailboxes)
+  for (const pane of panes) {
+    for (const mailbox of wake.hasObligation(pane)
+      ? sleepingMailOwnerMailboxes(db, pane, visited)
+      : []) {
+      mailboxes.add(mailbox)
+    }
+  }
+  for (const mailbox of mailboxes) {
+    wake.refresh(mailbox)
+  }
+}
+
+/** Refreshes only the named mailboxes and panes; returns every pane whose obligation may have moved. */
+export function refreshSleepingMailScope(
+  wake: SleptMailboxWake,
+  db: OrchestrationDb,
+  mailboxes: Iterable<string>,
+  panes: Iterable<string>
+): Set<string> {
+  const affected = new Set(panes)
+  const named = new Set(mailboxes)
+  for (const pane of affected) {
+    for (const mailbox of [
+      ...wake.mailboxesForPane(pane),
+      ...(wake.hasObligation(pane) ? sleepingMailOwnerMailboxes(db, pane) : [])
+    ]) {
+      named.add(mailbox)
+    }
+  }
+  for (const mailbox of named) {
+    for (const pane of wake.refresh(mailbox)) {
+      affected.add(pane)
+    }
+  }
+  return affected
 }
