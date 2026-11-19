@@ -136,3 +136,27 @@ it('keeps the note hidden during a background scan, while the strip still shows 
 
   await act(async () => background.resolve())
 })
+
+it('says the history refreshed only when the list shows and the note clears', async () => {
+  const scan = deferred()
+  listSessions.mockReturnValueOnce(scan.promise)
+  renderPanel()
+  await screen.findByText(NOTE)
+  await act(async () => pushProgress({ scanKey: lastScanKey, progress: activeScan() }))
+  expect(await screen.findByText(/Loading sessions/)).not.toBeNull()
+
+  // The scan reports done while its list is still on the way.
+  await act(async () =>
+    pushProgress({
+      scanKey: lastScanKey,
+      progress: { ...activeScan(), stage: 'finished', settledAt: 1_700_000_005_000 }
+    })
+  )
+  expect(screen.getByText(NOTE)).not.toBeNull()
+  expect(screen.queryByText('History refreshed')).toBeNull()
+  expect(screen.getByText(/Loading sessions/)).not.toBeNull()
+
+  await act(async () => scan.resolve())
+  await waitFor(() => expect(screen.queryByText(NOTE)).toBeNull())
+  expect(screen.getByText('History refreshed')).not.toBeNull()
+})

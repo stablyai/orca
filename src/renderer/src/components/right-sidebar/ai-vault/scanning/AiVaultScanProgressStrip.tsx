@@ -203,16 +203,31 @@ function AgentRow({
 
 /** One line under the search box naming what this computer's scan is doing; opens to one row per agent. */
 export function AiVaultScanProgressStrip({
-  progress,
-  agents = progress.agents,
-  active = progress.settledAt === null
+  progress: reported,
+  agents = reported.agents,
+  active: reportedActive = reported.settledAt === null,
+  listPending = false
 }: {
   progress: AiVaultScanProgress
   agents?: AiVaultScanAgentProgress[]
   active?: boolean
+  /** The panel's own load is still waiting to show its list. */
+  listPending?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const [open, setOpen] = useState(false)
+  const [watchedScanId, setWatchedScanId] = useState<string | null>(null)
+  if (reportedActive && reported.scanId !== watchedScanId) {
+    setWatchedScanId(reported.scanId)
+  }
+  // Why: a scan seen running can finish before its list is shown; stay loading so the strip, note and list change together.
+  const held =
+    listPending &&
+    !reportedActive &&
+    reported.stage === 'finished' &&
+    reported.scanId === watchedScanId
+  const progress: AiVaultScanProgress = held ? { ...reported, stage: 'finding' } : reported
+  const active = reportedActive || held
   const finished = progress.stage === 'finished'
   const now = useNow(active ? 1_000 : 30_000, active || finished)
   const elapsedAt = active ? now : progress.settledAt
