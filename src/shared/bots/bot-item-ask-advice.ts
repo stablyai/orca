@@ -45,8 +45,6 @@ const ORDER: readonly BotItemAskAdviceCode[] = [
 // "Pick one:", "A/B/C", "(recommended)".
 const PROSE_CHOICES = [
   /\b(?:reply|answer|say)\s+(?:with\s+)?(?:e\.g\.\s*)?[*"“'`]/i,
-  // Capital letters only, so "reply with a summary" is not a choice.
-  /\b(?:[Rr]eply|[Aa]nswer|[Ss]ay)\s+(?:with\s+)?[A-D1-4](?=[\s,.;]|$)/,
   /\b(?:pick(?: one)?|choose|options?)\s*:/i,
   /\(\s*[a-dA-D1-4]\s*\)\s/,
   /(?:^|\s)[A-D]\)\s/m,
@@ -64,11 +62,47 @@ const FUSED = /[a-z]{12}[A-Z0-9]|[a-z]{22}/
 const PIECE_SPLIT = /[/+,;:()[\]{}<>"'“”‘’|=*]+/
 const END_MARKS = /^[.!?…-]+|[.!?…-]+$/g
 
-/** A word without its Markdown link target, or nothing for a URL. Linear in the word. */
+// "Reply A or B" in any case; the letter must be a capital or a digit, so "reply with a summary" is
+// not option A.
+const REPLY_WITH = /\b(?:reply|answer|say)\s+(?:with\s+)?([a-d1-4])(?=[\s,.;]|$)/gi
+
+function repliesWithOption(words: string): boolean {
+  for (const match of words.matchAll(REPLY_WITH)) {
+    if (match[1] !== match[1]!.toLowerCase() || /\d/.test(match[1]!)) {
+      return true
+    }
+  }
+  return false
+}
+
+const URL_END = new Set(['.', ',', ';', ':', '!', '?', ')'])
+
+/** A word as a reader sees it: a Markdown link without its target, a URL as only the punctuation
+ *  after it. Linear in the word. */
 function shownWord(word: string): string {
-  const target = word.indexOf('](')
-  const shown = target === -1 ? word : word.slice(0, target + 1)
-  return shown.includes('://') ? ' ' : shown
+  let shown = ''
+  let at = 0
+  for (;;) {
+    const open = word.indexOf('](', at)
+    if (open === -1) {
+      shown += word.slice(at)
+      break
+    }
+    shown += word.slice(at, open + 1)
+    const close = word.indexOf(')', open + 2)
+    if (close === -1) {
+      break
+    }
+    at = close + 1
+  }
+  if (!shown.includes('://')) {
+    return shown
+  }
+  let end = shown.length
+  while (end > 0 && URL_END.has(shown[end - 1]!)) {
+    end -= 1
+  }
+  return ` ${shown.slice(end)}`
 }
 
 /** The words a reader sees: no code, link targets or URLs. Every pass is linear in the text. */
@@ -165,7 +199,7 @@ export function botItemAskAdvice({
   } else {
     const text = comment ?? ''
     words = prose(text)
-    if (PROSE_CHOICES.some((pattern) => pattern.test(words))) {
+    if (PROSE_CHOICES.some((pattern) => pattern.test(words)) || repliesWithOption(words)) {
       found.add('prose_choices')
     }
     if (!words.includes('?')) {

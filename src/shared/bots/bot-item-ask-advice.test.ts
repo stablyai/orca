@@ -89,6 +89,19 @@ describe('botItemAskAdvice', () => {
     expect(codes({ comment: 'Should I go ahead? Reply with A or B.' })).toEqual(['prose_choices'])
   })
 
+  it('reads "reply A" in any case, still never "reply a"', () => {
+    expect(codes({ comment: 'Which one? REPLY A or B.' })).toEqual(['prose_choices'])
+    expect(codes({ comment: 'Which one? reply 2.' })).toEqual(['prose_choices'])
+    expect(botItemAskAdvice({ comment: 'Should I REPLY WITH a summary?' })).toBeNull()
+  })
+
+  it('keeps what follows a link or a URL in the same word', () => {
+    expect(botItemAskAdvice({ comment: 'Is [fix](x)?' })).toBeNull()
+    expect(botItemAskAdvice({ comment: 'Is it at https://x.dev/a?b=1?' })).toBeNull()
+    expect(codes({ comment: 'Is [fix](x)ctx_e24f9ab3c1d2 ok?' })).toEqual(['jargon'])
+    expect(codes({ comment: 'Are [a](x),[b](y)/363e3235aa01 ok?' })).toEqual(['jargon'])
+  })
+
   it('skips ids inside parent-relative, Windows and wrapped paths', () => {
     for (const comment of [
       'Is ../runs/ctx_e24f9ab3c1d2/notes.md right?',
