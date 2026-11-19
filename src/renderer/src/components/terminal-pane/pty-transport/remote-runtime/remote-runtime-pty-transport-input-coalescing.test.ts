@@ -206,4 +206,36 @@ describe('createRemoteRuntimePtyTransport', () => {
       vi.useRealTimers()
     }
   })
+
+  it('drops a denied typing prefix from an acknowledged query reply', async () => {
+    vi.useFakeTimers()
+    let transport: PtyTransport | undefined
+    try {
+      let allowed = true
+      const hostCall = runtimeCall.getMockImplementation()
+      runtimeCall.mockImplementation((request: { method: string }) =>
+        request.method === 'terminal.send'
+          ? Promise.resolve({ ok: true, result: { send: { accepted: true } } })
+          : hostCall?.(request)
+      )
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId: 'pane:1',
+        canSendInput: (_id, kind) => kind === 'query-reply' || allowed
+      })
+      await transport.connect({ url: '', callbacks: {} })
+      transport.sendInput('denied-prefix', 'driving')
+      allowed = false
+      expect(await transport.sendInputAccepted?.('\x1b[?1;2c', 'query-reply')).toBe(true)
+      const sent = runtimeCall.mock.calls
+        .filter(([request]) => request.method === 'terminal.send')
+        .map(([request]) => request.params.text)
+      expect(sent).toEqual(['\x1b[?1;2c'])
+    } finally {
+      transport?.destroy?.()
+      vi.useRealTimers()
+    }
+  })
 })
