@@ -1,7 +1,6 @@
 import type { RuntimeEnvironmentStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import type { RuntimeHostConnectionState } from '../../../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
-import { readRecordChanges } from '@/store/record-transitions/keyed-record-change-reads'
 import { createPairedRuntimeParkingEnvironmentIdsSelector } from '@/components/terminal-pane/parking/retention/paired-runtime-parking-capabilities'
 
 type RuntimeStatusState = {
@@ -55,20 +54,16 @@ export function createRuntimeStatusSubscriptions(store: RuntimeStatusStore) {
       for (const listener of statusesListeners) {
         pending.push({ listeners: statusesListeners, listener })
       }
-      // One host's verification attempt visits only that host; a full resync visits every subscriber.
-      const changes = previous ? readRecordChanges(statuses, previous) : null
-      const changedIds = changes?.kind === 'addressed' ? changes.keys : null
-      for (const environmentId of changedIds ?? entryListeners.keys()) {
-        const listeners = entryListeners.get(environmentId)
-        if (listeners && statuses.get(environmentId) !== previous?.get(environmentId)) {
+      // Each host's subscribers compare that host's entry, so one host's write never wakes another's readers.
+      for (const [environmentId, listeners] of entryListeners) {
+        if (statuses.get(environmentId) !== previous?.get(environmentId)) {
           for (const listener of listeners) {
             pending.push({ listeners, listener })
           }
         }
       }
-      for (const environmentId of changedIds ?? connections.keys()) {
-        const subscription = connections.get(environmentId)
-        if (!subscription || statuses.get(environmentId) === previous?.get(environmentId)) {
+      for (const [environmentId, subscription] of connections) {
+        if (statuses.get(environmentId) === previous?.get(environmentId)) {
           continue
         }
         const snapshot = runtimeHostConnectionStateForEntry(statuses.get(environmentId))
