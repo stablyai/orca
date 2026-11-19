@@ -3,14 +3,14 @@ import { useCallback, useSyncExternalStore } from 'react'
 
 // Items groups: the stored flag says the owner flipped the group's default.
 export type BotPanelFoldId =
-  | 'suggestions'
   | 'automations'
+  | 'suggestions'
   | 'items-needs_you'
   | 'items-working'
   | 'items-planned'
   | 'items-snoozed'
   | 'items-stale'
-  | 'items-closed-folded'
+  | 'items-closed'
 
 const FOLDS_KEY = 'orca.bots.panelFolds'
 
