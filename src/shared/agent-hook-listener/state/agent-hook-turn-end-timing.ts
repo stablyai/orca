@@ -109,6 +109,7 @@ export function reduceHostTurnEnd(
       record = { ...record, currentTurnKey: `turn:${event.nativeTurnKey}` }
     } else if (
       isNewTurnEvent(source, event.hookEventName) &&
+      !(source === 'codex' && event.hookEventName === 'SessionStart' && !event.hasExplicitPrompt) &&
       event.payload.sessionBoundary !== true
     ) {
       record = { ...record, currentTurnKey: `opened:${at}` }

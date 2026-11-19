@@ -1,6 +1,25 @@
 import type { KeyedJsonRow } from './keyed-json-row-cache'
 
 export type StoredRow = { seq: number; json: string }
+
+/** Rows read with BLOB keys, in seq order; malformed rows are skipped. */
+export function foldStoredRows(rows: readonly Record<string, unknown>[]): {
+  stored: Map<string, StoredRow>
+  maxSeq: number
+} {
+  const stored = new Map<string, StoredRow>()
+  let maxSeq = 0
+  for (const row of rows) {
+    const { seq, value } = row
+    const key = row.key instanceof Uint8Array ? Buffer.from(row.key).toString('utf8') : row.key
+    if (typeof key === 'string' && typeof seq === 'number' && typeof value === 'string') {
+      stored.set(key, { seq, json: value })
+      maxSeq = Math.max(maxSeq, seq)
+    }
+  }
+  return { stored, maxSeq }
+}
+
 type RowWritePlan = {
   changes: Map<string, StoredRow | null>
   maxSeq: number

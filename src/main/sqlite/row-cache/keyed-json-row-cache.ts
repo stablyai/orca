@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs'
 import {
+  foldStoredRows,
   planFullRows,
   planRowPatch,
   parseOrNull,
@@ -25,6 +26,8 @@ export type KeyedJsonRowCacheOptions = {
   busyTimeoutMs?: number
   /** False opens and closes the database per call, so no handle outlives it (profile moves). */
   holdConnection?: boolean
+  /** Sync committed recovery facts even when the host loses power before a WAL checkpoint. */
+  durable?: boolean
   /** JSON file older builds wrote; see load(). */
   legacyPath?: string
   walCheckpoints?: Pick<
@@ -324,7 +327,8 @@ export class KeyedJsonRowCache {
       // Rows can hold prompts, PR titles and notification ids; keep them user-only.
       directoryMode: 0o700,
       sql: SCHEMA_SQL,
-      walAutocheckpoint: offMain ? 0 : undefined
+      walAutocheckpoint: offMain ? 0 : undefined,
+      synchronous: this.options.durable ? 'FULL' : undefined
     })
     this.db = db
     this.walRegistration = this.walCheckpoints.attach(this.path, () => (this.reopen = true))
@@ -349,16 +353,10 @@ export class KeyedJsonRowCache {
 }
 
 function readRows(db: SyncDatabase): { stored: Map<string, StoredRow>; maxSeq: number } {
-  const stored = new Map<string, StoredRow>()
-  let maxSeq = 0
-  for (const row of db.prepare('SELECT key, seq, value FROM rows ORDER BY seq').all()) {
-    const { key, seq, value } = row
-    if (typeof key === 'string' && typeof seq === 'number' && typeof value === 'string') {
-      stored.set(key, { seq, json: value })
-      maxSeq = Math.max(maxSeq, seq)
-    }
-  }
-  return { stored, maxSeq }
+  // node:sqlite TEXT reads truncate embedded NULs in composite keys; BLOB preserves their bytes.
+  return foldStoredRows(
+    db.prepare('SELECT CAST(key AS BLOB) AS key, seq, value FROM rows ORDER BY seq').all()
+  )
 }
 
 function rollback(db: SyncDatabase): void {

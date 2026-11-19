@@ -17,6 +17,7 @@ import { isLocalHookConnectionId } from '../../../shared/agent-hook-listener/tra
 import type { EnrichedAgentHookEventPayload } from './server-types'
 
 import { recordAgentExit } from './agent-exit-evidence'
+import { endedRestoredTurn } from './server-ended-restored-turn'
 
 export type EndedProcessReconciliationOptions = {
   endedPresence?: AgentProcessPresence
@@ -139,20 +140,16 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
         untouched.push(resolvedPaneKey)
         continue
       }
+      const previous = this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
+        | EnrichedAgentHookEventPayload
+        | undefined
       const resumeRow = options?.preserveResumeIdentity
-        ? this.toRetainedProviderSessionRow(
-            this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
-              | EnrichedAgentHookEventPayload
-              | undefined
-          )
+        ? (endedRestoredTurn(previous) ?? this.toRetainedProviderSessionRow(previous))
         : null
       const retained =
         resumeRow && options?.endedPresence
           ? { ...resumeRow, agentPresence: options.endedPresence }
           : resumeRow
-      const previous = this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
-        | EnrichedAgentHookEventPayload
-        | undefined
       clearPane(resolvedPaneKey)
       if (retained) {
         admitLegacyAgentStatus(
@@ -161,8 +158,11 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
           retained,
           AGENT_STATUS_2A_CURRENT_PRODUCER_MODE
         )
-        this.scheduleStatusPersist()
+        this.scheduleStatusPersist(!retained.providerSessionOnly)
         this.notifyStatusChangeListeners()
+        if (!retained.providerSessionOnly) {
+          this.emitEnrichedStatus(retained)
+        }
       }
       this.commitStatusRowMutation(previous, retained)
       cleared += 1

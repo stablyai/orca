@@ -210,7 +210,7 @@ export abstract class AgentHookServerStateContract {
     launchTokenHashOverride?: string
   ): AgentHookAuthorityEvidence | null
 
-  protected abstract scheduleStatusPersist(): void
+  protected abstract scheduleStatusPersist(turnBoundary?: boolean): void
 
   protected abstract runStatusPersist(): boolean
 

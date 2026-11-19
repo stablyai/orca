@@ -23,6 +23,8 @@ export type VersionedCacheDatabaseSchema = {
   beforeRemove?: () => void
   // 0 when another thread checkpoints this connection's WAL; SQLite's default otherwise.
   walAutocheckpoint?: number
+  // FULL syncs each commit, so it survives power loss before a WAL checkpoint.
+  synchronous?: 'FULL'
 }
 
 export type CacheDatabaseRemoval = 'retry' | 'fail-fast'
@@ -94,8 +96,12 @@ function openWithPragmas(
   {
     pageSize,
     busyTimeoutMs = 5000,
-    walAutocheckpoint
-  }: Pick<VersionedCacheDatabaseSchema, 'pageSize' | 'busyTimeoutMs' | 'walAutocheckpoint'>
+    walAutocheckpoint,
+    synchronous
+  }: Pick<
+    VersionedCacheDatabaseSchema,
+    'pageSize' | 'busyTimeoutMs' | 'walAutocheckpoint' | 'synchronous'
+  >
 ): SyncDatabase {
   const db = new SyncDatabase(path)
   try {
@@ -110,7 +116,9 @@ function openWithPragmas(
     db.pragma('journal_mode = WAL')
     const autoCheckpoint =
       walAutocheckpoint === undefined ? '' : ` PRAGMA wal_autocheckpoint = ${walAutocheckpoint};`
-    db.exec(`PRAGMA synchronous = NORMAL; PRAGMA journal_size_limit = 8388608;${autoCheckpoint}`)
+    db.exec(
+      `PRAGMA synchronous = ${synchronous ?? 'NORMAL'}; PRAGMA journal_size_limit = 8388608;${autoCheckpoint}`
+    )
     return db
   } catch (error) {
     db?.close()

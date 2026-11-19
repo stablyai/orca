@@ -49,3 +49,15 @@ export function mainAgentStatusEqual(
     a.stateStartedAt === b.stateStartedAt
   )
 }
+
+/** Work cut off before the row finished cannot end cleanly, even when only children were left running. */
+export function settleUnfinishedMainAgent(
+  lead: AgentMainAgentStatus | undefined,
+  outcome: 'interruption' | 'unconfirmed',
+  at: number
+): AgentMainAgentStatus {
+  if (lead?.state !== 'done') {
+    return { state: 'done', outcome, stateStartedAt: at }
+  }
+  return lead.outcome && lead.outcome !== 'success' ? lead : { ...lead, outcome }
+}
