@@ -1,18 +1,16 @@
 import type { IDisposable } from '@xterm/xterm'
 import type { resolveTerminalPaneOwnerContext } from '../host-state/terminal-pane-owner-context'
 import type { HasPty } from './lifecycle/terminal-dead-session-reconcile'
-import { useAppStore } from '@/store'
 import { consumeRestartReplacement } from './spawn/restart-replacement-on-show'
 import { shouldReconcileMissingSession } from './lifecycle/terminal-dead-session-reconcile'
 import { cancelPendingSafeFitContinuations } from '@/lib/pane-manager/terminal-fit/pane-fit-continuation-registry'
 import { PANE_PTY_RESIZE_HOLD_FLUSH_EVENT } from '@/lib/pane-manager/pane-layout/pane-pty-resize-hold'
 import { discardTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-terminal-output-queue-registry'
 import '@/lib/agent-session/resume/sleeping-agent-pane-ownership'
-import { getProviderSessionClaimKey } from '../../../../../shared/agent-session/lifecycle/resume/sleeping-record-legacy-pane-key'
 import { releaseRendererPtyVisibilityClaim } from '../pty-transport/delivery/pty-renderer-delivery-claims'
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
-import { noteArmsHibernatedPaneWake } from './lifecycle/hibernated-pane-wake'
+import { wakeHibernatedPaneIfArmed } from './lifecycle/hibernated-pane-wake'
 import { syncRemoteOutputCadence } from './output/remote-output-cadence'
 
 export type PanePtyBinding = IDisposable & {
@@ -116,45 +114,8 @@ export function createPanePtyBinding(session: ConnectPanePtySession): PanePtyBin
       session.claimPendingVisibleRemoteViewport()
       session.ptySizeReassertion.request({ fit: false })
     },
-    // Why: mobile wake reaches this pane while it's hidden on the desktop, so consume only the armed hibernation wake — no size/foreground reads.
     wakeHibernatedAgentIfArmed(claimedProviderSessions, paneKey) {
-      if (paneKey && paneKey !== session.cacheKey) {
-        return null
-      }
-      if (session.hibernatedWakeInFlightClaimKey) {
-        if (claimedProviderSessions?.has(session.hibernatedWakeInFlightClaimKey)) {
-          return null
-        }
-        claimedProviderSessions?.add(session.hibernatedWakeInFlightClaimKey)
-        return session.hibernatedWakeInFlightClaimKey
-      }
-      const consumedClaimKey = session.consumeHibernatedAgentWake(claimedProviderSessions)
-      if (consumedClaimKey) {
-        return consumedClaimKey
-      }
-      // Latch mid-kill mobile wakes only for the exact suppressed PTY, never unrelated stale/manual records.
-      const state = useAppStore.getState()
-      const recordEntry = session.getSleepingRecordForPane(state)
-      const currentPtyId = session.transport.getPtyId()
-      if (
-        recordEntry &&
-        noteArmsHibernatedPaneWake(recordEntry.record) &&
-        currentPtyId !== null &&
-        state.suppressedPtyExitIds[currentPtyId] === true &&
-        !session.disposed &&
-        session.hibernatedWakeTarget === null &&
-        session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport &&
-        session.transport.getPtyId() === currentPtyId
-      ) {
-        const claimKey = getProviderSessionClaimKey(recordEntry.record)
-        if (claimedProviderSessions?.has(claimKey)) {
-          return null
-        }
-        claimedProviderSessions?.add(claimKey)
-        session.pendingHibernatedWakeTarget = { ptyId: currentPtyId, record: recordEntry.record }
-        return claimKey
-      }
-      return null
+      return wakeHibernatedPaneIfArmed(session, claimedProviderSessions, paneKey)
     },
     sampleForegroundAgentOnFocus() {
       session.requestKnownWindowsShiftEnterReconfirmation()
