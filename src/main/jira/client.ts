@@ -39,6 +39,13 @@ import { verifyJiraCredentials } from './credential-verification'
 export async function getClients(
   selection?: JiraSiteSelection | null
 ): Promise<JiraClientForSite[]> {
+  // Reconnect saves the token before the site record; the registry queue keeps each client's pair from one generation.
+  return inSiteRegistryOrder(() => readClients(selection))
+}
+
+async function readClients(
+  selection: JiraSiteSelection | null | undefined
+): Promise<JiraClientForSite[]> {
   const file = await getSiteFile()
   const selected = selection ?? file.selectedSiteId ?? file.activeSiteId
   const isAllSelection = selected === 'all'
