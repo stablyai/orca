@@ -15,7 +15,7 @@ export const WORKER_STOP_SUBJECTS: Record<WorkerTurnStopReason, string> = {
   lost: 'Worker lost without reporting'
 }
 
-/** The worker went away: never deliberate, and once per Dispatch unless the stop names which exit it was. */
+/** The worker went away, which is never deliberate. */
 export function isWorkerGone(reason: WorkerTurnStopReason): boolean {
   return reason === 'exited' || reason === 'lost'
 }

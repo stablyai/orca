@@ -14,7 +14,8 @@ import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
 import { createRootDispatch } from '../../db/root-dispatch-test-fixture'
 import { TerminalWorkerTurnStops } from './terminal-worker-turn-stops'
-import { reportWorkerTurnStop, stopReportId } from './worker-turn-stop-report'
+import { stopReportId } from './worker-turn-stop-report'
+import { observeWorker } from './worker-presence-report'
 
 const PANE = makePaneKey('tab-worker', '11111111-1111-4111-8111-111111111111')
 const HANDLE = 'term_worker'
@@ -135,15 +136,20 @@ describe('terminal worker turn stops', () => {
   it('never mails a capability or credential carried in why a worker went away', () => {
     const ctx = setup()
     const capability = 'dcap_0123456789abcdefghijKLMN'
-    reportWorkerTurnStop(
+    observeWorker(
       ctx.db,
       { kind: 'local', dispatch: ctx.dispatch },
       {
-        from: HANDLE,
-        reason: 'lost',
-        lastOutput: undefined,
-        cause: `it never started: refused ${capability} at https://user:hunter2@git.example.com/repo`,
-        leftover: `workspace ${capability}`
+        presence: 'gone',
+        fence: 'start',
+        legacyStopKey: 'gone',
+        gone: {
+          from: HANDLE,
+          reason: 'lost',
+          lastOutput: undefined,
+          cause: `it never started: refused ${capability} at https://user:hunter2@git.example.com/repo`,
+          leftover: `workspace ${capability}`
+        }
       },
       ctx.deps
     )
@@ -176,10 +182,15 @@ describe('terminal worker turn stops', () => {
       ctx.db.convertLifecycleMessageToRejection(sent.id, 'worker_identity_changed', 'not the owner')
     }
     const stop = (stopKey: string, turnStartedAt: number) =>
-      reportWorkerTurnStop(
+      observeWorker(
         ctx.db,
         { kind: 'local', dispatch: ctx.dispatch },
-        { from: HANDLE, stopKey, reason: 'finished', lastOutput: undefined, turnStartedAt },
+        {
+          presence: 'at-rest',
+          fence: stopKey,
+          legacyStopKey: stopKey,
+          rest: { from: HANDLE, reason: 'finished', lastOutput: undefined, turnStartedAt }
+        },
         ctx.deps
       )
     // The rejection is stored on the real clock: after 1970, before 2100.

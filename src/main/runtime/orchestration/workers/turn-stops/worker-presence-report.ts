@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { readCoordinatorMailCount } from '../../db/messages/dispatch-read-mail'
+import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transaction-runner'
 import {
   hasRelayedWorkerReport,
   nextWorkerPresence,
@@ -26,6 +27,11 @@ export type WorkerRest = Pick<
   'from' | 'lastOutput' | 'awaitsReply' | 'approval' | 'turnStartedAt' | 'mailTaken'
 > & { reason: 'finished' | 'errored' | 'needs-input' }
 
+export type WorkerGone = Pick<
+  WorkerTurnStop,
+  'from' | 'lastOutput' | 'cause' | 'leftover' | 'neverStarted' | 'restartsOnMail'
+> & { reason: 'exited' | 'lost' }
+
 /** What an edge saw of its worker. `fence` names the rest: its process or chat turn and when it began,
  *  so the same rest seen twice is one fact and a new rest is another, even in the same presence. */
 export type WorkerObservation =
@@ -37,8 +43,19 @@ export type WorkerObservation =
       /** The key builds before the presence table gave this rest; its report must not go out twice. */
       legacyStopKey: string
     }
+  | {
+      presence: 'gone'
+      /** The process or provider that ended. A worker is gone once until it works again. */
+      fence: string
+      gone: WorkerGone
+      legacyStopKey: string
+      /** Settles the Dispatch in the same transaction as the report, which then names the outcome. */
+      settle?: () => WorkerTurnStop['settled']
+    }
 
-type StoredRest = WorkerRest & { legacyStopKey: string }
+type StoredRest = (WorkerRest | (WorkerGone & Pick<WorkerTurnStop, 'settled'>)) & {
+  legacyStopKey: string
+}
 
 /** Edges only observe; whether and how the coordinator hears of it is decided below.
  *  Callers have checked the observation is current. True when a report of this rest is in mail. */
@@ -57,14 +74,31 @@ export function observeWorker(
     }
     return false
   }
-  const { rest } = observation
-  const stored: StoredRest = {
-    ...rest,
-    ...(rest.lastOutput && rest.lastOutput.length > STORED_OUTPUT_MAX_CHARS
-      ? { lastOutput: rest.lastOutput.slice(-STORED_OUTPUT_MAX_CHARS) }
-      : {}),
-    legacyStopKey: observation.legacyStopKey
+  if (observation.presence === 'gone') {
+    // A worker whose Dispatch settled is gone for good, whichever edge sees it go next; one left open
+    // (a chat that mail restarts) ends only the provider its fence names.
+    const fence =
+      current?.presence === 'gone' && !isDispatchOpen(db, target)
+        ? current.fence
+        : observation.fence
+    return runLifecycleWriteTransaction(db.db, 'observe_worker_gone', () => {
+      const settled = observation.settle?.()
+      return reconcileWorkerReport(
+        db,
+        target,
+        nextWorkerPresence(current, {
+          presence: 'gone',
+          fence,
+          report: storedReport(
+            { ...observation.gone, ...(settled ? { settled } : {}) },
+            observation
+          )
+        }),
+        deps
+      )
+    })
   }
+  const { rest } = observation
   // Seen again, an undecided rest is decided again: what held it back may have cleared.
   const sent = reconcileWorkerReport(
     db,
@@ -72,7 +106,7 @@ export function observeWorker(
     nextWorkerPresence(current, {
       presence: rest.reason === 'needs-input' ? 'prompt' : 'resting',
       fence: observation.fence,
-      report: JSON.stringify(stored)
+      report: storedReport(rest, observation)
     }),
     deps
   )
@@ -83,6 +117,29 @@ export function observeWorker(
       target.kind === 'local' &&
       db.getMessageById(approvalReportId(dispatchId, rest.approval.approvalId)) !== undefined)
   )
+}
+
+/** A remote attachment settles at its Run home; this side sees only active ones. */
+function isDispatchOpen(db: OrchestrationDb, target: WorkerTurnStopDispatch): boolean {
+  if (target.kind === 'remote') {
+    return true
+  }
+  const status = db.getDispatchContextById(target.dispatch.id)?.status
+  return status === 'pending' || status === 'dispatched'
+}
+
+function storedReport(
+  report: Omit<StoredRest, 'legacyStopKey'>,
+  { legacyStopKey }: { legacyStopKey: string }
+): string {
+  const { lastOutput } = report
+  return JSON.stringify({
+    ...report,
+    ...(lastOutput && lastOutput.length > STORED_OUTPUT_MAX_CHARS
+      ? { lastOutput: lastOutput.slice(-STORED_OUTPUT_MAX_CHARS) }
+      : {}),
+    legacyStopKey
+  })
 }
 
 /** Decides, words and sends the report of the worker's current rest, once. Writes the row once: with the
@@ -108,7 +165,7 @@ function reconcileWorkerReport(
   })
   if (
     !row.report ||
-    (row.presence !== 'resting' && row.presence !== 'prompt') ||
+    row.presence === 'working' ||
     (row.reportedGeneration ?? 0) >= row.generation
   ) {
     return keep()
@@ -118,8 +175,12 @@ function reconcileWorkerReport(
     writeWorkerPresence(db, dispatchId, decided(undefined))
     return false
   }
-  // Left undecided: the same rest seen again is decided again.
-  if (isDeliberateRest(db, target, rest, deps)) {
+  // Left undecided: the same rest seen again is decided again. Going away is never deliberate.
+  if (
+    rest.reason !== 'exited' &&
+    rest.reason !== 'lost' &&
+    isDeliberateRest(db, target, rest, deps)
+  ) {
     return keep()
   }
   // An idle finish answers the coordinator's mail the worker took, so it is news once per mail taken: a later
@@ -137,9 +198,10 @@ function reconcileWorkerReport(
     writeWorkerPresence(db, dispatchId, decided(finishedMail))
     return false
   }
-  const id = rest.approval
-    ? approvalReportId(dispatchId, rest.approval.approvalId)
-    : presenceReportId(dispatchId, row.generation)
+  const id =
+    'approval' in rest && rest.approval
+      ? approvalReportId(dispatchId, rest.approval.approvalId)
+      : presenceReportId(dispatchId, row.generation)
   const sent = sendWorkerReport(db, target, rest, id, deps, () =>
     writeWorkerPresence(db, dispatchId, decided(finishedMail))
   )
@@ -171,7 +233,9 @@ function reportedByEarlierBuild(
   const legacyKey =
     finishedMail !== undefined
       ? row.reportedMailCount === null && `finished:${finishedMail}`
-      : !rest.approval && row.reportedGeneration === null && rest.legacyStopKey
+      : !('approval' in rest && rest.approval) &&
+        row.reportedGeneration === null &&
+        rest.legacyStopKey
   if (!legacyKey) {
     return false
   }

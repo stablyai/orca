@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { dispatchReportMailbox } from '../reports/dispatch-report-mailbox'
-import { readCoordinatorMailCount } from '../../db/messages/dispatch-read-mail'
 import { rejectedReportInTurn } from '../../db/messages/rejected-worker-report'
 import type {
   DispatchContextRow,
@@ -11,15 +10,13 @@ import { escalateWorkerFailure } from '../reports/worker-failure-escalation'
 import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transaction-runner'
 import type { WorkerApprovalPayload } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 import { describeApprovalClosed } from './worker-approval-text'
-import { describeStop, isWorkerGone, WORKER_STOP_SUBJECTS } from './worker-turn-stop-wording'
+import { describeStop, WORKER_STOP_SUBJECTS } from './worker-turn-stop-wording'
 
 export type WorkerTurnStopReason = 'finished' | 'errored' | 'needs-input' | 'exited' | 'lost'
 
 export type WorkerTurnStop = {
   /** The worker's own mailbox identity: terminal handle, chat address or structured worker handle. */
   from: string
-  /** Identifies this stop; a later turn's stop has a new one, so each stop is reported once. An idle finish is keyed by the coordinator's latest mail instead, and a worker without one goes away only once. */
-  stopKey?: string
   reason: WorkerTurnStopReason
   /** Coordinator mail the worker had taken when the stop was seen; mail it takes later is its next turn's. */
   mailTaken?: number
@@ -59,32 +56,6 @@ export type WorkerTurnStopReportDeps = {
 
 export function workerTurnStopDispatchId(target: WorkerTurnStopDispatch): string {
   return target.kind === 'local' ? target.dispatch.id : target.attachment.dispatch_id
-}
-
-/** Tell the coordinator once that a worker is at rest or gone without reporting; never settles its Dispatch.
- *  True when the report is in the coordinator's mail. */
-export function reportWorkerTurnStop(
-  db: OrchestrationDb,
-  target: WorkerTurnStopDispatch,
-  stop: WorkerTurnStop,
-  deps: WorkerTurnStopReportDeps
-): boolean {
-  const dispatchId = workerTurnStopDispatchId(target)
-  // Going away is never deliberate.
-  if (!isWorkerGone(stop.reason) && isDeliberateRest(db, target, stop, deps)) {
-    return false
-  }
-  // An idle finish answers the coordinator's mail the worker took, so it is news once per mail taken: a later
-  // idle turn (a worker on its own schedule, or one the user is talking to) repeats what the coordinator was told.
-  // One report per approval, whatever else the worker's state does meanwhile.
-  const stopKey = stop.approval
-    ? `approval:${stop.approval.approvalId}`
-    : stop.reason === 'finished'
-      ? `finished:${stop.mailTaken ?? readCoordinatorMailCount(db, dispatchId)}`
-      : isWorkerGone(stop.reason)
-        ? (stop.stopKey ?? 'gone')
-        : (stop.stopKey ?? stop.reason)
-  return sendWorkerReport(db, target, stop, stopReportId(dispatchId, stopKey), deps)
 }
 
 /** Waiting on mail, or a clean finish resting on its own question, rejected report or helpers, is deliberate. */
