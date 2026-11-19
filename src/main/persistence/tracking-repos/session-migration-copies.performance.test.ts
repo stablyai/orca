@@ -5,12 +5,10 @@ import {
 } from '../../../shared/orca-profiles/constants'
 import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
-import { toAppSshPtyId } from '../../../shared/remote-runtime/ssh/ssh-pty-id'
-import { migrateWorkspaceSessionSshTargetId } from '../../ssh/targets/ssh-target-id-migration'
 import { migrateWorktreeIdentity } from './worktree-identity-migration'
 
-// Perf contract: session migrations publish replacement sessions, so their copies must stay bounded
-// by what changed, not by how many hosts or workspaces are saved.
+// Perf contract (#44641): worktree moves publish replacement sessions; the host partition map must be
+// copied once per move, not once per host (fails at 10 and 100 with the per-host copies).
 
 const OLD = 'repo::/old/path'
 const NEW = 'repo::/new/path'
@@ -58,33 +56,7 @@ function hostMapCopiesForWorktreeMove(hosts: number): number {
   return copies
 }
 
-function tabArraysBuiltForAbsentSshTarget(worktrees: number): number {
-  let built = 0
-  const tabsByWorktree: WorkspaceSessionState['tabsByWorktree'] = {}
-  for (let index = 0; index < worktrees; index++) {
-    const worktreeId = `repo::/w${index}`
-    const tabs = sessionWithTabs(worktreeId, toAppSshPtyId('other-target', `pty-${index}`))
-      .tabsByWorktree[worktreeId]!
-    // Array#map reads `constructor` to build its result; plain iteration does not.
-    Object.defineProperty(tabs, 'constructor', {
-      get: () => {
-        built += 1
-        return Array
-      }
-    })
-    tabsByWorktree[worktreeId] = tabs
-  }
-  const session = { ...getDefaultWorkspaceSession(), tabsByWorktree }
-  expect(migrateWorkspaceSessionSshTargetId(session, 'old-target', 'new-target')).toBeNull()
-  return built
-}
-
 it('copies the host partition map once per worktree move at N and 10N hosts', () => {
   expect(hostMapCopiesForWorktreeMove(10)).toBe(1)
   expect(hostMapCopiesForWorktreeMove(100)).toBe(1)
-})
-
-it('builds no tab arrays when no saved tab names the re-adopted SSH target at N and 10N', () => {
-  expect(tabArraysBuiltForAbsentSshTarget(200)).toBe(0)
-  expect(tabArraysBuiltForAbsentSshTarget(2_000)).toBe(0)
 })

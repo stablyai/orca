@@ -4,8 +4,8 @@ import { retirePersistedStablePaneOwner } from '../../../ipc/pty/pane/stable-own
 import { TEST_LEAF_1, TEST_LEAF_2 } from '../../persistence-session-fixtures'
 import { fixture } from '../profile-writing/profile-state-delayed-authority-fixture'
 
-// Perf contract: a PTY bind or retire on main copied the whole session for rollback (~250-550 ms
-// per terminal spawn at a 9M-char session). Neither may copy the session, whatever its size.
+// Perf contract (#44641): a PTY bind or retire on main copied the whole session for rollback (~110-130 ms
+// per terminal spawn at a 10M-char session). Neither may copy the session (base: 8 copies here).
 
 const clone = globalThis.structuredClone
 
