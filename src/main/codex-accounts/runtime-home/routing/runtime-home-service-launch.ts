@@ -2,6 +2,8 @@ import { resolveHostCodexSessionSourceHome } from '../../../codex/history/rollou
 import { startSystemCodexSessionBridgeInBackground } from '../../../codex/history/bridges/codex-session-bridge'
 import { isCodexHistorySharedAcrossAccounts } from './codex-history-sharing'
 import {
+  getOrcaManagedCodexHomePath,
+  getSystemCodexHomePath,
   resolveOrcaManagedCodexHomePath,
   syncSystemCodexResourcesIntoManagedHome
 } from '../../../codex/configuration/homes/codex-home-paths'
@@ -69,7 +71,10 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
     this.syncForCurrentSelection(target, launchEnv)
     syncSystemCodexResourcesIntoManagedHome()
     if (options?.deferConfigSync) {
-      options.deferConfigSync(() => syncSystemConfigIntoManagedCodexHome())
+      options.deferConfigSync({
+        runtimeHomePath: getOrcaManagedCodexHomePath(),
+        systemHomePath: getSystemCodexHomePath()
+      })
     } else {
       syncSystemConfigIntoManagedCodexHome()
     }
