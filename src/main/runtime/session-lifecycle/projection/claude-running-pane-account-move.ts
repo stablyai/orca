@@ -45,6 +45,8 @@ export abstract class OrcaRuntimeWithClaudeRunningPaneAccountMove extends OrcaRu
   private claudeSelectionEpoch = 0
   /** The last switch that left panes running under Ask, for its answer to restart them. */
   private askedClaudeMove: ClaudeAccountSelectionChange | undefined
+  /** Counts the switches that moved the host's account: a plan from before the latest opens no Ask. */
+  private claudeHostSwitches = 0
 
   /** A window moves its own panes; a host without one moves its own and says what it did. */
   protected onClaudeAccountSelected(
@@ -60,10 +62,12 @@ export abstract class OrcaRuntimeWithClaudeRunningPaneAccountMove extends OrcaRu
     // A selection that moves nothing on the host (the same account again, a WSL lane) leaves the Ask open.
     if (answered || claudeHostAccountSwitch(change).movesHost) {
       this.askedClaudeMove = undefined
+      this.claudeHostSwitches += 1
     }
+    const hostSwitch = this.claudeHostSwitches
     // The switch is already saved: a failed plan must not fail its reply.
     const planned = this.claudePanePlans
-      .then(() => this.planClaudePaneMove(move))
+      .then(() => this.planClaudePaneMove(move, hostSwitch))
       .catch((error: unknown) => {
         console.warn('[runtime] could not plan moving running Claude terminals', error)
         return undefined
@@ -82,21 +86,26 @@ export abstract class OrcaRuntimeWithClaudeRunningPaneAccountMove extends OrcaRu
     return planned.then((plan) => plan?.summary)
   }
 
-  /** The account selected again with `restart` answers the Ask its switch left open. */
+  /** An answer restarts what its Ask left, unless a later switch moved the host off that account. */
   private answeredClaudeMove(
     change: ClaudeAccountSelectionChange
   ): ClaudeAccountSelectionChange | undefined {
     const asked = this.askedClaudeMove
-    const selected = claudeLaunchAccountId(change.after.state, change.after.accountId)
-    return asked &&
-      change.runningSessions === 'restart' &&
-      selected === claudeLaunchAccountId(change.before.state, change.before.accountId) &&
+    if (!asked || change.answersAskFor === undefined) {
+      return undefined
+    }
+    const { state } = change.after
+    const selected = claudeLaunchAccountId(state, change.after.accountId)
+    return selected === claudeLaunchAccountId(state, change.answersAskFor) &&
       selected === claudeLaunchAccountId(asked.after.state, asked.after.accountId)
       ? { ...asked, after: change.after, runningSessions: 'restart' }
       : undefined
   }
 
-  private async planClaudePaneMove(change: ClaudeAccountSelectionChange): Promise<
+  private async planClaudePaneMove(
+    change: ClaudeAccountSelectionChange,
+    hostSwitch: number
+  ): Promise<
     | {
         summary: ClaudeHostRunningSessionsMove
         restart: ClaudePaneRestart[]
@@ -155,7 +164,7 @@ export abstract class OrcaRuntimeWithClaudeRunningPaneAccountMove extends OrcaRu
       restart.push({ ...pane, session: pane.session })
       this.restartingClaudePanes.add(pane.paneKey)
     }
-    if (canRestart > 0) {
+    if (canRestart > 0 && hostSwitch === this.claudeHostSwitches) {
       this.askedClaudeMove = change
     }
     return restart.length + notMoved > 0

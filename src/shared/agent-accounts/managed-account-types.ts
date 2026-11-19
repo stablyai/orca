@@ -142,6 +142,8 @@ export type ClaudeAccountSelectionChange = {
   after: { state: ClaudeRateLimitAccountsState; accountId: string | null }
   /** The switching client's own choice for running sessions; absent, the host's setting decides. */
   runningSessions?: ClaudeAccountSwitchRunningSessions
+  /** Nothing was selected: this answers the Ask a switch to this account left open. */
+  answersAskFor?: string | null
 }
 
 /** What a server did with its running Claude terminals when its account switched. */

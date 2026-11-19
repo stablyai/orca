@@ -223,14 +223,8 @@ export class RuntimeAccountController {
       return claudeAccounts.selectAccount(accountId)
     }
     const before = claudeAccounts.listAccounts()
-    // Why: a later switch made the answer stale, and selecting its account would undo that switch.
-    if (
-      options.answersAsk &&
-      getSelectedClaudeAccountIdInState(before, { runtime: 'host' }) !== accountId
-    ) {
-      return before
-    }
-    const after = await claudeAccounts.selectAccount(accountId)
+    // An answer to Ask selects nothing, so it can never undo a later switch.
+    const after = options.answersAsk ? before : await claudeAccounts.selectAccount(accountId)
     const account = before.accounts.find((candidate) => candidate.id === accountId)
     const target: ClaudeAccountSelectionTarget = account
       ? getClaudeSelectionTargetForAccount(account)
@@ -239,7 +233,8 @@ export class RuntimeAccountController {
       target,
       before: { state: before, accountId: getSelectedClaudeAccountIdInState(before, target) },
       after: { state: after, accountId: getSelectedClaudeAccountIdInState(after, target) },
-      ...(options.runningSessions ? { runningSessions: options.runningSessions } : {})
+      ...(options.runningSessions ? { runningSessions: options.runningSessions } : {}),
+      ...(options.answersAsk ? { answersAskFor: accountId } : {})
     })
     return runningSessions ? { ...after, runningSessions } : after
   }
