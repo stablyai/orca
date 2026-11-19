@@ -255,7 +255,7 @@ export async function syncRuntimeBackedSettings(
         // Host voice is read only through followHostVoiceSettings, which also checks this page can capture.
         delete runtimeSettings.voice
         // The host's own switches, not this browser's notification settings.
-        delete (runtimeSettings as { hostNotifications?: unknown }).hostNotifications
+        Reflect.deleteProperty(runtimeSettings, 'hostNotifications')
         if (requireActiveEnvironmentOrNull()?.id !== requestedEnvironment.id) {
           delete runtimeSettings.worktreeCardDetailsRow
         }
