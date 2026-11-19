@@ -342,7 +342,7 @@ async function clearPathTo(page, id) {
   }, id)
 }
 
-// Once per window: full-window layers and fixed notices close on Escape.
+// Setup before switch's window, not measured: full-window layers and fixed notices close on Escape.
 async function dismissOverlays(page) {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const blocked = await page.evaluate(() =>
@@ -421,7 +421,6 @@ function cardBlocker(page) {
 }
 
 async function switchWorkspaces({ page, windowMs }) {
-  await dismissOverlays(page)
   let pair = await uncoveredCardPair(page)
   if (pair.length < 2) {
     const why = await cardBlocker(page)
@@ -453,6 +452,7 @@ async function switchWorkspaces({ page, windowMs }) {
         break
       }
       if (spot.path === 'covered') {
+        await page.evaluate(() => document.activeElement?.blur?.())
         await page.keyboard.press('Escape')
       }
       await sleep(100)
@@ -507,7 +507,7 @@ async function switchWorkspaces({ page, windowMs }) {
 }
 
 // Run by the runner before it resets the probes, so a window never counts its own setup.
-export const SCENARIO_SETUP = { typing: showTerminalWorkspace }
+export const SCENARIO_SETUP = { typing: showTerminalWorkspace, switch: dismissOverlays }
 
 export const SCENARIOS = {
   idle: async ({ windowMs }) => {
