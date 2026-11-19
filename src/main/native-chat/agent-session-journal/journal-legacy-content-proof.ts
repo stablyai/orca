@@ -1,4 +1,5 @@
 import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
+import { assertLegacyChatSettled } from './journal-legacy-proof-copies'
 import {
   journalLegacyChatRevision,
   journalLegacyChatRevisionKey
@@ -41,6 +42,7 @@ export function legacySessionHold(
   empty: boolean,
   hasQueue: boolean
 ): LegacySessionHold {
+  assertLegacyChatSettled(store, sessionId)
   const recorded =
     hasTable(source, 'agent_session_records') &&
     !!source.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?').get(sessionId)
@@ -104,6 +106,7 @@ export function legacyRecordOnlyHold(
   store: Database.Database,
   sessionId: string
 ): LegacySessionHold {
+  assertLegacyChatSettled(store, sessionId)
   const recorded = store
     .prepare('SELECT 1 FROM agent_session_records WHERE session_id=?')
     .get(sessionId)

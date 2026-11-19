@@ -3,29 +3,38 @@ import { expect, it, vi } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import { journalDomainImportState } from './journal-domain-import-rows'
 import { initializeJournalDomainDatabase } from './database/journal-domain-database'
-import { olderOrcaChat, profile } from './journal-legacy-retirement.test-fixture'
+import {
+  continueInOlderOrca,
+  olderOrcaChat,
+  profile
+} from './journal-legacy-retirement.test-fixture'
 import { JournalLegacyIneligibleError } from './journal-legacy-retention-error'
 import { readLegacyProofSessions } from './journal-legacy-content-proof'
 
 function rename(filename: string, sessionId: string, name: string) {
   const db = new Database(filename)
-  db.prepare(`UPDATE agent_session_records SET record_json=json_set(record_json,
-    '$.conversationName',?,'$.conversationNameSource','user') WHERE session_id=?`).run(
-    name,
-    sessionId
-  )
+  db.prepare(
+    `UPDATE agent_session_records SET record_json=json_set(record_json,
+    '$.conversationName',?,'$.conversationNameSource','user') WHERE session_id=?`
+  ).run(name, sessionId)
   db.close()
 }
 
 function queue(filename: string, sessionId: string, text: string) {
   const db = new Database(filename)
-  db.prepare(`INSERT INTO queued_messages
+  db.prepare(
+    `INSERT INTO queued_messages
     (session_id,message_id,position,body_json,fingerprint,created_at,host_instance,state)
-    VALUES(?,?,?,?,?,?,?,?)`).run(
+    VALUES(?,?,?,?,?,?,?,?)`
+  ).run(
     sessionId,
     'queued-after-copy',
     1,
-    JSON.stringify({ kind: 'message', role: 'user', blocks: [{ type: 'text', text }] }),
+    JSON.stringify({
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text }]
+    }),
     'fingerprint',
     1000,
     'older-host',
@@ -357,7 +366,10 @@ it('checks unsupported storage once per launch, not on every retry', async () =>
   const check = vi.fn(async () => {
     throw new JournalLegacyIneligibleError('legacy storage or file identity is unsupported')
   })
-  const retirement = launch('1.0.1', true, undefined, { check, present: () => {} })
+  const retirement = launch('1.0.1', true, undefined, {
+    check,
+    present: () => {}
+  })
   const now = vi.spyOn(performance, 'now')
   for (let hour = 0; hour < 48; hour++) {
     now.mockReturnValue(hour * 60 * 60_000)
@@ -435,4 +447,43 @@ it('finds queue cards by key, never by reading every card a chat has', async () 
     const firstEntry = /LIMIT 1/.test(sql) && plan.includes('COVERING INDEX')
     expect(firstEntry || /PRIMARY KEY|session_id=\? AND epoch[>=]\?/.test(plan)).toBe(true)
   }
+})
+
+it('converts the copies the reconcile keeps, and keeps the original while a chat is unsettled', async () => {
+  // An older Orca continued a converted chat: the reconcile keeps its version as a copy whose
+  // history still lives only in the original, so the copy converts before the original goes.
+  const continued = await profile()
+  await continued.convert('unopened')
+  continueInOlderOrca(continued.filename, 'unopened')
+  await initializeJournalDomainDatabase(continued.root)
+  const copy = String(
+    continued.db
+      .prepare(
+        "SELECT key FROM agent_session_store_meta WHERE key LIKE 'journal.legacy-copy-source:%'"
+      )
+      .get()!.key
+  ).slice('journal.legacy-copy-source:'.length)
+  expect(journalDomainImportState(continued.db, copy).state).toBe('converting')
+  await continued.launch().run()
+  expect(continued.errors).toEqual([])
+  expect(companions(continued.filename)).toEqual([])
+  expect(journalDomainImportState(continued.db, copy).state).toBe('ready')
+
+  // A chat the reconcile recorded as failed took its revision without its content.
+  const failed = await profile()
+  await failed.convert('unopened')
+  failed.db.exec(`INSERT INTO agent_session_store_meta VALUES('journal.legacy-failed:unopened',
+    '{"revision":null,"error":"original chat unreadable"}')`)
+  await failed.launch().run()
+  expect(companions(failed.filename)).toContain(failed.filename)
+  expect(String(failed.errors.at(-1))).toContain('could not be kept')
+
+  // A compare still due hasn't said whether this store holds the chat.
+  const comparing = await profile()
+  await comparing.convert('unopened')
+  comparing.db.exec(`INSERT INTO agent_session_store_meta
+    VALUES('journal.legacy-compare:unopened','["epoch",9,null,null]')`)
+  await comparing.launch().run()
+  expect(companions(comparing.filename)).toContain(comparing.filename)
+  expect(String(comparing.errors.at(-1))).toContain('still being compared')
 })

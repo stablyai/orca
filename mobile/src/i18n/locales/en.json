@@ -402,6 +402,7 @@
       "messages_other": "{{count}} messages",
       "currentWorktree": "current worktree",
       "resumeSession": "Resume agent session",
+      "continueInCli": "Continue in CLI",
       "hidePreview": "Hides the recent messages.",
       "showPreview": "Shows the recent messages.",
       "you": "You"
@@ -1326,7 +1327,9 @@
       "hooks": "HOOKS",
       "run": "Run",
       "skip": "Skip",
-      "runSetupCommand": "Run setup command"
+      "runSetupCommand": "Run setup command",
+      "waitForSetup": "Wait for setup to complete before starting agent",
+      "waitForSetupSaveFailed": "Failed to save setup startup behavior."
     },
     "newWorkspaceSshConnectionField": {
       "label": "SSH Connection",
@@ -2029,7 +2032,19 @@
       "timedOut": "Browser stream timed out."
     },
     "loadFailure": {
-      "retry": "Retry"
+      "retry": "Retry",
+      "connectionNotSecure": "Connection isn't secure",
+      "certificateNameMismatch": "The certificate doesn't match {{value0}}.",
+      "certificateDateInvalid": "The certificate for {{value0}} isn't valid at the current date and time.",
+      "certificateAuthorityInvalid": "Orca doesn't trust the authority that issued the certificate for {{value0}}.",
+      "certificateVerificationFailed": "Orca couldn't verify the certificate for {{value0}}.",
+      "proceedUnsafe": "Proceed Anyway (Unsafe)",
+      "connecting": "Connecting…",
+      "certificateChallengeExpired": "This certificate approval expired. Retry the page to request a new one.",
+      "certificateChallengeChanged": "The certificate request changed. Retry the page and review the new warning.",
+      "certificateProceedFailed": "Orca could not approve this certificate request. Retry the page and try again.",
+      "certificateChallengeUnavailable": "This certificate request is no longer available. Retry the page to request a new one.",
+      "certificateProceedNeedsHostUpdate": "Update Orca on this host to accept certificate warnings from your phone."
     }
   },
   "files": {
@@ -2110,7 +2125,8 @@
       "searched": "Searched {{loaded}} of {{total}} in {{folder}}.",
       "searching": "Searching {{folder}}… {{loaded}} of {{total}}",
       "searchAll": "Search all",
-      "searchAllIn": "Search all of {{folder}}"
+      "searchAllIn": "Search all of {{folder}}",
+      "ignored": "Ignored by .gitignore"
     },
     "fileExplorerRowActions": {
       "copyName": "Copy Name",
@@ -2315,7 +2331,12 @@
       "renameTerminalFailed": "Couldn't rename the terminal. {{reason}}",
       "terminalName": "Terminal name",
       "allowAutoClose": "Allow Auto-Close",
-      "agents": "Agents"
+      "agents": "Agents",
+      "shellPowerShell": "PowerShell",
+      "shellCmd": "CMD Prompt",
+      "shellGitBash": "Git Bash",
+      "shellWsl": "WSL",
+      "terminalWithShell": "Terminal: {{shell}}"
     },
     "tabStrip": {
       "newTab": "New tab",
@@ -3082,6 +3103,11 @@
       "terminalTitle": "Terminal text",
       "pointsAndColumns": "{{points}} · {{count}} columns",
       "moreTerminal": "More terminal settings"
+    },
+    "browserProfile": {
+      "title": "Profile",
+      "default": "Default",
+      "workspaceDefault": "Workspace default"
     }
   },
   "chat": {

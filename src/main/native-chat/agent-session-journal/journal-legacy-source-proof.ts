@@ -11,6 +11,7 @@ import {
   type LegacyClaim,
   type LegacySessionHold
 } from './journal-legacy-content-proof'
+import { readLegacyCopiesProofPage } from './journal-legacy-proof-copies'
 import type Database from '../../sqlite/sync-database'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 
@@ -38,6 +39,7 @@ const PROFILE_COLUMNS = new Map(
   JOURNAL_DOMAIN_PROFILE_TABLES.map(({ name, columns }) => [name, new Set<unknown>(columns)])
 )
 const RECOVERY_TABLES = ['journal_repairs', 'journal_imports', 'journal_set_aside']
+const COPIES = CONTENT_TABLES.length + 2
 export type LegacyProofCursor = { table: number; after: string | null; epoch?: string }
 export type LegacySourceSession = {
   sessionId: string
@@ -52,6 +54,8 @@ export type LegacyProofPage = {
   reason?: LegacySourceRefusalReason
   /** Claims only the original holds, for chats kept here, taken in before it retires. */
   claims?: LegacyClaim[]
+  /** Copies of chats an older Orca continued, converted from the original before it retires. */
+  copies?: string[]
 }
 
 /** Every saved content row must belong to the current catalog before any source file can retire. */
@@ -146,10 +150,14 @@ function readSourcePage(
       }
     }
   }
+  // Last, the copies the reconcile kept: converted from the original, then none may remain.
+  if (cursor.table >= COPIES) {
+    return readLegacyCopiesProofPage(destination, cursor, COPIES)
+  }
   // After the content tables: the original's attachment claims, taken in for chats kept here.
   if (cursor.table > CONTENT_TABLES.length) {
     if (!tables.has('agent_session_attachment_claims')) {
-      return { next: null, sessions: [] }
+      return { next: { table: COPIES, after: null }, sessions: [] }
     }
     const page = readLegacyClaimsPage(
       db,
@@ -157,7 +165,9 @@ function readSourcePage(
       cursor.after === null ? null : [cursor.after, cursor.epoch!]
     )
     return {
-      next: page.last ? { table: cursor.table, after: page.last[0], epoch: page.last[1] } : null,
+      next: page.last
+        ? { table: cursor.table, after: page.last[0], epoch: page.last[1] }
+        : { table: COPIES, after: null },
       sessions: [],
       claims: page.claims
     }

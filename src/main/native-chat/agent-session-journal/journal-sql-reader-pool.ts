@@ -5,6 +5,7 @@ import { JOURNAL_SQL_READERS } from './journal-sql-reader-requests'
 import type { JournalForkPreparationInput } from './journal-fork-preparation'
 import { throwIfSignalAborted } from '../../../shared/concurrency/abort-signal-reason'
 import type { JournalOutlineCache } from './journal-domain-outline'
+import type { JournalLegacyChatComparison } from './journal-sql-reader-protocol'
 import {
   currentWorkerEntryLayout,
   resolveWorkerThreadEntryPath
@@ -131,12 +132,28 @@ export class JournalSqlReaderPool {
     return this.conversionSlot.prepareConversion(sessionId)
   }
 
+  /** Null when the original journal is gone. Opens the original, so it waits out a retirement's lease. */
+  async compareLegacyChat(sessionId: string): Promise<JournalLegacyChatComparison | null> {
+    await this.releaseSourceLease()
+    const response = await this.slot().request({
+      kind: 'legacy-compare',
+      sessionId
+    })
+    if (response.type !== 'legacy-compare') {
+      throw new Error('journal reader returned no legacy compare')
+    }
+    return response.result
+  }
+
   async legacyProof(cursor: LegacyProofCursor) {
     await this.releaseSourceLease()
     if (!this.conversionSlot || this.conversionSlot.failed) {
       this.conversionSlot = this.slot()
     }
-    const response = await this.conversionSlot.request({ kind: 'legacy-proof', cursor })
+    const response = await this.conversionSlot.request({
+      kind: 'legacy-proof',
+      cursor
+    })
     if (response.type !== 'legacy-proof') {
       throw new Error('legacy proof reader returned no page')
     }
@@ -182,7 +199,10 @@ export class JournalSqlReaderPool {
   }
 
   async importState(sessionId: string) {
-    const response = await this.slot().request({ kind: 'import-state', sessionId })
+    const response = await this.slot().request({
+      kind: 'import-state',
+      sessionId
+    })
     if (response.type !== 'import-state') {
       throw new Error('journal reader returned no import state')
     }
@@ -190,7 +210,10 @@ export class JournalSqlReaderPool {
   }
 
   async database(operation: JournalSqlDatabaseRead): Promise<JournalSqlDatabaseReadResult> {
-    const response = await this.slot(false, operation).request({ kind: 'database', operation })
+    const response = await this.slot(false, operation).request({
+      kind: 'database',
+      operation
+    })
     if (response.type !== 'database') {
       throw new Error('journal reader returned no database result')
     }

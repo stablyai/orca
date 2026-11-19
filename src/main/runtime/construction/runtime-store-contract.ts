@@ -169,6 +169,8 @@ export type RuntimeStore = {
     followSymlinkedDirectories?: GlobalSettings['followSymlinkedDirectories']
     tabAutoGenerateTitle?: GlobalSettings['tabAutoGenerateTitle']
     terminalCopyTrimsGutter?: GlobalSettings['terminalCopyTrimsGutter']
+    terminalScrollbackRows?: GlobalSettings['terminalScrollbackRows']
+    terminalWordSeparator?: GlobalSettings['terminalWordSeparator']
     agentDefaultSurface?: GlobalSettings['agentDefaultSurface']
     nativeChatProviders?: GlobalSettings['nativeChatProviders']
     antigravityChatAuth?: GlobalSettings['antigravityChatAuth']

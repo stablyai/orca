@@ -8,7 +8,7 @@ import {
 } from './journal-legacy-retirement-state'
 import { JOURNAL_LEGACY_SOURCE_RECEIPT } from './database/journal-legacy-source-receipt'
 import { JOURNAL_LEGACY_REVISIONS_KEPT } from './database/journal-legacy-reconcile'
-import { JOURNAL_LEGACY_CONVERTED_BY } from './database/journal-domain-database'
+import { JOURNAL_LEGACY_CONVERTED_BY } from './database/journal-host-database'
 import { rekeyWslDriveUncChats } from '../../wsl/filesystem/wsl-drive-unc-chat-rekey'
 import type { JournalForkStageOperation, JournalForkStageResult } from './journal-fork-stages'
 import { saveJournalDomainOutlineCache, type JournalOutlineCache } from './journal-domain-outline'
@@ -38,6 +38,8 @@ import { discardForgottenJournalChatPage } from './journal-forgotten-chats'
 import { installAgentSessionStoreRows } from '../../runtime/agent-session/records/agent-session-record-rows'
 import { storedAgentSessionBackground } from '../../runtime/agent-session/records/agent-session-tab-table'
 import type { JournalSqlStoredRecords } from './journal-sql-database-read'
+import { settleJournalLegacyCompare } from './database/journal-legacy-compare'
+import { recordJournalLegacyCopyFailure } from './database/journal-legacy-copies'
 import {
   fillJournalConnectorReplies,
   sentJournalConnectorReplies
@@ -83,6 +85,8 @@ export type JournalSqlMaintenance =
   | { kind: 'import-finish'; header: JournalDomainImportHeader }
   | JournalDomainMaintenance
   | { kind: 'event-tail-prune'; now: number }
+  | ({ kind: 'legacy-compare-settle' } & Parameters<typeof settleJournalLegacyCompare>[1])
+  | { kind: 'legacy-copy-failed'; sessionId: string; error: string }
   // The reply outbox's rows outside any chat's lane: filled with outcomes, and sent.
   | { kind: 'connector-replies-fill'; fills: readonly JournalConnectorReplyFill[]; now: number }
   | { kind: 'connector-replies-sent'; keys: readonly JournalConnectorReplyKey[]; now: number }
@@ -196,6 +200,12 @@ export function applyJournalSqlMaintenance(
       return completeJournalDomainCompaction(db, operation.now)
     case 'event-tail-prune':
       return pruneJournalSqlEventTail(db, operation.now)
+    case 'legacy-compare-settle':
+      settleJournalLegacyCompare(db, operation)
+      return null
+    case 'legacy-copy-failed':
+      recordJournalLegacyCopyFailure(db, operation.sessionId, operation.error)
+      return null
     case 'stored-output-compaction':
       return compactJournalStoredOutputPage(db)
   }

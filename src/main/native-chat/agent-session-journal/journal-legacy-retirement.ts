@@ -3,11 +3,11 @@ import {
   JournalLegacyRetentionError
 } from './journal-legacy-retention-error'
 import { ownsOrcadProfileDirectory } from '../../orcad/instance-lock/orcad-instance-lock-hold'
-import { journalDatabasePath } from './database/journal-host-database'
 import {
+  journalDatabasePath,
   journalDomainDatabasePath,
   journalRunningOrcaVersion
-} from './database/journal-domain-database'
+} from './database/journal-host-database'
 import {
   legacyDestinationIdentity,
   legacyDestinationMain,

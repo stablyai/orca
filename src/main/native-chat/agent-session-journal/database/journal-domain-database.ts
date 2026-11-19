@@ -9,7 +9,12 @@ import {
   journalPragmaNumber,
   type OpenJournalDatabase
 } from './journal-database'
-import { journalDatabasePath } from './journal-host-database'
+import {
+  JOURNAL_LEGACY_CONVERTED_BY,
+  journalDatabasePath,
+  journalDomainDatabasePath,
+  journalRunningOrcaVersion
+} from './journal-host-database'
 import { tryFoldJournalTextTails } from '../journal-text-tail'
 import {
   JOURNAL_DOMAIN_SCHEMA_VERSION,
@@ -25,18 +30,6 @@ import {
   captureJournalLegacySourceReceipt,
   JOURNAL_LEGACY_SOURCE_RECEIPT
 } from './journal-legacy-source-receipt'
-
-/** The Orca version that copied this profile; its original journal stays until a later version runs. */
-export const JOURNAL_LEGACY_CONVERTED_BY = 'journal.legacy-converted-by.v1'
-
-/** This host's own release: the desktop's, or the bundle orcad stamps for itself at start. */
-export function journalRunningOrcaVersion(): string | null {
-  return process.env.ORCA_APP_VERSION?.trim() || null
-}
-
-export function journalDomainDatabasePath(stateDirectory: string): string {
-  return join(stateDirectory, 'agent-session-domain.db')
-}
 
 /** Run once on the writer worker, before opening its steady-state writable connection. */
 export async function initializeJournalDomainDatabase(stateDirectory: string): Promise<string> {

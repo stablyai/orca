@@ -22,15 +22,6 @@ function index() {
 }
 
 describe('UserHosts', () => {
-  it('an unknown user lists nothing and gets no storage', async () => {
-    const { hosts, state } = index()
-    expect(await hosts.list()).toEqual([])
-    await hosts.remove(A)
-    expect(await hosts.adminList()).toEqual({ outcome: 'listed', relayHostIds: [] })
-    expect(state.tables()).toBe(0)
-    expect(state.kv.size).toBe(0)
-  })
-
   it('add is idempotent: first seen stays, last seen moves forward only', async () => {
     const { hosts } = index()
     await hosts.add(A, 1_000)

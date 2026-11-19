@@ -30,7 +30,7 @@ it('keeps periodic cleanup running while a retirement proof waits on a paused co
             ? { kind: 'sessions', sessionIds: [] }
             : { kind: 'retired-heads', heads: [], through: null }
     },
-    { ensure: async () => null },
+    { ensure: async () => null, compareLegacyChats: async () => {} },
     activity,
     (error) => errors.push(error)
   )

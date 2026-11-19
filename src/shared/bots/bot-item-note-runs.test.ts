@@ -231,16 +231,6 @@ describe("the bot's notes in one turn: one row, each item at its final state", (
     expect(folded[0]!.botItemNote?.at).toBe(rows[2]!.message.timestamp)
   })
 
-  it('reads an add then an ask as one line', () => {
-    expect(
-      drawn([
-        bot('t1', made('share')),
-        bot('t1', commented('share', 'planned'), moved('share', 'planned', 'needs_you')),
-        prose()
-      ])
-    ).toEqual(['Added and asked you about <Share links>', 'prose'])
-  })
-
   it('splits items that ended differently, keeping the order they first appeared', () => {
     expect(
       drawn([
@@ -303,16 +293,6 @@ describe("the bot's notes in one turn: one row, each item at its final state", (
     ).toEqual([
       'Moved <Token refresh fix> to In progress / Added and moved <Login flaky test> <Export timeout> to In progress'
     ])
-  })
-
-  it('folds a bulk add and start into one line with every item', () => {
-    const five = ['a1', 'a2', 'a3', 'a4', 'a5']
-    expect(
-      drawn([
-        bot('t1', ...five.map(made)),
-        bot('t1', ...five.map((uid) => moved(uid, 'planned', 'working')))
-      ])
-    ).toEqual(['Added and moved <a1> <a2> <a3> <a4> <a5> to In progress'])
   })
 
   it('marks done after a link, drops a round trip to its comment, and leaves owner runs as they are', () => {

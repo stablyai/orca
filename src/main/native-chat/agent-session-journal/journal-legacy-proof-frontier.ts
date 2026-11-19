@@ -52,9 +52,19 @@ export async function completeJournalLegacyProof(
     if (page.claims?.length) {
       await writer.maintain({ kind: 'legacy-claims-absorb', claims: page.claims })
     }
-    while (frontier.session < page.sessions.length) {
+    // A copy converts from its original chat like any unconverted chat.
+    const chats = page.copies
+      ? page.copies.map((sessionId) => ({
+          sessionId,
+          workspaceId: '',
+          epoch: '',
+          empty: false,
+          convert: true
+        }))
+      : page.sessions
+    while (frontier.session < chats.length) {
       await admit()
-      const source = page.sessions[frontier.session]!
+      const source = chats[frontier.session]!
       // A chat deleted here, or one that never held anything, is not converted back.
       if (!source.convert) {
         frontier.session++

@@ -12,7 +12,7 @@ import type { JournalSqlActivity } from './journal-sql-activity'
 export function createJournalSqlMaintenance(
   writer: Pick<JournalSqlOwner, 'maintain'>,
   readers: JournalSqlReaderPool,
-  conversions: Pick<JournalSqlConversions, 'ensure'>,
+  conversions: Pick<JournalSqlConversions, 'ensure' | 'compareLegacyChats'>,
   activity: JournalSqlActivity,
   options: {
     onMaintenanceError: (error: unknown, sessionId?: string) => void

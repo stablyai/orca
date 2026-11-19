@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CONNECTOR_PATHS } from '../../shared/connectors/connector-cloud-contract'
 import { ConnectorCloud } from './connector-cloud'
+import { ConnectorTurnEvents } from './connector-turn-events'
 import { FakeConnectorCloud } from './fake-connector-cloud.test-fixture'
 import { FAKE_BOT, fakeMachine, fakeSeam, type FakeSeam } from './fake-connector-seam.test-fixture'
 
@@ -50,8 +51,9 @@ beforeEach(() => {
   machine = fakeMachine(() => (enabled ? seam : null))
 })
 
-afterEach(() => {
+afterEach(async () => {
   vi.useRealTimers()
+  await ConnectorTurnEvents.settled()
   rmSync(userDataPath, { recursive: true, force: true })
 })
 
@@ -268,6 +270,7 @@ describe('ConnectorCloud', () => {
     cloud.connect()
     await vi.advanceTimersByTimeAsync(60_000)
     expect(fake.events).toContainEqual(expect.objectContaining({ kind: 'turn-ended' }))
+    await ConnectorTurnEvents.settled()
     expect(existsSync(outbox)).toBe(false)
     expect(cloud.cloudFeatures()).toBeNull()
   })
@@ -354,11 +357,13 @@ describe('ConnectorCloud', () => {
     cloud.connect()
     await vi.advanceTimersByTimeAsync(10)
     cloud.accountChanged()
+    await ConnectorTurnEvents.settled()
     expect(existsSync(outbox)).toBe(true)
 
     fake.signedIn.add('grace')
     account = 'grace'
     cloud.accountChanged()
+    await ConnectorTurnEvents.settled()
     expect(existsSync(outbox)).toBe(false)
     await vi.advanceTimersByTimeAsync(10)
     expect(fake.minted.at(-1)?.account).toBe('grace')
@@ -366,6 +371,7 @@ describe('ConnectorCloud', () => {
     writeFileSync(outbox, JSON.stringify({ account: 'grace', turnEnds: [turnEnd] }))
     const restarted = connectorCloud()
     restarted.signOutStarted()
+    await ConnectorTurnEvents.settled()
     expect(existsSync(outbox)).toBe(false)
   })
 
@@ -391,6 +397,7 @@ describe('ConnectorCloud', () => {
     await vi.advanceTimersByTimeAsync(60_000)
     expect(fake.requestsTo(CONNECTOR_PATHS.poll)).toHaveLength(1)
     expect(fake.minted.every((minted) => minted.account === 'ada')).toBe(true)
+    await ConnectorTurnEvents.settled()
     expect(existsSync(outbox)).toBe(true)
   })
 })

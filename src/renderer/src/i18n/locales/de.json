@@ -13568,10 +13568,8 @@
             "f61af83316": "Ordner erstellen",
             "37c875d827": "Datei erstellen",
             "b3e288bf41": "„{{value0}}“ konnte nicht heruntergeladen werden.",
-            "f729bcd97d": "Der Ordner „{{value0}}“ konnte nicht heruntergeladen werden.",
             "1a3df04ae1": "Öffnen",
             "bce4d4e44f": "„{{value0}}“ heruntergeladen",
-            "a4029c996b": "Ordner „{{value0}}“ heruntergeladen",
             "e26010014a": "Durch .gitignore ignoriert",
             "a06551beee": "Enter",
             "66a29dde82": "Relativen Pfad kopieren",
@@ -22206,9 +22204,7 @@
     "updateFailed": "Projektfeld konnte nicht aktualisiert werden"
   },
   "mediaPreview": {
-    "unavailable": "Diese Mediendatei kann nicht wiedergegeben werden. Die Datei ist möglicherweise nicht verfügbar oder verwendet einen nicht unterstützten Codec.",
-    "openFailed": "Diese Datei konnte nicht in der Standard-App geöffnet werden.",
-    "openDefault": "In Standard-App öffnen"
+    "unavailable": "Diese Mediendatei kann nicht wiedergegeben werden. Die Datei ist möglicherweise nicht verfügbar oder verwendet einen nicht unterstützten Codec."
   },
   "workspace": {
     "branchChoice": {

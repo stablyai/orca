@@ -15,6 +15,7 @@ import { readJournalLegacyProofPage } from './journal-legacy-source-proof'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
 import { journalDomainImportState } from './journal-domain-import-rows'
 import { prepareJournalDomainImport } from './journal-domain-import'
+import { journalLegacyConversionSource } from './database/journal-legacy-source'
 import { journalSqlRetryRows } from './journal-sql-retry-rows.test-fixture'
 import { insertJournalRow, publishJournalSessionEpoch } from './durable-rows/journal-row-table'
 import { acquireJournalLegacyFileLock } from './journal-legacy-file-lock'
@@ -58,6 +59,19 @@ export function olderOrcaChat(filename: string, sessionId: string): void {
       sessionId,
       JSON.stringify({ sessionId, lease: { sessionId } })
     )
+  })
+  db.close()
+}
+
+/** An older Orca's later turns in a chat, as a new epoch replacing the old (as its /clear does). */
+export function continueInOlderOrca(filename: string, sessionId: string): void {
+  const { db } = openJournalDatabase(filename)
+  runJournalTransaction(db, () => {
+    db.prepare("DELETE FROM journal_rows WHERE session_id=? AND epoch<>'continued'").run(sessionId)
+    publishJournalSessionEpoch(db, { sessionId, workspaceId: 'workspace' }, 'continued')
+    for (const row of journalSqlRetryRows(true)) {
+      insertJournalRow(db, sessionId, { ...row, epoch: 'continued' })
+    }
   })
   db.close()
 }
@@ -116,11 +130,15 @@ export async function profile(
       if (journalDomainImportState(db, id).state === 'ready') {
         return 'epoch'
       }
-      const imported = prepareJournalDomainImport(source(), id)
-      if (!imported) {
+      // As the reader does: a copy takes its original chat's history under its own id.
+      const from = journalLegacyConversionSource(db, id)
+      const prepared = prepareJournalDomainImport(source(), from)
+      if (!prepared) {
         return null
       }
-      for (const page of imported.pages) {
+      const { pages, ...header } = prepared
+      const imported = from === id ? header : { ...header, sessionId: id, sourceRevision: null }
+      for (const page of pages) {
         await writer.maintain({ kind: 'import-page', target: imported, page })
       }
       return String(await writer.maintain({ kind: 'import-finish', header: imported }))

@@ -16,8 +16,10 @@ import { readJournalDomainHistoryFrame } from './journal-domain-history-page'
 import { journalDomainImportState } from './journal-domain-import-rows'
 import {
   journalLegacyChatRevision,
+  journalLegacyConversionSource,
   openJournalLegacySource
 } from './database/journal-legacy-source'
+import { compareJournalLegacyChat } from './database/journal-legacy-compare'
 import { installWorkerSendLedger } from '../../worker-threads/worker-send-ledger'
 import { limitJournalReaderReply } from './journal-sql-reader-reply-limit'
 
@@ -40,7 +42,11 @@ function reply(message: JournalSqlReaderReply): void {
   port.postMessage(limitJournalReaderReply(message))
 }
 try {
-  db = new Database(workerData.filename, { readonly: true, fileMustExist: true, timeout: 5000 })
+  db = new Database(workerData.filename, {
+    readonly: true,
+    fileMustExist: true,
+    timeout: 5000
+  })
   if (String(db.pragma('journal_mode', { simple: true })).toLowerCase() !== 'wal') {
     throw new Error('journal SQL reader requires WAL mode')
   }
@@ -64,7 +70,10 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
         if (fork || conversions.size) {
           throw new Error('fork reader reservation is not exclusive')
         }
-        fork = { id, preparation: new JournalForkPreparation(db, operation.input) }
+        fork = {
+          id,
+          preparation: new JournalForkPreparation(db, operation.input)
+        }
         reply({ type: 'fork-prepared', id })
         break
       case 'fork-next':
@@ -96,42 +105,59 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
         })
         break
       case 'point':
-        reply({ type: 'point', id, result: readJournalSqlPoint(db, operation.request) })
+        reply({
+          type: 'point',
+          id,
+          result: readJournalSqlPoint(db, operation.request)
+        })
         break
       case 'database':
-        reply({ type: 'database', id, result: readJournalSqlDatabase(db, operation.operation) })
+        reply({
+          type: 'database',
+          id,
+          result: readJournalSqlDatabase(db, operation.operation)
+        })
         break
-      case 'legacy-proof':
+      case 'legacy-proof': {
+        const source = readJournalLegacySource(openOriginal)
+        if (!source) {
+          throw new Error('legacy source disappeared during proof')
+        }
+        reply({
+          type: 'legacy-proof',
+          id,
+          page: readJournalLegacyProofPage(source, operation.cursor, db)
+        })
+        break
+      }
       case 'conversion-prepare': {
         // Each frozen-source read is its own short statement; no snapshot spans the restore.
-        if (!original && existsSync(workerData.originalFilename)) {
-          const openSource = () =>
-            openJournalLegacySource(workerData.originalFilename, { timeout: 5000 })
-          original =
-            operation.kind === 'legacy-proof' ? readJournalLegacySource(openSource) : openSource()
-        }
-        if (operation.kind === 'legacy-proof') {
-          if (!original) {
-            throw new Error('legacy source disappeared during proof')
-          }
-          reply({
-            type: 'legacy-proof',
-            id,
-            page: readJournalLegacyProofPage(original, operation.cursor, db)
-          })
-          break
-        }
-        const prepared = original
-          ? (prepareJournalDomainImport(original, operation.sessionId) ??
-            prepareEmptyConversion(original, operation.sessionId))
+        const source = openOriginal()
+        const from = journalLegacyConversionSource(db, operation.sessionId)
+        const prepared = source
+          ? (prepareJournalDomainImport(source, from) ?? prepareEmptyConversion(source, from))
           : null
         if (prepared) {
           const { pages, ...header } = prepared
           conversions.set(id, pages)
-          reply({ type: 'prepared', id, conversion: header })
+          // A copy takes the original chat's history; the original's revision stays the original's.
+          const conversion =
+            from === operation.sessionId
+              ? header
+              : {
+                  ...header,
+                  sessionId: operation.sessionId,
+                  sourceRevision: null
+                }
+          reply({ type: 'prepared', id, conversion })
         } else {
           reply({ type: 'prepared', id, conversion: null })
         }
+        break
+      }
+      case 'legacy-compare': {
+        const result = compareJournalLegacyChat(openOriginal, db, operation.sessionId)
+        reply({ type: 'legacy-compare', id, result })
         break
       }
       case 'conversion-page': {
@@ -156,7 +182,12 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
       reply({
         type: 'legacy-proof',
         id,
-        page: { next: null, sessions: [], retained: error.message, reason: error.reason }
+        page: {
+          next: null,
+          sessions: [],
+          retained: error.message,
+          reason: error.reason
+        }
       })
       return
     }
@@ -188,6 +219,15 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
   }
 })
 
+function openOriginal(): Database.Database | undefined {
+  if (!original && existsSync(workerData.originalFilename)) {
+    original = openJournalLegacySource(workerData.originalFilename, {
+      timeout: 5000
+    })
+  }
+  return original
+}
+
 /** Preserve empty saved epochs independently of legacy-source retirement. */
 function prepareEmptyConversion(
   source: Database.Database,
@@ -217,7 +257,11 @@ function prepareEmptyConversion(
       derivedTurnItemId: null,
       historyOrigin: null,
       queueFailureBoundary: 0,
-      queuePauseMarks: { latestStop: null, resumedSequence: 0, reopenedSequence: 0 }
+      queuePauseMarks: {
+        latestStop: null,
+        resumedSequence: 0,
+        reopenedSequence: 0
+      }
     },
     pages: (function* () {
       yield* []
