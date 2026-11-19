@@ -55,63 +55,86 @@ export abstract class OrcaRuntimeWithQuitIdleAgentStops extends OrcaRuntimeWithW
     if (!session) {
       return []
     }
-    const rows = this.getAgentProviderSessionSnapshotFn?.() ?? []
-    return rows.flatMap((row) => {
-      // Placeholder and structured rows claim no finished turn; remote and WSL agents stay on their host.
+    const targets: QuitStopTarget[] = []
+    const kept: Record<string, string> = {}
+    for (const row of this.getAgentProviderSessionSnapshotFn?.() ?? []) {
+      // Placeholder and structured rows claim no finished turn; other agents may hide a running job.
       if (
         row.providerSessionOnly ||
         row.structuredHost ||
-        row.connectionId !== null ||
         !AGENTS_REPORTING_BACKGROUND_WORK.has(row.agentType ?? '')
       ) {
-        return []
+        continue
       }
-      const ptyId = savedPanePtyId(session, row.paneKey)
-      const pty = ptyId ? this.ptysById.get(ptyId) : undefined
-      if (
-        !pty?.connected ||
-        pty.connectionId !== null ||
-        pty.isWsl === true ||
-        (pty.isWsl === null && process.platform === 'win32')
-      ) {
-        return []
+      const pick = this.quitStopTargetFor(row, session)
+      if (typeof pick === 'string') {
+        kept[row.paneKey] = pick
+      } else {
+        targets.push(pick)
       }
-      const savedRecord = session.sleepingAgentSessionsByPaneKey?.[row.paneKey]
-      const identity = this.readPaneAgentIdentity(row.paneKey, savedRecord)
-      // A shared process (tmux) outlives the pane, and an ended or suspended agent is not idle.
-      if (
-        !identity ||
-        identity.ended ||
-        identity.suspended ||
-        identity.processTopology !== 'pane-owned'
-      ) {
-        return []
-      }
-      const { status } = identity
-      const attention = this.getTerminalAttention(pty.ptyId)
-      const inputAt = this.terminalRunFacts.readLastInputAt(pty.ptyId)
-      if (
-        !completedAgentTurnAllowsStop(status) ||
-        attention.shownRemotely ||
-        inputMayOpenTurn(status, attention.lastInputAt, inputAt) ||
-        this.ptyShowsComposerDraft(pty.ptyId)
-      ) {
-        return []
-      }
-      // Never lose a conversation: stop only what the saved profile resumes as this same session.
-      if (
-        !savedRecord ||
-        savedRecord.agent !== status.agentType ||
-        !agentProviderSessionsEqual(
-          savedRecord.agent,
-          savedRecord.providerSession,
-          status.providerSession
-        )
-      ) {
-        return []
-      }
-      return [{ ptyId: pty.ptyId, incarnationId: pty.incarnationId, inputAt }]
-    })
+    }
+    // One line per quit: why each finished-looking agent kept running.
+    console.info('[quit] Idle agent stops', { picked: targets.length, kept })
+    return targets
+  }
+
+  private quitStopTargetFor(
+    row: AgentStatusIpcPayload,
+    session: WorkspaceSessionState
+  ): QuitStopTarget | string {
+    // Remote and WSL agents stay on their host.
+    if (row.connectionId !== null) {
+      return 'remote'
+    }
+    const ptyId = savedPanePtyId(session, row.paneKey)
+    const pty = ptyId ? this.ptysById.get(ptyId) : undefined
+    if (!pty?.connected) {
+      return 'no-live-pty'
+    }
+    if (
+      pty.connectionId !== null ||
+      pty.isWsl === true ||
+      (pty.isWsl === null && process.platform === 'win32')
+    ) {
+      return 'remote'
+    }
+    const savedRecord = session.sleepingAgentSessionsByPaneKey?.[row.paneKey]
+    const identity = this.readPaneAgentIdentity(row.paneKey, savedRecord)
+    // A shared process (tmux) outlives the pane, and an ended or suspended agent is not idle.
+    if (!identity || identity.ended || identity.suspended) {
+      return 'not-running'
+    }
+    if (identity.processTopology !== 'pane-owned') {
+      return 'shared-process'
+    }
+    const { status } = identity
+    if (!completedAgentTurnAllowsStop(status)) {
+      return 'mid-turn'
+    }
+    const attention = this.getTerminalAttention(pty.ptyId)
+    if (attention.shownRemotely) {
+      return 'shown-remotely'
+    }
+    const inputAt = this.terminalRunFacts.readLastInputAt(pty.ptyId)
+    if (inputMayOpenTurn(status, attention.lastInputAt, inputAt)) {
+      return 'input-since-turn'
+    }
+    if (this.ptyShowsComposerDraft(pty.ptyId)) {
+      return 'draft'
+    }
+    // Never lose a conversation: stop only what the saved profile resumes as this same session.
+    if (
+      !savedRecord ||
+      savedRecord.agent !== status.agentType ||
+      !agentProviderSessionsEqual(
+        savedRecord.agent,
+        savedRecord.providerSession,
+        status.providerSession
+      )
+    ) {
+      return 'no-saved-conversation'
+    }
+    return { ptyId: pty.ptyId, incarnationId: pty.incarnationId, inputAt }
   }
 
   /** Stop the picked agents, keeping history, once the final profile save holds their records;
@@ -148,6 +171,7 @@ export abstract class OrcaRuntimeWithQuitIdleAgentStops extends OrcaRuntimeWithW
   ): Promise<boolean> {
     // A write since selection (a delivered turn, a paired client) may have started work.
     if (this.terminalRunFacts.readLastInputAt(ptyId) !== inputAt) {
+      console.info('[quit] Idle agent written to since it was picked; kept running:', ptyId)
       return false
     }
     // Reversible: the exit must not retire the saved conversation the next launch resumes.
