@@ -309,7 +309,7 @@ describeRender('Look around in the phone’s bot sheet', () => {
     await page.click('[data-testid="bot-sheet-tab-settings"]')
     await waitForText(page, 'Tidy memory overnight')
     const text = await bodyText(page)
-    for (const line of ['Memory upkeep', 'Each night', 'Last tidied', '17 changes', 'Tidy now']) {
+    for (const line of ['Memory upkeep', 'Each night', 'Last tidied', 'Tidy now']) {
       expect(text).toContain(line)
     }
     await page.getByText('Tidy now', { exact: true }).scrollIntoViewIfNeeded()

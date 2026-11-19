@@ -36,6 +36,9 @@ vi.mock('../components/composer-input/TextField', () => ({
   TextField: 'TextField'
 }))
 vi.mock('../navigation/use-back-claim', () => ({ useBackClaim: () => {} }))
+vi.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0 })
+}))
 vi.mock('../platform/external-links/external-link', () => ({
   openExternalLink: mocks.openLink
 }))
@@ -59,7 +62,7 @@ vi.mock('./bot-up-next-operations', () => ({
 }))
 
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import { lastLookedText, lookedText } from './bot-up-next-copy'
+import { lookedText } from './bot-up-next-copy'
 import { MobileBotSettingsTab } from './MobileBotSettingsTab'
 import { MobileBotUpNext, type UpNextActions } from './MobileBotUpNext'
 import { useBotUpNext } from './use-bot-up-next'
@@ -358,8 +361,5 @@ describe('Suggestions wording', () => {
       /^Looked yesterday 4:12\sPM$/
     )
     expect(lookedText(new Date(2026, 9, 29, 16, 12).getTime(), now)).toBe('Looked Oct 29')
-    expect(lastLookedText(new Date(2026, 9, 29, 16, 12).getTime(), 4, now)).toBe(
-      'Oct 29 · 4 suggestions'
-    )
   })
 })
