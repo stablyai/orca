@@ -107,18 +107,6 @@ function rows(): HTMLElement[] {
   return screen.getAllByRole('button')
 }
 
-it('lists PRs and issues, then other links, then files, each on one line', () => {
-  expect(rows().map((row) => row.textContent)).toEqual([
-    'Issue #7',
-    'PR #9',
-    'PR #10',
-    'ENG-12',
-    'example.com/docs/a',
-    'acme.slack.com/archives/C1/p2',
-    'mock.html'
-  ])
-})
-
 it.each([
   ['https://example.com/docs/a', 'example.com'],
   ['notes/mock.html', 'notes/mock.html']

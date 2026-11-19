@@ -145,9 +145,11 @@ afterEach(() => {
 describe('the Chats tab', () => {
   it('starts every chat folded, whatever the sidebar has open, and unfolds to five workers', () => {
     useAppStore.getState().setBotChatFold('local', 'bot-1', 'rollout', 'open')
-    showTree({ chats: [rollout] })
+    showTree({ chats: [{ ...rollout, running: [worker('r1', 'needs-you')] }] })
     renderPanel()
     expect(screen.queryByText('Worker r1')).toBeNull()
+    expect(screen.getByRole('img', { name: '1 waiting' })).toBeTruthy()
+    expect(screen.queryByText(/running/)).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: 'Unfold Connector fix rollout' }))
 
@@ -173,20 +175,6 @@ describe('the Chats tab', () => {
 
     expect(opened).toHaveBeenCalledWith(bot, 'rollout')
     expect(screen.queryByText('Worker r1')).toBeNull()
-  })
-
-  it('says on a folded row how many workers wait on the owner, also when none runs', () => {
-    showTree({
-      chats: [
-        chat('waiting', {
-          running: [worker('w1', 'needs-you'), worker('w2', 'needs-you')],
-          runningTotal: 2
-        })
-      ]
-    })
-    renderPanel()
-    expect(screen.getByText('2 waiting')).toBeTruthy()
-    expect(screen.queryByText(/running/)).toBeNull()
   })
 
   it("shows Activity's header while the host is offline, its actions off and its gear opening settings in Activity", () => {
