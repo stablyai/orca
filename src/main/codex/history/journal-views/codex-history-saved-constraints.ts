@@ -183,7 +183,9 @@ export function constrainSavedHistoryItem(
         }
         // The row holds this text whole: drop the source copy so the saved cut is borrowed.
         if (item.type === 'commandExecution') {
+          // Rollout items keep the raw key, which the output reader falls back to.
           delete item.aggregatedOutput
+          delete item.aggregated_output
         }
         if (item.type === 'mcpToolCall' && item.error == null) {
           delete item.result
