@@ -33,6 +33,7 @@ import {
 } from './bot-look-around-failures'
 import type { BotLookAroundStore } from './bot-look-around-store'
 import { withoutBackgroundRun } from './bot-look-around-state'
+import type { BotMemoryHistoryRow } from '../../shared/bots/bot-memory-history'
 import type { BotMemoryRecord } from './bot-memory-record'
 import {
   beginTidyUp,
@@ -192,6 +193,7 @@ export class BotTidyUpRunner {
           )
     })
     let applied: TidyUpApplied | null = null
+    let historyRows: BotMemoryHistoryRow[] = []
     let startedAt = this.deps.now()
     let chatCount = 0
     try {
@@ -270,6 +272,8 @@ export class BotTidyUpRunner {
       } else {
         applied = outcome
         ended = { through: startedAt }
+        // Its own row, read now: a summary without it only loses its Undo link.
+        historyRows = await this.deps.memory.history(bot.id).catch(() => [])
       }
     } catch (error) {
       if (!gate.deferred()) {
@@ -288,7 +292,7 @@ export class BotTidyUpRunner {
         void this.deps.sessions.release(sessionId)
       } else if (begun) {
         const at = { startedAt, chats: chatCount, now: this.deps.now() }
-        const summary = applied && tidyUpRunSummary(this.deps.memory.history(bot.id), applied, at)
+        const summary = applied && tidyUpRunSummary(historyRows, applied, at)
         this.change(bot.id, (state) => {
           const quiet = 'error' in ended && ended.alerted && lookFailureIsQuiet(state, sessionId)
           const next = endTidyUp(

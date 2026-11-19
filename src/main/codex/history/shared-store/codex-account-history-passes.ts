@@ -11,20 +11,18 @@ import {
   requestHostCodexIndexHeal
 } from './codex-account-history-index'
 import { shareCodexAccountHistory, unshareCodexAccountHistory } from './codex-account-history-links'
-
-type QueuedPass = { shared: boolean; pass: Promise<void> }
+import { CodexHistoryPassRequests } from './codex-history-pass-queue'
 
 const INDEX_PENDING_DIR = (): string =>
   join(getOrcaUserDataPath(), 'codex-account-history', 'index-pending')
 
 /**
- * Host account history passes, one at a time in request order (homes merging into one store at
- * once would race on its folders): a request joins only the latest one queued for that home with
- * the same mode. A home settled in a mode this run skips later passes in it.
+ * Host account history passes, one at a time (homes merging into one store at once would race on
+ * its folders), a launch's own ahead of background ones; the newest request for a home replaces
+ * an older one still queued. A home settled in a mode this run skips later passes.
  */
 export class CodexAccountHistoryPasses {
-  private readonly latest = new Map<string, QueuedPass>()
-  private tail: Promise<void> = Promise.resolve()
+  private readonly requests = new CodexHistoryPassRequests()
   private readonly settledThisRun = new Map<string, boolean>()
   private activePasses = 0
   // Homes whose left-behind rollouts still await a content check, checked once no pass runs.
@@ -36,43 +34,36 @@ export class CodexAccountHistoryPasses {
     started: (): number => this.startedPasses
   }
 
-  run(accountHome: string, shared: boolean): Promise<void> {
+  /** `forLaunch`: a launch waits on it, so it goes ahead of queued background passes. */
+  run(accountHome: string, shared: boolean, options: { forLaunch?: boolean } = {}): Promise<void> {
     const key = normalizeRuntimePathForComparison(accountHome)
-    const previous = this.latest.get(key)
-    if (previous?.shared === shared) {
-      return previous.pass
-    }
-    const pass = this.tail.then(async () => {
-      if (this.settledThisRun.get(key) === shared) {
-        // Moves are done; only index work a stopped or failed heal left behind is retried.
-        if (hasIncompleteHostCodexIndexHeal(INDEX_PENDING_DIR())) {
-          requestHostCodexIndexHeal(
-            INDEX_PENDING_DIR(),
-            getSystemCodexHomePath(),
-            this.passProgress
-          )
+    // A launch's own pass goes ahead of background ones, never behind a queued one.
+    return this.requests.request(
+      { queue: 'host', home: key, shared, forLaunch: options.forLaunch ?? false },
+      async () => {
+        if (this.settledThisRun.get(key) === shared) {
+          // Moves are done; only index work a stopped or failed heal left behind is retried.
+          if (hasIncompleteHostCodexIndexHeal(INDEX_PENDING_DIR())) {
+            requestHostCodexIndexHeal(
+              INDEX_PENDING_DIR(),
+              getSystemCodexHomePath(),
+              this.passProgress
+            )
+          }
+          return
         }
-        return
+        this.activePasses += 1
+        this.startedPasses += 1
+        try {
+          await this.runPass(key, accountHome, shared)
+        } finally {
+          this.activePasses -= 1
+        }
+        // Index once no pass is moving files.
+        requestHostCodexIndexHeal(INDEX_PENDING_DIR(), getSystemCodexHomePath(), this.passProgress)
+        this.checkOwed()
       }
-      this.activePasses += 1
-      this.startedPasses += 1
-      try {
-        await this.runPass(key, accountHome, shared)
-      } finally {
-        this.activePasses -= 1
-      }
-      // Index once no pass is moving files.
-      requestHostCodexIndexHeal(INDEX_PENDING_DIR(), getSystemCodexHomePath(), this.passProgress)
-      this.checkOwed()
-    })
-    this.tail = pass.catch(() => {})
-    this.latest.set(key, { shared, pass })
-    void pass.finally(() => {
-      if (this.latest.get(key)?.pass === pass) {
-        this.latest.delete(key)
-      }
-    })
-    return pass
+    )
   }
 
   private async runPass(key: string, accountHome: string, shared: boolean): Promise<void> {

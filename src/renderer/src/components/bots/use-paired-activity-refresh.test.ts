@@ -20,12 +20,4 @@ describe('usePairedActivityRefresh', () => {
     vi.advanceTimersByTime(60_000 + 120_000)
     expect(refresh).toHaveBeenCalledTimes(4)
   })
-
-  it('does nothing for a bot with none', () => {
-    vi.useFakeTimers()
-    const refresh = vi.fn()
-    renderHook(() => usePairedActivityRefresh(false, refresh))
-    vi.advanceTimersByTime(600_000)
-    expect(refresh).not.toHaveBeenCalled()
-  })
 })

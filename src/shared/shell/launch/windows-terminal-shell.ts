@@ -2,11 +2,14 @@ import type { AgentStartupShell } from '../../agent-launch/startup/tui-agent-sta
 
 export const WINDOWS_GIT_BASH_SHELL = 'git-bash'
 
-export type BuiltInWindowsTerminalShell =
-  | 'powershell.exe'
-  | 'cmd.exe'
-  | 'wsl.exe'
-  | typeof WINDOWS_GIT_BASH_SHELL
+export const BUILT_IN_WINDOWS_TERMINAL_SHELLS = [
+  'powershell.exe',
+  'cmd.exe',
+  'wsl.exe',
+  WINDOWS_GIT_BASH_SHELL
+] as const
+
+export type BuiltInWindowsTerminalShell = (typeof BUILT_IN_WINDOWS_TERMINAL_SHELLS)[number]
 
 /** Choose startup quoting from terminalWindowsShell: Git Bash/WSL use POSIX, cmd.exe uses cmd, others use the PowerShell default. */
 export function resolveWindowsShellStartupFamily(

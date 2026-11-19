@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { ExternalLink, Loader2 } from 'lucide-react'
+import { ExternalLink, Loader2, Lock } from 'lucide-react'
 import { toast } from 'sonner'
 import { GitHubIcon } from '@/components/icons/GitHubIcon'
 import { Button } from '@/components/ui/button'
@@ -38,9 +38,15 @@ import {
   OrcaCloudSignInGate,
   orcaCloudSignInReason
 } from '../orca-cloud-sign-in'
-import { ConnectWaiting, ConnectorSetupHeader, SignedInAs } from '../connector-connect-parts'
+import {
+  ConnectWaiting,
+  ConnectorSetupHeader,
+  SignedInAs,
+  connectorSetupFor
+} from '../connector-connect-parts'
 import { useConfirmConnectorSignOut } from '../connector-sign-out-confirm'
-import { botGitHubErrorMessage, gitHubHowToAsk, gitHubSetupIntro } from './bot-github-copy'
+import { botGitHubErrorMessage, gitHubMention, gitHubPushesAs } from './bot-github-copy'
+import { ConnectorTryIt } from '../ConnectorTryIt'
 import { useGitHubWhoCanAsk } from './use-github-who-can-ask'
 import {
   GitHubFinishInBrowser,
@@ -67,7 +73,12 @@ export type BotGitHubSetupStep =
       installations: ConnectorGitHubInstallation[]
       installUrl: string
     }
-  | { kind: 'done'; installations: ConnectorGitHubInstallation[]; installUrl: string }
+  | {
+      kind: 'done'
+      login: string
+      installations: ConnectorGitHubInstallation[]
+      installUrl: string
+    }
 
 /** `on`: the bot is already turned on for GitHub, so setup ends once the account is linked and installed. */
 export function botGitHubSetupStep(
@@ -93,7 +104,7 @@ export function botGitHubSetupStep(
     return { kind: 'install', login: account.login, installUrl, requested }
   }
   return on
-    ? { kind: 'done', installations, installUrl }
+    ? { kind: 'done', login: account.login, installations, installUrl }
     : { kind: 'turn-on', login: account.login, installations, installUrl }
 }
 
@@ -175,6 +186,7 @@ function BotGitHubSetupFlow({
   )
   // GitHub's install page picks the account or organization and its repositories; the list follows.
   const installed = (step: {
+    kind: 'turn-on' | 'done'
     installations: ConnectorGitHubInstallation[]
     installUrl: string
   }): React.JSX.Element => (
@@ -182,6 +194,7 @@ function BotGitHubSetupFlow({
       installations={step.installations}
       installUrl={step.installUrl}
       trip={trip}
+      compact={step.kind === 'done'}
     />
   )
 
@@ -196,16 +209,19 @@ function BotGitHubSetupFlow({
       />
     )
   }
+  const signedInStep = step.kind === 'install' || step.kind === 'turn-on' || step.kind === 'done'
   const header = (
     <ConnectorSetupHeader
       connector={GITHUB}
       title={
         step.kind === 'done'
           ? t('bots.github.setup.isOn', '{{name}} is on GitHub', { name: bot.name })
-          : title
+          : signedInStep
+            ? title
+            : t('bots.github.setup.connectTitle', 'Connect GitHub')
       }
-      intro={step.kind === 'done' ? gitHubHowToAsk(bot) : gitHubSetupIntro(bot, hostName)}
-      line={step.kind === 'install' || step.kind === 'turn-on' ? signedIn(step.login) : undefined}
+      intro={connectorSetupFor(bot, hostName)}
+      line={signedInStep ? signedIn(step.login) : undefined}
       done={step.kind === 'done'}
     />
   )
@@ -237,34 +253,22 @@ function BotGitHubSetupFlow({
           </div>
         )
       case 'connect':
+        // Progressive disclosure: only what connecting needs; how to ask waits for Done.
         return (
           <div className="space-y-4">
-            <p className="text-sm">
-              {hostName
-                ? t(
-                    'bots.github.connect.introOnHost',
-                    'Sign in with GitHub in Orca’s browser for {{host}}, and install the Orca app on the repositories {{name}} may work in if it is not there yet. Orca only reads the username and id.',
-                    { name: bot.name, host: hostName }
-                  )
-                : t(
-                    'bots.github.connect.intro',
-                    'Sign in with GitHub in your browser, and install the Orca app on the repositories {{name}} may work in if it is not there yet. Orca only reads your username and id.',
-                    { name: bot.name }
-                  )}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              {hostName
-                ? t(
-                    'bots.github.setup.pushesOnHost',
-                    '{{name}} pushes code from {{host}} with its git login.',
-                    { name: bot.name, host: hostName }
-                  )
-                : t(
-                    'bots.github.setup.pushesAsYou',
-                    '{{name}} pushes code from this computer with your own git login.',
-                    { name: bot.name }
-                  )}
-            </p>
+            <div className="space-y-2">
+              <p className="text-sm">
+                {t(
+                  'bots.github.connect.pickRepositories',
+                  'Sign in and choose which repositories {{name}} can work in.',
+                  { name: bot.name }
+                )}
+              </p>
+              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Lock className="size-3.5 shrink-0" />
+                {t('bots.github.connect.readsOnly', 'Orca only reads your GitHub username and id.')}
+              </p>
+            </div>
             {step.error ? (
               <p role="alert" className="text-sm text-destructive">
                 {botGitHubErrorMessage(step.error, hostName)}
@@ -339,11 +343,21 @@ function BotGitHubSetupFlow({
           </div>
         )
       case 'done':
+        // Who can ask is edited later in the GitHub connector's settings (BotGitHubCard), not here.
         return (
           <div className="space-y-4">
+            <ConnectorTryIt
+              heading={t('bots.github.setup.tryIt', 'Try it on any issue or pull request')}
+              ways={[
+                {
+                  key: 'mention',
+                  shown: `${gitHubMention(bot)} …`,
+                  copy: gitHubMention(bot)
+                }
+              ]}
+              note={gitHubPushesAs(bot, hostName)}
+            />
             {installed(step)}
-            {/* Turned on just now, past the step that shows who can ask. */}
-            {record.turnedOn ? <LinkedPeople bot={bot} /> : null}
             <DialogFooter>
               <Button autoFocus onClick={onClose}>
                 {t('bots.github.setup.finish', 'Done')}

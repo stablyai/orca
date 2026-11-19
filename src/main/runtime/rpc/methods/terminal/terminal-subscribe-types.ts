@@ -1,3 +1,4 @@
+import type { RemoteTerminalViewer } from '../../../terminal/layout/terminal-view-presence'
 import type { z } from 'zod'
 import type { RpcContext } from '../../core'
 import type { TerminalReplyQuerySequence } from '../../../../../shared/terminal/protocol/queries/terminal-reply-query-scan'
@@ -20,7 +21,7 @@ export type TerminalSubscriptionArgs = {
   ptyId: string
   clientId: string | undefined
   // The authenticated device, whose departure ends this view; request ids are client-declared.
-  viewerDeviceId: string | undefined
+  viewer: RemoteTerminalViewer
   pairedDeviceId: string | undefined
   isMobile: boolean
   supportsDesktopViewportClaims: boolean

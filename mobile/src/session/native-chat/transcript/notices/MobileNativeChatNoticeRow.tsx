@@ -17,6 +17,7 @@ import {
   type NativeChatTextBlock
 } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { readWholeAgentSessionFailureFact } from '../../../../../../src/shared/agent-session/failures/agent-session-failure'
+import { isAgentSessionSetupFailureKind } from '../../../../../../src/shared/agent-session/failures/agent-session-visible-failures'
 import { agentSessionFailureDetailText } from '../../../../../../src/shared/agent-session/failures/agent-session-failure-quoted-detail'
 import { agentSessionFailureSentence } from '../../../../../../src/shared/agent-session/failures/agent-session-failure-words'
 import { agentSessionSignInCommand } from '../../../../../../src/shared/agent-session/lifecycle/launch/agent-session-setup-commands'
@@ -149,8 +150,14 @@ export function MobileNativeChatNoticeRow({
   const lineText = noticeLineText(notice, names, t)
   const failure = readWholeAgentSessionFailureFact(notice.failure)
   const failureDetail = agentSessionFailureDetailText(failure)
+  // A setup failure a later successful turn resolved reads as history: muted, with no action.
+  const resolved =
+    isAgentSessionSetupFailureKind(failure?.kind) &&
+    cardId !== undefined &&
+    names.unresolvedFailureRows !== undefined &&
+    !names.unresolvedFailureRows.has(cardId)
   const signInCommand =
-    failure?.kind === 'notSignedIn'
+    failure?.kind === 'notSignedIn' && !resolved
       ? agentSessionSignInCommand(names.agentName, { account: failure.account, remote: true })
       : null
   const runInTerminal = names.onRunInTerminal
@@ -282,7 +289,7 @@ export function MobileNativeChatNoticeRow({
       const textStyle = [
         styles.line,
         scaledType(TEXT_SIZE, fontScale),
-        look.tone && { color: toneColor(look.tone) }
+        look.tone && { color: toneColor(resolved ? 'notice' : look.tone) }
       ]
       const continuation = names.continuation
       const continueOffered =
@@ -336,10 +343,10 @@ export function MobileNativeChatNoticeRow({
       const Icon =
         look.tone === 'warning' ? AlertTriangle : look.tone === 'error' ? AlertCircle : Info
       return (
-        <View style={[styles.card, styles.toneCard]}>
+        <View style={resolved ? styles.toneCard : [styles.card, styles.toneCard]}>
           <Icon
             size={16 * fontScale}
-            color={toneColor(look.tone)}
+            color={toneColor(resolved ? 'notice' : look.tone)}
             strokeWidth={2}
             style={styles.toneIcon}
           />
@@ -376,7 +383,8 @@ const styles = themedStyleSheet(() => ({
   },
   toneCard: {
     flexDirection: 'row',
-    alignItems: 'flex-start'
+    alignItems: 'flex-start',
+    gap: spacing.sm
   },
   toneIcon: {
     marginTop: 2

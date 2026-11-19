@@ -4,6 +4,10 @@ import { fixtureCos } from '../../../component-fixtures/fixture-bot-panel'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
 import type { BotItemEvent } from '../../../../../shared/bots/bot-items'
 import { BotItemBody } from './BotItemView'
+import {
+  getDefaultSettings,
+  getDefaultVoiceSettings
+} from '../../../../../shared/orca-profiles/constants'
 
 const item = makeTestBotItem(6, { title: 'Ship the share dialog' })
 const comment = (id: string, text: string, at: number): BotItemEvent => ({
@@ -48,6 +52,29 @@ function Reader(): React.JSX.Element {
 
 // A reader scrolled up while earlier activity lands above them.
 export const reader = defineFixture({ width: 360, render: () => <Reader /> })
+
+const defaults = getDefaultSettings('/home/fixture')
+
+// Scrolled up from the end in the panel, with dictation on: the jump pill, the fade, and the mic.
+export const scrolledUp = defineFixture({
+  width: 360,
+  store: { settings: { ...defaults, voice: { ...getDefaultVoiceSettings(), enabled: true } } },
+  render: () => (
+    <div className="bg-sidebar">
+      <Reader />
+    </div>
+  ),
+  interact: async (frame) => {
+    const scroller = frame.querySelector<HTMLElement>('.overflow-y-auto')
+    if (!scroller) {
+      return
+    }
+    scroller.dispatchEvent(new WheelEvent('wheel', { deltaY: -400, bubbles: true }))
+    scroller.scrollTop = scroller.scrollHeight / 3
+    scroller.dispatchEvent(new Event('scroll'))
+    await new Promise((resolve) => setTimeout(resolve, 300))
+  }
+})
 
 const numbered = makeTestBotItem(35, {
   title: 'Show item numbers in lists',

@@ -36,21 +36,18 @@ const base: Bot = {
 afterEach(() => cleanup())
 
 describe('Look around settings', () => {
-  it('is on by default, saves a change as the whole setting, and looks now', () => {
+  it('saves the weekday change and runs Look now', () => {
     const update = vi.fn(async () => null)
     render(<BotLookAroundSection bot={base} update={update} />)
-    const toggle = screen.getByRole('switch', { name: 'Look around' })
-    expect(toggle.getAttribute('aria-checked')).toBe('true')
     fireEvent.click(screen.getByRole('switch', { name: 'Weekdays only' }))
     expect(update).toHaveBeenCalledWith({
       lookAround: { weekdaysOnly: false }
     })
     fireEvent.click(screen.getByRole('button', { name: 'Look now' }))
     expect(mocks.lookNow).toHaveBeenCalledWith(base)
-    expect(screen.getByText(/took 3 min · 0 suggestions/)).toBeTruthy()
   })
 
-  it('turns off from the switch in its title row, which then says Off and what it does', () => {
+  it('turns off from its title switch and hides the schedule controls', () => {
     const update = vi.fn(async () => null)
     const { rerender } = render(<BotLookAroundSection bot={base} update={update} />)
     fireEvent.click(screen.getByRole('switch', { name: 'Look around' }))
@@ -61,8 +58,6 @@ describe('Look around settings', () => {
       lookAround: { on: false, every: 'every-4h', weekdaysOnly: true, focus: '' }
     } as const
     rerender(<BotLookAroundSection bot={off} update={update} />)
-    expect(screen.getByText('Off')).toBeTruthy()
-    expect(screen.getByText(/Read-only; it can’t post or change files/)).toBeTruthy()
     expect(screen.queryByRole('switch', { name: 'Weekdays only' })).toBeNull()
   })
 

@@ -11,6 +11,7 @@ import type {
 import { onDownloadFailed } from '../update-recovery/mobile-web-shell-download-failure'
 import {
   onActivated,
+  onResumeEvent,
   onDocumentGates,
   onUpdateFailed,
   onUpdateManifest,
@@ -37,8 +38,8 @@ import {
 import { step } from './mobile-web-shell-session-step'
 import { reducePageDocumentLifecycle } from '../page-document/page-document-lifecycle'
 import {
+  reduceRetryPressed,
   reduceShellFailed,
-  retryDeletesCache,
   type RefetchAfterDelete
 } from '../update-recovery/shell-failure-recovery'
 
@@ -293,31 +294,10 @@ export function reduceMobileWebShellSession(
       return step(session, pageDocumentStatePatch(session, event))
     case 'layout-changed':
       return onLayoutChanged(session, event.wide)
-    case 'retry-pressed': {
-      // Only explicit retry resets recovery latches; reconnect must not grant another remount.
-      const reset = {
-        retriedOnce: false,
-        remountedOnce: false,
-        reclaimedOnce: false,
-        pageRemountedOnce: false
-      }
-      const fresh: MobileWebShellSessionEffect[] = retryDeletesCache(session.state)
-        ? [{ kind: 'delete-cache' }]
-        : []
-      return session.gates === null
-        ? step(
-            session,
-            {
-              ...reset,
-              updateNotice: null,
-              requestedBuildId: null,
-              requestedCompat: null,
-              state: CHECKING,
-              flow: session.flow + 1
-            },
-            fresh
-          )
-        : startFlow(session, session.gates, { ...reset, cached: null }, fresh)
-    }
+    case 'app-resumed':
+    case 'update-swap':
+      return onResumeEvent(session, event.type, startFlow)
+    case 'retry-pressed':
+      return reduceRetryPressed(session, startFlow)
   }
 }

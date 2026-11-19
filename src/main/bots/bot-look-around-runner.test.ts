@@ -47,6 +47,10 @@ function harness(
     failAfterDelivery?: true
     /** The host's turn watch is ready only once this settles. */
     watchReady?: Promise<void>
+    /** The usage limit that ended the look's turn. */
+    usageLimit?: { resetsAt?: number }
+    /** Orca continues a usage-limited look's own chat. */
+    continues?: boolean
   } = {}
 ) {
   let now = MONDAY_NOON
@@ -121,6 +125,8 @@ function harness(
     turnOff,
     stopTurn,
     turnRunning: () => hostRunning,
+    usageLimitOf: async () => options.usageLimit ?? null,
+    usageLimitContinues: async () => options.continues ?? false,
     watchTurns: async () => {
       await options.watchReady
       return {
@@ -262,6 +268,98 @@ describe('failing looks', () => {
     await vi.waitFor(() => expect(turnOff).toHaveBeenCalledTimes(1))
   })
 
+  it('never turns Look around off for looks a usage limit ended', async () => {
+    const resetsAt = MONDAY_NOON + 60 * 60 * 1000
+    const { runner, store, turnOff } = harness({
+      turn: { outcome: 'failure', message: 'usage limit' },
+      usageLimit: { resetsAt }
+    })
+    store.update('b1', (state) => ({
+      state: {
+        ...state,
+        runs: Array.from({ length: 9 }, (_, n) => ({
+          sessionId: `failed-${n}`,
+          startedAt: n,
+          endedAt: n + 1,
+          error: LOOK_FAILURES.unfinished
+        }))
+      },
+      result: null
+    }))
+    runner.lookNow('b1')
+    await vi.waitFor(() => expect(store.get('b1').runs.at(-1)?.endedAt).toBeDefined())
+    expect(store.get('b1').runs.at(-1)?.usageLimited).toEqual({ resetsAt })
+    runner.lookNow('b1')
+    await vi.waitFor(() => expect(store.get('b1').runs).toHaveLength(11))
+    await vi.waitFor(() => expect(store.get('b1').runs.at(-1)?.endedAt).toBeDefined())
+    expect(turnOff).not.toHaveBeenCalled()
+    // The owner hears of the limit once, not of every look it ends.
+    expect(
+      store
+        .get('b1')
+        .runs.slice(-2)
+        .map((run) => run.alerted)
+    ).toEqual([true, undefined])
+    // The host's turn-end notice follows the same rule.
+    const [first, second] = store.get('b1').runs.slice(-2)
+    expect(store.lookTurnIsQuiet(first!.sessionId, 'failure', true)).toBe(false)
+    expect(store.lookTurnIsQuiet(second!.sessionId, 'failure', true)).toBe(true)
+  })
+
+  it("starts no look for a usage-limited look's owed slot while Orca continues that look's chat", async () => {
+    const limitedLook = (continues: boolean) => {
+      const h = harness({ turn: success, continues })
+      h.store.update('b1', (state) => ({
+        state: {
+          ...state,
+          armedAt: new Date(2026, 9, 20, 9).getTime(),
+          runs: [
+            {
+              sessionId: 'limited',
+              startedAt: new Date(2026, 9, 26, 16, 1).getTime(),
+              endedAt: new Date(2026, 9, 26, 16, 2).getTime(),
+              error: LOOK_FAILURES.unfinished,
+              usageLimited: { resetsAt: new Date(2026, 9, 26, 16, 30).getTime() }
+            }
+          ]
+        },
+        result: null
+      }))
+      h.setNow(new Date(2026, 9, 26, 16, 31).getTime())
+      return h
+    }
+    const continued = limitedLook(true)
+    await continued.runner.tick()
+    // A look records its run as it starts, before any await.
+    expect(continued.store.get('b1').runs).toHaveLength(1)
+    const owed = limitedLook(false)
+    await owed.runner.tick()
+    await vi.waitFor(() => expect(owed.sessions.startConversation).toHaveBeenCalledTimes(1))
+  })
+
+  it("starts the next day's look even though the limited look's chat moved on", async () => {
+    const h = harness({ turn: success, continues: true })
+    h.store.update('b1', (state) => ({
+      state: {
+        ...state,
+        armedAt: new Date(2026, 9, 20, 9).getTime(),
+        runs: [
+          {
+            sessionId: 'limited',
+            startedAt: new Date(2026, 9, 26, 16, 1).getTime(),
+            endedAt: new Date(2026, 9, 26, 16, 2).getTime(),
+            error: LOOK_FAILURES.unfinished,
+            usageLimited: { resetsAt: new Date(2026, 9, 26, 16, 30).getTime() }
+          }
+        ]
+      },
+      result: null
+    }))
+    h.setNow(new Date(2026, 9, 27, 12, 1).getTime())
+    await h.runner.tick()
+    expect(h.store.get('b1').runs).toHaveLength(2)
+  })
+
   it('records a failed turn as notified only when it was news, and never a look that could not start', async () => {
     const { runner, store } = harness({ turn: { outcome: 'failure', message: 'limit' } })
     store.update('b1', (state) => ({
@@ -385,6 +483,8 @@ describe("Look around's model", () => {
       turnOff: async () => {},
       stopTurn: async () => {},
       turnRunning: () => false,
+      usageLimitOf: async () => null,
+      usageLimitContinues: async () => false,
       watchTurns: async () => ({
         next: () => Promise.resolve(success),
         dispose: () => {}

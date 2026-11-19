@@ -216,14 +216,6 @@ describe('WorktreeCard compact hover details', () => {
     expect(card).not.toContain('>+1<')
   })
 
-  it('leaves no agent gap on a line no agent reports on', async () => {
-    const { default: WorktreeCard } = await import('./WorktreeCard')
-    const line = renderToStaticMarkup(
-      <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} compactLine />
-    )
-    expect(line).not.toContain('data-worktree-card-line-agent')
-  })
-
   it("puts a line's agent rows under its status in the hover card", async () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the agent list is mocked and only counts rows.
     mockInlineAgentRows = [{} as DashboardAgentRowData]

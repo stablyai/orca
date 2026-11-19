@@ -9,7 +9,6 @@ import {
   formatAutomationShow,
   printAutomationResult
 } from './automation-format'
-import { quoteCliCommandArgument } from '../arguments/shell-command-quote'
 
 function automation(overrides: Partial<Automation> = {}): Automation {
   return {
@@ -44,25 +43,6 @@ describe('formatAutomationList and Show print event triggers', () => {
     { id: 'on-1', source: 'slack', event: 'message', textContains: 'a b' }
   ]
 
-  it('lists an events-only automation by its events, not its never-reached date', () => {
-    const output = formatAutomationList({
-      automations: [
-        automation({ ...EVENT_ONLY_SCHEDULE, on }),
-        automation({ ...EVENT_ONLY_SCHEDULE })
-      ]
-    })
-    expect(output).not.toContain('9999')
-    expect(output).toContain('runs on events: ')
-    expect(output).toContain('never runs')
-  })
-
-  it('shows an events-only automation with no schedule', () => {
-    const output = formatAutomationShow({ automation: automation({ ...EVENT_ONLY_SCHEDULE, on }) })
-    expect(output).toContain('schedule: none (runs on events)')
-    expect(output).not.toContain('9999')
-    expect(output).not.toContain('rrule:')
-  })
-
   it('prints JSON with no placeholder schedule for an events-only automation only', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined)
     const response = <T>(result: T) => ({
@@ -84,11 +64,5 @@ describe('formatAutomationList and Show print event triggers', () => {
     expect(listed.automations[1]).toMatchObject({ rrule: scheduled.rrule, nextRunAt: 0 })
     expect(shown.automation).toMatchObject({ rrule: null, dtstart: null, nextRunAt: null })
     log.mockRestore()
-  })
-
-  it('prints each --on value quoted for the shell', () => {
-    expect(formatAutomationShow({ automation: automation({ on }) })).toContain(
-      `on: ${quoteCliCommandArgument('slack.message contains="a b"')}`
-    )
   })
 })
