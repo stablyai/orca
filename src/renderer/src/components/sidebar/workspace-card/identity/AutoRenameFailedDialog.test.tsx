@@ -4,6 +4,7 @@ import { act, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AutoRenameFailedDialog } from './AutoRenameFailedDialog'
+import { BRANCH_AUTO_RENAME_OBSERVATION_MS } from './use-branch-auto-rename-retry'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
@@ -38,7 +39,11 @@ function WorkspaceFailure() {
   const error = worktree?.firstAgentMessageRenameError
   return worktree && (open || error) ? (
     <>
-      {error ? <span>rename failed</span> : null}
+      {error ? (
+        <button type="button" onClick={() => setOpen(true)}>
+          rename failed
+        </button>
+      ) : null}
       <AutoRenameFailedDialog
         open={open}
         onOpenChange={setOpen}
@@ -63,9 +68,18 @@ function button(label: string): HTMLButtonElement | undefined {
   )
 }
 
-async function renderFailure(available = true) {
+type Availability = { available: boolean; runningAttemptId: number | null }
+
+async function renderFailure(availability: boolean | Promise<Availability> = true) {
   getBranchRenameFailureOutput.mockResolvedValue(null)
-  getBranchAutoRenameRetryAvailability.mockResolvedValue({ available, runningAttemptId: null })
+  if (typeof availability === 'boolean') {
+    getBranchAutoRenameRetryAvailability.mockResolvedValue({
+      available: availability,
+      runningAttemptId: null
+    })
+  } else {
+    getBranchAutoRenameRetryAvailability.mockReturnValue(availability)
+  }
   useAppStore.setState({
     worktreesByRepo: {
       repo1: [
@@ -333,6 +347,214 @@ describe('AutoRenameFailedDialog retry', () => {
       'The branch changed while Orca was naming it.'
     )
     expect(button('Dismiss')?.disabled).toBe(false)
+  })
+})
+
+describe('AutoRenameFailedDialog when an attempt stops reporting back', () => {
+  const worktreeId = 'repo1::/path/wt1'
+  const started = (attemptId: number) =>
+    act(async () =>
+      emitAttempt({ executionHostId: 'local', worktreeId, attemptId, phase: 'started' })
+    )
+  const finished = (attemptId: number, outcome: BranchAutoRenameRetryResult['outcome']) =>
+    act(async () =>
+      emitAttempt({
+        executionHostId: 'local',
+        worktreeId,
+        attemptId,
+        phase: 'finished',
+        outcome,
+        finishedAt: 2
+      })
+    )
+  const waitOutObservation = () =>
+    act(async () => vi.advanceTimersByTime(BRANCH_AUTO_RENAME_OBSERVATION_MS))
+  const dialog = () => document.querySelector('[role="dialog"]')
+  function nextClickReply() {
+    const reply = Promise.withResolvers<BranchAutoRenameRetryResult>()
+    retryBranchAutoRename.mockReturnValueOnce(reply.promise)
+    return reply
+  }
+  function expectControlsBack() {
+    expect(button('Naming branch…')).toBeUndefined()
+    expect(button('Dismiss')?.disabled).toBe(false)
+    const tryAgain = button('Try again')
+    expect(tryAgain?.getAttribute('aria-disabled')).toBeNull()
+    expect(tryAgain?.getAttribute('aria-hidden')).toBeNull()
+  }
+  function expectBusy() {
+    expect(button('Naming branch…')?.getAttribute('aria-hidden')).toBeNull()
+    expect(button('Dismiss')?.disabled).toBe(true)
+  }
+
+  beforeEach(() => {
+    // Queued replies a test never consumed must not settle the next test's click.
+    retryBranchAutoRename.mockReset()
+    updateWorktreeMeta.mockReset()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('gives the controls back when a clicked attempt never reports back', async () => {
+    await renderFailure()
+    nextClickReply()
+    await act(async () => button('Try again')?.click())
+    await started(4)
+    expectBusy()
+    await waitOutObservation()
+    expectControlsBack()
+    // The stalled line replaces the error details.
+    expect(button('Copy error')).toBeUndefined()
+  })
+
+  it('offers Try again after a stalled attempt even though availability never answered', async () => {
+    const availability = Promise.withResolvers<Availability>()
+    await renderFailure(availability.promise)
+    await started(6)
+    expectBusy()
+    await waitOutObservation()
+    expectControlsBack()
+    await act(async () => availability.resolve({ available: false, runningAttemptId: null }))
+    expectControlsBack()
+    setStoredError(null)
+    await finished(6, { kind: 'renamed' })
+    expect(dialog()).toBeNull()
+  })
+
+  it('offers Try again for a local attempt that starts after availability said no', async () => {
+    await renderFailure(false)
+    expect(footerButtons()).toEqual(['Dismiss'])
+    await started(6)
+    expectBusy()
+    await waitOutObservation()
+    expectControlsBack()
+    setStoredError('Codex CLI timed out after 60s')
+    await finished(6, { kind: 'failed' })
+    expect(dialog()?.textContent).toContain('Codex CLI timed out after 60s')
+    expect(button('Copy error')).toBeDefined()
+    expectControlsBack()
+  })
+
+  it('closes on a stalled click’s late rename even when its attempt was never named', async () => {
+    await renderFailure()
+    const reply = nextClickReply()
+    await act(async () => button('Try again')?.click())
+    await waitOutObservation()
+    setStoredError(null)
+    await finished(6, { kind: 'renamed' })
+    expect(dialog()).not.toBeNull()
+    await act(async () =>
+      reply.resolve({ attemptId: 6, outcome: { kind: 'renamed' }, finishedAt: 2 })
+    )
+    expect(dialog()).toBeNull()
+  })
+
+  it('settles a Try again that rejoined the stalled attempt through its own reply', async () => {
+    await renderFailure()
+    await started(6)
+    await waitOutObservation()
+    const reply = nextClickReply()
+    await act(async () => button('Try again')?.click())
+    await finished(6, { kind: 'failed' })
+    // The click is a new wait; the attempt's event alone does not settle it.
+    expectBusy()
+    setStoredError('Codex CLI timed out after 60s')
+    await act(async () =>
+      reply.resolve({ attemptId: 6, outcome: { kind: 'failed' }, finishedAt: 2 })
+    )
+    expect(dialog()?.textContent).toContain('Codex CLI timed out after 60s')
+    expectControlsBack()
+  })
+
+  it('keeps following a newer attempt when an older attempt’s click reply arrives', async () => {
+    await renderFailure()
+    await started(6)
+    await waitOutObservation()
+    const reply = nextClickReply()
+    await act(async () => button('Try again')?.click())
+    await finished(6, { kind: 'failed' })
+    expectBusy()
+    await started(7)
+    await act(async () =>
+      reply.resolve({ attemptId: 6, outcome: { kind: 'failed' }, finishedAt: 2 })
+    )
+    expectBusy()
+    setStoredError(null)
+    await finished(7, { kind: 'renamed' })
+    expect(dialog()).toBeNull()
+  })
+
+  it('lets only the newest Try again settle the dialog', async () => {
+    await renderFailure()
+    const first = nextClickReply()
+    await act(async () => button('Try again')?.click())
+    await waitOutObservation()
+    const second = nextClickReply()
+    await act(async () => button('Try again')?.click())
+    await act(async () =>
+      first.resolve({ attemptId: 6, outcome: { kind: 'failed' }, finishedAt: 2 })
+    )
+    expectBusy()
+    setStoredError(null)
+    await act(async () =>
+      second.resolve({ attemptId: 7, outcome: { kind: 'renamed' }, finishedAt: 3 })
+    )
+    expect(dialog()).toBeNull()
+  })
+
+  it('ignores a dismissed dialog’s late reply after the card reopens a new one', async () => {
+    await renderFailure()
+    const reply = nextClickReply()
+    await act(async () => button('Try again')?.click())
+    await waitOutObservation()
+    updateWorktreeMeta.mockImplementation(async () => {
+      setStoredError(null)
+      return { ok: true }
+    })
+    await act(async () => button('Dismiss')?.click())
+    expect(dialog()).toBeNull()
+    await act(async () => setStoredError('Codex CLI timed out after 60s'))
+    await act(async () =>
+      Array.from(container.querySelectorAll('button'))
+        .find((candidate) => candidate.textContent === 'rename failed')
+        ?.click()
+    )
+    expect(dialog()).not.toBeNull()
+    await act(async () =>
+      reply.resolve({ attemptId: null, outcome: { kind: 'renamed' }, finishedAt: 2 })
+    )
+    expect(dialog()).not.toBeNull()
+  })
+
+  it('waits out each newer attempt it follows after a stall', async () => {
+    await renderFailure(Promise.resolve({ available: true, runningAttemptId: 6 }))
+    expectBusy()
+    await waitOutObservation()
+    expectControlsBack()
+    await started(7)
+    expectBusy()
+    await waitOutObservation()
+    expectControlsBack()
+  })
+
+  it('replaces a kept name with the naming state when a newer attempt starts', async () => {
+    await renderFailure()
+    retryBranchAutoRename.mockResolvedValueOnce({
+      attemptId: null,
+      outcome: { kind: 'ineligible', reason: 'setting-off' },
+      finishedAt: 1
+    })
+    await act(async () => button('Try again')?.click())
+    expect(footerButtons()).toEqual(['Dismiss'])
+    await started(8)
+    expectBusy()
+    setStoredError('Codex CLI timed out after 60s')
+    await finished(8, { kind: 'failed' })
+    expect(button('Copy error')).toBeDefined()
+    expectControlsBack()
   })
 })
 
