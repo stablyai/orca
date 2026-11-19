@@ -1,9 +1,14 @@
 import {
   closeTestStores,
+  createSqliteTestStore,
   createStore,
   testState,
   writeDataFile
 } from '../../persistence-test-harness'
+import { installFakeAppEnvironment } from '../../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
+import { initializeNewOrcaProfileState } from '../../../orca-profiles/storage/new-profile-state'
+import { getOrcaProfileDataFile } from '../../../orca-profiles/profile-storage-paths'
+import { Store } from '../store'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -42,6 +47,21 @@ function expectNewCardsWithoutNotices(store: ReturnType<typeof createStore>): vo
 describe('worktree card style seed', () => {
   it('starts a fresh profile on the new cards, including after restart', async () => {
     expectNewCardsWithoutNotices(await reopen())
+  })
+
+  it.each([
+    [
+      'inherited consent',
+      { optedIn: true, installId: 'inherited', existedBeforeTelemetryRelease: true }
+    ],
+    ['no consent', undefined]
+  ] as const)('starts a created profile with %s on the new cards', async (_, telemetry) => {
+    installFakeAppEnvironment({ getPath: () => testState.dir })
+    initializeNewOrcaProfileState('persistence-test', telemetry, testState.dir)
+    const dataFile = getOrcaProfileDataFile('persistence-test', testState.dir)
+    createSqliteTestStore(Store, { dataFile }).flush()
+    await closeTestStores()
+    expectNewCardsWithoutNotices(createSqliteTestStore(Store, { dataFile }))
   })
 
   it('starts a profile that holds only telemetry consent on the new cards', async () => {

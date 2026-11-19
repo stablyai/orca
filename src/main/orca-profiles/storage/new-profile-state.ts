@@ -32,7 +32,7 @@ export function initializeNewOrcaProfileState(
     const defaults = getDefaultPersistedState(homedir())
     const cohorts = new LoadedCohortMigrationOperations({ loadNeedsSave: false })
     // Inherited consent belongs to an install that already existed, so its milestone cohort is not fresh.
-    const initial = cohorts.migrateCohortSeeds(
+    const seeded = cohorts.migrateCohortSeeds(
       telemetry
         ? cohorts.migrateTelemetry(
             {
@@ -47,6 +47,8 @@ export function initializeNewOrcaProfileState(
         : cohorts.migrateTelemetry(defaults, false),
       false
     )
+    // A created profile is new, so its saved card default must not read as an upgrade to announce.
+    const initial = cohorts.seedWorktreeCardStyle(seeded, undefined)
     const initialState = createInitialHomeWorkspaceState(initial)
     const migrated = migrateProfileStateToSqlite({
       dataFile,
