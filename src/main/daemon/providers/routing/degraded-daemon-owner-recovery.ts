@@ -3,6 +3,7 @@ import type { PtyProcessInfo } from '../../../providers/pty/process-info'
 import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import type { DaemonPtyAdapter } from '../adapter/daemon-pty-adapter'
 import { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
+import { heldSpawnRefusal } from './daemon-router-newer-daemon-hold'
 
 export class DegradedDaemonOwnerRecovery {
   private readonly attachResolver: DaemonSessionOwnerResolver<IPtyProvider>
@@ -21,9 +22,16 @@ export class DegradedDaemonOwnerRecovery {
   resolveFencedOwner = (id: string, incarnationId: string) =>
     this.attachResolver.resolveTermination(id, incarnationId)
 
+  /** The newer-daemon hold, which the fallback's fresh starts would otherwise skip. */
+  refuseHeldSpawn = heldSpawnRefusal(() => this.livenessResolver)
+
   spawn = async (opts: PtySpawnOptions): Promise<PtySpawnResult> => {
     if (opts.attachOnly && opts.sessionId) {
       return await this.attachResolver.spawnAttachOnly({ ...opts, sessionId: opts.sessionId })
+    }
+    const held = this.refuseHeldSpawn(opts)
+    if (held) {
+      await held
     }
     const result = await this.spawnFresh(opts)
     const provider = this.routes.get(result.id)
