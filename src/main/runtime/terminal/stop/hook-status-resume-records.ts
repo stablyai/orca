@@ -79,6 +79,7 @@ export function resumeStatusFromHookRow(
     lastAssistantMessage: row.lastAssistantMessage,
     interrupted: row.interrupted,
     ...(row.mainAgent ? { mainAgent: row.mainAgent } : {}),
+    ...(row.sharedHost ? { sharedHost: true as const } : {}),
     ...(row.worktreeId ? { worktreeId: row.worktreeId } : {})
   }
 }

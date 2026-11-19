@@ -123,8 +123,7 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
         readSavedRecord: (paneKey) => this.readSavedResumeSource(worktreeId, paneKey),
         readIdentity: (paneKey, savedRecord) => this.readPaneAgentIdentity(paneKey, savedRecord),
         checkAgentPresence: (paneKey, since) =>
-          this.checkHookAgentPresenceFn?.(paneKey, since, { sleepCapture: true }) ??
-          Promise.resolve(null),
+          this.checkHookAgentPresenceFn?.(paneKey, since) ?? Promise.resolve(null),
         capturedAt: Date.now()
       })
     },

@@ -222,6 +222,7 @@ export function buildAgentStatusLiveEntry(
     ...(metadata?.terminalResumeEligible === false
       ? { terminalResumeEligible: false as const }
       : {}),
+    ...(metadata?.sharedHost ? { sharedHost: true as const } : {}),
     ...(promptInteractionKey ? { promptInteractionKey } : {}),
     ...(payload.restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
     ...(payload.paneSleep ? { paneSleep: payload.paneSleep } : {}),

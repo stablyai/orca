@@ -13,17 +13,19 @@ import type { AgentHookSource } from '../../../shared/agent-hook-listener/transp
 import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import { sameAgentStatusTerminalOwner } from '../../../shared/agent-status/identity/agent-status-terminal-owner'
 import {
+  cliWriterTopology,
+  OPEN_CODE_WRITER_TOPOLOGY,
+  type CliWriterTopology
+} from './cli-writer-topology'
+import {
   readTmuxHookPane,
   readTmuxHookPaneHint
 } from '../../../shared/agent-hook-listener/presence/tmux-client-attachment'
 
-// Execution metadata follows the conversation binding and disappears at serialization.
-export const OPEN_CODE_WRITER_TOPOLOGY = Symbol('openCodeWriterTopology')
-
 export type CliWriterObservation = {
   current: () => boolean
   presence: () => Promise<AgentProcessVerdict | null>
-  topology: 'pane-owned' | 'shared' | 'unverifiable'
+  topology: CliWriterTopology
 }
 
 export function retainOpenCodeWriterTopology(
@@ -48,24 +50,6 @@ export function retainOpenCodeWriterTopology(
         ? 'shared'
         : 'unverifiable'
   Object.defineProperty(event.providerSession, OPEN_CODE_WRITER_TOPOLOGY, { value: topology })
-}
-
-/** OpenCode-family servers can outlive their pane; only the binding they posted can prove otherwise. */
-export function cliWriterTopology(row: AgentHookEventPayload): CliWriterObservation['topology'] {
-  const binding = row.providerSession
-  const topology =
-    binding && OPEN_CODE_WRITER_TOPOLOGY in binding ? binding[OPEN_CODE_WRITER_TOPOLOGY] : undefined
-  return topology === 'shared'
-    ? 'shared'
-    : row.source !== 'opencode' &&
-        row.source !== 'opencode2' &&
-        row.source !== 'mimo-code' &&
-        row.payload.agentType !== 'opencode' &&
-        row.payload.agentType !== 'opencode2'
-      ? 'pane-owned'
-      : topology === 'pane-owned'
-        ? topology
-        : 'unverifiable'
 }
 
 /** A tmux server outlives the pane it was started from, so nothing it publishes is pane-owned. */
@@ -183,3 +167,5 @@ export function deriveCliWriterTopology<T extends AgentHookEventPayload>(
   }
   return { ...row, providerSession: { ...binding } }
 }
+
+export { cliWriterTopology, OPEN_CODE_WRITER_TOPOLOGY }

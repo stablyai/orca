@@ -78,12 +78,12 @@ export type HookPaneProcessIo = {
 }
 
 // Bounded ancestry walk; a pane's agent sits a few levels below its root.
-export const MAX_ANCESTRY_DEPTH = 32
+const MAX_ANCESTRY_DEPTH = 32
 const MAX_TERMINAL_ROWS = 256
 
 type Role = 'agent' | 'launcher' | 'other' | 'unknown'
 
-export function agentOf(command: string): string | undefined {
+function agentOf(command: string): string | undefined {
   const recognized = recognizeAgentProcessFromCommandLine(command, { includeHeadlessOneShot: true })
   if (recognized) {
     return recognized.agent
@@ -133,7 +133,7 @@ type Walk = 'reached' | 'outside' | 'nested' | 'unknown'
  *  when the sender runs under a tmux server and the pane does not show an agent. */
 type OtherTerminal = 'foreign' | 'bridged' | 'tmux'
 
-export function isTmuxServer(row: ProcessTableRow): boolean {
+function isTmuxServer(row: ProcessTableRow): boolean {
   const token = firstToken(row.command)
   return /^tmux:?$/.test(token.slice(token.lastIndexOf('/') + 1))
 }
@@ -231,8 +231,8 @@ export function classifyPaneHookProcess(input: {
   return role === 'shell' ? 'foreign' : 'bridged'
 }
 
-export async function collectRows(
-  io: Pick<HookPaneProcessIo, 'readProcesses' | 'readTerminal'>,
+async function collectRows(
+  io: HookPaneProcessIo,
   rootPid: number,
   senderPid: number
 ): Promise<ProcessTableRow[] | null> {

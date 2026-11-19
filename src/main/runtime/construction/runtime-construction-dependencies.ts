@@ -79,9 +79,7 @@ export type RuntimeConstructionDependencies = {
   /** `exitedSince`: also answer `exited` for an exit the hook store proved at or after it. */
   checkHookAgentPresence?: (
     paneKey: string,
-    exitedSince?: number,
-    /** A sleep capture also releases checkpoints a tmux client shows; other reads skip that probe. */
-    options?: { sleepCapture?: true }
+    exitedSince?: number
   ) => Promise<'live' | 'unverifiable' | 'exited' | null>
   reconcileAgentStatusForEndedProcess?: (
     paneKeys: Iterable<string>,

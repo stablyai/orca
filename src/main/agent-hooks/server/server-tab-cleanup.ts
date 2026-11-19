@@ -29,9 +29,6 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
       { ...options, preserveResumeIdentity: !options?.confirmedExit && !shared },
       (key) => this.clearRevokedPaneState(key)
     )
-    if (shared) {
-      this.releaseSharedPaneConversation(paneKey, identity.status)
-    }
     for (const key of untouched) {
       this.clearTmuxInnerSubjects(key)
       this.clearPaneProcessState(key)
@@ -73,9 +70,6 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
       preserveResumeIdentity: true,
       confirmedExit: confirmedExit === true
     })
-    if (shared) {
-      this.releaseSharedPaneConversation(resolved, identity.status)
-    }
   }
 
   dropPersistedStatusEntry(identity: AgentStatusCacheIdentity): boolean {

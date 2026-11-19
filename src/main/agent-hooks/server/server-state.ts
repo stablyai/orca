@@ -101,6 +101,7 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
           !row.agentPresence.ended
             ? { suspended: true as const }
             : {}),
+          // A shared host's conversation never leaves a saved record (sharedHost), so one is the pane's.
           processTopology: row ? (legacy ? cliWriterTopology(row) : 'shared') : 'pane-owned'
         }
       : null
@@ -112,16 +113,6 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
     const status = this.paneAgentIdentity(paneKey)?.status
     recordAgentExit(this.agentExitedAtByPaneKey, paneKeys, endedPresence, exitedAt)
     this.retirePaneResume(paneKeys, status, exitedAt)
-  }
-
-  /** A shared server's client left the pane; its conversation lives on there, never resumed here.
-   *  `releasedAt` bounds which saved record retires; one saved later is a newer conversation. */
-  protected releaseSharedPaneConversation(
-    paneKey: string,
-    status: PaneAgentIdentity['status'],
-    releasedAt = Date.now()
-  ): void {
-    this.retirePaneResume(this.paneKeysWithAliases(paneKey), status, releasedAt)
   }
 
   private paneKeysWithAliases(paneKey: string): Set<string> {
