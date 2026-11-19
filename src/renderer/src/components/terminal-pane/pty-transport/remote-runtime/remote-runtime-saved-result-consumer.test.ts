@@ -284,3 +284,57 @@ it('rechecks the leaf after async verification before adopting an account result
     transport.disconnect()
   }
 })
+
+it.each(['fresh', 'attach-only'] as const)(
+  'does not return %s restart success after its request retires during subscribe',
+  async (operation) => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const opening = Promise.withResolvers<void>()
+    const entered = Promise.withResolvers<void>()
+    const subscribe = runtimeSubscribe.getMockImplementation()
+    runtimeSubscribe.mockImplementation(async (...args: unknown[]) => {
+      entered.resolve()
+      await opening.promise
+      return subscribe?.(...args)
+    })
+    const hostCall = runtimeCall.getMockImplementation()
+    runtimeCall.mockImplementation((request: { method: string }) =>
+      request.method === 'terminal.create'
+        ? Promise.resolve({
+            ok: true,
+            result: { terminal: { handle: 'created', incarnationId: 'inc-created' } }
+          })
+        : request.method === 'terminal.resolvePane'
+          ? Promise.resolve({
+              ok: true,
+              result: {
+                terminal: { handle: 'terminal-1', incarnationId: 'inc-1', connected: true }
+              }
+            })
+          : hostCall?.(request)
+    )
+    let current = true
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'host-tab-1',
+      leafId: 'pane:1'
+    })
+    try {
+      const connecting = transport.connect({
+        url: '',
+        ...(operation === 'attach-only'
+          ? { sessionId: 'remote:env-1@@terminal-1', attachOnlyView: true }
+          : {}),
+        isAccountRestartCurrent: () => current,
+        callbacks: {}
+      })
+      await entered.promise
+      current = false
+      opening.resolve()
+      expect(await connecting).toBeUndefined()
+    } finally {
+      opening.resolve()
+      transport.disconnect()
+    }
+  }
+)
