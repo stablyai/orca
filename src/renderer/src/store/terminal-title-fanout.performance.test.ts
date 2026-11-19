@@ -23,16 +23,22 @@ const objectReads = { keys: Object.keys, values: Object.values, entries: Object.
 
 type Reads = { count: number; measuring: boolean }
 
-// Any access to a bucket the title change did not replace is a scan of an unrelated workspace.
-function counted<T extends object>(rows: T[], reads: Reads): T[] {
-  return new Proxy(rows, {
-    get(target, key, receiver) {
-      if (reads.measuring) {
-        reads.count += 1
+// Any field read on a row the title change did not replace is a scan of an unrelated workspace.
+function counted<T extends { id: string }>(row: T, reads: Reads): T {
+  const copy = { ...row }
+  for (const key of objectReads.keys(row)) {
+    const value: unknown = Object.getOwnPropertyDescriptor(row, key)?.value
+    Object.defineProperty(copy, key, {
+      enumerable: true,
+      get() {
+        if (reads.measuring) {
+          reads.count += 1
+        }
+        return value
       }
-      return Reflect.get(target, key, receiver)
-    }
-  })
+    })
+  }
+  return copy
 }
 
 function unifiedTerminalTab(worktreeId: string, tabId: string): Tab {
@@ -58,23 +64,21 @@ function scannedRowsPerTitleChange(workspaceCount: number): number {
   for (let index = 0; index < workspaceCount; index += 1) {
     const worktreeId = `wt-${index}`
     const tab = makeTab({ id: `tab-${index}`, worktreeId, createdAt: 0 })
-    tabsByWorktree[worktreeId] = index === 0 ? [tab] : counted([tab], reads)
-    unifiedTabsByWorktree[worktreeId] =
-      index === 0
-        ? [unifiedTerminalTab(worktreeId, tab.id)]
-        : counted([unifiedTerminalTab(worktreeId, tab.id)], reads)
+    tabsByWorktree[worktreeId] = [index === 0 ? tab : counted(tab, reads)]
+    const unifiedTab = unifiedTerminalTab(worktreeId, tab.id)
+    unifiedTabsByWorktree[worktreeId] = [index === 0 ? unifiedTab : counted(unifiedTab, reads)]
   }
   seedStore(store, { tabsByWorktree, unifiedTabsByWorktree, activeWorktreeId: 'wt-0' })
 
-  const records = (state: AppState): object[] => [
+  const records = (state: AppState): unknown[] => [
     state.tabsByWorktree,
     state.unifiedTabsByWorktree,
     state.ptyIdsByTabId
   ]
-  let watched = new Set<object>()
+  let watched = new Set<unknown>()
   for (const method of ['keys', 'values', 'entries'] as const) {
     const original = objectReads[method]
-    vi.spyOn(Object, method).mockImplementation((value: object) => {
+    vi.spyOn(Object, method).mockImplementation((value: Readonly<Record<string, unknown>>) => {
       if (reads.measuring && watched.has(value)) {
         reads.count += 1
       }
