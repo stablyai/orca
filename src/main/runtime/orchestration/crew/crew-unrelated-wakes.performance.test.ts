@@ -217,3 +217,79 @@ it('reads nothing and sends nothing for unrelated status, title, status-row, ter
     crew.stop()
   }
 })
+
+it('rereads only the crew a worker event concerns, however many crews are mounted', async () => {
+  const f = fixture()
+  // Four coordinators, each with its own worker: crews that share no party.
+  const crews = [0, 1, 2, 3].map((index) => {
+    const coordinator = `term_c${index}`
+    const worker = `term_b${index}`
+    f.handles.set(coordinator, `tab_c${index}:aaaaaaaa-aaaa-4aaa-8aaa-c${index}aaaaaaaaaa`)
+    f.handles.set(worker, `tab_b${index}:aaaaaaaa-aaaa-4aaa-8aaa-b${index}aaaaaaaaaa`)
+    const run = f.db.createRun({
+      objective: `Crew ${index}`,
+      coordinatorHandle: coordinator,
+      coordinatorPaneKey: f.handles.get(coordinator)!
+    })
+    const task = f.db.createTask({ runId: run.id, spec: `Task ${index}` })
+    const dispatch = f.db.createDispatchContext({
+      taskId: task.id,
+      assigneeHandle: worker,
+      assigneePaneKey: f.handles.get(worker),
+      creator: { kind: 'terminal', handle: coordinator, paneKey: f.handles.get(coordinator) },
+      maxDepth: 10
+    })
+    return { coordinator, workerPane: f.handles.get(worker)!, worker, dispatch }
+  })
+  let states: AgentStatusState[] = ['working', 'working', 'working', 'working']
+  const statuses = () =>
+    crews.map((crew, index) =>
+      status(crew.worker, crew.workerPane, states[index]!, crew.dispatch.id)
+    )
+  let transition: (change: { paneKey: string }) => void = () => {}
+  const model = new CrewReadModel(
+    () => ({ ...f.deps, statuses: statuses() }),
+    (wake, relevance) =>
+      watchCrewRuntimeSources(
+        {
+          store: null,
+          watchChanges: f.db.crewChanges.subscribe,
+          watchTransitions: (listener) => {
+            transition = listener
+            return () => {}
+          },
+          watchClient: () => () => {}
+        },
+        wake,
+        relevance
+      )
+  )
+  const reads = new Map<string, number>()
+  const frames = new Map<string, number>()
+  const stops = crews.map(({ coordinator }) =>
+    subscribeCrew(
+      () => {
+        reads.set(coordinator, (reads.get(coordinator) ?? 0) + 1)
+        return model.read(coordinator)
+      },
+      (wake) => model.subscribe(wake, coordinator),
+      (frame) => {
+        if (frame.type === 'complete') {
+          frames.set(coordinator, (frames.get(coordinator) ?? 0) + 1)
+        }
+      }
+    )
+  )
+  try {
+    await flush()
+    reads.clear()
+    frames.clear()
+    states = ['waiting', 'working', 'working', 'working']
+    transition({ paneKey: crews[0]!.workerPane })
+    await flush()
+    expect(Object.fromEntries(reads)).toEqual({ term_c0: 1 })
+    expect(Object.fromEntries(frames)).toEqual({ term_c0: 1 })
+  } finally {
+    stops.forEach((stop) => stop())
+  }
+})
