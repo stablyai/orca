@@ -129,7 +129,8 @@ async function seed(arm) {
     db.close()
     return
   }
-  for (const suffix of ['', '-wal', '-shm']) {
+  // Drop the marker first, so an interrupted reseed is never reused.
+  for (const suffix of ['.seed', '', '-wal', '-shm']) {
     rmSync(`${filename}${suffix}`, { force: true })
   }
   const { db } = arm.openJournalDomainDatabase(filename)
@@ -306,6 +307,9 @@ async function run(arm, sessions, round) {
   const stopAt = startedAt + seconds * 1000
   const tag = `${arm.name}-${sessions}-${round}-${startedAt}`
   let inWindow = 0
+  const ack = () => {
+    inWindow += Date.now() <= stopAt ? 1 : 0
+  }
   const stops = Array.from({ length: sessions }, (_, index) =>
     stream(owner, `burst-${index}`, tag, stopAt, (ms) => {
       if (ms === null) {
@@ -313,7 +317,7 @@ async function run(arm, sessions, round) {
         return
       }
       streamWrites.push(ms)
-      inWindow += Date.now() <= stopAt ? 1 : 0
+      ack()
     })
   )
   const probe = []
@@ -335,16 +339,21 @@ async function run(arm, sessions, round) {
   for (let index = 0; Date.now() < stopAt - 3000; index++) {
     const label = `probe-${arm.name}-${sessions}-${Date.now()}-${index}`
     await owner.write(control(`${label}-handover`))
+    ack()
     const startedAt = performance.now()
     await owner.write({
       ...stepsCommand('probe', [itemStep(message(`${label}-turn`, 'assistant', 'turn', false))]),
       urgent: true
     })
     probe.push(performance.now() - startedAt)
+    ack()
     await owner.write(control(`${label}-accepted`))
+    ack()
     chain.push(performance.now() - startedAt)
     await new Promise((resolve) => setTimeout(resolve, 1500))
   }
+  // Streams run the whole window, so throughput divides by the time it was measured over.
+  await new Promise((resolve) => setTimeout(resolve, Math.max(0, stopAt - Date.now())))
   stops.forEach((stop) => stop())
   await new Promise((resolve) => setTimeout(resolve, 2000))
   await owner.close()
@@ -365,7 +374,7 @@ async function run(arm, sessions, round) {
     streamWriteMs: summary(streamWrites),
     // Counted from completions, so builds without writer timing still report throughput.
     // Completions inside the measured window only; the drain and close after it are not counted.
-    writesPerSecond: Math.round((inWindow + 3 * probe.length) / seconds),
+    writesPerSecond: Math.round(inWindow / seconds),
     failedWrites: failures,
     ...(instrumented
       ? {
