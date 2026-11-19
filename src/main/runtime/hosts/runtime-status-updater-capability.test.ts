@@ -1,3 +1,4 @@
+// @orca-isolated-worker: configureRemoteServerUpdater sets module state the shared-worker reset cannot undo.
 import { describe, expect, it } from 'vitest'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { configureRemoteServerUpdater } from './management/remote-server-updater'
