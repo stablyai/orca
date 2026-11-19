@@ -119,11 +119,10 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
       )
       // Settle every pane's exit proof at once, so their process-table reads coalesce.
       const paneKeys = new Set([...paneKeysByPtyId.values()].flatMap((keys) => [...keys]))
-      await Promise.all(
-        [...paneKeys].map((paneKey) =>
-          this.checkHookAgentPresenceFn?.(paneKey, 0, { settleForSleep: true })
-        )
-      )
+      const settle = this.checkHookAgentPresenceFn
+      if (settle) {
+        await Promise.all([...paneKeys].map((key) => settle(key, 0, { settleForSleep: true })))
+      }
       const hostId = this.getWorkspaceSessionHostIdForWorktree(worktreeId)
       return captureWorktreeSleepResumeRecords({
         worktreeId,
