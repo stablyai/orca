@@ -228,7 +228,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     showMuse ? visibleMuse : null
   ]
     .filter((p): p is ProviderRateLimits => p !== null)
-    // Why: the bar collapses chips from the end, so placeholders give way first.
+    // Why: the usage row clips from the end, so placeholders give way first.
     .sort((a, b) => Number(isOwnerNotSetUpPlaceholder(a)) - Number(isOwnerNotSetUpPlaceholder(b)))
 
   // Why: the shown accounts are the owning host's; without a scope Settings opens on the default host.
