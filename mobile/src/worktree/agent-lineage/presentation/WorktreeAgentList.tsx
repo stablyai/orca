@@ -18,6 +18,7 @@ import type { AgentListStatus as AgentDotState } from '../../../../../src/shared
 import { WorktreeAgentChildToggle, WorktreeAgentIdleGroupRow } from './WorktreeAgentChildDisclosure'
 import { WorktreeAgentRow } from './WorktreeAgentRow'
 import { WorktreeAgentSummary } from './WorktreeAgentSummary'
+import { listedAgentVerdict } from '../../../agents/agent-list-rows'
 import { useSharedNow } from '../../../hooks/use-now'
 import { worktreeAgentChildRows } from '../worktree-agent-child-rows'
 
@@ -108,6 +109,8 @@ export function WorktreeAgentList({
     const parentKey = node.row.paneKey
     const children = childItemsOf(node)
     const childrenExpanded = isDisclosureOpen(parentDisclosureKey(parentKey))
+    const hiddenDescendants =
+      children.length > 0 && !childrenExpanded ? descendantItemsOf(node) : null
     const renderChild = (child: ChildItem): ReactNode =>
       child.kind === 'subagent' ? renderSubagent(node, child.childRow) : renderNode(child.node)
     const { activeChildren, idleChildren } = partitionIdleChildren(children)
@@ -128,10 +131,12 @@ export function WorktreeAgentList({
                 count={children.length}
                 expanded={childrenExpanded}
                 signalState={
-                  childrenExpanded
-                    ? undefined
-                    : collapsedChildrenSignalState(descendantItemsOf(node))
+                  hiddenDescendants ? collapsedChildrenSignalState(hiddenDescendants) : undefined
                 }
+                unread={hiddenDescendants?.some(
+                  (child) =>
+                    child.kind === 'agent' && listedAgentVerdict(child.node.row)?.unread === true
+                )}
                 onToggle={() => toggle(parentDisclosureKey(parentKey))}
               />
             ) : undefined
@@ -161,6 +166,7 @@ export function WorktreeAgentList({
         <WorktreeAgentSummary
           agents={summaryAgents}
           expanded={expanded}
+          unread={agents.some((agent) => listedAgentVerdict(agent)?.unread === true)}
           now={now}
           onToggle={() => setExpanded((value) => !value)}
         />

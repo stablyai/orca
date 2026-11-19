@@ -267,11 +267,6 @@ export function useMobileHomeData() {
     () => sortedHosts.filter((host) => hostStates[host.id] === 'connected'),
     [sortedHosts, hostStates]
   )
-  // Before a desktop's first connect settles, "not connected" is not yet true.
-  const hostsConnecting = hosts.some((host) => {
-    const state = hostStates[host.id]
-    return state === undefined || state === 'connecting' || state === 'handshaking'
-  })
   const hostIds = useMemo(() => hosts.map((host) => host.id), [hosts])
   const stats = useMemo(() => totalHomeStats(statsByHost, hostIds), [statsByHost, hostIds])
   const hostConnections = useMemo(() => projectHomeHostConnections(allClients), [allClients])
@@ -289,6 +284,10 @@ export function useMobileHomeData() {
   const unreachableHosts = useMemo(
     () => new Set(unreachableKey ? unreachableKey.split('\n') : []),
     [unreachableKey]
+  )
+  // A desktop still dialing may yet connect; one Home never dials or gave up on won't.
+  const hostsConnecting = hosts.some(
+    (host) => hostStates[host.id] !== 'connected' && !unreachableHosts.has(host.id)
   )
   const { bots, botsByHost } = useHomeBots({
     homeHosts,
@@ -320,6 +319,7 @@ export function useMobileHomeData() {
     sortedHostCatalog,
     sortedHosts,
     stats,
+    unreachableHosts,
     worktreeInfo
   }
 }

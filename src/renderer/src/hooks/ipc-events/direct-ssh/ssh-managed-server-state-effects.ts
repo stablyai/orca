@@ -133,7 +133,7 @@ async function loadManagedServerCatalogs(targetId: string, load: CatalogLoad): P
     return
   }
   store.setRuntimeEnvironments(environments)
-  void store.refreshRuntimeEnvironmentStatus(environmentId)
+  void store.refreshRuntimeEnvironmentStatus(environmentId, undefined, { force: true })
   // Refresh local catalogs to remove relay-era rows main now hides.
   for (const runtimeEnvironmentId of [null, environmentId]) {
     const options = { runtimeEnvironmentId, throwOnError: true }

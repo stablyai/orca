@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { admitSelfInitiatedTreeKill } from '../../../pty/process-retirement/own-chromium-tree-kill-guard'
 import {
   canSpawnOnWorkerThread,
@@ -170,16 +171,17 @@ function startTreeKill(
 /** True when taskkill reported every tree ended within its wait. */
 function runTaskkill(pids: number[], onWorker = canSpawnOnWorkerThread()): Promise<boolean> {
   return new Promise((resolve) => {
+    const taskkill = windowsSystem32Binary('taskkill.exe')
     const args = [...pids.flatMap((pid) => ['/pid', String(pid)]), '/t', '/f']
     let killer: ChildProcess | WorkerThreadChildProcess
     try {
       if (onWorker) {
         // Process creation blocks its thread on Windows; keep cleanup off main like the Git it ends.
-        killer = spawnProcessOnWorkerThread({ program: 'taskkill', args })
+        killer = spawnProcessOnWorkerThread({ program: taskkill, args })
         killer.stdin.end()
         killer.discardOutput()
       } else {
-        const native = spawn('taskkill', args, { stdio: 'ignore', windowsHide: true })
+        const native = spawn(taskkill, args, { stdio: 'ignore', windowsHide: true })
         if (!native || typeof native.unref !== 'function') {
           resolve(false)
           return

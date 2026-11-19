@@ -333,7 +333,8 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
         activeItemRef={activeItemRef}
         onChoose={() => onChoose(path)}
         onPointerEnter={member?.id ? () => setHovered(member.id ?? null) : undefined}
-        className={opens ? 'pr-20' : undefined}
+        // Room for the Chats action; important, as the row's own px-2 comes later in the CSS.
+        className={cn(member && 'items-center', opens && '!pr-20')}
       >
         <NativeChatMentionOption value={path} member={member} />
         {opens ? (
@@ -357,7 +358,7 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
           onPointerDown={(event) => event.preventDefault()}
           onClick={() => chats.drill.enter(opens)}
           className={cn(
-            'absolute top-1.5 right-2 h-6 items-center gap-0.5 rounded-md px-1.5 text-xs text-muted-foreground hover:bg-background/60 hover:text-foreground',
+            'absolute top-1/2 right-2 h-6 -translate-y-1/2 items-center gap-0.5 rounded-md px-1.5 text-xs text-muted-foreground hover:bg-background/60 hover:text-foreground',
             selected ? 'flex' : 'hidden group-hover/bot-row:flex'
           )}
         >
@@ -371,16 +372,20 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
   return (
     <PickerListbox id={listboxId}>
       {agentCount > 0 ? <PickerGroupHeading kind="agents" /> : null}
-      {files.slice(0, agentCount).map(option)}
+      <div className="flex flex-col gap-0.5">{files.slice(0, agentCount).map(option)}</div>
       {grouped ? <PickerGroupHeading kind="bots" /> : null}
-      <div onPointerLeave={() => setHovered(null)}>
+      <div className="flex flex-col gap-0.5" onPointerLeave={() => setHovered(null)}>
         {files
           .slice(agentCount, agentCount + bots)
           .map((path, index) => option(path, index + agentCount))}
       </div>
       {grouped ? <NativeChatUnavailableMentions room={room} /> : null}
       {headed && files.length > agentCount + bots ? <PickerGroupHeading kind="files" /> : null}
-      {files.slice(agentCount + bots).map((path, index) => option(path, index + agentCount + bots))}
+      <div className="flex flex-col gap-0.5">
+        {files
+          .slice(agentCount + bots)
+          .map((path, index) => option(path, index + agentCount + bots))}
+      </div>
       {statusText ? (
         <PickerStatus>
           {mention.loading ? <LoadingSpinner className="size-3.5" /> : null}
