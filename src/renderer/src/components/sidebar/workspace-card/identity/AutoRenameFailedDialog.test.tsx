@@ -154,7 +154,7 @@ describe('AutoRenameFailedDialog retry', () => {
     retryBranchAutoRename.mockReturnValue(attempt.promise)
     await act(async () => button('Try again')?.click())
     expect(button('Naming branch…')?.getAttribute('aria-disabled')).toBe('true')
-    expect(button('Dismiss')?.disabled).toBe(true)
+    expect(button('Dismiss')?.getAttribute('aria-disabled')).toBe('true')
     await act(async () => button('Naming branch…')?.click())
     expect(retryBranchAutoRename).toHaveBeenCalledTimes(1)
 
@@ -316,7 +316,7 @@ describe('AutoRenameFailedDialog retry', () => {
       })
     )
     await act(async () => availability.resolve({ available: true, runningAttemptId: 9 }))
-    expect(button('Dismiss')?.disabled).toBe(false)
+    expect(button('Dismiss')?.getAttribute('aria-disabled')).toBeNull()
     expect(button('Try again')).toBeDefined()
     expect(button('Naming branch…')).toBeUndefined()
   })
@@ -331,7 +331,7 @@ describe('AutoRenameFailedDialog retry', () => {
         phase: 'started'
       })
     )
-    expect(button('Dismiss')?.disabled).toBe(true)
+    expect(button('Dismiss')?.getAttribute('aria-disabled')).toBe('true')
     expect(button('Naming branch…')).toBeDefined()
     await act(async () =>
       emitAttempt({
@@ -346,7 +346,7 @@ describe('AutoRenameFailedDialog retry', () => {
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
       'The branch changed while Orca was naming it.'
     )
-    expect(button('Dismiss')?.disabled).toBe(false)
+    expect(button('Dismiss')?.getAttribute('aria-disabled')).toBeNull()
   })
 })
 
@@ -377,14 +377,14 @@ describe('AutoRenameFailedDialog when an attempt stops reporting back', () => {
   }
   function expectControlsBack() {
     expect(button('Naming branch…')).toBeUndefined()
-    expect(button('Dismiss')?.disabled).toBe(false)
+    expect(button('Dismiss')?.getAttribute('aria-disabled')).toBeNull()
     const tryAgain = button('Try again')
     expect(tryAgain?.getAttribute('aria-disabled')).toBeNull()
     expect(tryAgain?.getAttribute('aria-hidden')).toBeNull()
   }
   function expectBusy() {
     expect(button('Naming branch…')?.getAttribute('aria-hidden')).toBeNull()
-    expect(button('Dismiss')?.disabled).toBe(true)
+    expect(button('Dismiss')?.getAttribute('aria-disabled')).toBe('true')
   }
 
   beforeEach(() => {
@@ -540,6 +540,41 @@ describe('AutoRenameFailedDialog when an attempt stops reporting back', () => {
     expectControlsBack()
   })
 
+  it('keeps focus in the dialog while Dismiss is blocked, then hands it to Try again', async () => {
+    const frames: FrameRequestCallback[] = []
+    const rafSpy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((frame) => {
+      frames.push(frame)
+      return frames.length
+    })
+    const runFrames = () => act(async () => frames.splice(0).forEach((frame) => frame(0)))
+    await renderFailure()
+    retryBranchAutoRename.mockResolvedValueOnce({
+      attemptId: null,
+      outcome: { kind: 'ineligible', reason: 'setting-off' },
+      finishedAt: 1
+    })
+    button('Try again')?.focus()
+    await act(async () => button('Try again')?.click())
+    await runFrames()
+    expect(document.activeElement).toBe(button('Dismiss'))
+    await started(8)
+    // Blocked but still focusable, so the hand-back below can find focus inside the dialog.
+    const dismiss = button('Dismiss')
+    expect(dismiss?.getAttribute('aria-disabled')).toBe('true')
+    expect(dismiss?.disabled).toBe(false)
+    expect(document.activeElement).toBe(dismiss)
+    updateWorktreeMeta.mockImplementation(async () => {
+      setStoredError(null)
+      return { ok: true }
+    })
+    await act(async () => dismiss?.click())
+    expect(dialog()).not.toBeNull()
+    await waitOutObservation()
+    await runFrames()
+    expect(document.activeElement).toBe(button('Try again'))
+    rafSpy.mockRestore()
+  })
+
   it('replaces a kept name with the naming state when a newer attempt starts', async () => {
     await renderFailure()
     retryBranchAutoRename.mockResolvedValueOnce({
@@ -592,7 +627,7 @@ describe('AutoRenameFailedDialog sessions and focus', () => {
     )
     const event = { executionHostId: 'local', worktreeId: 'repo1::/path/wt1' } as const
     await act(async () => emitAttempt({ ...event, attemptId: 3, phase: 'started' }))
-    expect(button('Dismiss')?.disabled).toBe(false)
+    expect(button('Dismiss')?.getAttribute('aria-disabled')).toBeNull()
     await act(async () =>
       emitAttempt({
         ...event,
@@ -618,7 +653,7 @@ describe('AutoRenameFailedDialog sessions and focus', () => {
     await act(async () => root.render(<Controlled open={false} />))
     await act(async () => root.render(<Controlled open />))
     await act(async () => stale.resolve({ available: true, runningAttemptId: 5 }))
-    expect(button('Dismiss')?.disabled).toBe(false)
+    expect(button('Dismiss')?.getAttribute('aria-disabled')).toBeNull()
     expect(button('Try again')).toBeDefined()
   })
 
