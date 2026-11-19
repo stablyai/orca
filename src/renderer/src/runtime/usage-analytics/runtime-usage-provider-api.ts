@@ -5,6 +5,8 @@ type UsageProviderKey = 'claudeUsage' | 'codexUsage' | 'openCodeUsage' | 'museUs
 
 // Other reads wait for the host to rescan its transcripts; a first scan outlasts the default timeout.
 const USAGE_SCAN_TIMEOUT_MS = 10 * 60_000
+// Explicit, because an abortable call carries no default response deadline.
+const USAGE_READ_TIMEOUT_MS = 30_000
 const IMMEDIATE_USAGE_ACTIONS = new Set(['getScanState', 'getSnapshot', 'setEnabled'])
 
 export type RuntimeUsageCaller = (
@@ -25,7 +27,7 @@ export function createRuntimeUsageProviderApi<Key extends UsageProviderKey>(
           'usage.call',
           { method, params },
           IMMEDIATE_USAGE_ACTIONS.has(method.slice(method.indexOf(':') + 1))
-            ? undefined
+            ? USAGE_READ_TIMEOUT_MS
             : USAGE_SCAN_TIMEOUT_MS
         )
     },

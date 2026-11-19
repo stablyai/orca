@@ -36,8 +36,17 @@ export function StatsHostScope({
         : undefined,
     [environmentId, renewStatsHostView]
   )
-  // Layout effect: children's mount effects must already read this host. Same-host calls are no-ops.
-  useLayoutEffect(() => setStatsHost(host.target), [host.target, setStatsHost])
+  // Layout effect: children's mount effects must already read this host. Showing the same remote
+  // host again starts a new view, since its version or reachability may have changed meanwhile.
+  useLayoutEffect(() => {
+    if (environmentId === null) {
+      setStatsHost({ kind: 'local' })
+    } else if (usageHostKey(useAppStore.getState().statsHost) === key) {
+      renewStatsHostView()
+    } else {
+      setStatsHost({ kind: 'environment', environmentId })
+    }
+  }, [environmentId, key, setStatsHost, renewStatsHostView])
   return shown ? <>{children(usageSupport, view)}</> : null
 }
 

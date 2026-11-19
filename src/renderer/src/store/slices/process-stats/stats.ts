@@ -8,6 +8,9 @@ import { runtimeEnvironmentSupportsCapability } from '../../../runtime/rpc/compa
 import { usageHostKey } from '../usage/usage-host'
 import { clearUsageProviderData } from '../usage/usage-provider-slices'
 
+// An abortable call carries no default response deadline.
+const STATS_SUMMARY_TIMEOUT_MS = 30_000
+
 /** Whether the shown host computes usage: `unknown` when it could not be asked, so its reads report the failure. */
 export type StatsHostUsageSupport = 'checking' | 'supported' | 'unsupported' | 'unknown'
 
@@ -21,7 +24,7 @@ export type StatsSlice = {
   statsHostSignal: AbortSignal
   statsHostUsageSupport: StatsHostUsageSupport
   setStatsHost: (host: RuntimeClientTarget) => void
-  /** Contact with the shown host came back: read it again, keeping its numbers meanwhile. */
+  /** Shown again, or contact came back: read the host again, keeping its numbers meanwhile. */
   renewStatsHostView: () => void
   fetchStatsSummary: () => Promise<void>
 }
@@ -37,8 +40,12 @@ export const createStatsSlice: StateCreator<AppState, [], [], StatsSlice> = (set
       statsHost: host,
       statsHostEpoch: epoch,
       statsHostSignal: view.signal,
-      // A renewed view keeps the last answer so the panes stay up while the host is asked again.
-      ...(host.kind === 'local' ? { statsHostUsageSupport: 'supported' } : {})
+      // A renewed view keeps a real answer so the panes stay up while the host is asked again.
+      ...(host.kind === 'local'
+        ? { statsHostUsageSupport: 'supported' }
+        : get().statsHostUsageSupport === 'unknown'
+          ? { statsHostUsageSupport: 'checking' }
+          : {})
     })
     if (host.kind === 'local') {
       return
@@ -85,6 +92,7 @@ export const createStatsSlice: StateCreator<AppState, [], [], StatsSlice> = (set
           host.kind === 'local'
             ? await window.api.stats.getSummary()
             : await callRuntimeRpc<StatsSummary>(host, 'stats.summary', undefined, {
+                timeoutMs: STATS_SUMMARY_TIMEOUT_MS,
                 signal: get().statsHostSignal
               })
         // An answer from an earlier view, even of the same host, is stale.
