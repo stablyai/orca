@@ -1,6 +1,7 @@
+import { createHash } from 'node:crypto'
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { basename, join } from 'node:path'
+import { join, posix } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { z } from 'zod'
 import { setAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
@@ -27,6 +28,23 @@ const floorPid = (contents: string): { pid: number; startedAtMs: number | null }
   }
   const { pid, startedAtMs } = parsed.data
   return { pid, startedAtMs: typeof startedAtMs === 'number' ? startedAtMs : null }
+}
+// The floor's endpoint (daemon-spawner.ts, daemon-socket-endpoint-path.ts): a hashed Windows pipe, or a Unix
+// socket relocated under /tmp when the path overflows sun_path (104 bytes on macOS, 108 elsewhere, NUL included).
+const floorRuntimeHash = (runtimeDir: string): string =>
+  createHash('sha256').update(runtimeDir).digest('hex').slice(0, 12)
+const floorSocketPath = (runtimeDir: string, protocolVersion: number): string => {
+  if (process.platform === 'win32') {
+    return `\\\\?\\pipe\\orca-terminal-host-v${protocolVersion}-${floorRuntimeHash(runtimeDir)}`
+  }
+  const name = `daemon-v${protocolVersion}.sock`
+  const preferred = posix.join(runtimeDir, name)
+  const uid = process.getuid?.()
+  const limit = process.platform === 'darwin' ? 103 : 107
+  if (uid === undefined || Buffer.byteLength(preferred) <= limit) {
+    return preferred
+  }
+  return posix.join(`/tmp/.orca-daemon-${uid}/${floorRuntimeHash(runtimeDir)}`, name)
 }
 const floorRecognizesCommandLine = (commandLine: string, socket: string, token: string): boolean =>
   commandLine.includes('daemon-entry') &&
@@ -55,13 +73,9 @@ afterEach(() => {
 it('names its sockets where the floor release looks for them', () => {
   expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(STORE_FLOOR.daemonProtocolVersion)
   expect(getDaemonTokenPath(dir)).toBe(join(dir, `daemon-v${PROTOCOL_VERSION}.token`))
-  if (process.platform === 'win32') {
-    expect(getDaemonSocketPath(dir)).toMatch(
-      new RegExp(`^\\\\\\\\\\?\\\\pipe\\\\orca-terminal-host-v${PROTOCOL_VERSION}-[0-9a-f]{12}$`)
-    )
-  } else {
-    expect(basename(getDaemonSocketPath(dir))).toBe(`daemon-v${PROTOCOL_VERSION}.sock`)
-  }
+  expect(getDaemonSocketPath(dir)).toBe(floorSocketPath(dir, PROTOCOL_VERSION))
+  const longDir = join(dir, 'x'.repeat(120))
+  expect(getDaemonSocketPath(longDir)).toBe(floorSocketPath(longDir, PROTOCOL_VERSION))
 })
 
 it('publishes a pid record the floor release lists and reads', () => {

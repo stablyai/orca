@@ -1,3 +1,4 @@
+import positionalInsertTables from './1.4.263-positional-insert-tables.json'
 import floorSchemas from './1.4.263-store-schemas.json'
 import reviewedFloorTableTriggers from './reviewed-floor-table-triggers.json'
 
@@ -8,5 +9,6 @@ export const STORE_FLOOR = {
   daemonProtocolVersion: 57,
   agentSessionRecordSchemaVersion: 2,
   schemas: floorSchemas,
+  positionalInsertTables,
   reviewedFloorTableTriggers
 } as const

@@ -2,7 +2,7 @@
 // Raise the store floor: recreate each store as the given release tag does, into the floor fixture.
 // Usage: node config/scripts/store-compatibility/write-floor-store-schemas.mjs v1.4.263
 import { execFileSync } from 'node:child_process'
-import { cpSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -14,6 +14,12 @@ if (!tag || !/^v\d+\.\d+\.\d+$/.test(tag)) {
 const repo = resolve(import.meta.dirname, '../../..')
 const moduleDir = 'src/main/store-compatibility'
 const output = join(repo, moduleDir, 'floor', `${tag.slice(1)}-store-schemas.json`)
+const positionalOutput = join(
+  repo,
+  moduleDir,
+  'floor',
+  `${tag.slice(1)}-positional-insert-tables.json`
+)
 const checkout = mkdtempSync(join(tmpdir(), 'store-floor-'))
 // Only pnpm needs a shell on Windows (pnpm.cmd); its arguments hold no paths, so paths with spaces stay intact.
 const run = (command, args, cwd = repo, env = process.env) =>
@@ -23,6 +29,28 @@ const run = (command, args, cwd = repo, env = process.env) =>
     stdio: 'inherit',
     shell: process.platform === 'win32' && command === 'pnpm'
   })
+
+// Tables the tag inserts into without a column list; an added column breaks those inserts.
+function positionalInsertTables(root) {
+  const insert =
+    /INSERT(?:\s+OR\s+(?:\w+|\$\{[^}]*\}))?\s+INTO\s+([A-Za-z_][\w.]*)\s+(?:VALUES|SELECT)\b/gi
+  const tables = new Set()
+  for (const entry of readdirSync(join(root, 'src'), { recursive: true, withFileTypes: true })) {
+    const file = join(entry.parentPath, entry.name)
+    if (
+      entry.isFile() &&
+      /\.(?:ts|tsx|mjs|js)$/.test(entry.name) &&
+      !/\.(?:test|spec)\.|test-fixture|[\\/]testing[\\/]/.test(file)
+    ) {
+      for (const match of readFileSync(file, 'utf8').matchAll(insert)) {
+        if (!match[1].startsWith('temp.')) {
+          tables.add(match[1])
+        }
+      }
+    }
+  }
+  return [...tables].sort()
+}
 
 run('git', ['worktree', 'add', '--detach', checkout, tag])
 try {
@@ -48,6 +76,7 @@ try {
       ''
     ].join('\n')
   )
+  writeFileSync(positionalOutput, `${JSON.stringify(positionalInsertTables(checkout), null, 2)}\n`)
   run('pnpm', ['install', '--frozen-lockfile'], checkout)
   run(
     'pnpm',
@@ -55,7 +84,7 @@ try {
     checkout
   )
   console.log(
-    `Wrote ${output}. Point STORE_FLOOR at it and update its release, commit and versions.`
+    `Wrote ${output} and ${positionalOutput}. Point STORE_FLOOR at them and update its release, commit and versions.`
   )
 } finally {
   run('git', ['worktree', 'remove', '--force', checkout])

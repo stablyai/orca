@@ -5,6 +5,8 @@ export type FloorSchemaPolicy = {
   userVersionMustMatch: boolean
   /** Triggers this build adds to tables the floor build writes; they fire inside its writes too. */
   reviewedFloorTableTriggers: Readonly<Record<string, string>>
+  /** Tables the floor build inserts into without a column list, so their columns can't grow. */
+  positionalInsertTables: readonly string[]
 }
 
 /** Changes that break a floor build writing this store after this build created or migrated it. */
@@ -27,6 +29,12 @@ export function floorSchemaViolations(
       violations.push(`table ${table} dropped`)
       continue
     }
+    if (
+      currentTable.withoutRowid !== floorTable.withoutRowid ||
+      currentTable.strict !== floorTable.strict
+    ) {
+      violations.push(`table ${table} rowid or STRICT changed`)
+    }
     const columns = new Map(currentTable.columns.map((column) => [column[0], column]))
     for (const floorColumn of floorTable.columns) {
       const column = columns.get(floorColumn[0])
@@ -35,6 +43,16 @@ export function floorSchemaViolations(
       } else if (JSON.stringify(column) !== JSON.stringify(floorColumn)) {
         violations.push(`column ${table}.${floorColumn[0]} changed`)
       }
+    }
+    const columnOrder = (shape: typeof floorTable): string =>
+      shape.columns.map((column) => column[0]).join(',')
+    if (
+      policy.positionalInsertTables.includes(table) &&
+      columnOrder(currentTable) !== columnOrder(floorTable)
+    ) {
+      violations.push(
+        `columns of ${table} added or moved; the floor build inserts into it by position`
+      )
     }
     const floorColumnNames = new Set(floorTable.columns.map((column) => column[0]))
     for (const [name, , notNull, defaultSql] of currentTable.columns) {

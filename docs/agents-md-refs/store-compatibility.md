@@ -16,12 +16,13 @@ The profile state, chat journal, chat domain and orchestration stores are checke
 
 - **Allowed:**
   - new tables;
-  - new nullable or defaulted columns;
+  - new nullable or defaulted columns, except on a table the floor inserts into without a column list (`floor/<release>-positional-insert-tables.json`);
   - new non-unique indexes;
   - new tables' own triggers.
 - **Forbidden:**
   - dropping or rebuilding a floor table, column or index;
-  - changing a floor column's type, NOT NULL, default or primary key (the floor reports the profile as damaged);
+  - changing a floor column's type, NOT NULL, default, primary key or generated expression (the floor reports the profile as damaged);
+  - adding or removing `WITHOUT ROWID` or `STRICT` on a floor table;
   - adding a NOT NULL column with no default;
   - changing a CHECK constraint;
   - adding a UNIQUE index to a floor table (the floor's inserts start failing);
@@ -30,7 +31,7 @@ The profile state, chat journal, chat domain and orchestration stores are checke
 - **A trigger this build adds to a floor table** fires inside the floor's writes too. List it in `floor/reviewed-floor-table-triggers.json` with why it is safe. It must use only built-in SQL and never `RAISE`.
 - **The chat record `schemaVersion`** must equal the floor's. Records with any other version are invisible to the floor.
 
-`daemon-floor-hold.test.ts` keeps the floor able to find this build's terminal daemon by its pid record, socket and token names, and command line. That way the floor shows this build's terminals read-only with Reopen, instead of restoring them a second time. Every protocol bump must keep it passing.
+`daemon-floor-hold.test.ts` keeps the floor able to find this build's terminal daemon by its pid record, socket path (including the Windows pipe hash and the short Unix path for long user-data folders), token name and command line. That way the floor shows this build's terminals read-only with Reopen, instead of restoring them a second time. Every protocol bump must keep it passing.
 
 ## Review rules the tests can't see
 

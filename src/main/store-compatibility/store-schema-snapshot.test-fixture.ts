@@ -1,11 +1,21 @@
 import { z } from 'zod'
 import type Database from '../sqlite/sync-database'
 
-/** [name, declared type, NOT NULL, default SQL, primary-key position, hidden/generated kind] */
-export type StoreColumnShape = [string, string, boolean, string | null, number, number]
+/** [name, declared type, NOT NULL, default SQL, primary-key position, hidden/generated kind, generated expression] */
+export type StoreColumnShape = [
+  string,
+  string,
+  boolean,
+  string | null,
+  number,
+  number,
+  string | null
+]
 
 export type StoreTableShape = {
   columns: StoreColumnShape[]
+  withoutRowid: boolean
+  strict: boolean
   checks: string[]
   /** "from->table(to) ON UPDATE x ON DELETE y", one per foreign-key column. */
   foreignKeys: string[]
@@ -44,6 +54,7 @@ const ForeignKeyRow = z.object({
   on_update: z.string(),
   on_delete: z.string()
 })
+const TableListRow = z.object({ wr: z.number(), strict: z.number() })
 const IndexListRow = z.object({ name: z.string(), unique: z.number() })
 const IndexColumnRow = z.object({ name: z.string().nullable() })
 
@@ -69,8 +80,23 @@ export function normalizeSql(sql: string): string {
 
 /** Every CHECK (...) clause in a CREATE TABLE; parentheses inside literals don't count. */
 export function tableCheckClauses(sql: string): string[] {
-  const checks: string[] = []
-  const pattern = /\bCHECK\s*\(/gi
+  return parenthesizedClauses(sql, /\bCHECK\s*\(/gi)
+    .map(([, clause]) => clause)
+    .sort()
+}
+
+/** Each generated column's `AS (...)` expression, keyed by the column name before it. */
+function generatedColumnExpressions(sql: string): Map<string, string> {
+  return new Map(
+    parenthesizedClauses(sql, /("[^"]*"|`[^`]*`|\[[^\]]*\]|\w+)[^,(]*?\bAS\s*\(/gi).map(
+      ([name, clause]) => [/^["`[]/.test(name) ? name.slice(1, -1) : name, clause]
+    )
+  )
+}
+
+/** [first capture group, normalized clause] for each match of `pattern`, which must end at an open parenthesis. */
+function parenthesizedClauses(sql: string, pattern: RegExp): [string, string][] {
+  const clauses: [string, string][] = []
   for (let match = pattern.exec(sql); match; match = pattern.exec(sql)) {
     let depth = 1
     let quote: string | null = null
@@ -85,9 +111,9 @@ export function tableCheckClauses(sql: string): string[] {
         depth += char === '(' ? 1 : char === ')' ? -1 : 0
       }
     }
-    checks.push(normalizeSql(sql.slice(match.index, end)))
+    clauses.push([match[1] ?? '', normalizeSql(sql.slice(match.index, end))])
   }
-  return checks.sort()
+  return clauses
 }
 
 function tableShape(db: Database.Database, table: string, sql: string): StoreTableShape {
@@ -115,14 +141,19 @@ function tableShape(db: Database.Database, table: string, sql: string): StoreTab
         .map((row) => IndexColumnRow.parse(row).name ?? '<expr>')
         .join(',')
     )
+  const generated = generatedColumnExpressions(sql)
+  const options = TableListRow.parse(db.prepare('SELECT * FROM pragma_table_list(?)').get(table))
   return {
+    withoutRowid: options.wr === 1,
+    strict: options.strict === 1,
     columns: columns.map((column) => [
       column.name,
       column.type.toUpperCase(),
       column.notnull === 1,
       column.dflt_value,
       column.pk,
-      column.hidden
+      column.hidden,
+      column.hidden >= 2 ? (generated.get(column.name) ?? '<unparsed>') : null
     ]),
     checks: tableCheckClauses(sql),
     foreignKeys: foreignKeys.sort(),

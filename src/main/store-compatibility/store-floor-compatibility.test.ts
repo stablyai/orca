@@ -46,7 +46,8 @@ describe(`stores stay writable by ${STORE_FLOOR.release}`, () => {
     const floorSchema = STORE_FLOOR.schemas[store]
     const policy = {
       userVersionMustMatch: USER_VERSION_MUST_MATCH[store],
-      reviewedFloorTableTriggers: reviewedTriggers(store)
+      reviewedFloorTableTriggers: reviewedTriggers(store),
+      positionalInsertTables: STORE_FLOOR.positionalInsertTables
     }
 
     it(`${store}: a new store`, () => {
