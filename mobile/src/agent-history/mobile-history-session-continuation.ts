@@ -26,7 +26,7 @@ import {
   prepareMobileAiVaultSessionResume,
   RESUME_RPC_TIMEOUT_MS
 } from './ai-vault-resume-preparation'
-import { mobileHistoryTerminalPane } from './mobile-history-session-destination'
+import { terminalTabPaneKey } from '../session/tabs/notification-pane-tab'
 
 export type MobileHistorySessionAction =
   | { kind: 'resume' }
@@ -66,7 +66,7 @@ export async function continueMobileHistorySession(
     action: Exclude<MobileHistorySessionAction, { kind: 'resume' }>
     mutations: MobileAiVaultResumeMutationRegistry
   }
-): Promise<{ worktreeId: string; paneKey?: string }> {
+): Promise<{ worktreeId: string; paneKey?: string; terminal?: string }> {
   const { client, session, action, assertCurrentOwner, mutations } = args
   const mutationKey = `${session.id}:${action.kind}`
   if (action.kind === 'cli' && session.structuredSession) {
@@ -98,7 +98,8 @@ export async function continueMobileHistorySession(
     mutations.releaseOnSuccess(mutationKey)
     return {
       worktreeId: session.structuredSession.workspaceId,
-      paneKey: mobileHistoryTerminalPane(tab)
+      paneKey: terminalTabPaneKey(tab),
+      ...(tab.terminal ? { terminal: tab.terminal } : {})
     }
   }
   const { target, platform, settings, host, status } =
@@ -151,6 +152,7 @@ export async function continueMobileHistorySession(
     const outcome = launched.result.outcome
     return {
       worktreeId: launched.result.worktreeId,
+      ...(outcome.kind === 'terminal' ? { terminal: outcome.handle } : {}),
       paneKey:
         outcome.kind === 'structured'
           ? structuredAgentSessionPaneKey(
@@ -188,5 +190,5 @@ export async function continueMobileHistorySession(
     assertCurrentOwner
   )
   mutations.releaseOnSuccess(mutationKey)
-  return { worktreeId: target.worktreeId, paneKey: mobileHistoryTerminalPane(tab) }
+  return { worktreeId: target.worktreeId, paneKey: terminalTabPaneKey(tab), terminal: tab.terminal }
 }

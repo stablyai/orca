@@ -30,7 +30,15 @@ export function mobileSessionTabPaneKey(
   if (tab?.type === 'agent-session') {
     return structuredAgentSessionPaneKey(structuredAgentSessionTabId(tab.sessionId), tab.sessionId)
   }
-  if (tab?.type !== 'terminal' || !tab.leafId) {
+  return tab?.type === 'terminal' ? terminalTabPaneKey(tab) : undefined
+}
+
+export function terminalTabPaneKey(tab: {
+  id: string
+  parentTabId?: string
+  leafId?: string
+}): string | undefined {
+  if (!tab.leafId) {
     return undefined
   }
   try {

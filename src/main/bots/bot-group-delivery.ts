@@ -55,8 +55,18 @@ export async function sendBotGroupMessage(
       }
       const operationId = mintAgentSessionOperationId(Date.now())
       contexts.set(operationId, botGroupContext(history, completed, member))
-      const { name: botName, avatar, agent } = bot
-      return [{ operationId, botId, botName, avatar, agent, sessionId: member.sessionId }]
+      const { name: botName, avatar, avatarColor, agent } = bot
+      return [
+        {
+          operationId,
+          botId,
+          botName,
+          avatar,
+          ...(avatarColor ? { avatarColor } : {}),
+          agent,
+          sessionId: member.sessionId
+        }
+      ]
     })
     const stored = groups.store.append(
       {

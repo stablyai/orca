@@ -11,6 +11,7 @@ import { COMBOBOX_FIELD_SHELL } from '../type-ahead/type-ahead-combobox-styles'
 
 /** Overlay the committed selection while keeping the input ready to search. */
 export default function RunTargetField({
+  fieldName,
   query,
   onQueryChange,
   open,
@@ -26,6 +27,7 @@ export default function RunTargetField({
   inputRef,
   onKeyDown
 }: {
+  fieldName?: string
   query: string
   onQueryChange: (value: string) => void
   open: boolean
@@ -70,7 +72,9 @@ export default function RunTargetField({
                 type="text"
                 role="combobox"
                 data-run-target-combobox-root="true"
-                aria-label={t('auto.components.new.workspace.RunTargetCombobox.label', 'Run on')}
+                aria-label={
+                  fieldName ?? t('auto.components.new.workspace.RunTargetCombobox.label', 'Run on')
+                }
                 aria-expanded={open}
                 aria-controls={listId}
                 aria-autocomplete="list"

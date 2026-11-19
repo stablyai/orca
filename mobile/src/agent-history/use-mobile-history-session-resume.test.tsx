@@ -9,7 +9,22 @@ import { useMobileHistorySessionResume } from './use-mobile-history-session-resu
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 
-const navigation = vi.hoisted(() => ({ replace: vi.fn(), back: vi.fn() }))
+const navigation = vi.hoisted(() => ({
+  replace: vi.fn(),
+  back: vi.fn(),
+  shellOpen: vi.fn(),
+  shellReturns: true
+}))
+vi.mock('../navigation/route-handoff', () => ({
+  useShellSessionHandoff: () => ({
+    returns: () => navigation.shellReturns,
+    open: navigation.shellOpen
+  })
+}))
+vi.mock('../navigation/workspace-execution-host', () => ({
+  useWorkspaceExecutionHost: () => undefined,
+  workspaceRouteHref: (href: string) => href
+}))
 vi.mock('../navigation/workspace-route-handoff', () => ({
   useWorkspaceRouteHandoff: () => navigation
 }))
@@ -86,7 +101,10 @@ async function withResume(
   }
 }
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  navigation.shellReturns = true
+})
 
 describe('continuing mobile history from the current host record', () => {
   it.each(['codex', 'claude'] as const)(
@@ -170,41 +188,51 @@ describe('continuing mobile history from the current host record', () => {
     )
   })
 
-  it('opens the resumed terminal when the history page cannot reach the underlying session handler', async () => {
-    const selected = { ...session('claude'), structuredSession: undefined }
-    const client = stubRpcClient({
-      sendRequest: async (method) => {
-        const results: Record<string, unknown> = {
-          'aiVault.listSessions': { sessions: [selected], issues: [] },
-          'status.get': { hostPlatform: 'darwin', capabilities: [] },
-          'repo.list': { repos: [{ id: 'repo', path: '/repo' }] },
-          'folderWorkspace.list': { folderWorkspaces: [] },
-          'projectGroup.list': { groups: [] },
-          'settings.get': {},
-          'worktree.ps': { worktrees: [{ worktreeId: 'route', repoId: 'repo', path: '/repo' }] },
-          'session.tabs.createTerminal': {
-            tab: {
-              type: 'terminal',
-              id: 'new-tab',
-              terminal: 'pty',
-              parentTabId: 'group',
-              leafId: LEAF
-            }
-          },
-          'terminal.send': {}
+  it.each([true, false])(
+    'uses the shell return support (%s) when the session handler is in another document',
+    async (returns) => {
+      navigation.shellReturns = returns
+      const selected = { ...session('claude'), structuredSession: undefined }
+      const client = stubRpcClient({
+        sendRequest: async (method) => {
+          const results: Record<string, unknown> = {
+            'aiVault.listSessions': { sessions: [selected], issues: [] },
+            'status.get': { hostPlatform: 'darwin', capabilities: [] },
+            'repo.list': { repos: [{ id: 'repo', path: '/repo' }] },
+            'folderWorkspace.list': { folderWorkspaces: [] },
+            'projectGroup.list': { groups: [] },
+            'settings.get': {},
+            'worktree.ps': { worktrees: [{ worktreeId: 'route', repoId: 'repo', path: '/repo' }] },
+            'session.tabs.createTerminal': {
+              tab: {
+                type: 'terminal',
+                id: 'new-tab',
+                terminal: 'pty',
+                parentTabId: 'group',
+                leafId: LEAF
+              }
+            },
+            'terminal.send': {}
+          }
+          if (!(method in results)) {
+            throw new Error(`unexpected request: ${method}`)
+          }
+          return success(results[method])
         }
-        if (!(method in results)) {
-          throw new Error(`unexpected request: ${method}`)
-        }
-        return success(results[method])
+      })
+      await withResume(client, (resume) => resume(selected))
+      if (returns) {
+        expect(navigation.shellOpen).toHaveBeenCalledWith(
+          '/h/host/session/route?paneKey=group%3A11111111-1111-4111-8111-111111111111'
+        )
+        expect(navigation.back).not.toHaveBeenCalled()
+      } else {
+        expect(navigation.back).toHaveBeenCalled()
+        expect(navigation.shellOpen).not.toHaveBeenCalled()
       }
-    })
-    await withResume(client, (resume) => resume(selected))
-    expect(navigation.replace).toHaveBeenCalledWith(
-      '/h/host/session/route?paneKey=group%3A11111111-1111-4111-8111-111111111111'
-    )
-    expect(navigation.back).not.toHaveBeenCalled()
-  })
+      expect(navigation.replace).not.toHaveBeenCalled()
+    }
+  )
 
   it('does not launch a stale row when only another host still lists that id', async () => {
     const selected = session('claude')

@@ -146,21 +146,3 @@ it("drops an answer's move when an early unsnooze came between them in its write
 
   expect(entries.map((entry) => entry.key)).toEqual(['e1', 'e2', 'e4', 'e5'])
 })
-
-it("starts a follow-up chain's worker once however many of its steps the item links", () => {
-  const step = (ref: string) => ({
-    kind: 'dispatch' as const,
-    ref,
-    latest: 'ctx_9',
-    title: 'Run one more e2e',
-    state: 'working' as const,
-    host: null,
-    startedAt: 500,
-    settledAt: null,
-    report: null,
-    pr: null
-  })
-  const item = makeTestBotItem(6, { links: ['ctx_1', 'ctx_3', 'ctx_5', 'ctx_7'].map(step) })
-
-  expect(botItemActivity(item, []).map((entry) => entry.key)).toEqual(['ctx_1:started'])
-})

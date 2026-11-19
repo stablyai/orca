@@ -4,7 +4,10 @@ import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../transport/connection/connection-state'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
-import { useSessionScreenHandlers } from '../session/session-screen-handlers'
+import {
+  useResumedHistoryTerminalOpener,
+  useHistorySessionPaneOpener
+} from './open-resumed-history-terminal'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useTransientToast } from '../components/feedback/TransientToast'
 import { triggerError, triggerSuccess } from '../platform/haptics/haptics'
@@ -18,11 +21,7 @@ import {
   readMobileRuntimeTerminalWindowsShell,
   resumeAiVaultSessionInTerminal
 } from './ai-vault-resume-launch'
-import {
-  refreshMobileHistorySession,
-  mobileHistorySessionHref,
-  mobileHistoryTerminalPane
-} from './mobile-history-session-destination'
+import { refreshMobileHistorySession } from './refresh-mobile-history-session'
 import {
   continueMobileHistorySession,
   loadMobileHistoryContinuationTarget,
@@ -46,7 +45,8 @@ export function useMobileHistorySessionResume({
 }) {
   const t = useMobileTranslation()
   const router = useWorkspaceRouteHandoff()
-  const sessionBelow = useSessionScreenHandlers(hostId, worktreeId)
+  const openResumedTerminal = useResumedHistoryTerminalOpener(hostId, worktreeId)
+  const openSessionPane = useHistorySessionPaneOpener(hostId, worktreeId)
   const claimResumeOwnership = useMobileResumeOperationOwnership(
     hostId,
     worktreeId,
@@ -93,9 +93,10 @@ export function useMobileHistorySessionResume({
           })
           assertCurrentOwner()
           triggerSuccess()
-          router.replace(
-            mobileHistorySessionHref(hostId, destination.worktreeId, destination.paneKey)
-          )
+          openSessionPane({
+            ...destination,
+            fromSession: origin === 'session' && destination.worktreeId === worktreeId
+          })
           return
         }
         if (
@@ -172,15 +173,11 @@ export function useMobileHistorySessionResume({
           return
         }
         setResumeMessage(t('agentHistory.panel.sessionQueued', 'Agent session queued.'))
-        // From a session screen the same workspace is the screen below; otherwise the session takes this screen's place.
-        if (origin === 'session' && target.worktreeId === worktreeId && sessionBelow) {
-          sessionBelow?.onResumedTerminal(resumed.terminal)
-          router.back()
-        } else {
-          router.replace(
-            mobileHistorySessionHref(hostId, target.worktreeId, mobileHistoryTerminalPane(resumed))
-          )
-        }
+        openResumedTerminal({
+          worktreeId: target.worktreeId,
+          resumed,
+          fromSession: origin === 'session' && target.worktreeId === worktreeId
+        })
       } catch (err) {
         triggerError()
         setResumeMessage(
@@ -198,7 +195,8 @@ export function useMobileHistorySessionResume({
       connState,
       hostId,
       origin,
-      sessionBelow,
+      openResumedTerminal,
+      openSessionPane,
       router,
       worktreeId,
       worktrees,
