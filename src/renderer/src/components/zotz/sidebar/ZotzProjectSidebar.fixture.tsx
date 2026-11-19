@@ -1,6 +1,8 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type { Repo } from '../../../../../shared/repository/repo-types'
+import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { Worktree } from '../../../../../shared/worktree/types'
+import { EMPTY_ZOTZ_AGENT_QUEUE_SNAPSHOT } from '../../../../../shared/zotz/agent-queue/zotz-agent-queue-snapshot'
 import ZotzProjectSidebar from './ZotzProjectSidebar'
 import { ZotzConversationRow } from './ZotzConversationRow'
 
@@ -65,6 +67,46 @@ export const projects = defineFixture({
   },
   render: () => (
     <div className="flex h-[520px] flex-col bg-worktree-sidebar">
+      <ZotzProjectSidebar />
+    </div>
+  )
+})
+
+const msiRuntime: PublicKnownRuntimeEnvironment = {
+  id: 'msi',
+  name: 'MSI',
+  source: 'manual',
+  createdAt: 1,
+  updatedAt: 1,
+  lastUsedAt: null,
+  runtimeId: null,
+  preferredEndpointId: 'default',
+  endpoints: []
+}
+const rodri: Repo = { ...repo('rodri', 'rodri'), executionHostId: 'runtime:msi' }
+const uni: Repo = { ...repo('uni', 'uni'), executionHostId: 'runtime:msi' }
+
+export const remoteProjects = defineFixture({
+  width: 300,
+  setup: () => {
+    Object.assign(window.api, {
+      zotzAgentQueue: {
+        onChanged: () => () => {},
+        snapshot: async () => EMPTY_ZOTZ_AGENT_QUEUE_SNAPSHOT
+      }
+    })
+  },
+  store: {
+    repos: [zotz, rodri, uni],
+    runtimeEnvironments: [msiRuntime],
+    worktreesByRepo: {
+      zotz: [worktree('zotz', 'main', 'main', { isMainWorktree: true })],
+      rodri: [worktree('rodri', 'main', 'rodri', { isMainWorktree: true })],
+      uni: [worktree('uni', 'main', 'uni', { isMainWorktree: true })]
+    }
+  },
+  render: () => (
+    <div className="flex h-[260px] flex-col bg-worktree-sidebar">
       <ZotzProjectSidebar />
     </div>
   )
