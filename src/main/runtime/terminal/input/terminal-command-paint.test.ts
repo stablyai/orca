@@ -40,7 +40,7 @@ describe('terminal command paint after a reattach', () => {
     expect(takeReattachedRepaintRequest(painted)).toBe(false)
   })
 
-  it('never fences a process this run saw start, however often it is reattached', () => {
+  it('remembers a locally started process across reattach and lost output', () => {
     const record: TerminalCommandPaintRecord = {}
     vouchTerminalSpawn(record)
     observeTerminalCommandPaint(record, 'ready', 'ready', 2_000)
@@ -48,6 +48,10 @@ describe('terminal command paint after a reattach', () => {
     expect(hasTerminalAgentPainted(record, 'hermes')).toBe(true)
     expect(isCurrentCommandReport(record, null)).toBe(true)
     expect(takeReattachedRepaintRequest(record)).toBe(false)
+
+    record.commandPaint?.noteGap()
+    awaitReattachedTerminalPaint(record, 4_000)
+    expect(hasTerminalAgentPainted(record, 'hermes')).toBe(true)
   })
 
   it('stops holding a finished reattached command once output was lost', () => {
@@ -55,14 +59,6 @@ describe('terminal command paint after a reattach', () => {
     awaitReattachedTerminalPaint(record, 1_000)
     observeTerminalCommandPaint(record, FINISH_MARKER, FINISH_MARKER, 2_000)
     record.commandPaint?.noteGap()
-    expect(hasTerminalAgentPainted(record, 'hermes')).toBe(true)
-  })
-
-  it('remembers a process this run saw start across lost output', () => {
-    const record: TerminalCommandPaintRecord = {}
-    vouchTerminalSpawn(record)
-    record.commandPaint?.noteGap()
-    awaitReattachedTerminalPaint(record, 3_000)
     expect(hasTerminalAgentPainted(record, 'hermes')).toBe(true)
   })
 })
