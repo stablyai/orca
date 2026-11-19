@@ -57,9 +57,10 @@ async function reportCutChat(
   dispatchId: string,
   sessionId: string,
   root: string,
-  offered: ReadonlyMap<string, StructuredAgentSessionRestartCut>
+  offered: ReadonlyMap<string, StructuredAgentSessionRestartCut>,
+  /** The worker's generation before the offers were read. */
+  seen: number | undefined
 ): Promise<void> {
-  const seen = readWorkerPresence(deps.db, dispatchId)?.generation
   await chats.open(sessionId)
   const cut = await chats.cutOf(sessionId, offered)
   const worker = cut
@@ -67,7 +68,7 @@ async function reportCutChat(
         (entry) => entry.dispatch.id === dispatchId
       )
     : undefined
-  // The offers were read once for the pass: any turn or rest observed since then supersedes the cut.
+  // Any turn or rest observed since the offers were read supersedes the cut.
   const now = readWorkerPresence(deps.db, dispatchId)
   if (!cut || !worker || now?.generation !== seen) {
     return
@@ -166,6 +167,10 @@ export async function reportWorkerStopsAcrossRestart(
       })
     )
   }
+  // Fenced before the offers are read: a continuation that starts during the read supersedes its cut.
+  const seen = new Map(
+    openDispatchIds(db).map((id) => [id, readWorkerPresence(db, id)?.generation] as const)
+  )
   // Unread offers leave every chat to a person; terminals are decided all the same.
   const offered = chats
     ? await chats.offeredCuts().catch((error: unknown) => {
@@ -203,7 +208,9 @@ export async function reportWorkerStopsAcrossRestart(
     }
     for (const cut of cutsByRoot.get(sessionId) ?? []) {
       if (chats && offered) {
-        visit(dispatchId, () => reportCutChat(deps, chats, dispatchId, cut, sessionId, offered))
+        visit(dispatchId, () =>
+          reportCutChat(deps, chats, dispatchId, cut, sessionId, offered, seen.get(dispatchId))
+        )
       }
     }
   }

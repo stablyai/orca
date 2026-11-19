@@ -464,4 +464,32 @@ describe('worker stops across a restart', () => {
     })
     expect(visited).toEqual([PANE])
   })
+
+  it('drops a cut whose continuation a person started while the offers were being read', async () => {
+    const ctx = setup(formatOrcaSessionAddress(CHAT_SESSION))
+    const [worker] = chatWorkerDispatches(CHAT_SESSION, ctx.db)
+    const cut = { cause: 'quit', turnId: 'turn-0' } as const
+    await reportWorkerStopsAcrossRestart({
+      db: ctx.db,
+      reportDeps: ctx.reportDeps,
+      reportRestingPane: async () => {},
+      chats: {
+        cutByLastRun: new Set([CHAT_SESSION]),
+        lineageRoot: (sessionId) => sessionId,
+        offeredCuts: async () => {
+          observeWorker(
+            ctx.db,
+            { kind: 'local', dispatch: worker!.dispatch },
+            { presence: 'working', newTurn: true },
+            ctx.reportDeps
+          )
+          return new Map([[CHAT_SESSION, cut]])
+        },
+        open: async () => undefined,
+        lastOutput: () => undefined,
+        cutOf: async () => cut
+      }
+    })
+    expect(ctx.mail()).toEqual([])
+  })
 })
