@@ -1,4 +1,5 @@
 import { journalSqlSourceContent } from './journal-sql-failure'
+import { isJournalReaderReplyLimitFailure } from './journal-sql-reader-reply-limit'
 import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
 import type { LegacyProofCursor, LegacyProofPage } from './journal-legacy-source-proof'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
@@ -77,13 +78,22 @@ export async function completeJournalLegacyProof(
         try {
           await conversions.ensure(source.sessionId, false)
         } catch (error) {
-          // The next attempt converts this chat again instead of waiting on a conversion that failed.
+          // The next attempt reads this page again, so a failure recorded since is seen, and
+          // converts the chat again instead of waiting on a conversion that failed.
           frontier.pending = false
+          frontier.page = undefined
           const content = journalSqlSourceContent(error)
           if (content) {
             throw new JournalLegacyRetentionError(
               'legacy source has unreadable journal content',
               content === 'journalCorrupt' ? 'source-corrupt' : 'source-newer'
+            )
+          }
+          // Rows too large for one reply fail the same way at every retry.
+          if (isJournalReaderReplyLimitFailure(error)) {
+            throw new JournalLegacyRetentionError(
+              'an older Orca chat is too large to convert in one reply',
+              'source-oversize'
             )
           }
           throw error

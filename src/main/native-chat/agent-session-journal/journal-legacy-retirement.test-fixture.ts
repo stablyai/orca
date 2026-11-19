@@ -79,7 +79,12 @@ export function continueInOlderOrca(filename: string, sessionId: string): void {
 
 /** A profile an Orca at `copiedBy` copied, holding one unconverted chat with history. */
 export async function profile(
-  options: { copiedBy?: string; seed?: (db: Database.Database) => void } = {}
+  options: {
+    copiedBy?: string
+    seed?: (db: Database.Database) => void
+    /** Converting this chat fails with this error, as a reader would. */
+    failConversion?: { sessionId: string; error: Error }
+  } = {}
 ) {
   const root = mkdtempSync(join(tmpdir(), 'orca-legacy-retirement-'))
   cleanup.push(() => rmSync(root, { recursive: true, force: true }))
@@ -140,6 +145,9 @@ export async function profile(
   const conversions = {
     ensure: async (id: string) => {
       ensured.push(id)
+      if (options.failConversion?.sessionId === id) {
+        throw options.failConversion.error
+      }
       if (journalDomainImportState(db, id).state === 'ready') {
         return 'epoch'
       }

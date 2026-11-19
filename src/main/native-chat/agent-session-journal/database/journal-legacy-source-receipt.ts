@@ -1,8 +1,12 @@
-import { statSync, type BigIntStats } from 'node:fs'
+import type { BigIntStats } from 'node:fs'
 import { stat } from 'node:fs/promises'
 
 export const JOURNAL_LEGACY_SOURCE_RECEIPT = 'journal.legacy-source-copy.v1'
-const VERSION = { version: 1, profileCopyInventoryVersion: 1 } as const
+export const JOURNAL_LEGACY_SOURCE_RECEIPT_VERSION = {
+  version: 1,
+  profileCopyInventoryVersion: 1
+} as const
+const VERSION = JOURNAL_LEGACY_SOURCE_RECEIPT_VERSION
 
 export type JournalLegacyFileIdentity = {
   dev: string
@@ -24,12 +28,6 @@ export type JournalLegacySourceReceipt = {
   | { disposition: 'no-source-at-initialization' | 'uncertifiable' }
 )
 
-export function journalLegacyFileIdentity(filename: string): JournalLegacyFileIdentity {
-  return journalLegacyFileIdentityFromStat(
-    statSync(filename, { bigint: true, throwIfNoEntry: false })
-  )
-}
-
 export function journalLegacyFileIdentityFromStat(
   file: BigIntStats | undefined
 ): JournalLegacyFileIdentity {
@@ -45,22 +43,6 @@ export function journalLegacyFileIdentityFromStat(
   }
 }
 
-/** Path stats avoid releasing another connection's process-wide SQLite locks on close. */
-export function captureJournalLegacySourceReceipt(filename: string): JournalLegacySourceReceipt {
-  try {
-    const main = statSync(filename, { bigint: true, throwIfNoEntry: false })
-    if (!main) {
-      return sourceReceipt(main)
-    }
-    return sourceReceipt(
-      journalLegacyFileIdentity(filename),
-      statSync(`${filename}-wal`, { bigint: true, throwIfNoEntry: false })
-    )
-  } catch {
-    return { ...VERSION, disposition: 'uncertifiable' }
-  }
-}
-
 export async function readJournalLegacySourceReceipt(
   filename: string
 ): Promise<JournalLegacySourceReceipt> {
@@ -69,7 +51,10 @@ export async function readJournalLegacySourceReceipt(
       statIfPresent(filename),
       statIfPresent(`${filename}-wal`)
     ])
-    return sourceReceipt(main ? journalLegacyFileIdentityFromStat(main) : undefined, wal)
+    return journalLegacySourceReceiptOf(
+      main ? journalLegacyFileIdentityFromStat(main) : undefined,
+      wal
+    )
   } catch {
     return { ...VERSION, disposition: 'uncertifiable' }
   }
@@ -86,7 +71,7 @@ async function statIfPresent(filename: string): Promise<BigIntStats | undefined>
   }
 }
 
-function sourceReceipt(
+export function journalLegacySourceReceiptOf(
   main?: JournalLegacyFileIdentity,
   wal?: BigIntStats
 ): JournalLegacySourceReceipt {

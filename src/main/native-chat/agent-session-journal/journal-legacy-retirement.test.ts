@@ -532,4 +532,22 @@ it('converts the copies the reconcile keeps, and keeps the original while a chat
   await goneCopy.launch().run()
   expect(goneCopy.errors).toEqual([])
   expect(companions(goneCopy.filename)).toEqual([])
+
+  // A chat too large for one reply fails the same way at every retry: refused once, not reconverted.
+  const oversized = await profile({
+    failConversion: {
+      sessionId: 'unopened',
+      error: new Error('journal read reply (rows) exceeds 67108864 bytes')
+    }
+  })
+  vi.useFakeTimers({ toFake: ['performance'] })
+  const oversizedRetirement = oversized.launch()
+  for (let attempt = 0; attempt < 5; attempt++) {
+    await oversizedRetirement.run()
+    vi.advanceTimersByTime(60 * 60_000)
+  }
+  vi.useRealTimers()
+  expect(companions(oversized.filename)).toContain(oversized.filename)
+  expect(oversized.ensured.filter((id) => id === 'unopened')).toHaveLength(1)
+  expect(String(oversized.errors.at(-1))).toContain('too large to convert')
 })

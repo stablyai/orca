@@ -1,4 +1,4 @@
-import { captureJournalLegacySourceReceipt } from './database/journal-legacy-source-receipt'
+import { captureJournalLegacySourceReceipt } from './database/journal-legacy-source-capture'
 import { existsSync, mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

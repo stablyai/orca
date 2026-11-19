@@ -298,9 +298,11 @@ export class JournalSqlReaderPool {
   }
 
   close(): Promise<void> {
+    this.sourceLease?.abort()
     this.closed = true
     this.forkRelease?.resolve()
     return (this.closing ??= Promise.all([
+      this.sourceRelease?.promise,
       ...this.retiring,
       ...this.slots.map((slot) => slot.close())
     ]).then(() => {}))
