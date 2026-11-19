@@ -158,11 +158,12 @@ describeRender('a subagent opened from a phone chat', () => {
   it('shows its prompt, steps and reply, and Back returns to the same place in the chat', async () => {
     const page = await openChat('#done')
     const tail = await chatScrollTop(page)
-    await page.getByRole('button', { name: /Ran 1 subagent/ }).click()
     // Read up from the tail, where a remounted chat would land instead.
     await page.mouse.move(195, 300)
     await page.mouse.wheel(0, -120)
-    const entry = page.getByRole('button', { name: 'Open Find the settings defaults' })
+    const entry = page
+      .getByTestId('subagent-row')
+      .getByRole('button', { name: 'Open Find the settings defaults' })
     await expect.poll(() => chatScrollTop(page)).toBeLessThan(tail - 100)
     await entry.scrollIntoViewIfNeeded()
     const place = await chatScrollTop(page)
@@ -181,8 +182,9 @@ describeRender('a subagent opened from a phone chat', () => {
 
   it('opens a running subagent from the agents strip and shows its reply once it finishes', async () => {
     const page = await openChat()
-    await page.getByTestId('background-tasks-strip').getByRole('button').first().click()
-    await page.getByRole('button', { name: /^Open Find the settings defaults/ }).click()
+    const strip = page.getByTestId('background-tasks-strip')
+    await strip.getByRole('button').first().click()
+    await strip.getByRole('button', { name: /^Open Find the settings defaults/ }).click()
     const view = page.getByTestId('subagent-view')
     await shown(view.getByText('Searching the settings code.'))
     expect(await view.getByText(REPLY).count()).toBe(0)
