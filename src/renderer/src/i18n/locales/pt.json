@@ -20391,7 +20391,7 @@
       },
       "NativeChatResumeFailureGuidance": {
         "fallbackShort": "Não foi possível retomar.",
-        "unconfirmedShort": "Não confirmou que continuou.",
+        "unconfirmedShort": "Não foi possível confirmar se continuou.",
         "supersededShort": "Chegou trabalho novo após o reinício.",
         "conflictShort": "Aberto em outra janela ou terminal.",
         "ownershipUnknownShort": "Ainda não está pronto para retomar.",

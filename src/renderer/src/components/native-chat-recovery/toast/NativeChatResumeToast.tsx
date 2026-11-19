@@ -171,7 +171,7 @@ export function NativeChatResumeToast({
           <div role="status">
             <p
               id={titleId}
-              className="text-[13px] leading-snug font-medium [overflow-wrap:anywhere]"
+              className="text-[13px] leading-snug font-medium break-keep [overflow-wrap:anywhere]"
             >
               {headline(view, t, machineName)}
             </p>
