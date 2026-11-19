@@ -9,8 +9,8 @@ import {
 
 const WINDOWS_TREE_KILL_WAIT_MS = 2_000
 const WORKER_PID_WAIT_MS = 5_000
-// One tree kill per worker child: a second could walk a reused PID after the first ended the tree.
-const workerTreeKills = new WeakMap<WorkerThreadChildProcess, Promise<void>>()
+// One tree kill per worker child: a second could walk a reused PID after the first ended the tree. True once taskkill proved the tree ended.
+const workerTreeKills = new WeakMap<WorkerThreadChildProcess, Promise<boolean>>()
 // Tree kills a dying worker leaves in one turn share one taskkill per host, so main pays at most one launch.
 const taskkillBatches = new Map<boolean, { pids: Set<number>; ended: Promise<boolean> }>()
 
@@ -33,36 +33,53 @@ function batchTaskkill(pids: readonly number[], onWorker: boolean): Promise<bool
   return batch.ended
 }
 
-/** A dead worker can no longer stop its children; end a still-running Windows tree whose PID it reported. */
+/** A dead worker can no longer stop its children; end a still-running Windows tree whose PID it reported. True only when the tree provably ended. */
 export function killAbandonedWorkerChildTree(
   child: Pick<ChildProcess, 'pid' | 'exitCode' | 'signalCode' | 'kill'>
-): Promise<void> {
+): Promise<boolean> {
   const started = child instanceof WorkerThreadChildProcess && workerTreeKills.get(child)
   if (started) {
     return started
   }
   const pid = child.pid
+  if (process.platform !== 'win32' || !pid) {
+    return Promise.resolve(true)
+  }
   if (
-    process.platform !== 'win32' ||
-    !pid ||
+    // An exited root's PID may be reused and descendants may still hold its pipes: nothing provable is left to kill.
     (child.exitCode ?? null) !== null ||
     (child.signalCode ?? null) !== null ||
     !admitSelfInitiatedTreeKill({ pid, site: 'git-command-tree-kill', scope: 'win-taskkill-tree' })
   ) {
-    return Promise.resolve()
+    return Promise.resolve(false)
   }
-  const kill = batchTaskkill([pid], canSpawnOnWorkerThread()).then(() => {})
+  const kill = batchTaskkill([pid], canSpawnOnWorkerThread())
   if (child instanceof WorkerThreadChildProcess) {
     workerTreeKills.set(child, kill)
   }
   return kill
 }
 
+/** Capacity returns at once; termination is reported only if the tree kill proves the child ended. */
+export function endAbandonedWorkerChild(
+  child: Pick<ChildProcess, 'pid' | 'exitCode' | 'signalCode' | 'kill'>,
+  onWorkerLost: (() => void) | undefined,
+  onTerminated: () => void
+): void {
+  onWorkerLost?.()
+  void killAbandonedWorkerChildTree(child).then((proven) => {
+    if (proven) {
+      onTerminated()
+    }
+  })
+}
+
+/** Resolves once the stop is done; a stopped child's own close still reports its termination. */
 export function killSpawnedCommandTree(
   child: Pick<ChildProcess, 'pid' | 'exitCode' | 'signalCode' | 'kill'>
 ): Promise<void> {
   if (!(child instanceof WorkerThreadChildProcess)) {
-    return startTreeKill(child)
+    return startTreeKill(child).then(() => {})
   }
   // Nothing reads a child being stopped; its remaining output stays on the worker.
   child.discardOutput()
@@ -71,37 +88,39 @@ export function killSpawnedCommandTree(
     kill = startTreeKill(child)
     workerTreeKills.set(child, kill)
   }
-  return kill
+  return kill.then(() => {})
 }
 
+/** True when taskkill proved the tree ended, or the child closed before its PID arrived. */
 function startTreeKill(
   child: Pick<ChildProcess, 'pid' | 'exitCode' | 'signalCode' | 'kill'>
-): Promise<void> {
+): Promise<boolean> {
   const pid = child.pid
   if (!pid && process.platform === 'win32' && child instanceof WorkerThreadChildProcess) {
     return killOnceWorkerReportsPid(child)
   }
   if (!pid || process.platform !== 'win32') {
     child.kill()
-    return Promise.resolve()
+    return Promise.resolve(false)
   }
   // Windows may reuse the pid after exit while inherited pipes still delay close.
   if ((child.exitCode ?? null) !== null || (child.signalCode ?? null) !== null) {
     child.kill()
-    return Promise.resolve()
+    return Promise.resolve(false)
   }
   if (
     !admitSelfInitiatedTreeKill({ pid, site: 'git-command-tree-kill', scope: 'win-taskkill-tree' })
   ) {
     // A refused PID tree walk still permits handle-based root termination without risking a reused PID.
     child.kill()
-    return Promise.resolve()
+    return Promise.resolve(false)
   }
   // Await Windows tree cleanup so shim/WSL descendants cannot outlive their probe.
   return runTaskkill([pid]).then((ended) => {
     if (!ended) {
       child.kill()
     }
+    return ended
   })
 }
 
@@ -176,19 +195,19 @@ function runTaskkill(pids: number[], onWorker = canSpawnOnWorkerThread()): Promi
 }
 
 /** The worker created the process but its PID is still in flight; a root-only kill would leave hooks and filters running. */
-function killOnceWorkerReportsPid(child: WorkerThreadChildProcess): Promise<void> {
+function killOnceWorkerReportsPid(child: WorkerThreadChildProcess): Promise<boolean> {
   if (child.closed) {
-    return Promise.resolve()
+    return Promise.resolve(true)
   }
   // A launch still queued behind others is dropped outright; one already underway reports its PID.
   child.cancelPendingSpawn()
   return new Promise((resolve) => {
     let settled = false
-    const settle = (): void => {
+    const settle = (proven: boolean): void => {
       if (!settled) {
         settled = true
         clearTimeout(timer)
-        resolve()
+        resolve(proven)
       }
     }
     const detach = (): void => {
@@ -207,7 +226,7 @@ function killOnceWorkerReportsPid(child: WorkerThreadChildProcess): Promise<void
     }
     const onClose = (): void => {
       detach()
-      settle()
+      settle(true)
     }
     const onError = (error: Error): void => {
       if (isAbandonedWorkerChildError(error)) {
@@ -215,7 +234,7 @@ function killOnceWorkerReportsPid(child: WorkerThreadChildProcess): Promise<void
       }
     }
     // Stop waiting without a root kill: one queued behind the spawn could end the root before taskkill walks its tree.
-    const timer = setTimeout(settle, WORKER_PID_WAIT_MS)
+    const timer = setTimeout(() => settle(false), WORKER_PID_WAIT_MS)
     child.on('spawn', onSpawn)
     child.on('close', onClose)
     child.on('error', onError)

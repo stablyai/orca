@@ -108,6 +108,8 @@ async function gitExecFileAsyncUnlocked(
           // Admission already passed; the capture rechecks at the spawn call itself.
           ...(options.canStart ? { canStart: options.canStart } : {}),
           onChildTerminated: reportTerminated,
+          // A lost worker's child returns its permit now; mutation fences keep waiting on termination.
+          onWorkerLost: grant.release,
           ...(options.onStderr ? { onStderr: options.onStderr } : {}),
           ...(timeoutMs === undefined
             ? {}
@@ -275,6 +277,7 @@ async function gitExecFileAsyncBufferInSpan(
         env: untranslatedGitOutputEnv(options.env),
         admissionTier: options.admissionTier,
         onChildTerminated: reportTerminated,
+        onWorkerLost: grant.release,
         ...(timeoutMs === undefined
           ? {}
           : { createTimeoutError: () => new GitCommandTimeoutError(timeoutMs) })

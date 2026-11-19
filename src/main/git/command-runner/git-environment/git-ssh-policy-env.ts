@@ -56,7 +56,9 @@ export async function buildNetworkSshPolicyEnv(
       ),
       env: promptEnv,
       signal: options.signal,
-      onChildTerminated: reportTerminated
+      onChildTerminated: reportTerminated,
+      // A read-only probe holds only admission, which a lost worker returns.
+      onWorkerLost: reportTerminated
     })
     const payload = resolved.captured?.readStdout(String(stdout)) ?? String(stdout)
     configured = parseGitSshConfig(payload)

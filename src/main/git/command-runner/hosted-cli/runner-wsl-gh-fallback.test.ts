@@ -5,12 +5,22 @@ import {
   fakeSpawnReturning
 } from '../../../../shared/__fixtures__/fake-spawned-child'
 import type * as WslModule from '../../../wsl/discovery/distro-catalog'
+import type * as WorkerChildProcessModule from '../../../worker-thread-child-process/worker-thread-child-process'
 
 const { execFileSyncMock, spawnMock, getDefaultWslDistroMock } = vi.hoisted(() => ({
   execFileSyncMock: vi.fn(),
   spawnMock: vi.fn(),
   getDefaultWslDistroMock: vi.fn()
 }))
+
+// These tests drive the in-thread spawn mocks; keep Windows launches off the real process worker.
+vi.mock(
+  '../../../worker-thread-child-process/worker-thread-child-process',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof WorkerChildProcessModule>()),
+    canSpawnOnWorkerThread: () => false
+  })
+)
 
 // The default-distro fallback asks whether the distro runs before it may start it (E9).
 vi.mock('../../../wsl/discovery/wsl-background-distro-gate', async (importOriginal) => ({

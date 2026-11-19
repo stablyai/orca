@@ -1,8 +1,10 @@
 import { runProcess } from '@orca/process-host'
+import type { ProcessSpec } from '@orca/process-host/process-spec'
 import { resolveSelectedLocalCommand } from '../../../ipc/command-path/command-path-resolver'
 import type { WslProcessGroupTermination } from './wsl-process-group-termination'
 import { DEFAULT_GIT_MAX_BUFFER } from '../git-exec-options'
 import { createAbortError } from './abort-error'
+import { launchProcessSpecOnWindowsWorker } from './process-spec-worker-launch'
 import type { ExecFileCaptureOptions } from './exec-file-capture'
 
 const GIT_TERMINATION_BARRIER_FALLBACK_TIMEOUT_MS = 2_147_000_000
@@ -30,6 +32,14 @@ export async function execFileCaptureToTermination(
     throw createAbortError()
   }
   const captureBytes = options.encoding === 'buffer'
+  // runProcess and a lost worker's tree kill can both report; callers hear it once.
+  let terminated = false
+  const reportTerminated = (): void => {
+    if (!terminated) {
+      terminated = true
+      options.onChildTerminated?.()
+    }
+  }
   const pending = runProcess({
     program,
     args,
@@ -41,7 +51,13 @@ export async function execFileCaptureToTermination(
     captureStderrAsBytes: captureBytes,
     signal: options.signal,
     terminationBarrier: termination ?? true,
-    onChildTerminated: options.onChildTerminated,
+    onChildTerminated: reportTerminated,
+    ...(options.spawnOnWorkerThread === false
+      ? {}
+      : {
+          launch: (spec: ProcessSpec) =>
+            launchProcessSpecOnWindowsWorker(spec, options.onWorkerLost, reportTerminated)
+        }),
     ...(options.stdin === undefined ? {} : { input: options.stdin })
   })
   const result = await pending

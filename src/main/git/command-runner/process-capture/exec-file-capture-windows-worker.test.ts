@@ -59,7 +59,7 @@ import {
   WORKER_CHILD_ABANDONED_CODE,
   WorkerThreadChildProcess
 } from '../../../worker-thread-child-process/worker-thread-child-process'
-import { execFileCapture } from './exec-file-capture'
+import { execFileCapture, execFileCaptureToTermination } from './exec-file-capture'
 
 const originalPlatform = process.platform
 
@@ -155,6 +155,49 @@ describe('Windows process creation off the calling loop', () => {
     expect(terminated).not.toHaveBeenCalled()
     treeKills.killers[0]!.emit('close', 0)
     await vi.waitFor(() => expect(terminated).toHaveBeenCalledOnce())
+  })
+
+  it.each([
+    ['buffered', execFileCapture],
+    ['termination-barrier', execFileCaptureToTermination]
+  ] as const)(
+    'returns a %s capture its capacity when the worker dies, but not termination while the tree kill fails',
+    async (_kind, capture) => {
+      const child = new WorkerThreadChildProcess(1, () => true)
+      worker.spawn.mockReturnValue(child)
+      const terminated = vi.fn()
+      const workerLost = vi.fn()
+      const pending = capture('gh', ['api', 'user'], {
+        onChildTerminated: terminated,
+        onWorkerLost: workerLost
+      })
+      await vi.waitFor(() => expect(worker.spawn).toHaveBeenCalled())
+      child.receive({ type: 'spawn', id: 1, pid: 4242 })
+      child.receive({
+        type: 'error',
+        id: 1,
+        error: {
+          message: 'Child process worker exited with code 1',
+          code: WORKER_CHILD_ABANDONED_CODE
+        }
+      })
+      await expect(pending).rejects.toThrow('Child process worker exited with code 1')
+      expect(workerLost).toHaveBeenCalledOnce()
+      expect(treeKills.args).toEqual([['/pid', '4242', '/t', '/f']])
+      treeKills.killers[0]!.emit('close', 1)
+      await new Promise((resolve) => setImmediate(resolve))
+      expect(terminated).not.toHaveBeenCalled()
+    }
+  )
+
+  it('starts a termination-barrier capture such as gh on the worker', async () => {
+    worker.spawn.mockImplementation(() => finishedWorkerChild(0, 'ok', ''))
+    await expect(execFileCaptureToTermination('gh', ['api', 'user'], {})).resolves.toMatchObject({
+      stdout: 'ok'
+    })
+    expect(worker.spawn).toHaveBeenCalledWith(
+      expect.objectContaining({ program: 'gh', args: ['api', 'user'], env: process.env })
+    )
   })
 
   it('ends the whole Git tree when output passes maxBuffer', async () => {
