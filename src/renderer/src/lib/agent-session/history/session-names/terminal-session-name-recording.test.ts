@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useAppStore } from '@/store'
 import {
   recordTerminalTabRename,
   resetTerminalSessionNameRecordingForTest
@@ -12,7 +13,11 @@ import {
   resetTerminalSessionNamesForTest,
   saveTerminalSessionName
 } from './terminal-session-names'
-import { makeTerminalNamesState, type FixtureTab } from './terminal-session-names-test-fixture'
+import {
+  makeTerminalNamesState,
+  type FixtureTab,
+  WORKTREE_ID
+} from './terminal-session-names-test-fixture'
 
 const saved = (sessionId: string) => getSavedTerminalSessionName('local', 'claude', sessionId)
 const owner = (sessionId: string) => getTerminalSessionNameEntry('local', sessionId)?.tabId
@@ -35,6 +40,7 @@ const pass = (tabs: FixtureTab[], now = LATER) =>
 describe('terminal session name recording', () => {
   afterEach(() => {
     vi.restoreAllMocks()
+    useAppStore.setState(useAppStore.getInitialState(), true)
   })
 
   beforeEach(() => {
@@ -46,7 +52,11 @@ describe('terminal session name recording', () => {
   describe('rename through the store', () => {
     it('names the session at once, so closing the tab right after keeps it', () => {
       const state = makeTerminalNamesState([{ id: 'tab-1', sessionId: 's1' }])
-      recordTerminalTabRename(state, 'tab-1', 'Fix auth bug')
+      useAppStore.setState(state, true)
+      useAppStore.getState().setTabCustomTitle('tab-1', 'Fix auth bug')
+      expect(useAppStore.getState().tabsByWorktree[WORKTREE_ID]?.[0]?.customTitle).toBe(
+        'Fix auth bug'
+      )
       // The tab closes before any background pass runs.
       expect(saved('s1')).toBe('Fix auth bug')
       expect(owner('s1')).toBe('tab-1')
@@ -223,16 +233,16 @@ describe('terminal session name recording', () => {
       expect(saved('s2')).toBe('Fix auth bug')
 
       // A tab named by code, not a person, resumes s2 within the window.
-      recordTerminalTabRename(
+      vi.spyOn(Date, 'now').mockReturnValue(now)
+      useAppStore.setState(
         {
           ...makeTerminalNamesState([{ id: 'tab-2', sessionId: 's2' }]),
           activeWorktreeId: null,
           getKnownWorktreeById: () => undefined
         },
-        'tab-2',
-        'Worker 3',
-        { now, interactive: false }
+        true
       )
+      useAppStore.getState().setTabCustomTitle('tab-2', 'Worker 3', { recordInteraction: false })
       pass([{ id: 'tab-2', sessionId: 's2', customTitle: 'Worker 3' }], now + 1)
       expect(saved('s2')).toBe('Fix auth bug')
     })
