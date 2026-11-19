@@ -48,6 +48,7 @@ describe('Gmail from= rules match the real sender address', () => {
     expect(fromBoss('BOSS@Gmail.COM')).toBe(true)
     expect(fromBoss('The Boss <BOSS@GMAIL.COM>')).toBe(true)
     expect(fromBoss('<boss@gmail.com (Boss, <x@y.com>)>')).toBe(true)
+    expect(fromBoss('boss@gmail.com, (no one)')).toBe(true)
     expect(gmailRuleMatches(rule(['gmail.com']), mail('"x@acme.com" <boss@gmail.com>'), null)).toBe(
       true
     )

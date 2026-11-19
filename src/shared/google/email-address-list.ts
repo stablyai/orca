@@ -68,7 +68,13 @@ export function splitAddresses(header: string | undefined): string[] {
     }
   })
   entries.push(text.slice(start))
-  return entries.map((entry) => entry.trim()).filter((entry) => entry.length > 0)
+  // RFC 5322 allows empty and comment-only entries; they name no one.
+  return entries
+    .map((entry) => entry.trim())
+    .filter((entry) => {
+      const { outside, lastAngle } = scan(entry)
+      return lastAngle !== null || outside.trim().length > 0
+    })
 }
 
 /**
