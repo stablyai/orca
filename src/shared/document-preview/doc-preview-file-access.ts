@@ -5,6 +5,7 @@ import { isBinaryBuffer } from '../file-preview/binary-buffer'
 import { isPathInsideOrEqual } from '../file-access/cross-platform-path'
 import { IMAGE_FILE_MIME_TYPES } from '../file-preview/image-mime-types'
 import { FONT_FILE_MIME_TYPES } from '../file-preview/font-file-extensions'
+import { MEDIA_FILE_MIME_TYPES } from '../file-preview/media-mime-types'
 import type { RuntimeFileReadChunkResult } from '../file-content/runtime-file-read'
 import {
   NodeFileReadTooLargeError,
@@ -46,6 +47,7 @@ export type DocPreviewFileAccessResult = {
 const DOC_PREVIEW_BINARY_MIME_TYPES: Record<string, string> = {
   ...IMAGE_FILE_MIME_TYPES,
   ...FONT_FILE_MIME_TYPES,
+  ...MEDIA_FILE_MIME_TYPES,
   '.pdf': 'application/pdf'
 }
 const DOC_PREVIEW_MAX_TEXT_BYTES = 10 * 1024 * 1024

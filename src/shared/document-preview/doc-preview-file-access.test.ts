@@ -55,4 +55,26 @@ describe('readAuthorizedDocPreviewFile', () => {
       'file_too_large'
     )
   })
+
+  it('serves video bytes so remote previews can play <video> sources', async () => {
+    const fixture = await createFixture()
+    const clip = join(fixture.docs, 'clip.mp4')
+    await writeFile(clip, Buffer.from([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70]))
+
+    await expect(
+      readAuthorizedDocPreviewFile({
+        boundaryPath: fixture.workspace,
+        entryPath: fixture.entry,
+        implicitRootPath: fixture.docs,
+        authorizedRootPaths: [],
+        targetPath: clip,
+        maxTextBytes: 1024,
+        maxBinaryBytes: 1024
+      })
+    ).resolves.toEqual({
+      content: Buffer.from([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70]).toString('base64'),
+      isBinary: true,
+      mimeType: 'video/mp4'
+    })
+  })
 })

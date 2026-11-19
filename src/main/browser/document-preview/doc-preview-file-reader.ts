@@ -2,6 +2,7 @@ import { extname } from 'node:path'
 import type { RuntimeFilePreviewResult } from '../../../shared/file-content/runtime-file-read'
 import type { DocPreviewFileFailureReason } from '../../../shared/document-preview/doc-preview-scheme'
 import { FONT_FILE_MIME_TYPES } from '../../../shared/file-preview/font-file-extensions'
+import { MEDIA_FILE_MIME_TYPES } from '../../../shared/file-preview/media-mime-types'
 import { isBinaryBuffer } from '../../../shared/file-preview/binary-buffer'
 import {
   DOC_PREVIEW_FILE_CHANGED_MESSAGE,
@@ -63,7 +64,8 @@ const DOC_PREVIEW_CONTENT_TYPES: Record<string, string> = {
   '.bmp': 'image/bmp',
   '.ico': 'image/x-icon',
   '.pdf': 'application/pdf',
-  ...FONT_FILE_MIME_TYPES
+  ...FONT_FILE_MIME_TYPES,
+  ...MEDIA_FILE_MIME_TYPES
 }
 
 export function docPreviewContentType(relativePath: string): string {
