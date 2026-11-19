@@ -110,10 +110,20 @@ export function sameJournalLegacySource(
   }
   const { wal, ...file } = current
   const { wal: storedWal, ...storedFile } = stored
-  return sameJson(withoutDevice(storedFile), withoutDevice(file)) && sameJson(storedWal, wal)
+  const sameFile =
+    sameJson(storedFile, file) ||
+    (subSecondTimes(current.main) && sameJson(withoutDevice(storedFile), withoutDevice(file)))
+  return sameFile && sameJson(storedWal, wal)
 }
 
-/** A device number can change at reboot or remount; the inode and times still name the file. */
+/**
+ * A device number can change at reboot or remount; then the inode and times alone name the file.
+ * That holds only for sub-second times: with whole-second ones a file on another volume can match.
+ */
+function subSecondTimes(main: JournalLegacyFileIdentity): boolean {
+  return [main.mtimeNs, main.ctimeNs].every((ns) => BigInt(ns) % 1_000_000_000n !== 0n)
+}
+
 function withoutDevice(file: Record<string, unknown>): Record<string, unknown> {
   if (!isRecord(file.main)) {
     return file

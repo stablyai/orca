@@ -110,6 +110,14 @@ it('proves the original unchanged across a new device number, never by a WAL siz
   // Saved before a reboot or remount gave the volume a new device number.
   const saved = { ...current, main: { ...current.main, dev: '16777229' } }
   expect(sameJournalLegacySource(JSON.stringify(saved), current)).toBe(true)
+  // Whole-second times (FAT, HFS+) can't tell a same-sized file on another volume apart.
+  const wholeSecond = { ...current.main, mtimeNs: '2000000000', ctimeNs: '2000000000' }
+  expect(
+    sameJournalLegacySource(
+      JSON.stringify({ ...saved, main: { ...wholeSecond, dev: '16777229' } }),
+      { ...current, main: wholeSecond }
+    )
+  ).toBe(false)
   // Saved before WAL identity was kept: reused frames can keep the size after a write.
   const sizeOnly = { ...current, wal: { kind: 'nonempty', size: '8192' } }
   expect(sameJournalLegacySource(JSON.stringify(sizeOnly), current)).toBe(false)
