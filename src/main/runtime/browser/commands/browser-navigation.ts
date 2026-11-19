@@ -2,7 +2,8 @@ import type {
   BrowserBackResult,
   BrowserClickResult,
   BrowserGotoResult,
-  BrowserReloadResult
+  BrowserReloadResult,
+  BrowserStopResult
 } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import type {
   BrowserCommandTargetParams,
@@ -63,15 +64,24 @@ export class RuntimeBrowserNavigation {
     return result
   }
 
-  async browserReload(params: BrowserCommandTargetParams): Promise<BrowserReloadResult> {
+  async browserReload(
+    params: BrowserCommandTargetParams & { ignoreCache?: boolean }
+  ): Promise<BrowserReloadResult> {
     const target = await this.targets.resolveBrowserCommandTarget(params)
     const bridge = this.targets.requireAgentBrowserBridge()
-    const result = await bridge.reload(target.worktreeId, target.browserPageId)
+    const result = await bridge.reload(target.worktreeId, target.browserPageId, {
+      ignoreCache: params.ignoreCache === true
+    })
     const pageId = bridge.getActivePageId(target.worktreeId, target.browserPageId)
     if (pageId) {
       this.targets.notifyRendererNavigation(pageId, result.url, result.title)
     }
     return result
+  }
+
+  async browserStop(params: BrowserCommandTargetParams): Promise<BrowserStopResult> {
+    const target = await this.targets.resolveBrowserCommandTarget(params)
+    return this.targets.requireAgentBrowserBridge().stop(target.worktreeId, target.browserPageId)
   }
 
   async browserForward(params: BrowserCommandTargetParams): Promise<unknown> {

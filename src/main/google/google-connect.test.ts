@@ -603,26 +603,38 @@ describe('keeping a Google sign-in fresh on the host', () => {
 })
 
 describe('checking the saved app key', () => {
-  it('remembers a clear answer for this key only, and keeps it over an unclear one', async () => {
+  it('probes the app key without a sign-in and caches clear answers for that key only', async () => {
     const { GoogleConnect } = await load()
-    const answers: unknown[] = [
-      { error: 'invalid_grant' },
-      { error: 'rate_limited' },
-      { error: 'invalid_client' }
-    ]
-    const http: typeof fetch = async () => json(400, answers.shift())
+    const http = vi
+      .fn<typeof fetch>()
+      .mockImplementationOnce(async () => json(400, { error: 'invalid_grant' }))
+      .mockImplementationOnce(async () => json(429, { error: 'rate_limited' }))
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockImplementationOnce(async () => json(401, { error: 'invalid_client' }))
+      .mockImplementationOnce(async () => json(401, { error: 'deleted_client' }))
     const connect = new GoogleConnect({ http, now: () => now })
     expect(await connect.checkClient()).toBeNull()
+    expect(http).not.toHaveBeenCalled()
+
     connect.importClient(CLIENT_FILE)
     expect(connect.clientCheck()).toBeNull()
     expect(await connect.checkClient()).toBe('works')
+    const [url, request] = http.mock.calls[0] ?? []
+    expect(url).toBe('https://oauth2.googleapis.com/token')
+    expect(request?.method).toBe('POST')
+    const form = new URLSearchParams(String(request?.body))
+    expect(form.get('code')).toBe('orca-key-check')
+    expect(form.get('client_id')).toBe('123-abc.apps.googleusercontent.com')
+
+    expect(await connect.checkClient()).toBe('unknown')
     expect(await connect.checkClient()).toBe('unknown')
     expect(connect.clientCheck()).toBe('works')
-    // A new import is a new key: the old answer doesn't carry over.
+
     now += 1
     connect.importClient(CLIENT_FILE)
     expect(connect.clientCheck()).toBeNull()
     expect(await connect.checkClient()).toBe('gone')
     expect(connect.clientCheck()).toBe('gone')
+    expect(await connect.checkClient()).toBe('gone')
   })
 })

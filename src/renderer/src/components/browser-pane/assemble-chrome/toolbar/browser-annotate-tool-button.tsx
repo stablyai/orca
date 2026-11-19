@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, Copy, Crosshair, MessageSquarePlus, PenTool, Trash2 } from 'lucide-react'
+import { Check, Copy, Crosshair, PenTool, SquareMousePointer, Trash2 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -138,7 +138,7 @@ export function BrowserAnnotateToolButton({
     ? { icon: PenTool, label: t('browser.toolbar.draw', 'Draw') }
     : tools.activeIntent === 'copy'
       ? { icon: Crosshair, label: t('browser.toolbar.grab', 'Grab') }
-      : { icon: MessageSquarePlus, label: t('browser.toolbar.annotate', 'Annotate') }
+      : { icon: SquareMousePointer, label: t('browser.toolbar.annotate', 'Annotate') }
   const active = markup.active || tools.activeIntent !== null
   const ModeIcon = mode.icon
 
@@ -223,7 +223,7 @@ export function BrowserAnnotateToolButton({
           </Tooltip>
           <DropdownMenuContent align="end" className="w-64">
             <MenuToolRow
-              icon={MessageSquarePlus}
+              icon={SquareMousePointer}
               label={annotateLabel}
               shortcut={tools.annotateShortcutLabel}
               checked={tools.activeIntent === 'annotate'}

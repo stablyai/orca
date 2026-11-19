@@ -25,7 +25,7 @@ const sl = item(5, 'Share links: view-only by default?', 'needs_you')
 
 function Rows({ notes }: { notes: BotItemNoteView[] }): React.JSX.Element {
   return (
-    <div className="flex flex-col gap-3 p-4">
+    <div className="flex flex-col gap-3 bg-chat-pane p-4">
       {notes.map((note) => (
         <NativeChatBotItemNoteRow key={note.noteId} note={note} timestamp={at} />
       ))}
@@ -39,9 +39,8 @@ const botNote = (noteId: string, entries: BotItemNoteEntry[]): BotItemNoteView =
   entries
 })
 
-export const botWrites = defineFixture({
-  width: 680,
-  render: () => (
+function AgentWrites(): React.JSX.Element {
+  return (
     <Rows
       notes={[
         botNote(
@@ -85,7 +84,11 @@ export const botWrites = defineFixture({
       ]}
     />
   )
-})
+}
+
+export const botWrites = defineFixture({ width: 680, render: () => <AgentWrites /> })
+
+export const botWritesNarrow = defineFixture({ width: 340, render: () => <AgentWrites /> })
 
 const move = (
   noteId: string,
@@ -278,7 +281,18 @@ const transcript = [
     'bot',
     bulk.map((entry) => moved(entry, 'planned', 'working'))
   ),
-  words('t2', 'assistant', 'Reopened the token fix and started everything.')
+  words('t2', 'assistant', 'Reopened the token fix and started everything.'),
+  notes('t2', { kind: 'chat', chatId: 'chat-2', title: 'Release prep' }, [
+    moved(exp, 'planned', 'working')
+  ]),
+  notes('t2', 'owner', [
+    {
+      ...exp,
+      status: 'working',
+      event: 'commented',
+      text: 'Is this the same timeout as last week?'
+    }
+  ])
 ]
 
 const context: NativeChatTranscriptRowContext = {
@@ -308,7 +322,7 @@ export const turnLines = defineFixture({
       lifecycleWorking: false
     })
     return (
-      <div className="flex flex-col p-4" style={{ gap: NATIVE_CHAT_ROW_GAP_PX }}>
+      <div className="flex flex-col bg-chat-pane p-4" style={{ gap: NATIVE_CHAT_ROW_GAP_PX }}>
         {slots.map((slot) => (
           <NativeChatTranscriptRow key={nativeChatSlotKey(slot)} slot={slot} context={context} />
         ))}

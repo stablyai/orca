@@ -66,16 +66,19 @@ describe('bots other apps keep on this computer', () => {
     })
   })
 
-  it('lists the Hermes default profile and named profiles, skipping folders that are not profiles', async () => {
+  it('lists importable Hermes profiles and links a previously imported one', async () => {
     await file('.hermes/SOUL.md', 'You are Hermes.')
     await file('.hermes/profiles/research-desk/config.yaml', 'model: x\n')
     await mkdir(join(home, '.hermes/profiles/empty'), { recursive: true })
     await file('.hermes/profiles/.deleted/old/SOUL.md')
-    const [source] = await findBotImportSources(env(), [])
-    expect(source?.bots.map((bot) => [bot.agent, bot.name])).toEqual([
-      ['default', 'Hermes'],
-      ['research-desk', 'Research desk']
+    const [source] = await findBotImportSources(env(), [
+      { id: 'b1', name: 'Hermy', importedFrom: { app: 'hermes', path: join(home, '.hermes') } }
     ])
+    expect(source?.bots).toMatchObject([
+      { agent: 'default', name: 'Hermes', importedAs: { botId: 'b1', name: 'Hermy' } },
+      { agent: 'research-desk', name: 'Research desk' }
+    ])
+    expect(source?.bots[1]?.importedAs).toBeUndefined()
   })
 
   it('lists OpenBot agents from their folders', async () => {
@@ -86,13 +89,5 @@ describe('bots other apps keep on this computer', () => {
     })
     const [source] = await findBotImportSources(env(), [])
     expect(source?.bots.map((bot) => bot.name)).toEqual(['Research', 'OpenBot agent'])
-  })
-
-  it('names the Orca bot an earlier import made from it', async () => {
-    await file('.hermes/SOUL.md')
-    const [source] = await findBotImportSources(env(), [
-      { id: 'b1', name: 'Hermy', importedFrom: { app: 'hermes', path: join(home, '.hermes') } }
-    ])
-    expect(source?.bots[0]?.importedAs).toEqual({ botId: 'b1', name: 'Hermy' })
   })
 })

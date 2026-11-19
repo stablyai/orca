@@ -139,7 +139,8 @@ export type PtyApi = {
   clearBuffer: (id: string) => void
   resetInputModes: (id: string) => void
   killFenced: (request: PtyFencedTerminationRequest) => Promise<PtyFencedTerminationOutcome>
-  kill: (id: string, opts?: { keepHistory?: boolean }) => Promise<void>
+  /** `replaced` stops a restarted pane's old PTY without retiring the pane. */
+  kill: (id: string, opts?: { keepHistory?: boolean; replaced?: boolean }) => Promise<void>
   /** Acknowledge the pane that actually painted the restored frame. */
   ackColdRestore: (id: string, pane?: PaintedRestorePane) => void
   /** Hidden-output recovery painted main's snapshot; retires the hidden-delivery drop latch. */

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { AttachedWorktreeCards } from '@/components/sidebar/AttachedWorktreeCards'
 import { useTranslate } from '@/i18n/use-translate'
@@ -31,6 +31,8 @@ export function BotSidebarChats({
   workspaces,
   lineageChildrenByParentIdentity,
   activeLine,
+  steps,
+  onStep,
   onOpen
 }: {
   bot: Bot
@@ -39,6 +41,8 @@ export function BotSidebarChats({
   workspaces: readonly Worktree[]
   lineageChildrenByParentIdentity: ReadonlyMap<string, Worktree[]>
   activeLine: Worktree | undefined
+  steps: Readonly<Record<string, number>>
+  onStep: (chatId: string, steps: number) => void
   onOpen: () => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -51,7 +55,6 @@ export function BotSidebarChats({
     [listed, bot.hostId, bot.id]
   )
   const folds = useAppStore(useShallow((s) => foldKeys.map((key) => s.botChatFolds[key])))
-  const [steps, setSteps] = useState<Readonly<Record<string, number>>>({})
   const view = useMemo(() => {
     const foldById = new Map(listed.map((chat, index) => [chat.chatId, folds[index]]))
     return buildBotSidebarTree({
@@ -104,7 +107,7 @@ export function BotSidebarChats({
           view={chatView}
           notes={notes}
           lineageChildrenByParentIdentity={lineageChildrenByParentIdentity}
-          onStep={(next) => setSteps((shown) => ({ ...shown, [chatView.chat.chatId]: next }))}
+          onStep={(next) => onStep(chatView.chat.chatId, next)}
           onOpen={onOpen}
         />
       ))}

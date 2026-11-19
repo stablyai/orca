@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { Text, View } from 'react-native'
 import { AGENT_CHAT_PERMISSION_MODES } from '../../../src/shared/agent-launch/permissions/agent-chat-permission-mode'
 import { agentChatPermissionModes } from '../../../src/shared/agent-launch/permissions/agent-chat-permission-support'
 import { botMemberSource, type BotMember } from '../../../src/shared/bot-types'
@@ -9,6 +9,7 @@ import type { BotUpdateParams } from '../../../src/shared/rpc-contract/bots-para
 import type { BotLookAround } from '../../../src/shared/bots/bot-look-around'
 import type { BotTidyUp } from '../../../src/shared/bots/bot-tidy-up'
 import { agentChatPermissionModeCopy } from '../../../src/shared/agent-session/options/permissions/structured-agent-session-permission-option'
+import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import { ConfirmContent } from '../components/sheets/ConfirmModal'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
@@ -29,13 +30,16 @@ import {
 import { MobileTidyUpPage, MobileTidyUpSection, type TidyUpPage } from './MobileBotTidyUp'
 import { useMobileBotTidyUp } from './use-mobile-bot-tidy-up'
 import { BOT_ACCESS_COPY, botAccessCopy } from '../../../src/shared/bots/bot-access-copy'
-import { accessGrantConfirmCopy, accessRequestLine } from './bot-access-request-copy'
+import {
+  accessGrantConfirmCopy,
+  accessRequestLine,
+  phoneAccessHost
+} from './bot-access-request-copy'
 import type { BotAccessRequests } from './use-bot-access-requests'
 import type { RouteBot } from './use-route-bot'
+import { readConnectionStatusProbe } from '../transport/connection/runtime-status-probe'
 import { useBackClaim } from '../navigation/use-back-claim'
-import { ChevronLeft } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
-import { ListRow, SectionHeader } from '../components/list/ListGroup'
+import { ListRow } from '../components/list/ListGroup'
 import { optionStyles } from './mobile-bot-option-styles'
 import { MobileAccessFixConfirm, MobileBotWhoCanAsk } from './MobileBotWhoCanAsk'
 
@@ -108,9 +112,13 @@ export function MobileBotSettingsTab(props: {
   accessRequests: BotAccessRequests | null
   /** Null for an agent that can't look around. */
   lookAround: { onLookNow: () => void; busy: boolean } | null
+  /** Settings as a page of its own, headed with a back to where it opened from; absent as a tab. */
+  onBack?: { label: string; onPress: () => void }
 }) {
   const t = useMobileTranslation()
   const { bot, applyBot } = props.routeBot
+  const status = props.client ? readConnectionStatusProbe(props.client) : undefined
+  const accessBot = { ...bot, accessHost: phoneAccessHost(status) }
   const [saving, setSaving] = useState(false)
   const [removing, setRemoving] = useState<BotMember | null>(null)
   const [granting, setGranting] = useState<ConnectorAccessRequest | null>(null)
@@ -231,7 +239,7 @@ export function MobileBotSettingsTab(props: {
 
   // Any paired phone may grant (D3), so it always asks first, as the desktop does.
   if (granting && access) {
-    const copy = accessGrantConfirmCopy(granting, bot)
+    const copy = accessGrantConfirmCopy(granting, accessBot)
     return (
       <ConfirmContent
         title={copy.title}
@@ -260,16 +268,13 @@ export function MobileBotSettingsTab(props: {
   if (permissionsOpen) {
     return (
       <>
-        <Pressable
-          style={optionStyles.optionBack}
-          onPress={() => setPermissionsOpen(false)}
-          accessibilityRole="button"
-          accessibilityLabel={t('bots.lookAround.back', 'Back to Settings')}
-        >
-          <ChevronLeft size={16} color={colors.textSecondary} />
-          <Text style={optionStyles.optionBackText}>{t('bots.sheet.settings', 'Settings')}</Text>
-        </Pressable>
-        <SectionHeader title={t('bots.settings.permissions', 'Permissions')} />
+        <SheetHeader
+          title={t('bots.settings.permissions', 'Permissions')}
+          onBack={{
+            label: t('bots.lookAround.back', 'Back to Settings'),
+            onPress: () => setPermissionsOpen(false)
+          }}
+        />
         <Text style={[optionStyles.optionRowDetail, optionStyles.optionPageTitle]}>
           {t(
             'bots.settings.permissionsDetail',
@@ -295,6 +300,9 @@ export function MobileBotSettingsTab(props: {
     void save({ notifications: { ...bot.notifications, [key]: value } })
   return (
     <>
+      {props.onBack ? (
+        <SheetHeader title={t('bots.sheet.settings', 'Settings')} onBack={props.onBack} />
+      ) : null}
       <Section title={t('bots.settings.general', 'General')}>
         <SwitchRow
           label={t('bots.settings.active', 'Active')}
@@ -348,7 +356,7 @@ export function MobileBotSettingsTab(props: {
         </Section>
       ) : null}
       <MobileBotWhoCanAsk
-        bot={bot}
+        bot={accessBot}
         disabled={saving}
         onKeepOnlyMe={() => setFixing('only-me')}
         onAskForApproval={() => setFixing('ask-for-approval')}

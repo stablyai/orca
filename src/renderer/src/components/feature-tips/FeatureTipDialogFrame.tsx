@@ -17,6 +17,9 @@ export function FeatureTipDialogFrame({
   onOpenAutoFocus,
   visual,
   copyClassName,
+  wide = false,
+  scope,
+  outside,
   children
 }: {
   open: boolean
@@ -25,16 +28,29 @@ export function FeatureTipDialogFrame({
   visual: ReactNode
   /** Adjusts the copy column, e.g. its padding, for one tip. */
   copyClassName?: string
+  /** A larger frame for a visual that needs the room; nothing in it is clipped at the dialog's edge. */
+  wide?: boolean
+  /** Names the tip on the dialog (`data-feature-tip`), for a stylesheet of its own. */
+  scope?: string
+  /** Drawn on the dialog itself, outside its columns, e.g. figures over its edge. */
+  outside?: ReactNode
   children: ReactNode
 }): JSX.Element {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         surface="feature-tip"
-        className="!flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden sm:max-w-4xl md:!h-[min(27rem,calc(100vh-2rem))] md:!flex-row"
+        className={cn(
+          '!flex max-h-[calc(100vh-2rem)] flex-col sm:max-w-4xl md:!flex-row',
+          wide
+            ? 'sm:max-w-[min(63rem,calc(100%-2rem))] md:!h-[min(30.5rem,calc(100vh-2rem))]'
+            : 'overflow-hidden md:!h-[min(27rem,calc(100vh-2rem))]'
+        )}
+        data-feature-tip={scope}
         showCloseButton
         onOpenAutoFocus={onOpenAutoFocus}
       >
+        {outside}
         <div
           className={cn(
             'scrollbar-sleek flex min-h-0 min-w-0 flex-1 flex-col justify-between overflow-y-auto px-8 py-9 md:shrink-0 md:basis-1/2',
@@ -43,8 +59,18 @@ export function FeatureTipDialogFrame({
         >
           {children}
         </div>
-        <div className="flex min-h-0 min-w-0 shrink-0 self-stretch overflow-hidden bg-muted/60 md:basis-1/2 md:border-l md:border-border/70">
-          <div className="h-full min-h-[23rem] w-full md:w-[29.4rem]">{visual}</div>
+        <div
+          className={cn(
+            'flex min-h-0 min-w-0 shrink-0 self-stretch overflow-hidden bg-muted/60 md:basis-1/2 md:border-l md:border-border/70',
+            // Without the dialog's own clip, the visual keeps to its rounded corners.
+            wide && 'rounded-b-[7px] md:rounded-l-none md:rounded-r-[7px]'
+          )}
+        >
+          <div
+            className={cn('h-full min-h-[23rem] w-full', wide ? 'md:w-[33rem]' : 'md:w-[29.4rem]')}
+          >
+            {visual}
+          </div>
         </div>
       </DialogContent>
     </Dialog>

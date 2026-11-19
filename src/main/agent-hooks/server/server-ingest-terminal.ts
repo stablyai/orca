@@ -10,7 +10,11 @@ import type { EnrichedAgentHookEventPayload } from './server-types'
 import { agentSubagentsEqual } from '../../../shared/agent-status/contracts/agent-status-subagent-snapshot'
 import { isAgentStatusHeldOpenByChildWork } from '../../../shared/agent-status/lifecycle/agent-lead-status-fold'
 import { AgentHookServerIngestLaunch } from './server-ingest-launch'
-import { programStatusHookYieldEndsAt } from './program-status/hook-precedence'
+import {
+  antigravityRefusedDoneRetryMs,
+  programStatusHookYieldEndsAt
+} from './program-status/hook-precedence'
+import { deferProgramStatusRecheck } from './program-status/program-status-recheck'
 import type { ProgramStatusFacet } from '../../../shared/program-status/facet'
 
 const PROGRAM_STATUS_FACET_REPUBLISH_MS = 250
@@ -173,31 +177,26 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       }
       return
     }
+    const helpersIdleAt = this.state.antigravityChildWorkByPaneKey.get(paneKey)?.helpersIdleAt
     const yieldEndsAt =
       event.fromProgramStatus === true
-        ? programStatusHookYieldEndsAt(previous, payload, workingSince)
+        ? programStatusHookYieldEndsAt(previous, payload, workingSince, helpersIdleAt)
         : undefined
     const hookOwnsAgent = yieldEndsAt !== undefined && now < yieldEndsAt
     if (event.fromProgramStatus === true) {
-      if (hookOwnsAgent && previous && Number.isFinite(yieldEndsAt)) {
-        const yieldedTo = previous.receivedAt
-        const delayMs = yieldEndsAt - now
-        this.hookSilenceRechecks.defer(paneKey, delayMs + 1, (currentPaneKey) => {
-          const row = this.state.lastStatusByPaneKey.get(currentPaneKey)
-          // Re-offer only against the hook observation this report yielded to.
-          if (
-            row &&
-            row.providerSessionOnly !== true &&
-            'receivedAt' in row &&
-            row.receivedAt === yieldedTo
-          ) {
-            const tabId = parsePaneKey(currentPaneKey)?.tabId ?? event.tabId
-            this.ingestTerminalStatus({ ...event, paneKey: currentPaneKey, tabId })
-          }
-        })
-      } else {
-        this.hookSilenceRechecks.cancel(paneKey)
-      }
+      const delayMs =
+        hookOwnsAgent && Number.isFinite(yieldEndsAt)
+          ? yieldEndsAt - now
+          : antigravityRefusedDoneRetryMs(previous, payload, yieldEndsAt, event)
+      deferProgramStatusRecheck({
+        rechecks: this.hookSilenceRechecks,
+        rows: this.state.lastStatusByPaneKey,
+        paneKey,
+        yieldedTo: previous?.receivedAt,
+        delayMs,
+        event,
+        reoffer: (retried) => this.ingestTerminalStatus(retried)
+      })
     }
     if (
       hookOwnsCommand ||

@@ -134,6 +134,63 @@ test('a strip too narrow for quick commands offers them in the pane actions menu
   await expect(quickCommandsItem).toBeVisible()
 })
 
+test('a narrow strip anchors the shortcut-opened quick-command menu and Escape returns focus to the terminal', async ({
+  orcaPage
+}) => {
+  await orcaPage.setViewportSize({ width: 1280, height: 800 })
+  await waitForSessionReady(orcaPage)
+  const worktreeId = await waitForActiveWorktree(orcaPage)
+  await ensureTerminalVisible(orcaPage)
+
+  const layout = await buildThreeColumns(orcaPage, worktreeId)
+  await orcaPage.evaluate(async (id) => {
+    const state = window.__store?.getState()
+    state?.setTabGroupSplitRatio(id, '', 0.8)
+    state?.setTabGroupSplitRatio(id, 'second', 0.25)
+    await state?.upsertTerminalQuickCommand('local', {
+      id: 'e2e-narrow-strip-quick-command',
+      label: 'Narrow strip echo',
+      scope: { type: 'global' },
+      command: 'echo narrow',
+      appendEnter: true
+    })
+  }, worktreeId)
+  const rightStrip = orcaPage.locator(`[data-tab-group-strip-id="${layout.rightGroupId}"]`)
+  const runButton = rightStrip.getByRole('button', {
+    name: 'Run quick command: Narrow strip echo',
+    includeHidden: true
+  })
+  // Wait for the saved command to mount the menu trigger, which the narrow strip keeps hidden.
+  await expect(runButton).toHaveCount(1)
+  await expect(runButton).toBeHidden()
+
+  await rightStrip.locator('[data-tab-id]').first().click()
+  const focusedTextarea = orcaPage.locator('.xterm-helper-textarea:focus')
+  await expect(focusedTextarea).toHaveCount(1)
+  const terminalTabId = await focusedTextarea.evaluate(
+    (el) => el.closest('[data-terminal-tab-id]')?.getAttribute('data-terminal-tab-id') ?? null
+  )
+  expect(terminalTabId).not.toBeNull()
+
+  await orcaPage.evaluate(() => window.dispatchEvent(new Event('orca:toggleQuickCommandsMenu')))
+  const menu = orcaPage.getByRole('menu')
+  await expect(menu).toBeVisible()
+  const menuBox = await menu.boundingBox()
+  const stripBox = await rightStrip.boundingBox()
+  if (!menuBox || !stripBox) {
+    throw new Error('Quick-command menu or strip has no layout box')
+  }
+  // A rect-less trigger put the menu at the window origin; it should hang from the pane's top-right edge.
+  expect(menuBox.x).toBeGreaterThan(0)
+  expect(Math.abs(menuBox.x + menuBox.width - (stripBox.x + stripBox.width))).toBeLessThan(8)
+
+  await orcaPage.keyboard.press('Escape')
+  await expect(menu).toHaveCount(0)
+  await expect(
+    orcaPage.locator(`[data-terminal-tab-id="${terminalTabId}"] .xterm-helper-textarea`)
+  ).toBeFocused()
+})
+
 test('with the right sidebar closed, no focused strip control is clipped at any width', async ({
   orcaPage
 }) => {

@@ -44,12 +44,14 @@ afterEach(async () => {
 })
 
 describe('scoped Jira Cloud tokens over HTTP', () => {
-  it('resolves the tenant without a credential and connects an email-free Bearer token', async () => {
+  it('connects an email-free scoped token and routes requests through its tenant', async () => {
     fixture = await startJiraAuthFixture((request, response) => {
       if (request.url === `${SITE}/_edge/tenant_info`) {
         jiraFixtureJson(response, 200, { cloudId: 'cloud-abc' })
       } else if (request.url === `${GATEWAY}/rest/api/3/myself`) {
         jiraFixtureJson(response, 200, VIEWER)
+      } else if (request.url.startsWith(`${GATEWAY}/rest/api/3/`)) {
+        jiraFixtureJson(response, 200, { issues: [] })
       } else {
         jiraFixtureJson(response, 401, {})
       }
@@ -68,20 +70,6 @@ describe('scoped Jira Cloud tokens over HTTP', () => {
         method: 'GET'
       }
     ])
-  })
-
-  it('routes reads, edits and site attachment links through the selected gateway tenant', async () => {
-    fixture = await startJiraAuthFixture((request, response) => {
-      if (request.url.endsWith('/_edge/tenant_info')) {
-        jiraFixtureJson(response, 200, { cloudId: 'cloud-abc' })
-      } else if (request.url.endsWith('/myself')) {
-        jiraFixtureJson(response, 200, VIEWER)
-      } else {
-        jiraFixtureJson(response, 200, { issues: [] })
-      }
-    })
-    const jira = await loadClient()
-    await jira.connect({ ...CREDENTIAL, email: '' })
     const client = jira.getClients()[0]
     if (!client) {
       throw new Error('Expected connected scoped Jira client')
