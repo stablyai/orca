@@ -12,7 +12,6 @@
 1 src/main/agent-launch/trust/agent-trust-ownership-ledger.ts
 2 src/main/agent-launch/trust/agent-trust-path-canonicalization.ts # moved out of agent-trust-presets.ts (its count dropped by 2) so the Codex trust worker shares it
 12 src/main/agent-launch/trust/agent-trust-presets.ts
-2 src/main/agent-launch/trust/antigravity-workspace-trust-ownership.ts
 1 src/main/agent-launch/trust/execution-host-workspace-trust.ts
 1 src/main/ai-vault-search/worker/session-search-worker-client.ts
 4 src/main/ai-vault/parse-cache/session-parse-cache-legacy-json.ts
