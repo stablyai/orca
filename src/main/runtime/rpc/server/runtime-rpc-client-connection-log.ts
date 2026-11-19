@@ -48,9 +48,10 @@ export class RuntimeClientConnectionLog {
   }
 
   /** Closes the current window: one summary per device that changed, forgetting idle ones. */
-  flushWindow(): void {
+  flushWindow(includeOpen = false): void {
     for (const [label, activity] of this.devices) {
-      if (activity.connected === 0 && activity.disconnected === 0) {
+      const quiet = activity.connected === 0 && activity.disconnected === 0
+      if (quiet && !(includeOpen && activity.open > 0)) {
         if (activity.open === 0) {
           this.devices.delete(label)
         }
@@ -63,6 +64,19 @@ export class RuntimeClientConnectionLog {
       activity.disconnected = 0
     }
     if (this.devices.size === 0 && this.timer) {
+      clearInterval(this.timer)
+      this.timer = null
+    }
+  }
+
+  /**
+   * The server stopped: record every device still attached (some transports close after this),
+   * then start fresh so a missed close can't skew later counts.
+   */
+  close(): void {
+    this.flushWindow(true)
+    this.devices.clear()
+    if (this.timer) {
       clearInterval(this.timer)
       this.timer = null
     }
@@ -88,6 +102,6 @@ export function logClientConnection(
 }
 
 /** Writes the open window so a stopping host's log still shows who was attached last. */
-export function flushClientConnectionLog(): void {
-  runtimeClientConnectionLog.flushWindow()
+export function closeClientConnectionLog(): void {
+  runtimeClientConnectionLog.close()
 }

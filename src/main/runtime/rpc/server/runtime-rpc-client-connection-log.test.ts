@@ -53,4 +53,24 @@ describe('RuntimeClientConnectionLog', () => {
       '[runtime-rpc] client activity device=device-b scope=runtime transport=direct connected=0 disconnected=1 open=0'
     ])
   })
+
+  it('records every attached device on close and treats the next connection as new', () => {
+    const lines: string[] = []
+    const log = new RuntimeClientConnectionLog((line) => lines.push(line))
+
+    log.record('connected', socket('phone', 'device-b'))
+    vi.advanceTimersByTime(10 * 60_000)
+    log.record('connected', socket('cli'))
+    log.close()
+    log.record('connected', socket('after-restart'))
+
+    expect(lines).toEqual([
+      '[runtime-rpc] client connected device=device-b scope=runtime transport=direct connection=phone',
+      '[runtime-rpc] client activity device=device-b scope=runtime transport=direct connected=1 disconnected=0 open=1',
+      '[runtime-rpc] client connected device=device-a scope=runtime transport=direct connection=cli',
+      '[runtime-rpc] client activity device=device-b scope=runtime transport=direct connected=0 disconnected=0 open=1',
+      '[runtime-rpc] client activity device=device-a scope=runtime transport=direct connected=1 disconnected=0 open=1',
+      '[runtime-rpc] client connected device=device-a scope=runtime transport=direct connection=after-restart'
+    ])
+  })
 })
