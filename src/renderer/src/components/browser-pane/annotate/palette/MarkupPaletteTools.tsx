@@ -78,8 +78,13 @@ export function MarkupPaletteTools({
   onUndo,
   onRedo,
   onClear,
+  canClear = canUndo || canRedo,
   density = 'full'
-}: MarkupToolbarProps & { density?: MarkupPaletteDensity }): React.JSX.Element {
+}: MarkupToolbarProps & {
+  density?: MarkupPaletteDensity
+  /** False on an empty canvas: there is nothing to clear, even with redo history. */
+  canClear?: boolean
+}): React.JSX.Element {
   const t = useTranslate()
   const items = markupToolItems(t)
   const compact = density === 'compact'
@@ -143,7 +148,7 @@ export function MarkupPaletteTools({
               <Redo2 className="size-3.5" />
               {t('auto.components.browser-pane.markup.redo', 'Redo')}
             </DropdownMenuItem>
-            <DropdownMenuItem disabled={!canUndo && !canRedo} onSelect={onClear}>
+            <DropdownMenuItem disabled={!canClear} onSelect={onClear}>
               <Trash2 className="size-3.5" />
               {t('auto.components.browser-pane.markup.clear', 'Clear all')}
             </DropdownMenuItem>
@@ -269,7 +274,7 @@ export function MarkupPaletteTools({
           </PaletteIconButton>
           <PaletteIconButton
             label={t('auto.components.browser-pane.markup.clear', 'Clear all')}
-            disabled={!canUndo && !canRedo}
+            disabled={!canClear}
             onClick={onClear}
           >
             <Trash2 className="size-3.5" />

@@ -77,6 +77,7 @@ export function MarkupOverlay({
         onUndo={editor.undo}
         onRedo={editor.redo}
         onClear={editor.clear}
+        canClear={editor.shapes.length > 0}
       />
       <Button
         type="button"

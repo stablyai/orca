@@ -120,6 +120,8 @@ export type BrowserPageAnnotationTrayProps = {
   revealSignal?: number
   /** Set while the annotate palette owns the list: Esc closes it. */
   onDismiss?: () => void
+  /** Where the list sits when opened from the palette's note count (under the chip); default bottom-right. */
+  placement?: React.CSSProperties
   browserAnnotations: BrowserPageAnnotation[]
   currentUrl?: string
   annotationTraySendOpen: boolean

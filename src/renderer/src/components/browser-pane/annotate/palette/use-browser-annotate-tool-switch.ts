@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import { INLINE_ACTION_CLASS_NAMES } from '@/components/ui/sonner'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import type {
   BrowserAnnotateToolKey,
@@ -200,6 +201,8 @@ export function useBrowserAnnotateToolSwitch({
       translate('browser.annotatePalette.drawingDiscarded', 'Drawing discarded'),
       {
         duration: DISCARDED_DRAWING_UNDO_MS,
+        // A short outcome reads best with Undo beside it.
+        classNames: INLINE_ACTION_CLASS_NAMES,
         onAutoClose: expire,
         onDismiss: expire,
         action: {

@@ -41,6 +41,7 @@ import { useAnnotationTrayReveal } from './use-annotation-tray-reveal'
 export function BrowserPageAnnotationTray({
   revealSignal = 0,
   onDismiss,
+  placement,
   browserAnnotations,
   currentUrl,
   annotationTraySendOpen,
@@ -119,6 +120,7 @@ export function BrowserPageAnnotationTray({
           }
         }}
         className="absolute right-3 bottom-3 z-30 flex max-h-[45%] w-[min(20rem,calc(100%-1.5rem))] flex-col overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-[0_10px_24px_rgba(0,0,0,0.18)]"
+        style={placement}
       >
         <div className="flex items-center gap-2 px-3 py-2">
           <Tooltip>

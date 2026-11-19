@@ -4,6 +4,7 @@ import {
   registerAnnotateEscapeInterceptor
 } from './palette/annotate-escape-interceptor'
 import { useAnnotateKeyPage } from './palette/use-annotate-key-page'
+import { useNotesTrayPlacement } from './palette/use-notes-tray-placement'
 import { createPortal } from 'react-dom'
 import type { MutableRefObject, RefObject } from 'react'
 import { Copy, Image } from 'lucide-react'
@@ -83,6 +84,7 @@ export function BrowserGuestAnnotateOverlays({
   const [notesRevealSignal, setNotesRevealSignal] = useState(0)
   // While the mode is on, the notes list opens only from the palette's note count, so there is one notes surface.
   const [notesOpen, setNotesOpen] = useState(false)
+  const notesPlacement = useNotesTrayPlacement(containerRef, notesOpen)
   const {
     pendingAnnotationPayload,
     handleAddBrowserAnnotation,
@@ -313,6 +315,7 @@ export function BrowserGuestAnnotateOverlays({
       {browserAnnotations.length > 0 && (activeTool === null || notesOpen) ? (
         <BrowserPageAnnotationTray
           revealSignal={notesRevealSignal}
+          placement={notesPlacement}
           onDismiss={
             activeTool === null
               ? undefined
