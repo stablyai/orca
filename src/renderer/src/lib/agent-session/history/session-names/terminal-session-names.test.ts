@@ -168,6 +168,17 @@ describe('terminal session names', () => {
     expect(stored()[key]).toMatchObject({ title: 'Theirs', tabId: 'tab-2' })
   })
 
+  it('keeps when a name was given when only its owner tab changes', () => {
+    let now = 1_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now++)
+    save('s1', 'Fix auth bug', 'closed-tab')
+    const first = getTerminalSessionNameEntry('local', 's1')
+    save('s1', 'Fix auth bug', 'tab-new')
+    expect(getTerminalSessionNameEntry('local', 's1')).toEqual({ ...first, tabId: 'tab-new' })
+    save('s1', 'Renamed', 'tab-new')
+    expect(getTerminalSessionNameEntry('local', 's1')?.savedAt).toBeGreaterThan(first?.savedAt ?? 0)
+  })
+
   it("refreshes and notifies on another window's storage event", () => {
     const listener = vi.fn()
     const unsubscribe = subscribeTerminalSessionNames(listener)

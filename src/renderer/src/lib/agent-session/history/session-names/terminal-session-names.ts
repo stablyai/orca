@@ -215,7 +215,9 @@ export function saveTerminalSessionName(args: {
   if (existing?.title === title && existing.tabId === args.tabId && existing.agent === args.agent) {
     return
   }
-  commit([{ key, entry: { title, agent: args.agent, tabId: args.tabId, savedAt: Date.now() } }])
+  // Handing the same name to another tab is not a newer name: keep when it was named.
+  const savedAt = existing?.title === title ? existing.savedAt : Date.now()
+  commit([{ key, entry: { title, agent: args.agent, tabId: args.tabId, savedAt } }])
 }
 
 export type TerminalSessionNameForget = { key: string; ownerTabId: string }
