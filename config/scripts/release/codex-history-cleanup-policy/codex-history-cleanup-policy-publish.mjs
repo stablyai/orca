@@ -24,6 +24,8 @@ const POLICY_KEYS = ['version', 'revision', 'kinds']
 const RULE_KEYS = ['mode', 'enforcePermille', 'platforms', 'thresholds']
 // Far below the app's safe-integer limit, so a mistyped revision never leaves no room to lift it.
 const MAX_REVISION = 2 ** 31 - 1
+// Revisions people choose stay this far under the cap, so emergency-off can always outrank them.
+const MAX_CHOSEN_REVISION = MAX_REVISION - 1_000_000
 // The kinds the app reads, from the app, so a kind added later is covered by emergency-off.
 const KINDS = Object.keys(codexHistoryCleanupThresholds(null))
 
@@ -31,8 +33,17 @@ function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex')
 }
 
-function isUsableRevision(revision) {
-  return Number.isSafeInteger(revision) && revision > 0 && revision <= MAX_REVISION
+function isUsableRevision(revision, max = MAX_REVISION) {
+  return Number.isSafeInteger(revision) && revision > 0 && revision <= max
+}
+
+/** The checked-in file, validated, with room left above its revision for emergency-off. */
+function validatedCheckedInPolicy(bytes) {
+  const policy = validatedCodexHistoryCleanupPolicy(bytes)
+  if (!isUsableRevision(policy.revision, MAX_CHOSEN_REVISION)) {
+    throw new Error(`revision ${policy.revision} is above ${MAX_CHOSEN_REVISION}`)
+  }
+  return policy
 }
 
 function isPlainObject(value) {
@@ -191,7 +202,7 @@ function checkedInRevision(fileText) {
   } catch {
     revision = undefined
   }
-  if (isUsableRevision(revision)) {
+  if (isUsableRevision(revision, MAX_CHOSEN_REVISION)) {
     return revision
   }
   console.log(
@@ -218,14 +229,18 @@ export function publishCodexHistoryCleanupOff({
     ...readChannel(gh, repo, codexHistoryCleanupPolicyTag(channel), { lenient: true })
   }))
   const unknown = channels.filter(({ exists, revision }) => exists && revision === null)
+  // Only a hand-uploaded file can sit at the cap; outranking it is impossible, so it alone is skipped.
+  const atCap = channels.filter(({ revision }) => revision !== null && revision >= MAX_REVISION)
   const revision = Math.max(
     minRevision,
-    Math.max(checkedInRevision(fileText), ...channels.map((channel) => channel.revision ?? 0)) + 1
+    Math.max(
+      checkedInRevision(fileText),
+      ...channels
+        .filter((channel) => !atCap.includes(channel))
+        .map((channel) => channel.revision ?? 0)
+    ) + 1
   )
-  if (!isUsableRevision(revision)) {
-    throw new Error(`revision ${revision} is above ${MAX_REVISION}`)
-  }
-  const skipped = minRevision === 0 ? unknown.map(({ channel }) => channel) : []
+  const skipped = [...(minRevision === 0 ? unknown : []), ...atCap].map(({ channel }) => channel)
   const policy = {
     version: 1,
     revision,
@@ -248,14 +263,30 @@ export function publishCodexHistoryCleanupOff({
   }
   // A publish that landed after ours would leave the switch off this channel.
   for (const { tag, sha256: hash } of results) {
-    const now = downloadChannelAsset({ gh, repo, tag, asset: ASSET })
-    if (now === null || sha256(now) !== hash) {
-      failures.push(`${tag} changed after off was published; rerun emergency-off`)
+    try {
+      const now = downloadChannelAsset({ gh, repo, tag, asset: ASSET })
+      if (now === null || sha256(now) !== hash) {
+        failures.push(`${tag} changed after off was published; rerun emergency-off`)
+      }
+    } catch (error) {
+      failures.push(
+        `${tag} could not be checked after off was published: ${error instanceof Error ? error.message : String(error)}`
+      )
     }
   }
-  if (skipped.length > 0) {
+  const published =
+    results.length === 0
+      ? 'nothing was published'
+      : `off went out at revision ${revision} on ${results.map(({ tag }) => tag).join(' and ')}`
+  for (const { channel } of atCap) {
     failures.push(
-      `the ${skipped.join(' and ')} revision could not be read, so off was not published there (off went out at revision ${revision} elsewhere); rerun with -f revision=<N> above any revision ever published`
+      `the ${channel} channel holds revision ${MAX_REVISION}, which off can't outrank, so it was skipped (${published}); replace that file by hand`
+    )
+  }
+  const unread = skipped.filter((channel) => !atCap.some((capped) => capped.channel === channel))
+  if (unread.length > 0) {
+    failures.push(
+      `the ${unread.join(' and ')} revision could not be read, so off was not published there (${published}); rerun with -f revision=<N> above any revision ever published`
     )
   }
   return { results, failures }
@@ -275,9 +306,9 @@ function parseMinRevision(args) {
     return 0
   }
   const revision = Number(args[index + 1])
-  if (!isUsableRevision(revision)) {
+  if (!isUsableRevision(revision, MAX_CHOSEN_REVISION)) {
     throw new Error(
-      `the revision input must be a whole number from 1 to ${MAX_REVISION}, got ${args[index + 1]}`
+      `the revision input must be a whole number from 1 to ${MAX_CHOSEN_REVISION}, got ${args[index + 1]}`
     )
   }
   return revision
@@ -286,7 +317,7 @@ function parseMinRevision(args) {
 function main([command, ...args]) {
   const file = readFileSync(join(import.meta.dirname, '../../../..', POLICY_FILE))
   if (command === 'validate') {
-    const { revision } = validatedCodexHistoryCleanupPolicy(file)
+    const { revision } = validatedCheckedInPolicy(file)
     console.log(`${POLICY_FILE} is valid at revision ${revision}.`)
     return
   }
@@ -295,6 +326,7 @@ function main([command, ...args]) {
   let results
   let failures = []
   if (command === 'publish-next') {
+    validatedCheckedInPolicy(file)
     results = [publishCodexHistoryCleanupPolicy({ repo, channel: 'next', bytes: file, target })]
   } else if (command === 'promote-stable') {
     results = [promoteCodexHistoryCleanupPolicy({ repo, target })]
