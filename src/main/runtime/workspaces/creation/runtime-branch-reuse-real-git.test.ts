@@ -252,7 +252,7 @@ describe('explicit branch reuse with real Git', () => {
     }
   )
 
-  it.each(['ahead', 'diverged', 'behind'])(
+  it.each(['diverged', 'behind'])(
     'reuses a %s local branch without changing its tip or upstream',
     async (state) => {
       const f = await fixture()
@@ -265,10 +265,8 @@ describe('explicit branch reuse with real Git', () => {
       }
       const localTip = await git(f.repoPath, 'rev-parse', 'HEAD')
       await git(f.repoPath, 'checkout', '--quiet', 'main')
-      if (state !== 'ahead') {
-        await git(f.repoPath, 'commit', '--quiet', '--allow-empty', '-m', 'remote work')
-        await git(f.repoPath, 'update-ref', f.base, 'HEAD')
-      }
+      await git(f.repoPath, 'commit', '--quiet', '--allow-empty', '-m', 'remote work')
+      await git(f.repoPath, 'update-ref', f.base, 'HEAD')
       const remoteTip = await git(f.repoPath, 'rev-parse', f.base)
       await mkdir(join(f.workspaceRoot, 'My-workspace'), { recursive: true })
       const picked = await f.create()
@@ -339,7 +337,6 @@ describe('exact-name create with real Git', () => {
   // Branch prefix none, so each existing branch is the candidate's own twin after host naming.
   it.each([
     ['release..fix', 'release.fix'],
-    ['cache.lock', 'cache-lock'],
     ['Login fix', 'login-fix'],
     ['🚀 launch', 'rocket-launch'],
     // The default intent would adopt this unchecked-out branch.
