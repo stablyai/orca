@@ -114,6 +114,7 @@ export async function connectIpcPty(
     const priorIncarnationFence = currentPreHandlerPtySequence()
     const spawnResult = await spawnIpcPty(transportOptions, options, admittedSessionId)
     if (accountRestart && shouldContinue && !shouldContinue(spawnResult)) {
+      await options.verifyAccountRestartResult?.(spawnResult)
       return
     }
     if (
