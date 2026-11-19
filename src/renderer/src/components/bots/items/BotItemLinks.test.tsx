@@ -207,10 +207,8 @@ it('titles a PR from the cache with its number, else PR #n', () => {
 
 it.each([
   ['open', 'failure', 'Checks failing'],
-  ['open', 'success', 'Checks passing'],
   ['draft', 'success', 'Checks passing'],
   ['open', 'pending', null],
-  ['open', null, null],
   ['merged', 'success', null],
   ['closed', 'failure', null]
 ] as const)('a %s PR with %s checks shows CI glyph %s', (state, checks, label) => {

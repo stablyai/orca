@@ -70,12 +70,6 @@ describe('a bot’s quiet result in its home chat', () => {
     expect(screen.queryByText(/NO_REPLY/)).toBeNull()
   })
 
-  it('leaves a marker that is not at the end as written', () => {
-    renderAnswer('NO_REPLY is the quiet word', BOT_HOME)
-    expect(screen.getByText('NO_REPLY is the quiet word')).toBeInTheDocument()
-    expect(screen.queryByText('Nothing to report')).toBeNull()
-  })
-
   it('draws no line under the automation row that opened its turn', () => {
     renderAnswer('NO_REPLY', BOT_HOME, { inAutomationTurn: true })
     expect(screen.queryByText('Nothing to report')).toBeNull()

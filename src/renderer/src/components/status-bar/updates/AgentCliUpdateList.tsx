@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Copy, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
@@ -6,6 +5,8 @@ import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { useTranslate } from '@/i18n/use-translate'
 import { agentCliProductName } from '@/components/agent-cli-update/agent-cli-product-name'
+import { AgentCliUpdateFailedChip } from '@/components/agent-cli-update/AgentCliUpdateFailedChip'
+import { openAgentCliUpdateFailure } from '@/components/agent-cli-update/agent-cli-update-failure-modal'
 import type {
   AgentCliUpdateHost,
   AgentCliUpdateRun
@@ -57,7 +58,6 @@ function AgentCliUpdateListRow({
   onUpdate: (row: AgentCliUpdateRow) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const [outputShown, setOutputShown] = useState(false)
   const { update, run } = row
   const manual = update && !update.runnable ? update.command : null
   const copyCommand = (command: string) =>
@@ -83,19 +83,17 @@ function AgentCliUpdateListRow({
             </>
           ) : run?.phase === 'failed' ? (
             <>
-              <span className="text-2xs text-destructive">
-                {t('agentCliUpdate.failed', 'Update failed')}
-              </span>
-              <Button
-                type="button"
-                variant="outline"
-                size="xs"
-                aria-expanded={outputShown}
-                onClick={() => setOutputShown(!outputShown)}
-              >
-                {outputShown
-                  ? t('agentCliUpdate.hideOutput', 'Hide output')
-                  : t('agentCliUpdate.showOutput', 'Show output')}
+              <AgentCliUpdateFailedChip
+                onOpen={() =>
+                  openAgentCliUpdateFailure({
+                    hostKey: row.hostKey,
+                    agent: row.agent,
+                    tryAgain: () => onUpdate(row)
+                  })
+                }
+              />
+              <Button type="button" variant="outline" size="xs" onClick={() => onUpdate(row)}>
+                {t('agentCliUpdate.tryAgain', 'Try again')}
               </Button>
             </>
           ) : (
@@ -132,16 +130,6 @@ function AgentCliUpdateListRow({
           {t('agentCliUpdate.manualHint', 'Run in a terminal:')}{' '}
           <code className="font-mono break-all text-foreground">{manual}</code>
         </p>
-      ) : null}
-      {run?.phase === 'failed' && outputShown ? (
-        <div className="space-y-1.5 px-2 pb-2">
-          <pre className="scrollbar-sleek max-h-40 overflow-auto rounded-md bg-muted p-2 font-mono text-2xs whitespace-pre-wrap break-all text-muted-foreground">
-            {run.output || t('agentCliUpdate.noOutput', 'The command printed nothing.')}
-          </pre>
-          <Button type="button" variant="outline" size="xs" onClick={() => onUpdate(row)}>
-            {t('agentCliUpdate.tryAgain', 'Try again')}
-          </Button>
-        </div>
       ) : null}
     </div>
   )
