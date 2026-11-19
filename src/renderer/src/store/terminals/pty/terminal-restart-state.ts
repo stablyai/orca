@@ -1,5 +1,6 @@
 import { isSameCodexRestartNoticeAccount } from './codex-restart-notice-account-identity'
-import type { AccountRestartAgent } from '../terminal-contracts'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import type { AccountRestartAgent, PaneRestartIntent } from '../terminal-contracts'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from '../terminal-state'
 
 // Why: Codex notice cleanup shares this map with Claude switch restarts and must not drop them.
@@ -19,6 +20,9 @@ export function createTerminalRestartActions(
   | 'suppressPtyExit'
   | 'queuePaneAccountRestarts'
   | 'consumePendingPaneAccountRestart'
+  | 'queuePaneManualRestarts'
+  | 'consumePendingPaneRestart'
+  | 'dropPendingPaneManualRestart'
   | 'markCodexRestartNotices'
   | 'clearCodexRestartNotice'
   | 'dismissCodexRestartNotices'
@@ -85,6 +89,53 @@ export function createTerminalRestartActions(
         return { pendingPaneAccountRestarts: next }
       })
       return queuedAgent
+    },
+    queuePaneManualRestarts: (entries) => {
+      if (entries.length === 0) {
+        return
+      }
+      set((s) => ({
+        pendingPaneManualRestarts: {
+          ...s.pendingPaneManualRestarts,
+          ...Object.fromEntries(entries.map(({ ptyId, agent }) => [ptyId, agent] as const))
+        }
+      }))
+    },
+    consumePendingPaneRestart: (ptyId) => {
+      let result: { agent: TuiAgent; intent: PaneRestartIntent } | null = null
+      set((s) => {
+        const accountAgent = s.pendingPaneAccountRestarts[ptyId]
+        const manualAgent = s.pendingPaneManualRestarts[ptyId]
+        if (!accountAgent && !manualAgent) {
+          return s
+        }
+        result = accountAgent
+          ? { agent: accountAgent, intent: 'account' }
+          : { agent: manualAgent, intent: 'manual' }
+        const patch: Partial<TerminalSlice> = {}
+        if (accountAgent) {
+          const next = { ...s.pendingPaneAccountRestarts }
+          delete next[ptyId]
+          patch.pendingPaneAccountRestarts = next
+        }
+        if (manualAgent) {
+          const next = { ...s.pendingPaneManualRestarts }
+          delete next[ptyId]
+          patch.pendingPaneManualRestarts = next
+        }
+        return patch
+      })
+      return result
+    },
+    dropPendingPaneManualRestart: (ptyId) => {
+      set((s) => {
+        if (!(ptyId in s.pendingPaneManualRestarts)) {
+          return s
+        }
+        const next = { ...s.pendingPaneManualRestarts }
+        delete next[ptyId]
+        return { pendingPaneManualRestarts: next }
+      })
     },
     markCodexRestartNotices: (notices) => {
       if (notices.length === 0) {

@@ -58,6 +58,7 @@ export function buildWorktreePurgeSurfacePatch(
     migrationUnsupportedByPtyId: omitByPtyId(s.migrationUnsupportedByPtyId),
     suppressedPtyExitIds: omitByPtyId(s.suppressedPtyExitIds),
     pendingPaneAccountRestarts: omitByPtyId(s.pendingPaneAccountRestarts),
+    pendingPaneManualRestarts: omitByPtyId(s.pendingPaneManualRestarts),
     // Bulk purges skip pane teardown, so evict its agent identity and activity state here.
     agentStatusByPaneKey: nextAgentStatusByPaneKey,
     agentConversationsByPaneKey: omitByPaneKeyTabPrefix(s.agentConversationsByPaneKey),

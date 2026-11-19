@@ -23,6 +23,7 @@ import type {
   NativeChatLaunchPrompt
 } from '@/components/native-chat/drafts/native-chat-launch-prompt'
 import type { HostSessionSlices } from '@/lib/workspace/persistence/workspace-session-host-split'
+import type { ResumableTuiAgent } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type {
   AccountRestartAgent,
   AutomaticAgentResumeClaim,
@@ -46,6 +47,8 @@ export type TerminalState = {
   pendingPtyShutdownIds: Record<string, number>
   /** Account-switch restarts awaiting execution, keyed by the PTY they replace. */
   pendingPaneAccountRestarts: Record<string, AccountRestartAgent>
+  /** User-triggered restarts, kept apart so account-switch consumers never see them. */
+  pendingPaneManualRestarts: Record<string, ResumableTuiAgent>
   codexRestartNoticeByPtyId: Record<string, CodexRestartNotice>
   expandedPaneByTabId: Record<string, boolean>
   canExpandPaneByTabId: Record<string, boolean>

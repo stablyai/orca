@@ -71,13 +71,16 @@ export function createTerminalPtyReleaseActions(
           [tabId, worktreeId ? remainingPtyIds : null]
         ])
         const nextPendingPaneAccountRestarts = { ...s.pendingPaneAccountRestarts }
+        const nextPendingPaneManualRestarts = { ...s.pendingPaneManualRestarts }
         const nextCodexRestartNoticeByPtyId = { ...s.codexRestartNoticeByPtyId }
         if (ptyId) {
           delete nextPendingPaneAccountRestarts[ptyId]
+          delete nextPendingPaneManualRestarts[ptyId]
           delete nextCodexRestartNoticeByPtyId[ptyId]
         } else {
           for (const currentPtyId of s.ptyIdsByTabId[tabId] ?? []) {
             delete nextPendingPaneAccountRestarts[currentPtyId]
+            delete nextPendingPaneManualRestarts[currentPtyId]
             delete nextCodexRestartNoticeByPtyId[currentPtyId]
           }
         }
@@ -99,6 +102,7 @@ export function createTerminalPtyReleaseActions(
             relayReplacements
           ),
           pendingPaneAccountRestarts: nextPendingPaneAccountRestarts,
+          pendingPaneManualRestarts: nextPendingPaneManualRestarts,
           codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId
         }
       })

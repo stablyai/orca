@@ -24,6 +24,8 @@ export type AutomaticAgentResumeClaim = {
 /** Agents whose panes restart in place onto a newly selected account. */
 export type AccountRestartAgent = 'codex' | 'claude'
 
+export type PaneRestartIntent = 'account' | 'manual'
+
 export type CodexRestartNotice = {
   previousAccountLabel: string
   nextAccountLabel: string

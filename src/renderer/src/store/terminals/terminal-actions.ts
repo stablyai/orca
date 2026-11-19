@@ -6,6 +6,7 @@ import type {
   TerminalLayoutSnapshot,
   TerminalTab
 } from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { ResumableTuiAgent } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type {
@@ -32,6 +33,7 @@ import type {
 } from './retirement/terminal-tab-retirement'
 import type {
   AccountRestartAgent,
+  PaneRestartIntent,
   TerminalCreationExecutionFacts,
   AutomaticAgentResumeClaim,
   CodexRestartNotice,
@@ -189,6 +191,12 @@ export type TerminalActions = {
   /** Codex also marks its restart notices answered. */
   queuePaneAccountRestarts: (ptyIds: string[], agent: AccountRestartAgent) => void
   consumePendingPaneAccountRestart: (ptyId: string) => AccountRestartAgent | null
+  queuePaneManualRestarts: (entries: { ptyId: string; agent: ResumableTuiAgent }[]) => void
+  /** Account entries win and clear a same-pane manual entry. */
+  consumePendingPaneRestart: (
+    ptyId: string
+  ) => { agent: TuiAgent; intent: PaneRestartIntent } | null
+  dropPendingPaneManualRestart: (ptyId: string) => void
   markCodexRestartNotices: (
     notices: (Pick<CodexRestartNotice, 'previousAccountLabel' | 'nextAccountLabel'> &
       Partial<Pick<CodexRestartNotice, 'previousAccountId' | 'nextAccountId'>> & {
