@@ -31,7 +31,7 @@ const SEARCH_FLOOR = 180
 function OpenSearch(): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => holdSidebarBotsHeightForSearch(ref.current!), [])
-  return <div ref={ref} data-bot-sidebar-search="" />
+  return <div ref={ref} data-bot-sidebar-search="multiple-rows" />
 }
 
 function tree(projectsCollapsed = false, searching = false): React.JSX.Element {

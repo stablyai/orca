@@ -207,7 +207,7 @@ function BotSidebarSearchPanel({
       // With results it is the only thing shown and shrinks so they scroll under the field; fewer leave the rest empty.
       // Only an empty result grows to fill: a growing panel as the list comes back would clamp its kept scroll.
       className={cn('flex flex-col', hasQuery ? 'min-h-0' : 'shrink-0', empty && 'grow')}
-      data-bot-sidebar-search=""
+      data-bot-sidebar-search={entries.length <= 1 ? 'single-row' : 'multiple-rows'}
     >
       {/* Insets match the list's and a row's, so the field's glyph sits over the bots' pictures.
           The gap below clears the focus ring off the first row. */}
