@@ -12,6 +12,10 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import type { SshConnectionStatus } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { NativeChatSplitDirection } from '@/components/native-chat/pane/routing/native-chat-pane-shortcut'
 import type { TabSplitDirection } from '@/store/slices/tabs/tabs-slice-contract'
+import {
+  resolveActiveTerminalPaneMove,
+  type ActiveTerminalPaneMove
+} from './terminal-pane-move-quick-action'
 
 export type CmdJUnavailableReason =
   | 'loading'
@@ -19,6 +23,7 @@ export type CmdJUnavailableReason =
   | 'ssh-disconnected'
   | 'no-active-group'
   | 'no-active-chat'
+  | 'no-movable-pane'
   | 'client-action-unsupported'
 
 export type CmdJQuickActionAvailability =
@@ -48,6 +53,7 @@ export type CmdJQuickActionContext = {
   openAddQuickCommand: () => void
   canSplitActiveChat?: boolean
   splitActiveChat?: (direction: NativeChatSplitDirection) => boolean
+  activePaneMove?: ActiveTerminalPaneMove | null
 }
 
 export function resolveCmdJActiveGroupId(
@@ -203,7 +209,11 @@ export function buildCmdJQuickActionContext(args: {
     openAddQuickCommand: args.openAddQuickCommand,
     canSplitActiveChat: canRunNativeChatSplitTarget(args.state, activeChatTarget),
     splitActiveChat: (direction) =>
-      runActiveNativeChatSplit(activeWorktreeId, activeGroupId, direction)
+      runActiveNativeChatSplit(activeWorktreeId, activeGroupId, direction),
+    activePaneMove:
+      args.state.activeView === 'terminal'
+        ? resolveActiveTerminalPaneMove(args.state, activeWorktreeId, activeGroupId)
+        : null
   }
 }
 
@@ -242,6 +252,12 @@ export function getUnavailableQuickActionMessage(
       return translate(
         'auto.components.cmdJ.quickActionUnavailable.noMovableChat',
         'Can’t run “{{action}}” — no movable chat is active.',
+        options
+      )
+    case 'no-movable-pane':
+      return translate(
+        'auto.components.cmdJ.quickActionUnavailable.noMovablePane',
+        'Can’t run “{{action}}” — the active tab has no split pane that can move.',
         options
       )
     case 'client-action-unsupported':

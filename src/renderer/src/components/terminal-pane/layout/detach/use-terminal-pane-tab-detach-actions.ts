@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect } from 'react'
 import type { PaneExternalDropTarget } from '@/lib/pane-manager/pane-manager-types'
 import { useAppStore } from '../../../../store/index'
 import { detachTerminalPaneToTab, type TerminalPaneNewTabTarget } from './terminal-pane-tab-detach'
@@ -9,6 +9,7 @@ import {
 import type { TerminalPaneBindingController } from '../ownership/use-terminal-pane-layout-bindings'
 import { paneMoveReadiness, type PaneMoveReadiness } from './terminal-pane-move-readiness'
 import { focusMovedPane, newTabTargetBesideSource } from './terminal-pane-move-placement'
+import { registerTerminalPaneUserMoveHandler } from './terminal-pane-move-request-routing'
 
 /** Moving a pane out to a new tab: by dragging it onto a tab strip, or for another client. */
 export function useTerminalPaneTabDetachActions(controller: TerminalPaneBindingController) {
@@ -104,6 +105,19 @@ export function useTerminalPaneTabDetachActions(controller: TerminalPaneBindingC
         .catch((error) => console.warn('[terminal-pane-detach] move failed', error))
     },
     [detachPaneToNewTab, tabId, worktreeId]
+  )
+  // The Cmd+J palette reaches this tab's panes through the registry, not a React path.
+  useEffect(
+    () =>
+      registerTerminalPaneUserMoveHandler(worktreeId, tabId, (leafId) => {
+        const paneId = managerRef.current?.getNumericIdForLeaf(leafId) ?? null
+        if (paneId === null || getPaneMoveReadiness(paneId) !== 'ready') {
+          return false
+        }
+        movePaneToNewTab(paneId)
+        return true
+      }),
+    [getPaneMoveReadiness, managerRef, movePaneToNewTab, tabId, worktreeId]
   )
 
   return {
