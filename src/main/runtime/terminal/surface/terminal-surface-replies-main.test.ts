@@ -1,4 +1,5 @@
 import 'node:path'
+import { registerBoundPty } from '../layout/bind-first-pane.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 
 import {
@@ -65,4 +66,38 @@ describe('terminal replies from main (switch on)', () => {
     expect(layout?.root).toEqual({ type: 'leaf', leafId: HEADLESS_LEAF_ID })
     expect(killed).toEqual(['pty-b'])
   })
+})
+
+it('resolves refusal facts only for the exact live launch incarnation', () => {
+  const { runtime } = surfaceRuntime()
+  const pane = { tabId: SURFACE_TAB_ID, leafId: HEADLESS_LEAF_ID }
+  registerBoundPty(runtime, 'pty-a', TEST_WORKTREE_ID, null, {
+    ...pane,
+    incarnationId: 'inc-refused',
+    launchToken: 'attempt-refused'
+  })
+  runtime.rememberSavedTerminalLaunchResult('pty-a', {
+    agentResumeRefused: 'chat-home',
+    agentResumeUnavailable: true,
+    savedResumeDecision: {
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 'conversation-1' },
+      verdict: 'chat-home'
+    }
+  })
+  const resolved = runtime.resolveTerminalPane(
+    `${SURFACE_TAB_ID}:${HEADLESS_LEAF_ID}`,
+    TEST_WORKTREE_ID
+  )
+  expect(resolved.agentResumeRefused).toBe('chat-home')
+  expect(resolved.agentResumeUnavailable).toBe(true)
+  registerBoundPty(runtime, 'pty-a', TEST_WORKTREE_ID, null, {
+    ...pane,
+    incarnationId: 'inc-successor',
+    launchToken: 'attempt-successor'
+  })
+  expect(
+    runtime.resolveTerminalPane(`${SURFACE_TAB_ID}:${HEADLESS_LEAF_ID}`, TEST_WORKTREE_ID)
+      .agentResumeRefused
+  ).toBeUndefined()
 })

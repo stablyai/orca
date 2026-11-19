@@ -80,6 +80,10 @@ async function settleForeignResume(
           latest.agentStatusByPaneKey.get(candidate.paneKey) === entry &&
           latest.terminalLayoutsByTabId[pane.tabId]?.ptyIdsByLeafId?.[pane.leafId] === ptyId &&
           latest.ptyIdsByTabId[pane.tabId]?.includes(ptyId) &&
+          latest.tabsByWorktree[tab.worktreeId]?.some(
+            (t) => t.id === tab.id && t.createdAt === tab.createdAt
+          ) &&
+          getResourceExecutionHostIdForWorktree(latest, tab.worktreeId) === request.hostId &&
           getTerminalNoticeLifetime(ptyId)?.incarnationId === incarnation
         ) {
           latest.updateCodexAccountRestart(token, null)

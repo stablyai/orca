@@ -1,6 +1,7 @@
 import { resolveTerminalPaneWorktreeId } from '../identity/runtime-terminal-pane-identity'
 import { resolveAccountRestartPane, boundLaunchToken } from './account-restart-pane-snapshot'
 import { terminalLaunchFacts } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { boundTerminalLaunchFacts } from '../launch/terminal-launch-result'
 import type { OrcaRuntimeWithCreateTerminal } from '../launch/terminal-create'
 import { OrcaRuntimeWithRestoredHandlePaneStart } from '../surface/restored-handle-pane-start'
 import type {
@@ -100,7 +101,7 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
       ptyId: record?.ptyId ?? null,
       connected: pty?.connected === true,
       ...boundLaunchToken(pty, record?.ptyId),
-      ...(pty && pty.ptyId === record?.ptyId ? terminalLaunchFacts(pty) : {}),
+      ...boundTerminalLaunchFacts(pty, record?.ptyId),
       ...(worktreeId ? { worktreeId } : {}),
       ...this.getPtyExecutionHostMetadata(record?.ptyId ?? pty?.ptyId ?? null)
     }

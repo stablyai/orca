@@ -175,11 +175,14 @@ function connectDeferredSessionReattach(
         if (isCurrentReattach() && heldForStoppedDistro) {
           // Start is the user's act: this reconnect may start the distro.
           holdForStoppedWslDistro(session, deferredReattachSessionId, heldForStoppedDistro, () =>
-            connectDeferredSessionReattach(session, deferredReattachSessionId, { userAct: true })
+            connectDeferredSessionReattach(session, deferredReattachSessionId, {
+              ...options,
+              userAct: true
+            })
           )
         } else if (isCurrentReattach()) {
           holdForNewerDaemon(session, deferredReattachSessionId, () =>
-            connectDeferredSessionReattach(session, deferredReattachSessionId)
+            connectDeferredSessionReattach(session, deferredReattachSessionId, options)
           )
         }
         return NOT_REOPENED
@@ -189,7 +192,7 @@ function connectDeferredSessionReattach(
         armPaneOwnerRetry(
           session,
           outputCallbacks.generation,
-          () => connectDeferredSessionReattach(session, deferredReattachSessionId),
+          () => connectDeferredSessionReattach(session, deferredReattachSessionId, options),
           coldRestoreStartup
         )
         session.settlePaneAttachAttempt('failed')
@@ -199,7 +202,7 @@ function connectDeferredSessionReattach(
         armPaneOwnerRetry(
           session,
           outputCallbacks.generation,
-          () => connectDeferredSessionReattach(session, deferredReattachSessionId),
+          () => connectDeferredSessionReattach(session, deferredReattachSessionId, options),
           coldRestoreStartup
         )
         await abandonPendingSerializer()
@@ -275,7 +278,7 @@ function connectDeferredSessionReattach(
         armPaneOwnerRetry(
           session,
           outputCallbacks.generation,
-          () => connectDeferredSessionReattach(session, deferredReattachSessionId),
+          () => connectDeferredSessionReattach(session, deferredReattachSessionId, options),
           coldRestoreStartup
         )
         session.settlePaneAttachAttempt('failed')
