@@ -188,7 +188,7 @@ function useCheckedAppStoreSelector<U>(selector: (state: RootSelectorState) => U
   const read = useCallback(() => selector(appStoreApi.getState()), [selector])
   const readInitial = useCallback(() => selector(appStoreApi.getInitialState()), [selector])
   const selection = useSyncExternalStore(subscribeRootSelector, read, readInitial)
-  useRecordedRootSelection(read)
+  useRecordedRootSelection(selector)
   return selection
 }
 
