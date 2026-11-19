@@ -52,10 +52,6 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
     listener: Parameters<WorkspaceLayoutStream['subscribe']>[0]
   ): ReturnType<WorkspaceLayoutStream['subscribe']>
 
-  protected abstract admitFailedMailWake(
-    pane: RestoredPane,
-    trigger: RestoredPaneTrigger
-  ): Promise<boolean>
   private restoredPanes: RestoredPaneStarter | null = null
 
   /** Publishes the pane's start status (layout-owner build): starting, or failed with its reason. */
@@ -70,7 +66,6 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
     trigger: RestoredPaneTrigger = {}
   ): Promise<StartedPty | null> {
     this.restoredPanes ??= new RestoredPaneStarter({
-      retryMailWake: (pane, trigger) => this.admitFailedMailWake(pane, trigger),
       boundPtyId: (target) =>
         storedPaneBinding(this.getWorkspaceSessionForWorktree(target.worktreeId), target),
       isLive: (ptyId) => this.ptysById.get(ptyId)?.connected === true,

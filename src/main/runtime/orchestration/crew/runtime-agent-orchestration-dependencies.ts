@@ -11,7 +11,6 @@ import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-s
 
 export abstract class OrcaRuntimeWithAgentOrchestrationDependencies extends OrcaRuntimeWithRuntimeId {
   abstract retrySleptMailboxWakes(): void
-  protected abstract mailWakeShellOccupied(ptyId: string): boolean
   protected abstract requestSleptMailboxWake(
     mailbox: string,
     reservedTypes?: ReadonlySet<string>

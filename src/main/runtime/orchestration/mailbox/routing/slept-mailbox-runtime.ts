@@ -8,7 +8,6 @@ import {
 } from '../../../../../shared/agent-session/lifecycle/mail-wake-obligation'
 import { queueTerminalWorkspaceCommand } from '../../../workspaces/lifecycle/workspace-lifecycle-commands'
 import { MailWakeInvocations } from './mail-wake-invocations'
-import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { RuntimeMailWakeAdmission } from './runtime-mail-wake-admission'
 import { SleptMailboxWake } from './slept-mailbox-wake'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -46,24 +45,9 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
             ) {
               return false
             }
+            // A wake already attempted for this mail is not started again automatically.
             if (current.mailWake) {
-              const pane = parsePaneKey(current.paneKey)
-              const attempt = current.mailWake.attempt
-              return (
-                !!pane &&
-                !!attempt &&
-                !!(await this.ensureRestoredPaneStarted(
-                  { ...pane, worktreeId: current.worktreeId },
-                  {
-                    automatic: true,
-                    retryMailWake: {
-                      id: current.mailWake.id,
-                      ptyId: attempt.ptyId,
-                      incarnationId: attempt.incarnationId
-                    }
-                  }
-                ))
-              )
+              return false
             }
             if (this.getPtyRecordForPaneKey(current.paneKey)?.connected) {
               return false
