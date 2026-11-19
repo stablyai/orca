@@ -66,16 +66,37 @@ it("finds an agy terminal conversation in agy's own store and imports its words"
     sessionId: CONVERSATION,
     options: { filePath: transcriptPath! }
   })
-  expect(imported.ok && imported.items.map((item) => [item.identity, item.body.kind])).toEqual([
-    [
-      { provider: 'legacy', agent: 'antigravity', sessionId: CONVERSATION, recordId: 'step:0' },
-      'message'
-    ],
-    [
-      { provider: 'legacy', agent: 'antigravity', sessionId: CONVERSATION, recordId: 'step:1' },
-      'message'
+  expect(imported).toMatchObject({
+    ok: true,
+    items: [
+      {
+        identity: {
+          provider: 'legacy',
+          agent: 'antigravity',
+          sessionId: CONVERSATION,
+          recordId: 'step:0'
+        },
+        body: {
+          kind: 'message',
+          role: 'user',
+          blocks: [{ type: 'text', text: 'Remember ZEBRA' }]
+        }
+      },
+      {
+        identity: {
+          provider: 'legacy',
+          agent: 'antigravity',
+          sessionId: CONVERSATION,
+          recordId: 'step:1'
+        },
+        body: {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [{ type: 'text', text: 'noted' }]
+        }
+      }
     ]
-  ])
+  })
   // Another conversation's transcript never stands in for the requested one.
   expect(
     await prepareLegacyTranscriptImport({
