@@ -30,6 +30,7 @@ describe.skipIf(process.platform !== 'win32')('read-only backups on Windows', ()
     writeFileSync(source, 'model = "first"\n')
     chmodSync(source, 0o444)
     writeRollingFileBackup(source, backup)
+    expect(statSync(backup).mode & 0o200).toBe(0o200)
     chmodSync(source, 0o666)
     writeFileSync(source, 'model = "second"\n')
 
@@ -59,6 +60,18 @@ describe.skipIf(process.platform !== 'win32')('read-only backups on Windows', ()
     await writeHooksJsonAsync(source, { hooks: { Stop: [] } })
 
     expect(readFileSync(backup, 'utf-8')).toBe('{"hooks":{}}\n')
+    expect(statSync(backup).mode & 0o200).toBe(0o200)
+  })
+
+  it('leaves a writable backup when hooks JSON itself is read-only', async () => {
+    source = join(root, 'hooks.json')
+    backup = `${source}.bak`
+    writeFileSync(source, '{"hooks":{}}\n')
+    chmodSync(source, 0o444)
+
+    // The read-only file itself still refuses the write; its backup must not inherit that.
+    await expect(writeHooksJsonAsync(source, { hooks: { Stop: [] } })).rejects.toThrow()
+
     expect(statSync(backup).mode & 0o200).toBe(0o200)
   })
 })
