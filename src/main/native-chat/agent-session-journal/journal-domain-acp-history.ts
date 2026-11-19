@@ -20,17 +20,25 @@ export type JournalAcpHistoryRead = {
   agent: string
   sessionId: string
   providerSessionId: string
-  afterOrdinal: number
+  after: JournalAcpTurnCursor | null
 }
 
-/** One page of turn facts, in admission order. */
+/** A position in the named-turn index, so each page seeks rather than rescans. */
+export type JournalAcpTurnCursor = [
+  turnId: string,
+  sequence: number,
+  sequenceIndex: number,
+  ordinal: number
+]
+
+/** One page of turn facts, in index order; callers order natives by sequence, then admission. */
 export type JournalAcpHistory = {
   /** The chat's own lifecycle rows in the provider session's turn namespace. */
   turns: { itemId: string; userItemId: string | null }[]
-  natives: AcpNativeTurn[]
+  natives: (AcpNativeTurn & { ordinal: number })[]
   /** Whether any row was adopted from the provider session. */
   adopted: boolean
-  nextOrdinal: number | null
+  next: JournalAcpTurnCursor | null
 }
 
 export type JournalAcpHistoryRowsRead = { kind: 'acp-history-rows'; itemIds: readonly string[] }
@@ -61,20 +69,32 @@ export function readJournalDomainAcpHistory(
   const { db, prefix } = scope
   const namespace = `p:${providerTimelineKeyPart(read.providerSessionId)}:`
   const turns: JournalAcpHistory['turns'] = []
-  const natives: AcpNativeTurn[] = []
+  const natives: JournalAcpHistory['natives'] = []
   let scanned = 0
-  let lastOrdinal = read.afterOrdinal
+  let last: JournalAcpTurnCursor | null = null
   const scoped =
     db.prepare(`SELECT item_id,kind FROM journal_items INDEXED BY journal_items_stop_turn
     WHERE session_id=? AND epoch=? AND hidden=0 AND turn_item_id=? AND kind IN ${KINDS}`)
   for (const row of db
-    .prepare(`SELECT item_id,sequence,turn_id,opener_item_id,ordinal FROM journal_items
+    .prepare(`SELECT item_id,sequence,sequence_index,turn_id,opener_item_id,ordinal FROM journal_items
     INDEXED BY journal_items_named_turn
     WHERE session_id=? AND epoch=? AND hidden=0 AND turn_id IS NOT NULL AND turn_id>=? AND turn_id<?
-    AND ordinal>? ORDER BY ordinal LIMIT ?`)
-    .iterate(...prefix, namespace, `${namespace.slice(0, -1)};`, read.afterOrdinal, TURNS_PAGE)) {
+    ${read.after ? 'AND (turn_id,sequence,sequence_index,ordinal)>(?,?,?,?)' : ''}
+    ORDER BY turn_id,sequence,sequence_index,ordinal LIMIT ?`)
+    .iterate(
+      ...prefix,
+      namespace,
+      `${namespace.slice(0, -1)};`,
+      ...(read.after ?? []),
+      TURNS_PAGE
+    )) {
     scanned++
-    lastOrdinal = Number(row.ordinal)
+    last = [
+      String(row.turn_id),
+      Number(row.sequence),
+      Number(row.sequence_index),
+      Number(row.ordinal)
+    ]
     const itemId = String(row.item_id)
     const identity = parseAgentJournalItemKey(itemId)
     if (
@@ -107,6 +127,7 @@ export function readJournalDomainAcpHistory(
     natives.push({
       itemId,
       sequence: Number(row.sequence),
+      ordinal: Number(row.ordinal),
       output,
       text: user?.kind === 'message' && !user.command ? acpPromptDigest(user.blocks) : null
     })
@@ -136,7 +157,7 @@ export function readJournalDomainAcpHistory(
     turns,
     natives,
     adopted,
-    nextOrdinal: scanned === TURNS_PAGE ? lastOrdinal : null
+    next: scanned === TURNS_PAGE ? last : null
   }
 }
 

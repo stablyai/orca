@@ -12,7 +12,8 @@ import {
 } from '../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
 import type {
   JournalAcpHistory,
-  JournalAcpHistoryRow
+  JournalAcpHistoryRow,
+  JournalAcpTurnCursor
 } from '../../native-chat/agent-session-journal/journal-domain-acp-history'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { StructuredAgentSessionHistoryJournal } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
@@ -27,7 +28,7 @@ import {
   type AcpHistoryCandidate,
   type AcpHistoryReadJournal
 } from './acp-history-turn-matching'
-import { acpHistoryHasOutput, type AcpNativeTurn } from './acp-history-turn-content'
+import { acpHistoryHasOutput } from './acp-history-turn-content'
 
 /** Keys named per keyed read; the reader also ends a page at its byte budget. */
 const SAVED_ITEMS_KEYS = 1_024
@@ -126,21 +127,26 @@ function itemReader(saved: SavedItems, admits: (item: AgentJournalRenderItem) =>
 /** Every page of turn facts; each page stays far below the reader reply limit. */
 async function turnFacts(history: StructuredAgentSessionHistoryJournal, scope: AcpHistoryScope) {
   const turns: JournalAcpHistory['turns'] = []
-  const natives: AcpNativeTurn[] = []
+  const natives: JournalAcpHistory['natives'] = []
   let adopted = false
-  for (let afterOrdinal: number | null = -1; afterOrdinal !== null;) {
-    const page = await history.reads.acpHistory({
+  let after: JournalAcpTurnCursor | null = null
+  do {
+    const page: JournalAcpHistory = await history.reads.acpHistory({
       agent: scope.agent,
       sessionId: scope.sessionId,
       providerSessionId: scope.providerSessionId,
-      afterOrdinal
+      after
     })
     turns.push(...page.turns)
     natives.push(...page.natives)
     adopted ||= page.adopted
-    afterOrdinal = page.nextOrdinal
+    after = page.next
+  } while (after)
+  return {
+    turns,
+    natives: natives.toSorted((a, b) => a.sequence - b.sequence || a.ordinal - b.ordinal),
+    adopted
   }
-  return { turns, natives: natives.toSorted((a, b) => a.sequence - b.sequence), adopted }
 }
 
 async function savedRows(
