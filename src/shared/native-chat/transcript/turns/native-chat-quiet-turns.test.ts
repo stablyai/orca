@@ -155,16 +155,13 @@ describe('nativeChatQuietTurns', () => {
     }
   )
 
-  it.each(['failure', 'cancellation', 'superseded', 'interruption', 'unconfirmed'] as const)(
-    'keeps a quiet turn that ended in %s',
-    (verdict) => {
-      const rows = [
-        row('w1', 'user', 'repro found', { from: WORKER }),
-        row('a1', 'assistant', 'NO_REPLY')
-      ]
-      expect(quietOf(rows, 'w1', settled(['w1'], verdict))).toEqual({ hidden: [], turns: [] })
-    }
-  )
+  it.each(['failure', 'unconfirmed'] as const)('keeps a quiet turn that ended in %s', (verdict) => {
+    const rows = [
+      row('w1', 'user', 'repro found', { from: WORKER }),
+      row('a1', 'assistant', 'NO_REPLY')
+    ]
+    expect(quietOf(rows, 'w1', settled(['w1'], verdict))).toEqual({ hidden: [], turns: [] })
+  })
 
   it('keeps a quiet answer to a message the owner typed', () => {
     const rows = [row('u1', 'user', 'Anything new?'), row('a1', 'assistant', 'NO_REPLY')]

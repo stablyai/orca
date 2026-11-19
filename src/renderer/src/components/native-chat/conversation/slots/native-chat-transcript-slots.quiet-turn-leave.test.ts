@@ -56,18 +56,15 @@ function drawn(leavingTurnKeys?: ReadonlySet<string>) {
 }
 
 describe('a quiet turn in the transcript', () => {
-  it('draws only its mail and the card Orca drew once it settled', () => {
-    expect(drawn()).toEqual([
-      ['w1', false, null],
-      ['n1', false, null]
-    ])
-  })
-
-  it('still draws its bar and answer, marked leaving, while it fades out', () => {
+  it('draws the bar and answer during the fade, then keeps only the mail and item note', () => {
     expect(drawn(new Set(['w1']))).toEqual([
       ['w1', true, 'bar'],
       ['n1', false, null],
       ['a1', false, 'row']
+    ])
+    expect(drawn()).toEqual([
+      ['w1', false, null],
+      ['n1', false, null]
     ])
   })
 })
