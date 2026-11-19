@@ -488,12 +488,25 @@ describe("terminal worker approval holds for a helper agent's prompt", () => {
     expect(helper.replies).toEqual([{ behavior: 'deny', message: REASON }])
   })
 
+  it("names a lead's stop by a held helper's card, but leaves an unheld dialog on screen to its own report", async () => {
+    const ctx = setup()
+    ctx.screen.lines = LEAD_WAITING
+    helperAsks(ctx, 'tool-2')
+    const helperId = cardOf(ctx, 0).approval.approvalId
+
+    expect(await ctx.holds.takeOpenApproval(PANE, ctx.dispatch.id)).toMatchObject({
+      approvalId: helperId
+    })
+    ctx.screen.lines = DIALOG
+    expect(await ctx.holds.takeOpenApproval(PANE, ctx.dispatch.id)).toBeNull()
+  })
+
   it("hands a helper's prompt to the worker's terminal when Orca's hold ends unanswered", async () => {
     const ctx = setup()
     ctx.screen.lines = LEAD_WAITING
     const asked = helperAsks(ctx, 'tool-2')
     asked.end('budget')
-    await ctx.tick()
+    await ctx.tick(40)
 
     expect(ctx.closing()).toEqual([
       expect.stringContaining("Closed for Orca; a person must answer it in the worker's terminal")

@@ -45,6 +45,7 @@ type Hold = TerminalWorkerApprovalHold
 type CloseHow = TerminalWorkerApprovalCloseHow
 // Its tool ran, failed or not: it was allowed in the terminal.
 const RAN: CloseHow = { by: 'worker-terminal', decision: 'allow' }
+const TERMINAL_ONLY: CloseHow = { by: 'terminal-only', decision: null }
 
 export class TerminalWorkerApprovalHolds
   extends TerminalWorkerApprovalBook
@@ -67,7 +68,7 @@ export class TerminalWorkerApprovalHolds
       const other = this.openByPane.get(paneKey)
       if (other) {
         // Two prompts in one pane: the screen cannot say which one it shows, so neither is answerable.
-        this.close(other, { by: 'terminal-only', decision: null })
+        this.close(other, TERMINAL_ONLY)
         return false
       }
     } else if (!orcaMayHoldHelper(this.deps, worker)) {
@@ -166,13 +167,18 @@ export class TerminalWorkerApprovalHolds
   }
 
   /** The open approval this pane's worker waits on, for its stop's escalation: the lead's, else a
-   *  helper's, whose own card already went out under the same id. */
+   *  helper's, whose own card already went out under the same id. A dialog on screen is never a held
+   *  helper's, so with one up the stop is reported as the unheld prompt it is. */
   async takeOpenApproval(
     paneKey: string,
     dispatchId: string
   ): Promise<WorkerApprovalPayload | null> {
     const hold = this.openByPane.get(paneKey)
     if (hold?.state !== 'open' || hold.dispatch.id !== dispatchId) {
+      const screen = this.deps.readScreen(paneKey)
+      if (!screen || showsClaudeDialog(screen)) {
+        return null
+      }
       const helper = findHelperHold(
         this.byApprovalId.values(),
         paneKey,
@@ -276,8 +282,11 @@ export class TerminalWorkerApprovalHolds
   /** A hang-up is not an answer: a killed or crashed hook leaves the dialog up (probes F6, F11). */
   private async ended(hold: Hold, why: ClaudePermissionHoldEnd): Promise<void> {
     if (why === 'budget' && hold.helper !== undefined && hold.state === 'open') {
-      // Unanswered in Orca: Claude now shows it in the worker's terminal, where only a person answers it.
-      this.close(hold, { by: 'terminal-only', decision: null })
+      // Unanswered in Orca: Claude now shows it in the worker's terminal, unless its record already closed it.
+      const record = await this.toolRecord(hold)
+      if (hold.state === 'open') {
+        this.close(hold, claudeToolCloseHow(record?.result ?? null) ?? TERMINAL_ONLY)
+      }
       return
     }
     if (why !== 'hook-gone' || hold.state !== 'open') {
@@ -309,7 +318,7 @@ export class TerminalWorkerApprovalHolds
       this.close(hold, { by: 'worker-ended', decision: null })
     } else if (hold.helper === undefined && (!lines || showsClaudeDialog(lines))) {
       // The dialog is up but Orca can no longer answer it: a person must, in the terminal.
-      this.close(hold, { by: 'terminal-only', decision: null })
+      this.close(hold, TERMINAL_ONLY)
     } else {
       this.closeAwaitingEvidence(hold)
     }
