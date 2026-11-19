@@ -84,10 +84,10 @@ export function FloatingTerminalToggleButton({
     initialPositionState.current.committedPosition
   )
   const [position, setPosition] = useState(initialPositionState.current.position)
-  const shown = keepFloatingTerminalTriggerClear(
-    position,
-    useFloatingTerminalTriggerKeepClearRects()
-  )
+  const keepClear = useFloatingTerminalTriggerKeepClearRects()
+  const [dragging, setDragging] = useState(false)
+  // A drag follows the pointer; once dropped, the button shows, and saves, clear of the comment box.
+  const shown = dragging ? position : keepFloatingTerminalTriggerClear(position, keepClear)
   const dragRef = useRef<{
     pointerId: number
     startX: number
@@ -168,7 +168,10 @@ export function FloatingTerminalToggleButton({
     if (!drag.moved && Math.hypot(dx, dy) < FLOATING_TERMINAL_TRIGGER_DRAG_THRESHOLD) {
       return
     }
-    drag.moved = true
+    if (!drag.moved) {
+      drag.moved = true
+      setDragging(true)
+    }
     previewPosition({
       left: drag.left + dx,
       top: drag.top + dy
@@ -182,9 +185,10 @@ export function FloatingTerminalToggleButton({
     }
     suppressClickRef.current = drag.moved
     if (drag.moved && stagedPositionRef.current) {
-      commitPosition(stagedPositionRef.current)
+      commitPosition(keepFloatingTerminalTriggerClear(stagedPositionRef.current, keepClear))
     }
     dragRef.current = null
+    setDragging(false)
   }
 
   const handleClick = (event: React.MouseEvent<HTMLButtonElement>): void => {
