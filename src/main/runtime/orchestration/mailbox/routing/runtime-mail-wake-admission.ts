@@ -114,6 +114,28 @@ export abstract class RuntimeMailWakeAdmission extends OrcaRuntimeWithPruneMobil
     }
   }
 
+  private publishedHeldVersion = -1
+  private publishedHeld = ''
+
+  /** The workspaces holding mail for a sleeper, sent only when that set changed. */
+  protected publishHeldWorktrees(): void {
+    if (this.publishedHeldVersion === this.sleptMailboxWake.heldVersion) {
+      return
+    }
+    this.publishedHeldVersion = this.sleptMailboxWake.heldVersion
+    const ids = this.sleptMailboxWake.heldWorktrees()
+    const key = JSON.stringify(ids)
+    if (key !== this.publishedHeld) {
+      this.publishedHeld = key
+      this.notifier?.sleepingMailChanged?.(ids)
+    }
+  }
+
+  protected resetHeldWorktreesPublication(): void {
+    this.publishedHeldVersion = -1
+    this.publishedHeld = ''
+  }
+
   /** Mail that waited on a restoring window can wake its slept pane once the window is ready. */
   override markGraphReady(windowId: number): void {
     const wasReady = this.graphStatus === 'ready'
