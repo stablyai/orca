@@ -15,6 +15,11 @@ export function settlePaneShellForeground(
   const isHibernationWakeRecord =
     (ptyId && state.suppressedPtyExitIds[ptyId]) ||
     (wake && wake.record === sleepingRecord?.record && (ptyId === null || wake.ptyId === ptyId))
+  // Main proves a local agent's exit (shell alone, no stopped job) before retiring its record; a
+  // remote host has no such proof yet, so its returning shell retires the record as before.
+  if (sleepingRecord && !isHibernationWakeRecord && ptyId && isRemoteExecutionHostPtyId(ptyId)) {
+    session.clearSleepingRecordProviderDuplicates(state, sleepingRecord)
+  }
   session.clearStaleAgentTabTitleOnConfirmedShell()
   session.writeInputModeGround(CONFIRMED_SHELL_MODE_RESET)
   if (!isHibernationWakeRecord) {
