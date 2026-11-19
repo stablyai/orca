@@ -11,7 +11,8 @@ import {
 
 const claims = new Map<string, object>()
 const publications = new Map<string, Promise<void>>()
-const sweeps = new Map<string, { done: Promise<void>; again: boolean }>()
+const sweeps = new Map<string, Promise<void>>()
+const lastSweepAt = new Map<string, number>()
 // Staging files of hand-offs still being written, however long one pauses; the sweep leaves them.
 const staging = new Set<string>()
 // When each snapshot was last published here, in case its file times couldn't be set.
@@ -22,6 +23,8 @@ const SNAPSHOT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 const SNAPSHOT_FOLDER_MAX_BYTES = 1024 * 1024 * 1024
 // The size cap never takes a hand-off this fresh, which its agent may be reading now.
 const SNAPSHOT_MIN_AGE_MS = 60 * 60 * 1000
+// Hand-offs sweep at most this often, so repeated ones don't rescan an unchanged folder each time.
+const SNAPSHOT_SWEEP_INTERVAL_MS = 60 * 60 * 1000
 
 export function agentSessionContextSnapshotRoot(stateDirectory: string): string {
   const profile = createHash('sha256').update(resolve(stateDirectory)).digest('hex').slice(0, 16)
@@ -71,7 +74,10 @@ export async function writeAgentSessionContextSnapshot(
     }
     // Fresh as of the return itself, however long the awaits above took; nothing awaits after this.
     publishedAt.set(path, Date.now())
-    void sweepAgentSessionContextSnapshots(root)
+    const lastSweep = lastSweepAt.get(root)
+    if (lastSweep === undefined || Date.now() - lastSweep >= SNAPSHOT_SWEEP_INTERVAL_MS) {
+      void sweepAgentSessionContextSnapshots(root)
+    }
     return path
   } finally {
     if (isCurrent()) {
@@ -82,27 +88,20 @@ export async function writeAgentSessionContextSnapshot(
 
 /**
  * Removes snapshots unchanged for a week, crashed parts, then the oldest until the folder fits its
- * cap, so deleted chats' and workspaces' hand-offs can't pile up. Runs off the hand-off; never fails it.
+ * cap, so deleted chats' and workspaces' hand-offs can't pile up. Runs off the hand-off, at most
+ * hourly from hand-offs; never fails one.
  */
 export function sweepAgentSessionContextSnapshots(root: string): Promise<void> {
   const running = sweeps.get(root)
   if (running) {
-    // A hand-off published after this sweep's listing gets a sweep that counts it.
-    running.again = true
-    return running.done
+    return running
   }
-  const state = { done: Promise.resolve(), again: false }
-  state.done = (async () => {
-    do {
-      state.again = false
-      await sweepSnapshotFolder(root, Date.now()).catch((error) =>
-        console.warn('[agent-session-context] snapshot sweep failed', error)
-      )
-    } while (state.again)
-    sweeps.delete(root)
-  })()
-  sweeps.set(root, state)
-  return state.done
+  lastSweepAt.set(root, Date.now())
+  const sweep = sweepSnapshotFolder(root, Date.now())
+    .catch((error) => console.warn('[agent-session-context] snapshot sweep failed', error))
+    .finally(() => sweeps.delete(root))
+  sweeps.set(root, sweep)
+  return sweep
 }
 
 async function sweepSnapshotFolder(root: string, now: number): Promise<void> {

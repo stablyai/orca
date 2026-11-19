@@ -111,9 +111,11 @@ it('publishes captures in ownership order despite slow staging, dispatched renam
   expect(await readFile(path, 'utf8')).toBe('queued successor')
 })
 
-it('sweeps week-old hand-offs and crashed parts on publish, keeping recent ones', async () => {
+it('sweeps week-old hand-offs and crashed parts, keeping recent ones', async () => {
   const folder = contextSnapshots.agentSessionContextSnapshotRoot(root)
   const recent = await contextSnapshots.writeAgentSessionContextSnapshot(root, 'recent', 'recent')
+  // The hand-off's own sweep, so the one below lists the files written next.
+  await contextSnapshots.sweepAgentSessionContextSnapshots(folder)
   const stale = join(folder, 'deleted-chat.txt')
   const part = join(folder, 'crashed.txt.x.part')
   await actualFiles.writeFile(stale, 'stale')
@@ -122,10 +124,7 @@ it('sweeps week-old hand-offs and crashed parts on publish, keeping recent ones'
   await actualFiles.utimes(stale, longAgo, longAgo)
   await actualFiles.utimes(part, longAgo, longAgo)
 
-  const current = await contextSnapshots.writeAgentSessionContextSnapshot(root, SESSION, 'current')
   await contextSnapshots.sweepAgentSessionContextSnapshots(folder)
 
-  expect((await actualFiles.readdir(folder)).sort()).toEqual(
-    [recent, current].map((path) => path.slice(folder.length + 1)).sort()
-  )
+  expect(await actualFiles.readdir(folder)).toEqual([recent.slice(folder.length + 1)])
 })
