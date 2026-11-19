@@ -319,6 +319,43 @@ describe("a bot's memory history", () => {
     expect(history.undoneKnown('bot-1', 'any')).toBe(false)
   })
 
+  it('says a row was undone once old rows could not be pruned for a moment', async () => {
+    const now = Date.UTC(2026, 10, 6)
+    const row = (id: string, at: number, by: object) => ({
+      id,
+      at,
+      by,
+      change: { added: [], removed: [] },
+      undoable: true
+    })
+    let text: string | null = JSON.stringify([
+      row('undo', now, { kind: 'undo', of: 'tidied' }),
+      row('tidied', now, { kind: 'owner' }),
+      row('expired', now - 91 * DAY, { kind: 'owner' })
+    ])
+    let writeFails = true
+    const io = {
+      read: async () => text,
+      write: async (_botId: string, next: string | null) => {
+        if (writeFails) {
+          throw new Error('EBUSY')
+        }
+        text = next
+      },
+      bots: async () => []
+    }
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const history = createBotMemoryHistory(io, () => now)
+    const told = vi.fn()
+    history.whenUndoneKnown('bot-1', told)
+    await history.settled()
+    writeFails = false
+    history.whenUndoneKnown('bot-1', told)
+    await history.settled()
+
+    expect(history.undoneKnown('bot-1', 'tidied')).toBe(true)
+  })
+
   it('forgets what was undone when the bot is removed', async () => {
     const { history, forget } = bot(OLD)
     await forget('owner fact')
