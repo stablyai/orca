@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { X } from 'lucide-react-native'
 import { colors, spacing, pressedStyle } from '../../theme/mobile-theme'
@@ -11,9 +12,12 @@ export function HostRouteNoticeBanner({
   message,
   tone = 'notice',
   action,
-  onDismiss
+  onDismiss,
+  leading
 }: {
   message: string
+  /** A mark before the message, e.g. a status dot. */
+  leading?: ReactNode
   tone?: 'notice' | 'failure'
   action?: { label: string; onPress: () => void }
   onDismiss?: () => void
@@ -26,6 +30,7 @@ export function HostRouteNoticeBanner({
       accessibilityRole={tone === 'failure' ? 'alert' : undefined}
       accessibilityLiveRegion={tone === 'failure' ? 'assertive' : 'polite'}
     >
+      {leading}
       <Text style={styles.text}>{message}</Text>
       {action ? (
         <Pressable

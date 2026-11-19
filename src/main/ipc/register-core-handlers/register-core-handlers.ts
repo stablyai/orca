@@ -195,11 +195,11 @@ export async function registerCoreHandlers(
       registerPluginHandlers(store, pluginService, marketplaceServices)
     }
     registerTelemetryHandlers(store)
-    registerOrcaProfileHandlers(store, {
-      onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch,
-      onAuthMutation: lifecycleOptions.onOrcaProfileAuthMutation,
-      onBeforeSignOut: lifecycleOptions.onBeforeOrcaProfileSignOut,
-      onAfterSignOut: lifecycleOptions.onAfterOrcaProfileSignOut
+    if (!lifecycleOptions.orcaAccount) {
+      throw new Error('Orca account service must be initialized before core handlers')
+    }
+    registerOrcaProfileHandlers(store, lifecycleOptions.orcaAccount, {
+      onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch
     })
     registerBrowserHandlers(store)
     registerShellHandlers(store)

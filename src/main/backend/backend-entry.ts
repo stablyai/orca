@@ -2,7 +2,9 @@ import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import {
   BackendBootstrapSchema,
-  BACKEND_CAPABILITIES
+  BACKEND_CAPABILITIES,
+  BACKEND_PUBLIC_USAGE_METHOD,
+  UsageCallParams
 } from '../../shared/backend/backend-service-contract'
 import { BackendPortRpc } from '../../shared/backend/backend-port-rpc'
 import { setAppEnvironment } from '../../shared/app-lifecycle/app-environment'
@@ -124,6 +126,11 @@ async function bootstrap(raw: unknown, port: BackendNativePort): Promise<void> {
         throw new Error('Usage is still starting. Try again shortly.')
       }
       await usage.ready
+      // Paired clients reach usage through main's runtime RPC, with a renderer's privileges.
+      if (method === BACKEND_PUBLIC_USAGE_METHOD) {
+        const call = UsageCallParams.parse(params)
+        return usage.invoke(call.method, call.params, false, signal)
+      }
       return usage.invoke(method, params, true, signal)
     },
     () => {

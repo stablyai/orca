@@ -23,6 +23,7 @@ import { normalizeStatusBarUsageFormat } from '../../../../../shared/status-bar/
 import { normalizeUsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { mergeWorkspaceCleanupUIState } from '../../../../../shared/workspace-cleanup/workspace-cleanup-ui-state'
 import { getDefaultUIState } from '../../../../../shared/orca-profiles/constants'
+import { pinnedBotUiState } from './paired-bot-ui-state'
 import { getStoredSettings } from './web-preferences-store'
 import { UI_STORAGE_KEY, readJson } from '../web-storage'
 
@@ -80,6 +81,7 @@ export function mergeHostWebUIState(
     agentsHideWorkspacesFromOtherDevices: local.agentsHideWorkspacesFromOtherDevices === true,
     agentsHideAutomationGeneratedWorkspaces: local.agentsHideAutomationGeneratedWorkspaces === true,
     agentsHideCliCreatedWorkspaces: local.agentsHideCliCreatedWorkspaces === true,
+    ...pinnedBotUiState(local),
     agentsShowChildAgents: local.agentsShowChildAgents,
     agentsCompactMode: local.agentsCompactMode,
     agentsShowSearch: local.agentsShowSearch,

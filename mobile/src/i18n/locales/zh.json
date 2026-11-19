@@ -63,6 +63,7 @@
       "messages_one": "{{count}} 条消息",
       "messages_other": "{{count}} 条消息",
       "resumeSession": "恢复智能体会话",
+      "continueInCli": "在 CLI 中继续",
       "hidePreview": "隐藏最近的消息",
       "showPreview": "显示最近的消息",
       "you": "你"
@@ -176,11 +177,13 @@
       "invalidUrl": "请输入有效的 URL"
     },
     "paneView": {
-      "dialogTitle": "浏览器对话框",
       "forward": "前进",
       "keyboardPlaceholder": "在网页中输入…",
       "reload": "重新加载",
-      "sendText": "将文本发送到浏览器"
+      "sendText": "将文本发送到浏览器",
+      "dialogTitleWithOrigin": "{{origin}} 显示",
+      "dialogTitleNoOrigin": "此网页显示",
+      "dialogAnswer": "回答"
     },
     "pointerModifiers": {
       "clickModifier": "{{key}} 点击修饰键"
@@ -199,6 +202,20 @@
     "viewModeSwitch": {
       "mobileView": "显示移动版网站",
       "webView": "显示电脑版网站"
+    },
+    "loadFailure": {
+      "retry": "重试",
+      "connectionNotSecure": "连接不安全",
+      "certificateNameMismatch": "证书与 {{value0}} 不匹配",
+      "certificateDateInvalid": "{{value0}} 的证书在当前日期和时间无效",
+      "certificateAuthorityInvalid": "Orca 不信任签发 {{value0}} 证书的机构",
+      "certificateVerificationFailed": "Orca 无法验证 {{value0}} 的证书",
+      "proceedUnsafe": "仍然继续(不安全)",
+      "connecting": "正在连接…",
+      "certificateChallengeExpired": "此证书审批已过期，请重试该页面以请求新的审批",
+      "certificateChallengeChanged": "证书请求已更改，请重试该页面并查看新的警告",
+      "certificateProceedFailed": "Orca 无法批准此证书请求，请重试该页面后再试，",
+      "certificateChallengeUnavailable": "此证书请求已不可用，请重试该页面以重新请求"
     }
   },
   "chat": {
@@ -237,7 +254,8 @@
     "contextUsage": {
       "label": "上下文 {{used}}/{{window}} token，已用 {{percent}}%",
       "title": "上下文",
-      "estimated": "根据上一次响应的估算值。"
+      "estimated": "根据上一次响应的估算值。",
+      "deferredNote": "按需加载，不计入已用总量。"
     },
     "composerAttachments": {
       "attachedImage": "已添加的图片",
@@ -699,7 +717,7 @@
       "confirm": "回溯",
       "unsupported": "此聊天无法返回到更早的消息。",
       "historyNotPaginated": "此旧版 Codex 聊天无法返回到更早的消息。请开始新聊天以使用“回溯到此处”。",
-      "busy": "当智能体空闲且此聊天中没有等待您处理的内容时可用。",
+      "busy": "聊天空闲时可用",
       "staleEpoch": "对话已发生变化。请查看最新消息后重试。",
       "invalidTarget": "对话无法返回到此消息。未做任何更改。",
       "historyLimit": "此对话过长，无法回溯。未做任何更改。",
@@ -1075,7 +1093,9 @@
       "label": "设置脚本",
       "run": "执行",
       "runSetupCommand": "执行设置命令",
-      "skip": "跳过"
+      "skip": "跳过",
+      "waitForSetup": "等待设置完成后再启动代理",
+      "waitForSetupSaveFailed": "保存设置启动行为失败"
     },
     "newWorkspaceSshConnectionField": {
       "connect": "连接",
@@ -1324,6 +1344,9 @@
       "composer": {
         "planMode": "计划",
         "exitPlanMode": "退出计划模式"
+      },
+      "goal": {
+        "sentAsGoal": "作为目标发送"
       }
     },
     "hostOfflineBanner": {
@@ -2910,6 +2933,11 @@
       "sendReviewNotes": "发送评审备注",
       "shortcut": "快捷键",
       "terminal": "终端",
+      "terminalWithShell": "终端: {{shell}}",
+      "shellPowerShell": "PowerShell",
+      "shellCmd": "命令提示符",
+      "shellGitBash": "Git Bash",
+      "shellWsl": "WSL",
       "terminalName": "终端名称",
       "unsavedMarkdown": "未保存的 Markdown 更改",
       "urlPrompt": "输入 URL，或留空以新建标签页",
@@ -3099,7 +3127,7 @@
       "disconnected": "粘贴失败（连接已断开）",
       "imageTooLarge": "图片过大，无法粘贴",
       "pasteFailed": "粘贴失败",
-      "pasteTooLarge": "粘贴内容过大（最大 256 KiB）",
+      "pasteTooLarge": "粘贴内容过大",
       "terminalChanged": "粘贴已取消（终端已切换）"
     },
     "worktreeLabel": {
@@ -3241,6 +3269,7 @@
       "folderWorkspaceRemoved": "文件夹工作区已移除。"
     },
     "nativeChatView": {
+      "linkedMessageMissing": "找不到该消息。",
       "loading": "正在加载对话…"
     },
     "contentState": {
@@ -3308,6 +3337,10 @@
       "next": "下一个标签页",
       "previous": "上一个标签页",
       "hint": "显示所有标签页"
+    },
+    "browserProfile": {
+      "title": "配置文件",
+      "default": "默认"
     }
   },
   "settings": {
@@ -5162,6 +5195,23 @@
           "opencodeInvalidWorkspaceId": "工作区 ID 格式无效"
         }
       }
+    }
+  },
+  "bots": {
+    "link": {
+      "pairTitle": "配对电脑",
+      "pairRequired": "要打开此链接，请将这部手机与电脑配对。",
+      "pairAction": "配对电脑",
+      "openFailed": "无法打开此链接",
+      "ambiguous": "此机器人位于 {{names}}。请在你想用的电脑上通过 Orca 打开聊天。",
+      "computer": "你的电脑",
+      "updateNeeded": "请更新 {{names}} 上的 Orca 以打开此链接。",
+      "unreachable": "无法连接到 {{names}}。请确认其中一台电脑正在运行 Orca，然后重试。",
+      "missing": "你配对的电脑上都没有此机器人。",
+      "offline": "{{name}} 已离线。请在它重新上线后再次打开链接。",
+      "chatOpenFailed": "{{name}} 无法打开此聊天。请重试此链接。",
+      "unreachableSingle": "无法连接到 {{name}}。请确认该电脑正在运行 Orca，然后重试。",
+      "workspaceDeleted": "此聊天的工作区已在 {{name}} 上被删除。"
     }
   },
   "hostMutation": {

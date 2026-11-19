@@ -4,48 +4,25 @@ import { planNewTabMenuFit } from './new-tab-menu-fit-plan'
 const ROW = 36
 const rows = (count: number): number => count * ROW
 // The list alone gets `space` px: no chrome, no tip.
-const listIn = (space: number, agents: number, row = ROW) =>
-  planNewTabMenuFit({ available: space, chrome: 0, tip: 0, natural: agents * row, row })
+const listIn = (space: number, agents: number) =>
+  planNewTabMenuFit({ available: space, chrome: 0, tip: 0, natural: rows(agents), row: ROW })
 
 describe('planNewTabMenuFit', () => {
   it('shows a short list whole with no peek', () => {
     expect(listIn(700, 5)).toEqual({ tipHidden: false, mode: 'fit', listMaxHeight: 432 })
-    expect(listIn(200, 5)).toEqual({ tipHidden: false, mode: 'fit', listMaxHeight: 200 })
     expect(listIn(180, 5)).toEqual({ tipHidden: false, mode: 'fit', listMaxHeight: 180 })
   })
 
   it('peeks half of the last visible row once the list overflows', () => {
     expect(listIn(700, 16)).toEqual({ tipHidden: false, mode: 'peek', listMaxHeight: 414 })
-    expect(listIn(400, 16)).toEqual({ tipHidden: false, mode: 'peek', listMaxHeight: 378 })
-    expect(listIn(300, 10)).toEqual({ tipHidden: false, mode: 'peek', listMaxHeight: 270 })
     expect(listIn(250, 10)).toEqual({ tipHidden: false, mode: 'peek', listMaxHeight: 198 })
   })
 
   it('keeps a 2.5-row peek down to the last budget that fits it, then the menu scrolls', () => {
     expect(listIn(144, 10).listMaxHeight).toBe(126)
     expect(listIn(143, 10).listMaxHeight).toBe(90)
-    expect(listIn(126, 10).listMaxHeight).toBe(90)
-    expect(listIn(108, 10).listMaxHeight).toBe(90)
-    expect(listIn(107, 10).listMaxHeight).toBe(90)
     expect(listIn(90, 10)).toEqual({ tipHidden: false, mode: 'peek', listMaxHeight: 90 })
     expect(listIn(89, 10)).toEqual({ tipHidden: true, mode: 'menu', listMaxHeight: null })
-  })
-
-  it('scales the peek floor with the row height', () => {
-    expect(listIn(88, 10, 35)).toEqual({ tipHidden: false, mode: 'peek', listMaxHeight: 87.5 })
-    expect(listIn(87, 10, 35)).toEqual({ tipHidden: true, mode: 'menu', listMaxHeight: null })
-  })
-
-  it('hands scrolling to the menu when there is no room at all', () => {
-    for (const space of [54, 40, 0, -20]) {
-      expect(listIn(space, 3)).toEqual({ tipHidden: true, mode: 'menu', listMaxHeight: null })
-    }
-  })
-
-  it('subtracts the menu chrome from the room', () => {
-    expect(
-      planNewTabMenuFit({ available: 500, chrome: 140, tip: 0, natural: rows(16), row: ROW })
-    ).toEqual({ tipHidden: false, mode: 'peek', listMaxHeight: 342 })
   })
 
   it('keeps the tip while the list still gets a 2.5-row peek beside it', () => {

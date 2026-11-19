@@ -24,6 +24,18 @@ export type ClaudeLaunchFlags = {
   promptSuggestions: boolean
 }
 
+/** Whether this CLI loads plugin folders, which the visuals skill needs; a launch and a resting
+ *  `/` probe ask the same check. */
+export async function claudeTakesPluginDirs(
+  cliFlags: Pick<ClaudeCliFlagSupport, 'check'> | undefined,
+  launch: ClaudeCliLaunch
+): Promise<boolean> {
+  return (
+    (await cliFlags?.check(CLAUDE_PLUGIN_DIR_FLAG, launch, CLAUDE_CLI_FLAG_PROBE_KILL_AFTER_MS)) ===
+    'supported'
+  )
+}
+
 export async function resolveClaudeLaunchFlags(
   deps: {
     cliFlags?: Pick<ClaudeCliFlagSupport, 'check'>
@@ -46,9 +58,7 @@ export async function resolveClaudeLaunchFlags(
     thinking(),
     preparedVisuals,
     preparedVisuals.then(async (visuals) =>
-      visuals
-        ? (await check(CLAUDE_PLUGIN_DIR_FLAG, CLAUDE_CLI_FLAG_PROBE_KILL_AFTER_MS)) === 'supported'
-        : false
+      visuals ? await claudeTakesPluginDirs(deps.cliFlags, launch) : false
     )
   ])
   // Reuse any version learned by the plugin check without starting a new probe.

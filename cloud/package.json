@@ -8,7 +8,8 @@
     "dev": "pnpm --filter @orca-cloud/relay dev",
     "lint": "pnpm -r lint",
     "pretest": "pnpm test:runner",
-    "test": "pnpm -r --filter \"!@orca-cloud/relay\" test && pnpm --filter @orca-cloud/relay test",
+    "test": "pnpm build:libs && pnpm -r --config.enable-pre-post-scripts=false --filter \"!@orca-cloud/relay\" test && pnpm --filter @orca-cloud/relay test",
+    "build:libs": "pnpm -r --filter \"./packages/*\" build",
     "typecheck": "pnpm -r typecheck",
     "test:runner": "node --import tsx --conditions=orca-source --test dev/scripts/run-relay-tests.test.mjs \"../.github/actions/cloud-sql-rollout-lease/*.test.mjs\""
   },
