@@ -11,7 +11,11 @@ import type { OrcaRuntimeWithTouchMobileSessionTabsForWorktree as TouchMobileSes
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as ScheduleMobileSessionTabsChangedMethods } from '../session-tabs/publication/session-tabs-change-publication'
 import type { OrcaRuntimeWithSyncMobileSessionTabs as SyncMobileSessionTabsMethods } from '../session-tabs/restoration/mobile-session-reconciliation'
 import { OrcaRuntimeWithNotifySshStateChanged } from '../workspaces/workspace-host-notifications'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import {
+  HEADLESS_RUNTIME_WINDOW_ID,
+  type RuntimeSyncedTab
+} from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { syncTabCustomTitles } from './session-window-graph-titles'
 import { ActiveGroupViewFacts } from '../view-facts/active-group-view-facts'
 import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
@@ -153,6 +157,29 @@ export abstract class OrcaRuntimeWithAttachWindow extends OrcaRuntimeWithNotifyS
   protected abstract syncMobileSessionTabs(
     ...args: Parameters<SyncMobileSessionTabsMethods['syncMobileSessionTabs']>
   ): ReturnType<SyncMobileSessionTabsMethods['syncMobileSessionTabs']>
+
+  protected abstract rememberTerminalSessionTitle(
+    tabId: string | null | undefined,
+    handle: string | undefined,
+    title: string | null
+  ): void
+
+  protected scheduleStoredMobileSessionTabs(worktreeIds: Iterable<string>): void {
+    for (const worktreeId of worktreeIds) {
+      if (this.mobileSessionTabsByWorktree.has(worktreeId)) {
+        this.scheduleMobileSessionTabsChanged(worktreeId)
+      }
+    }
+  }
+
+  protected syncGraphTabCustomTitles(
+    tabs: readonly RuntimeSyncedTab[],
+    previousTabs: ReadonlyMap<string, RuntimeSyncedTab>
+  ): void {
+    syncTabCustomTitles(tabs, previousTabs, (tabId, title) =>
+      this.rememberTerminalSessionTitle(tabId, undefined, title)
+    )
+  }
 
   attachWindow(windowId: number): void {
     if (this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID) {

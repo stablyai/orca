@@ -63,28 +63,32 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
                 ...(data.cwd ? { startupCwd: data.cwd } : {})
               }
         // Why beyond command: a paired viewer's plain terminal carries only spawn env (#39852).
-        const pendingStartup =
+        const hasPendingStartupOptions = Boolean(
           data.command ||
           data.env ||
           data.envToDelete ||
           data.launchConfig ||
-          data.resumeProviderSession
-            ? {
-                ...(data.command ? { command: data.command } : {}),
-                ...(data.env ? { env: data.env } : {}),
-                ...(data.envToDelete ? { envToDelete: data.envToDelete } : {}),
-                ...(data.launchConfig ? { launchConfig: data.launchConfig } : {}),
-                ...(data.resumeProviderSession
-                  ? { resumeProviderSession: data.resumeProviderSession }
-                  : {}),
-                ...(data.launchToken ? { launchToken: data.launchToken } : {}),
-                ...(data.launchAgent ? { launchAgent: data.launchAgent } : {}),
-                ...(data.trustWorktreeId ? { trustWorktreeId: data.trustWorktreeId } : {}),
-                ...(data.startupCommandDelivery
-                  ? { startupCommandDelivery: data.startupCommandDelivery }
-                  : {})
-              }
-            : undefined
+          data.resumeProviderSession ||
+          data.launchToken ||
+          data.startupCommandDelivery
+        )
+        const pendingStartup = hasPendingStartupOptions
+          ? {
+              ...(data.command ? { command: data.command } : {}),
+              ...(data.env ? { env: data.env } : {}),
+              ...(data.envToDelete ? { envToDelete: data.envToDelete } : {}),
+              ...(data.launchConfig ? { launchConfig: data.launchConfig } : {}),
+              ...(data.resumeProviderSession
+                ? { resumeProviderSession: data.resumeProviderSession }
+                : {}),
+              ...(data.launchToken ? { launchToken: data.launchToken } : {}),
+              ...(data.launchAgent ? { launchAgent: data.launchAgent } : {}),
+              ...(data.trustWorktreeId ? { trustWorktreeId: data.trustWorktreeId } : {}),
+              ...(data.startupCommandDelivery
+                ? { startupCommandDelivery: data.startupCommandDelivery }
+                : {})
+            }
+          : undefined
         const tab = store.createTab(
           worktreeId,
           data.targetGroupId,

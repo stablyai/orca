@@ -123,7 +123,7 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
     ...(session.paneStartup?.envToDelete ? { envToDelete: session.paneStartup.envToDelete } : {}),
     command: session.shouldDeliverStartupViaTerminalPaste
       ? undefined
-      : session.paneStartup?.command,
+      : session.paneStartup?.command || undefined,
     startupCommandDelivery: session.shouldDeliverStartupViaTerminalPaste
       ? undefined
       : session.paneStartup?.startupCommandDelivery,
@@ -172,7 +172,9 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
       ? { agentLaunchPreferences: session.agentLaunchPreferences }
       : {}),
     ...(session.launchToken ? { launchToken: session.launchToken } : {}),
-    ...(session.paneStartup?.launchAgent ? { launchAgent: session.paneStartup.launchAgent } : {}),
+    ...((session.paneStartup?.launchAgent ?? session.tab?.launchAgent)
+      ? { launchAgent: session.paneStartup?.launchAgent ?? session.tab?.launchAgent }
+      : {}),
     ...(session.paneStartup?.trustWorktreeId
       ? { trustWorktreeId: session.paneStartup.trustWorktreeId }
       : {}),

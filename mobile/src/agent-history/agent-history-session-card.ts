@@ -49,7 +49,9 @@ export function buildMobileAgentHistoryCard(
     agent: session.agent,
     agentLabel: aiVaultAgentLabel(session.agent),
     title:
-      session.title || translate('agentHistory.sessionCard.untitledSession', 'Untitled session'),
+      session.customTitle ||
+      session.title ||
+      translate('agentHistory.sessionCard.untitledSession', 'Untitled session'),
     forked: session.forked === true,
     lastMessage: latestTurn?.text.trim() ?? '',
     messageCount: session.messageCount,

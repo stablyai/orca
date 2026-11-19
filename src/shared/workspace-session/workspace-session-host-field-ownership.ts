@@ -53,6 +53,8 @@ export const WORKSPACE_SESSION_FIELD_OWNERSHIP = {
   terminalSurfaceTombstonesByPaneKey: 'surfaceTombstoneKeyed',
   // Closed tabs no longer appear in worktreeIdByTabId; route tombstones by their recorded workspace, as for closed panes.
   closedTerminalTabTombstonesByTabId: 'surfaceTombstoneKeyed',
+  sessionCustomTitles: 'global',
+  // Its pane's tab may be gone too, so it routes by the record's own worktreeId as well.
   closedTerminalPanesByPaneKey: 'surfaceTombstoneKeyed'
 } as const satisfies Record<keyof WorkspaceSessionState, WorkspaceSessionFieldOwnership>
 

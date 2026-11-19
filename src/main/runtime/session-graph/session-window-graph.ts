@@ -232,6 +232,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmi
     this.rebuildLeafPtyIndex()
     this.followExportedPaneKeys()
     this.reconcilePtyIncarnationHandles()
+    this.syncGraphTabCustomTitles(graph.tabs, previousTabs)
     // Graph-only changes affect mobile handles/titles/liveness too; fan out the union on the same 50ms trailing edge, reading latest state at emission.
     for (const worktreeId of this.collectMobileVisibleGraphChangedWorktrees(
       previousTabs,
@@ -275,11 +276,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmi
       )
     }
     this.republishSessionTitleAuthorityChanges(previousTitleAuthority, changedMobileWorktrees)
-    for (const worktreeId of changedMobileWorktrees) {
-      if (this.mobileSessionTabsByWorktree.has(worktreeId)) {
-        this.scheduleMobileSessionTabsChanged(worktreeId)
-      }
-    }
+    this.scheduleStoredMobileSessionTabs(changedMobileWorktrees)
     for (const leaf of this.leaves.values()) {
       this.adoptPreAllocatedHandle(leaf)
       if (leaf.ptyId && this._orchestrationDb?.hasAnyDispatchContexts()) {

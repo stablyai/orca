@@ -3,6 +3,7 @@ import type { MobileTerminalCommandOptions, MobileTerminalCommand } from './mobi
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import { OrcaRuntimeWithMobileChatForkCreate } from './mobile-terminal-chat-fork-create'
+import type { MobileTerminalCreateOptions } from './mobile-terminal-create'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { randomUUID } from 'node:crypto'
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
@@ -19,7 +20,6 @@ import {
   listMobileTerminalShellChoices
 } from './mobile-terminal-shell-refusal'
 import { anchorTabOfCreate, mainPlacedAfter } from './mobile-terminal-create-anchor'
-import type { MobileTerminalCreateOptions } from './mobile-terminal-create'
 import { noteCallerOpenedTerminal } from '../../rpc/server/pairing/paired-terminal-creators'
 
 export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWithMobileChatForkCreate {
@@ -107,6 +107,12 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
       await this.resolveMobileSessionTerminalCommand(workspace, opts),
       opts.terminalImageViewerSupported
     )
+    const effectiveTitle =
+      opts.title?.trim() ||
+      (opts.resumeProviderSession?.id
+        ? this.getSessionCustomTitle(opts.resumeProviderSession.id)
+        : null) ||
+      undefined
     this.assertStableReadyGraph(graphEpoch)
     if (opts.signal?.aborted) {
       throw new Error('client_disconnected')
@@ -125,6 +131,10 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           ...startupCommand,
           ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
           cwd,
+          ...(effectiveTitle ? { title: effectiveTitle } : {}),
+          ...(opts.resumeProviderSession
+            ? { resumeProviderSession: opts.resumeProviderSession }
+            : {}),
           identity: {
             tabId: deterministicAgentSessionUuid(`mobile-qoder-tab\0${seed}`),
             leafId: deterministicAgentSessionUuid(`mobile-qoder-leaf\0${seed}`)
@@ -148,6 +158,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           command: startupCommand.command,
           ...(opts.shellOverride ? { shellOverride: opts.shellOverride } : {}),
           cwd,
+          ...(effectiveTitle ? { title: effectiveTitle } : {}),
           env: startupCommand.env,
           envToDelete: startupCommand.envToDelete,
           startupCommandDelivery: startupCommand.startupCommandDelivery,
@@ -161,6 +172,9 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           ),
           supportsSplitGroupPlacement: opts.supportsSplitGroupPlacement,
           launchConfig: startupCommand.launchConfig,
+          ...(opts.resumeProviderSession
+            ? { resumeProviderSession: opts.resumeProviderSession }
+            : {}),
           launchRuntime: startupCommand.launchRuntime,
           signal: opts.signal
         }
@@ -214,9 +228,13 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           command: startupCommand.command,
           ...(opts.shellOverride ? { shellOverride: opts.shellOverride } : {}),
           cwd,
+          ...(effectiveTitle ? { title: effectiveTitle } : {}),
           ...(startupCommand.env ? { env: startupCommand.env } : {}),
           ...(startupCommand.envToDelete ? { envToDelete: startupCommand.envToDelete } : {}),
           ...(startupCommand.launchConfig ? { launchConfig: startupCommand.launchConfig } : {}),
+          ...(opts.resumeProviderSession
+            ? { resumeProviderSession: opts.resumeProviderSession }
+            : {}),
           ...(startupCommand.launchAgent ? { launchAgent: startupCommand.launchAgent } : {}),
           ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
           ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
@@ -226,6 +244,9 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         })
       })
 
+      if (effectiveTitle) {
+        this.rememberManualTerminalTitle(reply.tabId, effectiveTitle)
+      }
       if (opts.activate !== false) {
         this.notifier?.focusTerminal(reply.tabId, worktreeId, null)
       }
@@ -236,6 +257,11 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         activate: opts.activate !== false,
         paired: pairedCreate,
         selectIfNoActiveTab: true,
+        ...(effectiveTitle ? { customTitle: effectiveTitle } : {}),
+        ...(opts.resumeProviderSession?.id
+          ? { providerSessionId: opts.resumeProviderSession.id }
+          : {}),
+        ...(startupCommand.launchAgent ? { launchAgent: startupCommand.launchAgent } : {}),
         ...(startupCommand.command ? { startupCommand: startupCommand.command } : {}),
         ...(opts.viewMode ? { viewMode: opts.viewMode } : {})
       })
@@ -280,6 +306,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
             command: startupCommand.command,
             ...(opts.shellOverride ? { shellOverride: opts.shellOverride } : {}),
             cwd,
+            ...(effectiveTitle ? { title: effectiveTitle } : {}),
             env: startupCommand.env,
             envToDelete: startupCommand.envToDelete,
             startupCommandDelivery: startupCommand.startupCommandDelivery,
@@ -290,6 +317,9 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
             targetGroupId: opts.targetGroupId,
             supportsSplitGroupPlacement: opts.supportsSplitGroupPlacement,
             launchConfig: startupCommand.launchConfig,
+            ...(opts.resumeProviderSession
+              ? { resumeProviderSession: opts.resumeProviderSession }
+              : {}),
             launchRuntime: startupCommand.launchRuntime,
             signal: opts.signal
           }

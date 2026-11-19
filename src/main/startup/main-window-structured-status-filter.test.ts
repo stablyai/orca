@@ -1,0 +1,127 @@
+// Until StructuredAgentSessionStatusBridge retires, renderer owns structured rows; forwarding them from main creates duplicate pane writers.
+
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { EnrichedAgentHookEventPayload } from '../agent-hooks/server'
+
+const hooks = vi.hoisted(() => ({
+  listener: null as ((payload: EnrichedAgentHookEventPayload) => void) | null
+}))
+
+vi.mock('electron', () => ({
+  app: { getPath: () => '', on: vi.fn(), isReady: () => true }
+}))
+vi.mock('../agent-hooks/server', () => ({
+  agentHookServer: {
+    setListener: (listener: ((payload: EnrichedAgentHookEventPayload) => void) | null) => {
+      hooks.listener = listener
+    },
+    setPaneStatusClearListener: vi.fn()
+  }
+}))
+vi.mock('../agent-hooks/migration-unsupported-pty-state', () => ({
+  setMigrationUnsupportedPtyListener: vi.fn()
+}))
+vi.mock('../window/dashboard-popout-window', () => ({
+  getDashboardPopoutWindow: () => null
+}))
+vi.mock('./synthetic-title-runtime', () => ({
+  stopSyntheticTitleSpinnerTimer: vi.fn()
+}))
+
+import { installMainWindowAgentStatusListeners } from './main-window-agent-status'
+import { mainProcessState } from './main-process-state'
+
+const sent: { channel: string; event: { paneKey: string } }[] = []
+
+function statusPayload(
+  over: Partial<EnrichedAgentHookEventPayload>
+): EnrichedAgentHookEventPayload {
+  return {
+    paneKey: 'pane-1',
+    tabId: 'tab-1',
+    worktreeId: 'repo::/wt',
+    connectionId: null,
+    receivedAt: 1,
+    stateStartedAt: 1,
+    payload: { state: 'working', prompt: 'ship it', agentType: 'codex' },
+    ...over
+  } as EnrichedAgentHookEventPayload
+}
+
+beforeEach(() => {
+  sent.length = 0
+  hooks.listener = null
+  mainProcessState.runtime = null
+  mainProcessState.mainWindow = {
+    isDestroyed: () => false,
+    webContents: {
+      send: (channel: string, event: { paneKey: string }) => sent.push({ channel, event })
+    }
+  } as unknown as typeof mainProcessState.mainWindow
+  installMainWindowAgentStatusListeners({
+    window: mainProcessState.mainWindow!,
+    onRecordAgentState: vi.fn()
+  })
+})
+
+describe('the main-window agent-status listener', () => {
+  it('forwards a hook row but never a structured one', () => {
+    expect(hooks.listener).not.toBeNull()
+
+    hooks.listener!(statusPayload({ paneKey: 'hook-pane' }))
+    hooks.listener!(
+      statusPayload({
+        paneKey: 'structured-agent-session-s1:leaf',
+        structuredHost: 'owned'
+      })
+    )
+
+    expect(sent.map((entry) => `${entry.channel}:${entry.event.paneKey}`)).toEqual([
+      'agentStatus:set:hook-pane'
+    ])
+  })
+
+  it('copies a live custom title onto a provider session the first time its id arrives', () => {
+    const setSessionCustomTitle = vi.fn()
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The listener only reads these four runtime methods for the alias backfill.
+    mainProcessState.runtime = {
+      getSessionCustomTitle: () => null,
+      setSessionCustomTitle,
+      getAgentStatusOrchestrationContextForPaneKey: () => undefined,
+      getAgentStatusTerminalHandleForPaneKey: () => 'term-1',
+      readLiveTerminalCustomTitle: ({ tabId, terminalHandle }) =>
+        tabId === 'tab-1' && terminalHandle === 'term-1' ? 'Pinned alias' : null
+    } as unknown as typeof mainProcessState.runtime
+
+    hooks.listener!(
+      statusPayload({
+        providerSession: { key: 'session_id', id: 'sess-1' }
+      })
+    )
+
+    expect(setSessionCustomTitle).toHaveBeenCalledWith('sess-1', 'Pinned alias')
+  })
+})
+
+it('forwards retirement acknowledgement only on live status delivery', () => {
+  hooks.listener!(statusPayload({ authorityRestartId: 'retirement-id' }))
+  hooks.listener!(statusPayload({ authorityRestartId: 'retirement-id', isReplay: true }))
+  expect(sent[0].event).toHaveProperty('authorityRestartId', 'retirement-id')
+  expect(sent[1].event).not.toHaveProperty('authorityRestartId')
+})
+
+// The field-by-field push must retain host turn start.
+it("forwards the host's turn start, and nothing when the host stamped none", () => {
+  hooks.listener!(statusPayload({ turnStartedAt: 1 }))
+  hooks.listener!(statusPayload({}))
+  expect(sent[0].event).toHaveProperty('turnStartedAt', 1)
+  expect(sent[1].event).not.toHaveProperty('turnStartedAt')
+})
+
+// Reconnect replays must not trigger fresh completion notifications.
+it('marks replayed rows so the renderer can skip their completion notification', () => {
+  hooks.listener!(statusPayload({ payload: { state: 'done', prompt: 'ship it' } }))
+  hooks.listener!(statusPayload({ payload: { state: 'done', prompt: 'ship it' }, isReplay: true }))
+  expect(sent[0].event).not.toHaveProperty('isReplay')
+  expect(sent[1].event).toHaveProperty('isReplay', true)
+})

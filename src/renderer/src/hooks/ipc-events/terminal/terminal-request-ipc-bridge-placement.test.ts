@@ -41,6 +41,10 @@ type CreateRequest = {
   worktreeId: string
   targetGroupId?: string
   presentation?: 'focused' | 'background'
+  title?: string
+  launchAgent?: 'claude' | 'codex'
+  launchConfig?: { agentArgs: string; agentEnv: Record<string, string> }
+  resumeProviderSession?: { id: string; resumeStyle: 'flag' }
 }
 
 let request!: (data: CreateRequest) => void
@@ -91,5 +95,52 @@ describe("a host's focused terminal create into a requested group", () => {
       .unifiedTabsByWorktree[WT]?.find((tab) => tab.entityId === tabId)?.groupId
     expect(landed).toBe(splitGroupId)
     expect(store.getState().groupsByWorktree[WT]?.map((group) => group.id)).toContain(splitGroupId)
+  })
+
+  it('is new work in a workspace with no live terminal: its first bind moves it up in Recent', () => {
+    store.getState().setActiveWorktree('repo1::/tmp/other')
+
+    request({ requestId: 'request-2', worktreeId: WT, presentation: 'focused' })
+
+    const tabId: string = replyTerminalCreate.mock.calls[0]?.[0]?.tabId
+    const tab = store.getState().tabsByWorktree[WT]?.find((candidate) => candidate.id === tabId)
+    expect(tab?.pendingActivationSpawn).toBeUndefined()
+    const epoch = store.getState().sortEpoch
+    store.getState().updateTabPtyId(tabId, 'pty-new-1')
+    expect(store.getState().sortEpoch).toBe(epoch + 1)
+  })
+
+  it('preserves pendingStartup resume metadata and launchAgent when created without command', () => {
+    request({
+      requestId: 'request-resume-no-cmd',
+      worktreeId: WT,
+      title: 'Renamed Claude',
+      launchAgent: 'claude',
+      launchConfig: {
+        agentArgs: '--resume session-abc',
+        agentEnv: {}
+      },
+      resumeProviderSession: {
+        id: 'session-abc',
+        resumeStyle: 'flag'
+      }
+    })
+
+    const tabId: string = replyTerminalCreate.mock.calls[0]?.[0]?.tabId
+    const tab = store.getState().tabsByWorktree[WT]?.find((candidate) => candidate.id === tabId)
+    expect(tab?.launchAgent).toBe('claude')
+    expect(tab?.customTitle).toBe('Renamed Claude')
+    expect(store.getState().pendingStartupByTabId[tabId]).toMatchObject({
+      command: '',
+      launchAgent: 'claude',
+      launchConfig: {
+        agentArgs: '--resume session-abc',
+        agentEnv: {}
+      },
+      resumeProviderSession: {
+        id: 'session-abc',
+        resumeStyle: 'flag'
+      }
+    })
   })
 })

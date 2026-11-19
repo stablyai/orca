@@ -33,6 +33,11 @@ import { closeLeafOrTab } from '../../../persistence/terminal-topology/terminal-
 import { markAgentLaunchesClosedByUser } from '../../../agent-launch/agent-launch-pane-attachment'
 
 export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs extends OrcaRuntimeWithPersistTerminalSurfaceRetirements {
+  abstract readLiveTerminalCustomTitle(args: {
+    tabId?: string
+    terminalHandle?: string
+  }): string | null
+
   protected abstract getRendererOwnedBrowserPageIds(
     ...args: Parameters<BrowserOwnership['getRendererOwnedBrowserPageIds']>
   ): ReturnType<BrowserOwnership['getRendererOwnedBrowserPageIds']>
@@ -166,6 +171,15 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
 
   /** The desktop renderer's close intent: it already guarded, removed and killed; this only reports. */
   async closeTerminalSurfaceFromRenderer({ worktreeId, target, reason }: RendererTerminalClose) {
+    if (target.kind === 'tab') {
+      const customTitle =
+        this.tabs.get(target.tabId)?.customTitle?.trim() ||
+        this.readLiveTerminalCustomTitle({ tabId: target.tabId }) ||
+        null
+      if (customTitle) {
+        this.rememberTerminalSessionTitle(target.tabId, undefined, customTitle)
+      }
+    }
     const options = { allowMissing: true, force: true, closedByLayoutOwner: true, reason }
     await this.closeTerminalSurface(worktreeId, target, options)
   }
