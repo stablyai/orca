@@ -303,7 +303,10 @@ function RightSidebarInner(): React.JSX.Element {
         if (!over || active.id === over.id) {
           return
         }
-        const ids: string[] = visibleItems.map((item) => item.id)
+        // The top strip's sortable list holds only the tabs shown in the strip; More tabs keep their slots.
+        const sortable =
+          activityBarPosition === 'top' ? topActivityLayout.visibleItems : visibleItems
+        const ids: string[] = sortable.map((item) => item.id)
         const from = ids.indexOf(String(active.id))
         const to = ids.indexOf(String(over.id))
         if (from !== -1 && to !== -1) {
