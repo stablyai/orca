@@ -8,6 +8,7 @@ import {
   addWorkspace,
   emptySession
 } from '../../../../shared/workspace-layout/persistence/workspace-layout-session.test-fixture'
+import type { WorkspaceLayout } from '../../../../shared/workspace-layout/workspace-layout-model'
 import { TerminalSurfaceIndex } from './terminal-surface-index'
 
 const hex = (index: number): string => index.toString(16).padStart(8, '0')
@@ -29,12 +30,16 @@ function fleet(count: number) {
     nameBasedLoadContext()
   )
   const reads = { count: 0 }
-  const workspaces = new Proxy(loaded.layout.workspaces, {
-    get(target, key, receiver) {
-      reads.count++
-      return Reflect.get(target, key, receiver)
-    }
-  })
+  const workspaces: Record<string, WorkspaceLayout> = {}
+  for (const [key, workspace] of Object.entries(loaded.layout.workspaces)) {
+    Object.defineProperty(workspaces, key, {
+      enumerable: true,
+      get: () => {
+        reads.count++
+        return workspace
+      }
+    })
+  }
   const partition = { ...loaded, layout: { ...loaded.layout, workspaces } }
   const index = new TerminalSurfaceIndex({
     reads: () => ({
