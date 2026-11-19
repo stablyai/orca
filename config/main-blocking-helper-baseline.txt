@@ -1285,6 +1285,8 @@
 3 src/main/runtime/orchestration/legacy-remote/remote-dispatch-attachment-create.ts
 2 src/main/runtime/orchestration/workers/lifecycle/context-only-dispatch-release.ts
 1 src/main/runtime/orchestration/workers/transcripts/worker-transcript-read.ts
+1 src/main/runtime/orchestration/workers/turn-stops/worker-presence-report.ts # one savepoint per real worker presence change, around orchestration DB writes that were already synchronous, so the report and its record commit together
+1 src/main/runtime/orchestration/workers/turn-stops/worker-turn-stop-report.ts # one savepoint per real worker presence change, around orchestration DB writes that were already synchronous, so the report and its record commit together
 2 src/main/runtime/push/push-unregister-outbox.ts
 1 src/main/runtime/repositories/folder-workspace-deletion.ts
 3 src/main/runtime/repositories/runtime-nested-repo-import.ts
