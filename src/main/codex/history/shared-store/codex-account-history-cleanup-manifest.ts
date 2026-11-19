@@ -19,6 +19,8 @@ export const HISTORY_CLEANUP_MANIFEST = '.orca-history-cleanup.json'
 export const SET_ASIDE_ROLLOUTS_DIR = '.orca-set-aside-rollouts'
 /** The account's own databases from before sharing stopped; kept, never read again. */
 export const PRE_SHARE_DATABASES_DIR = '.orca-pre-share-db'
+/** The only folders whose left-behind files the cleanup inventories, checks and deletes. */
+export const ROLLOUT_FOLDERS = new Set(['sessions', 'archived_sessions'])
 export const CODEX_DATABASE_FILE = /\.sqlite(?:-wal|-shm)?$/
 
 const HISTORY_FOLDERS = ['sessions', 'archived_sessions']
@@ -194,7 +196,7 @@ async function leftBehindRollouts(
   // A pending folder is `<folder>[.<ms>].orca-profile-merge`; its files conflict by name.
   const sources: { root: string; folder: string; kind: LeftBehindRollout['kind'] }[] = []
   for (const folder of await readEntries(join(accountHome, SET_ASIDE_ROLLOUTS_DIR))) {
-    if (folder.isDirectory()) {
+    if (folder.isDirectory() && ROLLOUT_FOLDERS.has(folder.name)) {
       sources.push({
         root: join(accountHome, SET_ASIDE_ROLLOUTS_DIR, folder.name),
         folder: folder.name,
@@ -205,13 +207,19 @@ async function leftBehindRollouts(
   for (const entry of await readEntries(accountHome)) {
     if (entry.isDirectory() && entry.name.endsWith(MERGE_PENDING_SUFFIX)) {
       const folder = entry.name.slice(0, -MERGE_PENDING_SUFFIX.length).replace(/\.\d+$/, '')
-      sources.push({ root: join(accountHome, entry.name), folder, kind: 'merge-conflict' })
+      // Kept thread locks, memories and the like are never the cleanup's to judge.
+      if (ROLLOUT_FOLDERS.has(folder)) {
+        sources.push({ root: join(accountHome, entry.name), folder, kind: 'merge-conflict' })
+      }
     }
   }
   const rollouts: LeftBehindRollout[] = []
   for (const source of sources) {
     for await (const file of regularFiles(source.root)) {
       const inFolder = `${source.folder}/${toManifestPath(source.root, file.path)}`
+      if (!parseCodexRolloutThreadId(inFolder)) {
+        continue
+      }
       // A set-aside form matches the store's other form; a conflict usually its same name.
       const [first, second] =
         source.kind === 'set-aside-twin'

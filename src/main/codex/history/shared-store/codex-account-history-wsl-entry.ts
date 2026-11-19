@@ -1,5 +1,5 @@
 import { watch } from 'node:fs'
-import { mkdir, readFile, readdir, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, rename, unlink, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -25,9 +25,15 @@ async function startTimeOf(pid: string): Promise<string | null> {
 async function isPassRunning(): Promise<boolean> {
   let running = false
   for (const pid of await readdir(RUNNING_PASSES).catch(() => [])) {
+    // A marker still being written is a `<pid>.tmp`; it's renamed into place whole.
+    if (!/^\d+$/.test(pid)) {
+      continue
+    }
     const marker = join(RUNNING_PASSES, pid)
     const recorded = await readFile(marker, 'utf8').catch(() => null)
-    if (/^\d+$/.test(pid) && recorded && recorded === (await startTimeOf(pid))) {
+    const started = await startTimeOf(pid)
+    // Empty: the helper couldn't read its own start time, so only its pid can tell.
+    if (recorded !== null && started !== null && (recorded === started || recorded === '')) {
       running = true
     } else if (recorded !== null) {
       // A helper the distro's shutdown or the host's timeout killed before it removed its marker.
@@ -53,22 +59,32 @@ async function main(): Promise<void> {
     const deadline = Date.now() + CHECK_BUDGET_MS
     await mkdir(RUNNING_PASSES, { recursive: true })
     let passRunning = false
-    // A pass starting writes its marker here, so the check hears of it without polling.
+    let lookups = 0
+    // A pass starting writes its marker here, so the check hears of it without polling. Only the
+    // newest lookup counts: an older one finishing late can't clear a pass a newer one saw.
     const watcher = watch(RUNNING_PASSES, () => {
+      const lookup = ++lookups
       void isPassRunning().then((running) => {
-        passRunning = running
+        if (lookup === lookups) {
+          passRunning = running
+        }
       })
     })
     // Without the signal a pass could go unnoticed, so the check stops and resumes later.
+    let watcherFailed = false
     watcher.on('error', () => {
-      passRunning = true
+      watcherFailed = true
     })
-    passRunning = await isPassRunning()
+    const first = ++lookups
+    const runningAtStart = await isPassRunning()
+    if (first === lookups) {
+      passRunning = runningAtStart
+    }
     try {
       const finished = await checkThenCleanUpCodexHistory({
         accountHome,
         storeHome,
-        shouldStop: () => passRunning || Date.now() > deadline
+        shouldStop: () => passRunning || watcherFailed || Date.now() > deadline
       })
       process.stdout.write(
         `${JSON.stringify({ result: finished ? 'checked' : 'stopped', pendingDir })}\n`
@@ -80,7 +96,9 @@ async function main(): Promise<void> {
   }
   const marker = join(RUNNING_PASSES, String(process.pid))
   await mkdir(RUNNING_PASSES, { recursive: true })
-  await writeFile(marker, (await startTimeOf(String(process.pid))) ?? '')
+  // Renamed into place, so a check never reads it half written (empty) and deletes it as stale.
+  await writeFile(`${marker}.tmp`, (await startTimeOf(String(process.pid))) ?? '')
+  await rename(`${marker}.tmp`, marker)
   try {
     await runPass(mode, accountHome, storeHome, pendingDir, onWarning)
   } finally {

@@ -1,5 +1,5 @@
 import type { BigIntStats } from 'node:fs'
-import { readFile, readdir, rmdir, unlink } from 'node:fs/promises'
+import { readFile, readdir, unlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { MERGE_PENDING_SUFFIX, lstatIfPresent } from '../../../filesystem/merged-directory-link'
@@ -18,27 +18,22 @@ import {
 import { isCodexAccountHistoryLinked } from './codex-account-history-links'
 import { findOpenFiles } from '../../../filesystem/open-file-check'
 import { checkCodexHistoryLeftBehind, contentSha256 } from './codex-account-history-content-check'
+import {
+  databaseGroup,
+  freedBy,
+  hasRealFolders,
+  isLeftBehindPath,
+  removeEmptyFolders
+} from './codex-account-left-behind-paths'
 
 const DAY_MS = 24 * 60 * 60 * 1000
 /** The home's databases go only after it has worked shared this long, over this many runs. */
 export const CLEANUP_MIN_SHARED_DAYS = 14
 export const CLEANUP_MIN_SHARED_PASSES = 5
-// Codex rebuilds its paginated history from the rollouts, and logs are only logs. The state database
-// also holds rows no rollout has (projects, legacy memories), so it stays with memories, goals and
-// queues.
-const REBUILDABLE_DATABASE_FILE = /^(?:logs|thread_history)_\d+\.sqlite(?:-wal|-shm)?$/
 // A streak not extended lately (the home unused, or a newer build gone) proves nothing current.
 const CLEANUP_MAX_SINCE_LAST_SHARED_DAYS = 30
 
 export type CodexHistoryCleanupResult = { deletedFiles: number; freedBytes: number }
-
-// The space a name frees: only its last link frees the blocks (Windows reports no block count).
-function freedBy(stats: BigIntStats): number {
-  if (stats.nlink > 1n) {
-    return 0
-  }
-  return Number(process.platform === 'win32' ? stats.size : stats.blocks * 512n)
-}
 
 async function readConfig(accountHome: string): Promise<string> {
   try {
@@ -66,65 +61,30 @@ function hasProvenShared(
   )
 }
 
-// A database goes with its WAL and shared memory or not at all; a file of it appearing since the
-// manifest was written means something opened it again.
-function databaseGroup(path: string): string {
-  return path.replace(/-(?:wal|shm)$/, '')
-}
-
-// Manifest paths are relative to the home and stay inside the folders the cleanup owns.
-function isLeftBehindPath(path: string, kind: 'rollout' | 'database'): boolean {
-  const parts = path.split('/')
-  if (parts.some((part) => !part || part === '.' || part === '..' || /[\\:]/.test(part))) {
-    return false
-  }
-  if (kind === 'database') {
-    return (
-      REBUILDABLE_DATABASE_FILE.test(parts.at(-1)!) &&
-      (parts.length === 1 || parts[0] === PRE_SHARE_DATABASES_DIR)
-    )
-  }
-  return (
-    parts.length > 1 &&
-    (parts[0] === SET_ASIDE_ROLLOUTS_DIR || parts[0].endsWith(MERGE_PENDING_SUFFIX))
-  )
-}
-
-// A linked folder on the way would point the delete outside the home.
-async function hasRealFolders(root: string, path: string): Promise<boolean> {
-  const parts = path.split('/')
-  for (let depth = 1; depth < parts.length; depth += 1) {
-    const folder = await lstatIfPresent(join(root, ...parts.slice(0, depth)))
-    if (!folder?.isDirectory()) {
-      return false
-    }
-  }
-  return true
-}
-
-async function removeEmptyFolders(folder: string, shouldStop: () => boolean): Promise<void> {
-  let entries
-  try {
-    entries = await readdir(folder, { withFileTypes: true })
-  } catch {
-    return
-  }
-  for (const entry of entries) {
-    if (shouldStop()) {
-      return
-    }
-    if (entry.isDirectory()) {
-      await removeEmptyFolders(join(folder, entry.name), shouldStop)
-    }
-  }
-  await rmdir(folder).catch(() => {})
-}
-
 async function databasesUnused(accountHome: string, storeHome: string): Promise<boolean> {
   return (
     readCodexSharedSqliteHome(await readConfig(accountHome)) === storeHome &&
     (await isCodexAccountHistoryLinked(accountHome, storeHome))
   )
+}
+
+// Homes whose open-file check couldn't tell this run (too many processes, a slow lsof): asking
+// again would repeat the same scan with the same answer, so nothing there is deleted until restart.
+const openCheckUnknown = new Set<string>()
+
+async function openFilesOnce(
+  home: string,
+  targets: string[],
+  shouldStop: () => boolean
+): Promise<Set<string> | null> {
+  if (openCheckUnknown.has(home)) {
+    return null
+  }
+  const open = await findOpenFiles(targets, { shouldStop })
+  if (!open && !shouldStop()) {
+    openCheckUnknown.add(home)
+  }
+  return open
 }
 
 /**
@@ -147,7 +107,9 @@ export async function cleanUpCodexHistoryLeftBehind(args: {
     return result
   }
   const deleted = new Set<string>()
-  const undeletable = new Set<string>()
+  // Proven copies that couldn't be deleted, or no longer hash the same: their check stops counting
+  // as a match, so they aren't hashed or retried again until they change.
+  const voided = new Set<string>()
   const remove = async (path: string, stats: BigIntStats): Promise<void> => {
     await unlink(fromManifestPath(home, path))
     deleted.add(path)
@@ -165,6 +127,7 @@ export async function cleanUpCodexHistoryLeftBehind(args: {
   }
 
   // Each proof is the file itself and its store copy, so no pass can void it meanwhile.
+  const provenRollouts: { path: string; stats: BigIntStats }[] = []
   for (const rollout of manifest.rollouts) {
     if (args.shouldStop()) {
       break
@@ -182,41 +145,53 @@ export async function cleanUpCodexHistoryLeftBehind(args: {
       if (
         file &&
         sameFacts(rollout, file.facts) &&
-        sameFacts(check.store, await storeFileFacts(args.storeHome, check.store.path)) &&
-        // Size and a millisecond mtime can miss a same-size rewrite of the copy being deleted.
-        (await contentSha256(fromManifestPath(home, rollout.path))) === check.sha256
+        sameFacts(check.store, await storeFileFacts(args.storeHome, check.store.path))
       ) {
-        await remove(rollout.path, file.stats).catch(() => {
-          // Not hashed again every run: the file stays, untracked.
-          undeletable.add(rollout.path)
-        })
+        // Size and a millisecond mtime can miss a same-size rewrite of the copy being deleted.
+        if ((await contentSha256(fromManifestPath(home, rollout.path))) === check.sha256) {
+          provenRollouts.push({ path: rollout.path, stats: file.stats })
+        } else {
+          voided.add(rollout.path)
+        }
       }
     } catch {
       // Left for a later run: the manifest still lists it.
     }
   }
 
-  // Asked before taking the lock, which a starting pass waits only seconds for: lsof can be slow.
-  // An idle Codex started before sharing may still hold one open; its later writes would vanish.
+  // Asked once, only for files otherwise ready to go, and before taking the lock, which a starting
+  // pass waits only seconds for. A Codex still holding one open would lose its later writes.
+  const readyDatabases = hasProvenShared(manifest, args.now)
+    ? await databasesReadyToDelete(manifest.databases)
+    : []
+  const targets = [
+    ...provenRollouts.map((rollout) => fromManifestPath(home, rollout.path)),
+    ...readyDatabases.map((database) => fromManifestPath(home, database.path))
+  ]
   const open =
-    hasProvenShared(manifest, args.now) && !args.shouldStop()
-      ? await findOpenFiles(
-          manifest.databases
-            .filter((database) => isLeftBehindPath(database.path, 'database'))
-            .map((database) => fromManifestPath(home, database.path)),
-          { shouldStop: args.shouldStop }
-        )
-      : null
+    targets.length === 0 || args.shouldStop()
+      ? null
+      : await openFilesOnce(home, targets, args.shouldStop)
+  for (const rollout of provenRollouts) {
+    if (!open || args.shouldStop() || open.has(fromManifestPath(home, rollout.path))) {
+      continue
+    }
+    await remove(rollout.path, rollout.stats).catch(() => voided.add(rollout.path))
+  }
   // The databases' proof is the sharing streak, so they go under the manifest's lock, which every
   // pass that changes the streak (or unshares and moves the databases aside) takes too.
   await updateManifest(home, async (current) => {
     if (!current || current.storeHome !== args.storeHome) {
       return null
     }
-    if (open && hasProvenShared(current, args.now)) {
-      await deleteUnusedDatabases(current.databases, open)
+    if (open && readyDatabases.length > 0 && hasProvenShared(current, args.now)) {
+      await deleteUnusedDatabases(
+        current.databases,
+        open,
+        new Set(readyDatabases.map((d) => d.path))
+      )
     }
-    if (deleted.size === 0 && undeletable.size === 0) {
+    if (deleted.size === 0 && voided.size === 0) {
       return null
     }
     try {
@@ -235,16 +210,28 @@ export async function cleanUpCodexHistoryLeftBehind(args: {
     }
     return {
       ...current,
-      rollouts: current.rollouts.filter(
-        (rollout) => !deleted.has(rollout.path) && !undeletable.has(rollout.path)
-      ),
+      rollouts: current.rollouts
+        .filter((rollout) => !deleted.has(rollout.path))
+        .map((rollout) =>
+          voided.has(rollout.path) && rollout.check
+            ? { ...rollout, check: { ...rollout.check, sameContent: false } }
+            : rollout
+        ),
       databases: current.databases.filter((database) => !deleted.has(database.path)),
       updatedAt: new Date(args.now).toISOString()
     }
   })
   return result
 
-  async function deleteUnusedDatabases(databases: FileFacts[], open: Set<string>): Promise<void> {
+  // Groups old enough, with no stray WAL or SHM and no second name: only these are worth asking
+  // the open-file check about.
+  async function databasesReadyToDelete(databases: FileFacts[]): Promise<FileFacts[]> {
+    return (await eligibleDatabaseGroups(databases)).flatMap((group) => group.files)
+  }
+
+  async function eligibleDatabaseGroups(
+    databases: FileFacts[]
+  ): Promise<{ files: FileFacts[]; stats: BigIntStats[] }[]> {
     const groups = new Map<string, FileFacts[]>()
     for (const database of databases) {
       if (isLeftBehindPath(database.path, 'database')) {
@@ -257,7 +244,7 @@ export async function cleanUpCodexHistoryLeftBehind(args: {
     const eligible: { files: FileFacts[]; stats: BigIntStats[] }[] = []
     for (const [group, files] of groups) {
       if (args.shouldStop()) {
-        return
+        return []
       }
       try {
         const recorded = new Set(files.map((file) => file.path))
@@ -283,11 +270,21 @@ export async function cleanUpCodexHistoryLeftBehind(args: {
         // Left for a later run.
       }
     }
+    return eligible
+  }
+
+  // Only files the open-file check covered: one a pass recorded since was never asked about.
+  async function deleteUnusedDatabases(
+    databases: FileFacts[],
+    open: Set<string>,
+    checked: Set<string>
+  ): Promise<void> {
+    const eligible = await eligibleDatabaseGroups(databases)
     for (const { files, stats } of eligible) {
       if (
         args.shouldStop() ||
         !(await databasesUnused(home, args.storeHome)) ||
-        files.some((file) => open.has(fromManifestPath(home, file.path)))
+        files.some((file) => !checked.has(file.path) || open.has(fromManifestPath(home, file.path)))
       ) {
         continue
       }
