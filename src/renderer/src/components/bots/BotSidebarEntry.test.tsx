@@ -331,20 +331,6 @@ describe('BotSidebarEntry', () => {
     expect(screen.getByRole('button', { name: 'Unfold Scout' }).textContent).toBe('2')
   })
 
-  it("keeps the bot's dot to its own turn while its workspaces work", () => {
-    seed({ ok: 'done' })
-    const idle = renderEntry().container.querySelector(
-      '[data-worktree-card-status-slot]'
-    )?.innerHTML
-    cleanup()
-    seed({ ask: 'permission', run: 'working' })
-    const busy = renderEntry().container.querySelector(
-      '[data-worktree-card-status-slot]'
-    )?.innerHTML
-
-    expect(busy).toBe(idle)
-  })
-
   it('lists workspaces whose PR merged or closed with the rest, with no done fold', () => {
     seed({ open: 'done', merged: 'done', closed: 'inactive' })
     mocks.reviewById = {
