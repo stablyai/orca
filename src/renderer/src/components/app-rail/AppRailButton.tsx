@@ -37,7 +37,7 @@ export function AppRailButton({
       aria-label={label}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        'relative flex size-8 shrink-0 items-center justify-center rounded-md outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
+        'relative flex size-8 shrink-0 items-center justify-center rounded-md outline-none transition-colors focus-visible:ring-2 focus-visible:ring-muted-foreground focus-visible:ring-offset-1 focus-visible:ring-offset-worktree-sidebar',
         active
           ? 'bg-worktree-sidebar-foreground/10 text-foreground'
           : 'text-muted-foreground/70 hover:bg-worktree-sidebar-foreground/6 hover:text-muted-foreground data-[state=open]:bg-worktree-sidebar-foreground/10 data-[state=open]:text-foreground',

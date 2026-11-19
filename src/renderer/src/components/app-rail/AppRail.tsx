@@ -176,6 +176,7 @@ export function AppRail({
       className="flex min-h-0 w-10 flex-1 shrink-0 flex-col border-r border-worktree-sidebar-border bg-worktree-sidebar"
       style={style}
     >
+      {/* Why pb-1: Help/Settings line up with the list footer icons and Settings' focus ring stays unclipped. */}
       <div
         ref={(node) => {
           toolbarRef.current = node
@@ -184,7 +185,7 @@ export function AppRail({
         role="toolbar"
         aria-orientation="vertical"
         aria-label={navigationLabel}
-        className="flex min-h-0 flex-1 flex-col items-center justify-between overflow-hidden py-2"
+        className="flex min-h-0 flex-1 flex-col items-center justify-between overflow-hidden pt-2 pb-1"
         onKeyDownCapture={handleKeyDown}
         onFocus={handleFocus}
       >
