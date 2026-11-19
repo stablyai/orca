@@ -125,6 +125,10 @@ export async function isOutsideProtectedRoots(
   ) {
     return false
   }
+  // A root in WSL has no ids to find.
+  if (protectedRoots.every((root) => root.folderIds.size === 0)) {
+    return true
+  }
   for (let folder = realFolder; ; folder = dirname(folder)) {
     const id = await folderId(folder)
     if (id !== null && protectedRoots.some((root) => root.folderIds.has(id))) {
