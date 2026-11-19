@@ -156,6 +156,10 @@ export class BrowserExtensionProfileStateStore {
 
   /** Saves now and settles once it is on disk; throws if the first attempt fails (retries continue). */
   async flush(): Promise<void> {
+    // After the final save, a change can't land, so a caller waiting on it (a removal marker) must not proceed.
+    if (this.closed && this.revision !== this.queuedRevision) {
+      throw new Error('Extension state is closed for quit')
+    }
     this.saveNow()
     if (!(await this.writer.landed())) {
       throw new Error('Could not save extension state')

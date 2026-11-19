@@ -107,7 +107,7 @@ describe('BrowserExtensionProfileStateStore', () => {
     store.update('default', EXTENSION, (state) => ({ ...state, removalGeneration: 3 }))
     store.forgetProfile('missing')
     store.update('default', EXTENSION, (state) => ({ ...state, removalGeneration: 4 }))
-    await store.flush()
+    await expect(store.flush()).rejects.toThrow('closed for quit')
     await store.close()
     expect(disk.renames).toBe(2)
   })
