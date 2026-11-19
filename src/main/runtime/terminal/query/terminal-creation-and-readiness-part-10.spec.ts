@@ -181,9 +181,9 @@ describe('OrcaRuntimeService', () => {
 
     expect(read).toMatchObject({
       source: 'screen',
-      tail: ['Build passed', '────────', '❯'],
-      draft: 'proceed with the release\nand close the pull request'
+      tail: ['Build passed', '────────', '❯']
     })
+    expect(read.draft).toBeUndefined()
   })
 
   it('does not use renderer visible-screen fallback for cursor transcript reads', async () => {
