@@ -61,6 +61,35 @@ const KINDS = `('message','tool-call','diff','approval','question','status','tur
 /** Turns scanned per page; each answers a few short strings. */
 const TURNS_PAGE = 1_024
 
+/**
+ * One page of turn rows in index order after the cursor: the rest of the cursor's turn, then the
+ * turns after it, so each part's index seek starts at the cursor rather than before it.
+ */
+function* turnPage(
+  { db, prefix }: JournalSqlScope,
+  namespace: string,
+  after: JournalAcpTurnCursor | null | undefined
+) {
+  const select = `SELECT item_id,sequence,sequence_index,turn_id,opener_item_id,ordinal FROM journal_items
+    INDEXED BY journal_items_named_turn WHERE session_id=? AND epoch=? AND hidden=0 AND turn_id IS NOT NULL`
+  let left = TURNS_PAGE
+  if (after) {
+    for (const row of db
+      .prepare(`${select} AND turn_id=? AND (sequence,sequence_index,ordinal)>(?,?,?)
+        ORDER BY sequence,sequence_index,ordinal LIMIT ?`)
+      .iterate(...prefix, ...after, left)) {
+      left--
+      yield row
+    }
+  }
+  if (left > 0) {
+    yield* db
+      .prepare(`${select} AND turn_id${after ? '>' : '>='}? AND turn_id<?
+        ORDER BY turn_id,sequence,sequence_index,ordinal LIMIT ?`)
+      .iterate(...prefix, after?.[0] ?? namespace, `${namespace.slice(0, -1)};`, left)
+  }
+}
+
 /** Turn facts only; no saved output leaves the reader. */
 export function readJournalDomainAcpHistory(
   scope: JournalSqlScope,
@@ -75,20 +104,7 @@ export function readJournalDomainAcpHistory(
   const scoped =
     db.prepare(`SELECT item_id,kind FROM journal_items INDEXED BY journal_items_stop_turn
     WHERE session_id=? AND epoch=? AND hidden=0 AND turn_item_id=? AND kind IN ${KINDS}`)
-  for (const row of db
-    .prepare(`SELECT item_id,sequence,sequence_index,turn_id,opener_item_id,ordinal FROM journal_items
-    INDEXED BY journal_items_named_turn
-    WHERE session_id=? AND epoch=? AND hidden=0 AND turn_id IS NOT NULL AND turn_id>=? AND turn_id<?
-    ${read.after ? 'AND (turn_id,sequence,sequence_index,ordinal)>(?,?,?,?)' : ''}
-    ORDER BY turn_id,sequence,sequence_index,ordinal LIMIT ?`)
-    .iterate(
-      ...prefix,
-      // The seek starts at the cursor's turn; the row comparison only settles ties within it.
-      read.after?.[0] ?? namespace,
-      `${namespace.slice(0, -1)};`,
-      ...(read.after ?? []),
-      TURNS_PAGE
-    )) {
+  for (const row of turnPage(scope, namespace, read.after)) {
     scanned++
     last = [
       String(row.turn_id),
