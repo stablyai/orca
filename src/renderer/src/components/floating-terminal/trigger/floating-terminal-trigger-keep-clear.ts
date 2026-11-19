@@ -1,20 +1,22 @@
 // Page parts the floating terminal button must never cover, such as the item page's comment box. The button
-// gets out of their way by showing just above them, so pages never reserve space for it.
+// gets out of their way by showing just below or above them, so pages never reserve space for it.
 import { useEffect, useSyncExternalStore, type RefObject } from 'react'
 import type { FloatingTerminalTriggerKeepClearRect } from './floating-terminal-trigger-position'
 
 const NONE: readonly FloatingTerminalTriggerKeepClearRect[] = []
-const elements = new Set<HTMLElement>()
+// Each element with the column it sits in, whose bottom bounds where the button may go below it.
+const elements = new Map<HTMLElement, HTMLElement | null>()
 const listeners = new Set<() => void>()
 let rects = NONE
 
 function measure(): void {
   const next: FloatingTerminalTriggerKeepClearRect[] = []
-  for (const element of elements) {
+  for (const [element, column] of elements) {
     const { left, top, right, bottom } = element.getBoundingClientRect()
     // A hidden page's box measures empty and has nothing to keep clear.
     if (right > left && bottom > top) {
-      next.push({ left, top, right, bottom })
+      const paneBottom = column?.getBoundingClientRect().bottom ?? window.innerHeight
+      next.push({ left, top, right, bottom, paneBottom })
     }
   }
   const same =
@@ -24,7 +26,8 @@ function measure(): void {
         rect.left === rects[index].left &&
         rect.top === rects[index].top &&
         rect.right === rects[index].right &&
-        rect.bottom === rects[index].bottom
+        rect.bottom === rects[index].bottom &&
+        rect.paneBottom === rects[index].paneBottom
     )
   if (same) {
     return
@@ -48,10 +51,10 @@ function keepClearOf(element: HTMLElement): () => void {
   if (elements.size === 0) {
     window.addEventListener('resize', measure)
   }
-  elements.add(element)
   // The element also moves without resizing when a box above it in its column grows, e.g. Activity
   // filling in, so the column and every box in it are watched, including boxes added later.
   const column = layoutParentOf(element)
+  elements.set(element, column)
   const resized = new ResizeObserver(measure)
   const watch = (): void => {
     resized.disconnect()

@@ -34,6 +34,8 @@ export type FloatingTerminalTriggerKeepClearRect = {
   top: number
   right: number
   bottom: number
+  /** Bottom of the pane holding the box: the button may only go below the box above this. */
+  paneBottom: number
 }
 
 function getViewport(): { width: number; height: number } {
@@ -96,7 +98,7 @@ export function clampFloatingTerminalTriggerPosition(
   }
 }
 
-/** Where the button shows: its own spot, or just above a page part there it would cover. */
+/** Where the button shows: its own spot, or the nearest clear spot below, else above, a page part it would cover. */
 export function keepFloatingTerminalTriggerClear(
   position: FloatingTerminalTriggerPosition,
   keepClear: readonly FloatingTerminalTriggerKeepClearRect[]
@@ -109,7 +111,11 @@ export function keepFloatingTerminalTriggerClear(
       top < rect.bottom &&
       top + TRIGGER_SIZE > rect.top
     ) {
-      top = rect.top - KEEP_CLEAR_GAP - TRIGGER_SIZE
+      const below = rect.bottom + KEEP_CLEAR_GAP
+      top =
+        below + TRIGGER_SIZE <= rect.paneBottom - DRAG_MARGIN
+          ? below
+          : rect.top - KEEP_CLEAR_GAP - TRIGGER_SIZE
     }
   }
   return top === position.top
