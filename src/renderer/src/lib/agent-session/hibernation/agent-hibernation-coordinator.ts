@@ -33,9 +33,6 @@ import type { AgentHibernationPlannerSnapshot } from './agent-hibernation-planne
 import type { AppState } from '@/store/types'
 
 export const AGENT_HIBERNATION_TICK_MS = 60 * 1000
-// A pane main refused for waiting orchestration work is retried on a doubling delay, not every tick.
-const ORCHESTRATION_BUSY_RETRY_MS = 5 * 60 * 1000
-const ORCHESTRATION_BUSY_RETRY_MAX_MS = 30 * 60 * 1000
 
 type IntervalHandle = ReturnType<typeof setInterval>
 
@@ -50,7 +47,6 @@ type AgentHibernationCoordinatorState = {
   confirmationState: AgentHibernationConfirmationState
   tickInFlight: boolean
   shuttingDownCandidateIds: Set<string>
-  busyRetries: Map<string, { at: number; delayMs: number }>
   now: () => number
 }
 
@@ -60,7 +56,6 @@ const coordinator: AgentHibernationCoordinatorState = {
   confirmationState: {},
   tickInFlight: false,
   shuttingDownCandidateIds: new Set(),
-  busyRetries: new Map(),
   now: () => Date.now()
 }
 
@@ -135,10 +130,7 @@ async function hibernatePaneIfStillEligible(
   confirmedCandidate: AgentHibernationCandidate
 ): Promise<void> {
   const { id, worktreeId } = confirmedCandidate
-  if (
-    coordinator.shuttingDownCandidateIds.has(id) ||
-    (coordinator.busyRetries.get(id)?.at ?? 0) > coordinator.now()
-  ) {
+  if (coordinator.shuttingDownCandidateIds.has(id)) {
     return
   }
   // Only the pane’s owner can authorize teardown; global sweeps cause C×W runtime listings for C candidates.
@@ -165,15 +157,9 @@ async function hibernatePaneIfStillEligible(
           : {})
       })
     )
-    coordinator.busyRetries.delete(id)
   } catch (err) {
-    // Main refuses while orchestration mail or a Dispatch is in flight; retry later, backing off.
+    // Main refuses while orchestration mail or a Dispatch is in flight; the next tick asks again.
     if (String(err).includes('orchestration_busy')) {
-      const previous = coordinator.busyRetries.get(id)?.delayMs
-      const delayMs = previous
-        ? Math.min(previous * 2, ORCHESTRATION_BUSY_RETRY_MAX_MS)
-        : ORCHESTRATION_BUSY_RETRY_MS
-      coordinator.busyRetries.set(id, { at: coordinator.now() + delayMs, delayMs })
       return
     }
     console.warn('[agent-hibernation] failed to hibernate agent pane:', id, err)
@@ -188,14 +174,10 @@ export async function runAgentHibernationTick(): Promise<void> {
   }
   coordinator.tickInFlight = true
   try {
-    const candidates = await currentCandidates(coordinator.now())
-    const candidateIds = new Set(candidates.map((candidate) => candidate.id))
-    for (const id of coordinator.busyRetries.keys()) {
-      if (!candidateIds.has(id)) {
-        coordinator.busyRetries.delete(id)
-      }
-    }
-    const plan = confirmAgentHibernationCandidates(coordinator.confirmationState, candidates)
+    const plan = confirmAgentHibernationCandidates(
+      coordinator.confirmationState,
+      await currentCandidates(coordinator.now())
+    )
     coordinator.confirmationState = plan.confirmationState
     // Drain sequentially to bound liveness/stop RPCs, keep tickInFlight through completion, and revalidate each candidate against a fresh plan.
     for (const candidate of plan.candidates) {
@@ -243,7 +225,6 @@ export function stopAgentHibernationCoordinator(): void {
 export function resetAgentHibernationCoordinatorForTests(): void {
   stopAgentHibernationCoordinator()
   coordinator.shuttingDownCandidateIds.clear()
-  coordinator.busyRetries.clear()
   coordinator.tickInFlight = false
   coordinator.now = () => Date.now()
 }
