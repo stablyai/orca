@@ -360,6 +360,10 @@
   [data-feature-tip='bots'] .bt-paw-press {
     transition: none;
   }
+  /* The still frame sits 12px lower: less of each body shows and the paws rest on the edge. */
+  [data-feature-tip='bots'] [data-mascots][data-on] .bt-mk {
+    transform: translateY(12px) rotate(var(--bt-rot, 0deg));
+  }
 }
 
 /* ===== Timeline pieces ===== */

@@ -1,4 +1,4 @@
-import type { JSX, ReactNode } from 'react'
+import { memo, type JSX, type ReactNode } from 'react'
 import { GitPullRequest, Plus, Square } from 'lucide-react'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { BOT_MASCOT_URLS } from '@/components/bots/bot-mascots'
@@ -56,7 +56,12 @@ function handOff(from: string, to: string): BotGroupMessage {
 }
 
 /** Page 3: a group chat of bots split one goal and come back with one answer. */
-export function BotsTipGroupVisual({ t: time }: { t: number }): JSX.Element {
+// Memoized: a page off screen keeps its frame and skips the 30 fps renders of the shown page.
+export const BotsTipGroupVisual = memo(function BotsTipGroupVisual({
+  t: time
+}: {
+  t: number
+}): JSX.Element {
   const t = useTranslate()
   const p = GROUP_PAGE
   const group = t('featureTips.botsTeammate.groupName', 'Launch crew')
@@ -148,4 +153,4 @@ export function BotsTipGroupVisual({ t: time }: { t: number }): JSX.Element {
       </div>
     </div>
   )
-}
+})

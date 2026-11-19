@@ -1,79 +1,20 @@
-import { useEffect, useLayoutEffect, useRef, type JSX, type ReactNode } from 'react'
-import { AgentIcon } from '@/components/agent/icons/AgentIcon'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type JSX } from 'react'
 import { BOT_MASCOT_URLS } from '@/components/bots/bot-mascots'
-import { GitHubIcon } from '@/components/icons/GitHubIcon'
-import { LinearIcon } from '@/components/icons/LinearIcon'
-import slackLogo from '@/assets/connector-brands/slack.svg'
 import { Button } from '@/components/ui/button'
-import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { forceLayoutReflow } from '@/lib/overlay-interaction/force-layout-reflow'
 import type { FeatureTip } from '../../../../shared/feature-education/feature-tips'
-import { BOT_AGENTS } from '../../../../shared/bot-types'
 import { getLocalizedFeatureTipCopy } from './feature-tip-localized-copy'
 import { FeatureTipDialogFrame } from './FeatureTipDialogFrame'
-import { FeatureTipRotatingSlot } from './FeatureTipRotatingSlot'
 import { BotsTipGroupVisual } from './BotsTipGroupVisual'
 import { BotsTipMascots } from './BotsTipMascots'
+import { GroupPageCopy, TeammatePageCopy } from './BotsTipPageCopy'
 import { BotsTipPageNav } from './BotsTipPageNav'
 import { BotsTipSlackVisual } from './BotsTipSlackVisual'
 import { BOTS_TIP_PAGE_COUNT, mascotPawTapping } from './bots-tip-timeline'
 import { useBotsTipPlayback } from './use-bots-tip-playback'
 import './bots-tip.css'
-
-// Product names, never translated.
-const BRAND_SLACK = 'Slack'
-const BRAND_GITHUB = 'GitHub'
-const BRAND_LINEAR = 'Linear'
-
-/** One page's copy: the title, a two-line description and three bold-lead lines. */
-function PageCopy({
-  title,
-  description,
-  lines,
-  after
-}: {
-  title: string
-  description: string
-  lines: readonly (readonly [string, ReactNode])[]
-  after?: ReactNode
-}): JSX.Element {
-  // Each part moves on a page switch, one step (40 ms) after the one above it.
-  return (
-    <DialogHeader className="text-left">
-      <div>
-        <div className="bt-pg-el">
-          <DialogTitle size="display">{title}</DialogTitle>
-        </div>
-        <div className="bt-pg-el mt-3" data-step="1">
-          <DialogDescription className="max-w-2xl">
-            <span className="block leading-relaxed">{description}</span>
-          </DialogDescription>
-        </div>
-        <ul
-          className="bt-pg-el mt-3 flex flex-col gap-1.5 text-sm leading-5 text-muted-foreground"
-          data-step="2"
-        >
-          {lines.map(([lead, rest]) => (
-            <li key={lead}>
-              <span className="font-semibold text-foreground">{lead}</span> {rest}
-            </li>
-          ))}
-        </ul>
-        {after ? (
-          <div className="bt-pg-el" data-step="3">
-            {after}
-          </div>
-        ) : null}
-      </div>
-    </DialogHeader>
-  )
-}
-
-function AskChip({ children, dark }: { children: ReactNode; dark?: boolean }): JSX.Element {
-  return <span className={cn('bt-ask-chip', dark && 'bt-dark-tile')}>{children}</span>
-}
 
 export function BotsTeammateTipDialog({
   open,
@@ -90,7 +31,27 @@ export function BotsTeammateTipDialog({
   const t = useTranslate()
   const primaryButtonRef = useRef<HTMLButtonElement>(null)
   const playback = useBotsTipPlayback(open)
-  const { page, visit, pageStarts, pageTimes, reducedMotion, goTo } = playback
+  const { page, visit, pageStarts, pageTimes, reducedMotion } = playback
+  // Pages you pick are announced; the auto-advance stays quiet.
+  const [announced, setAnnounced] = useState('')
+  const startPage = playback.goTo
+  const goTo = useCallback(
+    (next: number): void => {
+      startPage(next)
+      const titles = [
+        t('featureTips.botsTeammate.title', 'Your AI teammate'),
+        t('featureTips.botsTeammate.groupTitle', 'Bots work together')
+      ]
+      setAnnounced(
+        t('featureTips.botsTeammate.pageAnnounce', 'Page {{number}} of {{count}}: {{title}}', {
+          number: next + 1,
+          count: BOTS_TIP_PAGE_COUNT,
+          title: titles[next] ?? ''
+        })
+      )
+    },
+    [startPage, t]
+  )
 
   // The incoming copy starts 4px low with no transition, then eases up into place.
   const copyLayers = useRef<(HTMLDivElement | null)[]>([])
@@ -122,101 +83,9 @@ export function BotsTeammateTipDialog({
     return () => window.removeEventListener('keydown', onKey)
   }, [open, page, goTo])
 
-  const askIn = [
-    {
-      key: 'slack',
-      label: BRAND_SLACK,
-      icon: (
-        <AskChip>
-          <img src={slackLogo} alt="" />
-        </AskChip>
-      )
-    },
-    {
-      key: 'github',
-      label: BRAND_GITHUB,
-      icon: (
-        <AskChip>
-          <GitHubIcon />
-        </AskChip>
-      )
-    },
-    {
-      key: 'linear',
-      label: BRAND_LINEAR,
-      icon: (
-        <AskChip dark>
-          <LinearIcon />
-        </AskChip>
-      )
-    }
-  ]
   const pages = [
-    <PageCopy
-      key="teammate"
-      title={t('featureTips.botsTeammate.title', 'Your AI teammate')}
-      description={t(
-        'featureTips.botsTeammate.description',
-        'Ask it in a thread. It runs the work, gets it reviewed and brings back a pull request.'
-      )}
-      lines={[
-        [
-          t('featureTips.botsTeammate.alwaysOnLead', 'Always on.'),
-          t('featureTips.botsTeammate.alwaysOn', 'Picks up work while you’re away.')
-        ],
-        [
-          t('featureTips.botsTeammate.teamLead', 'Part of the team.'),
-          <>
-            {t('featureTips.botsTeammate.askIn', 'Anyone can ask it in')}{' '}
-            <FeatureTipRotatingSlot
-              // Page 1 shown again starts its names over.
-              key={pageStarts[0]}
-              items={askIn}
-              staticLabel={t('featureTips.botsTeammate.askInPlaces', 'Slack, GitHub or Linear')}
-            />
-            .
-          </>
-        ],
-        [
-          t('featureTips.botsTeammate.learnsLead', 'Learns as it goes.'),
-          t('featureTips.botsTeammate.learns', 'Remembers what you teach it.')
-        ]
-      ]}
-      after={
-        <p className="bt-agents-row">
-          <span>{t('featureTips.botsTeammate.agents', 'Works with the agents you use')}</span>
-          <span className="bt-agents-marks">
-            {BOT_AGENTS.map((agent) => (
-              <span key={agent}>
-                <AgentIcon agent={agent} size={14} />
-              </span>
-            ))}
-          </span>
-        </p>
-      }
-    />,
-    <PageCopy
-      key="group"
-      title={t('featureTips.botsTeammate.groupTitle', 'Bots work together')}
-      description={t(
-        'featureTips.botsTeammate.groupDescription',
-        'Put a few bots in one group chat and give them one goal. They split the work and come back with one answer.'
-      )}
-      lines={[
-        [
-          t('featureTips.botsTeammate.groupChatLead', 'Put bots in one chat.'),
-          t('featureTips.botsTeammate.groupChat', 'Mention one, or all of them.')
-        ],
-        [
-          t('featureTips.botsTeammate.groupHandLead', 'They hand work to each other.'),
-          t('featureTips.botsTeammate.groupHand', 'Each one picks up its part.')
-        ],
-        [
-          t('featureTips.botsTeammate.groupOneLead', 'You get one answer.'),
-          t('featureTips.botsTeammate.groupOne', 'With the pull request.')
-        ]
-      ]}
-    />
+    <TeammatePageCopy key="teammate" active={page === 0} slotStart={pageStarts[0]!} />,
+    <GroupPageCopy key="group" active={page === 1} />
   ]
   const visuals = [
     <BotsTipSlackVisual key="slack" t={pageTimes[0]!} />,
@@ -280,6 +149,9 @@ export function BotsTeammateTipDialog({
       </div>
       <div className="mt-8 flex items-center gap-2">
         <BotsTipPageNav page={page} progress={playback.progress} onPage={goTo} />
+        <span className="sr-only" aria-live="polite">
+          {announced}
+        </span>
         <span className="flex-1" />
         <Button ref={primaryButtonRef} onClick={onPrimaryAction}>
           <span className="bt-faces" aria-hidden>

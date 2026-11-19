@@ -1,4 +1,4 @@
-import type { JSX } from 'react'
+import { memo, type JSX } from 'react'
 import { Bookmark, Check, UserRound } from 'lucide-react'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { BotItemStatusIcon } from '@/components/bots/items/BotItemStatusIcon'
@@ -44,7 +44,12 @@ function BotMessage({
 }
 
 /** Page 1: asked in a Slack thread, the bot runs agents, a reviewer bot checks, a pull request lands. */
-export function BotsTipSlackVisual({ t: time }: { t: number }): JSX.Element {
+// Memoized: a page off screen keeps its frame and skips the 30 fps renders of the shown page.
+export const BotsTipSlackVisual = memo(function BotsTipSlackVisual({
+  t: time
+}: {
+  t: number
+}): JSX.Element {
   const t = useTranslate()
   const p = SLACK_PAGE
   const releaseBot = t('featureTips.botsTeammate.releaseBot', 'Release bot')
@@ -221,4 +226,4 @@ export function BotsTipSlackVisual({ t: time }: { t: number }): JSX.Element {
       </div>
     </div>
   )
-}
+})

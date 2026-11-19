@@ -4,6 +4,9 @@ import { BOTS_TIP_PAGE_COUNT, BOTS_TIP_PAGE_END, BOTS_TIP_PAGE_HOLD } from './bo
 
 // Why: the frame only moves rows and the progress pill; 30 renders a second reads as smooth.
 const FRAME_MS = 1000 / 30
+// Why: frames stop while the window is hidden; on return the clock resumes where it was instead of
+// jumping by the whole gap and skipping a page.
+const MAX_STEP_MS = 100
 
 export type BotsTipPlayback = {
   page: number
@@ -68,7 +71,7 @@ export function useBotsTipPlayback(active: boolean): BotsTipPlayback {
     let last = performance.now()
     let lastPaint = last
     const tick = (now: number): void => {
-      elapsedRef.current += (now - last) / 1000
+      elapsedRef.current += Math.min(now - last, MAX_STEP_MS) / 1000
       last = now
       if (elapsedRef.current >= total) {
         goTo(page + 1)
