@@ -10,7 +10,6 @@ import { sortNativeChatSessionOptions } from '../../../../../../../shared/native
 import {
   sessionOptionDispatchUnconfirmed,
   type SessionOptionDescriptor,
-  type SessionOptionsCliUpdate,
   type SessionOptionsSurface,
   type SessionOptionValue
 } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
@@ -148,7 +147,6 @@ function PickerTrigger(props: {
 
 function SessionOptionPopover(props: {
   demandModelCatalog?: () => void
-  cliUpdate?: SessionOptionsCliUpdate
   model: SessionOptionDescriptor
   options: readonly SessionOptionDescriptor[]
   isWorking: boolean
@@ -310,7 +308,6 @@ function SessionOptionPopover(props: {
             readOnlyReason={modelReason}
             busy={pendingIds.has(model.id)}
             onSelect={(value) => set(model, value)}
-            cliUpdate={props.cliUpdate}
           />
         ) : (
           <NativeChatSessionOptionWriteGroup
@@ -380,7 +377,6 @@ function NativeChatSessionOptionPickersInner({
     <div className="flex min-w-0 items-center text-chat-foreground-faint">
       <SessionOptionPopover
         demandModelCatalog={surface.demandModelCatalog}
-        cliUpdate={surface.cliUpdate}
         model={model}
         options={options}
         isWorking={isWorking}

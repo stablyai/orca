@@ -12,7 +12,11 @@ import { escalateWorkerFailure } from '../reports/worker-failure-escalation'
 import { replaceDispatchCapabilities } from '../../terminal-authority/views/worker-terminal-redaction'
 import type { WorkerApprovalPayload } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/agent-session/identity/orca-session-address-prefix'
-import { describeApprovalClosed, describeCoordinatorAnswer } from './worker-approval-text'
+import {
+  describeApprovalClosed,
+  describeCoordinatorAnswer,
+  describeHelperHold
+} from './worker-approval-text'
 
 // One screenful: enough to show the agent's last words or error banner without flooding the inbox.
 const LAST_OUTPUT_MAX_CHARS = 2_000
@@ -22,7 +26,7 @@ export type WorkerTurnStopReason = 'finished' | 'errored' | 'needs-input' | 'exi
 export type WorkerTurnStop = {
   /** The worker's own mailbox identity: terminal handle, chat address or structured worker handle. */
   from: string
-  /** Identifies this stop; a later turn's stop has a new one, so each stop is reported once. An idle finish is keyed by the coordinator's latest mail instead, and a worker goes away only once. */
+  /** Identifies this stop; a later turn's stop has a new one, so each stop is reported once. An idle finish is keyed by the coordinator's latest mail instead, and a worker without one goes away only once. */
   stopKey?: string
   reason: WorkerTurnStopReason
   /** Coordinator mail the worker had taken when the stop was seen; mail it takes later is its next turn's. */
@@ -36,6 +40,8 @@ export type WorkerTurnStop = {
   turnStartedAt?: number
   /** Why the worker went away, for an `exited` or `lost` stop. */
   cause?: string
+  /** An exited chat: mail starts it again, keeping its history. */
+  restartsOnMail?: true
   /** What the worker left behind, such as the workspace of a start that failed. */
   leftover?: string
   /** A start that never got a terminal has no output to read. */
@@ -71,7 +77,7 @@ const SUBJECTS: Record<WorkerTurnStopReason, string> = {
   lost: 'Worker lost without reporting'
 }
 
-/** The worker can no longer run: an exit or loss is never deliberate and happens once per Dispatch. */
+/** The worker went away: never deliberate, and once per Dispatch unless the stop names which exit it was. */
 function isWorkerGone(reason: WorkerTurnStopReason): boolean {
   return reason === 'exited' || reason === 'lost'
 }
@@ -94,7 +100,12 @@ function describeStop(stop: WorkerTurnStop, context: StopContext): string {
   // Failure text (a remote selector, a URL) can also carry credentials.
   const redactFailure = (text: string | undefined) =>
     text && redactString(replaceDispatchCapabilities(text).value)
-  const cause = redactFailure(stop.cause)
+  const fullCause = redactFailure(stop.cause)
+  // A provider's stderr can be long; its end names the failure.
+  const cause =
+    fullCause && fullCause.length > LAST_OUTPUT_MAX_CHARS
+      ? `…${fullCause.slice(-LAST_OUTPUT_MAX_CHARS)}`
+      : fullCause
   const leftover = redactFailure(stop.leftover)
   const what =
     stop.reason === 'needs-input'
@@ -147,6 +158,11 @@ function describeNextStep(
       `Its Dispatch is closed as failed. Start it again with your Orca CLI's \`${start}\` and the same placement and agent, or tell the user.`
     ]
   }
+  if (stop.restartsOnMail) {
+    return [
+      `The Dispatch is still open and its chat keeps its history. A message restarts it: your Orca CLI's \`orchestration send --to dispatch:${dispatchId} --subject "<topic>" --body "<guidance>"\`. Or stop the worker, then retry it or tell the user.`
+    ]
+  }
   if (isWorkerGone(stop.reason)) {
     return ['Stop the worker, then retry it or tell the user.']
   }
@@ -167,11 +183,13 @@ function describeNextStep(
     return [
       ...given,
       `${
-        chatCoordinator
-          ? `The user has been shown ${shown} in your chat in Orca.`
-          : where === 'chat'
-            ? `Your chat has no approval card for it; only the worker's own chat in Orca shows it. Tell the user that worker ${stop.from} is waiting for permission in its chat.`
-            : `No one has been shown this prompt in Orca. Tell the user that worker ${stop.from} is waiting for permission in its terminal.`
+        stop.approval.fromHelper
+          ? describeHelperHold(chatCoordinator)
+          : chatCoordinator
+            ? `The user has been shown ${shown} in your chat in Orca.`
+            : where === 'chat'
+              ? `Your chat has no approval card for it; only the worker's own chat in Orca shows it. Tell the user that worker ${stop.from} is waiting for permission in its chat.`
+              : `No one has been shown this prompt in Orca. Tell the user that worker ${stop.from} is waiting for permission in its terminal.`
       } Don't block on it: carry on with other work. You'll get a message when it's answered. Don't message this worker until then.`,
       allowedActions.includes('deny')
         ? `If this is holding up the task, deny it with a reason so the worker continues another way: \`orchestration deny --dispatch ${dispatchId} --prompt ${approvalId} --reason "<what to do instead>"\`.`
@@ -216,7 +234,7 @@ export function reportWorkerTurnStop(
     : stop.reason === 'finished'
       ? `finished:${stop.mailTaken ?? readCoordinatorMailCount(db, dispatchId)}`
       : isWorkerGone(stop.reason)
-        ? 'gone'
+        ? (stop.stopKey ?? 'gone')
         : (stop.stopKey ?? stop.reason)
   const id = stopReportId(dispatchId, stopKey)
   const subject = stop.approval ? 'Worker is waiting for permission' : SUBJECTS[stop.reason]

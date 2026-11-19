@@ -114,7 +114,7 @@ export function readJournalDomainItems(
         items: readJournalHistoryItems(
           {
             canonicalItemId: canonical,
-            item: (itemId) => visibleItem(db, prefix, itemId),
+            item: (itemId) => journalVisibleItem(db, prefix, itemId),
             presentationRemoved: (key) => Boolean(removed.get(...prefix, canonical(key))!.removed),
             ...(operation.options?.includeOpeners
               ? {
@@ -139,7 +139,7 @@ export function readJournalDomainItems(
     case 'continuation-spill':
       return readJournalDomainContinuation(db, target, operation)
     case 'message-options': {
-      const body = visibleItem(
+      const body = journalVisibleItem(
         db,
         prefix,
         agentJournalSubmissionKey(operation.clientMessageId)
@@ -237,7 +237,7 @@ export function journalCanonicalItemId(db: Database.Database, prefix: Prefix) {
   }
 }
 
-function visibleItem(
+export function journalVisibleItem(
   db: Database.Database,
   prefix: Prefix,
   itemId: string

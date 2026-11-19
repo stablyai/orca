@@ -176,7 +176,7 @@ export function SidebarBotsSplit({
       ref={containerRef}
       data-sidebar-bots-split=""
       className={cn(
-        'relative flex min-h-10 scroll-mb-1 flex-col border-b border-worktree-sidebar-divider',
+        'relative flex min-h-10 scroll-mb-1 flex-col border-b border-worktree-sidebar-border',
         'has-[[data-bot-sidebar-search]]:min-h-45',
         SPLIT_SCROLL_GUTTER,
         fillsSidebar ? 'flex-1' : 'max-h-[40%]'

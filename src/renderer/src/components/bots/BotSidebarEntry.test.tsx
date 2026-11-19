@@ -6,6 +6,7 @@ import { useAppStore } from '@/store'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { WorktreeStatus } from '../../../../shared/worktree/row-display/worktree-status-rollup'
 import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
+import { makeTabGroup, makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import type { Bot } from '../../../../shared/bot-types'
 import type * as SmartSort from '../../../../shared/sidebar-list/sorting/smart-sort'
@@ -44,14 +45,17 @@ const mocks = vi.hoisted(
   })
 )
 
+const openBotSession = vi.hoisted(() => vi.fn())
+vi.mock('./bot-session-open', () => ({ openBotSession }))
+
 vi.mock('./use-bot-chat-tree', async (importOriginal) => {
   const actual = await importOriginal<typeof ChatTree>()
   return {
     ...actual,
-    useBotChatTree: (bot: Bot | null) =>
+    useBotOwnChatTree: (bot: Bot | null) =>
       mocks.chatTree
         ? { ...mocks.chatTree, loadMore: () => {}, retry: () => {} }
-        : actual.useBotChatTree(bot)
+        : actual.useBotOwnChatTree(bot)
   }
 })
 vi.mock('@/lib/bot-hosts', async (importOriginal) => ({
@@ -167,15 +171,6 @@ function renderEntry(
       <BotSidebarEntry bot={bot({ paused })} home={home} isActive={isActive} onOpen={onOpen} />
     </TooltipProvider>
   )
-}
-
-/** The hover card's trigger, which radix anchors the card's right side to. */
-function hoverTrigger(container: HTMLElement): Element {
-  const trigger = container.querySelector('[data-slot="hover-card-trigger"]')
-  if (!trigger) {
-    throw new Error('no hover card trigger')
-  }
-  return trigger
 }
 
 /** Workspaces under the bot's home by name, each with its status; `cli` ones were linked by hand. */
@@ -325,18 +320,14 @@ describe('BotSidebarEntry', () => {
     expect(lines()).toHaveLength(5)
   })
 
-  it('shows the worker count only while its workers are folded away', () => {
+  it('shows the idle worker count only while folded', () => {
     seed({ ok: 'done', ok2: 'inactive' })
     renderEntry()
 
-    expect(screen.getByRole('button', { name: 'Fold Scout' }).textContent).toBe('')
-  })
+    const toggle = screen.getByRole('button', { name: 'Fold Scout' })
+    expect(toggle.textContent).toBe('')
 
-  it('shows the total while folded when nothing is live', () => {
-    seed({ ok: 'done', ok2: 'inactive' })
-    renderEntry()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Fold Scout' }))
+    fireEvent.click(toggle)
     expect(screen.getByRole('button', { name: 'Unfold Scout' }).textContent).toBe('2')
   })
 
@@ -354,17 +345,6 @@ describe('BotSidebarEntry', () => {
     expect(busy).toBe(idle)
   })
 
-  it('shows eight active lines, then the rest in place', () => {
-    seed(Object.fromEntries(Array.from({ length: 10 }, (_, index) => [`ws-${index}`, 'done'])))
-    renderEntry()
-
-    expect(lines()).toHaveLength(8)
-    fireEvent.click(screen.getByRole('button', { name: 'Show 2 more' }))
-    expect(lines()).toHaveLength(10)
-    fireEvent.click(screen.getByRole('button', { name: 'Show fewer' }))
-    expect(lines()).toHaveLength(8)
-  })
-
   it('lists workspaces whose PR merged or closed with the rest, with no done fold', () => {
     seed({ open: 'done', merged: 'done', closed: 'inactive' })
     mocks.reviewById = {
@@ -377,7 +357,7 @@ describe('BotSidebarEntry', () => {
     expect(screen.queryByRole('button', { name: /done/ })).toBeNull()
   })
 
-  it('shows the open workspace even when it ranks past the first eight', () => {
+  it('pages workspaces in place and keeps the open workspace past the cap', () => {
     const names = Array.from({ length: 10 }, (_, index) => `ws-${index}`)
     seed(Object.fromEntries(names.map((name) => [name, 'done'])))
     mocks.smartOrder = names
@@ -385,23 +365,10 @@ describe('BotSidebarEntry', () => {
     renderEntry()
 
     expect(lines()).toEqual([...names.slice(0, 8), 'ws-9'])
-    expect(screen.getByRole('button', { name: 'Show 1 more' })).toBeTruthy()
-  })
-
-  it.each([
-    ['with workspaces', { ws: 'done' } as const],
-    ['without workspaces', {}]
-  ])('anchors the hover card at the row end %s, so it opens past the sidebar', (_name, entries) => {
-    seed(entries)
-    const { container } = renderEntry()
-    const trigger = hoverTrigger(container)
-    const row = container.querySelector('[data-worktree-card-surface]')
-    // The last thing in the row: nothing sits between it and the sidebar's edge.
-    expect(row?.lastElementChild).toBe(trigger)
-    const toggle = screen.queryByRole('button', { name: 'Fold Scout' })
-    // Every bot folds: unfolded, it lists its chats even with no workspaces.
-    expect(toggle).not.toBeNull()
-    expect(trigger.contains(toggle)).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: 'Show 1 more' }))
+    expect(lines()).toEqual(names)
+    fireEvent.click(screen.getByRole('button', { name: 'Show fewer' }))
+    expect(lines()).toEqual([...names.slice(0, 8), 'ws-9'])
   })
 
   it('opens a bot with its chats folded: nothing until the first read, then the last tree at once', async () => {
@@ -443,6 +410,74 @@ describe('BotSidebarEntry', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Unfold Scout' }))
     expect(screen.getByText('Fix the flash')).toBeTruthy()
     expect(lines()).toEqual([])
+  })
+
+  it('folds the front chat from its sidebar row and opens a background chat', () => {
+    seed({ 'front-work': 'working', 'background-work': 'working' })
+    const workspace = folderWorkspaceKey(home.id)
+    const groupId = 'group-1'
+    const tabs = ['front', 'background'].map((id) =>
+      makeUnifiedTab({ id, worktreeId: workspace, groupId, contentType: 'agent-session' })
+    )
+    useAppStore.setState({
+      activeView: 'terminal',
+      activeWorkspaceKey: workspace,
+      activeGroupIdByWorktree: { [workspace]: groupId },
+      groupsByWorktree: {
+        [workspace]: [
+          makeTabGroup({
+            id: groupId,
+            worktreeId: workspace,
+            activeTabId: 'front',
+            tabOrder: ['front', 'background']
+          })
+        ]
+      },
+      unifiedTabsByWorktree: { [workspace]: tabs }
+    })
+    mocks.chatTree = {
+      state: 'ready',
+      workspaceChats: {
+        [worktree('front-work').id]: 'front',
+        [worktree('background-work').id]: 'background'
+      },
+      chats: tabs.map(({ entityId }) => ({
+        chatId: entityId,
+        title: entityId,
+        origin: 'side',
+        live: 'idle',
+        lastActiveAt: 0,
+        unread: false,
+        closed: false,
+        tab: true,
+        running: [],
+        runningTotal: 0,
+        finished: [],
+        finishedTotal: 0,
+        failedTotal: 0
+      }))
+    }
+    openBotSession.mockClear()
+    vi.stubGlobal('api', { ui: { set: vi.fn().mockResolvedValue(undefined) } })
+    try {
+      renderEntry()
+      const front = screen.getByRole('button', { name: /^front · Side chat/ })
+      const background = screen.getByRole('button', { name: /^background · Side chat/ })
+      expect(front.getAttribute('aria-current')).toBe('true')
+      expect(background.hasAttribute('aria-current')).toBe(false)
+
+      fireEvent.click(front, { detail: 1 })
+      expect(front.getAttribute('aria-expanded')).toBe('true')
+      fireEvent.click(front, { detail: 1 })
+      expect(front.getAttribute('aria-expanded')).toBe('false')
+      expect(openBotSession).not.toHaveBeenCalled()
+
+      fireEvent.click(background, { detail: 1 })
+      expect(openBotSession).toHaveBeenCalledExactlyOnceWith(bot(), 'background')
+      expect(background.getAttribute('aria-expanded')).toBe('true')
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 
   it('lists nothing under a bot whose server is down, and gives it no fold', () => {

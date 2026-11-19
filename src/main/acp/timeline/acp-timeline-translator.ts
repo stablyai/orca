@@ -290,7 +290,7 @@ export class AcpTimelineTranslator {
   private endTurn(turn: string, ending: AcpTurnEnding): ProviderTimelineEvent[] {
     const events = this.prompts.endCompaction(turn, ending, this.failures) ?? [
       ...this.failures.ended(turn, ending),
-      ...acpTurnEndEvents(this.options.sessionId, turn, ending)
+      ...acpTurnEndEvents(this.options.sessionId, turn, this.failures.ending(turn, ending))
     ]
     this.end(turn)
     if (this.prompts.current?.turn === turn) {

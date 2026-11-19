@@ -25,8 +25,13 @@ const TRIO: Spot[] = [
   { x: 5, y: 15, size: 13, font: 8 }
 ]
 
-/** A group's circles, back to front: every member up to three; past that two faces and a "+N" circle. */
-export function botGroupFaces<T>(members: readonly T[], keyOf: (member: T) => string) {
+/** A group's circles, back to front: every member up to three; past that two faces and a "+N" circle.
+ *  `scale` sizes the row's 28px picture for a larger slot. */
+export function botGroupFaces<T>(
+  members: readonly T[],
+  keyOf: (member: T) => string,
+  scale = 1
+): BotGroupFace<T>[] {
   const [first, second, third] = members
   if (!first) {
     return []
@@ -34,7 +39,10 @@ export function botGroupFaces<T>(members: readonly T[], keyOf: (member: T) => st
   const at = (spot: Spot, face: BotGroupFace<T>['face'], key: string): BotGroupFace<T> => ({
     key,
     face,
-    ...spot
+    x: spot.x * scale,
+    y: spot.y * scale,
+    size: spot.size * scale,
+    font: spot.font * scale
   })
   if (!second) {
     return [at({ x: 4, y: 4, size: 20, font: 11 }, { member: first }, keyOf(first))]

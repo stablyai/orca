@@ -96,6 +96,8 @@ export async function endRepliedTurn(
   if (!fill || !turn.stamps?.length || !turn.turnItemId) {
     return false
   }
+  const failure =
+    end.news.outcome === 'failure' ? { failure: connectorFailure(turn.failure, end.agent) } : {}
   const covered = await fill({
     sessionId: end.news.sessionId,
     turnItemId: turn.turnItemId,
@@ -104,9 +106,7 @@ export async function endRepliedTurn(
     prose: turn.turnProse ?? '',
     bot: Boolean(link.bot),
     links: link.bot ? await links() : [],
-    ...(end.news.outcome === 'failure'
-      ? { failure: connectorFailure(turn.failure, end.agent) }
-      : {})
+    ...failure
   }).catch((error: unknown) => {
     console.warn('[connector] could not fill reply outbox rows', error)
     return new Set<string>()
@@ -116,7 +116,8 @@ export async function endRepliedTurn(
   }
   await end.workersChecked()
   if (end.current()) {
-    end.emit({ ...end.ended, stateOnly: true })
+    // The cloud keeps the thread's failure from whichever of this and the reply lands last.
+    end.emit({ ...end.ended, stateOnly: true, ...failure })
   }
   return true
 }

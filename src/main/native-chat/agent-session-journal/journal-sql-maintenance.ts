@@ -1,3 +1,14 @@
+import { createHash } from 'node:crypto'
+import type { LegacyDestinationIdentity } from './journal-legacy-retirement-files'
+import type { LegacyClaim } from './journal-legacy-content-proof'
+import {
+  JOURNAL_LEGACY_ORIGINAL,
+  JOURNAL_LEGACY_RETIREMENT,
+  type JournalLegacyRetirementState
+} from './journal-legacy-retirement-state'
+import { JOURNAL_LEGACY_SOURCE_RECEIPT } from './database/journal-legacy-source-receipt'
+import { JOURNAL_LEGACY_REVISIONS_KEPT } from './database/journal-legacy-reconcile'
+import { JOURNAL_LEGACY_CONVERTED_BY } from './database/journal-host-database'
 import { rekeyWslDriveUncChats } from '../../wsl/filesystem/wsl-drive-unc-chat-rekey'
 import type { JournalForkStageOperation, JournalForkStageResult } from './journal-fork-stages'
 import { saveJournalDomainOutlineCache, type JournalOutlineCache } from './journal-domain-outline'
@@ -52,6 +63,18 @@ export type JournalPagedMaintenanceKind =
   | 'output-file-sweep'
 
 export type JournalSqlMaintenance =
+  | { kind: 'legacy-retirement-state' }
+  | { kind: 'legacy-claims-absorb'; claims: readonly LegacyClaim[] }
+  | {
+      kind: 'legacy-originals-keep'
+      originals: readonly { sessionId: string; value: string; identity: string }[]
+    }
+  | {
+      kind: 'legacy-retirement-save'
+      value: string
+      durable: boolean
+      destination?: LegacyDestinationIdentity
+    }
   | { kind: 'records-install' }
   | { kind: 'wsl-workspace-rekey'; worktreeIds: readonly (readonly [string, string])[] }
   | JournalForkStageOperation
@@ -77,6 +100,7 @@ export type JournalSqlMaintenance =
 export type JournalSqlProjectionState = JournalDomainImportState
 
 export type JournalSqlMaintenanceResult =
+  | ({ kind: 'legacy-retirement-state' } & JournalLegacyRetirementState)
   | { kind: 'records'; records: JournalSqlStoredRecords }
   | JournalForkStageResult
   | JournalSqlProjectionState
@@ -94,6 +118,49 @@ export function applyJournalSqlMaintenance(
   operation: JournalSqlMaintenance
 ): JournalSqlMaintenanceResult {
   switch (operation.kind) {
+    case 'legacy-retirement-state': {
+      const value = (key: string) =>
+        db
+          .prepare('SELECT value FROM agent_session_store_meta WHERE key=?')
+          .get(key)
+          ?.value?.toString() ?? null
+      return {
+        kind: 'legacy-retirement-state',
+        receipt: value(JOURNAL_LEGACY_SOURCE_RECEIPT),
+        kept: value(JOURNAL_LEGACY_REVISIONS_KEPT) !== null,
+        convertedBy: value(JOURNAL_LEGACY_CONVERTED_BY),
+        retirement: value(JOURNAL_LEGACY_RETIREMENT)
+      }
+    }
+    case 'legacy-claims-absorb': {
+      // Keeps the uploads an original claimed for chats this store keeps before it retires.
+      const insert = db.prepare(`INSERT INTO agent_session_attachment_claims(upload_id,session_id,
+        claimed_at) VALUES(?,?,?) ON CONFLICT DO NOTHING`)
+      for (const claim of operation.claims) {
+        insert.run(claim.uploadId, claim.sessionId, claim.claimedAt)
+      }
+      return true
+    }
+    case 'legacy-originals-keep': {
+      // What only the original holds for a chat both sides changed, kept verbatim before it goes.
+      // Keyed by what a person made in it too, so an original retired later never replaces one kept
+      // before, and one differing only in bookkeeping adds nothing.
+      const keep = db.prepare(
+        'INSERT OR IGNORE INTO agent_session_store_meta(key,value) VALUES(?,?)'
+      )
+      for (const { sessionId, value, identity } of operation.originals) {
+        const digest = createHash('sha256').update(identity).digest('hex').slice(0, 16)
+        keep.run(`${JOURNAL_LEGACY_ORIGINAL}${sessionId}:${digest}`, value)
+      }
+      return true
+    }
+    case 'legacy-retirement-save':
+      db.prepare('INSERT OR REPLACE INTO agent_session_store_meta(key,value) VALUES(?,?)').run(
+        JOURNAL_LEGACY_RETIREMENT,
+        operation.value
+      )
+      return true
+
     case 'wsl-workspace-rekey':
       return rekeyWslDriveUncChats(db, operation.worktreeIds)
     case 'records-install': {

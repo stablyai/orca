@@ -15,7 +15,16 @@ const RUN_TIMEOUT_MS = 11 * 60_000
 // Chat starts come in bursts; one ask per host in this window is enough.
 const CHECK_INTERVAL_MS = 10 * 60_000
 
-export type AgentCliUpdateRun = { phase: 'running' } | { phase: 'failed'; output: string }
+export type AgentCliUpdateRun =
+  | { phase: 'running' }
+  | {
+      phase: 'failed'
+      /** Capped by the host, so the failure dialog can show all of it. */
+      output: string
+      /** What Orca ran; absent when nothing ran. */
+      command?: string
+      finishedAt: number
+    }
 
 /** One host's answer about the user's own agent CLIs, and the updates run there from this window. */
 export type AgentCliUpdateHost = {
@@ -124,7 +133,12 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
         result = { ok: false, output: error instanceof Error ? error.message : String(error) }
       }
       if (!result.ok) {
-        writeRun(key, agent, { phase: 'failed', output: result.output })
+        writeRun(key, agent, {
+          phase: 'failed',
+          output: result.output,
+          ...(result.command ? { command: result.command } : {}),
+          finishedAt: Date.now()
+        })
         return false
       }
       writeHost(key, (host) => {

@@ -21,7 +21,11 @@ export default function NativeChatView(props: NativeChatViewProps): React.JSX.El
           sessionId={props.sessionId}
           target={props.target}
         >
-          <NativeChatWorkersProvider target={props.target} sessionId={props.sessionId}>
+          <NativeChatWorkersProvider
+            target={props.target}
+            sessionId={props.sessionId}
+            visible={props.isVisible}
+          >
             <BotChatRoom tabId={props.tabId} sessionId={props.sessionId}>
               <NativeChatStructuredSession {...props} />
             </BotChatRoom>

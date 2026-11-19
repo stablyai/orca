@@ -75,7 +75,7 @@ describe('group threads', () => {
     )
   })
 
-  it('gives a joining bot a session in every room, and closes a leaving bot in every room', async () => {
+  it('opens and retires member sessions in each room while preserving history', async () => {
     const { groups } = fixture()
     const group = await groups.create({ name: 'Review', botIds: ['bot-0'] })
     const { threadId } = await groups.newThread(group.id)
@@ -91,33 +91,23 @@ describe('group threads', () => {
     expect(groups.store.memberOf(joinedInThread)?.threadId).toBe(threadId)
 
     mocks.close.mockClear()
-    await groups.update({ groupId: group.id, revision: joined.revision, botIds: ['bot-0'] })
-    expect(mocks.close.mock.calls.map(([sessionId]) => sessionId).toSorted()).toEqual(
-      [joined.members[1]?.sessionId, joinedInThread].toSorted()
-    )
-    mocks.close.mockClear()
-    await groups.delete(group.id)
-    expect(mocks.close).toHaveBeenCalledTimes(2)
-  })
-
-  it("keeps a replaced member's session in its room, so the room's history still opens it", async () => {
-    const { groups } = fixture()
-    const group = await groups.create({ name: 'Review', botIds: ['bot-0'] })
-    const { threadId, group: withThread } = await groups.newThread(group.id)
-    const original = group.members[0]?.sessionId ?? ''
-    const inThread = withThread.threads?.[0]?.members[0]?.sessionId ?? ''
-    const replaced = await groups.update({
+    const joinedInMain = joined.members[1].sessionId
+    const retired = await groups.update({
       groupId: group.id,
-      revision: group.revision,
-      botIds: ['bot-1']
+      revision: joined.revision,
+      botIds: ['bot-0']
     })
-
-    expect(findBotGroupRoomOfSession([replaced], inThread)?.threadId).toBe(threadId)
-    expect(findBotGroupRoomOfSession([replaced], original)).toMatchObject({
+    expect(mocks.close.mock.calls.map(([sessionId]) => sessionId).toSorted()).toEqual(
+      [joinedInMain, joinedInThread].toSorted()
+    )
+    expect(findBotGroupRoomOfSession([retired], joinedInThread)?.threadId).toBe(threadId)
+    expect(findBotGroupRoomOfSession([retired], joinedInMain)).toMatchObject({
       group: { id: group.id },
       threadId: undefined
     })
-    // Lineage is for history only; a former member is no member.
-    expect(groups.store.memberOf(inThread)).toBeNull()
+    expect(groups.store.memberOf(joinedInThread)).toBeNull()
+    mocks.close.mockClear()
+    await groups.delete(group.id)
+    expect(mocks.close).toHaveBeenCalledTimes(2)
   })
 })
