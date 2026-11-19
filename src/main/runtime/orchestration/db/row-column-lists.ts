@@ -39,6 +39,8 @@ export const TASK_COLUMNS = [
   'created_by_run_generation',
   'task_title',
   'display_name',
+  'model',
+  'effort',
   'spec',
   'status',
   'deps',

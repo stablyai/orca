@@ -200,6 +200,42 @@ describe('commands about a worker a paired server owns', () => {
     }
   }
 
+  it.each([
+    { overrides: {}, expected: { model: 'gpt-6.1-sol', effort: 'high' } },
+    { overrides: { model: 'gpt-6-luna' }, expected: { model: 'gpt-6-luna', effort: undefined } }
+  ])(
+    'forwards task launch defaults and overrides to the execution host: $overrides',
+    async ({ overrides, expected }) => {
+      const run = db.createRun({
+        objective: 'Plan and build',
+        coordinatorHandle: 'term_coord',
+        coordinatorPaneKey: COORDINATOR_PANE
+      })
+      const task = db.createTask({
+        runId: run.id,
+        spec: 'Plan the implementation',
+        model: 'gpt-6.1-sol',
+        effort: 'high'
+      })
+      answers['orchestration.workerStart'] = [started()]
+      const response = await call('orchestration.workerStart', {
+        task: task.id,
+        run: run.id,
+        from: 'term_coord',
+        on: 'devB',
+        worktree: 'new-top-level',
+        agent: 'codex',
+        ...overrides
+      })
+
+      expect(response.ok).toBe(true)
+      const forwarded = sent.find((s) => s.method === 'orchestration.workerStart')?.params
+      expect(forwarded?.model).toBe(expected.model)
+      expect(forwarded?.effort).toBe(expected.effort)
+      expect(db.getTask(task.id)).toMatchObject({ model: 'gpt-6.1-sol', effort: 'high' })
+    }
+  )
+
   it("sends a new-child there with this caller's workspace as its parent", async () => {
     const parent = {
       installationId: 'install_a',

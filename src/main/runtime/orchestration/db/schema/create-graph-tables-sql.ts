@@ -159,6 +159,8 @@ CREATE TABLE IF NOT EXISTS tasks (
   created_by_run_generation INTEGER,
   task_title    TEXT,
   display_name  TEXT,
+  model         TEXT,
+  effort        TEXT,
   spec          TEXT NOT NULL,
   status        TEXT NOT NULL DEFAULT 'pending'
     CHECK(status IN (

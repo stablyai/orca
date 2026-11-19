@@ -243,6 +243,16 @@ export async function prepareWorkerStart(
   }
   if (existingTask) {
     await assertWorkerStartTaskSpecWithinPromptBudget(existingTask.spec)
+    // Reusing a terminal keeps its running model; an explicit model replaces the task's pair.
+    if (!params.terminal) {
+      params = {
+        ...params,
+        model: params.model ?? existingTask.model ?? undefined,
+        effort:
+          params.effort ??
+          (params.model === undefined ? (existingTask.effort ?? undefined) : undefined)
+      }
+    }
   }
   if (followUp) {
     const placement = await followUp.place(() => {

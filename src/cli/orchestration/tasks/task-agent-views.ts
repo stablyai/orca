@@ -6,6 +6,8 @@ export type TaskListResult = {
     spec: string
     task_title?: string | null
     display_name?: string | null
+    model?: string | null
+    effort?: string | null
     status: string
     assignee_handle?: string | null
     dispatch_id?: string | null
@@ -37,7 +39,9 @@ export const TASK_LIST_VIEW: OrchestrationAgentView<TaskListResult, Record<strin
       deps: task.deps && task.deps !== '[]' ? task.deps : undefined,
       parentId: task.parent_id ?? undefined,
       dispatchId: task.dispatch_id ?? undefined,
-      assignee: task.assignee_handle ?? undefined
+      assignee: task.assignee_handle ?? undefined,
+      model: task.model ?? undefined,
+      effort: task.effort ?? undefined
     })),
     runId: r.runId,
     legacyReadOnly: r.legacyReadOnly || undefined

@@ -82,21 +82,19 @@ const StartedOnServer = z.object({
  */
 export async function startRemoteOwnedWorker(
   runtime: OrcaRuntimeService,
-  params: StartParams,
+  startParams: StartParams,
   ctx: StartContext,
   callerRequestId: string | undefined
 ): Promise<unknown> {
-  if (params.terminal) {
+  if (startParams.terminal) {
     throw new OrchestrationError(
       'invalid_argument',
       '--terminal names a terminal on this Orca, so it cannot be used with --on. No effects were applied.',
       { effectsApplied: false }
     )
   }
-  const { coordinator, bindRun, taskDeps, existingTask, withRun } = await prepareWorkerStart(
-    params,
-    ctx
-  )
+  const { params, coordinator, bindRun, taskDeps, existingTask, withRun } =
+    await prepareWorkerStart(startParams, ctx)
   const db = runtime.getOrchestrationDb()
   const server = await runtime.resolveOrchestrationWorkerServer(params.on!)
   // This caller's workspace is here, so a server's new-child nests under it across machines.

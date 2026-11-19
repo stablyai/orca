@@ -15,6 +15,8 @@ export function createTask(
     spec: string
     taskTitle?: string
     displayName?: string
+    model?: string
+    effort?: string
     deps?: string[]
     parentId?: string
     createdByTerminalHandle?: string
@@ -53,9 +55,9 @@ export function createTask(
       `INSERT INTO tasks (
          id, run_id, parent_id, created_by_terminal_handle, created_by_pane_key,
          created_by_process_incarnation, created_by_run_generation,
-         task_title, display_name, spec, status, deps
+         task_title, display_name, model, effort, spec, status, deps
        ) VALUES (
-         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+         ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
          CASE WHEN EXISTS (
            SELECT 1
            FROM json_each(?) requested
@@ -77,6 +79,8 @@ export function createTask(
       task.createdByRunGeneration ?? null,
       display.taskTitle || null,
       display.displayName || null,
+      task.model ?? null,
+      task.effort ?? null,
       task.spec,
       depsJson,
       runId,
