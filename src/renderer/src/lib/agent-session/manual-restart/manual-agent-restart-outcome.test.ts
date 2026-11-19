@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import { makeTerminalTab } from '@/store/terminals/testing/terminal-row.test-fixture'
 import { isDetachedRestartInFlight } from '@/components/terminal-pane/account-restart/detached/codex-detached-pane-restart'
+import { notifyDetachedRestartSettled } from '@/components/terminal-pane/account-restart/detached/detached-pane-restart-slots'
 import { trackManualAgentRestarts } from './manual-agent-restart-outcome'
 
 vi.mock('@/components/terminal-pane/account-restart/detached/codex-detached-pane-restart', () => ({
@@ -92,6 +93,24 @@ it('waits for an in-flight detached restart to rebind the leaf', async () => {
 
   useAppStore.getState().consumePendingPaneRestart('pty-1')
   await Promise.resolve()
+  useAppStore.getState().updateTabPtyId(TAB_ID, 'pty-3', 'pty-1')
+
+  expect(await outcome).toEqual({ restarted: 1, failed: 0 })
+})
+
+it('keeps waiting when a detached claim hands its restart back to the mounted pane', async () => {
+  seedQueuedPane()
+  vi.mocked(isDetachedRestartInFlight).mockReturnValue(true)
+  const outcome = trackManualAgentRestarts([PANE])
+
+  useAppStore.getState().consumePendingPaneRestart('pty-1')
+  await Promise.resolve()
+  useAppStore.getState().queuePaneManualRestarts([{ ptyId: 'pty-1', agent: 'codex' }])
+  vi.mocked(isDetachedRestartInFlight).mockReturnValue(false)
+  notifyDetachedRestartSettled()
+  await Promise.resolve()
+  // The mounted executor then consumes the handed-back entry and binds the new PTY.
+  useAppStore.getState().consumePendingPaneRestart('pty-1')
   useAppStore.getState().updateTabPtyId(TAB_ID, 'pty-3', 'pty-1')
 
   expect(await outcome).toEqual({ restarted: 1, failed: 0 })

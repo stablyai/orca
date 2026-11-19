@@ -25,3 +25,17 @@ export function holdDetachedRestartSlot(ptyId: string, onStall: () => void): () 
 export function resetDetachedRestartSlotsForTests(): void {
   slotHolderPtyIds.clear()
 }
+
+const settleListeners = new Set<() => void>()
+
+/** Calls `listener` each time a detached restart claim settles, even one that wrote nothing to the store. */
+export function onDetachedRestartSettled(listener: () => void): () => void {
+  settleListeners.add(listener)
+  return () => settleListeners.delete(listener)
+}
+
+export function notifyDetachedRestartSettled(): void {
+  for (const listener of settleListeners) {
+    listener()
+  }
+}

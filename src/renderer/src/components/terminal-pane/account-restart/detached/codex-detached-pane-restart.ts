@@ -22,6 +22,7 @@ import { restartPaneOwner } from '../pane-ownership/codex-restart-main-pane'
 import {
   hasFreeDetachedRestartSlot,
   holdDetachedRestartSlot,
+  notifyDetachedRestartSettled,
   resetDetachedRestartSlotsForTests
 } from './detached-pane-restart-slots'
 import {
@@ -110,7 +111,6 @@ async function restartUnclaimedPane(ptyId: string, onSettled?: () => void): Prom
     await executeDetachedCodexPaneRestart(located, ptyId, restart)
   } catch (err) {
     console.warn('[codex-restart] detached pane restart failed:', err)
-    // Why: a manual restart never answered a Codex prompt, so there is none to reopen.
     if (restart?.intent === 'manual') {
       return
     }
@@ -124,6 +124,7 @@ async function restartUnclaimedPane(ptyId: string, onSettled?: () => void): Prom
     if (releaseSlot) {
       releaseSlot()
       inFlightPtyIds.delete(ptyId)
+      notifyDetachedRestartSettled()
       onSettled?.()
     }
   }

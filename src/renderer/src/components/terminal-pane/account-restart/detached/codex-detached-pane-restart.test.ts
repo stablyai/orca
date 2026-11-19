@@ -5,6 +5,7 @@ import { makeTerminalTab } from '@/store/terminals/testing/terminal-row.test-fix
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import { getDefaultSettings } from '../../../../../../shared/orca-profiles/constants'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
+import { trackManualAgentRestarts } from '@/lib/agent-session/manual-restart/manual-agent-restart-outcome'
 import {
   resetDetachedCodexPaneRestartClaimsForTests,
   sweepUnclaimedCodexPaneRestarts
@@ -72,6 +73,17 @@ it('does nothing for a manual restart of a leafless detached pane', async () => 
   expect(spawn).not.toHaveBeenCalled()
   expect(queueTabStartupCommand).not.toHaveBeenCalled()
   expect(useAppStore.getState().pendingPaneManualRestarts).toEqual({})
+})
+
+it('lets the restart summary count a manual restart that had no session to resume', async () => {
+  seedDetachedPane({ leafId: LEAF_ID })
+  useAppStore.getState().queuePaneManualRestarts([{ ptyId: PTY_ID, agent: 'codex' }])
+  const outcome = trackManualAgentRestarts([{ tabId: TAB_ID, leafId: LEAF_ID, ptyId: PTY_ID }])
+
+  // The claim gives up after consuming the entry and writes nothing else to the store.
+  await sweepUnclaimedCodexPaneRestarts()
+
+  expect(await outcome).toEqual({ restarted: 0, failed: 1 })
 })
 
 it('requeues a manual restart into the manual queue when the tab mounts mid-claim', async () => {

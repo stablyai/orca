@@ -2,7 +2,11 @@
 import { useAppStore } from '@/store/index'
 import { isTerminalTabPresent } from '@/store/terminals/retirement/terminal-tab-retirement'
 import { isDetachedRestartInFlight } from '@/components/terminal-pane/account-restart/detached/codex-detached-pane-restart'
-import { STALLED_DETACHED_RESTART_MS } from '@/components/terminal-pane/account-restart/detached/detached-pane-restart-slots'
+// Why the detached stall cap: a claim past it may never settle, and the summary must still appear.
+import {
+  STALLED_DETACHED_RESTART_MS,
+  onDetachedRestartSettled
+} from '@/components/terminal-pane/account-restart/detached/detached-pane-restart-slots'
 import { collectLeafIds } from '../../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import type { AppState } from '@/store/types'
 
@@ -35,12 +39,12 @@ function judgePane(state: AppState, pane: TrackedPane): keyof ManualRestartOutco
   if (!isTerminalTabPresent(state, pane.tabId) || !leafPresent) {
     return 'failed'
   }
-  if (pane.consumedPtyId === null) {
-    if (pane.ptyId in state.pendingPaneManualRestarts) {
-      return null
-    }
-    pane.consumedPtyId = pane.ptyId
+  if (pane.ptyId in state.pendingPaneManualRestarts) {
+    // Why reset: a detached claim hands its entry back when the tab mounts mid-restart.
+    pane.consumedPtyId = null
+    return null
   }
+  pane.consumedPtyId ??= pane.ptyId
   if (bound !== undefined && bound !== pane.consumedPtyId) {
     return 'restarted'
   }
@@ -63,6 +67,7 @@ export function trackManualAgentRestarts(
     let judgeQueued = false
     const finish = (): void => {
       unsubscribe()
+      unsubscribeSettled()
       clearTimeout(deadline)
       resolve(outcome)
     }
@@ -94,6 +99,8 @@ export function trackManualAgentRestarts(
       }
       queueJudge()
     })
+    // Why: a detached restart that gives up silently writes nothing to the store.
+    const unsubscribeSettled = onDetachedRestartSettled(queueJudge)
     const deadline = setTimeout(() => {
       const late = pending
       pending = []
