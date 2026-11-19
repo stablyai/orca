@@ -208,6 +208,15 @@ async function showTerminalWorkspace(page) {
     window.__store.getState().setActiveTabType?.('terminal', worktreeId)
   })
   await sleep(3_000)
+  // A startup announcement dialog traps focus, so keys would land in it instead of the terminal.
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const open = await page.evaluate(() => Boolean(document.querySelector('[role="dialog"]')))
+    if (!open) {
+      break
+    }
+    await page.keyboard.press('Escape')
+    await sleep(500)
+  }
 }
 
 async function typeIntoComposer({ page, windowMs }) {
@@ -258,6 +267,15 @@ async function typeIntoComposer({ page, windowMs }) {
       window.getSelection()?.addRange(range)
     }
   })
+  const focusHolder = await page.evaluate(() => {
+    const active = document.activeElement
+    return active?.matches('[data-fleet-gate-input="1"]')
+      ? null
+      : `${active?.tagName.toLowerCase() ?? 'nothing'}${active?.getAttribute('role') ? `[role=${active.getAttribute('role')}]` : ''}`
+  })
+  if (focusHolder) {
+    return { note: `focus held by ${focusHolder}`, undriven: `focus held by ${focusHolder}` }
+  }
   const lengthBefore = await textLength()
   const typingStarted = Date.now()
   const deadline = typingStarted + windowMs
