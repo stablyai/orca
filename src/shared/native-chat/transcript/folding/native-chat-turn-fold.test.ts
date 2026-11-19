@@ -123,7 +123,7 @@ describe('failed hooks in a settled turn', () => {
 
 it('retains only prepended history disclosures until an explicit collapse, while ordinary completion still folds', () => {
   const messages: NativeChatMessage[] = [PROMPT, WORK, ANSWER]
-  const rows = messages.map((item) => nativeChatTurnFoldRow(item, 'turn-1', false))
+  const rows = messages.map((item) => nativeChatTurnFoldRow(item, 'turn-1', undefined))
   const initial = nativeChatHistoryTurnFold(null, {
     scope: 'a',
     messages: messages.slice(1),
