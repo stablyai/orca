@@ -123,3 +123,14 @@ it("waits out the grace after a parent's busy Stop that lands after its subagent
   vi.advanceTimersByTime(ANTIGRAVITY_PARENT_WAKE_GRACE_MS + 1)
   expect(state()).toBe('done')
 })
+
+it("keeps the run working when agy's done lands while a sibling subagent still works", async () => {
+  await parentStopsWhileSubagentRuns()
+  await agyHook('PreInvocation', { conversationId: 'sibling', lastUserInput: '' })
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+  programDone()
+  await subagentIdleStop()
+
+  vi.advanceTimersByTime(ANTIGRAVITY_PARENT_WAKE_GRACE_MS * 2)
+  expect(state()).toBe('working')
+})

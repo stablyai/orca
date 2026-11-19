@@ -74,20 +74,24 @@ export function normalizeAntigravityEvent(
     // Subagents run inside the parent agy under their own conversationId and never carry user input.
     if (!readFirstString(hookPayload, ['lastUserInput'])) {
       const work = antigravityChildWork(state, paneKey)
-      // Unless agy wakes the parent with this result, the subagent's Stop is the run's last hook;
+      const open = (work.openSubagents ??= new Set())
+      if (eventName === 'Stop' && !isAntigravityStopStillBusy(hookPayload)) {
+        open.delete(conversationId)
+      } else {
+        open.add(conversationId)
+      }
+      // Unless agy wakes the parent with this result, the last subagent's Stop is the run's last hook;
       // a sibling still working or a parent command still running keeps the run open.
-      if (
-        eventName === 'Stop' &&
-        !isAntigravityStopStillBusy(hookPayload) &&
-        (work.commands?.size ?? 0) === 0
-      ) {
+      if (open.size === 0 && (work.commands?.size ?? 0) === 0) {
         work.helpersIdleAt = Date.now()
       } else {
         delete work.helpersIdleAt
       }
       return null
     }
-    delete antigravityChildWork(state, paneKey).subagentParent
+    const work = antigravityChildWork(state, paneKey)
+    delete work.subagentParent
+    delete work.openSubagents
   }
   const pendingHelpersIdle = state.antigravityChildWorkByPaneKey.get(paneKey)
   // The parent's busy Stop may land after its last subagent's; only other parent work reopens the run.

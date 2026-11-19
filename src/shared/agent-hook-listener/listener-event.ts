@@ -103,6 +103,8 @@ export type ToolSnapshot = {
 export type AntigravityChildWork = {
   subagentParent?: string
   commands?: Set<string>
+  /** Subagent conversations whose latest hook was not a fully idle Stop. */
+  openSubagents?: Set<string>
   /** When a subagent last sent a fully idle Stop after the parent's latest event; agy may then end with no parent Stop. */
   helpersIdleAt?: number
 }
