@@ -92,11 +92,14 @@ describe('buildSkillDeletePlan placement enumeration', () => {
     }
   )
 
-  it.skipIf(WINDOWS)(
-    'refuses a bundled skill even when the row claimed a home source',
-    async () => {
+  it.skipIf(WINDOWS).each([
+    ['.claude', 'skills', '.system', 'demo'],
+    ['.cursor', 'skills-cursor', 'demo']
+  ])(
+    'refuses a bundled skill even when the row claimed a home source (%s/%s)',
+    async (...segments) => {
       const { home } = await fixture()
-      const bundled = join(home, '.claude', 'skills', '.system', 'demo')
+      const bundled = join(home, ...segments)
       const file = await writeSkill(bundled, 'demo')
       await mkdir(join(home, '.agents', 'skills'), { recursive: true })
       await symlink(bundled, join(home, '.agents', 'skills', 'demo'), 'dir')

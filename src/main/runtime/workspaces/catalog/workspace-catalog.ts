@@ -39,6 +39,8 @@ import {
 import { withUnregisteredRemovalCheckouts } from '../../../workspaces/removal/worktree-removal-listing'
 import { withoutInFlightWorktreeCreates } from '../../../workspaces/creation/worktree-create-in-flight'
 import { preserveFolderUpgradeWorktreePath } from '../../../workspaces/catalog/folder-upgrade-worktree-path'
+import { collapsePathEqualWorktreeRows } from '../../../workspaces/catalog/path-equal-worktree-rows'
+import { readRuntimeWorktreeMetadata } from './runtime-listing-metadata'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import {
   peekWorktreeCatalog,
@@ -236,8 +238,16 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     options: { claimsHygiene?: boolean } = {}
   ): Promise<RuntimeWorktreeScanResult> {
     const cached = await this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId, options)
+    const store = this.requireStore()
     // Paired detectedList must retain folder-upgrade locators or folder ids lose metadata and terminals (#30150).
-    const scan = { ...cached, worktrees: preserveFolderUpgradeWorktreePath(repo, cached.worktrees) }
+    const scan = {
+      ...cached,
+      worktrees: collapsePathEqualWorktreeRows(
+        repo,
+        preserveFolderUpgradeWorktreePath(repo, cached.worktrees),
+        (worktreeId) => readRuntimeWorktreeMetadata(store, repo, worktreeId) !== undefined
+      )
+    }
     const listing =
       scan.ok && getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
         ? {
