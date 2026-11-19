@@ -189,3 +189,83 @@ it('focuses the More trigger when hiding a plugin whose neighbour is under More'
     expect(document.activeElement).toBe(document.querySelector('[data-activity-overflow-trigger]'))
   )
 })
+
+function builtIn(id: ActiveRightSidebarTab, title: string): ActivityBarItem {
+  return { id, title, icon: () => null, shortcut: '' }
+}
+
+it('moves a strip tab without re-inserting tabs under More when nothing is saved', () => {
+  // Strip shows Explorer and Checks; Source Control, Ports, Vault and the plugin sit under More.
+  const a = builtIn('explorer', 'Explorer')
+  const b = builtIn('checks', 'Checks')
+  const c = builtIn('source-control', 'Source Control')
+  const d = builtIn('ports', 'Ports')
+  const e = builtIn('vault', 'Agents')
+  render(
+    bar({
+      isBotPage: false,
+      visibleItems: [a, b],
+      overflowItems: [c, d, e, plugin],
+      arrangementItems: [a, b, c, d, e, plugin]
+    })
+  )
+  openMenuOn('Checks')
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Move left' }))
+  expect(useAppStore.getState().activityBarOrder).toEqual([
+    'checks',
+    'explorer',
+    'source-control',
+    'ports',
+    'vault',
+    'plugin:test/panel'
+  ])
+})
+
+it('moves an active tab pinned into the strip without pushing a strip tab under More', () => {
+  // Explorer, Checks and Workspaces are shown; Source Control, Ports and Agents sit under More.
+  const a = builtIn('explorer', 'Explorer')
+  const b = builtIn('checks', 'Checks')
+  const c = builtIn('source-control', 'Source Control')
+  const d = builtIn('ports', 'Ports')
+  const e = builtIn('vault', 'Agents')
+  const f = builtIn('workspaces', 'Worktrees')
+  render(
+    bar({
+      isBotPage: false,
+      visibleItems: [a, b, f],
+      overflowItems: [c, d, e],
+      effectiveTab: 'workspaces',
+      arrangementItems: [a, b, c, d, e, f]
+    })
+  )
+  openMenuOn('Worktrees')
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Move left' }))
+  expect(useAppStore.getState().activityBarOrder).toEqual([
+    'explorer',
+    'workspaces',
+    'checks',
+    'source-control',
+    'ports',
+    'vault'
+  ])
+})
+
+it('offers no Move items for a tab under More in the top layout', async () => {
+  const a = builtIn('explorer', 'Explorer')
+  const b = builtIn('checks', 'Checks')
+  const c = builtIn('vault', 'Agents')
+  render(
+    bar({ isBotPage: false, visibleItems: [a, b], overflowItems: [c], arrangementItems: [a, b, c] })
+  )
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'More sidebar tabs' }), {
+    button: 0,
+    pointerType: 'mouse',
+    ctrlKey: false
+  })
+  fireEvent.contextMenu(await screen.findByRole('menuitem', { name: 'Agents' }), {
+    clientX: 40,
+    clientY: 20
+  })
+  expect(screen.queryByRole('menuitem', { name: 'Move left' })).toBeNull()
+  expect(screen.queryByRole('menuitem', { name: 'Move right' })).toBeNull()
+})

@@ -66,3 +66,23 @@ export function activityOrderForPage(
 ): string[] {
   return isBotPage ? orders.botOrder : orders.order
 }
+
+/**
+ * Moves `fromId` into `toId`'s slot within the full list of shown tabs, so tabs under More keep
+ * their places. Returns null when either id is missing or nothing moves.
+ */
+export function moveActivityInShownList(
+  shownIds: readonly string[],
+  fromId: string,
+  toId: string
+): string[] | null {
+  const from = shownIds.indexOf(fromId)
+  const to = shownIds.indexOf(toId)
+  if (from === -1 || to === -1 || from === to) {
+    return null
+  }
+  const next = [...shownIds]
+  next.splice(from, 1)
+  next.splice(to, 0, fromId)
+  return next
+}
