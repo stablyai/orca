@@ -66,6 +66,41 @@ describe('profile state dirty-domain writes', () => {
     }
   })
 
+  it('patches the stored order after another writer restores the same session', () => {
+    const db = openTestDatabase()
+    try {
+      const write = (payload: string, withPatching: boolean): void => {
+        writeProfileStateDomains(db, {
+          expectedRevision: readProfileStateRevision(db),
+          replacements: [{ domain: 'workspaceSession', payload }],
+          ...(withPatching ? { patching } : {})
+        })
+      }
+      write('{"tabs":{"x":1,"y":2}}', true)
+      write('{"tabs":{"y":2,"x":1}}', false)
+      write('{"tabs":{"x":1,"y":2}}', false)
+      writeProfileStateDomains(db, {
+        expectedRevision: readProfileStateRevision(db),
+        replacements: [],
+        patching,
+        patches: [
+          {
+            domain: 'workspaceSession',
+            operations: [
+              { kind: 'set', path: ['tabs', 'z'], payload: '3' },
+              { kind: 'order', path: ['tabs'], keys: ['z', 'x', 'y'] }
+            ]
+          }
+        ]
+      })
+      expect(JSON.stringify(JSON.parse(exportProfileStateJson(db)).workspaceSession)).toBe(
+        '{"tabs":{"z":3,"x":1,"y":2}}'
+      )
+    } finally {
+      db.close()
+    }
+  })
+
   it('applies session entry patches to the stored parts in order', () => {
     const db = openTestDatabase()
     try {

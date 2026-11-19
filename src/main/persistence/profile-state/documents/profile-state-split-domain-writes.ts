@@ -70,6 +70,7 @@ export function writeWholeSplitDomain(
       root: partsTreeFromWrittenParts(mutation.domain, written),
       rows: written.rows,
       contentHash: mutation.payloadHash!,
+      revision: write.revision,
       legacyRevision: write.legacyRevision
     })
   }

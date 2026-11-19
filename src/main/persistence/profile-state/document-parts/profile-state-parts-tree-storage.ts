@@ -27,6 +27,8 @@ export type CommittedPartsTree = {
   root: PartsNode
   rows: Map<string, StoredPartRow>
   contentHash: string
+  /** The meta row's revision; another writer can restore the same content with different rows. */
+  revision: number
   legacyRevision: number
 }
 
@@ -65,7 +67,7 @@ export function partsTreeFromWrittenParts(
 export function readCommittedPartsTree(
   db: Database.Database,
   domain: string,
-  stored: { contentHash: string; legacyRevision: number }
+  stored: { contentHash: string; revision: number; legacyRevision: number }
 ): CommittedPartsTree {
   const rows = new Map<string, StoredPartRow>()
   const parts: { path: string[]; leaf: ReturnType<typeof partsLeaf> }[] = []
@@ -99,7 +101,13 @@ export function readCommittedPartsTree(
       domain
     )
   }
-  return { root, rows, contentHash: stored.contentHash, legacyRevision: stored.legacyRevision }
+  return {
+    root,
+    rows,
+    contentHash: stored.contentHash,
+    revision: stored.revision,
+    legacyRevision: stored.legacyRevision
+  }
 }
 
 /** Stores a patched tree, writing only the rows whose content or position changed. */
@@ -112,5 +120,11 @@ export function writeCommittedPartsTree(
 ): CommittedPartsTree {
   const parts = [...partsTreeParts(root)]
   const rows = writeProfileStatePartRows(db, domain, parts, previous.rows, meta)
-  return { root, rows, contentHash: meta.contentHash, legacyRevision: meta.legacyRevision }
+  return {
+    root,
+    rows,
+    contentHash: meta.contentHash,
+    revision: meta.revision,
+    legacyRevision: meta.legacyRevision
+  }
 }

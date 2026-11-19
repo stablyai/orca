@@ -23,18 +23,19 @@ import type {
 } from './profile-state-split-domain-writes'
 
 // The writer's own copy of each patched domain as last committed, so the next patch skips
-// reading, verifying and splitting the stored parts. Checked against the stored hash before use.
+// reading, verifying and splitting the stored parts. Checked against the stored revision and hash before use.
 let committedTrees = new WeakMap<Database.Database, Map<string, CommittedPartsTree>>()
 
 function takeCommittedTree(
   db: Database.Database,
   domain: string,
-  stored: { contentHash: string; legacyRevision: number }
+  stored: { contentHash: string; revision: number; legacyRevision: number }
 ): CommittedPartsTree {
   const committed = committedTrees.get(db)?.get(domain)
   // Patching mutates the tree, so it leaves the cache until the transaction commits.
   committedTrees.get(db)?.delete(domain)
-  return committed?.contentHash === stored.contentHash &&
+  return committed?.revision === stored.revision &&
+    committed.contentHash === stored.contentHash &&
     committed.legacyRevision === stored.legacyRevision
     ? committed
     : readCommittedPartsTree(db, domain, stored)
