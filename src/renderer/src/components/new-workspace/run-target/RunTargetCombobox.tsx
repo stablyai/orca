@@ -243,6 +243,9 @@ export default function RunTargetCombobox({
               recipesOpen={submenu === 'recipes'}
               onArm={(key, nextSubmenu) => {
                 arm(key)
+                if (submenu === 'add-host-keyboard') {
+                  inputRef.current?.focus()
+                }
                 setSubmenu(nextSubmenu)
               }}
               onRecipesOpenChange={(next) => setSubmenu(next ? 'recipes' : null)}

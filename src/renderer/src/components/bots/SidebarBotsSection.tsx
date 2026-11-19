@@ -338,7 +338,7 @@ export function SidebarBotsSection({ onOpenBot }: { onOpenBot: () => void }): Re
             {/* A room kept after its last bot went still lists, so it can be opened or deleted. */}
             {savedEntries.length > 0 && entries.length === 0 ? (
               collapsed ? null : (
-                <div className="px-4 pb-2 text-xs text-muted-foreground">
+                <div className="px-4 text-xs text-muted-foreground">
                   {t('bots.options.allHidden', 'All bots are paused and hidden.')}
                 </div>
               )

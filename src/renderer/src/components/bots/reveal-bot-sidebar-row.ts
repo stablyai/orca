@@ -3,6 +3,8 @@ import { BOTS_GROUP_KEY } from '../../../../shared/sidebar-list/sections/group-k
 import { readBotsEnabled } from '@/lib/bot-catalog'
 import { botSidebarVirtualScrollers } from './bot-sidebar-virtual-scroll'
 
+const READY_DEADLINE_MS = 500
+
 // One owner for "show a Bots row": the sidebar search (focuses the row's name) and Cmd+K (never moves focus).
 
 /** Scrolls only the bot list, never its overflow-hidden ancestors, so the sidebar shell can't shift. */
@@ -64,7 +66,7 @@ export function revealBotSidebarRow({
     store.toggleCollapsedGroup(BOTS_GROUP_KEY)
   }
   let retries = defer ? 1 : 0
-  let sought = false
+  let seekDeadline: number | null = null
   const step = (): void => {
     frame = null
     if (cancelled || !isCurrent()) {
@@ -73,12 +75,10 @@ export function revealBotSidebarRow({
     const found = findListedRow(sidebarKey, getList)
     if (!found) {
       const list = getList()
-      if (!sought && list && botSidebarVirtualScrollers.get(list)?.(sidebarKey)) {
-        sought = true
-        // Give the scroll observer time to mount and measure the requested window.
-        retries = 2
+      if (seekDeadline === null && list && botSidebarVirtualScrollers.get(list)?.(sidebarKey)) {
+        seekDeadline = performance.now() + READY_DEADLINE_MS
       }
-      if (retries-- > 0) {
+      if (seekDeadline === null ? retries-- > 0 : performance.now() < seekDeadline) {
         frame = requestAnimationFrame(step)
       }
       return
@@ -136,9 +136,6 @@ export function advanceBotPaletteGeneration(): number {
 export function currentBotPaletteGeneration(): number {
   return paletteSelectionGeneration
 }
-
-// Past this the open is treated as settled elsewhere and the reveal is dropped, leaving the sidebar as it is.
-const READY_DEADLINE_MS = 500
 
 /** Focus sits inside the opened tab's own pane (its chat, room or terminal), not just its workspace. */
 function destinationTabHasFocus(tabId: string): boolean {

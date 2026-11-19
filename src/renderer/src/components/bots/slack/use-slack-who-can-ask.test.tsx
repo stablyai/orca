@@ -29,7 +29,10 @@ vi.mock('@/lib/bot-catalog', () => ({
 }))
 
 vi.mock('@/store', () => {
-  const state = { setContextualToursBlockingSurfaceVisible: vi.fn() }
+  const state = {
+    setContextualToursBlockingSurfaceVisible: vi.fn(),
+    settings: null
+  }
   return {
     useAppStore: Object.assign(
       (selector: (current: Record<string, unknown>) => unknown) => selector(state),
@@ -150,6 +153,8 @@ describe('useSlackWhoCanAsk', () => {
     fireEvent.click(screen.getByRole('option', { name: 'Priya Shah' }))
     fireEvent.click(screen.getByRole('button', { name: 'Add 2 people' }))
     const dialog = await screen.findByRole('dialog')
+    expect(dialog).toBeVisible()
+    expect(dialog).toHaveAccessibleDescription()
     // Nothing is saved until the owner confirms.
     expect(mocks.updateBot).not.toHaveBeenCalled()
     // Enter must not grant access by accident.

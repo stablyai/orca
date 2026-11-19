@@ -12,7 +12,7 @@ import type { Bot } from '../../../../shared/bot-types'
 import { createBotSidebarSearchIndex } from '../../../../shared/bots/bot-sidebar-search'
 import { buildByIdIndex } from '../../../../shared/collections/first-row-by-id-index'
 import { getBotPurpose, useBotPurposeReader } from './bot-purpose-cache'
-import { useBotPurposes } from './use-bot-purposes'
+import { refreshBotPurposes, useKnownBotPurposes } from './use-bot-purposes'
 import { BotSearchResultRow, type BotSearchEntry } from './BotSearchResultRow'
 import { useBotSearchViewport } from './use-bot-search-viewport'
 import { setBotSidebarSearchHasQuery } from './reveal-bot-sidebar-row'
@@ -160,11 +160,12 @@ function BotSidebarSearchPanel({
   const t = useTranslate()
   const [query, setQuery] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+  const requestedPurposes = useRef(false)
   const hidePaused = useAppStore((s) => s.botSidebarView.hidePausedBots)
   const setView = useAppStore((s) => s.setBotSidebarView)
   const readRowPurpose = useBotPurposeReader()
   const hasQuery = query.trim() !== ''
-  const rosterPurposes = useBotPurposes()
+  const rosterPurposes = useKnownBotPurposes()
   const search = useMemo(
     () =>
       createBotSidebarSearchIndex({
@@ -196,6 +197,10 @@ function BotSidebarSearchPanel({
   useEffect(() => () => onHasQueryChange(false), [onHasQueryChange])
 
   const changeQuery = (value: string): void => {
+    if (value.trim() && !requestedPurposes.current) {
+      requestedPurposes.current = true
+      void refreshBotPurposes()
+    }
     setQuery(value)
     onSupersede()
   }

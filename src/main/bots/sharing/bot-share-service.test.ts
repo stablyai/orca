@@ -312,6 +312,35 @@ describe('sharing a bot by link', () => {
     expect(published).toMatchObject({ status: 'ok', value: { share: { id: 'share-1' } } })
   })
 
+  it('builds a reviewable preview when the cloud package lookup fails', async () => {
+    const cloud = fakeCloud()
+    cloud.fetcher = async () => new Response(null, { status: 503 })
+    const home = join(root, 'home')
+    await writeHome(home, '# Release notes\n\nDrafts release notes.\n')
+    const service = appSession(cloud, home, 'run-1')
+
+    const { candidate } = await service.prepare(bot, {}, { localOnly: true })
+
+    expect(candidate.bot.purpose).toBe('Drafts release notes.')
+    await expect(service.publish(bot, candidate.candidateId, '')).rejects.toMatchObject({
+      statusCode: 503
+    })
+  })
+
+  it('checks the cloud package again before publishing a local preview', async () => {
+    const cloud = fakeCloud()
+    cloud.fetcher = async () => Response.json({ package: { id: 'existing-package' } })
+    const home = join(root, 'home')
+    await writeHome(home, '# Release notes\n\nDrafts release notes.\n')
+    const service = appSession(cloud, home, 'run-1')
+
+    const { candidate } = await service.prepare(bot, {}, { localOnly: true })
+
+    await expect(service.publish(bot, candidate.candidateId, '')).rejects.toThrow(
+      BOT_SHARE_ERRORS.prepareAgain
+    )
+  })
+
   it('reopens Update link on the picks and note the link serves, reading as up to date', async () => {
     const cloud = fakeCloud()
     const home = join(root, 'home')

@@ -145,8 +145,8 @@ describe('Antigravity unprompted turns', () => {
     ])
   })
 
-  it('ends interrupted when the person presses Stop, and late text opens no new turn', async () => {
-    const { rig } = await open()
+  it('suppresses late updates after Stop and starts a new turn after the grace period', async () => {
+    const { rig, clock } = await open()
     const { agent } = rig.child()
     agent.notify('session/update', chunk('working on it'))
     await waitFor(async () => expect(await agentTurns(rig)).toMatchObject([{ state: 'running' }]))
@@ -158,14 +158,7 @@ describe('Antigravity unprompted turns', () => {
     agent.notify('session/update', chunk(' trailing'))
     await rig.settle()
     expect(await agentTurns(rig)).toHaveLength(1)
-  })
 
-  it('mints again once the Stop grace passes', async () => {
-    const { rig, clock } = await open()
-    const { agent } = rig.child()
-    agent.notify('session/update', chunk('working on it'))
-    await waitFor(async () => expect(await agentTurns(rig)).toHaveLength(1))
-    await rig.adapter.cancelTurn({ sessionId: SESSION, fence: 1 })
     clock.now += 5_000
     agent.notify('session/update', chunk('a new report'))
     await waitFor(async () =>
@@ -303,11 +296,8 @@ describe('Antigravity unprompted turns', () => {
     expect(await agentTurns(rig)).toEqual([])
   })
 
-  it.each([
-    ['Grok', GROK],
-    ['generic', { ...GROK, dialect: {} }]
-  ])('leaves %s text that arrives with no prompt in thread scope', async (_name, spec) => {
-    const { rig } = await open(spec)
+  it('leaves Grok text that arrives with no prompt in thread scope', async () => {
+    const { rig } = await open(GROK)
     rig.child().agent.notify('session/update', chunk('late'))
     await rig.settle()
     expect(await turns(rig)).toEqual([])

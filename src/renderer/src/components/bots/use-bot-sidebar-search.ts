@@ -102,7 +102,9 @@ export function useBotSidebarSearch({
       }
       revealBotSidebarRow({
         sidebarKey: entryId,
-        isCurrent: () => session === generation.current,
+        isCurrent: () =>
+          session === generation.current &&
+          (focusIsNowhere() || !!regionRef.current?.contains(document.activeElement)),
         focusName: true,
         defer: false,
         getList: () => listRef.current

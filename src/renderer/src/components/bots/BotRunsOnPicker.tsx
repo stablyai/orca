@@ -89,7 +89,7 @@ export function BotRunsOnPicker({
       : caption
         ? null
         : t('bots.new.computerHint', 'Where the bot runs.'))
-  const noAgents = caption && model.state === 'settled' && choices.length === 0
+  const noAgents = model.state === 'settled' && choices.length === 0
   const noAgentsHint = noAgents
     ? t('bots.new.noChatAgents', 'No chat agents available on this computer.')
     : null
