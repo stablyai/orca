@@ -11,6 +11,7 @@ import { forgetCodexHistoryDiskUsage } from '../disk-usage/codex-history-disk-us
 import {
   isOutsideProtectedRoots,
   resolveProtectedRoots,
+  type ProtectedRoot,
   type RolloutHomes
 } from './codex-rollout-protected-roots'
 
@@ -124,7 +125,10 @@ async function readNames(names: readonly RolloutName[]): Promise<NameState[]> {
   return states
 }
 
-async function removeName(path: string, protectedRoots: readonly string[]): Promise<boolean> {
+async function removeName(
+  path: string,
+  protectedRoots: readonly ProtectedRoot[]
+): Promise<boolean> {
   try {
     if (!(await isOutsideProtectedRoots(path, protectedRoots))) {
       return false
@@ -191,7 +195,10 @@ async function isOpenInCodex(homes: readonly string[], stem: string): Promise<bo
   return !keepsLocks
 }
 
-async function removeCopyMarker(path: string, protectedRoots: readonly string[]): Promise<void> {
+async function removeCopyMarker(
+  path: string,
+  protectedRoots: readonly ProtectedRoot[]
+): Promise<void> {
   if (await isOutsideProtectedRoots(path, protectedRoots)) {
     await rm(path, { force: true })
   }
@@ -209,12 +216,12 @@ async function deleteRollout(
     // Listed under the hold: an account added since the sweep began may already hold a link.
     const listed = await listHomes()
     const { homes } = listed
-    const protectedRoots = await resolveProtectedRoots(listed)
     const stem = rolloutStem(homes, target.filePath)
     if (!stem) {
       result.failed += 1
       return
     }
+    const protectedRoots = await resolveProtectedRoots(listed, stem)
     const names = rolloutNames(homes, stem)
     if (await isOpenInCodex(homes, stem)) {
       return
