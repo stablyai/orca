@@ -34,7 +34,7 @@ import {
   readBotItemAnswerDraft,
   saveBotItemAnswerDraft
 } from './bot-item-answer-drafts'
-import { useClearOfFloatingTrigger } from './use-clear-of-floating-trigger'
+import { useKeepFloatingTerminalTriggerClear } from '../../floating-terminal/trigger/floating-terminal-trigger-keep-clear'
 
 const TIME = { hour: 'numeric', minute: '2-digit' } as const
 
@@ -67,8 +67,8 @@ export function BotItemAskCard({
   const inFlight = useRef(false)
   const field = useRef<HTMLTextAreaElement | null>(null)
   const box = useRef<HTMLDivElement | null>(null)
-  // Like the comment box, it rises clear of the floating terminal button.
-  const lift = useClearOfFloatingTrigger(box)
+  // Like the comment box, the floating terminal button moves off it.
+  useKeepFloatingTerminalTriggerClear(box)
   // The owner's picks and words live in the session's drafts, so a remount or the question going away
   // never drops them; the page offers back what the question took with it.
   const draftKey = botItemAnswerDraftKey(botRefKey(bot), item.uid, question.eventId)
@@ -166,7 +166,6 @@ export function BotItemAskCard({
   return (
     <div
       ref={box}
-      style={lift > 0 ? { marginBottom: lift } : undefined}
       data-bot-item-ask="open"
       // At most about half the pane, so the frozen top stays whole; the card scrolls inside that.
       className="flex max-h-[55%] min-h-0 shrink-0 flex-col"

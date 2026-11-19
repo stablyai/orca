@@ -49,7 +49,7 @@ import { imageReferencesToPromptMarkers } from '../../../../../shared/native-cha
 import type { Bot } from '../../../../../shared/bot-types'
 import { BOT_ITEM_LIMITS, type BotItem } from '../../../../../shared/bots/bot-items'
 import { botRefKey } from '@/lib/bot-hosts'
-import { useClearOfFloatingTrigger } from './use-clear-of-floating-trigger'
+import { useKeepFloatingTerminalTriggerClear } from '../../floating-terminal/trigger/floating-terminal-trigger-keep-clear'
 import {
   useBotItemCommentAttachments,
   type BotItemCommentAttachTarget
@@ -93,7 +93,7 @@ export function BotItemCommentBox({
   const box = useRef<HTMLDivElement | null>(null)
   const input = useRef<NativeChatComposerInput | null>(null)
   const composer = useRef<NativeChatComposerHandle | null>(null)
-  const lift = useClearOfFloatingTrigger(box)
+  useKeepFloatingTerminalTriggerClear(box)
   const dictation = useNativeChatDictation(input, false)
   const access = useBotItemCommentAttachments(bot, item, attachTo)
   const [activeSuggestion, setActiveSuggestion] = useState(0)
@@ -316,7 +316,6 @@ export function BotItemCommentBox({
       data-native-chat-composer-scope={scopeKey}
       onClick={focusAtEnd}
       className="mx-3 mb-3 mt-2 flex shrink-0 cursor-text flex-col rounded-[10px] border border-border bg-background p-3 focus-within:border-foreground/20"
-      style={lift > 0 ? { marginBottom: 12 + lift } : undefined}
     >
       {mentions.autocomplete.mode === 'mention' ? (
         <NativeChatMentionMenu
