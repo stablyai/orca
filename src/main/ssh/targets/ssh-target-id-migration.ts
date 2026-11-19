@@ -41,16 +41,15 @@ export function migrateWorkspaceSessionSshTargetId(
   let next: WorkspaceSessionState | null = null
   let rows: WorkspaceSessionState['tabsByWorktree'] | null = null
   for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
-    let changedTab = false
-    const nextTabs = tabs.map((tab) => {
+    let nextTabs: typeof tabs | null = null
+    for (const [index, tab] of tabs.entries()) {
       const rewritten = tab.ptyId ? rewriteSshPtyId(tab.ptyId, oldTargetId, newTargetId) : null
-      if (!rewritten) {
-        return tab
+      if (rewritten) {
+        nextTabs ??= [...tabs]
+        nextTabs[index] = { ...tab, ptyId: rewritten }
       }
-      changedTab = true
-      return { ...tab, ptyId: rewritten }
-    })
-    if (changedTab) {
+    }
+    if (nextTabs) {
       rows ??= { ...session.tabsByWorktree }
       rows[worktreeId] = nextTabs
     }

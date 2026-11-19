@@ -5,6 +5,7 @@ import {
 import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import { withCrossStoreChildKey } from '../../../shared/worktree/lineage/cross-store-lineage-records'
 import { migrateWorkspaceSessionWorktreeIdentity } from './worktree-identity-session-migration'
+import { replaceWorkspaceSessionPartitions } from '../restoring-sessions/workspace-session-partition-replacement'
 
 /** Mutate worktree references in place (sessions are replaced); return whether anything changed so callers can gate persistence. */
 export function migrateWorktreeIdentity(
@@ -90,13 +91,12 @@ export function migrateWorktreeIdentity(
     state.workspaceSession = localSession
     changed = true
   }
-  for (const [hostId, session] of Object.entries(state.workspaceSessionsByHostId ?? {})) {
-    const migrated =
-      session && migrateWorkspaceSessionWorktreeIdentity(session, oldWorktreeId, newWorktreeId)
-    if (migrated) {
-      state.workspaceSessionsByHostId = { ...state.workspaceSessionsByHostId, [hostId]: migrated }
-      changed = true
-    }
+  const partitions = replaceWorkspaceSessionPartitions(state.workspaceSessionsByHostId, (session) =>
+    migrateWorkspaceSessionWorktreeIdentity(session, oldWorktreeId, newWorktreeId)
+  )
+  if (partitions !== state.workspaceSessionsByHostId) {
+    state.workspaceSessionsByHostId = partitions
+    changed = true
   }
   for (const selectionsByWorktree of Object.values(
     state.mobileClientTabSelectionsByDeviceId ?? {}

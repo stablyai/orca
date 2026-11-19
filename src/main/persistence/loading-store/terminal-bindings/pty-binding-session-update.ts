@@ -45,11 +45,14 @@ export function applyPtyBinding(
       : null
   const stamps =
     unbound?.terminalPtyIncarnationsByPaneKey ?? session.terminalPtyIncarnationsByPaneKey
-  const { [paneKey]: recordedIncarnation, ...otherIncarnations } = stamps ?? {}
-  if (args.incarnationId || (args.dropsIncarnation && recordedIncarnation)) {
-    session.terminalPtyIncarnationsByPaneKey = args.incarnationId
-      ? { ...stamps, [paneKey]: args.incarnationId }
-      : otherIncarnations
+  if (args.incarnationId || (args.dropsIncarnation && stamps?.[paneKey])) {
+    const nextStamps = { ...stamps }
+    if (args.incarnationId) {
+      nextStamps[paneKey] = args.incarnationId
+    } else {
+      delete nextStamps[paneKey]
+    }
+    session.terminalPtyIncarnationsByPaneKey = nextStamps
   }
   if (args.incarnationId && session.terminalSurfaceTombstonesByPaneKey?.[paneKey]) {
     session.terminalSurfaceTombstonesByPaneKey = {
@@ -96,9 +99,11 @@ export function applyPtyBinding(
   }
   session.tabsByWorktree = rows
   // Host-initiated binds must set the write-once default-terminal guard too.
-  session.defaultTerminalTabsAppliedByWorktreeId = {
-    ...session.defaultTerminalTabsAppliedByWorktreeId,
-    [bindingWorktreeId]: true
+  if (session.defaultTerminalTabsAppliedByWorktreeId?.[bindingWorktreeId] !== true) {
+    session.defaultTerminalTabsAppliedByWorktreeId = {
+      ...session.defaultTerminalTabsAppliedByWorktreeId,
+      [bindingWorktreeId]: true
+    }
   }
   // Acknowledged spawns must survive a crash before the renderer records their activity.
   if (
