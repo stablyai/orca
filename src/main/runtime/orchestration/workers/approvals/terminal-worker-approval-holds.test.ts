@@ -473,10 +473,15 @@ describe("terminal worker approval holds for a helper agent's prompt", () => {
     )
 
     expect(ctx.escalations()).toHaveLength(2)
-    expect(await deny(ctx, cardOf(ctx, 1).approval.approvalId)).toMatchObject({ ok: true })
-    expect(await deny(ctx, cardOf(ctx, 0).approval.approvalId)).toMatchObject({ ok: true })
-    expect(first.replies).toEqual([{ behavior: 'deny', message: REASON }])
+    const cardFor = (detail: string) =>
+      [0, 1]
+        .map((index) => cardOf(ctx, index).approval)
+        .find((card) => card.summary.detail === detail)
+    expect(await deny(ctx, cardFor('rm tool-3.txt').approvalId)).toMatchObject({ ok: true })
+    expect(first.replies).toEqual([])
     expect(second.replies).toEqual([{ behavior: 'deny', message: REASON }])
+    expect(await deny(ctx, cardFor('rm tool-2.txt').approvalId)).toMatchObject({ ok: true })
+    expect(first.replies).toEqual([{ behavior: 'deny', message: REASON }])
   })
 
   it("keeps the lead's on-screen prompt answerable while a helper's is held", async () => {
