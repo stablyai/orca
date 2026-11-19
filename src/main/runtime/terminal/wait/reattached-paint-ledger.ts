@@ -28,6 +28,8 @@ export type ReattachedPaintEntry = {
 const LEDGER_VERSION = 1
 /** A quit never waits on this write longer than this; a ledger missed only keeps today's hold. */
 const SAVE_BUDGET_MS = 500
+/** A restore never waits on the read longer than this; a ledger missed only keeps today's hold. */
+const READ_BUDGET_MS = 500
 /** An entry for a terminal no run attached since is kept this long. */
 const UNTRACKED_ENTRY_MS = 7 * 24 * 60 * 60_000
 /** A temp file this old is a writer's that stopped mid-quit; younger ones may be another instance's. */
@@ -84,7 +86,12 @@ export class ReattachedPaintLedger {
 
   /** The entry the last quit saved for this terminal; any read failure is no entry. */
   async read(ptyId: string): Promise<ReattachedPaintEntry | null> {
-    return (await this.load()).get(ptyId) ?? null
+    let timer: NodeJS.Timeout | undefined
+    const budget = new Promise<null>((resolve) => {
+      timer = setTimeout(() => resolve(null), READ_BUDGET_MS)
+    })
+    const entry = this.load().then((entries) => entries.get(ptyId) ?? null)
+    return Promise.race([entry, budget]).finally(() => clearTimeout(timer))
   }
 
   /** Saves this quit's terminals over the ledger within a small budget. Recent entries for

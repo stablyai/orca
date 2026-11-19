@@ -66,6 +66,8 @@ export class TerminalCommandPaint {
   private startSeen = false
   /** A command finished or started since the reattach fence; lost output never erases it. */
   private boundarySinceReattach = false
+  // Lost output while the fence held could hide a boundary, so the retained frame can't be vouched.
+  private gapSinceReattach = false
   private repaintOffered = false
   /** The last read finished a command and started the next. Its reports are stamped after this
    *  observer runs, so none of them count; at the next read they are retired by identity (a
@@ -189,8 +191,7 @@ export class TerminalCommandPaint {
   vouchSpawn(): void {
     if (this.reattach === 'armed' && !this.startSeen) {
       this.startedAt = null
-      this.awaitingPaint = false
-      this.repaintRequestable = false
+      this.awaitingPaint = this.repaintRequestable = false
     }
     this.reattach = 'vouched'
   }
@@ -201,15 +202,15 @@ export class TerminalCommandPaint {
   noteGap(): void {
     this.scanner.reset()
     if (this.awaitsReattachedCommand()) {
+      this.gapSinceReattach = true
       return
     }
     this.startedAt = null
     this.startSeen = false
     this.startFollowsFinishInRead = false
     this.betweenCommands = false
-    this.awaitingPaint = false
+    this.awaitingPaint = this.repaintRequestable = false
     this.composers = null
-    this.repaintRequestable = false
     this.restoredReportAt = null
   }
 
@@ -244,7 +245,7 @@ export class TerminalCommandPaint {
 
   /** A ledger saved at quit proved the retained frame is this reattached command's own paint. */
   vouchRetainedPaint(): void {
-    if (this.awaitsReattachedCommand()) {
+    if (this.awaitsReattachedCommand() && !this.gapSinceReattach) {
       this.awaitingPaint = this.repaintRequestable = false
     }
   }
