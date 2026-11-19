@@ -2,7 +2,7 @@ import { readTestJournalItems } from '../../../native-chat/agent-session-journal
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect } from 'vitest'
+import { afterEach } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { parseAgentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { JournalWriterOperation } from '../../../native-chat/agent-session-journal/journal-writer-command'
@@ -39,8 +39,19 @@ export function turn(index: number, view: 'full' | 'summary' = 'full'): Record<s
 export function codexWith(turns: Record<string, unknown>[]) {
   return {
     request: async (method: string, params?: Record<string, unknown>) => {
-      expect(method).toBe('thread/turns/list')
-      expect(params).toMatchObject({ sortDirection: 'desc', limit: 100 })
+      if (method === 'thread/items/list') {
+        const turn = turns.find((value) => value.id === params?.turnId)
+        const items = Array.isArray(turn?.items) ? turn.items : []
+        const start = typeof params?.cursor === 'string' ? Number(params.cursor) : 0
+        const end = start + Number(params?.limit)
+        return {
+          data: items.slice(start, end).map((item) => ({ turnId: params?.turnId, item })),
+          nextCursor: end < items.length ? String(end) : null
+        }
+      }
+      if (method !== 'thread/turns/list') {
+        throw new Error(`Unexpected method: ${method}`)
+      }
       const newestFirst = turns.toReversed()
       const start = typeof params?.cursor === 'string' ? Number(params.cursor) : 0
       const data = newestFirst.slice(start, start + 2)
