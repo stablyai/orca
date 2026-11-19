@@ -84,12 +84,16 @@ async function loadImportLedger(path: string): Promise<ImportLedger> {
       return { ...emptyLedger(), recovered: true }
     }
     const sources: Record<string, ImportedSource> = {}
+    let damaged = false
     for (const [key, source] of Object.entries(parsed.sources)) {
       if (isImportedSource(source)) {
         sources[key] = source
+      } else {
+        damaged = true
       }
     }
-    return { version: 1, sources }
+    // A dropped entry lost its record of handled names like a damaged file does.
+    return damaged ? { version: 1, sources, recovered: true } : { version: 1, sources }
   } catch {
     console.warn(`[codex-history-import] Damaged ledger ${path}; importing only new conversations`)
     return { ...emptyLedger(), recovered: true }

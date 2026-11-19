@@ -284,6 +284,8 @@ export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<
         result = await importFolder(args, folder, source, handled, store, seedOnly)
       } catch (error) {
         unread = true
+        // Names this folder linked before failing are kept: they must stay handled.
+        unsaved += 1
         // One unreadable folder must not hold back the rest; the next pass reads it again.
         console.warn(
           `[codex-history-import] Could not read ${join(args.importHome, folder)}:`,
