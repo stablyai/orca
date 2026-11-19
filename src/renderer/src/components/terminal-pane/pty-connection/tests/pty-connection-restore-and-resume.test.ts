@@ -5,6 +5,7 @@ import { registerPtyConnectionColdRestoreRepaintTests } from '../reattach/pty-co
 import { registerPtyConnectionRestartReplacementDisposeTests } from '../spawn/pty-connection-restart-replacement-stop-claim.spec'
 
 import { registerPtyConnectionOwnerErrorRetryTests } from '../reattach/pty-connection-owner-error-retry.spec'
+import { registerPtyConnectionUnprovenResumeRecordTests } from '../startup/pty-connection-unproven-resume-record.spec'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
@@ -14,6 +15,7 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
 )
 
 describe('pty-connection-cold-restore-repaint', registerPtyConnectionColdRestoreRepaintTests)
+describe('pty-connection-unproven-resume-record', registerPtyConnectionUnprovenResumeRecordTests)
 
 describe('pty-connection-hibernation-wake', () => {
   registerPtyConnectionRestartReplacementDisposeTests()
