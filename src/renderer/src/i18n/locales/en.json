@@ -1584,7 +1584,6 @@
         "readOnly": "Read-only here. Change them in {{agent}}.",
         "plugin": "Plugin",
         "title": "Tools",
-        "unsupported": "This bot uses the tools set up in {{agent}} itself.",
         "details": {
           "reading": "Reading tool details…",
           "editTitle": "Edit tool",
@@ -28796,7 +28795,6 @@
       "lastTidied": "last tidied {{when}}",
       "memoryFiles_one": "MEMORY.md and {{count}} topic file",
       "memoryFiles_other": "MEMORY.md and {{count}} topic files",
-      "toolsInAgent": "Set up in {{agent}}",
       "toolsFrom": "{{count}} from {{agent}}",
       "toolsMore": "{{count}} more from {{agent}}",
       "withAccess": "{{service}} {{people}} with access",
