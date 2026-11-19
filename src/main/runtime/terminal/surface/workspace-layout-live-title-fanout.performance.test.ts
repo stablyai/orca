@@ -4,19 +4,24 @@ import { expect, it } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import {
   addWorkspace,
-  emptySession,
-  leaf
+  emptySession
 } from '../../../../shared/workspace-layout/persistence/workspace-layout-session.test-fixture'
 import { WorkspaceLayoutStream } from './workspace-layout-stream'
 import { collectLayoutEvents } from './workspace-layout-stream-events.test-fixture'
 
-const ptyOf = (index: number): string => `repo-1::/fleet/w${index}@@pty${index}`
+const hex = (index: number): string => index.toString(16).padStart(8, '0')
+// Pane ids are unique across a partition; a repeated one is reminted and loses its terminal.
+const leafOf = (index: number): string => `${hex(index)}-0000-4000-8000-000000000000`
+const ptyOf = (index: number): string => `repo-1::/fleet/w${index}@@${hex(index)}`
 
 function fleet(workspaces: number) {
   let session = emptySession()
   for (let index = 0; index < workspaces; index++) {
     session = addWorkspace(session, `repo-1::/fleet/w${index}`, [
-      { id: `group-${index}`, tabs: [{ id: `tab-${index}`, leaves: [[leaf(1), ptyOf(index)]] }] }
+      {
+        id: `group-${index}`,
+        tabs: [{ id: `tab-${index}`, leaves: [[leafOf(index), ptyOf(index)]] }]
+      }
     ])
   }
   const titles = new Map<string, string>()
