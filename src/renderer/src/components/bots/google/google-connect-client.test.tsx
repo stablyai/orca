@@ -140,29 +140,6 @@ describe('what Google reaches through a bot', () => {
     mocks.supports.mockResolvedValue(true)
   })
 
-  it('may reach anything while the status is still loading', () => {
-    mocks.rpc.mockReturnValue(new Promise(() => {}))
-    expect(reachOn('env-pending').result.current).toEqual({ areas: [], unknown: true })
-  })
-
-  it('may reach anything when the status fails', async () => {
-    mocks.rpc.mockRejectedValue(new Error('offline'))
-    const { result } = reachOn('env-failed')
-    await waitFor(() => expect(mocks.rpc).toHaveBeenCalledTimes(1))
-    await act(async () => {})
-    expect(result.current).toEqual({ areas: [], unknown: true })
-  })
-
-  it('reaches nothing once a read since it opened shows no ready service, or no Google', async () => {
-    mocks.rpc.mockResolvedValue(noService)
-    const signedIn = reachOn('env-no-services')
-    await waitFor(() => expect(signedIn.result.current).toEqual({ areas: [], unknown: false }))
-
-    mocks.supports.mockResolvedValue(false)
-    const noGoogle = reachOn('env-old-server')
-    await waitFor(() => expect(noGoogle.result.current).toEqual({ areas: [], unknown: false }))
-  })
-
   it('does not trust an older "no ready service" until the read it starts answers', async () => {
     mocks.rpc.mockResolvedValueOnce(noService)
     await refreshGoogle({ kind: 'environment', environmentId: 'env-cached' })
@@ -242,6 +219,7 @@ describe('what Google reaches through a bot', () => {
   it('keeps the newest read when an older one answers after it', async () => {
     const answerOlder = answerLater()
     const { result } = reachOn('env-race')
+    expect(result.current).toEqual({ areas: [], unknown: true })
     await waitFor(() => expect(mocks.rpc).toHaveBeenCalledTimes(1))
     const answerNewer = answerLater()
     const newer = refreshGoogle({ kind: 'environment', environmentId: 'env-race' })

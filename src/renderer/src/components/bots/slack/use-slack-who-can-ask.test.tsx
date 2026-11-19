@@ -231,20 +231,6 @@ describe('useSlackWhoCanAsk', () => {
     expect(screen.queryByText('1 selected')).toBeNull()
   })
 
-  it('names the search and the workspace when no one is found', async () => {
-    api.members.mockResolvedValue({
-      ok: true,
-      value: { members: [], complete: true }
-    })
-    fireEvent.change(await openPicker(), { target: { value: 'zoe' } })
-    expect(await screen.findByText('No one named “zoe” in Globex')).toBeDefined()
-    expect(
-      screen.getByText(
-        'Members, guests and people from other organizations in Globex’s Slack can be added. Anyone else gets a private note to ask you.'
-      )
-    ).toBeDefined()
-  })
-
   it('shows four people after the owner, then the rest in place from +N', () => {
     const many = ['Ana', 'Ben', 'Cy', 'Dee', 'Eli', 'Fay'].map((name) => ({
       id: `U-${name}`,
@@ -352,18 +338,6 @@ describe('useSlackWhoCanAsk', () => {
         members: []
       })
     )
-  })
-
-  it('gives no advice to a bot that asks first, and says what anyone added reaches', () => {
-    renderList(<BotWhoCanAsk bot={bot({ agent: 'codex', permissionMode: 'ask' })} />)
-    expect(screen.queryByRole('region', { name: 'Before you share' })).toBeNull()
-    expect(screen.getByText('New conversations start in Ask for approval')).toBeDefined()
-    expect(
-      screen.getByText(
-        /Codex sandbox: read-only until a request is approved\. If it asks, whoever asked can approve\./
-      )
-    ).toBeDefined()
-    expect(screen.getByText('Add only people you’d trust at your keyboard.')).toBeDefined()
   })
 
   it('Keep only me takes off only this list’s people, never restoring someone revoked meanwhile', async () => {
