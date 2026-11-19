@@ -1,16 +1,21 @@
 import type { ProfileStateDomainReplacement } from '../../loading-store/profile-writing/profile-state-authority'
 import type { openProfileStateDatabase } from '../database/profile-state-database'
-import { parseProfileStateRoot } from './profile-state-document-validation'
+import { isRecord, parseProfileStateRoot } from './profile-state-document-validation'
 import {
   prepareProfileStateDomainPatches,
   type ProfileStateDomainPatch
 } from './profile-state-domain-patches'
 
-/** Validates every patch; an empty one only marks its domain present, so only changed ones apply. */
+/** Validates every patch's domain and shape; an empty one only marks its domain present, so only
+ *  changed ones apply, and their operations are parsed once, by the transaction. */
 export function changedSessionPatches(
   patches: readonly ProfileStateDomainPatch[]
 ): ProfileStateDomainPatch[] {
-  prepareProfileStateDomainPatches(patches)
+  prepareProfileStateDomainPatches(
+    patches.map((patch: unknown) =>
+      isRecord(patch) && Array.isArray(patch.operations) ? { ...patch, operations: [] } : patch
+    )
+  )
   return patches.filter(({ operations }) => operations.length > 0)
 }
 

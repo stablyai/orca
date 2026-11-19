@@ -113,7 +113,8 @@ describe('complete writes with session patches', () => {
     expect(() =>
       authority.writeCompleteSerializedDomains([{ domain: 'settings', payload: '{}' }], {
         patching,
-        patches: [{ domain: 'workspaceSession', operations: {} as never }]
+        // Malformed wire data, as the writer protocol could deliver it.
+        patches: JSON.parse('[{"domain":"workspaceSession","operations":{}}]')
       })
     ).toThrow('Profile state patch domain is invalid or repeated')
   })
