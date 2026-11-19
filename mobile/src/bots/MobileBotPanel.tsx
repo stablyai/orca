@@ -184,7 +184,8 @@ export function MobileBotPanel(props: {
     showing: visible,
     showToast,
     onStart: props.onStartSuggestion,
-    refresh: props.routeBot.refresh
+    refresh: props.routeBot.refresh,
+    online: props.online
   })
   const moves = useBotItemMoves({ client: props.client, hostName: props.hostName, showToast })
   // A write the host took ends the selection it came from.
@@ -230,6 +231,7 @@ export function MobileBotPanel(props: {
           rows={props.routeBot.activity.automations ?? null}
           showToast={showToast}
           onNewAutomation={props.onNewAutomation}
+          online={props.online}
         />
       ) : null}
       {props.routeBot.activity?.upNext ? (
@@ -349,6 +351,8 @@ export function MobileBotPanel(props: {
             routeBot={props.routeBot}
             client={props.client}
             showToast={showToast}
+            online={props.online}
+            hostName={props.hostName}
             accessRequests={props.accessRequests}
             lookAround={
               lookAroundSupported(bot.agent)
