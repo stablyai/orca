@@ -30,14 +30,15 @@ afterEach(async () => {
 
 it('spawns a Windows npm .cmd shim by its resolved path', async () => {
   Object.defineProperty(process, 'platform', { value: 'win32' })
-  await writeFile(join(pathDir, 'orca-test-openclaw.cmd'), '@echo off\r\n')
+  const shimPath = join(pathDir, 'orca-test-openclaw.cmd')
+  await writeFile(shimPath, '@echo off\r\n')
 
   await runLocalAutomationCommand('orca-test-openclaw', ['cron', 'run', 'job-42'])
 
   // runProcess launches .cmd shims only when the program carries the extension.
   expect(runProcess).toHaveBeenCalledWith(
     expect.objectContaining({
-      program: `${pathDir}/orca-test-openclaw.cmd`,
+      program: shimPath,
       args: ['cron', 'run', 'job-42']
     })
   )
