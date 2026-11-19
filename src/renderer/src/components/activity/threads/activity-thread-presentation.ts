@@ -14,6 +14,7 @@ import {
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
+import type { ActivityGroupBy } from '../../../../../shared/agent-status/presentation/agents-view-thread-filters'
 import type {
   AgentStatusEntry,
   AgentStatusState
@@ -236,8 +237,7 @@ export type ActivityThreadRowCopy = {
   statusLine: string
   statusKind: ActivityThreadStatusKind
   needsAttention: boolean
-  /** Project the chat belongs to; a branch or workspace name tells people less in a cross-project list. */
-  projectLabel: string
+  workspaceLabel: string
 }
 
 function normalizeScanLabel(value: string): string {
@@ -257,7 +257,6 @@ export function activityThreadRowCopy(
   t?: Translate
 ): ActivityThreadRowCopy {
   const workspaceLabel = getActivityThreadWorkspaceTitle(thread.worktree)
-  const projectLabel = thread.repo?.displayName.trim() || workspaceLabel
   const taskTitle = thread.paneTitle.trim() || workspaceLabel
   const renderedPreview = activityThreadResponseRenderPreview({
     responsePreview: thread.responsePreview
@@ -269,7 +268,11 @@ export function activityThreadRowCopy(
   if (
     state !== 'unverifiable' &&
     renderedPreview &&
-    !previewDuplicatesIdentity(renderedPreview, [taskTitle, workspaceLabel, projectLabel])
+    !previewDuplicatesIdentity(renderedPreview, [
+      taskTitle,
+      workspaceLabel,
+      thread.repo?.displayName ?? ''
+    ])
   ) {
     return {
       taskTitle,
@@ -277,7 +280,7 @@ export function activityThreadRowCopy(
       // Monitoring is a distinct live state, not a tool-running row state.
       statusKind: showsAgentToolPreview(toolPreviewState) ? 'tool' : 'message',
       needsAttention,
-      projectLabel
+      workspaceLabel
     }
   }
   if (state !== 'done' && state !== 'idle') {
@@ -286,8 +289,17 @@ export function activityThreadRowCopy(
       statusLine: threadAgentStateLabel(thread, t),
       statusKind: 'state',
       needsAttention,
-      projectLabel
+      workspaceLabel
     }
   }
-  return { taskTitle, statusLine: '', statusKind: 'none', needsAttention, projectLabel }
+  return { taskTitle, statusLine: '', statusKind: 'none', needsAttention, workspaceLabel }
+}
+
+/** The row names what its group header doesn't: the project chip, the workspace, or both. */
+export function activityThreadRowIdentity(
+  thread: Pick<AgentPaneThread, 'repo'>,
+  groupBy: ActivityGroupBy
+): { showProject: boolean; showWorkspace: boolean } {
+  const showProject = thread.repo !== null && groupBy !== 'project'
+  return { showProject, showWorkspace: groupBy !== 'worktree' || !showProject }
 }

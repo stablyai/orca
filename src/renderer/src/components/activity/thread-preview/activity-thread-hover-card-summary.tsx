@@ -2,6 +2,7 @@ import React, { useCallback, useMemo } from 'react'
 import { LocateFixed } from 'lucide-react'
 import { useAppStore } from '@/store/index'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
+import { ProjectChip } from '@/components/repo/project-chip'
 import { formatAgentTypeLabel } from '../../../../../shared/agent-status/presentation/agent-type-label'
 import { jumpToWorktreeFromSidebar } from '@/lib/workspace/activation/worktree-jump-navigation'
 import { useTranslate } from '@/i18n/use-translate'
@@ -21,20 +22,6 @@ import {
   threadAgentStateLabel
 } from '../threads/activity-thread-presentation'
 import type { AgentPaneThread } from '../threads/activity-thread-types'
-
-function IdentityPart({ label }: { label: string }): React.JSX.Element {
-  return (
-    <>
-      <span className="shrink-0 text-[12px] text-muted-foreground/40">•</span>
-      <span
-        className="min-w-0 truncate text-[12px] font-medium text-muted-foreground"
-        title={label}
-      >
-        {label}
-      </span>
-    </>
-  )
-}
 
 export function ActivityThreadHoverCardSummary({
   thread,
@@ -77,7 +64,7 @@ export function ActivityThreadHoverCardSummary({
     }
     return getTranslatedExecutionHostLabel(executionHostId)
   }, [executionHostId, hostLabelOverrides, parsedHost, runtimeEnvironments, sshTargetLabels])
-  const { taskTitle, needsAttention, projectLabel } = activityThreadRowCopy(thread, t)
+  const { taskTitle, needsAttention, workspaceLabel } = activityThreadRowCopy(thread, t)
 
   const isKnownWorktree = useAppStore((s) =>
     Boolean(s.getKnownWorktreeById(worktree.id, executionHostId))
@@ -102,16 +89,43 @@ export function ActivityThreadHoverCardSummary({
 
   return (
     <div className="space-y-1.5">
+      <div className="flex items-start justify-between gap-2 pb-0.5">
+        {/* Why: wrap rather than truncate, so long project and workspace names stay readable. */}
+        <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-[12px] font-medium text-muted-foreground">
+          {repo ? <ProjectChip repo={repo} className="max-w-full" /> : null}
+          <span className="min-w-0 max-w-full truncate" title={workspaceLabel}>
+            {workspaceLabel}
+          </span>
+          {remoteHostLabel ? (
+            <>
+              <span className="text-muted-foreground/40">•</span>
+              <span className="min-w-0 max-w-full truncate" title={remoteHostLabel}>
+                {remoteHostLabel}
+              </span>
+            </>
+          ) : null}
+        </div>
+        {canJump ? (
+          <MetadataActionIcon
+            label={t(
+              'auto.components.activity.ActivityThreadHoverCard.jumpToWorkspace',
+              'Jump to workspace'
+            )}
+            onClick={handleJumpToWorkspace}
+          >
+            <LocateFixed className="size-3" />
+          </MetadataActionIcon>
+        ) : null}
+      </div>
+
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1.5">
           <span className="inline-flex shrink-0">
             <AgentTypeIcon agentType={thread.agentType} size={14} />
           </span>
-          <span className="shrink-0 text-[12px] font-semibold text-foreground">
+          <span className="truncate text-[12px] font-semibold text-foreground">
             {formatAgentTypeLabel(thread.agentType)}
           </span>
-          <IdentityPart label={projectLabel} />
-          {remoteHostLabel ? <IdentityPart label={remoteHostLabel} /> : null}
         </div>
         <div className="flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
           <ThreadAgentStateIndicator thread={thread} />
@@ -125,17 +139,6 @@ export function ActivityThreadHoverCardSummary({
           </span>
           <span className="text-muted-foreground/40">•</span>
           <EventTime timestamp={thread.latestTimestamp} compact />
-          {canJump ? (
-            <MetadataActionIcon
-              label={t(
-                'auto.components.activity.ActivityThreadHoverCard.jumpToWorkspace',
-                'Jump to workspace'
-              )}
-              onClick={handleJumpToWorkspace}
-            >
-              <LocateFixed className="size-3" />
-            </MetadataActionIcon>
-          ) : null}
         </div>
       </div>
 
