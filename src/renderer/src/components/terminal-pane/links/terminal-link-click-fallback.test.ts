@@ -1,6 +1,8 @@
 import type { IDisposable } from '@xterm/xterm'
 import { describe, expect, it, vi } from 'vitest'
 import { installFilePathLinkClickFallback } from './files/terminal-link-handlers'
+import { handleOscLink } from './terminal-osc-link-routing'
+import type { TerminalLinkActionRequest } from './terminal-link-action-request'
 import { openFilePathLinkAtBufferPosition } from './files/terminal-file-link-hit-testing'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
 import {
@@ -40,6 +42,41 @@ vi.mock('@/lib/workspace/ownership/connection-context', () => ({
 }))
 
 installTerminalLinkTestEnvironment(doubles)
+
+describe('Windows OSC file links', () => {
+  it('reveals the drive path for a slash-prefixed OSC 8 link from a local terminal', async () => {
+    setPlatform('Windows')
+    const reveal = vi.fn().mockResolvedValue({ ok: true })
+    window.api.shell.openInFileManager = reveal
+    const request = vi.fn<(action: TerminalLinkActionRequest) => void>()
+    const sourceOwner = { kind: 'local' } as const
+
+    const handled = handleOscLink(
+      '/C:/Users/test/report.txt:12:3',
+      { button: 0, ctrlKey: false, metaKey: false, preventDefault: vi.fn() },
+      {
+        worktreeId: 'wt-1',
+        worktreePath: 'D:/project',
+        runtimeEnvironmentId: null,
+        wslDistro: null,
+        sourceOwner,
+        linkActionContext: {
+          paneId: 1,
+          pointerGesture: { canRequestAction: () => true, dispose: vi.fn() },
+          claimPtyMouse: () => true,
+          request,
+          focusTerminal: vi.fn(),
+          sourceOwner
+        }
+      }
+    )
+
+    expect(handled).toBe(true)
+    const revealAction = request.mock.calls[0]?.[0].secondaryActions?.find((row) => row.external)
+    await revealAction?.run()
+    expect(reveal).toHaveBeenCalledWith('C:/Users/test/report.txt', 'local')
+  })
+})
 
 describe('createFilePathLinkProvider range bounds', () => {
   it('opens a wrapped continuation-row html path from a direct modifier-click fallback', async () => {
