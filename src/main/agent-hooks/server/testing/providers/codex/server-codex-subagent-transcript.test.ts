@@ -75,12 +75,16 @@ describe('AgentHookServer Codex subagent transcript polling', () => {
       })
       expect(server.getStatusSnapshot()[0]?.subagents).toHaveLength(1)
 
-      const nested = await post('/hook/copilot', {
+      let nested: Response | undefined
+      void post('/hook/copilot', {
         hook_event_name: 'Stop',
         session_id: 'nested-session',
         transcript_path: join(dir, 'nested-copilot-transcript.jsonl')
+      }).then((response) => {
+        nested = response
       })
-      expect(nested.status).toBe(204)
+      // Its textless Stop waits out the transcript flush retries, which waitFor's fake clock advances.
+      await vi.waitFor(() => expect(nested?.status).toBe(204))
       expect(server.getStatusSnapshot()[0]?.agentType).toBe('codex')
       expect(server.getStatusSnapshot()[0]?.subagents).toHaveLength(1)
 
