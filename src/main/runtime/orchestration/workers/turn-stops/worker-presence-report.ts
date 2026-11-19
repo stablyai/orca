@@ -20,8 +20,6 @@ import {
   type WorkerTurnStopReportDeps
 } from './worker-turn-stop-report'
 
-import { isTargetStopRequested } from '../lifecycle/worker-exit-observation'
-
 const LIVE_ATTACHMENT_STATES: readonly string[] = POTENTIALLY_LIVE_REMOTE_ATTACHMENT_STATES
 
 // Kept with an undecided rest; the report shows only the end of it.
@@ -272,7 +270,7 @@ function reconcileWorkerReport(
   if (
     rest.reason !== 'exited' &&
     rest.reason !== 'lost' &&
-    (isTargetStopRequested(db, target) ||
+    (db.isWorkerStopRequested(dispatchId) ||
       (!('requestError' in rest && rest.requestError) && isDeliberateRest(db, target, rest, deps)))
   ) {
     return keep()

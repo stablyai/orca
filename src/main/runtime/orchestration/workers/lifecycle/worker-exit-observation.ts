@@ -1,28 +1,13 @@
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { WorkerDispatchRow } from '../../db/orchestration-records'
 import { observeWorker, type WorkerGone } from '../turn-stops/worker-presence-report'
-import type {
-  WorkerTurnStopDispatch,
-  WorkerTurnStopReportDeps
-} from '../turn-stops/worker-turn-stop-report'
+import type { WorkerTurnStopReportDeps } from '../turn-stops/worker-turn-stop-report'
 
 type WorkerState = WorkerDispatchRow['state'] | undefined
 
 /** The coordinator asked for a stop: the worker going away is what it asked for. */
 export function isWorkerStopRequested(state: WorkerState): boolean {
   return state === 'stopping' || state === 'stop_unknown'
-}
-
-/** Whether the coordinator is stopping this local or paired server's worker. */
-export function isTargetStopRequested(
-  db: OrchestrationDb,
-  target: WorkerTurnStopDispatch
-): boolean {
-  return isWorkerStopRequested(
-    target.kind === 'local'
-      ? db.getWorkerDispatch?.(target.dispatch.id)?.state
-      : db.getRemoteDispatchAttachment(target.attachment.dispatch_id)?.state
-  )
 }
 
 /** A start still being decided reports its own outcome; a stop the coordinator asked for is no news. */
