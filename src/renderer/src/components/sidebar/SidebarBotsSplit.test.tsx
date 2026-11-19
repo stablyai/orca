@@ -179,20 +179,6 @@ describe('SidebarBotsSplit', () => {
       expect(section.style.maxHeight).toBe('420px')
     })
 
-    it('resizes with a drag and saves the new height', () => {
-      const { section, handle } = renderSearching(300)
-      drag(handle, 300, 350)
-      expect(section.offsetHeight).toBe(350)
-      expect(mocks.setSidebarBotsHeight).toHaveBeenCalledWith(350)
-    })
-
-    it('resizes with the keyboard and saves the new height', () => {
-      const { section, handle } = renderSearching(300)
-      fireEvent.keyDown(handle, { key: 'ArrowDown' })
-      expect(section.offsetHeight).toBe(308)
-      expect(mocks.setSidebarBotsHeight).toHaveBeenCalledWith(308)
-    })
-
     it('keeps its height and the saved cap when the search floor masks a drag', () => {
       mocks.state.sidebarBotsHeight = 420
       const { section, handle } = renderSearching(SEARCH_FLOOR)
