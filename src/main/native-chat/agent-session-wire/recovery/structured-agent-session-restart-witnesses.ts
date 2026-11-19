@@ -1,6 +1,9 @@
 // Capture live work immediately before Stop and retain only proven interruptions; persisted running rows prove nothing.
 
-import type { StructuredAgentSessionRestartResume } from './structured-agent-session-restart-resume-contract'
+import type {
+  StructuredAgentSessionRestartCut,
+  StructuredAgentSessionRestartResume
+} from './structured-agent-session-restart-resume-contract'
 import { restartActivityWaitsOnPerson } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-activity'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
@@ -147,14 +150,8 @@ export function createStructuredAgentSessionRestartWitnesses(deps: {
         (await deps.capsule?.listFailed(now))?.find(
           (failure) => failure.marker.sessionId === sessionId
         )?.marker
-      if (offer && offer.work.kind === 'turn') {
-        return {
-          cause: offer.trigger,
-          turnId: offer.work.id,
-          ...(restartActivityWaitsOnPerson(offer.activity)
-            ? { waitingOnPerson: true as const }
-            : {})
-        }
+      if (offer) {
+        return restartCutOfMarker(offer)
       }
       const journal = deps.sessions.get(sessionId)?.journal
       const cut = journal ? await journal.reads.orcaStopCut() : null
@@ -166,5 +163,17 @@ export function createStructuredAgentSessionRestartWitnesses(deps: {
       await deps.enqueue(async () => deps.capsule?.passOverAutomatic(recordedBy, deps.now()))
     },
     clear
+  }
+}
+
+/** The cut an offer records: its turn, or a send that had not become one yet. */
+export function restartCutOfMarker(
+  marker: AgentSessionResumeMarker
+): StructuredAgentSessionRestartCut {
+  return {
+    cause: marker.trigger,
+    turnId: marker.work.id,
+    ...(restartActivityWaitsOnPerson(marker.activity) ? { waitingOnPerson: true as const } : {}),
+    ...(marker.exitUnproven ? { exitUnproven: true as const } : {})
   }
 }

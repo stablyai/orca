@@ -13,8 +13,11 @@ import {
   reportDismissedCutWorkers,
   reportWorkerStopsAcrossRestart
 } from '../workers/turn-stops/restart-worker-stop-report'
+import { reconsiderRestAfterWait } from '../workers/turn-stops/worker-presence-report'
 import type { TerminalWorkerTurnStops } from '../workers/turn-stops/terminal-worker-turn-stops'
 import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
+import { isOrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address'
+import { canonicalOrcaSessionId } from '../addressing/session-lineage/canonical-orca-session-id'
 
 export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessionFlush {
   protected abstract getResolvedWorktreeMap(): Promise<Map<string, ResolvedWorktree>>
@@ -63,6 +66,10 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
       this.structuredAgentSessionLaunchContinuation.onRetried(
         (settled) => void this.reportWorkerStopsAcrossRestart(Promise.resolve(settled))
       )
+      // A worker's wait for mail that ended empty no longer holds back its rest.
+      this.messageWaiters.onWaitEnded((mailbox) =>
+        reconsiderRestAfterWait(mailbox, this.workerTurnStopReportDeps)
+      )
     }
     this.restartWorkerStopReport ??= this.reportWorkerStopsAcrossRestart(
       this.structuredAgentSessionLaunchContinuation.done
@@ -105,6 +112,8 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
         chats: host
           ? {
               cutByLastRun,
+              lineageRoot: (sessionId) =>
+                isOrcaSessionId(sessionId) ? canonicalOrcaSessionId(sessionId) : sessionId,
               open: (sessionId) => host.revealSession(sessionId).catch(() => null),
               lastOutput: (sessionId) => host.readStatusSummary(sessionId)?.lastAssistantMessage,
               cutOf: (sessionId) => host.restartResume.cutOf(sessionId)

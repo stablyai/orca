@@ -148,34 +148,37 @@ export function sendWorkerReport(
   if (db.hasPendingFederatedWorkerReport(dispatchId)) {
     return false
   }
-  // The queued item outlives a crash, and the stable id makes a repeat a no-op here and at the home.
+  // The queued item outlives a crash, and the stable id makes a repeat a no-op here and at the home;
+  // the record of having sent it commits with it.
   try {
-    db.enqueueFederationRelay({
-      dispatchId,
-      direction: 'to_home',
-      kind: 'escalation',
-      messageId: id,
-      payload: JSON.stringify({
-        from: stop.from,
-        subject,
-        body: describeStop(stop, {
-          task: attachment.task_id,
-          taskId: attachment.task_id,
-          dispatchId,
-          coordinatorApprovals: deps.coordinatorApprovals?.() === true
-        }),
-        type: 'escalation',
-        priority: 'high',
-        threadId: null,
-        // Relayed payloads travel as strings, as a worker's own `send` relays them.
-        payload: JSON.stringify({ taskId: attachment.task_id, ...payload })
+    runLifecycleWriteTransaction(db.db, 'worker_stop_relay', () => {
+      db.enqueueFederationRelay({
+        dispatchId,
+        direction: 'to_home',
+        kind: 'escalation',
+        messageId: id,
+        payload: JSON.stringify({
+          from: stop.from,
+          subject,
+          body: describeStop(stop, {
+            task: attachment.task_id,
+            taskId: attachment.task_id,
+            dispatchId,
+            coordinatorApprovals: deps.coordinatorApprovals?.() === true
+          }),
+          type: 'escalation',
+          priority: 'high',
+          threadId: null,
+          // Relayed payloads travel as strings, as a worker's own `send` relays them.
+          payload: JSON.stringify({ taskId: attachment.task_id, ...payload })
+        })
       })
+      stored()
     })
   } catch (error) {
     console.warn('[orchestration] failed to relay a worker stop report', dispatchId, error)
     return false
   }
-  stored()
   return true
 }
 

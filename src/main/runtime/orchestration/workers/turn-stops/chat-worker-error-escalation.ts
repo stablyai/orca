@@ -11,6 +11,7 @@ import { readChatRequestError } from './chat-request-error-read'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { DispatchContextRow } from '../../db/orchestration-records'
 import { observeWorker } from './worker-presence-report'
+import { readWorkerPresence } from '../../db/worker-presence/worker-presence-store'
 import type { WorkerTurnStopReportDeps } from './worker-turn-stop-report'
 
 type ChatWorkerDispatch = { dispatch: DispatchContextRow; from: string }
@@ -42,6 +43,15 @@ function escalationId(dispatchId: string, request: StructuredAgentSessionRequest
     .slice(0, 24)}`
 }
 
+const REQUEST_FENCE = 'request:'
+
+/** Its worker began another turn, or rested after one, since the failure: other failed requests'
+ *  reports aside, that is the newer news. */
+function movedOnSince(db: OrchestrationDb, dispatchId: string, seen: number | undefined): boolean {
+  const now = readWorkerPresence(db, dispatchId)
+  return now !== null && now.generation !== seen && !now.fence?.startsWith(REQUEST_FENCE)
+}
+
 /** Capture authority synchronously; notification bookkeeping never rejects a committed write. */
 export async function escalateChatWorkerError(
   request: StructuredAgentSessionRequestFailure,
@@ -53,17 +63,22 @@ export async function escalateChatWorkerError(
     if (!db || targets.length === 0) {
       return
     }
+    // What the worker did next is the newer fact: a retry it started meanwhile is not stopped.
+    const seen = new Map(
+      targets.map(({ dispatch }) => [dispatch.id, readWorkerPresence(db, dispatch.id)?.generation])
+    )
     const error = await readChatRequestError(request)
     if (!error || isSenderOwnRejection(error)) {
       return
     }
     const { text, detail, kind } = error
     for (const { dispatch, from } of targets) {
-      // The journal read awaited: the Dispatch may have settled.
+      // The journal read awaited: the Dispatch may have settled, or the worker moved on.
       const current = db.getDispatchContextById(dispatch.id)
       if (
         (current?.status !== 'pending' && current?.status !== 'dispatched') ||
-        current.assignee_handle !== dispatch.assignee_handle
+        current.assignee_handle !== dispatch.assignee_handle ||
+        movedOnSince(db, dispatch.id, seen.get(dispatch.id))
       ) {
         continue
       }
@@ -72,7 +87,7 @@ export async function escalateChatWorkerError(
         { kind: 'local', dispatch },
         {
           presence: 'at-rest',
-          fence: `request:${request.sessionId}:${request.kind}:${request.id}`,
+          fence: `${REQUEST_FENCE}${request.sessionId}:${request.kind}:${request.id}`,
           legacyStopKey: `request:${request.kind}:${request.id}`,
           legacyReportId: escalationId(dispatch.id, request),
           rest: {

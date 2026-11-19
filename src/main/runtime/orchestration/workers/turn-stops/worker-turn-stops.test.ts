@@ -16,6 +16,7 @@ import { createRootDispatch } from '../../db/root-dispatch-test-fixture'
 import { TerminalWorkerTurnStops } from './terminal-worker-turn-stops'
 import { stopReportId } from './worker-turn-stop-report'
 import { observeWorker } from './worker-presence-report'
+import type { WorkerApprovalPayload } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 
 const PANE = makePaneKey('tab-worker', '11111111-1111-4111-8111-111111111111')
 const HANDLE = 'term_worker'
@@ -282,6 +283,47 @@ describe('terminal worker turn stops', () => {
     await vi.waitFor(() => expect(ctx.mail()).toHaveLength(1))
     expect(ctx.mail()[0].body).toContain('Do you want to proceed?')
   })
+
+  it('does not page at startup for a turn its user stopped, or a session boundary', async () => {
+    const ctx = setup()
+    const current = { row: hookRow({ interrupted: true }) }
+    const stops = terminal(ctx, current)
+    await stops.reportRestingPane(PANE)
+    current.row = hookRow({ sessionBoundary: true, stateStartedAt: 300 })
+    await stops.reportRestingPane(PANE)
+    expect(ctx.mail()).toHaveLength(0)
+    current.row = hookRow({ stateStartedAt: 400 })
+    await stops.reportRestingPane(PANE)
+    expect(ctx.mail()).toHaveLength(1)
+  })
+
+  it('reports an approval seen on a prompt already reported without one', async () => {
+    const ctx = setup()
+    const current = { row: hookRow({ state: 'waiting', stateStartedAt: 300 }) }
+    let open: WorkerApprovalPayload | null = null
+    const reported: string[] = []
+    const stops = terminal(ctx, current, {
+      takeOpenApproval: async () => open,
+      markApprovalReported: (approvalId) => reported.push(approvalId)
+    })
+    await stops.reportRestingPane(PANE)
+    expect(ctx.mail()).toHaveLength(1)
+    open = {
+      v: 1,
+      approvalId: 'apr_open',
+      state: 'open',
+      worker: { handle: HANDLE, dispatchId: ctx.dispatch.id, taskId: ctx.dispatch.task_id },
+      summary: { title: 'Allow Bash?', detail: null, reason: null },
+      allowedActions: ['allow', 'deny']
+    }
+    await stops.reportRestingPane(PANE)
+    await stops.reportRestingPane(PANE)
+    expect(ctx.mail().map((message) => message.subject)).toEqual([
+      'Worker is waiting on a prompt',
+      'Worker is waiting for permission'
+    ])
+    expect(reported).toEqual(['apr_open', 'apr_open'])
+  })
 })
 
 describe('chat worker turn stops', () => {
@@ -454,5 +496,48 @@ describe('chat worker turn stops', () => {
     }
     expect(ctx.mail()).toMatchObject([{ subject: 'Worker stopped without reporting' }])
     live.stop()
+  })
+})
+
+describe('remote worker presence', () => {
+  function attachment() {
+    const db = new OrchestrationDb(':memory:')
+    db.createRemoteDispatchAttachment({
+      runId: 'run-home',
+      dispatchId: 'ctx_remote',
+      taskId: 'task_remote',
+      homePeerFingerprint: 'home_peer',
+      protocolVersion: 1,
+      runtimeEpoch: 'worker_epoch',
+      mutationReceipt: {
+        callerFingerprint: 'home_peer',
+        requestId: 'attach_remote',
+        method: 'orchestration.federationAttachStart',
+        payloadHash: 'attach_hash'
+      }
+    })
+    const relayed = () =>
+      db.db
+        .prepare("SELECT message_id FROM federation_relay_items WHERE direction = 'to_home'")
+        .all()
+    const deps = { getDb: () => db, isWaitingForMail: () => false, notify: vi.fn() }
+    const target = {
+      kind: 'remote' as const,
+      attachment: { dispatch_id: 'ctx_remote', task_id: 'task_remote' }
+    }
+    return { db, relayed, deps, target }
+  }
+
+  it('relays an exit to the Run home once, however often it is seen', () => {
+    const { db, relayed, deps, target } = attachment()
+    const gone = {
+      presence: 'gone' as const,
+      fence: 'proc-1',
+      legacyStopKey: 'gone',
+      gone: { from: HANDLE, reason: 'exited' as const, lastOutput: undefined }
+    }
+    expect(observeWorker(db, target, gone, deps)).toBe(true)
+    observeWorker(db, target, gone, deps)
+    expect(relayed()).toHaveLength(1)
   })
 })

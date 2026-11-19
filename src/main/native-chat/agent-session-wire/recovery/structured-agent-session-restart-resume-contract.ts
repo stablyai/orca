@@ -14,6 +14,8 @@ export type StructuredAgentSessionRestartCut = {
   turnId: string
   /** The turn was asking its person: the prompt's item when known. */
   waitingOnPerson?: true
+  /** A crash that did not prove the agent exited: it may still be running. */
+  exitUnproven?: true
 }
 
 export type RestartContinuationOptions = {

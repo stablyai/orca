@@ -56,6 +56,16 @@ describe('durable restart offers', () => {
     expect((await capsule.list(NOW)).map((offer) => offer.trigger)).toEqual(['crash'])
   })
 
+  it('names as abandoned only the offers a dismissal removed that nothing was continuing', async () => {
+    await capsule.record([marker(), marker({ sessionId: 'second' })], NOW)
+    await capsule.beginResume([SESSION], 'operation-a', NOW)
+
+    const dismissed = await capsule.dismiss('all', NOW)
+    expect(dismissed.count).toBe(2)
+    expect(dismissed.abandoned.map((offer) => offer.sessionId)).toEqual(['second'])
+    expect((await capsule.dismiss('all', NOW)).abandoned).toEqual([])
+  })
+
   it('reserves only one copy of a selected session across competing owners', async () => {
     await capsule.record([marker(), marker({ sessionId: 'second' })], NOW)
     const other = new AgentSessionRecoveryCapsule(directory)

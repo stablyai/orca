@@ -84,3 +84,14 @@ it('tells listeners of the cut a dismissal removed, and nothing for one it kept'
     { sessionId: SESSION, cut: expect.objectContaining({ cause: 'quit' }) }
   ])
 })
+
+it('tells listeners of a dismissed send its turn never recorded', async () => {
+  const { host } = await interruptedRestart('submission')
+  const heard = vi.fn()
+  host.restartResume.onDismissed(heard)
+
+  await host.restartResume.dismiss([SESSION])
+  expect(heard).toHaveBeenCalledExactlyOnceWith([
+    { sessionId: SESSION, cut: expect.objectContaining({ cause: 'quit' }) }
+  ])
+})

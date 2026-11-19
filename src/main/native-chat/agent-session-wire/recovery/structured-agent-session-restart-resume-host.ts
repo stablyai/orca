@@ -293,7 +293,7 @@ export function createStructuredAgentSessionRestartResume(
     }
   }
 
-  const dismissals = createRestartOfferDismissals({ list, listFailures, cutOf: witnesses.cutOf })
+  const dismissals = createRestartOfferDismissals()
 
   return {
     adoptCrashCuts: witnesses.recordCrashCuts,

@@ -6,58 +6,40 @@ import type {
   StructuredAgentSessionRestartResume
 } from './structured-agent-session-restart-resume-contract'
 import type { StructuredAgentSessionRestartAudience } from './structured-agent-session-restart-resume-set'
+import type { RecoveryDismissal } from '../../../runtime/agent-session/records/agent-session-recovery-capsule-entries'
+import { restartCutOfMarker } from './structured-agent-session-restart-witnesses'
 
 export type StructuredAgentSessionDismissedCut = {
   sessionId: string
   cut: StructuredAgentSessionRestartCut
 }
 
-type Dismiss = StructuredAgentSessionRestartResume['dismiss']
 type BeforeClearAll = (audience?: StructuredAgentSessionRestartAudience) => Promise<void>
 
-export function createRestartOfferDismissals(
-  deps: Pick<StructuredAgentSessionRestartResume, 'list' | 'listFailures' | 'cutOf'>
-): {
+export function createRestartOfferDismissals(): {
   onDismissed: StructuredAgentSessionRestartResume['onDismissed']
   dismissing: (
     dismiss: (
       sessionIds: readonly string[] | undefined,
       beforeClearAll: BeforeClearAll,
       audience?: StructuredAgentSessionRestartAudience
-    ) => Promise<number>,
+    ) => Promise<RecoveryDismissal>,
     beforeClearAll: BeforeClearAll
-  ) => Dismiss
+  ) => StructuredAgentSessionRestartResume['dismiss']
 } {
   const listeners = new Set<(dismissed: readonly StructuredAgentSessionDismissedCut[]) => void>()
-  const shown = async (audience?: StructuredAgentSessionRestartAudience) =>
-    new Set(
-      [...(await deps.list(audience)), ...(await deps.listFailures(audience))].map(
-        (row) => row.sessionId
-      )
-    )
   return {
     onDismissed: (listener) => {
       listeners.add(listener)
     },
     dismissing: (dismiss, beforeClearAll) => async (sessionIds, audience) => {
-      if (listeners.size === 0) {
-        return dismiss(sessionIds, beforeClearAll, audience)
-      }
-      const named = [...(await shown(audience))].filter(
-        (sessionId) => sessionIds === undefined || sessionIds.includes(sessionId)
-      )
-      const cuts = new Map<string, StructuredAgentSessionRestartCut>()
-      for (const sessionId of named) {
-        const cut = await deps.cutOf(sessionId)
-        if (cut) {
-          cuts.set(sessionId, cut)
-        }
-      }
-      const count = await dismiss(sessionIds, beforeClearAll, audience)
-      const left = await shown(audience)
-      const dismissed = [...cuts].flatMap(([sessionId, cut]) =>
-        left.has(sessionId) ? [] : [{ sessionId, cut }]
-      )
+      const { count, abandoned } = await dismiss(sessionIds, beforeClearAll, audience)
+      // Exactly what this dismissal removed under the capsule's lock: an offer another window
+      // continued first is not abandoned.
+      const dismissed = abandoned.map((marker) => ({
+        sessionId: marker.sessionId,
+        cut: restartCutOfMarker(marker)
+      }))
       if (dismissed.length > 0) {
         for (const listener of listeners) {
           try {

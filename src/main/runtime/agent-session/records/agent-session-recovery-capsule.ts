@@ -9,6 +9,9 @@ import {
   type AgentSessionResumeFailureInput,
   type AgentSessionResumeFailureRecord,
   type KeepRecord,
+  removeOffers,
+  NO_RECOVERY_DISMISSAL,
+  type RecoveryDismissal,
   type RecoveryCapsuleState,
   type RecoveryEntry
 } from './agent-session-recovery-capsule-entries'
@@ -232,27 +235,19 @@ export class AgentSessionRecoveryCapsule {
     now: number,
     /** Evaluate preserved records under the lock against their stored markers. */
     keep: (marker: AgentSessionResumeMarker) => boolean = () => false
-  ): Promise<number> {
+  ): Promise<RecoveryDismissal> {
     return withFileTransactionLock(this.filePath, async () => {
       const named = sessionIds === 'all' ? null : new Set(sessionIds)
       const state = await this.readState()
-      const { entries, failed } = normalizeState(state, now)
-      const dismissedMarkers = [...entries, ...failed]
-        .filter(({ marker }) => (named?.has(marker.sessionId) ?? true) && !keep(marker))
-        .map((record) => record.marker)
-      const dismissed = new Set(dismissedMarkers.map((marker) => marker.sessionId))
-      if (dismissed.size > 0) {
-        await recordDismissedOffers(this.filePath, dismissedMarkers)
-        await this.publish(
-          {
-            entries: entries.filter((entry) => !dismissed.has(entry.marker.sessionId)),
-            failed: failed.filter((failure) => !dismissed.has(failure.marker.sessionId))
-          },
-          now,
-          state.dismissedAt
-        )
+      const removal = removeOffers(
+        normalizeState(state, now),
+        (marker) => (named?.has(marker.sessionId) ?? true) && !keep(marker)
+      )
+      if (removal.recorded.length > 0) {
+        await recordDismissedOffers(this.filePath, removal.recorded)
+        await this.publish(removal.kept, now, state.dismissedAt)
       }
-      return dismissed.size
+      return removal.dismissal
     })
   }
 
@@ -302,7 +297,7 @@ export class AgentSessionRecoveryCapsule {
   }
 
   /** Preserve records unreadable to this host for a compatible Orca. */
-  clearAll(now: number, keep: KeepRecord = () => false): Promise<number> {
+  clearAll(now: number, keep: KeepRecord = () => false): Promise<RecoveryDismissal> {
     return withFileTransactionLock(this.filePath, async () => {
       let state: Pick<RecoveryCapsuleState, 'entries' | 'failed'>
       try {
@@ -310,12 +305,12 @@ export class AgentSessionRecoveryCapsule {
       } catch {
         // Explicit dismiss may replace unreadable advisory data; fence it against late teardown resurrection.
         await this.publish({ entries: [], failed: [] }, now, now)
-        return 0
+        return NO_RECOVERY_DISMISSAL
       }
-      const { kept, dismissedPending } = splitDismissedAll(state, keep)
+      const { kept, dismissal } = splitDismissedAll(state, keep)
       // Fence every dismissed record; in-flight completion/rollback then cannot resurrect it.
       await this.publish(kept, now, now)
-      return dismissedPending
+      return dismissal
     })
   }
 

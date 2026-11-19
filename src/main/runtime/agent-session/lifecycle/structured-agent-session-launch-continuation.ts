@@ -88,7 +88,13 @@ export async function continueStructuredAgentSessionsAtLaunch(
         outcome.outcome === 'continued' ? [outcome.sessionId] : []
       )
     )
-    return { continued, answer, cutByLastRun: await cutByLastRun(continued) }
+    // A handoff its provider has not confirmed may already be running: not known to be cut.
+    const handedOff = new Set(
+      answer.continued.flatMap((outcome) =>
+        outcome.outcome === 'refused' ? [] : [outcome.sessionId]
+      )
+    )
+    return { continued, answer, cutByLastRun: await cutByLastRun(handedOff) }
   } finally {
     // Only this launch continues on its own what the last run cut; later launches leave it to a person.
     await deps.restartResume.passOverAutomatic(recordedBy)

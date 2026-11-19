@@ -248,7 +248,8 @@ export function chatWorkerTurnStopReporter(
   }
 }
 
-/** A chat worker's turn started: its rest, if any, is over. Called once per working edge. */
+/** A chat worker's turn started: its rest, if any, is over. Called once per working edge, which follows
+ *  an edge that was not working, so each is a turn of its own even when no rest was recorded. */
 export function observeChatWorkerWorking(sessionId: string, deps: WorkerTurnStopReportDeps): void {
   try {
     const db = deps.getDb()
@@ -256,7 +257,7 @@ export function observeChatWorkerWorking(sessionId: string, deps: WorkerTurnStop
       return
     }
     for (const { dispatch } of chatWorkerDispatches(sessionId, db)) {
-      observeWorker(db, { kind: 'local', dispatch }, { presence: 'working' }, deps)
+      observeWorker(db, { kind: 'local', dispatch }, { presence: 'working', newTurn: true }, deps)
     }
   } catch (error) {
     console.warn('[orchestration] chat worker presence failed', error)

@@ -10,7 +10,9 @@ import type {
 } from '../../../../native-chat/agent-session-wire/recovery/structured-agent-session-restart-resume-contract'
 import { chatWorkerDispatches } from './chat-worker-error-escalation'
 import type { WorkerTurnStopReportDeps } from './worker-turn-stop-report'
-import { observeWorker } from './worker-presence-report'
+import { observeWorker, reconsiderWorkerRest } from './worker-presence-report'
+import { listUndecidedWorkerRests } from '../../db/worker-presence/worker-presence-store'
+import { potentiallyLiveRemoteAttachmentSql } from '../../db/federation/remote-attachment-liveness'
 import type { DispatchContextRow } from '../../db/orchestration-records'
 
 export type RestartWorkerStopReportDeps = {
@@ -22,6 +24,8 @@ export type RestartWorkerStopReportDeps = {
   chats: {
     /** Only these chats were cut by the run that just ended; no other worker chat is opened. */
     cutByLastRun: ReadonlySet<string>
+    /** The /clear root a session continues, which its Dispatch names. */
+    lineageRoot: (sessionId: string) => string
     open: (sessionId: string) => Promise<unknown>
     /** What the worker last said, for the report. */
     lastOutput: (sessionId: string) => string | undefined
@@ -47,12 +51,15 @@ async function reportCutChat(
   deps: RestartWorkerStopReportDeps,
   chats: NonNullable<RestartWorkerStopReportDeps['chats']>,
   dispatchId: string,
-  sessionId: string
+  sessionId: string,
+  root: string
 ): Promise<void> {
   await chats.open(sessionId)
   const cut = await chats.cutOf(sessionId)
   const worker = cut
-    ? chatWorkerDispatches(sessionId, deps.db).find((entry) => entry.dispatch.id === dispatchId)
+    ? [...chatWorkerDispatches(sessionId, deps.db), ...chatWorkerDispatches(root, deps.db)].find(
+        (entry) => entry.dispatch.id === dispatchId
+      )
     : undefined
   if (!cut || !worker) {
     return
@@ -99,7 +106,11 @@ function observeCutWorkerGone(
       presence: 'gone',
       fence,
       legacyStopKey: fence,
-      gone: { ...gone, reason: 'exited', restartsOnMail: true }
+      // An agent a crash may have left running is not known to have exited, and mail could start a
+      // second one beside it.
+      gone: cut.exitUnproven
+        ? { ...gone, reason: 'lost', cause: `${gone.cause}; its agent may still be running` }
+        : { ...gone, reason: 'exited', restartsOnMail: true }
     },
     deps.reportDeps
   )
@@ -127,35 +138,74 @@ export function reportDismissedCutWorkers(
 export async function reportWorkerStopsAcrossRestart(
   deps: RestartWorkerStopReportDeps
 ): Promise<void> {
-  const { db } = deps
+  const { db, chats } = deps
+  // Visits run side by side: one pane's screen read must not hold back another worker's report.
+  const visits: Promise<void>[] = []
+  const visit = (key: string, run: () => Promise<void> | void): void => {
+    visits.push(
+      Promise.resolve()
+        .then(run)
+        .catch((error: unknown) => {
+          console.warn(
+            '[orchestration] reporting a worker stopped across a restart failed',
+            key,
+            error
+          )
+        })
+    )
+  }
+  // A Dispatch names its chat's /clear root; the cut names the successor that ran.
+  const cutsByRoot = new Map<string, string[]>()
+  for (const sessionId of chats?.cutByLastRun ?? []) {
+    const root = chats?.lineageRoot(sessionId) ?? sessionId
+    cutsByRoot.set(root, [...(cutsByRoot.get(root) ?? []), sessionId])
+  }
   for (const dispatchId of openDispatchIds(db)) {
-    try {
-      // Re-read: an earlier report, a worker's own report or the terminal sweep may have closed it.
-      const dispatch = db.getDispatchContextById(dispatchId)
-      if (
-        !dispatch ||
-        (dispatch.status !== 'pending' && dispatch.status !== 'dispatched') ||
-        // Its brief may not have reached the worker yet, as the live report waits out too.
-        db.getWorkerDispatch(dispatchId)?.state === 'starting'
-      ) {
-        continue
+    // Re-read: an earlier report, a worker's own report or the terminal sweep may have closed it.
+    const dispatch = db.getDispatchContextById(dispatchId)
+    if (
+      !dispatch ||
+      (dispatch.status !== 'pending' && dispatch.status !== 'dispatched') ||
+      // Its brief may not have reached the worker yet, as the live report waits out too.
+      db.getWorkerDispatch(dispatchId)?.state === 'starting'
+    ) {
+      continue
+    }
+    const sessionId = dispatch.assignee_orca_session_id
+    const paneKey = dispatch.assignee_pane_key
+    if (!sessionId) {
+      if (paneKey) {
+        visit(dispatchId, () => deps.reportRestingPane(paneKey))
       }
-      const sessionId = dispatch.assignee_orca_session_id
-      if (!sessionId) {
-        if (dispatch.assignee_pane_key) {
-          await deps.reportRestingPane(dispatch.assignee_pane_key)
-        }
-        continue
+      continue
+    }
+    for (const cut of cutsByRoot.get(sessionId) ?? []) {
+      if (chats) {
+        visit(dispatchId, () => reportCutChat(deps, chats, dispatchId, cut, sessionId))
       }
-      if (deps.chats?.cutByLastRun.has(sessionId)) {
-        await reportCutChat(deps, deps.chats, dispatchId, sessionId)
-      }
-    } catch (error) {
-      console.warn(
-        '[orchestration] reporting a worker stopped across a restart failed',
-        dispatchId,
-        error
-      )
     }
   }
+  // A paired server's worker has only its attachment here.
+  for (const paneKey of activeRemoteWorkerPanes(db)) {
+    visit(paneKey, () => deps.reportRestingPane(paneKey))
+  }
+  await Promise.all(visits)
+  // No wait for mail outlives a restart, so none holds back a rest any more.
+  for (const dispatchId of listUndecidedWorkerRests(db)) {
+    try {
+      reconsiderWorkerRest(db, dispatchId, deps.reportDeps)
+    } catch (error) {
+      console.warn('[orchestration] reconsidering a worker rest failed', dispatchId, error)
+    }
+  }
+}
+
+function activeRemoteWorkerPanes(db: OrchestrationDb): string[] {
+  return db.db
+    .prepare(
+      `SELECT DISTINCT pane_key FROM remote_dispatch_attachments
+        WHERE ${potentiallyLiveRemoteAttachmentSql()} AND state != 'starting' AND pane_key IS NOT NULL`
+    )
+    .all()
+    .flatMap((row) => (typeof row.pane_key === 'string' ? [row.pane_key] : []))
 }

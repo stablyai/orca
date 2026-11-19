@@ -101,6 +101,17 @@ export function writeWorkerPresence(
     )
 }
 
+/** Dispatches whose worker rests with a report still undecided. */
+export function listUndecidedWorkerRests(db: OrchestrationDb): string[] {
+  return db.db
+    .prepare(
+      `SELECT dispatch_id FROM worker_presence
+        WHERE report IS NOT NULL AND presence IN ('resting', 'prompt')`
+    )
+    .all()
+    .flatMap((row) => (typeof row.dispatch_id === 'string' ? [row.dispatch_id] : []))
+}
+
 /** A worker report this machine relayed toward its Run home under this id. */
 export function hasRelayedWorkerReport(
   db: OrchestrationDb,

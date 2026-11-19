@@ -1,7 +1,10 @@
 import type { AgentPaneChange } from '../../../../agent-hooks/observations/agent-transition-detector'
 import { agentVerdictDisplayMark } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import { hookRowAgentPhase } from '../../../../../shared/agent-status/lifecycle/agent-transitions'
+import {
+  hookRowAgentPhase,
+  hookRowTransition
+} from '../../../../../shared/agent-status/lifecycle/agent-transitions'
 import type { RuntimeTerminalRead } from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import {
   TerminalAgentTurnNews,
@@ -75,10 +78,12 @@ export class TerminalWorkerTurnStops {
     }
   }
 
-  /** A pane restored at rest: its stop came while Orca was down, so no live edge announced it. */
+  /** A pane restored at rest: its stop came while Orca was down, so no live edge announced it. A turn
+   *  its user stopped, or a session boundary, is no news here either, as it is live. */
   reportRestingPane(paneKey: string): Promise<void> {
     const row = this.deps.readHookRow(paneKey)
-    const resolved = row && row.state !== 'working' ? this.resolve(paneKey) : null
+    const news = row && hookRowTransition('working', hookRowAgentPhase(row), row) !== null
+    const resolved = news ? this.resolve(paneKey) : null
     if (!row || !resolved) {
       return Promise.resolve()
     }
@@ -126,8 +131,9 @@ export class TerminalWorkerTurnStops {
       resolved.target,
       {
         presence: 'at-rest',
-        // A relaunched agent in the same pane is a new process, whatever its hook clock says.
-        fence: `${this.deps.getProcessIncarnation(resolved.handle) ?? resolved.handle}:${stop.row.stateStartedAt}`,
+        // A relaunched agent in the same pane is a new process, whatever its hook clock says; an
+        // approval seen on a prompt already reported is news of its own.
+        fence: `${this.deps.getProcessIncarnation(resolved.handle) ?? resolved.handle}:${stop.row.stateStartedAt}${approval ? `:approval:${approval.approvalId}` : ''}`,
         legacyStopKey: `${stop.paneKey}:${stop.row.stateStartedAt}`,
         rest: {
           from: resolved.handle,

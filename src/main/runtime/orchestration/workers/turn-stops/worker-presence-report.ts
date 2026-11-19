@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { readCoordinatorMailCount } from '../../db/messages/dispatch-read-mail'
 import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transaction-runner'
+import { POTENTIALLY_LIVE_REMOTE_ATTACHMENT_STATES } from '../../db/federation/remote-attachment-liveness'
 import {
   hasRelayedWorkerReport,
   nextWorkerPresence,
@@ -18,6 +19,8 @@ import {
   type WorkerTurnStopDispatch,
   type WorkerTurnStopReportDeps
 } from './worker-turn-stop-report'
+
+const LIVE_ATTACHMENT_STATES: readonly string[] = POTENTIALLY_LIVE_REMOTE_ATTACHMENT_STATES
 
 // Kept with an undecided rest; the report shows only the end of it.
 const STORED_OUTPUT_MAX_CHARS = 2_000
@@ -41,7 +44,11 @@ export type WorkerGone = Pick<
 /** What an edge saw of its worker. `fence` names the rest: its process or chat turn and when it began,
  *  so the same rest seen twice is one fact and a new rest is another, even in the same presence. */
 export type WorkerObservation =
-  | { presence: 'working' }
+  | {
+      presence: 'working'
+      /** A turn that began after the worker stopped, though nothing recorded the stop: a new fact. */
+      newTurn?: true
+    }
   | {
       presence: 'at-rest'
       fence: string
@@ -77,7 +84,8 @@ export function observeWorker(
   const dispatchId = workerTurnStopDispatchId(target)
   const current = readWorkerPresence(db, dispatchId)
   if (observation.presence === 'working') {
-    const next = nextWorkerPresence(current, { presence: 'working', fence: null, report: null })
+    const fence = observation.newTurn ? `turn:${(current?.generation ?? 0) + 1}` : null
+    const next = nextWorkerPresence(current, { presence: 'working', fence, report: null })
     if (next.changed) {
       writeWorkerPresence(db, dispatchId, next)
     }
@@ -126,6 +134,48 @@ export function observeWorker(
       target.kind === 'local' &&
       db.getMessageById(approvalReportId(dispatchId, rest.approval.approvalId)) !== undefined)
   )
+}
+
+/** What held a rest back may have cleared without the worker moving (a wait for mail that ended, or
+ *  a restart that dropped every wait): its stored rest is decided again. True when it went out now. */
+export function reconsiderWorkerRest(
+  db: OrchestrationDb,
+  dispatchId: string,
+  deps: WorkerTurnStopReportDeps
+): boolean {
+  const row = readWorkerPresence(db, dispatchId)
+  const target = row?.report ? currentWorkerTarget(db, dispatchId) : null
+  return row && target ? reconcileWorkerReport(db, target, { ...row, changed: false }, deps) : false
+}
+
+/** A worker's wait for mail that ended empty no longer holds back its rest. */
+export function reconsiderRestAfterWait(mailbox: string, deps: WorkerTurnStopReportDeps): void {
+  const db = deps.getDb()
+  if (!db || !mailbox.startsWith('dispatch:')) {
+    return
+  }
+  try {
+    reconsiderWorkerRest(db, mailbox.slice('dispatch:'.length), deps)
+  } catch (error) {
+    console.warn('[orchestration] reconsidering a worker rest failed', mailbox, error)
+  }
+}
+
+/** The open Dispatch, or the active attachment of a paired server's worker, whose worker this is. */
+function currentWorkerTarget(
+  db: OrchestrationDb,
+  dispatchId: string
+): WorkerTurnStopDispatch | null {
+  const dispatch = db.getDispatchContextById(dispatchId)
+  if (dispatch) {
+    return dispatch.status === 'pending' || dispatch.status === 'dispatched'
+      ? { kind: 'local', dispatch }
+      : null
+  }
+  const attachment = db.getRemoteDispatchAttachment(dispatchId)
+  return attachment && LIVE_ATTACHMENT_STATES.includes(attachment.state)
+    ? { kind: 'remote', attachment }
+    : null
 }
 
 /** A remote attachment settles at its Run home; this side sees only active ones. */

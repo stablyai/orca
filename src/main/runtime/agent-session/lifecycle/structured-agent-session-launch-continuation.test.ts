@@ -5,6 +5,7 @@ import {
   STRUCTURED_AGENT_SESSION_LAUNCH_CONTINUATION_OWNER,
   type StructuredAgentSessionLaunchContinuationDeps
 } from './structured-agent-session-launch-continuation'
+import type { StructuredAgentSessionContinuationOutcome } from '../../../native-chat/agent-session-wire/recovery/structured-agent-session-restart-continuation'
 import type { StructuredAgentSessionResumeCandidate } from '../../../native-chat/agent-session-wire/recovery/structured-agent-session-restart-resume-set'
 
 const offer = (sessionId: string, recordedAt: number): StructuredAgentSessionResumeCandidate => ({
@@ -41,13 +42,11 @@ function launch(resumeWorkOnRestart: boolean) {
     }),
     continueAfterRestart: vi.fn(async () => {
       calls.push('continue')
-      return {
-        resumed: [],
-        continued: [
-          { sessionId: 'continued', outcome: 'continued' as const },
-          { sessionId: 'refused', outcome: 'refused' as const }
-        ]
-      }
+      const continued: StructuredAgentSessionContinuationOutcome[] = [
+        { sessionId: 'continued', outcome: 'continued' },
+        { sessionId: 'refused', outcome: 'refused' }
+      ]
+      return { resumed: [], continued }
     }),
     passOverAutomatic: vi.fn(async () => {
       calls.push('pass over')
@@ -104,6 +103,23 @@ describe('continuing interrupted chats at launch', () => {
       { automatic: true, onReserved: expect.any(Function) }
     )
     expect(calls).toEqual(['adopt', 'continue', 'pass over'])
+  })
+
+  it('does not count as cut a chat whose continuation its provider has not confirmed yet', async () => {
+    const { result, restartResume, deps } = launch(true)
+    await result
+    restartResume.continueAfterRestart.mockResolvedValueOnce({
+      resumed: [],
+      continued: [
+        { sessionId: 'chat-quit', outcome: 'pending' },
+        { sessionId: 'chat-crashed', outcome: 'unknown' },
+        { sessionId: 'chat-quit-killed', outcome: 'refused' }
+      ]
+    })
+    const settled = await continueStructuredAgentSessionsAtLaunch(deps)
+    expect(settled.cutByLastRun).toEqual(
+      new Set(['chat-crashed-earlier', 'chat-quit-killed', 'continued'])
+    )
   })
 
   it('with the setting off, still offers what a crash cut and passes it over, continuing nothing', async () => {
