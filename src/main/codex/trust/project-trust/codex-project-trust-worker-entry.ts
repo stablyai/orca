@@ -5,7 +5,7 @@ import {
   listCodexProjectTrustOwnedConfigs,
   removeOrcaCreatedProjectTrust
 } from './codex-project-trust-transaction'
-import { removeOrcaCreatedAntigravityTrust } from '../../../agent-launch/trust/antigravity-workspace-trust-ownership'
+import { removeOrcaCreatedAntigravityTrust } from '../../../agent-launch/trust/antigravity-workspace-trust-removal'
 import type {
   CodexProjectTrustWorkerFailure,
   CodexProjectTrustWorkerRequest,

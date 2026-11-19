@@ -139,16 +139,15 @@ export async function applyWorkspaceTrustOnThisHost(
         return
       }
     }
-    const write = (): Promise<void> =>
-      awaitAgentTrustWriteWithinDeadline(writePreset(preset, workspacePath, host), {
-        preset,
-        workspacePath,
-        deadlineMs: host.deadlineMs
-      })
-    // Why: removals edit the same files on the worker; the deadline starts once this grant is admitted.
-    await (preset === 'antigravity'
-      ? runExclusivelyForCodexTrustConfig(getAntigravityTrustLedgerPath(), write)
-      : write())
+    // Why: removals edit the same Antigravity files on the worker; the deadline bounds the wait
+    // behind them, and a late grant still runs in queue order.
+    const write = (): Promise<void> => writePreset(preset, workspacePath, host)
+    await awaitAgentTrustWriteWithinDeadline(
+      preset === 'antigravity'
+        ? runExclusivelyForCodexTrustConfig(getAntigravityTrustLedgerPath(), write)
+        : write(),
+      { preset, workspacePath, deadlineMs: host.deadlineMs }
+    )
   } catch (error) {
     console.warn(
       `[agent-trust] ${preset} trust for ${workspacePath} failed; the agent will ask`,
