@@ -22471,6 +22471,10 @@
         "anotherComputer": "another computer",
         "fromVia": "From {{name}} via {{computer}}",
         "fromViaPhone": "From {{name}}, typed on {{phone}} via {{computer}}"
+      },
+      "eventRow": {
+        "showLess": "Show less",
+        "showMore": "Show more"
       }
     },
     "tab": {
