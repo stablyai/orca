@@ -79,7 +79,7 @@ export class TerminalWorkerTurnStops {
           : 'finished'
     // A clean finish has the agent's own last words; an error or prompt is on the screen.
     const lastOutput =
-      (reason === 'finished' && latest.lastAssistantMessage) ||
+      (reason === 'finished' && (latest.lastAssistantMessage || stop.row.lastAssistantMessage)) ||
       (await this.readStopScreen(
         stopped.handle,
         reason === 'needs-input' && stop.row.agentType === 'claude'

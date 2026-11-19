@@ -32,7 +32,11 @@ type PaneNews = {
   event: MobileNotificationDispatchEvent
 }
 
-type TurnNews = PaneNews & { paneKey: string; row: AgentStatusIpcPayload }
+type TurnNews = PaneNews & {
+  paneKey: string
+  row: AgentStatusIpcPayload
+  labels: TerminalAgentWorkspaceLabels
+}
 
 export type TerminalAgentPhonePushDeps = {
   /** A desktop window owns this host and pushes its phones itself. */
@@ -61,12 +65,16 @@ export class TerminalAgentPhonePush {
   constructor(private readonly deps: TerminalAgentPhonePushDeps) {
     this.turnNews = new TerminalAgentTurnNews({
       readHookRow: (paneKey) => deps.readHookRow(paneKey),
-      prepare: ({ paneKey, worktreeId, row }) => ({
-        worktreeId,
-        paneKey,
-        row,
-        event: this.buildEvent(worktreeId, paneKey, row)
-      }),
+      prepare: ({ paneKey, worktreeId, row }) => {
+        const labels = this.readLabels(worktreeId, paneKey)
+        return {
+          worktreeId,
+          paneKey,
+          row,
+          labels,
+          event: this.buildEvent(worktreeId, paneKey, row, labels)
+        }
+      },
       deliver: (news, row) => {
         if (news.event.paneKey) {
           this.hooklessNews.noteFinish(news.event.paneKey)
@@ -75,7 +83,7 @@ export class TerminalAgentPhonePush {
         this.send(
           row === news.row
             ? news
-            : { ...news, event: this.buildEvent(news.worktreeId, news.paneKey, row) }
+            : { ...news, event: this.buildEvent(news.worktreeId, news.paneKey, row, news.labels) }
         )
       },
       setTimer: (run, delayMs) => deps.setTimer(run, delayMs)
@@ -153,14 +161,15 @@ export class TerminalAgentPhonePush {
   private buildEvent(
     worktreeId: string,
     paneKey: string,
-    row: AgentStatusIpcPayload
+    row: AgentStatusIpcPayload,
+    labels: TerminalAgentWorkspaceLabels
   ): MobileNotificationDispatchEvent {
     const outcome = agentMainAgentVerdict(row)
     const request: NotificationDispatchRequest = {
       source: 'agent-task-complete',
       worktreeId,
       paneKey,
-      ...this.readLabels(worktreeId, paneKey),
+      ...labels,
       agentState: row.state,
       ...(row.agentType ? { agentType: row.agentType } : {}),
       ...(row.prompt ? { agentPrompt: row.prompt } : {}),
