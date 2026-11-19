@@ -73,7 +73,8 @@ describe('NativeChatWebhookCard', () => {
     expect(screen.getByRole('button', { name: 'Add signing secret…' })).toBeTruthy()
     expect(document.body.textContent).not.toContain('orcawh_')
     fireEvent.click(reveal)
-    await screen.findByText(KEY.url)
+    const url = await screen.findByText(KEY.url)
+    expect(url.closest('[data-native-chat-secret][data-native-chat-find-skip]')).toBeTruthy()
     expect(host).toHaveBeenCalledWith(OWNER.target, 'webhooks.reveal', {
       hookId: 'wh_7Kx2pQ9mT4vB8nLc'
     })
@@ -141,13 +142,5 @@ describe('NativeChatWebhookCard', () => {
     await screen.findByText('No calls yet')
     expect(document.body.textContent).not.toContain('orcawh_')
     expect(host.mock.calls.filter(([, method]) => method === 'webhooks.reveal')).toHaveLength(1)
-  })
-
-  it('keeps the card out of transcript find', async () => {
-    renderCard(webhookSummaryFixture())
-    await screen.findByText('Webhook · starts “Investigate Sentry alert”')
-    expect(
-      document.querySelector('[data-native-chat-secret][data-native-chat-find-skip]')
-    ).toBeTruthy()
   })
 })
