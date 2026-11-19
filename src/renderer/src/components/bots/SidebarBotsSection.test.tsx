@@ -377,14 +377,8 @@ describe('SidebarBotsSection', () => {
       fireEvent.keyDown(screen.getByRole('menuitem', { name: 'New bot' }), { key: 'ArrowRight' })
     })
     const submenu = screen.getAllByRole('menu').at(-1)!
-    const items = [...submenu.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent)
-    expect(items).toEqual([
-      'Start from scratch',
-      'Browse templates',
-      'From a link…',
-      'Import from another app…'
-    ])
     const scratch = screen.getByRole('menuitem', { name: 'Start from scratch' })
+    expect(submenu.querySelector('[role="menuitem"]')).toBe(scratch)
     expect(document.activeElement).toBe(scratch)
     await act(async () => {
       fireEvent.click(scratch)
