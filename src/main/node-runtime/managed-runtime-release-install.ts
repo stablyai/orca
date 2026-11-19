@@ -39,7 +39,7 @@ const EXTRACT_TIMEOUT_MS = 10 * 60_000
 
 export type RuntimeReleaseInstall = {
   agent: string
-  runtime: Pick<ManagedRuntime, 'label' | 'validate'>
+  runtime: Pick<ManagedRuntime, 'label' | 'validate' | 'prepare'>
   root: string
   pin: ManagedRuntimePin
   fetcher?: MainHttpClient['fetch']
@@ -134,6 +134,7 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
         : extractPinnedZipMembers(archive, release, pin.members, label, signal))
     publish({ phase: 'verifying' })
     await verifyMembers(release, pin, label, signal)
+    await input.runtime.prepare?.(release, pin)
     await validate(input, release)
     await writeRuntimeReleaseReceipt(release, pin)
     signal.throwIfAborted()

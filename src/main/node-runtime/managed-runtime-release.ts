@@ -35,6 +35,8 @@ export type ManagedRuntime = {
   refreshPin?(signal?: AbortSignal): Promise<void>
   /** Validate startup without user credentials before publishing/reusing this pinned copy. */
   validate?(folder: string, pin: ManagedRuntimePin, signal: AbortSignal): Promise<void>
+  /** Add files the unpacked release needs before it is checked and published, e.g. a second command name. */
+  prepare?(folder: string, pin: ManagedRuntimePin): Promise<void>
 }
 
 /** What a failed start check observed; the installer words it for the user. */

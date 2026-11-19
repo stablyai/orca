@@ -1,6 +1,7 @@
 // Orca's own copy of an ACP agent whose official build is an archive listed in the ACP Registry.
 
-import { join } from 'node:path'
+import { copyFile, link } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import { getMainHttpClient } from '../../network/http-client'
 import type { ManagedRuntime, ManagedRuntimePin } from '../../node-runtime/managed-runtime-release'
 import { followLatestRelease } from '../../node-runtime/managed-runtime-latest-release'
@@ -26,6 +27,8 @@ export type AcpRegistryManagedAgent = {
   command: (platform: NodeJS.Platform) => string
   /** The launch gate's floors; a listed release below them is never installed. */
   minimumVersions: readonly string[]
+  /** Another name the agent's own installer gives the command, which its sign-in hint uses. */
+  alias?: (platform: NodeJS.Platform) => string
 }
 
 /** `cmd` as a release member path; null for anything that could leave the release folder. */
@@ -134,6 +137,7 @@ export function acpRegistryManagedRuntime(managed: AcpRegistryManagedAgent): {
   available: () => boolean
   executable: (folder: string) => string
 } {
+  const { alias } = managed
   const executable = (folder: string): string =>
     join(folder, ...managed.command(process.platform).split('/'))
   return {
@@ -148,7 +152,15 @@ export function acpRegistryManagedRuntime(managed: AcpRegistryManagedAgent): {
           pin.version,
           (answered) => answersVersion(answered, pin.version),
           signal
-        )
+        ),
+      ...(alias && {
+        // Beside the command, so the folder on Orca's PATH answers to the alias too.
+        prepare: async (folder: string) => {
+          const command = executable(folder)
+          const named = join(dirname(command), alias(process.platform))
+          await link(command, named).catch(() => copyFile(command, named))
+        }
+      })
     },
     // Before the registry is read, a host with a known target offers the install; the install looks it up.
     available: () => {

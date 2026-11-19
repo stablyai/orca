@@ -53,13 +53,14 @@ const MANAGED_AGENT_CLIS: Record<ManagedAgentCliId, ManagedAgentCli> = {
     command: openCodeBinary,
     minimumVersions: OPENCODE_MINIMUM_VERSIONS
   }),
-  // The 2.x listing ships the same `opencode` binary that Orca's `opencode2` alias names.
+  // The 2.x listing ships the `opencode` binary; `opencode2` is the name its own installer adds.
   opencode2: acpRegistryManagedRuntime({
     label: 'OpenCode 2',
     agent: 'opencode2',
     registryId: 'opencode-v2',
     command: openCodeBinary,
-    minimumVersions: OPENCODE2_MINIMUM_VERSIONS
+    minimumVersions: OPENCODE2_MINIMUM_VERSIONS,
+    alias: (platform) => (platform === 'win32' ? 'opencode2.exe' : 'opencode2')
   }),
   cursor: acpRegistryManagedRuntime({
     label: 'Cursor',
