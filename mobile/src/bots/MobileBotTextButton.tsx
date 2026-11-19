@@ -3,7 +3,9 @@ import { Pressable, Text } from 'react-native'
 import { pressedStyle } from '../theme/mobile-theme'
 import { sheetStyles } from './mobile-bot-sheet-styles'
 
-/** A row's quiet text action; 32 pt tall with an 8 pt slop, the touch target of MobileStateButton. */
+const TEXT_BUTTON_HIT_SLOP = { top: 8, bottom: 8 }
+
+/** A row's quiet text action: 32 pt tall plus 8 pt above and below, like MobileStateButton; none sideways, where these sit 4 pt apart. */
 export function MobileBotTextButton(props: {
   label: string
   onPress: () => void
@@ -20,7 +22,7 @@ export function MobileBotTextButton(props: {
       ]}
       onPress={props.onPress}
       disabled={props.disabled}
-      hitSlop={8}
+      hitSlop={TEXT_BUTTON_HIT_SLOP}
       accessibilityRole="button"
       accessibilityLabel={props.accessibilityLabel ?? props.label}
       accessibilityState={{ disabled: props.disabled === true }}
