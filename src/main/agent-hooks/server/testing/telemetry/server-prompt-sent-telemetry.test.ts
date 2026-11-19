@@ -63,4 +63,28 @@ describe('AgentHookServer prompt-sent telemetry', () => {
     )
     errorSpy.mockRestore()
   })
+
+  it('counts each prompt a person sends into an already open Claude turn once', () => {
+    const server = new AgentHookServer()
+    const ingest = (fields: Record<string, unknown>, prompt: string) =>
+      server.ingestRemote(
+        {
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          source: 'claude',
+          providerPromptId: '0b6f1a52-2f43-4f0e-9d55-0c9f6a1e2b31',
+          ...fields,
+          payload: { state: 'working', prompt, agentType: 'claude' }
+        },
+        'conn-1'
+      )
+    ingest({ hookEventName: 'PreToolUse', opensTurn: true }, '')
+    const late = { hookEventName: 'UserPromptSubmit:late', lateExplicitPrompt: true }
+    ingest(late, 'also this')
+    ingest(late, 'start the task')
+    ingest(late, 'start the task')
+
+    expect(trackMock).toHaveBeenCalledTimes(2)
+  })
 })

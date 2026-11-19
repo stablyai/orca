@@ -46,3 +46,32 @@ export function claudeHeldTurnEnd(
     ? { unclassifiedTurnCompletedAt: Date.now() }
     : { turnCompletedAt: Date.now() }
 }
+
+// Why: outlasts the prompt hook's 1.5s post budget under load; a post that fails by then is spooled, not delivered live.
+const CLAUDE_UNCLASSIFIED_TURN_END_GRACE_MS = 5_000
+
+/** When a held end stops waiting for its turn's prompt event. */
+export function claudeUnclassifiedTurnEndDeadline(
+  lead: Pick<ClaudeLeadTurnState, 'unclassifiedTurnCompletedAt'> | undefined
+): number | undefined {
+  return lead?.unclassifiedTurnCompletedAt === undefined
+    ? undefined
+    : lead.unclassifiedTurnCompletedAt + CLAUDE_UNCLASSIFIED_TURN_END_GRACE_MS
+}
+
+/** Settle a held end as a person's turn: it earns its completion only while running work still holds the ended turn. */
+export function releaseClaudeUnclassifiedTurnEnd(
+  state: HookListenerState,
+  paneKey: string,
+  lead: ClaudeLeadTurnState
+): void {
+  const heldEnd = lead.unclassifiedTurnCompletedAt
+  lead.unclassifiedTurnCompletedAt = undefined
+  if (
+    heldEnd !== undefined &&
+    lead.state === 'done' &&
+    claudePaneHasRunningChildWork(state, paneKey)
+  ) {
+    lead.turnCompletedAt = heldEnd
+  }
+}

@@ -87,7 +87,7 @@ describe('Claude background task status', () => {
     ).toBe('done')
   })
 
-  it('does not stamp a wake-up turn that ends with only a monitor that will wake it again', () => {
+  it('repeats the person’s announced end through task wakeups instead of announcing them', () => {
     const state = createHookListenerState()
 
     claudeEvent(state, SOURCE_PANE, { hook_event_name: 'UserPromptSubmit', prompt: 'watch' })
@@ -97,18 +97,34 @@ describe('Claude background task status', () => {
       tool_input: { command: 'sleep 15', run_in_background: true },
       tool_response: { backgroundTaskId: RUNNING_SHELL.id }
     })
-    claudeEvent(state, SOURCE_PANE, { hook_event_name: 'Stop', background_tasks: [RUNNING_SHELL] })
-    claudeEvent(state, SOURCE_PANE, {
-      hook_event_name: 'UserPromptSubmit',
-      prompt: `<task-notification>\n<task-id>${RUNNING_SHELL.id}</task-id>\n<event>tick</event>`
-    })
-    const wakeEnd = claudeEvent(state, SOURCE_PANE, {
+    const personEnd = claudeEvent(state, SOURCE_PANE, {
       hook_event_name: 'Stop',
       background_tasks: [RUNNING_SHELL]
-    })
+    })?.turnCompletedAt
+    expect(typeof personEnd).toBe('number')
 
-    expect(wakeEnd).toMatchObject({ state: 'working', workingMode: 'monitoring' })
-    expect(wakeEnd?.turnCompletedAt).toBeUndefined()
+    const wakeups = [
+      claudeEvent(state, SOURCE_PANE, {
+        hook_event_name: 'UserPromptSubmit',
+        prompt: `<task-notification>\n<task-id>${RUNNING_SHELL.id}</task-id>\n<event>tick</event>`
+      }),
+      claudeEvent(state, SOURCE_PANE, {
+        hook_event_name: 'Stop',
+        background_tasks: [RUNNING_SHELL]
+      }),
+      claudeEvent(state, SOURCE_PANE, {
+        hook_event_name: 'UserPromptSubmit',
+        prompt: `<task-notification>\n<task-id>${RUNNING_SHELL.id}</task-id>\n<status>completed</status>`
+      }),
+      claudeEvent(state, SOURCE_PANE, { hook_event_name: 'Stop', background_tasks: [] })
+    ]
+
+    expect(wakeups.map((row) => [row?.state, row?.turnCompletedAt])).toEqual([
+      ['working', personEnd],
+      ['working', personEnd],
+      ['working', personEnd],
+      ['done', personEnd]
+    ])
   })
 
   it('keeps pending task state when pane authority moves', () => {

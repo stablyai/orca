@@ -26,6 +26,7 @@ export type RemoteAgentStatusEnvelope = {
   launchToken?: string
   hostTurnRevision?: unknown
   hasExplicitPrompt?: boolean
+  lateExplicitPrompt?: unknown
   promptInteractionKey?: string
   agentPresence?: unknown
   hookEventName?: string
@@ -60,6 +61,7 @@ export type RemoteEnvelopeFields = {
   providerPromptId?: string
   grokPromptBoundary?: true
   opensTurn?: true
+  lateExplicitPrompt?: true
   /** The execution host's turn-end facts, validated. */
   hostTurnEnd: HostTurnEndFacts
   compactTrigger?: 'manual' | 'auto'
@@ -79,6 +81,7 @@ export function normalizeRemoteEnvelopeFields(envelope: {
   providerPromptId?: unknown
   grokPromptBoundary?: unknown
   opensTurn?: unknown
+  lateExplicitPrompt?: unknown
   turnEndedAt?: unknown
   turnEndDisposition?: unknown
   compactTrigger?: unknown
@@ -109,6 +112,10 @@ export function normalizeRemoteEnvelopeFields(envelope: {
       source === 'grok' && envelope.grokPromptBoundary === true ? true : undefined,
     opensTurn:
       source === 'claude' && envelope.opensTurn === true && envelope.isReplay !== true
+        ? true
+        : undefined,
+    lateExplicitPrompt:
+      source === 'claude' && envelope.lateExplicitPrompt === true && envelope.isReplay !== true
         ? true
         : undefined,
     hostTurnEnd: {

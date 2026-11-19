@@ -289,6 +289,13 @@ export function normalizeClaudeEvent(
           selfStarted: ownPreviousLead?.taskWakeupTurn === true
         })
       : {}
+  // A task wakeup is not a person's turn: it repeats the end the person's turn already announced, so it is not announced again.
+  const wakeupKeepsPersonEnd =
+    eventAgentId === undefined &&
+    (taskWakeupTurn || (isTurnBoundary && ownPreviousLead?.taskWakeupTurn === true)) &&
+    ownPreviousLead?.turnCompletedAt !== undefined
+      ? { turnCompletedAt: ownPreviousLead.turnCompletedAt }
+      : {}
 
   setClaudeMainAgentTurnState(state, paneKey, {
     state: reportedStateName,
@@ -297,6 +304,7 @@ export function normalizeClaudeEvent(
     ...(isWaitingInducing && eventAgentId ? { waitingAgentId: eventAgentId } : {}),
     ...claudeWaitRequest(eventName, isAskUserQuestionWait, eventToolUseId, previousLead),
     ...(stateBeforeWait ? { stateBeforeWait } : {}),
+    ...wakeupKeepsPersonEnd,
     ...heldEnd,
     model: leadModel
   })

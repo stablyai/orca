@@ -4,6 +4,10 @@ import { mainAgentIdleSince } from '../../../main-agent-turn-state'
 import { claudeRowHasUnlistedLiveWork } from '../lifecycle/claude-pane-hold-evidence'
 import { buildClaudeCachedLeadStatusPayload } from '../lifecycle/claude-lifecycle-events'
 import {
+  claudeUnclassifiedTurnEndDeadline,
+  releaseClaudeUnclassifiedTurnEnd
+} from '../lifecycle/claude-held-turn-end'
+import {
   CLAUDE_OWED_TASK_NOTIFICATION_LEASE_MS,
   claudeOwedTaskNotificationDeadline
 } from './claude-owed-task-notifications'
@@ -11,7 +15,8 @@ import { CodexSubagentPollScheduler } from '../../../transcripts/codex-subagent-
 
 type PublishRow = (row: AgentHookEventPayload) => void
 
-/** Wake the local/remote execution host when owed notifications expire without another event. Re-read the pane so closed/moved leftovers are no-ops. */
+/** Wake the local/remote execution host when owed notifications expire, or a held turn end's prompt event never comes,
+ * without another event. Re-read the pane so closed/moved leftovers are no-ops. */
 export class ClaudeOwedNotificationExpiryTimers {
   private readonly wakeups = new CodexSubagentPollScheduler<PublishRow>(0, (paneKey, publish) =>
     this.restate(paneKey, publish)
@@ -38,15 +43,19 @@ export class ClaudeOwedNotificationExpiryTimers {
     this.wakeups.clearAll()
   }
 
-  /** Only an idle main agent has one: the lease does not run while it is in a turn. */
+  /** Only an idle main agent has one: neither the lease nor a held turn end runs while it is in a turn. */
   private deadline(paneKey: string): number | undefined {
-    const idleSince = mainAgentIdleSince(this.state.claudeLeadStateByPaneKey.get(paneKey))
-    return idleSince === undefined
-      ? undefined
-      : claudeOwedTaskNotificationDeadline(
-          this.state.claudeLaunchedBackgroundTasksByPaneKey.get(paneKey),
-          idleSince
-        )
+    const lead = this.state.claudeLeadStateByPaneKey.get(paneKey)
+    const idleSince = mainAgentIdleSince(lead)
+    if (idleSince === undefined) {
+      return undefined
+    }
+    const owed = claudeOwedTaskNotificationDeadline(
+      this.state.claudeLaunchedBackgroundTasksByPaneKey.get(paneKey),
+      idleSince
+    )
+    const held = claudeUnclassifiedTurnEndDeadline(lead)
+    return owed === undefined || held === undefined ? (owed ?? held) : Math.min(owed, held)
   }
 
   private restate(paneKey: string, publish: PublishRow): void {
@@ -58,6 +67,12 @@ export class ClaudeOwedNotificationExpiryTimers {
     if (deadline > Date.now()) {
       this.arm(paneKey, publish)
       return
+    }
+    const lead = this.state.claudeLeadStateByPaneKey.get(paneKey)
+    const heldDeadline = claudeUnclassifiedTurnEndDeadline(lead)
+    // The turn's prompt event never arrived, so nothing says a task wakeup started it.
+    if (lead && heldDeadline !== undefined && heldDeadline <= Date.now()) {
+      releaseClaudeUnclassifiedTurnEnd(this.state, paneKey, lead)
     }
     const row = this.state.lastStatusByPaneKey.get(paneKey)
     // Use the child-end fold so expired debt produces the same row as other Claude events.

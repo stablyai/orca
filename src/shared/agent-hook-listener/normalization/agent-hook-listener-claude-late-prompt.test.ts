@@ -1,9 +1,11 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { normalizeHookPayload } from './normalize-hook-payload'
 import { createHookListenerState, type HookListenerState } from '../listener-state'
 import type { AgentHookEventPayload } from '../listener-event'
 import { reduceHostTurnEnd } from '../state/agent-hook-turn-end-timing'
 import { makePaneKey } from '../../workspace-layout/stable-pane-id'
+import { seedLegacyAgentStatusForTests } from '../legacy-agent-status-test-seed'
+import { ClaudeOwedNotificationExpiryTimers } from '../providers/claude/background-tasks/claude-owed-notification-expiry-timers'
 
 const PANE_KEY = makePaneKey('claude-late-prompt', '22222222-2222-4222-8222-222222222222')
 const FIRST = '0b6f1a52-2f43-4f0e-9d55-0c9f6a1e2b31'
@@ -229,6 +231,17 @@ describe('Claude prompt event arriving after its turn', () => {
       event({ hook_event_name: 'UserPromptSubmit', prompt_id: FIRST, prompt: 'old' }, true)?.payload
         ?.state
     ).not.toBe('working')
+    expect(
+      event(
+        {
+          hook_event_name: 'UserPromptSubmit',
+          session_id: 'session-z',
+          prompt_id: THIRD,
+          prompt: 'old'
+        },
+        true
+      )?.payload?.state
+    ).not.toBe('working')
   })
 
   describe('a turn whose Stop beats its prompt event while a shell runs', () => {
@@ -266,6 +279,27 @@ describe('Claude prompt event arriving after its turn', () => {
       startWatching()
       const late = claude({ hook_event_name: 'UserPromptSubmit', prompt_id: SECOND, prompt: 'hi' })
       expect(typeof late?.turnCompletedAt).toBe('number')
+    })
+
+    it('announces it as a person’s turn when its prompt event never arrives', () => {
+      vi.useFakeTimers()
+      try {
+        startWatching()
+        seedLegacyAgentStatusForTests(state, {
+          paneKey: PANE_KEY,
+          connectionId: null,
+          payload: { state: 'working', prompt: '', agentType: 'claude' }
+        })
+        const published: AgentHookEventPayload[] = []
+        new ClaudeOwedNotificationExpiryTimers(state).arm(PANE_KEY, (row) => published.push(row))
+
+        vi.advanceTimersByTime(4_000)
+        expect(published).toEqual([])
+        vi.advanceTimersByTime(1_000)
+        expect(typeof published.at(-1)?.payload.turnCompletedAt).toBe('number')
+      } finally {
+        vi.useRealTimers()
+      }
     })
   })
 })

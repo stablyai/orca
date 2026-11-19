@@ -4,7 +4,7 @@ import { resolvePrompt } from '../../../prompt-fields'
 import { readClaudeBackgroundAgentTasks } from '../background-tasks/claude-background-task-inventory'
 import { trackClaudeTaskNotificationDelivery } from '../background-tasks/claude-task-notification-delivery'
 import { buildClaudeCachedLeadStatusPayload } from './claude-lifecycle-events'
-import { claudePaneHasRunningChildWork } from './claude-pane-hold-evidence'
+import { releaseClaudeUnclassifiedTurnEnd } from './claude-held-turn-end'
 import { CLAUDE_LATE_PROMPT_SUBMIT_EVENT, isCurrentClaudeTurn } from './claude-prompt-turn-order'
 
 /** Settles the late prompt's task notification and, for the pane's current turn, its label, wakeup flag and held completion. */
@@ -30,16 +30,11 @@ export function settleLateClaudePromptSubmit(
   if (isTaskWakeup && own && own.state !== 'done') {
     own.taskWakeupTurn = true
   }
-  const heldEnd = lead.unclassifiedTurnCompletedAt
-  lead.unclassifiedTurnCompletedAt = undefined
   // A person's turn that Stop already ended earns the completion it held; a wakeup's never does.
-  if (
-    heldEnd !== undefined &&
-    !isTaskWakeup &&
-    lead.state === 'done' &&
-    claudePaneHasRunningChildWork(state, paneKey)
-  ) {
-    lead.turnCompletedAt = heldEnd
+  if (isTaskWakeup) {
+    lead.unclassifiedTurnCompletedAt = undefined
+  } else {
+    releaseClaudeUnclassifiedTurnEnd(state, paneKey, lead)
   }
   resolvePrompt(state, paneKey, promptText)
   return buildClaudeCachedLeadStatusPayload(

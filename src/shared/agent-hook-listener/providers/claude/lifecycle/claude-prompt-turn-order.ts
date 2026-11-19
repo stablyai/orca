@@ -6,6 +6,8 @@ import { readString } from '../../../tool-input-preview'
 import { readFirstString } from '../../../interactive-tool'
 import { withClaudeToolRequestId } from '../../../claude-tool-request-identity'
 import { isClaudePluginToolCall } from './claude-tool-events'
+import { extractPromptText } from '../../../prompt-fields'
+import { hasExplicitUserPrompt } from '../../../provider-event-routing'
 
 /** A UserPromptSubmit whose turn already began: it landed late, or was typed into the running turn. */
 export const CLAUDE_LATE_PROMPT_SUBMIT_EVENT = 'UserPromptSubmit:late'
@@ -41,7 +43,8 @@ export type ClaudeTurnOrder = {
  * Claude does not wait for Orca's UserPromptSubmit hook, so its post can land after later events of its turn.
  * The turn is Claude's prompt_id instead: the first admitted main-agent event with an unseen one opens the turn, and
  * that turn's prompt event, late or typed mid-turn, is renamed so nothing treats it as a turn start. Returns null for a
- * prompt event from a session the pane already left. Call only for admitted events.
+ * prompt event from a session the pane already left, or another session's replayed after live delivery. Call only for
+ * admitted events.
  */
 function orderClaudeTurn(
   state: HookListenerState,
@@ -72,9 +75,10 @@ function orderClaudeTurn(
     if (isPrompt && known.retiredSessionIds.includes(sessionId)) {
       return null
     }
-    // Before live delivery, replays restate the recorded session changes in order.
+    // Before live delivery, replays restate the recorded session changes in order; after it, another session's
+    // replayed prompt is older than the live one and must not restart it.
     if (isReplay && known.live) {
-      return passThrough
+      return isPrompt ? null : passThrough
     }
     turns = {
       sessionId,
@@ -134,7 +138,7 @@ function orderClaudeTurn(
 
 type ClaudeHookOrder = ClaudeTurnOrder & {
   hookPayload: Record<string, unknown>
-  hostTurnSignals: Pick<AgentHookEventPayload, 'nativeTurnKey' | 'opensTurn'>
+  hostTurnSignals: Pick<AgentHookEventPayload, 'nativeTurnKey' | 'opensTurn' | 'lateExplicitPrompt'>
 }
 
 /** Orders an admitted hook into its Claude turn and names a Claude PermissionRequest's request once, so the listener
@@ -158,9 +162,15 @@ export function orderClaudeHook(
   if (!order) {
     return null
   }
+  // A person's live prompt that joined an open turn still counts as sent; a task wakeup's never does.
+  const lateExplicitPrompt =
+    order.eventName === CLAUDE_LATE_PROMPT_SUBMIT_EVENT &&
+    options.isReplay !== true &&
+    hasExplicitUserPrompt('claude', 'UserPromptSubmit', extractPromptText(hookPayload), '')
   const hostTurnSignals = {
     ...(order.turnKey ? { nativeTurnKey: order.turnKey } : {}),
-    ...(order.opensTurn ? { opensTurn: true as const } : {})
+    ...(order.opensTurn ? { opensTurn: true as const } : {}),
+    ...(lateExplicitPrompt ? { lateExplicitPrompt: true as const } : {})
   }
   if (source !== 'claude') {
     return { ...order, hookPayload, hostTurnSignals }
