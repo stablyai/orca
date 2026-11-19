@@ -6,6 +6,7 @@ import {
   DNR_ERRORS,
   DNR_MAX_DISABLED_STATIC_RULES,
   dnrRuleLimitError,
+  dnrStaticRuleLimitError,
   type DnrRuleScope
 } from './browser-extension-dnr-limits'
 import {
@@ -17,6 +18,7 @@ import {
   type DnrManifestRuleset
 } from './browser-extension-dnr-static-rulesets'
 import {
+  getBrowserExtensionDnrStore,
   readBrowserExtensionDnrState,
   updateBrowserExtensionDnrState
 } from './browser-extension-dnr-store'
@@ -90,18 +92,26 @@ export class DnrExtensionRules {
         ? this.manifestRulesets.filter((ruleset) => state.enabledRulesetIds?.includes(ruleset.id))
         : this.manifestRulesets.filter((ruleset) => ruleset.enabled)
       await this.enableStaticWithinLimits(wanted)
-      const dynamic = readableRules(state.dynamicRules)
-      if (dynamic.length > 0 && !this.unloaded) {
-        const result = await buildDnrRules(dynamic, this.extension.id, { kind: 'dynamic' }, 'warn')
-        if (result.ok && !this.unloaded) {
-          this.setScoped('dynamic', dynamic, result.built)
-          this.host.changed()
-        }
-      }
+      await this.restoreScoped('dynamic', readableRules(state.dynamicRules))
+      await this.restoreScoped(
+        'session',
+        getBrowserExtensionDnrStore().readSessionRules(this.host.profileId, this.extension.id)
+      )
     })
   }
 
-  /** Extension unloaded: its rules leave the engine; session rules are gone for good. */
+  private async restoreScoped(scope: DnrRuleScope, rules: DnrRule[]): Promise<void> {
+    if (rules.length === 0 || this.unloaded) {
+      return
+    }
+    const result = await buildDnrRules(rules, this.extension.id, { kind: scope }, 'warn')
+    if (result.ok && !this.unloaded) {
+      this.setScoped(scope, rules, result.built)
+      this.host.changed()
+    }
+  }
+
+  /** Extension unloaded: its rules leave the engine; the store keeps session rules until uninstall. */
   unload(): void {
     this.unloaded = true
     for (const id of this.enabledStatic.keys()) {
@@ -217,7 +227,9 @@ export class DnrExtensionRules {
         const found = this.enabledStatic.get(ruleset.id) ?? builds[added.indexOf(ruleset)]
         return found ? [found] : []
       })
-      const error = builds.includes(null) ? DNR_ERRORS.internal : this.staticLimitError(built)
+      const error = builds.includes(null)
+        ? DNR_ERRORS.internal
+        : dnrStaticRuleLimitError(built, this.host.staticRuleLimit(this.extension.id))
       if (error || this.unloaded) {
         added.forEach((ruleset) => releaseDnrStaticRuleset(this.extension, ruleset.id))
         if (error) {
@@ -243,19 +255,6 @@ export class DnrExtensionRules {
       })
       this.host.changed()
     })
-  }
-
-  private staticLimitError(built: readonly DnrBuiltRuleset[]): string | null {
-    if (
-      built.reduce((sum, ruleset) => sum + ruleset.ruleCount, 0) >
-      this.host.staticRuleLimit(this.extension.id)
-    ) {
-      return DNR_ERRORS.enabledRulesetsRuleCount
-    }
-    return built.reduce((sum, ruleset) => sum + ruleset.regexRuleCount, 0) >
-      DNR_API_CONSTANTS.MAX_NUMBER_OF_REGEX_RULES
-      ? DNR_ERRORS.enabledRulesetsRegexRuleCount
-      : null
   }
 
   disabledRuleIdsFor(rulesetId: string): number[] {
@@ -323,6 +322,9 @@ export class DnrExtensionRules {
     const attached = rules.length > 0 ? built : null
     this.scoped[scope] = { rules, built: attached }
     this.host.engine.setRuleset(this.extension.id, { kind: scope }, attached?.index ?? null)
+    if (scope === 'session') {
+      getBrowserExtensionDnrStore().writeSessionRules(this.host.profileId, this.extension.id, rules)
+    }
   }
 
   setDisplayActionCountAsBadgeText(display: boolean): void {

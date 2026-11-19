@@ -9,6 +9,7 @@ import { getBrowserExtensionProfileIdForSession } from '../api-runtime/browser-e
 import { getActiveBrowserTabId } from '../tabs-and-windows/browser-extension-tab-model'
 import {
   forgetBrowserExtensionContentScriptRestore,
+  forgetBrowserExtensionSessionContentScripts,
   restoreBrowserExtensionContentScripts
 } from '../api-runtime/browser-extension-content-scripts'
 import { setBrowserSessionRequestDecider } from '../../sessions/requests/browser-session-request-decisions'
@@ -18,6 +19,11 @@ import {
   whenBrowserExtensionDnrLoaded
 } from '../declarative-net-request/session/browser-extension-dnr-session'
 import { setBrowserExtensionSessionHooks } from './browser-extension-session-loader'
+import {
+  isBrowserExtensionStateKeptWhileIdle,
+  onBrowserExtensionIdleStateDropped,
+  settleBrowserExtensionIdleState
+} from './browser-extension-idle-kept-state'
 import { closeBrowserExtensionSidePanelsForExtension } from '../side-panel/browser-extension-side-panel-host'
 import { forgetSidePanelExtensionOptions } from '../side-panel/browser-extension-side-panel-options'
 import {
@@ -49,8 +55,15 @@ function resolveExtensionDownloadOwner(webContentsId: number): string | null {
     : null
 }
 
+/** What an extension set for this run that a reattach after an idle unload keeps. */
+function forgetBrowserExtensionSessionState(profileId: string, extensionId: string): void {
+  forgetSidePanelExtensionOptions(profileId, extensionId)
+  forgetBrowserExtensionSessionContentScripts(profileId, extensionId)
+}
+
 /** Wires cookie, request and content-blocking services into each extension session; restores scripts on load. */
 export function installBrowserExtensionSessionServices(): void {
+  onBrowserExtensionIdleStateDropped(forgetBrowserExtensionSessionState)
   installBrowserExtensionWebRequestForwarding()
   setBrowserSessionRequestDecider(browserExtensionDnrRequestDecider)
   browserManager.setUnownedDownloadOwnerResolver(resolveExtensionDownloadOwner)
@@ -68,7 +81,9 @@ export function installBrowserExtensionSessionServices(): void {
           revokeBrowserExtensionActiveTabInSession(sess, extension.id)
           // Why the attach-time id: deleting a profile forgets its session before unloading.
           closeBrowserExtensionSidePanelsForExtension(profileId, extension.id)
-          forgetSidePanelExtensionOptions(profileId, extension.id)
+          if (!isBrowserExtensionStateKeptWhileIdle(profileId, extension.id)) {
+            forgetBrowserExtensionSessionState(profileId, extension.id)
+          }
         })
       }
     },
@@ -92,6 +107,7 @@ export function installBrowserExtensionSessionServices(): void {
     },
     detached: stopObservingBrowserExtensionWebRequests,
     loaded: async (sess, profileId, extension) => {
+      settleBrowserExtensionIdleState(profileId, extension)
       await Promise.all([
         restoreBrowserExtensionContentScripts(
           sess,
