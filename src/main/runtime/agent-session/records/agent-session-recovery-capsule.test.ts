@@ -131,6 +131,20 @@ describe('durable restart offers', () => {
     expect(await capsule.list(NOW)).toEqual([marker()])
   })
 
+  it('keeps dismissed the newer teardown a dismissed reservation held, when it is read again', async () => {
+    const newer = marker({
+      teardownId: 'teardown-new',
+      recordedAt: NOW + 1,
+      work: { kind: 'turn', id: 'turn-new' }
+    })
+    await capsule.record([marker()], NOW)
+    await capsule.beginResume([SESSION], 'operation-a', NOW)
+    await capsule.record([newer], NOW + 1)
+    await capsule.dismiss([SESSION], NOW + 2)
+    await capsule.record([newer], NOW + 3)
+    expect(await capsule.list(NOW + 3)).toEqual([])
+  })
+
   it('keeps a newer same-session teardown behind an active reservation', async () => {
     const newer = marker({
       teardownId: 'teardown-new',

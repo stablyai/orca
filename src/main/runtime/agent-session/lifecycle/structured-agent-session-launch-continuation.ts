@@ -65,12 +65,19 @@ export async function continueStructuredAgentSessionsAtLaunch(
     await deps.restartResume.adoptCrashCuts(cuts, deps.startedAt)
   }
   const recordedBy = Date.now()
+  // A crash offer is recorded by this start, so it is always newer than the run it read.
+  const since = await deps.previousRunStartedAt()
   const cutByLastRun = async (continued: ReadonlySet<string> = new Set()) => {
-    const since = await deps.previousRunStartedAt()
-    // A crash offer is recorded by this start, so it is always newer than the run it read.
-    const recorded = (await offers()).flatMap((offer) =>
-      since === undefined || offer.recordedAt < since ? [] : [offer.sessionId]
-    )
+    const recorded = await offers()
+      .then((rows) =>
+        rows.flatMap((offer) =>
+          since === undefined || offer.recordedAt < since ? [] : [offer.sessionId]
+        )
+      )
+      .catch((error: unknown) => {
+        console.warn('[agent-session] reading restart offers after continuing failed', error)
+        return []
+      })
     return new Set([...heldByLastRun, ...recorded].filter((sessionId) => !continued.has(sessionId)))
   }
   try {
@@ -81,7 +88,8 @@ export async function continueStructuredAgentSessionsAtLaunch(
       undefined,
       STRUCTURED_AGENT_SESSION_LAUNCH_CONTINUATION_OWNER,
       undefined,
-      { automatic: true, onReserved }
+      // Only the run that just ended cut what this start may continue on its own.
+      { automatic: true, onReserved, recordedSince: since }
     )
     const continued = new Set(
       answer.continued.flatMap((outcome) =>
@@ -96,8 +104,11 @@ export async function continueStructuredAgentSessionsAtLaunch(
     )
     return { continued, answer, cutByLastRun: await cutByLastRun(handedOff) }
   } finally {
-    // Only this launch continues on its own what the last run cut; later launches leave it to a person.
-    await deps.restartResume.passOverAutomatic(recordedBy)
+    // Only this launch continues on its own what the last run cut; later launches leave it to a
+    // person. A failure here must not hide what this launch already continued.
+    await deps.restartResume.passOverAutomatic(recordedBy).catch((error: unknown) => {
+      console.warn('[agent-session] passing over restart offers failed', error)
+    })
   }
 }
 

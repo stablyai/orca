@@ -33,7 +33,17 @@ function chat() {
         ownerFence: 1
       })
     )
-  return { seed, read: () => readJournalDomainRestartCut(db, target) }
+  // Settlement rewrites a row at the chat's head, keeping its place in admission order.
+  const rewrite = (item: AgentJournalRenderItem, ordinal: number) =>
+    runJournalTransaction(db, () =>
+      writeJournalDomainCurrentItem(db, target, {
+        item,
+        previous: { item, ordinal, hidden: false },
+        hidden: false,
+        ownerFence: 1
+      })
+    )
+  return { seed, rewrite, read: () => readJournalDomainRestartCut(db, target) }
 }
 
 const IN_TURN = { kind: 'turn', turnItemId: 'turn:2' } as const
@@ -81,4 +91,28 @@ it('reads the newest turn, and the rows a restart settled in it, not the transcr
 
   seed(row('user:3', 6, user('third')))
   expect(read().movedOn).toBe(true)
+})
+
+it("counts a person's message sent during the cut turn, though settlement moved the turn after it", () => {
+  const { seed, rewrite, read } = chat()
+  const turn = row('turn:2', 3, { kind: 'turn', turnId: '2', state: 'running' })
+  seed(turn)
+  seed(row('user:steer', 4, user('use the other branch')))
+  rewrite(
+    {
+      ...turn,
+      sequence: 10,
+      body: { ...turn.body, state: 'interrupted' } as AgentJournalItemBody,
+      ...settled
+    },
+    3
+  )
+  expect(read().movedOn).toBe(true)
+})
+
+it("does not count a child agent's user-role row as the person moving on", () => {
+  const { seed, read } = chat()
+  seed(row('turn:2', 3, { kind: 'turn', turnId: '2', state: 'interrupted' }, settled))
+  seed(row('child:prompt', 4, user('review the diff'), { agentId: 'child-1', turnScope: IN_TURN }))
+  expect(read().movedOn).toBe(false)
 })

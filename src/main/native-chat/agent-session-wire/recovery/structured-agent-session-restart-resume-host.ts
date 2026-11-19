@@ -144,7 +144,8 @@ export function createStructuredAgentSessionRestartResume(
     audience: StructuredAgentSessionRestartAudience | undefined,
     continueOne: (marker: AgentSessionResumeMarker, continuationId: string) => Promise<void>,
     progress: ReturnType<typeof createRestartResumeProgress>,
-    automatic = false
+    automatic = false,
+    recordedSince = Number.NEGATIVE_INFINITY
   ) => {
     // Supersede captured witnesses; the mutation lane drains any publication already in flight.
     witnesses.clear(audience)
@@ -153,8 +154,8 @@ export function createStructuredAgentSessionRestartResume(
     const requested = new Set(sessionIds ?? markers.map((marker) => marker.sessionId))
     const derived = await derive(markers, 'may-be-held')
     retireSuperseded(derived.superseded)
-    const eligible = restartRowsFor(derived.candidates, audience).filter((candidate) =>
-      requested.has(candidate.sessionId)
+    const eligible = restartRowsFor(derived.candidates, audience).filter(
+      (candidate) => requested.has(candidate.sessionId) && candidate.recordedAt >= recordedSince
     )
     progress.skipExcluded(sessionIds ?? [], eligible)
     if (eligible.length === 0) {
@@ -259,7 +260,8 @@ export function createStructuredAgentSessionRestartResume(
           )
         },
         progress,
-        options?.automatic === true
+        options?.automatic === true,
+        options?.recordedSince
       )
       await Promise.all(verdicts)
       const resumed = action?.outcomes ?? []

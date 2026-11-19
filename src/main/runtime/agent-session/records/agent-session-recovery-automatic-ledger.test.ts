@@ -1,13 +1,15 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { writeFile } from 'node:fs/promises'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import {
   marker,
   NOW
 } from '../../../native-chat/agent-session-wire/recovery/testing/structured-agent-session-restart-resume.test-fixture'
 import { AgentSessionRecoveryCapsule } from './agent-session-recovery-capsule'
+import * as automaticLedger from './agent-session-recovery-automatic-ledger'
 
 const MINUTE = 60_000
 let directory: string
@@ -19,6 +21,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await rm(directory, { recursive: true, force: true })
 })
 
@@ -96,4 +99,29 @@ it('keeps a dismissed crash cut dismissed when a later launch reads it again, an
   expect(await capsule.list(NOW + 2 * MINUTE)).toEqual([])
   await capsule.record([cut('turn-2', NOW + 3 * MINUTE)], NOW + 3 * MINUTE)
   expect(await capsule.list(NOW + 3 * MINUTE)).toHaveLength(1)
+})
+
+it('takes nothing on its own while the ledger of what it took cannot be read', async () => {
+  await capsule.record([marker({ recordedAt: NOW })], NOW)
+  await writeFile(join(directory, 'agent-session-recovery-automatic.json'), '{not json')
+  expect(await capsule.beginResume(undefined, 'automatic', NOW, true)).toEqual([])
+  expect(await capsule.beginResume(undefined, 'person', NOW)).toHaveLength(1)
+})
+
+it('undoes an automatic reservation it could not record', async () => {
+  await capsule.record([marker({ recordedAt: NOW })], NOW)
+  vi.spyOn(automaticLedger, 'writeAutomaticRestartLedger').mockRejectedValueOnce(
+    new Error('disk full')
+  )
+  await expect(capsule.beginResume(undefined, 'automatic', NOW, true)).rejects.toThrow('disk full')
+  expect(await capsule.list(NOW)).toHaveLength(1)
+})
+
+it('keeps an offer passed over while a person holds it, should their continuation be undone', async () => {
+  await capsule.record([marker({ teardownId: 'quit-earlier', recordedAt: NOW })], NOW)
+  await capsule.passOverAutomatic(NOW, NOW)
+  await capsule.beginResume(undefined, 'person', NOW + 1)
+  await capsule.passOverAutomatic(NOW + 2, NOW + 2)
+  await capsule.rollbackResume('person', NOW + 3)
+  expect(await capsule.beginResume(undefined, 'automatic', NOW + MINUTE, true)).toEqual([])
 })

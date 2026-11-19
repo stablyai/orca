@@ -95,3 +95,19 @@ it('tells listeners of a dismissed send its turn never recorded', async () => {
     { sessionId: SESSION, cut: expect.objectContaining({ cause: 'quit' }) }
   ])
 })
+
+it('continues on its own only an offer the run that just ended recorded', async () => {
+  const { host, root } = await interruptedRestart()
+  const [offer] = await host.restartResume.list()
+  const automatic = (recordedSince: number) =>
+    host.restartResume.continueAfterRestart(undefined, 'launch', undefined, {
+      automatic: true,
+      recordedSince
+    })
+
+  expect((await automatic(offer!.recordedAt + 1)).continued).toEqual([])
+  expect(await offersIn(root)).toHaveLength(1)
+  expect((await automatic(offer!.recordedAt)).continued).toMatchObject([
+    { sessionId: SESSION, outcome: 'continued' }
+  ])
+})

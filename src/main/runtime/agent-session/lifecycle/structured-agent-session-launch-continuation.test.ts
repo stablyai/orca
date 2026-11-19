@@ -100,7 +100,7 @@ describe('continuing interrupted chats at launch', () => {
       undefined,
       STRUCTURED_AGENT_SESSION_LAUNCH_CONTINUATION_OWNER,
       undefined,
-      { automatic: true, onReserved: expect.any(Function) }
+      { automatic: true, onReserved: expect.any(Function), recordedSince: 3 }
     )
     expect(calls).toEqual(['adopt', 'continue', 'pass over'])
   })
@@ -120,6 +120,14 @@ describe('continuing interrupted chats at launch', () => {
     expect(settled.cutByLastRun).toEqual(
       new Set(['chat-crashed-earlier', 'chat-quit-killed', 'continued'])
     )
+  })
+
+  it('keeps what it continued when passing over the rest fails', async () => {
+    const { result, restartResume, deps } = launch(true)
+    await result
+    restartResume.passOverAutomatic.mockRejectedValueOnce(new Error('disk full'))
+    const settled = await continueStructuredAgentSessionsAtLaunch(deps)
+    expect(settled.continued).toEqual(new Set(['continued']))
   })
 
   it('with the setting off, still offers what a crash cut and passes it over, continuing nothing', async () => {

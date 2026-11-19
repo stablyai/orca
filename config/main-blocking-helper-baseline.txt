@@ -1281,6 +1281,7 @@
 15 src/main/runtime/orchestration/legacy-remote-home/federated-worker-start-reconcile.ts
 1 src/main/runtime/orchestration/legacy-remote-home/legacy-remote-home-db-methods.ts
 5 src/main/runtime/orchestration/legacy-remote/federated-dispatch-observation-fence.ts
+1 src/main/runtime/orchestration/legacy-remote/federation-relay-enqueue.ts # its own transaction became savepoint-aware so a worker report and its record commit together; no new statements
 2 src/main/runtime/orchestration/legacy-remote/legacy-remote-db-methods.ts
 3 src/main/runtime/orchestration/legacy-remote/remote-dispatch-attachment-create.ts
 2 src/main/runtime/orchestration/workers/lifecycle/context-only-dispatch-release.ts

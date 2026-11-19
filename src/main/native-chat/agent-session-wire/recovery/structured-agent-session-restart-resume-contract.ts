@@ -22,6 +22,8 @@ export type RestartContinuationOptions = {
   automatic?: boolean
   /** The chats this action reserved, before any agent starts; called once, empty when it took none. */
   onReserved?: (rows: StructuredAgentSessionResumeCandidate[]) => void
+  /** With `automatic`: only offers recorded since then, by the run that just ended. */
+  recordedSince?: number
 }
 
 export type StructuredAgentSessionRestartResume = {

@@ -34,9 +34,9 @@ export function readJournalDomainRestartCut(
       .get(...prefix, itemId)
     return row ? readJournalStoredItem(db, prefix, row.payload_json).body : null
   }
-  let found: { item: AgentJournalRenderItem; sequence: number; sequenceIndex: number } | null = null
+  let found: { item: AgentJournalRenderItem; ordinal: number } | null = null
   for (const row of db
-    .prepare(`SELECT payload_json, sequence, sequence_index FROM journal_items
+    .prepare(`SELECT payload_json, ordinal FROM journal_items
     INDEXED BY journal_items_turn_marker
     WHERE session_id=? AND epoch=? AND hidden=0 AND turn_marker=1
     ORDER BY sequence DESC, sequence_index DESC, ordinal DESC`)
@@ -51,19 +51,21 @@ export function readJournalDomainRestartCut(
       isRootAgentJournalItem(item) &&
       !isStructuredAgentSessionCommandTurn(turn, bodyOf)
     ) {
-      found = { item, sequence: Number(row.sequence), sequenceIndex: Number(row.sequence_index) }
+      found = { item, ordinal: Number(row.ordinal) }
       break
     }
   }
   if (!found) {
     return { cursor, turn: null, movedOn: false, recovered: [] }
   }
+  // By admission order: settlement moves a cut turn's sequence to the chat's head, past a message the
+  // person sent during it. A child agent's user-role rows are not the person's.
   const movedOn = Boolean(
     db
       .prepare(`SELECT 1 FROM journal_items INDEXED BY journal_items_user_message
       WHERE session_id=? AND epoch=? AND hidden=0 AND kind='message' AND message_role='user'
-        AND (sequence, sequence_index) > (?, ?) LIMIT 1`)
-      .get(...prefix, found.sequence, found.sequenceIndex)
+        AND root=1 AND subagent_row=0 AND ordinal > ? LIMIT 1`)
+      .get(...prefix, found.ordinal)
   )
   const recovered = db
     .prepare(`SELECT payload_json FROM journal_items INDEXED BY journal_items_stop_turn

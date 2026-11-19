@@ -21,6 +21,7 @@ import {
   passOverAutomaticOffers,
   recordDismissedOffers,
   readAutomaticRestartLedger,
+  readAutomaticReservationLedger,
   recordAutomaticContinuations,
   writeAutomaticRestartLedger
 } from './agent-session-recovery-automatic-ledger'
@@ -110,7 +111,10 @@ export class AgentSessionRecoveryCapsule {
     return withFileTransactionLock(this.filePath, async () => {
       const state = await this.readState()
       const { entries, failed } = normalizeState(state, now)
-      const ledger = automatic ? await readAutomaticRestartLedger(this.filePath) : null
+      const ledger = automatic ? await readAutomaticReservationLedger(this.filePath) : null
+      if (automatic && !ledger) {
+        return []
+      }
       const requested = sessionIds === undefined ? null : new Set(sessionIds)
       const selected: AgentSessionResumeMarker[] = []
       const reserve = (marker: AgentSessionResumeMarker): RecoveryEntry => {
@@ -136,10 +140,14 @@ export class AgentSessionRecoveryCapsule {
       }
       await this.publish({ entries: next, failed }, now, state.dismissedAt)
       if (ledger && selected.length > 0) {
+        // Unrecorded, an automatic reservation is undone: a later launch must not take it again.
         await writeAutomaticRestartLedger(
           this.filePath,
           recordAutomaticContinuations(ledger, selected, now)
-        )
+        ).catch(async (error: unknown) => {
+          await this.publish({ entries, failed }, now, state.dismissedAt)
+          throw error
+        })
       }
       return selected
     })
@@ -150,15 +158,10 @@ export class AgentSessionRecoveryCapsule {
   passOverAutomatic(recordedBy: number, now: number): Promise<void> {
     return withFileTransactionLock(this.filePath, async () => {
       const { entries } = normalizeState(await this.readState(), now)
-      const waiting = entries.filter(
-        (entry) => entry.state === 'pending' && entry.marker.recordedAt <= recordedBy
-      )
+      const ledger = await readAutomaticRestartLedger(this.filePath)
       await writeAutomaticRestartLedger(
         this.filePath,
-        passOverAutomaticOffers(
-          await readAutomaticRestartLedger(this.filePath),
-          waiting.map((entry) => entry.marker)
-        )
+        passOverAutomaticOffers(ledger, entries, recordedBy)
       )
     })
   }

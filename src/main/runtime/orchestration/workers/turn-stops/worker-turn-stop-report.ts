@@ -104,34 +104,18 @@ export function sendWorkerReport(
     ...(stop.requestError ? stop.requestError.facts : { stopReason: stop.reason }),
     ...(stop.approval ? { approval: stop.approval } : {})
   }
-  if (target.kind === 'local') {
-    const { dispatch } = target
-    const woken: [string, string][] = []
-    // Stored is sent: a failed wake or an earlier send of this stop still reached the mailbox.
+  // A worker_done its Run home has not acknowledged yet is still a report.
+  if (target.kind === 'remote' && db.hasPendingFederatedWorkerReport(dispatchId)) {
+    return false
+  }
+  const woken: [string, string][] = []
+  try {
+    // The report and the record of having sent it commit together.
     const sent = runLifecycleWriteTransaction(db.db, 'worker_stop_report', () => {
-      escalateWorkerFailure(
-        db,
-        dispatch,
-        {
-          id,
-          from: stop.from,
-          mailbox: () => dispatchReportMailbox(db, dispatch),
-          describe: (task) => ({
-            subject,
-            body: describeStop(stop, {
-              task,
-              taskId: dispatch.task_id,
-              dispatchId: dispatch.id,
-              chatCoordinator: deps.isChatMailbox?.(dispatchReportMailbox(db, dispatch)) === true,
-              taskReady: db.getTask(dispatch.task_id)?.status === 'ready',
-              coordinatorApprovals: deps.coordinatorApprovals?.() === true
-            })
-          }),
-          payload: { taskId: dispatch.task_id, ...payload }
-        },
-        (handle, type) => woken.push([handle, type])
-      )
-      const inMail = db.getMessageById(id) !== undefined
+      const inMail =
+        target.kind === 'local'
+          ? mailWorkerReport(db, target.dispatch, stop, { id, subject, payload }, deps, woken)
+          : relayWorkerReport(db, target.attachment, stop, { id, subject, payload }, deps)
       if (inMail) {
         stored()
       }
@@ -141,44 +125,78 @@ export function sendWorkerReport(
       deps.notify(handle, type)
     }
     return sent
-  }
-  // The Run home imports relayed worker mail into the coordinator's Run and wakes it.
-  const { attachment } = target
-  // A worker_done the home has not acknowledged yet is still a report.
-  if (db.hasPendingFederatedWorkerReport(dispatchId)) {
-    return false
-  }
-  // The queued item outlives a crash, and the stable id makes a repeat a no-op here and at the home;
-  // the record of having sent it commits with it.
-  try {
-    runLifecycleWriteTransaction(db.db, 'worker_stop_relay', () => {
-      db.enqueueFederationRelay({
-        dispatchId,
-        direction: 'to_home',
-        kind: 'escalation',
-        messageId: id,
-        payload: JSON.stringify({
-          from: stop.from,
-          subject,
-          body: describeStop(stop, {
-            task: attachment.task_id,
-            taskId: attachment.task_id,
-            dispatchId,
-            coordinatorApprovals: deps.coordinatorApprovals?.() === true
-          }),
-          type: 'escalation',
-          priority: 'high',
-          threadId: null,
-          // Relayed payloads travel as strings, as a worker's own `send` relays them.
-          payload: JSON.stringify({ taskId: attachment.task_id, ...payload })
-        })
-      })
-      stored()
-    })
   } catch (error) {
-    console.warn('[orchestration] failed to relay a worker stop report', dispatchId, error)
+    console.warn('[orchestration] failed to send a worker stop report', dispatchId, error)
     return false
   }
+}
+
+type WorkerReportMail = { id: string; subject: string; payload: Record<string, unknown> }
+
+/** Stored is sent: a failed wake or an earlier send of this stop still reached the mailbox. */
+function mailWorkerReport(
+  db: OrchestrationDb,
+  dispatch: DispatchContextRow,
+  stop: WorkerTurnStop,
+  { id, subject, payload }: WorkerReportMail,
+  deps: WorkerTurnStopReportDeps,
+  woken: [string, string][]
+): boolean {
+  escalateWorkerFailure(
+    db,
+    dispatch,
+    {
+      id,
+      from: stop.from,
+      mailbox: () => dispatchReportMailbox(db, dispatch),
+      describe: (task) => ({
+        subject,
+        body: describeStop(stop, {
+          task,
+          taskId: dispatch.task_id,
+          dispatchId: dispatch.id,
+          chatCoordinator: deps.isChatMailbox?.(dispatchReportMailbox(db, dispatch)) === true,
+          taskReady: db.getTask(dispatch.task_id)?.status === 'ready',
+          coordinatorApprovals: deps.coordinatorApprovals?.() === true
+        })
+      }),
+      payload: { taskId: dispatch.task_id, ...payload }
+    },
+    (handle, type) => woken.push([handle, type])
+  )
+  return db.getMessageById(id) !== undefined
+}
+
+/** The Run home imports relayed worker mail into the coordinator's Run and wakes it. The queued
+ *  item outlives a crash, and the stable id makes a repeat a no-op here and at the home. */
+function relayWorkerReport(
+  db: OrchestrationDb,
+  attachment: Pick<RemoteDispatchAttachmentRow, 'dispatch_id' | 'task_id'>,
+  stop: WorkerTurnStop,
+  { id, subject, payload }: WorkerReportMail,
+  deps: WorkerTurnStopReportDeps
+): true {
+  db.enqueueFederationRelay({
+    dispatchId: attachment.dispatch_id,
+    direction: 'to_home',
+    kind: 'escalation',
+    messageId: id,
+    payload: JSON.stringify({
+      from: stop.from,
+      subject,
+      body: describeStop(stop, {
+        task: attachment.task_id,
+        taskId: attachment.task_id,
+        dispatchId: attachment.dispatch_id,
+        coordinatorApprovals: deps.coordinatorApprovals?.() === true
+      }),
+      type: 'escalation',
+      priority: 'high',
+      threadId: null,
+      // Relayed payloads travel as strings, as a worker's own `send` relays them.
+      payload: JSON.stringify({ taskId: attachment.task_id, ...payload })
+    })
+  })
   return true
 }
 

@@ -8,6 +8,7 @@ import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/
 import { restartActivityWaitsOnPerson } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-activity'
 import { readNodeFileWithinLimit } from '../../../../shared/file-content/node-bounded-file-reader'
 import { writeRecoveryFileDurable } from './agent-session-recovery-capsule-file'
+import type { RecoveryEntry } from './agent-session-recovery-capsule-entries'
 
 const LEDGER_FILE = 'agent-session-recovery-automatic.json'
 const MAX_LEDGER_BYTES = 256 * 1024
@@ -39,15 +40,27 @@ function ledgerPath(capsulePath: string): string {
   return join(dirname(capsulePath), LEDGER_FILE)
 }
 
-/** A missing or unreadable ledger is empty: the worst case is one continuation too many. */
+/** A missing ledger is empty. An unreadable one reads as empty for writes, which then replace it. */
 export async function readAutomaticRestartLedger(
   capsulePath: string
 ): Promise<AutomaticRestartLedger> {
+  return (await readLedger(capsulePath)) ?? EMPTY
+}
+
+/** For an automatic reservation: null when the ledger cannot be read, so nothing is taken rather
+ *  than forgetting what was. */
+export async function readAutomaticReservationLedger(
+  capsulePath: string
+): Promise<AutomaticRestartLedger | null> {
+  return readLedger(capsulePath)
+}
+
+async function readLedger(capsulePath: string): Promise<AutomaticRestartLedger | null> {
   try {
     const { buffer } = await readNodeFileWithinLimit(ledgerPath(capsulePath), MAX_LEDGER_BYTES)
     return ledgerSchema.parse(JSON.parse(buffer.toString('utf8')))
-  } catch {
-    return EMPTY
+  } catch (error) {
+    return error instanceof Error && 'code' in error && error.code === 'ENOENT' ? EMPTY : null
   }
 }
 
@@ -117,10 +130,22 @@ export async function recordDismissedOffers(
   })
 }
 
-/** Offers still waiting when a launch ends were this launch's to continue; later launches leave them to a person. */
+/** Offers still waiting when a launch ends were this launch's to continue; later launches leave them
+ *  to a person. A quit during the turn records offers after `recordedBy`; those are the next
+ *  launch's. One reserved meanwhile stays passed over, should its reservation be undone. */
 export function passOverAutomaticOffers(
   ledger: AutomaticRestartLedger,
-  waiting: readonly AgentSessionResumeMarker[]
+  entries: readonly RecoveryEntry[],
+  recordedBy: number
 ): AutomaticRestartLedger {
-  return { ...ledger, passed: waiting.map(offerKey) }
+  const waiting = entries.flatMap((entry) =>
+    entry.state === 'pending' && entry.marker.recordedAt <= recordedBy ? [entry.marker] : []
+  )
+  const reserved = entries.flatMap((entry) =>
+    entry.state === 'in-progress'
+      ? [entry.marker, ...(entry.replacement ? [entry.replacement] : [])]
+      : []
+  )
+  const stillPassed = reserved.map(offerKey).filter((key) => ledger.passed.includes(key))
+  return { ...ledger, passed: [...new Set([...waiting.map(offerKey), ...stillPassed])] }
 }

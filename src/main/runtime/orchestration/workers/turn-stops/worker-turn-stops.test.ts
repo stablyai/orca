@@ -74,7 +74,11 @@ function terminal(
   overrides: Partial<
     Pick<
       ConstructorParameters<typeof TerminalWorkerTurnStops>[0],
-      'takeOpenApproval' | 'markApprovalReported' | 'setTimer' | 'readScreen'
+      | 'takeOpenApproval'
+      | 'markApprovalReported'
+      | 'setTimer'
+      | 'readScreen'
+      | 'getProcessIncarnation'
     >
   > = {}
 ) {
