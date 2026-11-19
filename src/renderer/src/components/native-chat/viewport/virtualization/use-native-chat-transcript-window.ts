@@ -11,7 +11,10 @@ import {
 import { nativeChatPinnedRowIndexes, nativeChatTranscriptRange } from './native-chat-pinned-rows'
 import { nativeChatSlotKeys } from '../../conversation/slots/native-chat-transcript-slot-selection'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
-import { useNativeChatViewportAlign, type NativeChatAlignEdge } from './use-native-chat-viewport-align'
+import {
+  useNativeChatViewportAlign,
+  type NativeChatAlignEdge
+} from './use-native-chat-viewport-align'
 import { useNativeChatScrollMargin } from './use-native-chat-scroll-margin'
 
 /** Overscan by row because chat rows vary widely in height and rendering cost. */
@@ -155,7 +158,6 @@ export function useNativeChatTranscriptWindow({
     }
     retiredMeasurementCountRef.current = 0
   }, [itemKeys, scrollRef, virtualizer])
-
 
   const {
     alignToViewportTop,
