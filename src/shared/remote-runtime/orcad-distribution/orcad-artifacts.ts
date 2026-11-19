@@ -16,7 +16,7 @@ export const ORCAD_PROVIDER_EXEC_SLOT_FILE = 'provider-exec/orca-provider-exec'
 
 /** Files every install path must mark executable; SFTP and plain copies drop the mode. */
 export function isOrcadExecutableArtifact(filename: string): boolean {
-  return /(?:^|\/)(?:rg|spawn-helper|orca-provider-exec)$/.test(filename)
+  return /(?:^|\/)(?:rg|spawn-helper|orca-provider-exec|journal-file-lock)$/.test(filename)
 }
 
 export function orcadBunRuntimeFilename(target: string): string {
@@ -84,6 +84,7 @@ export const ORCAD_NODE_PTY_JS_ARTIFACTS = [
 export function orcadNodePtySlotFiles(target: string): string[] {
   if (isWindowsTarget(target)) {
     return [
+      'journal-file-lock.exe',
       'conpty.node',
       'conpty_console_list.node',
       'conpty/conpty.dll',
@@ -94,7 +95,9 @@ export function orcadNodePtySlotFiles(target: string): string[] {
       'winpty-agent.exe'
     ]
   }
-  return target.startsWith('darwin-') ? ['pty.node', 'spawn-helper'] : ['pty.node']
+  return target.startsWith('darwin-')
+    ? ['journal-file-lock', 'pty.node', 'spawn-helper']
+    : ['journal-file-lock', 'pty.node']
 }
 
 export function orcadNodePtyNativeArtifacts(target: string): string[] {

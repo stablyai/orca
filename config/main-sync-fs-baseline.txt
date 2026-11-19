@@ -366,7 +366,7 @@
 3 src/main/orcad/instance-lock/orcad-stale-lock-reclaim.ts
 1 src/main/orcad/instance-lock/orcad-wsl-holder-release.ts
 2 src/main/orcad/launcher.ts
-7 src/main/orcad/native-runtime/node-pty-prebuilt-slot.ts
+8 src/main/orcad/native-runtime/node-pty-prebuilt-slot.ts
 2 src/main/orcad/native-runtime/node-pty-precondition.ts
 1 src/main/orcad/profile-state/orcad-host-identity-reset.ts
 12 src/main/orcad/runtime-launch/orcad-bundled-runtime.ts
