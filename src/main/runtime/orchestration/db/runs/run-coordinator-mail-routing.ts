@@ -56,23 +56,18 @@ export function runOwnsDirectMessageSql(messageSql: string): string {
       OR ${activeDispatchOwnsAddressSql(runIdSql, addressSql)}))`
 }
 
+/** True when the alias is new; the calling mutation announces it with its own changes. */
 export function rememberRunCoordinatorHandle(
   this: OrchestrationDb,
   runId: string,
   terminalHandle: string
-): void {
+): boolean {
   const changed = this.db
     .prepare(
       `INSERT OR IGNORE INTO run_coordinator_handles (run_id, terminal_handle) VALUES (?, ?)`
     )
     .run(runId, terminalHandle)
-  if (changed.changes) {
-    this.crewChanges.notify(
-      Object.assign(new Set(['topology'] as const), {
-        trafficAddresses: new Set([`run:${runId}`, terminalHandle])
-      })
-    )
-  }
+  return Number(changed.changes) > 0
 }
 
 const CURRENT_COORDINATOR_SESSION_ADDRESS_SQL = currentRunCoordinatorSessionAddressSql('runs')

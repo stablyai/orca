@@ -66,7 +66,7 @@ it('invalidates the current coordinator alias using returned persisted routing e
   }
 })
 
-it('names every mailbox a coordinator rebind changes and stays silent when nothing changed', () => {
+it('announces a coordinator rebind once with every mailbox it changed, and a no-op not at all', () => {
   const f = fixture()
   const bind = (runId: string) =>
     f.db.bindRun({
@@ -86,10 +86,11 @@ it('names every mailbox a coordinator rebind changes and stays silent when nothi
     bind(f.run.id)
     expect(notices).toEqual([])
     bind(other.id)
-    expect(notices.length).toBeGreaterThan(0)
-    expect(notices.every((notice) => notice.trafficAddresses !== undefined)).toBe(true)
-    const named = new Set(notices.flatMap((notice) => [...(notice.trafficAddresses ?? [])]))
-    expect([...named]).toEqual(expect.arrayContaining([`run:${f.run.id}`, `run:${other.id}`]))
+    // One notice, after commit, naming both Runs the rebind changed.
+    expect(notices).toHaveLength(1)
+    expect([...(notices[0].trafficAddresses ?? [])]).toEqual(
+      expect.arrayContaining([`run:${f.run.id}`, `run:${other.id}`])
+    )
   } finally {
     stop()
   }

@@ -98,7 +98,6 @@ const namedDispatch: MailboxScope = ([id]) =>
 const mailboxScopes: Partial<Record<(typeof mutations)[number], MailboxScope>> = {
   createRun: createdRun,
   createDispatchContext: createdDispatch,
-  createStartingWorkerDispatch: createdDispatch,
   markWorkerDispatchReady: namedDispatch,
   completeDispatch: namedDispatch,
   failDispatch: namedDispatch,
@@ -110,7 +109,7 @@ const mailboxScopes: Partial<Record<(typeof mutations)[number], MailboxScope>> =
     }
     const id = 'id' in params ? params.id : undefined
     const entity = 'entity' in params ? params.entity : undefined
-    // A worker row is keyed by its dispatch id; a task names no mailbox.
+    // A worker row is keyed by its dispatch id; a task's mailboxes are unknown here.
     return typeof id === 'string' && (entity === 'dispatch' || entity === 'worker')
       ? [`dispatch:${id}`]
       : undefined

@@ -162,8 +162,8 @@ export function bindRun(
       if (address === null) {
         continue
       }
-      this.rememberRunCoordinatorHandle(params.runId, address)
-      if (this.routeAllUnreadDirectMessagesToRunMailbox(params.runId, address) > 0) {
+      const remembered = this.rememberRunCoordinatorHandle(params.runId, address)
+      if (this.routeAllUnreadDirectMessagesToRunMailbox(params.runId, address) > 0 || remembered) {
         changed.add(runMailbox).add(address)
       }
     }
