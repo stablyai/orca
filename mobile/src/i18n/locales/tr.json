@@ -3819,6 +3819,7 @@
       "refreshGitHub": "GitHub işini yenile",
       "refreshGitLab": "GitLab iş öğelerini yenile",
       "refreshJira": "Jira sorunlarını yenile",
+      "refreshTodoist": "Todoist görevlerini yenile",
       "refreshLinear": "Linear'ı yenile",
       "title": "Görevler"
     },
@@ -3846,6 +3847,7 @@
       "noGitHubTasks": "GitHub görevi yok",
       "noGitLabTasks": "GitLab görevi yok",
       "noJiraTasks": "Jira görevi yok",
+      "noTodoistTasks": "Todoist görevi yok",
       "noLinearTasks": "Linear görevi yok",
       "reportedSubtitle": "Bildirdiğiniz çözülmemiş sorunlar"
     },

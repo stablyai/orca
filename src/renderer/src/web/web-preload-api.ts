@@ -68,8 +68,12 @@ export function installWebPreloadApi(): void {
   window.api = withFallback(createWebPreloadApi(), []) as PreloadApi
 }
 
-function createWebPreloadApi(): Omit<Partial<PreloadApi>, 'settings' | 'plugins' | 'speech'> & {
+function createWebPreloadApi(): Omit<
+  Partial<PreloadApi>,
+  'settings' | 'plugins' | 'speech' | 'todoist'
+> & {
   settings: Partial<PreloadApi['settings']>
+  todoist: Partial<PreloadApi['todoist']>
   plugins: Partial<PreloadApi['plugins']>
   speech: Partial<PreloadApi['speech']>
 } {
@@ -104,6 +108,8 @@ function createWebPreloadApi(): Omit<Partial<PreloadApi>, 'settings' | 'plugins'
     hostedReview: createRuntimeNamespaceApi('hostedReview'),
     linear: createRuntimeNamespaceApi('linear'),
     jira: createWebJiraApi(),
+    // Why: Todoist runs only in the desktop main process; the browser client reports it disconnected.
+    todoist: { status: () => Promise.resolve({ connected: false, viewer: null }) },
     hooks: createHooksApi(),
     stats: {
       getSummary: async () =>

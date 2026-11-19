@@ -1,12 +1,13 @@
 import { createFolderWorkspaceCreateAction } from './folder-workspace-creation'
 import { createFolderWorkspaceDeleteAction } from './folder-workspace-removal'
-import { assertWorkspaceAttachmentWriteCapability } from '../../runtime/workspace-links/runtime-workspace-attachment-capabilities'
+import {
+  assertContextOnlyLinkCapability,
+  assertWorkspaceAttachmentWriteCapability
+} from '../../runtime/workspace-links/runtime-workspace-attachment-capabilities'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
-import { WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
-import { assertRuntimeEnvironmentCapability } from '../../runtime/rpc/compatibility/runtime-capability-proof'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import { getRuntimeTargetHostId } from '../../runtime/rpc/targets/runtime-client-target'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
@@ -97,18 +98,11 @@ export function createFolderWorkspaceMutationActions(
       if (target.kind === 'environment' && updates.linkedItems !== undefined) {
         await assertWorkspaceAttachmentWriteCapability(target, updates)
       }
-      // Why: same gate as folderWorkspace.create — an older paired runtime would drop the Jira link silently.
-      if (
-        target.kind === 'environment' &&
-        (updates.linkedTask?.provider === 'jira' ||
-          updates.linkedTaskSourceContext?.provider === 'jira')
-      ) {
-        await assertRuntimeEnvironmentCapability(
-          target.environmentId,
-          WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
-          'Update the remote runtime to link Jira'
-        )
-      }
+      await assertContextOnlyLinkCapability(
+        target,
+        updates.linkedTask?.provider,
+        updates.linkedTaskSourceContext?.provider
+      )
       const updateTicket = folderWorkspaceUpdates.begin(
         updateIdentity,
         Object.keys(updates) as FolderWorkspaceUpdateField[]

@@ -3812,6 +3812,7 @@
       "refreshGitHub": "重新整理 GitHub 工作",
       "refreshGitLab": "重新整理 GitLab 工作項",
       "refreshJira": "重新整理 Jira 議題",
+      "refreshTodoist": "重新整理 Todoist 任務",
       "refreshLinear": "重新整理 Linear",
       "title": "任務"
     },
@@ -3839,6 +3840,7 @@
       "noGitHubTasks": "沒有 GitHub 任務",
       "noGitLabTasks": "沒有 GitLab 任務",
       "noJiraTasks": "沒有 Jira 任務",
+      "noTodoistTasks": "沒有 Todoist 任務",
       "noLinearTasks": "沒有 Linear 任務",
       "reportedSubtitle": "您回報的未解決議題"
     },

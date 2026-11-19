@@ -209,6 +209,8 @@ export function taskListParams(input: TaskListInput, repoKey: string): HostQuery
         : null
     case 'gitlab':
       return { provider, view: input.gitlabView, filter: input.gitlabFilter, query, repos: repoKey }
+    case 'todoist':
+      return null
     case 'jira':
       return input.jiraConnection.connected
         ? {

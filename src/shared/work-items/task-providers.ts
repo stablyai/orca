@@ -1,6 +1,12 @@
-export type TaskProvider = 'github' | 'gitlab' | 'linear' | 'jira'
+export type TaskProvider = 'github' | 'gitlab' | 'linear' | 'jira' | 'todoist'
 
-export const TASK_PROVIDERS: readonly TaskProvider[] = ['github', 'gitlab', 'linear', 'jira']
+export const TASK_PROVIDERS: readonly TaskProvider[] = [
+  'github',
+  'gitlab',
+  'linear',
+  'jira',
+  'todoist'
+]
 
 const TASK_PROVIDER_SET = new Set<TaskProvider>(TASK_PROVIDERS)
 
@@ -52,6 +58,8 @@ export function normalizeVisibleTaskProviders(value: unknown): TaskProvider[] {
 export type TaskProviderAvailability = {
   gitlabInstalled: boolean
   linearConnected: boolean
+  // Todoist runs in the desktop main process only, so paired mobile clients cannot read it.
+  todoistAvailable: boolean
 }
 
 export function filterAvailableTaskProviders(
@@ -96,9 +104,12 @@ function isTaskProviderAvailable(
   if (provider === 'gitlab') {
     return availability.gitlabInstalled
   }
-  // Disconnected Jira must remain visible as its own first-time setup entry point.
+  // Disconnected Jira and Todoist must remain visible as their own first-time setup entry point.
   if (provider === 'jira') {
     return true
+  }
+  if (provider === 'todoist') {
+    return availability.todoistAvailable
   }
   return availability.linearConnected
 }

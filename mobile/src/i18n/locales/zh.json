@@ -4539,6 +4539,7 @@
       "refreshGitHub": "刷新 GitHub 工作",
       "refreshGitLab": "刷新 GitLab 工作项",
       "refreshJira": "刷新 Jira 议题",
+      "refreshTodoist": "刷新 Todoist 任务",
       "refreshLinear": "刷新 Linear",
       "title": "任务"
     },
@@ -4566,6 +4567,7 @@
       "noGitHubTasks": "暂无 GitHub 任务",
       "noGitLabTasks": "暂无 GitLab 任务",
       "noJiraTasks": "暂无 Jira 任务",
+      "noTodoistTasks": "没有 Todoist 任务",
       "noLinearTasks": "暂无 Linear 任务",
       "reportedSubtitle": "您报告的未解决议题"
     },

@@ -3819,6 +3819,7 @@
       "refreshGitHub": "GitHub-Aufgaben aktualisieren",
       "refreshGitLab": "GitLab-Arbeitselemente aktualisieren",
       "refreshJira": "Jira-Issues aktualisieren",
+      "refreshTodoist": "Todoist-Aufgaben aktualisieren",
       "refreshLinear": "Linear aktualisieren",
       "title": "Aufgaben"
     },
@@ -3846,6 +3847,7 @@
       "noGitHubTasks": "Keine GitHub-Aufgaben",
       "noGitLabTasks": "Keine GitLab-Aufgaben",
       "noJiraTasks": "Keine Jira-Aufgaben",
+      "noTodoistTasks": "Keine Todoist-Aufgaben",
       "noLinearTasks": "Keine Linear-Aufgaben",
       "reportedSubtitle": "Von dir gemeldete ungelöste Issues"
     },

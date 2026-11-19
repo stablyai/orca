@@ -18,6 +18,7 @@ import { registerGitLabHandlers } from '../source-control/gitlab'
 import { registerHostedReviewHandlers } from '../source-control/hosted-review'
 import { registerLinearHandlers } from '../linear/register-handlers'
 import { registerJiraHandlers } from '../jira/register-handlers'
+import { registerTodoistHandlers } from '../todoist/register-handlers'
 import { registerJiraIssueSummaryGenerationHandlers } from '../jira/issue-summary-generation'
 import { registerBitbucketHandlers } from '../source-control/bitbucket'
 import { registerFeedbackHandlers } from '../feedback/feedback'
@@ -161,6 +162,7 @@ export async function registerCoreHandlers(
     registerLinearHandlers()
     registerJiraHandlers()
     registerJiraIssueSummaryGenerationHandlers(store, commitMessageAgentEnv)
+    registerTodoistHandlers()
     registerBitbucketHandlers()
     registerFeedbackHandlers()
     if (crashReports) {

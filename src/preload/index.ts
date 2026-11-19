@@ -33,6 +33,7 @@ import { glApi } from './api/gitlab/gitlab'
 import { bitbucketApi } from './api/hosted-review/bitbucket-bridge'
 import { linearApi } from './api/work-items/linear-bridge'
 import { jiraApi } from './api/work-items/jira-bridge'
+import { todoistApi } from './api/work-items/todoist-bridge'
 import { starNagApi } from './api/onboarding/star-nag-bridge'
 import { diagnosticsApi } from './api/diagnostics/diagnostics-bridge'
 import { settingsApi } from './api/preferences/settings-bridge'
@@ -142,6 +143,7 @@ const api = {
   bitbucket: bitbucketApi,
   linear: linearApi,
   jira: jiraApi,
+  todoist: todoistApi,
   starNag: starNagApi,
   telemetryTrack: telemetryTrackApi,
   telemetrySetOptIn: telemetrySetOptInApi,

@@ -12,6 +12,8 @@ export function useIntegrationProviderStatusRefresh(): void {
   const linearStatusContextKey = useAppStore((s) => s.linearStatusContextKey)
   const jiraStatusChecked = useAppStore((s) => s.jiraStatusChecked)
   const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
+  const todoistStatusChecked = useAppStore((s) => s.todoistStatusChecked)
+  const checkTodoistConnection = useAppStore((s) => s.checkTodoistConnection)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
@@ -30,6 +32,9 @@ export function useIntegrationProviderStatusRefresh(): void {
     if (!jiraStatusCurrent || !jiraStatusChecked) {
       void checkJiraConnection()
     }
+    if (!todoistStatusChecked) {
+      void checkTodoistConnection()
+    }
     if (!preflightStatusCurrent || !preflightStatusChecked) {
       void refreshPreflightStatus()
     }
@@ -47,6 +52,8 @@ export function useIntegrationProviderStatusRefresh(): void {
     preflightStatusContextKey,
     preflightStatusCurrent,
     providerRuntimeContextKey,
-    refreshPreflightStatus
+    refreshPreflightStatus,
+    checkTodoistConnection,
+    todoistStatusChecked
   ])
 }

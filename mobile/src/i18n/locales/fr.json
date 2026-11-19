@@ -3917,6 +3917,7 @@
       "refreshGitHub": "Actualiser le travail GitHub",
       "refreshGitLab": "Actualiser les éléments de travail GitLab",
       "refreshJira": "Actualiser les tickets Jira",
+      "refreshTodoist": "Actualiser les tâches Todoist",
       "refreshLinear": "Actualiser Linear",
       "title": "Tâches"
     },
@@ -3944,6 +3945,7 @@
       "noGitHubTasks": "Aucune tâche GitHub",
       "noGitLabTasks": "Aucune tâche GitLab",
       "noJiraTasks": "Aucune tâche Jira",
+      "noTodoistTasks": "Aucune tâche Todoist",
       "noLinearTasks": "Aucune tâche Linear",
       "reportedSubtitle": "Tickets non résolus que vous avez signalés"
     },

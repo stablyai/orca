@@ -1,6 +1,7 @@
 import Svg, { Path } from 'react-native-svg'
+import type { TaskProvider } from '../../../../src/shared/work-items/task-providers'
 
-export type TaskProviderLogoKind = 'github' | 'gitlab' | 'linear' | 'jira'
+export type TaskProviderLogoKind = TaskProvider
 
 type Props = {
   provider: TaskProviderLogoKind
@@ -60,6 +61,11 @@ export function TaskProviderLogo({ provider, size = 16, color }: Props) {
         <Path d="M122.951 122.489H0c0 30.653 24.85 55.502 55.502 55.502h22.72v21.867c.02 30.597 24.798 55.408 55.396 55.466V133.156c0-5.891-4.776-10.667-10.667-10.667z" />
       </Svg>
     )
+  }
+
+  // Mobile hides Todoist (desktop-only), so it has no glyph here.
+  if (provider === 'todoist') {
+    return null
   }
 
   return (
