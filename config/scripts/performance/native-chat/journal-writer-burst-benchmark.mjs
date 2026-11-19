@@ -325,7 +325,7 @@ async function run(arm, sessions, round) {
   let maxGap = 0
   const ack = () => {
     const now = performance.now()
-    if (Date.now() <= stopAt) {
+    if (now < windowEnd) {
       inWindow++
       maxGap = Math.max(maxGap, now - lastAck)
       lastAck = now
