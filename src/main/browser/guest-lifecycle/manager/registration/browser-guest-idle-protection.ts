@@ -18,6 +18,11 @@ export function setBrowserGuestSemanticVisibility(
   }
 }
 
+/** Null until the owning renderer has reported this page's visibility. */
+export function readBrowserGuestSemanticVisibility(guest: Electron.WebContents): boolean | null {
+  return semanticVisibility.get(guest) ?? null
+}
+
 /** The partition's existing permission answers; read without prompting. */
 export function registerBrowserSessionNotificationGrant(
   sess: Electron.Session,

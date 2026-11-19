@@ -8,6 +8,27 @@ export type BrowserPermissionDeniedEvent = {
   origin: string
 }
 
+/**
+ * Where an uncommitted main-frame load stopped moving: before any request (`not-sent`), inside
+ * Orca's own request checks (`held`), or after its headers went to the network (`waiting`).
+ */
+export type BrowserLoadStallPhase = 'not-sent' | 'held' | 'waiting'
+
+export type BrowserLoadStall = {
+  phase: BrowserLoadStallPhase
+  scheme: 'http' | 'https'
+  /** host[:port] only, so paths and queries never reach UI state. */
+  host: string
+  /** Same-profile pages on this scheme, host and port that the user isn't looking at. */
+  hiddenSameOriginPages: number
+}
+
+export type BrowserLoadStallEvent = {
+  browserPageId: string
+  /** Null once the load commits, fails, stops or is replaced. */
+  stall: BrowserLoadStall | null
+}
+
 export type BrowserPopupEvent = {
   browserPageId: string
   /** Sanitized to origin/host so auth query params never leak into UI state. */

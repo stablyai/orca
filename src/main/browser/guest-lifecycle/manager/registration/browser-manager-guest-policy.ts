@@ -19,6 +19,8 @@ import {
   readBrowserGuestDiscardProtection
 } from './browser-guest-discard-protection'
 import { readBrowserMemoryPageDiscardProtection } from '../../browser-page-memory'
+import { installBrowserNavigationStallWatchdog } from '../navigation/browser-navigation-stall-watchdog'
+import type { BrowserLoadStallEvent } from '../../../../../shared/browser/guest-lifecycle/browser-guest-events'
 
 export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestCleanup {
   attachGuestPolicies(
@@ -44,6 +46,15 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     const disposeDiscardProtection = installBrowserGuestDiscardProtection(guest, () =>
       this.invalidateGuestMemoryProtection(guest)
     )
+    const disposeStallWatchdog = installBrowserNavigationStallWatchdog(guest, (stall) => {
+      const browserPageId = this.tabIdByWebContentsId.get(guest.id)
+      if (browserPageId) {
+        this.resolveRendererForBrowserTab(browserPageId)?.send('browser:load-stall', {
+          browserPageId,
+          stall
+        } satisfies BrowserLoadStallEvent)
+      }
+    })
     const invalidate = (): void => this.invalidateGuestMemoryProtection(guest)
     const inPageNavigation = (_event: Electron.Event, _url: string, mainFrame: boolean): void => {
       if (mainFrame) {
@@ -110,6 +121,7 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
         disposePopupPolicy,
         disposeNavigationPolicy,
         disposeDiscardProtection,
+        disposeStallWatchdog,
         disposeMetadata,
         () => guest.off('did-stop-loading', invalidate),
         () => guest.off('did-navigate', invalidate),
