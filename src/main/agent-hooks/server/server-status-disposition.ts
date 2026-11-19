@@ -19,6 +19,7 @@ export abstract class AgentHookServerStatusDisposition extends AgentHookServerCo
     // Refresh insertion order so only the oldest closed tabs are evicted.
     this.closedAgentStatusTabIds.delete(tabId)
     this.closedAgentStatusTabIds.add(tabId)
+    this.claudeAgentViews.reconcile()
     for (const key of this.state.lastStatusByPaneKey.keys()) {
       if (
         (parsePaneKey(key)?.tabId ?? parseLegacyNumericPaneKey(key)?.tabId) === tabId &&
@@ -203,6 +204,7 @@ export abstract class AgentHookServerStatusDisposition extends AgentHookServerCo
   protected markPaneClosedForAgentStatus(paneKey: string): void {
     this.closedAgentStatusPaneKeys.delete(paneKey)
     this.closedAgentStatusPaneKeys.add(paneKey)
+    this.claudeAgentViews.removePane(paneKey)
     while (this.closedAgentStatusPaneKeys.size > CLOSED_AGENT_STATUS_PANE_KEYS_MAX) {
       const oldest = this.closedAgentStatusPaneKeys.keys().next().value
       if (oldest === undefined) {

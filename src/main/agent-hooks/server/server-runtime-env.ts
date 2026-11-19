@@ -47,6 +47,7 @@ export abstract class AgentHookServerRuntimeEnv extends AgentHookServerIngestRem
       token: this.token,
       env: this.env,
       version: ORCA_HOOK_PROTOCOL_VERSION,
+      generation: this.statusHookGeneration,
       openCodeTui: true,
       transport: ORCA_HOOK_RAW_JSON_TRANSPORT
     })

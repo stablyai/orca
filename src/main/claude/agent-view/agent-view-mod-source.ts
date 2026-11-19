@@ -10,19 +10,32 @@ let paneKey
 let endedSessionId
 let observedView
 let viewRevision = 0
+let lastAnnouncement
+let lifecycle = false
+let refreshTimer
+let refreshMs
+let announcing
+let announceAgain = false
 
-  async function post($, action, data = {}, session = identity) {
-    if (!session) return {}
+  async function connection($) {
     let port = await $.env.get('ORCA_AGENT_HOOK_PORT')
     let token = await $.env.get('ORCA_AGENT_HOOK_TOKEN')
+    let publication
     const endpoint = await $.env.get('ORCA_AGENT_HOOK_ENDPOINT')
     if (endpoint) {
       try {
-        const file = parseEndpoint(await $.fs.read(endpoint))
+        publication = await $.fs.read(endpoint)
+        const file = parseEndpoint(publication)
         port = file.port
         token = file.token
       } catch {}
     }
+    return { port, token, publication }
+  }
+
+  async function post($, action, data = {}, session = identity, target) {
+    if (!session) return {}
+    const { port, token } = target || await connection($)
     if (!token || !/^[0-9]+$/.test(String(port)) || Number(port) < 1 || Number(port) > 65535) return {}
     const response = await $.http.fetch('http://127.0.0.1:' + port + ${JSON.stringify(CLAUDE_AGENT_VIEW_PATH)}, {
       method: 'POST',
@@ -36,25 +49,55 @@ let viewRevision = 0
     } catch { return {} }
   }
 
-  async function announce($) {
+  function refresh($, ms) {
+    if (refreshMs === ms) return
+    refreshTimer?.cancel()
+    refreshMs = ms
+    refreshTimer = $.clock.every(ms, () => announce($))
+  }
+
+  async function sendAnnouncement($) {
     try {
       if (!paneKey || !configDir) return {}
       const sessionId = await $.session.id()
       if (sessionId === endedSessionId) return {}
       if (!identity || identity.sessionId !== sessionId) {
         identity = { paneKey, sessionId, instanceId: String(await $.clock.now()) + '-' + String(Math.random()) }
+        lastAnnouncement = undefined
       }
       const session = identity
-      const keybindings = await $.fs.read(configDir + '/keybindings.json')
+      const keybindings = await $.fs.read(configDir + '/keybindings.json').catch(() => '')
+      const target = await connection($)
       if (identity !== session || endedSessionId === sessionId) return {}
-      return await post($, 'register', {
+      const data = {
         keybindings,
         ...(observedView?.sessionId === sessionId ? { view: observedView.view } : {})
-      }, session)
+      }
+      const announcement = JSON.stringify({ ...session, ...target, ...data })
+      if (lifecycle && lastAnnouncement === announcement) return {}
+      const reply = await post($, 'register', data, session, target)
+      if (identity !== session || endedSessionId === sessionId) return {}
+      lifecycle = reply.lifecycle === true
+      if (lifecycle) lastAnnouncement = announcement
+      // Older runtimes still expire registrations after 15 seconds.
+      refresh($, reply.registered && !lifecycle ? 5000 : 60000)
+      return reply
     } catch {
-      try { await post($, 'end') } catch {}
       return {}
     }
+  }
+
+  function announce($) {
+    announceAgain = true
+    if (!announcing) {
+      announcing = (async () => {
+        while (announceAgain) {
+          announceAgain = false
+          await sendAnnouncement($)
+        }
+      })().finally(() => { announcing = undefined })
+    }
+    return announcing
   }
 
 export function register(on) {
@@ -66,9 +109,7 @@ export function register(on) {
       const agentId = event.props.view.agentId
       if (observedView?.sessionId !== sessionId || observedView.view.agentId !== agentId) {
         observedView = { sessionId, view: { ...(agentId ? { agentId } : {}), revision: ++viewRevision } }
-        if (identity?.sessionId === sessionId) {
-          void post($, 'observe', { view: observedView.view }).catch(() => {})
-        }
+        void announce($)
       }
     }
     return result
@@ -83,8 +124,9 @@ export function register(on) {
     if (!configDir) return result
     endedSessionId = undefined
     await $.command.register({ name: 'orca-agent-view', description: 'Open the agent selected in Orca', immediate: true })
+    // The mod API has no file watcher; compare locally without renewing a lease.
+    refresh($, 60000)
     void announce($)
-    $.clock.every(5000, () => announce($))
     return result
   })
 
@@ -111,7 +153,13 @@ export function register(on) {
     void post($, 'end', {}, session).catch(() => {})
     endedSessionId = event.sessionId
     identity = undefined
-    if (event.reason !== 'clear' && event.reason !== 'resume') paneKey = undefined
+    lastAnnouncement = undefined
+    if (event.reason !== 'clear' && event.reason !== 'resume') {
+      paneKey = undefined
+      refreshTimer?.cancel()
+      refreshTimer = undefined
+      refreshMs = undefined
+    }
     return result
   })
 }
