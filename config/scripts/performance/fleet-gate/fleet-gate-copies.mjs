@@ -1,5 +1,5 @@
 // Per-run app copies: profile copies the gate can make safely, and the terminal daemons a copy leaves behind.
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -51,19 +51,25 @@ function copyInternalLinkedFiles(sourceDir, targetDir, daemonDir) {
   visit(sourceDir)
 }
 
+/** A failed ps proves nothing either way: whoever holds a record must keep it and try again later. */
+export class ProcessTableUnavailable extends Error {}
+
+/** The live process with this pid, or null once ps has shown it gone; throws when ps itself fails. */
 function processInfo(pid) {
-  try {
-    const [started, ...args] = execFileSync('ps', ['-o', 'lstart=,args=', '-p', String(pid)], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-      env: { ...process.env, LC_ALL: 'C' }
-    })
-      .trim()
-      .split(/(?<=^\S+ \S+ +\S+ \S+ \S+) /)
+  const r = spawnSync('ps', ['-o', 'lstart=,args=', '-p', String(pid)], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+    env: { ...process.env, LC_ALL: 'C' }
+  })
+  const out = typeof r.stdout === 'string' ? r.stdout.trim() : ''
+  if (!r.error && !r.signal && r.status === 0 && out) {
+    const [started, ...args] = out.split(/(?<=^\S+ \S+ +\S+ \S+ \S+) /)
     return { startedAtMs: Date.parse(started), args: args.join(' ') }
-  } catch {
+  }
+  if (!r.error && !r.signal && r.status === 1 && !out) {
     return null
   }
+  throw new ProcessTableUnavailable(`ps couldn't read process ${String(pid)}`)
 }
 
 /**
@@ -104,13 +110,25 @@ export function readDaemonPids(userDataDir) {
       continue
     }
     const recordPath = path.join(daemonDir, entry)
+    let text = ''
     try {
-      const record = JSON.parse(fs.readFileSync(recordPath, 'utf8'))
-      if (Number.isInteger(record.pid) && record.pid > 1 && isRecordedDaemon(record, recordPath)) {
-        pids.push(record.pid)
+      text = fs.readFileSync(recordPath, 'utf8')
+    } catch (error) {
+      if (error?.code === 'ENOENT') {
+        continue
       }
+      throw error
+    }
+    let record = null
+    try {
+      record = JSON.parse(text)
     } catch {
-      // Gone, torn, or a bare legacy pid with nothing to prove it is still the daemon.
+      // Torn, or a bare legacy pid with nothing to prove it is still the daemon.
+      continue
+    }
+    // isRecordedDaemon throws when ps fails: that is never "no daemon".
+    if (Number.isInteger(record?.pid) && record.pid > 1 && isRecordedDaemon(record, recordPath)) {
+      pids.push(record.pid)
     }
   }
   return pids
@@ -128,7 +146,7 @@ export function descendantPids(rootPid) {
       }
     }
   } catch {
-    return []
+    throw new ProcessTableUnavailable("ps couldn't list processes")
   }
   const found = []
   const stack = [...(childrenByParent.get(rootPid) ?? [])]

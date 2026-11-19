@@ -14,6 +14,7 @@ export const RUNS_ROOT = path.join(CACHE_ROOT, 'runs')
 const UNOWNED_GRACE_MS = 10 * 60_000
 // pid -> { identity, userDataDir? } for this gate's own copies and helpers, killed on exit.
 const live = new Map()
+const sleeper = new Int32Array(new SharedArrayBuffer(4))
 
 /** A fresh folder under the gate's cache, owned by this process (the owner file appears whole, by rename). */
 export function createRunDir(prefix, root = RUNS_ROOT) {
@@ -92,16 +93,28 @@ export function recordHelperLaunch(runDir) {
   writeRecord(pending, { marker })
   return {
     arg: `--fleet-gate-helper=${marker}`,
-    record: (pid) => recordHelper(runDir, pid),
+    record: (pid) => {
+      try {
+        return recordHelper(runDir, pid)
+      } catch {
+        // The marker on its command line still lets a reap find it.
+        return () => {}
+      }
+    },
     done: () => fs.rmSync(pending, { force: true })
   }
 }
 
 /** Records a helper the gate spawned (Xvfb, CPU load); returns the call that forgets it once it is stopped. */
 export function recordHelper(runDir, pid) {
-  const identity = processIdentity(pid)
+  let identity = processIdentity(pid)
+  for (let attempt = 0; !identity && attempt < 10; attempt += 1) {
+    Atomics.wait(sleeper, 0, 0, 100)
+    identity = processIdentity(pid)
+  }
   if (!identity) {
-    return () => {}
+    // Unrecorded, a gate killed later would leave it running for good.
+    throw new Error(`can't read process ${String(pid)}'s start time with ps, so can't record it`)
   }
   const file = path.join(ownerFolder(runDir), 'helpers', String(pid))
   writeRecord(file, { identity })
@@ -146,9 +159,18 @@ function daemonsGone(userDataDir) {
     return error?.code === 'ENOENT'
   }
   for (const name of names) {
+    let text = ''
+    try {
+      text = fs.readFileSync(path.join(daemonDir, name), 'utf8')
+    } catch (error) {
+      if (error?.code === 'ENOENT') {
+        continue
+      }
+      return false
+    }
     let pid = null
     try {
-      pid = JSON.parse(fs.readFileSync(path.join(daemonDir, name), 'utf8')).pid
+      pid = JSON.parse(text).pid
     } catch {
       // Torn or legacy: nothing in it can name a process.
     }
@@ -162,18 +184,16 @@ function daemonsGone(userDataDir) {
 /** For process 'exit': synchronous, so it also runs on a thrown error or process.exit. */
 export function killLiveNow() {
   for (const [pid, { identity, userDataDir }] of live) {
-    killVerified(pid, identity, Boolean(userDataDir))
-    // readDaemonPids proves each daemon is this copy's (launch nonce, pid record, start time) just before the kill.
-    let daemons = []
     try {
-      daemons = userDataDir ? readDaemonPids(userDataDir) : []
-    } catch {
-      // The folder (and its records) stays for the next gate's reap.
-    }
-    for (const root of daemons) {
-      for (const daemonPid of [...descendantPids(root), root]) {
-        signal(daemonPid, 'SIGKILL', false)
+      killVerified(pid, identity, Boolean(userDataDir))
+      // readDaemonPids proves each daemon is this copy's (launch nonce, pid record, start time) just before the kill.
+      for (const root of userDataDir ? readDaemonPids(userDataDir) : []) {
+        for (const daemonPid of [...descendantPids(root), root]) {
+          signal(daemonPid, 'SIGKILL', false)
+        }
       }
+    } catch {
+      // ps failed: its records stay on disk, so the exit handler keeps the folder for the next gate's reap.
     }
   }
   live.clear()
@@ -223,6 +243,15 @@ function killByMarker(arg, group) {
  * intact, for a later reap, since deleting it would orphan whatever still runs.
  */
 async function reapFolder(dir) {
+  try {
+    return await reapFolderOrThrow(dir)
+  } catch {
+    // A failed ps or read: the folder stays for a later reap.
+    return false
+  }
+}
+
+async function reapFolderOrThrow(dir) {
   const inside = (userDataDir) =>
     typeof userDataDir === 'string' && !path.relative(dir, userDataDir).startsWith('..')
   for (const record of readRecords(path.join(dir, 'apps'))) {
@@ -234,11 +263,7 @@ async function reapFolder(dir) {
     }
     // Only daemons recorded inside this folder: a pid record anywhere else could be another gate's.
     if (inside(record.userDataDir)) {
-      try {
-        await stopCopyDaemons(record.userDataDir)
-      } catch {
-        return false
-      }
+      await stopCopyDaemons(record.userDataDir)
       if (!daemonsGone(record.userDataDir)) {
         return false
       }
@@ -256,15 +281,24 @@ async function reapFolder(dir) {
   return true
 }
 
-/** For the exit handler: a pending record means a launch this gate couldn't confirm, so the folder must stay. */
-export function hasPendingRecords(dir) {
+/** For the exit handler: any record left is a process this gate couldn't prove stopped, so the folder must stay. */
+export function hasRecords(dir) {
   return ['apps', 'helpers'].some((sub) => {
     try {
-      return fs.readdirSync(path.join(dir, sub)).some((name) => name.startsWith('pending-'))
-    } catch {
-      return false
+      return fs.readdirSync(path.join(dir, sub)).some((name) => !name.endsWith('.new'))
+    } catch (error) {
+      return error?.code !== 'ENOENT'
     }
   })
+}
+
+/** Deletes a copy's run folder unless a record still points into it (its daemon pid records must survive). */
+export function removeRunDir(runDir) {
+  const apps = readRecords(path.join(ownerFolder(runDir), 'apps'))
+  if (apps.some((record) => !path.relative(runDir, String(record.userDataDir)).startsWith('..'))) {
+    return
+  }
+  fs.rmSync(runDir, { recursive: true, force: true })
 }
 
 /** Stops what dead gates left behind (verified processes only), then deletes their folders. */

@@ -13,10 +13,11 @@ import {
   createRunDir,
   killLiveNow,
   reapStaleRunDirs,
-  hasPendingRecords,
+  hasRecords,
   recordCopyLaunch,
   recordHelper,
-  recordHelperLaunch
+  recordHelperLaunch,
+  removeRunDir
 } from './fleet-gate-run-dirs.mjs'
 import { startVirtualDisplay } from './fleet-gate-display.mjs'
 import { waitForAppWindow } from './fleet-gate-app-ready.mjs'
@@ -194,8 +195,15 @@ async function launchCopy({ buildDir, runDir, userDataDir, label, outDir, extraE
     if (child.exitCode === null && child.signalCode === null) {
       child.kill('SIGKILL')
     }
-    await stopCopyDaemons(userDataDir)
-    launchRecord.forget()
+    // A failed daemon stop keeps the record, so the run folder (and the next gate's reap) still knows the daemon.
+    if (
+      await stopCopyDaemons(userDataDir).then(
+        () => true,
+        () => false
+      )
+    ) {
+      launchRecord.forget()
+    }
     liveCleanups.delete(close)
   }
   liveCleanups.add(close)
@@ -284,7 +292,7 @@ async function burstOnce({ arm, sha, buildDir, seedDir, runDir, outDir, repoRoot
     }
   }
   result.ownershipRefusals = countOwnershipRefusals(stderrOwnership, userDataDir)
-  fs.rmSync(runDir, { recursive: true, force: true })
+  removeRunDir(runDir)
   console.log(`[fleet-gate] ${label}: ${JSON.stringify(result)}`)
   return result
 }
@@ -323,7 +331,7 @@ async function seedUnderLock({ seedsDir, seedDir, oldSha, oldBuild, outDir }) {
     pruneCache(seedsDir, '.fleet-seed.json', KEEP_SEEDS, new Set([seedDir]))
     return { seedDir, receipt }
   } finally {
-    fs.rmSync(runDir, { recursive: true, force: true })
+    removeRunDir(runDir)
   }
 }
 
@@ -411,7 +419,7 @@ async function measureOnce({ arm, sha, buildDir, seedDir, options, runDir, outDi
     }
   } finally {
     await close()
-    fs.rmSync(runDir, { recursive: true, force: true })
+    removeRunDir(runDir)
   }
   return result
 }
@@ -571,7 +579,7 @@ function installStopHandlers() {
 process.on('exit', () => {
   killLiveNow()
   // A copy still launching isn't in the live list yet: keep its pending record for the next gate's reap.
-  if (gateRunDir && launchesInFlight === 0 && !hasPendingRecords(gateRunDir)) {
+  if (gateRunDir && launchesInFlight === 0 && !hasRecords(gateRunDir)) {
     fs.rmSync(gateRunDir, { recursive: true, force: true })
   }
 })

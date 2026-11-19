@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -106,16 +106,21 @@ it.skipIf(process.platform === 'win32')(
 )
 
 it.skipIf(process.platform === 'win32')(
-  "keeps a dead gate's folder while ps fails, then reaps it once ps works",
+  "keeps a dead gate's folder while ps fails for its daemon, then reaps it once ps works",
   async () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'fleet-gate-runs-test-'))
     const dead = createRunDir('gate', root)
     const deadCopy = await runFolderWithCopy(dead, 'marker-busy')
     fs.writeFileSync(path.join(dead, 'owner'), '999999 Thu Jan  1 00:00:00 1970')
-    // A busy host: ps fails, which proves nothing about the recorded processes.
+    // A busy host: only the daemon check (start time plus command line) fails, which proves nothing about it.
+    const realPs = execFileSync('sh', ['-c', 'command -v ps'], { encoding: 'utf8' }).trim()
     const fakeBin = path.join(root, 'bin')
     fs.mkdirSync(fakeBin)
-    fs.writeFileSync(path.join(fakeBin, 'ps'), '#!/bin/sh\nexit 2\n', { mode: 0o755 })
+    fs.writeFileSync(
+      path.join(fakeBin, 'ps'),
+      `#!/bin/sh\ncase " $* " in *"lstart=,args="*" ${String(deadCopy[1])} "*) exit 2 ;; esac\nexec ${realPs} "$@"\n`,
+      { mode: 0o755 }
+    )
     const realPath = process.env.PATH
     process.env.PATH = `${fakeBin}${path.delimiter}${realPath}`
     try {
@@ -124,7 +129,7 @@ it.skipIf(process.platform === 'win32')(
       process.env.PATH = realPath
     }
     expect(fs.existsSync(dead)).toBe(true)
-    expect(deadCopy.map(alive)).toEqual([true, true, true, true])
+    expect(alive(deadCopy[1])).toBe(true)
 
     expect(await reapStaleRunDirs(root)).toBe(1)
     await until(() => deadCopy.every((pid) => !alive(pid)))

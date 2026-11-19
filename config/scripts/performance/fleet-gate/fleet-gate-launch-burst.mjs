@@ -58,13 +58,15 @@ export function startCpuLoad(repoRoot, tracker = null) {
       earlyExits += stopped ? 0 : 1
       forget()
     })
-    return child
+    return { child, forget }
   })
   /** Stops the load; returns how many workers had already exited, i.e. how much of it was missing. */
   return () => {
     stopped = true
-    for (const child of children) {
+    for (const { child, forget } of children) {
       child.kill('SIGKILL')
+      // Our own unreaped child: its pid can't pass to another process, so the SIGKILL settles it.
+      forget()
     }
     tracker?.done()
     return earlyExits

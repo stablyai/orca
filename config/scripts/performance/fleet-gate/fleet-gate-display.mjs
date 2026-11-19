@@ -27,7 +27,13 @@ export async function startVirtualDisplay(record = () => () => {}) {
       stdio: ['ignore', 'ignore', 'ignore', 'pipe']
     }
   )
-  const forget = record(child.pid)
+  let forget = () => {}
+  try {
+    forget = record(child.pid)
+  } catch (error) {
+    child.kill('SIGKILL')
+    throw error
+  }
   const number = await new Promise((resolve) => {
     let text = ''
     const timer = setTimeout(() => resolve(null), 10_000)
