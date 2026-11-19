@@ -42,7 +42,8 @@ const run = (before) => {
   // A commit already restarted the WAL: nothing is owed.
   const restarted = after.log < state.log || after.checkpointed < state.checkpointed;
   // A catch-up asks again only while it makes progress; a reader can pin the tail.
-  owed = !restarted && after.log > after.checkpointed && state.checkpointed > before.checkpointed;
+  // A commit after this sample can still leave a tail; an empty WAL clears the debt on the next tick.
+  owed = !restarted && state.checkpointed > before.checkpointed;
 };
 const tick = () => {
   try {
