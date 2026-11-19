@@ -22,11 +22,17 @@ const CHANNELS = ['next', 'stable']
 const CLEANUP_PLATFORMS = ['darwin', 'win32']
 const POLICY_KEYS = ['version', 'revision', 'kinds']
 const RULE_KEYS = ['mode', 'enforcePermille', 'platforms', 'thresholds']
+// Far below the app's safe-integer limit, so a mistyped revision never leaves no room to lift it.
+const MAX_REVISION = 2 ** 31 - 1
 // The kinds the app reads, from the app, so a kind added later is covered by emergency-off.
 const KINDS = Object.keys(codexHistoryCleanupThresholds(null))
 
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex')
+}
+
+function isUsableRevision(revision) {
+  return Number.isSafeInteger(revision) && revision > 0 && revision <= MAX_REVISION
 }
 
 function isPlainObject(value) {
@@ -48,6 +54,9 @@ export function validatedCodexHistoryCleanupPolicy(bytes) {
     throw new Error(`apps would reject this policy: ${parsed.error}`)
   }
   const { policy } = parsed
+  if (!isUsableRevision(policy.revision)) {
+    throw new Error(`revision ${policy.revision} is above ${MAX_REVISION}`)
+  }
   const raw = JSON.parse(bytes.toString('utf8'))
   requireKnownKeys(raw, POLICY_KEYS, 'the policy')
   if (!isPlainObject(raw.kinds)) {
@@ -106,10 +115,15 @@ function readChannel(gh, repo, tag, { lenient = false } = {}) {
     return { exists: false, bytes: null, revision: null }
   }
   const parsed = parseCodexHistoryCleanupPolicy(bytes.toString('utf8'))
-  if (!parsed.ok && !lenient) {
-    throw new Error(`apps would reject the ${tag} file: ${parsed.error}`)
+  const error = !parsed.ok
+    ? `apps would reject the ${tag} file: ${parsed.error}`
+    : !isUsableRevision(parsed.policy.revision)
+      ? `the ${tag} revision ${parsed.policy.revision} is above ${MAX_REVISION}`
+      : null
+  if (error && !lenient) {
+    throw new Error(error)
   }
-  return { exists: true, bytes, revision: parsed.ok ? parsed.policy.revision : null }
+  return { exists: true, bytes, revision: error ? null : parsed.policy.revision }
 }
 
 /**
@@ -127,6 +141,7 @@ export function publishCodexHistoryCleanupPolicy({
   const policy = validatedCodexHistoryCleanupPolicy(bytes)
   const tag = codexHistoryCleanupPolicyTag(channel)
   const result = { tag, revision: policy.revision, sha256: sha256(bytes) }
+  // Read right before the upload: releases have no compare-and-swap, so this keeps the race to one call.
   const published = readChannel(gh, repo, tag, { lenient })
   if (published.revision !== null) {
     if (published.revision === policy.revision && sha256(published.bytes) === result.sha256) {
@@ -168,19 +183,28 @@ export function promoteCodexHistoryCleanupPolicy({ repo, target, gh = runGh }) {
   return publishCodexHistoryCleanupPolicy({ repo, channel: 'stable', bytes, target, gh })
 }
 
+// An unusable checked-in revision can't be published either, so it never needs outranking.
 function checkedInRevision(fileText) {
+  let revision
   try {
-    const revision = JSON.parse(fileText).revision
-    return Number.isInteger(revision) ? revision : 0
+    revision = JSON.parse(fileText).revision
   } catch {
-    return 0
+    revision = undefined
   }
+  if (isUsableRevision(revision)) {
+    return revision
+  }
+  console.log(
+    `Ignoring the checked-in revision ${JSON.stringify(revision)}: not a usable revision.`
+  )
+  return 0
 }
 
 /**
  * Every kind `off`, built from scratch above every published and checked-in revision, on each
  * channel independently with no soak: apps obey an `off` from any revision they know. Lifting it
- * takes a checked-in revision above this one.
+ * takes a checked-in revision above this one. A channel whose revision can't be read is replaced
+ * only with `minRevision`: otherwise a rerun would read the low off revision and pass.
  */
 export function publishCodexHistoryCleanupOff({
   repo,
@@ -198,6 +222,10 @@ export function publishCodexHistoryCleanupOff({
     minRevision,
     Math.max(checkedInRevision(fileText), ...channels.map((channel) => channel.revision ?? 0)) + 1
   )
+  if (!isUsableRevision(revision)) {
+    throw new Error(`revision ${revision} is above ${MAX_REVISION}`)
+  }
+  const skipped = minRevision === 0 ? unknown.map(({ channel }) => channel) : []
   const policy = {
     version: 1,
     revision,
@@ -207,7 +235,7 @@ export function publishCodexHistoryCleanupOff({
   const results = []
   const failures = []
   // One channel's failure must not keep the switch off the other.
-  for (const { channel } of channels) {
+  for (const { channel } of channels.filter(({ channel }) => !skipped.includes(channel))) {
     try {
       results.push(
         publishCodexHistoryCleanupPolicy({ repo, channel, bytes, target, gh, lenient: true })
@@ -218,10 +246,16 @@ export function publishCodexHistoryCleanupOff({
       )
     }
   }
-  // Published anyway so some installs take it, but the run fails: apps holding a higher revision ignore it.
-  if (unknown.length > 0 && minRevision === 0) {
+  // A publish that landed after ours would leave the switch off this channel.
+  for (const { tag, sha256: hash } of results) {
+    const now = downloadChannelAsset({ gh, repo, tag, asset: ASSET })
+    if (now === null || sha256(now) !== hash) {
+      failures.push(`${tag} changed after off was published; rerun emergency-off`)
+    }
+  }
+  if (skipped.length > 0) {
     failures.push(
-      `the ${unknown.map(({ channel }) => channel).join(' and ')} revision could not be read, so off went out at revision ${revision}, which apps holding a higher revision ignore; rerun with -f revision=<N> above any revision ever published`
+      `the ${skipped.join(' and ')} revision could not be read, so off was not published there (off went out at revision ${revision} elsewhere); rerun with -f revision=<N> above any revision ever published`
     )
   }
   return { results, failures }
@@ -241,8 +275,10 @@ function parseMinRevision(args) {
     return 0
   }
   const revision = Number(args[index + 1])
-  if (!Number.isInteger(revision) || revision <= 0) {
-    throw new Error(`--revision must be a positive integer, got ${args[index + 1]}`)
+  if (!isUsableRevision(revision)) {
+    throw new Error(
+      `the revision input must be a whole number from 1 to ${MAX_REVISION}, got ${args[index + 1]}`
+    )
   }
   return revision
 }
