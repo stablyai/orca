@@ -4,6 +4,8 @@ import type { OrchestrationDb } from '../orchestration-db'
 // Checks often while other connections commit, rarely while none do, so an idle database barely wakes it.
 const CHECKPOINT_BUSY_INTERVAL_MS = 250
 const CHECKPOINT_IDLE_INTERVAL_MS = 5000
+// A tail left by commits during a checkpoint drains in the first pause this long; until then main's backstop bounds it.
+const CHECKPOINT_CATCH_UP_INTERVAL_MS = 100
 // SQLite's own threshold: a checkpoint lets main's next commit restart the WAL, whose header it syncs, so
 // checkpointing smaller batches would sync on main more often than before.
 const CHECKPOINT_BATCH_FRAMES = 1000
@@ -11,7 +13,8 @@ const CHECKPOINT_BATCH_FRAMES = 1000
 export const MAIN_CHECKPOINT_BACKSTOP_PAGES = 10_000
 
 // Evaluated source, as the chat journal's checkpoint worker: a passive checkpoint never blocks the writer.
-// An older SQLite runs NOOP as a real checkpoint, so it is refused here; the exit hands checkpoints back to main.
+// Older SQLite runs NOOP as a real checkpoint, and 3.51.0-3.51.2 can corrupt a WAL reset that overlaps
+// one, so those are refused here; the exit hands checkpoints back to main.
 const checkpointWorkerSource = `
 const { workerData } = require('node:worker_threads');
 const { DatabaseSync } = require('node:sqlite');
@@ -19,9 +22,9 @@ const db = new DatabaseSync(workerData.filename);
 if (db.prepare('PRAGMA journal_mode').get().journal_mode !== 'wal') {
   throw new Error('orchestration database is not in WAL mode');
 }
-const [major, minor] = db.prepare('SELECT sqlite_version() AS v').get().v.split('.').map(Number);
-if (major < 3 || (major === 3 && minor < 51)) {
-  throw new Error('SQLite ' + major + '.' + minor + ' lacks NOOP checkpoints');
+const [major, minor, patch] = db.prepare('SELECT sqlite_version() AS v').get().v.split('.').map(Number);
+if (!(major > 3 || (major === 3 && (minor > 51 || (minor === 51 && patch >= 3))))) {
+  throw new Error('SQLite ' + major + '.' + minor + '.' + patch + ' cannot checkpoint off the writer');
 }
 db.exec('PRAGMA busy_timeout = 1000;');
 const frames = db.prepare('PRAGMA wal_checkpoint(NOOP)');
@@ -31,16 +34,30 @@ frames.get();
 let failures = 0;
 let interval = workerData.busyMs;
 let seen = version.get().data_version;
+// Commits that landed during a checkpoint leave a tail, and the WAL restarts only once it drains.
+let owed = false;
+const run = (before) => {
+  const state = checkpoint.get();
+  const after = frames.get();
+  // A commit already restarted the WAL: nothing is owed.
+  const restarted = after.log < state.log || after.checkpointed < state.checkpointed;
+  // A catch-up asks again only while it makes progress; a reader can pin the tail.
+  owed = !restarted && after.log > after.checkpointed && state.checkpointed > before.checkpointed;
+};
 const tick = () => {
   try {
     // Changes only when another connection commits.
     const current = version.get().data_version;
+    const paused = current === seen;
     const state = frames.get();
-    if (state.log - state.checkpointed >= workerData.batchFrames) {
-      checkpoint.get();
+    const pending = state.log - state.checkpointed;
+    if (pending >= workerData.batchFrames || (owed && paused && pending > 0)) {
+      run(state);
+    } else if (pending === 0) {
+      owed = false;
     }
     failures = 0;
-    interval = current !== seen ? workerData.busyMs : Math.min(interval * 2, workerData.idleMs);
+    interval = owed ? workerData.catchUpMs : !paused ? workerData.busyMs : Math.min(interval * 2, workerData.idleMs);
     seen = current;
   } catch (error) {
     // Exiting hands checkpoints back to main rather than letting the WAL grow.
@@ -76,7 +93,8 @@ export function checkpointOffMainThread({ db }: OrchestrationDb): () => void {
         filename,
         busyMs: CHECKPOINT_BUSY_INTERVAL_MS,
         idleMs: CHECKPOINT_IDLE_INTERVAL_MS,
-        batchFrames: CHECKPOINT_BATCH_FRAMES
+        batchFrames: CHECKPOINT_BATCH_FRAMES,
+        catchUpMs: CHECKPOINT_CATCH_UP_INTERVAL_MS
       }
     })
   } catch {
