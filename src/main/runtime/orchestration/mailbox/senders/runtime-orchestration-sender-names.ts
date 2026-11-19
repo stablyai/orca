@@ -14,7 +14,6 @@ import type { OrchestrationDb } from '../../db/orchestration-db'
 import {
   liveSenderAgent,
   observeOrchestrationSender,
-  orchestrationSenderName,
   structuredChatNaming,
   captureMirroredTabs,
   type MirroredTabs,
@@ -79,21 +78,6 @@ export class RuntimeOrchestrationSenderNames {
       this.deps.getDb(),
       (party, reported, recorded) => this.snapshotOf(party, reported, recorded),
       reportedDispatchId
-    )
-  }
-
-  nameOf(
-    party: AgentMessageSender['party'],
-    reportedDispatchId?: string,
-    taskName?: string | null,
-    records: AgentSessionRecordReader | null = readAgentSessionRecordStore()
-  ): string | null {
-    return orchestrationSenderName(
-      party,
-      this.namingSources(records),
-      reportedDispatchId,
-      undefined,
-      taskName
     )
   }
 
@@ -179,6 +163,7 @@ export class RuntimeOrchestrationSenderNames {
     }
   }
 
+  /** Names each crew row as its sender card would, by the Dispatch the row shows. */
   captureCrewInputs() {
     const generatedTitlesEnabled = readGeneratedTitlesEnabled(this.deps.getStore())
     const db = this.deps.getDb()
@@ -203,11 +188,11 @@ export class RuntimeOrchestrationSenderNames {
     const terminals = new Map<string, TerminalSenderNaming | null>()
     return (
       party: AgentMessageSender['party'],
-      taskName: string | null,
+      dispatchId: string | undefined,
       records: AgentSessionRecordReader | null,
       readPane = this.deps.getTerminalPaneKey
     ) =>
-      orchestrationSenderName(
+      observeSenderSnapshot(
         party,
         {
           db,
@@ -230,10 +215,8 @@ export class RuntimeOrchestrationSenderNames {
             return terminals.get(handle) ?? null
           }
         },
-        undefined,
-        undefined,
-        taskName
-      )
+        dispatchId
+      ).name
   }
 
   private chatSources(

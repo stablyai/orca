@@ -250,13 +250,12 @@ export function orchestrationSenderName(
   party: Party,
   sources: SenderNamingSources,
   reportedDispatchId?: string,
-  observation = observeOrchestrationSender(party, sources, reportedDispatchId),
-  taskName?: string | null
+  observation = observeOrchestrationSender(party, sources, reportedDispatchId)
 ): string | null {
   const { chat, terminal } = observation
   return crewDisplayName(
     liveSenderName(observation, sources),
-    taskName !== undefined ? taskName : observedTaskName(observation, sources.db),
+    observedTaskName(observation, sources.db),
     chat?.fallback,
     terminal?.agent ? formatAgentTypeLabel(terminal.agent) : null
   )

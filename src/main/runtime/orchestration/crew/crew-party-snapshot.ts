@@ -167,11 +167,7 @@ export function buildCrewSnapshot(
     const row: OrchestrationCrewRow = {
       partyKey: JSON.stringify([deps.hostKey, target.address]),
       role,
-      label: crewDisplayName(
-        deps.name(target, display.displayName || display.taskTitle || null, records),
-        title,
-        'Agent'
-      )!,
+      label: crewDisplayName(deps.name(target, assignment?.id, records), title, 'Agent')!,
       agentKind:
         live?.kind === 'here'
           ? live.record.provider

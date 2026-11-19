@@ -380,6 +380,12 @@ it("names a worker's mail by its task and agent once its terminal tab is gone", 
   }).senders[0]
   expect(sender).toMatchObject({ name: 'Fix the login page · Codex', agent: 'codex' })
   expect(sender).not.toHaveProperty('host')
+  const crewName = names().captureCrewInputs()(
+    { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null },
+    started.dispatch.id,
+    null
+  )
+  expect(crewName).toBe('Fix the login page · Codex')
 })
 
 it("names a legacy paired server's relayed mail by its task, agent and server", () => {
