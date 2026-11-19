@@ -221,11 +221,12 @@ async function deleteRollout(
       result.failed += 1
       return
     }
-    const protectedRoots = await resolveProtectedRoots(listed, stem)
     const names = rolloutNames(homes, stem)
     if (await isOpenInCodex(homes, stem)) {
       return
     }
+    // After the open check: a chat still open never reads the import folder (which can start WSL).
+    const protectedRoots = await resolveProtectedRoots(listed, stem)
     const found = await readNames(names)
     // Every name, every extension: a chat resumed or still written anywhere keeps them all.
     const checked = new Set<string>()

@@ -6,8 +6,11 @@ import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesy
 /** Orca's homes to delete in, and roots (the user's import folder) no deletion may reach. */
 export type RolloutHomes = { homes: readonly string[]; protectedRoots: readonly string[] }
 
-/** A protected root as seen from one rollout: where it really is, and the folders that hold it there. */
-export type ProtectedRoot = { realPath: string; folderIds: ReadonlySet<string> }
+/**
+ * A protected root as seen from one rollout: the dev:ino of the root and of the folders that hold
+ * this rollout in it, or, on a filesystem that gives the root no inode, its real path.
+ */
+export type ProtectedRoot = { folderIds: ReadonlySet<string>; inodelessRealPath: string | null }
 
 /** Null when absent; a folder that can't be resolved for another reason throws. */
 async function realpathUnlessAbsent(path: string): Promise<string | null> {
@@ -58,22 +61,28 @@ export async function resolveProtectedRoots(
     if (rootId && homeIds.has(rootId)) {
       continue
     }
-    // Where this rollout's names or marker sit in the root: a home folder that is one of these
-    // (linked, mounted, or spelled another way) holds the root's own files.
+    // Where this rollout's names or marker sit in the root: a home's subfolder mounted from one of
+    // these has no ancestor that is the root itself.
     const ids = await Promise.all(
       [
         join(realPath, 'sessions', ...dated),
         join(realPath, 'archived_sessions'),
-        join(realPath, '.orca-session-copies', ...dated),
-        join(realPath, ...dated)
+        join(realPath, '.orca-session-copies', ...dated)
       ].map(folderId)
     )
-    resolved.push({ realPath, folderIds: new Set(ids.filter((id) => id !== null)) })
+    resolved.push({
+      folderIds: new Set([rootId, ...ids].filter((id) => id !== null)),
+      inodelessRealPath: rootId === null ? realPath : null
+    })
   }
   return resolved
 }
 
-/** False when the name's folder is one of a root's folders or really inside it; checked right before removal. */
+/**
+ * False when the name's folder, or any folder above it, is a protected root or one of its folders;
+ * checked right before removal. Identity, not spelling: a link, mount or other spelling of the root
+ * is still the root.
+ */
 export async function isOutsideProtectedRoots(
   path: string,
   protectedRoots: readonly ProtectedRoot[]
@@ -81,13 +90,25 @@ export async function isOutsideProtectedRoots(
   if (protectedRoots.length === 0) {
     return true
   }
-  const folder = dirname(path)
-  const [id, realFolder] = await Promise.all([folderId(folder), realpathUnlessAbsent(folder)])
+  const realFolder = await realpathUnlessAbsent(dirname(path))
   if (realFolder === null) {
     return false
   }
-  return !protectedRoots.some(
-    (root) =>
-      (id !== null && root.folderIds.has(id)) || isPathInsideOrEqual(root.realPath, realFolder)
-  )
+  if (
+    protectedRoots.some(
+      (root) =>
+        root.inodelessRealPath !== null && isPathInsideOrEqual(root.inodelessRealPath, realFolder)
+    )
+  ) {
+    return false
+  }
+  for (let folder = realFolder; ; folder = dirname(folder)) {
+    const id = await folderId(folder)
+    if (id !== null && protectedRoots.some((root) => root.folderIds.has(id))) {
+      return false
+    }
+    if (dirname(folder) === folder) {
+      return true
+    }
+  }
 }
