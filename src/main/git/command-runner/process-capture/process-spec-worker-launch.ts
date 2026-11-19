@@ -68,9 +68,11 @@ export function launchProcessSpecOnWindowsWorker(
     onWorkerLost?.()
     // runProcess's own stop may already be walking this tree; join its verdict rather than walk the pid again.
     const stopping = windowsTreeKillFor(launched)
-    const treeEnded = stopping
-      ? stopping.settled.then((verdict) => verdict === 'exited')
-      : killAbandonedWorkerChildTree(child)
+    const rootExited = child.exitCode !== null || child.signalCode !== null
+    const treeEnded =
+      stopping && !rootExited
+        ? stopping.settled.then((verdict) => verdict === 'exited')
+        : killAbandonedWorkerChildTree(child)
     const barrier = spec.terminationBarrier
     // Ending wsl.exe proves nothing about the Linux process group; the guest barrier's kill does.
     const proven =

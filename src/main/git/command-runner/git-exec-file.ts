@@ -277,7 +277,8 @@ async function gitExecFileAsyncBufferInSpan(
         env: untranslatedGitOutputEnv(options.env),
         admissionTier: options.admissionTier,
         onChildTerminated: reportTerminated,
-        onWorkerLost: grant.release,
+        // A buffered read holds only admission, so a lost worker ends it.
+        onWorkerLost: reportTerminated,
         ...(timeoutMs === undefined
           ? {}
           : { createTimeoutError: () => new GitCommandTimeoutError(timeoutMs) })
