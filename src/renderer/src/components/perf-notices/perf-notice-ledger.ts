@@ -15,6 +15,8 @@ const URGENT: ReadonlySet<PerfNoticeId> = new Set(['disk-almost-full'])
 const launchedAt = Date.now()
 // Why: if storage fails, this copy keeps snoozes and caps for the rest of the session.
 let sessionLedger: Ledger = { lastToastAt: null, notices: {} }
+// Why: after a failed write, storage holds an older ledger that must not overwrite newer state.
+let storageFailed = false
 
 function isLedger(value: unknown): value is Ledger {
   return (
@@ -29,6 +31,9 @@ function isLedger(value: unknown): value is Ledger {
 }
 
 function read(): Ledger {
+  if (storageFailed) {
+    return sessionLedger
+  }
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY)
     const parsed: unknown = raw ? JSON.parse(raw) : null
@@ -46,7 +51,7 @@ function write(ledger: Ledger): void {
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(ledger))
   } catch {
-    // Storage can be full or blocked; the session copy still holds.
+    storageFailed = true
   }
 }
 

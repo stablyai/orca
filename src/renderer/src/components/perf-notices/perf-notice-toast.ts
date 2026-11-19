@@ -14,7 +14,7 @@ import {
 import type { IdleAgents } from './perf-notice-rules'
 
 export type PerfNotice =
-  | { id: 'memory-low'; variant: 'agent-sleep' | 'agents' | 'your-terminals' }
+  | { id: 'memory-low'; variant: 'agent-sleep' | 'agents' | 'your-terminals' | 'terminals' }
   | { id: 'idle-agents'; idle: IdleAgents }
   | { id: 'hidden-browser-tabs'; count: number; hours: number }
   | { id: 'disk-almost-full'; freeLabel: string }
@@ -57,10 +57,15 @@ function copyFor(notice: PerfNotice): Copy {
                 'perfNotices.memoryLow.agents',
                 'Terminal agents are using most of it. Resources shows what each one uses.'
               )
-            : translate(
-                'perfNotices.memoryLow.yourTerminals',
-                'Your terminals are using most of it. Resources shows what each one uses.'
-              ),
+            : notice.variant === 'your-terminals'
+              ? translate(
+                  'perfNotices.memoryLow.yourTerminals',
+                  'Your terminals are using most of it. Resources shows what each one uses.'
+                )
+              : translate(
+                  'perfNotices.memoryLow.terminals',
+                  'Agents and terminals in Orca are using most of it. Resources shows what each one uses.'
+                ),
         action: openResources,
         run: requestResourceManagerOpen
       }

@@ -72,12 +72,17 @@ export function countIdleAgents(
     }
   }
   const chatsNeverStop = nativeChatIdleStopMinutes(state.settings) === 0
+  const chatCandidates = chatsNeverStop
+    ? candidates.filter((entry) => entry.structuredHostOwned && entry.worktreeId)
+    : []
+  // Why: one catalog walk per check, never one per chat.
+  const localWorktrees = chatCandidates.length > 0 ? collectLocalWorktreeIds(state) : null
   const labels = new Set<string>()
   let terminal = 0
   let chats = 0
   for (const entry of candidates) {
     if (entry.structuredHostOwned) {
-      if (chatsNeverStop && entry.worktreeId && isLocalWorktree(state, entry.worktreeId)) {
+      if (localWorktrees && entry.worktreeId && localWorktrees.has(entry.worktreeId)) {
         chats += 1
       }
     } else if (liveAgentPanes.has(entry.paneKey)) {
@@ -88,18 +93,21 @@ export function countIdleAgents(
   return { terminal, chats, terminalLabels: [...labels] }
 }
 
-function isLocalWorktree(state: AppState, worktreeId: string): boolean {
+function collectLocalWorktreeIds(state: AppState): Set<string> {
+  const ids = new Set<string>()
   for (const folder of selectFolderWorkspaces(state)) {
-    if (folderWorkspaceKey(folder.id) === worktreeId) {
-      return parseExecutionHostId(folderWorkspaceToWorktree(folder).hostId)?.kind === 'local'
+    if (parseExecutionHostId(folderWorkspaceToWorktree(folder).hostId)?.kind === 'local') {
+      ids.add(folderWorkspaceKey(folder.id))
     }
   }
   const worktreesByRepo = selectWorktreesByRepo(state)
   for (const repo of state.repos) {
-    const worktree = worktreesByRepo[repo.id]?.find((candidate) => candidate.id === worktreeId)
-    if (worktree) {
-      return parseExecutionHostId(worktree.hostId ?? getRepoExecutionHostId(repo))?.kind === 'local'
+    const repoHost = getRepoExecutionHostId(repo)
+    for (const worktree of worktreesByRepo[repo.id] ?? []) {
+      if (parseExecutionHostId(worktree.hostId ?? repoHost)?.kind === 'local') {
+        ids.add(worktree.id)
+      }
     }
   }
-  return false
+  return ids
 }

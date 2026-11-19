@@ -29358,7 +29358,8 @@
       "agentSleep": "Agent Sleep frees memory from idle agents. They resume when you open them.",
       "turnOnAgentSleep": "Turn on Agent Sleep",
       "agents": "Terminal agents are using most of it. Resources shows what each one uses.",
-      "yourTerminals": "Your terminals are using most of it. Resources shows what each one uses."
+      "yourTerminals": "Your terminals are using most of it. Resources shows what each one uses.",
+      "terminals": "Agents and terminals in Orca are using most of it. Resources shows what each one uses."
     },
     "idleAgents": {
       "autoStop": "Their agents are still using memory. Auto-stop pauses idle chats, and they pick up again when you send a message.",

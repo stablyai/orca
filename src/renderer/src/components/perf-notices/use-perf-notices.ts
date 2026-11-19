@@ -28,7 +28,8 @@ const HOUR = 60 * MINUTE
 const LOW_MEMORY_HOLD_MS = 2 * MINUTE
 // Why: each owner check takes a full process snapshot, so a failed one waits hours, not minutes.
 const OWNER_SHARE_RECHECK_MS = 6 * HOUR
-const IDLE_AGENT_RECHECK_MS = 10 * MINUTE
+// Why: proving idle agents lists local sessions, so a check without a toast waits an hour.
+const IDLE_AGENT_RECHECK_MS = HOUR
 const HIDDEN_TABS_RECHECK_MS = 10 * MINUTE
 const AGENT_SLEEP_IDLE_MS = 30 * MINUTE
 const TYPING_QUIET_MS = 5_000
@@ -82,7 +83,12 @@ async function memoryLowNotice(now: number, blocked: Gate): Promise<PerfNotice |
   }
   return {
     id: 'memory-low',
-    variant: split.agents.memory >= split.yourProcesses.memory ? 'agents' : 'your-terminals'
+    variant:
+      split.agents.memory / used >= TERMINAL_SHARE_MIN
+        ? 'agents'
+        : split.yourProcesses.memory / used >= TERMINAL_SHARE_MIN
+          ? 'your-terminals'
+          : 'terminals'
   }
 }
 
@@ -95,7 +101,10 @@ async function idleAgentsNotice(now: number, blocked: Gate): Promise<PerfNotice 
   if (blocked()) {
     return null
   }
-  const idle = countIdleAgents(useAppStore.getState(), candidates, sessions)
+  // Why: agents may have started working during the listing; only rows still idle count.
+  const state = useAppStore.getState()
+  const stillIdle = idleAgentCandidates(state, Date.now())
+  const idle = countIdleAgents(state, stillIdle, sessions)
   if (idle.terminal + idle.chats < IDLE_AGENT_MIN) {
     return null
   }
@@ -140,6 +149,10 @@ async function evaluate(
       notice = await memoryLowNotice(now, blocked)
     }
   }
+  // Why: a blocked step admits no further work; the next tick starts over.
+  if (blocked()) {
+    return CADENCE.tight
+  }
   if (
     !notice &&
     now - tracking.idleCheckedAt >= IDLE_AGENT_RECHECK_MS &&
@@ -147,6 +160,9 @@ async function evaluate(
   ) {
     tracking.idleCheckedAt = now
     notice = await idleAgentsNotice(now, blocked)
+  }
+  if (blocked()) {
+    return CADENCE.tight
   }
   if (
     !notice &&
@@ -181,7 +197,8 @@ function startPerfNoticeLoop(): () => void {
     Date.now() - lastKeyAt < TYPING_QUIET_MS ||
     useAppStore.getState().activeModal !== 'none' ||
     isResourceManagerOpen()
-  const blocked: Gate = () => disposed || !document.hasFocus() || isQuietTime()
+  const blocked: Gate = () =>
+    disposed || !document.hasFocus() || isQuietTime() || Date.now() - lastActivityAt >= USER_AWAY_MS
   const clear = (): void => {
     if (timer !== null) {
       clearTimeout(timer)
