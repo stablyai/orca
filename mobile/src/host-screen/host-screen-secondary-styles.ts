@@ -50,11 +50,6 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
   sectionPendingSpinner: {
     marginLeft: spacing.sm
   },
-  // At the header's end, as the desktop's Bots + is.
-  sectionNewBot: {
-    marginLeft: 'auto',
-    paddingHorizontal: spacing.xs
-  },
   separator: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle,
