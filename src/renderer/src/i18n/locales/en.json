@@ -26004,7 +26004,11 @@
     },
     "background": {
       "title": "Background",
-      "empty": "Nothing is running in the background for this chat. Tests, scripts and subagents the agent starts show up here."
+      "empty": "Nothing is running in the background for this chat. Tests, scripts and subagents the agent starts show up here.",
+      "outputLoading": "Reading output…",
+      "outputUnavailable": "The output could not be read.",
+      "outputEmpty": "No output yet",
+      "outputNotShared": "This agent does not share the output of its shells."
     }
   }
 }

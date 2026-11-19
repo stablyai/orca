@@ -4,6 +4,7 @@ import { NativeChatBackgroundTasksStatus } from '../../native-chat/tools/tasks/N
 import type { AgentSessionBackgroundTask } from '../../../../../shared/agent-session/agent-session-background-task-wire'
 import ZotzBackgroundPanel from './ZotzBackgroundPanel'
 import { ZotzBackgroundTasksPortal } from './ZotzBackgroundTasksPortal'
+import type { ZotzBackgroundTaskOutputs } from './zotz-background-task-outputs'
 
 const now = Date.now()
 const tasks: AgentSessionBackgroundTask[] = [
@@ -30,12 +31,31 @@ const tasks: AgentSessionBackgroundTask[] = [
   }
 ]
 
-function PanelWithTasks(): React.JSX.Element {
+const testOutput = [
+  ' RUN  v5.0.5 /Users/me/code/zotz',
+  '',
+  ' ✓ src/main/zotz/zotz-cli-auto-registration.test.ts (3 tests) 12ms',
+  ' ✓ src/main/zotz/zotz-network-policy-guards.test.ts (3 tests) 18ms',
+  ' ✓ src/main/zotz/zotz-tailnet-source-guard.test.ts (6 tests) 31ms',
+  ' ❯ src/main/zotz/memory-governor/zotz-agent-launch-queue.test.ts (9 tests)',
+  '',
+  ' Test Files  3 passed | 1 running (4)',
+  '      Tests  12 passed (21)'
+].join('\n')
+
+// Only the test run published an output file; `pnpm dev` came from an agent that shares none.
+const outputs: ZotzBackgroundTaskOutputs = {
+  worktreeId: 'zotz::/Users/me/code/zotz',
+  outputFiles: new Map([['tests', '/private/tmp/claude-501/tasks/tests.output']]),
+  read: async () => testOutput
+}
+
+function PanelWithTasks({ height = 360 }: { height?: number }): React.JSX.Element {
   const [expanded, setExpanded] = useState(true)
   return (
-    <div className="flex h-[360px] flex-col border border-border bg-background">
+    <div style={{ height }} className="flex flex-col border border-border bg-background">
       <ZotzBackgroundPanel />
-      <ZotzBackgroundTasksPortal active>
+      <ZotzBackgroundTasksPortal active outputs={outputs}>
         <NativeChatBackgroundTasksStatus
           isVisible
           tasks={tasks}
@@ -66,4 +86,18 @@ export const empty = defineFixture({
       <ZotzBackgroundPanel />
     </div>
   )
+})
+
+// A shell row expands to its output; the agent row keeps opening its chat.
+export const shellExpanded = defineFixture({
+  width: 340,
+  render: () => <PanelWithTasks height={560} />,
+  interact: async () => {
+    for (const label of ['pnpm test', 'pnpm dev']) {
+      Array.from(document.querySelectorAll<HTMLButtonElement>('button[aria-expanded]'))
+        .find((button) => button.textContent?.includes(label))
+        ?.click()
+    }
+    await new Promise((resolve) => setTimeout(resolve, 200))
+  }
 })

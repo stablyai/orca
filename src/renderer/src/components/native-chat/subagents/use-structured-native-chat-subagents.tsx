@@ -11,6 +11,8 @@ import {
 } from './native-chat-open-subagent'
 import { NativeChatStructuredSubagentStatusBar } from './NativeChatSubagentStatusBar'
 import { ZotzBackgroundTasksPortal } from '@/components/zotz/background/ZotzBackgroundTasksPortal'
+import { useZotzChatTaskOutputs } from '@/components/zotz/background/use-zotz-chat-task-outputs'
+import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 
 /** A structured chat's agents strip and open subagent's bar, which share the strip's one Stop. */
 export function useStructuredNativeChatSubagents({
@@ -18,6 +20,7 @@ export function useStructuredNativeChatSubagents({
   paneKey,
   isVisible,
   isFocusedGroup,
+  tabId,
   controller
 }: {
   sessionId: string
@@ -25,7 +28,10 @@ export function useStructuredNativeChatSubagents({
   isVisible: boolean
   /** Zotz: only the visible, focused pane fills the right sidebar's Background panel. */
   isFocusedGroup?: boolean
+  /** Zotz: the chat's tab, whose worktree owns its shells' output files. */
+  tabId: string
   controller: {
+    messages?: readonly NativeChatMessage[]
     subagentRoster?: StructuredAgentSubagentRoster
     backgroundTasks: StructuredSessionBackgroundTasksView
     stopBackgroundTask: (taskId?: string) => Promise<AgentSessionCancelResult | null>
@@ -36,13 +42,17 @@ export function useStructuredNativeChatSubagents({
   const openId = open?.agentId ?? null
   const parentId = open?.parentId ?? null
   const stop = useStructuredSessionTaskStop(sessionId, controller)
+  const taskOutputs = useZotzChatTaskOutputs(tabId, controller.messages)
   return {
     /** The subagent whose view replaces the conversation and the composer; null for none. */
     openId,
     onKeyDown: (event: React.KeyboardEvent) => closeNativeChatSubagentOnEscape(event, paneKey),
     // Zotz: background work shows in the right sidebar's Background tab, not above the chat.
     strip: (
-      <ZotzBackgroundTasksPortal active={isVisible && isFocusedGroup !== false}>
+      <ZotzBackgroundTasksPortal
+        active={isVisible && isFocusedGroup !== false}
+        outputs={taskOutputs}
+      >
         <NativeChatStructuredSessionStatus
           sessionId={sessionId}
           paneKey={paneKey}

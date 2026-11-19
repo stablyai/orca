@@ -24378,7 +24378,11 @@
     },
     "background": {
       "title": "Segundo plano",
-      "empty": "No hay nada corriendo en segundo plano en esta conversación. Aquí aparecen las pruebas, scripts y subagentes que inicie el agente."
+      "empty": "No hay nada corriendo en segundo plano en esta conversación. Aquí aparecen las pruebas, scripts y subagentes que inicie el agente.",
+      "outputLoading": "Leyendo la salida…",
+      "outputUnavailable": "No se pudo leer la salida.",
+      "outputEmpty": "Todavía no hay salida",
+      "outputNotShared": "Este agente no comparte la salida de sus shells."
     }
   }
 }
