@@ -25,6 +25,7 @@ import {
 } from './activity-thread-virtual-items'
 import { ActivityThreadCollapseContext } from './activity-thread-collapse-context'
 import { useActivityThreadSelection } from './use-activity-thread-selection'
+import { useActivityInboxShortcuts } from './use-activity-inbox-shortcuts'
 import type {
   ActivityGroupBy,
   ThreadReadFilter
@@ -77,7 +78,8 @@ export function ActivityThreadListPane({
   showInlineActions = true,
   collapsedGroupKeys,
   onToggleGroupCollapse,
-  scrollTopRef
+  scrollTopRef,
+  onInboxDeselect
 }: {
   threadListRef?: React.RefObject<HTMLDivElement | null>
   threadListWidth?: number
@@ -117,6 +119,8 @@ export function ActivityThreadListPane({
   onToggleGroupCollapse?: (groupKey: string) => void
   /** Optional view-local scroll memory; updated without triggering React renders. */
   scrollTopRef?: React.MutableRefObject<number>
+  /** Enables inbox triage shortcuts; runs when the last row is cleared. */
+  onInboxDeselect?: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   const [internalCollapsedGroupKeys, setInternalCollapsedGroupKeys] = useState<Set<string>>(
@@ -175,11 +179,8 @@ export function ActivityThreadListPane({
     () => getActivityHeaderItemIndexes(virtualItems),
     [virtualItems]
   )
-  const { selectedKeys, handleSelectThread, getContextMenuTargets } = useActivityThreadSelection({
-    virtualItems,
-    scrollContainerRef,
-    onSelectThread
-  })
+  const selection = useActivityThreadSelection({ virtualItems, scrollContainerRef, onSelectThread })
+  const { selectedKeys, handleSelectThread, getContextMenuTargets } = selection
   const canMarkThreadUnread = useCallback(
     (thread: AgentPaneThread) => allowMarkUnreadWhenSelected || thread.paneKey !== selectedPaneKey,
     [allowMarkUnreadWhenSelected, selectedPaneKey]
@@ -290,6 +291,16 @@ export function ActivityThreadListPane({
           virtualItems: virtualizer.getVirtualItems()
         })
       : null
+  const hintNumberByPaneKey = useActivityInboxShortcuts({
+    onDeselect: onInboxDeselect,
+    selection,
+    selectedPaneKey,
+    selectedItemIndex,
+    virtualItems,
+    virtualizer,
+    activeStickyHeaderIndex,
+    onMarkThreadsRead
+  })
 
   const resizable = onResizeStart !== undefined
   return (
@@ -380,6 +391,7 @@ export function ActivityThreadListPane({
                     canMarkThreadUnread={canMarkThreadUnread}
                     compactMode={compactMode}
                     showJumpAction={showJumpAction}
+                    indexHints={hintNumberByPaneKey}
                   />
                 </div>
               )

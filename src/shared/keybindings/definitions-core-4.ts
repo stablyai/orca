@@ -79,6 +79,41 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     // Why: ship unbound like the sleeping toggle, so no existing chord is claimed on any platform.
     defaultBindings: platformBindings([])
   },
+  // Activity inbox triage. Orca-first keeps these working from the terminal a selection focuses; terminal-first hands them to TUIs.
+  // Why macOS only: Ctrl+Alt+Arrow/Backspace/digit are OS rotate/zap/workspace or AltGr text chords on Windows/Linux.
+  {
+    id: 'activity.nextThread',
+    title: 'Activity: Next Agent',
+    group: 'Agents',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'activity', 'inbox', 'agent', 'next', 'down', 'triage'],
+    defaultBindings: { darwin: ['Mod+Alt+ArrowDown'], linux: [], win32: [] }
+  },
+  {
+    id: 'activity.previousThread',
+    title: 'Activity: Previous Agent',
+    group: 'Agents',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'activity', 'inbox', 'agent', 'previous', 'up', 'triage'],
+    defaultBindings: { darwin: ['Mod+Alt+ArrowUp'], linux: [], win32: [] }
+  },
+  {
+    id: 'activity.clearAndNext',
+    title: 'Activity: Clear Agent and Go to Next',
+    group: 'Agents',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'activity', 'inbox', 'agent', 'clear', 'done', 'archive', 'next'],
+    defaultBindings: { darwin: ['Mod+Alt+Backspace'], linux: [], win32: [] }
+  },
+  {
+    id: 'activity.selectByIndex',
+    title: 'Activity: Select Agent 1–9',
+    group: 'Agents',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'activity', 'inbox', 'agent', 'select', 'number', 'digit', '1-9'],
+    // Why: one remappable row covers 1-9 (the stored chord is a representative).
+    defaultBindings: { darwin: ['Mod+Alt+1'], linux: [], win32: [] }
+  },
   {
     id: 'terminal.clearPaneTitle',
     title: 'Clear Pane Title',

@@ -26,7 +26,8 @@ export function ActivityThreadVirtualRow({
   canJumpToWorkspace,
   canMarkThreadUnread,
   compactMode,
-  showJumpAction
+  showJumpAction,
+  indexHints
 }: {
   item: ActivityVirtualItemDescriptor
   collapsed: boolean
@@ -45,6 +46,7 @@ export function ActivityThreadVirtualRow({
   canMarkThreadUnread: (thread: AgentPaneThread) => boolean
   compactMode: boolean
   showJumpAction: boolean
+  indexHints: ReadonlyMap<string, number> | null
 }): React.JSX.Element {
   const t = useTranslate()
   if (item.type === 'header') {
@@ -98,6 +100,7 @@ export function ActivityThreadVirtualRow({
             disableMarkUnread={!canMarkThreadUnread(item.thread)}
             showJumpAction={showJumpAction}
             previewSuppressed={menuOpen}
+            indexHint={indexHints?.get(item.thread.paneKey)}
           />
         </div>
       )}
