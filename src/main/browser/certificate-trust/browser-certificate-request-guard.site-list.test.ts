@@ -5,7 +5,10 @@ import {
   bindBrowserSessionToSiteListProfile,
   setBrowserProfileSiteList
 } from '../sessions/site-list/browser-session-site-list'
-import { watchDecisionBlockedMainFrames } from '../sessions/requests/browser-session-request-decisions'
+import {
+  setBrowserSessionRequestDecider,
+  watchDecisionBlockedMainFrames
+} from '../sessions/requests/browser-session-request-decisions'
 
 type Listener = (
   details: Partial<Electron.OnBeforeRequestListenerDetails>,
@@ -49,5 +52,37 @@ describe('browser profile site list in the request guard', () => {
 
     setBrowserProfileSiteList('profile-a', [])
     expect(send('https://tracker.test/pixel')).toEqual({})
+  })
+
+  it('re-checks the list after an extension decision that was still pending', async () => {
+    let listener: Listener | null = null
+    const fakeSession = {
+      webRequest: { onBeforeRequest: (next: Listener) => (listener = next) }
+    }
+    if (!isSession(fakeSession)) {
+      throw new Error('unreachable')
+    }
+    const session = fakeSession
+    bindBrowserSessionToSiteListProfile(session, 'profile-b')
+    new BrowserCertificateRequestGuard({ onBlockedMainFrame: vi.fn() }).installSession(session)
+    let settle: (response: Electron.CallbackResponse) => void = () => {}
+    const decider = {
+      beforeRequest: () => new Promise<Electron.CallbackResponse>((resolve) => (settle = resolve)),
+      beforeSendHeaders: (_s: Electron.Session, _d: unknown, headers: Record<string, string>) =>
+        headers,
+      headersReceived: () => null
+    }
+    setBrowserSessionRequestDecider(decider)
+    try {
+      setBrowserProfileSiteList('profile-b', ['example.com'])
+      const callback = vi.fn()
+      listener?.({ url: 'https://example.com/', resourceType: 'xhr' }, callback)
+      setBrowserProfileSiteList('profile-b', ['other.test'])
+      settle({})
+      await vi.waitFor(() => expect(callback).toHaveBeenCalled())
+      expect(callback.mock.calls[0][0]).toEqual({ cancel: true })
+    } finally {
+      setBrowserSessionRequestDecider(null)
+    }
   })
 })

@@ -108,9 +108,14 @@ export function answerBrowserSessionBeforeRequest(
   if (decision === null) {
     callback({})
   } else if ('then' in decision) {
-    decision.then(answer, (error: unknown) => {
+    // The list can change while the decision is pending.
+    const settled = (response: Electron.CallbackResponse): void =>
+      isBrowserSessionRequestOutsideSiteList(session, details.url)
+        ? answer({ cancel: true }, 'site-list')
+        : answer(response)
+    decision.then(settled, (error: unknown) => {
       warn('onBeforeRequest', error)
-      callback({})
+      settled({})
     })
   } else {
     answer(decision)
