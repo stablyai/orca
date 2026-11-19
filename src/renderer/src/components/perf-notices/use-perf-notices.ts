@@ -203,6 +203,7 @@ function startPerfNoticeLoop(): () => void {
   const isQuietTime = (): boolean =>
     Date.now() - lastKeyAt < TYPING_QUIET_MS ||
     useAppStore.getState().activeModal !== 'none' ||
+    useAppStore.getState().activeView === 'settings' ||
     isResourceManagerOpen()
   const isAway = (): boolean => Date.now() - lastActivityAt >= USER_AWAY_MS
   const activeUntil: ActiveUntil = () => lastActivityAt + USER_AWAY_MS
