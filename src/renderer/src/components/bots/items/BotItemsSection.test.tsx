@@ -128,7 +128,7 @@ it('keeps a chat’s items up when their re-read fails, saying so, with Retry', 
   expect(chat.retry).toHaveBeenCalledOnce()
 })
 
-it('lists Orca’s asks while items load and after, counting asks and items but not stopped runs', () => {
+it('counts Orca’s asks with items and shows all clear only after both are gone', () => {
   const { rerender } = render(
     <Section filter={NO_FILTER} read={null} state="loading" asks={SIGN_IN} />
   )
@@ -148,10 +148,8 @@ it('lists Orca’s asks while items load and after, counting asks and items but 
   expect(screen.getByRole('button', { name: 'Open Linear' })).toBeTruthy()
   expect(screen.getByText('Item 2')).toBeTruthy()
   expect(screen.getByRole('button', { expanded: true }).textContent).toBe('Needs you2')
-})
 
-it('says all clear only once no ask is left', () => {
-  const { rerender } = render(<Section filter={NO_FILTER} asks={SIGN_IN} />)
+  rerender(<Section filter={NO_FILTER} asks={SIGN_IN} />)
   expect(screen.queryByText('Nothing needs you and nothing is running.')).toBeNull()
 
   const planned = makeTestBotItem(3, { status: 'planned', lastActivityAt: NOW })
