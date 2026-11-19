@@ -85,10 +85,10 @@ export class DaemonPtyRouter implements IPtyProvider {
       const adapter =
         (opts.sessionId ? this.sessionAdapters.get(opts.sessionId) : undefined) ??
         (await findLegacySessionOwner(opts, this.current, this.legacy, this.legacyExitProof))
-      const target = await routeSpawnOrHold(opts, adapter, this.current, this.ownerResolver)
-      const result = await target.spawn(opts)
+      const held = await routeSpawnOrHold(opts, adapter, this.current, this.ownerResolver)
+      const result = await held.target.spawn(held.opts)
       if (!result.exitedBeforeSpawnReply) {
-        this.ownerResolver.recordRoute(result.id, target, result.incarnationId)
+        this.ownerResolver.recordRoute(result.id, held.target, result.incarnationId)
       }
       return result
     } finally {
