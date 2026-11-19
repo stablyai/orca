@@ -6,6 +6,7 @@ import { makeOpenFile } from '../slices/editor/types/open-file.test-fixture'
 import { makeTab } from '../terminals/testing/terminal-tab.test-fixture'
 import { makeTabGroup, makeUnifiedTab } from '../slices/tabs/tab-group.test-fixture'
 import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
+import type { CodexAccountRestart } from '../terminals/terminal-contracts'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
@@ -210,4 +211,58 @@ describe('removing a remote project keeps its local twin', () => {
       'tab-local'
     ])
   })
+  it.each([LOCAL_HOST, REMOTE_HOST])(
+    'retires only the removed %s restart in a surviving mixed tab',
+    async (hostId) => {
+      const store = seedTwins()
+      const tab = store.getState().tabsByWorktree[WORKTREE_ID][0]
+      const request = (host: 'local' | 'runtime:env-b', ptyId: string): CodexAccountRestart => ({
+        agent: 'codex',
+        requestId: `request-${host}`,
+        attemptId: `attempt-${host}`,
+        executorId: `executor-${host}`,
+        worktreeId: WORKTREE_ID,
+        tabId: tab.id,
+        tabCreatedAt: tab.createdAt,
+        leafId: null,
+        oldPtyId: ptyId,
+        hostId: host,
+        environmentId: host === LOCAL_HOST ? null : 'env-b',
+        phase: 'claimed',
+        startup: null,
+        startupInput: null
+      })
+      const local = request(LOCAL_HOST, 'pty-local')
+      const remote = request(REMOTE_HOST, remotePtyId)
+      const notices = {
+        'pty-local': { previousAccountLabel: 'old', nextAccountLabel: 'new' },
+        [remotePtyId]: { previousAccountLabel: 'old', nextAccountLabel: 'new' }
+      }
+      store.setState((state) => ({
+        tabsByWorktree: { [WORKTREE_ID]: [tab] },
+        unifiedTabsByWorktree: {
+          [WORKTREE_ID]: state.unifiedTabsByWorktree[WORKTREE_ID].filter(
+            (row) => row.id !== 'tab-remote'
+          )
+        },
+        ptyIdsByTabId: { [tab.id]: ['pty-local', remotePtyId] },
+        pendingPaneAccountRestarts: { local, remote },
+        codexRestartNoticeByPtyId: notices
+      }))
+      await store.getState().removeProject(PROJECT_ID, { hostId })
+      const state = store.getState()
+      expect(state.tabsByWorktree[WORKTREE_ID]?.map((row) => row.id)).toEqual(['tab-local'])
+      if (hostId === LOCAL_HOST) {
+        expect(state.pendingPaneAccountRestarts).toEqual({ remote })
+        expect(state.pendingPaneAccountRestarts.remote).toBe(remote)
+        expect(state.codexRestartNoticeByPtyId).toEqual({ [remotePtyId]: notices[remotePtyId] })
+        expect(ptyKill).toHaveBeenCalledWith('pty-local')
+      } else {
+        expect(state.pendingPaneAccountRestarts).toEqual({ local })
+        expect(state.pendingPaneAccountRestarts.local).toBe(local)
+        expect(state.codexRestartNoticeByPtyId).toEqual({ 'pty-local': notices['pty-local'] })
+        expect(ptyKill).not.toHaveBeenCalled()
+      }
+    }
+  )
 })
