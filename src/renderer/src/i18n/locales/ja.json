@@ -16099,11 +16099,9 @@
           "feature": {
             "tip": {
               "copy": {
-                "1fcdfc5fe8": "新機能",
                 "f98e9d1bad": "すべての Agent セッションを検索",
                 "990cc29865": "過去の会話を内容から見つけて、Agent が中断したところから再開できます。",
                 "91e2719807": "セッション検索を有効にする",
-                "52e9e84809": "ヒント",
                 "3eacedec93": "Orca CLI で Agent に Orca を操作させる",
                 "8d54d0ff53": "Agent が子ワークツリーを連携させ、ワークツリー間で通信できるようにします。",
                 "0080bc86eb": "CLI とスキルをインストール",
@@ -22288,16 +22286,17 @@
   },
   "featureTips": {
     "voice": {
-      "demoPrompt": "特殊なケースについてはこの差分を確認し、見つかったものについてはテストを追加してください。",
-      "startDictation": "ディクテーションを開始する",
-      "agentPromptTitle": "Agent プロンプト",
-      "listening": "リスニング…",
       "unassignedInstruction": "フォーカスされたペインで音声ディクテーションを開始する前に、ディクテーションショートカットを割り当てます。",
       "shortcutInstruction": "ターミナル、エディター、または Agent のプロンプトにフォーカスし、<shortcut/> を押すと音声入力を開始します。もう一度 <shortcut/> を押すと停止します。",
       "changeInSettings": "モデル、ディクテーションモード、ショートカットは、<link>設定 → 音声</link>でいつでも変更できます。",
       "title": "どのペインでも音声入力",
       "description": "フォーカス中のペインで音声ディクテーションを開始し、停止するには同じショートカットをもう一度押します。",
-      "cta": "音声ディクテーションを設定"
+      "cta": "音声ディクテーションを設定",
+      "demoFirstPhrase": "小さい画面でチェックアウトボタンがフッターに重なっています。",
+      "demoSecondPhrase": "テストも追加できる？",
+      "demoUserPrompt": "決済バッジを追加して",
+      "demoTabTitle": "チェックアウトのフッター",
+      "demoReply": "フッターに決済バッジを追加しました。"
     },
     "sessionSearch": {
       "ageHours": "2時間前",
@@ -22347,8 +22346,6 @@
       "description": "過去の会話を内容から見つけて、Agent が中断したところから再開できます。",
       "cta": "セッション検索を有効にする"
     },
-    "eyebrowNew": "新機能",
-    "eyebrowTip": "ヒント",
     "orcaCli": {
       "title": "Orca CLI で Agent に Orca を操作させる",
       "description": "Agent が子ワークツリーを連携させ、ワークツリー間で通信できるようにします。",

@@ -1,6 +1,5 @@
 import type { ComponentProps, JSX, ReactNode } from 'react'
 import { Trans } from 'react-i18next'
-import { Badge } from '@/components/ui/badge'
 import { i18n } from '@/i18n/i18n'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { cn } from '@/lib/class-names'
@@ -74,17 +73,6 @@ export function FeatureTipDialogFrame({
         </div>
       </DialogContent>
     </Dialog>
-  )
-}
-
-export function FeatureTipEyebrow({ label }: { label: string }): JSX.Element {
-  return (
-    <Badge
-      variant="outline"
-      className="mb-3 rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"
-    >
-      {label.toUpperCase()}
-    </Badge>
   )
 }
 

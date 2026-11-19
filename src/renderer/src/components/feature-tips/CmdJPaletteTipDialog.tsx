@@ -5,11 +5,7 @@ import { formatShortcutLabel, useShortcutLabel } from '@/lib/keyboard/useShortcu
 import { CmdJPaletteFeatureTipVisual } from './CmdJPaletteFeatureTipVisual'
 import { FeatureTipActions } from './FeatureTipActions'
 import { getLocalizedFeatureTipCopy } from './feature-tip-localized-copy'
-import {
-  FeatureTipDialogFrame,
-  FeatureTipEyebrow,
-  FeatureTipSettingsLine
-} from './FeatureTipDialogFrame'
+import { FeatureTipDialogFrame, FeatureTipSettingsLine } from './FeatureTipDialogFrame'
 import { useTranslate } from '@/i18n/use-translate'
 
 export function CmdJPaletteTipDialog({
@@ -52,8 +48,6 @@ export function CmdJPaletteTipDialog({
     >
       <DialogHeader className="gap-4 text-left">
         <div>
-          {/* Category label. */}
-          <FeatureTipEyebrow label={copy.eyebrow} />
           {/* Keep the shortcut inline so wide Windows/Linux bindings wrap naturally. */}
           <DialogTitle className="text-2xl font-semibold leading-tight tracking-tight md:text-[1.75rem]">
             {titlePrefix.trimEnd()}

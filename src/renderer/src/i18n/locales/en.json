@@ -17386,11 +17386,9 @@
           "feature": {
             "tip": {
               "copy": {
-                "1fcdfc5fe8": "New",
                 "f98e9d1bad": "Search every agent session",
                 "990cc29865": "Find any past conversation by what was said in it, then pick up where the agent left off.",
                 "91e2719807": "Turn on session search",
-                "52e9e84809": "Tip",
                 "3eacedec93": "Let agents drive Orca with the Orca CLI",
                 "8d54d0ff53": "Enable agents to coordinate child worktrees and communicate between worktrees.",
                 "0080bc86eb": "Install CLI & Skills",
@@ -23918,16 +23916,17 @@
   },
   "featureTips": {
     "voice": {
-      "demoPrompt": "Review this diff for edge cases and add tests for anything you find.",
-      "startDictation": "Start dictation",
-      "agentPromptTitle": "Agent prompt",
-      "listening": "Listening...",
       "unassignedInstruction": "Assign a dictation shortcut before starting voice dictation in a focused pane.",
       "shortcutInstruction": "Focus a terminal, editor, or agent prompt, then press <shortcut/> to start voice dictation. Press <shortcut/> again to stop.",
       "changeInSettings": "Change the model, dictation mode, or shortcut anytime in <link>Settings → Voice</link>.",
       "title": "Dictate into any pane",
       "description": "Start voice dictation in any focused pane, then use the shortcut again to stop.",
-      "cta": "Set up voice dictation"
+      "cta": "Set up voice dictation",
+      "demoFirstPhrase": "The checkout button overlaps the footer on small screens.",
+      "demoSecondPhrase": "Can you add a test?",
+      "demoUserPrompt": "Add payment badges",
+      "demoTabTitle": "Checkout footer",
+      "demoReply": "Added payment badges to the checkout footer."
     },
     "sessionSearch": {
       "enableFailed": "Could not turn on session search. Try again.",
@@ -23977,8 +23976,6 @@
       "description": "Find any past conversation by what was said in it, then pick up where the agent left off.",
       "cta": "Turn on session search"
     },
-    "eyebrowNew": "New",
-    "eyebrowTip": "Tip",
     "orcaCli": {
       "title": "Let agents drive Orca with the Orca CLI",
       "description": "Enable agents to coordinate child worktrees and communicate between worktrees.",

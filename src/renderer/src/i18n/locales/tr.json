@@ -21274,16 +21274,17 @@
   },
   "featureTips": {
     "voice": {
-      "demoPrompt": "Bu diff'i uç durumlar için inceleyin ve bulduğunuz her şey için test ekleyin.",
-      "startDictation": "Sesli yazmayı başlat",
-      "agentPromptTitle": "Ajan istemi",
-      "listening": "Dinleniyor...",
       "unassignedInstruction": "Odaklanmış bir bölmede sesli yazmayı başlatmadan önce bir sesli yazma kısayolu atayın.",
       "shortcutInstruction": "Bir terminale, düzenleyiciye veya ajan istemine odaklanın, ardından sesli dikteyi başlatmak için <shortcut/> tuşuna basın. Durdurmak için tekrar <shortcut/> tuşuna basın.",
       "changeInSettings": "Modeli, dikte modunu veya kısayolu istediğiniz zaman <link>Ayarlar → Ses</link> bölümünde değiştirin.",
       "title": "Herhangi bir bölmede sesli yazın",
       "description": "Odaklanmış bir bölmede sesli yazmayı başlatın, ardından durdurmak için aynı kısayolu tekrar kullanın.",
-      "cta": "Sesli yazmayı ayarla"
+      "cta": "Sesli yazmayı ayarla",
+      "demoFirstPhrase": "Küçük ekranlarda ödeme düğmesi altbilgiyle çakışıyor.",
+      "demoSecondPhrase": "Bir test ekler misin?",
+      "demoUserPrompt": "Ödeme rozetleri ekle",
+      "demoTabTitle": "Ödeme altbilgisi",
+      "demoReply": "Ödeme altbilgisine rozetler eklendi."
     },
     "sessionSearch": {
       "enableFailed": "Oturum araması açılmadı. Tekrar deneyin.",
@@ -21333,8 +21334,6 @@
       "description": "Geçmiş konuşmaları içlerinde söylenenlere göre bulun ve ajanın kaldığı yerden devam edin.",
       "cta": "Oturum aramasını aç"
     },
-    "eyebrowNew": "Yeni",
-    "eyebrowTip": "İpucu",
     "orcaCli": {
       "title": "Ajanların Orca CLI ile Orca'yı yönetmesini sağlayın",
       "description": "Ajanların alt worktree'leri koordine etmesini ve worktree'ler arasında iletişim kurmasını sağlayın.",
