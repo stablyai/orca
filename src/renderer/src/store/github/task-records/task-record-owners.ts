@@ -80,7 +80,8 @@ export abstract class TaskRecordOwners {
   private reconcileRecords(keys: readonly string[], scoped: boolean) {
     let changed = false
     const reconnected = new Set<BindingIncarnation>()
-    const kept = new Map<string, AcceptedTask>()
+    // Only a scoped pass needs its kept records, as the wake candidates for a reconnect.
+    const kept = scoped ? new Map<string, AcceptedTask>() : undefined
     for (const key of keys) {
       const record = this.records.get(key)
       if (!record) {
@@ -91,7 +92,7 @@ export abstract class TaskRecordOwners {
         changed = true
         continue
       }
-      kept.set(key, record)
+      kept?.set(key, record)
       if (record.binding !== observed) {
         reconnected.add(record.binding.incarnation)
       }
@@ -101,7 +102,10 @@ export abstract class TaskRecordOwners {
     }
     // A reconnect is a new chance for a read still owed on that binding.
     // A binding's records share its host, so a scoped pass already holds every candidate.
-    const candidates = scoped
+    if (reconnected.size === 0) {
+      return
+    }
+    const candidates = kept
       ? [...kept].flatMap(([key, record]) => (this.records.get(key) === record ? [record] : []))
       : undefined
     for (const incarnation of reconnected) {
