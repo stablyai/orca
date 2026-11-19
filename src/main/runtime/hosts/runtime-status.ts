@@ -56,6 +56,8 @@ import { WORKTREE_CREATE_RESULT_TTL_MS } from '../workspaces/creation/worktree-c
 
 import { MACHINE_NAME_PUBLISH_WAIT_MS } from './platform-probe/runtime-machine-name'
 import { getManagedServerActions } from './management/managed-server-actions-registry'
+import { isRemoteServerUpdaterConfigured } from './management/remote-server-updater'
+import { REMOTE_SERVER_UPDATE_CAPABILITY } from '../../../shared/remote-runtime/host-catalog/remote-server-update'
 import { getRecipeVmWaker } from '../workspaces/sleep/recipe-vm-waker-registry'
 import { HOST_RECIPE_VM_WAKE_CAPABILITY } from '../../../shared/remote-runtime/recipe-vm-wake'
 import { isDesktopBrowserBridgeHostEnabled } from '../desktop-browser-bridge/desktop-browser-bridge-registry'
@@ -94,6 +96,7 @@ export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEve
           capability !== SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY) &&
         (capability !== TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY ||
           supportsDurableTerminalPromptDelivery()) &&
+        (capability !== REMOTE_SERVER_UPDATE_CAPABILITY || isRemoteServerUpdaterConfigured()) &&
         // Only hosts running their own usage poller can consume saved keys.
         (capability !== USAGE_CREDENTIALS_RUNTIME_CAPABILITY || this.getUsageRateLimits() !== null)
     )
