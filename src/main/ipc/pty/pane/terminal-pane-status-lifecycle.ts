@@ -5,7 +5,8 @@ import { toSshExecutionHostId } from '../../../../shared/execution-host/executio
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import { paneKeyPtyId } from './key-state'
-import { ptyIncarnationById, ptyRootPidById } from '../provider/ownership-state'
+import { ptyIncarnationById } from '../provider/ownership-state'
+import { getRegisteredPtyPid } from '../../../memory/pty-registry'
 import { isLocalHookConnectionId } from '../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import { getProviderForPty } from '../provider/registry'
 import { inspectPtyProviderProcess } from '../../../providers/pty/process-inspection'
@@ -148,25 +149,19 @@ async function paneShellAlone(
  *  table instead, local or daemon alike. Windows shells stop no jobs, so the host's job census
  *  finding no child beside a shell foreground suffices there. Never fall back to a foreground
  *  name, which a live unrecognized agent shares. */
-// A PTY keeps its root process for its incarnation, so it pays at most one inventory per life.
+// Spawn and adoption publish the shell PID; only a host that published none needs the inventory.
 async function readPtyRootPid(
   provider: ReturnType<typeof getProviderForPty>,
-  ptyId: string,
-  incarnationId: string | undefined
+  ptyId: string
 ): Promise<number | undefined> {
-  const known = ptyRootPidById.get(ptyId)
-  if (known && known.incarnationId === incarnationId) {
-    return known.rootPid
+  const registered = getRegisteredPtyPid(ptyId)
+  if (registered) {
+    return registered
   }
   const processes = await provider
     .listProcesses({ ptyIds: [ptyId], targetOwnerOnly: true })
     .catch(() => [])
-  const rootPid = processes.find((entry) => entry.id === ptyId)?.rootProcessId
-  // Only a live incarnation main still tracks is cached; the PTY's teardown drops it.
-  if (rootPid && incarnationId && ptyIncarnationById.get(ptyId) === incarnationId) {
-    ptyRootPidById.set(ptyId, { incarnationId, rootPid })
-  }
-  return rootPid
+  return processes.find((entry) => entry.id === ptyId)?.rootProcessId
 }
 
 async function confirmShellAlone(
@@ -176,7 +171,7 @@ async function confirmShellAlone(
 ): Promise<boolean> {
   const provider = getProviderForPty(ptyId)
   if (process.platform !== 'win32') {
-    const rootPid = await readPtyRootPid(provider, ptyId, incarnationId)
+    const rootPid = await readPtyRootPid(provider, ptyId)
     return rootPid
       ? confirmRootShellAloneFromProcessTable(rootPid, {
           stoppedJobBlocks: stoppedAgentBlocks(agent)
