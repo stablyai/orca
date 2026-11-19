@@ -281,11 +281,16 @@ export async function checkThenCleanUpCodexHistory(args: {
   if (process.platform === 'linux') {
     return true
   }
-  if (!(await checkCodexHistoryLeftBehind(args))) {
+  // Once asked to stop, the run is unfinished even if the pass that asked has ended by the time it
+  // returns: whatever it skipped is owed again rather than settled for this run.
+  let stopped = false
+  const shouldStop = (): boolean => (stopped ||= args.shouldStop())
+  if (!(await checkCodexHistoryLeftBehind({ ...args, shouldStop }))) {
     return false
   }
   const { deletedFiles, freedBytes } = await cleanUpCodexHistoryLeftBehind({
     ...args,
+    shouldStop,
     now: Date.now()
   })
   if (deletedFiles > 0) {
@@ -293,5 +298,5 @@ export async function checkThenCleanUpCodexHistory(args: {
       `[codex-account-history] Deleted ${deletedFiles} copies left behind in ${args.accountHome}, freeing ${freedBytes} bytes`
     )
   }
-  return !args.shouldStop()
+  return !shouldStop()
 }
