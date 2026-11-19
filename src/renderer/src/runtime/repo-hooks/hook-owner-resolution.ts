@@ -2,12 +2,12 @@ import type { AppState } from '@/store/types'
 import {
   projectGroupHookOwner,
   projectGroupHookTrustKey
-} from '../../../../shared/workspace-hook-owner'
+} from '../../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import {
   getRepoExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 
 export function findHookRepo(state: AppState, repoId: string, hostId?: ExecutionHostId) {
   const group = state.projectGroups.find(

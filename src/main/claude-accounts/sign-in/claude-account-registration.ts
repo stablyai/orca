@@ -3,8 +3,8 @@ import type {
   ClaudeAccountSignIn,
   ClaudeRateLimitAccountsState,
   ClaudeSignInRequest
-} from '../../../shared/managed-account-types'
-import { claudeStateFile, readClaudeFolderLogin } from './claude-account-folder'
+} from '../../../shared/agent-accounts/managed-account-types'
+import { claudeStateFile, isSameClaudeLogin, readClaudeFolderLogin } from './claude-account-folder'
 import type {
   ClaudeAccountRuntime,
   ClaudeAccountSelection,
@@ -98,16 +98,22 @@ export class ClaudeAccountRegistration {
       wslDistro: target.runtime === 'wsl' ? (target.wslDistro ?? null) : null
     } as const
     if (
-      !saved &&
-      // Compare current folder logins; saved identities may be stale.
-      findDuplicateClaudeAccount(selection.list().accounts, {
-        email: login.email,
-        organizationUuid: login.organizationUuid,
-        ...scope
-      })
+      // A saved account may sign in again as itself even when another folder now shares its login.
+      !(saved && isSameClaudeLogin(saved, login)) &&
+      // Host rows list their folder login; WSL rows list their saved identity.
+      findDuplicateClaudeAccount(
+        selection.list().accounts.filter((entry) => entry.id !== signIn.accountId),
+        { email: login.email, organizationUuid: login.organizationUuid, ...scope }
+      )
     ) {
-      await runtimeAuth.removeAccountFolder(signIn.accountId, target)
-      throw new Error('This Claude account is already added.')
+      if (!saved) {
+        await runtimeAuth.removeAccountFolder(signIn.accountId, target)
+        throw new Error('This Claude account is already added.')
+      }
+      // Claude already wrote this login into the account's folder, so the user must sign in again.
+      throw new Error(
+        `You signed in as ${describeLogin(login)}, which another Claude account already uses. Sign in again as ${describeLogin(saved)}.`
+      )
     }
     const now = Date.now()
     selection.saveSettings({
@@ -144,4 +150,9 @@ function signInTarget(request: ClaudeAccountSelectionTarget): ClaudeAccountSelec
   return target.runtime === 'wsl'
     ? { runtime: 'wsl', wslDistro: target.wslDistro }
     : { runtime: 'host' }
+}
+
+// Same-email rows differ only by organization, so name it when known.
+function describeLogin(login: { email: string; organizationName?: string | null }): string {
+  return login.organizationName ? `${login.email} (${login.organizationName})` : login.email
 }

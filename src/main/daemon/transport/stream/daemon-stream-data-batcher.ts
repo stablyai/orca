@@ -1,5 +1,5 @@
 import type { Socket } from 'node:net'
-import { NDJSON_MAX_LINE_BYTES } from '../../../../shared/main-process-ndjson-framer'
+import { NDJSON_MAX_LINE_BYTES } from '../../../../shared/json-stream/main-process-ndjson-framer'
 import { recordDaemonStreamBacklogEvent } from './daemon-stream-backlog-probe'
 import { DaemonStreamBackpressure } from './daemon-stream-backpressure'
 import {

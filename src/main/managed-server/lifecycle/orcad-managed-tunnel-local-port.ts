@@ -14,9 +14,9 @@ export async function buildOnBindableLocalPort<T>(
   environmentId: string,
   build: () => Promise<T>
 ): Promise<T> {
-  const savedPort = () =>
-    getOrcadSshDeployment(resolveEnvironment(userDataPath, environmentId))?.localPort
-  const saved = savedPort()
+  const savedPort = async () =>
+    getOrcadSshDeployment(await resolveEnvironment(userDataPath, environmentId))?.localPort
+  const saved = await savedPort()
   try {
     return await build()
   } catch (error) {
@@ -24,20 +24,20 @@ export async function buildOnBindableLocalPort<T>(
       throw error
     }
     // A concurrent build moved this server, superseding or failing ours; build on what it saved.
-    if (savedPort() !== saved) {
+    if ((await savedPort()) !== saved) {
       return build()
     }
     if (!(error instanceof Error) || !UNBINDABLE_LOCAL_PORT_CODES.has(error.cause)) {
       throw error
     }
     const localPort = await reserveLocalForwardPort(0)
-    if (savedPort() !== saved) {
+    if ((await savedPort()) !== saved) {
       return build()
     }
     console.warn(
       `[ssh] Moving the tunnel to this host’s Orca server from local port ${saved} to ${localPort}: ${error.message}`
     )
-    moveManagedOrcadLocalPort(userDataPath, environmentId, localPort)
+    await moveManagedOrcadLocalPort(userDataPath, environmentId, localPort)
     // Like a repair, the rebind retires transports and status owners still dialing the old port.
     await notifyManagedOrcadPairingRepaired(environmentId)
     return build()

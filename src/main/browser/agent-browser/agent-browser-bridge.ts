@@ -13,10 +13,9 @@ import type {
   BrowserNetworkLogResult
 } from '../../../shared/browser/runtime/runtime-browser-contracts'
 import { BrowserError } from '../browser-error'
-import {
-  assertAgentBrowserPassthroughStaysOnPage,
-  parseShellArgs
-} from './protocol/agent-browser-passthrough-arguments'
+import { parseShellArgs } from '../../../shared/shell-args'
+import { assertAgentBrowserPassthroughStaysOnPage } from './protocol/agent-browser-passthrough-arguments'
+import { agentBrowserCookieSetArguments } from './protocol/agent-browser-cookie-set-arguments'
 import { AgentBrowserBridgeInteractionCommands } from './commands/agent-browser-bridge-interaction-commands'
 import { sendGuestCdpCommand } from '../cdp/debugger/guest-cdp-command'
 import { deleteCookieByName } from '../cookies/browser-cookie-delete-by-name'
@@ -48,25 +47,7 @@ export class AgentBrowserBridge extends AgentBrowserBridgeInteractionCommands {
     browserPageId?: string
   ): Promise<BrowserCookieSetResult> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      const args = ['cookies', 'set', cookie.name ?? '', cookie.value ?? '']
-      if (cookie.domain) {
-        args.push('--domain', cookie.domain)
-      }
-      if (cookie.path) {
-        args.push('--path', cookie.path)
-      }
-      if (cookie.secure) {
-        args.push('--secure')
-      }
-      if (cookie.httpOnly) {
-        args.push('--httpOnly')
-      }
-      if (cookie.sameSite) {
-        args.push('--sameSite', cookie.sameSite)
-      }
-      if (cookie.expires != null) {
-        args.push('--expires', String(cookie.expires))
-      }
+      const args = agentBrowserCookieSetArguments(cookie)
       return (await this.execAgentBrowser(sessionName, args)) as BrowserCookieSetResult
     })
   }
@@ -169,7 +150,7 @@ export class AgentBrowserBridge extends AgentBrowserBridgeInteractionCommands {
       const session = this.sessions.get(sessionName)
       if (session) {
         this.pendingInterceptRestore.delete(sessionName)
-        session.activeInterceptPatterns = patterns ?? ['*']
+        session.activeInterceptPatterns = patterns?.length ? patterns : ['*']
       }
       return result
     })

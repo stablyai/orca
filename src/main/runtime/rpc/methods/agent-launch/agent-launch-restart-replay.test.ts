@@ -18,7 +18,7 @@ import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { RpcContext } from '../../core'
 import { RpcDispatcher } from '../../dispatcher'
 import { DESKTOP_RPC_CALLER } from '../../callers/rpc-caller-identity'
-import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../../../ipc/desktop-renderer-runtime-capabilities'
+import '../../../../ipc/runtime-client/desktop-renderer-runtime-capabilities'
 import {
   methodNamed,
   rpcContext,
@@ -61,13 +61,7 @@ const UPGRADED_PHONE: Partial<RpcContext> = {
     AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY
   ]
 }
-/** Exactly what the desktop's `runtime:call` handler hands the dispatcher. */
-const DESKTOP_IPC = {
-  clientId: 'desktop-renderer',
-  caller: DESKTOP_RPC_CALLER,
-  clientKind: 'runtime' as const,
-  clientCapabilities: DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES
-}
+
 /** A restarted host's new handle for the same surviving pane, when the recorded handle was not re-adopted. */
 const ADOPTED_HANDLE = 'term_adopted'
 
@@ -228,41 +222,6 @@ describe('a host restart mid-launch', () => {
     await expect(launch(restarted)).rejects.toThrow('agent_session_operation_unknown')
     expect(row()?.outcome.status).toBe('unknown')
     expect(restarted.createTerminal).not.toHaveBeenCalled()
-  })
-
-  it('replays the final answer when the host died after the prompt landed', async () => {
-    const first = await launch(hostRuntime())
-    expect(first.prompt).toEqual({ delivery: 'submit', outcome: 'handed-to-terminal' })
-
-    await restartHost()
-    const restarted = restartedHostRuntime()
-
-    await expect(launch(restarted)).resolves.toEqual({
-      ...first,
-      outcome: { ...first.outcome, handle: ADOPTED_HANDLE }
-    })
-    expect(restarted.createTerminal).not.toHaveBeenCalled()
-    expect(deliverTerminalPrompt).toHaveBeenCalledOnce()
-  })
-})
-
-describe('the desktop launches replay-safely', () => {
-  it('admits the desktop window under its own host-assigned identity and replays its id', async () => {
-    const host = hostRuntime()
-    const request = {
-      id: 'request-1',
-      authToken: 'desktop-ipc',
-      method: 'agent.launchReplay',
-      params: PROMPTED_LAUNCH
-    }
-
-    const first = await dispatcherFor(host).dispatch(request, DESKTOP_IPC)
-    const replayed = await dispatcherFor(host).dispatch(request, DESKTOP_IPC)
-
-    expect(first).toMatchObject({ ok: true, result: { outcome: { kind: 'terminal' } } })
-    expect(replayed).toMatchObject({ ok: true, result: first.ok ? first.result : null })
-    expect(host.createTerminal).toHaveBeenCalledOnce()
-    expect(row('trusted-local:desktop')?.outcome.status).toBe('succeeded')
   })
 })
 

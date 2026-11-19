@@ -66,12 +66,14 @@ export class PeerMailRelay {
     private readonly transport: () => OrchestrationEnvironmentTransport | null
   ) {}
 
-  ensure(): void {
+  ensure(targetEnvironmentId?: string): void {
     if (!this.transport()) {
       return
     }
     const db = this.runtime.getOrchestrationDb()
-    for (const environmentId of peerMailRelayEnvironments(db)) {
+    for (const environmentId of targetEnvironmentId === undefined
+      ? peerMailRelayEnvironments(db)
+      : [targetEnvironmentId]) {
       const current = this.loops.get(environmentId)
       if (current && !current.stopped && current.db === db) {
         continue
@@ -104,7 +106,7 @@ export class PeerMailRelay {
   private async run(environmentId: string, loop: Loop): Promise<void> {
     let failures = 0
     // Named while it is still paired, so a removal can say which server went.
-    const serverName = remoteServerName(this.runtime, environmentId)
+    const serverName = await remoteServerName(this.runtime, environmentId)
     // Ends with its last reason to pull; a later conversation or link starts a new loop through ensure().
     while (this.isCurrent(environmentId, loop) && peerMailRelayWants(loop.db, environmentId)) {
       try {
@@ -116,7 +118,7 @@ export class PeerMailRelay {
         }
         failures = 0
       } catch {
-        if (this.isEnvironmentRemoved(environmentId)) {
+        if (await this.isEnvironmentRemoved(environmentId)) {
           // A removed server cannot answer for its Runs' work again; their Tasks here fail with why.
           try {
             closeRemoteRunLinksOfRemovedServer(
@@ -145,9 +147,9 @@ export class PeerMailRelay {
   }
 
   /** A store read error keeps the loop retrying rather than ending it. */
-  private isEnvironmentRemoved(environmentId: string): boolean {
+  private async isEnvironmentRemoved(environmentId: string): Promise<boolean> {
     try {
-      return this.transport()?.hasEnvironment?.(environmentId) === false
+      return (await this.transport()?.hasEnvironment?.(environmentId)) === false
     } catch {
       return false
     }
@@ -155,7 +157,7 @@ export class PeerMailRelay {
 
   private async pullOnce(environmentId: string, loop: Loop): Promise<void> {
     // A re-pair is noticed here, not only by the next call through a link: its held Tasks fail now.
-    const server = this.runtime.resolveOrchestrationWorkerServer(environmentId)
+    const server = await this.runtime.resolveOrchestrationWorkerServer(environmentId)
     closeRemoteRunLinksOfChangedPairing(
       loop.db,
       remoteServerPin(server),
@@ -207,7 +209,7 @@ export class PeerMailRelay {
       }
       onlyHeldBack = false
       try {
-        const stored = this.importItem(loop.db, environmentId, item)
+        const stored = await this.importItem(loop.db, environmentId, item)
         // Wake before the ack: a replay after a failed ack finds the row stored and stays quiet.
         if (stored) {
           this.runtime.notifyMessageArrived(stored.to, stored.type)
@@ -266,13 +268,13 @@ export class PeerMailRelay {
   }
 
   /** A Run this Orca coordinates there owns its conversation's items; any other is a peer-mail reply. */
-  private importItem(
+  private async importItem(
     db: OrchestrationDb,
     environmentId: string,
     item: z.infer<typeof PulledPeerMail>['items'][number]
-  ): { to: string; type: MessageRow['type'] } | undefined {
+  ): Promise<{ to: string; type: MessageRow['type'] } | undefined> {
     if (getRemoteRunLink(db, item.conversationId)) {
-      const server = this.runtime.resolveOrchestrationWorkerServer(environmentId)
+      const server = await this.runtime.resolveOrchestrationWorkerServer(environmentId)
       return importRemoteOwnedItem(db, remoteServerPin(server), item, {
         name: server.name,
         notify: (handle, type) => this.runtime.notifyMessageArrived(handle, type)
@@ -304,22 +306,22 @@ export class PeerMailRelay {
     const handle = peerMailLocalRecipient(this.runtime, conversation)
     // Peer-mail replies come home to this Orca's own sender handle, never a terminal agent's id.
     const recipient = resolveBareOrchestrationRecipient({ runtime: this.runtime, db, handle })
-    const presented = presentImportedPeerItem({
+    const { from, body, ...carried } = presentImportedPeerItem({
       kind: 'peer_mail',
-      senderLabel: payload.data.senderLabel,
-      body: payload.data.body
+      ...payload.data
     })
     const stored = db.insertPeerMailMessage({
       conversationId: conversation.conversation_id,
       remoteParty: payload.data.fromAddress,
       message: {
         id: item.messageId,
-        from: presented.from,
+        from,
         to: recipient.ok ? recipient.to : handle,
         subject: payload.data.subject,
-        body: presented.body,
+        body,
         threadId: payload.data.threadId ?? undefined,
-        runId: recipient.ok ? recipient.runId : undefined
+        runId: recipient.ok ? recipient.runId : undefined,
+        ...carried
       }
     })
     return stored.duplicate ? undefined : stored.message

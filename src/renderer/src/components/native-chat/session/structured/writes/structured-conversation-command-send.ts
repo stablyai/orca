@@ -1,12 +1,12 @@
 import type {
   AgentSessionConversationCommand,
   AgentSessionConversationCommandResult
-} from '../../../../../../../shared/agent-session/agent-session-conversation-command'
+} from '../../../../../../../shared/agent-session/conversation-context/agent-session-conversation-command'
 import type { AgentSessionFailureFact } from '../../../../../../../shared/agent-session/failures/agent-session-failure'
 import { sayAgentSessionFailureTranslated } from '../../../messages/notices/agent-session-failure-words-text'
 import { agentSessionWriteNoticeText } from '../../../messages/notices/agent-session-write-notice-text'
 import { agentSessionVisibleFailureFacts } from '../../../../../../../shared/agent-session/failures/agent-session-visible-failures'
-import { pendingPromptsAllUnanswerableHere } from '../../../../../../../shared/agent-session/agent-session-approval-subject'
+import { pendingPromptsAllUnanswerableHere } from '../../../../../../../shared/agent-session/requests/prompts/agent-session-approval-subject'
 import type { StructuredPromptItem } from '../../../../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import type {
   AgentJournalRenderItem,
@@ -22,7 +22,7 @@ import {
   heldConversationCommandParts,
   structuredConversationCommandHold,
   type StructuredConversationCommandHold
-} from '../../../../../../../shared/structured-conversation-command-hold'
+} from '../../../../../../../shared/native-chat/input/commands/structured-conversation-command-hold'
 import type { StructuredAgentSessionWriteOutcome } from './use-structured-agent-session-mutate'
 import { structuredAgentSessionCommandWriteRefusalCause } from '../../../../../../../shared/agent-session/failures/structured-agent-session-command-refusal-cause'
 

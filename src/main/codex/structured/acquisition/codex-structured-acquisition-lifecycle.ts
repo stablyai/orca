@@ -1,3 +1,10 @@
+import {
+  agentSessionFailureFact,
+  providerDiagnosticOf
+} from '../../../../shared/agent-session/failures/agent-session-failure'
+import { providerSpawnAbsent } from '../../../provider-process/provider-executable-missing'
+import { providerOutcomeLost } from '../../../provider-process/provider-process-exit-status'
+import { providerStartupFailureFact } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import { cancelProcessAcquisition } from '@orca/process-host/cancel-process-acquisition'
 import '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import {
@@ -84,4 +91,14 @@ export async function cancelCodexAcquisitionAttempt(
     attempt.dispose?.()
   }
   return closed
+}
+
+/** Lost transport outcomes cannot be attributed to the agent. */
+export function codexAcquisitionExitFailure(error: Error, cancelled: boolean) {
+  if (cancelled || providerOutcomeLost(error)) {
+    return agentSessionFailureFact('hostFault')
+  }
+  return providerSpawnAbsent(error)
+    ? providerStartupFailureFact(error)
+    : agentSessionFailureFact('providerExited', { detail: providerDiagnosticOf(error) })
 }

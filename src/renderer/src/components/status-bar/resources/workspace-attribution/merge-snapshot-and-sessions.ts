@@ -1,6 +1,9 @@
 /** Merge local/paired-host samples and daemon sessions by project/workspace; unsampled metrics are null and paired rows are read-only. */
 
-import type { MemorySnapshot, WorktreeMemory } from '../../../../../../shared/process-stats-types'
+import type {
+  MemorySnapshot,
+  WorktreeMemory
+} from '../../../../../../shared/diagnostics/process-stats-types'
 import { parsePtySessionId } from '../../../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import type {

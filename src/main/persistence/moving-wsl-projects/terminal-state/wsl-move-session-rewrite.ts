@@ -4,8 +4,8 @@
  * shows the moved tabs before the host publishes. Native chats stay on this computer (owner
  * decision, option C), and terminals restart on the host, so neither is seeded.
  */
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import type { Tab } from '../../../../shared/tab-types'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { filterWorkspaceSessionTabs } from '../../../../shared/workspace-session/workspace-session-tab-filter'
 import { WORKSPACE_SESSION_FIELD_OWNERSHIP } from '../../../../shared/workspace-session/workspace-session-host-field-ownership'
 import {
@@ -20,7 +20,10 @@ import {
   filterWorkspaceRows,
   workspaceIdsNamedByPartition
 } from '../../../../shared/workspace-session/workspace-session-stranded-partition-adoption'
-import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
+import {
+  parseWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../../../shared/workspace/identity/workspace-scope'
 import type { WslMoveRewriteScope } from '../desktop-state/wsl-move-rewrite-scope'
 
 type SessionGlobals = Pick<

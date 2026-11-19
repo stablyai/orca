@@ -146,7 +146,12 @@ export class AutomationRunCompletionWatcher {
       }
     }
     this.reconciler.reconcile(
-      runs.filter((run) => run.status === 'dispatched' || run.status === 'dispatching')
+      runs.filter(
+        (run) =>
+          // A bot run's session, not a terminal, says when it ends.
+          (run.status === 'dispatched' && run.sessionKind !== 'chat') ||
+          run.status === 'dispatching'
+      )
     )
   }
 

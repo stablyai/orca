@@ -15,7 +15,7 @@ import {
 import { shouldSendSyntheticTitleFrame } from '../../runtime/terminal/title/synthetic-title-visibility'
 import { shouldCopySyntheticTitleFrameToPtyData } from '../../runtime/terminal/title/synthetic-title-frame-routing'
 import { mainProcessState as state } from '../main-process-state'
-import { CODEX_ASYNC_QUESTION_TOOL } from '../../../shared/codex-async-question-input'
+import { CODEX_ASYNC_QUESTION_TOOL } from '../../../shared/native-chat/input/questions/codex-async-question-input'
 
 // Agent redraws can overwrite one-shot OSC titles; reassert at Pi's 80ms cadence.
 const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']

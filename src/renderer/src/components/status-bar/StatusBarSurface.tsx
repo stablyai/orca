@@ -18,6 +18,7 @@ import { StatusBarUsageEmptyCta } from './usage/StatusBarUsageEmptyCta'
 import { StatusBarUsageChangeNotices } from './usage/StatusBarUsageChangeNotices'
 import { UpdateStatusSegment } from './updates/UpdateStatusSegment'
 import { SkillUpdateStatusSegment } from './updates/SkillUpdateStatusSegment'
+import { AgentCliUpdateStatusSegment } from './updates/AgentCliUpdateStatusSegment'
 import { NativeChatResumeStatusSegment } from './NativeChatResumeStatusSegment'
 import { CaffeinateStatusSegment } from './CaffeinateStatusSegment'
 import { PluginsStatusSegment } from './plugins/PluginsStatusSegment'
@@ -30,7 +31,7 @@ import { CodexSwitcherMenu } from './accounts/CodexSwitcherMenu'
 import { ProviderDetailsMenu } from './usage/ProviderDetailsMenu'
 import { AntigravityUsageMenu } from './usage/AntigravityUsageMenu'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
-import { ProviderSegment, UsageOverflowChip, getUsageTone } from './usage/StatusBarProviderSegment'
+import { ProviderSegment, UsageOverflowChip, isUsageUrgent } from './usage/StatusBarProviderSegment'
 import {
   UsageUnitLabel,
   getUsageUnitLabelState,
@@ -38,8 +39,10 @@ import {
 } from './usage/usage-unit-label'
 import { useStatusBarController } from './composition/use-status-bar-controller'
 import { isOwnerNotSetUpPlaceholder } from './usage/owner-usage-rate-limits'
+import { getAccountOwnerKey } from './accounts/owner-account-rows'
 import { StatusBarVisibilityMenu } from './composition/StatusBarVisibilityMenu'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
+import { GitBlameStatusSegment } from './GitBlameStatusSegment'
 
 const PetStatusSegment = lazyWithRetry(() =>
   import('./PetStatusSegment').then((module) => ({ default: module.PetStatusSegment }))
@@ -94,6 +97,7 @@ export function StatusBarSurface({
     isEmptyUsageState,
     isRefreshing,
     overflowing,
+    ownerUsage,
     petEnabled,
     remoteOwner,
     rosterProviders,
@@ -105,6 +109,7 @@ export function StatusBarSurface({
     showEmptyUsageCta,
     showFloatingTerminalToggle,
     showFloatingWorkspaceAttentionDot,
+    showGitBlame,
     showPorts,
     showResourceUsage,
     showSsh,
@@ -175,7 +180,7 @@ export function StatusBarSurface({
                       <span
                         key={p.provider}
                         data-usage-chip={p.provider}
-                        data-usage-urgent={getUsageTone(p) === 'urgent'}
+                        data-usage-urgent={isUsageUrgent(p)}
                         data-usage-percentage={usageChipShowsPercentage(p, usageMode, t)}
                         data-usage-collapsed={collapsedUsageProviders.includes(p.provider)}
                         aria-hidden={collapsedUsageProviders.includes(p.provider)}
@@ -234,6 +239,7 @@ export function StatusBarSurface({
                         return (
                           <ClaudeSwitcherMenu
                             claude={p}
+                            ownerUsage={ownerUsage}
                             compact={compact}
                             iconOnly={false}
                             asSubmenu
@@ -255,7 +261,9 @@ export function StatusBarSurface({
                       if (p.provider === 'codex') {
                         return (
                           <CodexSwitcherMenu
+                            key={getAccountOwnerKey(ownerUsage.owner)}
                             codex={p}
+                            ownerUsage={ownerUsage}
                             compact={compact}
                             iconOnly={false}
                             asSubmenu
@@ -323,8 +331,10 @@ export function StatusBarSurface({
           ) : null}
           <RemoteServerUpdateStatusSegment iconOnly={segmentsIconOnly} />
           <SkillUpdateStatusSegment iconOnly={segmentsIconOnly} />
+          <AgentCliUpdateStatusSegment iconOnly={segmentsIconOnly} />
           <NativeChatResumeStatusSegment iconOnly={segmentsIconOnly} />
           <UpdateStatusSegment compact={compact} iconOnly={segmentsIconOnly} />
+          {showGitBlame ? <GitBlameStatusSegment iconOnly={segmentsIconOnly} /> : null}
           <React.Suspense fallback={null}>
             {petEnabled ? <PetStatusSegment /> : null}
             {showResourceUsage ? (

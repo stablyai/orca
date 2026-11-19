@@ -9,14 +9,14 @@ import {
 import { useAppStore } from '@/store/index'
 import { getRuntimeFileReadScope } from '@/runtime/files/runtime-file-routing'
 import { readEditorCsvFileContent } from '../csv/preview/csv-file-content'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { requireRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
 import type { RuntimeWorkspaceFileRoute } from '@/lib/files/access/runtime-workspace-file-route'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId,
   toSshExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import {
   WORKTREE_OWNER_NOT_READY_ERROR,
   type EditorPanelFileContentLoader,

@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { isPublicOrchestrationAddress } from './mailbox/orchestration-agent-reference'
 import { WorkerApprovalPayloadSchema } from './approvals/worker-approval-payload'
-import { parseOrcaSessionAddress } from '../orca-session-address'
+import { parseOrcaSessionAddress } from '../agent-session/identity/orca-session-address'
 
 export const CrewParty = z.string().refine(isPublicOrchestrationAddress)
 export const CrewSubscribeParams = z.object({ party: CrewParty })

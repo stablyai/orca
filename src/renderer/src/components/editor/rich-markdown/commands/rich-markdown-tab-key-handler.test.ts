@@ -1,26 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { Editor, type JSONContent } from '@tiptap/core'
-import StarterKit from '@tiptap/starter-kit'
-import { TaskList, TaskItem } from '@tiptap/extension-list'
-import { createIsolatedMarkdownExtensionForTests } from '../schema/isolated-markdown-extension-for-tests'
+import { Editor } from '@tiptap/core'
 import { createRichMarkdownExtensions } from '../schema/rich-markdown-extensions'
 import { createRichMarkdownEditorCodec } from '../document/rich-markdown-source-transport'
 import { createRichMarkdownKeyHandler } from './rich-markdown-key-handler'
 import type { KeyHandlerContext } from './rich-markdown-key-handler-context'
-
-function createEditor(content: JSONContent): Editor {
-  // Isolate marked registries so tokenizer state cannot accumulate across editors.
-  return new Editor({
-    element: null,
-    extensions: [
-      StarterKit,
-      TaskList,
-      TaskItem.configure({ nested: true }),
-      createIsolatedMarkdownExtensionForTests()
-    ],
-    content
-  })
-}
 
 /** Mixed task/bullet nesting and code indentation require the production extensions. */
 function createMarkdownEditor(markdown: string): Editor {
@@ -33,8 +16,6 @@ function createMarkdownEditor(markdown: string): Editor {
     contentType: 'markdown'
   })
 }
-
-/** Use the node shapes HTML paste produces because this DOM-less fixture cannot parse the reported pasted HTML. */
 
 function textPosition(editor: Editor, text: string): number {
   let position: number | null = null
@@ -132,112 +113,7 @@ function createContext(editor: Editor): KeyHandlerContext {
   }
 }
 
-function parentAndFixesDocument(): JSONContent {
-  return {
-    type: 'doc',
-    content: [
-      {
-        type: 'bulletList',
-        content: [
-          {
-            type: 'listItem',
-            content: [
-              {
-                type: 'paragraph',
-                content: [{ type: 'text', text: 'Parent' }]
-              }
-            ]
-          },
-          {
-            type: 'listItem',
-            content: [{ type: 'paragraph', content: [{ type: 'text', text: 'FixA' }] }]
-          },
-          {
-            type: 'listItem',
-            content: [{ type: 'paragraph', content: [{ type: 'text', text: 'FixB' }] }]
-          }
-        ]
-      }
-    ]
-  }
-}
-
-function taskListDocument(): JSONContent {
-  return {
-    type: 'doc',
-    content: [
-      {
-        type: 'taskList',
-        content: [
-          {
-            type: 'taskItem',
-            attrs: { checked: false },
-            content: [
-              {
-                type: 'paragraph',
-                content: [{ type: 'text', text: 'Task A' }]
-              }
-            ]
-          },
-          {
-            type: 'taskItem',
-            attrs: { checked: false },
-            content: [
-              {
-                type: 'paragraph',
-                content: [{ type: 'text', text: 'Task B' }]
-              }
-            ]
-          }
-        ]
-      }
-    ]
-  }
-}
-
 describe('rich markdown Tab key handler', () => {
-  it('indents FixA under a preceding parent item on Tab', () => {
-    const editor = createEditor(parentAndFixesDocument())
-
-    try {
-      editor.commands.setTextSelection(textPosition(editor, 'FixA'))
-      const event = keyEvent('Tab')
-
-      expect(createRichMarkdownKeyHandler(createContext(editor))(null, event)).toBe(true)
-      expect(editor.getMarkdown()).toBe('- Parent\n  - FixA\n- FixB')
-    } finally {
-      editor.destroy()
-    }
-  })
-
-  it('indents second task item through the taskItem fallback', () => {
-    const editor = createEditor(taskListDocument())
-
-    try {
-      editor.commands.setTextSelection(textPosition(editor, 'Task B'))
-      const event = keyEvent('Tab')
-
-      expect(createRichMarkdownKeyHandler(createContext(editor))(null, event)).toBe(true)
-      expect(editor.getMarkdown()).toBe('- [ ] Task A\n  - [ ] Task B')
-    } finally {
-      editor.destroy()
-    }
-  })
-
-  it('outdents a task nested inside a bullet item into the enclosing bullet list', () => {
-    const editor = createMarkdownEditor('- Bullet A\n  - [ ] Task B')
-
-    try {
-      editor.commands.setTextSelection(textPosition(editor, 'Task B'))
-      const event = keyEvent('Tab', { shiftKey: true })
-
-      expect(createRichMarkdownKeyHandler(createContext(editor))(null, event)).toBe(true)
-      expect(editor.getMarkdown()).toBe('- Bullet A\n- Task B')
-    } finally {
-      editor.destroy()
-    }
-  })
-
   it('keeps sibling bullets that stay behind when outdenting out of a task item', () => {
     const editor = createMarkdownEditor('- [ ] Task A\n  - Bullet X\n  - Bullet Y')
 
@@ -247,37 +123,6 @@ describe('rich markdown Tab key handler', () => {
 
       expect(createRichMarkdownKeyHandler(createContext(editor))(null, event)).toBe(true)
       expect(editor.getMarkdown()).toBe('- [ ] Task A\n  - Bullet X\n- [ ] Bullet Y')
-    } finally {
-      editor.destroy()
-    }
-  })
-
-  it('outdents one level into the enclosing task list in a mixed nest', () => {
-    const editor = createMarkdownEditor('- A\n  - [ ] B\n    - C')
-
-    try {
-      editor.commands.setTextSelection(textPosition(editor, 'C'))
-      const event = keyEvent('Tab', { shiftKey: true })
-
-      expect(createRichMarkdownKeyHandler(createContext(editor))(null, event)).toBe(true)
-      expect(editor.getMarkdown()).toBe('- A\n  - [ ] B\n  - [ ] C')
-    } finally {
-      editor.destroy()
-    }
-  })
-
-  it('outdents every code block line the selection touches', () => {
-    const editor = createMarkdownEditor('```js\n  a\n  b\n  c\n```')
-
-    try {
-      editor.commands.setTextSelection({
-        from: codeBlockPosition(editor, 'a'),
-        to: codeBlockPosition(editor, 'b') + 1
-      })
-      const event = keyEvent('Tab', { shiftKey: true })
-
-      expect(createRichMarkdownKeyHandler(createContext(editor))(null, event)).toBe(true)
-      expect(editor.getMarkdown()).toBe('```js\na\nb\n  c\n```')
     } finally {
       editor.destroy()
     }

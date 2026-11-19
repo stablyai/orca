@@ -10,8 +10,8 @@ import {
   selectRuntimeAwareSshStatus
 } from '@/store/slices/ssh/runtime-environment-ssh-selectors'
 import { isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
-import type { SshConnectionStatus } from '../../../../../shared/ssh-types'
-import { isRuntimeOwnedSshTargetId } from '../../../../../shared/execution-host'
+import type { SshConnectionStatus } from '../../../../../shared/remote-runtime/ssh/ssh-types'
+import { isRuntimeOwnedSshTargetId } from '../../../../../shared/execution-host/execution-host'
 import { getOrcadSshDeployment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { isConnectedRuntimeHostState } from '../../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'

@@ -1,7 +1,7 @@
 import type { BrowserClientAutomationMethod } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import type { BrowserClientHostCommandEvent } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import { requiresBrowserClientFileChannel } from '../../../../shared/browser/client-hosting/browser-client-file-channel-methods'
-import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
+import { normalizeBrowserNavigationUrl } from '../../../../shared/browser/navigation/browser-url'
 import { executeBrowserClientUploadCommand } from '../../client-hosts/file-transfers/browser-client-upload-command'
 import type { BrowserClientFileChannelTransport } from '../../client-hosts/file-transfers/browser-client-file-channel-transport'
 import type { BrowserClientUploadStaging } from '../../client-hosts/file-transfers/browser-client-upload-staging'
@@ -68,6 +68,7 @@ export async function executeBrowserClientPageAutomationCommand(
   assertBrowserClientPageCommandNotAborted(signal)
   assertCurrentBrowserClientPageRenderer(page.renderer)
   const method = event.command.method
+  refuseDesktopFileAccess(method, event.command.params)
   const agent = event.command.agent !== false
   const run = (params: Record<string, unknown>): Promise<unknown> =>
     execute(
@@ -87,7 +88,10 @@ export async function executeBrowserClientPageAutomationCommand(
   }
   if (method !== 'browser.upload') {
     // Protocol v1 cannot honor remote download paths; never resolve them on the desktop.
-    throw new BrowserClientPageCommandError('browser_client_download_path_unsupported')
+    throw new BrowserClientPageCommandError('browser_client_download_path_unsupported', {
+      detail:
+        'download is not available for this page because it is shown on the paired desktop: the file would be saved there, not on this host.'
+    })
   }
   return executeBrowserClientUploadCommand({
     event,
@@ -96,6 +100,28 @@ export async function executeBrowserClientPageAutomationCommand(
     staging: fileChannel?.staging,
     run
   })
+}
+
+// Commands come from the page's runtime, so a path or file: URL must never name this desktop's files.
+function refuseDesktopFileAccess(
+  method: BrowserClientAutomationMethod,
+  params: Record<string, unknown>
+): void {
+  if (method === 'browser.exec') {
+    throw new BrowserClientPageCommandError('browser_client_exec_unsupported', {
+      detail:
+        'exec is not available for this page because it is shown on the paired desktop: raw commands and their file paths would run there, not on this host. Use the typed browser commands instead, such as a plain snapshot for page text.'
+    })
+  }
+  if (method === 'browser.goto' && typeof params.url === 'string') {
+    const normalized = normalizeBrowserNavigationUrl(params.url)
+    if (normalized?.startsWith('file:')) {
+      throw new BrowserClientPageCommandError('browser_client_page_navigation_invalid', {
+        detail:
+          'This page cannot open file: URLs because it is shown on the paired desktop: the file would be read there, not on this host.'
+      })
+    }
+  }
 }
 
 function requireCommandPage(

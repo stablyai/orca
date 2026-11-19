@@ -2,8 +2,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { getManagedOrcadFenceEnvironmentId } from '../../../../shared/managed-orcad-ssh-owner'
-import type { SshTarget } from '../../../../shared/ssh-types'
+import { getManagedOrcadFenceEnvironmentId } from '../../../../shared/remote-runtime/ssh/managed-orcad-ssh-owner'
+import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { OrcadMigrationManifest } from '../../../../shared/orcad-migration/orcad-migration-manifest'
 import {
   closeTestStores,

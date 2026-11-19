@@ -1,6 +1,7 @@
 import WebSocket, { type RawData } from 'ws'
-import { forEachWithConcurrency } from '../../../../shared/map-with-concurrency'
+import { forEachWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import type { RpcTransport } from '../transport'
+import { relayWebSocketOrigin } from './relay-websocket-origin'
 import type {
   MobileSocketTransport,
   MobileSocketTransportMetadata
@@ -39,23 +40,8 @@ type CloudRelayTransportOptions = {
   ) => void
 }
 
-function relayWebSocketOrigin(cellUrl: string): string {
-  const url = new URL(cellUrl)
-  if (url.pathname !== '/' || url.search || url.hash) {
-    throw new Error('relay_cell_url_must_be_an_origin')
-  }
-  if (url.protocol === 'https:') {
-    url.protocol = 'wss:'
-  } else if (url.protocol === 'http:') {
-    url.protocol = 'ws:'
-  } else {
-    throw new Error('relay_cell_url_must_use_http')
-  }
-  return url.origin
-}
-
 export class CloudRelayTransport implements RpcTransport, MobileSocketTransport {
-  private readonly cellWebSocketOrigin: string
+  private cellWebSocketOrigin: string
   private readonly relayHostId: string
   private generation: number
   private readonly createSocket: (url: string) => WebSocket
@@ -116,6 +102,11 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
       throw new Error('invalid_relay_generation_transition')
     }
     this.generation = generation
+  }
+
+  /** New data dials follow the control's path; open data sockets stay where they are. */
+  setDataOrigin(cellUrl: string): void {
+    this.cellWebSocketOrigin = relayWebSocketOrigin(cellUrl)
   }
 
   hasConnection(connectionId: string): boolean {

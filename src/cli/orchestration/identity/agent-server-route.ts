@@ -4,7 +4,7 @@ import { RuntimeClientError } from '../../runtime/connection/types'
 import { readInjectedAgentSessionId } from '../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import type { OrchestrationCallerShowResult } from '../../../shared/orchestration/orchestration-caller-status'
 import { renderOrchestrationArgv } from '../agent-view'
-import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY } from '../../../shared/orchestration/orchestration-runtime-capabilities'
 
 type AgentServerRoutedCommand = 'send' | 'worker-start' | 'check'

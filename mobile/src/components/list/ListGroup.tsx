@@ -129,7 +129,13 @@ const sectionHeaderStyles = themedStyleSheet(() => ({
 // Kept beside ListGroup for the same reason as SectionHeader: one module, one page chunk.
 type ListRowProps = {
   title: string
+  /** The title is a sentence (a fact, a message) and wraps rather than cutting off. */
+  wrapTitle?: boolean
   subtitle?: string
+  /** A muted mark in a fixed-width column before the title, e.g. an item's `#35`. */
+  marker?: string
+  /** Lines the subtitle may take before it cuts; two by default. */
+  subtitleLines?: number
   /** Richer content under the title, e.g. usage bars or a coloured status line. */
   detail?: ReactNode
   /** A slot for an icon or a status dot. */
@@ -143,6 +149,8 @@ type ListRowProps = {
   /** Draws a check: the row is the picked option. */
   selected?: boolean
   destructive?: boolean
+  /** Something new to read: the title bolder. */
+  strong?: boolean
   onPress?: () => void
   onLongPress?: () => void
   disabled?: boolean
@@ -156,7 +164,10 @@ type ListRowProps = {
 /** One row of a grouped list: 48 pt, or 60 with a subtitle, with a trailing value, chevron or check. */
 export function ListRow({
   title,
+  wrapTitle = false,
   subtitle,
+  marker,
+  subtitleLines = 2,
   detail,
   leading,
   value,
@@ -164,6 +175,7 @@ export function ListRow({
   navigates = false,
   selected,
   destructive = false,
+  strong = false,
   onPress,
   onLongPress,
   disabled = false,
@@ -179,27 +191,40 @@ export function ListRow({
     subtitle !== undefined && listRowStyles.rowTwoLine,
     disabled && listRowStyles.disabled
   ]
+  const main = (
+    <View style={listRowStyles.main}>
+      <Text
+        style={[
+          listRowStyles.title,
+          subtitle !== undefined && listRowStyles.titleEmphasis,
+          strong && listRowStyles.titleStrong,
+          destructive && listRowStyles.titleDestructive
+        ]}
+        numberOfLines={wrapTitle ? undefined : 1}
+      >
+        {title}
+      </Text>
+      {subtitle !== undefined ? (
+        <Text style={listRowStyles.subtitle} numberOfLines={subtitleLines}>
+          {subtitle}
+        </Text>
+      ) : null}
+      {detail}
+    </View>
+  )
   const content = (
     <>
       {leading !== undefined ? <View style={listRowStyles.leading}>{leading}</View> : null}
-      <View style={listRowStyles.main}>
-        <Text
-          style={[
-            listRowStyles.title,
-            subtitle !== undefined && listRowStyles.titleEmphasis,
-            destructive && listRowStyles.titleDestructive
-          ]}
-          numberOfLines={1}
-        >
-          {title}
-        </Text>
-        {subtitle !== undefined ? (
-          <Text style={listRowStyles.subtitle} numberOfLines={2}>
-            {subtitle}
+      {marker !== undefined ? (
+        <View style={listRowStyles.marked}>
+          <Text style={[listRowStyles.title, listRowStyles.marker]} numberOfLines={1}>
+            {marker}
           </Text>
-        ) : null}
-        {detail}
-      </View>
+          {main}
+        </View>
+      ) : (
+        main
+      )}
       {value !== undefined ? (
         <Text style={listRowStyles.value} numberOfLines={1}>
           {value}
@@ -258,8 +283,16 @@ const listRowStyles = themedStyleSheet(() => ({
   disabled: { opacity: feedback.disabledOpacity },
   leading: { width: LIST_LEADING_SLOT, alignItems: 'center', justifyContent: 'center' },
   main: { flex: 1, minWidth: 0, gap: 2 },
+  marked: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'flex-start' },
+  marker: {
+    minWidth: 48,
+    paddingRight: spacing.sm,
+    color: colors.textMuted,
+    fontVariant: ['tabular-nums']
+  },
   title: { fontSize: 15, color: colors.textPrimary },
   titleEmphasis: { fontWeight: '500' },
+  titleStrong: { fontWeight: '700' },
   titleDestructive: { color: colors.statusRed },
   subtitle: { fontSize: 13, color: colors.textSecondary },
   value: { fontSize: 15, color: colors.textSecondary, flexShrink: 1, maxWidth: 180 },

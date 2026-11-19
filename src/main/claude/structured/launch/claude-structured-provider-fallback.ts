@@ -1,7 +1,7 @@
 import {
   readClaudeModelFallback,
   claudeModelFallbackText
-} from '../../../../shared/native-chat/claude-model-fallback'
+} from '../../../../shared/native-chat/transcript/notices/claude-model-fallback'
 import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from '../../../../shared/agent-session/journal/agent-session-turn-notice'
 import type {
   AgentJournalPlainStatusItem,
@@ -27,7 +27,7 @@ import { isUnmodeledClaudeSystemFrame } from '../../../native-chat/agent-session
 import {
   isClaudeToolUseContent,
   isClaudeToolResultContent
-} from '../../../../shared/claude-tool-content'
+} from '../../../../shared/agent-hook-listener/providers/claude/transcripts/claude-tool-content'
 import type { ClaudeRowStamp } from '../../subagents/claude-provisional-row-corrections'
 import { writeClaudeStopReadings, type ClaudeStopCheck } from '../../claude-stop-readings'
 import { estimateStructuredAgentSessionItemBytes } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink-estimate'

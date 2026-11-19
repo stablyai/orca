@@ -1,5 +1,5 @@
-import type { Repo } from '../../../shared/repo-types'
-import { isFolderRepo } from '../../../shared/repo-kind'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import {
   resolveLocalProjectRuntimeForRepo,
   type ProjectRuntimeResolutionStore

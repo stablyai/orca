@@ -7,9 +7,12 @@ import {
   type ActiveRateLimitProvider
 } from './service-types'
 import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth/runtime-auth-types'
-import type { ClaudeStatusLineRateLimits } from '../../../shared/claude-statusline-rate-limits'
+import type { ClaudeStatusLineRateLimits } from '../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
 import type { NormalizedClaudeAccountSelectionTarget } from '../../claude-accounts/selection/runtime-selection'
-import type { ProviderRateLimits, RateLimitWindow } from '../../../shared/rate-limit-types'
+import type {
+  ProviderRateLimits,
+  RateLimitWindow
+} from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import {
   isSameClaudeUsageWindow,
   isStaleClaudeUsageWindow,
@@ -174,6 +177,8 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     }
     // Kept snapshots can outlive a reset; never relabel a past-reset window as live.
     const inherited = previous ? withoutResetWindows(previous, now) : null
+    // Statusline posts carry no plan; keep the one read for this same login, with its account.
+    const sameLogin = inherited?.usageMetadata?.authProvenance === snapshot.provenance
     // Partial statusline payloads leave unreported windows unchanged.
     const session = freshSession ?? inherited?.session ?? null
     const weekly = freshWeekly ?? inherited?.weekly ?? null
@@ -225,6 +230,7 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
         // Statusline lacks Fable scope and credits; retain the latest OAuth values.
         fableWeekly: inherited?.fableWeekly ?? null,
         extraUsage: inherited?.extraUsage ?? null,
+        ...(sameLogin && inherited.planType ? { planType: inherited.planType } : {}),
         updatedAt: Date.now(),
         error: null,
         status: 'ok',
@@ -233,7 +239,10 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
           lastSuccessfulSource: 'live-session',
           credentialSource: previous?.usageMetadata?.credentialSource,
           retryAtMs: previous?.usageMetadata?.retryAtMs,
-          authProvenance: snapshot.provenance
+          authProvenance: snapshot.provenance,
+          ...(sameLogin && inherited.usageMetadata?.readingAccount
+            ? { readingAccount: inherited.usageMetadata.readingAccount }
+            : {})
         }
       }
     })

@@ -4,6 +4,7 @@ import type {
 } from './client-state/bridge-rpc-client-contract'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { emitPageAppInactive } from './page-lifecycle/bridge-app-inactive'
+import { createPageSwapSafety } from './page-lifecycle/page-swap-safety'
 import type { SendRequestOptions } from '../../transport/rpc/unvalidated-rpc-request-port'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
@@ -134,6 +135,10 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     }
   })
 
+  // Requests still unanswered when the app left: the user may be waiting on an upload or a save.
+  let sentBeforeLeaving: readonly string[] | null = null
+  const pageDocument: Document | undefined = globalThis.document
+  const swapSafety = pageDocument === undefined ? null : createPageSwapSafety(pageDocument)
   const readInboundFrame = createBridgeInboundFrameReader({
     requests,
     subscriptions,
@@ -150,7 +155,23 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     acceptBack: back.press,
     // Only a page booted before its screen, with no init yet, is parked; the shell answers its ready on adoption.
     acceptParked: handshake.stop,
-    acceptAppInactive: emitPageAppInactive,
+    acceptAppInactive: () => {
+      sentBeforeLeaving = requests.ids()
+      swapSafety?.disarm()
+      emitPageAppInactive()
+    },
+    // A leave the page never heard leaves its requests unknown, so it never says safe.
+    acceptAppResumed: (round, reloading) => {
+      const sent = sentBeforeLeaving
+      const safe =
+        sent !== null &&
+        swapSafety !== null &&
+        swapSafety.answer(
+          sent.some((id) => requests.has(id)),
+          reloading ? () => notifications.notifySwapSafe(false, round) : null
+        )
+      notifications.notifySwapSafe(safe, round)
+    },
     acceptTerminalKey: (key, inputOwner) => terminalKeys.accept(key, inputOwner)
   })
 
@@ -300,7 +321,10 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     notifyHaptics: notifications.notifyHaptics,
     notifyPageFault: notifications.notifyPageFault,
     notifyPagePainted: notifications.notifyPagePainted,
-    notifyPageLocation: notifications.notifyPageLocation,
+    notifyPageLocation: (href) => {
+      swapSafety?.navigated()
+      notifications.notifyPageLocation(href)
+    },
     claimBack: back.claim,
     close,
     ...shellSessionListeners(shellSession),

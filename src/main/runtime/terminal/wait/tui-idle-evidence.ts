@@ -4,7 +4,7 @@ import {
   isFreshNonDoneAgentStatus
 } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { AgentStatusState } from '../../../../shared/agent-status/contracts/agent-status-types'
-import type { RuntimeTerminalWaitBlockedReason } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalWaitBlockedReason } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { getSyntheticAgentTerminalTitle } from '../../../../shared/agent-status/title/synthetic-agent-title'
 import { resolveTerminalTitlePolicyAgentType } from '../../../../shared/agent-status/title/terminal-title-agent-type'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
@@ -155,6 +155,9 @@ export type TuiIdleEvaluationInput = {
    *  composer marker where it draws one (Claude), else any visible byte after the command-start
    *  marker; true when the shell sends no marker. Corroborates name-only titles alongside quiet. */
   readCommandPainted?: () => boolean
+  /** The pane's idle status predates the command now running: like launch readiness, it counts only
+   *  with that command's own quiet paint. */
+  statusRetired?: boolean
 }
 
 export type TuiIdleVerdict =
@@ -283,7 +286,7 @@ function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
       ruled,
       input.record,
       input.quiescenceMs,
-      input.launchReadiness,
+      input.launchReadiness || input.statusRetired,
       input.readCommandPainted
     )
       ? READY_WEAK
@@ -294,7 +297,7 @@ function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
       input.record,
       input.agent,
       input.quiescenceMs,
-      input.launchReadiness,
+      input.launchReadiness || input.statusRetired,
       input.readCommandPainted
     )
   ) {

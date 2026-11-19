@@ -27,6 +27,7 @@ export const session = {
 }
 export const structuredSession = {
   asyncQuestionSourceScope: 'journal/host/session/epoch',
+  asyncQuestionSkip: null,
   session,
   isWorking: false,
   turnId: null,
@@ -189,7 +190,8 @@ function Harness(props: HarnessProps) {
     sessionId: null,
     getSendCompletionGeneration: () => 0,
     keyboardInset: 0,
-    hostName: null
+    hostName: null,
+    linkOpenMode: 'ask'
   })
 }
 export async function render(props: HarnessProps = lastProps ?? {}) {

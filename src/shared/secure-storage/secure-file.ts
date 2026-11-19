@@ -121,7 +121,13 @@ export function writeDurableSecureJsonFile(
 export function writeSecureFile(
   targetPath: string,
   contents: string,
-  options: { durable?: boolean; shouldPublish?: () => boolean } = {}
+  // ownerOnly: publish only a file owner-only permissions hold for, else nothing and false.
+  options: {
+    durable?: boolean
+    shouldPublish?: () => boolean
+    onPublished?: () => void
+    ownerOnly?: boolean
+  } = {}
 ): boolean {
   const dir = dirname(targetPath)
   if (!existsSync(dir)) {
@@ -135,8 +141,12 @@ export function writeSecureFile(
     // Create restricted on Windows: mode is ignored there, leaving inherited DACL exposure until a later fix.
     const restricted =
       process.platform === 'win32'
-        ? writeRestrictedWindowsFile(tmpFile, contents)
+        ? writeRestrictedWindowsFile(tmpFile, contents, false, { ownerOnly: options.ownerOnly })
         : writeModeRestrictedFile(tmpFile, contents)
+    if (options.ownerOnly && !restricted) {
+      rmSync(tmpFile, { force: true })
+      return false
+    }
     if (options.durable) {
       fsyncFileSync(tmpFile)
     }
@@ -147,6 +157,7 @@ export function writeSecureFile(
     }
     // The rename publishes the staged inode, so its DACL or mode is already the published file's.
     renameSync(tmpFile, targetPath)
+    options.onPublished?.()
     // Cache only on confirmed success so failures retry; a success also clears the read path's backoff.
     if (restricted) {
       rememberHardenedPath(targetPath, false)

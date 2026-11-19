@@ -3,7 +3,7 @@ import { recordMobileViewOpened } from '../../../../telemetry/mobile-client-tele
 import type {
   NativeChatTranscriptFrame,
   NativeChatTranscriptPage
-} from '../../../../../shared/native-chat/native-chat-transcript-frames'
+} from '../../../../../shared/native-chat/transcript/streaming/native-chat-transcript-frames'
 import { resolveNativeChatTranscriptAgent } from '../../../../../shared/native-chat/native-chat-agent-support'
 import { subscribeNativeChatTranscript } from '../../../../native-chat/transcript-watch'
 import { readNativeChatTranscriptTail } from '../../../../native-chat/transcript-tail-reader'

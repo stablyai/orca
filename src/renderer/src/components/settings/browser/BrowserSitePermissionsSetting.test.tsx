@@ -3,8 +3,8 @@
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { BrowserSitePermissionEntry } from '../../../../../shared/browser-site-permission'
-import type { BrowserSessionProfile } from '../../../../../shared/browser-workspace-types'
+import type { BrowserSitePermissionEntry } from '../../../../../shared/browser/site-settings/browser-site-permission'
+import type { BrowserSessionProfile } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 
 const storeState = vi.hoisted(() => {
   const profile = (id: string, label: string): BrowserSessionProfile => ({

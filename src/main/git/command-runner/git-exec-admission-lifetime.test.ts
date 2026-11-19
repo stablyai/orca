@@ -12,6 +12,8 @@ const restorePlatform = vi.hoisted(() => {
 })
 afterAll(restorePlatform)
 
+const { groupExists } = vi.hoisted(() => ({ groupExists: vi.fn(() => true) }))
+
 const {
   execFileMock,
   spawnMock,
@@ -35,6 +37,7 @@ vi.mock('./process-capture/spawned-command-tree-kill', () => ({
   killSpawnedCommandTree: killSpawnedCommandTreeMock
 }))
 vi.mock('@orca/process-host/process-tree-termination', () => ({
+  processGroupExists: groupExists,
   signalProcessTree: signalProcessTreeMock,
   forceTerminateProcessTree: forceTerminateProcessTreeMock
 }))
@@ -63,6 +66,7 @@ import { GitAdmissionScheduler } from '../../../shared/git/admission/git-admissi
 
 describe('git exec admission lifetime', () => {
   beforeEach(() => {
+    groupExists.mockReturnValue(true)
     vi.useFakeTimers()
     execFileMock.mockReset()
     spawnMock.mockReset()

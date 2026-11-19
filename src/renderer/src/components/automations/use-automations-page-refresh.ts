@@ -62,7 +62,8 @@ export function useAutomationsPageRefresh({
       const managersSettled = reloadExternalManagers().catch(() => undefined)
       try {
         const nextAutomations = await listAutomationsForTarget(target)
-        setAutomations(nextAutomations)
+        // A bot's waits are listed in its sidebar, never with automations.
+        setAutomations(nextAutomations.filter((automation) => !automation.once))
         setAutomationHostTargetKey(getAutomationHostTargetKey(target))
         setFailedAuthorityKeys((current) => {
           if (!current.has(authorityKey)) {

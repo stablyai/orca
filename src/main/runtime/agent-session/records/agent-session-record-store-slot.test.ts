@@ -6,11 +6,11 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { JournalSqlDatabase } from '../../../native-chat/agent-session-journal/database/journal-sql-database'
 import { openJournalDatabase } from '../../../native-chat/agent-session-journal/database/journal-database'
-import { journalDatabasePath } from '../../../native-chat/agent-session-journal/database/journal-host-database'
 import {
-  journalDomainDatabasePath,
-  openJournalDomainDatabase
-} from '../../../native-chat/agent-session-journal/database/journal-domain-database'
+  journalDatabasePath,
+  journalDomainDatabasePath
+} from '../../../native-chat/agent-session-journal/database/journal-host-database'
+import { openJournalDomainDatabase } from '../../../native-chat/agent-session-journal/database/journal-domain-database'
 import {
   journalSqlReaderPath,
   journalSqlWorkerPath
@@ -82,6 +82,19 @@ it('discovers saved SQL chats after restart and consults the old store only befo
     db.close()
   }
   await rm(oldPath)
+  expect(hasPersistedStructuredAgentSessionStore(stateDirectory)).toBe(true)
+})
+
+it('still opens the store when cleanup deleted the last chat before its rows were gone', () => {
+  const { db } = openJournalDomainDatabase(journalDomainDatabasePath(stateDirectory))
+  try {
+    db.prepare('INSERT INTO agent_session_store_meta VALUES(?,?)').run(
+      'journal.forgotten-chat:deleted-chat',
+      '1'
+    )
+  } finally {
+    db.close()
+  }
   expect(hasPersistedStructuredAgentSessionStore(stateDirectory)).toBe(true)
 })
 

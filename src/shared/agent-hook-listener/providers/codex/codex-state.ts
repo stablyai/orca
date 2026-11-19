@@ -1,7 +1,7 @@
 import type { AgentMainAgentStatus } from '../../../agent-status/lifecycle/main-agent-status'
 import type { ParsedAgentStatusPayload } from '../../../agent-status/contracts/agent-status-types'
 import { isAskUserQuestionTool } from '../../../agent-status/lifecycle/agent-question-answered-intent'
-import { CODEX_ASYNC_QUESTION_TOOL } from '../../../codex-async-question-input'
+import { CODEX_ASYNC_QUESTION_TOOL } from '../../../native-chat/input/questions/codex-async-question-input'
 import {
   continueMainAgentStatus,
   foldAgentLeadStatus,
@@ -14,13 +14,14 @@ import {
   finishCodexSubagent,
   seedCodexSubagentRoster,
   type CodexSubagentRoster
-} from '../../../codex-subagent-roster'
+} from './codex-subagent-roster'
 import {
   createCodexSubagentTranscriptState,
   hasTrackedCodexTranscriptSubagents,
   type CodexSubagentTranscriptState
-} from '../../../codex-subagent-transcript'
+} from './codex-subagent-transcript'
 import type { HookListenerState } from '../../listener-state'
+import { parentReadDeferred } from './codex-rollout-prefetch-scope'
 import type { CodexLeadTurnState } from '../../main-agent-turn-state'
 
 export function getOrCreateCodexSubagentRoster(
@@ -49,6 +50,16 @@ export function getOrCreateCodexSubagentTranscriptState(
 
 export function hasCodexTranscriptSubagents(state: HookListenerState, paneKey: string): boolean {
   return hasTrackedCodexTranscriptSubagents(state.codexSubagentTranscriptByPaneKey.get(paneKey))
+}
+
+/**
+ * Whether a replayed hook left rollout work only the transcript poll can do: a child whose path is
+ * unresolved, or a parent read the replay scope gave up on. A stale root-only row would otherwise
+ * poll a dead rollout forever.
+ */
+export function codexReplayLeftTranscriptWork(state: HookListenerState, paneKey: string): boolean {
+  const subagents = state.codexSubagentTranscriptByPaneKey.get(paneKey)?.subagents.values()
+  return parentReadDeferred() || [...(subagents ?? [])].some((child) => !child.filePath)
 }
 
 /** The only writer of the root record; the root's clock keeps continuity across same-state writes. */

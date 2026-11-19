@@ -1,7 +1,8 @@
 // Chat operations through the host RPC surface both arms serve, with envelopes built by each arm's own protocol bundle.
 // Its AppStore import also declares the window.__store and window.api globals these page.evaluate callbacks use.
-import type { AppStore } from '../../../../tests/e2e/helpers/runtime-types'
+import type { AppStore } from '../../../../tests/e2e/desktop/renderer-probes/runtime-types'
 import { randomUUID } from 'node:crypto'
+import { createOrcaSessionId } from '../../../../src/shared/agent-session/identity/orca-session-address'
 import type { Page } from '@stablyai/playwright-test'
 import { operationId, type Arm } from './native-chat-4a-arm'
 import { rendererTime, rpc, visibleChatState } from './native-chat-4a-probes'
@@ -61,7 +62,7 @@ export async function createChat(
   worktreeId: string,
   forkFrom?: { sessionId: string; throughItemId: string }
 ) {
-  const sessionId = arm.protocol.createStructuredAgentSessionId('claude', randomUUID)
+  const sessionId = createOrcaSessionId(randomUUID)
   const worktree = `id:${worktreeId}`
   const params = {
     envelope: {

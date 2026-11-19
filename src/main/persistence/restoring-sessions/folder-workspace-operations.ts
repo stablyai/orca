@@ -1,23 +1,24 @@
-import { shouldAutoRenameWorkspaceTitle } from '../../../shared/workspace-title-language'
+import { shouldAutoRenameWorkspaceTitle } from '../../../shared/settings/workspace-title-language'
 import { FOLDER_WORKSPACE_REMOVAL_DOMAINS, type ProfileSaveDomains } from '../profile-save-domains'
 import { randomUUID } from 'node:crypto'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
-import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { Repo } from '../../../shared/repo-types'
-import type { RepoHostTarget } from '../../../shared/repo-host-identity'
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+import type { Repo } from '../../../shared/repository/repo-types'
+import type { RepoHostTarget } from '../../../shared/repository/repo-host-identity'
+import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { normalizeFolderWorkspaceName } from '../../../shared/folder-workspaces/folder-workspaces'
-import { getNextProjectGroupOrder } from '../../../shared/project-groups'
+import { getNextProjectGroupOrder } from '../../../shared/project/groups/project-groups'
 import { normalizeStoredTaskSourceContext } from '../../../shared/work-items/task-source-context'
 import { normalizeWorkspaceLinkedItem } from '../../../shared/workspace-attachments/workspace-linked-item'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-attachments/workspace-linked-item-source-context'
-import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { retireAtRestCommandContext } from '../../native-chat/agent-session-wire/options/at-rest-command-context'
 import { removeWorkspaceSessionOwnerEverywhere } from './session-owner-removal'
 import { findRepoRowForHostScopedWrite } from '../tracking-repos/repo-update-operations'
 import type { WorkspaceAttachmentMutation } from '../../../shared/workspace-attachments/workspace-attachment-mutation'
 import { normalizeWorkspaceAttachmentUpdate } from '../../../shared/workspace-attachments/workspace-attachments'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-list/feed/sidebar-inputs-switch'
+import { findFolderWorkspace } from './folder-workspace-index'
 
 export type FolderWorkspaceMutationOperations = {
   state: PersistedState
@@ -56,8 +57,9 @@ export class FolderWorkspacePersistenceOperations {
     )
   }
 
+  /** Keyed, not a scan (`findFolderWorkspace`). */
   getFolderWorkspace(id: string): FolderWorkspace | undefined {
-    return (this.state.folderWorkspaces ?? []).find((workspace) => workspace.id === id)
+    return findFolderWorkspace(this.state.folderWorkspaces ?? [], id)
   }
 
   createFolderWorkspace(input: {
@@ -186,8 +188,7 @@ export class FolderWorkspacePersistenceOperations {
     }
     if (updates.name !== undefined) {
       const name = normalizeFolderWorkspaceName(updates.name, workspace.name)
-      workspace.pendingFirstAgentMessageRename =
-        name === workspace.name && workspace.pendingFirstAgentMessageRename
+      workspace.pendingFirstAgentMessageRename &&= name === workspace.name
       workspace.name = name
     }
     if (typeof updates.folderPath === 'string' && updates.folderPath.trim().length > 0) {

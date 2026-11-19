@@ -171,8 +171,8 @@ describe('CLI close of one pane in a split tab', () => {
   // L255: expected main-owned headless pane-close failure until its fix lands.
 
   it('keeps the sibling when the stop delivers the exit before the pane commit', async () => {
-    const harness = createHarness()
-    harness.syncSplitFixtureGraph()
+    const harness = await createHarness()
+    await harness.syncSplitFixtureGraph()
     harness.setStopAndWaitAction((stoppingPtyId) => harness.runtime.onPtyExit(stoppingPtyId, 0))
     harness.setVerifiedStopResult(true)
     const terminal = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals.find(
@@ -187,5 +187,34 @@ describe('CLI close of one pane in a split tab', () => {
       type: 'leaf',
       leafId: SIBLING_LEAF_ID
     })
+  })
+})
+
+describe('CLI close of a headless single-pane tab', () => {
+  it('retires the renderer tab when the PTY exit already removed the durable tab', async () => {
+    const harness = await createHarness()
+    await harness.syncEmptyGraph()
+    const terminal = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals.find(
+      (candidate) => candidate.ptyId === PTY_ID
+    )!
+    // A surface without leaf PTY ids grants no PTY close authority, so the PTY is stopped before the tab close.
+    harness.editSession((session) => ({
+      ...session,
+      tabsByWorktree: {
+        [WORKTREE_ID]: session.tabsByWorktree[WORKTREE_ID]!.map((tab) => ({ ...tab, ptyId: null }))
+      },
+      terminalLayoutsByTabId: {
+        [TAB_ID]: { ...session.terminalLayoutsByTabId[TAB_ID]!, ptyIdsByLeafId: {} }
+      }
+    }))
+    await harness.runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    harness.setStopAndWaitAction((stoppingPtyId) => harness.runtime.onPtyExit(stoppingPtyId, 0))
+    harness.setVerifiedStopResult(true)
+
+    await expect(harness.runtime.closeTerminal(terminal.handle)).resolves.toMatchObject({
+      tabId: TAB_ID,
+      ptyKilled: true
+    })
+    expect(harness.closeTerminal).toHaveBeenCalledWith(TAB_ID)
   })
 })

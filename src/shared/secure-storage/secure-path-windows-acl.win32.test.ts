@@ -14,9 +14,9 @@ import {
   loadWindowsSecurity,
   resetWindowsSecurityLoadForTests,
   type WindowsSecurity
-} from '../windows-security-addon'
-import { CONTAINER_INHERIT_ACE, OBJECT_INHERIT_ACE } from '../windows-secure-dacl'
-import { removeTreeSync } from '../windows-transient-lock-removal'
+} from './windows-security-addon'
+import { CONTAINER_INHERIT_ACE, OBJECT_INHERIT_ACE } from './windows-secure-dacl'
+import { removeTreeSync } from '../file-write/windows-transient-lock-removal'
 
 /** Real NTFS read-back covers what fake addons cannot: relocated C:\ roots inheriting broad Modify access. Windows only. */
 const describeOnWindows = process.platform === 'win32' ? describe : describe.skip

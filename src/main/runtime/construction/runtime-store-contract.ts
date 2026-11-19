@@ -1,11 +1,12 @@
 import type { Store } from '../../persistence/loading-store/store'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { VoiceSettings } from '../../../shared/speech-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
+import type { VoiceSettings } from '../../../shared/speech/speech-types'
 
 export type RuntimeStore = {
   getRepos: Store['getRepos']
   getSshTargets?: Store['getSshTargets']
   getRepo: Store['getRepo']
+  getRepoForHost?: Store['getRepoForHost']
   addRepo: Store['addRepo']
   updateRepo: Store['updateRepo']
   addRetiredWorktreeName?: Store['addRetiredWorktreeName']
@@ -49,10 +50,12 @@ export type RuntimeStore = {
   getWorkspaceLineage?: Store['getWorkspaceLineage']
   getAllWorkspaceLineage?: Store['getAllWorkspaceLineage']
   setWorkspaceLineage?: Store['setWorkspaceLineage']
+  removeWorkspaceLineage?: Store['removeWorkspaceLineage']
   setFolderParentLineage?: Store['setFolderParentLineage']
   getCrossStoreWorkspaceLineage?: Store['getCrossStoreWorkspaceLineage']
   getAllCrossStoreWorkspaceLineage?: Store['getAllCrossStoreWorkspaceLineage']
   setCrossStoreWorkspaceLineage?: Store['setCrossStoreWorkspaceLineage']
+  removeCrossStoreWorkspaceLineage?: Store['removeCrossStoreWorkspaceLineage']
   getGitHubCache: Store['getGitHubCache']
   onGitHubCacheWritten?: Store['onGitHubCacheWritten']
   getWorkspaceSession?: Store['getWorkspaceSession']
@@ -81,6 +84,7 @@ export type RuntimeStore = {
   peekOrcadMigrationTerminalRestoreHint?: Store['peekOrcadMigrationTerminalRestoreHint']
   consumeOrcadMigrationTerminalRestoreHint?: Store['consumeOrcadMigrationTerminalRestoreHint']
   persistPtyBinding?: Store['persistPtyBinding']
+  retirePtyBinding?: Store['retirePtyBinding']
   getPtyBindingGeneration?: Store['getPtyBindingGeneration']
   getLayoutEditorViews?: Store['getLayoutEditorViews']
   admitTerminalPane?: Store['admitTerminalPane']
@@ -101,6 +105,7 @@ export type RuntimeStore = {
   automationOwnerPrecondition?: Store['automationOwnerPrecondition']
   automationChangeSelector?: Store['automationChangeSelector']
   listAutomationRuns?: Store['listAutomationRuns']
+  listAutomationRunsByAutomation?: Store['listAutomationRunsByAutomation']
   listAutomationRunsPage?: Store['listAutomationRunsPage']
   createAutomation?: Store['createAutomation']
   updateAutomation?: Store['updateAutomation']
@@ -108,6 +113,10 @@ export type RuntimeStore = {
   deleteAutomation?: Store['deleteAutomation']
   getSparsePresets?: Store['getSparsePresets']
   saveSparsePreset?: Store['saveSparsePreset']
+  getBots?: Store['getBots']
+  saveBot?: Store['saveBot']
+  removeBot?: Store['removeBot']
+  removeSparsePreset?: Store['removeSparsePreset']
   getMobileClientTabSelections?: Store['getMobileClientTabSelections']
   setMobileClientTabSelections?: Store['setMobileClientTabSelections']
   getSettings(): {
@@ -125,6 +134,8 @@ export type RuntimeStore = {
     agentWorkspaceTrustEnabled?: GlobalSettings['agentWorkspaceTrustEnabled']
     codexManagedAccounts?: GlobalSettings['codexManagedAccounts']
     codexShareHistoryAcrossAccounts?: GlobalSettings['codexShareHistoryAcrossAccounts']
+    codexSessionSourceHome?: GlobalSettings['codexSessionSourceHome']
+    deleteChatHistoryWithWorkspace?: GlobalSettings['deleteChatHistoryWithWorkspace']
     nestedWorkerMaxDepth?: GlobalSettings['nestedWorkerMaxDepth']
     orchestrationWorkerAutoReleaseEnabled?: GlobalSettings['orchestrationWorkerAutoReleaseEnabled']
     orchestrationCoordinatorApprovalsEnabled?: GlobalSettings['orchestrationCoordinatorApprovalsEnabled']
@@ -160,6 +171,8 @@ export type RuntimeStore = {
     followSymlinkedDirectories?: GlobalSettings['followSymlinkedDirectories']
     tabAutoGenerateTitle?: GlobalSettings['tabAutoGenerateTitle']
     terminalCopyTrimsGutter?: GlobalSettings['terminalCopyTrimsGutter']
+    terminalScrollbackRows?: GlobalSettings['terminalScrollbackRows']
+    terminalWordSeparator?: GlobalSettings['terminalWordSeparator']
     agentDefaultSurface?: GlobalSettings['agentDefaultSurface']
     nativeChatProviders?: GlobalSettings['nativeChatProviders']
     antigravityChatAuth?: GlobalSettings['antigravityChatAuth']
@@ -170,6 +183,7 @@ export type RuntimeStore = {
     defaultLinearTeamSelection?: GlobalSettings['defaultLinearTeamSelection']
     githubProjects?: GlobalSettings['githubProjects']
     experimentalNewWorktreeCardStyle?: GlobalSettings['experimentalNewWorktreeCardStyle']
+    botsEnabled?: GlobalSettings['botsEnabled']
     worktreeCardDetailsRow?: GlobalSettings['worktreeCardDetailsRow']
     compactWorktreeCards?: GlobalSettings['compactWorktreeCards']
     minimaxGroupId?: GlobalSettings['minimaxGroupId']
@@ -181,6 +195,8 @@ export type RuntimeStore = {
     sourceControlCompareAgainstUpstream?: GlobalSettings['sourceControlCompareAgainstUpstream']
     prAutoRefresh?: GlobalSettings['prAutoRefresh']
     diffShowWhitespace?: GlobalSettings['diffShowWhitespace']
+    newTabMenuLayout?: GlobalSettings['newTabMenuLayout']
+    floatingTerminalNewTabMenuLayout?: GlobalSettings['floatingTerminalNewTabMenuLayout']
     artifactSharingEnabled?: GlobalSettings['artifactSharingEnabled']
     terminalQuickCommands?: GlobalSettings['terminalQuickCommands']
     gitlabProjects?: GlobalSettings['gitlabProjects']
@@ -190,6 +206,7 @@ export type RuntimeStore = {
     machineName?: GlobalSettings['machineName']
     voice?: VoiceSettings
     claudeAgentTeamsMode?: GlobalSettings['claudeAgentTeamsMode']
+    claudeAccountSwitchRunningSessions?: GlobalSettings['claudeAccountSwitchRunningSessions']
     // Read query-responder kill switches per ingested chunk to capture reply ownership.
     terminalMainSideEffectAuthority?: GlobalSettings['terminalMainSideEffectAuthority']
     terminalHiddenDeliveryGate?: GlobalSettings['terminalHiddenDeliveryGate']
@@ -207,6 +224,7 @@ export type RuntimeStore = {
     nativeChatAutoContinueAfterUsageLimit?: GlobalSettings['nativeChatAutoContinueAfterUsageLimit']
     nativeChatIdleStopMinutes?: GlobalSettings['nativeChatIdleStopMinutes']
     nativeChatInlineVisuals?: GlobalSettings['nativeChatInlineVisuals']
+    nativeChatPromptSuggestions?: GlobalSettings['nativeChatPromptSuggestions']
     nativeChatInheritShellEnvironment?: GlobalSettings['nativeChatInheritShellEnvironment']
     nativeChatShellEnvironmentVariables?: GlobalSettings['nativeChatShellEnvironmentVariables']
     aiVaultSearch?: GlobalSettings['aiVaultSearch']

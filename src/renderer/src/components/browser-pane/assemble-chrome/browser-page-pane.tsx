@@ -2,14 +2,13 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/class-names'
 import '@/lib/workspace/ownership/connection-context'
-import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { useAppStore } from '@/store/index'
-import { useShortcutLabel } from '@/hooks/useShortcutLabel'
-import '../../../../../shared/constants'
+import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
+import '../../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
-import { normalizeExternalBrowserUrl } from '../../../../../shared/browser-url'
+import { normalizeExternalBrowserUrl } from '../../../../../shared/browser/navigation/browser-url'
 import { getLiveBrowserUrl } from '../describe-page/live-browser-url-registry'
-import { getBrowserViewportPreset } from '../../../../../shared/browser-viewport-presets'
+import { getBrowserViewportPreset } from '../../../../../shared/browser/guest-lifecycle/browser-viewport-presets'
 import {
   ensureBrowserPageViewport,
   scrollBrowserPageViewport,
@@ -54,6 +53,7 @@ export function BrowserPagePane({
   isAutomationVisible,
   isMobileDriven,
   isRemotelyViewed,
+  isMountAdmitted = false,
   inputLocked,
   onUpdatePageState,
   onSetUrl
@@ -124,7 +124,6 @@ export function BrowserPagePane({
     version: 0
   })
 
-  const workspaceConnectionId = useAppStore((state) => getConnectionIdFromState(state, worktreeId))
   const certificateFailure = useAppStore(
     (s) => s.browserCertificateFailuresByPageId[browserTab.id] ?? null
   )
@@ -202,6 +201,7 @@ export function BrowserPagePane({
     webviewPartition,
     isActive,
     isPaintable,
+    isMountAdmitted,
     slotViewport,
     viewportPresetId: browserTab.viewportPresetId ?? null,
     addressBarInputRef,
@@ -278,8 +278,8 @@ export function BrowserPagePane({
   const liveBrowserUrl = getLiveBrowserUrl(browserTab.id) ?? browserTab.url
   const externalUrl = getOpenableExternalUrl(liveBrowserUrl)
   const currentBrowserUrl = toDisplayUrl(liveBrowserUrl)
-  const shareableArtifactFile =
-    workspaceConnectionId === null ? getShareableBrowserArtifactFile(currentBrowserUrl) : null
+  // A file: page in this webview is always this machine's file, even in an SSH workspace.
+  const shareableArtifactFile = getShareableBrowserArtifactFile(currentBrowserUrl)
   const failedNavigationUrl = browserTab.loadError?.validatedUrl ?? currentBrowserUrl
   const failureExternalUrl = normalizeExternalBrowserUrl(failedNavigationUrl)
   const showFailureOverlay = Boolean(browserTab.loadError) && !isBlankTab

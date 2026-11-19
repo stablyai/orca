@@ -2,7 +2,7 @@ import { ipcRenderer } from 'electron'
 import type {
   WslDriveProjectConversionResult,
   WslDriveProjectPreview
-} from '../../../shared/wsl-drive-project-types'
+} from '../../../shared/wsl-move/wsl-drive-project-types'
 
 /** Converting a WSL project on a Windows drive to Windows Git; main gates every call. */
 export type WslDriveProjectApi = {

@@ -1,4 +1,4 @@
-import { isAntigravityReferenceSession } from '../../../../../../shared/antigravity-session-origin'
+import { isAntigravityReferenceSession } from '../../../../../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
 import type { AiVaultSubagentResumeActions } from './AiVaultSessionSubagents'
 import { useCallback } from 'react'
 import type React from 'react'
@@ -28,7 +28,7 @@ import {
   getSessionDetailsId,
   SessionMetadata
 } from './ai-vault-session-row-display'
-import type { AgentDotState } from '@/components/AgentStateDot'
+import type { AgentDotState } from '@/components/agent/status/AgentStateDot'
 import type { AiVaultSearchHit } from '../../../../../../shared/ai-vault/search/ai-vault-search-types'
 import { AiVaultSearchEvidence } from '../search/AiVaultSearchEvidence'
 import { useAiVaultSessionDisplayTitle } from './use-ai-vault-session-display-title'

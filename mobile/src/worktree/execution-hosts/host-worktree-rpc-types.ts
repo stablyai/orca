@@ -1,5 +1,5 @@
-import type { RepoIcon } from '../../../../src/shared/repo-icon'
-import type { ExecutionHostId } from '../../../../src/shared/execution-host'
+import type { RepoIcon } from '../../../../src/shared/repository/appearance/repo-icon'
+import type { ExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 
 export type DesktopStatus = {
   appVersion?: string

@@ -188,7 +188,9 @@ describe('command-finished drop and a Done that lands after it', () => {
       ).isClaudeAgent
     )
     mockStoreState.dropAgentStatus.mockImplementation((key: string) => {
-      delete mockStoreState.agentStatusByPaneKey[key]
+      mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+        [key, null]
+      ])
     })
     return {
       paneKey,
@@ -200,21 +202,27 @@ describe('command-finished drop and a Done that lands after it', () => {
         }
       },
       setEntry: (entry) => {
-        mockStoreState.agentStatusByPaneKey[paneKey] = {
-          state: 'done',
-          prompt: '',
-          agentType: 'brew',
-          paneKey,
-          updatedAt: 2_000,
-          stateStartedAt: 2_000,
-          stateHistory: [],
-          ...entry
-        }
+        mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+          [
+            paneKey,
+            {
+              state: 'done',
+              prompt: '',
+              agentType: 'brew',
+              paneKey,
+              updatedAt: 2_000,
+              stateStartedAt: 2_000,
+              stateHistory: [],
+              ...entry
+            }
+          ]
+        ])
       },
       setStatus: (state) => {
         realStore.getState().setAgentStatus(paneKey, { state, prompt: '', agentType: 'opencode' })
-        mockStoreState.agentStatusByPaneKey[paneKey] =
-          realStore.getState().agentStatusByPaneKey[paneKey]
+        mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+          [paneKey, realStore.getState().agentStatusByPaneKey.get(paneKey)!]
+        ])
       }
     }
   }
@@ -228,7 +236,7 @@ describe('command-finished drop and a Done that lands after it', () => {
     await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
 
     expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
-    expect(mockStoreState.agentStatusByPaneKey[pane.paneKey]).toMatchObject({ state: 'done' })
+    expect(mockStoreState.agentStatusByPaneKey.get(pane.paneKey)!).toMatchObject({ state: 'done' })
   })
 
   // OSC 7501: a finished program's result outlives its exit until the user comes back to it.
@@ -268,7 +276,9 @@ describe('command-finished drop and a Done that lands after it', () => {
 
       pane.typeKey('l')
       expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
-      expect(mockStoreState.agentStatusByPaneKey[pane.paneKey]).toMatchObject({ state: 'done' })
+      expect(mockStoreState.agentStatusByPaneKey.get(pane.paneKey)!).toMatchObject({
+        state: 'done'
+      })
     })
   })
 })

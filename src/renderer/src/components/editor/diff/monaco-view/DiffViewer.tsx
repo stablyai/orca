@@ -9,7 +9,7 @@ import {
   setWithLRU
 } from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 import { monacoTypographyOptions } from '@/lib/editor/appearance/editor-typography'
-import { useEditorTypography } from '@/hooks/use-editor-typography'
+import { useEditorTypography } from '@/lib/editor/appearance/use-editor-typography'
 import { useContextualCopySetup } from '../../contextual-copy/useContextualCopySetup'
 import { useDiffCommentDecorator } from '../../../diff-comments/useDiffCommentDecorator'
 import { toast } from 'sonner'
@@ -23,7 +23,7 @@ import {
 } from '../../commands/editor-shortcuts'
 import { diffEditorScrollbarOptions } from './diff-editor-scrollbar-options'
 import { LargeDiffFallback } from '../large-files/LargeDiffFallback'
-import { getLargeDiffRenderLimit } from '../../../../../../shared/large-diff-render-limit'
+import { getLargeDiffRenderLimit } from '../../../../../../shared/source-control/diff/large-diff-render-limit'
 import { useDiffViewerLargeDiffLifecycle } from '../large-files/useDiffViewerLargeDiffLifecycle'
 import { useDiffViewerFirstChangeAutoScroll } from './useDiffViewerFirstChangeAutoScroll'
 import { getDiffViewerLargeDiffSaveAction } from '../large-files/diff-viewer-large-diff-save-action'
@@ -43,7 +43,7 @@ import {
   PLUGIN_SYNTAX_EDITOR_OPTIONS,
   applyModelLanguage
 } from '@/lib/monaco-languages/plugin-syntax-editor-options'
-import { useMonacoTheme } from '@/hooks/use-monaco-theme'
+import { useMonacoTheme } from '@/lib/editor/appearance/use-monaco-theme'
 import { cn } from '@/lib/class-names'
 import { wholeFileDiffTintClass } from './whole-file-diff-tint'
 

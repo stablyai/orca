@@ -3,9 +3,9 @@ import {
   type PublicKnownRuntimeEnvironment,
   type RuntimePairingRepairRoute
 } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { resolveHostDisplay } from '../../../../../../shared/host-display-resolution'
+import { resolveHostDisplay } from '../../../../../../shared/execution-host/host-display-resolution'
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'

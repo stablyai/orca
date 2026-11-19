@@ -5,7 +5,7 @@ import { ACCOUNT_METHODS } from './accounts'
 import type {
   HostAccountSignInChannel,
   HostAccountSignInStatus
-} from '../../../../../shared/host-account-sign-in-types'
+} from '../../../../../shared/agent-accounts/host-account-sign-in-types'
 
 function method(name: string) {
   const found = eraseRpcMethods(ACCOUNT_METHODS).find((candidate) => candidate.name === name)
@@ -76,7 +76,41 @@ describe('account RPC methods', () => {
           })
         ).toMatchObject({ phase: 'signedIn', claude: claudeState })
       )
-      expect(runHostAccountSignIn).toHaveBeenCalledWith('claude', received)
+      expect(runHostAccountSignIn).toHaveBeenCalledWith('claude', received, undefined)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    're-authenticates the saved account a paired client names, without joining another sign-in',
+    async () => {
+      const codexState = { accounts: [], activeAccountId: null }
+      const runHostAccountSignIn = vi.fn(
+        (_provider: string, channel: HostAccountSignInChannel, _accountId?: string) =>
+          new Promise<{ codex: typeof codexState }>((resolve) =>
+            channel.signal.addEventListener('abort', () => resolve({ codex: codexState }))
+          )
+      )
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sign-in methods call only this runtime member.
+      const runtime = { runHostAccountSignIn } as unknown as OrcaRuntimeService
+      const ctx = { runtime, caller: { kind: 'paired-device' as const, deviceId: 'laptop' } }
+      const call = (name: string, params: unknown) => {
+        const found = method(name)
+        if (isStreamingMethod(found) || !found.params) {
+          throw new Error(`${name} must be a request method with params`)
+        }
+        return found.handler(found.params.parse(params), ctx)
+      }
+
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: hostSignInStart answers with a HostAccountSignInStatus.
+      const started = (await call('accounts.hostSignInStart', {
+        provider: 'codex',
+        accountId: 'acct-1'
+      })) as HostAccountSignInStatus
+      expect(runHostAccountSignIn).toHaveBeenCalledWith('codex', expect.anything(), 'acct-1')
+      await expect(call('accounts.hostSignInStart', { provider: 'codex' })).rejects.toThrow(
+        'already running'
+      )
+      await call('accounts.hostSignInCancel', { flowId: started.flowId })
     }
   )
 })

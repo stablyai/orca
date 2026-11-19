@@ -1,4 +1,4 @@
-import type { EditorTypographySettings } from '../../../../../shared/editor-typography-settings-types'
+import type { EditorTypographySettings } from '../../../../../shared/editor/appearance/editor-typography-settings-types'
 import { isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
 
 export type CodeFontSmoothing = NonNullable<EditorTypographySettings['codeFontSmoothing']>

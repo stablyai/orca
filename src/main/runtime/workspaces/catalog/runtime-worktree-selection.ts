@@ -1,9 +1,9 @@
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   getRepoExecutionHostId,
   getRepoSshConnectionId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { splitWorktreeId } from '../../../../shared/worktree/id'
 import type { GitPushTarget, GitWorktreeInfo } from '../../../../shared/worktree/types'
 

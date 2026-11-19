@@ -1,6 +1,6 @@
 import { useSyncExternalStore, type SetStateAction } from 'react'
 import type { AgentJournalSkillRef } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
-import { appendReturnedDraftText } from '../../../../../../src/shared/returned-draft-text'
+import { appendReturnedDraftText } from '../../../../../../src/shared/native-chat/input/drafts/returned-draft-text'
 import {
   returnMobileNativeChatDraftAttachments,
   closeMobileNativeChatEditInputs,
@@ -88,6 +88,16 @@ export function restoreMobileNativeChatPickedSkills(
     ...current,
     skills: [...current.skills, ...skills.filter((skill) => !paths.has(skill.path))]
   }))
+  saveMobileNativeChatDraft(draftKey, 'deferred')
+}
+
+/** A later pick of Orca's same-named command row decides the send, as on desktop. */
+export function forgetMobileNativeChatSkillOrigin(draftKey: string, token: string): void {
+  const current = drafts.get(draftKey)
+  if (current?.skillOrigin !== token) {
+    return
+  }
+  drafts.set(draftKey, { ...current, skillOrigin: undefined })
   saveMobileNativeChatDraft(draftKey, 'deferred')
 }
 

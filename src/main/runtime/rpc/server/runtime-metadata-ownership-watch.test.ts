@@ -10,8 +10,8 @@ import { join } from 'node:path'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import '../../../../shared/runtime-bootstrap'
-import type { RuntimeMetadata } from '../../../../shared/runtime-bootstrap'
+import '../../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
+import type { RuntimeMetadata } from '../../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 
 import { clearRuntimeMetadata, readRuntimeMetadata, writeRuntimeMetadata } from './runtime-metadata'
 

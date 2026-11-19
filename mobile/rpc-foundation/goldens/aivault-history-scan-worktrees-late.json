@@ -4,7 +4,28 @@
   "family": "aiVault.history",
   "namedDeltas": [],
   "values": {
-    "03fd6edde488": {
+    "0932a105659a": {
+      "name": "aiVault.listSessions#1",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"includeAntigravityIdeSessions\":true,\"force\":false,\"scopePaths\":[\"/repo/feature\"],\"scopeOnly\":true}}"
+    },
+    "44a27dbf05e2": {
+      "name": "status.get#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "758b3fde1948": {
+      "name": "streams-registered-at-teardown",
+      "ordinal": 6,
+      "value": [
+        {
+          "cancelled": false,
+          "method": "agentSession.subscribeStatus",
+          "payload": "agentSession.subscribeStatus#1"
+        }
+      ]
+    },
+    "84ac8f56e5fc": {
       "name": "aiVault.listSessions#1",
       "ordinal": 4,
       "args": [
@@ -16,6 +37,7 @@
           "name": "params",
           "value": {
             "force": false,
+            "includeAntigravityIdeSessions": true,
             "limit": 500,
             "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
@@ -47,27 +69,6 @@
           }
         }
       }
-    },
-    "2182656920b3": {
-      "name": "aiVault.listSessions#1",
-      "ordinal": 5,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"],\"scopeOnly\":true}}"
-    },
-    "44a27dbf05e2": {
-      "name": "status.get#1",
-      "ordinal": 3,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
-    },
-    "758b3fde1948": {
-      "name": "streams-registered-at-teardown",
-      "ordinal": 6,
-      "value": [
-        {
-          "cancelled": false,
-          "method": "agentSession.subscribeStatus",
-          "payload": "agentSession.subscribeStatus#1"
-        }
-      ]
     },
     "9aa0df31dc4d": {
       "activeWorktreePath": "/repo/feature",
@@ -161,8 +162,8 @@
       {
         "id": "ready",
         "observation": {
-          "sender": ["daf52dc85a58", "03fd6edde488"],
-          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "2182656920b3"],
+          "sender": ["daf52dc85a58", "84ac8f56e5fc"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "0932a105659a"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "worktrees-loaded": "eb79a9b3682a"
@@ -174,8 +175,8 @@
       {
         "id": "cleanup",
         "observation": {
-          "sender": ["daf52dc85a58", "03fd6edde488"],
-          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "2182656920b3"],
+          "sender": ["daf52dc85a58", "84ac8f56e5fc"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2", "0932a105659a"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "worktrees-loaded": "eb79a9b3682a"

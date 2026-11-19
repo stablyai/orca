@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import { getWorktreeGitHubIssueRepository } from '../../../../../../shared/worktree/github-issue-repository'
 import { useAppStore } from '@/store/index'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { findWorktreeReviewOwner } from '@/store/github/refresh/worktree-refresh'
@@ -13,7 +14,10 @@ export function refreshLinkedIssueForWorktree(
   const owner = findWorktreeReviewOwner(state, worktreeId, executionHostId)
   const issueNumber = owner?.worktree.linkedIssue
   if (owner && issueNumber) {
-    void state.fetchIssue(owner.repo.path, issueNumber, { repoId: owner.repo.id })
+    void state.fetchIssue(owner.repo.path, issueNumber, {
+      repoId: owner.repo.id,
+      ownerRepo: getWorktreeGitHubIssueRepository(owner.worktree)
+    })
   }
 }
 

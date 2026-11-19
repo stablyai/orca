@@ -1,5 +1,9 @@
 import { app } from 'electron'
-import type { AppEnvironment, AppPathName, AppProcessMetric } from '../../shared/app-environment'
+import type {
+  AppEnvironment,
+  AppPathName,
+  AppProcessMetric
+} from '../../shared/app-lifecycle/app-environment'
 import { getSystemLanguageDetection } from '../i18n/system-language'
 
 export class ElectronAppEnvironment implements AppEnvironment {

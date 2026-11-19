@@ -4,7 +4,7 @@ import { mainAgentTurnInterrupted } from '../../../../shared/agent-status/lifecy
 import { agentTurnEndedOnPurpose } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { AGENT_DONE_QUIET_MS } from '../../../../shared/agent-status/lifecycle/agent-transitions'
-import { isPiCompatibleAgentType } from '../../../../shared/pi-agent-kind'
+import { isPiCompatibleAgentType } from '../../../../shared/agent-launch/catalog/pi-agent-kind'
 
 export type TerminalAgentTurnNewsItem = {
   paneKey: string
@@ -92,6 +92,11 @@ export class TerminalAgentTurnNews<Prepared> {
     const waitOutQuiet = this.workingSeen.has(paneKey) || isPiCompatibleAgentType(row.agentType)
     this.workingSeen.delete(paneKey)
     this.announce(paneKey, change.workspace.worktreeId, row, waitOutQuiet)
+  }
+
+  /** A finish decided for this pane and still waiting out its quiet window. */
+  hasPending(paneKey: string): boolean {
+    return this.pendingByPane.has(paneKey)
   }
 
   dispose(): void {

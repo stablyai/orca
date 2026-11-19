@@ -1,32 +1,19 @@
-import {
-  createContext,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState
-} from 'react'
-import {
-  AGENT_SESSION_AGENTS_METHOD,
-  decodeAgentSessionAgentsResult,
-  type AgentSessionRegisteredAgent
-} from '../../../../../src/shared/agent-session/agent-session-registered-agents'
+import { createContext, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { AgentSessionOptionsResult } from '../../../../../src/shared/agent-session/options/protocol/agent-session-options-result'
 import {
   AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY,
   AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY
-} from '../../../../../src/shared/agent-session/agent-session-create-capabilities'
-import { latestAgentSessionContextClearSequence } from '../../../../../src/shared/agent-session/agent-session-context-clear'
+} from '../../../../../src/shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
+import { latestAgentSessionContextClearSequence } from '../../../../../src/shared/agent-session/conversation-context/agent-session-context-clear'
 import { isTuiAgent } from '../../../../../src/shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../../../src/shared/agent-launch/catalog/tui-agent'
-import type { StructuredAgentSessionForkSource } from '../../../../../src/shared/agent-session/structured-agent-session-create'
-import type { StructuredAgentSessionHostCapabilityState } from '../../../../../src/shared/agent-session/structured-agent-session-host-capability'
+import type { StructuredAgentSessionForkSource } from '../../../../../src/shared/agent-session/lifecycle/operations/structured-agent-session-create'
+import type { StructuredAgentSessionHostCapabilityState } from '../../../../../src/shared/agent-session/capabilities/structured-agent-session-host-capability'
 import {
   nativeChatForkInventory,
   nativeChatForkSupport,
   nativeChatRowOffersFork
-} from '../../../../../src/shared/native-chat/native-chat-fork-offer'
+} from '../../../../../src/shared/native-chat/transcript/turns/native-chat-fork-offer'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import { isRootAgentJournalItem } from '../../../../../src/shared/agent-session/journal/agent-session-journal-producer'
 import {
@@ -34,14 +21,22 @@ import {
   type NativeChatTurnJournal
 } from '../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-membership'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
+import { useMobileRegisteredAgent } from '../agent-session/use-mobile-registered-agent'
 
 /** The fork a response offers: none, an empty held slot, drawn disabled, or pressable. */
 export type MobileNativeChatForkOffer = 'hidden' | 'reserved' | 'disabled' | 'available'
+
+/** What `/fork` did: opened a fork, waited on one already opening, or found no response to copy. */
+export type MobileNativeChatForkLatestOutcome = 'started' | 'pending' | 'working' | 'none'
 
 export type MobileNativeChatFork = {
   subscribe: (listener: () => void) => () => void
   offerFor: (message: NativeChatMessage) => MobileNativeChatForkOffer
   fork: (message: NativeChatMessage) => void
+  /** Whether `/fork` is Orca's here: the host and agent confirmed they can fork, as on desktop. */
+  commandOffered: () => boolean
+  /** `/fork`: copies through the newest response that offers a fork, as desktop's command does. */
+  forkLatest: () => MobileNativeChatForkLatestOutcome
 }
 
 /** Fixed by the row's own kind, never by support or turn state, so the meta row never shifts. */
@@ -55,103 +50,6 @@ export function mobileNativeChatRowHoldsForkSlot(message: NativeChatMessage): bo
 }
 
 export const MobileNativeChatForkContext = createContext<MobileNativeChatFork | null>(null)
-
-const AGENTS_READ_RETRIES_MS = [2_000, 8_000, 30_000]
-
-/** One stretch of discovery: a client, its generation, and one supported, unlearned spell. Its
- *  reads, failures and retry timer die with it, so a new stretch starts with every retry. */
-type Discovery = {
-  client: RpcClient | null
-  generation: number | undefined
-  wanted: boolean
-  id: number
-  count: number
-  failures: number
-}
-
-/** The host's agents, read once per connection, only from a host that can fork. */
-function useRegisteredAgent(
-  client: RpcClient | null,
-  host: StructuredAgentSessionHostCapabilityState,
-  agent: string | null
-): AgentSessionRegisteredAgent | undefined {
-  const [agents, setAgents] = useState<{
-    client: RpcClient
-    generation: number | undefined
-    rows: readonly AgentSessionRegisteredAgent[]
-  } | null>(null)
-  const generation = client?.getGeneration?.()
-  const learned = agents?.client === client && agents?.generation === generation
-  const wanted = !!client && host === 'supported' && !learned
-  const [stored, setDiscovery] = useState<Discovery>({
-    client,
-    generation,
-    wanted,
-    id: 0,
-    count: 0,
-    failures: 0
-  })
-  let discovery = stored
-  if (stored.client !== client || stored.generation !== generation || stored.wanted !== wanted) {
-    // A new stretch, false ones included, so resuming never reuses an earlier budget.
-    discovery = { client, generation, wanted, id: stored.id + 1, count: 0, failures: 0 }
-    setDiscovery(discovery)
-  }
-  const { id } = discovery
-  // Updates from an earlier stretch's read, timer or listener change nothing.
-  const update = useCallback(
-    (next: (current: Discovery) => Pick<Discovery, 'count' | 'failures'>) =>
-      setDiscovery((current) => (current.id === id ? { ...current, ...next(current) } : current)),
-    [id]
-  )
-  useEffect(() => {
-    if (!client || !wanted) {
-      return
-    }
-    let cancelled = false
-    void client
-      .sendRequest(AGENT_SESSION_AGENTS_METHOD, {})
-      .then((response) => (response.ok ? decodeAgentSessionAgentsResult(response.result) : null))
-      .catch(() => null)
-      .then((rows) => {
-        if (cancelled) {
-          return
-        }
-        if (rows) {
-          setAgents({ client, generation, rows })
-        } else {
-          update((current) => ({ count: current.count, failures: current.failures + 1 }))
-        }
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [client, generation, wanted, update, discovery.count])
-  // The action stays disabled while unread: a few spaced retries, then the next reconnect.
-  const retryMs = wanted ? AGENTS_READ_RETRIES_MS[discovery.failures - 1] : undefined
-  useEffect(() => {
-    if (retryMs === undefined) {
-      return
-    }
-    const timer = setTimeout(
-      () => update((current) => ({ count: current.count + 1, failures: current.failures })),
-      retryMs
-    )
-    return () => clearTimeout(timer)
-    // One timer per failure of this stretch; a retry's own read must not arm another.
-  }, [update, retryMs, discovery.failures])
-  useEffect(() => {
-    if (!client || !wanted) {
-      return
-    }
-    return client.onStateChange((state) => {
-      if (state === 'connected') {
-        update((current) => ({ count: current.count + 1, failures: 0 }))
-      }
-    })
-  }, [client, wanted, update])
-  return learned ? agents.rows.find((row) => row.agent === agent) : undefined
-}
 
 export function useMobileNativeChatFork(input: {
   client: RpcClient | null
@@ -177,7 +75,7 @@ export function useMobileNativeChatFork(input: {
       : input.hostCapabilities.includes(AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY)
         ? 'supported'
         : 'unsupported'
-  const registered = useRegisteredAgent(input.client, host, input.agent)
+  const registered = useMobileRegisteredAgent(input.client, host === 'supported', input.agent)
   const support = useMemo(
     () => nativeChatForkSupport(host, registered, input.sessionForkSupport, inheritedOriginal),
     [host, registered, input.sessionForkSupport, inheritedOriginal]
@@ -259,16 +157,31 @@ export function useMobileNativeChatFork(input: {
     },
     [agent, createFork, offerFor, sessionId]
   )
+  const commandOffered = useCallback(
+    () => support.kind === 'known' && !!sessionId && isTuiAgent(agent ?? ''),
+    [agent, sessionId, support]
+  )
+  const forkLatest = useCallback((): MobileNativeChatForkLatestOutcome => {
+    if (inFlight.current) {
+      return 'pending'
+    }
+    const through = messages.findLast((message) => offerFor(message) === 'available')
+    if (!through) {
+      return agentWorking ? 'working' : 'none'
+    }
+    fork(through)
+    return 'started'
+  }, [agentWorking, fork, messages, offerFor])
   // One stable value: each button re-renders only when its own offer changes, not on every
   // streamed revision of the transcript.
-  const latest = useRef({ offerFor, fork })
+  const latest = useRef({ offerFor, fork, commandOffered, forkLatest })
   const listeners = useRef(new Set<() => void>())
   useLayoutEffect(() => {
-    latest.current = { offerFor, fork }
+    latest.current = { offerFor, fork, commandOffered, forkLatest }
     for (const listener of listeners.current) {
       listener()
     }
-  }, [offerFor, fork])
+  }, [offerFor, fork, commandOffered, forkLatest])
   return useMemo(
     () => ({
       subscribe: (listener) => {
@@ -276,7 +189,9 @@ export function useMobileNativeChatFork(input: {
         return () => listeners.current.delete(listener)
       },
       offerFor: (message) => latest.current.offerFor(message),
-      fork: (message) => latest.current.fork(message)
+      fork: (message) => latest.current.fork(message),
+      commandOffered: () => latest.current.commandOffered(),
+      forkLatest: () => latest.current.forkLatest()
     }),
     []
   )

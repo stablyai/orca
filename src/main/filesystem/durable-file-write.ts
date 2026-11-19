@@ -7,7 +7,7 @@ import { publishFileWithoutOverwrite } from './atomic-file-publication'
 import {
   renameFileWithWindowsRetry,
   renameFileWithWindowsRetryAsync
-} from '../../shared/windows-retry-file-operations'
+} from '../../shared/file-write/windows-retry-file-operations'
 
 export type DurableFilePayload =
   | string
@@ -16,7 +16,7 @@ export type DurableFilePayload =
   | AsyncIterable<string | Uint8Array>
 
 /** Persist directory changes where supported; Windows and some filesystems reject directory fsync. */
-async function syncDirectory(directory: string): Promise<void> {
+export async function syncDirectory(directory: string): Promise<void> {
   let handle: Awaited<ReturnType<typeof open>> | null = null
   try {
     handle = await open(directory, 'r')
