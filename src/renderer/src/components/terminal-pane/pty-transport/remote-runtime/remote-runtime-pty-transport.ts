@@ -147,6 +147,7 @@ import {
   drainRolledBackPtyShutdownData,
   isPtyDataHandlerShutdownPending,
   ptyDataHandlers,
+  removePtyDataHandler,
   ptyReplayHandlers,
   ptyShutdownLifecycleHandlers
 } from '../shutdown/pty-shutdown-data-suspension'
@@ -676,7 +677,7 @@ export function createRemoteRuntimePtyTransport(
       return
     }
     if (ptyDataHandlers.get(ptyId) === shutdownDataHandler) {
-      ptyDataHandlers.delete(ptyId)
+      removePtyDataHandler(ptyId, shutdownDataHandler)
     }
     if (ptyReplayHandlers.get(ptyId) === shutdownReplayHandler) {
       ptyReplayHandlers.delete(ptyId)

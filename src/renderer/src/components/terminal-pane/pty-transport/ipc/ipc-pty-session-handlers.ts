@@ -5,6 +5,7 @@ import {
   drainRolledBackPtyShutdownData,
   isPtyDataHandlerShutdownPending,
   ptyDataHandlers,
+  removePtyDataHandler,
   ptyExitHandlers,
   ptyReplayHandlers,
   ptyShutdownLifecycleHandlers,
@@ -70,7 +71,7 @@ export function createIpcPtySessionHandlers({
     const owned = ownedDataHandlers.get(id)
     if (owned) {
       if (ptyDataHandlers.get(id) === owned.data) {
-        ptyDataHandlers.delete(id)
+        removePtyDataHandler(id, owned.data)
       }
       if (ptyReplayHandlers.get(id) === owned.replay) {
         ptyReplayHandlers.delete(id)
