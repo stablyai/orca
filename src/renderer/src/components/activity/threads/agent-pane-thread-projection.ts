@@ -70,10 +70,10 @@ function hasLiveActivity(storeData: AllAgentPaneThreadsStoreData, now: number): 
 export function createAgentPaneThreadProjection(store: ProjectionStore) {
   // Value: whether that subscriber needs every thread (false: live badge rows only).
   const listeners = new Map<() => void, boolean>()
-  const tabProjection: ActivityTabProjectionCache = { raw: null, projected: null }
-  const eventCache = createActivityEventBuildCache()
-  const threadCache = createAgentPaneThreadReuseCache()
-  const badgeThreadCache = createAgentPaneThreadReuseCache()
+  let tabProjection: ActivityTabProjectionCache = { raw: null, projected: null }
+  let eventCache = createActivityEventBuildCache()
+  let threadCache = createAgentPaneThreadReuseCache()
+  let badgeThreadCache = createAgentPaneThreadReuseCache()
   let inputs: Inputs | null = null
   let built: { inputs: Inputs; events: EventBuild } | null = null
   let statusCursor: { projection: object; cursor: number } | null = null
@@ -82,12 +82,13 @@ export function createAgentPaneThreadProjection(store: ProjectionStore) {
   let notifyQueued = false
   let release: (() => void) | null = null
 
-  function readInputs(): Inputs {
+  // Chat names are read only when the naming observer reports them; store writes reuse the last names.
+  function readInputs(chatNames = inputs?.chatNames ?? getStructuredChatTabNames()): Inputs {
     const state = store.getState()
     const storeData = selectAllAgentPaneThreadStoreData(state, tabProjection)
     const next = {
       storeData: inputs && shallow(inputs.storeData, storeData) ? inputs.storeData : storeData,
-      chatNames: getStructuredChatTabNames(),
+      chatNames,
       agentStatusEpoch: state.agentStatusEpoch
     }
     return inputs &&
@@ -98,8 +99,7 @@ export function createAgentPaneThreadProjection(store: ProjectionStore) {
       : next
   }
 
-  function sourceChanged(): void {
-    const next = readInputs()
+  function sourceChanged(next: Inputs): void {
     if (next === inputs) {
       return
     }
@@ -122,7 +122,7 @@ export function createAgentPaneThreadProjection(store: ProjectionStore) {
   function currentInputs(): Inputs {
     // Unsubscribed reads (first render) cannot rely on change tracking.
     if (!release || !inputs) {
-      inputs = readInputs()
+      inputs = readInputs(getStructuredChatTabNames())
     }
     return inputs
   }
@@ -204,14 +204,19 @@ export function createAgentPaneThreadProjection(store: ProjectionStore) {
       )
     } else if (!Array.from(listeners.values()).some(Boolean)) {
       // Idle badges keep no per-pane builds alive unless a full reader shares them.
-      eventCache.panes.clear()
-      eventCache.tabs = undefined
-      built = null
-      full = null
-      statusCursor = null
+      dropBuilds()
     }
     badge = { inputs: current, snapshot: { storeData: current.storeData, allThreads } }
     return badge.snapshot
+  }
+
+  function dropBuilds(): void {
+    eventCache = createActivityEventBuildCache()
+    threadCache = createAgentPaneThreadReuseCache()
+    badgeThreadCache = createAgentPaneThreadReuseCache()
+    built = null
+    full = null
+    statusCursor = null
   }
 
   function read(needsAllThreads: boolean): AgentPaneThreadSnapshot {
@@ -221,9 +226,11 @@ export function createAgentPaneThreadProjection(store: ProjectionStore) {
 
   function subscribe(listener: () => void, needsAllThreads: boolean): () => void {
     if (!release) {
-      inputs = readInputs()
-      const stopStore = store.subscribe(sourceChanged)
-      const stopNames = subscribeStructuredChatTabNames(sourceChanged)
+      inputs = readInputs(getStructuredChatTabNames())
+      const stopStore = store.subscribe(() => sourceChanged(readInputs()))
+      const stopNames = subscribeStructuredChatTabNames(() =>
+        sourceChanged(readInputs(getStructuredChatTabNames()))
+      )
       release = () => {
         stopStore()
         stopNames()
@@ -233,9 +240,24 @@ export function createAgentPaneThreadProjection(store: ProjectionStore) {
     listeners.set(registered, needsAllThreads)
     return () => {
       listeners.delete(registered)
+      // Each mode's snapshot and thread cache go with that mode's last reader.
+      const remaining = Array.from(listeners.values())
+      if (needsAllThreads && !remaining.includes(true)) {
+        full = null
+        threadCache = createAgentPaneThreadReuseCache()
+      }
+      if (!needsAllThreads && !remaining.includes(false)) {
+        badge = null
+        badgeThreadCache = createAgentPaneThreadReuseCache()
+      }
       if (listeners.size === 0 && release) {
         release()
         release = null
+        // Nothing observes removals now, so keep nothing per pane.
+        dropBuilds()
+        tabProjection = { raw: null, projected: null }
+        inputs = null
+        badge = null
       }
     }
   }
