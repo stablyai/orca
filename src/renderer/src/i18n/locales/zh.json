@@ -18404,10 +18404,6 @@
           "standaloneTerminal": "独立终端"
         },
         "ActivityThreadHoverCard": {
-          "pathCopied": "路径已复制到剪贴板",
-          "copyPathFailed": "复制路径失败",
-          "workspace": "工作区",
-          "copyPath": "复制路径",
           "jumpToWorkspace": "跳转到工作区"
         },
         "ActivityThreadContextMenu": {
