@@ -6,6 +6,7 @@ import { useAppStore } from '@/store'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { WorktreeStatus } from '../../../../shared/worktree/row-display/worktree-status-rollup'
 import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
+import { makeTabGroup, makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import type { Bot } from '../../../../shared/bot-types'
 import type * as SmartSort from '../../../../shared/sidebar-list/sorting/smart-sort'
@@ -43,6 +44,9 @@ const mocks = vi.hoisted(
     chatTreeReads: []
   })
 )
+
+const openBotSession = vi.hoisted(() => vi.fn())
+vi.mock('./bot-session-open', () => ({ openBotSession }))
 
 vi.mock('./use-bot-chat-tree', async (importOriginal) => {
   const actual = await importOriginal<typeof ChatTree>()
@@ -406,6 +410,74 @@ describe('BotSidebarEntry', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Unfold Scout' }))
     expect(screen.getByText('Fix the flash')).toBeTruthy()
     expect(lines()).toEqual([])
+  })
+
+  it('folds the front chat from its sidebar row and opens a background chat', () => {
+    seed({ 'front-work': 'working', 'background-work': 'working' })
+    const workspace = folderWorkspaceKey(home.id)
+    const groupId = 'group-1'
+    const tabs = ['front', 'background'].map((id) =>
+      makeUnifiedTab({ id, worktreeId: workspace, groupId, contentType: 'agent-session' })
+    )
+    useAppStore.setState({
+      activeView: 'terminal',
+      activeWorkspaceKey: workspace,
+      activeGroupIdByWorktree: { [workspace]: groupId },
+      groupsByWorktree: {
+        [workspace]: [
+          makeTabGroup({
+            id: groupId,
+            worktreeId: workspace,
+            activeTabId: 'front',
+            tabOrder: ['front', 'background']
+          })
+        ]
+      },
+      unifiedTabsByWorktree: { [workspace]: tabs }
+    })
+    mocks.chatTree = {
+      state: 'ready',
+      workspaceChats: {
+        [worktree('front-work').id]: 'front',
+        [worktree('background-work').id]: 'background'
+      },
+      chats: tabs.map(({ entityId }) => ({
+        chatId: entityId,
+        title: entityId,
+        origin: 'side',
+        live: 'idle',
+        lastActiveAt: 0,
+        unread: false,
+        closed: false,
+        tab: true,
+        running: [],
+        runningTotal: 0,
+        finished: [],
+        finishedTotal: 0,
+        failedTotal: 0
+      }))
+    }
+    openBotSession.mockClear()
+    vi.stubGlobal('api', { ui: { set: vi.fn().mockResolvedValue(undefined) } })
+    try {
+      renderEntry()
+      const front = screen.getByRole('button', { name: /^front · Side chat/ })
+      const background = screen.getByRole('button', { name: /^background · Side chat/ })
+      expect(front.getAttribute('aria-current')).toBe('true')
+      expect(background.hasAttribute('aria-current')).toBe(false)
+
+      fireEvent.click(front, { detail: 1 })
+      expect(front.getAttribute('aria-expanded')).toBe('true')
+      fireEvent.click(front, { detail: 1 })
+      expect(front.getAttribute('aria-expanded')).toBe('false')
+      expect(openBotSession).not.toHaveBeenCalled()
+
+      fireEvent.click(background, { detail: 1 })
+      expect(openBotSession).toHaveBeenCalledExactlyOnceWith(bot(), 'background')
+      expect(background.getAttribute('aria-expanded')).toBe('true')
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 
   it('lists nothing under a bot whose server is down, and gives it no fold', () => {
