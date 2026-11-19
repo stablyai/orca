@@ -225,6 +225,10 @@ function beginLocalProvisionalLaunch(
       ...(args.afterTabId ? { afterTabId: args.afterTabId } : {}),
       ...(args.activate !== undefined ? { activate: args.activate } : {})
     })
+    // The draft was seeded before the chat's slot id was minted.
+    if (position?.target === structuredAgentSessionTabId(handle.sessionId)) {
+      position.target = tab.id
+    }
     afterPendingTab(tab.id, (shown) => {
       if (!shown || !useAppStore.getState().getTab(shown)) {
         retirePosition(tab.id)

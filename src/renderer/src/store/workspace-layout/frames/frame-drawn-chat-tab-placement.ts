@@ -4,6 +4,7 @@ import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/h
 import type { StructuredAgentSessionCreateParams } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import { AGENT_SESSION_CREATE_TAB_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
 import { structuredAgentSessionTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
+import { findTabByIdOrChatAlias } from '../../../../../shared/agent-session/view/structured-agent-session-tab'
 import { useAppStore } from '@/store/index'
 import { readCachedRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import { serverLayoutApplyRoute } from '@/runtime/workspace-layout/server/server-layout-apply-routes'
@@ -98,12 +99,15 @@ export function withFrameDrawnChatTabPlacement(intent: {
       environmentId,
       AGENT_SESSION_CREATE_TAB_PLACEMENT_RUNTIME_CAPABILITY
     ) === true
+  const legacyTabId = structuredAgentSessionTabId(intent.sessionId)
+  const tabId =
+    findTabByIdOrChatAlias(
+      useAppStore.getState().unifiedTabsByWorktree[intent.worktreeId],
+      legacyTabId
+    )?.id ?? legacyTabId
   const tabPlacement = supported
-    ? (chatTabPlacement(
-        environmentId,
-        intent.worktreeId,
-        structuredAgentSessionTabId(intent.sessionId)
-      ) ?? addressTabPlacement(environmentId, intent.worktreeId, intent.surfaceAddress))
+    ? (chatTabPlacement(environmentId, intent.worktreeId, tabId) ??
+      addressTabPlacement(environmentId, intent.worktreeId, intent.surfaceAddress))
     : undefined
   return tabPlacement ? { ...intent.params, tabPlacement } : intent.params
 }
