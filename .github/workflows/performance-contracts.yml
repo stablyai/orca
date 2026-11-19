@@ -17,7 +17,8 @@ on:
       - 'config/oxlint-performance-audit.json'
       - 'config/oxlint-plugins/*performance.mjs'
       - 'config/oxlint-plugins/quadratic-buffer-concat.mjs'
-      - 'config/scripts/**/*.performance.test.mjs'
+      - 'config/scripts/**/*.performance.test.*'
+      - 'tests/tools/**/*.performance.test.*'
       - 'config/scripts/static-analysis/oxlint-contracts/app-store-performance-plugin.test.mjs'
       - 'config/scripts/static-analysis/oxlint-contracts/quadratic-buffer-concat-plugin.test.mjs'
 

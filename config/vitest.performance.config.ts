@@ -6,10 +6,11 @@ import { nodeRuntimePool } from './scripts/test-runtime/node-worker/vitest-node-
 
 // Perf contracts: the only tests allowed to count work (docs/agents-md-refs/test-antipatterns.md#perf-contracts).
 const contractGlobs = [
-  'src/**/*.performance.test.{ts,tsx}',
-  'config/scripts/**/*.performance.test.mjs'
+  'src/**/*.performance.test.{ts,tsx,mjs}',
+  'config/scripts/**/*.performance.test.{ts,tsx,mjs}',
+  'tests/tools/**/*.performance.test.{ts,tsx,mjs}'
 ]
-// Older contracts named before the suffix existed.
+// Older regression tests this job also runs; they get no work-count exception.
 const namedContracts = [
   'src/renderer/src/components/agent/launch-menu/use-new-tab-agent-menu-host-preferences.test.tsx',
   'src/main/codex-usage/codex-rollout-file-lifetime.test.ts',

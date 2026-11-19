@@ -32,8 +32,8 @@ manual review. A finding identifies repeated setup, not proof of visible lag.
 `pnpm test:perf:contracts` runs every `*.performance.test.{ts,tsx,mjs}` file, plus a few
 older contracts listed by name in `vitest.performance.config.ts`: Codex rollout lifetimes and
 incremental scans, pinned JSONL reading, the launch-menu host preferences, and the two lint-plugin
-contracts. These are the only tests allowed to count work; see
-[perf contracts](../docs/agents-md-refs/test-antipatterns.md#perf-contracts). The selection is
+contracts. Only the `*.performance.test.*` files may count work; the older ones get no exception (see
+[perf contracts](../docs/agents-md-refs/test-antipatterns.md#perf-contracts)). The selection is
 count-only and runs in seconds: wall-clock budgets and long disk runs stay out of it. Missing
 listed files fail configuration loading. Tests run serially, without retries, and inherit the
 full suite's setup and forced-GC support.

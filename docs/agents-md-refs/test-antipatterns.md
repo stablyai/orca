@@ -35,9 +35,9 @@ Production code that adds exports, globals, wrappers, dependency overrides, or c
 
 The only tests allowed to count work. A perf contract:
 
-- lives in a `*.performance.test.{ts,tsx,mjs}` file, which `pnpm test:perf:contracts` (`config/vitest.performance.config.ts`) and its CI job select (older contracts are listed there by name);
+- lives in a `*.performance.test.{ts,tsx,mjs}` file, which `pnpm test:perf:contracts` (`config/vitest.performance.config.ts`) and its CI job select;
 - names, in a comment, the incident it guards (PR number) and fails when that fix is reverted (show it in the PR);
-- counts operations at the layer that owns the behavior (frames sent, store publications, our own listener registrations, admitted launches), against hardcoded expected values, and never wall time;
-- runs in seconds.
+- counts operations at the layer that owns the behavior (frames sent, store publications, our own listener registrations, admitted launches), against hardcoded values, and never wall time;
+- runs in seconds, with fake clocks.
 
-No test outside that selection may count work, and a perf contract may not test third-party behavior.
+No test outside those files may count work, and a perf contract may not test third-party behavior, reach into private state, or use test-only subclasses. The older regression tests that `config/vitest.performance.config.ts` also lists by name get no exception.
