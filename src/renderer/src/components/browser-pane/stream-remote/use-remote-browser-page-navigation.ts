@@ -140,16 +140,13 @@ export function useRemoteBrowserPageNavigation({
       return
     }
     abandonRemoteNavigation()
-    const token = createRemoteOperationToken()
-    if (!token) {
+    // Only a page the host already has can be stopped; resolving one here could create it.
+    const pageId = lifecycle.tokens.remotePage
+    const token = pageId ? createRemoteOperationToken(pageId) : null
+    if (!pageId || !token) {
       return
     }
-    let pageId: string | null = null
     try {
-      pageId = await lifecycle.session.resolveNavigationPage(token)
-      if (!pageId || !isCurrentRemoteOperationToken({ ...token, remotePageId: pageId })) {
-        return
-      }
       await callRuntimeRpc(
         target,
         'browser.stop',
@@ -157,9 +154,9 @@ export function useRemoteBrowserPageNavigation({
         { timeoutMs: 10_000, suppressFeatureInteraction: true }
       )
       // Read the stopped page's state; the session ignores the read if anything newer lands first.
-      await lifecycle.session.refreshTabInfo({ ...token, remotePageId: pageId })
+      await lifecycle.session.refreshTabInfo(token)
     } catch (error) {
-      if (!isCurrentRemoteOperationToken({ ...token, remotePageId: pageId })) {
+      if (!isCurrentRemoteOperationToken(token)) {
         return
       }
       if (isRemoteBrowserPageMissingError(error)) {
