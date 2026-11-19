@@ -3,6 +3,7 @@ import { retireReplacedPaneBinding } from '../../../ipc/pty/pane/pane-owner-repl
 import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { WorktreeSleepResumeRecorder } from '../../terminal/stop/worktree-sleep-resume-records'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 
 export type AgentPaneRestartRefusal =
@@ -24,6 +25,7 @@ export type AgentPaneRestartResult =
 
 export abstract class OrcaRuntimeWithRestartAgentPaneInPlace extends OrcaRuntimeWithResumeAgentSessionInWorkspace {
   private readonly agentPaneRestartsByPaneKey = new Set<string>()
+  protected abstract readonly sleepResumeRecords: WorktreeSleepResumeRecorder
 
   /** Restarts a pane's agent conversation in a new terminal in the same tab and leaf; the spawn
    *  applies whatever account is selected now. Refusals other than `stop_failed` and
