@@ -31,6 +31,7 @@ function installProvider(
     },
     shutdown: async (id: string) => {
       calls.shutdowns += 1
+      // ast-grep-ignore: test-no-real-time-wait -- every test drives this delay with fake timers
       await new Promise((resolve) => setTimeout(resolve, behavior.shutdownMs ?? 0))
       if (id === behavior.survivesStop) {
         return
@@ -55,17 +56,20 @@ function installProvider(
       return [...live].map((id) => ({ id, cwd: '/', title: 'claude' }))
     }
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stop path calls only onExit, shutdown and listProcesses
   setLocalPtyProvider(provider as unknown as IPtyProvider)
   return calls
 }
 
-const deps = {
+const stopDeps = {
   getLocalPtyProviderStartupPromise: () => undefined,
   shutdownProviderAndDetectExit,
   finishPtyShutdown: () => undefined,
   rememberSyntheticKillExit: () => {},
   sendPtyExitToRenderer: () => {}
-} as unknown as PtyRuntimeControllerDeps
+}
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stop path reads only these deps; runtime and store are optional
+const deps = stopDeps as unknown as PtyRuntimeControllerDeps
 
 describe('batched stop proof', () => {
   it.each([

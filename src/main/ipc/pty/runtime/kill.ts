@@ -6,7 +6,7 @@ import {
   getPtySshConnectionId,
   resolvePtyExecutionHost
 } from '../provider/registry'
-import { isPtyAlreadyGoneError } from '../provider/liveness'
+import { delay, isPtyAlreadyGoneError } from '../provider/liveness'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { errorMessage } from '../../../../shared/errors/error-message'
@@ -17,7 +17,8 @@ import {
 } from '../../../pty/process-retirement/pty-exit-proof'
 import {
   closeLegacyRelayPane,
-  isLegacyRelayBridgedPty
+  isLegacyRelayBridgedPty,
+  stopLegacyRelayPaneAndWait
 } from '../../../ssh/legacy-relay/bridge/legacy-relay-bridge-registry'
 
 // Bounds the wait for an observed exit to reach the runtime record when the caller set no deadline.
@@ -63,6 +64,51 @@ export function stopLegacyRelayBridgedPty(
     : closeLegacyRelayPane(ptyId)
 }
 
+/** A PTY whose SSH provider is gone cannot prove its remote exit: retire its tombstoned lease. */
+export function retireSshPtyWithoutProvider(
+  deps: PtyRuntimeControllerDeps,
+  ptyId: string,
+  connectionId: string
+): void {
+  const unproven = PtyRetirementWithoutProof.because(SSH_PROVIDER_UNREGISTERED_REASON)
+  const incarnationId = deps.finishPtyShutdown(ptyId, connectionId, deps.store, unproven)
+  publishSyntheticExit(deps, ptyId, -1, incarnationId, unproven)
+}
+
+/** Whether a final stop of this PTY is owed through the legacy relay bridge until it proves it. */
+export function legacyRelayOwesStop(ptyId: string, keepHistory: boolean | undefined): boolean {
+  return !keepHistory && Boolean(getPtySshConnectionId(ptyId)) && isLegacyRelayBridgedPty(ptyId)
+}
+
+/** Stops a legacy-relay-bridged PTY and waits for the bridge's proof; null when not bridged. */
+export async function stopLegacyRelayBridgedPtyAndWait(
+  deps: PtyRuntimeControllerDeps,
+  ptyId: string,
+  opts: { keepHistory?: boolean; deadlineMs?: number }
+): Promise<boolean | null> {
+  if (!getPtySshConnectionId(ptyId) || !isLegacyRelayBridgedPty(ptyId)) {
+    return null
+  }
+  // A reversible stop must not leave the bridge's durable stop behind, so the pane stays live.
+  if (opts.keepHistory) {
+    return false
+  }
+  const stoppingIncarnationId = ptyIncarnationById.get(ptyId)
+  const deadline = opts.deadlineMs ?? Date.now() + OBSERVED_EXIT_RECORD_WAIT_MS
+  const stopped = await Promise.race([
+    stopLegacyRelayPaneAndWait(ptyId, deadline),
+    delay(Math.max(1, deadline - Date.now())).then(() => null)
+  ])
+  if (stopped) {
+    // The bridge retired the lease and holds no pane. An exit it saw already reached the runtime.
+    const proof = PtyExitProof.from('absent', stoppingIncarnationId)
+    const publishTo = stopped === 'reported' ? { ...deps, runtime: undefined } : deps
+    const incarnationId = deps.finishPtyShutdown(ptyId, null, deps.store, proof)
+    publishSyntheticExit(publishTo, ptyId, 0, incarnationId, proof)
+  }
+  return stopped !== null
+}
+
 export function killPtyFromRuntimeController(
   deps: PtyRuntimeControllerDeps,
   ptyId: string
@@ -96,9 +142,7 @@ export function killPtyFromRuntimeController(
     } catch {
       if (connectionId) {
         // Detached SSH close must tombstone the lease so reconnect cannot revive a user-closed pane.
-        const unproven = PtyRetirementWithoutProof.because(SSH_PROVIDER_UNREGISTERED_REASON)
-        const incarnationId = finishPtyShutdown(ptyId, connectionId, store, unproven)
-        publishSyntheticExit(deps, ptyId, -1, incarnationId, unproven)
+        retireSshPtyWithoutProvider(deps, ptyId, connectionId)
       }
       return false
     }

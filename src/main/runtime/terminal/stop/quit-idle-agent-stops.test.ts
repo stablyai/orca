@@ -125,7 +125,7 @@ describe('quit stops idle agents', () => {
       runtime.terminalRunFacts.recordInput('persisted-pty', 'orchestration', 'next task\r', 400)
     }
 
-    const stopped = await runtime.stopIdleAgentTerminalsForQuit(targets, Date.now() + 4_000)
+    const stopped = await runtime.stopIdleAgentTerminalsForQuit(targets, 4_000)
 
     expect(stopped).toEqual(expectedStopped)
     // History is kept so the next launch resumes the conversation.

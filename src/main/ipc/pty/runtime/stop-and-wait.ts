@@ -1,5 +1,4 @@
 import type { IPtyProvider } from '../../../providers/pty/provider-contract'
-import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import { ptyIncarnationById } from '../provider/ownership-state'
 import {
   getProviderForPty,
@@ -9,15 +8,14 @@ import {
 import { delay, isPtyAlreadyGoneError, verifyPtysStopped } from '../provider/liveness'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import { errorMessage } from '../../../../shared/errors/error-message'
+import { PtyExitProof } from '../../../pty/process-retirement/pty-exit-proof'
 import {
-  PtyExitProof,
-  PtyRetirementWithoutProof
-} from '../../../pty/process-retirement/pty-exit-proof'
-import {
-  isLegacyRelayBridgedPty,
-  stopLegacyRelayPaneAndWait
-} from '../../../ssh/legacy-relay/bridge/legacy-relay-bridge-registry'
-import { OBSERVED_EXIT_RECORD_WAIT_MS, publishSyntheticExit } from './kill'
+  legacyRelayOwesStop,
+  OBSERVED_EXIT_RECORD_WAIT_MS,
+  publishSyntheticExit,
+  retireSshPtyWithoutProvider,
+  stopLegacyRelayBridgedPtyAndWait
+} from './kill'
 import type { PtyStopBatchOptions } from '../../../runtime/terminal/lifecycle/runtime-pty-controller-contract'
 
 type PtyStopOptions = { keepHistory?: boolean; deadlineMs?: number }
@@ -92,7 +90,7 @@ async function stopAndWaitPtys(
         continue
       }
       // A final relay stop is owed until the relay proves it, so an unproven one still reads as closing.
-      if (!keepHistory && getPtySshConnectionId(ptyId) && isLegacyRelayBridgedPty(ptyId)) {
+      if (legacyRelayOwesStop(ptyId, keepHistory)) {
         relayOwesStop.add(ptyId)
       }
       try {
@@ -178,29 +176,13 @@ async function shutDownPtyForStop(
   ptyId: string,
   opts: PtyStopOptions
 ): Promise<{ stopped: boolean } | PtyStopAwaitingProof> {
-  const { runtime, store, getLocalPtyProviderStartupPromise, shutdownProviderAndDetectExit } = deps
+  const { runtime, getLocalPtyProviderStartupPromise, shutdownProviderAndDetectExit } = deps
   runtime?.markPtyStopRequested?.(ptyId)
-  const connectionId = getPtySshConnectionId(ptyId)
-  if (connectionId && isLegacyRelayBridgedPty(ptyId)) {
-    // A reversible stop must not leave the bridge's durable stop behind, so the pane stays live.
-    if (opts.keepHistory) {
-      return { stopped: false }
-    }
-    const stoppingIncarnationId = ptyIncarnationById.get(ptyId)
-    const deadline = opts.deadlineMs ?? Date.now() + OBSERVED_EXIT_RECORD_WAIT_MS
-    const stopped = await Promise.race([
-      stopLegacyRelayPaneAndWait(ptyId, deadline),
-      delay(Math.max(1, deadline - Date.now())).then(() => null)
-    ])
-    if (stopped) {
-      // The bridge retired the lease and holds no pane. An exit it saw already reached the runtime.
-      const proof = PtyExitProof.from('absent', stoppingIncarnationId)
-      const publishTo = stopped === 'reported' ? { ...deps, runtime: undefined } : deps
-      const incarnationId = deps.finishPtyShutdown(ptyId, null, store, proof)
-      publishSyntheticExit(publishTo, ptyId, 0, incarnationId, proof)
-    }
-    return { stopped: stopped !== null }
+  const relayStopped = await stopLegacyRelayBridgedPtyAndWait(deps, ptyId, opts)
+  if (relayStopped !== null) {
+    return { stopped: relayStopped }
   }
+  const connectionId = getPtySshConnectionId(ptyId)
   // Share one absolute teardown deadline across sequential awaits and RPC leaves.
   const { deadlineMs } = opts
   const startupPromise = getLocalPtyProviderStartupPromise(resolvePtyExecutionHost(ptyId))
@@ -229,9 +211,7 @@ async function shutDownPtyForStop(
   } catch {
     if (connectionId) {
       // Missing SSH provider cannot confirm remote exit; retain its tombstoned lease.
-      const unproven = PtyRetirementWithoutProof.because(SSH_PROVIDER_UNREGISTERED_REASON)
-      const incarnationId = deps.finishPtyShutdown(ptyId, connectionId, store, unproven)
-      publishSyntheticExit(deps, ptyId, -1, incarnationId, unproven)
+      retireSshPtyWithoutProvider(deps, ptyId, connectionId)
     }
     return { stopped: false }
   }
