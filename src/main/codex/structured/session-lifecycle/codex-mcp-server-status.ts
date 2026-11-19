@@ -6,7 +6,7 @@ import type { CodexAppServerRpc } from '../../app-server/codex-app-server-sessio
 
 export type CodexMcpRequest = CodexAppServerRpc['request']
 
-// Without a thread, Codex opens a fresh connection to every server to answer.
+// One deadline for the status pages and the config read.
 export const CODEX_MCP_RPC_TIMEOUT_MS = 30_000
 const MAX_STATUS_PAGES = 20
 const ERROR_MAX_CHARS = 160
@@ -34,12 +34,14 @@ type CodexMcpConfig = {
   disabled: ReadonlySet<string>
   /** Only servers in the home's own config.toml take an `enabled` write. */
   userDeclared: ReadonlySet<string>
+  /** Effective config names. The status list is empty before a thread exists. */
+  configured: readonly string[]
 }
 
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
-/** `threadId` reads the running thread's connections; without one Codex probes each server itself. */
+/** `threadId` reads the running thread. Configured servers missing from that inventory stay listed. */
 export async function listCodexMcpServers(
   request: CodexMcpRequest,
   scope: { threadId: string | null; cwd: string | null }
@@ -69,7 +71,15 @@ export async function listCodexMcpServers(
       break
     }
   }
-  return entries.map((entry) => codexMcpServerRow(entry, config, scope.threadId !== null))
+  const rows = entries.map((entry) => codexMcpServerRow(entry, config, scope.threadId !== null))
+  const seen = new Set(rows.map((row) => row.name))
+  // Why: Codex answers mcpServerStatus/list with no rows until a thread exists (#44644).
+  for (const name of config.configured) {
+    if (!seen.has(name)) {
+      rows.push(configuredCodexMcpServer(name, config))
+    }
+  }
+  return rows
 }
 
 async function readCodexMcpConfig(
@@ -96,7 +106,25 @@ async function readCodexMcpConfig(
   )
   const userConfig = user?.config
   const userServers = isRecord(userConfig) ? userConfig.mcp_servers : null
-  return { disabled, userDeclared: new Set(isRecord(userServers) ? Object.keys(userServers) : []) }
+  return {
+    disabled,
+    userDeclared: new Set(isRecord(userServers) ? Object.keys(userServers) : []),
+    configured: isRecord(servers) ? Object.keys(servers) : []
+  }
+}
+
+function configuredCodexMcpServer(name: string, config: CodexMcpConfig): AgentSessionMcpServer {
+  const status: AgentSessionMcpServerStatus = config.disabled.has(name) ? 'disabled' : 'pending'
+  return {
+    name,
+    status,
+    source: null,
+    toolCount: null,
+    error: null,
+    canSignIn: false,
+    canReconnect: false,
+    canToggle: config.userDeclared.has(name) && CODEX_MCP_TOML_KEY.test(name)
+  }
 }
 
 function codexMcpServerRow(
