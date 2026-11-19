@@ -1,4 +1,5 @@
 // How a chat draws item changes: the item mail the bot reads stays hidden (its note shows the change),
+// the bot's note that only links workers whose Started rows this chat shows stays hidden,
 // the owner's quick changes to one item, with nothing shown between them, fold into the first, and the
 // bot's notes in one turn, with only tool work between them, fold into the first (its row stays put
 // while a live turn adds to it, and shows the latest note's time).
@@ -30,7 +31,8 @@ function ownerMoveOf(message: NativeChatMessage): string | null {
   return entry?.event === 'status' ? entry.uid : null
 }
 
-function drawsNothing(message: NativeChatMessage): boolean {
+/** Item mail, a folded note, or a row with nothing to draw. */
+export function rowDrawsNothing(message: NativeChatMessage): boolean {
   return (
     isBotItemMail(message) ||
     (!isNativeChatOrcaCard(message) && !nativeChatRowRendersContent(message.blocks))
@@ -50,9 +52,63 @@ export function foldBotItemNotes<T extends readonly NativeChatMessage[]>(
     return messages
   }
   const out = messages.map((message) => (isBotItemMail(message) ? hidden(message) : message))
+  dropOwnWorkerLinks(out, turnKeys)
   foldOwnerMoves(messages, out)
   foldBotTurnNotes(out, turnKeys)
   return out
+}
+
+const DISPATCH_REF = 'dispatch:'
+
+/** The Dispatches a note of the bot's links, when linking them is all it does; else null. */
+function linkedDispatches(message: NativeChatMessage): string[] | null {
+  const note = message.botItemNote
+  if (note?.by !== 'bot' || note.entries.length === 0) {
+    return null
+  }
+  const ids: string[] = []
+  for (const entry of note.entries) {
+    if (entry.event !== 'linked' || entry.refs.length === 0) {
+      return null
+    }
+    for (const ref of entry.refs) {
+      if (!ref.startsWith(DISPATCH_REF)) {
+        return null
+      }
+      ids.push(ref.slice(DISPATCH_REF.length))
+    }
+  }
+  return ids
+}
+
+/** Matched by Dispatch id, never by name. A link line hides only when each worker's Started row comes
+ *  before it, or in its own turn (the live turn often links just before it starts), so a line the
+ *  reader already saw never vanishes when a later turn brings the row; another chat's or the owner's
+ *  link, or one naming a worker this chat never started, always shows. */
+function dropOwnWorkerLinks(
+  out: NativeChatMessage[],
+  turnKeys: readonly (string | undefined)[]
+): void {
+  const started = new Map<string, { index: number; turn: string | undefined }[]>()
+  out.forEach((message, index) => {
+    const id = message.agentStart ? message.agentStartDispatchId : undefined
+    if (id) {
+      started.set(id, [...(started.get(id) ?? []), { index, turn: turnKeys[index] }])
+    }
+  })
+  if (started.size === 0) {
+    return
+  }
+  out.forEach((message, index) => {
+    const turn = turnKeys[index]
+    const shown = (id: string) =>
+      started
+        .get(id)
+        ?.some((row) => row.index < index || (turn !== undefined && row.turn === turn)) === true
+    if (linkedDispatches(message)?.every(shown)) {
+      out[index] = hidden(message)
+    }
+  })
 }
 
 function foldOwnerMoves(messages: readonly NativeChatMessage[], out: NativeChatMessage[]): void {
@@ -69,7 +125,7 @@ function foldOwnerMoves(messages: readonly NativeChatMessage[], out: NativeChatM
     }
     if (uid !== null) {
       lead = index
-    } else if (!drawsNothing(message)) {
+    } else if (!rowDrawsNothing(message)) {
       lead = -1
     }
   }
@@ -112,7 +168,7 @@ function foldBotTurnNotes(
       }
     } else if (
       lead >= 0 &&
-      !drawsNothing(message) &&
+      !rowDrawsNothing(message) &&
       (turn !== turnKeys[lead] || breaksRun(message))
     ) {
       lead = -1
@@ -131,7 +187,7 @@ export function botItemNoteJoins(
   drawsBelow: (index: number) => boolean = () => false
 ): Map<number, BotItemNoteJoin> {
   const drawn = messages.flatMap((message, index) =>
-    hidden(index) || drawsNothing(message) ? [] : [index]
+    hidden(index) || rowDrawsNothing(message) ? [] : [index]
   )
   const quiet = (index: number | undefined) => {
     const note = index === undefined ? undefined : messages[index]!.botItemNote

@@ -21,6 +21,7 @@ import {
   type OwnAgentCli
 } from './agent-cli-own-install'
 import { latestAgentCliRelease } from './agent-cli-latest-release'
+import { readModelsNeedingCliUpdate } from './agent-cli-model-requirements'
 
 // `codex update` arrived in 0.126.0; older builds are updated by hand.
 const CODEX_UPDATE_COMMAND_SINCE = '0.126.0'
@@ -94,11 +95,13 @@ async function readAgentCliUpdate(
   if (!version || !latest || compareAppVersions(version, latest) >= 0) {
     return null
   }
+  const models = await readModelsNeedingCliUpdate(agent, version, latest)
   return {
     agent,
     installedVersion: version,
     latestVersion: latest,
-    ...updateCommand(agent, cli, version)
+    ...updateCommand(agent, cli, version),
+    ...(models.length > 0 ? { models } : {})
   }
 }
 

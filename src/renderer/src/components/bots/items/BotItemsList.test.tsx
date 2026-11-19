@@ -77,17 +77,16 @@ function renderClosed(): void {
 const closedRows = (): (string | null)[] =>
   [...document.querySelectorAll('[data-bot-item]')].map((row) => row.getAttribute('data-bot-item'))
 
-it('shows Closed open with paging, then keeps the owner’s fold across remounts', () => {
-  // Closed's flag from when it was folded by default meant the owner opened it.
-  localStorage.setItem('orca.bots.panelFolds', JSON.stringify({ 'bot-a': ['items-closed'] }))
+it('folds Closed by default, and keeps it open with five rows once the owner opens it', () => {
   renderClosed()
-  expect(screen.getByRole('button', { name: /Closed/ }).getAttribute('aria-expanded')).toBe('true')
-  expect(closedRows()).toEqual(['1', '2', '3', '4', '5'])
-  expect(screen.getByRole('button', { name: 'Show 7 more' })).toBeTruthy()
-
-  fireEvent.click(screen.getByRole('button', { name: /Closed/ }))
+  expect(
+    screen.getByRole('button', { name: 'Closed 12 · 8 new' }).getAttribute('aria-expanded')
+  ).toBe('false')
+  expect(closedRows()).toEqual([])
+  fireEvent.click(screen.getByRole('button', { name: /^Closed/ }))
   cleanup()
   renderClosed()
-  expect(screen.getByRole('button', { name: /Closed/ }).getAttribute('aria-expanded')).toBe('false')
-  expect(closedRows()).toEqual([])
+  expect(screen.getByRole('button', { name: /^Closed/ }).getAttribute('aria-expanded')).toBe('true')
+  expect(closedRows()).toEqual(['1', '2', '3', '4', '5'])
+  expect(screen.getByRole('button', { name: 'Show 7 more' })).toBeTruthy()
 })

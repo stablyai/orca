@@ -303,14 +303,15 @@
 1 src/main/codex/configuration/homes/codex-stale-pane-accounts.ts
 9 src/main/codex/configuration/homes/codex-windows-sandbox-read-grant.ts
 1 src/main/codex/configuration/settings/codex-config-mirror-merge.ts
-30 src/main/codex/configuration/settings/codex-config-mirror.ts
+3 src/main/codex/configuration/settings/codex-config-mirror-source.ts # moved from codex-config-mirror.ts with the system-config preparation helpers; no new calls
+27 src/main/codex/configuration/settings/codex-config-mirror.ts
 2 src/main/codex/configuration/settings/codex-config-path-reference-rewrite.ts
 1 src/main/codex/configuration/settings/codex-config-runtime-owned-values.ts
 2 src/main/codex/configuration/settings/config-settings-baseline.ts
 1 src/main/codex/configuration/settings/config-settings-promotion-write-target.ts
 8 src/main/codex/configuration/settings/config-settings-promotion.ts
 1 src/main/codex/configuration/settings/config-sync-stall.ts
-2 src/main/codex/configuration/shared-server/codex-daemon-socket-path-guard.ts
+1 src/main/codex/configuration/shared-server/codex-daemon-socket-path-guard.ts
 1 src/main/codex/configuration/shared-server/codex-shared-server-fix.ts
 3 src/main/codex/configuration/shared-server/codex-shared-server-pane.ts
 2 src/main/codex/configuration/shared-server/codex-shared-server-probe.ts
@@ -924,7 +925,7 @@
 6 src/main/orca-profiles/cloud-session/profile-cloud-session-store.ts
 7 src/main/orca-profiles/orca-account-service.ts
 1 src/main/orca-profiles/profile-account-user-id.ts
-20 src/main/orca-profiles/profile-index-store.ts
+21 src/main/orca-profiles/profile-index-store.ts # writeRollingFileBackup replaces copyFileSync (main-sync-fs 12 -> 11)
 1 src/main/orca-profiles/profile-storage-paths.ts
 6 src/main/orca-profiles/project-transfer/profile-active-transfer.ts
 2 src/main/orca-profiles/project-transfer/profile-project-domain-move-intent.ts

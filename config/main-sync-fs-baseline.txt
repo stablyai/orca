@@ -335,7 +335,7 @@
 3 src/main/orca-profiles/cloud-auth/profile-artifact-cloud-cleanup.ts
 1 src/main/orca-profiles/cloud-auth/profile-cloud-index.ts
 5 src/main/orca-profiles/cloud-session/profile-cloud-session-store.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
-12 src/main/orca-profiles/profile-index-store.ts
+11 src/main/orca-profiles/profile-index-store.ts
 4 src/main/orca-profiles/project-transfer/profile-project-move-intent.ts
 3 src/main/orca-profiles/project-transfer/profile-project-move-record.ts
 4 src/main/orca-profiles/project-transfer/profile-project-state-file.ts

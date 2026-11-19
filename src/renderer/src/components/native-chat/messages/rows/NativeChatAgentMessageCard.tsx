@@ -37,6 +37,7 @@ import { NativeChatMarkdown } from '../../markdown/NativeChatMarkdown'
 import { NativeChatTextAttachments } from '../../media/text/NativeChatTextAttachments'
 import { NativeChatCodeBlock } from '../../markdown/code/NativeChatCodeBlock'
 import { NativeChatCopyButton } from '../actions/NativeChatCopyButton'
+import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { NativeChatImageAttachments } from '../../media/images/NativeChatImageAttachments'
 import { NativeChatEventRow, type NativeChatEventBadge } from '../events/NativeChatEventRow'
 
@@ -94,8 +95,12 @@ export function NativeChatAgentMessageCard({
   const canCopy = agentMessageCanCopy(text)
   // Mail from several senders opens each from its details.
   const several = shown.length > 1
+  const merged = message.mergedEvents ?? []
   const expandable =
-    canCopy || several || message.blocks.some((block) => block.type === 'image-ref')
+    canCopy ||
+    several ||
+    merged.length > 0 ||
+    message.blocks.some((block) => block.type === 'image-ref')
   const words = lead(from, message, t)
   const senderName = useAgentMessageSenderLabel(sender ?? NO_SENDER, worktreeId, target, dispatchId)
   const view = useAgentMessageSenderView(sender, worktreeId, target, dispatchId)
@@ -172,6 +177,9 @@ export function NativeChatAgentMessageCard({
                 />
               )}
             />
+            {merged.map((earlier) => (
+              <MergedAgentMessage key={earlier.id} message={earlier} newerLead={words} />
+            ))}
           </>
         ) : null
       }
@@ -189,6 +197,38 @@ export function NativeChatAgentMessageCard({
       )}
       {more > 0 ? ` +${more}` : null}
     </NativeChatEventRow>
+  )
+}
+
+/** An earlier message about the same Dispatch, under the newer row it merged into: its time (and
+ *  its lead when it differs, as "Started"), then its words. */
+function MergedAgentMessage({
+  message,
+  newerLead
+}: {
+  message: NativeChatMessage
+  newerLead: string
+}): React.JSX.Element {
+  const t = useTranslate()
+  const from = message.from
+  const words = from ? lead(from, message, t) : null
+  const text = agentMessageTranscriptText(message.blocks, from, message.shortened)
+  return (
+    <>
+      <p className="flex items-center gap-1 text-xs text-chat-foreground-faint">
+        {words && words !== newerLead ? <span>{words}</span> : null}
+        <NativeChatMessageTimestamp timestamp={message.timestamp} />
+      </p>
+      {text.trim() ? (
+        <NativeChatMarkdown
+          rowKey={message.id}
+          content={text}
+          variant="document"
+          className="text-sm"
+          renderCodeBlock={NativeChatCodeBlock}
+        />
+      ) : null}
+    </>
   )
 }
 
