@@ -20,7 +20,7 @@ import {
   type ConnectorSnapshotExpectation
 } from './connector-snapshot-trace'
 import { ConnectorPromptPublications } from './connector-prompt-publications'
-import { answerFor, toConnectorEvent } from './connector-event-wire'
+import { answerFor, answerTextFor, toConnectorEvent } from './connector-event-wire'
 import type { ConnectorCallObserver } from './connector-transport'
 import {
   ConnectorReplyOutbox,
@@ -247,7 +247,8 @@ export class ConnectorTurnEvents {
     const { post, hostName } = this.replyDeps
     return {
       client: flush && {
-        post,
+        // As the events path sends it: within the older cap for a cloud without answers.long.
+        post: (reply) => post({ ...reply, text: answerTextFor(reply.text, this.cloudFeatures) }),
         hostName,
         push: (events) => {
           this.outbox.push(...events)

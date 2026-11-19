@@ -25,6 +25,25 @@ describe('capAnswer', () => {
   })
 })
 
+describe('capAnswer closing an open code block', () => {
+  const body = 'const a = 1\n'.repeat(200)
+  it.each([
+    ['~~~js', '~~~'],
+    ['````md', '````'],
+    // A fence of the other kind inside the block is its content, and closes nothing.
+    ['```js\n~~~', '```']
+  ])('closes %j with %j', (opener, closing) => {
+    const capped = capAnswer(`Intro\n${opener}\n${body}`, 600)
+    expect(Buffer.byteLength(capped)).toBeLessThanOrEqual(600)
+    expect(capped.endsWith(`const a = 1\n${closing}\n\n${NOTE}`)).toBe(true)
+  })
+
+  it('adds no fence after a block that already closed', () => {
+    const capped = capAnswer(`\`\`\`\nx\n\`\`\`\n${'word '.repeat(400)}`, 600)
+    expect(capped.endsWith(`word\n\n${NOTE}`)).toBe(true)
+  })
+})
+
 describe('answerFor', () => {
   const reply: ConnectorEvent = {
     kind: 'reply',

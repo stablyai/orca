@@ -54,7 +54,7 @@ export type JournalSqlReads = AgentSessionJournalReads & {
   /** The rows and sends that place these anchors' turns, never the whole conversation. */
   operationWindow(anchors: JournalOperationWindowAnchors): Promise<JournalOperationWindow>
   promptItem(end: 'first' | 'last'): Promise<AgentJournalRenderItem | null>
-  /** The plan the newest turn's agent last wrote, or null. */
+  /** The plan last written in the turn of the chat's newest tool call, or null. */
   latestTaskList(): Promise<NativeChatTaskList | null>
   runMentions(
     runId: string

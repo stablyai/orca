@@ -8,8 +8,9 @@ import type { JournalSqlScope } from './journal-sql-scope'
 // A turn rarely runs more tools than this after it last wrote its plan; past it the plan reads as none.
 const NEWEST_TOOL_CALLS = 300
 
-/** The plan the newest turn's agent last wrote (its todo list), or null: from that turn's newest
- *  task-list tool call, never an earlier turn's. */
+/** The plan last written in the turn that ran the chat's newest tool call (its todo list), or null:
+ *  from that turn's newest task-list call, never an earlier turn's. Read it when that newest call is
+ *  the running turn's; a turn that has run no tool yet still answers with the turn before it. */
 export function readJournalDomainLatestTaskList(scope: JournalSqlScope): NativeChatTaskList | null {
   const rows = scope.db
     .prepare(`SELECT payload_json,turn_item_id FROM journal_items

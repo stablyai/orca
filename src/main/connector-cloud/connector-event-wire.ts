@@ -116,28 +116,31 @@ export function toConnectorEvent(
   }
 }
 
+/** An answer's words as this cloud takes them: within the older cap, said to be cut, for one that
+ *  doesn't list `answers.long`. */
+export function answerTextFor(text: string, cloudFeatures: ReadonlySet<string>): string {
+  return cloudFeatures.has(CONNECTOR_CLOUD_LONG_ANSWERS_FEATURE)
+    ? text
+    : capAnswer(text, CONNECTOR_CLIENT_LIMITS.maxLastAssistantMessageBytes)
+}
+
 /**
- * An event as this cloud takes its answer: one that doesn't list `answers.long` gets it within the
- * older cap, said to be cut. Read as each batch goes, since an answer waits across hellos and the
- * cloud it finally reaches may not be the one it was written for.
+ * An event as this cloud takes its answer. Read as each batch goes, since an answer waits across
+ * hellos and the cloud it finally reaches may not be the one it was written for.
  */
 export function answerFor(
   event: ConnectorEvent,
   cloudFeatures: ReadonlySet<string>
 ): ConnectorEvent {
-  if (cloudFeatures.has(CONNECTOR_CLOUD_LONG_ANSWERS_FEATURE)) {
-    return event
-  }
-  const max = CONNECTOR_CLIENT_LIMITS.maxLastAssistantMessageBytes
   // One already within the cap goes as the same object: what binds to a sent event still finds it.
   if (event.kind === 'turn-ended' && event.lastAssistantMessage !== undefined) {
-    const lastAssistantMessage = capAnswer(event.lastAssistantMessage, max)
+    const lastAssistantMessage = answerTextFor(event.lastAssistantMessage, cloudFeatures)
     return lastAssistantMessage === event.lastAssistantMessage
       ? event
       : { ...event, lastAssistantMessage }
   }
   if (event.kind === 'reply' && event.prose !== undefined) {
-    const prose = capAnswer(event.prose, max)
+    const prose = answerTextFor(event.prose, cloudFeatures)
     return prose === event.prose ? event : { ...event, prose }
   }
   return event

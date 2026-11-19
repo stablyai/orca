@@ -214,6 +214,48 @@ describe('ConnectorTurnEvents', () => {
       expect(sent(events)).toBe(`${'a'.repeat(8_137)}${NOTE}`)
     })
 
+    it('is cut the same way through /replies, for a cloud that takes neither it nor reply events', async () => {
+      const posted: string[] = []
+      const rows = [
+        {
+          account: 'ada',
+          deliveryId: 'd1',
+          conversation: { source: 'slack', externalId: 'slack:T1:C1:1.2' },
+          sessionId: 'chat-1',
+          epoch: 'e',
+          messageId: 'm-d1',
+          queued: false,
+          fill: {
+            outcome: 'answered' as const,
+            answerDeliveryId: 'd1',
+            prose: 'a'.repeat(20_000),
+            filledAt: 40
+          }
+        }
+      ]
+      const replies = (features: string[]) => {
+        const events = new ConnectorTurnEvents(userDataPath, 'ada', undefined, {
+          journal: () => ({
+            read: async () => rows,
+            fillOutcomes: async () => false,
+            sent: async () => {}
+          }),
+          onOwed: () => {},
+          post: async (reply) => {
+            posted.push(reply.text)
+            return { ok: true, value: { status: 'queued' } }
+          },
+          hostName: () => 'build-box'
+        })
+        events.useCloudFeatures(new Set(features), 1)
+        events.useReplyFlush(() => {})
+        return events.drainReplies()
+      }
+      await replies(['workers'])
+      await replies(['workers', 'answers.long'])
+      expect(posted).toEqual([`${'a'.repeat(8_137)}${NOTE}`, 'a'.repeat(20_000)])
+    })
+
     it('never goes over 32 KB', () => {
       const events = new ConnectorTurnEvents(userDataPath, 'ada')
       events.useCloudFeatures(new Set(['answers.long']))

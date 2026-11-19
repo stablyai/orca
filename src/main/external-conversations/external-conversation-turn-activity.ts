@@ -48,6 +48,8 @@ export class ConversationTurnActivity {
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>()
   // The plan-tool call each chat's plan was last read for, so one call is one read.
   private readonly planRead = new Map<string, string>()
+  // Each chat's plan reads, counted: one that answers after a later one began is out of date.
+  private readonly planReads = new Map<string, number>()
 
   constructor(
     private readonly deps: {
@@ -116,16 +118,24 @@ export class ConversationTurnActivity {
       return
     }
     this.planRead.set(paneKey, call)
+    const read = (this.planReads.get(paneKey) ?? 0) + 1
+    this.planReads.set(paneKey, read)
     void this.deps
       .turnPlan?.(sessionId)
       .then((list) => {
-        const steps = stepsOf(list)
         const last = this.told.get(paneKey)
-        if (!steps || this.deps.toldTurn(paneKey) !== turnId) {
+        if (
+          list === null ||
+          this.planReads.get(paneKey) !== read ||
+          this.deps.toldTurn(paneKey) !== turnId
+        ) {
           return
         }
-        // Held on the turn's last word (one never said yet waits as nothing said), then told.
-        this.told.set(paneKey, { turnId, said: '', at: 0, ...last, steps })
+        // Held on the turn's last word (one never said yet waits as nothing said), then told. A
+        // plan emptied is a plan gone: its steps stop being told.
+        const { steps: _stale, ...kept } = { turnId, said: '', at: 0, ...last }
+        const steps = stepsOf(list)
+        this.told.set(paneKey, { ...kept, ...(steps ? { steps } : {}) })
         this.observe(paneKey)
       })
       .catch(() => {})
@@ -138,5 +148,6 @@ export class ConversationTurnActivity {
     this.timers.clear()
     this.told.clear()
     this.planRead.clear()
+    this.planReads.clear()
   }
 }

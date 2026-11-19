@@ -7,6 +7,8 @@ function harness() {
   const told: (string | undefined)[] = []
   const plans: unknown[] = []
   let plan: { content: string; status: 'pending' | 'in_progress' | 'completed' }[] = []
+  // Reads a test answers by hand, in the order they are asked for.
+  const planReads: (() => Promise<{ tasks: typeof plan } | null>)[] = []
   let row: { state: AgentStatusState; toolName: string; toolInput: string } | null = null
   let turnId: number | null = 5
   const activity = new ConversationTurnActivity({
@@ -14,7 +16,7 @@ function harness() {
       told.push(event.text)
       plans.push(event.steps)
     },
-    turnPlan: async () => ({ tasks: plan }),
+    turnPlan: () => (planReads.shift() ?? (async () => ({ tasks: plan })))(),
     readHookRow: () => row,
     toldTurn: () => turnId,
     linkedFor: () => ({
@@ -32,7 +34,8 @@ function harness() {
     plans,
     tool,
     turn: (id: number | null) => (turnId = id),
-    writes: (tasks: typeof plan) => (plan = tasks)
+    writes: (tasks: typeof plan) => (plan = tasks),
+    planReads
   }
 }
 
@@ -94,5 +97,37 @@ describe('ConversationTurnActivity', () => {
     ]
     expect(told).toEqual(['Updating the plan', 'Updating the plan', 'Running pnpm test'])
     expect(plans).toEqual([undefined, steps, steps])
+  })
+
+  it('stops telling a plan the agent emptied', async () => {
+    const { plans, tool, writes } = harness()
+    writes([{ content: 'Fix it', status: 'in_progress' }])
+    tool('TodoWrite', 'one')
+    await vi.advanceTimersByTimeAsync(3_000)
+    tool('Bash', 'ls')
+    await vi.advanceTimersByTimeAsync(3_000)
+    writes([])
+    tool('TodoWrite', 'none')
+    await vi.advanceTimersByTimeAsync(3_000)
+    expect(plans.at(-2)).toEqual([{ title: 'Fix it', status: 'in_progress' }])
+    expect(plans.at(-1)).toBeUndefined()
+  })
+
+  it('keeps the newer plan when an older read answers last', async () => {
+    const { plans, tool, planReads } = harness()
+    const answers: ((content: string) => void)[] = []
+    const held = () =>
+      new Promise<{ tasks: { content: string; status: 'pending' }[] }>((resolve) =>
+        answers.push((content) => resolve({ tasks: [{ content, status: 'pending' }] }))
+      )
+    planReads.push(held, held)
+    tool('TodoWrite', 'first')
+    tool('Bash', 'ls')
+    tool('TodoWrite', 'second')
+    answers[1]?.('newer')
+    await vi.advanceTimersByTimeAsync(3_000)
+    answers[0]?.('older')
+    await vi.advanceTimersByTimeAsync(3_000)
+    expect(plans.at(-1)).toEqual([{ title: 'newer', status: 'pending' }])
   })
 })
