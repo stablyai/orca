@@ -78,8 +78,8 @@ function mirrorSystemConfigIntoManagedCodexHome(homes: CodexSettingsPromotionHom
     return { ran: false, complete: false }
   }
   if (mirrorResult.status === 'superseded') {
-    // Keep the baseline: it must describe a config this pass published.
-    return { ran: true, complete: false }
+    // Keep the baseline: it must describe a config this pass published. The guard is still owed.
+    return { ran: false, complete: false }
   }
   reportCodexConfigSyncOutcome(homes.runtimeHomePath, getCodexConfigSyncStatus(homes))
   if (mirrorResult.status === 'skipped-missing-source') {

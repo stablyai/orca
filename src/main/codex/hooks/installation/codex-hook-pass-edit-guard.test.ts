@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
@@ -37,3 +37,18 @@ it('lets a pass read back and replace what it published itself', () => {
   expect(result.conflict).toBeNull()
   expect(readFileSync(config, 'utf-8')).toBe('model = "second"\n')
 })
+
+// Symlink creation needs extra privileges on Windows.
+it.skipIf(process.platform === 'win32')(
+  'treats a symlink and its target as one file across the pass',
+  () => {
+    const link = join(root, 'linked.toml')
+    symlinkSync(config, link)
+    const result = withHookPassEditGuard([link, config], () => {
+      writeFileAtomically(config, 'model = "ours"\n')
+      expect(readObservedFileSync(link, 'utf-8')).toBe('model = "ours"\n')
+    })
+
+    expect(result.conflict).toBeNull()
+  }
+)

@@ -56,6 +56,8 @@ export function stripCodexManagedHookEffects(
     ? { kind: 'written', complete: true }
     : {
         kind: 'status',
+        // A malformed runtime file must not skip legacy cleanup after disabling.
+        cleanupFirst: true,
         status: {
           agent: 'codex',
           state: 'error',

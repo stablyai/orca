@@ -9,7 +9,7 @@ function readDigest(filePath: string): string | null | undefined {
   try {
     return createHash('sha256').update(readFileSync(filePath)).digest('hex')
   } catch (error) {
-    // Unknown read failures leave the file unguarded; its own writer reports them.
+    // Unknown read failures stay guarded as unreadable; its own writer reports them.
     return isDefinitiveAbsence(error) ? null : undefined
   }
 }
@@ -19,12 +19,9 @@ export function withHookPassEditGuard<T>(
   paths: readonly string[],
   run: () => T
 ): { value: T; conflict: string | null } {
-  const seeded: { digest: string | null; aliases: string[] }[] = []
+  const seeded: { digest: string | null | undefined; aliases: string[] }[] = []
   for (const filePath of paths) {
     const digest = readDigest(filePath)
-    if (digest === undefined) {
-      continue
-    }
     const aliases = [filePath]
     try {
       aliases.push(realpathSync.native(filePath))

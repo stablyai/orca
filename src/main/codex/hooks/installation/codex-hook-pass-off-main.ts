@@ -27,7 +27,8 @@ export async function runCodexHookPassEffectsOffMain(
   } catch (error) {
     adoptFileObservation({ matches: false, files: [] })
     if (request.mode === 'strip') {
-      // Why: Off stays authoritative even with the worker down; removal is small and runs once.
+      // Why: Off stays authoritative even with the worker down. Strip only: the user-hook rebuild stays
+      // on the worker, so approvals may sit in shifted slots until the next launch's refresh.
       return stripCodexManagedHookEffects(request.runtimeHomePath, request.codexHashes)
     }
     if (configMirror) {

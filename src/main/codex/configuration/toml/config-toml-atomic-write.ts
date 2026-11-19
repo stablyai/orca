@@ -31,6 +31,8 @@ export function writeTomlConfigAtomically(
       encoding: 'utf-8',
       mode: resolveCodexConfigTomlFileMode(writePath)
     })
+    // A rejected update must not rotate the backup first.
+    assertGuardedFileCurrent(writePath)
     if (existsSync(writePath)) {
       writeRollingFileBackup(writePath, `${writePath}.bak`)
     }

@@ -51,6 +51,8 @@ export function writeHooksJson(
       // Preserve requested permissions even with a stricter process umask.
       chmodSync(tmpPath, existingMode)
     }
+    // A rejected update must not rotate the backup first.
+    assertGuardedFileCurrent(writePath)
     // Keep one prior version for recovery from a bad merge.
     if (existsSync(writePath)) {
       writeRollingFileBackup(writePath, `${writePath}.bak`)

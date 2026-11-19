@@ -7,7 +7,8 @@ import { fileIdentityKey } from './file-identity-key'
  * means another writer got in between, so the pass stops publishing and is retried.
  */
 
-type GuardedFile = { digest: string | null }
+/** `undefined` marks a file unreadable when seeded; any later readable content is a change. */
+type GuardedFile = { digest: string | null | undefined }
 type Guard = {
   files: Map<string, GuardedFile>
   conflict: string | null
@@ -34,16 +35,17 @@ function conflict(guard: Guard, filePath: string): never {
  * the file reader, so the checks below do no I/O on the main thread.
  */
 export function runWithConcurrentFileEditGuard<T>(
-  seeded: readonly { digest: string | null; aliases: readonly string[] }[],
+  seeded: readonly { digest: string | null | undefined; aliases: readonly string[] }[],
   readDigest: Guard['readDigest'],
   run: () => T
 ): { value: T; conflict: string | null } {
   const files = new Map<string, GuardedFile>()
   for (const { digest, aliases } of seeded) {
-    // A symlinked config is published at its target; both spellings share one record.
-    const entry = { digest }
-    for (const alias of aliases) {
-      files.set(fileIdentityKey(alias), entry)
+    // A symlinked config is published at its target; every spelling shares one record.
+    const keys = aliases.map(fileIdentityKey)
+    const entry = keys.map((key) => files.get(key)).find(Boolean) ?? { digest }
+    for (const key of keys) {
+      files.set(key, entry)
     }
   }
   const guard: Guard = { files, conflict: null, readDigest }
