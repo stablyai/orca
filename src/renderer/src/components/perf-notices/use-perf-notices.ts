@@ -34,12 +34,15 @@ async function nextNotice(
   blocked: Gate,
   tracking: { hiddenTabsCheckedAt: number }
 ): Promise<PerfNotice | null> {
-  const signals = await window.api.memory.readPerfNoticeSignals()
-  if (blocked() || !signals) {
-    return null
-  }
-  if (signals.disk && isDiskAlmostFull(signals) && mayShow('disk-almost-full', now)) {
-    return { id: 'disk-almost-full', freeLabel: formatMemory(signals.disk.freeBytes) }
+  // Why: a notice that can't show (off, snoozed, capped) never pays for its reading.
+  if (mayShow('disk-almost-full', now)) {
+    const signals = await window.api.memory.readPerfNoticeSignals()
+    if (blocked()) {
+      return null
+    }
+    if (signals?.disk && isDiskAlmostFull(signals)) {
+      return { id: 'disk-almost-full', freeLabel: formatMemory(signals.disk.freeBytes) }
+    }
   }
   if (
     useAppStore.getState().settings?.browserGuestWorktreeRetentionBudget !== false ||
