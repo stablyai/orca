@@ -11,13 +11,17 @@ const CHECKPOINT_BATCH_FRAMES = 1000
 export const MAIN_CHECKPOINT_BACKSTOP_PAGES = 10_000
 
 // Evaluated source, as the chat journal's checkpoint worker: a passive checkpoint never blocks the writer.
-// A SQLite without NOOP checkpoints throws here, and the exit hands checkpoints back to main.
+// An older SQLite runs NOOP as a real checkpoint, so it is refused here; the exit hands checkpoints back to main.
 const checkpointWorkerSource = `
 const { workerData } = require('node:worker_threads');
 const { DatabaseSync } = require('node:sqlite');
 const db = new DatabaseSync(workerData.filename);
 if (db.prepare('PRAGMA journal_mode').get().journal_mode !== 'wal') {
   throw new Error('orchestration database is not in WAL mode');
+}
+const [major, minor] = db.prepare('SELECT sqlite_version() AS v').get().v.split('.').map(Number);
+if (major < 3 || (major === 3 && minor < 51)) {
+  throw new Error('SQLite ' + major + '.' + minor + ' lacks NOOP checkpoints');
 }
 db.exec('PRAGMA busy_timeout = 1000;');
 const frames = db.prepare('PRAGMA wal_checkpoint(NOOP)');
