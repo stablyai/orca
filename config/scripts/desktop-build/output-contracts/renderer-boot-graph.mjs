@@ -91,10 +91,20 @@ export function findTwoByteBootChunks(rendererDir) {
     .map((chunk) => path.basename(chunk.file))
 }
 
+// Node-only lru-cache calls node:diagnostics_channel at module load and crashes the renderer under Vite's empty browser stub.
+const NODE_ONLY_BOOT_PAYLOADS = [
+  { label: 'lru-cache (node:diagnostics_channel)', signature: 'lru-cache:metrics' }
+]
+
+export function findNodeOnlyBootPayloads(rendererDir) {
+  return findForbiddenBootPayloads(rendererDir, NODE_ONLY_BOOT_PAYLOADS)
+}
+
 export function verifyRendererBootGraph(root = process.cwd()) {
   const rendererDir = path.join(root, RENDERER_BUILD_DIR)
   const { chunks, totalBytes } = readRendererBootGraph(rendererDir)
   const violations = findForbiddenBootPayloads(rendererDir, bootGraphForbiddenPayloads(root))
+  const nodeOnlyViolations = findNodeOnlyBootPayloads(rendererDir)
   console.log(
     `Renderer boot graph: ${chunks.length} chunks, ${(totalBytes / 1024).toFixed(1)} KB minified.`
   )
@@ -116,5 +126,16 @@ export function verifyRendererBootGraph(root = process.cwd()) {
       'Load them after first paint (see primeTerminalWebglAddon) or from a route chunk.'
     )
   }
-  return twoByteChunks.length > 0 || violations.length > 0 ? 1 : 0
+  if (nodeOnlyViolations.length > 0) {
+    console.error(
+      'Renderer boot chunks bundled a Node-only dependency that crashes in the browser:'
+    )
+    for (const violation of nodeOnlyViolations) {
+      console.error(`  ${violation.label} -> ${violation.chunk}`)
+    }
+    console.error(
+      'Keep @xterm/addon-ligatures aliased to lib/addon-ligatures.js (not lib/addon-ligatures.mjs).'
+    )
+  }
+  return twoByteChunks.length > 0 || violations.length > 0 || nodeOnlyViolations.length > 0 ? 1 : 0
 }
