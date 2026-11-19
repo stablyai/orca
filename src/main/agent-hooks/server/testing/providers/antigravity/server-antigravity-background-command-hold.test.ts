@@ -108,6 +108,22 @@ it.each([
   }
 )
 
+it("waits out the grace after a parent's busy Stop that lands after its subagent's", async () => {
+  await agyHook('PreInvocation', {})
+  await agyHook('PreToolUse', subagentCall)
+  await agyHook('PostToolUse', subagentCall)
+  await agyHook('PreInvocation', child)
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+  await subagentIdleStop()
+  vi.advanceTimersByTime(ANTIGRAVITY_PARENT_WAKE_GRACE_MS + 1000)
+  await agyHook('Stop', { fullyIdle: false, terminationReason: 'NO_TOOL_CALL' })
+  programDone()
+  expect(state()).toBe('working')
+
+  vi.advanceTimersByTime(ANTIGRAVITY_PARENT_WAKE_GRACE_MS + 1)
+  expect(state()).toBe('done')
+})
+
 it("keeps a subagent run working while the parent's background command still runs", async () => {
   await parentStopsWhileSubagentRuns()
   await agyHook('PreInvocation', {})

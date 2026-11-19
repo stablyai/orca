@@ -95,8 +95,11 @@ export function programStatusHookYieldEndsAt(
     return previous.receivedAt + AGENT_STATUS_STALE_AFTER_MS
   }
   // When the last subagent ends after its parent's turn, agy's done is its only end signal.
+  // A parent wake follows the run's latest hook, which may be a busy Stop after the subagent's.
   if (antigravityHelpersIdleAt !== undefined && isAntigravityHelperHeldDone(previous, payload)) {
-    return antigravityHelpersIdleAt + ANTIGRAVITY_PARENT_WAKE_GRACE_MS
+    return (
+      Math.max(antigravityHelpersIdleAt, previous.receivedAt) + ANTIGRAVITY_PARENT_WAKE_GRACE_MS
+    )
   }
   // Hook and program child rosters cannot settle or reopen each other's turns.
   if (
