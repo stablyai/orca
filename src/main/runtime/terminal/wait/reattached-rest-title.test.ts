@@ -19,15 +19,11 @@ function seededPane(): TerminalCommandPaintRecord & {
 }
 
 describe("a reattached pane's retained rest title", () => {
-  it('names its agent while the reattached command is still the one running', () => {
-    const pane = seededPane()
-    awaitReattachedTerminalPaint(pane, 1_000)
-    expect(reattachedRestTitleAgent(pane)).toBe('claude')
-  })
-
-  it('names nobody once that command finished, or for a process this run saw start', () => {
+  it('names the reattached agent until its command finishes, and excludes locally spawned processes', () => {
     const finished = seededPane()
     awaitReattachedTerminalPaint(finished, 1_000)
+    expect(reattachedRestTitleAgent(finished)).toBe('claude')
+
     observeTerminalCommandPaint(finished, FINISH, FINISH, 2_000)
     expect(reattachedRestTitleAgent(finished)).toBeNull()
 
