@@ -1,7 +1,8 @@
 import React, { useRef } from 'react'
 import { Trans } from 'react-i18next'
-import { ChevronLeft, ChevronRight, ImageUp, Plus } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ImageUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ColorPicker } from '@/components/ui/color-picker'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { i18n } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
@@ -168,7 +169,7 @@ function pictureFaces(
   return [...mascots.slice(0, custom.after + 1), face, ...mascots.slice(custom.after + 1)]
 }
 
-/** The mascot's tile color: the swatches, then any color from the system picker. */
+/** The mascot's tile color: the swatches, then any color. */
 function BotPictureColors({
   color,
   onChange
@@ -179,11 +180,22 @@ function BotPictureColors({
   const t = useTranslate()
   const current = color ?? DEFAULT_BOT_AVATAR_COLOR
   const isCustom = !BOT_AVATAR_COLORS.some((swatch) => swatch === current)
-  const ring =
-    'rounded-full border border-black/10 outline-none focus-visible:ring-2 focus-visible:ring-ring aria-checked:ring-2 aria-checked:ring-ring aria-checked:ring-offset-2 aria-checked:ring-offset-popover dark:border-white/15'
+  const names: Record<(typeof BOT_AVATAR_COLORS)[number], string> = {
+    '#b3dbf4': t('bots.new.colorSky', 'Sky'),
+    '#ffffff': t('bots.new.colorWhite', 'White'),
+    '#c9b8e8': t('bots.new.colorLavender', 'Lavender'),
+    '#f4c4cf': t('bots.new.colorPink', 'Pink'),
+    '#f8cfa8': t('bots.new.colorPeach', 'Peach'),
+    '#f6e3a1': t('bots.new.colorButter', 'Butter'),
+    '#c5dfb5': t('bots.new.colorSage', 'Sage'),
+    '#b5e3d8': t('bots.new.colorMint', 'Mint'),
+    '#8fa3b8': t('bots.new.colorSlate', 'Slate'),
+    '#3a3f4b': t('bots.new.colorGraphite', 'Graphite'),
+    '#1f2126': t('bots.new.colorInk', 'Ink')
+  }
   return (
     <div
-      role="radiogroup"
+      role="group"
       aria-label={t('bots.new.pictureColor', 'Background color')}
       className="mt-1.5 mb-1 flex flex-wrap items-center justify-center gap-1"
     >
@@ -191,31 +203,25 @@ function BotPictureColors({
         <button
           key={swatch}
           type="button"
-          role="radio"
-          aria-checked={swatch === current}
-          aria-label={swatch}
+          aria-label={names[swatch]}
+          aria-pressed={swatch === current}
           style={{ backgroundColor: swatch }}
           onClick={() => onChange(swatch === DEFAULT_BOT_AVATAR_COLOR ? null : swatch)}
-          className={cn('size-4.5 cursor-pointer', ring)}
+          className={cn(
+            'size-4 cursor-pointer rounded-full border border-black/10 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:border-white/15',
+            swatch === current && 'ring-2 ring-foreground ring-offset-2 ring-offset-popover'
+          )}
         />
       ))}
-      <label
-        style={isCustom ? { backgroundColor: current } : undefined}
-        className={cn(
-          'relative flex size-4.5 cursor-pointer items-center justify-center bg-muted text-muted-foreground focus-within:ring-2 focus-within:ring-ring',
-          ring,
-          isCustom && 'ring-2 ring-ring ring-offset-2 ring-offset-popover'
-        )}
-      >
-        {isCustom ? null : <Plus className="size-3" />}
-        <input
-          type="color"
-          aria-label={t('bots.new.pictureColorCustom', 'Custom color')}
-          value={current}
-          onChange={(event) => onChange(event.currentTarget.value.toLowerCase())}
-          className="absolute inset-0 cursor-pointer opacity-0"
-        />
-      </label>
+      <ColorPicker
+        value={current}
+        onChange={(next) => onChange(next.toLowerCase())}
+        label={t('bots.new.pictureColorCustom', 'Custom color')}
+        selected={isCustom}
+        showHexInTrigger={false}
+        triggerLabel={t('bots.new.pictureColorMore', 'Custom')}
+        className={cn('ml-0.5 h-5.5 gap-1 px-1.5', !isCustom && '[&>span:first-child]:hidden')}
+      />
     </div>
   )
 }

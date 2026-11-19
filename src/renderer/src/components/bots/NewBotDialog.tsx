@@ -29,7 +29,10 @@ import {
 } from '../../../../shared/execution-host/execution-host'
 import { useBotAgentSetup } from './use-bot-agent-setup'
 import { proposalCreateParams, type BotProposal } from '../../../../shared/bots/bot-proposal'
-import { BOTS_TEMPLATES_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
+import {
+  BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY,
+  BOTS_TEMPLATES_RUNTIME_CAPABILITY
+} from '../../../../shared/bot-runtime-capabilities'
 import { useBotHostHas } from '@/lib/bot-host-status'
 import { botTemplate, type BotTemplateSkill } from '../../../../shared/bots/bot-templates'
 import { NewBotTemplateParts } from './NewBotTemplateParts'
@@ -128,7 +131,10 @@ export function NewBotDialog({
   const agentSetup = useBotAgentSetup(choices, hostId, initialAgent)
   const [creating, setCreating] = useState(false)
   const createdBot = useRef(false)
-  const picture = useNewBotPicture(proposal?.mascot)
+  const picture = useNewBotPicture(
+    useBotHostHas(hostId, BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY),
+    proposal?.mascot
+  )
   // From Bot templates itself (Blank bot), the row would only lead back to it.
   const fromTemplates = useAppStore((state) => state.activeModal === 'bot-templates')
   const trimmedName = name.trim()

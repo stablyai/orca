@@ -169,7 +169,7 @@ export const newColor = defineFixture({
   render: () => <NewBot />,
   interact: async () => {
     document
-      .querySelector<HTMLButtonElement>('[role="dialog"] button[aria-label="#3a3f4b"]')
+      .querySelector<HTMLButtonElement>('[role="dialog"] button[aria-label="Graphite"]')
       ?.click()
     await settle(600)
   }

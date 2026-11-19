@@ -30,7 +30,8 @@ export type NewBotPicture = {
   onUpload: (png: string, after: number) => void
   /** The mascot's tile color; null is its own sky blue. */
   color: string | null
-  onColorChange: (color: string | null) => void
+  /** Absent when the host can't store a color. */
+  onColorChange?: (color: string | null) => void
   /** The picture shown, as an image URL. */
   src: string
   /** createBot's `avatar`: the mascot shown, or the one before an upload, which the bot keeps if the upload is refused. */
@@ -44,13 +45,19 @@ export type NewBotPicture = {
   reset: () => void
 }
 
-/** `initialUpload` (base64 PNG) opens on that picture, placed first, as a shared bot's own. */
-export function useNewBotPicture(mascot?: string, initialUpload?: string): NewBotPicture {
+/** `initialUpload` (base64 PNG) opens on that picture, placed first, as a shared bot's own; `colors` is
+ *  whether the host stores a tile color. */
+export function useNewBotPicture(
+  colors: boolean,
+  mascot?: string,
+  initialUpload?: string
+): NewBotPicture {
   const t = useTranslate()
   const [value, setValue] = useState<BotPictureValue>(() =>
     initialUpload ? { kind: 'custom' } : firstMascot(mascot)
   )
-  const [color, setColor] = useState<string | null>(null)
+  const [picked, setColor] = useState<string | null>(null)
+  const color = colors ? picked : null
   const [upload, setUpload] = useState<NewBotUpload | null>(() =>
     initialUpload ? { png: initialUpload, after: -1 } : null
   )
@@ -73,7 +80,7 @@ export function useNewBotPicture(mascot?: string, initialUpload?: string): NewBo
       setValue({ kind: 'custom' })
     },
     color,
-    onColorChange: setColor,
+    onColorChange: colors ? setColor : undefined,
     src: showingUpload && custom ? custom.src : mascotSrc,
     avatar: mascotAvatar(mascotId),
     avatarColor: showingUpload || !color ? undefined : color,

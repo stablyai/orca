@@ -1,5 +1,5 @@
 // A mascot on another tile color: its SVG with the background, and on a dark color the light rim, filled in.
-import { useEffect, useState } from 'react'
+import { useEffect, useSyncExternalStore } from 'react'
 import type { BotMascotId } from '../../../../shared/bot-avatar'
 import {
   DEFAULT_BOT_AVATAR_COLOR,
@@ -18,56 +18,60 @@ export function recolorMascotSvg(svg: string, color: string): string {
   return isDarkBotAvatarColor(color) ? filled.replace('var(--avatar-rim,0)', '1') : filled
 }
 
-// Bounded, since dragging the custom color makes a new one per step.
-const MAX_RECOLORED = 64
+// Bounded, since dragging the custom color makes a new one per step; room for the picker's 19 on several colors.
+const MAX_RECOLORED = 200
 const recolored = new Map<string, string>()
+const loading = new Set<string>()
+// Bumped whenever a recolored picture is ready, so readers render again.
+let version = 0
+const listeners = new Set<() => void>()
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
+}
 
 function recoloredKey(id: BotMascotId, color: string): string {
   return `${id}${color}`
 }
 
-async function loadRecolored(id: BotMascotId, color: string): Promise<void> {
+function loadRecolored(id: BotMascotId, color: string): void {
+  const key = recoloredKey(id, color)
   const load = MASCOT_SVGS[`../../../../shared/bot-mascots/${id}.svg`]
-  if (!load) {
+  if (!load || recolored.has(key) || loading.has(key)) {
     return
   }
-  const src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(recolorMascotSvg(await load(), color))}`
-  recolored.set(recoloredKey(id, color), src)
-  if (recolored.size > MAX_RECOLORED) {
-    recolored.delete(recolored.keys().next().value as string)
-  }
+  loading.add(key)
+  void load().then(
+    (svg) => {
+      loading.delete(key)
+      recolored.set(
+        key,
+        `data:image/svg+xml;charset=utf-8,${encodeURIComponent(recolorMascotSvg(svg, color))}`
+      )
+      if (recolored.size > MAX_RECOLORED) {
+        recolored.delete(recolored.keys().next().value as string)
+      }
+      version += 1
+      for (const listener of listeners) {
+        listener()
+      }
+    },
+    // A picture that can't load stays on the bundled sky blue.
+    () => loading.delete(key)
+  )
 }
 
 function isDefaultColor(color: string | null | undefined): color is null | undefined {
   return !color || color === DEFAULT_BOT_AVATAR_COLOR
 }
 
-/** Each mascot's picture on `color`; the bundled SVG until a recolored one is ready. */
-export function useBotMascotSrcs(
+// `_ready` is the cache version, passed so a memoizing compiler reads the cache again when it changes.
+function mascotSrcs(
   ids: readonly BotMascotId[],
-  color: string | null | undefined
+  color: string | null | undefined,
+  _ready: number
 ): Record<BotMascotId, string> {
-  const [, setReady] = useState(0)
-  const missing = isDefaultColor(color)
-    ? []
-    : ids.filter((id) => !recolored.has(recoloredKey(id, color)))
-  const missingKey = missing.join(',')
-  useEffect(() => {
-    if (!missingKey || isDefaultColor(color)) {
-      return
-    }
-    let live = true
-    void Promise.all(
-      missingKey.split(',').map((id) => loadRecolored(id as BotMascotId, color))
-    ).then(() => {
-      if (live) {
-        setReady((n) => n + 1)
-      }
-    })
-    return () => {
-      live = false
-    }
-  }, [missingKey, color])
   const srcs = { ...BOT_MASCOT_URLS }
   if (!isDefaultColor(color)) {
     for (const id of ids) {
@@ -75,6 +79,22 @@ export function useBotMascotSrcs(
     }
   }
   return srcs
+}
+
+/** Each mascot's picture on `color`; the bundled SVG until a recolored one is ready. */
+export function useBotMascotSrcs(
+  ids: readonly BotMascotId[],
+  color: string | null | undefined
+): Record<BotMascotId, string> {
+  const ready = useSyncExternalStore(subscribe, () => version)
+  useEffect(() => {
+    if (!isDefaultColor(color)) {
+      for (const id of ids) {
+        loadRecolored(id, color)
+      }
+    }
+  }, [ids, color])
+  return mascotSrcs(ids, color, ready)
 }
 
 const NO_IDS: readonly BotMascotId[] = []

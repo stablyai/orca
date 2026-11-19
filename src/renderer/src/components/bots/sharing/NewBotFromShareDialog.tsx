@@ -1,6 +1,8 @@
 // New bot, from a reviewed link: the New bot dialog's picture, name and agent, plus the per-bot
 // permission (Ask, picked for bots made from a link) and the review's tool ticks. Create writes the
 // reviewed version whole, or nothing.
+import { useBotHostHas } from '@/lib/bot-host-status'
+import { BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY } from '../../../../../shared/bot-runtime-capabilities'
 import { ownBotHost } from '@/lib/bot-hosts'
 import { useId, useRef, useState } from 'react'
 import { Check, ShieldCheck } from 'lucide-react'
@@ -154,7 +156,11 @@ export function NewBotFromShareDialog({
   const sharedPng = review.avatarDataUrl?.slice(review.avatarDataUrl.indexOf(',') + 1)
   const sharedMascot =
     review.bot.avatar && 'mascot' in review.bot.avatar ? review.bot.avatar.mascot : undefined
-  const picture = useNewBotPicture(sharedMascot, sharedPng)
+  const picture = useNewBotPicture(
+    useBotHostHas(hostId, BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY),
+    sharedMascot,
+    sharedPng
+  )
   const trimmedName = name.trim()
 
   const create = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
