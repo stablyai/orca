@@ -311,7 +311,7 @@
 1 src/main/codex/configuration/settings/config-settings-promotion-write-target.ts
 8 src/main/codex/configuration/settings/config-settings-promotion.ts
 1 src/main/codex/configuration/settings/config-sync-stall.ts
-2 src/main/codex/configuration/shared-server/codex-daemon-socket-path-guard.ts
+1 src/main/codex/configuration/shared-server/codex-daemon-socket-path-guard.ts
 1 src/main/codex/configuration/shared-server/codex-shared-server-fix.ts
 3 src/main/codex/configuration/shared-server/codex-shared-server-pane.ts
 2 src/main/codex/configuration/shared-server/codex-shared-server-probe.ts
