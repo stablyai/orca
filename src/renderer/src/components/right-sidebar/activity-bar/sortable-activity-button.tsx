@@ -1,6 +1,5 @@
 import React from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
 import { ActivityBarButton, type ActivityBarItem } from './activity-bar-buttons'
 
 export function SortableActivityButton({
@@ -35,7 +34,10 @@ export function SortableActivityButton({
           setNodeRef(node)
           setActivatorNodeRef(node)
         },
-        style: { transform: CSS.Transform.toString(transform), transition }
+        style: {
+          transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+          transition
+        }
       }}
     />
   )
