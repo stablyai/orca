@@ -140,21 +140,25 @@ export class SleptMailboxWake {
     return this.owed.size > 0 || this.attempted.size > 0 || this.succeeded.size > 0
   }
 
-  reconcile(): void {
-    const handles = new Set(this.deps.db()?.getUndeliveredUnreadMailboxHandles() ?? [])
-    for (const handle of [...this.owed.keys(), ...this.succeeded.keys()]) {
-      handles.add(handle)
-    }
-    for (const handle of handles) {
-      this.refresh(handle)
-    }
-  }
-
-  discover(paneKey: string, visited?: Set<string>): readonly string[] {
+  /** Re-derive tracked mailboxes and every sleeping pane's owned inboxes from current rows. */
+  reconcile(panes: Iterable<string>): void {
     const db = this.deps.db()
-    return db && this.hasObligation(paneKey)
-      ? sleepingMailOwnerMailboxes(db, paneKey, undefined, undefined, visited)
-      : []
+    const mailboxes = new Set([
+      ...this.owed.keys(),
+      ...this.succeeded.keys(),
+      ...this.attempted.keys()
+    ])
+    const visited = new Set(mailboxes)
+    for (const pane of panes) {
+      if (db && this.hasObligation(pane)) {
+        for (const mailbox of sleepingMailOwnerMailboxes(db, pane, visited)) {
+          mailboxes.add(mailbox)
+        }
+      }
+    }
+    for (const mailbox of mailboxes) {
+      this.refresh(mailbox)
+    }
   }
 
   hasObligation(paneKey: string): boolean {
