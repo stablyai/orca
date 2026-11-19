@@ -159,7 +159,9 @@ async function readPtyRootPid(
   if (known) {
     return known
   }
-  const processes = await provider.listProcesses({ ptyIds: [ptyId] }).catch(() => [])
+  const processes = await provider
+    .listProcesses({ ptyIds: [ptyId], targetOwnerOnly: true })
+    .catch(() => [])
   const rootPid = processes.find((entry) => entry.id === ptyId)?.rootProcessId
   if (rootPid) {
     if (rootPidByPtyIncarnation.size >= 64) {
