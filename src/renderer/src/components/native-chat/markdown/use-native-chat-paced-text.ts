@@ -1,4 +1,8 @@
 import { useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import {
+  isDocumentRangeSelected,
+  watchDocumentRange
+} from '@/components/comment-markdown/CommentMarkdownWords'
 import { usePrefersReducedMotion } from '@/hooks/theme/usePrefersReducedMotion'
 import { NativeChatReplyRevealsContext } from './native-chat-reply-reveals'
 import {
@@ -87,4 +91,38 @@ export function useNativeChatPacedText(
     revealing,
     fading: !reducedMotion && (revealing || lingering)
   }
+}
+
+type DrawnSample = { at: number; length: number }
+
+/** Where the words drawn in the last fade window start: text drawn before it stays plain, so only
+ *  arriving words are elements. Holds still while a range is selected, so the selection keeps its
+ *  nodes. */
+export function useNativeChatFadeWindow(drawn: string, fading: boolean): number | undefined {
+  // Text already there when the reply mounts never fades.
+  const [samples] = useState<DrawnSample[]>(() => [{ at: -Infinity, length: drawn.length }])
+  const held = useRef(drawn.length)
+  useLayoutEffect(() => {
+    const now = performance.now()
+    samples.push({ at: now, length: drawn.length })
+    while (samples.length > 1 && samples[1]!.at <= now - WORD_FADE_MS) {
+      samples.shift()
+    }
+  }, [drawn, samples])
+  useEffect(() => (fading ? watchDocumentRange() : undefined), [fading])
+  if (!fading) {
+    return undefined
+  }
+  if (isDocumentRangeSelected()) {
+    return held.current
+  }
+  const cutoff = performance.now() - WORD_FADE_MS
+  let from = samples[0]!.length
+  for (const sample of samples) {
+    if (sample.at <= cutoff) {
+      from = sample.length
+    }
+  }
+  held.current = Math.min(from, drawn.length)
+  return held.current
 }
