@@ -85,7 +85,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       )
     ) {
       // Retry through the existing queue with current account homes and credentials.
-      this.fullFetchQueued = true
+      this.fullFetchQueued ??= { force: options?.force ?? false }
       return null
     }
     // Preserve live usage received while credentials were loading.

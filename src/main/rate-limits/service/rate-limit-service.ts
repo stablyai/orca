@@ -183,6 +183,7 @@ export class RateLimitService extends RateLimitServiceAccountRefresh {
   }
 
   start(options: { fetchImmediately?: boolean } = {}): void {
+    this.publicationStopped = false
     if (options.fetchImmediately !== false) {
       this.clearDeferredStartupRefresh()
       void this.fetchAll()
@@ -197,6 +198,7 @@ export class RateLimitService extends RateLimitServiceAccountRefresh {
   }
 
   stop(): void {
+    this.publicationStopped = true
     this.abortActiveFetchCycle()
     this.clearQueuedFetches()
     this.inactiveClaudeFetching.clear()

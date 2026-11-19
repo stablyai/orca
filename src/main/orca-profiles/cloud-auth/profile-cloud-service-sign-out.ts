@@ -25,24 +25,31 @@ export async function signOutCurrentOrcaProfile(
   // Pending browser sign-ins must not relink after explicit sign-out.
   const signOutEpoch = invalidateOutstandingCloudConnectAttempts()
   const active = await ensureActiveOrcaProfileAsync(userDataPath)
+  const superseded = () => connectAttempts.cloudConnectLinkEpoch() > signOutEpoch
+  const currentResult = async (): Promise<SignOutCurrentOrcaProfileResult> => {
+    const current = await ensureActiveOrcaProfileAsync(userDataPath)
+    return {
+      status: 'signed-out',
+      auth: await getOrcaProfileAuthStatusFromProfile(current, userDataPath),
+      activeProfileId: current.index.activeProfileId,
+      profiles: current.index.profiles
+    }
+  }
+  if (superseded()) {
+    return currentResult()
+  }
   const configState = getOrcaCloudAuthConfig()
   // Fence before disk/network waits so in-flight work cannot act after sign-out.
   invalidateCloudSessionChanges(active.profile.id, userDataPath)
   const session = await readCloudSession(active.profile.id, userDataPath)
+  if (superseded()) {
+    return currentResult()
+  }
   if (!isOrcaCloudDevAuthEnabled() && configState.configured && session.status === 'found') {
     await revokeOrcaCloudSession(configState.config, session.session).catch(() => undefined)
   }
-  if (connectAttempts.cloudConnectLinkEpoch() > signOutEpoch) {
-    const current = await ensureActiveOrcaProfileAsync(userDataPath)
-    return {
-      status: 'signed-out',
-      auth: await getOrcaProfileAuthStatusFromProfile(
-        await ensureActiveOrcaProfileAsync(userDataPath),
-        userDataPath
-      ),
-      activeProfileId: current.index.activeProfileId,
-      profiles: current.index.profiles
-    }
+  if (superseded()) {
+    return currentResult()
   }
   await signOutCloudSession(active.profile.id, userDataPath)
   const list = await unlinkOrcaProfileFromCloudAsync(active.profile.id, userDataPath)

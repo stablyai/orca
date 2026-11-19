@@ -1,5 +1,5 @@
-import { readFile, rm } from 'node:fs/promises'
-import { rmSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
+import { renameSync, rmSync } from 'node:fs'
 import { stageCredentialFile } from '../../credentials/credential-file-io'
 import { join } from 'node:path'
 import { getSecretStore, type SecretStore } from '../../../shared/secure-storage/secret-store'
@@ -154,13 +154,22 @@ export async function writeOrcaCloudSessionFile(
   profileId: string,
   userDataPath: string,
   session: OrcaCloudSession,
-  requireSealed = false
+  requireSealed = false,
+  shouldPublish: () => boolean = () => true
 ): Promise<Exclude<OrcaCloudSessionPersistence, 'none'>> {
   const { persistence, data } = serializeSession(session, requireSealed)
   const path = getOrcaCloudSessionPath(profileId, userDataPath)
-  await (data === null
-    ? rm(path, { force: true })
-    : stageCredentialFile(path, data, { createDirectory: true }))
+  if (data === null) {
+    if (shouldPublish()) {
+      rmSync(path, { force: true })
+    }
+  } else {
+    await stageCredentialFile(path, data, {
+      createDirectory: true,
+      shouldPublish,
+      publish: renameSync
+    })
+  }
   return persistence
 }
 

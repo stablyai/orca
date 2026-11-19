@@ -72,8 +72,13 @@ export async function getStatus(): Promise<JiraConnectionStatus> {
   const credentialError = (
     await Promise.all(sites.map((site) => getCredentialError(site.id)))
   ).find((message) => message !== undefined)
-  const protections = await Promise.all(sites.map((site) => getSiteTokenProtection(site.id)))
-  const credentialProtection = protections.includes('plaintext') ? 'plaintext' : null
+  let credentialProtection: 'plaintext' | null = null
+  for (const site of sites) {
+    if ((await getSiteTokenProtection(site.id)) === 'plaintext') {
+      credentialProtection = 'plaintext'
+      break
+    }
+  }
   return {
     connected: sites.length > 0,
     viewer: siteToViewer(activeSite),

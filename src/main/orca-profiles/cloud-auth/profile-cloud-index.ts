@@ -1,5 +1,3 @@
-import { inCredentialFileOrder } from '../../credentials/credential-file-io'
-import { loadOrCreateProfileIndexAsync, writeProfileIndexAsync } from '../profile-index-store-async'
 import { randomUUID } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import type {
@@ -11,13 +9,9 @@ import { loadOrCreateProfileIndex, writeProfileIndex } from '../profile-index-st
 import { getOrcaProfileDirectory, getOrcaProfileIndexPath } from '../profile-storage-paths'
 import {
   artifactCloudCleanupNeedsCommit,
-  artifactCloudCleanupNeedsCommitAsync,
   commitArtifactCloudCleanup,
-  commitArtifactCloudCleanupAsync,
   completeArtifactCloudCleanupIfCommitted,
-  completeArtifactCloudCleanupIfCommittedAsync,
-  prepareArtifactCloudCleanup,
-  prepareArtifactCloudCleanupAsync
+  prepareArtifactCloudCleanup
 } from './profile-artifact-cloud-cleanup'
 
 export type CreateCloudLinkedOrcaProfileRecordResult = OrcaProfileListState & {
@@ -191,108 +185,18 @@ export function unlinkOrcaProfileFromCloud(
   }
 }
 
-async function reconcileCurrentArtifactCloudCleanupAsync(
-  profileId: string,
-  userDataPath: string,
-  currentCloud: OrcaProfileCloudSummary | undefined
-): Promise<void> {
-  await completeArtifactCloudCleanupIfCommittedAsync(profileId, userDataPath, currentCloud)
-  if (!(await artifactCloudCleanupNeedsCommitAsync(profileId, userDataPath, currentCloud))) {
-    return
-  }
-  await commitArtifactCloudCleanupAsync(profileId, userDataPath, currentCloud)
-  await completeArtifactCloudCleanupIfCommittedAsync(profileId, userDataPath, currentCloud)
-}
-
+// Index mutations stay indivisible with synchronous profile creation and switching.
 export async function linkOrcaProfileToCloudAsync(
   profileId: string,
   cloud: OrcaProfileCloudSummary,
   userDataPath: string
 ): Promise<OrcaProfileListState> {
-  return inCredentialFileOrder(`${getOrcaProfileIndexPath(userDataPath)}.mutation`, async () => {
-    const index = await loadOrCreateProfileIndexAsync(userDataPath)
-    const currentProfile = index.profiles.find((profile) => profile.id === profileId)
-    if (!currentProfile) {
-      throw new Error('unknown_orca_profile')
-    }
-    await reconcileCurrentArtifactCloudCleanupAsync(profileId, userDataPath, currentProfile.cloud)
-    const cleanupNeedsCommit = await artifactCloudCleanupNeedsCommitAsync(
-      profileId,
-      userDataPath,
-      cloud
-    )
-    const now = Date.now()
-    let found = false
-    let cloudIdentityChanged = false
-    const profiles = index.profiles.map((profile) => {
-      if (profile.id !== profileId) {
-        return profile
-      }
-      found = true
-      cloudIdentityChanged = Boolean(
-        profile.cloud &&
-        (profile.cloud.userId !== cloud.userId ||
-          profile.cloud.cloudProfileId !== cloud.cloudProfileId ||
-          (profile.cloud.activeOrgId ?? '') !== (cloud.activeOrgId ?? ''))
-      )
-      return toCloudLinkedProfile(profile, cloud, now)
-    })
-    if (!found) {
-      throw new Error('unknown_orca_profile')
-    }
-    if (cloudIdentityChanged || cleanupNeedsCommit) {
-      await prepareArtifactCloudCleanupAsync(profileId, userDataPath, cloud)
-    }
-    const nextIndex = {
-      ...index,
-      profiles
-    }
-    await writeProfileIndexAsync(getOrcaProfileIndexPath(userDataPath), nextIndex)
-    if (cloudIdentityChanged || cleanupNeedsCommit) {
-      await commitArtifactCloudCleanupAsync(profileId, userDataPath, cloud)
-      await completeArtifactCloudCleanupIfCommittedAsync(profileId, userDataPath, cloud)
-    }
-    return {
-      activeProfileId: nextIndex.activeProfileId,
-      profiles: nextIndex.profiles
-    }
-  })
+  return linkOrcaProfileToCloud(profileId, cloud, userDataPath)
 }
 
 export async function unlinkOrcaProfileFromCloudAsync(
   profileId: string,
   userDataPath: string
 ): Promise<OrcaProfileListState> {
-  return inCredentialFileOrder(`${getOrcaProfileIndexPath(userDataPath)}.mutation`, async () => {
-    const index = await loadOrCreateProfileIndexAsync(userDataPath)
-    const currentProfile = index.profiles.find((profile) => profile.id === profileId)
-    if (!currentProfile) {
-      throw new Error('unknown_orca_profile')
-    }
-    await reconcileCurrentArtifactCloudCleanupAsync(profileId, userDataPath, currentProfile.cloud)
-    const now = Date.now()
-    let found = false
-    const profiles = index.profiles.map((profile) => {
-      if (profile.id !== profileId) {
-        return profile
-      }
-      found = true
-      return toLocalProfile(profile, now)
-    })
-    if (!found) {
-      throw new Error('unknown_orca_profile')
-    }
-    await prepareArtifactCloudCleanupAsync(profileId, userDataPath, undefined)
-    const nextIndex = {
-      ...index,
-      profiles
-    }
-    await writeProfileIndexAsync(getOrcaProfileIndexPath(userDataPath), nextIndex)
-    await commitArtifactCloudCleanupAsync(profileId, userDataPath, undefined)
-    await completeArtifactCloudCleanupIfCommittedAsync(profileId, userDataPath, undefined)
-    return {
-      activeProfileId: nextIndex.activeProfileId,
-      profiles: nextIndex.profiles
-    }
-  })
+  return unlinkOrcaProfileFromCloud(profileId, userDataPath)
 }

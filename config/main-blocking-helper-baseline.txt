@@ -868,16 +868,20 @@
 3 src/main/orca-profiles/cloud-auth/profile-cloud-capability-refresh.ts
 3 src/main/orca-profiles/cloud-auth/profile-cloud-code-sign-in.ts
 4 src/main/orca-profiles/cloud-auth/profile-cloud-dev-service.ts
-19 src/main/orca-profiles/cloud-auth/profile-cloud-index.ts
+21 src/main/orca-profiles/cloud-auth/profile-cloud-index.ts # Keep index and cleanup mutations indivisible with synchronous creation, switching and startup
+5 src/main/orca-profiles/cloud-auth/profile-cloud-service-sign-out.ts # Index transitions and generation-fenced session deletion stay indivisible with synchronous mutators and shutdown
 21 src/main/orca-profiles/cloud-auth/profile-cloud-service.ts
 5 src/main/orca-profiles/cloud-org/profile-cloud-org-members-service.ts
 1 src/main/orca-profiles/cloud-org/profile-cloud-org-selection.ts
 6 src/main/orca-profiles/cloud-session/profile-cloud-session-commit.ts
 1 src/main/orca-profiles/cloud-session/profile-cloud-session-file.ts # OS session-end cannot await promises; synchronously save unsaved refresh-token rotations before shutdown
-3 src/main/orca-profiles/cloud-session/profile-cloud-session-owner.ts
-1 src/main/orca-profiles/cloud-session/profile-cloud-session-store.ts
+2 src/main/orca-profiles/cloud-session/profile-cloud-session-link-state.ts # Relink and rare index initialization must not overwrite synchronous profile mutations
+8 src/main/orca-profiles/cloud-session/profile-cloud-session-owner.ts # Session final publication and deletion cannot interleave with synchronous shutdown recovery
+1 src/main/orca-profiles/cloud-session/profile-cloud-session-refresh.ts # Rotation final publication is indivisible with synchronous shutdown recovery
+8 src/main/orca-profiles/cloud-session/profile-cloud-session-store.ts # Fence final publication and spent-token removal against synchronous OS shutdown recovery
 6 src/main/orca-profiles/orca-account-service.ts
 1 src/main/orca-profiles/profile-account-user-id.ts
+3 src/main/orca-profiles/profile-index-store-async.ts # Rare index initialization and recovery recheck synchronously with all existing index mutators
 20 src/main/orca-profiles/profile-index-store.ts
 1 src/main/orca-profiles/profile-storage-paths.ts
 6 src/main/orca-profiles/project-transfer/profile-active-transfer.ts
@@ -1393,7 +1397,7 @@
 5 src/main/startup/profile-startup/profile-state-recovery-preflight.ts
 2 src/main/startup/profile-startup/single-instance-lock.ts
 12 src/main/startup/pty-startup/main-process-pty-startup.ts
-2 src/main/startup/quit/main-process-quit.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
+3 src/main/startup/quit/main-process-quit.ts # Recover unsaved cloud rotations synchronously if the quit drain times out
 15 src/main/startup/runtime-startup/main-process-runtime-launch.ts
 4 src/main/startup/runtime-startup/main-process-runtime-service.ts
 1 src/main/startup/serve-launch/headless-serve-ssh-registration.ts

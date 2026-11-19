@@ -83,7 +83,7 @@ export abstract class RateLimitServiceState {
   protected usageViewers = 0
   protected detachWindowListeners: (() => void) | null = null
   protected isFetching = false
-  protected fullFetchQueued = false
+  protected fullFetchQueued: { force: boolean } | null = null
   protected codexOnlyFetchQueued = false
   protected claudeOnlyFetchQueued = false
   protected grokOnlyFetchQueued = false
@@ -153,6 +153,10 @@ export abstract class RateLimitServiceState {
   protected inactiveCodexAccountsGeneration = 0
   protected stateListeners = new Set<(state: RateLimitState) => void>()
 
+  private publicationPending = false
+  private publicationInFlight: Promise<void> | null = null
+  protected publicationStopped = false
+
   constructor() {}
 
   onStateChange(listener: (state: RateLimitState) => void): () => void {
@@ -214,22 +218,47 @@ export abstract class RateLimitServiceState {
     )
   }
 
-  protected async pushToRenderer(): Promise<void> {
-    const snapshot = this.state
-    const state = await this.getState()
-    if (this.state !== snapshot) {
-      return
+  protected pushToRenderer(): Promise<void> {
+    if (this.publicationStopped) {
+      return Promise.resolve()
     }
-    for (const listener of this.stateListeners) {
-      try {
-        listener(state)
-      } catch {
-        // ignore — one bad listener must not break the others
+    this.publicationPending = true
+    this.publicationInFlight ??= Promise.resolve().then(() => this.publishLatestState())
+    return this.publicationInFlight
+  }
+
+  private async publishLatestState(): Promise<void> {
+    try {
+      while (this.publicationPending && !this.publicationStopped) {
+        this.publicationPending = false
+        if (!this.stateListeners.size && (!this.mainWindow || this.mainWindow.isDestroyed())) {
+          continue
+        }
+        let state: RateLimitState
+        try {
+          state = await this.getState()
+        } catch (error) {
+          if (this.publicationPending && !this.publicationStopped) {
+            continue
+          }
+          throw error
+        }
+        if (this.publicationStopped || this.publicationPending) {
+          continue
+        }
+        for (const listener of this.stateListeners) {
+          try {
+            listener(state)
+          } catch {
+            // One failing listener must not interrupt delivery.
+          }
+        }
+        if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+          this.mainWindow.webContents.send('rateLimits:update', state)
+        }
       }
+    } finally {
+      this.publicationInFlight = null
     }
-    if (!this.mainWindow || this.mainWindow.isDestroyed()) {
-      return
-    }
-    this.mainWindow.webContents.send('rateLimits:update', state)
   }
 }

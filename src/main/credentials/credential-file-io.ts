@@ -82,6 +82,7 @@ export async function stageCredentialFile(
   data: string | Buffer,
   options: {
     durable?: boolean
+    publish?: (temporaryPath: string, destinationPath: string) => void
     syncFile?: boolean
     shouldPublish?: () => boolean | Promise<boolean>
     requirePrivateWindowsFile?: boolean
@@ -120,10 +121,19 @@ export async function stageCredentialFile(
         await handle.close()
       }
     }
-    if (options.shouldPublish && !(await options.shouldPublish())) {
+    const shouldPublish = options.shouldPublish?.()
+    if (
+      shouldPublish !== undefined &&
+      !(typeof shouldPublish === 'boolean' ? shouldPublish : await shouldPublish)
+    ) {
       return false
     }
-    await rename(temp, path)
+    // Shutdown-sensitive writers must fence and rename without yielding to the shutdown callback.
+    if (options.publish) {
+      options.publish(temp, path)
+    } else {
+      await rename(temp, path)
+    }
     if (options.durable) {
       await bestEffortFsyncDirectory(dir)
     }

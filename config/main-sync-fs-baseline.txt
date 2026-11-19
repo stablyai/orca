@@ -318,7 +318,8 @@
 3 src/main/orca-profiles/catalog/other-profile-workspace-catalog.ts
 3 src/main/orca-profiles/cloud-auth/profile-artifact-cloud-cleanup.ts
 1 src/main/orca-profiles/cloud-auth/profile-cloud-index.ts
-1 src/main/orca-profiles/cloud-session/profile-cloud-session-file.ts
+3 src/main/orca-profiles/cloud-session/profile-cloud-session-file.ts # Session publication and deletion must be indivisible with OS shutdown recovery; staging and reads stay async
+2 src/main/orca-profiles/cloud-session/profile-cloud-session-store.ts # Ordered deletion and spent-token removal must not resume after synchronous OS shutdown recovery
 12 src/main/orca-profiles/profile-index-store.ts
 4 src/main/orca-profiles/project-transfer/profile-project-move-intent.ts
 3 src/main/orca-profiles/project-transfer/profile-project-move-record.ts

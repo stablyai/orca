@@ -176,10 +176,13 @@ export async function getStatus(): Promise<LinearConnectionStatus> {
   const credentialError = (
     await Promise.all(state.workspaces.map((workspace) => getCredentialError(workspace.id)))
   ).find((message) => message !== undefined)
-  const protections = await Promise.all(
-    state.workspaces.map((workspace) => getWorkspaceTokenProtection(workspace.id))
-  )
-  const credentialProtection = protections.includes('plaintext') ? 'plaintext' : null
+  let credentialProtection: 'plaintext' | null = null
+  for (const workspace of state.workspaces) {
+    if ((await getWorkspaceTokenProtection(workspace.id)) === 'plaintext') {
+      credentialProtection = 'plaintext'
+      break
+    }
+  }
 
   return {
     connected: state.workspaces.length > 0,

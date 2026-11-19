@@ -110,3 +110,34 @@ it('never republishes outgoing Codex usage after a switch during a credential re
   expect(publications).not.toContain(90)
   unsubscribe()
 })
+
+it('preserves Retry-After when an automatic preparation is retried after a Codex switch', async () => {
+  class AutomaticService extends RateLimitService {
+    poll() {
+      return this.fetchAll()
+    }
+  }
+  const service = new AutomaticService()
+  vi.mocked(fetchActiveClaudeRateLimits).mockResolvedValue({
+    ...okProvider('claude', 15),
+    usageMetadata: { retryAtMs: 9_999_999_999_999 }
+  })
+  await service.refresh()
+  vi.mocked(fetchActiveClaudeRateLimits).mockClear()
+  const entered = Promise.withResolvers<void>()
+  const credential = Promise.withResolvers<string | null>()
+  service.setOpenCodeGoConfigResolver(
+    () => ({ sessionCookie: '', workspaceIdOverride: '' }),
+    () => {
+      entered.resolve()
+      return credential.promise
+    }
+  )
+  const polling = service.poll()
+  await entered.promise
+  const switching = service.refreshForCodexAccountChange('outgoing')
+  credential.resolve(null)
+  await Promise.all([polling, switching])
+  expect(fetchActiveClaudeRateLimits).not.toHaveBeenCalled()
+  expect((await service.getState()).claude?.session?.usedPercent).toBe(15)
+})

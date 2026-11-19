@@ -1,8 +1,5 @@
 import { inCredentialFileOrder } from '../credentials/credential-file-io'
-import { randomUUID } from 'node:crypto'
-import { copyFile, mkdir, open, readFile, rename, rm, stat } from 'node:fs/promises'
-import { dirname } from 'node:path'
-import { bestEffortFsyncDirectory } from '../../shared/secure-storage/secure-file-async-write'
+import { mkdir, readFile, stat } from 'node:fs/promises'
 import {
   DEFAULT_LOCAL_ORCA_PROFILE_ID,
   type OrcaProfileIndex
@@ -12,11 +9,7 @@ import { hasProfileStateAuthorityMarkerAsync } from '../persistence/profile-stat
 import { profileStateJsonExportPathsAsync } from '../persistence/profile-state/legacy-json/profile-state-export-path'
 import { profileStateDatabaseBackupsAsync } from '../persistence/profile-state/backup/profile-state-backup-path'
 import { copyLegacyStateToProfileAsync } from './storage/profile-legacy-state-import'
-import {
-  normalizeProfileIndex,
-  createInitialProfileIndex,
-  getActiveProfile
-} from './profile-index-schema'
+import { normalizeProfileIndex, getActiveProfile } from './profile-index-schema'
 import {
   getOrcaProfileIndexPath,
   getOrcaProfileDirectory,
@@ -24,7 +17,11 @@ import {
   getOrcaProfileDataFile,
   getProfileUserDataPath
 } from './profile-storage-paths'
-import type { ActiveOrcaProfileState } from './profile-index-store'
+import {
+  ensureActiveOrcaProfile,
+  loadOrCreateProfileIndex,
+  type ActiveOrcaProfileState
+} from './profile-index-store'
 
 async function profileIndexPathExists(path: string): Promise<boolean> {
   try {
@@ -63,35 +60,6 @@ async function readExistingProfileIndexAsync(indexPath: string): Promise<OrcaPro
   return index
 }
 
-export async function writeProfileIndexAsync(
-  indexPath: string,
-  index: OrcaProfileIndex
-): Promise<void> {
-  await mkdir(dirname(indexPath), { recursive: true })
-  // Never replace the recovery backup with a corrupt primary index.
-  if ((await profileIndexPathExists(indexPath)) && (await readProfileIndexFileAsync(indexPath))) {
-    try {
-      await copyFile(indexPath, `${indexPath}.bak`)
-    } catch {
-      // Backup failure must not block the primary write.
-    }
-  }
-  const tmpPath = `${indexPath}.${randomUUID()}.tmp`
-  try {
-    const handle = await open(tmpPath, 'wx')
-    try {
-      await handle.writeFile(JSON.stringify(index, null, 2), 'utf-8')
-      await handle.sync()
-    } finally {
-      await handle.close()
-    }
-    await rename(tmpPath, indexPath)
-  } finally {
-    await rm(tmpPath, { force: true })
-  }
-  await bestEffortFsyncDirectory(dirname(indexPath))
-}
-
 export async function loadOrCreateProfileIndexAsync(
   userDataPath: string
 ): Promise<OrcaProfileIndex> {
@@ -100,9 +68,7 @@ export async function loadOrCreateProfileIndexAsync(
   if (index) {
     return index
   }
-  const nextIndex = createInitialProfileIndex()
-  await writeProfileIndexAsync(indexPath, nextIndex)
-  return nextIndex
+  return loadOrCreateProfileIndex(userDataPath)
 }
 
 export async function ensureActiveOrcaProfileAsync(
@@ -110,18 +76,13 @@ export async function ensureActiveOrcaProfileAsync(
 ): Promise<ActiveOrcaProfileState> {
   return inCredentialFileOrder(`${getOrcaProfileIndexPath(userDataPath)}.mutation`, async () => {
     const indexPath = getOrcaProfileIndexPath(userDataPath)
-    let index = await readExistingProfileIndexAsync(indexPath)
-    let shouldWriteIndex = !(await profileIndexPathExists(indexPath))
-
-    if (!index) {
-      index = createInitialProfileIndex()
-      shouldWriteIndex = true
+    const index = await readExistingProfileIndexAsync(indexPath)
+    if (!index || !(await profileIndexPathExists(indexPath))) {
+      return ensureActiveOrcaProfile(userDataPath)
     }
-
     const activeProfile = getActiveProfile(index)
     if (activeProfile.id !== index.activeProfileId) {
-      index = { ...index, activeProfileId: activeProfile.id }
-      shouldWriteIndex = true
+      return ensureActiveOrcaProfile(userDataPath)
     }
 
     const profileDirectory = getOrcaProfileDirectory(activeProfile.id, userDataPath)
@@ -144,10 +105,6 @@ export async function ensureActiveOrcaProfileAsync(
       !hasRetainedProfileStateAuthority
     ) {
       await copyLegacyStateToProfileAsync(userDataPath, activeProfile.id)
-    }
-
-    if (shouldWriteIndex) {
-      await writeProfileIndexAsync(indexPath, index)
     }
 
     return {

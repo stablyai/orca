@@ -1,10 +1,8 @@
 import {
   ownerOf,
-  advanceCloudSessionGeneration,
   relink,
   isSameOrgAsLink,
   takeCloudSessionTicket,
-  sessionFromExchange,
   invalidateCloudSessionChanges,
   type CloudSessionTicket,
   type CloudSessionServerReply
@@ -23,89 +21,19 @@ import type { OrcaProfileListState } from '../../../shared/orca-profiles/orca-pr
 import { getOrcaProfileListState } from '../profile-index-store'
 import type { OrcaCloudSessionExchangeResponse } from './profile-cloud-session-exchange'
 import {
+  readCurrentCloudSession,
+  signInSession,
+  restoreSession,
+  signOutRevokedSession
+} from './profile-cloud-session-local'
+import {
   clearOrcaCloudSession,
+  discardUnsavedOrcaCloudSession,
   flushUnsavedOrcaCloudSessions,
-  readOrcaCloudSession,
   saveOrcaCloudSession,
   type OrcaCloudSession,
   type OrcaCloudSessionReadResult
 } from './profile-cloud-session-store'
-
-async function readCurrentCloudSession(
-  profileId: string,
-  userDataPath: string
-): Promise<OrcaCloudSessionReadResult> {
-  if (ownerOf(profileId, userDataPath).signedOut) {
-    return { status: 'missing', persistence: 'none' }
-  }
-  const session = await readOrcaCloudSession(profileId, userDataPath)
-  return ownerOf(profileId, userDataPath).signedOut
-    ? { status: 'missing', persistence: 'none' }
-    : session
-}
-
-/** `requireSealed` refuses memory-only and plaintext saves instead of falling back. */
-async function signInSession(
-  profileId: string,
-  userDataPath: string,
-  exchange: OrcaCloudSessionExchangeResponse,
-  options: { requireSealed?: boolean } = {}
-): Promise<void> {
-  const generation = ownerOf(profileId, userDataPath).generation
-  await saveOrcaCloudSession(profileId, userDataPath, sessionFromExchange(exchange), options)
-  if (ownerOf(profileId, userDataPath).generation !== generation) {
-    throw new Error('orca_cloud_auth_cancelled')
-  }
-  advanceCloudSessionGeneration(ownerOf(profileId, userDataPath))
-  ownerOf(profileId, userDataPath).signedOut = false
-}
-
-/** Puts back the session an unfinished account change replaced; with none, signs out. */
-async function restoreSession(
-  profileId: string,
-  userDataPath: string,
-  previous: OrcaCloudSessionReadResult
-): Promise<void> {
-  if (previous.status === 'found') {
-    try {
-      await saveOrcaCloudSession(profileId, userDataPath, previous.session)
-      advanceCloudSessionGeneration(ownerOf(profileId, userDataPath))
-      ownerOf(profileId, userDataPath).signedOut = false
-      return
-    } catch {
-      // The replacement's identity stamp keeps it from being used as the profile's account.
-    }
-  }
-  await signOutSession(profileId, userDataPath)
-}
-
-async function signOutSession(profileId: string, userDataPath: string): Promise<void> {
-  invalidateCloudSessionChanges(profileId, userDataPath)
-  ownerOf(profileId, userDataPath).signedOut = true
-  try {
-    await clearOrcaCloudSession(profileId, userDataPath)
-  } catch {
-    // `signedOut` already hides the file, so a revoked token is never read back.
-  }
-}
-
-// Clear only the token that failed; losing refresh racers must not erase the winner’s session.
-async function signOutRevokedSession(
-  profileId: string,
-  userDataPath: string,
-  failed: OrcaCloudSession
-): Promise<boolean> {
-  const current = await readCurrentCloudSession(profileId, userDataPath)
-  if (current.status === 'found' && current.session.refreshToken !== failed.refreshToken) {
-    return false
-  }
-  // An unreadable token may differ from the failed one, so deletion is unsafe.
-  if (current.status === 'unreadable') {
-    return false
-  }
-  await signOutSession(profileId, userDataPath)
-  return true
-}
 
 /** Save rotated tokens unless signed out/replaced: retaining spent tokens can revoke the family.
  * Apply org metadata only if the link has not moved; persist tokens before the best-effort link. */
@@ -250,6 +178,7 @@ export function signInCloudSession(
   })
 }
 export function signOutCloudSession(profileId: string, userDataPath: string): Promise<void> {
+  discardUnsavedOrcaCloudSession(profileId, userDataPath)
   invalidateCloudSessionChanges(profileId, userDataPath)
   ownerOf(profileId, userDataPath).signedOut = true
   return inCloudSessionOrder(profileId, userDataPath, async () => {

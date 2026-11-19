@@ -247,7 +247,6 @@
 1 test-no-wall-clock:src/main/native-chat/agent-session-attachments/agent-session-attachment-sweep.test.ts
 1 test-no-wall-clock:src/main/opencode/status-hooks/overlay-dir-gc.test.ts
 4 test-no-wall-clock:src/main/orca-profiles/cloud-auth/profile-cloud-service-connect-overlap.test.ts
-2 test-no-wall-clock:src/main/orca-profiles/cloud-auth/profile-cloud-service-sign-out-connect-race.test.ts
 2 test-no-wall-clock:src/main/orcad/artifact-slots/orcad-artifact-cache-retention.test.ts
 1 test-no-wall-clock:src/main/orcad/artifact-slots/orcad-artifact-materializer.test.ts
 3 test-no-wall-clock:src/main/orcad/host-lifecycle/managed-stop/orcad-stop-request-shutdown.integration.test.ts
