@@ -7,6 +7,9 @@ export type SlackMarkupSegment =
   | { kind: 'plain'; text: string }
   | { kind: 'link'; url: string; text: string }
 
+/** Slack people a chat knows, name by user id. */
+export type SlackPeople = ReadonlyMap<string, string>
+
 // A token holds no `<` or `>`; Slack escapes those inside it.
 const TOKEN = /<([^<>]+)>/g
 const SAFE_LINK = /^(?:https?:\/\/|mailto:)/i
@@ -34,14 +37,18 @@ function prefixed(prefix: string, label: string): string {
   return label.startsWith(prefix) ? label : `${prefix}${label}`
 }
 
-function tokenSegment(raw: string, body: string): SlackMarkupSegment {
+/** One `<…>` token as the chat shows it; `people` names a bare `<@U…>`. */
+export function slackTokenSegment(
+  raw: string,
+  body: string,
+  people?: SlackPeople | null
+): SlackMarkupSegment {
   const bar = body.indexOf('|')
   const target = decodeEntities(bar === -1 ? body : body.slice(0, bar))
   const label = bar === -1 ? '' : oneLine(decodeEntities(body.slice(bar + 1)))
   if (target.startsWith('@')) {
-    return label
-      ? { kind: 'mention', text: prefixed('@', label) }
-      : { kind: 'plain', text: '@user' }
+    const name = label || people?.get(target.slice(1))
+    return name ? { kind: 'mention', text: prefixed('@', name) } : { kind: 'plain', text: '@user' }
   }
   if (target.startsWith('#')) {
     return label
@@ -77,7 +84,7 @@ export function slackMarkupSegments(text: string): SlackMarkupSegment[] {
     if (match.index > last) {
       segments.push({ kind: 'text', text: text.slice(last, match.index) })
     }
-    segments.push(tokenSegment(match[0], match[1]!))
+    segments.push(slackTokenSegment(match[0], match[1]!))
     last = match.index + match[0].length
   }
   if (last < text.length) {

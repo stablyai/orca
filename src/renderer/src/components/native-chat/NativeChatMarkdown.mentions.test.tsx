@@ -7,6 +7,7 @@ import {
   NativeChatBotChatTitleContext,
   NativeChatMentionEveryoneContext,
   NativeChatMentionNamesContext,
+  NativeChatSlackPeopleContext,
   withBoundBotMentions
 } from './native-chat-markdown-mentions'
 
@@ -106,5 +107,21 @@ describe("a Slack message's mentions", () => {
     expect(container.textContent).toContain('mail ann@Ann.dev')
     expect(container.querySelector('code')?.textContent).toBe('@Ann (PM) *x*')
     expect(container.querySelector('em')).toBeNull()
+  })
+})
+
+describe("Slack mention tokens in an agent's reply", () => {
+  it('shows them as names, leaving code as written', () => {
+    const { container } = render(
+      <NativeChatSlackPeopleContext value={new Map([['U05BRPQSABY', 'Jinjing']])}>
+        <NativeChatMarkdown
+          content="Hi <!here> <@U05BRPQSABY> The limit, see `<@U05BRPQSABY>`; ask <@U2>"
+          variant="document"
+        />
+      </NativeChatSlackPeopleContext>
+    )
+    expect(chips(container)).toEqual(['@here', '@Jinjing'])
+    expect(container.querySelector('code')?.textContent).toBe('<@U05BRPQSABY>')
+    expect(container.textContent).toContain('ask @user')
   })
 })
