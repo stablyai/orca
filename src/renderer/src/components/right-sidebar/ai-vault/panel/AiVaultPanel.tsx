@@ -41,6 +41,7 @@ import { AiVaultPanelSearch } from '../search/AiVaultPanelSearch'
 import { useAiVaultResumeCatalogs } from '../session-actions/use-ai-vault-resume-catalogs'
 import { useAiVaultPanelSessionResume } from '../session-actions/use-ai-vault-panel-session-resume'
 import { AiVaultScanProgressStrip } from '../scanning/AiVaultScanProgressStrip'
+import { useAiVaultListGeneration } from '../scanning/ai-vault-list-generation'
 import { useAiVaultScanProgress } from '../scanning/ai-vault-scan-progress-store'
 import { aiVaultLocalScanKey } from '../../../../../../shared/ai-vault/scanning/ai-vault-local-scan-key'
 import { useAiVaultPanelWorkspace } from '../scope/use-ai-vault-panel-workspace'
@@ -193,8 +194,12 @@ export default function AiVaultPanel({
   const stripProgress = searching ? null : scanProgress
   // The panel's own load has not shown its list yet; the note and the strip's done state wait for it.
   const historyLoading = loading || historyRefreshing
-  // Changes when a list is shown or a different list is requested, so the strip never revives an earlier scan.
-  const listGeneration = `${listRevision}\n${requestedScanKey}`
+  const listGeneration = useAiVaultListGeneration(
+    listRevision,
+    `${executionHostScope}\n${requestedScanKey}`
+  )
+  // Why: a wait over shown rows needs its loading state even before (or without) any scan progress.
+  const stripShown = stripProgress !== null || (!searching && historyLoading && sessions.length > 0)
   // Keep session maps independent of active workspace switches to avoid rebuilding them during navigation (#10841).
   const sessionProjectById = useMemo(
     () =>
@@ -305,9 +310,11 @@ export default function AiVaultPanel({
         onRefresh={() => (searching ? search.retry() : void refresh({ force: true }))}
       />
 
-      {stripProgress ? (
+      {stripShown ? (
         <AiVaultScanProgressStrip
-          {...stripProgress}
+          progress={stripProgress?.progress ?? null}
+          agents={stripProgress?.agents}
+          active={stripProgress?.active}
           listPending={historyLoading}
           listGeneration={listGeneration}
         />
@@ -355,7 +362,7 @@ export default function AiVaultPanel({
             collapsedGroups={collapsedGroups}
             loading={searching ? search.loading : loading}
             scopePending={!searching && scopePending}
-            scanProgressShown={stripProgress !== null}
+            scanProgressShown={stripShown}
             sessionsCount={searching ? filteredSessions.length : sessions.length}
             filteredSessionsCount={filteredSessions.length}
             noAgentsSelected={agents.length === 0}

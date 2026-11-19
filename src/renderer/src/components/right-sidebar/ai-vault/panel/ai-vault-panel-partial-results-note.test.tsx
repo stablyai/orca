@@ -163,14 +163,21 @@ it('says the history refreshed only when the list shows and the note clears', as
 
 // Records each distinct DOM state of the note, the strip and the list header while a refresh runs.
 function recordStates(): {
-  states: { note: boolean; refreshed: boolean; stale: boolean; list: string }[]
+  states: { note: boolean; plain: boolean; refreshed: boolean; stale: boolean; list: string }[]
   stop: () => void
 } {
-  const states: { note: boolean; refreshed: boolean; stale: boolean; list: string }[] = []
+  const states: {
+    note: boolean
+    plain: boolean
+    refreshed: boolean
+    stale: boolean
+    list: string
+  }[] = []
   const sample = (): void => {
     const text = document.body.textContent ?? ''
     const state = {
       note: text.includes(NOTE),
+      plain: document.querySelector('[title="Loading sessions…"]') !== null,
       refreshed: text.includes('History refreshed'),
       stale: /10 files|3 \/ 10|\d+:\d\d/.test(text),
       list: text.match(/\d+ sessions?(?=Last updated)/)?.[0] ?? ''
@@ -229,4 +236,39 @@ it('shows plain loading during a later refresh with no scan, and says refreshed 
   const firstRefreshed = states.findIndex((state, i) => i > 0 && state.refreshed)
   expect(states[firstRefreshed]).toMatchObject({ note: false, list: '2 sessions' })
   expect(states.slice(1, firstRefreshed).every((state) => state.list === '1 session')).toBe(true)
+})
+
+it('shows plain loading over shown rows when no scan has reported, and clears it with the list', async () => {
+  // No scan progress at all for this list.
+  await act(async () => pushProgress({ scanKey: lastScanKey, progress: null }))
+  listSessions.mockResolvedValueOnce(listed)
+  renderPanel()
+  await waitFor(() => expect(screen.queryByText(NOTE)).toBeNull())
+  expect(screen.queryByTitle(/Loading sessions/)).toBeNull()
+  expect(screen.queryByText('History refreshed')).toBeNull()
+
+  let resolveLater = (): void => {}
+  listSessions.mockReturnValueOnce(
+    new Promise((done) => {
+      resolveLater = () =>
+        done({
+          ...listed,
+          sessions: [demoSession(), { ...demoSession(), id: 'demo-2', sessionId: 'demo-2' }]
+        })
+    })
+  )
+  const recorder = recordStates()
+  await act(async () => screen.getByRole('button', { name: 'Refresh Session History' }).click())
+  expect(await screen.findByText(NOTE)).not.toBeNull()
+  expect(screen.getByTitle('Loading sessions…')).not.toBeNull()
+
+  await act(async () => resolveLater())
+  await waitFor(() => expect(screen.queryByText(NOTE)).toBeNull())
+  recorder.stop()
+  expect(screen.queryByTitle(/Loading sessions/)).toBeNull()
+  // In every sampled state the note and the plain loading strip appear and clear together, with no count or time.
+  const pendingStates = recorder.states.filter((state) => state.note)
+  expect(pendingStates.length).toBeGreaterThan(0)
+  expect(pendingStates.every((state) => state.plain && !state.refreshed && !state.stale)).toBe(true)
+  expect(recorder.states.at(-1)).toMatchObject({ note: false, list: '2 sessions' })
 })

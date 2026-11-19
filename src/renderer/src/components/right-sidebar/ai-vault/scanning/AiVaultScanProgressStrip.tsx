@@ -201,15 +201,26 @@ function AgentRow({
   )
 }
 
+// Stands in only while a list is awaited with no scan progress at all; none of its fields is ever displayed.
+const NO_PROGRESS: AiVaultScanProgress = {
+  scanId: '',
+  stage: 'finding',
+  startedAt: 0,
+  settledAt: null,
+  agents: [],
+  read: { done: 0, total: 0 }
+}
+
 /** One line under the search box naming what this computer's scan is doing; opens to one row per agent. */
 export function AiVaultScanProgressStrip({
-  progress: reported,
-  agents = reported.agents,
-  active: reportedActive = reported.settledAt === null,
+  progress: reportedProgress,
+  agents: reportedAgents,
+  active: reportedActiveProp,
   listPending = false,
   listGeneration = ''
 }: {
-  progress: AiVaultScanProgress
+  /** Null when no scan has reported for this list; the strip then only shows a pending wait. */
+  progress: AiVaultScanProgress | null
   agents?: AiVaultScanAgentProgress[]
   active?: boolean
   /** The panel's own load is still waiting to show its list. */
@@ -219,6 +230,10 @@ export function AiVaultScanProgressStrip({
 }): React.JSX.Element {
   const t = useTranslate()
   const [open, setOpen] = useState(false)
+  const reported = reportedProgress ?? NO_PROGRESS
+  const agents = reportedAgents ?? reported.agents
+  const reportedActive =
+    reportedProgress !== null && (reportedActiveProp ?? reported.settledAt === null)
   const [watched, setWatched] = useState<{ scanId: string; generation: string } | null>(null)
   // Why: remember only a scan seen running while this list was awaited, so a later wait never revives a finished scan.
   if (
