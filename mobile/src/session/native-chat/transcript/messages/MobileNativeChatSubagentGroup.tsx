@@ -1,3 +1,4 @@
+import { useContext } from 'react'
 import { Pressable, Text, View, type ViewStyle } from 'react-native'
 import { Bot, ChevronRight } from 'lucide-react-native'
 import {
@@ -21,8 +22,10 @@ import { useNow } from '../../../../hooks/use-now'
 import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
+import { MobileNativeChatRowOverlaysContext } from '../message-actions/mobile-native-chat-row-overlays'
 
-function stateDotStyle(state: NativeChatSubagentState): ViewStyle {
+export function stateDotStyle(state: NativeChatSubagentState): ViewStyle {
   switch (state) {
     case 'working':
       return { backgroundColor: colors.textPrimary }
@@ -39,7 +42,7 @@ function stateDotStyle(state: NativeChatSubagentState): ViewStyle {
 }
 
 // Isolate the one-second clock so ticks cannot rerender the containing message.
-function Elapsed({
+export function Elapsed({
   startedAt,
   settledAt,
   counting
@@ -65,6 +68,8 @@ export function MobileNativeChatSubagentGroup({
   onToggle?: (groupId: string) => void
 }): React.JSX.Element | null {
   useMobileColorScheme()
+  const t = useMobileTranslation()
+  const { openSubagent } = useContext(MobileNativeChatRowOverlaysContext)
   const header = nativeChatSubagentGroupHeader(block.agents, say)
   if (header.total === 0) {
     return null
@@ -122,7 +127,24 @@ export function MobileNativeChatSubagentGroup({
               .filter((part): part is string => part !== null)
               .join(' · ')
             return (
-              <View key={agent.id} testID="subagent-group-entry" style={styles.entryBlock}>
+              // Each entry opens its subagent's own view, where the chat can show one.
+              <Pressable
+                key={agent.id}
+                testID="subagent-group-entry"
+                disabled={!openSubagent}
+                accessibilityRole={openSubagent ? 'button' : undefined}
+                accessibilityLabel={
+                  openSubagent
+                    ? t('chat.subagentGroup.openAgent', 'Open {{value0}}', { value0: agent.label })
+                    : undefined
+                }
+                style={({ pressed }) => [
+                  styles.entryBlock,
+                  openSubagent && styles.entryOpens,
+                  pressed && styles.pressed
+                ]}
+                onPress={() => openSubagent?.(agent.id)}
+              >
                 <View style={styles.entry}>
                   <View style={[styles.dot, stateDotStyle(state)]} />
                   <Text
@@ -137,13 +159,16 @@ export function MobileNativeChatSubagentGroup({
                       ? ` · ${formatSubagentTokens(agent.tokens)}`
                       : null}
                   </Text>
+                  {openSubagent ? (
+                    <ChevronRight size={12} color={colors.textMuted} strokeWidth={2} />
+                  ) : null}
                 </View>
                 {detail ? (
                   <Text style={styles.entryDetail} numberOfLines={2}>
                     {detail}
                   </Text>
                 ) : null}
-              </View>
+              </Pressable>
             )
           })
         : null}
@@ -196,6 +221,10 @@ const styles = themedStyleSheet(() => ({
   },
   entryBlock: {
     paddingLeft: spacing.lg + spacing.xs
+  },
+  // A tap target, not just a line: room above and below the row it opens.
+  entryOpens: {
+    paddingVertical: spacing.xs
   },
   entry: {
     minHeight: 24,

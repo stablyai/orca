@@ -4,8 +4,7 @@ import {
   type NativeChatMessage
 } from '../../../../../shared/native-chat/native-chat-types'
 import type { NativeChatSubagentRow } from '../../../../../shared/native-chat/transcript/native-chat-transcript-projection'
-
-export type NativeChatSubagentHistory = 'landed' | 'page' | 'cleared' | 'stop'
+import type { NativeChatSubagentHistory } from '../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-ending'
 
 function namesAgent(message: NativeChatMessage, agentId: string): boolean {
   return message.blocks.some(

@@ -35,6 +35,7 @@ import type { AgentSessionRewindSurface } from '../../../../../src/shared/agent-
 import type { MobileNativeChatUsageLimit } from '../status/use-mobile-native-chat-usage-limit'
 import type { MobileStructuredMcpPanel } from '../mcp/use-mobile-structured-mcp-panel'
 import type { MobileStructuredAsyncQuestionSkip } from './use-mobile-structured-async-questions'
+import type { MobileNativeChatSubagentSource } from '../subagents/mobile-native-chat-subagent-view'
 
 export type StructuredMobileSession = Omit<
   ReturnType<typeof useMobileStructuredAgentOptions>,
@@ -42,6 +43,8 @@ export type StructuredMobileSession = Omit<
 > &
   ReturnType<typeof useMobileStructuredAgentTurnTiming> & {
     journal: Pick<AgentJournalSnapshot, 'items' | 'submissions'>
+    /** What a subagent's own view reads beyond the chat's rows. */
+    subagentSource: MobileNativeChatSubagentSource
     /** The composer ring's readout; null until the session reports usage. */
     contextUsage: NativeChatContextUsageSummary | null
     submissions: readonly AgentJournalSubmission[]

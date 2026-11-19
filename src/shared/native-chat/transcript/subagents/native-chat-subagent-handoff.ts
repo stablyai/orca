@@ -1,14 +1,10 @@
 // What the main agent asked a subagent to do and, for Claude, the reply its spawn call returned.
 
-import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { codexCollabRowAgentIds } from '../../../../../shared/agent-hook-listener/providers/codex/codex-collab-agent-tools'
-import {
-  isSubagentBlock,
-  isToolCallBlock,
-  type NativeChatMessage
-} from '../../../../../shared/native-chat/native-chat-types'
-import type { NativeChatSubagentRow } from '../../../../../shared/native-chat/transcript/native-chat-transcript-projection'
-import { pairNativeChatToolResults } from '../../../../../shared/native-chat/tools/native-chat-tool-pairing'
+import type { AgentJournalRenderItem } from '../../../agent-session/journal/agent-session-journal-types'
+import { codexCollabRowAgentIds } from '../../../agent-hook-listener/providers/codex/codex-collab-agent-tools'
+import { isSubagentBlock, isToolCallBlock, type NativeChatMessage } from '../../native-chat-types'
+import type { NativeChatSubagentRow } from '../native-chat-transcript-projection'
+import { pairNativeChatToolResults } from '../../tools/native-chat-tool-pairing'
 
 export type NativeChatSubagentHandoff = {
   prompt: string | null

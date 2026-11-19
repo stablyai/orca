@@ -28,6 +28,7 @@ export function MobileNativeChatRowOverlaysHost({
   onOpenUrlInOrca,
   linkOpenMode,
   rewind,
+  openSubagent,
   children
 }: {
   conversation: MobileNativeChatConversation
@@ -37,6 +38,7 @@ export function MobileNativeChatRowOverlaysHost({
   linkOpenMode: MobileLinkOpenMode
   /** The chat's "Rewind to here"; absent where it can't rewind. */
   rewind?: AgentSessionRewindSurface
+  openSubagent?: (agentId: string) => void
   children?: React.ReactNode
 }): React.JSX.Element {
   const { openRewind, dialog, close: closeRewind } = useMobileNativeChatRewindDialog(rewind)
@@ -54,9 +56,10 @@ export function MobileNativeChatRowOverlaysHost({
         setShown({ actionsFor })
       },
       openRewind,
-      imageSource
+      imageSource,
+      ...(openSubagent ? { openSubagent } : {})
     }),
-    [setShown, openRewind, imageSource]
+    [setShown, openRewind, imageSource, openSubagent]
   )
   // Why a ref: every markdown block reads openLink, so a reconnect must not change its identity.
   const linkRouteRef = useRef({ linkOpenMode, onOpenUrlInOrca })

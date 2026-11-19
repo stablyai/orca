@@ -29,10 +29,10 @@ import {
   nativeChatSubagentEnding,
   nativeChatSubagentEndingMessage,
   type NativeChatSubagentAside
-} from './native-chat-subagent-ending'
+} from '../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-ending'
 import { NativeChatSubagentViewBar } from './NativeChatSubagentViewBar'
 import { NativeChatSubagentPrompt } from './NativeChatSubagentPrompt'
-import { nativeChatSubagentHandoff } from './native-chat-subagent-handoff'
+import { nativeChatSubagentHandoff } from '../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-handoff'
 
 const NO_MESSAGES: readonly NativeChatMessage[] = []
 const NO_SUBAGENT_ROWS: readonly NativeChatSubagentRow[] = []
