@@ -13,7 +13,10 @@ import {
   type SourceControlDisplaySectionArea,
   type SourceControlDisplaySectionId
 } from '../../../../src/shared/source-control/listing/source-control-section-order'
-import { getUnstageAllPaths } from '../../../../src/shared/source-control/listing/source-control-discard-all-sequence'
+import {
+  getDiscardAllPaths,
+  getUnstageAllPaths
+} from '../../../../src/shared/source-control/listing/source-control-discard-all-sequence'
 import {
   canDiscardStatusEntry,
   canStageStatusEntry,
@@ -81,6 +84,15 @@ export function getStageablePaths(entries: readonly MobileGitStatusEntry[]): str
 
 export function getUnstageablePaths(entries: readonly MobileGitStatusEntry[]): string[] {
   return getUnstageAllPaths(entries.filter(hasKnownArea))
+}
+
+/** Desktop's section Discard all set; the Changes section's area also covers its untracked rows. */
+export function getDiscardAllSectionPaths(
+  section: Pick<MobileSourceControlSection, 'id' | 'area' | 'data'>
+): string[] {
+  return section.id === 'conflicts'
+    ? []
+    : getDiscardAllPaths(section.data.filter(hasKnownArea), section.area)
 }
 
 export function isMobileGitStageableEntry(entry: MobileGitStatusEntry): boolean {

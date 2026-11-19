@@ -28,6 +28,7 @@ import { remoteRuntimeClientCapabilities } from '../../../../src/shared/remote-r
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../src/shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
 import { COMPRESSED_FRAMES_CLIENT_CAPABILITY } from '../../../../src/shared/remote-runtime/e2ee/paired-e2ee-compressed-frame'
 import { TERMINAL_HOST_PANE_RESPAWN_CLIENT_CAPABILITY } from '../../../../src/shared/terminal/pty/lifecycle/host-pane-respawn-capability'
+import { GIT_REVERT_CONFLICT_CLIENT_CAPABILITY } from '../../../../src/shared/git/commands/git-commit-action'
 
 export const MOBILE_RUNTIME_CLIENT_CAPABILITIES = remoteRuntimeClientCapabilities([
   AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY,
@@ -58,6 +59,8 @@ export const MOBILE_RUNTIME_CLIENT_CAPABILITIES = remoteRuntimeClientCapabilitie
   AGENT_SESSION_QUEUED_IMAGE_CARDS_CLIENT_CAPABILITY,
   // The session view follows a tab's terminal handle, so a pane the host restarts shows its new terminal.
   TERMINAL_HOST_PANE_RESPAWN_CLIENT_CAPABILITY,
+  // Source Control labels a paused revert as one, so the host stops reporting it as unknown.
+  GIT_REVERT_CONFLICT_CLIENT_CAPABILITY,
   // Every socket this list is sent on reads frames through MobileE2EEV2PhysicalChannel, which inflates them.
   COMPRESSED_FRAMES_CLIENT_CAPABILITY
 ])

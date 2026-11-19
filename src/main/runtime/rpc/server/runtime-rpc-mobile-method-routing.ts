@@ -102,6 +102,8 @@ export const EXECUTION_HOST_METHODS = [
   'git.abortRebase',
   'git.branchCompare',
   'git.branchDiff',
+  // Discard all on the phone; older hosts refuse it and the phone falls back to per-file git.discard.
+  'git.bulkDiscard',
   'git.bulkStage',
   'git.bulkUnstage',
   'git.cancelGenerateCommitMessage',
@@ -127,6 +129,9 @@ export const EXECUTION_HOST_METHODS = [
   'git.rebaseFromBase',
   'git.remoteCommitUrl',
   'git.resolveConflict',
+  // A paused cherry-pick or revert, continued or aborted from the phone as desktop does.
+  'git.sequencerAbort',
+  'git.sequencerContinue',
   'git.stage',
   'git.status',
   'git.unstage',

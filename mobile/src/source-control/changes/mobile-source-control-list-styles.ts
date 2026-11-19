@@ -16,6 +16,9 @@ export const listStyles = themedStyleSheet(() => ({
     fontSize: 13,
     fontWeight: '600'
   },
+  sectionActionDestructive: {
+    color: colors.statusRed
+  },
   sectionActions: {
     flexDirection: 'row',
     gap: spacing.lg

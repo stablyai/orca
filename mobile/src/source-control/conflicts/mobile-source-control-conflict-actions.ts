@@ -6,7 +6,7 @@ export const MOBILE_COMPLETE_MERGE_ACTION_ID = 'complete-merge'
 export function mobileConflictNeedsNewerHostMessage(): string {
   return translate(
     'sourceControl.conflictActions.needsNewerHost',
-    'Update Orca on the computer running this workspace to resolve merge conflicts from your phone.'
+    'Update Orca on the computer running this workspace to resolve conflicts from your phone.'
   )
 }
 
