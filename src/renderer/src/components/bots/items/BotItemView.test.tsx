@@ -80,6 +80,7 @@ function show(count: number, item = makeTestBotItem(6)): void {
   read.current = {
     item,
     events: eventsUpTo(count),
+    eventsRead: true,
     hasEarlier: false,
     failed: false,
     deleted: false,
@@ -160,7 +161,7 @@ it('scrolls to the end after a comment is sent', async () => {
     fireEvent.keyDown(box, { key: 'Enter' })
   })
 
-  expect(sent).toHaveBeenCalledWith(BOT, 'uid-6', 'Ship it', [])
+  expect(sent).toHaveBeenCalledWith(BOT, 'uid-6', 'Ship it', [], expect.any(String))
   expect(scroller().scrollTop).toBe(CONTENT)
 })
 

@@ -85,6 +85,7 @@ function read(
     case 'automation-result-notes':
     case 'operation-window':
     case 'prompt-item':
+    case 'latest-task-list':
     case 'run-mentions':
     case 'turn-ran-since':
     case 'ended-turn-count':

@@ -33,7 +33,7 @@ import { folderWorkspaceKey } from '../../../../shared/workspace/identity/worksp
 import { BotChatTreeWorkerRow } from './BotChatTreeWorkerRow'
 import { BotChatPaging } from './BotChatRowControls'
 import { botErrorMessage } from './bot-presentation'
-import { useBotChatTree } from './use-bot-chat-tree'
+import { useBotOwnChatTree } from './use-bot-chat-tree'
 import { useBotForWorkspace } from './bot-workspace'
 import { BotPanelHeader } from './BotPanelHeader'
 import { useBotNeedsYouCount, useBotNow } from './use-bot-now'
@@ -96,7 +96,7 @@ export default function BotChatsPanel(): React.JSX.Element | null {
 
 function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
   const t = useTranslate()
-  const tree = useBotChatTree(bot)
+  const tree = useBotOwnChatTree(bot)
   // Its server is down: the last read shows with its actions off until it's back.
   const offline = useBotHostOffline(bot.hostId)
   const chats = useMemo(() => orderChatsTab(tree.chats), [tree.chats])

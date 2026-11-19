@@ -68,6 +68,8 @@ export type AgentSessionFailureWordsContext = {
   messageSubmitted?: boolean
   /** The chat runs on this WSL distro's host; desktop-only, since the host can't name itself so. */
   wslDistro?: string
+  /** Where the chat runs as this reader names it ("this computer", a server's name); desktop-only. */
+  hostName?: string
   /** How this reader says a usage limit's reset; without it the words name no time. */
   usageLimitReset?: AgentSessionUsageLimitResetWords
 }
@@ -101,9 +103,9 @@ function startRetry(
 
 function couldNot(verb: 'couldNotStart' | 'couldNotRestart'): Sentence {
   return (context, fact, _surface, say) => {
-    const installationFailure = agentCliInstallationFailureWords(fact.refusal, say)
-    if (installationFailure) {
-      return installationFailure
+    const installation = agentCliInstallationFailureWords(fact.refusal, say, context.hostName)
+    if (installation) {
+      return installation
     }
     const failed = say(verb, agent(say, context))
     if (fact.argumentProblem) {

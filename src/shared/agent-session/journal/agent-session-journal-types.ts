@@ -205,6 +205,8 @@ export type AgentJournalApprovalItem = AgentJournalPromptFields & {
   kind: 'approval'
   title: string
   displayName?: string
+  /** The tool being asked about, when the provider names one; readers fall back to the title. */
+  toolName?: string
   description?: string
   decisionReason?: string
   blockedPath?: string

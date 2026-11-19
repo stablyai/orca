@@ -1,4 +1,5 @@
 import type { AgentType } from '../../../agent-status/contracts/agent-status-types'
+import type { NativeChatAgent } from '../../../agent-launch/permissions/agent-chat-permission-support'
 import type { DiscoveredSkill, SkillDiscoverySource } from '../../../skills/discovery/skills'
 import {
   getAgentSlashCommands,
@@ -14,6 +15,8 @@ export type NativeChatAgentProfile = {
   skillNamePrefix?: string
   /** Other agents whose own skill folders, though not their plugins, this agent also reads. */
   readsSkillFoldersOf?: readonly AgentType[]
+  /** Other agents whose project skill folders, but not home ones, this agent also reads. */
+  readsProjectSkillFoldersOf?: readonly AgentType[]
   /** OpenCode 1.x reports some skills as commands; 2.x reports none. Keep folder scans for running chats. */
   keepsScannedSkills?: true
   /** The agent's own harness expands a slash command out of the message text, so
@@ -35,7 +38,10 @@ const OPENCODE_PROFILE: NativeChatAgentProfile = {
   expandsSlashCommandsFromText: true
 }
 
-const NATIVE_CHAT_AGENT_PROFILES: Partial<Record<AgentType, NativeChatAgentProfile>> = {
+// Every chat agent is listed so a new one cannot miss its skills; null means no folder scan runs,
+// because the agent reports its own skills at rest or cannot invoke them from the chat.
+const NATIVE_CHAT_AGENT_PROFILES: Record<NativeChatAgent, NativeChatAgentProfile | null> &
+  Partial<Record<AgentType, NativeChatAgentProfile | null>> = {
   codex: {
     skillPrefix: '$',
     skillSourceOwner: 'codex',
@@ -76,23 +82,55 @@ const NATIVE_CHAT_AGENT_PROFILES: Partial<Record<AgentType, NativeChatAgentProfi
     skillPrefix: '/',
     skillSourceOwner: 'pi',
     skillNamePrefix: 'skill:'
-  }
+  },
+  // Copilot reads Claude's project skills, not its home ones, and reports skills only in a session.
+  copilot: {
+    skillPrefix: '/',
+    skillSourceOwner: 'copilot',
+    readsProjectSkillFoldersOf: ['claude']
+  },
+  // Hermes' ACP sends an unregistered `/word` to the model as text, so a picked skill would not load.
+  hermes: null,
+  // Both report their user and project skills as `skill:<name>`, at rest too.
+  kimi: null,
+  omp: null
 }
 
 /** Whether `skill` under `source` reaches `profile`'s agent: shared roots, its own, and the skill
  *  folders of agents it also reads, without their plugins or the skills they bundle. */
 export function readsSkillSource(
-  profile: Pick<NativeChatAgentProfile, 'skillSourceOwner' | 'readsSkillFoldersOf'>,
-  source: Pick<SkillDiscoverySource, 'owner' | 'sourceKind'>,
+  profile: Pick<
+    NativeChatAgentProfile,
+    'skillSourceOwner' | 'readsSkillFoldersOf' | 'readsProjectSkillFoldersOf'
+  >,
+  source: Pick<SkillDiscoverySource, 'owner' | 'sourceKind' | 'readers'>,
   skill: Pick<DiscoveredSkill, 'sourceKind'>
 ): boolean {
+  if (source.owner === null) {
+    return true
+  }
+  if (source.owner === profile.skillSourceOwner) {
+    return source.readers !== 'borrowers'
+  }
+  const borrowed =
+    profile.readsSkillFoldersOf?.includes(source.owner) === true ||
+    (source.sourceKind === 'repo' &&
+      profile.readsProjectSkillFoldersOf?.includes(source.owner) === true)
   return (
-    source.owner === null ||
-    source.owner === profile.skillSourceOwner ||
-    (profile.readsSkillFoldersOf?.includes(source.owner) === true &&
-      source.sourceKind !== 'plugin' &&
-      skill.sourceKind !== 'bundled')
+    borrowed &&
+    source.readers !== 'owner' &&
+    source.sourceKind !== 'plugin' &&
+    skill.sourceKind !== 'bundled'
   )
+}
+
+const HOME_SKILL_FOLDER_OWNERS_OTHERS_READ: ReadonlySet<AgentType> = new Set(
+  Object.values(NATIVE_CHAT_AGENT_PROFILES).flatMap((profile) => profile?.readsSkillFoldersOf ?? [])
+)
+
+/** Whether another agent reads `owner`'s home skill folders, so its default home still matters. */
+export function isSkillFolderOwnerOthersRead(owner: AgentType): boolean {
+  return HOME_SKILL_FOLDER_OWNERS_OTHERS_READ.has(owner)
 }
 
 export function getNativeChatAgentProfile(

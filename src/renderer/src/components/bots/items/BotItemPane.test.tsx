@@ -93,7 +93,7 @@ it('shows the place and steps with the arrows; ends are disabled', () => {
   expect(screen.getByRole('button', { name: 'Previous item' }).hasAttribute('disabled')).toBe(true)
 })
 
-it('goes back on Escape from the pane, but not one a layer already spent', () => {
+it('goes back on unclaimed Escape or the Back chord inside the pane', () => {
   const onBack = pane(walk())
   const status = screen.getByRole('button', { name: 'Status' })
   status.addEventListener('keydown', (event) => event.preventDefault(), { once: true })
@@ -101,14 +101,11 @@ it('goes back on Escape from the pane, but not one a layer already spent', () =>
   expect(onBack).not.toHaveBeenCalled()
   fireEvent.keyDown(status, { key: 'Escape' })
   expect(onBack).toHaveBeenCalledOnce()
-})
 
-it('goes back on its chord only from inside the pane', () => {
-  const onBack = pane(walk())
   backChord(screen.getByLabelText('Elsewhere'))
-  expect(onBack).not.toHaveBeenCalled()
-  backChord(screen.getByRole('button', { name: 'Status' }))
   expect(onBack).toHaveBeenCalledOnce()
+  backChord(status)
+  expect(onBack).toHaveBeenCalledTimes(2)
 })
 
 it('offline, disables the arrows but keeps Back', () => {

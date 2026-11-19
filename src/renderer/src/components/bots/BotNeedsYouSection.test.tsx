@@ -14,7 +14,18 @@ const mocks = vi.hoisted(() => ({
   openAutomation: vi.fn(),
   manageConnectors: vi.fn(),
   reviewAccess: vi.fn(),
-  openWorker: vi.fn()
+  openWorker: vi.fn(),
+  awaiting: new Map<string, { itemId: string; text: string }>(),
+  skip: vi.fn(() => Promise.resolve()),
+  toastError: vi.fn()
+}))
+vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
+vi.mock('../native-chat/prompts/use-structured-agent-session-async-question-skip', () => ({
+  useStructuredAgentSessionAsyncQuestionSkip: (_target: unknown, sessionId: string) => ({
+    skippedThrough: undefined,
+    awaiting: mocks.awaiting.get(sessionId),
+    save: mocks.skip
+  })
 }))
 vi.mock('./use-bot-session-prompt', async () => {
   const { useSyncExternalStore } = await import('react')
@@ -188,6 +199,7 @@ function footer(): string | null {
 
 beforeEach(() => {
   mocks.prompts.clear()
+  mocks.awaiting.clear()
   for (const mock of Object.values(mocks)) {
     if (typeof mock === 'function') {
       mock.mockClear()
@@ -231,6 +243,28 @@ describe('Needs you', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open: Fix flaky test' }))
     expect(mocks.openSession).toHaveBeenCalledWith(BOT, 't1')
     expect(mocks.respond).not.toHaveBeenCalled()
+  })
+
+  it('shows the question a chat waits on without a prompt, and Skips it by its row', () => {
+    mocks.awaiting.set('t3', { itemId: 'ask-row', text: 'File the follow-up?' })
+    renderNeeds([{ kind: 'session', key: 'thread:t3', row: thread('t3', 'Review') }])
+
+    expect(screen.getByText('File the follow-up?')).toBeTruthy()
+    expect(screen.queryByText('Waiting for you')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Skip: Review' }))
+    expect(mocks.skip).toHaveBeenCalledWith('ask-row')
+    expect(mocks.openSession).not.toHaveBeenCalled()
+  })
+
+  it('tells a Skip the host did not save', async () => {
+    mocks.skip.mockRejectedValueOnce(new Error('offline'))
+    mocks.awaiting.set('t3', { itemId: 'ask-row', text: 'File the follow-up?' })
+    renderNeeds([{ kind: 'session', key: 'thread:t3', row: thread('t3', 'Review') }])
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Skip: Review' }))
+    })
+    expect(mocks.toastError).toHaveBeenCalledWith('Something went wrong. Try again.')
   })
 
   it('shows a question and opens its chat; the Home chat opens as Home', () => {
