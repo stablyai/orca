@@ -24,8 +24,8 @@ import {
 const offsetHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight')
 let sectionHeight = 0
 let listHeight = 0
-// The open search's floor (min-h-45): a held height below it renders at the floor.
-const SEARCH_FLOOR = 180
+// The open search's floor (min-h-47): a held height below it renders at the floor.
+const SEARCH_FLOOR = 188
 
 /** Stands in for the open Bots search, which holds the section the way the real panel does. */
 function OpenSearch(): React.JSX.Element {
@@ -228,7 +228,7 @@ describe('SidebarBotsSplit', () => {
     it('grows with a drag that ends at the saved cap', () => {
       mocks.state.sidebarBotsHeight = 260
       const { section, handle } = renderSearching(SEARCH_FLOOR)
-      drag(handle, 300, 380)
+      drag(handle, 300, 300 + 260 - SEARCH_FLOOR)
       expect(section.offsetHeight).toBe(260)
       expect(mocks.setSidebarBotsHeight).toHaveBeenCalledWith(260)
     })
