@@ -1,10 +1,11 @@
 import { rm, writeFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
+import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { lstatIfPresent } from '../../../filesystem/merged-directory-link'
 import { rolloutTwinPath } from '../rollouts/codex-rollout-compressed-twin'
 import { AtomicNoReplaceUnsupportedError, linkStagedRollout } from '../rollouts/codex-rollout-copy'
 import {
-  codexRolloutDeletionGeneration,
+  codexRolloutDeletionEpoch,
   linkCodexRolloutUnlessHeld
 } from '../rollouts/codex-rollout-deletion-guard'
 import { removeStagedCopy } from '../rollouts/codex-rollout-staged-copy'
@@ -16,8 +17,8 @@ export type StagedImport = {
   /** Store folders that would hold another form of it: the same folder, and the other place. */
   storeFolders: string[]
   indexPendingDir: string
-  /** The rollout's deletion generation when staging began. */
-  generation: number
+  /** The deletion epoch when staging began. */
+  deletionEpoch: number
   /** The import setting is unchanged and Orca isn't quitting. */
   isCurrent: () => boolean
   isHandled: () => boolean
@@ -39,8 +40,9 @@ async function storeHoldsAnyForm(folders: string[], name: string): Promise<boole
 
 async function linkUnlessDeleted(job: StagedImport): Promise<'copied' | 'existing' | 'refused'> {
   const outcome = await linkCodexRolloutUnlessHeld(job.final, async () => {
-    // A deletion that came and went since staging began must not see its conversation return.
-    if (codexRolloutDeletionGeneration(job.final) !== job.generation) {
+    // A deletion that came and went since staging began must not see its conversation return;
+    // one of any other rollout only delays this one to a later pass.
+    if (codexRolloutDeletionEpoch() !== job.deletionEpoch) {
       return 'refused'
     }
     // Recorded before the link, so the store's index learns every rollout that joins it.
@@ -73,8 +75,11 @@ export async function publishStagedImport(job: StagedImport): Promise<ImportPubl
     return await linkUnlessDeleted(job)
   } catch (error) {
     console.warn(`[codex-history-import] Could not publish ${job.final}:`, error)
-    // The probe found hard links in this folder, so a refused link is this file's alone.
-    return error instanceof AtomicNoReplaceUnsupportedError ? 'refused' : 'failed'
+    // The probe found hard links in this folder, so a refused link is this file's alone; a staged
+    // copy another instance swept away is retried.
+    return error instanceof AtomicNoReplaceUnsupportedError || isDefinitiveAbsence(error)
+      ? 'refused'
+      : 'failed'
   } finally {
     await removeStagedCopy(job.staged).catch((error: unknown) =>
       console.warn('[codex-history-import] Could not remove staged copy:', job.staged, error)
