@@ -9,7 +9,8 @@ function Row({ loadFailed }: { loadFailed: boolean }): React.JSX.Element {
           sentinelRef: () => undefined,
           isAutoLoadEnabled: false,
           loadFailed,
-          loadEarlierManually: () => undefined
+          loadEarlierManually: () => undefined,
+          loadEarlier: async () => 'unchanged'
         }}
         loadingEarlier={false}
       />
