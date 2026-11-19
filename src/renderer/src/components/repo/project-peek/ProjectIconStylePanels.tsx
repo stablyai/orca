@@ -155,9 +155,12 @@ export function LettersPanel({
 
 export function GlyphPanel({
   repo,
+  color,
   onSetIcon
 }: {
   repo: Repo
+  /** The mark's color, so the grid previews each icon as it will look. */
+  color: string
   onSetIcon: (repoIcon: RepoIcon | null) => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -178,7 +181,7 @@ export function GlyphPanel({
             selected={selectedLucideName === option.name}
             onClick={() => onSetIcon({ type: 'lucide', name: option.name })}
           >
-            <option.icon className="size-3.5" />
+            <option.icon className="size-3.5" style={{ color }} />
           </IconTile>
         ))}
         <IconTile

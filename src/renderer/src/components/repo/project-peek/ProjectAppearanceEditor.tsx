@@ -148,7 +148,7 @@ export function ProjectAppearanceEditor({
             <LettersPanel repo={repo} color={autoColorFor(repo, autoColor)} onSetIcon={setIcon} />
           </TabsContent>
           <TabsContent value="icon" className="mt-1">
-            <GlyphPanel repo={repo} onSetIcon={setIcon} />
+            <GlyphPanel repo={repo} color={autoColorFor(repo, autoColor)} onSetIcon={setIcon} />
           </TabsContent>
           <TabsContent value="picture" className="mt-1">
             <PicturePanel

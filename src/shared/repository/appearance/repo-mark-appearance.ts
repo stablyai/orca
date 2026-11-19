@@ -62,11 +62,11 @@ export function resolveRepoMarkAppearances(
     groups.set(key, [...(groups.get(key) ?? []), repo])
   }
 
-  for (const [key, members] of groups) {
+  for (const members of groups.values()) {
     const used = new Set(members.map((repo) => explicitRepoMarkColor(repo.badgeColor)))
-    // A grey monogram reads as disabled, so letters start from the real colors.
+    // Grey reads as "no color picked", so Auto always lands on a real color.
     const palette = REPO_COLORS.filter(
-      (color) => !used.has(color) && !(key === LETTERS_GROUP && color === DEFAULT_REPO_BADGE_COLOR)
+      (color) => !used.has(color) && color !== DEFAULT_REPO_BADGE_COLOR
     )
     let next = 0
     for (const repo of members) {
