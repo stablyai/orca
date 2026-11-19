@@ -2,6 +2,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
+import { z } from 'zod'
 import { setAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { PROTOCOL_VERSION } from '../protocol/daemon-protocol-version'
 import { STORE_FLOOR } from '../../store-compatibility/floor/store-floor-release'
@@ -17,16 +18,15 @@ import {
 // Frozen from the floor release: how it finds a newer daemon and holds that daemon's terminals
 // instead of restoring them a second time (daemon-generation-liveness.ts, daemon-pid-identity.ts).
 const FLOOR_PID_FILE = /^daemon-v(\d+)\.pid$/
+// The floor reads a JSON record with a numeric pid; a missing or non-numeric startedAtMs reads as null.
+const FloorPidRecord = z.looseObject({ pid: z.number(), startedAtMs: z.unknown().optional() })
 const floorPid = (contents: string): { pid: number; startedAtMs: number | null } | null => {
-  const parsed: unknown = JSON.parse(contents.trim())
-  if (typeof parsed !== 'object' || parsed === null) {
+  const parsed = FloorPidRecord.safeParse(JSON.parse(contents.trim()))
+  if (!parsed.success) {
     return null
   }
-  const pid: unknown = Reflect.get(parsed, 'pid')
-  const startedAtMs: unknown = Reflect.get(parsed, 'startedAtMs')
-  return typeof pid === 'number'
-    ? { pid, startedAtMs: typeof startedAtMs === 'number' ? startedAtMs : null }
-    : null
+  const { pid, startedAtMs } = parsed.data
+  return { pid, startedAtMs: typeof startedAtMs === 'number' ? startedAtMs : null }
 }
 const floorRecognizesCommandLine = (commandLine: string, socket: string, token: string): boolean =>
   commandLine.includes('daemon-entry') &&

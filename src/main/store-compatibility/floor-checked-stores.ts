@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { z } from 'zod'
 import Database from '../sqlite/sync-database'
 import { openJournalDatabase } from '../native-chat/agent-session-journal/database/journal-database'
 import { openJournalDomainDatabase } from '../native-chat/agent-session-journal/database/journal-domain-database'
@@ -92,14 +93,9 @@ export function readFloorStoreSchema(dir: string, schema: FloorStoreSchema): Sto
 
 const SCHEMA_ORDER: Record<string, number> = { table: 0, view: 1, index: 2, trigger: 3 }
 
-/** A TEXT column of a row read from SQLite. */
-function textColumn(row: unknown, column: string): string {
-  const value: unknown = typeof row === 'object' && row !== null ? Reflect.get(row, column) : null
-  if (typeof value !== 'string') {
-    throw new Error(`expected a TEXT ${column}`)
-  }
-  return value
-}
+const SchemaRow = z.object({ type: z.string(), name: z.string(), sql: z.string() })
+const NamedRow = z.object({ name: z.string() })
+const QuotedValuesRow = z.object({ v: z.string() })
 
 /** Every CREATE statement and seeded row of a store, so a later build can recreate it exactly. */
 function readStoreCreateStatements(db: Database.Database): FloorStoreSchema {
@@ -108,25 +104,23 @@ function readStoreCreateStatements(db: Database.Database): FloorStoreSchema {
       "SELECT type, name, sql FROM sqlite_schema WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%'"
     )
     .all()
-    .map((row) => ({
-      type: textColumn(row, 'type'),
-      name: textColumn(row, 'name'),
-      sql: textColumn(row, 'sql')
-    }))
+    .map((row) => SchemaRow.parse(row))
   rows.sort((a, b) => SCHEMA_ORDER[a.type] - SCHEMA_ORDER[b.type] || a.name.localeCompare(b.name))
   const inserts: string[] = []
   for (const { name } of rows.filter((row) => row.type === 'table')) {
     const columns = db
       .prepare('SELECT name FROM pragma_table_info(?)')
       .all(name)
-      .map((column) => `"${textColumn(column, 'name')}"`)
+      .map((column) => `"${NamedRow.parse(column).name}"`)
     const values = db
       .prepare(
         `SELECT ${columns.map((column) => `quote(${column})`).join(" || ',' || ")} AS v FROM "${name}"`
       )
       .all()
     for (const row of values) {
-      inserts.push(`INSERT INTO "${name}" (${columns.join(', ')}) VALUES (${textColumn(row, 'v')})`)
+      inserts.push(
+        `INSERT INTO "${name}" (${columns.join(', ')}) VALUES (${QuotedValuesRow.parse(row).v})`
+      )
     }
   }
   return {
