@@ -125,7 +125,7 @@ function renderSection(saved: Bot, openPicture = true) {
 describe('Bot picture', () => {
   it('shows each step at once and saves only the last one', async () => {
     vi.useFakeTimers()
-    const { update, announced, step, settle } = renderSection(bot())
+    const { update, announced, step, settle, unmount } = renderSection(bot())
     expect(announced()).toBe('Mascot 2 of 19')
     expect(screen.getByText("Changes your bot's picture in Slack too.")).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Shuffle picture' })).toBeNull()
@@ -137,8 +137,9 @@ describe('Bot picture', () => {
     expect(update).not.toHaveBeenCalled()
 
     await settle()
+    expect(update).toHaveBeenCalledExactlyOnceWith({ avatar: mascotAvatar('F1') })
+    unmount()
     expect(update).toHaveBeenCalledTimes(1)
-    expect(update).toHaveBeenCalledWith({ avatar: mascotAvatar('F1') })
   })
 
   it('saves a pending step when Settings closes', () => {
@@ -217,15 +218,6 @@ describe('Bot picture', () => {
     expect(update).toHaveBeenLastCalledWith({ avatar: mascotAvatar('S2') })
   })
 
-  it('saves once when Settings closes after the step was saved', async () => {
-    vi.useFakeTimers()
-    const { update, step, settle, unmount } = renderSection(bot())
-    step('Next picture')
-    await settle()
-    unmount()
-    expect(update).toHaveBeenCalledTimes(1)
-  })
-
   it('ends on the upload when the owner steps back to it while it is still sending', async () => {
     let finish: (saved: Bot) => void = () => {}
     mocks.uploadBotAvatar.mockImplementationOnce(
@@ -239,7 +231,12 @@ describe('Bot picture', () => {
     fireEvent.change(input, {
       target: { files: [new File(['x'], 'me.png', { type: 'image/png' })] }
     })
-    await waitFor(() => expect(mocks.uploadBotAvatar).toHaveBeenCalledTimes(1))
+    await waitFor(() =>
+      expect(mocks.uploadBotAvatar).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ id: 'bot-1' }),
+        'TkVX'
+      )
+    )
     vi.useFakeTimers()
 
     step('Next picture')
@@ -369,23 +366,6 @@ describe('Bot picture', () => {
     )
     expect(announced()).toBe('Mascot 1 of 19')
     mocks.readBotAvatarPng.mockImplementation(async () => 'UE5H')
-  })
-
-  it('sends an uploaded image as the bot picture', async () => {
-    renderSection(bot())
-    const input = document.querySelector('input[type="file"]')
-    if (!input) {
-      throw new Error('no file input')
-    }
-    fireEvent.change(input, {
-      target: { files: [new File(['x'], 'me.png', { type: 'image/png' })] }
-    })
-    await waitFor(() =>
-      expect(mocks.uploadBotAvatar).toHaveBeenCalledWith(
-        expect.objectContaining({ id: 'bot-1' }),
-        'TkVX'
-      )
-    )
   })
 })
 

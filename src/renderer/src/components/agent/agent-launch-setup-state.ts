@@ -82,8 +82,8 @@ export function agentLaunchSetupState(
 const PICKED_MODELS_KEPT = 32
 const pickedModels = new Map<string, AgentPickerModel>()
 const pickedModelListeners = new Set<() => void>()
-const pickedModelKey = (entry: AgentPickerEntry, modelId: string) =>
-  `${entry.agent}\u0000${entry.rows[0]?.executionHostId ?? ''}\u0000${modelId}`
+const pickedModelKey = (agent: string, executionHostId: string | undefined, modelId: string) =>
+  `${agent}\u0000${executionHostId ?? ''}\u0000${modelId}`
 
 export function rememberPickedAgentModel(entry: AgentPickerEntry, draft: AgentPickerDraft): void {
   const modelId = draft.choices.model
@@ -93,7 +93,7 @@ export function rememberPickedAgentModel(entry: AgentPickerEntry, draft: AgentPi
   if (!modelId || !listed || entry.catalog.origin === 'unknown') {
     return
   }
-  const key = pickedModelKey(entry, modelId)
+  const key = pickedModelKey(entry.agent, entry.rows[0]?.executionHostId, modelId)
   const kept = pickedModels.get(key)
   const unchanged = kept !== undefined && JSON.stringify(kept) === JSON.stringify(listed)
   // Kept rows stay the same object while unchanged, so their readers do not re-render.
@@ -116,10 +116,11 @@ function subscribePickedAgentModels(listener: () => void): () => void {
 
 /** The row the user last picked for this agent, host and model; only its own pick re-renders a reader. */
 export function usePickedAgentModel(
-  entry: AgentPickerEntry | undefined,
+  agent: string | undefined,
+  executionHostId: string | undefined,
   modelId: string | undefined
 ): AgentPickerModel | undefined {
-  const key = entry && modelId ? pickedModelKey(entry, modelId) : undefined
+  const key = agent && modelId ? pickedModelKey(agent, executionHostId, modelId) : undefined
   return useSyncExternalStore(subscribePickedAgentModels, () =>
     key ? pickedModels.get(key) : undefined
   )

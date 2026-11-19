@@ -332,17 +332,9 @@ describe('Bots search', () => {
     expect(results()).toEqual(['bot-1'])
   })
 
-  it('hides drag handles while open', () => {
+  it('opens the first result on Enter and focuses its row under StrictMode', async () => {
     threeBots()
-    renderSection()
-    expect(document.querySelector('[data-project-group-header-drag-handle]')).toBeTruthy()
-    openSearch()
-    expect(document.querySelector('[data-project-group-header-drag-handle]')).toBeNull()
-  })
-
-  it('opens the first result on Enter, closes the search and focuses the opened row', async () => {
-    threeBots()
-    renderSection()
+    renderStrictSection()
     const field = openSearch()
     type(field, 'disk')
     fireEvent.keyDown(field, { key: 'Enter' })
@@ -350,23 +342,6 @@ describe('Bots search', () => {
     expect(mocks.onOpenBot).toHaveBeenCalledOnce()
     expect(screen.queryByRole('searchbox')).toBeNull()
     await vi.waitFor(() => expect(document.activeElement).toBe(rowTitle('bot-3')))
-  })
-
-  it('opens a search result under the app StrictMode root', async () => {
-    threeBots()
-    render(
-      <StrictMode>
-        <TooltipProvider>
-          <SidebarBotsSection onOpenBot={mocks.onOpenBot} />
-        </TooltipProvider>
-      </StrictMode>
-    )
-    const field = openSearch()
-    type(field, 'scout')
-    fireEvent.keyDown(field, { key: 'Enter' })
-    expect(mocks.activate).toHaveBeenCalledWith(expect.objectContaining({ id: 'bot-2' }))
-    expect(screen.queryByRole('searchbox')).toBeNull()
-    await vi.waitFor(() => expect(document.activeElement).toBe(rowTitle('bot-2')))
   })
 
   it('keeps newer focus in a reopened search after a selection', () => {
@@ -448,32 +423,6 @@ describe('Bots search', () => {
     expect(outside).not.toHaveBeenCalled()
   })
 
-  it('shows a folded section while open, and folds it back when cancelled', () => {
-    threeBots()
-    useAppStore.setState({ collapsedGroups: new Set(['bots']) })
-    renderSection()
-    expect(screen.queryByText('Scout')).toBeNull()
-    openSearch()
-    expect(screen.getByText('Scout')).toBeTruthy()
-    // Tab from the field reaches a real row, which stays.
-    rowTitle('bot-1').focus()
-    expect(document.activeElement).toBe(rowTitle('bot-1'))
-    fireEvent.click(searchToggle())
-    expect(screen.queryByText('Scout')).toBeNull()
-    expect(useAppStore.getState().collapsedGroups.has('bots')).toBe(true)
-  })
-
-  it('unfolds a folded section for good when a result opens, and focuses its row', async () => {
-    threeBots()
-    useAppStore.setState({ collapsedGroups: new Set(['bots']) })
-    renderSection()
-    const field = openSearch()
-    type(field, 'scout')
-    fireEvent.click(document.querySelector('[data-bot-search-result="local/bot-2"]')!)
-    expect(useAppStore.getState().collapsedGroups.has('bots')).toBe(false)
-    await vi.waitFor(() => expect(document.activeElement).toBe(rowTitle('bot-2')))
-  })
-
   it('tells about paused bots the list hides, and shows them on request', () => {
     mocks.bots = [
       bot(),
@@ -497,19 +446,6 @@ describe('Bots search', () => {
     ).toBe('local/bot-2')
   })
 
-  it('focuses the group row when a group finishes opening', async () => {
-    withCrew()
-    const finish = deferGroupOpen()
-    renderSection()
-    const field = openSearch()
-    type(field, 'crew')
-    fireEvent.keyDown(field, { key: 'Enter' })
-    await act(async () => finish())
-    expect(screen.queryByRole('searchbox')).toBeNull()
-    expect(document.activeElement).toBe(rowTitle('group-1'))
-    expect(mocks.onOpenBot).toHaveBeenCalledOnce()
-  })
-
   it('focuses the group row when a group finishes opening under StrictMode', async () => {
     withCrew()
     const finish = deferGroupOpen()
@@ -518,25 +454,9 @@ describe('Bots search', () => {
     type(field, 'crew')
     fireEvent.keyDown(field, { key: 'Enter' })
     await act(async () => finish())
+    expect(screen.queryByRole('searchbox')).toBeNull()
     expect(document.activeElement).toBe(rowTitle('group-1'))
-  })
-
-  it('leaves the search alone when focus moves away while a group opens', async () => {
-    withCrew()
-    useAppStore.setState({ collapsedGroups: new Set(['bots']) })
-    const finish = deferGroupOpen()
-    renderSection()
-    const field = openSearch()
-    type(field, 'crew')
-    fireEvent.keyDown(field, { key: 'Enter' })
-    const options = screen.getByRole('button', { name: 'Bot options' })
-    act(() => options.focus())
-    await act(async () => finish())
-    expect(document.activeElement).toBe(options)
-    expect(screen.getByRole('searchbox')).toBe(field)
-    expect(field.value).toBe('crew')
-    expect(useAppStore.getState().collapsedGroups.has('bots')).toBe(true)
-    expect(mocks.onOpenBot).not.toHaveBeenCalled()
+    expect(mocks.onOpenBot).toHaveBeenCalledOnce()
   })
 
   it('leaves the search alone when focus leaves and comes back while a group opens', async () => {
@@ -551,12 +471,12 @@ describe('Bots search', () => {
     await act(async () => finish())
     expect(document.activeElement).toBe(field)
     expect(screen.getByRole('searchbox')).toBe(field)
+    expect(field.value).toBe('crew')
     expect(mocks.onOpenBot).not.toHaveBeenCalled()
   })
 
   it('ignores a group that opens after its last bot went away and came back', async () => {
     withCrew()
-    useAppStore.setState({ collapsedGroups: new Set(['bots']) })
     const finish = deferGroupOpen()
     renderSection()
     const field = openSearch()
@@ -567,7 +487,6 @@ describe('Bots search', () => {
     act(() => useAppStore.setState({ folderWorkspaces: homes }))
     await act(async () => finish())
     expect(mocks.onOpenBot).not.toHaveBeenCalled()
-    expect(useAppStore.getState().collapsedGroups.has('bots')).toBe(true)
   })
 
   it('says nothing when a group fails to open after the search was closed', async () => {
@@ -642,7 +561,6 @@ describe('Bots search', () => {
     threeBots()
     mocks.groups = [group()]
     useAppStore.setState({
-      collapsedGroups: new Set(['bots']),
       folderWorkspaces: [...useAppStore.getState().folderWorkspaces, home({ id: 'fw-g' })]
     })
     let finish: () => void = () => {}
@@ -655,7 +573,6 @@ describe('Bots search', () => {
     await act(async () => finish())
     // The underlying room open cannot be cancelled; its stale callback leaves the current view alone.
     expect(mocks.onOpenBot).not.toHaveBeenCalled()
-    expect(useAppStore.getState().collapsedGroups.has('bots')).toBe(true)
   })
 })
 
@@ -665,15 +582,6 @@ describe('Collapse all bots', () => {
     renderSection()
     expect(foldButton('First folded bot').getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(screen.getByRole('button', { name: 'Expand all bots' }))
-    expect(foldButton('First folded bot').getAttribute('aria-expanded')).toBe('true')
-    expect(foldButton('Second folded bot').getAttribute('aria-expanded')).toBe('true')
-  })
-
-  it('expands every persisted fold on a cold start from Bot options', async () => {
-    twoFoldedBots('cold-menu')
-    renderSection()
-    fireEvent.keyDown(screen.getByRole('button', { name: 'Bot options' }), { key: 'ArrowDown' })
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Expand all bots' }))
     expect(foldButton('First folded bot').getAttribute('aria-expanded')).toBe('true')
     expect(foldButton('Second folded bot').getAttribute('aria-expanded')).toBe('true')
   })

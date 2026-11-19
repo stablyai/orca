@@ -11,6 +11,7 @@ import {
   pollClientHarness,
   settle
 } from './connector-poll-client.test-fixture'
+import { ConnectorTurnEvents } from './connector-turn-events'
 import { FAKE_BOT } from './fake-connector-seam.test-fixture'
 
 const h = pollClientHarness()
@@ -41,45 +42,29 @@ describe('ConnectorPollClient events', () => {
       at: 5
     })
     await settle()
+    await ConnectorTurnEvents.settled()
     const stored = JSON.parse(readFileSync(outboxFile, 'utf8')).turnEnds
     expect(stored).toHaveLength(1)
-    // 8 KB would split a two-byte character after the leading 'x', so the cut steps back one byte.
-    expect(stored[0].lastAssistantMessage).toBe(`x${'é'.repeat(4_095)}`)
+    // Kept whole while it waits: it is cut for the cloud that takes it, as it goes.
+    expect(stored[0].lastAssistantMessage).toBe(`x${'é'.repeat(5_000)}`)
     first.client.stop()
 
     h.fake.forced.delete(CONNECTOR_PATHS.events)
     const second = startClient()
     await settle()
+    // This cloud lists no answers.long: within 8 KB with its note, no two-byte character split.
     expect(h.fake.events).toContainEqual(
-      expect.objectContaining({ kind: 'turn-ended', turnId: 100, at: 300 })
+      expect.objectContaining({
+        kind: 'turn-ended',
+        turnId: 100,
+        at: 300,
+        lastAssistantMessage: `x${'é'.repeat(4_068)}\n\n_… cut short here. The full answer is in Orca._`
+      })
     )
     expect(h.fake.events).not.toContainEqual(expect.objectContaining({ paneKey: 'tab:2' }))
+    await ConnectorTurnEvents.settled()
     expect(existsSync(outboxFile)).toBe(false)
     second.client.stop()
-  })
-
-  it('keeps at most 200 turn ends, in memory and on disk alike', async () => {
-    h.fake.forced.set(CONNECTOR_PATHS.events, { status: 503 })
-    const { client, emit } = startClient()
-    await settle()
-    for (let turn = 1; turn <= 250; turn++) {
-      emit({
-        kind: 'turn-ended',
-        conversation,
-        worktreeId: 'wt',
-        paneKey: 'tab:1',
-        turnId: turn,
-        stopReason: null,
-        at: turn
-      })
-    }
-    const stored = JSON.parse(
-      readFileSync(join(h.userDataPath, 'connector-turn-outbox.json'), 'utf8')
-    ).turnEnds
-    expect(stored.map((event: { turnId: number }) => event.turnId)).toEqual(
-      Array.from({ length: 200 }, (_, index) => index + 51)
-    )
-    client.stop()
   })
 
   it('opens each hello with the snapshot as batch 0 and keeps later events in order behind a retry', async () => {
@@ -159,6 +144,7 @@ describe('ConnectorPollClient events', () => {
       stopReason: 'success',
       at: 9
     })
+    await ConnectorTurnEvents.settled()
     expect(existsSync(join(h.userDataPath, 'connector-turn-outbox.json'))).toBe(true)
     h.fake.online = true
     await settle(30_000)

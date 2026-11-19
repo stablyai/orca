@@ -57,21 +57,23 @@ export class BotShareService {
     }
   ) {}
 
-  /** The candidate the owner reviews. Signed out, it still builds, with a new package id. With
+  /** The candidate the owner reviews. A local preview uses a temporary package id until publish. With
    *  `last`, it is built from the picks and note the bot was last published with, when there are any. */
   async prepare(
     bot: Bot,
     selection: BotShareSelection,
-    options: { setupNote?: string; last?: boolean } = {}
+    options: { setupNote?: string; last?: boolean; localOnly?: boolean } = {}
   ): Promise<BotSharePrepared> {
     const last = options.last ? ((await this.deps.picks?.get(bot.id)) ?? undefined) : undefined
-    const found = await this.deps.client.findPackageId(botPackageName(bot.id))
+    const found = options.localOnly
+      ? null
+      : await this.deps.client.findPackageId(botPackageName(bot.id))
     const candidate = await this.deps.candidates.prepare({
       bot,
       shareable: await this.deps.readShareable(bot),
       selection: last?.selection ?? selection,
       setupNote: last?.setupNote ?? options.setupNote,
-      packageId: (found.status === 'ok' && found.value) || randomUUID()
+      packageId: (found?.status === 'ok' && found.value) || randomUUID()
     })
     return last ? { candidate, last } : { candidate }
   }

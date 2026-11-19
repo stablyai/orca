@@ -1,8 +1,9 @@
 // Which agents a bot can run on a host, and whether each can start; the desktop's New bot and the
 // host's own answer to a phone read it the same way.
-import type {
-  ChatUnavailableReason,
-  NewTabAgentMenuRow
+import {
+  agentMenuRowSupportsChat,
+  type ChatUnavailableReason,
+  type NewTabAgentMenuRow
 } from '../agent-launch/picker/agent-launch-picker-rows'
 import { BOT_AGENTS, type Bot, type BotAgent } from '../bot-types'
 import { botAgentHostRefusal, botAgentNeedsManagedRuntime } from './bot-agent-runtime'
@@ -67,11 +68,10 @@ export function botAgentChoices(model: BotAgentMenuModel, current?: BotAgent): B
   if (model.state === 'loading') {
     return current ? [current] : []
   }
-  return BOT_AGENTS.filter((agent) => {
-    if (agent === current) {
-      return true
-    }
-    const entry = botAgentOnHost(agent, model)
-    return entry !== null && entry.unavailable !== 'not-installed'
-  })
+  return BOT_AGENTS.filter(
+    (agent) =>
+      agent === current ||
+      (!botAgentHostRefusal(agent, model.managedRuntimeAgents?.includes(agent) === true) &&
+        model.rows.some((row) => row.agent === agent && agentMenuRowSupportsChat(row)))
+  )
 }

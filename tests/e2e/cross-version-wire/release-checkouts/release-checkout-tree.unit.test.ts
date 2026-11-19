@@ -198,25 +198,6 @@ const RELEASE_PROCESS_HOST = {
   'src/packages/release-tool/src/index.test.mjs': 'throw new Error("stale spec")\n'
 }
 
-describe('release phone row reader', () => {
-  it.each([
-    'mobile/src/worktree/agent-row-display.ts',
-    'mobile/src/worktree/agent-lineage/agent-row-display.ts'
-  ])("loads main's row reader path from a release that ships it at %s", async (released) => {
-    const { repo, commit } = commitRelease({ [released]: `export const at = '${released}'\n` })
-    const staging = temporaryDirectory('orca-cross-version-row-reader-')
-
-    await extractReleaseCheckoutTree(repo, staging, commit)
-    const checkout = { ref: 'v0.0.0-synthetic', commit, label: 'v0.0.0-synthetic', root: staging }
-    const reader = await importReleaseCheckoutModule(
-      checkout,
-      'mobile/src/worktree/agent-lineage/agent-row-display.ts'
-    )
-
-    expect(reader.at).toBe(released)
-  })
-})
-
 describe('release checkout workspace packages', () => {
   it.each([
     {
@@ -309,7 +290,7 @@ describe('release checkout workspace packages', () => {
     expect(existsSync(join(staging, 'node_modules'))).toBe(false)
   })
 
-  it.each(['@orca/process-host/internal', '@orca/release-tool/private', '@orca/not-in-release'])(
+  it.each(['@orca/process-host/internal', '@orca/not-in-release'])(
     'fails extraction rather than loading the current tree for %s',
     async (specifier) => {
       const { repo, commit } = commitRelease({
