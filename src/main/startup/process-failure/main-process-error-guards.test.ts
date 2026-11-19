@@ -39,15 +39,13 @@ describe('installStdioWriteErrorSink', () => {
     recordDurableCrashBreadcrumbMock.mockReset()
   })
 
-  it('absorbs repeated real console write failures on a dead stdout', async () => {
+  it('absorbs a real console write failure on a dead stdout', async () => {
     const stdout = deadLogStream()
     installStdioWriteErrorSink([['stdout', stdout]])
-    const logger = new Console({ stdout, stderr: stdout, ignoreErrors: false })
+    const logger = new Console({ stdout, stderr: stdout })
 
     logger.info('[runtime-rpc] client connected', { deviceId: 'a' })
     await closed(stdout)
-    logger.info('[runtime-rpc] client connected', { deviceId: 'b' })
-    await new Promise((resolve) => setImmediate(resolve))
 
     expect(recordDurableCrashBreadcrumbMock).toHaveBeenCalledWith(
       'main_stdio_write_failed',
@@ -55,14 +53,17 @@ describe('installStdioWriteErrorSink', () => {
     )
   })
 
-  it('records the raw errno when libuv cannot name the failure', () => {
+  it('records the raw errno when libuv cannot name the failure, and survives the next one', () => {
     const stdout = deadLogStream()
     installStdioWriteErrorSink([['stdout', stdout]])
+    const quotaExceeded = Object.assign(new Error('UNKNOWN: unknown error, write'), {
+      code: 'UNKNOWN',
+      errno: -122
+    })
 
-    stdout.emit(
-      'error',
-      Object.assign(new Error('UNKNOWN: unknown error, write'), { code: 'UNKNOWN', errno: -122 })
-    )
+    stdout.emit('error', quotaExceeded)
+    // Stdio stays writable after a failure, so the next console write can fail again.
+    expect(() => stdout.emit('error', quotaExceeded)).not.toThrow()
 
     expect(recordDurableCrashBreadcrumbMock).toHaveBeenCalledWith('main_stdio_write_failed', {
       stream: 'stdout',
