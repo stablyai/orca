@@ -284,5 +284,10 @@ function commitPaneChange<T>(
     (value) => context.markDirty(assignWorkspaceSessionPartition(context.state, hostId, value)),
     keepFrozen(hostId, change.session, context)
   )
-  return { value: change.value, rollback: restore, writtenHostIds: [hostId] }
+  return {
+    value: change.value,
+    rollback: restore,
+    writtenHostIds: [hostId],
+    ...(change.workspaces ? { writtenWorkspaces: new Map([[hostId, change.workspaces]]) } : {})
+  }
 }
