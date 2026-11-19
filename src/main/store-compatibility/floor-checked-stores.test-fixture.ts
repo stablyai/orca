@@ -53,11 +53,18 @@ export const FLOOR_CHECKED_STORES: readonly FloorCheckedStore[] = [
   'orchestration'
 ]
 
+/** Tables, then their seeded rows, then everything else, so triggers never rewrite the captured rows. */
+const replayRank = (sql: string): number =>
+  /^\s*CREATE\s+TABLE\b/i.test(sql) ? 0 : /^\s*INSERT\b/i.test(sql) ? 1 : 2
+
 /** Recreate the floor build's empty store from its CREATE statements. */
 function writeFloorShapedStore(path: string, schema: FloorStoreSchema): void {
   const db = new Database(path)
   try {
-    db.exec(schema.sql.map((sql) => `${sql};`).join('\n'))
+    const ordered = schema.sql
+      .map((sql, index) => ({ sql, index }))
+      .sort((a, b) => replayRank(a.sql) - replayRank(b.sql) || a.index - b.index)
+    db.exec(ordered.map(({ sql }) => `${sql};`).join('\n'))
     db.pragma(`user_version = ${schema.userVersion}`)
   } finally {
     db.close()

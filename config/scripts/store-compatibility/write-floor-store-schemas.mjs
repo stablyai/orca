@@ -15,8 +15,14 @@ const repo = resolve(import.meta.dirname, '../../..')
 const moduleDir = 'src/main/store-compatibility'
 const output = join(repo, moduleDir, 'floor', `${tag.slice(1)}-store-schemas.json`)
 const checkout = mkdtempSync(join(tmpdir(), 'store-floor-'))
+// Only pnpm needs a shell on Windows (pnpm.cmd); its arguments hold no paths, so paths with spaces stay intact.
 const run = (command, args, cwd = repo, env = process.env) =>
-  execFileSync(command, args, { cwd, env, stdio: 'inherit', shell: process.platform === 'win32' })
+  execFileSync(command, args, {
+    cwd,
+    env,
+    stdio: 'inherit',
+    shell: process.platform === 'win32' && command === 'pnpm'
+  })
 
 run('git', ['worktree', 'add', '--detach', checkout, tag])
 try {

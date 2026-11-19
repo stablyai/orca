@@ -38,12 +38,24 @@ export function floorSchemaViolations(
     }
     const floorColumnNames = new Set(floorTable.columns.map((column) => column[0]))
     for (const [name, , notNull, defaultSql] of currentTable.columns) {
-      if (!floorColumnNames.has(name) && notNull && defaultSql === null) {
+      if (
+        !floorColumnNames.has(name) &&
+        notNull &&
+        (defaultSql ?? 'NULL').toUpperCase() === 'NULL'
+      ) {
         violations.push(`column ${table}.${name} added NOT NULL without a default`)
       }
     }
     if (JSON.stringify(currentTable.checks) !== JSON.stringify(floorTable.checks)) {
       violations.push(`CHECK constraints on ${table} changed`)
+    }
+    if (JSON.stringify(currentTable.foreignKeys) !== JSON.stringify(floorTable.foreignKeys)) {
+      violations.push(`foreign keys on ${table} changed`)
+    }
+    for (const key of currentTable.uniqueKeys) {
+      if (!floorTable.uniqueKeys.includes(key)) {
+        violations.push(`unique key (${key}) added to ${table}`)
+      }
     }
   }
   for (const [name, floorIndex] of Object.entries(floor.indexes)) {
@@ -54,14 +66,17 @@ export function floorSchemaViolations(
       violations.push(`index ${name} changed`)
     }
   }
-  for (const [name, index] of Object.entries(current.indexes)) {
-    if (!floor.indexes[name] && index.unique && floor.tables[index.table]) {
-      violations.push(`unique index ${name} added to ${index.table}`)
+  for (const [name, floorTrigger] of Object.entries(floor.triggers)) {
+    const trigger = current.triggers[name]
+    if (!trigger) {
+      violations.push(`trigger ${name} dropped`)
+    } else if (trigger.sql !== floorTrigger.sql) {
+      violations.push(`trigger ${name} body changed; give the new body a new name`)
     }
   }
-  for (const [name, floorTrigger] of Object.entries(floor.triggers)) {
-    if (current.triggers[name] && current.triggers[name].sql !== floorTrigger.sql) {
-      violations.push(`trigger ${name} body changed; give the new body a new name`)
+  for (const [name, floorView] of Object.entries(floor.views)) {
+    if (current.views[name] !== floorView) {
+      violations.push(`view ${name} ${current.views[name] === undefined ? 'dropped' : 'changed'}`)
     }
   }
   for (const [name, trigger] of Object.entries(current.triggers)) {
