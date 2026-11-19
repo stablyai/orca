@@ -213,9 +213,10 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       }
       return
     }
+    const helpersIdleAt = this.state.antigravityChildWorkByPaneKey.get(paneKey)?.helpersIdleAt
     const yieldEndsAt =
       event.fromProgramStatus === true
-        ? programStatusHookYieldEndsAt(previous, payload, workingSince)
+        ? programStatusHookYieldEndsAt(previous, payload, workingSince, helpersIdleAt)
         : undefined
     const hookOwnsAgent = yieldEndsAt !== undefined && now < yieldEndsAt
     if (event.fromProgramStatus === true) {

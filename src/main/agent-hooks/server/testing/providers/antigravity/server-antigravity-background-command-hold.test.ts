@@ -3,7 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { AgentHookServer } from '../../../agent-hook-server'
-import { HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS } from '../../../program-status/hook-precedence'
+import {
+  ANTIGRAVITY_PARENT_WAKE_GRACE_MS,
+  HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS
+} from '../../../program-status/hook-precedence'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { buildBody, PANE, postHookEvent } from '../../server.test-fixtures'
 
@@ -63,5 +66,25 @@ it('keeps a turn waiting on a background command working past the hook-silence f
   expect(state()).toBe('working')
 
   vi.advanceTimersByTime(AGENT_STATUS_STALE_AFTER_MS)
+  expect(state()).toBe('done')
+})
+
+it('ends the run on agy done when its last subagent stops after the parent turn', async () => {
+  // Order captured from agy 1.5.12: no parent hook follows the subagent's idle Stop.
+  const subagentCall = { stepIdx: 2, toolCall: { name: 'invoke_subagent', args: { Prompt: 'ls' } } }
+  const child = { conversationId: 'child', lastUserInput: '' }
+  await agyHook('PreInvocation', {})
+  await agyHook('PreToolUse', subagentCall)
+  await agyHook('PostToolUse', subagentCall)
+  await agyHook('PreInvocation', child)
+  await agyHook('PostInvocation', {})
+  await agyHook('Stop', { fullyIdle: false, terminationReason: 'NO_TOOL_CALL' })
+  await agyHook('PostInvocation', child)
+  await agyHook('Stop', { ...child, fullyIdle: true, terminationReason: 'NO_TOOL_CALL' })
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+  programDone()
+  expect(state()).toBe('working')
+
+  vi.advanceTimersByTime(ANTIGRAVITY_PARENT_WAKE_GRACE_MS + 1)
   expect(state()).toBe('done')
 })

@@ -3,6 +3,7 @@ import {
   type ParsedAgentStatusPayload
 } from '../../../agent-status/contracts/agent-status-types'
 import { readFirstString } from '../../interactive-tool'
+import type { AntigravityChildWork } from '../../listener-event'
 import type { HookListenerState } from '../../listener-state'
 import { resolvePrompt, resolveToolState } from '../../prompt-fields'
 import { extractToolFields, isNewTurnEvent } from '../../provider-event-routing'
@@ -50,10 +51,7 @@ function trackAntigravityBackgroundCommand(
   work.commands = (work.commands ?? new Set()).add(key)
 }
 
-function antigravityChildWork(
-  state: HookListenerState,
-  paneKey: string
-): { subagentParent?: string; commands?: Set<string> } {
+function antigravityChildWork(state: HookListenerState, paneKey: string): AntigravityChildWork {
   let work = state.antigravityChildWorkByPaneKey.get(paneKey)
   if (!work) {
     work = {}
@@ -75,9 +73,17 @@ export function normalizeAntigravityEvent(
   if (subagentParent && conversationId && conversationId !== subagentParent) {
     // Subagents run inside the parent agy under their own conversationId and never carry user input.
     if (!readFirstString(hookPayload, ['lastUserInput'])) {
+      if (eventName === 'Stop' && !isAntigravityStopStillBusy(hookPayload)) {
+        // Unless agy wakes the parent with this result, the subagent's Stop is the run's last hook.
+        antigravityChildWork(state, paneKey).helpersIdleAt = Date.now()
+      }
       return null
     }
     delete antigravityChildWork(state, paneKey).subagentParent
+  }
+  const pendingHelpersIdle = state.antigravityChildWorkByPaneKey.get(paneKey)
+  if (pendingHelpersIdle) {
+    delete pendingHelpersIdle.helpersIdleAt
   }
   if (eventName === 'PreInvocation') {
     state.antigravityCompletedTranscriptByPaneKey.delete(paneKey)

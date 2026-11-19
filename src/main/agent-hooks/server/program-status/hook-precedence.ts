@@ -6,6 +6,9 @@ import type { EnrichedAgentHookEventPayload } from '../server-types'
 // Long tool calls can be hook-silent; allow sustained disagreement before yielding to OSC 7501.
 export const HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS = 2 * 60 * 1000
 
+// agy wakes a parent with its subagent's result within milliseconds of the subagent's Stop.
+export const ANTIGRAVITY_PARENT_WAKE_GRACE_MS = 2000
+
 function isOpenCodeAgent(agentType: string | undefined): boolean {
   return agentType === 'opencode' || agentType === 'opencode2'
 }
@@ -21,7 +24,8 @@ export function isOpenCodeHookRow(
 export function programStatusHookYieldEndsAt(
   previous: EnrichedAgentHookEventPayload | undefined,
   payload: ParsedAgentStatusPayload,
-  programWorkingSince?: number
+  programWorkingSince?: number,
+  antigravityHelpersIdleAt?: number
 ): number | undefined {
   if (previous?.observation?.origin !== 'hook' || previous.providerSessionOnly === true) {
     return undefined
@@ -49,6 +53,17 @@ export function programStatusHookYieldEndsAt(
     isAgentStatusHeldOpenByChildWork(previous.payload)
   ) {
     return previous.receivedAt + AGENT_STATUS_STALE_AFTER_MS
+  }
+  // When the last subagent ends after its parent's turn, agy's done is its only end signal.
+  if (
+    payload.state === 'done' &&
+    payload.sessionBoundary !== true &&
+    previous.payload.agentType === 'antigravity' &&
+    isAgentStatusHeldOpenByChildWork(previous.payload) &&
+    antigravityHelpersIdleAt !== undefined &&
+    antigravityHelpersIdleAt >= previous.receivedAt
+  ) {
+    return antigravityHelpersIdleAt + ANTIGRAVITY_PARENT_WAKE_GRACE_MS
   }
   // Hook and program child rosters cannot settle or reopen each other's turns.
   if (
