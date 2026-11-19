@@ -66,6 +66,11 @@ const checks = new Map<string, HostCheck>()
 
 class IncompatibleHostAcp extends Error {}
 
+/** After agy's login changes, the next check asks again instead of trusting the last answer. */
+export function forgetAntigravityHostAcpChecks(): void {
+  checks.clear()
+}
+
 /** Whether `command acp` initializes as a compatible server that serves session requests. An
  *  incompatible binary is not asked again; a sign-in can lapse or a hung agy recover, so any other
  *  answer is checked again after a while. */

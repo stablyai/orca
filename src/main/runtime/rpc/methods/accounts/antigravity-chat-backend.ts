@@ -2,10 +2,16 @@ import type {
   AntigravityAccountState,
   AntigravityAccountTarget
 } from '../../../../../shared/agent-accounts/antigravity/antigravity-account-types'
-import { isAntigravityHostAccountHome } from '../../../../antigravity/antigravity-host-acp'
+import {
+  forgetAntigravityHostAcpChecks,
+  isAntigravityHostAccountHome
+} from '../../../../antigravity/antigravity-host-acp'
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { structuredAgentHostAlternativeReady } from '../../../agent-session/launch/structured-agent-launch-support'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
+import { withTimeout } from '../../../../../shared/concurrency/promise-timeout-fallback'
+
+const CHAT_BACKEND_WAIT_MS = 1_500
 
 /** Adds whether new chats on this host run on agy, and so on the account these rows switch. */
 export async function withAntigravityChatBackend(
@@ -17,8 +23,11 @@ export async function withAntigravityChatBackend(
   if (target.runtime !== 'host') {
     return state
   }
-  const chatUsesAgy = await structuredAgentHostAlternativeReady('antigravity', runtime).catch(
-    () => null
+  // A cold agy check takes seconds; the rows don't wait for it, and a later refresh shows it.
+  const chatUsesAgy = await withTimeout<boolean | null>(
+    structuredAgentHostAlternativeReady('antigravity', runtime),
+    CHAT_BACKEND_WAIT_MS,
+    null
   )
   return chatUsesAgy === null ? state : { ...state, chatUsesAgy }
 }
@@ -26,8 +35,13 @@ export async function withAntigravityChatBackend(
 /** A running `agy acp` may keep the login it started with, so idle chats on agy stop and resume on
  *  the newly selected account at their next send; busy ones keep their turn (#43375). */
 export function restartIdleAgyChats(target: AntigravityAccountTarget): void {
+  if (target.runtime !== 'host') {
+    return
+  }
+  // The cached answer vouched for the previous login.
+  forgetAntigravityHostAcpChecks()
   const host = getStructuredAgentSessionHost()
-  if (!host || target.runtime !== 'host') {
+  if (!host) {
     return
   }
   for (const id of host.loadedSessionIds()) {
