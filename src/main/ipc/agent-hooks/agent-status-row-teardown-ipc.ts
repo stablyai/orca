@@ -66,15 +66,21 @@ export function registerAgentStatusRowTeardownIpcHandlers(): void {
     }
   })
 
+  const reconcilingPaneKeys = new Set<string>()
   ipcMain.on('agentStatus:reconcileEndedProcess', (_event, paneKey: unknown) => {
     if (typeof paneKey !== 'string' || !isValidPaneKey(paneKey)) {
       return
     }
     try {
-      // Confirmed process exit must clear latches with the row (STA-4612).
-      void agentHookServer
-        .reconcilePaneProcessExit(paneKey)
-        .catch((err) => console.warn('[agent-hooks] reconcilePaneProcessExit failed:', err))
+      // Confirmed process exit must clear latches with the row (STA-4612). The shell-settle and
+      // row-retire callbacks both report one exit; one proof answers both.
+      if (!reconcilingPaneKeys.has(paneKey)) {
+        reconcilingPaneKeys.add(paneKey)
+        void agentHookServer
+          .reconcilePaneProcessExit(paneKey)
+          .catch((err) => console.warn('[agent-hooks] reconcilePaneProcessExit failed:', err))
+          .finally(() => reconcilingPaneKeys.delete(paneKey))
+      }
       clearMigrationUnsupportedPtysForPaneKey(paneKey)
     } catch (err) {
       console.warn('[agent-hooks] reconcileEndedProcessForPaneKeys failed:', err)
