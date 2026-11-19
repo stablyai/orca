@@ -28,6 +28,7 @@ export function NativeChatMentionOption({
           {member.note || member.detail || member.host ? (
             <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
               {member.host}
+              {member.noteIcon}
               {member.note || member.detail ? (
                 <span className="min-w-0 truncate">
                   {member.note ??

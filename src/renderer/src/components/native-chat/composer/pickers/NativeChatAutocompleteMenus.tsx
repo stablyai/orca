@@ -262,7 +262,8 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
 
   // A bot's chats are read once its row has been highlighted or hovered a moment.
   const memberOf = (value: string) =>
-    room?.mentions.find((mention) => nativeChatMentionValue(mention) === value)
+    room?.mentions.find((mention) => nativeChatMentionValue(mention) === value) ??
+    room?.agents?.find((mention) => nativeChatMentionValue(mention) === value)
   const [hovered, setHovered] = useState<string | null>(null)
   const highlighted = memberOf(files[selectedIndex] ?? '')?.id ?? null
   const prefetch = chats?.picker.prefetch
@@ -311,9 +312,15 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
           ? t('components.native-chat.composer.filesLoadFailed', "Couldn't load files")
           : nativeChatMentionEmptyText(room !== null && !room.withFiles)
 
-  // A bot's chat lists the other bots, then files, each under its heading.
-  const bots = room?.withFiles ? files.filter((value) => memberOf(value)).length : 0
+  // This chat's crew agents lead, then a bot's chat lists the other bots, then files, each under its heading.
+  const agentValues = new Set(room?.agents?.map(nativeChatMentionValue))
+  const agents = files.findIndex((value) => !agentValues.has(value))
+  const agentCount = agents === -1 ? files.length : agents
+  const bots = room?.withFiles
+    ? files.slice(agentCount).filter((value) => memberOf(value)).length
+    : 0
   const grouped = room?.withFiles === true && bots + room.unavailable.length > 0
+  const headed = grouped || agentCount > 0
   const option = (path: string, index: number) => {
     const member = room ? memberOf(path) : undefined
     const selected = index === selectedIndex
@@ -363,11 +370,17 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
 
   return (
     <PickerListbox id={listboxId}>
+      {agentCount > 0 ? <PickerGroupHeading kind="agents" /> : null}
+      {files.slice(0, agentCount).map(option)}
       {grouped ? <PickerGroupHeading kind="bots" /> : null}
-      <div onPointerLeave={() => setHovered(null)}>{files.slice(0, bots).map(option)}</div>
+      <div onPointerLeave={() => setHovered(null)}>
+        {files
+          .slice(agentCount, agentCount + bots)
+          .map((path, index) => option(path, index + agentCount))}
+      </div>
       {grouped ? <NativeChatUnavailableMentions room={room} /> : null}
-      {grouped && files.length > bots ? <PickerGroupHeading kind="files" /> : null}
-      {files.slice(bots).map((path, index) => option(path, index + bots))}
+      {headed && files.length > agentCount + bots ? <PickerGroupHeading kind="files" /> : null}
+      {files.slice(agentCount + bots).map((path, index) => option(path, index + agentCount + bots))}
       {statusText ? (
         <PickerStatus>
           {mention.loading ? <LoadingSpinner className="size-3.5" /> : null}
