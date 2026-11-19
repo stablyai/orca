@@ -10,13 +10,17 @@ import {
 import { tmpdir } from 'node:os'
 import type * as NodeOs from 'node:os'
 import { join } from 'node:path'
+import { parse as parseToml } from 'smol-toml'
 
 const { homedirMock } = vi.hoisted(() => ({ homedirMock: vi.fn<() => string>() }))
 vi.mock('node:os', async () => ({
   ...(await vi.importActual<typeof NodeOs>('node:os')),
   homedir: homedirMock
 }))
-import { syncSystemConfigIntoManagedCodexHome } from './codex-config-mirror'
+import {
+  syncSystemConfigIntoLegacySharedCodexHome,
+  syncSystemConfigIntoManagedCodexHome
+} from './codex-config-mirror'
 import { CODEX_DAEMON_OVERRIDE_MARKER } from '../shared-server/codex-daemon-socket-path-guard'
 
 let root: string
@@ -75,3 +79,33 @@ it.each(Object.entries(SYSTEM_CONFIGS))(
     )
   }
 )
+
+it('keeps a BOM-led inline features table a single valid definition', () => {
+  writeFileSync(
+    join(systemHomePath, 'config.toml'),
+    '\uFEFFfeatures = { daemon_auto_start = false }\nmodel = "gpt-5"\n'
+  )
+  const runtimeConfigPath = join(runtimeHomePath, 'config.toml')
+  syncSystemConfigIntoManagedCodexHome({ runtimeHomePath, systemHomePath })
+
+  syncSystemConfigIntoManagedCodexHome({ runtimeHomePath, systemHomePath })
+
+  expect(parseToml(readFileSync(runtimeConfigPath, 'utf-8'))).toMatchObject({
+    features: { daemon_auto_start: false },
+    model: 'gpt-5'
+  })
+})
+
+it('lets the legacy shared-home refresh and the managed mirror agree on one layout', () => {
+  writeFileSync(join(systemHomePath, 'config.toml'), SYSTEM_CONFIGS.plain)
+  const runtimeConfigPath = join(runtimeHomePath, 'config.toml')
+  const homes = { runtimeHomePath, systemHomePath }
+  syncSystemConfigIntoManagedCodexHome(homes)
+  syncSystemConfigIntoManagedCodexHome(homes)
+  appendFileSync(runtimeConfigPath, '\n[projects."/work/two"]\ntrust_level = "trusted"\n')
+  const settled = readFileSync(runtimeConfigPath, 'utf-8')
+
+  syncSystemConfigIntoLegacySharedCodexHome(homes)
+
+  expect(readFileSync(runtimeConfigPath, 'utf-8')).toBe(settled)
+})

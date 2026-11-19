@@ -19,7 +19,8 @@ import type * as CodexFsUtils from '../../../filesystem/atomic-file-publication'
 // Bypass platform-specific socket paths so asserted config bytes stay host-independent.
 vi.mock('../shared-server/codex-daemon-socket-path-guard', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  applyCodexDaemonSocketGuard: (config: string) => config
+  applyCodexDaemonSocketGuard: (config: string) => config,
+  codexDaemonSocketPathExceedsLimit: () => false
 }))
 
 const { homedirMock, promotionTestState } = vi.hoisted(() => ({
