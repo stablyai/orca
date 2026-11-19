@@ -8,7 +8,6 @@ import {
   assertAgentMayMoveBrowsingOut,
   browserProfileHasSiteList
 } from '../../../../browser/sessions/site-list/browser-profile-site-list-lock'
-import { browserSessionRegistry } from '../../../../browser/sessions/profiles/browser-session-registry'
 import {
   getManagedBrowserProfileOwner,
   isManagedBrowserProfileOf
@@ -51,11 +50,8 @@ async function expectedNewTabProfileId(
     return DEFAULT_PROFILE_ID
   }
   // Managed profiles are made lazily; none yet means no list to protect.
-  return (
-    browserSessionRegistry
-      .listProfiles()
-      .find((profile) => isManagedBrowserProfileOf(profile, owner))?.id ?? null
-  )
+  const { profiles } = await context.runtime.browserProfileList()
+  return profiles.find((profile) => isManagedBrowserProfileOf(profile, owner))?.id ?? null
 }
 
 /** Pins an agent's new tab to the profile it would get anyway when that profile has a site list: headless and client placements would otherwise use the host default. */
@@ -102,13 +98,13 @@ export async function assertAgentMayChangeRepoBrowserProfile(
     return
   }
   const current = await context.runtime.showRepo(repo)
-  for (const from of currentRepoProfileIds(context, current)) {
+  for (const from of await currentRepoProfileIds(context, current)) {
     assertAgentMayMoveBrowsingOut(from, updates.browserProfileId)
   }
 }
 
 /** Where the repo's new tabs go now: its pick, else the managed profiles of its workspaces (none made yet means nothing to protect), else Default. */
-function currentRepoProfileIds(context: GateContext, repo: Repo): string[] {
+async function currentRepoProfileIds(context: GateContext, repo: Repo): Promise<string[]> {
   if (repo.browserProfileId) {
     return [repo.browserProfileId]
   }
@@ -116,8 +112,8 @@ function currentRepoProfileIds(context: GateContext, repo: Repo): string[] {
   if (scope !== 'repo' && scope !== 'worktree') {
     return [DEFAULT_PROFILE_ID]
   }
-  return browserSessionRegistry
-    .listProfiles()
+  const { profiles } = await context.runtime.browserProfileList()
+  return profiles
     .filter(
       (profile) =>
         profile.owner?.kind === scope &&

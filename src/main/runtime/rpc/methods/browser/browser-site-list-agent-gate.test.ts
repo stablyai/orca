@@ -3,9 +3,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../../dispatcher'
 import type { RpcRequest } from '../../core'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
+import type { BrowserProfileListResult } from '../../../../../shared/browser/runtime/runtime-browser-contracts'
 import { DESKTOP_RPC_CALLER, LOCAL_CLI_RPC_CALLER } from '../../callers/rpc-caller-identity'
 import { setBrowserProfileSiteList } from '../../../../browser/sessions/site-list/browser-session-site-list'
-import { browserSessionRegistry } from '../../../../browser/sessions/profiles/browser-session-registry'
 import { BROWSER_CORE_METHODS } from './browser-core'
 import { REPO_METHODS } from '../projects/repo'
 
@@ -14,6 +14,7 @@ const LOCKED = { ok: false, error: { code: 'browser_profile_site_list_locked' } 
 function setup(repoProfileId: string | null = 'work', scope?: string) {
   const runtime = {
     getRuntimeId: () => 'test-runtime',
+    browserProfileList: vi.fn(async (): Promise<BrowserProfileListResult> => ({ profiles: [] })),
     showManagedWorktree: vi.fn(async () => ({ id: 'r1::/w', repoId: 'r1' })),
     showRepo: vi.fn(async () => ({ id: 'r1', browserProfileId: repoProfileId })),
     requireStore: () => ({ getSettings: () => ({ browserProfileScope: scope }) }),
@@ -31,7 +32,9 @@ function setup(repoProfileId: string | null = 'work', scope?: string) {
     methods: [...BROWSER_CORE_METHODS, ...REPO_METHODS]
   })
   const call = (method: string, params: unknown, caller = LOCAL_CLI_RPC_CALLER) =>
-    dispatcher.dispatch({ id: 'r', authToken: 't', method, params } as RpcRequest, { caller })
+    dispatcher.dispatch({ id: 'r', authToken: 't', method, params } satisfies RpcRequest, {
+      caller
+    })
   return { runtime, call }
 }
 
@@ -127,8 +130,8 @@ describe('agents and a browser profile with a site list', () => {
     const owned = (id: string) =>
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the gate reads only id and owner.
       ({ id, owner: { kind: 'repo', id: 'r1' } }) as never
-    vi.spyOn(browserSessionRegistry, 'listProfiles').mockReturnValue([owned('managed')])
-    const { call } = setup(null, 'repo')
+    const { call, runtime } = setup(null, 'repo')
+    runtime.browserProfileList.mockResolvedValue({ profiles: [owned('managed')] })
     const update = { repo: 'id:r1', updates: { browserProfileId: 'other' } }
     setBrowserProfileSiteList('default', ['example.com'])
     expect(await call('repo.update', update)).toMatchObject({ ok: true })
