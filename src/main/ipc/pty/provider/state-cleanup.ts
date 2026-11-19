@@ -12,7 +12,12 @@ import {
 } from '../delivery/pty-hidden-delivery-gate'
 import { agentSessionOwners } from '../pane/agent-session-owners'
 import { paneKeyPtyId, paneKeyTeardownListeners, ptyPaneKey } from '../pane/key-state'
-import { getPtyIdsForConnection, ptyIncarnationById, ptyOwnership } from './ownership-state'
+import {
+  getPtyIdsForConnection,
+  ptyIncarnationById,
+  ptyOwnership,
+  ptyRootPidById
+} from './ownership-state'
 import { clearBackgroundedDeliverySyncForPty } from './listener-lifecycle'
 import {
   activeRendererPtys,
@@ -56,6 +61,7 @@ export function clearProviderPtyState(
   piTitlebarExtensionService.clearPty(id)
   ptySizes.delete(id)
   ptyIncarnationById.delete(id)
+  ptyRootPidById.delete(id)
   lastInputAtByPty.delete(id)
   interactiveOutputCharsByPty.delete(id)
   const activeChanged = activeRendererPtys.delete(id)

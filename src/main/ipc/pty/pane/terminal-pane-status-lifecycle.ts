@@ -5,7 +5,7 @@ import { toSshExecutionHostId } from '../../../../shared/execution-host/executio
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import { paneKeyPtyId } from './key-state'
-import { ptyIncarnationById } from '../provider/ownership-state'
+import { ptyIncarnationById, ptyRootPidById } from '../provider/ownership-state'
 import { isLocalHookConnectionId } from '../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import { getProviderForPty } from '../provider/registry'
 import { inspectPtyProviderProcess } from '../../../providers/pty/process-inspection'
@@ -146,28 +146,23 @@ async function paneShellAlone(
  *  table instead, local or daemon alike. Windows shells stop no jobs, so the host's job census
  *  finding no child beside a shell foreground suffices there. Never fall back to a foreground
  *  name, which a live unrecognized agent shares. */
-// A PTY keeps its root process for its incarnation, so repeated proofs skip the inventory.
-const rootPidByPtyIncarnation = new Map<string, number>()
-
+// A PTY keeps its root process for its incarnation, so it pays at most one inventory per life.
 async function readPtyRootPid(
   provider: ReturnType<typeof getProviderForPty>,
   ptyId: string,
   incarnationId: string | undefined
 ): Promise<number | undefined> {
-  const key = `${ptyId}\0${incarnationId ?? ''}`
-  const known = rootPidByPtyIncarnation.get(key)
-  if (known) {
-    return known
+  const known = ptyRootPidById.get(ptyId)
+  if (known && known.incarnationId === incarnationId) {
+    return known.rootPid
   }
   const processes = await provider
     .listProcesses({ ptyIds: [ptyId], targetOwnerOnly: true })
     .catch(() => [])
   const rootPid = processes.find((entry) => entry.id === ptyId)?.rootProcessId
-  if (rootPid) {
-    if (rootPidByPtyIncarnation.size >= 64) {
-      rootPidByPtyIncarnation.delete(rootPidByPtyIncarnation.keys().next().value!)
-    }
-    rootPidByPtyIncarnation.set(key, rootPid)
+  // Only a live incarnation main still tracks is cached; the PTY's teardown drops it.
+  if (rootPid && incarnationId && ptyIncarnationById.get(ptyId) === incarnationId) {
+    ptyRootPidById.set(ptyId, { incarnationId, rootPid })
   }
   return rootPid
 }
