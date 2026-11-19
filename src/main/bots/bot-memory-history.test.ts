@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { addBotMemoryFact, botMemoryChange } from '../../shared/bot-memory-lines'
 import { createBotMemoryHistory } from './bot-memory-history'
+import type { BotMemoryHistoryRow } from '../../shared/bots/bot-memory-history'
 import { createBotMemoryRecord } from './bot-memory-record'
 import { createBotTurnContext } from './bot-turn-context'
 
@@ -321,7 +322,7 @@ describe("a bot's memory history", () => {
 
   it('says a row was undone once old rows could not be pruned for a moment', async () => {
     const now = Date.UTC(2026, 10, 6)
-    const row = (id: string, at: number, by: object) => ({
+    const row = (id: string, at: number, by: BotMemoryHistoryRow['by']) => ({
       id,
       at,
       by,
