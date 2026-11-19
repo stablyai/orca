@@ -1,7 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import {
   classifyUnenvelopedCredential,
-  isMockKeychainCiphertext,
   type SecretAtRestProtection
 } from '../../shared/secure-storage/secret-at-rest-protection'
 
@@ -12,11 +11,7 @@ export function readCredentialFileProtection(path: string): SecretAtRestProtecti
   }
   try {
     const raw = readFileSync(path)
-    return raw.length === 0
-      ? null
-      : isMockKeychainCiphertext(raw)
-        ? 'plaintext'
-        : classifyUnenvelopedCredential(raw)
+    return raw.length === 0 ? null : classifyUnenvelopedCredential(raw)
   } catch {
     // Unreadable is a read-time error to surface elsewhere, not a protection claim.
     return null
