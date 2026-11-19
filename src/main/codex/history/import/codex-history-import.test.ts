@@ -12,11 +12,26 @@ import {
   utimesSync,
   writeFileSync
 } from 'node:fs'
+import type * as NodeFsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { basename, join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { holdCodexRolloutForDeletion } from '../rollouts/codex-rollout-deletion-guard'
 import { importCodexHistory } from './codex-history-import'
+
+// The rollout whose copy finds the store's disk full.
+const diskFull = vi.hoisted(() => ({ forName: '' }))
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFsPromises>()
+  return {
+    ...actual,
+    copyFile: (...args: Parameters<typeof actual.copyFile>) =>
+      basename(String(args[0])) === diskFull.forName
+        ? Promise.reject(Object.assign(new Error('ENOSPC: no space left'), { code: 'ENOSPC' }))
+        : actual.copyFile(...args)
+  }
+})
 
 const DAY = join('sessions', '2026', '11', '18')
 const NEW = 'rollout-2026-11-18T10-00-00-0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a51.jsonl'
@@ -28,6 +43,7 @@ const LATER = 'rollout-2026-11-18T13-00-00-0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a55.
 const roots: string[] = []
 
 afterEach(() => {
+  diskFull.forName = ''
   for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }
@@ -152,5 +168,16 @@ describe('importCodexHistory', () => {
     await run()
 
     expect(readFileSync(join(storeHome, DAY, NEW), 'utf8')).toBe('new\n')
+  })
+
+  it('stops importing when the store disk is full', async () => {
+    const { importHome, storeHome, run } = setup()
+    writeFileSync(join(importHome, 'archived_sessions', ARCHIVED), 'archived\n')
+    writeFileSync(join(importHome, DAY, NEW), 'new\n')
+    diskFull.forName = ARCHIVED
+
+    expect(await run()).toBe(0)
+
+    expect(existsSync(join(storeHome, DAY, NEW))).toBe(false)
   })
 })

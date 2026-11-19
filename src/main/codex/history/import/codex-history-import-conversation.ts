@@ -1,4 +1,5 @@
 import { join } from 'node:path'
+import { errnoCodeOrUnknown } from '../../../../shared/errors/errno-code'
 import {
   codexRolloutDeletionEpoch,
   isCodexRolloutHeldForDeletion
@@ -7,7 +8,14 @@ import { RolloutSourceReadError } from '../rollouts/codex-rollout-staged-copy'
 import type { CodexHistoryImportArgs } from './codex-history-import'
 import { publishStagedImport, type ImportPublishOutcome } from './codex-history-import-publish'
 import { canWriteIn, stagedImportPath, stageImportRollout } from './codex-history-import-staging'
-import { recordStagedImport, stagingRecordPath } from './codex-history-import-staging-record'
+import {
+  forgetStagedImport,
+  recordStagedImport,
+  stagingRecordPath
+} from './codex-history-import-staging-record'
+
+// The store's disk is full or read-only: every further copy would fail the same way.
+const STORE_REFUSES_WRITES = new Set(['ENOSPC', 'EDQUOT', 'EROFS', 'EFBIG'])
 
 export type ConversationCopy = {
   from: string
@@ -53,11 +61,16 @@ export async function copyConversationIntoStore(
     )
   } catch (error) {
     console.warn(`[codex-history-import] Could not copy ${copy.from}:`, error)
+    if (error instanceof RolloutSourceReadError) {
+      return 'refused'
+    }
+    if (STORE_REFUSES_WRITES.has(errnoCodeOrUnknown(error))) {
+      return 'failed'
+    }
     // copyFile doesn't say which side failed: while the store takes files, it was the source.
-    return error instanceof RolloutSourceReadError || (await canWriteIn(copy.targetDir, args.runId))
-      ? 'refused'
-      : 'failed'
+    return (await canWriteIn(copy.targetDir, args.runId)) ? 'refused' : 'failed'
   } finally {
-    await recordStagedImport(recordPath, null)
+    // Never throws, so a published conversation is always recorded as handled.
+    await forgetStagedImport(recordPath, staged)
   }
 }
