@@ -252,7 +252,7 @@ export default function EditHostScreen() {
             <Text style={styles.help}>
               {t(
                 'host.edit.help',
-                'Change the display name or connection address. Leave the name empty to use the name the desktop reports. Address edits only switch where this phone connects — they do not re-pair. Use this when the same desktop is reachable at a different IP (for example home LAN vs Tailscale).'
+                'Change the display name or connection address. Leave the name empty to use the name the host reports. Address edits only switch where this phone connects — they do not re-pair. Use this when the same host is reachable at a different IP (for example home LAN vs Tailscale).'
               )}
             </Text>
 
