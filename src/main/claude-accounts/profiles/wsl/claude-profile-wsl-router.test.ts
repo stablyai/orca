@@ -58,7 +58,7 @@ vi.mock('../../../wsl/execution/wsl-runner', () => ({
   }
 }))
 
-import type { ClaudeProfileRouterSettings } from '../routing/claude-profile-router'
+import type { ClaudeProfileRouterSettings } from '../routing/claude-profile-router-settings'
 
 import { ClaudeWslProfileRouter } from './claude-profile-wsl-router'
 

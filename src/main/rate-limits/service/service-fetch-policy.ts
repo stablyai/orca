@@ -21,6 +21,7 @@ import {
 } from '../providers/claude/claude-usage-window'
 import { claudeOAuthUsageDisabledResult } from '../providers/claude/claude-usage-result'
 import { readUserClaudeConfigDir } from '../../claude-accounts/profiles/claude-profile-paths'
+import { CLAUDE_USAGE_ACCOUNT_ID_ENV } from '../../../shared/agent-accounts/claude/claude-system-default-usage-account'
 import { getClaudeProfileRouter } from '../../claude-accounts/profiles/routing/claude-profile-installed-router'
 
 export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchTargets {
@@ -129,7 +130,8 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
           readUserClaudeConfigDir(process.env)
       ),
       home: authPreparation?.configDir,
-      provenance: authPreparation?.provenance ?? 'system'
+      provenance: authPreparation?.provenance ?? 'system',
+      accountId: authPreparation?.envPatch[CLAUDE_USAGE_ACCOUNT_ID_ENV]
     }
     if (
       snapshot.configDir !== this.lastClaudeAuthSnapshot?.configDir ||
@@ -145,9 +147,22 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
     const eventDir = normalizeClaudeConfigDir(event.configDir)
     const reportingAccount = resolveClaudeLiveAccount(
       event.configDir,
-      this.inactiveClaudeAccountsResolver?.() ?? []
+      this.inactiveClaudeAccountsResolver?.() ?? [],
+      event.accountId
     )
-    const inactiveAccount = eventDir !== activeSnapshot?.configDir ? reportingAccount : null
+    if (
+      (event.accountId && event.accountId !== activeSnapshot?.accountId && !reportingAccount) ||
+      (!event.accountId && activeSnapshot?.accountId?.startsWith('system-default:host:'))
+    ) {
+      return
+    }
+    const inactiveAccount = event.accountId
+      ? event.accountId === activeSnapshot?.accountId
+        ? null
+        : reportingAccount
+      : eventDir !== activeSnapshot?.configDir
+        ? reportingAccount
+        : null
     const snapshot = inactiveAccount
       ? {
           configDir: eventDir,

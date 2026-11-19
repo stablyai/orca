@@ -134,6 +134,7 @@ it('records system-default workspace usage from live posts without replacing the
   })
   service.ingestLiveClaudeRateLimits({
     configDir: router.systemDefaultHome(),
+    accountId: 'system-default:host:["personal@example.com","personal-org"]',
     fiveHour: { used_percentage: 38 },
     sevenDay: null
   })

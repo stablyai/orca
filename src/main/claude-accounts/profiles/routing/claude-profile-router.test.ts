@@ -23,7 +23,8 @@ import {
 } from '../claude-profile-paths'
 
 import { getPosixClaudeShellFunction } from '../../../../shared/shell/launch/agents/claude-shell-function'
-import { ClaudeProfileRouter, type ClaudeProfileRouterSettings } from './claude-profile-router'
+import { ClaudeProfileRouter } from './claude-profile-router'
+import type { ClaudeProfileRouterSettings } from './claude-profile-router-settings'
 import {
   claudeProfileHistoryDirs,
   getClaudeObservedConfigDirs,
@@ -175,7 +176,9 @@ describe('ClaudeProfileRouter', () => {
       provenance: 'system'
     })
     expect(f.router.preparation().envPatch).not.toHaveProperty('CLAUDE_CONFIG_DIR')
-    expect(f.router.terminalEnv()).toEqual({ ORCA_CLAUDE_PROFILE_POINTER: f.router.pointerPath })
+    expect(f.router.terminalEnv()).toMatchObject({
+      ORCA_CLAUDE_PROFILE_POINTER: f.router.pointerPath
+    })
     expect(f.router.routedHome()).toBeNull()
     expect(f.router.routedHome('identity')).toBeNull()
     await expect(claudeRoutedHomeAsync(f.router)).resolves.toBeNull()

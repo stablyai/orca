@@ -2,10 +2,8 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { agentSessionAccountHome } from '../../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { AgentSessionJournalIdentity } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
-import {
-  ClaudeProfileRouter,
-  type ClaudeProfileRouterSettings
-} from '../../../../claude-accounts/profiles/routing/claude-profile-router'
+import { ClaudeProfileRouter } from '../../../../claude-accounts/profiles/routing/claude-profile-router'
+import type { ClaudeProfileRouterSettings } from '../../../../claude-accounts/profiles/routing/claude-profile-router-settings'
 import { installClaudeProfileRouter } from '../../../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { claudeProfileMarkerPath } from '../../../../claude-accounts/profiles/claude-profile-paths'
 import { CLAUDE_STRUCTURED_AGENT } from '../../../../claude/structured/claude-structured-agent-definition'

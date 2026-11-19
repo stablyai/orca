@@ -2,7 +2,8 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { ClaudeProfileRouter, type ClaudeProfileRouterSettings } from './claude-profile-router'
+import { ClaudeProfileRouter } from './claude-profile-router'
+import type { ClaudeProfileRouterSettings } from './claude-profile-router-settings'
 import { ClaudeWorkspaceProfiles } from './claude-workspace-profile'
 import {
   installClaudeProfileRouter,
