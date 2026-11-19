@@ -12,6 +12,7 @@ import {
   admitTerminalNoticeLifetime,
   retireTerminalNoticeLifetime
 } from '../provider-notices/terminal-notice-lifetime'
+import { isCodexPaneStale } from '../pty-connection/input/codex-pane-stale'
 import { routeCodexAccountRestartWake } from './codex-account-restart-wake'
 import type { CodexAccountRestart } from '@/store/terminals/terminal-contracts'
 import type { ConnectPanePtySession } from '../pty-connection/connect-pane-pty-session'
@@ -521,6 +522,24 @@ it.each(['connected', 'disconnected', 'removed during read'] as const)(
         expect(typeof after === 'object' && after.phase).toBe('failed')
         expect(typeof after === 'object' && after.notDispatched).toBe(true)
         expect(connect).not.toHaveBeenCalled()
+        expect(
+          isCodexPaneStale({
+            tabId: 'tab',
+            worktreeId: 'wt',
+            leafId: leaf,
+            panePtyId: 'old',
+            paneIncarnationId: 'inc-old'
+          })
+        ).toBe(true)
+        expect(
+          isCodexPaneStale({
+            tabId: 'foreign',
+            worktreeId: 'wt',
+            leafId: foreignLeaf,
+            panePtyId: 'foreign-pty',
+            paneIncarnationId: 'inc-foreign'
+          })
+        ).toBe(false)
         expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(1)
       }
       expect(
