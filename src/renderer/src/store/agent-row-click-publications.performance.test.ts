@@ -73,14 +73,14 @@ it("main's echo of a UI write publishes once and changes only the field that dif
   store.getState().hydratePersistedUI(makePersistedUI({ ...saved, sidebarWidth: 320 }))
 
   const after = store.getState()
-  const changed = (Object.keys(after) as (keyof AppState)[]).filter(
-    (key) => after[key] !== before[key]
-  )
+  const changed = (Object.keys(after) as (keyof AppState)[])
+    .filter((key) => after[key] !== before[key])
+    .toSorted()
   expect(count()).toBe(1)
   // The write baseline moves with every hydration; before #43945 it replaced 27 fields here.
   expect(changed).toEqual([
-    'sidebarWidth',
     'persistedUIWriteBaseline',
-    'persistedUIWriteBaselineGeneration'
+    'persistedUIWriteBaselineGeneration',
+    'sidebarWidth'
   ])
 })
