@@ -196,9 +196,16 @@ async function showTerminalWorkspace(page) {
     const withTerminal = Object.entries(state.tabsByWorktree ?? {}).find(
       ([, tabs]) => Array.isArray(tabs) && tabs.length > 0
     )
-    if (withTerminal && state.activeWorktreeId !== withTerminal[0]) {
-      state.setActiveWorktree(withTerminal[0])
+    if (!withTerminal) {
+      return
     }
+    const [worktreeId, tabs] = withTerminal
+    if (state.activeWorktreeId !== worktreeId) {
+      state.setActiveWorktree(worktreeId)
+    }
+    // The terminal tab in front, not a chat: otherwise keys land in a composer and never reach a PTY.
+    window.__store.getState().setActiveTab?.(tabs[0].id)
+    window.__store.getState().setActiveTabType?.('terminal', worktreeId)
   })
   await sleep(3_000)
 }
@@ -228,9 +235,13 @@ async function typeIntoComposer({ page, windowMs }) {
   if (!target) {
     return { note: 'no visible input', undriven: 'no visible input' }
   }
+  // The focused editor itself: a rich-text composer can re-render the marked node while it is typed into.
   const textLength = () =>
     page.evaluate(() => {
-      const element = document.querySelector('[data-fleet-gate-input="1"]')
+      const focused = document.activeElement
+      const element =
+        focused?.closest?.('[contenteditable="true"], textarea') ??
+        document.querySelector('[data-fleet-gate-input="1"]')
       return (element?.value ?? element?.textContent ?? '').length
     })
   await page.locator('[data-fleet-gate-input="1"]').first().focus()
