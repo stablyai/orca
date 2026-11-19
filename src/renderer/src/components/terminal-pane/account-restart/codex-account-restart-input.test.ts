@@ -3,6 +3,9 @@ import { useAppStore } from '@/store/index'
 import { selectCodexStaleSessionCount } from '@/components/status-bar/accounts/codex-restart-status-summary'
 import { codexAccountRestartToken } from '@/store/terminals/codex-account-restart-continuation'
 import { seed, leaf, sibling } from './codex-account-restart.test-fixture'
+import { buildPaneTransportOptions } from '../pty-connection/pane-transport-options'
+import { installIpcPtyWindow } from '../pty-transport/ipc/pty-transport-test-harness'
+import { createIpcPtyTransport } from '../pty-transport/ipc/pty-transport'
 import { installPtyInputForward } from '../pty-connection/input/pty-input-forward'
 
 vi.mock('@/lib/agent-session/accounts/agent-account-restart-startup', () => ({
@@ -115,3 +118,52 @@ it('keeps rootless recovery failure guarded without borrowing a sibling binding'
   expect(old.writes).toEqual([])
   expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(1)
 })
+
+it.each(['notice before typing', 'notice before flush'] as const)(
+  'fences preconnect typing at %s while delivering protocol replies and later valid input',
+  async (when) => {
+    installIpcPtyWindow(window, {})
+    const spawn = Promise.withResolvers<{ id: string; incarnationId: string; isReattach: true }>()
+    vi.mocked(window.api.pty.spawn).mockReturnValue(spawn.promise as never)
+    if (when === 'notice before flush') {
+      useAppStore.setState({ codexRestartNoticeByPtyId: {} })
+    }
+    const options = buildPaneTransportOptions({
+      deps: {
+        tabId: 'tab',
+        worktreeId: 'wt',
+        isActiveRef: { current: true },
+        isVisibleRef: { current: true }
+      },
+      pane: { id: 1, leafId: leaf, terminal: { options: {} } },
+      paneStartup: { command: 'codex' },
+      getSleepingRecordForPane: () => null
+    } as never)
+    const transport = createIpcPtyTransport({ ...options, bufferInputUntilConnect: true })
+    expect(transport.sendInput('never execute\r', 'driving')).toBe(when === 'notice before flush')
+    expect(transport.sendInputImmediate('\x1b[1;1R')).toBe(true)
+    const pending = transport.connect({
+      url: '',
+      callbacks: {},
+      sessionId: 'old',
+      attachOnlyView: true
+    })
+    useAppStore.setState({
+      codexRestartNoticeByPtyId: {
+        old: { previousAccountLabel: 'old', nextAccountLabel: 'new', incarnationId: 'inc-old' }
+      }
+    })
+    spawn.resolve({ id: 'old', incarnationId: 'inc-old', isReattach: true })
+    await pending
+    await vi.waitFor(() =>
+      expect(window.api.pty.write).toHaveBeenCalledWith('old', '\x1b[1;1R', 'query-reply')
+    )
+    expect(window.api.pty.write).not.toHaveBeenCalledWith('old', 'never execute\r', 'driving')
+    useAppStore.getState().clearCodexRestartNotice('old')
+    expect(transport.sendInput('valid later input\r', 'driving')).toBe(true)
+    await vi.waitFor(() =>
+      expect(window.api.pty.write).toHaveBeenCalledWith('old', 'valid later input\r', 'driving')
+    )
+    await transport.destroy?.()
+  }
+)

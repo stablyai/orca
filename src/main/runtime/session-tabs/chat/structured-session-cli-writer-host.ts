@@ -2,6 +2,7 @@ import {
   terminalLaunchFacts,
   type TerminalLaunchResult
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { currentTerminalLaunchFacts } from '../../terminal/launch/terminal-launch-result'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import { assertCliConversationWritersExited } from '../../agent-session/lifecycle/structured-agent-cli-writers'
@@ -46,21 +47,7 @@ export abstract class OrcaRuntimeWithStructuredSessionCliWriterHost extends Orca
   }
 
   getTerminalLaunchResult(ptyId: string): TerminalLaunchResult | undefined {
-    const pty = this.ptysById.get(ptyId)
-    const saved = pty?.savedTerminalLaunchResult
-    if (!pty) {
-      return undefined
-    }
-    return terminalLaunchFacts({
-      ...(saved?.incarnationId === pty.incarnationId &&
-      saved.launchConfig === pty.launchConfig &&
-      saved.launchToken === pty.launchToken
-        ? saved.result
-        : {}),
-      launchAgent: pty.launchAgent ?? undefined,
-      launchToken: pty.launchToken ?? undefined,
-      launchConfig: pty.launchConfig ?? undefined
-    })
+    return currentTerminalLaunchFacts(this.ptysById.get(ptyId))
   }
 
   /** A local hook that names its agent process supersedes the launch result saved for this PTY. */

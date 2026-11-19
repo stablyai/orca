@@ -436,7 +436,7 @@ describe('Codex account continuation', () => {
         })
       }
       await retryCodexAccountRestarts([request])
-      expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(0)
+      expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(1)
       expect(useAppStore.getState().terminalLayoutsByTabId.tab.ptyIdsByLeafId?.[leaf]).toBe('old')
       expect(spawn).not.toHaveBeenCalled()
     }

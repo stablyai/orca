@@ -51,7 +51,7 @@ export function continueCodexAccountRestart(
     : undefined
   if (result && !result.incarnationId) {
     state.updateCodexAccountRestart(token, {
-      resultPtyId: result.id,
+      resultPtyId: request.resultPtyId ?? result.id,
       phase: 'unresolved',
       error: ACCOUNT_RESTART_OWNER_UNVERIFIED
     })
@@ -63,8 +63,8 @@ export function continueCodexAccountRestart(
       isObsoleteCodexRestartResult(request, result))
   ) {
     state.updateCodexAccountRestart(token, {
-      resultPtyId: result.id,
-      resultIncarnationId: result.incarnationId ?? undefined,
+      resultPtyId: request.resultPtyId ?? result.id,
+      resultIncarnationId: request.resultIncarnationId ?? result.incarnationId ?? undefined,
       phase: 'unresolved',
       error: ACCOUNT_RESTART_OWNER_UNVERIFIED
     })

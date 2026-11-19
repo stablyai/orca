@@ -8,6 +8,8 @@ import { bindStartFreshSpawn } from '../pty-connection/spawn/fresh-spawn-start'
 import { defersToMainPaneStart } from '../pty-connection/spawn/main-pane-start-request'
 import { runDeferredSessionAttach } from '../pty-connection/deferred-session-attach'
 import { showFramePatch } from '@/store/slices/tabs/moved-tab-selection'
+import { routeCodexAccountRestartWake } from './codex-account-restart-wake'
+import type { CodexAccountRestart } from '@/store/terminals/terminal-contracts'
 import type { ConnectPanePtySession } from '../pty-connection/connect-pane-pty-session'
 import {
   failCodexAccountRestart,
@@ -71,12 +73,21 @@ async function deferredSession() {
     receipt(request, 'not-started', 'original'),
     'deferred'
   )
+  return mountSession(request)
+}
+
+function mountSession(request: CodexAccountRestart) {
   const retained = new Map([[leaf, 'saved output']])
   const connect = vi.fn()
   const value = mountedSpawnSession(request, retained, connect)
   let bound: string | null = null
   value.transport.getPtyId = () => bound
   Object.assign(value, {
+    allowInitialIdleCacheSeed: false,
+    buildColdRestoreAgentResumeStartup: () => null,
+    beginReattachLiveDataDeferral: () => {},
+    handleReattachResult: async () => true,
+    settlePaneSerializerAfterReplay: async () => {},
     cols: 80,
     rows: 24,
     keepResumeRecordAfterColdRestoreSpawn: () => {},
@@ -327,4 +338,83 @@ it('retains a disposed create result and retries by attaching that exact incarna
   await expect(successor.startFreshSpawn()).resolves.toBe('committed')
   expect(retained.has(leaf)).toBe(false)
   expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(0)
+})
+
+it('re-arms a receipt-backed paused restart after its view is replaced and resumes it once', async () => {
+  const first = await deferredSession()
+  first.session.disposed = true
+  first.session.disposeSpawnDeferral()
+  const current = useAppStore.getState().pendingPaneAccountRestarts[key]
+  if (typeof current !== 'object') {
+    throw new Error('missing retained restart')
+  }
+  const replacement = mountSession(current)
+  replacement.session.deps.accountRestartToken = undefined
+  await routeCodexAccountRestartWake(replacement.session)
+  expect(replacement.connect).not.toHaveBeenCalled()
+  const dispatched: unknown[] = []
+  replacement.connect.mockImplementation(async (options) => {
+    dispatched.push(options.accountRestart)
+    options.onAccountRestartDispatch()
+    const result = { id: 'replacement', incarnationId: 'inc-new' }
+    if (!options.shouldContinue(result)) {
+      return undefined
+    }
+    replacement.bind(result.id)
+    return result
+  })
+  await replacement.session.resumeDeferredSpawn()
+  await replacement.session.resumeDeferredSpawn()
+  expect(dispatched).toHaveLength(1)
+  expect(dispatched[0]).toMatchObject({
+    expected: { kind: 'endpoint', ptyId: 'old', incarnationId: 'inc-old' }
+  })
+  expect(replacement.session.transport.getPtyId()).toBe('replacement')
+  expect(replacement.retained.has(leaf)).toBe(false)
+  expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(0)
+})
+
+it('reattaches a proven undispatched original without resuming or creating on an unsupported host', async () => {
+  const first = await deferredSession()
+  first.session.disposed = true
+  first.session.disposeSpawnDeferral()
+  useAppStore.getState().updateCodexAccountRestart(codexAccountRestartToken(first.request), {
+    phase: 'preparing',
+    receipt: undefined
+  })
+  failCodexAccountRestart(
+    codexAccountRestartToken(first.request),
+    'terminal_account_restart_unsupported',
+    'failed',
+    { notDispatched: true }
+  )
+  const current = useAppStore.getState().pendingPaneAccountRestarts[key]
+  if (typeof current !== 'object') {
+    throw new Error('missing failure')
+  }
+  const view = mountSession(current)
+  view.session.deps.accountRestartToken = undefined
+  view.session.buildColdRestoreAgentResumeStartup = () => first.request.startup as never
+  const attachments: unknown[] = []
+  view.connect.mockImplementation(async (options) => {
+    attachments.push({
+      sessionId: options.sessionId,
+      attachOnlyView: options.attachOnlyView,
+      command: options.command,
+      accountRestart: options.accountRestart
+    })
+    const result = { id: 'old', incarnationId: 'inc-old', isReattach: true }
+    if (!options.shouldContinue(result)) {
+      return undefined
+    }
+    view.bind('old')
+    return result
+  })
+  await routeCodexAccountRestartWake(view.session)
+  expect(attachments).toEqual([
+    { sessionId: 'old', attachOnlyView: true, command: undefined, accountRestart: undefined }
+  ])
+  expect(view.session.transport.getPtyId()).toBe('old')
+  expect(view.retained.get(leaf)).toBe('saved output')
+  expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(1)
 })

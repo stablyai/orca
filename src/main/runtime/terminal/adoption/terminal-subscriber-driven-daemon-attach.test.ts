@@ -559,3 +559,26 @@ describe('re-attach after a daemon reconnect detached a spawned session', () => 
     expect(model.emitData(PTY_ID, 'after both\r\n')).toBe(true)
   })
 })
+
+it('never creates while reconciling an absent account-restart mutation', async () => {
+  const runtime = new OrcaRuntimeService()
+  const model = createDaemonProviderModel({ snapshotCapable: false })
+  model.bind(runtime)
+  runtime.setPtyController(model.controller as never)
+  vi.spyOn(internals(runtime), 'resolveTerminalWorkspaceLaunchScope').mockResolvedValue({
+    id: WORKTREE_ID,
+    connectionId: null
+  })
+  const spawn = vi.fn()
+  await expect(
+    runtime.dedupeTerminalCreate(
+      'device-a',
+      `id:${WORKTREE_ID}`,
+      'account-restart:request:attempt',
+      true,
+      spawn,
+      { accountRestart: true }
+    )
+  ).rejects.toThrow('terminal_account_restart_outcome_unknown')
+  expect(spawn).not.toHaveBeenCalled()
+})

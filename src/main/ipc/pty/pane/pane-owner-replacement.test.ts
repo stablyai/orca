@@ -1,5 +1,10 @@
 import { expect, it, vi } from 'vitest'
-import { fixture } from '../../../persistence/loading-store/profile-writing/profile-state-delayed-authority-fixture'
+import { toSshExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { savePtySpawnPaneBinding } from '../spawn/spawn-commit-binding'
+import {
+  fixture,
+  admitRuntimeSpawnPane
+} from '../../../persistence/loading-store/profile-writing/profile-state-delayed-authority-fixture'
 import { TEST_LEAF_1, TEST_LEAF_2 } from '../../../persistence/persistence-session-fixtures'
 import { swapReplacedPaneBinding } from './pane-owner-replacement'
 import type { ReplacedPaneOwner } from './replaced-pane-owner'
@@ -76,4 +81,35 @@ it('refuses the swap when another owner holds the leaf', async () => {
   expect(
     store.getWorkspaceSession().terminalLayoutsByTabId[tabId].ptyIdsByLeafId?.[TEST_LEAF_1]
   ).toBe('successor')
+})
+
+it('commits an SSH replacement to its authoritative partition when the local pane identity collides', async () => {
+  const { store } = await fixture()
+  const connectionId = 'account-restart-ssh'
+  const hostId = toSshExecutionHostId(connectionId)
+  const pane = { worktreeId, tabId, leafId: TEST_LEAF_1 }
+  await admitRuntimeSpawnPane(store, pane, connectionId)
+  await store.persistPtyBinding({ ...pane, ptyId: 'ssh-old', incarnationId: 'inc-ssh-old' }, hostId)
+  await store.persistPtyBinding({ ...pane, ptyId: 'local-winner', incarnationId: 'inc-local' })
+  await savePtySpawnPaneBinding(
+    {
+      result: { id: 'ssh-new', incarnationId: 'inc-ssh-new' },
+      provider: {} as never,
+      replacedPaneOwner: { ptyId: 'ssh-old', pane: { ...pane, hostId } },
+      deps: {}
+    },
+    {
+      store,
+      binding: { ...pane, ptyId: 'ssh-new', incarnationId: 'inc-ssh-new' },
+      refusal: 'terminal_pane_owner_changed',
+      failureLog: 'unexpected SSH commit failure'
+    },
+    connectionId
+  )
+  expect(
+    store.getWorkspaceSession(hostId).terminalLayoutsByTabId[tabId].ptyIdsByLeafId?.[TEST_LEAF_1]
+  ).toBe('ssh-new')
+  expect(
+    store.getWorkspaceSession().terminalLayoutsByTabId[tabId].ptyIdsByLeafId?.[TEST_LEAF_1]
+  ).toBe('local-winner')
 })
