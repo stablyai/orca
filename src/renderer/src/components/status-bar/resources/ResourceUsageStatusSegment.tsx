@@ -54,9 +54,7 @@ export function ResourceUsageStatusSegment({
     triggerSessionCount,
     memoryMetricCopy,
     commitMetricCopy,
-    totalMemory,
-    totalCpu,
-    memBadgeLabel,
+    ownerSplit,
     commitToneClass,
     commitBadgeLabel,
     daemonUnreachable,
@@ -92,7 +90,6 @@ export function ResourceUsageStatusSegment({
           spaceScanReady,
           iconOnly,
           commitToneClass,
-          memBadgeLabel,
           triggerSessionCount,
           orphanCount,
           resourceManagerTooltipLines
@@ -158,12 +155,11 @@ export function ResourceUsageStatusSegment({
             )}
             {daemonUnreachable && renderDaemonUnreachableBanner({ daemonActions }, t)}
             {!daemonUnreachable && sessionsOnlyError && renderSessionsOnlyErrorBanner(t)}
-            {resourceSnapshot && (
+            {ownerSplit && (
               <div className="min-h-0 max-h-[40%] overflow-y-auto scrollbar-sleek">
                 {renderResourceUsageSummary(
                   {
-                    totalCpu,
-                    totalMemory,
+                    ownerSplit,
                     memoryMetricCopy,
                     commitBadgeLabel,
                     commitMetricCopy,

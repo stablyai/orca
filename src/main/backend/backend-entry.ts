@@ -23,6 +23,7 @@ import type { createUsageService } from './usage-service'
 import type { UsageWorktreeCatalog } from '../usage/usage-store-host'
 import { parseUsageAccountRoots } from '../usage/usage-account-attribution'
 import { installFatalSignalListenerGuard } from '../crash-reporting/fatal-signal-listener-guard'
+import { DESKTOP_OWNER_POLL_MS, watchDesktopOwner } from './backend-desktop-owner-watch'
 
 // A fatal V8 trap must crash, never spin on a JS fault-signal listener.
 installFatalSignalListenerGuard()
@@ -52,6 +53,11 @@ let usage: ReturnType<typeof createUsageService> | undefined
 let stopping: Promise<void> | undefined
 let booting = false
 let startup: Promise<void> | undefined
+// Linux: no bootstrap means main died before sending it, and a leaked IPC fd can hide that.
+const bootstrapDeadline =
+  process.platform === 'linux'
+    ? setTimeout(() => void stop(), ORCAD_SHUTDOWN_DEADLINE_MS * 2)
+    : undefined
 
 function stop(): Promise<void> {
   stopping ??= (async () => {
@@ -75,7 +81,9 @@ function stop(): Promise<void> {
 }
 
 async function acquireServiceLock(userDataPath: string) {
-  const deadline = Date.now() + ORCAD_SHUTDOWN_DEADLINE_MS
+  // Room for an orphaned holder to notice its desktop is gone and finish stopping.
+  const ownerWatchSlack = process.platform === 'linux' ? 2 * DESKTOP_OWNER_POLL_MS : 0
+  const deadline = Date.now() + ORCAD_SHUTDOWN_DEADLINE_MS + ownerWatchSlack
   while (!abort.signal.aborted) {
     try {
       return acquireOrcadInstanceLock(join(userDataPath, 'backend-service'), {
@@ -105,6 +113,7 @@ async function bootstrap(raw: unknown, port: BackendNativePort): Promise<void> {
     throw new Error('Backend was already bootstrapped.')
   }
   booting = true
+  clearTimeout(bootstrapDeadline)
   const config = BackendBootstrapSchema.parse(raw)
   if (
     config.requiredCapabilities.some(
@@ -113,6 +122,11 @@ async function bootstrap(raw: unknown, port: BackendNativePort): Promise<void> {
   ) {
     throw new Error('Backend contract is unsupported.')
   }
+  await watchDesktopOwner(config.desktopOwner, () => {
+    console.error(`[backend ${incarnation}] Desktop process is gone; stopping.`)
+    void stop()
+  })
+  abort.signal.throwIfAborted()
   const host = createDesktopBackendEnvironment(config)
   setAppEnvironment(host.environment)
   control = new BackendPortRpc(
@@ -194,8 +208,10 @@ parent.on('message', (event) => {
   }
   if (message?.type === 'bootstrap' && port) {
     startup = bootstrap(message.config, port)
-    void startup.catch(() => {
-      console.error(`[backend ${incarnation}] Startup failed.`)
+    void startup.catch((error: unknown) => {
+      const code = error instanceof Error && 'code' in error ? ` (${String(error.code)})` : ''
+      const reason = error instanceof Error ? error.message : String(error)
+      console.error(`[backend ${incarnation}] Startup failed: ${reason}${code}`)
       parent!.postMessage({ type: 'failed', incarnation })
       void stop()
     })

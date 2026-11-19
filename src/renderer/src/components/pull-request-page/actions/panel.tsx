@@ -36,6 +36,7 @@ import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function PRActionsPanel({
   item,
+  headSha,
   repoPath,
   repoId,
   sourceContext,
@@ -45,6 +46,8 @@ export function PRActionsPanel({
   onMutated
 }: {
   item: GitHubWorkItem
+  /** Head from the loaded details; falls back to the list item's head. */
+  headSha: string | undefined
   repoPath: string | null
   repoId: string | null
   sourceContext?: TaskSourceContext | null
@@ -174,6 +177,7 @@ export function PRActionsPanel({
                     mergeDisabled,
                     method,
                     item,
+                    expectedHeadSha: headSha ?? item.headSha ?? null,
                     repoPath,
                     repoId,
                     sourceContext,

@@ -4,12 +4,15 @@ import type { TerminalOscLinkRange } from '../../../../src/shared/terminal/links
 
 export type TerminalFrame = { width: number; height: number }
 
+// Desktop terminal settings the phone follows; scrollback is capped for phone memory.
+export type TerminalHostSettings = { scrollbackRows: number; wordSeparator: string }
+
 export type TerminalWebViewCommand =
   | { type: 'set-interaction-active'; active: boolean }
   | { type: 'ping'; id?: number }
   // `onParsed` survives only an in-process post; a native bridge drops it.
   | { type: 'write'; id?: number; data: string; onParsed?: () => void }
-  | {
+  | ({
       type: 'init'
       id?: number
       cols: number
@@ -23,7 +26,7 @@ export type TerminalWebViewCommand =
       // Width-reflow replay contains the same rewrapped content; preserve reader position instead of jumping to bottom.
       preserveScroll?: boolean
       frame: TerminalFrame | null
-    }
+    } & Partial<TerminalHostSettings>)
   | { type: 'set-font-scale'; id?: number; fontScale: number }
   | { type: 'set-font-style'; id?: number; fontStyle: TerminalFontStyle; fontFaceCss?: string }
   | { type: 'resize'; id?: number; cols: number; rows: number; frame: TerminalFrame | null }
@@ -34,3 +37,4 @@ export type TerminalWebViewCommand =
   | { type: 'cancel-select'; id?: number }
   | { type: 'do-select-all'; id?: number }
   | { type: 'set-theme'; id?: number; terminalTheme?: RuntimeMobileTerminalTheme }
+  | ({ type: 'set-host-settings'; id?: number } & TerminalHostSettings)

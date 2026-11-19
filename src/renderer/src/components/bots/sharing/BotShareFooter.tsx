@@ -1,53 +1,19 @@
-// The Share dialog's frame pieces: the signed-out body, the contents section and the footer, whose
-// actions follow the bot's link and the dialog's phase.
-import { Loader2, RefreshCw, Share2, UserRound } from 'lucide-react'
+import { Loader2, RefreshCw, Share2 } from 'lucide-react'
+import { OrcaSignInWaitNotice } from '@/components/orca-profiles/OrcaSignInProgress'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import type { Bot } from '../../../../../shared/bot-types'
-import { OrcaCloudSignInButton, orcaCloudSignInReason } from '../orca-cloud-sign-in'
+import { OrcaCloudSignInButton } from '../orca-cloud-sign-in'
 import { SettingsInsetGroup } from '../settings-view/BotSettingsRows'
 import type { BotShareFlagSpot } from './bot-share-flags'
 import type { BotShareContext } from './bot-share-pages'
-import { BotShareHero } from './BotShareDialog'
 import { BotShareOverview, BotShareOverviewSkeleton } from './BotShareOverview'
 import type { BotShareCandidateState } from './use-bot-share-candidate'
 import type { BotShareLink, BotShareStart, LinkRead } from './use-bot-share-link'
 
 export const BODY = 'scrollbar-sleek flex min-h-0 flex-col gap-4 overflow-y-auto px-6 pt-6'
 export const FOOT = 'mt-5 flex items-center gap-2 border-t border-border px-6 py-4'
-
-export function SignInBody({
-  bot,
-  onCancel,
-  onSignedIn
-}: {
-  bot: Bot
-  onCancel: () => void
-  onSignedIn: () => void
-}): React.JSX.Element {
-  const t = useTranslate()
-  return (
-    <>
-      <div className={BODY}>
-        <BotShareHero bot={bot} purpose={null} compact={false} />
-        <SettingsInsetGroup>
-          <div className="flex min-h-11 items-center gap-2.5 py-2 pr-2.5 pl-3 text-[13px] leading-[18px]">
-            <UserRound className="size-4 shrink-0 text-muted-foreground" />
-            <span className="min-w-0 flex-1">{orcaCloudSignInReason('share')}</span>
-          </div>
-        </SettingsInsetGroup>
-      </div>
-      <div className={FOOT}>
-        <span className="flex-1" />
-        <Button type="button" variant="outline" onClick={onCancel}>
-          {t('bots.share.cancel', 'Cancel')}
-        </Button>
-        <OrcaCloudSignInButton onSignedIn={onSignedIn} />
-      </div>
-    </>
-  )
-}
 
 export type Phase =
   | { kind: 'idle' }
@@ -66,9 +32,7 @@ export function Contents({
   shared: boolean
 }): React.JSX.Element {
   const t = useTranslate()
-  const rows = ctx ? (
-    <BotShareOverview ctx={ctx} />
-  ) : state.error ? (
+  const failure = state.error ? (
     <SettingsInsetGroup>
       <div className="flex min-h-11 items-center gap-2.5 py-2 pr-2.5 pl-3 text-sm">
         <span className="min-w-0 flex-1 text-destructive">{state.error}</span>
@@ -77,8 +41,14 @@ export function Contents({
         </Button>
       </div>
     </SettingsInsetGroup>
+  ) : null
+  const rows = ctx ? (
+    <>
+      {failure}
+      <BotShareOverview ctx={ctx} />
+    </>
   ) : (
-    <BotShareOverviewSkeleton />
+    (failure ?? <BotShareOverviewSkeleton />)
   )
   if (!shared) {
     return rows
@@ -129,9 +99,18 @@ export function Footer({
 }): React.JSX.Element {
   const t = useTranslate()
   const busy = phase.kind === 'busy'
+  const needsSignIn = read.kind === 'signIn'
+  const foot = cn(FOOT, needsSignIn && 'flex-wrap')
+  const signInNotice = needsSignIn && (
+    <OrcaSignInWaitNotice
+      className="basis-full"
+      cancelLabel={t('bots.share.cancelSignIn', 'Cancel sign-in')}
+    />
+  )
   if (phase.kind === 'confirmStop' || phase.kind === 'stopping') {
     return (
-      <div className={FOOT}>
+      <div className={foot}>
+        {signInNotice}
         <span
           className={cn(
             'min-w-0 flex-1 text-xs leading-4',
@@ -157,15 +136,19 @@ export function Footer({
         >
           {t('bots.share.cancel', 'Cancel')}
         </Button>
-        <Button
-          type="button"
-          variant="destructive"
-          disabled={phase.kind === 'stopping' || !link}
-          onClick={onStop}
-        >
-          {phase.kind === 'stopping' ? <Loader2 className="animate-spin" /> : null}
-          {t('bots.share.stopSharing', 'Stop sharing')}
-        </Button>
+        {needsSignIn ? (
+          <OrcaCloudSignInButton onSignedIn={onReload} />
+        ) : (
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={phase.kind === 'stopping' || !link}
+            onClick={onStop}
+          >
+            {phase.kind === 'stopping' ? <Loader2 className="animate-spin" /> : null}
+            {t('bots.share.stopSharing', 'Stop sharing')}
+          </Button>
+        )}
       </div>
     )
   }
@@ -195,7 +178,7 @@ export function Footer({
         : t('bots.share.description', 'Anyone with the link can make a copy.')}
     </span>
   )
-  const off = !candidate || candidate.blocked || !state.committed || busy || read.kind !== 'read'
+  const off = !candidate || candidate.blocked || !state.committed || busy
   let second: React.ReactNode
   let primary: React.ReactNode
   if (read.kind === 'loading') {
@@ -244,8 +227,13 @@ export function Footer({
         {t('bots.share.cancel', 'Cancel')}
       </Button>
     )
-    primary = (
-      <Button type="button" disabled={off} onClick={onPublish}>
+    primary = needsSignIn ? (
+      <OrcaCloudSignInButton disabled={busy} onSignedIn={onReload}>
+        <Share2 />
+        {t('bots.share.signInToPublish', 'Sign in to publish')}
+      </OrcaCloudSignInButton>
+    ) : (
+      <Button type="button" disabled={off || read.kind !== 'read'} onClick={onPublish}>
         {busy || (state.building && candidate) ? <Loader2 className="animate-spin" /> : <Share2 />}
         {busy
           ? t('bots.share.publishing', 'Publishing…')
@@ -254,7 +242,8 @@ export function Footer({
     )
   }
   return (
-    <div className={FOOT}>
+    <div className={foot}>
+      {signInNotice}
       {link && !error ? (
         <Button
           type="button"

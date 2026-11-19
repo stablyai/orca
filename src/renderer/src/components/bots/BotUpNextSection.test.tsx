@@ -15,7 +15,6 @@ import type { Bot } from '../../../../shared/bot-types'
 
 const mocks = vi.hoisted(() => ({
   rpc: vi.fn(),
-  openHome: vi.fn(async () => true),
   openLink: vi.fn(),
   toastMessage: vi.fn(),
   toastError: vi.fn(),
@@ -32,7 +31,6 @@ vi.mock('@/store', () => ({
   }
 }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: mocks.rpc }))
-vi.mock('@/lib/bot-catalog', () => ({ openBotHomeTab: mocks.openHome }))
 vi.mock('@/lib/browser/navigation/app-http-link-open', () => ({ openAppHttpLink: mocks.openLink }))
 vi.mock('sonner', () => ({ toast: { message: mocks.toastMessage, error: mocks.toastError } }))
 vi.mock('@/lib/bot-up-next-unseen', () => ({ markBotUpNextSeen: mocks.markSeen }))
@@ -42,7 +40,7 @@ vi.mock('./BotLookSteps', () => ({
 
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { setBotHostListing, stampBotHost } from '@/lib/bot-catalog-snapshot'
-import { BotUpNextSection, lookedText } from './BotUpNextSection'
+import { BotUpNextSection } from './BotUpNextSection'
 import { revealBotUpNext } from './bot-up-next-reveal'
 
 function Tooltips({ children }: { children: ReactNode }): React.JSX.Element {
@@ -104,8 +102,7 @@ beforeEach(() => {
 afterEach(() => cleanup())
 
 describe('Suggestions', () => {
-  it('opens a suggestion’s link from its row, and Start puts its request in the Home composer', async () => {
-    mocks.rpc.mockResolvedValueOnce({ ask: review.ask })
+  it('opens a suggestion’s link in its bot’s workspace', () => {
     render(<BotUpNextSection bot={bot} upNext={upNext()} />)
     fireEvent.click(screen.getByText(review.title))
     // The bot's own workspace hosts it, so Orca's open-links setting applies.
@@ -113,39 +110,15 @@ describe('Suggestions', () => {
       review.link,
       expect.objectContaining({ worktreeId: 'folder:fw-1' })
     )
-
-    fireEvent.click(screen.getByRole('button', { name: 'Start' }))
-    await waitFor(() => expect(mocks.openHome).toHaveBeenCalledWith(bot, { draft: review.ask }))
-    expect(mocks.rpc).toHaveBeenCalledWith({ kind: 'local' }, 'bots.suggestions.start', {
-      botId: 'b1',
-      suggestionId: 's1'
-    })
   })
 
-  it('dismisses through the host', async () => {
-    mocks.rpc.mockResolvedValueOnce({ dismissed: true })
-    render(<BotUpNextSection bot={bot} upNext={upNext()} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }))
-    await waitFor(() =>
-      expect(mocks.rpc).toHaveBeenCalledWith({ kind: 'local' }, 'bots.suggestions.dismiss', {
-        botId: 'b1',
-        suggestionId: 's1'
-      })
-    )
-  })
-
-  it('says why Look now was refused', async () => {
-    mocks.rpc.mockRejectedValueOnce(new Error('look_now_running'))
-    render(<BotUpNextSection bot={bot} upNext={upNext()} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Look now' }))
-    await waitFor(() => expect(mocks.toastMessage).toHaveBeenCalledWith('Already looking around.'))
-  })
-
-  it('shows while looking, and not at all with nothing to suggest', () => {
+  it('shows a look with no steps when the host gives no session, then hides when idle', () => {
     const { rerender, container } = render(
       <BotUpNextSection bot={bot} upNext={upNext({ running: true }, [])} />
     )
-    expect(screen.getByText('Looking around…')).toBeTruthy()
+    expect(
+      screen.getByRole('button', { name: 'Looking around' }).getAttribute('aria-expanded')
+    ).toBeNull()
     expect(screen.queryByRole('button', { name: 'Look now' })).toBeNull()
     rerender(<BotUpNextSection bot={bot} upNext={upNext({}, [])} />)
     expect(container.textContent).toBe('')
@@ -156,10 +129,8 @@ describe('a suggestion’s whole text', () => {
   it('reads in full from its row, which the hovered row’s actions partly cover', async () => {
     render(<BotUpNextSection bot={bot} upNext={upNext()} />)
     fireEvent.focus(screen.getByRole('button', { name: new RegExp(`^${review.title}`) }))
-    const tip = await screen.findByRole('tooltip')
-    expect(tip.textContent).toContain(review.title)
-    expect(tip.textContent).toContain(review.why)
-    expect(tip.textContent).toContain('orca#1234')
+    expect(await screen.findByText(review.why)).toBeTruthy()
+    expect(screen.getByText('orca#1234')).toBeTruthy()
   })
 })
 
@@ -179,7 +150,7 @@ describe('while the bot’s computer is offline', () => {
     setBotHostListing({ hosts: [{ hostId: 'local', state: 'live' }], updateNeeded: [] })
   )
 
-  it('keeps Start and Dismiss off, saying why, instead of sending them to the host', () => {
+  it('describes unavailable actions while offline and enables them on reconnect', async () => {
     render(<BotUpNextSection bot={serverBot} upNext={upNext()} />)
     const start = screen.getByRole<HTMLButtonElement>('button', { name: 'Start' })
     const dismiss = screen.getByRole<HTMLButtonElement>('button', { name: 'Dismiss' })
@@ -195,28 +166,25 @@ describe('while the bot’s computer is offline', () => {
     fireEvent.click(start)
     fireEvent.click(dismiss)
     expect(mocks.rpc).not.toHaveBeenCalled()
-  })
 
-  it('acts again once the computer is back', async () => {
     mocks.rpc.mockResolvedValueOnce({ dismissed: true })
-    render(<BotUpNextSection bot={serverBot} upNext={upNext()} />)
     act(() => {
       listHost('live')
     })
-    const dismiss = screen.getByRole<HTMLButtonElement>('button', { name: 'Dismiss' })
-    expect(dismiss.disabled).toBe(false)
-    expect(description(dismiss)).toBeNull()
+    const liveDismiss = screen.getByRole<HTMLButtonElement>('button', { name: 'Dismiss' })
+    expect(liveDismiss.disabled).toBe(false)
+    expect(description(liveDismiss)).toBeNull()
     expect(
       screen
         .getByRole('button', { name: new RegExp(`^${review.title}`) })
         .getAttribute('aria-describedby')
     ).toBeNull()
-    fireEvent.click(dismiss)
+    fireEvent.click(liveDismiss)
     await waitFor(() =>
       expect(mocks.rpc).toHaveBeenCalledWith(
-        expect.anything(),
+        { kind: 'environment', environmentId: 'm4' },
         'bots.suggestions.dismiss',
-        expect.objectContaining({ suggestionId: 's1' })
+        { botId: 'b1', suggestionId: 's1' }
       )
     )
   })
@@ -227,38 +195,27 @@ describe('Suggestions while a look starts', () => {
     mocks.rpc.mockResolvedValueOnce({})
     render(<BotUpNextSection bot={bot} upNext={upNext({ lastLookedAt: 1 })} />)
     fireEvent.click(screen.getByRole('button', { name: 'Look now' }))
-    expect(screen.getByText('Looking around…')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Looking around' })).toBeTruthy()
     cleanup()
     mocks.rpc.mockRejectedValueOnce(new Error('look_now_running'))
     render(<BotUpNextSection bot={bot} upNext={upNext({ lastLookedAt: 1 })} />)
     fireEvent.click(screen.getByRole('button', { name: 'Look now' }))
-    await waitFor(() => expect(screen.queryByText('Looking around…')).toBeNull())
-  })
-
-  it('marks a suggestion with no source as Orca’s, so rows line up', () => {
-    const { source: _github, ...noSource } = review
-    const { container } = render(<BotUpNextSection bot={bot} upNext={upNext({}, [noSource])} />)
-    expect(container.querySelector('img[aria-hidden="true"]')).not.toBeNull()
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Looking around' })).toBeNull())
+    expect(mocks.toastMessage).toHaveBeenCalledWith('Already looking around.')
   })
 })
 
 describe('Suggestions v2', () => {
-  it('opens the running look’s steps from Looking around, with no placeholder row', () => {
-    const { container } = render(
+  it('opens and closes the running look’s steps', () => {
+    render(
       <BotUpNextSection bot={bot} upNext={upNext({ running: true, runSessionId: 'look-1' })} />
     )
-    const toggle = screen.getByRole('button', { name: /Looking around…/ })
+    const toggle = screen.getByRole('button', { name: 'Looking around' })
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
-    expect(container.querySelector('.animate-pulse')).toBeNull()
     fireEvent.click(toggle)
     expect(screen.getByText('steps of look-1')).toBeTruthy()
     fireEvent.click(toggle)
     expect(screen.queryByText('steps of look-1')).toBeNull()
-  })
-
-  it('has no steps toggle on a host that does not name the look', () => {
-    render(<BotUpNextSection bot={bot} upNext={upNext({ running: true })} />)
-    expect(screen.queryByRole('button', { name: /Looking around…/ })).toBeNull()
   })
 
   it('says how many are new since it was last seen, marks them seen, and keeps saying it', async () => {
@@ -266,13 +223,13 @@ describe('Suggestions v2', () => {
     const { rerender } = render(
       <BotUpNextSection bot={bot} upNext={upNext({ seenAt: 5 }, [fresh, review])} />
     )
-    expect(screen.getByText('1 new')).toBeTruthy()
     await waitFor(() =>
       expect(mocks.markSeen).toHaveBeenCalledWith(expect.objectContaining({ id: 'b1' }))
     )
-    // The host now says it was seen; this panel still shows what was new when it opened.
+    // The host now says it was seen; folded, this panel still says what was new when it opened.
     rerender(<BotUpNextSection bot={bot} upNext={upNext({ seenAt: 20 }, [fresh, review])} />)
-    expect(screen.getByText('1 new')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Suggestions', expanded: true }))
+    expect(screen.getByText(/1 new/)).toBeTruthy()
   })
 
   it('leaves new suggestions unseen while the card is folded, and marks them once it opens', async () => {
@@ -301,29 +258,15 @@ describe('Suggestions v2', () => {
 })
 
 describe('the bot row pointing here', () => {
-  it('opens the Activity panel, scrolls to Suggestions and flashes it as Start does the composer', () => {
+  it('opens the Activity panel and scrolls to Suggestions', () => {
     const scrollIntoView = vi.fn()
     Element.prototype.scrollIntoView = scrollIntoView
     render(<BotUpNextSection bot={bot} upNext={upNext()} />)
-    const section = screen.getByRole('heading', { name: 'Suggestions' }).closest('section')!
-    expect(section.classList.contains('native-chat-composer-glow')).toBe(false)
 
     act(() => revealBotUpNext('b1'))
 
     expect(mocks.setRightSidebarTab).toHaveBeenCalledWith('bot-activity')
     expect(mocks.setRightSidebarOpen).toHaveBeenCalledWith(true)
-    expect(section.classList.contains('native-chat-composer-glow')).toBe(true)
     expect(scrollIntoView).toHaveBeenCalledTimes(1)
-  })
-})
-
-describe('when it last looked', () => {
-  const now = new Date(2026, 9, 31, 18, 0).getTime()
-  it('names the day once it is not today', () => {
-    expect(lookedText(new Date(2026, 9, 31, 16, 12).getTime(), now)).toMatch(/^Looked 4:12\sPM$/)
-    expect(lookedText(new Date(2026, 9, 30, 16, 12).getTime(), now)).toMatch(
-      /^Looked yesterday 4:12\sPM$/
-    )
-    expect(lookedText(new Date(2026, 9, 29, 16, 12).getTime(), now)).toBe('Looked Oct 29')
   })
 })

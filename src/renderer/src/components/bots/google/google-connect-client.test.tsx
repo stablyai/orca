@@ -15,10 +15,12 @@ vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   runtimeEnvironmentSupportsCapability: mocks.supports
 }))
 
+import { act, renderHook, waitFor } from '@testing-library/react'
 import {
   connectGoogle,
   finishGoogleSignInWithAddress,
-  refreshGoogle
+  refreshGoogle,
+  useBotGoogleReach
 } from './google-connect-client'
 
 const SERVER = { kind: 'environment', environmentId: 'env-1' } as const
@@ -109,5 +111,126 @@ describe("this computer's Google", () => {
     )
     await connectGoogle({ kind: 'local' }, { services: ['gmail', 'files'] }, () => {})
     expect(mocks.openUrl).not.toHaveBeenCalled()
+  })
+})
+
+describe('what Google reaches through a bot', () => {
+  // A host of its own per case: the client keeps each host's last status.
+  const reachOn = (environmentId: string) =>
+    renderHook(() => useBotGoogleReach({ google: true, hostId: `runtime:${environmentId}` }))
+  const status = (services: { service: 'gmail'; state: 'ready' }[]) => ({
+    client: null,
+    accounts: [{ ...account, services }],
+    bots: []
+  })
+  const noService = status([])
+  const gmailReady = status([{ service: 'gmail', state: 'ready' }])
+  function answerLater(): (value: unknown) => void {
+    let answer: (value: unknown) => void = () => {}
+    mocks.rpc.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve
+        })
+    )
+    return (value) => answer(value)
+  }
+
+  beforeEach(() => {
+    mocks.supports.mockResolvedValue(true)
+  })
+
+  it('does not trust an older "no ready service" until the read it starts answers', async () => {
+    mocks.rpc.mockResolvedValueOnce(noService)
+    await refreshGoogle({ kind: 'environment', environmentId: 'env-cached' })
+    const answer = answerLater()
+    // Every value the confirm renders with, the first one before its own read has started.
+    const shown: ReturnType<typeof useBotGoogleReach>[] = []
+    const { result } = renderHook(() => {
+      const reach = useBotGoogleReach({ google: true, hostId: 'runtime:env-cached' })
+      shown.push(reach)
+      return reach
+    })
+    expect(shown[0]).toEqual({ areas: [], unknown: true })
+    expect(result.current).toEqual({ areas: [], unknown: true })
+    await waitFor(() => expect(mocks.rpc).toHaveBeenCalledTimes(2))
+
+    await act(async () => answer(noService))
+    expect(result.current).toEqual({ areas: [], unknown: false })
+  })
+
+  it('does not trust an older "no Google on this server" once the server may have it', async () => {
+    mocks.supports.mockResolvedValueOnce(false)
+    await refreshGoogle({ kind: 'environment', environmentId: 'env-updated' })
+    const answer = answerLater()
+    const { result } = reachOn('env-updated')
+    expect(result.current).toEqual({ areas: [], unknown: true })
+    await waitFor(() => expect(mocks.rpc).toHaveBeenCalledTimes(1))
+
+    await act(async () => answer(gmailReady))
+    expect(result.current).toEqual({ areas: ['email'], unknown: false })
+  })
+
+  it('stops trusting "no ready service" while a newer read is out, then follows its answers', async () => {
+    mocks.rpc.mockResolvedValueOnce(noService)
+    const { result } = reachOn('env-reread')
+    await waitFor(() => expect(result.current).toEqual({ areas: [], unknown: false }))
+    const target = { kind: 'environment', environmentId: 'env-reread' } as const
+
+    const answer = answerLater()
+    let reread: Promise<unknown> = Promise.resolve()
+    act(() => {
+      reread = refreshGoogle(target)
+    })
+    expect(result.current).toEqual({ areas: [], unknown: true })
+    await waitFor(() => expect(mocks.rpc).toHaveBeenCalledTimes(2))
+    await act(async () => {
+      answer(gmailReady)
+      await reread
+    })
+    expect(result.current).toEqual({ areas: ['email'], unknown: false })
+
+    mocks.rpc.mockRejectedValueOnce(new Error('offline'))
+    await act(async () => {
+      await refreshGoogle(target)
+    })
+    expect(result.current).toEqual({ areas: [], unknown: true })
+  })
+
+  it('stops trusting "no Google on this server" while a newer read is out', async () => {
+    mocks.supports.mockResolvedValueOnce(false)
+    const { result } = reachOn('env-reread-server')
+    await waitFor(() => expect(result.current).toEqual({ areas: [], unknown: false }))
+
+    const answer = answerLater()
+    let reread: Promise<unknown> = Promise.resolve()
+    act(() => {
+      reread = refreshGoogle({ kind: 'environment', environmentId: 'env-reread-server' })
+    })
+    expect(result.current).toEqual({ areas: [], unknown: true })
+    await waitFor(() => expect(mocks.rpc).toHaveBeenCalledTimes(1))
+    await act(async () => {
+      answer(noService)
+      await reread
+    })
+    expect(result.current).toEqual({ areas: [], unknown: false })
+  })
+
+  it('keeps the newest read when an older one answers after it', async () => {
+    const answerOlder = answerLater()
+    const { result } = reachOn('env-race')
+    expect(result.current).toEqual({ areas: [], unknown: true })
+    await waitFor(() => expect(mocks.rpc).toHaveBeenCalledTimes(1))
+    const answerNewer = answerLater()
+    const newer = refreshGoogle({ kind: 'environment', environmentId: 'env-race' })
+    await waitFor(() => expect(mocks.rpc).toHaveBeenCalledTimes(2))
+
+    await act(async () => {
+      answerNewer(gmailReady)
+      await newer
+    })
+    expect(result.current).toEqual({ areas: ['email'], unknown: false })
+    await act(async () => answerOlder(noService))
+    expect(result.current).toEqual({ areas: ['email'], unknown: false })
   })
 })

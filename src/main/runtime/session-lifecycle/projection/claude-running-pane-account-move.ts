@@ -288,7 +288,7 @@ export abstract class OrcaRuntimeWithClaudeRunningPaneAccountMove extends OrcaRu
         () => this.claudePaneStillMoves(restarting, session, attempt > 0)
       )
       if (!result.ok) {
-        // After a stop (create_failed), the pane keeps its surface and its saved resume record.
+        // After a stop (create_failed) the pane shows a failed start; a view or Start resumes it.
         console.warn('[runtime] a Claude terminal did not move to the selected account', {
           ptyId: restarting,
           reason: result.reason

@@ -108,6 +108,20 @@ describe('deliverBotRunResult', () => {
     expect(delivery.sendToChat).not.toHaveBeenCalled()
   })
 
+  it("saves the provider's error on a run whose turn failed", async () => {
+    const completion = await deliverBotRunResult(
+      deps(),
+      result({
+        ended: { outcome: 'failure', message: '', error: 'API Error: 503 Service unavailable' }
+      })
+    )
+
+    expect(completion).toEqual({
+      status: 'dispatch_failed',
+      error: 'API Error: 503 Service unavailable'
+    })
+  })
+
   it('says on the run when the note could not be added', async () => {
     const completion = await deliverBotRunResult(
       deps({

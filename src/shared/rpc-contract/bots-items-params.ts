@@ -14,6 +14,8 @@ import {
 
 const Caller = { callerSessionId: OptionalString, retryRequest: OptionalString }
 const Item = requiredString('Name the item by its number.')
+/** A group's rooms and threads hold one session per member, and keep each one a member left. */
+const BOT_ITEM_LIST_CHATS_MAX = 5_000
 
 export const BotItemsAdd = z.object({
   ...Caller,
@@ -92,6 +94,8 @@ export const BotItemsOwnerList = z.object({
   botId: requiredString('Missing bot'),
   /** Only this chat's items, counts included. */
   chatId: OptionalString,
+  /** Only these chats' items, counts included; a host before it ignores it, so one chat goes as `chatId`. */
+  chatIds: z.array(z.string().min(1)).max(BOT_ITEM_LIST_CHATS_MAX).optional(),
   closedCursor: OptionalString
 })
 
@@ -103,7 +107,8 @@ export const BotItemsOwnerShow = z.object({
   before: OptionalString
 })
 
-/** `images`: committed chat-attachment store paths on the bot's host; files ride in `text` as `@path`. */
+/** `images`: committed chat-attachment store paths on the bot's host; files ride in `text` as `@path`.
+ *  `requestId` only to a host advertising BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY. */
 export const BotItemsOwnerComment = z
   .object({
     ...Owner,
@@ -112,7 +117,9 @@ export const BotItemsOwnerComment = z
     images: z
       .array(z.string().min(1).max(4096))
       .max(AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT, 'Comments take up to 20 images.')
-      .optional()
+      .optional(),
+    /** The sender's id for this comment: a repeat returns the comment already made. */
+    requestId: z.string().min(1).max(128).optional()
   })
   .refine((value) => value.text.trim() || value.images?.length, 'Missing text')
 

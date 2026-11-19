@@ -143,6 +143,39 @@ describe('v47-v48 bot dispatch migrations', () => {
     }
   })
 
+  it('keeps the bot columns, mail rows and indexes of a v46 database an earlier bots build already shaped', () => {
+    const path = dbPath()
+    const taskId = seedWithDispatch(path)
+    const raw = new Database(path)
+    // Earlier bots builds added these unnumbered on every open, leaving user_version at 46.
+    raw.exec(`
+      UPDATE dispatch_contexts SET creator_turn_source = 'connector', origin_ref = 'item_1';
+      INSERT INTO bot_requests (message_id, root_key, to_bot_id, purpose, depth, record, send_key)
+        VALUES ('msg_status', 'root_1', 'bot_b', 'status', 1, '{"a":1}', 'send_1');
+    `)
+    raw.pragma('user_version = 46')
+    raw.close()
+
+    expectCurrentSchema(path, taskId)
+    const db = new OrchestrationDb(path)
+    try {
+      expect(
+        db.db
+          .prepare(
+            'SELECT creator_turn_source, origin_ref FROM dispatch_contexts WHERE task_id = ?'
+          )
+          .get(taskId)
+      ).toEqual({ creator_turn_source: 'connector', origin_ref: 'item_1' })
+      expect(
+        db.db.prepare('SELECT message_id, purpose, record, send_key FROM bot_requests').all()
+      ).toEqual([
+        { message_id: 'msg_status', purpose: 'status', record: '{"a":1}', send_key: 'send_1' }
+      ])
+    } finally {
+      db.close()
+    }
+  })
+
   it('migrates a database an early bot build stamped 47 with only creator_turn_source', () => {
     const path = dbPath()
     const taskId = seedWithDispatch(path)

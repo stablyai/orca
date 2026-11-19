@@ -31,7 +31,8 @@ import {
   useBotMentionChatsWatch,
   type BotMentionChatsRead
 } from './bot-mention-chats-read'
-import { useBotChatTree } from './use-bot-chat-tree'
+import { useBotOwnChatTree } from './use-bot-chat-tree'
+import { isBotGroupMemberSession } from '../../../../shared/bots/bot-group'
 import { useBotHostLabel } from './use-bot-host-label'
 
 /** Whether the computer the chat's agent runs on reads chat picks; an unknown one doesn't. */
@@ -72,7 +73,7 @@ export function useBotChatPicker(
     [bots, viewing, pilled]
   )
   useBotMentionChatsWatch(watched, caller)
-  const tree = useBotChatTree(viewed)
+  const tree = useBotOwnChatTree(viewed)
   const title = useBotChatMentionTitle(hostId)
   const selfId = self && capable ? self.id : null
 
@@ -221,7 +222,9 @@ function mailableChats(
   t: Translate
 ): NativeChatMentionChat[] {
   const mailable = new Map(
-    rows.filter((row) => !row.closed && !row.self).map((row) => [row.id, row])
+    rows
+      .filter((row) => !row.closed && !row.self && !isBotGroupMemberSession(row.id))
+      .map((row) => [row.id, row])
   )
   const listed = tree.filter((chat) => !chat.run && mailable.has(chat.chatId))
   const listedIds = new Set(listed.map((chat) => chat.chatId))

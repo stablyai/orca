@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isQuietBotResult, quietBotResultText } from './bot-quiet-result'
+import { isQuietBotResult, quietBotAnswer, quietBotResultText } from './bot-quiet-result'
 
 describe('a quiet bot result', () => {
   it('reads the marker as the last word, however it is dressed', () => {
@@ -25,5 +25,25 @@ describe('a quiet bot result', () => {
   it('keeps what came before the marker, and nothing of the marker', () => {
     expect(quietBotResultText('Checked the queue.\n\n**NO_REPLY.**')).toBe('Checked the queue.')
     expect(quietBotResultText('`NO_REPLY`')).toBe('')
+  })
+})
+
+describe('a still-streaming answer', () => {
+  const streaming = (words: string) =>
+    quietBotAnswer(words, {
+      botAnswer: true,
+      streaming: true,
+      inAutomationTurn: false,
+      inActingTurn: false
+    }).words
+
+  it('hides a growing marker and preserves surrounding prose and Markdown', () => {
+    expect(streaming('NO_REP')).toBe('')
+    expect(streaming('NO_REPLY')).toBe('')
+    expect(streaming('**NO_REPLY**\n')).toBe('')
+    expect(streaming('Checked the queue.\n\nNO_REPL')).toBe('Checked the queue.')
+    expect(streaming('```ts\nconst a = 1\n```')).toBe('```ts\nconst a = 1\n```')
+    expect(streaming('Not yet')).toBe('Not yet')
+    expect(streaming('NO_REPLYING')).toBe('NO_REPLYING')
   })
 })
