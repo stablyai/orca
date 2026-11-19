@@ -12,6 +12,7 @@ import {
   clampFloatingTerminalTriggerPosition,
   getDefaultFloatingTerminalTriggerCommittedPosition,
   getDefaultFloatingTerminalTriggerPosition,
+  keepFloatingTerminalTriggerClear,
   persistFloatingTerminalTriggerPosition,
   readPersistedFloatingTerminalTriggerPosition,
   resolveFloatingTerminalTriggerCommittedPosition,
@@ -21,6 +22,7 @@ import {
   type FloatingTerminalTriggerPosition,
   type FloatingTerminalTriggerPositionSource
 } from './floating-terminal-trigger-position'
+import { useFloatingTerminalTriggerKeepClearRects } from './floating-terminal-trigger-keep-clear'
 import { useTranslate } from '@/i18n/use-translate'
 
 const FLOATING_TERMINAL_TRIGGER_DRAG_THRESHOLD = 4
@@ -82,6 +84,10 @@ export function FloatingTerminalToggleButton({
     initialPositionState.current.committedPosition
   )
   const [position, setPosition] = useState(initialPositionState.current.position)
+  const shown = keepFloatingTerminalTriggerClear(
+    position,
+    useFloatingTerminalTriggerKeepClearRects()
+  )
   const dragRef = useRef<{
     pointerId: number
     startX: number
@@ -145,8 +151,8 @@ export function FloatingTerminalToggleButton({
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
-      left: position.left,
-      top: position.top,
+      left: shown.left,
+      top: shown.top,
       moved: false
     }
     event.currentTarget.setPointerCapture(event.pointerId)
@@ -196,7 +202,7 @@ export function FloatingTerminalToggleButton({
       currentLocation="floating-button"
       // Keep the toggle above the panel so overlapping areas remain clickable.
       className="fixed z-[46]"
-      style={{ left: position.left, top: position.top }}
+      style={{ left: shown.left, top: shown.top }}
     >
       <Tooltip>
         <TooltipTrigger asChild>

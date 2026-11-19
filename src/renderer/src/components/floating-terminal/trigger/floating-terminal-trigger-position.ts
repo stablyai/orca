@@ -3,6 +3,7 @@ const DEFAULT_RIGHT_GAP = 24
 const DEFAULT_BOTTOM_GAP = 72
 const DRAG_MARGIN = 8
 const TITLEBAR_SAFE_TOP = 36
+const KEEP_CLEAR_GAP = 8
 
 export const FLOATING_TERMINAL_TRIGGER_POSITION_STORAGE_KEY =
   'orca-floating-terminal-trigger-position-v2'
@@ -27,6 +28,13 @@ export type FloatingTerminalTriggerCommittedPosition =
   | FloatingTerminalAnchoredTriggerPosition
 
 export type FloatingTerminalTriggerPositionSource = 'default' | 'user'
+
+export type FloatingTerminalTriggerKeepClearRect = {
+  left: number
+  top: number
+  right: number
+  bottom: number
+}
 
 function getViewport(): { width: number; height: number } {
   return {
@@ -86,6 +94,27 @@ export function clampFloatingTerminalTriggerPosition(
     left: Math.min(Math.max(DRAG_MARGIN, position.left), maxLeft),
     top: Math.min(Math.max(TITLEBAR_SAFE_TOP, position.top), maxTop)
   }
+}
+
+/** Where the button shows: its own spot, or just above a page part there it would cover. */
+export function keepFloatingTerminalTriggerClear(
+  position: FloatingTerminalTriggerPosition,
+  keepClear: readonly FloatingTerminalTriggerKeepClearRect[]
+): FloatingTerminalTriggerPosition {
+  let top = position.top
+  for (const rect of keepClear) {
+    if (
+      position.left < rect.right &&
+      position.left + TRIGGER_SIZE > rect.left &&
+      top < rect.bottom &&
+      top + TRIGGER_SIZE > rect.top
+    ) {
+      top = rect.top - KEEP_CLEAR_GAP - TRIGGER_SIZE
+    }
+  }
+  return top === position.top
+    ? position
+    : clampFloatingTerminalTriggerPosition({ left: position.left, top })
 }
 
 export function hasUsableFloatingTerminalTriggerViewport(): boolean {
