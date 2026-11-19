@@ -55,19 +55,25 @@ export function idleAgentCandidates(
   return candidates
 }
 
+/** Terminal agents need a pane listing; chats are proven from the store alone. */
+export function hasTerminalCandidates(candidates: readonly AgentStatusEntry[]): boolean {
+  return candidates.some((entry) => !entry.structuredHostOwned)
+}
+
 /**
- * Agents still holding memory on this machine. A terminal agent counts only while the local daemon
- * still reports an agent in its pane (a finished row can outlive the agent); a chat counts only while
- * the host runs its agent, its workspace is local, and auto-stop is off.
+ * Agents still holding memory on this machine. A terminal agent counts only while its pane still has
+ * a live local session (the row is dropped when the agent's command finishes); a chat counts only
+ * while the host runs its agent, its workspace is local, and auto-stop is off.
  */
 export function countIdleAgents(
   state: AppState,
   candidates: readonly AgentStatusEntry[],
-  localSessions: readonly Pick<PtyListedSession, 'paneKey' | 'agentOwnership' | 'exiting'>[]
+  localSessions: readonly Pick<PtyListedSession, 'paneKey' | 'exiting'>[]
 ): IdleAgents {
+  // Why: the daemon proves only claimed agents present, so a live pane plus its agent row is the proof.
   const liveAgentPanes = new Set<string>()
   for (const session of localSessions) {
-    if (session.paneKey && session.agentOwnership === 'present' && !session.exiting) {
+    if (session.paneKey && !session.exiting) {
       liveAgentPanes.add(session.paneKey)
     }
   }

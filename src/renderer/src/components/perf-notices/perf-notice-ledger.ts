@@ -50,6 +50,8 @@ function write(ledger: Ledger): void {
   sessionLedger = ledger
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(ledger))
+    // Why: storage now holds this window's newest state, so other windows' writes count again.
+    storageFailed = false
   } catch {
     storageFailed = true
   }

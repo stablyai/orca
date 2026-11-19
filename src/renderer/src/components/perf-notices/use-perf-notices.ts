@@ -12,6 +12,7 @@ import { canShowPerfNotice } from './perf-notice-ledger'
 import {
   availableFraction,
   countIdleAgents,
+  hasTerminalCandidates,
   HIDDEN_TAB_MIN,
   IDLE_AGENT_MIN,
   idleAgentCandidates,
@@ -62,6 +63,10 @@ async function localSessions(): Promise<Awaited<ReturnType<typeof window.api.pty
 
 /** Memory-low names terminals only when they hold most of the used memory; never Orca, never other apps. */
 async function memoryLowNotice(now: number, blocked: Gate): Promise<PerfNotice | null> {
+  // Why: every variant can open Resources, so skip the process snapshot when it can't.
+  if (!hasResourceManager()) {
+    return null
+  }
   const [snapshot, sessions] = await Promise.all([window.api.memory.getSnapshot(), localSessions()])
   if (blocked()) {
     return null
@@ -70,7 +75,7 @@ async function memoryLowNotice(now: number, blocked: Gate): Promise<PerfNotice |
   const split = splitSnapshotByOwner(snapshot, sessions, state.agentStatusByPaneKey)
   const used = snapshot.host.usedMemory
   const terminals = split.agents.memory + split.yourProcesses.memory
-  if (used <= 0 || terminals / used < TERMINAL_SHARE_MIN || !hasResourceManager()) {
+  if (used <= 0 || terminals / used < TERMINAL_SHARE_MIN) {
     return null
   }
   if (
@@ -92,12 +97,18 @@ async function memoryLowNotice(now: number, blocked: Gate): Promise<PerfNotice |
   }
 }
 
-async function idleAgentsNotice(now: number, blocked: Gate): Promise<PerfNotice | null> {
+async function idleAgentsNotice(
+  now: number,
+  blocked: Gate,
+  tracking: Tracking
+): Promise<PerfNotice | null> {
   const candidates = idleAgentCandidates(useAppStore.getState(), now)
   if (candidates.length < IDLE_AGENT_MIN) {
     return null
   }
-  const sessions = await localSessions()
+  tracking.idleCheckedAt = now
+  // Why: chats are proven from the store, so only terminal candidates pay for the pane listing.
+  const sessions = hasTerminalCandidates(candidates) ? await localSessions() : []
   if (blocked()) {
     return null
   }
@@ -158,8 +169,7 @@ async function evaluate(
     now - tracking.idleCheckedAt >= IDLE_AGENT_RECHECK_MS &&
     canShowPerfNotice('idle-agents', now)
   ) {
-    tracking.idleCheckedAt = now
-    notice = await idleAgentsNotice(now, blocked)
+    notice = await idleAgentsNotice(now, blocked, tracking)
   }
   if (blocked()) {
     return CADENCE.tight
@@ -197,8 +207,8 @@ function startPerfNoticeLoop(): () => void {
     Date.now() - lastKeyAt < TYPING_QUIET_MS ||
     useAppStore.getState().activeModal !== 'none' ||
     isResourceManagerOpen()
-  const blocked: Gate = () =>
-    disposed || !document.hasFocus() || isQuietTime() || Date.now() - lastActivityAt >= USER_AWAY_MS
+  const isAway = (): boolean => Date.now() - lastActivityAt >= USER_AWAY_MS
+  const blocked: Gate = () => disposed || !document.hasFocus() || isQuietTime() || isAway()
   const clear = (): void => {
     if (timer !== null) {
       clearTimeout(timer)
@@ -207,14 +217,15 @@ function startPerfNoticeLoop(): () => void {
   }
   const schedule = (delayMs: number): void => {
     clear()
-    if (!disposed && !reading && document.hasFocus()) {
+    // Why: away, nothing is armed; the next key or click restarts the loop.
+    if (!disposed && !reading && document.hasFocus() && !isAway()) {
       timer = setTimeout(() => void tick(), delayMs)
     }
   }
   const tick = async (): Promise<void> => {
     timer = null
     const now = Date.now()
-    if (now - lastActivityAt >= USER_AWAY_MS) {
+    if (isAway()) {
       return
     }
     if (isQuietTime()) {
