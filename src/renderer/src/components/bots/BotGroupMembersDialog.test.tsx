@@ -68,23 +68,18 @@ afterEach(() => {
 describe('BotGroupMembersDialog', () => {
   mocks.bots = [bot('a', 'Fern'), bot('b', 'Moss'), bot('c', 'Ivy')]
 
-  it('keeps focus in the name field when a member is picked with the pointer', () => {
-    render(<BotGroupMembersDialog onClose={() => {}} />)
-    const name = screen.getByPlaceholderText<HTMLInputElement>('Name your group')
-    name.focus()
-    // fireEvent returns false when a handler called preventDefault, which keeps focus where it was.
-    expect(fireEvent.mouseDown(row('Fern'))).toBe(false)
-  })
-
-  it('creates once there is a name and two bots, offering the suggestion on Tab', () => {
+  it('keeps the name field focused during member selection and offers the suggestion on Tab', () => {
     render(<BotGroupMembersDialog onClose={() => {}} />)
     expect(button('Create').disabled).toBe(true)
     expect(screen.getByText('Pick 2 or more bots')).toBeTruthy()
+    const name = screen.getByPlaceholderText<HTMLInputElement>('Name your group')
+    name.focus()
+    expect(fireEvent.mouseDown(row('Ivy'))).toBe(false)
     fireEvent.click(row('Ivy'))
+    expect(document.activeElement).toBe(name)
     expect(screen.getByText('Pick 2 or more bots')).toBeTruthy()
     fireEvent.click(row('Fern'))
     expect(screen.getByText('Name the group')).toBeTruthy()
-    const name = screen.getByPlaceholderText<HTMLInputElement>('Name your group')
     fireEvent.keyDown(name, { key: 'Tab' })
     expect(name.value).toBe('Ivy & Fern')
     expect(button('Create').disabled).toBe(false)

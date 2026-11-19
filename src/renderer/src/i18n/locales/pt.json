@@ -21348,14 +21348,7 @@
         "unreported": "O uso de contexto não está disponível para esta sessão."
       },
       "agentMessage": {
-        "messageFrom": "Mensagem de",
         "unnamedSender": "um agente",
-        "messageFromCoordinator": "Mensagem do coordenador",
-        "startedWorker": "Worker iniciado",
-        "handedOffToAgent": "Entregue a um agente",
-        "startedAgent": "Agente iniciado",
-        "taskFromCoordinator": "Tarefa do coordenador",
-        "updateFromWorker": "Atualização do worker",
         "senderReplaced": "{{name}} não está mais em execução em seu terminal; outro agente está em execução nele agora. Abra esse terminal pela barra lateral se precisar dele.",
         "senderAmbiguous": "O Orca não consegue identificar em qual terminal {{name}} está em execução. Abra-o pela barra lateral.",
         "senderNotRunning": "{{name}} não está mais em execução. Inicie um novo agente pela barra lateral para continuar o trabalho.",

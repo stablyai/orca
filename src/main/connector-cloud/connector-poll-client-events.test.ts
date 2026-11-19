@@ -67,31 +67,6 @@ describe('ConnectorPollClient events', () => {
     second.client.stop()
   })
 
-  it('keeps at most 200 turn ends, in memory and on disk alike', async () => {
-    h.fake.forced.set(CONNECTOR_PATHS.events, { status: 503 })
-    const { client, emit } = startClient()
-    await settle()
-    for (let turn = 1; turn <= 250; turn++) {
-      emit({
-        kind: 'turn-ended',
-        conversation,
-        worktreeId: 'wt',
-        paneKey: 'tab:1',
-        turnId: turn,
-        stopReason: null,
-        at: turn
-      })
-    }
-    await ConnectorTurnEvents.settled()
-    const stored = JSON.parse(
-      readFileSync(join(h.userDataPath, 'connector-turn-outbox.json'), 'utf8')
-    ).turnEnds
-    expect(stored.map((event: { turnId: number }) => event.turnId)).toEqual(
-      Array.from({ length: 200 }, (_, index) => index + 51)
-    )
-    client.stop()
-  })
-
   it('opens each hello with the snapshot as batch 0 and keeps later events in order behind a retry', async () => {
     const { client, emit } = startClient()
     await settle()

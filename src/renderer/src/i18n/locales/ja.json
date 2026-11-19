@@ -20219,17 +20219,8 @@
         "unreported": "このセッションではコンテキストの使用量を表示できません。"
       },
       "agentMessage": {
-        "messageFrom": "送信元:",
         "unnamedSender": "Agent",
         "goToAgent": "Agent に移動",
-        "messageFromCoordinator": "コーディネーターからのメッセージ",
-        "startedWorker": "ワーカーを開始しました",
-        "reopenedWorker": "ワーカーを再度開きました",
-        "sentFollowUpToWorker": "ワーカーにフォローアップを送信しました",
-        "handedOffToAgent": "Agentに引き継ぎました",
-        "startedAgent": "Agentを開始しました",
-        "taskFromCoordinator": "コーディネーターからのタスク",
-        "updateFromWorker": "ワーカーからの更新",
         "senderReplaced": "{{name}} はターミナルで実行されていません。現在は別の Agent が実行されています。必要に応じてサイドバーからターミナルを開いてください。",
         "senderAmbiguous": "Orca は {{name}} がどのターミナルで実行されているか判別できません。サイドバーから開いてください。",
         "senderNotRunning": "{{name}} は実行されていません。作業を続けるにはサイドバーから新規 Agent を起動してください。",

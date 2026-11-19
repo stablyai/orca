@@ -394,9 +394,11 @@ describe('a successor no agent ever ran', () => {
         expect(open.has(SUCCESSOR)).toBe(true)
       }
       structuredWorkerIdentities.clear()
+      // A proven stop releases the row itself; the explicit release only confirms it once that has settled.
       await expect(
         call('orchestration.workerRelease', { dispatch: dispatchId })
-      ).resolves.toMatchObject({ state: 'released' })
+      ).resolves.toMatchObject({ state: expect.stringMatching(/^(already_)?released$/) })
+      expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('released')
     }
   )
 })

@@ -1648,7 +1648,12 @@
       "removeHostMessage": "「{{name}}」を削除しますか？後で再度ペアリングできます。",
       "sleep": "スリープ",
       "unpin": "固定を解除する",
-      "rename": "名前を変更"
+      "rename": "名前を変更",
+      "markRead": "既読マークを付ける",
+      "markUnread": "未読としてマークする",
+      "muteNotifications": "通知をミュート",
+      "unmuteNotifications": "通知のミュートを解除",
+      "moveToStatus": "ステータスに移動"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "チェック：失敗",

@@ -1,5 +1,5 @@
 // Markdown cut at a height with Show more: the item's description and its long comments.
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { BotItemMarkdown } from './BotItemMarkdown'
@@ -21,6 +21,7 @@ export function BotItemClampedText({
   const [open, setOpen] = useState(false)
   const [clamped, setClamped] = useState(false)
   const body = useRef<HTMLDivElement | null>(null)
+  const id = useId()
   // Remeasured when the pane narrows or the text's own height changes (an image loads), not only
   // when the text does, so a cut never hides text without Show more.
   useEffect(() => {
@@ -41,6 +42,7 @@ export function BotItemClampedText({
     <div className={className}>
       <div
         ref={body}
+        id={id}
         className={
           open
             ? undefined
@@ -58,6 +60,8 @@ export function BotItemClampedText({
       {clamped || open ? (
         <button
           type="button"
+          aria-expanded={open}
+          aria-controls={id}
           className="text-xs font-medium text-foreground hover:underline"
           onClick={() => setOpen(!open)}
         >

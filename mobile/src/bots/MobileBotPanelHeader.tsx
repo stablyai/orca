@@ -2,7 +2,11 @@
 // settings, then the tabs with Items' Needs you count; and the Items filter sheet.
 import { Text, View } from 'react-native'
 import { ListFilter, Settings } from 'lucide-react-native'
-import type { BotItemChatChoice, BotItemFilter } from '../../../src/shared/bots/bot-item-groups'
+import {
+  botItemFilterChat,
+  type BotItemChatChoice,
+  type BotItemFilter
+} from '../../../src/shared/bots/bot-item-groups'
 import { MobileSegmentedControl } from '../components/controls/MobileSegmentedControl'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
@@ -104,8 +108,8 @@ export function MobileBotItemsFilterSheet(props: {
         {
           id: 'all',
           label: t('bots.items.filter.all', 'All chats'),
-          checked: filter.chatId === null,
-          onPress: () => onFilter({ ...filter, chatId: null })
+          checked: filter.chatIds === null,
+          onPress: () => onFilter({ ...filter, chatIds: null })
         },
         ...props.chats.map((chat) => ({
           id: chat.chatId,
@@ -114,8 +118,8 @@ export function MobileBotItemsFilterSheet(props: {
               ? t('bots.items.homeChat', 'Home Chat')
               : (chat.title ?? t('bots.items.chatFallback', 'Chat')),
           ...(chat.count > 0 ? { status: String(chat.count) } : {}),
-          checked: filter.chatId === chat.chatId,
-          onPress: () => onFilter({ ...filter, chatId: chat.chatId })
+          checked: botItemFilterChat(filter) === chat.chatId,
+          onPress: () => onFilter({ ...filter, chatIds: [chat.chatId] })
         })),
         {
           id: 'needsYou',

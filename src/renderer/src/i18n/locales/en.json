@@ -21676,21 +21676,22 @@
         "unreported": "Context usage is not available for this session."
       },
       "agentMessage": {
-        "messageFrom": "Message from",
         "unnamedSender": "an agent",
         "goToAgent": "Go to agent",
-        "messageFromCoordinator": "Message from coordinator",
-        "startedWorker": "Started worker",
-        "reopenedWorker": "Reopened worker",
-        "sentFollowUpToWorker": "Sent follow-up to worker",
-        "handedOffToAgent": "Handed off to agent",
-        "startedAgent": "Started agent",
-        "taskFromCoordinator": "Task from coordinator",
-        "updateFromWorker": "Update from worker",
         "senderReplaced": "{{name}} is no longer running in its terminal; another agent is running there now. Open that terminal from the sidebar if you need it.",
         "senderAmbiguous": "Orca can't tell which terminal {{name}} is running in. Open it from the sidebar.",
         "senderNotRunning": "{{name}} is no longer running. Start a new agent from the sidebar to continue its work.",
-        "unnamedSenderSubject": "An agent"
+        "unnamedSenderSubject": "An agent",
+        "open": "Open {{name}}",
+        "row": {
+          "started": "Started",
+          "reopened": "Reopened",
+          "followedUp": "Sent follow-up to",
+          "handedOff": "Handed off to",
+          "task": "Task from",
+          "update": "Update from",
+          "message": "Message from"
+        }
       },
       "goal": {
         "placeholder": "Describe your goal, define measurable outcomes for best results",
@@ -22492,7 +22493,9 @@
       },
       "eventRow": {
         "showLess": "Show less",
-        "showMore": "Show more"
+        "showMore": "Show more",
+        "running": "Running",
+        "failed": "Failed"
       }
     },
     "tab": {
@@ -26928,11 +26931,8 @@
         "uncertainChecked": "I checked Slack: there is no such app, or I deleted it",
         "again": "Set up again",
         "done": "Done",
-        "title": "Add {{name}} to Slack",
         "pick": "Choose a Slack workspace.",
         "another": "Connect another Slack workspace",
-        "titleAnother": "Add {{name}} to another Slack workspace",
-        "titleOn": "Set up {{name}} in Slack",
         "isIn": "{{name}} is in Slack",
         "ready": "Your Slack app is ready. Approve it in Slack to finish.",
         "approve": "Approve in Slack",
@@ -26945,7 +26945,10 @@
         "linkCopied": "Link copied",
         "copyLink": "Copy link",
         "linkUntil": "(works once, until {{time}}).",
-        "linkOnce": "(works once)."
+        "linkOnce": "(works once).",
+        "tryIt": "Try it in any channel or direct message",
+        "connectAnother": "Connect another Slack workspace",
+        "connect": "Connect Slack"
       },
       "connection": {
         "appSettings": "Slack app settings",
@@ -26996,8 +26999,6 @@
         "handOffExpired": "That hand-off expired or was already used. Try again."
       },
       "howToAsk": "Mention <code>@{{name}}</code> in a channel, or send it a direct message.",
-      "setupIntro": "Mention <code>@{{name}}</code> in a channel, or send it a direct message, and {{name}} starts working on this computer.",
-      "setupIntroOnHost": "Mention <code>@{{name}}</code> in a channel, or send it a direct message, and {{name}} starts working on {{host}}.",
       "handOff": {
         "confirmMac": "Orca on this Mac creates the Slack app with {{email}}’s token. {{host}} gets only this bot’s app.",
         "confirm": "Orca on this computer creates the Slack app with {{email}}’s token. {{host}} gets only this bot’s app.",
@@ -27811,7 +27812,34 @@
       "pickOne": "Pick a bot",
       "newThread": "New thread in {{name}}",
       "newThreadHint": "starts fresh",
-      "newThreadTab": "New thread"
+      "newThreadTab": "New thread",
+      "items": {
+        "thisGroup": "This group",
+        "thread": "Thread",
+        "all": "All their work",
+        "orNames": "{{names}} or {{last}}",
+        "emptyBotsNeedsYou": "Nothing from {{names}} needs you",
+        "emptyBots": "No items from {{names}}",
+        "emptyTitle": "No items from this group yet",
+        "emptyBody": "When {{names}} take something on in this group, it shows up here.",
+        "showAll": "Show all their work",
+        "filterNamed": "Filter items, filtered by {{filter}}",
+        "filterBot": "Bot",
+        "outside_one": "{{count}} more outside this group",
+        "outside_other": "{{count}} more outside this group",
+        "outsideRoom_one": "{{count}} more outside this room",
+        "outsideRoom_other": "{{count}} more outside this room",
+        "outsideThread_one": "{{count}} more outside this thread",
+        "outsideThread_other": "{{count}} more outside this thread"
+      },
+      "panel": {
+        "membersMore": "Members: {{names}} and {{count}} more",
+        "membersNamed": "Members: {{names}}",
+        "settings": "Group settings…",
+        "members": "Members",
+        "membersCount": "Members {{count}}",
+        "noMembers": "No bots in this group"
+      }
     },
     "google": {
       "turnOn": {
@@ -28843,14 +28871,18 @@
         "canceled": "canceled this",
         "changed": "changed {{field}}",
         "closed": "marked this done",
+        "commentLabel": "{{name}}, {{time}}",
+        "goToAnswer": "Answered at {{time}}. Go to the answer",
+        "replyingTo": "Replying to: {{question}}. Go to the question",
         "linked": "linked {{links}}",
         "made": "added this item",
         "madeNeedsYou": "added this item as Needs you",
         "moved": "moved this to",
         "noComments": "No comments yet.",
+        "notSent": "Not sent.",
+        "retry": "Retry",
+        "discard": "Discard",
         "reopened": "reopened this",
-        "reply": "Reply",
-        "waitingOnYou": "Waiting on you",
         "workerFailed": "Worker stopped:",
         "workerFinished": "Worker finished:",
         "workerStarted": "Worker started:",

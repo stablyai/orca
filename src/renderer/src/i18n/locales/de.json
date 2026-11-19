@@ -19897,14 +19897,7 @@
         "unreported": "Die Kontextnutzung ist für diese Sitzung nicht verfügbar."
       },
       "agentMessage": {
-        "messageFrom": "Nachricht von",
         "unnamedSender": "einem Agenten",
-        "messageFromCoordinator": "Nachricht vom Koordinator",
-        "startedWorker": "Worker gestartet",
-        "handedOffToAgent": "An Agenten übergeben",
-        "startedAgent": "Agent gestartet",
-        "taskFromCoordinator": "Aufgabe vom Koordinator",
-        "updateFromWorker": "Aktualisierung vom Worker",
         "senderReplaced": "{{name}} läuft nicht mehr in seinem Terminal; dort läuft jetzt ein anderer Agent. Öffne das Terminal bei Bedarf über die Seitenleiste.",
         "senderAmbiguous": "Orca kann nicht feststellen, in welchem Terminal {{name}} läuft. Öffne es über die Seitenleiste.",
         "senderNotRunning": "{{name}} läuft nicht mehr. Starte einen neuen Agenten über die Seitenleiste, um die Arbeit fortzusetzen.",

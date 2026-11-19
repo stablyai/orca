@@ -1648,7 +1648,12 @@
       "removeHostMessage": "\"{{name}}\"을(를) 제거하시겠습니까? 나중에 다시 페어링할 수 있습니다.",
       "sleep": "슬립",
       "unpin": "고정 해제",
-      "rename": "이름 변경"
+      "rename": "이름 변경",
+      "markRead": "읽음으로 표시",
+      "markUnread": "읽지 않은 것으로 표시",
+      "muteNotifications": "알림 음소거",
+      "unmuteNotifications": "알림 음소거 해제",
+      "moveToStatus": "상태로 이동"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "체크: 실패",

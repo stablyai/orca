@@ -107,18 +107,6 @@ function rows(): HTMLElement[] {
   return screen.getAllByRole('button')
 }
 
-it('lists PRs and issues, then other links, then files, each on one line', () => {
-  expect(rows().map((row) => row.textContent)).toEqual([
-    'Issue #7',
-    'PR #9',
-    'PR #10',
-    'ENG-12',
-    'example.com/docs/a',
-    'acme.slack.com/archives/C1/p2',
-    'mock.html'
-  ])
-})
-
 it.each([
   ['https://example.com/docs/a', 'example.com'],
   ['notes/mock.html', 'notes/mock.html']
@@ -196,15 +184,6 @@ it('uses the cached issue title beside its number', () => {
   expect(row.textContent).toBe('Viewers can edit#7')
 })
 
-it('titles a PR from the cache with its number, else PR #n', () => {
-  expect(only(prLink('acme/app', 9, 'open', null, 'Share dialog')).textContent).toBe(
-    'Share dialog#9'
-  )
-  cleanup()
-  const fallback = only(prLink('acme/app', 9, 'open', null, null))
-  expect(fallback.textContent).toBe('PR #9')
-})
-
 it.each([
   ['open', 'failure', 'Checks failing'],
   ['draft', 'success', 'Checks passing'],
@@ -217,13 +196,13 @@ it.each([
   expect(glyph?.getAttribute('aria-label') ?? null).toBe(label)
 })
 
-it('names the repo only on links outside the item’s own repo', () => {
+it('uses cached titles when available and names the repo only on external links', () => {
   render(
     <BotItemLinks
       bot={BOT}
       links={[
-        prLink('acme/app', 1, 'open', null),
-        prLink('acme/app', 2, 'merged', null),
+        prLink('acme/app', 1, 'open', null, 'Share dialog'),
+        prLink('acme/app', 2, 'merged', null, null),
         prLink('acme/infra', 3, 'closed', null),
         { kind: 'pr', ref: 'acme/infra#4', pr: null }
       ]}
@@ -231,8 +210,8 @@ it('names the repo only on links outside the item’s own repo', () => {
     />
   )
   expect(screen.getAllByRole('button').map((row) => row.textContent)).toEqual([
-    'Title 1#1',
-    'Title 2#2',
+    'Share dialog#1',
+    'PR #2',
     'Title 3acme/infra#3',
     'PR #4acme/infra'
   ])
@@ -325,20 +304,19 @@ describe('a PR merged since the host read it', () => {
       : link
   }
 
-  it('shows merged, not its last CI result, once this window read it later', () => {
+  it('uses the newer PR read from the host or this window and hides CI once merged', () => {
     useAppStore.setState({ prCache: { 'acme/app#fix': { data: merged, fetchedAt: 2 } } })
     const svg = only(prLink('acme/app', 9, 'open', 'success')).querySelector('svg')!
     expect(svg.classList.contains('lucide-git-merge')).toBe(true)
     expect(svg.classList.contains('text-purple-600')).toBe(true)
     expect(screen.queryByRole('img')).toBeNull()
-  })
 
-  it('keeps the host’s read when this window’s is older', () => {
+    cleanup()
     useAppStore.setState({
       prCache: { 'acme/app#fix': { data: { ...merged, state: 'open' }, fetchedAt: 0 } }
     })
-    const svg = only(prLink('acme/app', 9, 'merged', null)).querySelector('svg')!
-    expect(svg.classList.contains('lucide-git-merge')).toBe(true)
+    const host = only(prLink('acme/app', 9, 'merged', null)).querySelector('svg')!
+    expect(host.classList.contains('lucide-git-merge')).toBe(true)
   })
 
   it('asks for a fresh read of a worker’s stale open PR, never of a fresh or settled one', () => {

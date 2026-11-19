@@ -52,7 +52,8 @@ const IMAGE_STRIP_PX = 88
 const TOOL_RUN_CHROME_PX = 16
 /** A reasoning row draws only its one-line trigger (`min-h-6`) until opened; opening remeasures it. */
 const COLLAPSED_REASONING_PX = 24
-const COMPACT_AGENT_MESSAGE_PX = 38
+/** A message between agents is one status row until opened. */
+const COMPACT_AGENT_MESSAGE_PX = 24
 const SUBAGENT_ROW_PX = 32
 export const NATIVE_CHAT_SUBAGENT_HEAD_PX = SUBAGENT_ROW_PX
 const STATUS_ROW_PX = 28

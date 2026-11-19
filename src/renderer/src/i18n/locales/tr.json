@@ -20047,14 +20047,7 @@
         "unreported": "Bu oturum için bağlam kullanımı bilgisi mevcut değil."
       },
       "agentMessage": {
-        "messageFrom": "Mesajı gönderen",
         "unnamedSender": "bir ajan",
-        "messageFromCoordinator": "Koordinatörden mesaj",
-        "startedWorker": "Çalışan başlatıldı",
-        "handedOffToAgent": "Ajana devredildi",
-        "startedAgent": "Ajan başlatıldı",
-        "taskFromCoordinator": "Koordinatörden görev",
-        "updateFromWorker": "Çalışandan güncelleme",
         "senderReplaced": "{{name}} artık kendi terminalinde çalışmıyor; orada şimdi başka bir ajan çalışıyor. Gerekirse terminali kenar çubuğundan açın.",
         "senderAmbiguous": "Orca, {{name}} adlı ajanın hangi terminalde çalıştığını belirleyemiyor. Terminali kenar çubuğundan açın.",
         "senderNotRunning": "{{name}} artık çalışmıyor. İşine devam etmek için kenar çubuğundan yeni bir ajan başlatın.",
