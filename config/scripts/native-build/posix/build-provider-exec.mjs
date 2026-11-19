@@ -22,7 +22,7 @@ import { linuxNativeToolchainImage } from '../linux/build-wayland-clipboard.mjs'
 
 const PROVIDER_EXEC_EXECUTABLE = 'orca-provider-exec'
 // Equals the desktop's minimumSystemVersion; the pinned server Node needs a newer macOS anyway.
-const MACOS_DEPLOYMENT_TARGET = '13.4'
+export const MACOS_DEPLOYMENT_TARGET = '13.4'
 const SOURCE = 'native/provider-exec/provider-exec.c'
 const WARNINGS = ['-std=c11', '-O2', '-Wall', '-Wextra', '-Werror']
 const LINUX_HARDENING = [

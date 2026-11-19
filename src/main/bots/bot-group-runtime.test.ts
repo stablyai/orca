@@ -1,13 +1,14 @@
 import { randomUUID } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 import { fixture, groupNativeMocks } from './bot-group-native-runtime.test-fixture'
+import { BotGroupRuntime } from './bot-group-runtime'
 import { BotGroupStore } from './bot-group-store'
 import { assertBotGroupOwner } from '../runtime/rpc/methods/bot-groups'
 import { assertBotGroupSessionAccess } from './bot-group-session-access'
 import type { StructuredMailboxPointerHost } from '../runtime/orchestration/mailbox/structured-pointer/structured-mailbox-pointer-host-contract'
 const mocks = groupNativeMocks()
 describe('persistent native group lifecycle', () => {
-  it('creates a separate persistent native session for each group member and reserves ordered responders', async () => {
+  it('creates separate member sessions, admits ordered responders and does not redeliver a replay', async () => {
     const { groups } = fixture()
     const group = await groups.create({ name: 'Review', botIds: ['bot-0', 'bot-1', 'bot-2'] })
     expect(new Set(group.members.map((member) => member.sessionId)).size).toBe(3)
@@ -33,7 +34,14 @@ describe('persistent native group lifecycle', () => {
       '[]'
     ])
     expect(groups.store.message(message.id)?.turns).toEqual(message.turns)
+    await vi.waitFor(() => expect(groups.store.pending()).toEqual([]))
+    for (const turn of message.turns) {
+      expect(() =>
+        groups.assertQueuedMessageAllowed(turn.sessionId, turn.operationId)
+      ).not.toThrow()
+    }
     await groups.send(input)
+    expect(mocks.send).toHaveBeenCalledTimes(3)
     expect(groups.store.messages(group.id)).toHaveLength(1)
     await expect(groups.send({ ...input, text: 'different' })).rejects.toThrow(/identity/)
   })
@@ -178,16 +186,30 @@ describe('persistent native group lifecycle', () => {
     })
     expect(groups.store.message('mail:verified-worker')?.requester).toBeUndefined()
   })
-  it('scopes Stop to room native sessions and invalidates older causal requests', async () => {
-    const { groups } = fixture()
+  it('scopes Stop to room sessions and preserves the cutoff after runtime recreation', async () => {
+    const { groups, runtime } = fixture()
     const group = await groups.create({ name: 'Review', botIds: ['bot-0', 'bot-1'] })
-    await groups.send({
+    const message = await groups.send({
       groupId: group.id,
       revision: group.revision,
       messageId: 'human',
       text: '@everyone harmless'
     })
-    await groups.stop(group.id, 'bot-0')
+    const [turn] = message.turns
+    const restored = new BotGroupRuntime(runtime)
+    expect(() =>
+      restored.assertQueuedMessageAllowed(turn.sessionId, turn.operationId)
+    ).not.toThrow()
+    expect(() =>
+      restored.assertQueuedMessageAllowed(group.members[1].sessionId, turn.operationId)
+    ).toThrow(/cannot be verified/)
+    expect(() => restored.assertQueuedMessageAllowed('ordinary-home', 'unrelated')).not.toThrow()
+
+    await restored.stop(group.id, 'bot-0')
+    expect(() =>
+      new BotGroupRuntime(runtime).assertQueuedMessageAllowed(turn.sessionId, turn.operationId)
+    ).toThrow(/no longer active/)
+    expect(groups.store.message(message.id)?.turns[0].error).toMatch(/no longer active/)
     expect(mocks.cancel.mock.calls.map((call) => call[1].envelope.sessionId)).toEqual([
       group.members[0].sessionId
     ])
@@ -228,8 +250,8 @@ describe('persistent native group lifecycle', () => {
       })
     ).rejects.toThrow(/changed/)
   })
-  it('removes the default explicitly, retains history and fences delayed delivery after removal', async () => {
-    const { groups } = fixture()
+  it('rejects retired deliveries after a member rejoins with a new session', async () => {
+    const { groups, runtime } = fixture()
     const group = await groups.create({ name: 'Review', botIds: ['bot-0', 'bot-1'] })
     let guard: (() => void) | undefined
     mocks.send.mockImplementation(async (send) => {
@@ -266,6 +288,13 @@ describe('persistent native group lifecycle', () => {
       botIds: ['bot-0', 'bot-1']
     })
     expect(rejoined.members[0].sessionId).not.toBe(group.members[0].sessionId)
+    const [retired] = message.turns
+    expect(() =>
+      new BotGroupRuntime(runtime).assertQueuedMessageAllowed(
+        retired.sessionId,
+        retired.operationId
+      )
+    ).toThrow(/no longer active/)
   })
   it('blocks model-written human messages and model approval access to another group member', async () => {
     const { runtime, groups } = fixture()

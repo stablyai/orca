@@ -49,12 +49,14 @@ export function registerAutoUpdaterHandlers({
   failMacStaging,
   isAwaitingMacStaging,
   isMacStagingDeferredToInstall,
+  watchMacStaging,
   shouldDeferMacQuitForInstall,
   recordCompletedUpdateCheck,
   restoreReleaseUpdateSource,
   sendCheckFailureStatus,
   sendErrorStatus,
   sendStatus,
+  publishUpdateOffer,
   scheduleAutomaticUpdateCheck,
   shouldSuppressMissingManifestPrereleaseFallbackEvent,
   suppressMissingManifestPrereleaseFallbackPromiseFailure,
@@ -157,13 +159,21 @@ export function registerAutoUpdaterHandlers({
           }
         }
 
-        sendStatus(
+        publishUpdateOffer(
           getRetainedLinuxPackageManualInstallStatus() ?? {
             state: 'available',
             version: info.version,
             changelog,
             // Tell clients this host cannot self-update before offering a download.
             ...(isExternallyManagedLinuxInstall() ? { externallyManaged: true } : {})
+          },
+          {
+            eligible:
+              !isLocalBuildCheck() &&
+              !isPinnedBuildCheck() &&
+              !missingManifestFallback &&
+              !publishingWindowLastGoodCheck,
+            backgroundCheck: !wasUserInitiated && !getUserInitiatedCheck()
           }
         )
       } finally {
@@ -259,6 +269,7 @@ export function registerAutoUpdaterHandlers({
     // Squirrel must finish staging before macOS can install.
     if (process.platform === 'darwin' && !macInstallerReady && !isMacStagingDeferredToInstall()) {
       recordUpdaterLifecycle('macos_waiting_for_squirrel', { version: info.version })
+      watchMacStaging(info.version)
       sendStatus({ state: 'downloading', percent: 100, version: info.version })
       return
     }

@@ -191,7 +191,7 @@ describe('orca gmail draft|send|label and calendar writes', () => {
     expect(out).toContain('Invites emailed to: sam@x.com')
   })
 
-  it('keeps a cap-sized attachment’s whole request under a paired server’s inbound limit', async () => {
+  it('accepts a draft attachment at the paired-server cap and refuses one byte over', async () => {
     writeFileSync(join(cwd, 'cap.bin'), Buffer.alloc(GMAIL_DRAFT_ATTACH_MAX_BYTES, 0xff))
     const [method, params] = await run(
       [
@@ -231,9 +231,6 @@ describe('orca gmail draft|send|label and calendar writes', () => {
     expect(Buffer.byteLength(request)).toBeLessThanOrEqual(
       REMOTE_RUNTIME_MAX_INBOUND_REQUEST_JSON_BYTES
     )
-  })
-
-  it('refuses attachments past what one request to a paired server may carry', async () => {
     writeFileSync(join(cwd, 'big.bin'), Buffer.alloc(GMAIL_DRAFT_ATTACH_MAX_BYTES + 1))
     await expect(
       run(

@@ -24,31 +24,21 @@ describe('secret lines left out of bot text', () => {
     ])
   })
 
-  it('reads snake_case, camelCase and Bearer labels as secret words', () => {
+  it('redacts snake_case, camelCase, hyphenated and Bearer labels', () => {
     const { text, leftOut } = redactBotText(
       [
         'DATABASE_PASSWORD=canary-env',
         '{"accessToken":"canary-camel"}',
         'Authorization: Bearer canary-bearer',
         '  "args": ["--api-key", "tvly-canary-shape"],',
+        'api-key: canary-hyphen-api',
+        'private-key = canary-hyphen-private',
         'Timezone is Eastern.'
       ].join('\n')
     )
-    expect(leftOut).toBe(4)
+    expect(leftOut).toBe(6)
     expect(text).not.toMatch(/canary/)
     expect(text).toMatch(/Timezone is Eastern\.$/)
-  })
-
-  it('reads hyphenated labels as secret words', () => {
-    const { text, leftOut } = redactBotText(
-      [
-        'api-key: canary-hyphen-api',
-        'private-key = canary-hyphen-private',
-        'Ships on Fridays.'
-      ].join('\n')
-    )
-    expect(leftOut).toBe(2)
-    expect(text).not.toMatch(/canary/)
   })
 
   it('leaves out a key block whole, to the end when it never ends', () => {

@@ -23,7 +23,7 @@ import { colors, pressedStyle, radii, spacing, typography } from '../../../theme
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { MobileNativeChatMessage } from '../transcript/messages/MobileNativeChatMessage'
-import { Elapsed, stateDotStyle } from '../transcript/messages/MobileNativeChatSubagentGroup'
+import { SubagentElapsed, subagentStateDotStyle } from './MobileNativeChatSubagentStatus'
 import { sayMobileNativeChatSubagentGroup as say } from '../transcript/messages/native-chat-subagent-group-copy'
 import { Prose } from '../transcript/message-content/MobileNativeChatProse'
 import {
@@ -148,7 +148,7 @@ function SubagentScreen({
           </Text>
         </Pressable>
         <View style={styles.titleRow}>
-          <View style={[styles.dot, stateDotStyle(state)]} />
+          <View style={[styles.dot, subagentStateDotStyle(state)]} />
           <Text style={styles.title} numberOfLines={1} accessibilityRole="header">
             {entry?.label ?? t('chat.subagentView.unnamed', 'Subagent')}
           </Text>
@@ -158,7 +158,7 @@ function SubagentScreen({
           {entry?.startedAt !== undefined ? (
             <>
               {' · '}
-              <Elapsed
+              <SubagentElapsed
                 startedAt={entry.startedAt}
                 settledAt={entry.settledAt ?? null}
                 counting={working}
