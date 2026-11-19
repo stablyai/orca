@@ -161,7 +161,32 @@ it('says the history refreshed only when the list shows and the note clears', as
   expect(screen.getByText('History refreshed')).not.toBeNull()
 })
 
-it('does not show a published scan as loading again during a later refresh', async () => {
+// Records each distinct DOM state of the note, the strip and the list header while a refresh runs.
+function recordStates(): {
+  states: { note: boolean; refreshed: boolean; stale: boolean; list: string }[]
+  stop: () => void
+} {
+  const states: { note: boolean; refreshed: boolean; stale: boolean; list: string }[] = []
+  const sample = (): void => {
+    const text = document.body.textContent ?? ''
+    const state = {
+      note: text.includes(NOTE),
+      refreshed: text.includes('History refreshed'),
+      stale: /10 files|3 \/ 10|\d+:\d\d/.test(text),
+      list: text.match(/\d+ sessions?(?=Last updated)/)?.[0] ?? ''
+    }
+    const last = states.at(-1)
+    if (!last || JSON.stringify(last) !== JSON.stringify(state)) {
+      states.push(state)
+    }
+  }
+  const observer = new MutationObserver(sample)
+  observer.observe(document.body, { subtree: true, childList: true, characterData: true })
+  sample()
+  return { states, stop: () => observer.disconnect() }
+}
+
+it('shows plain loading during a later refresh with no scan, and says refreshed with its list', async () => {
   const first = deferred()
   listSessions.mockReturnValueOnce(first.promise)
   renderPanel()
@@ -178,13 +203,30 @@ it('does not show a published scan as loading again during a later refresh', asy
   expect(screen.getByText('History refreshed')).not.toBeNull()
 
   // A later refresh answers from cache: no new scan reports progress.
-  const later = deferred()
-  listSessions.mockReturnValueOnce(later.promise)
+  let resolveLater = (): void => {}
+  listSessions.mockReturnValueOnce(
+    new Promise((done) => {
+      resolveLater = () =>
+        done({
+          ...listed,
+          sessions: [demoSession(), { ...demoSession(), id: 'demo-2', sessionId: 'demo-2' }]
+        })
+    })
+  )
+  const recorder = recordStates()
   await act(async () => screen.getByRole('button', { name: 'Refresh Session History' }).click())
   expect(await screen.findByText(NOTE)).not.toBeNull()
-  expect(screen.getByText('History refreshed')).not.toBeNull()
-  expect(screen.queryByText(/Loading sessions/)).toBeNull()
+  expect(screen.getByTitle('Loading sessions…')).not.toBeNull()
+  expect(screen.queryByText('History refreshed')).toBeNull()
 
-  await act(async () => later.resolve())
+  await act(async () => resolveLater())
   await waitFor(() => expect(screen.queryByText(NOTE)).toBeNull())
+  recorder.stop()
+  const { states } = recorder
+  expect(states.filter((state) => state.note && state.refreshed)).toEqual([])
+  expect(states.filter((state) => state.note && state.stale)).toEqual([])
+  // The strip says refreshed only together with the new list, in the state the note clears.
+  const firstRefreshed = states.findIndex((state, i) => i > 0 && state.refreshed)
+  expect(states[firstRefreshed]).toMatchObject({ note: false, list: '2 sessions' })
+  expect(states.slice(1, firstRefreshed).every((state) => state.list === '1 session')).toBe(true)
 })

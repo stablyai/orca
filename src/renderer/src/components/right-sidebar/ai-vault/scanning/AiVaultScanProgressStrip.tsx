@@ -235,13 +235,21 @@ export function AiVaultScanProgressStrip({
     reported.stage === 'finished' &&
     watched?.scanId === reported.scanId &&
     watched.generation === listGeneration
-  const progress: AiVaultScanProgress = held ? { ...reported, stage: 'finding' } : reported
-  const active = reportedActive || held
+  // Why: a wait with no scan of its own shows plain loading; an earlier scan's count, time or rows never stand in for it.
+  const neutral = listPending && !reportedActive && !held
+  const progress: AiVaultScanProgress = held
+    ? { ...reported, stage: 'finding' }
+    : neutral
+      ? { ...reported, stage: 'finding', agents: [] }
+      : reported
+  const active = reportedActive || held || neutral
   const finished = progress.stage === 'finished'
-  const now = useNow(active ? 1_000 : 30_000, active || finished)
-  const elapsedAt = active ? now : progress.settledAt
-  const time =
-    finished && progress.settledAt !== null
+  const timed = active && !neutral
+  const now = useNow(timed ? 1_000 : 30_000, timed || finished)
+  const elapsedAt = timed ? now : progress.settledAt
+  const time = neutral
+    ? null
+    : finished && progress.settledAt !== null
       ? formatTimeAgo(progress.settledAt, t)
       : elapsedAt !== null
         ? formatElapsed(elapsedAt - progress.startedAt)
@@ -264,7 +272,7 @@ export function AiVaultScanProgressStrip({
         </CollapsibleTrigger>
         <CollapsibleContent>
           <div role="list" className="py-1">
-            {agents.map((agent) => (
+            {(neutral ? [] : agents).map((agent) => (
               <AgentRow
                 key={agent.agent}
                 agent={agent}
