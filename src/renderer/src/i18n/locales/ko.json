@@ -20138,6 +20138,20 @@
         "confirmCheckHomeFolder": "이 홈 폴더를 공유하는 다른 컴퓨터에서 Orca를 실행하고 있지 않습니다",
         "details": "세부 정보",
         "clearing": "해제 중…"
+      },
+      "browser": {
+        "openLinks": {
+          "orcaBrowser": "Orca 브라우저",
+          "systemBrowser": "시스템 브라우저",
+          "ask": "매번 묻기",
+          "openDirectlyIn": "바로 열 위치",
+          "openDirectlyInDescription": "{{modifier}}-클릭 및 Orca가 물을 때 첫 번째 선택.",
+          "title": "링크 열기",
+          "description": "채팅, 터미널, 버튼의 링크."
+        },
+        "terminalLinkClicks": {
+          "plainClickDescription": "터미널의 파일 경로용입니다. 웹 링크는 클릭을 터미널 앱에 맡기지 않는 한 '링크 열기'를 따릅니다."
+        }
       }
     },
     "agentChildRow": {
@@ -20325,6 +20339,17 @@
             "shortcutSummary": "{{shortcut}}-클릭하면 시스템 브라우저에서 한 번 엽니다. 설정에서 변경할 수 있습니다."
           }
         }
+      },
+      "actions": {
+        "linkSettings": "링크 설정",
+        "rememberChoice": "항상 이 방법으로 링크 열기"
+      },
+      "preferences": {
+        "savedOrca": "링크가 Orca 브라우저에서 열립니다",
+        "savedSystem": "링크가 시스템 브라우저에서 열립니다",
+        "saveFailed": "선택을 저장하지 못했습니다.",
+        "saveUnknown": "선택이 저장되었는지 확인하지 못했습니다.",
+        "settings": "설정"
       }
     },
     "shared": {

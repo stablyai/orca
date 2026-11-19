@@ -21941,6 +21941,20 @@
         "confirmCheckHomeFolder": "没有其他共享此主文件夹的机器正在运行 Orca",
         "details": "详细信息",
         "clearing": "正在清除…"
+      },
+      "browser": {
+        "openLinks": {
+          "orcaBrowser": "Orca 浏览器",
+          "systemBrowser": "系统浏览器",
+          "ask": "每次询问",
+          "openDirectlyIn": "直接打开方式",
+          "openDirectlyInDescription": "{{modifier}}-点击以及 Orca 询问时的第一个选项。",
+          "title": "打开链接",
+          "description": "聊天、终端和按钮中的链接。"
+        },
+        "terminalLinkClicks": {
+          "plainClickDescription": "用于终端中的文件路径。除非点击交给终端应用，网页链接遵循“打开链接”。"
+        }
       }
     },
     "agentChildRow": {
@@ -22239,6 +22253,17 @@
             "shortcutSummary": "{{shortcut}}-点击可改用系统浏览器打开一次。可在设置中更改。"
           }
         }
+      },
+      "actions": {
+        "linkSettings": "链接设置",
+        "rememberChoice": "始终以此方式打开链接"
+      },
+      "preferences": {
+        "savedOrca": "链接将在 Orca 浏览器中打开",
+        "savedSystem": "链接将在系统浏览器中打开",
+        "saveFailed": "无法保存你的选择。",
+        "saveUnknown": "无法确认你的选择是否已保存。",
+        "settings": "设置"
       }
     },
     "shared": {

@@ -21004,6 +21004,20 @@
         "confirmCheckHomeFolder": "Bu ana klasörü paylaşan başka hiçbir makine Orca çalıştırmıyor",
         "details": "Ayrıntılar",
         "clearing": "Kaldırılıyor…"
+      },
+      "browser": {
+        "openLinks": {
+          "orcaBrowser": "Orca tarayıcısı",
+          "systemBrowser": "Sistem tarayıcısı",
+          "ask": "Her seferinde sor",
+          "openDirectlyIn": "Doğrudan şurada aç",
+          "openDirectlyInDescription": "{{modifier}}-tıklama ve Orca sorduğunda ilk seçenek.",
+          "title": "Bağlantıları aç",
+          "description": "Sohbet, terminal ve düğmelerdeki bağlantılar."
+        },
+        "terminalLinkClicks": {
+          "plainClickDescription": "Terminaldeki dosya yolları için. Tıklamalar terminal uygulamasına bırakılmadıkça web bağlantıları “Bağlantıları aç” ayarını izler."
+        }
       }
     },
     "agentChildRow": {
@@ -21186,6 +21200,17 @@
             "shortcutSummary": "{{shortcut}}-tıklama sistem tarayıcınızı bir kez açar. Bunu Ayarlar'dan değiştirebilirsiniz."
           }
         }
+      },
+      "actions": {
+        "linkSettings": "Bağlantı ayarları",
+        "rememberChoice": "Bağlantıları her zaman böyle aç"
+      },
+      "preferences": {
+        "savedOrca": "Bağlantılar Orca tarayıcısında açılacak",
+        "savedSystem": "Bağlantılar sistem tarayıcınızda açılacak",
+        "saveFailed": "Seçiminiz kaydedilemedi.",
+        "saveUnknown": "Seçiminizin kaydedildiği doğrulanamadı.",
+        "settings": "Ayarlar"
       }
     },
     "shared": {

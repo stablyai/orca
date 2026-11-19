@@ -21386,6 +21386,20 @@
         "activity": {
           "kept": "保持 · {{count}}"
         }
+      },
+      "browser": {
+        "openLinks": {
+          "orcaBrowser": "Orca ブラウザ",
+          "systemBrowser": "システムのブラウザ",
+          "ask": "毎回確認する",
+          "openDirectlyIn": "直接開く場所",
+          "openDirectlyInDescription": "{{modifier}}-クリックと、Orca が確認するときの最初の選択肢。",
+          "title": "リンクを開く",
+          "description": "チャット、ターミナル、ボタンのリンク。"
+        },
+        "terminalLinkClicks": {
+          "plainClickDescription": "ターミナル内のファイルパス用。Web リンクは、クリックをターミナルアプリに任せない限り「リンクを開く」に従います。"
+        }
       }
     },
     "agentChildRow": {
@@ -21680,6 +21694,17 @@
             "shortcutSummary": "{{shortcut}}-クリックで一度だけシステムブラウザーで開きます。設定で変更できます。"
           }
         }
+      },
+      "actions": {
+        "linkSettings": "リンクの設定",
+        "rememberChoice": "常にこの方法でリンクを開く"
+      },
+      "preferences": {
+        "savedOrca": "リンクは Orca ブラウザで開きます",
+        "savedSystem": "リンクはシステムのブラウザで開きます",
+        "saveFailed": "選択を保存できませんでした。",
+        "saveUnknown": "選択が保存されたか確認できませんでした。",
+        "settings": "設定"
       }
     },
     "shared": {

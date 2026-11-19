@@ -22489,6 +22489,20 @@
         "confirmCheckHomeFolder": "Nenhuma outra máquina que compartilha esta pasta pessoal está executando o Orca",
         "details": "Detalhes",
         "clearing": "Removendo…"
+      },
+      "browser": {
+        "openLinks": {
+          "orcaBrowser": "Navegador do Orca",
+          "systemBrowser": "Navegador do sistema",
+          "ask": "Perguntar sempre",
+          "openDirectlyIn": "Abrir diretamente em",
+          "openDirectlyInDescription": "{{modifier}}-clique e a primeira opção quando o Orca pergunta.",
+          "title": "Abrir links",
+          "description": "Links no chat, nos terminais e nos botões."
+        },
+        "terminalLinkClicks": {
+          "plainClickDescription": "Para caminhos de arquivo no terminal. Os links da web seguem “Abrir links”, a menos que os cliques fiquem com o aplicativo de terminal."
+        }
       }
     },
     "jiraIssueAssigneeField": {
@@ -22735,6 +22749,17 @@
             "shortcutSummary": "{{shortcut}}-clique abre o navegador do sistema uma vez. Altere isso nas Configurações."
           }
         }
+      },
+      "actions": {
+        "linkSettings": "Configurações de links",
+        "rememberChoice": "Sempre abrir links assim"
+      },
+      "preferences": {
+        "savedOrca": "Os links vão abrir no navegador do Orca",
+        "savedSystem": "Os links vão abrir no navegador do sistema",
+        "saveFailed": "Não foi possível salvar sua escolha.",
+        "saveUnknown": "Não foi possível confirmar que sua escolha foi salva.",
+        "settings": "Configurações"
       }
     },
     "shared": {

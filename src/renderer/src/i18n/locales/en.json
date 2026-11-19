@@ -23587,6 +23587,24 @@
       },
       "git": {
         "branchPrefixHostGitUsername": "Git username on {{host}}"
+      },
+      "browser": {
+        "openLinks": {
+          "orcaBrowser": "Orca browser",
+          "systemBrowser": "System browser",
+          "ask": "Ask each time",
+          "openDirectlyIn": "Open directly in",
+          "openDirectlyInDescription": "{{modifier}}-click and the first choice when Orca asks.",
+          "title": "Open links",
+          "description": "Links in chat, terminals and buttons.",
+          "search": {
+            "ask": "ask",
+            "system": "system browser"
+          }
+        },
+        "terminalLinkClicks": {
+          "plainClickDescription": "For file paths in the terminal. Web links follow Open links unless left to the terminal app."
+        }
       }
     },
     "agentChildRow": {
@@ -23897,6 +23915,17 @@
             "shortcutSummary": "{{shortcut}}-click opens your system browser once. Change this in Settings."
           }
         }
+      },
+      "actions": {
+        "linkSettings": "Link settings",
+        "rememberChoice": "Always open links this way"
+      },
+      "preferences": {
+        "savedOrca": "Links will open in the Orca browser",
+        "savedSystem": "Links will open in your system browser",
+        "saveFailed": "Couldn't save your choice.",
+        "saveUnknown": "Couldn't confirm your choice was saved.",
+        "settings": "Settings"
       }
     },
     "shared": {
