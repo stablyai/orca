@@ -193,6 +193,8 @@ export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
     questionForm(method, params) ??
     questionRequest(method, params) ??
     warnedApproval(method, params),
+  // Calls past WaitMsBeforeAsync, subagents and schedules finish after end_turn (#40447).
+  reactiveWakeups: true,
   normalizeToolUpdate,
   promptErrorDetail,
   providerRetry: (text) => RETRY_NOTICE.exec(text)?.[1],

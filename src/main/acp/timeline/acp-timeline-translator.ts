@@ -8,6 +8,7 @@ import {
 import { AcpContextTimeline } from './acp-context-usage'
 import { AcpThreadGoalTimeline } from './acp-thread-goal-timeline'
 import { AcpBackgroundTaskTimeline } from './acp-background-task-timeline'
+import { AcpAgentTurns } from './acp-agent-turns'
 import {
   GENERIC_ACP_DIALECT,
   type AcpDialect,
@@ -53,6 +54,7 @@ export class AcpTimelineTranslator {
   private readonly context = new AcpContextTimeline()
   private readonly threadGoal = new AcpThreadGoalTimeline()
   protected activeTurn?: string
+  private readonly agentTurns: AcpAgentTurns
 
   constructor(private readonly options: AcpTimelineTranslatorOptions) {
     this.ownership = new AcpTimelineOwnership()
@@ -66,6 +68,7 @@ export class AcpTimelineTranslator {
     this.prompts = new AcpPromptTurns(options.sessionId, this.dialect, options.agentName)
     const tools = this.ownership.tools
     this.children = new AcpChildSessions(options.sessionId, this.dialect, this.subagents, tools)
+    this.agentTurns = new AcpAgentTurns(this.dialect, tools, this.backgroundTasks)
   }
 
   dispose(): void {
@@ -90,6 +93,14 @@ export class AcpTimelineTranslator {
     }
     return prompt
   }
+
+  /** The lane ends unprompted work on quiet, Stop or a send. */
+  endAgentTurn(at: number, stopReason = 'end_turn'): ProviderTimelineEvent[] {
+    const turn = this.agentTurns.take(this.activeTurn)
+    return turn ? this.endTurn(turn, { stopReason, at }) : []
+  }
+
+  agentTurnQuietMs = (): number | null => this.agentTurns.quietMs(this.activeTurn)
 
   promptResult(
     clientMessageId: string,
@@ -196,7 +207,7 @@ export class AcpTimelineTranslator {
       (update !== undefined && ACP_SUBSTANTIVE_UPDATES.includes(update.sessionUpdate)) ||
       extension?.end !== undefined ||
       extension?.started === true
-    const offeredTurn = providerTurn ?? open
+    const offeredTurn = providerTurn ?? open ?? this.agentTurns.mint(opens, update)
     const operation = this.ownership.operation()
     const owner = update
       ? this.ownership.messages.owner(offeredTurn, update, operation.settled)
@@ -237,14 +248,7 @@ export class AcpTimelineTranslator {
     }
     const end = extension?.end
     if (end && turn) {
-      // Hook refusal ends immediately; normal completion waits for the prompt reply.
-      if (
-        this.prompts.current?.turn === turn &&
-        ['end_turn', 'cancelled'].includes(end.stopReason) &&
-        !end.hookBlock
-      ) {
-        this.prompts.current.durationMs = end.durationMs
-      } else {
+      if (!this.prompts.awaitsReply(turn, end)) {
         events.push(...this.endTurn(turn, { ...end, at }))
       }
       return events
@@ -289,6 +293,7 @@ export class AcpTimelineTranslator {
   // Write failure reasons before ending the turn so their rows join it.
   private endTurn(turn: string, ending: AcpTurnEnding): ProviderTimelineEvent[] {
     const events = this.prompts.endCompaction(turn, ending, this.failures) ?? [
+      ...this.agentTurns.background(turn, ending, this.options.sessionId),
       ...this.failures.ended(turn, ending),
       ...acpTurnEndEvents(this.options.sessionId, turn, ending)
     ]
@@ -314,16 +319,12 @@ export class AcpTimelineTranslator {
       this.end(this.activeTurn)
     }
     operation.open(turn)
-    if (turn === this.prompts.current?.turn) {
-      const events = this.prompts.start(turn, at)
-      // Late frames must not reopen or retarget this prompt.
-      this.started.set(turn, true)
-      this.activeTurn = turn
-      return events
-    }
+    // Late frames must not reopen or retarget a prompt.
     this.started.set(turn, true)
     this.activeTurn = turn
-    return [{ type: 'turn.open', turn, at }]
+    return turn === this.prompts.current?.turn
+      ? this.prompts.start(turn, at)
+      : [{ type: 'turn.open', turn, at }]
   }
 
   private end(turn: string): void {
