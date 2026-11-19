@@ -8,6 +8,7 @@ const SHADOW_OFFSET_Y = 8
 const SHADOW_SIGMA = 16
 const SHADOW_OPACITY = 0.25
 const CORNER_SAMPLE_RATIO = 0.02
+// Tolerates near-opaque export noise (alpha 250–254); anything lower counts as see-through.
 const OPAQUE_CORNER_ALPHA = 250
 
 export type MacAppIconTileGeometry = {
@@ -21,14 +22,13 @@ export function getMacAppIconTileGeometry(side: number): MacAppIconTileGeometry 
   return { side, tileOffset, tileSide: side - 2 * tileOffset }
 }
 
-/** True when every corner pixel is opaque, i.e. the art is a full-bleed square, not an icon shape. */
+/** True when every sampled corner pixel has alpha ≥ 250, i.e. the art is a full-bleed square, not an icon shape. */
 export function isFullBleedIconBitmap(bitmap: Uint8Array, side: number): boolean {
   const patch = Math.max(1, Math.round(side * CORNER_SAMPLE_RATIO))
   for (const originY of [0, side - patch]) {
     for (const originX of [0, side - patch]) {
       for (let y = originY; y < originY + patch; y++) {
         for (let x = originX; x < originX + patch; x++) {
-          // Any see-through corner pixel means the art already carries its own shape.
           if (bitmap[(y * side + x) * 4 + 3] < OPAQUE_CORNER_ALPHA) {
             return false
           }
