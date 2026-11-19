@@ -35,8 +35,8 @@ incremental scans, pinned JSONL reading, the launch-menu host preferences, and t
 contracts. Only the `*.performance.test.*` files may count work; the older ones get no exception (see
 [perf contracts](../docs/agents-md-refs/test-antipatterns.md#perf-contracts)). The selection is
 count-only and runs in seconds: wall-clock budgets and long disk runs stay out of it. Missing
-listed files fail configuration loading. Tests run serially, without retries, and inherit the
-full suite's setup and forced-GC support.
+listed files fail configuration loading. Files run in parallel worker processes (counts are
+per process), without retries, and inherit the full suite's setup and forced-GC support.
 
 `.github/workflows/performance-contracts.yml` runs daily and manually on Linux,
 macOS and Windows, and on every PR that changes production source (`src/**`, patches, dependencies) or
