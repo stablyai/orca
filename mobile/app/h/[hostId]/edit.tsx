@@ -36,6 +36,7 @@ import { hostOs } from '../../../src/platform/host-os'
 import { translate } from '../../../src/i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../src/i18n/use-mobile-translation'
 import { TextField } from '../../../src/components/composer-input/TextField'
+import { HostOrcaVersionSection } from '../../../src/host-screen/identity/HostOrcaVersionSection'
 
 export default function EditHostScreen() {
   useMobileColorScheme()
@@ -309,6 +310,8 @@ export default function EditHostScreen() {
             ) : null}
 
             {saveError ? <Text style={styles.errorText}>{saveError}</Text> : null}
+
+            <HostOrcaVersionSection hostId={host.id} />
 
             <ListGroup style={styles.removeGroup}>
               <ListRow
