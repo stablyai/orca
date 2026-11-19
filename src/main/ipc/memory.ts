@@ -19,8 +19,11 @@ export function registerMemoryHandlers(store: Store): void {
         return collectMemorySnapshot(store)
       }
       const window = BrowserWindow.fromWebContents(event.sender)
+      const activeUntil =
+        typeof admission.activeUntil === 'number' ? admission.activeUntil : Infinity
       return collectMemorySnapshot(store, {
-        stillWanted: () => !!window && !window.isDestroyed() && window.isFocused()
+        stillWanted: () =>
+          !!window && !window.isDestroyed() && window.isFocused() && Date.now() < activeUntil
       })
     }
   )

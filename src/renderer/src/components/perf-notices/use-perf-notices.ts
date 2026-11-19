@@ -55,6 +55,8 @@ type Tracking = {
 
 /** Why the loop must hold off right now; rechecked after every await before anything shows. */
 type Gate = () => boolean
+/** Wall-clock ms at which the user counts as away, so main starts no process sweep after it. */
+type ActiveUntil = () => number
 
 async function localSessions(): Promise<Awaited<ReturnType<typeof window.api.pty.listSessions>>> {
   try {
@@ -65,13 +67,17 @@ async function localSessions(): Promise<Awaited<ReturnType<typeof window.api.pty
 }
 
 /** Memory-low names terminals only when they hold most of the used memory; never Orca, never other apps. */
-async function memoryLowNotice(now: number, blocked: Gate): Promise<PerfNotice | null> {
+async function memoryLowNotice(
+  now: number,
+  blocked: Gate,
+  activeUntil: ActiveUntil
+): Promise<PerfNotice | null> {
   // Why: every variant can open Resources, so skip the process snapshot when it can't.
   if (!hasResourceManager()) {
     return null
   }
   const [snapshot, sessions] = await Promise.all([
-    window.api.memory.getSnapshot({ whileFocused: true }),
+    window.api.memory.getSnapshot({ whileFocused: true, activeUntil: activeUntil() }),
     localSessions()
   ])
   if (blocked()) {
@@ -140,7 +146,8 @@ async function evaluate(
   signals: PerfNoticeSignals,
   tracking: Tracking,
   now: number,
-  blocked: Gate
+  blocked: Gate,
+  activeUntil: ActiveUntil
 ): Promise<number> {
   if (signals.disk && isDiskAlmostFull(signals) && canShowPerfNotice('disk-almost-full', now)) {
     showPerfNotice({ id: 'disk-almost-full', freeLabel: formatMemory(signals.disk.freeBytes) }, now)
@@ -163,7 +170,7 @@ async function evaluate(
       canShowPerfNotice('memory-low', now)
     ) {
       tracking.ownerShareCheckedAt = now
-      notice = await memoryLowNotice(now, blocked)
+      notice = await memoryLowNotice(now, blocked, activeUntil)
     }
   }
   // Why: a blocked step admits no further work; the next tick starts over.
@@ -214,6 +221,7 @@ function startPerfNoticeLoop(): () => void {
     useAppStore.getState().activeModal !== 'none' ||
     isResourceManagerOpen()
   const isAway = (): boolean => Date.now() - lastActivityAt >= USER_AWAY_MS
+  const activeUntil: ActiveUntil = () => lastActivityAt + USER_AWAY_MS
   const blocked: Gate = () => disposed || !document.hasFocus() || isQuietTime() || isAway()
   const clear = (): void => {
     if (timer !== null) {
@@ -245,7 +253,7 @@ function startPerfNoticeLoop(): () => void {
       if (!signals || signals.userIdleSeconds * 1000 >= USER_AWAY_MS) {
         next = null
       } else if (!blocked()) {
-        next = await evaluate(signals, tracking, now, blocked)
+        next = await evaluate(signals, tracking, now, blocked, activeUntil)
       }
     } catch {
       // A failed reading waits for the slow cadence instead of retrying hot.

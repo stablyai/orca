@@ -44,6 +44,9 @@ export async function enumerateWindowsProcessResources({
     processBackend = 'cim'
   }
 
+  if (!stillWanted()) {
+    return []
+  }
   const sample = await enumerateWindowsWithCim(withNames)
   if (sample) {
     return trackCpu ? applyWindowsCpuSample(sample) : sample.rows

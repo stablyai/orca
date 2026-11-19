@@ -46,6 +46,10 @@ export async function collectMemorySnapshot(
   options: { stillWanted?: () => boolean } = {}
 ): Promise<MemorySnapshot> {
   const { stillWanted } = options
+  // Why: a queued background request that arrives after blur or away starts no sweep at all.
+  if (stillWanted && !stillWanted() && !inflight) {
+    return emptyMemorySnapshot()
+  }
   // Runtime callers share one process-wide store, so coalesced sweeps use the same data source.
   if (inflight) {
     if (inflightInterest) {

@@ -20,6 +20,9 @@ export async function enumerateHostProcesses(
   options: { trackCpu?: boolean; withNames?: boolean; stillWanted?: () => boolean } = {}
 ): Promise<ProcIndex> {
   const platform = os.platform()
+  if (options.stillWanted && !options.stillWanted()) {
+    return buildProcessIndex([], null, getProcessMemoryMetric(platform))
+  }
   const withNames = options.withNames ?? false
   const [rows, footprints] = await Promise.all([
     platform === 'win32'
