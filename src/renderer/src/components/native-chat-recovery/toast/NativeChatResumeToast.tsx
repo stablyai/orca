@@ -246,8 +246,8 @@ export function NativeChatResumeToast({
           )}
         </div>
         <div className="space-y-1.5 border-t border-border px-3.5 py-2.5 text-xs text-muted-foreground">
-          {/* Balanced, so a longer locale wraps into even lines instead of orphaning a word. */}
-          <p className="text-balance">
+          {/* Balanced, so a longer locale wraps into even lines instead of orphaning a word; CJK breaks only between phrases. */}
+          <p className="text-balance break-keep">
             {offering
               ? t(
                   'auto.components.NativeChatResumeToast.willAsk',

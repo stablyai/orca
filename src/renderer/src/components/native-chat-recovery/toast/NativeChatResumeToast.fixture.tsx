@@ -173,8 +173,8 @@ type FixtureLanguage =
   | 'zh'
   | 'zh-Hant'
 
-/** The toaster's narrowest width, min(26rem, 100vw - 2rem) in a 360 px window, in a long locale. */
-const NARROWEST = 328
+/** The toaster's narrowest width, min(26rem, 100vw - 2rem) = 328 px in a 360 px window, plus the frame's padding. */
+const NARROWEST = 360
 
 function twelveOneNeedsYouIn(language: FixtureLanguage, width = NARROWEST) {
   return defineFixture({
@@ -201,8 +201,8 @@ function twelveOneNeedsYouIn(language: FixtureLanguage, width = NARROWEST) {
 export const twelveOneNeedsYouGerman = twelveOneNeedsYouIn('de')
 export const twelveOneNeedsYouRussian = twelveOneNeedsYouIn('ru')
 
-/** The toaster's usual width, 26rem, as the real app showed it. */
-const TOAST_WIDTH = 416
+/** The frame pads 16 px a side, so this renders the toast at its real 26rem (416 px). */
+const TOAST_WIDTH = 448
 export const twelveOneNeedsYouEnglish416 = twelveOneNeedsYouIn('en', TOAST_WIDTH)
 export const twelveOneNeedsYouGerman416 = twelveOneNeedsYouIn('de', TOAST_WIDTH)
 export const twelveOneNeedsYouRussian416 = twelveOneNeedsYouIn('ru', TOAST_WIDTH)
