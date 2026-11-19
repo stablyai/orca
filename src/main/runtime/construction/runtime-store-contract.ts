@@ -121,6 +121,7 @@ export type RuntimeStore = {
   setMobileClientTabSelections?: Store['setMobileClientTabSelections']
   getSettings(): {
     browserClientHostedRemoteEnabled?: GlobalSettings['browserClientHostedRemoteEnabled']
+    browserProfileScope?: GlobalSettings['browserProfileScope']
     autoRenameBranchFromWork?: GlobalSettings['autoRenameBranchFromWork']
     nativeChatAutoName?: GlobalSettings['nativeChatAutoName']
     notifications?: GlobalSettings['notifications']
