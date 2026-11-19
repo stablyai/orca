@@ -200,15 +200,13 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
     this.watchSleepingMail()
     this.sleptMailboxWake.retryFailed()
     if (paneKey === undefined) {
-      this.publishedHeldVersion = -1
-      this.publishedHeld = ''
+      this.resetHeldWorktreesPublication()
     }
     this.getExistingOrchestrationDb()
     this.publishSleepingMail(paneKey === undefined ? undefined : { panes: [paneKey] }, true)
   }
 
   private sleepingMailPublicationQueued = false
-  private publishedHeldVersion = -1
   private readonly sleepingMailScope = {
     full: true,
     urgent: true,
@@ -305,18 +303,4 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
   }
 
   private lastFullSleepingMailPass = 0
-  private publishedHeld = ''
-
-  private publishHeldWorktrees(): void {
-    if (this.publishedHeldVersion === this.sleptMailboxWake.heldVersion) {
-      return
-    }
-    this.publishedHeldVersion = this.sleptMailboxWake.heldVersion
-    const ids = this.sleptMailboxWake.heldWorktrees()
-    const key = JSON.stringify(ids)
-    if (key !== this.publishedHeld) {
-      this.publishedHeld = key
-      this.notifier?.sleepingMailChanged?.(ids)
-    }
-  }
 }
