@@ -1,9 +1,11 @@
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
+import { cn } from '@/lib/class-names'
 import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-icon'
 import { FleetNetworkNode, type FleetCardOpener } from './FleetNetworkNode'
 import { FleetProjectHeader } from './FleetProjectHeader'
 import { FleetSoloHeader } from './FleetSoloHeader'
 import { FleetTeamSection } from './FleetTeamSection'
+import { fleetFoldedAttentionClass } from './fleet-bucket-presentation'
 import { fleetTeamLayout } from './fleet-team-fold'
 import type { FleetProject } from './fleet-view-model'
 
@@ -26,7 +28,12 @@ export function FleetProjectSection({
 }): React.JSX.Element {
   return (
     <Collapsible asChild open={open} onOpenChange={onOpenChange}>
-      <section className="min-w-0 rounded-xl border border-border/60 bg-muted/30">
+      <section
+        className={cn(
+          'min-w-0 rounded-xl border border-border/60 bg-muted/30',
+          fleetFoldedAttentionClass(open, project.counts)
+        )}
+      >
         <FleetProjectHeader project={project} repoIcon={repoIcon} />
         <CollapsibleContent>
           {project.teams.map((team) => (

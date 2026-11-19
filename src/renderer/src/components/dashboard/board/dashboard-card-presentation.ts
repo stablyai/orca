@@ -5,10 +5,13 @@ import {
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 
+export const DASHBOARD_ATTENTION_SURFACE_CLASS =
+  'border-agent-question/40 bg-agent-question/[0.06] hover:border-agent-question/60 hover:bg-agent-question/10'
+
 /** Tint only attention and done so scan-worthy outcomes retain distinct meaning. */
 export function dashboardCardSurfaceClass(card: DashboardCard): string {
   if (card.bucket === 'attention') {
-    return 'border-agent-question/40 bg-agent-question/[0.06] hover:border-agent-question/60 hover:bg-agent-question/10'
+    return DASHBOARD_ATTENTION_SURFACE_CLASS
   }
   return dashboardCardDisplayState(card) === 'done'
     ? 'border-emerald-500/40 bg-emerald-500/[0.06] hover:border-emerald-500/60 hover:bg-emerald-500/10'
