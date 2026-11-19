@@ -1,4 +1,5 @@
 import { open, readFile, rm, stat, statfs, writeFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
 import { dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { spawnProcess } from '@orca/process-host'
@@ -159,7 +160,8 @@ function readChildResult(output: string): OrchestrationDbCompaction | null {
   }
 }
 
-type CompactionDeferral = { liveBytes: number; timeouts: number }
+// `attempt` identifies the quit that wrote it, so a late undo never removes another quit's note.
+type CompactionDeferral = { liveBytes: number; timeouts: number; attempt?: string }
 
 function deferralFile(filename: string): string {
   return `${filename}-compaction-deferred`
@@ -174,7 +176,13 @@ async function readDeferral(filename: string): Promise<CompactionDeferral | null
       typeof parsed.liveBytes === 'number' &&
       'timeouts' in parsed &&
       typeof parsed.timeouts === 'number'
-      ? { liveBytes: parsed.liveBytes, timeouts: parsed.timeouts }
+      ? {
+          liveBytes: parsed.liveBytes,
+          timeouts: parsed.timeouts,
+          ...('attempt' in parsed && typeof parsed.attempt === 'string'
+            ? { attempt: parsed.attempt }
+            : {})
+        }
       : null
   } catch {
     return null
@@ -257,7 +265,7 @@ export async function compactOrchestrationDb(
   }
   // Recorded before the wait, so a quit cut off mid-attempt still counts as the one wait it paid; a disk
   // that can't write it promptly gets no attempt at all.
-  const attempt = { liveBytes, timeouts: (deferral?.timeouts ?? 0) + 1 }
+  const attempt = { liveBytes, timeouts: (deferral?.timeouts ?? 0) + 1, attempt: randomUUID() }
   const write = writeDeferral(filename, attempt)
   const recorded = await settlesWithin(write, MARKER_WRITE_MS)
   if (recorded !== true) {
@@ -266,7 +274,7 @@ export async function compactOrchestrationDb(
       void write.then(
         async (saved) =>
           saved &&
-          JSON.stringify(await readDeferral(filename)) === JSON.stringify(attempt) &&
+          (await readDeferral(filename))?.attempt === attempt.attempt &&
           writeDeferral(filename, deferral)
       )
     }

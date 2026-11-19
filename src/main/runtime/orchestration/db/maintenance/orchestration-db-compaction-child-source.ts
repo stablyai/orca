@@ -62,15 +62,16 @@ try {
 }
 };
 if (w.recoverOnly) {
-  // After a stopped VACUUM: reading the file rolls its abandoned WAL frames back, and closing removes them.
+  // After a stopped VACUUM: taking the file alone rolls its abandoned WAL frames back, and closing removes
+  // them. Any other connection means it isn't ours to touch; that open does the rollback instead.
   try {
     db = new DatabaseSync(w.filename);
-    db.exec('PRAGMA busy_timeout = 0');
-    db.prepare('SELECT 1 FROM sqlite_master LIMIT 1').get();
-    db.close();
+    db.exec('PRAGMA busy_timeout = 0; PRAGMA locking_mode = EXCLUSIVE; BEGIN EXCLUSIVE; COMMIT');
     report({ kind: 'recovered' });
   } catch (error) {
-    report({ kind: 'failed', error: String(error) });
+    report({ kind: 'busy' });
+  } finally {
+    db?.close();
   }
 } else try {
   // Joined before the parent closes its connection, so that close is not the last one and never checkpoints.
