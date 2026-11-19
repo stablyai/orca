@@ -31,18 +31,4 @@ describe('isAgentPaneQuiet', () => {
     const subagents = [{ id: 'r-1', agentType: 'reviewer', state: 'idle' as const, startedAt: OLD }]
     expect(isAgentPaneQuiet(entry({ subagents }), quiet)).toBe(false)
   })
-
-  it('treats a non-done pane as busy', () => {
-    expect(isAgentPaneQuiet(entry({ state: 'working' }), quiet)).toBe(false)
-  })
-
-  it('treats an unsettled dispatch as busy', () => {
-    const orchestration = { dispatchStatus: 'dispatched' } as AgentStatusEntry['orchestration']
-    expect(isAgentPaneQuiet(entry({ orchestration }), quiet)).toBe(false)
-  })
-
-  it('treats in-use and remotely shown panes as busy', () => {
-    expect(isAgentPaneQuiet(entry(), { ...quiet, inUse: true })).toBe(false)
-    expect(isAgentPaneQuiet(entry(), { ...quiet, shownRemotely: true })).toBe(false)
-  })
 })

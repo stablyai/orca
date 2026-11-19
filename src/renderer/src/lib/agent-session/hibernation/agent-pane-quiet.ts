@@ -9,7 +9,7 @@ export type AgentPaneQuietEvidence = {
 }
 
 // Why: provider done hooks can fire mid-Dispatch; only runtime-confirmed settlement makes sleep safe.
-export const hasUnsettledOrUnknownDispatch = ({ orchestration }: AgentStatusEntry): boolean =>
+const hasUnsettledOrUnknownDispatch = ({ orchestration }: AgentStatusEntry): boolean =>
   orchestration
     ? !['completed', 'failed', 'circuit_broken'].includes(orchestration.dispatchStatus ?? '')
     : false
