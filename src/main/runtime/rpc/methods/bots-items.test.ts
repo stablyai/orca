@@ -342,6 +342,57 @@ describe('bot items over RPC', () => {
     ])
   })
 
+  it('posts a hard-to-read ask as written and tips the bot; a clean ask gets no tip', async () => {
+    const { dispatcher } = itemsRuntime()
+    for (const title of ['Go ahead', 'Go ahead too']) {
+      await dispatcher.dispatch(request('bots.items.add', { callerSessionId: RANGER_CHAT, title }))
+    }
+    const prose = 'Go ahead without review? Reply **yes**, or **wait**.'
+
+    const tipped = await dispatcher.dispatch(
+      request('bots.items.set', {
+        callerSessionId: RANGER_CHAT,
+        item: '1',
+        status: 'needs_you',
+        comment: prose
+      })
+    )
+    const clean = await dispatcher.dispatch(
+      request('bots.items.set', {
+        callerSessionId: RANGER_CHAT,
+        item: '2',
+        status: 'needs_you',
+        ask: {
+          questions: [{ prompt: 'Go ahead?', options: [{ label: 'Go' }, { label: 'Wait' }] }]
+        }
+      })
+    )
+    const shown = await dispatcher.dispatch(
+      request('bots.items.show', { callerSessionId: RANGER_CHAT, item: '1', newest: true })
+    )
+
+    expect(tipped).toMatchObject({
+      ok: true,
+      result: {
+        item: { status: 'needs_you', question: { text: prose } },
+        advice: {
+          codes: ['prose_choices'],
+          tip: 'Posted. Tip: Give the choices as buttons with --ask and --option, not in the text. Set Needs you again if you rewrite it.'
+        }
+      }
+    })
+    expect(clean).toMatchObject({ ok: true, result: { item: { status: 'needs_you' } } })
+    expect(clean).not.toHaveProperty('result.advice')
+    expect(shown).toMatchObject({
+      ok: true,
+      result: {
+        events: expect.arrayContaining([
+          expect.objectContaining({ kind: 'commented', data: { text: prose, answerable: true } })
+        ])
+      }
+    })
+  })
+
   it("takes a paired client's store image on a comment, claimed for the item's live chat, and nothing outside the store", async () => {
     const { dispatcher } = itemsRuntime()
     const store = new AgentSessionAttachmentStore(
