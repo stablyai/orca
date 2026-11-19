@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
+import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { ClaudeStreamJsonLaunch } from '../../../claude/claude-stream-json-connection'
 import type { FakeConnection } from '../../../claude/structured/claude-structured-session-test-support'
 import { HOST_TEST_SESSION } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
@@ -15,7 +16,7 @@ afterEach(async () => {
   runtime = undefined
 })
 
-type Title = { title: string; while: 'queued' | 'started' }
+type Title = { title: string; while: 'queued' | 'started'; subagent?: true }
 
 /** Answers each send with the frame order Claude Code 2.1.327 emits; `titles` maps prompt text to
  *  the session_title_changed frames its turn carries (a /rename's own, or a hook's sessionTitle). */
@@ -24,19 +25,27 @@ function scriptTurns(titles: Record<string, Title[]>) {
     const sessionId = String(launch.options.resume ?? launch.options.sessionId)
     const frame = (message: Record<string, unknown>) =>
       connection.handlers.onMessage?.({ session_id: sessionId, ...message })
-    // Claude replays a resumed session's saved title at launch, before any send.
-    frame({ type: 'system', subtype: 'session_title_changed', title: 'Replayed Title' })
     const answer = connection.send
+    let launched = false
     connection.send = async (message, beforeDispatch) => {
       await beforeDispatch?.()
+      if (!launched) {
+        launched = true
+        // A relaunched chat replays its saved title before the send is even queued.
+        frame({ type: 'system', subtype: 'session_title_changed', title: 'Replayed Title' })
+      }
       const uuid = message.uuid
-      const content = (message.message as { content: { text?: string }[] }).content
-      const turnTitles = titles[content.at(-1)?.text ?? ''] ?? []
+      const turnTitles = titles[promptText(message)] ?? []
       const lifecycle = (state: string) =>
         frame({ type: 'command_lifecycle', command_uuid: uuid, state })
       const title = (when: Title['while']) => {
         for (const entry of turnTitles.filter((candidate) => candidate.while === when)) {
-          frame({ type: 'system', subtype: 'session_title_changed', title: entry.title })
+          frame({
+            type: 'system',
+            subtype: 'session_title_changed',
+            title: entry.title,
+            ...(entry.subagent ? { parent_tool_use_id: 'toolu_child' } : {})
+          })
         }
       }
       frame({ type: 'system', subtype: 'session_state_changed', state: 'running' })
@@ -51,16 +60,30 @@ function scriptTurns(titles: Record<string, Title[]>) {
   }
 }
 
+function promptText(message: Record<string, unknown>): string {
+  const body = message.message
+  const content =
+    typeof body === 'object' && body !== null && 'content' in body ? body.content : null
+  const last: unknown = Array.isArray(content) ? content.at(-1) : null
+  return typeof last === 'object' &&
+    last !== null &&
+    'text' in last &&
+    typeof last.text === 'string'
+    ? last.text
+    : ''
+}
+
 async function startChat(titles: Record<string, Title[]>) {
-  const named: string[] = []
+  const named: (string | undefined)[] = []
+  let record = (): AgentSessionRecord | null => null
   runtime = await createClaudeNamingRuntime({
     beforeOpen: scriptTurns(titles),
-    onNamed: (_workspaceId, sessionId) => named.push(sessionId)
+    onNamed: () => named.push(record()?.conversationName)
   })
   const host = await runtime.install()
+  record = () => host.deps.store.getRecord(HOST_TEST_SESSION)
   await writeNativeNamingConversation(runtime.file, runtime.nativeId, runtime.root)
   expect(await runtime.create()).toMatchObject({ ok: true })
-  const record = () => host.deps.store.getRecord(HOST_TEST_SESSION)
   return { runtime, named, record }
 }
 
@@ -77,7 +100,7 @@ it.each(['/rename', '/name'])(
         conversationNameSource: 'user'
       })
     )
-    expect(chat.named).toContain(HOST_TEST_SESSION)
+    expect(chat.named).toEqual(['东莞银行Bond补丁项目'])
     expect(chat.runtime.controls).toEqual([])
   }
 )
@@ -87,13 +110,19 @@ it('ignores titles outside a started rename send', async () => {
     'An ordinary prompt': [{ title: 'Hook Title', while: 'started' }],
     '/rename Wanted': [
       { title: 'Earlier Turn Title', while: 'queued' },
-      { title: 'Wanted', while: 'started' }
-    ]
+      { title: 'Wanted', while: 'started' },
+      { title: 'Subagent Title', while: 'started', subagent: true }
+    ],
+    // Claude re-announcing the name the chat already has.
+    '/rename Wanted again': [{ title: 'Wanted', while: 'started' }],
+    '/rename Final': [{ title: 'Final', while: 'started' }]
   })
   await chat.runtime.send('An ordinary prompt')
   await chat.runtime.send('/rename Wanted')
-  await vi.waitFor(() => expect(chat.record()?.conversationName).toBe('Wanted'))
-  // Only the rename publishes: not the launch replay, the hook title or the queued turn's title.
-  expect(chat.named).toEqual([HOST_TEST_SESSION])
+  await vi.waitFor(() => expect(chat.named).toEqual(['Wanted']))
+  await chat.runtime.send('/rename Wanted again')
+  await chat.runtime.send('/rename Final')
+  await vi.waitFor(() => expect(chat.named).toEqual(['Wanted', 'Final']))
+  expect(chat.record()?.conversationName).toBe('Final')
   expect(chat.runtime.controls).toEqual([])
 })
