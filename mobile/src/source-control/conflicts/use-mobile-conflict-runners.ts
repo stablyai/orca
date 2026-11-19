@@ -14,7 +14,11 @@ type SendGitRequest = (method: string, params?: Record<string, unknown>) => Prom
 type Params = {
   sendGitRequest: SendGitRequest
   runGitAction: (actionId: string, method: string, p: Record<string, unknown>) => Promise<boolean>
-  runGitWorkflow: (actionId: string, runner: () => Promise<void>) => Promise<boolean>
+  runGitWorkflow: (
+    actionId: string,
+    runner: () => Promise<void>,
+    options?: { refreshOnError?: boolean }
+  ) => Promise<boolean>
 }
 
 /** Abort, resolve and finish a paused merge, cherry-pick or revert through the host ops desktop uses. */
@@ -41,12 +45,17 @@ export function useMobileConflictRunners({ sendGitRequest, runGitAction, runGitW
   // Desktop's SequencerRecoveryControls: the host runs git cherry-pick/revert --continue or --abort.
   const runSequencerRecovery = useCallback(
     async (action: 'abort' | 'continue', operation: GitCommitAction) => {
-      await runGitWorkflow(`${action}-${operation}`, async () => {
-        await sendConflictRequest(
-          action === 'abort' ? 'git.sequencerAbort' : 'git.sequencerContinue',
-          { operation }
-        )
-      })
+      await runGitWorkflow(
+        `${action}-${operation}`,
+        async () => {
+          await sendConflictRequest(
+            action === 'abort' ? 'git.sequencerAbort' : 'git.sequencerContinue',
+            { operation }
+          )
+        },
+        // A failed continue may still have landed commits and stopped on new conflicts.
+        { refreshOnError: true }
+      )
     },
     [runGitWorkflow, sendConflictRequest]
   )
