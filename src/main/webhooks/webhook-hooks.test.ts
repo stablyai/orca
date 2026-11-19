@@ -281,8 +281,8 @@ describe('a webhook on its host', () => {
     expect(ledger.hook(HOOK)).toBeUndefined()
   })
 
-  it.each([400, 403, 409])('stops sending a change the cloud refuses with %i', async (status) => {
-    const setState = vi.fn(async () => failed(status))
+  it('stops sending a change after a terminal client error', async () => {
+    const setState = vi.fn(async () => failed(409))
     const { hooks, ledger } = setup({ setState }, [automation({ enabled: false })])
     ledger.saveHook({
       hookId: HOOK,

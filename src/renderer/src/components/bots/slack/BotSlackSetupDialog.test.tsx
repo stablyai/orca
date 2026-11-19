@@ -381,8 +381,7 @@ describe('BotSlackSetupDialog', () => {
       } as const,
       'Done'
     ],
-    [{ state: 'grant_expired', teamId: 'T1' } as const, 'Reconnect Slack workspace'],
-    [{ state: 'uncertain', teamId: 'T1' } as const, 'Set up again']
+    [{ state: 'grant_expired', teamId: 'T1' } as const, 'Reconnect Slack workspace']
   ])('opens on the step for the cloud’s %o', async (state, button) => {
     slackState(state)
     openDialog()

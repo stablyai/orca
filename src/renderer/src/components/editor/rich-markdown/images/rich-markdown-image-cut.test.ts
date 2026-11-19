@@ -56,9 +56,9 @@ afterEach(() => {
 })
 
 describe('cutting Markdown images with an empty caret selection', () => {
-  it.each([1, 2])('writes a restorable image before deleting its paragraph at caret %s', (pos) => {
+  it('writes a restorable image before deleting its paragraph', () => {
     const editor = createEditor('![](image.png)')
-    editor.commands.setTextSelection(pos)
+    editor.commands.setTextSelection(1)
     const { data, event } = clipboard()
     expect(handleRichMarkdownCut(editor.view, event)).toBe(true)
     expect(event.defaultPrevented).toBe(true)

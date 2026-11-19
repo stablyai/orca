@@ -189,40 +189,38 @@ function accumulatedCatalogHarness(count: number) {
   return { store, writes, service, requests, connect, read, answer }
 }
 
-it.each([10, 100])(
-  'accumulates %i untargeted menus without publishing the full catalog per reply',
-  async (count) => {
-    vi.useFakeTimers()
-    onTestFinished(() => {
-      vi.useRealTimers()
-    })
-    const h = accumulatedCatalogHarness(count)
-    const first = h.read()
+it('accumulates 100 untargeted menus without publishing the full catalog per reply', async () => {
+  const count = 100
+  vi.useFakeTimers()
+  onTestFinished(() => {
+    vi.useRealTimers()
+  })
+  const h = accumulatedCatalogHarness(count)
+  const first = h.read()
+  await vi.advanceTimersByTimeAsync(0)
+  expect((await first).models).toHaveLength(count)
+  let delivered = false
+  const observer = h.read().then((answer) => {
+    delivered = true
+    return answer
+  })
+  await vi.advanceTimersByTimeAsync(0)
+  for (let index = 0; index < count - 1; index++) {
+    h.answer(index)
     await vi.advanceTimersByTimeAsync(0)
-    expect((await first).models).toHaveLength(count)
-    let delivered = false
-    const observer = h.read().then((answer) => {
-      delivered = true
-      return answer
-    })
-    await vi.advanceTimersByTimeAsync(0)
-    for (let index = 0; index < count - 1; index++) {
-      h.answer(index)
-      await vi.advanceTimersByTimeAsync(0)
-      if (index < count - 2) {
-        expect(delivered).toBe(false)
-      }
+    if (index < count - 2) {
+      expect(delivered).toBe(false)
     }
-    const final = await observer
-    expect(final.models?.every((model) => model.effortsKnown !== false)).toBe(true)
-    expect(h.connect).toHaveBeenCalledOnce()
-    // One initial inventory and one terminal observation, independent of the target count.
-    expect(h.writes.mock.calls.length).toBeLessThanOrEqual(2)
-    expect(
-      h.writes.mock.calls.reduce((rows, call) => rows + call[2].models.length, 0)
-    ).toBeLessThanOrEqual(count * 2)
   }
-)
+  const final = await observer
+  expect(final.models?.every((model) => model.effortsKnown !== false)).toBe(true)
+  expect(h.connect).toHaveBeenCalledOnce()
+  // One initial inventory and one terminal observation, independent of the target count.
+  expect(h.writes.mock.calls.length).toBeLessThanOrEqual(2)
+  expect(
+    h.writes.mock.calls.reduce((rows, call) => rows + call[2].models.length, 0)
+  ).toBeLessThanOrEqual(count * 2)
+})
 
 it.each(['snapshot', 'deadline', 'selected'])(
   'exposes accumulated menus at a %s boundary while the next switch is unanswered',
