@@ -148,7 +148,12 @@ describe('TerminalAgentPhonePush on a windowless host', () => {
   it("keeps a finish's reply when /clear starts a new session within the quiet window", () => {
     const host = windowlessHost()
     const pane = 'tab-1:leaf-1'
-    const turn = { paneKey: pane, agentType: 'claude', connectionId: null } as const
+    const turn = {
+      paneKey: pane,
+      agentType: 'claude',
+      connectionId: null,
+      prompt: 'fix it'
+    } as const
     host.hookRows.set(pane, {
       ...turn,
       state: 'working',
@@ -165,7 +170,6 @@ describe('TerminalAgentPhonePush on a windowless host', () => {
     const done: AgentStatusIpcPayload = {
       ...turn,
       state: 'done',
-      prompt: 'fix it',
       lastAssistantMessage: 'All tests pass.',
       receivedAt: host.now(),
       stateStartedAt: host.now(),
