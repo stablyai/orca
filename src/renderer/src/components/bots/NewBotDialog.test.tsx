@@ -303,6 +303,7 @@ describe('NewBotDialog agent', () => {
     mocks.createBot.mockResolvedValue(created)
     const { submit } = renderDialog()
 
+    fireEvent.click(screen.getByRole('button', { name: /Change$/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Agent claude' }))
     await submit()
     expect(mocks.createBot.mock.calls[0]?.[1]).toMatchObject({
