@@ -11,11 +11,8 @@ import {
 import { nativeChatPinnedRowIndexes, nativeChatTranscriptRange } from './native-chat-pinned-rows'
 import { nativeChatSlotKey } from '../../conversation/slots/native-chat-transcript-slot-selection'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
-import {
-  nativeChatScrollOffsetWithin,
-  useNativeChatViewportAlign,
-  type NativeChatAlignEdge
-} from './use-native-chat-viewport-align'
+import { useNativeChatViewportAlign, type NativeChatAlignEdge } from './use-native-chat-viewport-align'
+import { useNativeChatScrollMargin } from './use-native-chat-scroll-margin'
 
 /** Overscan by row because chat rows vary widely in height and rendering cost. */
 export const NATIVE_CHAT_WINDOW_OVERSCAN = 6
@@ -67,8 +64,7 @@ export function useNativeChatTranscriptWindow({
   /** Chat text scale; gap scales with the text size. */
   typography?: NativeChatRowTypography
 }): NativeChatTranscriptWindow {
-  const sizerElementRef = useRef<HTMLDivElement | null>(null)
-  const [scrollMargin, setScrollMargin] = useState(0)
+  const { scrollMargin, sizerRef } = useNativeChatScrollMargin(scrollRef, isVisible)
   const [programmaticScrollMarks] = useState(createProgrammaticScrollMarks)
   const readerTakeoverFrameRef = useRef<number | null>(null)
   const previousMeasurementKeysRef = useRef<ReadonlySet<string> | null>(null)
@@ -130,51 +126,6 @@ export function useNativeChatTranscriptWindow({
   }, [])
   useEffect(() => finishReaderTakeover, [finishReaderTakeover])
 
-  // Measure actual in-flow predecessors; stale margins misplace every row, so older-history controls stay out of flow.
-  const readScrollMargin = useCallback(() => {
-    const container = scrollRef.current
-    const sizer = sizerElementRef.current
-    if (!container || !sizer) {
-      return
-    }
-    // Avoid rect fallback without layout: it reports scrollTop as margin and would pin the window at the transcript’s start.
-    const offset = nativeChatScrollOffsetWithin(sizer, container)
-    if (offset !== null) {
-      setScrollMargin((current) => (current === offset ? current : offset))
-    }
-  }, [scrollRef])
-  // A hidden pane is display:none, so read again once it shows.
-  useLayoutEffect(() => {
-    if (isVisible) {
-      readScrollMargin()
-    }
-  }, [isVisible, readScrollMargin])
-
-  // Only the scroller or the column above the rows (lead content) moves the margin. Observer
-  // callbacks run after layout, so reading there forces none, unlike a read after every render.
-  const marginObserverRef = useRef<ResizeObserver | null>(null)
-  useLayoutEffect(() => {
-    const container = scrollRef.current
-    if (!container) {
-      return
-    }
-    readScrollMargin()
-    if (typeof ResizeObserver === 'undefined') {
-      return
-    }
-    const observer = new ResizeObserver(readScrollMargin)
-    marginObserverRef.current = observer
-    observer.observe(container)
-    const column = sizerElementRef.current?.parentElement
-    if (column) {
-      observer.observe(column)
-    }
-    return () => {
-      observer.disconnect()
-      marginObserverRef.current = null
-    }
-  }, [readScrollMargin, scrollRef])
-
   useLayoutEffect(() => {
     const currentKeys = new Set(itemKeys)
     const previousKeys = previousMeasurementKeysRef.current
@@ -206,18 +157,6 @@ export function useNativeChatTranscriptWindow({
     retiredMeasurementCountRef.current = 0
   }, [itemKeys, scrollRef, virtualizer])
 
-  const sizerRef = useCallback(
-    (node: HTMLDivElement | null) => {
-      sizerElementRef.current = node
-      if (node) {
-        readScrollMargin()
-        if (node.parentElement) {
-          marginObserverRef.current?.observe(node.parentElement)
-        }
-      }
-    },
-    [readScrollMargin]
-  )
 
   const {
     alignToViewportTop,
