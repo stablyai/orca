@@ -121,9 +121,7 @@ export function splitMarkdownTopLevelBlocks(
   const context = definitionContext(settledDefinitions)
   const parsed = context ? `${tail}\n\n${context}` : tail
   const tree = parse ? parse(parsed) : (math ? mathBlockParser : blockParser).parse(parsed)
-  tree.children = tree.children.filter(
-    (child) => (child.position?.start.offset ?? 0) < tail.length
-  )
+  tree.children = tree.children.filter((child) => (child.position?.start.offset ?? 0) < tail.length)
   if (math) {
     chatMathCodeFences(tree, tail)
   }

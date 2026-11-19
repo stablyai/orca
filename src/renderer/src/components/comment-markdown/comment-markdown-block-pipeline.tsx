@@ -121,7 +121,10 @@ export function useMarkdownBlocks(
   return next
 }
 
-type BlockReferenceUse = { footnotes: readonly { identifier: string; label: string }[]; links: boolean }
+type BlockReferenceUse = {
+  footnotes: readonly { identifier: string; label: string }[]
+  links: boolean
+}
 const referenceUses = new WeakMap<object, BlockReferenceUse>()
 
 function blockReferenceUse(block: MarkdownBlock): BlockReferenceUse {
@@ -192,17 +195,25 @@ export function useMarkdownBlockReferences(
   const footnoteSources = definitions
     .filter((definition) => definition.kind === 'footnote')
     .map((definition) => definition.source)
+  // Footnote bodies resolve their link references at parse, so the link definitions follow them.
+  const linkSources = definitions
+    .filter((definition) => definition.kind === 'link')
+    .map((definition) => definition.source)
   const footer =
     order.length > 0 && footnoteSources.length > 0
       ? {
-          source: footnoteSources.join('\n\n'),
+          source: [...footnoteSources, ...linkSources].join('\n\n'),
           references: remember(`footer|${linkKey}|${JSON.stringify(order)}`, () => ({
             links: linkDefinitions,
             seed: order
           }))
         }
       : undefined
-  return { blocks: perBlock, context: definitionContext(definitions), ...(footer ? { footer } : {}) }
+  return {
+    blocks: perBlock,
+    context: definitionContext(definitions),
+    ...(footer ? { footer } : {})
+  }
 }
 
 export function markdownBlockContent(block: MarkdownBlock): string {
