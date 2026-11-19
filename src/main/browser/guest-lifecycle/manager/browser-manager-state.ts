@@ -1,4 +1,3 @@
-import type { BrowserLoadStall } from '../../../../shared/browser/guest-lifecycle/browser-guest-events'
 import { BrowserGrabSessionController } from '../../element-grab/browser-grab-session-controller'
 import type { BrowserCertificateTrustController } from '../../certificate-trust/browser-certificate-trust-controller'
 import type { BrowserSiteDisplayController } from '../../site-settings/display/browser-site-display-controller'
@@ -16,7 +15,8 @@ import type { BrowserGuestPolicy } from './registration/browser-guest-policy-pro
 import type { PopupOwnerContext } from '../popups/browser-popup-ownership'
 import type {
   BrowserDownloadFinishedEvent,
-  BrowserDownloadProgressEvent
+  BrowserDownloadProgressEvent,
+  BrowserLoadStall
 } from '../../../../shared/browser/guest-lifecycle/browser-guest-events'
 import type { BrowserGrabCancelReason } from '../../../../shared/browser/element-grab/browser-grab-types'
 import { BrowserManagerViewportScrollState } from './viewport/browser-manager-viewport-scroll-state'
