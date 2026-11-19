@@ -7,6 +7,7 @@ import type {
 } from '../../../../../../shared/native-chat/input/commands/native-chat-slash-commands'
 import { nativeChatSessionSkills } from '../../../../../../shared/native-chat/input/commands/native-chat-skill-visibility'
 import { structuredSessionSlashCommands } from '../../../../../../shared/agent-session/view/structured-agent-session-slash-menu'
+import { withNativeChatRecapCommand } from '@/components/native-chat/composer/pickers/use-native-chat-recap-command'
 import { withNativeChatResumeCommand } from '@/components/native-chat/composer/pickers/use-native-chat-resume-command'
 import { withNativeChatSideChatRows } from '@/components/native-chat/composer/pickers/use-native-chat-side-chat-command'
 import type { NativeChatStructuredComposerTransport } from '@/components/native-chat/composer/submit/native-chat-structured-composer-transport'
@@ -32,11 +33,12 @@ export function useNativeChatComposerCatalog(
   const fork = structuredTransport?.fork !== undefined
   const sideChat = structuredTransport?.sideChat !== undefined
   const sideChatNotReady = structuredTransport?.sideChat?.notReadyReason ?? null
+  const recap = structuredTransport?.recap !== undefined
   const agentCommands = useMemo(() => {
     if (!structured) {
       return getVerifiedNativeChatCommands(agent)
     }
-    const commands = withNativeChatResumeCommand(
+    let commands = withNativeChatResumeCommand(
       structuredSessionSlashCommands(
         agent,
         conversationCommands,
@@ -48,11 +50,15 @@ export function useNativeChatComposerCatalog(
       accountUsage,
       fork
     )
+    if (recap) {
+      commands = withNativeChatRecapCommand(commands)
+    }
     return sideChat ? withNativeChatSideChatRows(commands, sideChatNotReady) : commands
   }, [
     accountUsage,
     agent,
     fork,
+    recap,
     sideChat,
     sideChatNotReady,
     compactInstructions,

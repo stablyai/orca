@@ -59,6 +59,8 @@ export type NativeChatStructuredComposerTransport = {
   threadGoal?: { setObjective: (objective: string) => Promise<boolean> }
   /** `/btw`; absent where Orca can't fork this chat, so the command stays the agent's. */
   sideChat?: NativeChatSideChat
+  /** `/recap`; present only where this host recaps this chat's agent. A notice, or null on success. */
+  recap?: { run: () => Promise<string | null> }
   /** Present only where the host can read this chat's Codex account usage. */
   accountUsage?: { open: () => void }
   /** Present only where the host manages this agent's MCP servers; `/mcp` opens Orca's MCP tray. */

@@ -31,6 +31,7 @@ import { STRUCTURED_AGENT_SESSION_HOLD_METHODS } from './conversation/structured
 import { STRUCTURED_AGENT_SESSION_PROMPT_RESPONSE_METHODS } from './conversation/structured-agent-session-prompt-response'
 import { STRUCTURED_AGENT_SESSION_REVEAL_METHODS } from './conversation/structured-agent-session-reveal'
 import { STRUCTURED_AGENT_SESSION_REGENERATE_NAME_METHODS } from './conversation/structured-agent-session-regenerate-name'
+import { STRUCTURED_AGENT_SESSION_RECAP_METHODS } from './conversation/structured-agent-session-recap'
 import { STRUCTURED_AGENT_SESSION_RENAME_METHODS } from './conversation/structured-agent-session-rename'
 import { STRUCTURED_AGENT_SESSION_QUEUED_METHODS } from './conversation/structured-agent-session-queued-methods'
 import { STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS } from './conversation/structured-agent-session-restart-resume'
@@ -209,6 +210,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
   ...STRUCTURED_AGENT_SESSION_HOLD_METHODS,
   ...STRUCTURED_AGENT_SESSION_REVEAL_METHODS,
   ...STRUCTURED_AGENT_SESSION_REGENERATE_NAME_METHODS,
+  ...STRUCTURED_AGENT_SESSION_RECAP_METHODS,
   ...STRUCTURED_AGENT_SESSION_RENAME_METHODS,
   ...STRUCTURED_AGENT_SESSION_RESTART_RESUME_METHODS,
   ...STRUCTURED_AGENT_SESSION_USAGE_LIMIT_CONTINUE_METHODS,
