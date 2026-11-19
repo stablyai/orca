@@ -18,7 +18,7 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { Worker } from 'node:worker_threads'
+import { Worker, setEnvironmentData } from 'node:worker_threads'
 import { build } from 'esbuild'
 
 const root = fileURLToPath(new URL('../../../..', import.meta.url))
@@ -297,6 +297,8 @@ const summary = (values) => ({
 })
 
 async function run(arm, sessions, round) {
+  // Builds share this process; each sizes its own worker send ledger, so none inherits another's.
+  setEnvironmentData('orca.worker-send-ledger.v1', undefined)
   const owner = new arm.JournalSqlOwner(filename, dir, arm.workerPath)
   await owner.opened()
   const timings = []
