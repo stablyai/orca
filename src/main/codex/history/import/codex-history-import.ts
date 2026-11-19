@@ -109,9 +109,13 @@ type FolderResult = ImportedFolder & { linked: number; stopped: boolean }
 // Whether a plain rollout left waiting grew (or went) since: its folder's mtime doesn't show that.
 async function anyChanged(
   folder: string,
-  waiting: Record<string, string> | undefined
-): Promise<boolean> {
+  waiting: Record<string, string> | undefined,
+  shouldStop: () => boolean
+): Promise<boolean | 'stopped'> {
   for (const [name, mtimeNs] of Object.entries(waiting ?? {})) {
+    if (shouldStop()) {
+      return 'stopped'
+    }
     const current = await stat(join(folder, name), { bigint: true }).catch(() => null)
     if (String(current?.mtimeNs) !== mtimeNs) {
       return true
@@ -139,8 +143,15 @@ async function importFolder(
     throw error
   }
   const previous = source.folders[folder]
-  if (previous?.mtimeNs === String(before) && !(await anyChanged(path, previous.waiting))) {
-    return null
+  if (previous?.mtimeNs === String(before)) {
+    const changed = await anyChanged(path, previous.waiting, args.shouldStop)
+    if (changed === 'stopped') {
+      // A waiting launch goes first; the folder keeps what it recorded.
+      return { ...previous, linked: 0, stopped: true }
+    }
+    if (!changed) {
+      return null
+    }
   }
   const archived = folder === ARCHIVED
   const target = archived ? ARCHIVED : folder
