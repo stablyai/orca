@@ -108,11 +108,14 @@ export function recordTerminalTabRename(
     at,
     name,
     sessionId: null,
-    // Renames in quick succession before the session is known still count from the first name.
+    // Renames in quick succession before the session is known still count from the first name the
+    // tab showed (a resume's own naming of an unnamed tab leaves none, so the seeded name counts).
     previousName:
-      earlier && earlier.sessionId === null && at - earlier.at < LOCAL_TAB_NAME_WRITE_GRACE_MS
-        ? earlier.previousName
-        : previousName
+      (earlier &&
+        earlier.sessionId === null &&
+        at - earlier.at < LOCAL_TAB_NAME_WRITE_GRACE_MS &&
+        earlier.previousName) ||
+      previousName
   }
   localNameWriteByTabId.set(tabId, write)
   if (!name && !hasTerminalSessionNames()) {

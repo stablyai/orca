@@ -236,6 +236,13 @@ describe('terminal session name recording', () => {
     it('a resumed tab renamed before its session is known takes the saved name', () => {
       const now = 1_000_000
       seed('s1', 'Fix auth bug', 'closed-tab')
+      // The resume names its new, still unnamed tab through the same rename path.
+      recordTerminalTabRename(
+        makeTerminalNamesState([{ id: 'tab-new' }]),
+        'tab-new',
+        'Fix auth bug',
+        { now: now - 100, interactive: false }
+      )
       // The resumed tab shows the saved name; the user renames it before the agent reports s1.
       recordTerminalTabRename(
         makeTerminalNamesState([{ id: 'tab-new', customTitle: 'Fix auth bug' }]),
@@ -251,6 +258,13 @@ describe('terminal session name recording', () => {
     it('two quick renames of a resumed tab before its session is known still take the name', () => {
       const now = 1_000_000
       seed('s1', 'Fix auth bug', 'closed-tab')
+      // The resume names its new, still unnamed tab through the same rename path.
+      recordTerminalTabRename(
+        makeTerminalNamesState([{ id: 'tab-new' }]),
+        'tab-new',
+        'Fix auth bug',
+        { now: now - 100, interactive: false }
+      )
       recordTerminalTabRename(
         makeTerminalNamesState([{ id: 'tab-new', customTitle: 'Fix auth bug' }]),
         'tab-new',
@@ -270,6 +284,13 @@ describe('terminal session name recording', () => {
     it('a resumed tab cleared before its session is known forgets the saved name', () => {
       const now = 1_000_000
       seed('s1', 'Fix auth bug', 'closed-tab')
+      // The resume names its new, still unnamed tab through the same rename path.
+      recordTerminalTabRename(
+        makeTerminalNamesState([{ id: 'tab-new' }]),
+        'tab-new',
+        'Fix auth bug',
+        { now: now - 100, interactive: false }
+      )
       recordTerminalTabRename(
         makeTerminalNamesState([{ id: 'tab-new', customTitle: 'Fix auth bug' }]),
         'tab-new',
