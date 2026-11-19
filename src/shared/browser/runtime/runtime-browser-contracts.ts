@@ -1,11 +1,12 @@
+import type { BrowserPageAnnotation } from '../element-grab/browser-grab-types'
 import type {
   BrowserCertificateFailure,
   BrowserCookieImportResult,
   BrowserLoadError,
   BrowserSessionProfile,
   BrowserSessionProfileSource
-} from '../../browser-workspace-types'
-import type { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../runtime-session-contracts'
+} from '../workspaces/browser-workspace-types'
+import type { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../remote-runtime/session-graph/runtime-session-contracts'
 
 export type BrowserSnapshotRef = { ref: string; role: string; name: string }
 
@@ -20,12 +21,16 @@ export type BrowserSnapshotDelta =
       treeChange?: { startLine: number; deleteCount: number; lines: string[] }
     }
 
+/** A passkey (WebAuthn) request the page is waiting on; Orca's browser has no UI to complete it. */
+export type BrowserPasskeyRequest = { origin: string }
+
 export type BrowserSnapshotResult = {
   browserPageId: string
   snapshot: string | BrowserSnapshotDelta
   refs: BrowserSnapshotRef[]
   url: string
   title: string
+  passkeyRequest?: BrowserPasskeyRequest
 }
 
 /** What an agent's page action caused; absent for people's input and from runtimes that predate it. */
@@ -41,6 +46,10 @@ export type BrowserActionEffects = {
   popups?: { action: 'blocked' | 'opened-external' | 'window'; origin: string }[]
   downloads?: { filename: string; origin: string }[]
   consoleErrors?: string[]
+  /** Still pending when the page settled. */
+  passkeyRequest?: BrowserPasskeyRequest
+  /** The page asked for the system print dialog, which Orca refused so it would not take the user's screen. */
+  blockedPrint?: { origin: string }
   /** Snapshot lines changed since the last reading; `full` is the whole new tree. Absent when unread. */
   page?: 'unchanged' | { lines: string[]; removedLines: number; full: boolean; truncated: boolean }
   /** False when the page was still changing at the settle cap. */
@@ -55,6 +64,7 @@ export type BrowserSelectResult = { selected: string }
 export type BrowserScrollResult = { scrolled: 'up' | 'down' }
 export type BrowserBackResult = { url: string; title: string }
 export type BrowserReloadResult = { url: string; title: string }
+export type BrowserStopResult = { url: string; title: string }
 export type BrowserScreenshotAnnotation = {
   ref: string
   number: number
@@ -82,7 +92,14 @@ export type BrowserScreencastReadyResult = {
 }
 
 export type BrowserScreencastEndResult = { type: 'end'; subscriptionId: string }
-export type BrowserScreencastDialogResult = { type: 'dialog'; dialogType: string; message: string }
+export type BrowserScreencastDialogResult = {
+  type: 'dialog'
+  dialogType: string
+  message: string
+  /** Older hosts omit these two; viewers then start a prompt empty and name no origin. */
+  defaultPromptText?: string
+  origin?: string | null
+}
 export type BrowserScreencastDialogClosedResult = { type: 'dialogClosed' }
 export type BrowserScreencastErrorResult = { type: 'error'; message: string }
 
@@ -96,6 +113,7 @@ export type BrowserScreencastResult =
 export type BrowserEvalResult = { result: string; origin: string }
 
 export type BrowserTabInfo = {
+  generation?: number
   browserPageId: string
   index: number
   url: string
@@ -122,6 +140,11 @@ export type BrowserTabSetProfileResult = {
 }
 
 export type BrowserTabShowResult = { tab: BrowserTabInfo }
+/** The notes the user left on a tab's page and has not sent yet. */
+export type BrowserTabAnnotationsResult = {
+  tab: BrowserTabInfo
+  annotations: BrowserPageAnnotation[]
+}
 export type BrowserTabCurrentResult = { tab: BrowserTabInfo }
 
 export type BrowserTabProfileShowResult = {

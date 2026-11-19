@@ -1,5 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query'
-import { normalizeExecutionHostId } from '../../../src/shared/execution-host'
+import { normalizeExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import { accountsSnapshotFamily, accountsSnapshotKey } from '../accounts/accounts-snapshot-stream'
 import {
   HOST_LIST_TARGET,
@@ -10,15 +10,15 @@ import {
   hostWorktreeCatalogKey,
   hostWorktreeCatalogQuery,
   NO_HOST_LIST_INPUT
-} from '../host-screen/host-list-queries'
-import { hostViewFamily, hostViewKey } from '../host-screen/host-view-memory'
-import { hostProjectSectionsQuery } from '../host-screen/use-host-project-sections'
+} from '../host-screen/catalog/host-list-queries'
+import { hostViewFamily, hostViewKey } from '../host-screen/view-settings/host-view-memory'
+import { hostProjectSectionsQuery } from '../host-screen/catalog/use-host-project-sections'
 import { sessionTabsFamily, sessionTabsKey } from '../session/tabs/mobile-session-last-tabs'
 import type { MobileSessionTab } from '../session/tabs/mobile-session-tabs'
 import { activeSessionTabOf } from '../session/tabs/active-session-tab'
-import { storedTabChatTranscriptIdentity } from '../session/native-chat/mobile-native-chat-transcript-store'
-import { gitStatusQuery } from '../source-control/mobile-git-status-query'
-import { firstPaintTaskKeys } from '../tasks/task-query-storage'
+import { storedTabChatTranscriptIdentity } from '../session/native-chat/transcript/persistence/mobile-native-chat-transcript-store'
+import { gitStatusQuery } from '../source-control/changes/mobile-git-status-query'
+import { firstPaintTaskKeys } from '../tasks/screen-state/task-query-storage'
 import { hostQueryKey } from './host-query-key'
 import { persistedHostQueryKey, type PersistedHostQueryKey } from './host-query-persistence'
 

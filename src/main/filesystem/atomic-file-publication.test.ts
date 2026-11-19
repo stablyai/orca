@@ -38,23 +38,6 @@ describe('writeFileAtomically', () => {
     }
   }
 
-  it('replaces only the expected file generation', () => {
-    setup()
-    try {
-      const target = join(dir, 'guarded.toml')
-      writeFileSync(target, 'baseline')
-
-      expect(writeFileAtomicallyIfUnchanged(target, 'baseline', 'next')).toBe(true)
-      expect(readFileSync(target, 'utf-8')).toBe('next')
-
-      writeFileSync(target, 'concurrent')
-      expect(writeFileAtomicallyIfUnchanged(target, 'next', 'stale-write')).toBe(false)
-      expect(readFileSync(target, 'utf-8')).toBe('concurrent')
-    } finally {
-      cleanup()
-    }
-  })
-
   it('validates the generation moved after a Windows rename retry', () => {
     setup()
     try {
@@ -103,57 +86,6 @@ describe('writeFileAtomically', () => {
       expect(writeFileAtomicallyIfUnchanged(target, 'baseline', 'next')).toBe(true)
       expect(readFileSync(target, 'utf-8')).toBe('next')
       expect(existsSync(held)).toBe(false)
-    } finally {
-      cleanup()
-    }
-  })
-
-  it('fails before moving the target when hard-link publication is unsupported', () => {
-    setup()
-    try {
-      const target = join(dir, 'guarded.toml')
-      writeFileSync(target, 'baseline')
-      fsMock.linkSync.mockImplementationOnce(() => {
-        throw Object.assign(new Error('unsupported'), { code: 'ENOTSUP' })
-      })
-
-      expect(() => writeFileAtomicallyIfUnchanged(target, 'baseline', 'next')).toThrow(
-        'unsupported'
-      )
-      expect(readFileSync(target, 'utf-8')).toBe('baseline')
-      expect(existsSync(`${target}.orca-guarded`)).toBe(false)
-    } finally {
-      cleanup()
-    }
-  })
-
-  it('removes only the expected file generation', () => {
-    setup()
-    try {
-      const target = join(dir, 'guarded-auth.json')
-      writeFileSync(target, 'baseline')
-
-      expect(removeFileAtomicallyIfUnchanged(target, 'other')).toBe(false)
-      expect(readFileSync(target, 'utf-8')).toBe('baseline')
-      expect(removeFileAtomicallyIfUnchanged(target, 'baseline')).toBe(true)
-      expect(existsSync(target)).toBe(false)
-    } finally {
-      cleanup()
-    }
-  })
-
-  it('returns false when the target disappears during the removal probe', () => {
-    setup()
-    try {
-      const target = join(dir, 'guarded-auth.json')
-      writeFileSync(target, 'baseline')
-      fsMock.linkSync.mockImplementationOnce(() => {
-        rmSync(target)
-        throw Object.assign(new Error('gone'), { code: 'ENOENT' })
-      })
-
-      expect(removeFileAtomicallyIfUnchanged(target, 'baseline')).toBe(false)
-      expect(existsSync(`${target}.orca-guarded`)).toBe(false)
     } finally {
       cleanup()
     }

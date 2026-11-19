@@ -4,9 +4,9 @@ import { useOwnedDiffComments } from '@/components/diff-comments/use-diff-commen
 import { withoutMarkdownReviewNotes } from '@/lib/editor/markdown/review-notes/markdown-review-notes-setting'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { formatDiffComments } from '@/lib/diff-comments-format'
+import { formatDiffComments } from '../../../../../../shared/file-review/diff-comments-format'
 import { translate } from '@/i18n/i18n'
-import type { DiffComment } from '../../../../../../shared/diff-comment-types'
+import type { DiffComment } from '../../../../../../shared/file-review/diff-comment-types'
 
 export type CombinedDiffNotesActions = {
   clearNotesCount: number

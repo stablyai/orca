@@ -1,24 +1,28 @@
 import { memo, Suspense, useCallback, useRef } from 'react'
-import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { useTranslate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { usePluginViewCaptureStore } from '@/store/plugins/capture/plugin-view-capture'
+import { useBotShareReceiveRequest } from '@/components/bots/sharing/bot-share-receive-open'
+import { useHandToBotRequest } from '@/components/bots/hand-to-bot/hand-to-bot-open'
 import { pendingCreationOpensNativeChat } from '@/lib/workspace/creation/pending-worktree-creation'
-import Sidebar from '../components/Sidebar'
-import RightSidebar from '../components/right-sidebar'
+import { showsFloatingRightSidebarToggle } from '@/components/right-sidebar/visibility/right-sidebar-visibility'
+import Sidebar from '../components/sidebar/index'
+import RightSidebar from '../components/right-sidebar/RightSidebar'
 import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/RecoverableRenderErrorBoundary'
-import { FloatingTerminalToggleButton } from '../components/floating-terminal/FloatingTerminalToggleButton'
-import { TerminalWorkbenchContainer } from '../components/TerminalWorkbenchContainer'
-import type { VirtualizedScrollAnchor } from '../hooks/useVirtualizedScrollAnchor'
-import { TitlebarLeftControls } from './TitlebarLeftControls'
-import { RightSidebarToggle, TitlebarMainStrip } from './TitlebarMainStrip'
-import type { AppChromeLayout } from './use-app-chrome-layout'
-import type { FloatingWorkspacePanelState } from './use-floating-workspace-panel'
+import { FloatingTerminalToggleButton } from '../components/floating-terminal/trigger/FloatingTerminalToggleButton'
+import { TerminalWorkbenchContainer } from '../components/terminal/workbench/TerminalWorkbenchContainer'
+import type { VirtualizedScrollAnchor } from '../lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
+import { TitlebarLeftControls } from './chrome/TitlebarLeftControls'
+import { RightSidebarToggle } from './chrome/RightSidebarToggle'
+import { TitlebarMainStrip } from './chrome/TitlebarMainStrip'
+import type { AppChromeLayout } from './chrome/use-app-chrome-layout'
+import type { FloatingWorkspacePanelState } from '../components/floating-terminal/workspace/use-floating-workspace-panel'
 
 // Skips the shell render each workspace switch causes; its props only change on toggle.
 const MemoFloatingTerminalToggleButton = memo(FloatingTerminalToggleButton)
 
-const Landing = lazy(() => import('../components/Landing'))
+const Landing = lazy(() => import('../components/onboarding/landing/Landing'))
 const WorktreeCreationPanel = lazy(
   () => import('../components/worktree-creation/WorktreeCreationPanel')
 )
@@ -33,7 +37,23 @@ const SkillsPage = lazy(() => import('../components/skills/SkillsPage'))
 const ArtifactsPage = lazy(() => import('../components/artifacts/ArtifactsPage'))
 const WorkspaceSpacePage = lazy(() => import('../components/workspace-space/WorkspaceSpacePage'))
 const MobilePage = lazy(() => import('../components/mobile/MobilePage'))
-const Terminal = lazy(() => import('../components/Terminal'))
+const HandToBotFlow = lazy(() =>
+  import('../components/bots/hand-to-bot/HandToBotFlow').then((module) => ({
+    default: module.HandToBotFlow
+  }))
+)
+const BotTemplatesDialog = lazy(() => import('../components/bots/templates/BotTemplatesDialog'))
+const BotShareReceiveFlow = lazy(() =>
+  import('../components/bots/sharing/BotShareReceiveFlow').then((module) => ({
+    default: module.BotShareReceiveFlow
+  }))
+)
+const GitHubInstallMount = lazy(() =>
+  import('../components/bots/github/GitHubInstallMount').then((module) => ({
+    default: module.GitHubInstallMount
+  }))
+)
+const Terminal = lazy(() => import('../components/terminal/workbench/Terminal'))
 
 type WorktreeSidebarScrollRefs = {
   scrollOffsetRef: React.MutableRefObject<number>
@@ -86,6 +106,33 @@ function PendingCreationSurface(props: {
   return opensChat ? <PendingNativeChatCreation {...props} /> : <WorktreeCreationPanel {...props} />
 }
 
+function BotShareReceiveMount(): React.JSX.Element | null {
+  const request = useBotShareReceiveRequest()
+  return request ? (
+    <Suspense fallback={null}>
+      <BotShareReceiveFlow key={request.key} request={request} />
+    </Suspense>
+  ) : null
+}
+
+function BotTemplatesMount(): React.JSX.Element | null {
+  const open = useAppStore((s) => s.activeModal === 'bot-templates')
+  return open ? (
+    <Suspense fallback={null}>
+      <BotTemplatesDialog />
+    </Suspense>
+  ) : null
+}
+
+function HandToBotMount(): React.JSX.Element | null {
+  const request = useHandToBotRequest()
+  return request ? (
+    <Suspense fallback={null}>
+      <HandToBotFlow key={request.key} request={request} />
+    </Suspense>
+  ) : null
+}
+
 function ActivePage({ layout }: { layout: AppChromeLayout }): React.JSX.Element {
   const { activeView, hasActiveWorktree, activePendingCreationId, creationLayoutActive } = layout
   return (
@@ -98,6 +145,12 @@ function ActivePage({ layout }: { layout: AppChromeLayout }): React.JSX.Element 
       {activeView === 'activity' ? <ActivityPrototypePage /> : null}
       {activeView === 'space' ? <WorkspaceSpacePage /> : null}
       {activeView === 'mobile' ? <MobilePage /> : null}
+      <BotShareReceiveMount />
+      <BotTemplatesMount />
+      <HandToBotMount />
+      <Suspense fallback={null}>
+        <GitHubInstallMount />
+      </Suspense>
       {activeView === 'terminal' && creationLayoutActive && activePendingCreationId ? (
         <PendingCreationSurface
           creationId={activePendingCreationId}
@@ -194,7 +247,7 @@ export function AppWorkspaceShell(props: {
               ) : null}
               <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
                 {/* Match the open sidebar header’s alignment to prevent toggle jitter. */}
-                {layout.workspaceChromeActive && !layout.rightSidebarOpen && (
+                {showsFloatingRightSidebarToggle(layout) && (
                   <div
                     className="absolute top-0 z-10 flex items-center h-[36px]"
                     style={
@@ -205,7 +258,7 @@ export function AppWorkspaceShell(props: {
                       } as React.CSSProperties
                     }
                   >
-                    {layout.showRightSidebarControls ? <RightSidebarToggle /> : null}
+                    <RightSidebarToggle />
                   </div>
                 )}
                 <div className="flex flex-1 min-w-0 min-h-0 flex-col">

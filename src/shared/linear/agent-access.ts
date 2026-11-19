@@ -37,7 +37,9 @@ export const LINEAR_ERROR_CODES = [
   'linear_permission_denied',
   'linear_auth_expired',
   'linear_network_error',
-  'linear_partial'
+  'linear_partial',
+  // A bot's comment on the issue that woke it, which it answers with `orca bot reply`.
+  'linear_waking_issue'
 ] as const
 
 export type LinearErrorCode = (typeof LINEAR_ERROR_CODES)[number]
@@ -146,6 +148,7 @@ export type LinearCommentAddRequest = LinearWriteTargetRequest & {
   body: string
   replyTo?: string
   writeId?: string
+  callerSessionId?: string
 }
 
 // Why: comment ids are workspace-unique UUIDs, so the comment alone names its issue.

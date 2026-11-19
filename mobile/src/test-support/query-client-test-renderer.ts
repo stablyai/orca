@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react'
 import { notifyManager } from '@tanstack/react-query'
 import { create, type ReactTestRenderer, type TestRendererOptions } from 'react-test-renderer'
-import { documentQueryClient } from './rpc-recording/hook-mount'
+import { documentQueryClient } from './rpc-recording/react-mounting/hook-mount'
 
 // TanStack tells observers on a zero-delay timer; a microtask lets act() and fake-timer tests see replies.
 notifyManager.setScheduler(queueMicrotask)

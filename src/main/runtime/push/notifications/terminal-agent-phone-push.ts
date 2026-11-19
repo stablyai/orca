@@ -1,23 +1,29 @@
-// Push hook-agent finish/input alerts from windowless execution hosts using desktop rules. A window already pushes these phones; the phone suppresses its own visible chat.
-import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
-import type { AgentPaneChange } from '../../../agent-hooks/observations/agent-transition-detector'
+// Push agent finish/input alerts and bells from windowless execution hosts using desktop rules. A window already pushes these phones; the phone suppresses its own visible chat.
+import { getConnectionExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import {
+  agentPaneWorkspace,
+  type AgentPaneChange
+} from '../../../agent-hooks/observations/agent-transition-detector'
+import type { TerminalSideEffectBatch } from '../../../../shared/terminal/output/terminal-side-effect-facts'
 import { agentMainAgentVerdict } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
-import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
+import { buildAgentNotificationId } from '../../../../shared/agent-status/presentation/agent-notification-id'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
   isCoordinatorOnlyNews,
   withApprovalTitle
 } from '../../../../shared/orchestration/workers/dispatched-worker-attention'
-import { reserveNotificationCooldown } from '../../../../shared/notification-burst-cooldown'
-import { isNotificationSourceEnabled } from '../../../../shared/notification-source-gate'
+import { reserveNotificationCooldown } from '../../../../shared/notifications/notification-burst-cooldown'
+import { isNotificationSourceEnabled } from '../../../../shared/notifications/notification-source-gate'
 import type {
   NotificationDispatchRequest,
   NotificationSettings
-} from '../../../../shared/notification-settings-types'
-import { buildNotificationOptions } from '../../../ipc/notification-options'
+} from '../../../../shared/notifications/notification-settings-types'
+import { buildNotificationOptions } from '../../../ipc/notifications/notification-options'
 import type { MobileNotificationDispatchEvent } from './runtime-mobile-notification-controller'
 import { TerminalAgentTurnNews } from './terminal-agent-turn-news'
+import type { RuntimeClientEventBus } from '../../client/events/runtime-client-event-bus'
+import { TerminalHooklessNews, type TerminalHooklessNewsItem } from './terminal-hookless-news'
 
 export type TerminalAgentWorkspaceLabels = { repoLabel?: string; worktreeLabel?: string }
 
@@ -38,6 +44,8 @@ export type TerminalAgentPhonePushDeps = {
   readHookRow: (paneKey: string) => AgentStatusIpcPayload | null
   translate?: (key: string, fallback: string) => string
   dispatch: (event: MobileNotificationDispatchEvent) => void
+  /** Title edges and bells reach a window as facts; without one, this lane tells the phones. */
+  onClientEvent: RuntimeClientEventBus['on']
   setTimer: (run: () => void, delayMs: number) => { cancel: () => void }
   now: () => number
 }
@@ -46,6 +54,7 @@ export class TerminalAgentPhonePush {
   // The burst gate the window's fan-out applies, per workspace.
   private readonly recentDispatches = new Map<string, number>()
   private readonly turnNews: TerminalAgentTurnNews<PaneNews>
+  private readonly hooklessNews: TerminalHooklessNews
 
   constructor(private readonly deps: TerminalAgentPhonePushDeps) {
     this.turnNews = new TerminalAgentTurnNews({
@@ -54,13 +63,82 @@ export class TerminalAgentPhonePush {
         worktreeId,
         event: this.buildEvent(worktreeId, paneKey, row)
       }),
-      deliver: (news) => this.send(news),
+      deliver: (news) => {
+        if (news.event.paneKey) {
+          this.hooklessNews.noteFinish(news.event.paneKey)
+        }
+        this.send(news)
+      },
       setTimer: (run, delayMs) => deps.setTimer(run, delayMs)
     })
+    this.hooklessNews = new TerminalHooklessNews({
+      hasHookRow: (paneKey) => deps.readHookRow(paneKey) !== null,
+      hasPendingHookFinish: (paneKey) => this.turnNews.hasPending(paneKey),
+      completionAlertsEnabled: () => {
+        const settings = deps.readNotificationSettings()
+        return !settings || isNotificationSourceEnabled(settings, 'agent-task-complete', undefined)
+      },
+      deliverTitleFinish: (news, title) =>
+        this.send(this.buildHooklessNews('agent-task-complete', news, title)),
+      deliverBell: (news) => this.send(this.buildHooklessNews('terminal-bell', news)),
+      setTimer: (run, delayMs) => deps.setTimer(run, delayMs),
+      now: () => deps.now()
+    })
+    deps.onClientEvent(
+      (event) => {
+        if (event.type === 'terminalSideEffects') {
+          this.noteTerminalSideEffects(event.batch)
+        }
+      },
+      { consumesTerminalSideEffects: true }
+    )
   }
 
   observe(change: AgentPaneChange): void {
     this.turnNews.observe(change)
+    if (change.kind === 'moved' && change.to === 'working') {
+      this.hooklessNews.noteWorking(change.paneKey)
+    }
+  }
+
+  private noteTerminalSideEffects(batch: TerminalSideEffectBatch): void {
+    const { worktreeId, paneKey } = batch
+    // Replays restore titles only; their edges and bells were told live.
+    if (batch.replay || !worktreeId || !paneKey) {
+      return
+    }
+    const { sshHostId } = agentPaneWorkspace(worktreeId, batch.connectionId)
+    this.hooklessNews.noteFacts({ paneKey, worktreeId, executionHostId: sshHostId }, batch.facts)
+  }
+
+  /** A bell or a title-only finish: no hook row, so no agent detail, as the window sends it. */
+  private buildHooklessNews(
+    source: 'agent-task-complete' | 'terminal-bell',
+    { paneKey, worktreeId, executionHostId }: TerminalHooklessNewsItem,
+    terminalTitle?: string
+  ): PaneNews {
+    const { title, body } = buildNotificationOptions(
+      {
+        source,
+        worktreeId,
+        paneKey,
+        ...this.readLabels(worktreeId, paneKey),
+        ...(terminalTitle ? { terminalTitle } : {})
+      },
+      this.deps.translate
+    )
+    return {
+      worktreeId,
+      event: {
+        type: 'notification',
+        ...(executionHostId ? { workspaceExecutionHostId: executionHostId } : {}),
+        source,
+        title,
+        body,
+        worktreeId,
+        paneKey
+      }
+    }
   }
 
   private buildEvent(
@@ -122,7 +200,12 @@ export class TerminalAgentPhonePush {
     const desktopAllowed =
       !settings || isNotificationSourceEnabled(settings, news.event.source, news.event.agentState)
     const now = this.deps.now()
-    const burstKey = JSON.stringify([desktopAllowed, news.event.agentState, news.worktreeId])
+    const burstKey = JSON.stringify([
+      desktopAllowed,
+      news.event.source,
+      news.event.agentState,
+      news.worktreeId
+    ])
     if (!reserveNotificationCooldown(this.recentDispatches, burstKey, now)) {
       return
     }

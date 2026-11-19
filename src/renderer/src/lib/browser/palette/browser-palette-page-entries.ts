@@ -1,7 +1,13 @@
-import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
-import type { Tab, WorkspaceVisibleTabType } from '../../../../../shared/tab-types'
+import type {
+  BrowserPage,
+  BrowserWorkspace
+} from '../../../../../shared/browser/workspaces/browser-workspace-types'
+import type {
+  Tab,
+  WorkspaceVisibleTabType
+} from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import {
   getPaletteWorktreeIdentity,
   isPaletteCurrentWorktree,
@@ -19,8 +25,6 @@ import {
 } from '../../workspace/ownership/unified-tab-host-ownership'
 import { maxValidPaletteActivityTimestamp } from '../../../../../shared/palette-match/palette-ranking'
 
-type BrowserPaletteActiveTabType = WorkspaceVisibleTabType
-
 export type BuildSearchableBrowserPagesOptions = {
   worktrees: readonly Worktree[]
   ownershipWorktrees?: readonly Pick<Worktree, 'id'>[]
@@ -34,7 +38,7 @@ export type BuildSearchableBrowserPagesOptions = {
   activeBrowserTabId: string | null
   activeWorktreeId: string | null
   activeWorkspaceExecutionHostId?: ExecutionHostId | null
-  activeTabType: BrowserPaletteActiveTabType
+  activeTabType: WorkspaceVisibleTabType
 }
 
 export function buildSearchableBrowserPages({

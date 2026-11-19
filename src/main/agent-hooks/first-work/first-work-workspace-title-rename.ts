@@ -1,29 +1,35 @@
 import { humanizeBranchSlug } from '../../../shared/source-control/ai/naming/branch-name-from-work'
 import {
   generateBranchNameFromContext,
-  resolveTextGenerationParams
+  resolveCommitMessageSettings as resolveTextGenerationParams
 } from '../../text-generation/commit-message-text-generation'
 import { resolveGenerationTarget } from './first-work-generation-target'
 import type { FirstWorkBranchRenameDeps } from './first-work-branch-rename'
-import { retryFailedGeneration } from './first-work-generation-backoff'
+import {
+  failedGenerationVerdict,
+  resolveFirstWorkContext,
+  type FirstWorkContextSource,
+  type FirstWorkVerdictBuilders
+} from './first-work-rename-verdicts'
+import type { FirstWorkAttempt, FirstWorkRenameVerdict } from './first-work-rename-attempts'
 
 export async function runFolderWorkspaceTitleAutoRename(
   worktreeId: string,
-  prompt: string,
-  assistantMessage: string | undefined,
+  source: FirstWorkContextSource,
   deps: FirstWorkBranchRenameDeps,
-  stop: (reason: string, clearError?: boolean) => true,
-  retry: (reason: string) => false
-): Promise<boolean> {
+  attempt: FirstWorkAttempt,
+  verdicts: FirstWorkVerdictBuilders
+): Promise<FirstWorkRenameVerdict> {
+  const { stop, defer, failed } = verdicts
   if (deps.isFolderWorkspaceWslMoveBlocked?.(worktreeId) === true) {
-    return retry('a WSL move is taking the workspace')
+    return defer('project-moving', 'a WSL move is taking the workspace')
   }
   if (deps.isPendingFirstAgentMessageRename?.(worktreeId) !== true) {
-    return stop('folder workspace is not pending title rename', true)
+    return stop('already-named', 'folder workspace is not pending title rename', true)
   }
   const folderPath = deps.getFolderWorkspacePath?.(worktreeId)
   if (!folderPath) {
-    return stop('folder workspace path unavailable')
+    return stop('unavailable', 'folder workspace path unavailable')
   }
 
   const originalDisplayName = deps.getCurrentDisplayName(worktreeId)
@@ -31,16 +37,22 @@ export async function runFolderWorkspaceTitleAutoRename(
   const resolvedParams = resolveTextGenerationParams(settings, 'local', 'branchName', null)
   if (!resolvedParams.ok) {
     deps.setRenameError(worktreeId, resolvedParams.error)
-    return stop(`no generation agent: ${resolvedParams.error}`)
+    return failed(`no generation agent: ${resolvedParams.error}`, true)
+  }
+  const resolved = await resolveFirstWorkContext(source, attempt)
+  if (resolved.kind === 'outcome') {
+    return { outcome: resolved.outcome, settles: false }
   }
   const target = await resolveGenerationTarget(folderPath, resolvedParams.params.agentId, deps)
   if (!target) {
     deps.setRenameError(worktreeId, 'Could not prepare the workspace-name generation environment.')
-    return retry('could not prepare generation environment')
+    return failed('could not prepare generation environment', false)
   }
 
+  // Target preparation awaits; a replaced workspace must not launch generation.
+  attempt.assertIncarnation()
   const generated = await generateBranchNameFromContext(
-    { firstPrompt: prompt, assistantMessage },
+    resolved.context,
     resolvedParams.params,
     target
   )
@@ -49,13 +61,19 @@ export async function runFolderWorkspaceTitleAutoRename(
     deps.isPendingFirstAgentMessageRename?.(worktreeId) !== true ||
     deps.getCurrentDisplayName(worktreeId) !== originalDisplayName
   ) {
-    return stop('folder workspace changed during generation', true)
+    return stop('already-named', 'folder workspace changed during generation', true)
   }
   if (deps.isFolderWorkspaceWslMoveBlocked?.(worktreeId) === true) {
-    return retry('a WSL move started during generation')
+    return defer('project-moving', 'a WSL move started during generation')
   }
   if (!generated.success) {
-    return retryFailedGeneration(worktreeId, generated, deps, retry)
+    return failedGenerationVerdict(worktreeId, generated, deps, verdicts)
+  }
+  if (!deps.getSettings().autoRenameBranchFromWork) {
+    return {
+      ...stop('setting-off', 'auto-rename was turned off during generation'),
+      settles: false
+    }
   }
 
   const newDisplayName = humanizeBranchSlug(generated.slug)
@@ -63,5 +81,5 @@ export async function runFolderWorkspaceTitleAutoRename(
   deps.setRenameError(worktreeId, null)
   deps.onRenamed(worktreeId)
   console.info(`[auto-branch-rename] renamed folder workspace title -> "${newDisplayName}"`)
-  return true
+  return { outcome: { kind: 'renamed' }, settles: true }
 }

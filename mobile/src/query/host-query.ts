@@ -11,7 +11,7 @@ import {
   type UseQueryOptions,
   type UseQueryResult
 } from '@tanstack/react-query'
-import type { RuntimeClientEventStreamMessage } from '../../../src/shared/runtime-client-events'
+import type { RuntimeClientEventStreamMessage } from '../../../src/shared/remote-runtime/session-graph/runtime-client-events'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { useHostConnectionInvalidation } from './host-connection-invalidation'
 import { useHostEventRouter } from './host-event-router'
@@ -23,9 +23,6 @@ import {
 } from './host-query-key'
 import { holdsRestoredHostQueryData, type HostQueryPersist } from './host-query-persistence'
 import { hostReadClient } from './host-read-client'
-
-// Exported with the query hooks so the router lands in their page chunk, not a chunk of its own.
-export { useHostEventRouter } from './host-event-router'
 
 export type HostQuery<TInput extends HostQueryParams, TData> = {
   family: string
@@ -65,7 +62,8 @@ type HostQueryFetch<TInput extends HostQueryParams, TData> = (
 
 // `live` marks an action's read (readHostQueryLive), which must not be served from a host-side cache.
 // `previousFromStore` says `previous` is an earlier launch's copy that no read in this document confirmed.
-export type HostQueryRead = { live: boolean; previousFromStore: boolean }
+// `hostId` names the paired host, for a fetch that shares another family's per-host single-flight.
+export type HostQueryRead = { live: boolean; previousFromStore: boolean; hostId: string }
 
 export function defineHostQuery<TInput extends HostQueryParams, TData>(
   query: HostQuery<TInput, TData> & { fetch: HostQueryFetch<TInput, TData> }
@@ -96,7 +94,8 @@ function hostQueryOptions<TInput extends HostQueryParams, TData>(
       ? ({ client: queryClient }) =>
           fetch(hostReadClient(client), target, input, queryClient.getQueryData<TData>(queryKey), {
             live: false,
-            previousFromStore: holdsRestoredHostQueryData(queryClient, hashKey(queryKey))
+            previousFromStore: holdsRestoredHostQueryData(queryClient, hashKey(queryKey)),
+            hostId
           })
       : skipToken,
     meta: { streamBacked, signal, persist }
@@ -126,7 +125,8 @@ export async function readHostQueryLive<TInput extends HostQueryParams, TData>(
     (() =>
       fetch(hostReadClient(client), target, input, undefined, {
         live: true,
-        previousFromStore: false
+        previousFromStore: false,
+        hostId
       }))
   if (!read && !live) {
     throw new Error(`${query.family} is read by its screen`)
@@ -226,13 +226,15 @@ export function useHostQuery<TInput extends HostQueryParams, TData>(
   options?: {
     enabled?: boolean
     subscribed?: boolean
-    refetchInterval?: number | false
+    // A function decides from the data each read leaves, so one read's answer can time the next.
+    refetchInterval?: number | false | ((data: TData | undefined) => number | false)
     // Replaces the family's own, e.g. once the host is known to signal every change.
     staleTime?: number
   }
 ): UseQueryResult<TData> {
   const { hostId, client } = host
   const enabled = client !== null && options?.enabled !== false
+  const refetchInterval = options?.refetchInterval
   useHostConnectionInvalidation(hostId, enabled ? client : null)
   // A screen alone on its page has no host list to keep the router; its signalled reads hold one.
   useHostEventRouter(hostId, enabled && query.signal ? client : null)
@@ -248,7 +250,10 @@ export function useHostQuery<TInput extends HostQueryParams, TData>(
     ...queryOptions,
     ...(options?.staleTime === undefined ? {} : { staleTime: options.staleTime }),
     subscribed: options?.subscribed,
-    refetchInterval: options?.refetchInterval
+    refetchInterval:
+      typeof refetchInterval === 'function'
+        ? (query) => refetchInterval(query.state.data)
+        : refetchInterval
   })
 }
 

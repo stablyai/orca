@@ -1,15 +1,16 @@
-import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import { realpath, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, relative, sep } from 'node:path'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type {
   DiscoveredSkill,
   SkillDiscoveryResult,
   SkillDiscoverySource,
   SkillSourceKind
-} from '../../../shared/skills'
+} from '../../../shared/skills/discovery/skills'
 import { buildSkillDiscoverySources, type SkillScanRoot } from './skill-discovery-sources'
+import { withoutLinkedDefaultHomes } from './skill-relocated-home-roots'
 import {
   sortDiscoveredSkills,
   sortSkillDiscoverySources,
@@ -28,7 +29,10 @@ import {
 } from './skill-discovery-stopped-wsl-roots'
 import { wslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 import { buildRemoteRepoSkillSources } from './skill-remote-repo-sources'
-import { discoverClaudePluginSkillSources } from './claude-plugin-skill-sources'
+import {
+  applyClaudePluginManifestNames,
+  discoverClaudePluginSkillInstalls
+} from './claude-plugin-skill-sources'
 import { findSkillFiles } from './skill-root-file-walk'
 import { runSkillCandidateTasks } from '../filesystem/skill-candidate-concurrency'
 import {
@@ -37,14 +41,17 @@ import {
   type SkillScanOutcome
 } from './skill-scan-coalescer'
 import type { SkillProviderRootOverrides } from '../providers/skill-provider-destinations'
-import { skillDirectoryMaxDepth } from '../../../shared/skill-discovery-depth'
+import { skillDirectoryMaxDepth } from '../../../shared/skills/discovery/skill-discovery-depth'
 import { withoutBundledSkillCompatibilityCopies } from './bundled-skill-discovery-name'
 import { readSkillSummary } from './skill-discovery-summary'
-import { bundledSkillNames, requestedBundledSkillName } from '../../../shared/bundled-skill-names'
+import {
+  bundledSkillNames,
+  requestedBundledSkillName
+} from '../../../shared/skills/bundled/bundled-skill-names'
 
 // Share fixed home-root scans across workspace panes to bound repeated filesystem walks.
 export const SKILL_ROOT_SCAN_TTL_MS = 10_000
-// A scan builds 17 fixed roots + 7/repo + cwd/plugin roots; the cache must hold whole scans or evict itself. Beyond capacity LRU degrades to repeated repo walks.
+// A scan builds 26 fixed roots (+1 per relocated home others read) + 15/repo + cwd/plugin roots; the cache must hold whole scans or evict itself. Beyond capacity LRU degrades to repeated repo walks.
 const MAX_CACHED_SKILL_ROOTS = 1_024
 // Cap logged root ids as repos grow; hashed ids avoid exposing names and paths.
 export const MAX_LOGGED_ROOT_IDS = 12
@@ -129,6 +136,7 @@ async function scanRoot(root: SkillScanRoot, signal: AbortSignal): Promise<Scann
         providers: [...root.providers],
         sourceKind,
         sourceLabel: sourceLabelForSkill(root, sourceKind),
+        ...(root.pluginName ? { pluginName: root.pluginName } : {}),
         rootPath: root.path,
         directoryPath,
         skillFilePath,
@@ -247,7 +255,9 @@ export async function discoverSkills(args: {
     ...buildSkillDiscoverySources({ ...args, homeDir }),
     ...(pluginCwd && !pluginCwdStopped
       ? await waitForPromiseWithSignal(
-          discoverClaudePluginSkillSources({ homeDir, cwd: pluginCwd, signal: args.signal }),
+          discoverClaudePluginSkillInstalls({ homeDir, cwd: pluginCwd, signal: args.signal }).then(
+            (installs) => applyClaudePluginManifestNames(installs, args.signal)
+          ),
           args.signal
         )
       : [])
@@ -257,7 +267,10 @@ export async function discoverSkills(args: {
     gateStopped && candidateRoots.some((root) => wslDistroForPath(root.path))
       ? await splitStoppedWslDistroRoots(candidateRoots, mayReadStopped)
       : { readable: candidateRoots, unavailable: [] }
-  const roots = readable.filter((root) => rootMayContainSourceKind(root, args.sourceKinds))
+  // Fold only roots that may be touched, so a relocated home in a stopped distro stays down.
+  const roots = (
+    await waitForPromiseWithSignal(withoutLinkedDefaultHomes(readable), args.signal)
+  ).filter((root) => rootMayContainSourceKind(root, args.sourceKinds))
   args.signal?.throwIfAborted()
   const scans = await waitForPromiseWithSignal(
     Promise.all(roots.map((root) => scanRootShared(root, refresh))),

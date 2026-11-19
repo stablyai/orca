@@ -25,7 +25,7 @@ import {
   applyWorkspaceTrustOnThisHost,
   type WorkspaceTrustHost
 } from './execution-host-workspace-trust'
-const INHERITING_PRESETS: readonly AgentTrustPreset[] = ['claude', 'copilot', 'qoder']
+const INHERITING_PRESETS: readonly AgentTrustPreset[] = ['claude', 'copilot', 'qoder', 'qwen-code']
 
 let root: string
 
@@ -73,7 +73,11 @@ describe('applyWorkspaceTrustOnThisHost', () => {
       },
       { CODEWHALE_CONFIG_PATH: '~/tilde-config.toml' }
     ]) {
-      await applyWorkspaceTrustOnThisHost('codewhale', workspace, thisHost({ codewhaleEnv }))
+      await applyWorkspaceTrustOnThisHost(
+        'codewhale',
+        workspace,
+        thisHost({ agentEnv: codewhaleEnv })
+      )
       const file =
         codewhaleEnv.CODEWHALE_CONFIG_PATH?.replace(/^~\//, `${state.home}/`) ??
         join(codewhaleEnv.CODEWHALE_HOME!, 'config.toml')

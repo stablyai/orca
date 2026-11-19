@@ -41,12 +41,19 @@ vi.mock('../extensions/profile-sessions/browser-extension-session-loader', () =>
   attachBrowserExtensionsToProfileSession: () => {},
   detachBrowserExtensionsFromProfileSession: async () => {}
 }))
+vi.mock('../cookies/session-restore/browser-session-cookie-restore', () => ({
+  trackBrowserSessionCookies: () => {},
+  forgetBrowserSessionCookies: () => {},
+  restoreBrowserRoutePartitionSessionCookies: async () => {},
+  forgetBrowserRoutePartitionSessionCookies: () => {}
+}))
 
 vi.mock('../identity/browser-process-user-agent', () => ({
   getBrowserProcessUserAgentIdentity: () => ({ mode: 'clean', userAgent: 'Mozilla/5.0 Test' })
 }))
 
 import { browserSessionRegistry } from '../sessions/profiles/browser-session-registry'
+import { setBrowserNetworkProxySettingsResolver } from '../sessions/proxy/browser-session-proxy'
 import {
   cancelAllBrowserWebAuthnAccountRequests,
   respondToBrowserWebAuthnAccountRequest
@@ -88,6 +95,7 @@ describe('browser WebAuthn profile deletion', () => {
   const sessionsByPartition = new Map<string, MockSession>()
 
   beforeEach(() => {
+    setBrowserNetworkProxySettingsResolver(null)
     sessionsByPartition.clear()
     sessionFromPartitionMock.mockReset()
     sessionFromPartitionMock.mockImplementation((partition: string) => {

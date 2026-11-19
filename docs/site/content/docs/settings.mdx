@@ -20,6 +20,7 @@ Settings are grouped into panes. Everything here is searchable with `Cmd-,` then
 - **Default new-worktree name** — custom prefix or marine creatures.
 - **Editor Word Wrap** — default wrap for file editors (on by default). Toggle from a file tab's **⋯** menu or `Alt+Z`. Separate from **Diff Word Wrap**.
 - **Insert Final Newline** — add a missing line break when saving a non-empty file from the code editor; off by default.
+- **End of Line** — line ending for new files and files with no line breaks yet: Auto (follows the system that runs the file's workspace: LF for Linux, macOS, and WSL, CRLF for Windows), LF, or CRLF. Files with line breaks keep theirs.
 
 ## Appearance
 
@@ -91,7 +92,7 @@ Settings are grouped into panes. Everything here is searchable with `Cmd-,` then
 ## Artifacts
 
 - **Orca account** — sign in (same account family as Orca Relay) to publish and manage shared files.
-- **Allow publishing public artifact links** — **off by default**. Device-wide gate: when on, you, agents, and the `orca` CLI on this machine can upload HTML/Markdown and mint public view links. Turning it off does not delete existing links.
+- **Allow publishing public artifact links** — **on by default for new profiles**; profiles created before this default keep their previous setting. Device-wide gate: when on, you, agents, and the `orca` CLI on this machine can upload HTML/Markdown and mint public view links. Turning it off does not delete existing links.
 - **Show Artifacts** / sidebar shortcut — open the Artifacts list to search, preview, copy, or delete account-owned links.
 - **Ask Before Deleting Artifacts** — optional confirmation before breaking a public link.
 - Share from an open local HTML page or Markdown editor with **Share as artifact**, or via `orca artifacts …`. See [CLI reference → Artifacts](/docs/cli/reference#artifacts).

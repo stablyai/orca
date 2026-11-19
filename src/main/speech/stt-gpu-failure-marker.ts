@@ -15,7 +15,7 @@ function gpuFailureKey(): string {
     return cachedGpuFailureKey
   }
   let version = 'unknown'
-  const modulesDir = getSpeechEngineModulesDir('transcribe-cpp')
+  const modulesDir = getSpeechEngineModulesDir()
   if (modulesDir) {
     try {
       version = JSON.parse(

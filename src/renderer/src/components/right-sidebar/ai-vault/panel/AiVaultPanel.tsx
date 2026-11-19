@@ -38,12 +38,14 @@ import { useAiVaultPanelSearch } from '../search/use-ai-vault-search'
 import { useAiVaultPanelSearchSessions } from '../search/ai-vault-search-session'
 import { aiVaultSearchScopeIdentity } from '../search/ai-vault-search-scope-identity'
 import { AiVaultPanelSearch } from '../search/AiVaultPanelSearch'
+import { useAiVaultResumeCatalogs } from '../session-actions/use-ai-vault-resume-catalogs'
 import { useAiVaultPanelSessionResume } from '../session-actions/use-ai-vault-panel-session-resume'
 import { AiVaultScanProgressStrip } from '../scanning/AiVaultScanProgressStrip'
 import { useAiVaultScanProgress } from '../scanning/ai-vault-scan-progress-store'
 import { aiVaultLocalScanKey } from '../../../../../../shared/ai-vault/scanning/ai-vault-local-scan-key'
 import { useAiVaultPanelWorkspace } from '../scope/use-ai-vault-panel-workspace'
 import { useAiVaultPanelQuery } from '../scope/use-ai-vault-panel-query'
+import { useAiVaultGroupRoomRows } from './use-ai-vault-group-room-rows'
 import {
   aiVaultPanelKeyboardRootProps,
   type AiVaultSessionListKeyboard
@@ -108,6 +110,7 @@ export default function AiVaultPanel({
   } = usePersistedAiVaultViewOptions(initialAgents)
   const { executionHostScope, onExecutionHostScopeChange, hostScopeOptions } =
     useAiVaultPanelHostScope(activeWorktreeId ?? null, resumeTargetState)
+  useAiVaultResumeCatalogs(executionHostScope)
   const activeWorktreePath = activeWorktree?.path ?? null
   // Why: AI Vault ownership is cwd-based, so we must consider live worktrees across all repos.
   const activeWorktreePaths = useMemo(
@@ -229,11 +232,13 @@ export default function AiVaultPanel({
     activeProjectKey,
     sessionProjectById,
     projectLabelByKey,
-    hideEmptySessions
+    hideEmptySessions,
+    // A group room's member rows list once, in the group's home.
+    roomRows: useAiVaultGroupRoomRows()
   })
   const searchHitHostLabels = useMemo(
-    () => (searching ? aiVaultSearchHitHostLabels(filteredSessions, hostScopeOptions) : null),
-    [filteredSessions, hostScopeOptions, searching]
+    () => (searching ? aiVaultSearchHitHostLabels(filteredSessions, hostScopeOptions, t) : null),
+    [filteredSessions, hostScopeOptions, searching, t]
   )
 
   useAiVaultPanelHandle(ref, {
@@ -365,7 +370,7 @@ export default function AiVaultPanel({
           />
         )}
       </AiVaultPanelSearch>
-      {launchActions.continuationRequest && (
+      {launchActions.continuationOpen && (
         <AgentSessionContinuationDialog
           open
           request={launchActions.continuationRequest}

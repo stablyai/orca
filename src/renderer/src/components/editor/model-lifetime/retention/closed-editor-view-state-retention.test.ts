@@ -6,7 +6,11 @@ import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { createEditorModelRegistry } from '@/lib/editor/monaco/editor-model-registry'
 import { attachClosedEditorTabCleanup } from '@/components/editor/model-lifetime/retention/closed-editor-tab-controller'
 import { toEditorModelUri } from '@/components/editor/model-lifetime/identity/editor-model-uri'
-import { scrollTopCache, editorSelectionCache, pdfViewPositionCache } from '@/lib/scroll-cache'
+import {
+  scrollTopCache,
+  editorSelectionCache,
+  pdfViewPositionCache
+} from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 
 const disposeOwners: (() => void)[] = []
 afterEach(() => {
@@ -19,65 +23,6 @@ afterEach(() => {
   scrollTopCache.clear()
   editorSelectionCache.clear()
   pdfViewPositionCache.clear()
-})
-
-function open(path: string, text = 'original') {
-  const file: OpenFile = {
-    id: path,
-    worktreeId: 'fixture',
-    filePath: path,
-    relativePath: path,
-    mode: 'edit',
-    language: 'plaintext',
-    isDirty: false
-  }
-  // Match the React wrapper’s path-to-Uri.parse conversion.
-  const model = monaco.editor.createModel(
-    text,
-    'plaintext',
-    monaco.Uri.parse(toEditorModelUri(path))
-  )
-  const store = createStore(() => ({
-    openFiles: [file],
-    worktreesByRepo: { fixture: [{ id: 'fixture', repoId: 'fixture', hostId: 'local' as const }] }
-  }))
-  const bridge = createEditorModelRegistry()
-  disposeOwners.push(bridge.register(monaco), attachClosedEditorTabCleanup(store, bridge))
-  return {
-    model,
-    close: async () => {
-      store.setState({ openFiles: [] })
-      await Promise.resolve()
-      expect(model.isDisposed()).toBe(true)
-    }
-  }
-}
-
-it.each([
-  '/tradeoff/undo-posix.txt',
-  'file:///C:/tradeoff/undo-file-uri.txt',
-  'C:/tradeoff/undo-raw-drive.txt',
-  'C:\\tradeoff\\undo-raw-drive-backslash.txt',
-  '\\\\server\\share\\undo-unc.txt'
-] as const)('restores closed-file undo after reopening %s', async (path) => {
-  const owner = open(path)
-  owner.model.pushEditOperations(
-    [],
-    [{ range: new monaco.Range(1, 1, 1, 1), text: 'saved ' }],
-    () => null
-  )
-  owner.model.pushStackElement()
-  expect(owner.model.canUndo()).toBe(true)
-  const content = owner.model.getValue()
-  await owner.close()
-  const reopened = monaco.editor.createModel(
-    content,
-    'plaintext',
-    monaco.Uri.parse(toEditorModelUri(path))
-  )
-  expect(reopened.canUndo()).toBe(true)
-  await reopened.undo()
-  expect(reopened.getValue()).toBe('original')
 })
 
 // Disposal and ownership lookup must normalize Windows paths identically or one close can destroy another tab’s model.

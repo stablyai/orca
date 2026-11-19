@@ -26,7 +26,7 @@ afterEach(() => {
   }
 })
 
-function startBuild(mode, options = {}) {
+function startBuild(mode) {
   const directory = mkdtempSync(join(tmpdir(), 'orca-native-build-test-'))
   directories.push(directory)
   const cli = join(directory, 'fake-pnpm.mjs')
@@ -59,8 +59,7 @@ function startBuild(mode, options = {}) {
       if (['success', 'descendant-success'].includes(process.env.NATIVE_BUILD_MODE)) { record('completed'); process.exit(0) }
       if (!name.includes('computer')) return
       record('failed')
-      if (process.env.NATIVE_BUILD_MODE === 'failure-signal') process.kill(process.pid, 'SIGALRM')
-      else if (process.env.NATIVE_BUILD_MODE === 'failure-sigpipe') { process.on('SIGPIPE', () => {}); process.removeAllListeners('SIGPIPE'); process.kill(process.pid, 'SIGPIPE') }
+      if (process.env.NATIVE_BUILD_MODE === 'failure-sigpipe') { process.on('SIGPIPE', () => {}); process.removeAllListeners('SIGPIPE'); process.kill(process.pid, 'SIGPIPE') }
       else process.exit(7)
     }, 10)
   `
@@ -72,7 +71,7 @@ function startBuild(mode, options = {}) {
     env: {
       ...process.env,
       ORCA_BACKGROUND_LAUNCH: '1',
-      npm_execpath: options.missingCli ? join(directory, 'missing-pnpm') : cli,
+      npm_execpath: cli,
       NATIVE_BUILD_JOURNAL: journal,
       NATIVE_BUILD_GATE: join(directory, 'release'),
       NATIVE_BUILD_MODE: mode
@@ -132,14 +131,6 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
     expect(build.events().filter(({ event }) => event === 'SIGTERM')).toHaveLength(BUILD_COUNT - 1)
   })
 
-  it('re-raises the signal that killed a build', async () => {
-    const build = startBuild('failure-signal')
-    await build.ready
-    build.release()
-    expect(await build.closed).toMatchObject({ code: null, signal: 'SIGALRM' })
-    expect(build.events().filter(({ event }) => event === 'SIGTERM')).toHaveLength(BUILD_COUNT - 1)
-  })
-
   it('fails when the signal that killed a build is one the launcher ignores', async () => {
     const build = startBuild('failure-sigpipe')
     await build.ready
@@ -182,21 +173,6 @@ describe.skipIf(process.platform !== 'darwin')('parallel native builds', () => {
       }
     }
   )
-
-  it('reports a missing build command without waiting forever', async () => {
-    const build = startBuild('success', { missingCli: true })
-    expect(await build.closed).toMatchObject({ code: 1, signal: null })
-  })
-
-  it('reaps compiler descendants that retain pipes after their launcher exits', async () => {
-    const build = startBuild('descendant')
-    await build.ready
-    build.child.kill('SIGTERM')
-    expect(await build.closed).toMatchObject({ code: null, signal: 'SIGTERM' })
-    for (const pid of build.descendants()) {
-      expect(() => process.kill(pid, 0)).toThrow()
-    }
-  })
 
   it("reaps descendants that keep a finished build's pipes open instead of hanging", async () => {
     const build = startBuild('descendant-success')

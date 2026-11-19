@@ -1,14 +1,14 @@
-import type { ChecksPanelControllerState } from '../use-checks-panel-controller-state'
-import type { ChecksPanelContextState } from '../use-checks-panel-context-state'
+import type { ChecksPanelControllerState } from '../panel/use-checks-panel-controller-state'
+import type { ChecksPanelContextState } from '../review-state/use-checks-panel-context-state'
 import type { ChecksPanelCommentResolutionState } from '../comments/use-checks-panel-comment-resolution'
-import type { ChecksPanelReviewDataState } from '../use-checks-panel-review-data'
+import type { ChecksPanelReviewDataState } from '../review-data/use-checks-panel-review-data'
 import type { ChecksPanelCommentMutationState } from '../comments/use-checks-panel-comment-mutations'
 import type { ChecksPanelEntryRefreshAndTitleActionsState } from '../refresh/use-checks-panel-entry-refresh-and-title-actions'
 import type { ChecksPanelCheckAndReviewActionsState } from '../review-actions/use-checks-panel-check-and-review-actions'
 import type { ChecksPanelRefreshState } from '../refresh/use-checks-panel-manual-refresh'
 import type { ChecksPanelAiQueueState } from '../review-actions/use-checks-panel-ai-queue'
-import type { ChecksPanelReviewState } from '../use-checks-panel-review-state'
-import type { ChecksPanelComposerState } from '../use-checks-panel-composer-state'
+import type { ChecksPanelReviewState } from '../review-state/use-checks-panel-review-state'
+import type { ChecksPanelComposerState } from '../review-actions/use-checks-panel-composer-state'
 
 export type ChecksPanelActiveContentModel = Pick<
   ChecksPanelControllerState,

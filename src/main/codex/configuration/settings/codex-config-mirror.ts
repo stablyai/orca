@@ -1,5 +1,5 @@
 import { readMcpServerTomlOwnership } from '../toml/config-toml-mcp-servers'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { observeAgentStateFile } from '../codex-path-observation'
 import {
   recoverInterruptedGuardedFileOperation,
@@ -7,12 +7,6 @@ import {
   writeFileAtomicallyIfUnchanged
 } from '../../../filesystem/atomic-file-publication'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../homes/codex-home-paths'
-import {
-  rebaseBundledMarketplaceSources,
-  rewriteRelativePathConfigValues
-} from './codex-config-path-reference-rewrite'
-import { normalizeDeprecatedCodexHookFeatureFlag } from '../toml/config-toml-deprecated-hook-flag'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import {
   promoteCodexRuntimeSettingsToSystem,
   snapshotCodexRuntimeSettingsBaseline,
@@ -22,8 +16,17 @@ import {
 import { observeCodexSettingsBaseline, readCodexSettingsBaseline } from './config-settings-baseline'
 import { getCodexConfigSyncStatus, reportCodexConfigSyncOutcome } from './config-sync-stall'
 import { preserveRuntimeConflictValues } from './codex-config-settings-preservation'
-import { applyCodexDaemonSocketGuard } from '../shared-server/codex-daemon-socket-path-guard'
-import { stripRuntimeOwnedTomlSections } from '../toml/config-toml-runtime-owned-sections'
+import {
+  applyMeasuredRuntimeOwnedConfig,
+  applyRuntimeOwnedConfig
+} from './codex-config-runtime-owned-values'
+import { codexDaemonSocketPathExceedsLimit } from '../shared-server/codex-daemon-socket-path-guard'
+import {
+  guardSystemConfigForRuntimeMerge,
+  prepareSystemConfigForFreshRuntimeMirror,
+  prepareSystemConfigForRuntimeMirror,
+  resolveCodexConfigMirrorSourceDirectory
+} from './codex-config-mirror-source'
 import { mergeSystemCodexConfigIntoRuntime } from './codex-config-mirror-merge'
 
 // Mirrored MCP environment tokens require owner-only writes.
@@ -34,15 +37,20 @@ export function syncSystemConfigIntoManagedCodexHome(
     runtimeHomePath: getOrcaManagedCodexHomePath(),
     systemHomePath: getSystemCodexHomePath()
   }
-): void {
-  if (!mirrorSystemConfigIntoManagedCodexHome(homes)) {
+): boolean {
+  const result = mirrorSystemConfigIntoManagedCodexHome(homes)
+  if (!result.ran) {
     // Apply the daemon guard even on mirror stalls so long home paths can still launch Codex.
     ensureCodexDaemonSocketGuard(homes.runtimeHomePath)
   }
+  return result.complete
 }
 
-/** Returns false when no mirror pass ran, so the caller still owes the daemon guard. */
-function mirrorSystemConfigIntoManagedCodexHome(homes: CodexSettingsPromotionHomes): boolean {
+/** A baseline failure prevents reuse without changing when the daemon guard is owed. */
+function mirrorSystemConfigIntoManagedCodexHome(homes: CodexSettingsPromotionHomes): {
+  ran: boolean
+  complete: boolean
+} {
   // Promote in-chat changes before mirroring ~/.codex or this pass would revert them.
   const promotionPlan = promoteCodexRuntimeSettingsToSystem(homes)
   if (!promotionPlan) {
@@ -51,7 +59,7 @@ function mirrorSystemConfigIntoManagedCodexHome(homes: CodexSettingsPromotionHom
     if (stalledStatus.state === 'stalled') {
       reportCodexConfigSyncOutcome(homes.runtimeHomePath, stalledStatus)
     }
-    return false
+    return { ran: false, complete: false }
   }
   let mirrorResult: CodexConfigMirrorResult
   try {
@@ -59,7 +67,7 @@ function mirrorSystemConfigIntoManagedCodexHome(homes: CodexSettingsPromotionHom
   } catch (error) {
     // Latch mirror failures too, so the user sees their cause without repeated generic logging.
     reportCodexConfigSyncOutcome(homes.runtimeHomePath, getCodexConfigSyncStatus(homes), error)
-    return false
+    return { ran: false, complete: false }
   }
   if (mirrorResult.status === 'refused-indeterminate') {
     // Keep the baseline unchanged on indeterminate reads so unmirrored changes can retry.
@@ -68,18 +76,18 @@ function mirrorSystemConfigIntoManagedCodexHome(homes: CodexSettingsPromotionHom
       getCodexConfigSyncStatus(homes),
       mirrorResult.error
     )
-    return false
+    return { ran: false, complete: false }
   }
   reportCodexConfigSyncOutcome(homes.runtimeHomePath, getCodexConfigSyncStatus(homes))
   if (mirrorResult.status === 'skipped-missing-source') {
     // Bootstrap seeded homes only; advancing an existing baseline would strand unmirrored changes.
     if (!readCodexSettingsBaseline(homes.runtimeHomePath)) {
-      snapshotCodexRuntimeSettingsBaseline(homes.runtimeHomePath)
+      return { ran: true, complete: snapshotCodexRuntimeSettingsBaseline(homes.runtimeHomePath) }
     }
-    return true
+    return { ran: true, complete: true }
   }
   // Advance the baseline only after mirroring so unpromoted changes remain eligible for retry.
-  snapshotCodexRuntimeSettingsBaseline(homes.runtimeHomePath, {
+  const complete = snapshotCodexRuntimeSettingsBaseline(homes.runtimeHomePath, {
     conflicts: new Map(
       [...promotionPlan.conflicts].filter(([key]) => mirrorResult.preservedConflictKeys.has(key))
     ),
@@ -88,7 +96,7 @@ function mirrorSystemConfigIntoManagedCodexHome(homes: CodexSettingsPromotionHom
     mirroredMcpServers: mirrorResult.mirroredMcpServerNames,
     mirroredMcpServerRoot: mirrorResult.mirroredMcpServerRoot
   })
-  return true
+  return { ran: true, complete }
 }
 
 export function ensureCodexDaemonSocketGuard(runtimeHomePath: string): void {
@@ -106,7 +114,7 @@ export function ensureCodexDaemonSocketGuard(runtimeHomePath: string): void {
 }
 
 function writeCodexDaemonSocketGuard(runtimeHomePath: string, runtimeConfig: string | null): void {
-  const guarded = applyCodexDaemonSocketGuard(runtimeConfig ?? '', runtimeHomePath)
+  const guarded = applyRuntimeOwnedConfig(runtimeConfig ?? '', runtimeHomePath, runtimeConfig)
   if (guarded !== (runtimeConfig ?? '')) {
     writeFileAtomicallyIfUnchanged(
       join(runtimeHomePath, 'config.toml'),
@@ -139,6 +147,7 @@ export function syncSystemConfigIntoLegacySharedCodexHome(
   }
   const runtimeConfigBeforeMirror =
     runtimeConfigObservation.kind === 'present' ? runtimeConfigObservation.value : null
+  const daemonGuarded = codexDaemonSocketPathExceedsLimit(homes.runtimeHomePath)
   // A missing cloud-synced source does not prove the user cleared config.
   let mirroredRuntimeConfig = runtimeConfigBeforeMirror ?? ''
   if (rawSystemConfig.trim() !== '') {
@@ -147,10 +156,14 @@ export function syncSystemConfigIntoLegacySharedCodexHome(
       runtimeConfigBeforeMirror !== null
         ? mergeSystemCodexConfigIntoRuntime(
             runtimeConfigBeforeMirror,
-            prepareSystemConfigForRuntimeMirror(
-              rawSystemConfig,
-              sourceConfigDir,
-              homes.runtimeHomePath
+            guardSystemConfigForRuntimeMerge(
+              prepareSystemConfigForRuntimeMirror(
+                rawSystemConfig,
+                sourceConfigDir,
+                homes.runtimeHomePath
+              ),
+              homes.runtimeHomePath,
+              daemonGuarded
             ),
             sourceConfigDir,
             ...readLegacySharedHomeMcpOwnership(homes.runtimeHomePath)
@@ -161,9 +174,11 @@ export function syncSystemConfigIntoLegacySharedCodexHome(
             homes.runtimeHomePath
           )
   }
-  const nextRuntimeConfig = applyCodexDaemonSocketGuard(
+  const nextRuntimeConfig = applyMeasuredRuntimeOwnedConfig(
     mirroredRuntimeConfig,
-    homes.runtimeHomePath
+    homes.runtimeHomePath,
+    runtimeConfigBeforeMirror,
+    daemonGuarded
   )
   if ((runtimeConfigBeforeMirror ?? '') === nextRuntimeConfig) {
     return
@@ -201,9 +216,10 @@ type CodexConfigMirrorResult =
     }
 
 function syncSystemConfigIntoManagedCodexHomeUnsafe(
-  { runtimeHomePath, systemHomePath, systemConfigDir }: CodexSettingsPromotionHomes,
+  homes: CodexSettingsPromotionHomes,
   promotionPlan: CodexSettingsPromotionPlan
 ): CodexConfigMirrorResult {
+  const { runtimeHomePath, systemHomePath, systemConfigDir } = homes
   const systemConfigPath = join(systemHomePath, 'config.toml')
   const runtimeConfigPath = join(runtimeHomePath, 'config.toml')
   // Distinguish unavailable paths from absent ones to avoid replacing an unreadable runtime as fresh.
@@ -236,9 +252,10 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
 
   const sourceConfigDir = resolveCodexConfigMirrorSourceDirectory(systemHomePath, systemConfigDir)
   if (!runtimeConfigExists) {
-    const freshRuntimeConfig = applyCodexDaemonSocketGuard(
+    const freshRuntimeConfig = applyRuntimeOwnedConfig(
       prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir, runtimeHomePath),
-      runtimeHomePath
+      runtimeHomePath,
+      null
     )
     const ownership = readMcpServerTomlOwnership(freshRuntimeConfig)
     writeFileAtomically(runtimeConfigPath, freshRuntimeConfig, RUNTIME_CONFIG_WRITE)
@@ -250,10 +267,11 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
     }
   }
 
-  const systemConfig = prepareSystemConfigForRuntimeMirror(
-    rawSystemConfig,
-    sourceConfigDir,
-    runtimeHomePath
+  const daemonGuarded = codexDaemonSocketPathExceedsLimit(runtimeHomePath)
+  const systemConfig = guardSystemConfigForRuntimeMerge(
+    prepareSystemConfigForRuntimeMirror(rawSystemConfig, sourceConfigDir, runtimeHomePath),
+    runtimeHomePath,
+    daemonGuarded
   )
   const { names: mirroredMcpServerNames, ownsRoot: mirroredMcpServerRoot } =
     readMcpServerTomlOwnership(systemConfig)
@@ -269,7 +287,12 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
     ),
     promotionPlan.runtimeValuesToPreserve
   )
-  const nextRuntimeConfig = applyCodexDaemonSocketGuard(preserved.content, runtimeHomePath)
+  const nextRuntimeConfig = applyMeasuredRuntimeOwnedConfig(
+    preserved.content,
+    runtimeHomePath,
+    runtimeConfig,
+    daemonGuarded
+  )
   if (nextRuntimeConfig !== runtimeConfig) {
     writeFileAtomically(runtimeConfigPath, nextRuntimeConfig, RUNTIME_CONFIG_WRITE)
   }
@@ -279,44 +302,4 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
     mirroredMcpServerNames,
     mirroredMcpServerRoot
   }
-}
-
-export function resolveCodexConfigMirrorSourceDirectory(
-  systemHomePath: string,
-  systemConfigDir?: string
-): string {
-  return (
-    systemConfigDir ??
-    parseWslUncPath(systemHomePath)?.linuxPath ??
-    dirname(join(systemHomePath, 'config.toml'))
-  )
-}
-
-function prepareSystemConfigForRuntimeMirror(
-  config: string,
-  systemConfigDir: string,
-  runtimeHomePath?: string
-): string {
-  const prepared = rewriteRelativePathConfigValues(
-    normalizeDeprecatedCodexHookFeatureFlag(config),
-    systemConfigDir
-  )
-  // WSL guest homes do not receive host resource links.
-  return runtimeHomePath && !parseWslUncPath(runtimeHomePath)
-    ? rebaseBundledMarketplaceSources(prepared, systemConfigDir, runtimeHomePath)
-    : prepared
-}
-
-// Install re-keys user-hook trust; plugin/project trust carries unchanged.
-// WSL systemConfigDir must name the Linux-side config directory.
-export function prepareSystemConfigForFreshRuntimeMirror(
-  config: string,
-  systemConfigDir: string,
-  runtimeHomePath?: string
-): string {
-  return stripRuntimeOwnedTomlSections(
-    prepareSystemConfigForRuntimeMirror(config, systemConfigDir, runtimeHomePath),
-    new Set(),
-    { systemHomeDir: systemConfigDir, runtimeHookTrustKeys: new Set() }
-  )
 }

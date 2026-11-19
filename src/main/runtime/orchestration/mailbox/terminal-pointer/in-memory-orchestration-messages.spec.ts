@@ -5,6 +5,10 @@ import type { MessagePriority, MessageRow, MessageType } from '../../db/orchestr
 export class InMemoryOrchestrationMessages {
   readonly crewChanges = new CrewChanges()
 
+  hasAnyDispatchContexts(): boolean {
+    return false
+  }
+
   private sequence = 0
 
   private activeCoordinatorRun: { coordinator_handle: string } | null = null

@@ -1,14 +1,14 @@
 import { useMemo } from 'react'
 import { getRelativePathInsideRoot } from '@/lib/path'
-import { normalizeRelativePath } from '../../../../../../shared/cross-platform-path'
-import { isMarkdownComment } from '@/lib/diff-comment-compat'
+import { normalizeRelativePath } from '../../../../../../shared/file-access/cross-platform-path'
+import { isMarkdownComment } from '@/lib/source-control/review/comments/diff-comment-compat'
 import {
   formatMarkdownReviewNotes,
   sortMarkdownReviewNotes,
   type MarkdownReviewNote
 } from '@/lib/editor/markdown/review-notes/markdown-review-notes'
 import type { NotesSendMenuScope } from '../../review-note-delivery/NotesSendMenu'
-import type { DiffComment } from '../../../../../../shared/diff-comment-types'
+import type { DiffComment } from '../../../../../../shared/file-review/diff-comment-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 

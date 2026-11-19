@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { CodexAppServerRequestError } from '../../app-server/codex-app-server-request-error'
 import { openCodexAppServerConnection } from '../../app-server/codex-app-server-connection'
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
-import { codexStructuredPermissionPolicy } from '../../../../shared/codex-permission-policy'
+import { codexStructuredPermissionPolicy } from '../../../../shared/agent-launch/permissions/codex-permission-policy'
 import { openCodexThread } from './codex-structured-thread-open'
 
 function connectionFor(
@@ -13,6 +13,28 @@ function connectionFor(
 }
 
 describe('openCodexThread', () => {
+  it('gives developer instructions to a new thread only', async () => {
+    const request = vi.fn(async (method: string, _params?: Record<string, unknown>) => ({
+      thread: { id: method === 'thread/start' ? 'thread-created' : 'thread-existing' }
+    }))
+    const developerInstructions = 'You are Reviewer.'
+
+    for (const resumeThreadId of [null, 'thread-existing']) {
+      await openCodexThread(
+        connectionFor(request),
+        { cwd: '/workspace', resumeThreadId, developerInstructions },
+        2_000
+      )
+    }
+
+    expect(
+      request.mock.calls.map(([method, params]) => [method, params?.developerInstructions])
+    ).toEqual([
+      ['thread/start', developerInstructions],
+      ['thread/resume', undefined]
+    ])
+  })
+
   // Omitting policy can inherit approval_policy = never and suppress Ask prompts.
   it('sends Ask as an explicit policy on resume, not as absent fields', async () => {
     const request = vi.fn(async (_method: string, _params?: Record<string, unknown>) => ({
@@ -55,6 +77,66 @@ describe('openCodexThread', () => {
       )
     ).rejects.toBe(refusal)
     expect(request).toHaveBeenCalledOnce()
+  })
+
+  it('unarchives a thread archived in Codex and reopens that same thread', async () => {
+    let archived = true
+    const request = vi.fn(async (method: string, params?: Record<string, unknown>) => {
+      if (method === 'thread/unarchive') {
+        archived = false
+        return {}
+      }
+      if (method === 'thread/resume' && archived) {
+        throw new CodexAppServerRequestError(
+          'thread/resume',
+          -32600,
+          `session ${String(params?.threadId)} is archived. Run \`codex unarchive ${String(params?.threadId)}\` to unarchive it first.`
+        )
+      }
+      return { thread: { id: params?.threadId ?? 'thread-new' } }
+    })
+
+    await expect(
+      openCodexThread(
+        connectionFor(request),
+        { cwd: '/workspace', resumeThreadId: 'thread-archived', supersedeIfUnsaved: true },
+        2_000
+      )
+    ).resolves.toMatchObject({ threadId: 'thread-archived' })
+    expect(request.mock.calls.map(([method]) => method)).toEqual([
+      'thread/resume',
+      'thread/unarchive',
+      'thread/resume'
+    ])
+    expect(request.mock.calls[1]?.[1]).toEqual({ threadId: 'thread-archived' })
+  })
+
+  it('never replaces an archived thread whose saved conversation is gone after unarchiving', async () => {
+    const request = vi.fn(async (method: string) => {
+      if (method === 'thread/resume' && request.mock.calls.length === 1) {
+        throw new CodexAppServerRequestError(
+          'thread/resume',
+          -32600,
+          'session thread-a is archived.'
+        )
+      }
+      if (method === 'thread/resume') {
+        throw new CodexAppServerRequestError(
+          'thread/resume',
+          -32600,
+          'no rollout found for thread id thread-a'
+        )
+      }
+      return method === 'thread/unarchive' ? {} : { thread: { id: 'thread-new' } }
+    })
+    const error = await openCodexThread(
+      connectionFor(request),
+      { cwd: '/workspace', resumeThreadId: 'thread-a', supersedeIfUnsaved: true },
+      2_000
+    ).catch((error: unknown) => error)
+
+    expect(providerStartupFailureFact(error)).toMatchObject({ kind: 'savedConversationMissing' })
+    expect(request.mock.calls.map(([method]) => method)).not.toContain('thread/start')
   })
 
   describe('a thread Codex never saved', () => {

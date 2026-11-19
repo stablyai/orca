@@ -5,7 +5,8 @@ import * as HoverCardPrimitive from 'radix-ui/hover-card'
 import { useControllableState } from 'radix-ui/internal'
 import { cva, type VariantProps } from 'class-variance-authority'
 
-import { cn } from '@/lib/utils'
+import { usePortalContainer } from './portal-container-context'
+import { cn } from '@/lib/class-names'
 
 const HoverCardInteractionContext = React.createContext({
   dismiss: () => {},
@@ -86,7 +87,10 @@ const hoverCardContentVariants = cva('', {
     variant: {
       default: 'w-64 p-4',
       'workspace-details':
-        'w-[360px] max-w-[calc(100vw-2rem)] max-h-[28rem] overflow-y-auto p-3 text-xs scrollbar-sleek'
+        'w-[360px] max-w-[calc(100vw-2rem)] max-h-[28rem] overflow-y-auto p-3 text-xs scrollbar-sleek',
+      // A list row's details beside its panel: compact, one short fact per line.
+      'row-details':
+        'max-h-(--radix-hover-card-content-available-height) w-64 overflow-y-auto p-2.5 text-xs leading-4 [overflow-wrap:anywhere]'
     }
   },
   defaultVariants: { variant: 'default' }
@@ -101,7 +105,10 @@ function HoverCardContent({
 }: React.ComponentProps<typeof HoverCardPrimitive.Content> &
   VariantProps<typeof hoverCardContentVariants>) {
   return (
-    <HoverCardPrimitive.Portal data-slot="hover-card-portal">
+    <HoverCardPrimitive.Portal
+      data-slot="hover-card-portal"
+      container={usePortalContainer() ?? undefined}
+    >
       <HoverCardPrimitive.Content
         data-slot="hover-card-content"
         align={align}

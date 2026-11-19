@@ -5,6 +5,7 @@ let host: StructuredAgentSessionHost | null = null
 let held = false
 let stopWatchingHost: (() => void) | null = null
 const heldListeners = new Set<(held: boolean) => void>()
+const hostListeners = new Set<() => void>()
 
 // Partial test hosts may omit holdsSessions.
 function hostHoldsSessions(candidate: StructuredAgentSessionHost | null): boolean {
@@ -46,6 +47,19 @@ export function setStructuredAgentSessionHost(next: StructuredAgentSessionHost |
     console.warn('[structured-agent-session] watching for held chats failed', error)
   }
   publishHeld()
+  for (const listener of hostListeners) {
+    try {
+      listener()
+    } catch (error) {
+      console.warn('[structured-agent-session] a host listener threw', error)
+    }
+  }
+}
+
+/** Told after every install or removal, so a reader can follow the host it subscribes to. */
+export function onStructuredAgentSessionHostChanged(listener: () => void): () => void {
+  hostListeners.add(listener)
+  return () => hostListeners.delete(listener)
 }
 
 /** Includes saved/live chats; constructing a host holds none. */

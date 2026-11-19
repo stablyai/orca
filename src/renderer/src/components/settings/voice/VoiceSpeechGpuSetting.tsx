@@ -1,4 +1,4 @@
-import type { VoiceSettings } from '../../../../../shared/speech-types'
+import type { VoiceSettings } from '../../../../../shared/speech/speech-types'
 import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -17,8 +17,8 @@ export function VoiceSpeechGpuSetting({
     <SettingsSwitchRow
       label={t('auto.components.settings.VoicePane.speechGpuLabel', 'Use GPU')}
       description={t(
-        'auto.components.settings.VoicePane.speechGpuDescription',
-        'Recognize speech on the graphics card when it works, and on the CPU when it fails. Turn off if dictation freezes or restarts your computer.'
+        'components.settings.voice.gpu.description',
+        'Turn off if dictation freezes your computer.'
       )}
       checked={gpuOn}
       onChange={() => onUpdateVoiceSettings({ speechGpu: gpuOn ? 'off' : 'auto' })}

@@ -1,7 +1,7 @@
 import React from 'react'
 import { LoaderCircle } from 'lucide-react'
 
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { AutoRenameFailedDialog } from '../identity/AutoRenameFailedDialog'
 import WorktreeContextMenu from '../../workspace-actions/context-menu/WorktreeContextMenu'
 import { useIsSleepingWorktree } from '../../workspace-actions/sleep/use-worktree-sleep-state'
@@ -9,6 +9,11 @@ import { getWorktreeCardFrameGeometry } from './worktree-card-frame-geometry'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 import { DEFAULT_WORKSPACE_CARD_TEMPLATE } from '../template/default-workspace-card'
 import { renderWorkspaceCardTemplate } from '../template/render-workspace-card-template'
+import { WorktreeCardTitleStatusProvider } from './worktree-card-title-status'
+
+/** Shape, inset and transitions every sidebar card row shares; inactive rows add `worktree-sidebar-card-hover`. */
+export const WORKTREE_CARD_SURFACE_CLASS_NAME =
+  'relative ml-1 cursor-pointer overflow-hidden rounded-lg border border-transparent pr-1.5 outline-none select-none transition-[background-color,border-color,opacity,box-shadow] duration-200'
 
 export function WorktreeCardSurface({ card }: { card: WorktreeCardController }): React.JSX.Element {
   const {
@@ -47,7 +52,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
   const isSleeping = useIsSleepingWorktree(worktree.id)
   const geometryFor = (statusLane: boolean) =>
     getWorktreeCardFrameGeometry({ flushSurface, contentIndent, statusLane })
-  const { content: parentCardContent, frame } = renderWorkspaceCardTemplate(
+  const { content: templateContent, frame } = renderWorkspaceCardTemplate(
     card,
     DEFAULT_WORKSPACE_CARD_TEMPLATE,
     (templateFrame) => {
@@ -57,22 +62,27 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         : undefined
     }
   )
+  const parentCardContent = newCardStyle ? (
+    // One roll-up per card feeds the status lane, the title and the title's right-hand slot.
+    <WorktreeCardTitleStatusProvider card={card}>{templateContent}</WorktreeCardTitleStatusProvider>
+  ) : (
+    templateContent
+  )
   const { cardStyle } = geometryFor(frame.statusLane)
   const titleOnlyCard = frame.singleLine
 
   const cardBody = (
     <div
       className={cn(
-        'relative flex cursor-pointer flex-col pr-1.5 transition-[background-color,border-color,opacity,box-shadow] duration-200 outline-none select-none',
-        titleOnlyCard ? 'py-2' : 'pt-1.25 pb-1.5',
-        flushSurface ? 'ml-1 w-[calc(100%-0.25rem)]' : 'ml-1',
-        'overflow-hidden rounded-lg',
+        WORKTREE_CARD_SURFACE_CLASS_NAME,
+        'flex flex-col',
+        // A bot's line is as tall as its chat's row.
+        titleOnlyCard ? (card.compactLine ? 'py-px' : 'py-2') : 'pt-1.25 pb-1.5',
+        flushSurface && 'w-[calc(100%-0.25rem)]',
         // Navigation updates the live attribute before React; it must own the complete active style.
         isLineageDropTarget
-          ? 'border border-worktree-sidebar-foreground/40 bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground ring-1 ring-inset ring-worktree-sidebar-ring/60'
-          : isActiveSurface
-            ? 'border border-transparent'
-            : 'border border-transparent worktree-sidebar-card-hover',
+          ? 'border-worktree-sidebar-foreground/40 bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground ring-1 ring-inset ring-worktree-sidebar-ring/60'
+          : !isActiveSurface && 'worktree-sidebar-card-hover',
         isActiveSurface && isMultiSelected && 'ring-1 ring-worktree-sidebar-ring/35',
         revealHighlight && [
           'scroll-to-current-workspace-reveal-highlight',
@@ -147,17 +157,19 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         </WorktreeContextMenu>
       )}
 
-      {typeof worktree.firstAgentMessageRenameError === 'string' &&
-        worktree.firstAgentMessageRenameError.length > 0 && (
-          <AutoRenameFailedDialog
-            open={showRenameErrorDialog}
-            onOpenChange={setShowRenameErrorDialog}
-            worktreeId={worktree.id}
-            executionHostId={worktree.hostId}
-            worktreeName={worktree.displayName}
-            error={worktree.firstAgentMessageRenameError}
-          />
-        )}
+      {/* Stays mounted while open: a final retry result clears the error but keeps its reason visible. */}
+      {(showRenameErrorDialog ||
+        (typeof worktree.firstAgentMessageRenameError === 'string' &&
+          worktree.firstAgentMessageRenameError.length > 0)) && (
+        <AutoRenameFailedDialog
+          open={showRenameErrorDialog}
+          onOpenChange={setShowRenameErrorDialog}
+          worktreeId={worktree.id}
+          executionHostId={worktree.hostId}
+          worktreeName={worktree.displayName}
+          error={worktree.firstAgentMessageRenameError ?? ''}
+        />
+      )}
     </>
   )
 }

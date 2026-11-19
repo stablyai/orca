@@ -2,6 +2,7 @@ import type {
   BrowserScreencastFormat,
   BrowserScreencastFrameMetadata
 } from '../../../../shared/browser/screencast/browser-screencast-protocol'
+import type { CapturePaintHold } from '../debugger/guest-paint-hold'
 
 export type BrowserScreencastOptions = {
   format: BrowserScreencastFormat
@@ -17,6 +18,7 @@ export type BrowserScreencastOptions = {
   onFrame: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
   onEvent?: (event: BrowserScreencastEvent) => void
   onError?: (message: string) => void
+  holdPaint: CapturePaintHold
 }
 
 export type BrowserScreencastViewport = Pick<
@@ -37,7 +39,13 @@ export type BrowserScreencastSession = {
 }
 
 export type BrowserScreencastEvent =
-  | { type: 'dialog'; dialogType: string; message: string }
+  | {
+      type: 'dialog'
+      dialogType: string
+      message: string
+      defaultPromptText: string
+      origin: string | null
+    }
   | { type: 'dialogClosed' }
 
 export type PendingScreencastFrame = {

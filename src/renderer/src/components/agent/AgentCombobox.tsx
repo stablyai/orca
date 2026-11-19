@@ -11,7 +11,7 @@ import {
   getAgentPickerCommandValue,
   searchAgentPickerEntries
 } from '@/lib/agent-catalog/agent-picker-search'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import * as state from './agent-combobox-command-state'
 import {
@@ -20,7 +20,7 @@ import {
   renderAgentComboboxItem
 } from './agent-combobox-items'
 import { useTranslate } from '@/i18n/use-translate'
-import { rowLabel } from '@/components/tab-bar/tab-agent-row-presentation'
+import { rowLabel } from '@/components/agent/launch-menu/agent-menu-row-presentation'
 import {
   SurfaceAgentItems,
   surfaceCommandValues,

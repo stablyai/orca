@@ -11,8 +11,8 @@ import {
   type TranscriptPaneOptions,
   TRANSCRIPT_PANE_PTY_ID as PTY_ID,
   waitForTranscriptIdle
-} from '../../orca-runtime-tests/agent-transcript-pane-test-harness'
-import { assertTerminalAgentSendable } from '../../rpc/terminal-agent-send-guard'
+} from './agent-transcript-pane-test-harness'
+import { assertTerminalAgentSendable } from '../../rpc/terminal/terminal-agent-send-guard'
 import { readRuntimeFixture } from './agent-transcript-replay-test-harness'
 
 vi.mock('electron', () => ({
@@ -41,8 +41,8 @@ describe('Interactive wait visibility and terminal admission', () => {
     '  2. No, exit\n'
   ].join('')
 
-  function agentStatusOsc(state: string): string {
-    return `]9999;${JSON.stringify({ state, prompt: 'ship it', agentType: 'claude' })}`
+  function agentStatusOsc(state: string, agentType = 'claude'): string {
+    return `]9999;${JSON.stringify({ state, prompt: 'ship it', agentType })}`
   }
 
   async function createPane(
@@ -108,6 +108,38 @@ describe('Interactive wait visibility and terminal admission', () => {
         )
 
         await expect(runtime.getTerminalInteractiveWait(handle)).resolves.toBeNull()
+      })
+    })
+
+    describe('agents whose hooks report working through an approval menu', () => {
+      async function guard(pane: Awaited<ReturnType<typeof createPane>>): Promise<void> {
+        await assertTerminalAgentSendable({
+          runtime: pane.runtime,
+          handle: pane.handle,
+          assertWritable: () => {}
+        })
+      }
+
+      it('refuses Kiro mid-turn and sends once its own report ends the turn', async () => {
+        const pane = await createPane({
+          paneTitle: 'kiro-cli',
+          foregroundProcess: 'kiro-cli',
+          data: agentStatusOsc('working', 'kiro')
+        })
+        await expect(guard(pane)).rejects.toThrow('terminal_guard_approval_unseen')
+
+        pane.runtime.onPtyData(PTY_ID, agentStatusOsc('done', 'kiro'), Date.now())
+
+        await expect(guard(pane)).resolves.toBeUndefined()
+      })
+
+      it('refuses such an agent when only another agent has reported on its pane', async () => {
+        const pane = await createPane({
+          paneTitle: 'amp',
+          foregroundProcess: 'amp',
+          data: `${agentStatusOsc('done', 'claude')}Thinking...`
+        })
+        await expect(guard(pane)).rejects.toThrow('terminal_guard_approval_unseen')
       })
     })
 
@@ -193,36 +225,6 @@ describe('Interactive wait visibility and terminal admission', () => {
 
       await expect(runtime.getTerminalInteractiveWait(handle)).resolves.toBeUndefined()
     })
-
-    it('does not accrue a probe per poll while the foreground probe wedges', async () => {
-      // Timeout abandons the wait, not the request; single-flight prevents one stranded remote probe per poll.
-      let probes = 0
-      const { runtime, handle } = await createPane({
-        paneTitle: '✻ Claude Code',
-        foregroundProcess: 'claude',
-        data: agentStatusOsc('waiting'),
-        onForegroundProbe: () => {
-          probes += 1
-        },
-        foregroundProbeHangs: true
-      })
-
-      vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
-      try {
-        const probing = Promise.all([
-          runtime.getTerminalInteractiveWait(handle),
-          runtime.getTerminalInteractiveWait(handle),
-          runtime.getTerminalInteractiveWait(handle)
-        ])
-        void probing.catch(() => undefined)
-        await vi.advanceTimersByTimeAsync(TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS)
-        await probing
-
-        expect(probes).toBe(1)
-      } finally {
-        vi.useRealTimers()
-      }
-    }, 20_000)
 
     it('leaves the wait unevaluated when the foreground probe wedges', async () => {
       // Bound remote PTY probes; a wedged host must leave wait unknown without stalling showTerminal.

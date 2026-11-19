@@ -12,22 +12,25 @@
  */
 import type { WslMoveRequest, WslMoveResult } from '../../../shared/wsl-move/wsl-move-driver-types'
 import type { WslMoveCutover } from '../../../shared/wsl-move/wsl-move-cutover'
-import { removeWslMoveCutover, writeWslMoveCutover } from './wsl-move-cutover-journal'
-import { journalSleptWslMove } from './wsl-move-driver-journal'
-import type { WslMoveDriverDeps, WslMoveHost } from './wsl-move-driver-ports'
+import {
+  removeWslMoveCutover,
+  writeWslMoveCutover
+} from './cutover-recovery/wsl-move-cutover-journal'
+import { journalSleptWslMove } from './execution/wsl-move-driver-journal'
+import type { WslMoveDriverDeps, WslMoveHost } from './execution/wsl-move-driver-ports'
 import {
   readSleptScrollback,
   daemonHistoryLeafOf,
   type WslMoveSleptScrollback
-} from './wsl-move-slept-scrollback'
-import { reportWslMoveRunEnd } from './wsl-move-driver-run-end'
+} from './terminal-state/wsl-move-slept-scrollback'
+import { reportWslMoveRunEnd } from './execution/wsl-move-driver-run-end'
 import {
   exportRequestOf,
   isWslMoveScopeChanged,
   prepareWslMove,
   refusal,
   type WslMovePrepared
-} from './wsl-move-driver-plan'
+} from './execution/wsl-move-driver-plan'
 import {
   advanceWslMove,
   collectWslMoveBlobs,
@@ -35,21 +38,21 @@ import {
   sendWslMoveBlobs,
   stageWslMove,
   wslMoveCopyBytes
-} from './wsl-move-driver-transfer'
-import { pauseWslMoveScope } from './wsl-move-driver-pause'
-import { quiesceWslMove, type WslMoveQuiesceRefusalReason } from './wsl-move-quiesce'
-import { finishWslMove as finish } from './wsl-move-driver-finish'
-import { resetWslMoveToZero } from './wsl-move-reset'
+} from './execution/wsl-move-driver-transfer'
+import { pauseWslMoveScope } from './execution/wsl-move-driver-pause'
+import { quiesceWslMove, type WslMoveQuiesceRefusalReason } from './quiescence/wsl-move-quiesce'
+import { finishWslMove as finish } from './execution/wsl-move-driver-finish'
+import { resetWslMoveToZero } from './cutover-recovery/wsl-move-reset'
 import {
   claimWslMoveRun,
   releaseWslMoveRun,
   wslMoveClaimRefusal,
   type RunningWslMove
-} from './wsl-move-running-moves'
+} from './orchestration/wsl-move-running-moves'
 import {
   holdWslMoveWindowWritesForCommit,
   settleWslMoveWindowWriteHoldForCommit
-} from './wsl-move-window-write-hold'
+} from './quiescence/wsl-move-window-write-hold'
 
 class WslMoveStop extends Error {}
 
@@ -57,9 +60,6 @@ class WslMoveStop extends Error {}
 const WSL_MOVE_TERMINALS_STARTED = 'terminals-started-after-pause'
 /** The quiesce's own wording, so both proofs read alike in the result. */
 const WSL_MOVE_EXIT_UNVERIFIABLE = 'exit-unverifiable'
-
-export { cancelWslMove, isWslMoveRunning } from './wsl-move-running-moves'
-export { previewWslMove } from './wsl-move-driver-preview'
 
 export async function moveProjectsToWslHost(
   deps: WslMoveDriverDeps,
@@ -93,7 +93,15 @@ async function runMove(
   const { distro } = request
   deps.progress({ distro, step: 'preparing' })
   const startedAt = deps.now()
-  const prepared = await prepareWslMove(deps, request, migrationId, startedAt, 'finish-now')
+  // The start re-reads the mapped drives and refuses if they moved since the preview showed them.
+  const prepared = await prepareWslMove(
+    deps,
+    request,
+    migrationId,
+    startedAt,
+    'finish-now',
+    request.mappedDrives ?? []
+  )
   if ('outcome' in prepared) {
     return prepared
   }
@@ -116,7 +124,8 @@ async function runMove(
     distro,
     migrationId,
     scope.workspaceIds,
-    request.sleptPanes
+    request.sleptPanes,
+    prepared.plan.mappedDrives
   )
   try {
     const journaled = await journalSleptWslMove(deps, prepared, migrationId, startedAt, slept)
@@ -149,11 +158,13 @@ async function runMove(
             detail: pauseDetail(quiesced.reason, quiesced.detail)
           })
     }
-    try {
-      return await moveQuiesced(deps, host, quiesced.cutover, prepared, running, slept)
-    } catch (error) {
-      return await putBack(deps, host, migrationId, describe(error))
-    }
+    const result = await moveQuiesced(deps, host, quiesced.cutover, prepared, running, slept).catch(
+      (error: unknown) => putBack(deps, host, migrationId, describe(error))
+    )
+    // The projects the preview showed that this start left say why in the result.
+    return result.outcome === 'moved' && prepared.droppedForDrives
+      ? { ...result, droppedForMappedDrives: prepared.droppedForDrives }
+      : result
   } finally {
     slept.dispose()
   }
@@ -241,6 +252,7 @@ async function proveStillExited(
 ): Promise<void> {
   const proof = await deps.quiesce.proveExited({
     distro: quiesced.manifest.source.distro,
+    mappedDrives: quiesced.mappedDrives ?? [],
     workspaceKeys: prepared.scope.workspaceKeys,
     sessionIds: new Set(quiesced.provenExitedSessionIds)
   })

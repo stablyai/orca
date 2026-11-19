@@ -4,13 +4,13 @@ import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import {
   parseExecutionHostId,
   toRuntimeExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { recordTerminalUserInputForLeaf } from '../terminal-input-activity'
 import {
   isResolvedWorkspaceFileDragExecutionHost,
   readWorkspaceFileDragPaths,
   readWorkspaceFileDragSource
-} from '@/lib/workspace-file-drag'
+} from '@/lib/files/drop/workspace-file-drag'
 import { captureTerminalDropTarget } from './terminal-drop-target'
 import { resolveTerminalDropTargetShell } from './terminal-drop-shell'
 import { writeTerminalDropPathsToCapturedTarget } from './terminal-drop-path-writer'

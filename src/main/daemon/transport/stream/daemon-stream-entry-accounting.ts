@@ -1,4 +1,4 @@
-import { encodeNdjson } from '../../../../shared/main-process-ndjson-framer'
+import { encodeNdjson } from '../../../../shared/json-stream/main-process-ndjson-framer'
 import type { PendingStreamDataBatch, StreamQueueEntry } from './daemon-stream-data-batch'
 
 // Budget callbacks, stream requests and queue objects even when their data payload is empty.

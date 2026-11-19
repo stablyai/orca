@@ -10,7 +10,7 @@ import {
   isClaudeIdentityFrameSegment,
   isClaudeManagementTitle,
   isCursorNativeAgentTitle,
-  isGrokRotatingWorkingTitle
+  grokFrameTitleStatus
 } from './agent-title-core'
 import {
   isOpenCodeNativeTitle,
@@ -28,9 +28,11 @@ import {
   getPiCompatibleTitleBrand,
   isLegacyPiCompatibleTitle
 } from './providers/pi-compatible-synthetic-title'
+import { WRAPPER_SEPARATOR, getEvidenceTitleSegments } from './terminal-title-wrapper-segments'
 import { isCodewhaleTerminalTitle } from './providers/codewhale-terminal-title'
 import { isDshTerminalTitle } from './providers/dsh-terminal-title'
 import { hasQoderTitleLabelPayload, isQoderTerminalTitle } from './providers/qoder-terminal-title'
+import { isJcodeIdentityTerminalTitle } from './providers/jcode-terminal-title'
 import {
   SYNTHETIC_AGENT_TITLE_AGENTS,
   SYNTHETIC_AGENT_TITLE_PROFILES
@@ -70,26 +72,6 @@ const ANTIGRAVITY_MODEL_TITLE_RE = /^(?:agy|antigravity)(?:\s*[\u00B7\u2014:-]\s
 
 /** Orca owns the final - <agent> suffix. Require leading whitespace to avoid treating hyphenated cwd names as ownership. */
 const OWNER_SUFFIX_RE = /\s-\s+([A-Za-z][\w-]*)\s*$/
-const WRAPPER_SEPARATOR = ' | '
-const MAX_WRAPPER_EVIDENCE_SEGMENTS = 8
-
-function getEvidenceTitleSegments(title: string): string[] {
-  const segments = [title]
-  let separatorIndex = title.lastIndexOf(WRAPPER_SEPARATOR)
-  while (separatorIndex >= 0 && segments.length < MAX_WRAPPER_EVIDENCE_SEGMENTS) {
-    const wrapped = title.slice(separatorIndex + WRAPPER_SEPARATOR.length).trim()
-    if (wrapped && !segments.includes(wrapped)) {
-      segments.push(wrapped)
-    }
-    const previousSeparatorIndex = separatorIndex
-    separatorIndex = title.lastIndexOf(WRAPPER_SEPARATOR, separatorIndex - 1)
-    if (separatorIndex === previousSeparatorIndex) {
-      break
-    }
-  }
-  return segments
-}
-
 function agentForSyntheticTitle(text: string): TerminalAgent | null {
   const trimmed = text.trim()
   if (/[\\/]/.test(trimmed)) {
@@ -184,6 +166,9 @@ function collectAnchoredNames(
     if (synthetic) {
       anchored.add(synthetic)
     }
+    if (grokFrameTitleStatus(segment)) {
+      anchored.add('grok')
+    }
     if (isClaudeIdentityFrameSegment(segment)) {
       anchored.add('claude')
     }
@@ -267,12 +252,13 @@ function collectObserverAnchors(title: string): TerminalAgent[] {
     agent = agentForNativeFrame(segment) === 'claude' ? 'claude' : null
   } else {
     agent =
-      (isGrokRotatingWorkingTitle(segment) ? 'grok' : null) ??
+      (grokFrameTitleStatus(segment) ? 'grok' : null) ??
       (isDeepSeekBuildWorkingTitle(segment) ||
       (!segment.includes('|') && isDeepSeekBuildTerminalTitle(segment))
         ? 'dsb'
         : null) ??
       agentForNativeFrame(segment) ??
+      (isJcodeIdentityTerminalTitle(segment) ? 'jcode' : null) ??
       agentForWholeTitle(segment) ??
       agentForSyntheticTitle(segment) ??
       (ANTIGRAVITY_MODEL_TITLE_RE.test(undecorated) ? 'antigravity' : null) ??

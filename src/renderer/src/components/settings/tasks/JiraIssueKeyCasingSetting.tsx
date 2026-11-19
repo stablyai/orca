@@ -1,5 +1,5 @@
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { JiraIssueKeyCasing } from '../../../../../shared/ui-chrome-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import type { JiraIssueKeyCasing } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Translate } from '@/i18n/use-translate'
@@ -15,7 +15,7 @@ export const JIRA_ISSUE_KEY_CASING_KEYWORDS = [
 ]
 
 export function getJiraIssueKeyCasingTitle(t: Translate = translate): string {
-  return t('auto.components.settings.GitPane.jiraIssueKeyCasingTitle', 'Jira Key Casing')
+  return t('auto.components.settings.GitPane.8cdbaf4b03', 'Jira key casing')
 }
 
 export function getJiraIssueKeyCasingDescription(t: Translate = translate): string {

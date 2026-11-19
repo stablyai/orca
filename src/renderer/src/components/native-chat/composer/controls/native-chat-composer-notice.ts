@@ -1,8 +1,8 @@
 // Separate Orca’s notice wording from verbatim external errors so the latter stay readable and copyable.
 
 import { translate } from '@/i18n/i18n'
-import { readIpcErrorDetail } from '@/lib/ipc-error'
-import { isClipboardTextTooLargeError } from '../../../../../../shared/clipboard-text'
+import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
+import { isClipboardTextTooLargeError } from '../../../../../../shared/clipboard/clipboard-text'
 
 export type NativeChatComposerNoticeContent = {
   text: string
@@ -14,7 +14,14 @@ export type NativeChatComposerNoticeContent = {
 
 export type NativeChatComposerNotice = NativeChatComposerNoticeContent & {
   key: string
-  action?: { label: string; onClick: () => void; disabled?: boolean; primary?: boolean }
+  action?: {
+    label: string
+    onClick: () => void
+    disabled?: boolean
+    primary?: boolean
+    /** Shown before the button, e.g. a failed run's chip. */
+    status?: React.ReactNode
+  }
   onDismiss?: () => void
 } & ({ kind: 'error' | 'attachment' | 'device' } | { kind: 'host'; tone: 'warning' | 'muted' })
 

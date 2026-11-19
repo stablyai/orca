@@ -1,7 +1,7 @@
 import { AlertCircle, Paperclip, ServerOff, Smartphone, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { NativeChatCopyButton } from '../../messages/actions/NativeChatCopyButton'
 import { NativeChatActionButton } from './NativeChatActionButton'
 import type { NativeChatComposerNotice } from './native-chat-composer-notice'
@@ -52,6 +52,20 @@ export function NativeChatPromptSlotNotices({
   )
 }
 
+function NoticeAction({
+  status,
+  ...action
+}: NonNullable<NativeChatComposerNotice['action']>): React.JSX.Element {
+  return status ? (
+    <span className="flex shrink-0 items-center gap-1.5">
+      {status}
+      <NativeChatActionButton {...action} />
+    </span>
+  ) : (
+    <NativeChatActionButton {...action} />
+  )
+}
+
 function NoticeRow({ notice }: { notice: NativeChatComposerNotice }): React.JSX.Element {
   const t = useTranslate()
   const isError = notice.kind === 'error'
@@ -87,7 +101,7 @@ function NoticeRow({ notice }: { notice: NativeChatComposerNotice }): React.JSX.
         >
           {notice.content ?? notice.text}
         </p>
-        {notice.action ? <NativeChatActionButton {...notice.action} /> : null}
+        {notice.action ? <NoticeAction {...notice.action} /> : null}
         {notice.onDismiss ? (
           <Button
             type="button"

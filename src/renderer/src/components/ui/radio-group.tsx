@@ -2,12 +2,14 @@ import * as React from 'react'
 import * as RadioGroupPrimitive from 'radix-ui/radio-group'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { Circle } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 const radioGroupVariants = cva('', {
   variants: {
     layout: {
       default: 'grid gap-2',
+      // Sidebar-style rows carry their own padding.
+      rows: 'grid gap-0.5',
       cards: 'grid gap-3 md:grid-cols-2',
       inline: 'flex flex-wrap items-center gap-2.5'
     }
@@ -71,4 +73,11 @@ function RadioGroupItem({
   )
 }
 
-export { RadioGroup, RadioGroupItem }
+/** A radio whose look is its one child: the group's arrow keys and single Tab stop, on any row. */
+function RadioGroupItemSlot(
+  props: Omit<React.ComponentProps<typeof RadioGroupPrimitive.Item>, 'asChild'>
+) {
+  return <RadioGroupPrimitive.Item data-slot="radio-group-item" asChild {...props} />
+}
+
+export { RadioGroup, RadioGroupItem, RadioGroupItemSlot }

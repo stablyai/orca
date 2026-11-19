@@ -6,7 +6,7 @@ import {
   oldestStructuredAgentSessionCursor,
   reduceStructuredAgentSession,
   type StructuredAgentSessionState
-} from '../structured-agent-session-reducer'
+} from './live-read/structured-agent-session-reducer'
 
 function item(sequence: number): AgentJournalRenderItem {
   return {

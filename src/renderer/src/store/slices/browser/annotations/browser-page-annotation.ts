@@ -42,3 +42,16 @@ export function retainBrowserAnnotationMarkerIds(
   }
   return nextByPageId
 }
+
+/** Closing a browser tab discards the notes its pages hold unsent. */
+export function hasUnsentBrowserNotes(
+  state: {
+    browserPagesByWorkspace: Record<string, readonly { id: string }[]>
+    browserAnnotationsByPageId: Record<string, readonly BrowserPageAnnotation[]>
+  },
+  browserWorkspaceId: string
+): boolean {
+  return (state.browserPagesByWorkspace[browserWorkspaceId] ?? []).some(
+    (page) => (state.browserAnnotationsByPageId[page.id]?.length ?? 0) > 0
+  )
+}

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { getAgentLabel } from '../agent-title-identity'
 import { collectAgentTitleEvidence } from '../agent-title-evidence'
 import { isDshTerminalTitle } from './dsh-terminal-title'
-import { resolvePublishedPaneAgentIdentity } from '../../../published-pane-agent-identity'
+import { resolvePublishedPaneAgentIdentity } from '../../identity/published-pane-agent-identity'
 import { resolveExplicitTerminalTitleAgentType } from '../terminal-title-agent-type'
 
 describe('Codewhale terminal titles', () => {

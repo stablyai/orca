@@ -17,18 +17,6 @@ export {
 } from './agent-launch-picker-drafts'
 export type { AgentPickerSetupIdentity } from './agent-launch-picker-drafts'
 
-export type AgentLaunchSetupPanelProps = {
-  entry: AgentPickerEntry
-  draft: AgentPickerDraft
-  getDraft: () => AgentPickerDraft | undefined
-  mode?: 'launch' | 'select'
-  disabled?: boolean
-  autoFocus?: boolean
-  terminalBlocked?: boolean
-  onDraftChange: (draft: AgentPickerDraft) => void
-  onUse: (draft: AgentPickerDraft) => boolean | void | Promise<boolean>
-}
-
 export function AgentLaunchSetupButton({
   entry,
   draftScope,
@@ -36,8 +24,6 @@ export function AgentLaunchSetupButton({
   preset,
   initial,
   seed,
-  surface,
-  mode = 'launch',
   renderAnchor,
   disabled,
   terminalBlocked,
@@ -52,8 +38,6 @@ export function AgentLaunchSetupButton({
   preset?: AgentPickerSetupIdentity
   initial?: AgentPickerDraft
   seed?: AgentPickerDraft
-  surface?: AgentPickerDraft['surface']
-  mode?: 'launch' | 'select'
   renderAnchor: (trigger: ReactElement) => ReactElement
   disabled?: boolean
   terminalBlocked?: boolean
@@ -69,11 +53,9 @@ export function AgentLaunchSetupButton({
     entry,
     initial,
     seed,
-    surface,
     draftScope,
     draftId,
     preset,
-    mode,
     open
   })
   const changeOpen = (next: boolean) => {
@@ -90,7 +72,6 @@ export function AgentLaunchSetupButton({
       {setup.ready ? (
         <AgentLaunchSetupPanel
           entry={entry}
-          mode={mode}
           draft={setup.draft}
           getDraft={setup.getDraft}
           disabled={disabled}
@@ -98,12 +79,12 @@ export function AgentLaunchSetupButton({
           terminalBlocked={terminalBlocked}
           onDraftChange={setup.change}
           onUse={(draft) => {
-            if (mode !== 'select' && terminalBlocked && draft.surface === 'terminal') {
+            if (terminalBlocked && draft.surface === 'terminal') {
               return false
             }
             const options = { ...draft, surface: setup.draft.surface }
             delete options.prompt
-            if (!setup.accept(mode === 'select' ? draft : options)) {
+            if (!setup.accept(options)) {
               return false
             }
             const accepted = onUse(draft)

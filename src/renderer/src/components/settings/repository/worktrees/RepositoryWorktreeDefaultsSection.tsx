@@ -1,5 +1,5 @@
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
@@ -7,11 +7,11 @@ import { BaseRefPicker } from '../../../source-control/BaseRefPicker'
 import { RepoSettingsDraftInput } from '../RepositorySettingsDraftInput'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { useTranslate } from '@/i18n/use-translate'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   effectiveExternalWorktreeVisibility,
   isLegacyRepoForExternalWorktreeVisibility
-} from '../../../../../../shared/external-worktree-visibility'
+} from '../../../../../../shared/worktree/visibility/external-worktree-visibility'
 
 type RepositoryWorktreeDefaultsUpdate = Pick<Repo, 'worktreeBasePath' | 'worktreeBaseRef'> & {
   externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
@@ -118,7 +118,7 @@ export function RepositoryWorktreeDefaultsSection({
       </SearchableSetting>
 
       <SearchableSetting
-        title={t('auto.components.settings.RepositoryPane.f88db4fece', 'Default Worktree Base')}
+        title={t('auto.components.settings.RepositoryPane.38df44846b', 'Default worktree base')}
         description={t(
           'auto.components.settings.RepositoryPane.8984d06520',
           'Default base branch or ref when creating worktrees.'
@@ -128,7 +128,7 @@ export function RepositoryWorktreeDefaultsSection({
         forceVisible={forceVisible}
       >
         <Label className="text-sm font-semibold">
-          {t('auto.components.settings.RepositoryPane.f88db4fece', 'Default Worktree Base')}
+          {t('auto.components.settings.RepositoryPane.38df44846b', 'Default worktree base')}
         </Label>
         <BaseRefPicker
           repoId={repo.id}
@@ -140,7 +140,7 @@ export function RepositoryWorktreeDefaultsSection({
       </SearchableSetting>
 
       <SearchableSetting
-        title={t('auto.components.settings.RepositoryPane.e9bd57a336', 'Worktree Location')}
+        title={t('auto.components.settings.RepositoryPane.5ff7788414', 'Worktree location')}
         description={t(
           'auto.components.settings.RepositoryPane.e63bb96a9b',
           'Project-specific directory for new worktrees.'
@@ -158,7 +158,7 @@ export function RepositoryWorktreeDefaultsSection({
       >
         <div className="flex items-center justify-between gap-3">
           <Label className="text-sm font-semibold">
-            {t('auto.components.settings.RepositoryPane.e9bd57a336', 'Worktree Location')}
+            {t('auto.components.settings.RepositoryPane.5ff7788414', 'Worktree location')}
           </Label>
           {repo.worktreeBasePath ? (
             <Button
@@ -167,7 +167,7 @@ export function RepositoryWorktreeDefaultsSection({
               size="sm"
               onClick={() => updateRepo(repo.id, { worktreeBasePath: undefined })}
             >
-              {t('auto.components.settings.RepositoryPane.8ccacbeb5a', 'Use Global')}
+              {t('auto.components.settings.RepositoryPane.077dc18a4a', 'Use global')}
             </Button>
           ) : null}
         </div>

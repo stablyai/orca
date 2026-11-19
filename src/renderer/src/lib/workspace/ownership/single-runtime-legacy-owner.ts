@@ -1,4 +1,4 @@
-import { getPairedWebClientEnvironmentId } from '../../paired-web-client-host'
+import { getPairedWebClientEnvironmentId } from '../../../app-shell/platform/paired-web-client-host'
 
 export type SingleRuntimeLegacyOwnerState = {
   settings?: { activeRuntimeEnvironmentId?: string | null } | null

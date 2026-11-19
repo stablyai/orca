@@ -212,7 +212,7 @@ export function createUiAgentActions(
       mode.onPromptDelivered?.()
       const [{ toast }, { track }] = await Promise.all([
         import('sonner'),
-        import('@/lib/telemetry')
+        import('@/diagnostics/telemetry/telemetry')
       ])
       track('agent_prompt_sent', {
         agent_kind: agentKindForAgentType(agentType),

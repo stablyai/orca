@@ -2,10 +2,11 @@ import { useMemo } from 'react'
 import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { mapAgentStatusStateToVisualStatus } from '@/lib/agent-status/aggregation/worktree-agent-status'
-import { getWorktreeStatusLabel, type WorktreeStatus } from '@/lib/worktree-status'
+import { getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
+import type { WorktreeStatus } from '../../../../shared/worktree/row-display/worktree-status-rollup'
 import {
   useAgentMessageSenderViews,
   type AgentMessageSenderInput
@@ -13,10 +14,13 @@ import {
 import { isAgentStatusState } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
-import { isOrcaSessionId, formatOrcaSessionAddress } from '../../../../shared/orca-session-address'
-import type { AgentMessageSenderView } from '../../../../shared/agent-session/agent-message-presentation'
+import {
+  isOrcaSessionId,
+  formatOrcaSessionAddress
+} from '../../../../shared/agent-session/identity/orca-session-address'
+import type { AgentMessageSenderView } from '../../../../shared/agent-session/view/messages/agent-message-presentation'
 import type { OrchestrationCrewRow } from '../../../../shared/orchestration/orchestration-crew'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export type CrewRowLook = { partyKey: string; status: WorktreeStatus; agentType: string }
 export type CrewStatusGroup = 'needsYou' | 'working' | 'idle' | 'failed'
@@ -75,24 +79,39 @@ function dotStatus(dot: NonNullable<AgentMessageSenderView['dot']>): WorktreeSta
   }
 }
 
-/** The sidebar's status for a Crew row: live sender state first, then the Crew snapshot. */
-function crewRowLook(row: OrchestrationCrewRow, view: AgentMessageSenderView): CrewRowLook {
-  const agentType = view.agentType ?? row.agentKind
-  const { partyKey } = row
-  if (row.pendingQuestion) {
-    return { partyKey, status: 'permission', agentType }
+export type CrewPartyState = {
+  pendingQuestion: boolean
+  dot: AgentMessageSenderView['dot']
+  /** The party's recorded agent state. */
+  status: string
+  taskFailed: boolean
+}
+
+/** The sidebar's status for a party: an open question, then live sender state, then its record. */
+export function crewPartyStatus(party: CrewPartyState): WorktreeStatus {
+  if (party.pendingQuestion) {
+    return 'permission'
   }
-  if (view.dot) {
-    return { partyKey, status: dotStatus(view.dot), agentType }
+  if (party.dot) {
+    return dotStatus(party.dot)
   }
-  const status = isAgentStatusState(row.status)
-    ? mapAgentStatusStateToVisualStatus(row.status)
+  const status = isAgentStatusState(party.status)
+    ? mapAgentStatusStateToVisualStatus(party.status)
     : 'inactive'
   // A settled assignment whose task failed is a failure, not a quiet finish.
+  return status === 'done' && party.taskFailed ? 'failed' : status
+}
+
+function crewRowLook(row: OrchestrationCrewRow, view: AgentMessageSenderView): CrewRowLook {
   return {
-    partyKey,
-    status: status === 'done' && row.task?.state === 'failed' ? 'failed' : status,
-    agentType
+    partyKey: row.partyKey,
+    status: crewPartyStatus({
+      pendingQuestion: Boolean(row.pendingQuestion),
+      dot: view.dot,
+      status: row.status,
+      taskFailed: row.task?.state === 'failed'
+    }),
+    agentType: view.agentType ?? row.agentKind
   }
 }
 

@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { Label } from '../../../ui/label'
 import { EphemeralVmsPane } from './EphemeralVmsPane'
@@ -16,7 +16,7 @@ export function EphemeralVmsExperimentalSetting({
   updateSettings
 }: EphemeralVmsExperimentalSettingProps): React.JSX.Element {
   const t = useTranslate()
-  const entry = getExperimentalSearchEntry(t).ephemeralVms
+  const entry = getExperimentalSearchEntry().ephemeralVms
   const enabled = settings.experimentalEphemeralVms === true
 
   return (
@@ -29,9 +29,7 @@ export function EphemeralVmsExperimentalSetting({
     >
       <div className="flex max-w-3xl items-start justify-between gap-4">
         <div className="min-w-0 shrink space-y-0.5">
-          <Label>
-            {t('auto.components.settings.ephemeralVms.search.cloudVmTitle', 'Cloud VM')}
-          </Label>
+          <Label>{entry.title}</Label>
           <p className="text-xs text-muted-foreground">
             {t(
               'auto.components.settings.ephemeralVmsExperimentalSetting.description',

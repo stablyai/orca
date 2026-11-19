@@ -1,17 +1,17 @@
-import type { ExecutionHostId } from '../../../../src/shared/execution-host'
-import type { Worktree } from '../../worktree/workspace-list-types'
+import type { ExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
+import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
 import {
   getMobileWorkspaceLineageChildren,
   type MobileLineageRow,
   type MobileLineageStores
-} from '../../worktree/mobile-workspace-lineage'
-import { getWorktreeRowIdentity } from '../../worktree/worktree-host-row-identity'
+} from '../../worktree/agent-lineage/mobile-workspace-lineage'
+import { getWorktreeRowIdentity } from '../../worktree/row-presentation/worktree-host-row-identity'
 import { serializeFolderLineage } from './folder-lineage-serialization'
 
 /** What a folder list row shows of a host row. */
 export type FolderListRow = Pick<
   Worktree,
-  'worktreeId' | 'hostId' | 'repo' | 'displayName' | 'branch'
+  'worktreeId' | 'hostId' | 'repoId' | 'repo' | 'displayName' | 'branch'
 >
 
 type FolderLineageRow = MobileLineageRow & Pick<Worktree, 'createdAt'>
@@ -36,6 +36,7 @@ export function toFolderListRow(row: Worktree): FolderListRow {
     listRow = {
       worktreeId: row.worktreeId,
       hostId: row.hostId,
+      repoId: row.repoId,
       repo: row.repo,
       displayName: row.displayName,
       branch: row.branch

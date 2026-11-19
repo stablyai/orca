@@ -1,7 +1,7 @@
 import React from 'react'
 import { FolderX } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   getFolderWorkspacePathStatusDescription,
   getFolderWorkspacePathStatusTitle
@@ -45,5 +45,12 @@ export function FolderPathStatusIndicator({
         </div>
       </TooltipContent>
     </Tooltip>
+  )
+}
+
+export function isFolderWorkspaceCreateDisabled(status: FolderWorkspacePathStatus | null): boolean {
+  return (
+    status?.exists === false &&
+    (isConfirmedStaleFolderPathStatus(status) || status.reason === 'ambiguous-connection')
   )
 }

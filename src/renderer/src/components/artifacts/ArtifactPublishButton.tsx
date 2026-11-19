@@ -5,12 +5,12 @@ import { Button } from '@/components/ui/button'
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
-import { useAppStore } from '@/store'
+import { cn } from '@/lib/class-names'
+import { useAppStore } from '@/store/index'
 import { ArtifactPublishedLinkPanel } from './ArtifactPublishedLinkPanel'
 import { getPublishedArtifactLink } from './artifact-published-link-client'
 import { publishArtifactFromSurface } from './artifact-publish-flow'
-import { OrcaSignInButton, OrcaSignInWaitNotice } from '../OrcaSignInProgress'
+import { OrcaSignInButton, OrcaSignInWaitNotice } from '../orca-profiles/OrcaSignInProgress'
 
 type PublishedLinkLookup = {
   key: string

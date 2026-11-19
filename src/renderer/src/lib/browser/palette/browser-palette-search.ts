@@ -1,9 +1,12 @@
-import '../../../../../shared/constants'
+import '../../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
-import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
+import type {
+  BrowserPage,
+  BrowserWorkspace
+} from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
-import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard-text'
-import { compareBaseSensitivityLocaleText } from '../../../../../shared/locale-text-collators'
+import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard/clipboard-text'
+import { compareBaseSensitivityLocaleText } from '../../../../../shared/i18n/locale-text-collators'
 import {
   comparePaletteTabResults,
   isOmniboxPaletteTabFieldAllowed,
@@ -14,8 +17,8 @@ import { buildPaletteTabDocument } from '../../../../../shared/palette-match/tab
 import {
   resolveWorktreeBranchLabel,
   resolveWorktreeDisplayName
-} from '../../worktree-default-display-name'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+} from '../../workspace/display/worktree-default-display-name'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { MatchRange } from '../../../../../shared/palette-match/normalized-text'
 import type {
   PaletteDocument,
@@ -90,10 +93,6 @@ function isBrowserPaletteQueryTooLarge(
   return isClipboardTextByteLengthOverLimit(query, maxBytes)
 }
 
-function compareText(a: string, b: string): number {
-  return compareBaseSensitivityLocaleText(a, b)
-}
-
 export function isBlankBrowserUrl(url: string): boolean {
   return url === 'about:blank' || url === ORCA_BROWSER_BLANK_URL
 }
@@ -146,11 +145,11 @@ function compareEmptyQueryResults(
   if (a.score !== b.score) {
     return a.score - b.score
   }
-  const secondaryCmp = compareText(a.secondaryText, b.secondaryText)
+  const secondaryCmp = compareBaseSensitivityLocaleText(a.secondaryText, b.secondaryText)
   if (secondaryCmp !== 0) {
     return secondaryCmp
   }
-  return compareText(a.title, b.title)
+  return compareBaseSensitivityLocaleText(a.title, b.title)
 }
 
 // Empty-query order is deterministic/context-first; use recency only to break equally ranked query hits.

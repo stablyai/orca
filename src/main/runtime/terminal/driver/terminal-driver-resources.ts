@@ -1,11 +1,11 @@
 import type { RuntimeServiceCommandSurface } from '../../construction/runtime-service-command-surface'
-import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as ChatPresentation } from '../../session-tabs/structured-session-tab-close'
+import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as ChatPresentation } from '../../session-tabs/chat/structured-session-tab-close'
 import {
   remoteCliBrowserScopeWorkspaceId,
   resolveRemoteCliBrowserScopeSelector
 } from '../../desktop-browser-bridge/remote-cli-browser-scope'
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { RuntimeAccountController } from '../../agent-session/environment/runtime-account-controller'
 import type { BrowserNetworkExecutionHost } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
@@ -16,11 +16,11 @@ import type { PtyLivenessVerdict } from '../../../../shared/terminal/pty/lifecyc
 import type {
   RuntimeTerminalClose,
   RuntimeTerminalRead
-} from '../../../../shared/runtime-terminal-contracts'
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { ExactWorkerProviderSession } from '../../../../shared/orchestration/workers/orchestration-worker-output'
 import type { RuntimeProviderSnapshotReadOptions } from '../output/provider-snapshot-read-options'
 import { OrcaRuntimeWithFitOverrideListeners } from '../lifecycle/terminal-view-resources'
-import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeTerminalDriverState } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   ApplyLayoutResult,
   PtyLayoutTarget,
@@ -36,17 +36,18 @@ import { getBrowserHostRequestRegistry } from '../../browser-host/leases/browser
 
 import { RuntimeBrowserDriverController } from '../../browser/driver/runtime-browser-driver-controller'
 import { RemoteDesktopTerminalFloor } from '../layout/remote-desktop-terminal-floor'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/runtime-session-contracts'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { StatsCollector } from '../../../stats/collector'
 import { RuntimeRemoteFetchController } from '../../repositories/runtime-remote-fetch-controller'
 import { RuntimeWorktreeBaseReconciliation } from '../../workspaces/metadata/runtime-worktree-base-reconciliation'
 import { RuntimeWorktreeRemovalInFlight } from '../../workspaces/removal/runtime-worktree-removal-in-flight'
 import { ServeBrowserTabs } from '../../browser/headless/serve-browser-tabs'
 import { readBrowserTabBar } from '../../browser/tabs/browser-tab-listing'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { readSavedBrowserPageAnnotations } from '../../browser/tabs/browser-tab-annotations'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { ServeBrowserPageState } from '../../browser/headless/serve-browser-tab-layout'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { LayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 
 export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitOverrideListeners {
@@ -77,7 +78,7 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
     worktreeId: string | undefined,
     browserPageId: string,
     options: BrowserSessionTabSelectionOptions
-  ): void
+  ): Promise<void>
   abstract notifyMobileSessionTabsChanged(worktreeId?: string): void
   protected abstract getWorkspaceSessionHostIdForWorktree(worktreeId: string): ExecutionHostId
   protected abstract setWorkspaceSessionForWorktree(
@@ -146,7 +147,7 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
       this.mobileTookFloor(ptyId, clientId, previousFloor, isCurrent)
   })
 
-  protected readonly serveBrowserTabs = new ServeBrowserTabs({
+  readonly serveBrowserTabs = new ServeBrowserTabs({
     backend: () => (this.getAvailableAuthoritativeWindow() ? null : this.offscreenBrowserBackend),
     livePageIds: (worktreeId) =>
       new Set(
@@ -201,6 +202,8 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
       markHeadlessBrowserSessionTabActive: this.markHeadlessBrowserSessionTabActive.bind(this),
       notifyHeadlessBrowserSessionTabsChanged: (worktreeId) =>
         this.notifyMobileSessionTabsChanged(worktreeId),
+      readBrowserPageAnnotations: (browserPageId) =>
+        readSavedBrowserPageAnnotations(this.store, browserPageId),
       readBrowserTabBar: (worktreeId) =>
         readBrowserTabBar(this.mobileSessionTabsByWorktree, worktreeId, (id) => {
           // Why: an SSH host's bridged workspace may have no row here, yet its pages render in this window.

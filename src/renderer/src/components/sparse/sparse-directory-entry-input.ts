@@ -2,7 +2,7 @@ import {
   hasSparseDirectoryParentSegment,
   isAbsoluteSparseDirectoryPath,
   normalizeSparseDirectoryLines
-} from '@/lib/sparse-paths'
+} from '../../../../shared/worktree/creation/sparse-directory-paths'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 

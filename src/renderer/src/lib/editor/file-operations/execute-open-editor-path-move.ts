@@ -5,9 +5,9 @@ import { requestEditorSaveQuiesce } from '@/components/editor/autosave/editor-au
 import {
   beginEditorPathMove,
   settleEditorPathMove
-} from '@/components/editor/editor-path-move-inflight'
+} from '@/components/editor/file-ownership/editor-path-move-inflight'
 import { remapOpenEditorTabsForPathChange } from '@/lib/editor/file-operations/remap-open-editor-tabs-for-path-change'
-import { isPathInsideOrEqual } from '../../../../../shared/cross-platform-path'
+import { isPathInsideOrEqual } from '../../../../../shared/file-access/cross-platform-path'
 import { verifyLatchedMoveDestinations } from '@/hooks/useEditorExternalWatch'
 import { notifyHostOfMirroredEditorClose } from '@/runtime/web-session-tabs-sync/closing/close-mirrored-editor-tab'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
@@ -15,9 +15,9 @@ import {
   editorMoveOwnerFromContext,
   isOpenFileOnMoveOwner
 } from '@/lib/editor/file-operations/open-editor-move-owner'
-import { documentFolderAccess } from '@/lib/local-file-access'
+import { documentFolderAccess } from '@/lib/files/access/local-file-access'
 import { contentRekeyOutcome } from '@/runtime/workspace-layout/intents/layout-owner-content-rekeys'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 
 let moveOperationCounter = 0
 

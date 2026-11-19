@@ -3,17 +3,19 @@ import type * as ParkedWatcherRegistryModule from '../terminal-pane/parking/outp
 import { act, StrictMode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { useTerminalWatcherEffects } from '../use-terminal-watcher-effects'
+import { useTerminalWatcherEffects } from './workbench/use-terminal-watcher-effects'
 import type { PendingWorktreeCreation } from '@/lib/workspace/creation/pending-worktree-creation'
 import {
   claimEmptyWorkspaceDefaultSurface,
   releaseEmptyWorkspaceDefaultSurface
 } from '@/lib/workspace/activation/initial-surface/empty-workspace-default-surface-claims'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 
 const mocks = vi.hoisted(() => {
   const storeTabsByWorktree: Record<string, unknown[]> = {}
   const storeClosedRecords: Record<string, { worktreeId: string; closedAt: number }> = {}
   const storePendingCreations: Record<string, PendingWorktreeCreation> = {}
+  const bots: { folderWorkspaceId: string }[] = []
   return {
     gate: vi.fn(),
     resume: vi.fn(),
@@ -22,12 +24,15 @@ const mocks = vi.hoisted(() => {
     createTab: vi.fn(),
     storeTabsByWorktree,
     storeClosedRecords,
-    storePendingCreations
+    storePendingCreations,
+    bots,
+    botsEnabled: true,
+    activeWorktreeId: 'wt-1'
   }
 })
 vi.mock('@/store', () => {
   const getState = () => ({
-    activeWorktreeId: 'wt-1',
+    activeWorktreeId: mocks.activeWorktreeId,
     tabsByWorktree: mocks.storeTabsByWorktree,
     closedTerminalTabTombstonesByTabId: mocks.storeClosedRecords,
     pendingWorktreeCreations: mocks.storePendingCreations
@@ -45,6 +50,12 @@ vi.mock('@/lib/workspace/activation/worktree-agent-activation-gate', () => ({
 vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-status', () => ({
   hasStructuredAgentLaunchInWorktree: (worktreeId: string) =>
     ['claude', 'codex', 'grok'].some((agent) => mocks.launchStatus(worktreeId, agent) !== 'idle')
+}))
+vi.mock('@/lib/bot-catalog', () => ({
+  readBots: () => mocks.bots,
+  readBotsEnabled: () => mocks.botsEnabled,
+  useBots: () => mocks.bots,
+  useBotsEnabled: () => true
 }))
 vi.mock('@/lib/agent-session/resume/resume-sleeping-agent-session', () => ({
   resumeSleepingAgentSessionsForWorktree: mocks.resume
@@ -77,6 +88,9 @@ afterEach(async () => {
   mocks.storeTabsByWorktree = {}
   mocks.storeClosedRecords = {}
   mocks.storePendingCreations = {}
+  mocks.bots = []
+  mocks.botsEnabled = true
+  mocks.activeWorktreeId = 'wt-1'
 })
 
 function Watcher({ restored = true, hydrated = false, worktreeId = 'wt-1' } = {}): null {
@@ -86,6 +100,7 @@ function Watcher({ restored = true, hydrated = false, worktreeId = 'wt-1' } = {}
     terminalStartupRestorationReady: restored,
     hydrationSucceeded: hydrated,
     workspaceSurfaceIds: [],
+    workspaceSurfaceIdSet: new Set(),
     tabsByWorktree: {},
     createTab: mocks.createTab,
     reconcileWorktreeTabModel: () => ({
@@ -162,6 +177,33 @@ function deferredGate(): (outcome: 'empty' | 'blocked') => Promise<void> {
   return async (outcome) => act(async () => finishGate(outcome))
 }
 
+describe('passive terminal seeding in a bot home', () => {
+  it('leaves an empty bot home to its Chat, whose tab may not have arrived yet', async () => {
+    mocks.activeWorktreeId = folderWorkspaceKey('home-1')
+    mocks.gate.mockResolvedValue('empty')
+    root = createRoot(document.createElement('div'))
+    // The same folder seeds a shell once it is no longer a bot's home.
+    await act(async () => root?.render(<Watcher worktreeId={mocks.activeWorktreeId} />))
+    expect(mocks.createTab).toHaveBeenCalledOnce()
+
+    mocks.bots = [{ folderWorkspaceId: 'home-2' }]
+    mocks.activeWorktreeId = folderWorkspaceKey('home-2')
+    await act(async () => root?.render(<Watcher worktreeId={mocks.activeWorktreeId} />))
+    expect(mocks.gate).toHaveBeenCalledTimes(2)
+    expect(mocks.createTab).toHaveBeenCalledOnce()
+  })
+
+  it('seeds a shell in a bot home folder while bots are off', async () => {
+    mocks.bots = [{ folderWorkspaceId: 'home-1' }]
+    mocks.botsEnabled = false
+    mocks.activeWorktreeId = folderWorkspaceKey('home-1')
+    mocks.gate.mockResolvedValue('empty')
+    root = createRoot(document.createElement('div'))
+    await act(async () => root?.render(<Watcher worktreeId={mocks.activeWorktreeId} />))
+    expect(mocks.createTab).toHaveBeenCalledOnce()
+  })
+})
+
 describe('passive terminal seeding retries until a decision applies', () => {
   it('seeds once after a StrictMode double run', async () => {
     const finishGate = deferredGate()
@@ -207,7 +249,10 @@ describe('passive terminal seeding retries until a decision applies', () => {
     await act(async () => root?.render(<Watcher />))
     // closeTab empties the row and records the close in the same store write.
     mocks.storeTabsByWorktree = { 'wt-1': [] }
-    mocks.storeClosedRecords = { 'closed-tab': { worktreeId: 'wt-1', closedAt: Date.now() } }
+    // Any time after the check began; a fixed far-future stamp keeps the wall clock out.
+    mocks.storeClosedRecords = {
+      'closed-tab': { worktreeId: 'wt-1', closedAt: Number.MAX_SAFE_INTEGER }
+    }
     await finishGate('empty')
     expect(mocks.createTab).not.toHaveBeenCalled()
   })

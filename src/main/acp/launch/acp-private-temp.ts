@@ -3,7 +3,7 @@
 import { createHash } from 'node:crypto'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import { unixSocketPathFits } from '../../../shared/unix-socket-path-limit'
+import { unixSocketPathFits } from '../../../shared/network/unix-socket-path-limit'
 import { ensureOwnedPrivateDir } from '../../daemon/endpoint/publication/daemon-socket-endpoint-path'
 import { launchPreparationFailure } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import type { AcpStructuredConnection, ConnectAcpAgent } from '../process/acp-structured-connection'

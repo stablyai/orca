@@ -1,4 +1,4 @@
-import type { PtyBackgroundStreamEvent } from '../../../providers/pty-provider-contract'
+import type { PtyBackgroundStreamEvent } from '../../../providers/pty/events'
 import { combineUnsubscribes } from './combine-unsubscribes'
 import type { DaemonPtyAdapter } from '../adapter/daemon-pty-adapter'
 import type {

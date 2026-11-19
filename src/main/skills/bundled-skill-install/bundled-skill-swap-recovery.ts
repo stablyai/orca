@@ -3,7 +3,7 @@ import type {
   BundledSkillCleanup,
   BundledSkillObserved,
   BundledSkillOp
-} from '../../../shared/bundled-skill-plan'
+} from '../../../shared/skills/bundled/bundled-skill-plan'
 import type { BundledSkillSource } from './bundled-skill-sources'
 import { classifyBundledSkillPath } from './bundled-skill-classification'
 import type { BundledSkillFilesystem } from './bundled-skill-filesystem'

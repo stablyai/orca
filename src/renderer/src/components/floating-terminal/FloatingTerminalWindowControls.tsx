@@ -4,17 +4,18 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
-import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
-import { useAppStore } from '@/store'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
+import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
+
+import { createNonSecureContextUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
+import { useAppStore } from '@/store/index'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/workspace/identity/floating-workspace-id'
 import {
   DEFAULT_DISABLED_TUI_AGENTS,
   isTuiAgentEnabled
 } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { useTranslate } from '@/i18n/use-translate'
-import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useOptionalShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 
 type FloatingTerminalWindowControlsProps = {
   maximized: boolean
@@ -62,8 +63,8 @@ export function FloatingTerminalWindowControls({
     if (!defaultAgent) {
       return
     }
-    const result = launchAgentInNewTab({
-      requestId: newAgentLaunchRequestId(),
+    const result = launchAgentInNewTabWithOutcome({
+      requestId: createNonSecureContextUuid(),
       agent: defaultAgent,
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
       launchSource: 'shortcut',

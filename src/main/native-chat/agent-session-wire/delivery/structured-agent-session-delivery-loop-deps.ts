@@ -9,8 +9,10 @@ import type { AgentSessionFailureWordsContext } from '../../../../shared/agent-s
 import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
 import type { StructuredAgentRegistry } from '../providers/structured-agent-registry'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
-import type { StructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
+import type { StructuredAgentSessionObservedWork } from '../observations/structured-agent-session-observed-work'
+import type { JournalWorkReader } from '../../agent-session-journal/journal-work-read'
 import type { StructuredAgentSessionRanRecorder } from '../options/structured-agent-session-ran-options'
+import type { StructuredAgentSessionTurnContext } from '../structured-agent-session-turn-context'
 import type { StructuredAgentSessionAcquireAborts } from '../startup/structured-agent-session-acquire-aborts'
 import type { StructuredAgentSessionStartClaim } from '../startup/structured-agent-session-agent-start'
 import type { StructuredAgentSessionStartReadiness } from '../startup/structured-agent-session-start-readiness'
@@ -21,6 +23,7 @@ import type {
 
 export type StructuredAgentSessionDeliveryLoopDeps = {
   startFlights?: Pick<StructuredAgentSessionStartFlights, 'get'>
+  activityChanged?: (sessionId: string) => void
   deliveryOrder: StructuredAgentSessionDeliveryOrder
   sessions: ReadonlyMap<string, StructuredAgentSessionHostSession>
   adapter: StructuredAgentSessionAdapter
@@ -28,7 +31,10 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   /** Track from enqueue so quit drains any child the start may create. */
   trackStart: <T>(start: Promise<T>) => Promise<T>
-  startProviderChild: (sessionId: string, startedFor: string) => StructuredAgentSessionStartClaim
+  startProviderChild: (
+    sessionId: string,
+    startedFor: string
+  ) => Promise<StructuredAgentSessionStartClaim>
   /** Retire mismatched login/permission children under serialization. */
   retireOutgrownChild: (
     sessionId: string,
@@ -37,7 +43,10 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
   ) => Promise<void>
   immediatePermission?: (sessionId: string) => AgentChatPermissionChoice | null
   stopPermissionTransitionChild?: (sessionId: string) => Promise<void>
-  retainedWork?: (sessionId: string, continuingId: string) => boolean
+  retainedWork?: (sessionId: string, continuingId: string) => Promise<boolean>
+  /** Orca changed the bot's tools since this child launched and it owes no work (see
+   *  `StructuredAgentSessionHostDeps.launchTools.outdated`): the input needs a child that has them. */
+  launchToolsRefreshDue?: (sessionId: string, continuingId: string) => Promise<boolean>
   readiness: (
     sessionId: string,
     child: StructuredAgentSessionProviderChildIdentity
@@ -45,10 +54,11 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
   conversationFence: (sessionId: string) => number
   /** Settle sends covered by partial close; later sends remain eligible. False means settlement failed. */
   closeWhatTheUserClosed: (sessionId: string) => Promise<boolean>
-  failureTextContext: (sessionId: string) => AgentSessionFailureWordsContext
+  failureTextContext: (sessionId: string) => Promise<AgentSessionFailureWordsContext>
   logger: StructuredAgentSessionLogger
   record: (sessionId: string) => AgentSessionRecord | null
-  currentWork: (sessionId: string) => StructuredAgentSessionCurrentWork | null
+  currentWork: (sessionId: string) => Promise<StructuredAgentSessionObservedWork | null>
+  readWork: (sessionId: string) => JournalWorkReader
   /** Publish row-free changes in current work. */
   workChanged?: (sessionId: string) => void
   holdClosedInput?: (
@@ -60,8 +70,9 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
   settleLeftovers?: (sessionId: string, owner: () => void) => Promise<void>
   readChildWork: (sessionId: string) => readonly AgentChildWorkView[] | undefined
   childWorkOpen: (sessionId: string) => boolean
-  stopping: (sessionId: string) => boolean
+  stopping: (sessionId: string) => Promise<boolean>
   now: () => number
   acquireAborts: Pick<StructuredAgentSessionAcquireAborts, 'begin'>
   recordRanOptions?: StructuredAgentSessionRanRecorder
+  turnContext?: StructuredAgentSessionTurnContext | undefined
 }

@@ -22,46 +22,48 @@ import {
 import { HistoryReader } from '../../daemon/history/restoration/history-reader'
 import { orcadMigrationDestinationFor } from '../../managed-server/lifecycle/orcad-runtime-conversion-wiring'
 import type { Store } from '../../persistence/loading-store/store'
-import { exportWslMoveManifest } from '../../persistence/moving-wsl-projects/wsl-move-manifest-export'
-import { ensureWslMoveDestinationBrowserLogins } from '../../persistence/moving-wsl-projects/wsl-move-browser-cookie-copy'
+import { exportWslMoveManifest } from '../../persistence/moving-wsl-projects/manifest-scope/wsl-move-manifest-export'
+import { ensureWslMoveDestinationBrowserLogins } from '../../persistence/moving-wsl-projects/desktop-state/wsl-move-browser-cookie-copy'
 import { activeBrowserRoutePartitionOrcaProfileId } from '../../browser/routing/partitions/browser-route-partition-binding-runtime'
 import { wslHostBrowserRouteStorage } from '../../browser/routing/local-host-partitions/wsl-host-browser-route-partition'
-import { runGatedWslMoveDesktopRewritePass } from '../../persistence/moving-wsl-projects/wsl-move-desktop-rewrite'
+import { runGatedWslMoveDesktopRewritePass } from '../../persistence/moving-wsl-projects/desktop-state/wsl-move-desktop-rewrite'
 import type {
   WslMoveDriverDeps,
   WslMoveHost
-} from '../../persistence/moving-wsl-projects/wsl-move-driver-ports'
-import { proveWslMoveTerminalsExited } from '../../persistence/moving-wsl-projects/wsl-move-exit-proof'
+} from '../../persistence/moving-wsl-projects/execution/wsl-move-driver-ports'
+import { proveWslMoveTerminalsExited } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-exit-proof'
+import { wslMoveSleepFailures } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-sleep-failures'
 import {
   collectWslMoveGateInputs,
   listWslMovePanes,
   type WslMoveGateFactSources
-} from '../../persistence/moving-wsl-projects/wsl-move-gate-facts'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-gate-facts'
 import {
   classifyWslGuestPaneForeground,
   readWslGuestPaneShellCwd
-} from '../../persistence/moving-wsl-projects/wsl-move-guest-foreground'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-guest-foreground'
 import {
   listWslMoveSleptSessionPanes,
   readWslMoveSleptScrollbackFromHistory,
   withSleptSessionPanes,
   wslMoveTabTitle,
   wslMoveSleptSpoolRoot
-} from '../../persistence/moving-wsl-projects/wsl-move-slept-scrollback'
-import { scheduleWslMoveRewriteRetry } from '../../persistence/moving-wsl-projects/wsl-move-rewrite-retry'
+} from '../../persistence/moving-wsl-projects/terminal-state/wsl-move-slept-scrollback'
+import { scheduleWslMoveRewriteRetry } from '../../persistence/moving-wsl-projects/cutover-recovery/wsl-move-rewrite-retry'
 import {
   captureWslMoveRestoreHints,
   type WslMoveRestoreHintPane
-} from '../../persistence/moving-wsl-projects/wsl-move-restore-hints'
+} from '../../persistence/moving-wsl-projects/terminal-state/wsl-move-restore-hints'
 import {
   isWslMoveProjectFenced,
   wslMoveProjectRefForWorkspace
-} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
-import { buildWslMoveShellHistoryBlobs } from '../../persistence/moving-wsl-projects/wsl-move-shell-history-blobs'
-import { inspectPtyProviderProcessForRenderer } from '../../providers/pty-process-inspection'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
+import { buildWslMoveShellHistoryBlobs } from '../../persistence/moving-wsl-projects/terminal-state/wsl-move-shell-history-blobs'
+import { inspectPtyProviderProcessForRenderer } from '../../providers/pty/process-inspection'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { getTrustedUIRendererWebContents, getTrustedUIRendererWindow } from '../ui'
 import { registerWslMoveHandlers } from './wsl-move-handlers'
+import { wslMoveMappedDrivePorts } from './wsl-move-mapped-drive-ports'
 import { registerWslMoveOrchestrator } from './wsl-move-orchestrator-wiring'
 import { createWslMoveUndoPorts } from './wsl-move-undo-wiring'
 import { connectWslMoveHostService, type WslMoveHostConnectMode } from './wsl-move-host-connect'
@@ -72,20 +74,20 @@ import {
 import {
   setWslMoveReloadLanding,
   setWslMoveReloadableWindow
-} from '../../persistence/moving-wsl-projects/wsl-move-window-write-hold'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-window-write-hold'
 import { commitRemoteOrcadMigrationCatalog } from '../../managed-server/migration/catalog/orcad-migration-catalog-client'
 import { listRemoteOrcadRepositories } from '../../managed-server/migration/linking/orcad-server-repositories'
 import { stageRemoteOrcadMigrationBlobChunk } from '../../managed-server/migration/transfers/orcad-migration-chunk-client'
 import { listRemoteOrcadFolderCatalog } from '../../managed-server/migration/linking/orcad-server-folder-workspaces'
 import { makeTerminalScrollbackSnapshotRef } from '../../pty/scrollback/terminal-scrollback-snapshots'
-import { pauseWorkspacesForProjectMove } from '../../window/project-move-pause'
+import { pauseWorkspacesForProjectMove } from '../../window/renderer-relays/project-move-pause'
 import { getWslHostService } from '../../wsl/host-lifecycle/wsl-host-service-instance'
 import { readWslGuestProcessTable } from '../../wsl/execution/wsl-guest-process-table'
 import { isWslDistroRegistered } from '../../wsl/discovery/wsl-distro-registry-id'
 import { defaultWslOrcadEnvironmentId } from '../../wsl/orcad/wsl-orcad-deploy'
 import { ptyPaneKey } from '../pty/pane/key-state'
 import { tryGetProviderForPty } from '../pty/provider/registry'
-import { getRuntimeEnvironmentStatus } from '../runtime-environments/runtime-environment-status-probe'
+import { getRuntimeEnvironmentStatus } from '../runtime-environments/status/runtime-environment-status-probe'
 /** The move's IPC handlers; its driver reads every move dependency from this module. */
 export function registerWslMoveWiring(store: Store, runtime: OrcaRuntimeService): void {
   setWslMoveReloadableWindow(() => {
@@ -179,6 +181,7 @@ export function createWslMoveDriverDeps(
     connectHost: (distro) => connectWslMoveHost(userDataPath, distro, hostConnect),
     isDistroRegistered: (distro, distroGuid) => isWslDistroRegistered(distro, distroGuid),
     exportManifest: (request) => exportWslMoveManifest(store, request),
+    ...wslMoveMappedDrivePorts(),
     gateInputs: (scope) => collectWslMoveGateInputs(facts, scope),
     listPanes: (scope) => listWslMovePanes(facts, scope),
     ...(process.platform === 'win32' ? { shellCwds: readWslMovePaneShellCwds } : {}),
@@ -192,16 +195,27 @@ export function createWslMoveDriverDeps(
         }
         // Main's pause barrier: keeps browser tabs and waits for the window's session to persist.
         const outcomes = await pauseWorkspacesForProjectMove(window, runtime, workspaceIds)
-        return {
-          failedWorktreeIds: outcomes
-            .filter((outcome) => outcome.failure || outcome.chatFailed || outcome.vmSuspendFailure)
-            .map((outcome) => outcome.worktreeId)
+        const failedWorktreeIds = await wslMoveSleepFailures(outcomes, {
+          store,
+          hasLiveTerminal: (worktreeId) => runtime.listWslMoveLiveTerminals([worktreeId]).length > 0
+        })
+        if (failedWorktreeIds.length > 0) {
+          console.warn(
+            '[wsl-move] Sleep left workspaces awake:',
+            outcomes.filter((outcome) => failedWorktreeIds.includes(outcome.worktreeId))
+          )
         }
+        return { failedWorktreeIds }
       },
       livePtyIds: (workspaceIds) =>
         runtime.listWslMoveLiveTerminals(workspaceIds).map((terminal) => terminal.ptyId),
-      captureRestoreHints: (panes, distro) =>
-        captureWslMoveRestoreHints(new HistoryReader(getDaemonHistoryDir()), panes, distro),
+      captureRestoreHints: (panes, distro, mappedDrives) =>
+        captureWslMoveRestoreHints(
+          new HistoryReader(getDaemonHistoryDir()),
+          panes,
+          distro,
+          mappedDrives
+        ),
       proveExited: async (scope) => {
         const fallback = await countInProcessFallbackTerminals()
         return proveWslMoveTerminalsExited(
@@ -218,7 +232,7 @@ export function createWslMoveDriverDeps(
       }
     },
     snapshots: store,
-    sleptScrollback: (panes, distro, migrationId, workspaceIds, reported) =>
+    sleptScrollback: (panes, distro, migrationId, workspaceIds, reported, mappedDrives) =>
       readWslMoveSleptScrollbackFromHistory(
         new HistoryReader(getDaemonHistoryDir()),
         withSleptSessionPanes(
@@ -227,7 +241,9 @@ export function createWslMoveDriverDeps(
         ),
         distro,
         wslMoveSleptSpoolRoot(userDataPath, migrationId),
-        (tabId) => wslMoveTabTitle(store.getWorkspaceSession(), tabId)
+        (tabId) => wslMoveTabTitle(store.getWorkspaceSession(), tabId),
+        () => new Date(),
+        mappedDrives
       ),
     shellHistory: (distro, worktrees) => buildWslMoveShellHistoryBlobs({ distro, worktrees }),
     // The pass reloads the window it held at commit (wsl-move-window-write-hold.ts).
@@ -257,8 +273,8 @@ async function connectWslMoveHost(
   if (!service || !(await connectWslMoveHostService(service, userDataPath, distro, mode))) {
     return null
   }
-  const { environment, notCarried } = ensureWslMoveDestinationBrowserLogins({
-    resolveEnvironment: () => resolveEnvironment(userDataPath, environmentId),
+  const { environment, notCarried } = await ensureWslMoveDestinationBrowserLogins({
+    resolveEnvironment: async () => await resolveEnvironment(userDataPath, environmentId),
     resaveConnection: () => service.resaveConnection(environmentId),
     orcaProfileId: activeBrowserRoutePartitionOrcaProfileId,
     resolveHostStorage: wslHostBrowserRouteStorage
@@ -269,7 +285,8 @@ async function connectWslMoveHost(
   }
   const pairingCode = encodePairingOffer(getPreferredPairingOffer(environment))
   const options = environment.runtimeId ? { expectedRuntimeId: environment.runtimeId } : {}
-  const distroGuid = findWslHostDeployment(userDataPath, environmentId)?.distroId ?? undefined
+  const distroGuid =
+    (await findWslHostDeployment(userDataPath, environmentId))?.distroId ?? undefined
   return {
     environmentId,
     name: environment.name,

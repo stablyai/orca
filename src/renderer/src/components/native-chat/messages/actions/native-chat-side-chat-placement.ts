@@ -1,12 +1,15 @@
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { findSiblingGroupId } from '../../../../../../shared/workspace-layout/tab-group-layout-tree'
+import { findSiblingGroupId } from '../../../../../../shared/workspace-layout/tab-groups/tab-group-layout-tree'
 import { findStructuredLaunchTab } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import { afterPendingTab } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import { requestNativeChatComposerFocus } from '../../composer/focus/native-chat-composer-focus-intent'
-import { moveTabToGroup, moveTabToNewPaneColumn } from '../../../tab-bar/tab-move-to-pane-column'
-import type { TabDropCompletion } from '../../../tab-group/tab-group-layout-owner-commands'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  moveTabToGroup,
+  moveTabToNewPaneColumn
+} from '../../../tab-bar/pane-actions/tab-move-to-pane-column'
+import type { TabDropCompletion } from '../../../../runtime/workspace-layout/commands/tab-group-layout-owner-commands'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
 // Moving a late tab would yank a pane the user may already be reading.
 const SIDE_CHAT_MOVE_MS = 5_000

@@ -10,8 +10,8 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useAppStore } from '@/store'
-import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+import { useAppStore } from '@/store/index'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import {
@@ -23,8 +23,8 @@ import {
   computerAwakeSettingsForMode,
   normalizeComputerAwakeMode,
   type ComputerAwakeStatus
-} from '../../../../shared/computer-awake-mode'
-import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-policy'
+} from '../../../../shared/app-lifecycle/computer-awake-mode'
+import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './composition/status-bar-context-menu-policy'
 
 const INACTIVE_STATUS: ComputerAwakeStatus = {
   mode: 'off',

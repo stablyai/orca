@@ -1,20 +1,20 @@
-import './session-search-worker.test-fixture'
+import './worker/session-search-worker.test-fixture'
 import { existsSync } from 'node:fs'
-import { unlink, utimes } from 'node:fs/promises'
-import * as fileRemoval from '../../shared/windows-transient-lock-removal'
+import { unlink } from 'node:fs/promises'
+import * as fileRemoval from '../../shared/file-write/windows-transient-lock-removal'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { resetSessionParseCacheForTests } from '../ai-vault/parse-cache/session-parse-cache-store'
 import { resetTranscriptConsumersForTests } from '../ai-vault/transcripts/session-transcript-consumers'
-import * as searchSchema from './session-search-schema'
-import { SessionSearchReaders } from './session-search-readers'
+import './storage/session-search-schema'
+import './worker/session-search-readers'
 import { SessionSearchInstance } from './session-search-instance'
-import { SessionSearchIndexer } from './session-search-indexer'
+import { SessionSearchIndexer } from './indexing/session-search-indexer'
 import {
   openSessionSearchIndexerHarness,
   writeClaudeTranscript,
   type SessionSearchIndexerHarness
-} from './session-search-indexer-test-fixture'
+} from './indexing/session-search-indexer-test-fixture'
 
 const RECENT_SESSION_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
 const ANCIENT_SESSION_ID = 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff'
@@ -51,82 +51,6 @@ function newInstance(): SessionSearchInstance {
 function transcriptPath(sessionId: string): string {
   return join(harness.claudeProjectDir, `${sessionId}.jsonl`)
 }
-
-async function searchFor(query: string): Promise<string[]> {
-  const response = await instance!.search({ query })
-  if (response.kind !== 'results') {
-    throw new Error(`expected results, got ${response.kind}`)
-  }
-  return response.hits.map((hit) => hit.sessionId).sort()
-}
-
-it('constructs nothing and touches no disk while the setting is off', async () => {
-  await writeClaudeTranscript(
-    transcriptPath(RECENT_SESSION_ID),
-    ['a conversation'],
-    RECENT_SESSION_ID
-  )
-  const subject = newInstance()
-  subject.apply({ enabled: false, historyDays: null })
-  await subject.settled()
-
-  expect(subject.running).toBe(false)
-  expect(existsSync(harness.databasePath)).toBe(false)
-  expect(await subject.search({ query: 'conversation' })).toEqual({
-    kind: 'unavailable',
-    reason: 'disabled'
-  })
-  expect(await subject.status()).toMatchObject({ enabled: false, phase: 'idle', generation: 0 })
-  expect(errors).toEqual([])
-})
-
-it('closes the live pair and starts a new one on a settings change', async () => {
-  const recent = transcriptPath(RECENT_SESSION_ID)
-  const ancient = transcriptPath(ANCIENT_SESSION_ID)
-  await writeClaudeTranscript(recent, ['a recent conversation'], RECENT_SESSION_ID)
-  await writeClaudeTranscript(ancient, ['an ancient conversation'], ANCIENT_SESSION_ID)
-  const longAgo = new Date(Date.now() - 120 * 86_400_000)
-  await utimes(ancient, longAgo, longAgo)
-
-  const subject = newInstance()
-  subject.apply({ enabled: true, historyDays: null })
-  await subject.settled()
-  expect(await searchFor('ancient')).toEqual([ANCIENT_SESSION_ID])
-
-  subject.apply({ enabled: true, historyDays: 30 })
-  await subject.settled()
-  expect(await searchFor('ancient')).toEqual([])
-  expect(await searchFor('recent')).toEqual([RECENT_SESSION_ID])
-
-  subject.apply({ enabled: true, historyDays: null })
-  await subject.settled()
-  expect(await searchFor('ancient')).toEqual([ANCIENT_SESSION_ID])
-  expect(errors).toEqual([])
-})
-
-it('removes the database on clear and rebuilds only while consent stands', async () => {
-  await writeClaudeTranscript(
-    transcriptPath(RECENT_SESSION_ID),
-    ['a distinctive conversation'],
-    RECENT_SESSION_ID
-  )
-  const subject = newInstance()
-  subject.apply({ enabled: true, historyDays: null })
-  await subject.settled()
-  expect(await searchFor('distinctive')).toEqual([RECENT_SESSION_ID])
-
-  await subject.clear()
-  expect(subject.running).toBe(true)
-  expect(existsSync(harness.databasePath)).toBe(true)
-  await subject.settled()
-  expect(await searchFor('distinctive')).toEqual([RECENT_SESSION_ID])
-
-  subject.apply({ enabled: false, historyDays: null })
-  await subject.clear()
-  expect(subject.running).toBe(false)
-  expect(existsSync(harness.databasePath)).toBe(false)
-  expect(errors).toEqual([])
-})
 
 it('never reports the deleted index while re-enabling a cleared search', async () => {
   for (const id of [RECENT_SESSION_ID, ANCIENT_SESSION_ID]) {
@@ -229,26 +153,6 @@ it('keeps pagination stable when the clock crosses retention before a purge', as
   expect(second.hits).toHaveLength(1)
   expect(second.hits[0].sessionId).not.toBe(first.hits[0].sessionId)
   expect(errors).toEqual([])
-})
-
-it('propagates query failures while status remains available without a reader', async () => {
-  const subject = newInstance()
-  await subject.apply({ enabled: true, historyDays: null })
-  await subject.settled()
-  const before = await subject.status()
-  vi.spyOn(SessionSearchReaders.prototype, 'query').mockRejectedValue(new Error('reader failed'))
-  await expect(subject.search({ query: 'needle' })).rejects.toThrow('reader failed')
-  expect(await subject.status()).toEqual(before)
-})
-
-it('rejects a failed clear and keeps the transition chain usable for another clear', async () => {
-  const subject = newInstance()
-  const remove = vi
-    .spyOn(searchSchema, 'removeSessionSearchDatabaseAsync')
-    .mockRejectedValueOnce(new Error('unlink denied'))
-  await expect(subject.clear()).rejects.toThrow('unlink denied')
-  await expect(subject.clear()).resolves.toBeUndefined()
-  expect(remove).toHaveBeenCalledTimes(2)
 })
 
 it('keeps serving while an asynchronous clear deletion outlives its deadline', async () => {

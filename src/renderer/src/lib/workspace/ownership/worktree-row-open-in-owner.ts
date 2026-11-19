@@ -1,4 +1,7 @@
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { resolveOwnerOrLocal } from './worktree-runtime-owner'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
@@ -7,7 +10,7 @@ import {
   type WorktreeOperationRouteState
 } from './worktree-operation-route'
 import { routeForOwner } from './worktree-owner-route'
-import { getLocalPathOpenOwnerForRoute } from '../../local-path-open-guard'
+import { getLocalPathOpenOwnerForRoute } from '../../files/os-open/local-path-open-guard'
 
 export type WorktreeRowOpenInOwner = {
   runtimeEnvironmentId: string | null

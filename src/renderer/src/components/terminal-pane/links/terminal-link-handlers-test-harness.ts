@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, vi } from 'vitest'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { registerHttpLinkStoreAccessor } from '@/lib/browser/navigation/http-link-routing'
 import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import {
@@ -43,6 +44,7 @@ export function installTerminalLinkTestEnvironment(doubles: TerminalLinkTestDoub
   } = doubles
 
   beforeEach(() => {
+    replaceRuntimeEnvironmentRevisions([])
     clearRuntimeCompatibilityCacheForTests()
     vi.clearAllMocks()
     runtimeEnvironmentTransportCallMock.mockReset()
@@ -56,6 +58,7 @@ export function installTerminalLinkTestEnvironment(doubles: TerminalLinkTestDoub
     vi.mocked(getConnectionId).mockReturnValue(null)
     openFilePathMock.mockResolvedValue(true)
     storeState.settings = undefined
+    storeState.activeWorktreeId = null
     storeState.activeFileIdByWorktree = {}
     storeState.openFiles = []
     storeState.unifiedTabsByWorktree = {}
@@ -87,6 +90,7 @@ export function installTerminalLinkTestEnvironment(doubles: TerminalLinkTestDoub
   })
 
   afterEach(() => {
+    replaceRuntimeEnvironmentRevisions([])
     vi.unstubAllGlobals()
   })
 }

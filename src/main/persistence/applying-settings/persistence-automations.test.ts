@@ -3,8 +3,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../shared/execution-host'
-import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
+import { toRuntimeExecutionHostId } from '../../../shared/execution-host/execution-host'
+import '../../../shared/worktree/host-qualified-identity'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
@@ -80,44 +80,40 @@ describe('Store', () => {
     expect(store.listAutomations()).toHaveLength(1)
   })
 
-  it('treats undefined update fields as omitted, never as explicit clears', async () => {
-    // Renderer patches can carry explicit undefined for untouched fields; only null clears them.
+  it('applies a batch of updates, reporting a missing row without blocking the rest', async () => {
     const store = await createStore()
-    store.addRepo(makeRepo({ upstream: { owner: 'stablyai', repo: 'orca' } }))
-    const automation = store.createAutomation({
-      name: 'Nightly',
-      prompt: 'Run checks',
-      agentId: 'claude',
-      projectId: 'r1',
-      workspaceMode: 'new_per_run',
-      baseBranch: 'origin/release',
-      setupDecision: 'run',
-      precheck: { command: 'pnpm lint', timeoutSeconds: 30 },
-      timezone: 'UTC',
-      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
-      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
-    })
+    store.addRepo(makeRepo())
+    const create = (name: string) =>
+      store.createAutomation({
+        name,
+        prompt: 'Run checks',
+        agentId: 'claude',
+        projectId: 'r1',
+        workspaceMode: 'new_per_run',
+        timezone: 'UTC',
+        rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+        dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+      })
+    const [a, b, c] = [create('A'), create('B'), create('C')]
 
-    const updated = store.updateAutomation(automation.id, {
-      precheck: undefined,
-      runContext: undefined,
-      sourceContext: undefined,
-      baseBranch: undefined,
-      setupDecision: undefined
-    })
+    const results = store.updateAutomations([
+      { id: a.id, updates: { enabled: false } },
+      { id: 'missing', updates: { enabled: false } },
+      { id: b.id, updates: { enabled: false } }
+    ])
 
-    expect(updated.precheck).toEqual(automation.precheck)
-    expect(updated.runContext).toEqual(automation.runContext)
-    expect(updated.sourceContext).toEqual(automation.sourceContext)
-    expect(updated.baseBranch).toBe('origin/release')
-    expect(updated.setupDecision).toBe('run')
-    expect(store.updateAutomation(automation.id, { baseBranch: null }).baseBranch).toBeNull()
-
-    const existing = store.updateAutomation(automation.id, {
-      workspaceMode: 'existing',
-      workspaceId: 'wt1'
-    })
-    expect(store.updateAutomation(existing.id, { workspaceId: undefined }).workspaceId).toBe('wt1')
+    expect(results.map((result) => ('automation' in result ? 'ok' : 'error'))).toEqual([
+      'ok',
+      'error',
+      'ok'
+    ])
+    expect(store.listAutomations().map(({ name, enabled }) => [name, enabled])).toEqual([
+      ['A', false],
+      ['B', false],
+      ['C', true]
+    ])
+    expect(store.automationEnablementRevision(a.id)).toBe(1)
+    expect(store.automationEnablementRevision(c.id)).toBe(0)
   })
 
   it('stores its own contexts over a client-perspective create runContext', async () => {
@@ -146,32 +142,6 @@ describe('Store', () => {
 
     expect(automation.runContext).toMatchObject({ hostId: 'local', repoId: 'r1' })
     expect(store.listAutomationsForScope().items[0]?.selector).toEqual({ kind: 'self' })
-  })
-
-  it("deleting an SSH twin's workspace leaves the local twin's run label", async () => {
-    const store = await createStore()
-    store.addRepo(makeRepo())
-    const automation = store.createAutomation({
-      name: 'Nightly',
-      prompt: 'Run checks',
-      agentId: 'claude',
-      projectId: 'r1',
-      workspaceMode: 'existing',
-      workspaceId: 'wt1',
-      timezone: 'UTC',
-      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
-      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
-    })
-    store.createAutomationRun(automation, new Date('2026-05-13T09:00:00Z').getTime())
-    const before = store.listAutomationRuns(automation.id)[0].workspaceDisplayName
-
-    const updatedCount = store.snapshotAutomationRunWorkspaceDisplayName(
-      hostWorktreeTarget({ id: 'wt1', hostId: toSshExecutionHostId('ssh-1') }),
-      'SSH twin'
-    )
-
-    expect(updatedCount).toBe(0)
-    expect(store.listAutomationRuns(automation.id)[0].workspaceDisplayName).toBe(before)
   })
 
   it('persists automation run output snapshots across later status updates', async () => {

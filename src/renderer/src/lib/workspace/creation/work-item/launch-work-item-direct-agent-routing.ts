@@ -11,7 +11,7 @@ import {
   buildDirectWorkItemAgentStartupPlan,
   notifyDirectWorkItemAgentStartTimeout
 } from '@/lib/workspace/creation/work-item/launch-work-item-direct-agent'
-import { acquireAgentLaunchChoices } from '../../../host-chat-program-acquisition'
+import { acquireAgentLaunchChoices } from '../../../agent-session/launch/inventory/host-chat-program-acquisition'
 import { useAppStore } from '@/store/index'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AppState } from '@/store/types'
@@ -19,7 +19,7 @@ import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-ag
 import { isTuiAgentEnabled } from '../../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { resolveDefaultAgentForWorkspace } from '../../../agent-session/launch/shortcuts/agent-tab-shortcuts'
 import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
-import { agentChoiceMayOpenAsChat } from '@/lib/host-chat-program'
+import { agentChoiceMayOpenAsChat } from '@/lib/agent-session/launch/inventory/host-chat-program'
 import type { AgentSessionLaunchPlan } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import {
   resolveExecutionHostAgentStartupShell,

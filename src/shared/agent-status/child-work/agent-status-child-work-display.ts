@@ -1,5 +1,5 @@
 import { foldAgentLeadStatus } from '../lifecycle/agent-lead-status-fold'
-import type { AgentSessionBackgroundTaskRunState } from '../../agent-session/agent-session-background-task-wire'
+import type { AgentSessionBackgroundTaskRunState } from '../../agent-session/background-tasks/agent-session-background-task-wire'
 import type { AgentChildWorkId, AgentChildWorkOutcome } from './agent-status-child-work'
 import {
   agentChildWorkLiveness,
@@ -7,7 +7,7 @@ import {
 } from './agent-status-child-work-liveness'
 import type { AgentChildWorkView } from './agent-status-child-work-view'
 import type { AgentStatusState } from '../contracts/agent-status-types'
-import { groupedBy } from '../../grouped-by'
+import { groupedBy } from '../../collections/grouped-by'
 
 // Keep renderer-safe display policy separate from projection, whose status-subject owner resolution reaches host-only code.
 

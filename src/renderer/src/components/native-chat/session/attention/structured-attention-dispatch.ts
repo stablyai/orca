@@ -3,8 +3,8 @@ import {
   notificationExecutionHostForOwner,
   notificationWorkspaceExecutionHostForOwner,
   notificationSourceForOwner
-} from '../../../../../../shared/notification-source'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+} from '../../../../../../shared/notifications/notification-source'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { resolveNotificationTabOwner } from '@/attention/notification-subject-owner'
 import type {
   AgentSessionPromptAttention,
@@ -17,7 +17,7 @@ import {
   structuredAttentionOrigin,
   type AgentSessionAttentionEdge,
   type StructuredAttentionRead
-} from '../../../../../../shared/agent-session/agent-session-attention'
+} from '../../../../../../shared/agent-session/view/agent-session-attention'
 import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { applyAgentAttention, resolveAgentAttention } from '@/attention/agent-attention-policy'
 import {
@@ -25,9 +25,19 @@ import {
   readAgentAttentionNotificationSound
 } from '@/attention/agent-attention-notification-delivery'
 import { useAppStore } from '@/store'
+import { readBots } from '@/lib/bot-catalog'
+import { readBotGroups } from '@/lib/bot-group-catalog-snapshot'
+import {
+  botGroupRoomMembers,
+  findBotGroupRoomOfSession,
+  isBotGroupMemberSession
+} from '../../../../../../shared/bots/bot-group'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
+import { isBotAttentionSilenced } from '../../../../../../shared/bot-notifications'
+import { isWorktreeNotificationDeliveryMuted } from '@/attention/worktree-notification-mute'
 import { canonicalOrchestrationForRow } from '@/runtime/agent-orchestration/visible-agent-orchestration'
 import { isCoordinatorOnlyChatNews } from '../../../../../../shared/orchestration/workers/dispatched-worker-attention'
-import { getNotificationWorkspaceLabels } from '../../../../attention/notification-workspace-labels'
+import { getNotificationWorkspaceLabels } from '@/attention/notification-workspace-labels'
 import { createStructuredAttentionSurface } from './structured-attention-surface'
 import type { StructuredTab } from '../status/structured-agent-session-tabs'
 
@@ -72,6 +82,9 @@ function dispatchStructuredAttention(
   if (promptWasRead()) {
     return
   }
+  if (isBotAttentionSilenced(readBots(), botHomeOfSession(sessionId) ?? tab.worktreeId, news)) {
+    return
+  }
   const attentionKey = agentSessionAttentionKey(edge)
   const state = useAppStore.getState()
   const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
@@ -93,13 +106,17 @@ function dispatchStructuredAttention(
   if (!decision.admitted) {
     return
   }
-  const row = state.agentStatusByPaneKey[paneKey]
+  const row = state.agentStatusByPaneKey.get(paneKey)
   const sound = readAgentAttentionNotificationSound(state.settings ?? {})
   applyAgentAttention(decision, {
     unread: state.markAgentAttentionUnread,
     requestDelivery: (request) => {
       // Unread writes can synchronously cause a genuine read before delivery.
       if (promptWasRead()) {
+        return
+      }
+      // Per-worktree mute keeps the unread writes above but drops the interruption.
+      if (isWorktreeNotificationDeliveryMuted(useAppStore.getState(), request.workspaceId)) {
         return
       }
       // The receiving subscription identifies the paired source even when tab ownership is ambiguous.
@@ -129,6 +146,9 @@ function dispatchStructuredAttention(
           ...(row?.agentType ? { agentType: row.agentType } : {}),
           agentState: news.agentState,
           ...(news.outcome ? { agentTurnOutcome: news.outcome } : {}),
+          ...(edge.type === 'completion' && edge.completion.failure
+            ? { agentFailure: edge.completion.failure }
+            : {}),
           ...(row?.prompt ? { agentPrompt: row.prompt } : {}),
           ...(row?.lastAssistantMessage
             ? { agentLastAssistantMessage: row.lastAssistantMessage }
@@ -138,4 +158,18 @@ function dispatchStructuredAttention(
       )
     }
   })
+}
+
+/** A group member's news is still its bot's: that bot's switches silence it, though it reads in the room. */
+function botHomeOfSession(sessionId: string): string | null {
+  const room = isBotGroupMemberSession(sessionId)
+    ? findBotGroupRoomOfSession(readBotGroups(), sessionId)
+    : null
+  const botId = room
+    ? botGroupRoomMembers(room.group)
+        .flat()
+        .find((member) => member.sessionId === sessionId)?.botId
+    : undefined
+  const bot = botId ? readBots().find((candidate) => candidate.id === botId) : undefined
+  return bot ? folderWorkspaceKey(bot.folderWorkspaceId) : null
 }

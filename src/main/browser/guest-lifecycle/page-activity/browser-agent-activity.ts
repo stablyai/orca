@@ -1,22 +1,24 @@
 import { BrowserWindow, ipcMain, type WebContents } from 'electron'
-import { isResourceWindowVisible } from '../../../window/resource-view-admission'
+import { isResourceWindowVisible } from '../../../window/visibility/resource-view-admission'
 import { sendGuestCdpCommand } from '../../cdp/debugger/guest-cdp-command'
-import { isAgentRpcCaller } from '../../../runtime/rpc/rpc-caller-identity'
+import { isAgentRpcCaller } from '../../../runtime/rpc/callers/rpc-caller-identity'
 import {
   BROWSER_AGENT_ACTIVITY_CHANNEL,
   BROWSER_AGENT_CURSOR_ARRIVED_CHANNEL,
   BROWSER_AGENT_CURSOR_CHANNEL,
   type BrowserAgentActivityEvent,
   type BrowserAgentCursorEvent
-} from '../../../../shared/browser-agent-activity-contract'
-import { getActiveRpcCaller } from '../../../runtime/rpc/rpc-active-caller'
+} from '../../../../shared/browser/automation/browser-agent-activity-contract'
+import {
+  getActiveRpcAgentSessionId,
+  getActiveRpcCaller
+} from '../../../runtime/rpc/callers/active-call'
 import {
   remoteCliBrowserScopeController,
   type RemoteCliBrowserController
 } from '../../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
+import { AGENT_PAGE_ACTIVITY_IDLE_MS } from '../../agent-browser/session-routing/person-pick-hold'
 
-// Spans an agent's thinking between steps; a finished, failed or disconnected agent clears within it.
-const ACTIVITY_IDLE_MS = 20_000
 const CURSOR_ARRIVAL_TIMEOUT_MS = 1500
 
 /** A CDP mouse event's params, as the agent sent them. */
@@ -35,6 +37,8 @@ type PageActivity = {
   idleTimer: ReturnType<typeof setTimeout> | null
   /** The SSH host whose command marked the page last, if it came through the desktop bridge. */
   controller: RemoteCliBrowserController | null
+  /** The chat whose agent marked the page last, when its CLI named one. */
+  agentSessionId: string | undefined
 }
 
 /** One page-targeted command, held from when it is queued until it settles. */
@@ -80,12 +84,19 @@ export class BrowserAgentActivity {
     }
     let page = this.pages.get(browserPageId)
     if (!page) {
-      page = { commands: 0, executing: false, idleTimer: null, controller: null }
+      page = {
+        commands: 0,
+        executing: false,
+        idleTimer: null,
+        controller: null,
+        agentSessionId: undefined
+      }
       this.pages.set(browserPageId, page)
     }
     page.controller = remoteCliBrowserScopeController() ?? null
+    page.agentSessionId = getActiveRpcAgentSessionId()
     // Every command republishes, so a reloaded or newly attached window catches up.
-    this.publish(browserPageId, true, page.controller)
+    this.publish(browserPageId, true, page)
     if (page.idleTimer) {
       clearTimeout(page.idleTimer)
       page.idleTimer = null
@@ -122,20 +133,22 @@ export class BrowserAgentActivity {
   /** The agent continues on another page (a closed popup's opener), so its claim moves there. */
   handOver(fromPageId: string, toPageId: string): void {
     const existing = this.pages.get(toPageId)
+    const from = this.pages.get(fromPageId)
     // A running command restarts the idle window itself when it settles.
-    if (!this.pages.has(fromPageId) || (existing && existing.commands > 0)) {
+    if (!from || (existing && existing.commands > 0)) {
       return
     }
     const page = existing ?? {
       commands: 0,
       executing: false,
       idleTimer: null,
-      controller: this.pages.get(fromPageId)?.controller ?? null
+      controller: from.controller,
+      agentSessionId: from.agentSessionId
     }
     this.restartIdleWindow(toPageId, page)
     if (!existing) {
       this.pages.set(toPageId, page)
-      this.publish(toPageId, true, page.controller)
+      this.publish(toPageId, true, page)
     }
   }
 
@@ -143,7 +156,7 @@ export class BrowserAgentActivity {
     if (page.idleTimer) {
       clearTimeout(page.idleTimer)
     }
-    page.idleTimer = setTimeout(() => this.end(browserPageId), ACTIVITY_IDLE_MS)
+    page.idleTimer = setTimeout(() => this.end(browserPageId), AGENT_PAGE_ACTIVITY_IDLE_MS)
   }
 
   /** A person stopped this SSH host; its pages stop showing it at once instead of after idling. */
@@ -157,6 +170,10 @@ export class BrowserAgentActivity {
 
   isActive(browserPageId: string): boolean {
     return this.pages.has(browserPageId)
+  }
+
+  activePageIds(): IterableIterator<string> {
+    return this.pages.keys()
   }
 
   end(browserPageId: string): void {
@@ -251,7 +268,7 @@ export class BrowserAgentActivity {
   private publish(
     browserPageId: string,
     active: boolean,
-    controller: RemoteCliBrowserController | null = null
+    { controller, agentSessionId }: Partial<PageActivity> = {}
   ): void {
     const renderer = this.deps.rendererForPage(browserPageId)
     if (renderer && !renderer.isDestroyed()) {
@@ -259,7 +276,8 @@ export class BrowserAgentActivity {
         browserPageId,
         worktreeId: this.deps.worktreeForPage(browserPageId),
         active,
-        ...(controller ? { controllerHostLabel: controller.hostLabel } : {})
+        ...(controller ? { controllerHostLabel: controller.hostLabel } : {}),
+        ...(agentSessionId ? { agentSessionId } : {})
       }
       renderer.send(BROWSER_AGENT_ACTIVITY_CHANNEL, event)
     }

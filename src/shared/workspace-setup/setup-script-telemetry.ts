@@ -1,4 +1,4 @@
-import type { EventProps } from '../telemetry-event-classification'
+import type { EventProps } from '../telemetry/telemetry-event-classification'
 import type { SetupScriptImportCandidate } from './setup-script-imports'
 
 type SetupScriptPromptTelemetry = Omit<EventProps<'setup_script_prompt_shown'>, 'nth_repo_added'>

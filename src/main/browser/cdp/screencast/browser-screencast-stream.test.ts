@@ -27,6 +27,7 @@ describe('startBrowserScreencast', () => {
       maxHeight: 1200,
       everyNthFrame: 1,
       minFrameIntervalMs: 0,
+      holdPaint: () => () => {},
       onFrame
     })
 
@@ -84,6 +85,7 @@ describe('startBrowserScreencast', () => {
       maxHeight: 1200,
       everyNthFrame: 1,
       minFrameIntervalMs: 100,
+      holdPaint: () => () => {},
       onFrame
     })
 
@@ -136,27 +138,82 @@ describe('startBrowserScreencast', () => {
       maxHeight: 1200,
       everyNthFrame: 2,
       minFrameIntervalMs: 0,
+      holdPaint: () => () => {},
       onFrame: vi.fn(),
       onEvent
     })
     const answer = vi.fn()
     webContents.emit(
       '-run-dialog',
-      { dialogType: 'confirm', messageText: 'Continue?', defaultPromptText: '' },
+      {
+        dialogType: 'prompt',
+        messageText: 'Your name?',
+        defaultPromptText: 'Ada',
+        frame: { origin: 'https://frame.example.com' }
+      },
       answer
     )
+    const held = {
+      type: 'dialog',
+      dialogType: 'prompt',
+      message: 'Your name?',
+      defaultPromptText: 'Ada',
+      origin: 'https://frame.example.com'
+    }
+    expect(onEvent).toHaveBeenLastCalledWith(held)
+
+    // A second frame's dialog is turned away without replacing the held one on viewers' screens.
+    const turnedAway = vi.fn()
+    const eventsBefore = onEvent.mock.calls.length
+    webContents.emit(
+      '-run-dialog',
+      { dialogType: 'alert', messageText: 'Ad', defaultPromptText: '' },
+      turnedAway
+    )
+    expect(turnedAway).toHaveBeenCalledExactlyOnceWith(false, '')
+    expect(onEvent).toHaveBeenCalledTimes(eventsBefore)
 
     // The turned-away dialog's close names no dialog.
     webContents.debugger.emit('message', {}, 'Page.javascriptDialogClosed', {})
 
-    expect(onEvent).toHaveBeenLastCalledWith({
-      type: 'dialog',
-      dialogType: 'confirm',
-      message: 'Continue?'
-    })
+    expect(onEvent).toHaveBeenLastCalledWith(held)
     // The last viewer leaving dismisses it, so a later session isn't blocked behind it.
     session.stop()
     await session.done
     expect(answer).toHaveBeenCalledExactlyOnceWith(false, '')
+  })
+
+  it('clears the phone viewport on stop without waiting for a capture the guest never draws', async () => {
+    vi.useFakeTimers()
+    const capturePage = vi.fn(() => new Promise(() => {}))
+    const webContents = { ...createMockWebContents(), capturePage }
+    const session = await startBrowserScreencast(webContents as never, {
+      format: 'jpeg',
+      quality: 70,
+      maxWidth: 780,
+      maxHeight: 1688,
+      everyNthFrame: 1,
+      minFrameIntervalMs: 0,
+      viewportWidth: 390,
+      viewportHeight: 844,
+      deviceScaleFactor: 2,
+      mobile: true,
+      holdPaint: () => () => {},
+      onFrame: vi.fn()
+    })
+    try {
+      await vi.advanceTimersByTimeAsync(0)
+      expect(capturePage).toHaveBeenCalled()
+      session.stop()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(webContents.debugger.sendCommand).toHaveBeenCalledWith(
+        'Emulation.clearDeviceMetricsOverride',
+        {}
+      )
+    } finally {
+      await vi.runAllTimersAsync()
+      await session.done
+      vi.useRealTimers()
+    }
   })
 })

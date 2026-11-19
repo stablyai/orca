@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 
 export function getProviderRuntimeContextKey(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
@@ -8,8 +8,12 @@ export function getProviderRuntimeContextKey(
 
 /** Context key for an explicit owner; `null` is this app. */
 export function getEnvironmentRuntimeContextKey(environmentId: string | null): string {
-  const baseKey = environmentId ? `runtime:${environmentId}` : 'local'
-  return `${baseKey}#${providerRuntimeSessionGeneration}`
+  return `${getEnvironmentRuntimeIdentityKey(environmentId)}#${providerRuntimeSessionGeneration}`
+}
+
+/** The owner without the session generation, for preferences that must outlive a reconnect. */
+export function getEnvironmentRuntimeIdentityKey(environmentId: string | null): string {
+  return environmentId ? `runtime:${environmentId}` : 'local'
 }
 
 /** Whether a context key from {@link getEnvironmentRuntimeContextKey} names a paired server. */
@@ -28,4 +32,8 @@ let providerRuntimeSessionGeneration = 0
 export function bumpProviderRuntimeSessionGeneration(): number {
   providerRuntimeSessionGeneration += 1
   return providerRuntimeSessionGeneration
+}
+
+export function resetProviderRuntimeSessionGenerationForTests(): void {
+  providerRuntimeSessionGeneration = 0
 }

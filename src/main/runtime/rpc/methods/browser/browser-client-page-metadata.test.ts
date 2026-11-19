@@ -1,15 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
-import '../../../../../shared/protocol-version'
+import '../../../../../shared/remote-runtime/protocol/protocol-version'
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY
 } from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
-import type { RuntimeBrowserClientPlacement } from '../../../../../shared/runtime-browser-placement'
+import type { RuntimeBrowserClientPlacement } from '../../../../../shared/browser/client-hosting/runtime-browser-placement'
 import { getBrowserHostLeaseRegistry } from '../../../browser-host/leases/browser-host-lease-registry-instance'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { getRuntimeBrowserPageRegistry } from '../../../browser/client-pages/runtime-browser-page-registry'
 import { RpcDispatcher } from '../../dispatcher'
 import { BROWSER_CLIENT_HOST_METHODS } from './browser-client-host'
+import { buildRuntimeClientBrowserTabs } from '../../../session-lifecycle/projection/build-runtime-client-browser-tabs'
 
 describe('browser.clientHost.pageMetadata RPC', () => {
   it('accepts only newer metadata and republishes session tabs after acceptance', async () => {
@@ -34,6 +35,32 @@ describe('browser.clientHost.pageMetadata RPC', () => {
       title: 'Page 2',
       url: 'https://example.com/2'
     })
+
+    await harness.close()
+  })
+
+  it('carries the hosting desktop icon to session tabs until a publish clears it', async () => {
+    const harness = await createHarness()
+    const icon = 'https://example.com/favicon.ico'
+    const projectedIcon = () =>
+      buildRuntimeClientBrowserTabs(
+        getRuntimeBrowserPageRegistry(harness.runtime).listPages(),
+        getBrowserHostLeaseRegistry(harness.runtime)
+      )[0]?.faviconUrl
+
+    await dispatchMetadata(harness.dispatcher, {
+      ...metadata(harness.placement, 1),
+      faviconUrl: icon
+    })
+    expect(projectedIcon()).toBe(icon)
+    // An older desktop leaves the field out.
+    await dispatchMetadata(harness.dispatcher, metadata(harness.placement, 2))
+    expect(projectedIcon()).toBe(icon)
+    await dispatchMetadata(harness.dispatcher, {
+      ...metadata(harness.placement, 3),
+      faviconUrl: null
+    })
+    expect(projectedIcon()).toBeNull()
 
     await harness.close()
   })

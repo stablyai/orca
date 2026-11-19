@@ -1,22 +1,22 @@
 import { randomUUID } from 'node:crypto'
 import { realpath } from 'node:fs/promises'
 import { isAbsolute } from 'node:path'
-import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/repo-badge-color'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/repository/appearance/repo-badge-color'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 import type {
   NestedRepoScanResult,
   ProjectGroupImportMode,
   ProjectGroupImportResult
-} from '../../../shared/project-group-types'
-import type { Repo } from '../../../shared/repo-types'
+} from '../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import {
   getRepoDialableSshTargetId,
   getRepoExecutionHostId,
   getRepoRoutingConnectionId
-} from '../../../shared/execution-host'
-import { awaitWindowsHostGitEnvironmentReady } from '../../git/command-runner/windows-host-git-environment'
-import { getRepoName } from '../../git/repo'
-import { isGitRepoAsync } from '../../git/repo-detection'
+} from '../../../shared/execution-host/execution-host'
+import { awaitWindowsHostGitEnvironmentReady } from '../../git/command-runner/host-routing/windows-host-git-environment'
+import { getRepoName } from '../../git/repositories/repository-name'
+import { isGitRepoAsync } from '../../git/repositories/discovery/repo-detection'
 import { scanNestedRepos } from '../../project-groups/nested-repo-discovery'
 import {
   createNestedProjectGroupResolver,
@@ -79,6 +79,7 @@ export class RuntimeNestedRepoImport {
       (repoPath) => ({
         path: repoPath,
         status: 'failed',
+        errorCode: 'not_in_scan',
         error: 'Repository was not found in the nested repo scan result'
       })
     )
@@ -88,7 +89,12 @@ export class RuntimeNestedRepoImport {
       try {
         await awaitWindowsHostGitEnvironmentReady({ cwd: repoPath })
         if (!(await isGitRepoAsync(repoPath))) {
-          results.push({ path: repoPath, status: 'failed', error: 'Not a valid git repository' })
+          results.push({
+            path: repoPath,
+            status: 'failed',
+            errorCode: 'not_git_repository',
+            error: 'Not a valid git repository'
+          })
           continue
         }
         const importRepoPath = await importTargetResolver.resolveLocal(repoPath)
@@ -143,6 +149,7 @@ export class RuntimeNestedRepoImport {
         results.push({
           path: repoPath,
           status: 'failed',
+          errorCode: 'import_failed',
           error: sanitizeImportError('Failed to import nested repository in runtime', error)
         })
       }

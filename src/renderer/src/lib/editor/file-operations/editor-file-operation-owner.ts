@@ -5,13 +5,16 @@ import {
   type EditorFileOperationProvenance
 } from './editor-file-operation-provenance'
 
-import { parseExecutionHostId, toSshExecutionHostId } from '../../../../../shared/execution-host'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import {
+  parseExecutionHostId,
+  toSshExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import type { AppState } from '@/store/types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import { resolveWorkspaceDirectory } from '../../workspace-directory'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { resolveWorkspaceDirectory } from '../../workspace/paths/workspace-directory'
 import { getFileConnectionOwnerFromState } from '../../workspace/ownership/connection-owner-resolution'
 import { captureWorktreeOperationGenerationSnapshot } from '../../workspace/ownership/worktree-operation-generation'
 import {

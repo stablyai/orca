@@ -3,7 +3,7 @@ import { StrictMode, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { ConfirmationDialogProvider } from './components/confirmation-dialog'
+import { ConfirmationDialogProvider } from './components/dismiss/confirmation/confirmation-dialog'
 import DeleteWorktreeDialog from './components/sidebar/workspace-actions/deletion/DeleteWorktreeDialog'
 import PreservedBranchBatchReviewModal from './components/sidebar/workspace-actions/deletion/PreservedBranchBatchReviewModal'
 import WorkspaceSpacePage from './components/workspace-space/WorkspaceSpacePage'
@@ -12,23 +12,27 @@ import {
   selectSpaceWindowAnalysis
 } from './components/workspace-space/space-window-state'
 import { RecoverableRenderErrorBoundary } from './components/error-boundaries/RecoverableRenderErrorBoundary'
-import { applyDocumentTheme } from './lib/document-theme'
-import { resolvePaintedTheme } from './lib/terminal-app-theme'
-import { buildAppFontFamily } from './lib/app-font-family'
-import { getOrCreateRendererRoot } from './lib/react-renderer-root'
+import { applyDocumentTheme } from './app-shell/appearance/document-theme'
+import { useAppThemePaint } from './app-shell/appearance/use-app-theme-paint'
+import { buildAppFontFamily } from './app-shell/appearance/app-font-family'
+import { getOrCreateRendererRoot } from './app-shell/startup/react-renderer-root'
 import { I18nProvider } from './i18n/I18nProvider'
-import { useAppStore } from './store'
-import { installBodyOverlayAttributes } from './lib/body-overlay-attributes'
-import { useReduceVisualEffects } from './hooks/use-reduce-visual-effects'
+import { useAppStore } from './store/index'
+import { installBodyOverlayAttributes } from './lib/overlay-interaction/body-overlay-attributes'
+import { useReduceVisualEffects } from './hooks/theme/use-reduce-visual-effects'
+import { registerBackgroundWorkerPausedIpcBridge } from './hooks/ipc-events/native-app/background-worker-paused-ipc-bridge'
 
 const disposeBodyOverlayAttributes = installBodyOverlayAttributes()
 import.meta.hot?.dispose(disposeBodyOverlayAttributes)
+// Why before settings arrive: the window otherwise paints without a light or dark mode.
+applyDocumentTheme('system', { disableTransitions: false })
 
 function SpaceWindowRoot(): React.JSX.Element {
   const { t } = useTranslation()
   const settings = useAppStore((state) => state.settings)
   const activeModal = useAppStore((state) => state.activeModal)
   useReduceVisualEffects(settings?.reduceVisualEffects)
+  useAppThemePaint()
 
   useEffect(() => {
     const api = window.api.workspaceSpace
@@ -59,20 +63,19 @@ function SpaceWindowRoot(): React.JSX.Element {
     }
   }, [])
 
+  // A scan run from this window can pause background work; the notice belongs here too.
   useEffect(() => {
-    applyDocumentTheme(resolvePaintedTheme(settings), { disableTransitions: false })
+    const unsubs: (() => void)[] = []
+    registerBackgroundWorkerPausedIpcBridge(unsubs)
+    return () => unsubs.forEach((unsub) => unsub())
+  }, [])
+
+  useEffect(() => {
     document.documentElement.style.setProperty(
       '--app-font-family',
       buildAppFontFamily(settings?.appFontFamily)
     )
-    if (settings?.theme !== 'system') {
-      return
-    }
-    const media = window.matchMedia('(prefers-color-scheme: dark)')
-    const handleChange = (): void => applyDocumentTheme(resolvePaintedTheme(settings))
-    media.addEventListener('change', handleChange)
-    return () => media.removeEventListener('change', handleChange)
-  }, [settings])
+  }, [settings?.appFontFamily])
 
   return (
     <RecoverableRenderErrorBoundary

@@ -1,4 +1,4 @@
-import { orchestrationMailNotice } from '../../../../shared/agent-session/agent-session-message-source'
+import { orchestrationMailNotice } from '../../../../shared/agent-session/journal/agent-session-message-source'
 import type * as journalTypes from '../../../../shared/agent-session/journal/agent-session-journal-types'
 // Derive pauses from journal state: failed turns, personal Stop, clear and reopen.
 // Later accepted turns/Resume lift pauses; per-card holds still require their own action.

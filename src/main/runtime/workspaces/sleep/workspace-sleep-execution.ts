@@ -1,12 +1,12 @@
-import type { AgentSessionWorkspaceSleepResult } from '../../../../shared/agent-session/agent-session-workspace-sleep'
+import type { AgentSessionWorkspaceSleepResult } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-workspace-sleep'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
-import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type {
   WorkspaceChatStopReceipt,
   WorkspaceSleepHost,
@@ -14,7 +14,7 @@ import type {
   WorkspaceSleepOutcome,
   WorkspaceSleepRequest,
   WorkspaceSleepTarget
-} from '../../../../shared/workspace-sleep'
+} from '../../../../shared/workspace/lifecycle/workspace-sleep'
 import {
   requestRemoteWorktreeSleep,
   type RemoteWorkspaceCall

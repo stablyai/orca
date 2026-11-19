@@ -1,18 +1,19 @@
 import { randomBytes } from 'node:crypto'
-import type { RuntimeTransportMetadata } from '../../../../shared/runtime-bootstrap'
+import type { RuntimeTransportMetadata } from '../../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../dispatcher'
 import { ALL_RPC_METHODS } from '../methods/rpc-method-registry'
 import type { RpcTransport } from '../transport'
 import type { WebSocket } from 'ws'
 import type { DeviceRegistry } from './pairing/device-registry'
+import { RuntimeClientConnectionLog } from './runtime-rpc-client-connection-log'
 import type { E2EEKeypair } from './pairing/e2ee-keypair'
 import type { RuntimeHostDescriptor } from '../../../../shared/remote-runtime/host-status/runtime-host-descriptor'
-import type { UnpairedDeviceAuthThrottle } from '../unpaired-device-auth-throttle'
-import type { MobileSocketWiring } from '../mobile-socket-wiring'
+import type { UnpairedDeviceAuthThrottle } from '../mobile/unpaired-device-auth-throttle'
+import type { MobileSocketWiring } from '../mobile/mobile-socket-wiring'
 import type { MobileDesktopRelay } from '../../mobile-desktop-relay/mobile-desktop-relay'
 import type { MobileRelayHostCatalog } from '../../mobile-desktop-relay/mobile-relay-host-catalog'
-import { RelayRevokeOutbox } from '../../mobile-cloud-relay/relay-revoke-outbox'
+import { RelayRevokeOutbox } from '../../mobile-cloud-relay/pairing/relay-revoke-outbox'
 import { PushUnregisterOutbox } from '../../push/push-unregister-outbox'
 import { RuntimeBinaryMessageRouter } from './runtime-binary-message-router'
 
@@ -38,7 +39,7 @@ import {
 import { DeclaredDesktopClients } from './pairing/declared-desktop-clients'
 import { AuthenticatedSourceRecorder } from './network-source-policy-store'
 import type { ServeNetworkSourceOptions } from './serve-network-source-policy'
-import type { WebSocketSourceGuard } from '../ws-network-source-guard'
+import type { WebSocketSourceGuard } from '../transports/websocket/source-admission/ws-network-source-guard'
 
 export class RuntimeRpcState {
   protected readonly runtime: OrcaRuntimeService
@@ -79,6 +80,7 @@ export class RuntimeRpcState {
   protected transports: RuntimeTransportMetadata[] = []
   protected metadataOwnershipWatch: RuntimeMetadataOwnershipWatch | null = null
   protected mobileSocketWiring: MobileSocketWiring | null = null
+  protected clientConnectionLog: RuntimeClientConnectionLog | null = null
   // Rebind swaps transports inside session wiring so captured relay sockets remain attached.
   protected detachWebSocketWiring: (() => void) | null = null
   protected mobileRelayPairingProvider: MobileRelayPairingProvider | null = null
@@ -94,6 +96,7 @@ export class RuntimeRpcState {
   protected mobileRelayPairingOfferQueue: Promise<void> = Promise.resolve()
   protected mobileRelayPairingOfferInFlight: {
     generation: number
+    createdByDeviceId: string | undefined
     address: string | null
     rotate: boolean
     request: Promise<MobilePairingOffer>
@@ -171,5 +174,12 @@ export class RuntimeRpcState {
       this.clientRequestsInFlight -= 1
       this.lastClientRequestAt = Date.now()
     })
+  }
+
+  /** One log per socket wiring: a relay close that lands after stop must not touch a later session's counts. */
+  protected startClientConnectionLog(): RuntimeClientConnectionLog {
+    this.clientConnectionLog?.close()
+    this.clientConnectionLog = new RuntimeClientConnectionLog()
+    return this.clientConnectionLog
   }
 }

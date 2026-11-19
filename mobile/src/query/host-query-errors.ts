@@ -1,11 +1,18 @@
-import { BridgeReplyRefusedError } from '../mobile-web-shell/bridge/bridge-client-errors'
+import { BridgeReplyRefusedError } from '../mobile-web-shell/bridge/client-state/bridge-client-errors'
 import { isLogicalClientSuspendedError } from '../transport/connection/logical-client-suspended-error'
 import { isRpcDeliveryUnknown } from '../transport/rpc/rpc-delivery-ambiguity'
 import '../transport/connection/stable-logical-rpc-client'
 import { isLogicalClientCutoverError } from '../transport/connection/logical-client-cutover-error'
-import { GITHUB_CONNECTION_CHANGED } from '../source-control/review/github-target-invocation'
+import { GITHUB_CONNECTION_CHANGED } from '../source-control/review/github-operations/github-target-invocation'
 
 export const CUTOVER_RETRY_DELAY_MS = 250
+
+/** A read whose answers came over two connections: it reads again at once, on the newest connection. */
+export class ReadCrossedReconnectError extends Error {
+  constructor() {
+    super('Read crossed a reconnect')
+  }
+}
 
 // failWhenDisconnected rejects with a plain Error that the page bridge rebuilds, so match the message.
 export function isHostNotConnectedError(error: unknown): boolean {
@@ -18,6 +25,9 @@ export function isHostNotConnectedError(error: unknown): boolean {
 // A path switch or a lost reply may succeed on a second try; a disconnect waits for the connected edge instead.
 // A lost read retries at once: if the host went away, failWhenDisconnected ends it without waiting.
 function retryDelayFor(error: unknown): number | null {
+  if (error instanceof ReadCrossedReconnectError) {
+    return 0
+  }
   if (isLogicalClientCutoverError(error)) {
     return CUTOVER_RETRY_DELAY_MS
   }
@@ -37,7 +47,11 @@ function retryDelayFor(error: unknown): number | null {
 }
 
 export function shouldRetryHostQuery(failureCount: number, error: unknown): boolean {
-  return failureCount === 0 && retryDelayFor(error) !== null
+  // Each crossing needs another reconnect, so retrying until a read lands on one connection ends.
+  return (
+    error instanceof ReadCrossedReconnectError ||
+    (failureCount === 0 && retryDelayFor(error) !== null)
+  )
 }
 
 export function hostQueryRetryDelay(_failureCount: number, error: unknown): number {

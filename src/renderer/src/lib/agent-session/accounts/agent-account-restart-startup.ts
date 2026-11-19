@@ -1,33 +1,30 @@
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { useAppStore } from '@/store/index'
-import type { AppState } from '@/store/types'
 import { buildAgentResumeStartupPlan } from '../../../../../shared/agent-launch/startup/tui-agent-resume-startup'
 import {
   resolveRuntimeHostReportedPlatform,
   resolveRuntimeHostTerminalWindowsShell,
   resolveSshHostReportedPlatform,
-  resolveAgentResumeLaunchTarget,
-  type AgentResumeLaunchTarget
+  resolveAgentResumeLaunchTarget
 } from '@/lib/agent-session/resume/agent-resume-launch-target'
+import type { AgentResumeLaunchTarget } from '@/lib/agent-session/resume/agent-resume-launch-target'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
-import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
 import { isSessionHeldByAnotherPane } from '@/lib/agent-session/identity/claude-session-pane-holders'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import {
-  normalizeAgentProviderSession,
-  type AgentProviderSessionMetadata,
-  type SleepingAgentLaunchConfig
+import { normalizeAgentProviderSession } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentLaunchConfig
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import {
-  resolveTuiAgentLaunchRawArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
-import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
-import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'
+import { resolveResumeLaunchRecipe } from '../../../../../shared/agent-launch/choices/resume-launch-recipe'
 import { resolveAgentLaunchCommand } from '../../../../../shared/agent-launch/startup/tui-agent-launch-command'
 import { resolveStartupShell } from '../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import type { AppState } from '@/store/types'
+import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
+import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'
 
 export type AgentAccountRestartStartup = {
   command: string
@@ -55,11 +52,9 @@ export function resolveAgentAccountRestartResumeStartup(
   agent: AccountRestartAgent,
   args: AccountRestartPane
 ): AgentAccountRestartStartup | null {
-  // Why: a hand-started Claude must not come back with configured defaults such as a permission bypass.
-  const unrecordedLaunchUsesDefaults = agent !== 'claude'
   const state = useAppStore.getState()
   const paneKey = makePaneKey(args.tabId, args.leafId)
-  const entry = state.agentStatusByPaneKey[paneKey]
+  const entry = state.agentStatusByPaneKey.get(paneKey)
   const sleeping = state.sleepingAgentSessionsByPaneKey[paneKey]
   const agentType = entry?.agentType ?? sleeping?.agent
   if (agentType !== agent) {
@@ -80,35 +75,18 @@ export function resolveAgentAccountRestartResumeStartup(
   ) {
     return null
   }
-  const launchConfig =
-    (entry ? state.getAgentLaunchConfigForStatusEntry(entry) : undefined) ??
-    (sleeping?.agent === agent ? sleeping.launchConfig : undefined)
+  // A live invocation takes the one decision's answer, none included.
+  const launchConfig = entry
+    ? state.getAgentLaunchConfigForStatusEntry(entry)
+    : sleeping?.agent === agent
+      ? sleeping.launchConfig
+      : undefined
   const resumeTarget = resolveAccountRestartLaunchTarget(state, args, projectRuntime)
   const startupPlan = buildAgentResumeStartupPlan({
     agent,
     providerSession,
     cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-    agentArgs:
-      launchConfig !== undefined
-        ? launchConfig.agentArgs
-        : unrecordedLaunchUsesDefaults
-          ? resolveTuiAgentLaunchRawArgs(
-              agent,
-              state.settings,
-              undefined,
-              resolveStartupShell(resumeTarget.platform, resumeTarget.shell)
-            )
-          : null,
-    agentEnv:
-      launchConfig !== undefined
-        ? launchConfig.agentEnv
-        : unrecordedLaunchUsesDefaults
-          ? resolveTuiAgentLaunchEnv(agent, state.settings, resumeTarget.platform)
-          : null,
-    ...(launchConfig?.agentCommand ? { agentCommand: launchConfig.agentCommand } : {}),
-    ...(launchConfig?.ompResumeFilePath
-      ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
-      : {}),
+    ...resolveResumeLaunchRecipe(launchConfig, agent, providerSession),
     platform: resumeTarget.platform,
     agentHostPlatform: resumeTarget.agentHostPlatform,
     shell: resumeTarget.shell,
@@ -141,7 +119,7 @@ export function buildPaneAccountRestartStartup(
 ): AgentAccountRestartStartup | null {
   const resume = resolveAgentAccountRestartResumeStartup(agent, args)
   const sessionId = resume?.resumeProviderSession?.id
-  // Why here: a queued restart runs at idle, and another pane may have resumed the session since.
+  // Why here: another pane may have resumed the session since the restart was queued.
   if (
     agent === 'claude' &&
     sessionId &&

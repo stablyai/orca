@@ -4,7 +4,7 @@ import type {
   SshConnectionState,
   SshConnectionStatus,
   SshTarget
-} from '../../../../../../shared/ssh-types'
+} from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import { Checkbox } from '../../../ui/checkbox'
@@ -27,7 +27,7 @@ import {
 } from '../server-actions/SshTargetServerStatus'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 export const STATUS_LABELS: Record<SshConnectionStatus, string> = {
   get disconnected() {

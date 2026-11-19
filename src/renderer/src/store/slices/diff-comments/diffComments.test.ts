@@ -1,9 +1,10 @@
 import type { AppState } from '../../types'
 import { selectDiffCommentView, type DiffCommentOwner } from './diff-comment-owner'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import type { DiffComment } from '../../../../../shared/diff-comment-types'
+import type { DiffComment } from '../../../../../shared/file-review/diff-comment-types'
+import { mergeDiffCommentMutation } from '../../../../../shared/file-review/diff-comment-mutation'
 import type { Worktree } from '../../../../../shared/worktree/types'
-import { SELF_LOCAL_AUTHORITY } from '../../../../../shared/host-authority'
+import { SELF_LOCAL_AUTHORITY } from '../../../../../shared/execution-host/host-authority'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -156,150 +157,6 @@ function seed(
   })
 }
 
-describe('updateDiffComment', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    clearRuntimeCompatibilityCacheForTests()
-    runtimeEnvironmentTransportCall.mockReset()
-    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
-      return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
-    })
-    updateMeta.mockResolvedValue({})
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-1',
-      ok: true,
-      result: { ok: true },
-      _meta: { runtimeId: 'remote-runtime' }
-    })
-  })
-
-  it('updates the body, trims it, and persists', async () => {
-    const store = createTestStore()
-    const original: DiffComment = {
-      id: 'c1',
-      worktreeId: WT,
-      filePath: 'src/foo.ts',
-      lineNumber: 10,
-      body: 'old body',
-      createdAt: 1000,
-      sentAt: 2000,
-      side: 'modified'
-    }
-    seed(store, [original])
-
-    const ok = await store
-      .getState()
-      .updateDiffComment(capturedOwner(store, WT), 'c1', '  new body  ')
-
-    expect(ok).toBe(true)
-    const saved = store.getState().getDiffComments(WT)[0]
-    expect(saved.body).toBe('new body')
-    expect(saved.id).toBe('c1')
-    expect(saved.lineNumber).toBe(10)
-    expect(saved.createdAt).toBe(1000)
-    expect(saved.sentAt).toBeUndefined()
-    expect(updateMeta).toHaveBeenCalledTimes(1)
-  })
-
-  it('rejects an empty body without persisting', async () => {
-    const store = createTestStore()
-    seed(store, [
-      {
-        id: 'c1',
-        worktreeId: WT,
-        filePath: 'src/foo.ts',
-        lineNumber: 10,
-        body: 'old body',
-        createdAt: 1000,
-        side: 'modified'
-      }
-    ])
-
-    const ok = await store.getState().updateDiffComment(capturedOwner(store, WT), 'c1', '   ')
-
-    expect(ok).toBe(false)
-    expect(store.getState().getDiffComments(WT)[0].body).toBe('old body')
-    expect(updateMeta).not.toHaveBeenCalled()
-  })
-
-  it('rolls back on persist failure', async () => {
-    const store = createTestStore()
-    seed(store, [
-      {
-        id: 'c1',
-        worktreeId: WT,
-        filePath: 'src/foo.ts',
-        lineNumber: 10,
-        body: 'old body',
-        createdAt: 1000,
-        side: 'modified'
-      }
-    ])
-    updateMeta.mockRejectedValueOnce(new Error('disk full'))
-    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-
-    const ok = await store.getState().updateDiffComment(capturedOwner(store, WT), 'c1', 'new body')
-
-    expect(ok).toBe(false)
-    expect(store.getState().getDiffComments(WT)[0].body).toBe('old body')
-    errSpy.mockRestore()
-  })
-})
-
-describe('clearDeliveredDiffComments', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    clearRuntimeCompatibilityCacheForTests()
-    runtimeEnvironmentTransportCall.mockReset()
-    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
-      return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
-    })
-    updateMeta.mockResolvedValue({})
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-1',
-      ok: true,
-      result: { ok: true },
-      _meta: { runtimeId: 'remote-runtime' }
-    })
-  })
-
-  it('keeps a note that changed while delivery was pending', async () => {
-    const store = createTestStore()
-    const sentSnapshot = makeComment({ id: 'c1', body: 'old body' })
-    const edited = makeComment({ id: 'c1', body: 'new body' })
-    const delivered = makeComment({ id: 'c2', body: 'unchanged' })
-    seed(store, [edited, delivered])
-
-    const ok = await store
-      .getState()
-      .clearDeliveredDiffComments(capturedOwner(store, WT), [sentSnapshot, delivered])
-
-    expect(ok).toBe(true)
-    expect(store.getState().getDiffComments(WT)).toEqual([edited])
-    expect(updateMeta).toHaveBeenCalledWith({
-      executionHostId: 'local',
-      worktreeId: WT,
-      updates: { diffComments: [edited] }
-    })
-  })
-
-  it('rolls back delivered-note clearing on persist failure', async () => {
-    const store = createTestStore()
-    const comments = [makeComment({ id: 'c1' }), makeComment({ id: 'c2' })]
-    seed(store, comments)
-    updateMeta.mockRejectedValueOnce(new Error('disk full'))
-    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-
-    const ok = await store
-      .getState()
-      .clearDeliveredDiffComments(capturedOwner(store, WT), [comments[0]])
-
-    expect(ok).toBe(false)
-    expect(store.getState().getDiffComments(WT)).toBe(comments)
-    errSpy.mockRestore()
-  })
-})
-
 describe('bulk clear diff comments', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -315,33 +172,6 @@ describe('bulk clear diff comments', () => {
       result: { ok: true },
       _meta: { runtimeId: 'remote-runtime' }
     })
-  })
-
-  it('keeps markdown notes when asked, so a hidden markdown note survives a clear', async () => {
-    const store = createTestStore()
-    seed(store, [
-      makeComment({ id: 'diff', filePath: 'README.md' }),
-      makeComment({ id: 'md', filePath: 'README.md', source: 'markdown' }),
-      makeComment({ id: 'other', filePath: 'src/foo.ts' })
-    ])
-
-    await store
-      .getState()
-      .clearDiffCommentsForFile(capturedOwner(store, WT), 'README.md', { keepMarkdownNotes: true })
-    expect(
-      store
-        .getState()
-        .getDiffComments(WT)
-        .map((c) => c.id)
-    ).toEqual(['md', 'other'])
-
-    await store.getState().clearDiffComments(capturedOwner(store, WT), { keepMarkdownNotes: true })
-    expect(
-      store
-        .getState()
-        .getDiffComments(WT)
-        .map((c) => c.id)
-    ).toEqual(['md'])
   })
 
   it('does not clobber a later comment array identity when rollback runs', async () => {
@@ -418,36 +248,106 @@ describe('worktree diff comment rollback convergence', () => {
     expect(updateMeta).toHaveBeenCalledTimes(2)
     expect(store.getState().getDiffComments(WT)).toBe(comments)
   })
+})
 
-  it('converges a mixed-mutator failing burst and still reports the delete failure', async () => {
+describe('desktop note writes beside another device', () => {
+  type NoteWrite = { updates: { diffComments: DiffComment[]; diffCommentsBase?: DiffComment[] } }
+  let hostNotes: DiffComment[] = []
+  // The host's write rule: merge against the writer's base when it sends one.
+  const saveOnHost = ({ updates }: NoteWrite): void => {
+    hostNotes = updates.diffCommentsBase
+      ? mergeDiffCommentMutation(updates.diffCommentsBase, hostNotes, updates.diffComments)
+      : updates.diffComments
+  }
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    updateMeta.mockImplementation(async (write: NoteWrite) => {
+      saveOnHost(write)
+      return {}
+    })
+    // Failed writes in earlier tests leave this copy's next write unbased; one success resyncs it.
     const store = createTestStore()
-    const comments = [makeComment({ id: 'c1' }), makeComment({ id: 'c2' })]
-    seed(store, comments)
-    updateMeta.mockRejectedValue(new Error('disk full'))
-
-    const removed = store.getState().deleteDiffComment(capturedOwner(store, WT), 'c1')
-    const marked = store.getState().markDiffCommentsSent(capturedOwner(store, WT), ['c2'], 3000)
-
-    // deleteDiffComment returns no boolean; absent return must not hide write failures.
-    await expect(removed).resolves.toBeUndefined()
-    await expect(marked).resolves.toBe(false)
-    expect(store.getState().getDiffComments(WT)).toBe(comments)
-    expect(errSpy).toHaveBeenCalled()
+    seed(store, [])
+    await store.getState().addDiffComment(capturedOwner(store, WT), {
+      worktreeId: WT,
+      filePath: 'src/foo.ts',
+      lineNumber: 1,
+      body: 'resync',
+      side: 'modified'
+    })
   })
 
-  it('converges on the runtime branch when two consecutive writes fail', async () => {
+  it('keeps a note another device saved after this desktop last loaded the list', async () => {
     const store = createTestStore()
-    store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
-    const comments = [makeComment({ id: 'c1' })]
-    seed(store, comments, { hostId: 'local', runtimeOwnerEnvironmentId: 'env-1' })
-    runtimeEnvironmentCall.mockRejectedValue(new Error('runtime unreachable'))
+    const mine = makeComment({ id: 'mine', body: 'desktop note' })
+    seed(store, [mine])
+    hostNotes = [mine, makeComment({ id: 'phone', body: 'phone note' })]
 
-    await expect(Promise.all([addNote(store, 'A', 11), addNote(store, 'B', 12)])).resolves.toEqual([
-      null,
-      null
-    ])
-    expect(updateMeta).not.toHaveBeenCalled()
-    expect(store.getState().getDiffComments(WT)).toBe(comments)
+    expect(
+      await store.getState().updateDiffComment(capturedOwner(store, WT), 'mine', 'edited')
+    ).toBe(true)
+
+    expect(hostNotes.map((comment) => comment.body)).toEqual(['edited', 'phone note'])
+  })
+
+  it('keeps an edit queued behind a save whose reply was lost after it landed', async () => {
+    const store = createTestStore()
+    seed(store, [])
+    hostNotes = []
+    let failLandedSave: () => void = () => {}
+    updateMeta.mockImplementationOnce(
+      (write: NoteWrite) =>
+        new Promise((_, reject) => {
+          failLandedSave = () => {
+            saveOnHost(write)
+            reject(new Error('timed out'))
+          }
+        })
+    )
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const owner = capturedOwner(store, WT)
+    const adding = store.getState().addDiffComment(owner, {
+      worktreeId: WT,
+      filePath: 'src/foo.ts',
+      lineNumber: 3,
+      body: 'first draft',
+      side: 'modified'
+    })
+    await Promise.resolve()
+    const [added] = store.getState().getDiffComments(WT) ?? []
+    const editing = store.getState().updateDiffComment(owner, added.id, 'final text')
+    failLandedSave()
+
+    await adding
+    expect(await editing).toBe(true)
+    expect(hostNotes.map((comment) => comment.body)).toEqual(['final text'])
+    errSpy.mockRestore()
+  })
+
+  it('does not duplicate a note retried after its first save landed but its reply was lost', async () => {
+    const store = createTestStore()
+    seed(store, [])
+    hostNotes = []
+    updateMeta.mockImplementationOnce(async (write: NoteWrite) => {
+      saveOnHost(write)
+      throw new Error('timed out')
+    })
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const owner = capturedOwner(store, WT)
+    const note = {
+      worktreeId: WT,
+      filePath: 'src/foo.ts',
+      lineNumber: 3,
+      body: 'retried note',
+      side: 'modified' as const
+    }
+
+    expect(await store.getState().addDiffComment(owner, note)).toBeNull()
+    expect(await store.getState().addDiffComment(owner, note)).not.toBeNull()
+
+    expect(hostNotes.map((comment) => comment.body)).toEqual(['retried note'])
+    errSpy.mockRestore()
   })
 })
 

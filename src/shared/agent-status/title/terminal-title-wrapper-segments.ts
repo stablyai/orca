@@ -16,6 +16,26 @@ export function getWrapperTitleSegments(title: string): string[] {
   return segments
 }
 
+const MAX_WRAPPER_EVIDENCE_SEGMENTS = 8
+
+/** Evidence titles keep at most eight wrapper segments, innermost last-separator first. */
+export function getEvidenceTitleSegments(title: string): string[] {
+  const segments = [title]
+  let separatorIndex = title.lastIndexOf(WRAPPER_SEPARATOR)
+  while (separatorIndex >= 0 && segments.length < MAX_WRAPPER_EVIDENCE_SEGMENTS) {
+    const wrapped = title.slice(separatorIndex + WRAPPER_SEPARATOR.length).trim()
+    if (wrapped && !segments.includes(wrapped)) {
+      segments.push(wrapped)
+    }
+    const previousSeparatorIndex = separatorIndex
+    separatorIndex = title.lastIndexOf(WRAPPER_SEPARATOR, separatorIndex - 1)
+    if (separatorIndex === previousSeparatorIndex) {
+      break
+    }
+  }
+  return segments
+}
+
 /** Inspect one disjoint header, preserving shell host/cwd syntax without admitting colon task prose. */
 export function isNeutralAgentTitleWrapper(header: string): boolean {
   // ASCII activity tokens include trailing whitespace, so classify before right trimming.

@@ -2,17 +2,19 @@
 name: orchestration
 description: >-
   Run work in separate Orca worker agents and get their results back. Use when
-  the user asks for Orca workers or supervision (monitor, task DAGs, ask/reply,
-  decision gates), or when the work needs something your own subagents cannot
-  give: a different agent (such as Codex from Claude) or its own Orca workspace.
-  "Have Codex (or Claude) review this and report back" means an Orca worker of
-  that agent, even when you have your own model subagents.
+  the user invokes /orchestration, asks for Orca workers or supervision
+  (monitor, task DAGs, ask/reply, decision gates), or asks to split,
+  parallelize or fan out code changes across agents, worktrees or branches;
+  use Orca workers for those. Also use when the work needs a different agent
+  (such as Codex from Claude) or its own Orca workspace: "Have Codex (or
+  Claude) review this and report back" means an Orca worker of that agent.
   Also use when you are a dispatched worker (a prompt with Task and Dispatch
-  IDs: ask, worker_done). Otherwise prefer your own subagents,
-  including for long or parallel work. Use `orca-cli` to hand work off with
-  nothing expected back ("hand off", "handover", "give this to another agent",
-  "another worktree"), and for terminal control, shell commands, worktree
-  management, and reading or waiting on terminals.
+  IDs: ask, worker_done). Unless the user asks for Orca workers or a named
+  agent, searches, reads and research in your workspace stay with your own
+  subagents, even in parallel. Use `orca-cli` to hand work off
+  with nothing expected back ("hand off", "handover", "give this to another
+  agent", "another worktree"), and for terminal control, shell commands,
+  worktree management, and reading or waiting on terminals.
 ---
 
 # Orca orchestration
@@ -20,6 +22,9 @@ description: >-
 If your prompt has a preamble with Task and Dispatch IDs, you are a worker:
 follow the preamble. To ask your coordinator, run `ask`, then end your turn;
 Orca wakes you with the answer. To hand work off with nothing back, use `orca-cli`.
+When you report your effort, take it from the dispatch's `--effort` or your process
+argv, not from a numeric `reasoning_effort`: that number is not on a 0–100 scale
+(claude-opus-5-5: low=5, medium=10, high=15, xhigh=40).
 
 ## Recipe
 
@@ -27,10 +32,19 @@ Orca wakes you with the answer. To hand work off with nothing back, use `orca-cl
 place and use it for every command.
 
 ```text
-ORCA orchestration worker-start --spec "<task>" --worktree current --agent codex
+ORCA orchestration worker-start --spec "<task>" --worktree current --agent <agent>
 ```
 
-- Start every independent worker, then **end your turn**. "Report back" and
+`<agent>` is an Orca agent id: one the user named, else the agent you are
+running as when the worker shares your execution host. Otherwise, such as a
+different SSH/WSL host or `--on`, ask the user. `worker-start` does not check
+that the CLI is installed; a missing one fails as an `agent_readiness` timeout.
+
+- Start independent workers at the same time, up to about 4 at once, and
+  start the rest as those return. Separate tool calls often run one after
+  another, so start each group from one shell command: load
+  `references/parallel-start.md` for the POSIX and PowerShell forms.
+  Then **end your turn**. "Report back" and
   "tell me when it's done" still mean end your turn; Orca wakes you and you
   report then.
 - If a receipt has `next`, follow it. When Orca has nothing for you, end your
@@ -71,6 +85,7 @@ Never:
   follows from the task or the user's instructions; otherwise ask the user first.
 - An `escalation` with `stopReason` means the worker stopped without
   `worker_done`: steer it with `send`, stop and retry it, or tell the user.
+  `exited` or `lost` means it is gone: retry it or tell the user.
 - A `worker_done` settles its Task; never mark a reported failure completed.
 - When every worker has settled, report to the user per Task: outcome,
   evidence, open blockers.
@@ -112,4 +127,5 @@ assignment does not prove its agent stopped.
 | Child worktrees, SSH, WSL, a connected server  | `references/placement-and-remote.md` |
 | Group messages                                 | `references/messaging-and-gates.md`  |
 | A failed or unknown worker; retry, stop, reset | `references/recovery-and-cleanup.md` |
+| Several independent workers at once            | `references/parallel-start.md`       |
 | Custom argv or terminal layout                 | `references/low-level-topology.md`   |

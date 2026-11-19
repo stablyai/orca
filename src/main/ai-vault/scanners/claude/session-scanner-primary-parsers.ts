@@ -2,11 +2,14 @@ import {
   remoteSessionContentLines,
   type RemoteSessionContent
 } from '../../transcripts/remote-session-content-lines'
-import { openTranscriptReadStream } from '../../../native-chat/wsl-transcript-fs-access'
+import { openTranscriptReadStream } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
-import { isKnownHarnessInjectedUserTurnText } from '../../../../shared/harness-injected-user-turns'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
+import { isKnownHarnessInjectedUserTurnText } from '../../../../shared/agent-session/journal/harness-injected-user-turns'
 import { normalizePromptField } from '../../../../shared/agent-status/contracts/agent-status-field-normalization'
 import type {
   FileWithMtime,
@@ -21,13 +24,17 @@ import {
   sessionIdFromFileName,
   updateLatestLocation,
   updateTimeline
-} from '../../session-scanner-accumulator'
-import { addSessionContent } from '../../session-scanner-messages'
+} from '../../parsing/session-scanner-accumulator'
+import { addSessionContent } from '../../parsing/session-scanner-messages'
 import { countSubagentTranscripts } from './session-scanner-subagent-transcripts'
-import { asRecord } from '../../session-scanner-record-value'
-import { claudeUsageTotal } from '../../session-scanner-token-values'
-import { extractMessageText, normalizeTitleText } from '../../session-scanner-text-normalization'
-import { extractString, parseJsonObject } from '../../session-scanner-values'
+import { asRecord } from '../../parsing/session-record-fields'
+import { claudeUsageTotal } from '../../parsing/session-scanner-token-values'
+import {
+  extractMessageText,
+  normalizeTitleText
+} from '../../parsing/session-scanner-text-normalization'
+import { extractString } from '../../../../shared/text/trimmed-string'
+import { readJsonObjectMembers } from '../../parsing/session-json-object'
 
 type ParserSessionOptions = {
   signal?: AbortSignal
@@ -73,11 +80,45 @@ export function cloneClaudeSessionParseState(
   }
 }
 
+// Every top-level field consumeClaudeSessionRecord reads; keep in sync when it reads another.
+const CLAUDE_RECORD_FIELDS: ReadonlySet<string> = new Set([
+  'type',
+  'sessionId',
+  'timestamp',
+  'cwd',
+  'gitBranch',
+  'customTitle',
+  'aiTitle',
+  'agentName',
+  'operation',
+  'content',
+  'lastPrompt',
+  'isMeta',
+  'message'
+])
+
+// Tool results and attachments can parse to ~20x their size; listing never reads them (#42921).
 export function consumeClaudeSessionLine(state: ClaudeSessionParseState, line: string): void {
-  const record = parseJsonObject(line)
-  if (record) {
-    consumeClaudeSessionRecord(state, record)
+  const members = readJsonObjectMembers(line, CLAUDE_RECORD_FIELDS)
+  if (!members) {
+    return
   }
+  const record: Record<string, unknown> = {}
+  try {
+    for (const [key, raw] of members) {
+      if (key !== 'message') {
+        record[key] = JSON.parse(raw)
+      }
+    }
+    const message = members.get('message')
+    // Other record types, such as api-request-blob, carry whole API requests here.
+    if (message !== undefined && (record.type === 'user' || record.type === 'assistant')) {
+      record.message = JSON.parse(message)
+    }
+  } catch {
+    return
+  }
+  consumeClaudeSessionRecord(state, record)
 }
 
 export function consumeClaudeSessionRecord(

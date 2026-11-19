@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalSubmission } from '../journal/agent-session-journal-types'
-import type { AgentSessionQueuedMessage } from '../requests/agent-session-queued-message-wire'
+import {
+  QUEUED_MESSAGE_PAUSED_SEND_FAILED,
+  type AgentSessionQueuedMessage
+} from '../requests/agent-session-queued-message-wire'
 import {
   headSteerableQueuedMessageCard,
   projectQueuedMessageCards
@@ -96,5 +99,44 @@ describe('queued message cards', () => {
     })
     expect(working.map((card) => card.waitsForAgent ?? false)).toEqual([false, true])
     expect(cards[1]).not.toHaveProperty('waitsForAgent')
+  })
+
+  it("Orca's own waiting sends stay out of the queue; a returned one and the person's behind it show", () => {
+    const orcaSend = (id: string, position: number, origin: 'card-answer' | 'bot-created') =>
+      draft(id, position, {
+        body: { ...draft(id, position).body, origin }
+      })
+    const cards = projectQueuedMessageCards(
+      [
+        orcaSend('answer', 1, 'card-answer'),
+        orcaSend('first-turn', 2, 'bot-created'),
+        { ...orcaSend('refused', 3, 'card-answer'), state: 'returned', returnedReason: null },
+        draft('typed', 4)
+      ],
+      [],
+      IDLE
+    )
+    expect(cards.map((card) => card.messageId)).toEqual(['refused', 'typed'])
+    const waitingOnly = projectQueuedMessageCards(
+      [orcaSend('answer', 1, 'card-answer'), draft('typed', 2)],
+      [],
+      IDLE
+    )
+    expect(headSteerableQueuedMessageCard(waitingOnly)?.messageId).toBe('typed')
+  })
+  it("shows Orca's own send while it is held, so Send or Resume can still reach it", () => {
+    const answer = (overrides: Partial<AgentSessionQueuedMessage> = {}) =>
+      draft('answer', 1, {
+        body: { ...draft('answer', 1).body, origin: 'card-answer' },
+        ...overrides
+      })
+    const sendFailed = projectQueuedMessageCards(
+      [answer({ paused: true, pausedReason: QUEUED_MESSAGE_PAUSED_SEND_FAILED })],
+      [],
+      IDLE
+    )
+    expect(sendFailed.map((card) => [card.messageId, card.hold])).toEqual([['answer', 'paused']])
+    const stopped = projectQueuedMessageCards([answer()], [], { queuePaused: true })
+    expect(stopped.map((card) => [card.messageId, card.hold])).toEqual([['answer', 'queue-paused']])
   })
 })

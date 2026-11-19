@@ -1,4 +1,4 @@
-import type { StatusBarItem } from '../../../../../shared/ui-chrome-types'
+import type { StatusBarItem } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 
@@ -11,10 +11,7 @@ export function getAntigravityStatusBarToggleSearchEntry(): {
 } {
   return {
     id: 'antigravity',
-    title: translate(
-      'auto.components.settings.appearance.search.antigravityUsageTitle',
-      'Antigravity Usage'
-    ),
+    title: translate('auto.components.settings.appearance.search.ba1f9d39a6', 'Antigravity usage'),
     description: translate(
       'auto.components.settings.appearance.search.antigravityUsageDescription',
       'Show Antigravity subscription usage in the status bar.'

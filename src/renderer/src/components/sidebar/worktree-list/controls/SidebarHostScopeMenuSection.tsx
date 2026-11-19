@@ -1,15 +1,15 @@
-import type React from 'react'
+import React, { useMemo } from 'react'
 import {
   DropdownMenuCheckboxItem,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
-import { ALL_EXECUTION_HOSTS_SCOPE } from '../../../../../../shared/execution-host'
+import { ALL_EXECUTION_HOSTS_SCOPE } from '../../../../../../shared/execution-host/execution-host'
 import type {
   VisibleWorkspaceHostIds,
   WorkspaceHostScope
-} from '../../../../../../shared/ui-chrome-types'
+} from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import { pickerExecutionHosts } from '../../../../../../shared/execution-host/managed-orcad-execution-host'
 import {
   getCheckedHostRows,
@@ -22,6 +22,10 @@ import { HostListSearchField } from '../../../host-picker/HostListSearchField'
 import { HostListOverflowNote } from '../../../host-picker/HostListOverflowNote'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import {
+  translateExecutionHostDetail,
+  translateHostDisplayLabel
+} from '../../../../runtime/hosts/display/execution-host-label'
 
 type SidebarHostScopeMenuSectionProps = {
   hostVisibilityLabel: string
@@ -35,7 +39,7 @@ type SidebarHostScopeMenuSectionProps = {
 function getHostMetadata(host: SidebarHostOption, t: Translate = translate): string {
   const healthLabel = getSidebarHostHealthLabel(host.health, host.blockedReason, t, host.vmState)
   if (host.kind === 'local') {
-    return host.detail
+    return translateExecutionHostDetail(host.detail)
   }
   if (host.kind === 'ssh') {
     const presenceLabel =
@@ -70,7 +74,14 @@ export function SidebarHostScopeMenuSection({
 }: SidebarHostScopeMenuSectionProps): React.JSX.Element {
   const t = useTranslate()
   const allVisible = !visibleWorkspaceHostIds
-  const hostRows = pickerExecutionHosts(hostOptions)
+  const hostRows = useMemo(
+    () =>
+      pickerExecutionHosts(hostOptions).map((host) => ({
+        ...host,
+        searchText: translateHostDisplayLabel(host, t)
+      })),
+    [hostOptions, t]
+  )
   const checkedRowIds = new Set(
     (visibleWorkspaceHostIds
       ? getCheckedHostRows(hostRows, visibleWorkspaceHostIds)
@@ -144,7 +155,7 @@ export function SidebarHostScopeMenuSection({
               className="min-h-11 items-start py-1.5"
             >
               <span className="flex min-w-0 flex-col gap-0.5">
-                <span className="truncate">{host.label}</span>
+                <span className="truncate">{translateHostDisplayLabel(host, t)}</span>
                 <span className="text-[11px] font-normal text-muted-foreground">
                   {getHostMetadata(host, t)}
                 </span>

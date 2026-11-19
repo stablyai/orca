@@ -42,3 +42,25 @@ export function verdictOf(
     ? { sessionId, outcome: 'continued' }
     : { sessionId, outcome: 'unknown' }
 }
+
+type SubmissionWait = (
+  sessionId: string,
+  clientMessageId: string
+) => Promise<ContinuationSubmission | undefined>
+
+/** Initial acceptance is usually pending; settled provider state decides. */
+export async function settledVerdict(
+  deps: { awaitSettlement: SubmissionWait; awaitDispatched: SubmissionWait },
+  sessionId: string,
+  clientMessageId: string,
+  fallback: ContinuationSubmission | undefined
+): Promise<StructuredAgentSessionContinuationOutcome> {
+  const settled = await deps.awaitSettlement(sessionId, clientMessageId).catch(() => undefined)
+  const verdict = verdictOf(sessionId, settled ?? fallback)
+  if (verdict.outcome !== 'unknown' || !settled) {
+    return verdict
+  }
+  // Handed over during a turn that ended without it (Claude's post-restart startup turn); the next turn may still take it.
+  const dispatched = await deps.awaitDispatched(sessionId, clientMessageId).catch(() => undefined)
+  return dispatched ? verdictOf(sessionId, dispatched) : verdict
+}

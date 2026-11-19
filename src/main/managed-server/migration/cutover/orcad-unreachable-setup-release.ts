@@ -1,7 +1,7 @@
 /** Release conversion setups stranded before staging by refused SSH forwarding. Stop any activated slot, unregister, then use undeployed-fence release; source rows remain intact for retry. */
 import { listEnvironments } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { removeManagedOrcadEnvironment } from '../../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
-import { findOrcadMigrationSourceCutoverForTarget } from '../../../persistence/migrating-orcad-catalog/orcad-migration-cutover-journal'
+import { findOrcadMigrationSourceCutoverForTarget } from '../../../persistence/migrating-orcad-catalog/cutover-journals/orcad-migration-cutover-journal'
 import { releaseUndeployedMigrationFence } from '../../../ssh/migration-source/orcad-migration-source-fence'
 import { closeOrcadManagedTunnel } from '../../lifecycle/orcad-managed-tunnel'
 import type { SshTargetOrcadClaims } from '../../../ssh/targets/ssh-target-orcad-claims'
@@ -20,7 +20,7 @@ import {
   getSshConnectionManager,
   getSshTargetRegistryStore
 } from '../../../ssh/targets/ssh-target-registry'
-import { errorMessage } from '../../../../shared/error-message'
+import { errorMessage } from '../../../../shared/errors/error-message'
 
 export async function releaseUnreachableOrcadSetup(args: {
   userDataPath: string
@@ -38,11 +38,11 @@ export async function releaseUnreachableOrcadSetup(args: {
   await stopStrandedOrcad(args.targetId, args.signal).catch((error: unknown) => {
     console.warn(`[orcad] Could not stop the unreachable setup's server: ${errorMessage(error)}`)
   })
-  const isRegistered = (id: string): boolean =>
-    listEnvironments(args.userDataPath).some((entry) => entry.id === id)
+  const isRegistered = async (id: string): Promise<boolean> =>
+    (await listEnvironments(args.userDataPath)).some((entry) => entry.id === id)
   // Unregister first so an interrupted release leaves a recoverable undeployed fence.
-  if (isRegistered(environmentId)) {
-    removeManagedOrcadEnvironment(args.userDataPath, environmentId)
+  if (await isRegistered(environmentId)) {
+    await removeManagedOrcadEnvironment(args.userDataPath, environmentId)
   }
   await releaseUndeployedMigrationFence({
     userDataPath: args.userDataPath,

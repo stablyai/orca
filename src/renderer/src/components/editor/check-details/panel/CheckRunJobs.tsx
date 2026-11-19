@@ -11,23 +11,26 @@ import { isGitLabAllowedFailureJob } from '@/components/github/pr-check-presenta
 import { CHECK_COLOR } from '@/components/right-sidebar/checks-panel/presentation/check-presentation'
 import { CheckJobLogTail } from '@/components/right-sidebar/checks-panel/logs/check-job-log-tail'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type {
   PRCheckDetail,
   PRCheckJob,
   PRCheckStep
-} from '../../../../../../shared/github/check-types'
+} from '../../../../../../shared/github/checks/check-types'
 import {
   resolveStepOutcome,
   summarizeJobSteps,
   type StepOutcome
 } from '../../../../../../shared/source-control/checks/pr-check-step-status'
 import { formatJobsForClipboard } from '../actions/check-run-clipboard-text'
-import { CheckRunCopyButton } from './CheckRunCopyButton'
+import { CopyTextButton } from '@/components/clipboard/CopyTextButton'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
+import {
+  scrollTopCache,
+  setWithLRU
+} from '@/components/editor/model-lifetime/retention/editor-view-state-cache'
 import { checkJobIdentities, checkReadingStepsKey } from '../reading/check-details-reading-cache'
 import type { CheckDetailsReadingOwner } from '../reading/check-details-reading-owner'
 
@@ -247,7 +250,7 @@ export function CheckRunJobs({
             ? t('auto.components.editor.CheckRunDetailsPanel.066fedd446', 'Failed jobs')
             : t('auto.components.editor.CheckRunDetailsPanel.49731703ea', 'Jobs')}
         </div>
-        <CheckRunCopyButton
+        <CopyTextButton
           text={clipboardText}
           label={t('auto.components.editor.CheckRunJobs.copy', 'Copy jobs')}
         />

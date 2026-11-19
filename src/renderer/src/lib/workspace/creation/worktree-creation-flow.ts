@@ -7,7 +7,7 @@ import {
 } from '@/lib/workspace/creation/pending-worktree-creation'
 import { updateNativeChatComposerDraft } from '@/components/native-chat/drafts/native-chat-composer-draft-store'
 import { promptTextContent } from '@/components/native-chat/composer/editor/native-chat-prompt-document-text'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   isInstantFolderWorktreeCreation,
   showWorktreeCreationError
@@ -20,7 +20,7 @@ import {
 import {
   formatWorkspaceCreateError,
   getWorkspaceCreateErrorToastMessage
-} from '@/lib/workspace-create-error-format'
+} from '@/lib/workspace/creation/workspace-create-error-format'
 
 type ContinueBackgroundWorktreeCreationOptions = {
   revealCreationSurface?: boolean
@@ -174,7 +174,8 @@ export function retryBackgroundWorktreeCreation(creationId: string): void {
     provisioningLog: undefined,
     environmentCheck: undefined,
     checkoutProgress: undefined,
-    worktreeId: undefined
+    worktreeId: undefined,
+    chatHandedOffAt: undefined
   })
   store.setActivePendingWorktreeCreation(creationId)
   store.setActiveView('terminal')

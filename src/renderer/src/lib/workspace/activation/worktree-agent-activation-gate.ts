@@ -1,3 +1,4 @@
+import { sleepingAgentRecordIndex } from '@/store/terminals/sleep/sleeping-agent-record-index'
 import { useAppStore } from '@/store/index'
 import type { PtyListedSession } from '../../../../../shared/terminal/pty/lifecycle/pty-listed-session'
 import {
@@ -5,13 +6,13 @@ import {
   PTY_SESSION_ID_SEPARATOR
 } from '../../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { worktreeIdsEqual } from '../../../../../shared/worktree/id'
 import { listActivationPtySessions } from './worktree-activation-pty-inventory'
 import { resumeSleepingAgentSessionsForWorktree } from '../../agent-session/resume/resume-sleeping-agent-session'
 import type { ResumeSleepingAgentSessionsOptions } from '../../agent-session/resume/sleeping-agent-session-launch'
 import '../../agent-session/resume/sleeping-agent-pane-ownership'
-import { getProviderSessionClaimKey } from '../../../../../shared/sleeping-record-legacy-pane-key'
+import { getProviderSessionClaimKey } from '../../../../../shared/agent-session/lifecycle/resume/sleeping-record-legacy-pane-key'
 import {
   adoptLiveWorkspacePtySurfaces,
   type LiveSurfaceAdoptionStore
@@ -84,9 +85,10 @@ export function workspaceHasSleepingAgentSessions(
   state: Pick<ReturnType<typeof useAppStore.getState>, 'sleepingAgentSessionsByPaneKey'>,
   worktreeId: string
 ): boolean {
-  return Object.values(state.sleepingAgentSessionsByPaneKey).some(
-    (record) => record.worktreeId === worktreeId
-  )
+  return sleepingAgentRecordIndex
+    .entries(state.sleepingAgentSessionsByPaneKey, worktreeId)
+    .map(([, record]) => record)
+    .some((record) => record.worktreeId === worktreeId)
 }
 
 function hasStructuredSession(store: ActivationStore, worktreeId: string): boolean {
@@ -122,7 +124,9 @@ function liveSleepingAgentClaims(
       session.paneKey ? [[session.paneKey, session.id] as const] : []
     )
   )
-  for (const record of Object.values(store.sleepingAgentSessionsByPaneKey)) {
+  for (const record of sleepingAgentRecordIndex
+    .entries(store.sleepingAgentSessionsByPaneKey, worktreeId)
+    .map(([, record]) => record)) {
     if (record.worktreeId !== worktreeId) {
       continue
     }
@@ -247,10 +251,13 @@ export async function runWorktreeAgentActivationGate(
     liveWorkspaceSessions,
     structuredInventory
   )
-  const hasUnclaimedRecovery = Object.values(store.sleepingAgentSessionsByPaneKey).some(
-    (record) =>
-      record.worktreeId === worktreeId && !claims.keys.has(getProviderSessionClaimKey(record))
-  )
+  const hasUnclaimedRecovery = sleepingAgentRecordIndex
+    .entries(store.sleepingAgentSessionsByPaneKey, worktreeId)
+    .map(([, record]) => record)
+    .some(
+      (record) =>
+        record.worktreeId === worktreeId && !claims.keys.has(getProviderSessionClaimKey(record))
+    )
   // A surfaced PTY without a conversation claim may still own the sleeping session.
   if (
     hasUnclaimedRecovery &&

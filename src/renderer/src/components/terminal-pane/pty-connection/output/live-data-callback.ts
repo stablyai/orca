@@ -1,6 +1,6 @@
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { useAppStore } from '@/store/index'
-import { takeCurrentTerminalDeliveryCredit } from '@/lib/pane-manager/terminal-delivery-credit'
+import { takeCurrentTerminalDeliveryCredit } from '@/lib/pane-manager/terminal-output/terminal-delivery-credit'
 import { recordAgentHibernationPaneOutput } from '@/lib/agent-session/hibernation/agent-hibernation-output-activity'
 import { observeTerminalBracketedPasteModeOutput } from '../../input/paste/terminal-bracketed-paste'
 import type { PtyDataMeta } from '../../pty-transport/delivery/pty-dispatcher'
@@ -58,7 +58,8 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
       })
       return
     }
-    if (data.length > 0) {
+    // A cap sentinel carries no bytes but stands for output the PTY printed.
+    if (data.length > 0 || meta?.droppedOutput === true) {
       session.hasReceivedPtyOutput = true
       recordAgentHibernationPaneOutput(session.cacheKey)
       // Why: output is the agent-start signal that ends the relaxed no-evidence process-scan cadence (a starting agent always prints).

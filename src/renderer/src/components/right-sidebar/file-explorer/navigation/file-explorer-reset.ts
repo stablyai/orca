@@ -1,4 +1,4 @@
-import type { RightSidebarExplorerView } from '../../../../../../shared/ui-chrome-types'
+import type { RightSidebarExplorerView } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 
 export function getVisibleFileExplorerWorktreePath({
   explorerView,

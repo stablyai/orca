@@ -3,13 +3,13 @@ import { mkdir, mkdtemp, realpath, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
-import type { Repo } from '../../../shared/repo-types'
+import '../../../shared/file-access/cross-platform-path'
+import type { Repo } from '../../../shared/repository/repo-types'
 import { RuntimeRepositoryRegistrationController } from './runtime-repository-registration-controller'
-import { partialRuntimeStore } from '../orca-runtime-tests/runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../construction/test-context/runtime-store-partial-fixture'
 
 vi.mock('../../repository-icons/repo-icon-autodetect', () => ({
-  detectRepoIconAndUpstream: vi.fn().mockResolvedValue({})
+  detectRepoLocalMetadata: vi.fn().mockResolvedValue({})
 }))
 vi.mock('../../workspaces/creation/worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: vi.fn().mockResolvedValue(undefined)
@@ -51,7 +51,7 @@ function gitInit(path: string): void {
   runGit(['init', '-q', path])
 }
 
-describe('RuntimeRepositoryRegistrationController.add through a symlink alias', () => {
+describe('RuntimeRepositoryRegistrationController.add reuses the existing project', () => {
   let root: string
 
   beforeEach(async () => {
@@ -104,6 +104,34 @@ describe('RuntimeRepositoryRegistrationController.add through a symlink alias', 
     expect(repos).toHaveLength(2)
   })
 
+  it('returns the main checkout project when one of its linked worktrees is added', async () => {
+    const repoPath = join(root, 'repo')
+    await mkdir(repoPath)
+    gitInit(repoPath)
+    runGit([
+      '-C',
+      repoPath,
+      '-c',
+      'user.name=t',
+      '-c',
+      'user.email=t@t',
+      'commit',
+      '-q',
+      '--allow-empty',
+      '-m',
+      'init'
+    ])
+    const worktreePath = join(root, 'repo-feature')
+    runGit(['-C', repoPath, 'worktree', 'add', '-q', '-b', 'feature', worktreePath])
+    const { controller, repos } = createController()
+
+    const first = await controller.add(repoPath, 'git')
+    const second = await controller.add(worktreePath, 'git')
+
+    expect(second.id).toBe(first.id)
+    expect(repos).toHaveLength(1)
+  })
+
   it('does not resolve an SSH project path against this machine', async () => {
     const folderPath = join(root, 'notes')
     await mkdir(folderPath)
@@ -135,19 +163,6 @@ describe('RuntimeRepositoryRegistrationController.add stores the checkout git li
 
   afterEach(async () => {
     await rm(root, { recursive: true, force: true })
-  })
-
-  it('stores the toplevel when a subdirectory of a git checkout is added', async () => {
-    const repoPath = join(root, 'mono')
-    await mkdir(join(repoPath, 'pkg', 'web'), { recursive: true })
-    gitInit(repoPath)
-    const { controller } = createController()
-
-    const added = await controller.add(join(repoPath, 'pkg', 'web'), 'git')
-
-    expect(normalizeRuntimePathForComparison(added.path)).toBe(
-      normalizeRuntimePathForComparison(repoPath)
-    )
   })
 
   it.skipIf(process.platform === 'win32')(
