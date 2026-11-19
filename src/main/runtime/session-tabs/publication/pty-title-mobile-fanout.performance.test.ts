@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
@@ -10,11 +10,25 @@ vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp') }
 }))
 
+const T0 = 1_700_000_000_000
+
+// Perf contract (#44491, STA-16123): each PTY title change scanned every workspace's mobile session snapshot and
+// tab, twice (republish and status heartbeat), so title churn cost grew with the fleet. Counts reads of other
+// workspaces' tabs, which must stay 0 at N and 10N.
+
+beforeEach(() => {
+  vi.useFakeTimers()
+  vi.setSystemTime(T0)
+})
+afterEach(() => {
+  vi.clearAllTimers()
+  vi.useRealTimers()
+})
+
 const WORKTREE_ID = 'wt-target'
 const TAB_ID = 'tab-target'
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const PTY_ID = 'pty-target'
-const T0 = 1_700_000_000_000
 
 function terminalSnapshot(
   worktree: string,
@@ -86,7 +100,9 @@ describe('PTY title fanout to mobile session snapshots', () => {
       }
       fleetTabReads = 0
       const before = runtime.mobileSessionTabsByWorktree.get(WORKTREE_ID)!.snapshotVersion
-      runtime.onPtyData(PTY_ID, `\x1b]0;Task ${++title}\x07`, T0 + title)
+      const at = T0 + ++title * 1_000
+      vi.setSystemTime(at)
+      runtime.onPtyData(PTY_ID, `\x1b]0;Task ${title}\x07`, at)
 
       expect({
         fleetTabReads,
