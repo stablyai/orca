@@ -26,7 +26,8 @@ function isContentCheck(value: unknown): boolean {
     typeof value.at === 'string' &&
     typeof value.sameContent === 'boolean' &&
     typeof value.sha256 === 'string' &&
-    isFileFacts(value.store)
+    isFileFacts(value.store) &&
+    (value.transientFailures === undefined || typeof value.transientFailures === 'number')
   )
 }
 

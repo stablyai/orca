@@ -35,6 +35,8 @@ export type ContentCheck = {
   sha256: string
   /** The store file as it was checked; a change since voids the check. */
   store: FileFacts
+  /** Busy unlinks so far; a changed file gets a fresh check, so this starts over with it. */
+  transientFailures?: number
 }
 
 export type LeftBehindRollout = FileFacts & {

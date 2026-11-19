@@ -83,17 +83,21 @@ async function openOnWindows(targets: Target[]): Promise<Set<string>> {
   return found
 }
 
-// A file that's gone can't be open; one Orca can't look up makes the answer unknown.
+// A file that's gone can't be open; one Orca can't look up makes the answer unknown. One with
+// another name counts as open unasked: that name may be a live Codex's, which a probe would disturb.
 async function resolveTargets(
   files: string[]
-): Promise<{ targets: Target[]; original: Map<string, string> } | null> {
+): Promise<{ targets: Target[]; original: Map<string, string>; linked: string[] } | null> {
   const targets: Target[] = []
   const original = new Map<string, string>()
+  const linked: string[] = []
   for (const file of files) {
     try {
       const path = await realpath(file)
       const stats = await lstat(path, { bigint: true })
-      if (stats.isFile()) {
+      if (stats.isFile() && stats.nlink > 1n) {
+        linked.push(file)
+      } else if (stats.isFile()) {
         targets.push({ path, ino: stats.ino })
         original.set(path, file)
       }
@@ -103,7 +107,7 @@ async function resolveTargets(
       }
     }
   }
-  return { targets, original }
+  return { targets, original, linked }
 }
 
 async function findFiles(
@@ -115,10 +119,13 @@ async function findFiles(
     return null
   }
   if (resolved.targets.length === 0) {
-    return new Set()
+    return new Set(resolved.linked)
   }
   const found = await check(resolved.targets)
-  return found && new Set([...found].map((path) => resolved.original.get(path) ?? path))
+  return (
+    found &&
+    new Set([...resolved.linked, ...[...found].map((path) => resolved.original.get(path) ?? path)])
+  )
 }
 
 // Linux can't be told reliably: an undumpable process (Codex is one) hides its descriptors, and
@@ -132,8 +139,8 @@ function openOnThisPlatform(): (targets: Target[]) => Promise<Set<string> | null
 }
 
 /**
- * Which of `files` some process has open; null when that can't be told, or when `shouldStop`
- * turned true meanwhile.
+ * Which of `files` some process has open, or might through another hard link; null when that can't
+ * be told, or when `shouldStop` turned true meanwhile.
  */
 export async function findOpenFiles(
   files: string[],

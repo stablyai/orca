@@ -6,7 +6,7 @@ import {
   getOrcaUserDataPath,
   getSystemCodexHomePath
 } from '../../configuration/homes/codex-home-paths'
-import { checkThenCleanUpCodexHistory } from './codex-account-history-cleanup'
+import { checkThenCleanUpCodexHistory } from './codex-account-history-cleanup-sweep'
 import {
   hasIncompleteHostCodexIndexHeal,
   isCodexAccountHistoryWorkStopping,

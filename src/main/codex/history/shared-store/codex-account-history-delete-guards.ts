@@ -3,14 +3,12 @@ import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { findOpenFiles } from '../../../filesystem/open-file-check'
 import { readCodexSharedSqliteHome } from '../../configuration/toml/config-toml-shared-sqlite-home'
+import type { CodexHistoryCleanupThresholds } from '../cleanup-policy/codex-history-cleanup-policy'
 import { isCodexAccountHistoryLinked } from './codex-account-history-links'
 
 export const DAY_MS = 24 * 60 * 60 * 1000
-/** The home's databases go only after it has worked shared this long, over this many runs. */
-export const CLEANUP_MIN_SHARED_DAYS = 14
-export const CLEANUP_MIN_SHARED_PASSES = 5
-// A streak not extended lately (the home unused, or a newer build gone) proves nothing current.
-const CLEANUP_MAX_SINCE_LAST_SHARED_DAYS = 30
+/** Busy unlinks a proven copy may fail before it is kept for good, until it changes. */
+export const MAX_TRANSIENT_DELETE_FAILURES = 3
 
 export async function readConfig(accountHome: string): Promise<string> {
   try {
@@ -23,18 +21,23 @@ export async function readConfig(accountHome: string): Promise<string> {
   }
 }
 
+/**
+ * The home's databases go only after it has worked shared long enough, over enough runs; a streak
+ * not extended lately (the home unused, or a newer build gone) proves nothing current.
+ */
 export function hasProvenShared(
   manifest: { firstSharedAt: string | null; lastSharedAt: string | null; sharedPasses: number },
-  now: number
+  now: number,
+  thresholds: CodexHistoryCleanupThresholds<'databases'>
 ): boolean {
   const first = Date.parse(manifest.firstSharedAt ?? '')
   const last = Date.parse(manifest.lastSharedAt ?? '')
   return (
     Number.isFinite(first) &&
     Number.isFinite(last) &&
-    now - first >= CLEANUP_MIN_SHARED_DAYS * DAY_MS &&
-    now - last <= CLEANUP_MAX_SINCE_LAST_SHARED_DAYS * DAY_MS &&
-    manifest.sharedPasses >= CLEANUP_MIN_SHARED_PASSES
+    now - first >= thresholds.minSharedDays * DAY_MS &&
+    now - last <= thresholds.maxSinceLastSharedDays * DAY_MS &&
+    manifest.sharedPasses >= thresholds.minSharedPasses
   )
 }
 

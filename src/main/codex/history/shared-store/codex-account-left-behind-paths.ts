@@ -5,7 +5,10 @@ import { MERGE_PENDING_SUFFIX, lstatIfPresent } from '../../../filesystem/merged
 import {
   PRE_SHARE_DATABASES_DIR,
   ROLLOUT_FOLDERS,
-  SET_ASIDE_ROLLOUTS_DIR
+  SET_ASIDE_ROLLOUTS_DIR,
+  factsOf,
+  fromManifestPath,
+  type FileFacts
 } from './codex-account-history-cleanup-manifest'
 import { parseCodexRolloutThreadId } from '../rollouts/codex-rollout-thread-id'
 
@@ -65,6 +68,20 @@ export async function hasRealFolders(root: string, path: string): Promise<boolea
     }
   }
   return true
+}
+
+/** The home's file at `path` as it is now, or null when it isn't a plain file reached that way. */
+export async function currentLeftBehindFile(
+  home: string,
+  path: string
+): Promise<{ stats: BigIntStats; facts: FileFacts } | null> {
+  if (!(await hasRealFolders(home, path))) {
+    return null
+  }
+  const stats = await lstatIfPresent(fromManifestPath(home, path))
+  return stats?.isFile()
+    ? { stats, facts: factsOf(home, fromManifestPath(home, path), stats) }
+    : null
 }
 
 export async function removeEmptyFolders(folder: string, shouldStop: () => boolean): Promise<void> {
