@@ -1,6 +1,18 @@
 import type { ProfileStateDomainReplacement } from '../../loading-store/profile-writing/profile-state-authority'
 import type { openProfileStateDatabase } from '../database/profile-state-database'
 import { parseProfileStateRoot } from './profile-state-document-validation'
+import {
+  prepareProfileStateDomainPatches,
+  type ProfileStateDomainPatch
+} from './profile-state-domain-patches'
+
+/** Validates every patch; an empty one only marks its domain present, so only changed ones apply. */
+export function changedSessionPatches(
+  patches: readonly ProfileStateDomainPatch[]
+): ProfileStateDomainPatch[] {
+  prepareProfileStateDomainPatches(patches)
+  return patches.filter(({ operations }) => operations.length > 0)
+}
 
 /** Splices domain fragments into one document; null payloads are omitted. */
 export function spliceProfileStateFragments(

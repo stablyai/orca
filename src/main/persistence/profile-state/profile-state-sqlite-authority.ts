@@ -33,6 +33,7 @@ import {
 import { writeProfileStateAuthorityJsonExport } from './legacy-json/profile-state-authority-exports'
 import {
   buildCompleteDocumentReplacements,
+  changedSessionPatches,
   spliceProfileStateFragments,
   splitProfileStatePayload
 } from './documents/profile-state-complete-replacements'
@@ -197,10 +198,15 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
         replacements
       })
     }
+    const changed = changedSessionPatches(patches)
     const opened = this.openWritableDatabase()
     this.legacyDocuments.catchUp(this.writableDatabase?.db)
     const currentRevision = readProfileStateRevision(opened.db)
     const complete = buildCompleteDocumentReplacements(opened.db, replacements, patches)
+    if (patches.length > 0 && complete.length === 0 && changed.length === 0) {
+      // Only unchanged session domains: nothing to write, but still fence the revision.
+      return this.assertCurrentRevision()
+    }
     // Patches need the stored copy, so they never take the empty-database import.
     if (patches.length === 0 && (currentRevision === 0 || complete.length === 0)) {
       // Validate fragments independently so splicing cannot conceal malformed JSON.
@@ -216,8 +222,7 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     this.observedRevision = writeProfileStateDomains(opened.db, {
       expectedRevision: this.observedRevision ?? currentRevision,
       replacements: complete,
-      // An unchanged session domain only marks itself present.
-      patches: patches.filter(({ operations }) => operations.length > 0),
+      patches: changed,
       patching
     }).revision
     this.legacyDocuments.afterWrite(() => this.writableDatabase?.db)

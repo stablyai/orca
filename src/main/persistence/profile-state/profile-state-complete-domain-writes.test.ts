@@ -91,4 +91,30 @@ describe('complete writes with session patches', () => {
       workspaceSessionsByHostId: { 'ssh:h': { tabsByWorktree: { w2: [2] } } }
     })
   })
+
+  it('treats only unchanged session patches as a revision-checked no-op', () => {
+    const { authority, readRevision } = fixture(false)
+    authority.writeSerializedState(
+      Buffer.from('{"workspaceSession":{"tabsByWorktree":{"w1":[1]}}}')
+    )
+    authority.writeCompleteSerializedDomains([], {
+      patching,
+      patches: [{ domain: 'workspaceSession', operations: [] }]
+    })
+    expect(readRevision()).toBe(1)
+    expect(authority.readSerializedState()).toBe(
+      '{"workspaceSession":{"tabsByWorktree":{"w1":[1]}}}'
+    )
+  })
+
+  it('rejects a malformed session patch before keeping its domain', () => {
+    const { authority } = fixture(false)
+    authority.writeSerializedState(Buffer.from('{"settings":{},"workspaceSession":{"a":{"b":1}}}'))
+    expect(() =>
+      authority.writeCompleteSerializedDomains([{ domain: 'settings', payload: '{}' }], {
+        patching,
+        patches: [{ domain: 'workspaceSession', operations: {} as never }]
+      })
+    ).toThrow('Profile state patch domain is invalid or repeated')
+  })
 })
