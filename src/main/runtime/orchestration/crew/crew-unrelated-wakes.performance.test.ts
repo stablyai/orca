@@ -7,6 +7,7 @@ import { CrewReadModel } from './crew-read-model'
 import { subscribeCrew } from './crew-stream'
 import { watchCrewRuntimeSources } from './crew-runtime-watch'
 import { fixture } from './crew-read-model.test-fixture'
+import { crewStatusRowChange } from './crew-changes'
 
 const flush = async () => {
   for (let i = 0; i < 4; i++) {
@@ -128,6 +129,14 @@ function mountedCrew() {
     setWorkerState: (state: AgentStatusState) => {
       statuses = [status('term_worker', workerPane, state, worker.id), ...unrelated]
     },
+    /** A hook status row for a pane no crew shows appears, then leaves. */
+    statusRow: (paneKey: string) => {
+      statuses = [...statuses, status(`term_${paneKey}`, paneKey, 'working')]
+      f.db.crewChanges.notify(crewStatusRowChange({ before: null, after: { paneKey } }))
+      statuses = statuses.filter((row) => row.activity.paneKey !== paneKey)
+      f.db.crewChanges.notify(crewStatusRowChange({ before: { paneKey }, after: null }))
+    },
+
     reset: () => {
       counts.sql = 0
       counts.statusReads = 0
@@ -136,7 +145,7 @@ function mountedCrew() {
   }
 }
 
-it('reads nothing and sends nothing for unrelated status, title and federation ticks', async () => {
+it('reads nothing and sends nothing for unrelated status, title, status-row, run and federation writes', async () => {
   const crew = mountedCrew()
   try {
     await flush()
@@ -158,6 +167,31 @@ it('reads nothing and sends nothing for unrelated status, title and federation t
       terminalHandle: 'term_far_worker'
     })
     crew.f.db.recordWorkerStage({ dispatchId: crew.far.dispatch.id, stage: 'remote_running' })
+    crew.reset()
+    await flush()
+    expect(crew.counts).toEqual({ sql: 0, statusReads: 0, frames: 0 })
+
+    // Hook status rows for unrelated panes, added and removed: no read, no rebuild.
+    for (let index = 0; index < 50; index++) {
+      crew.statusRow(`tab_row${index}:pane`)
+    }
+    await flush()
+    expect(crew.counts).toEqual({ sql: 0, statusReads: 0, frames: 0 })
+
+    // Another workspace's run: a new Run, Task, Dispatch and Task status write.
+    const foreign = crew.f.db.createRun({
+      objective: 'Foreign',
+      coordinatorHandle: 'term_foreign',
+      coordinatorPaneKey: 'tab_foreign:pane'
+    })
+    const task = crew.f.db.createTask({ spec: 'Foreign task', runId: foreign.id })
+    crew.f.db.createDispatchContext({
+      taskId: task.id,
+      assigneeHandle: 'term_foreign_worker',
+      creator: { kind: 'terminal', handle: 'term_foreign', paneKey: 'tab_foreign:pane' },
+      maxDepth: 10
+    })
+    crew.f.db.updateTaskStatus(task.id, 'completed', 'done')
     crew.reset()
     await flush()
     expect(crew.counts).toEqual({ sql: 0, statusReads: 0, frames: 0 })
