@@ -26,6 +26,14 @@ function mayShow(id: PerfNoticeId, now: number): boolean {
   return !isPerfNoticeOff(useAppStore.getState().settings, id) && canShowPerfNotice(id, now)
 }
 
+/** The hidden-tabs notice offers Memory Saver, so it no longer applies once Memory Saver is on. */
+function stillApplies(notice: PerfNotice): boolean {
+  return (
+    notice.id !== 'hidden-browser-tabs' ||
+    useAppStore.getState().settings?.browserGuestWorktreeRetentionBudget === false
+  )
+}
+
 /** Why the loop must hold off; rechecked after every await before anything shows. */
 type Gate = () => boolean
 
@@ -95,11 +103,11 @@ function startPerfNoticeLoop(): () => void {
     }
     reading = true
     try {
-      const now = Date.now()
-      const notice = await nextNotice(now, blocked, tracking)
-      // Why: during the read, another window may have shown a toast, or the user turned this one off.
-      if (notice && !blocked() && mayShow(notice.id, Date.now())) {
-        showPerfNotice(notice, now)
+      const notice = await nextNotice(Date.now(), blocked, tracking)
+      const shownAt = Date.now()
+      // Why: during the read, another window may have shown a toast, or the user changed a setting.
+      if (notice && !blocked() && mayShow(notice.id, shownAt) && stillApplies(notice)) {
+        showPerfNotice(notice, shownAt)
       }
     } catch {
       // A failed reading waits for the next interval instead of retrying hot.
