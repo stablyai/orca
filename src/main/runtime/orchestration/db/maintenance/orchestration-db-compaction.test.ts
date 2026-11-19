@@ -115,6 +115,18 @@ describe('compactOrchestrationDb', () => {
     expect(inspect(file)).toEqual({ autoVacuum: 0, integrity: 'ok' })
   })
 
+  it('waits out both a running worker and the daemon holding the file', async () => {
+    const file = legacyDatabase({ activeWorker: true })
+    await holdOpenInAnotherProcess(file)
+
+    expect(await compactOrchestrationDb(file)).toEqual({ kind: 'busy' })
+    const holder = holders.pop()!
+    holder.kill('SIGKILL')
+    await once(holder, 'exit')
+    expect(await compactOrchestrationDb(file)).toEqual({ kind: 'active' })
+    expect(inspect(file)).toEqual({ autoVacuum: 0, integrity: 'ok' })
+  })
+
   it('stops at its budget and leaves the file as it was', async () => {
     const file = legacyDatabase()
 

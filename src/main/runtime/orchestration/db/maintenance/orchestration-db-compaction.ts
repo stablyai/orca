@@ -8,8 +8,8 @@ import { compactionChildSource } from './orchestration-db-compaction-child-sourc
 const MIB = 1024 * 1024
 const MIN_FREE_BYTES = 32 * MIB
 const MIN_FREE_FRACTION = 0.25
-// Quit waits at most QUIT_BUDGET_MS; larger files rarely finish inside it.
-const MAX_LIVE_BYTES = 256 * MIB
+// Quit waits at most QUIT_BUDGET_MS; larger files rarely finish inside it (235 MiB live took 2.9-3.6 s).
+const MAX_LIVE_BYTES = 128 * MIB
 const QUIT_BUDGET_MS = 2_000
 const EXIT_GRACE_MS = 500
 // Two stopped attempts mean this disk can't finish in time; wait until the live data shrinks this much.
@@ -164,6 +164,8 @@ export async function compactOrchestrationDb(
   options: { budgetMs?: number; isActive?: () => boolean; release?: () => void } = {}
 ): Promise<OrchestrationDbCompaction> {
   const { budgetMs = QUIT_BUDGET_MS, isActive = () => false, release = () => {} } = options
+  // The budget covers the checks too, so a slow disk or long history can't stretch quit past it.
+  const started = performance.now()
   // A cheap first look, so ordinary quits do nothing else; the child decides on SQLite's own view.
   const counts = await readHeaderCounts(filename)
   if (!counts || !isCompactionWarranted(counts)) {
@@ -189,7 +191,11 @@ export async function compactOrchestrationDb(
   if (isActive()) {
     return { kind: 'active' }
   }
-  const result = await runCompactionChild(filename, budgetMs, release)
+  const remainingMs = budgetMs - (performance.now() - started)
+  const result =
+    remainingMs > 0
+      ? await runCompactionChild(filename, remainingMs, release, started)
+      : { kind: 'timed-out' as const, ms: Math.round(performance.now() - started) }
   await recordOutcome(filename, liveBytes, result)
   return result
 }
@@ -197,9 +203,9 @@ export async function compactOrchestrationDb(
 function runCompactionChild(
   filename: string,
   budgetMs: number,
-  release: () => void
+  release: () => void,
+  started: number
 ): Promise<OrchestrationDbCompaction> {
-  const started = performance.now()
   return new Promise((resolve) => {
     let child: ReturnType<typeof spawnProcess>
     try {
@@ -231,6 +237,10 @@ function runCompactionChild(
       output += chunk.toString()
       if (!released && output.startsWith('ready\n')) {
         released = true
+        // A child gone after 'ready' would make our close the last one, which checkpoints on quit.
+        if (child.exitCode !== null || child.signalCode !== null) {
+          return
+        }
         try {
           release()
           child.stdin?.end('go\n')
@@ -270,6 +280,17 @@ function runCompactionChild(
 export async function compactOrchestrationDbAtQuit(
   owner: OrchestrationDbQuitOwner | null | undefined
 ): Promise<void> {
+  let cap: NodeJS.Timeout | undefined
+  // Quit never waits past the budget plus the kill grace, whatever the disk does.
+  const capped = new Promise<void>((resolve) => {
+    cap = setTimeout(resolve, QUIT_BUDGET_MS + EXIT_GRACE_MS + 250)
+    cap.unref()
+  })
+  await Promise.race([compactAtQuit(owner), capped])
+  clearTimeout(cap)
+}
+
+async function compactAtQuit(owner: OrchestrationDbQuitOwner | null | undefined): Promise<void> {
   try {
     const filename = owner?.orchestrationDbFileForQuit()
     if (!owner || !filename) {
