@@ -135,11 +135,8 @@ export function BrowserAnnotateToolButton({
     'Annotate page element'
   )
 
-  const mode = markup.active
-    ? { icon: PenTool, label: t('browser.toolbar.draw', 'Draw') }
-    : tools.activeIntent === 'copy'
-      ? { icon: Crosshair, label: t('browser.toolbar.grab', 'Grab') }
-      : { icon: SquareMousePointer, label: t('browser.toolbar.annotate', 'Annotate') }
+  // The entry icon stays put (pressed while on); the palette over the page shows which tool is active.
+  const mode = { icon: SquareMousePointer, label: t('browser.toolbar.annotate', 'Annotate') }
   const active = markup.active || tools.activeIntent !== null
   const ModeIcon = mode.icon
 

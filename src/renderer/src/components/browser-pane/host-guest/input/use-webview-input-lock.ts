@@ -1,5 +1,8 @@
 import { useEffect, type MutableRefObject } from 'react'
-import { registerWebviewDragPassthroughSurface } from '../drag/webview-drag-passthrough'
+import {
+  isWebviewDragPassthroughActive,
+  registerWebviewDragPassthroughSurface
+} from '../drag/webview-drag-passthrough'
 
 /**
  * Keeps the page's own hit testing off while input is locked.
@@ -14,8 +17,10 @@ export function useWebviewInputLock(
     if (!webview) {
       return
     }
+    // While a drag holds passthrough, the page stays un-hittable whatever the lock says; release re-applies it.
     const applyLock = (): void => {
-      webview.style.pointerEvents = inputLocked ? 'none' : 'auto'
+      webview.style.pointerEvents =
+        inputLocked || isWebviewDragPassthroughActive() ? 'none' : 'auto'
     }
     applyLock()
     // A drag that started before the lock changed restores the old value on release; re-apply the current lock.

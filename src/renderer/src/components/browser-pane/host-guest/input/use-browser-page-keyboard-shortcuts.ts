@@ -16,6 +16,25 @@ import { isEditableKeyboardTarget } from './browser-keyboard'
 import { useBrowserPageWebviewShortcuts } from './use-browser-page-webview-shortcuts'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
+/**
+ * Bare tool letters belong to this page only when focus is in its pane or its palette (or nowhere in particular);
+ * a button in the sidebar or another pane must not switch tools, start a capture or copy.
+ */
+function annotateKeysOwnTarget(target: EventTarget | null, browserTabId: string): boolean {
+  if (target === null || target === document.body || target === document.documentElement) {
+    return true
+  }
+  if (!(target instanceof Element)) {
+    return false
+  }
+  const pane = target.closest('[data-browser-page-pane-id]')
+  if (pane) {
+    return pane.getAttribute('data-browser-page-pane-id') === browserTabId
+  }
+  const palette = target.closest('[data-browser-annotate-page]')
+  return palette?.getAttribute('data-browser-annotate-page') === browserTabId
+}
+
 export function useBrowserPageKeyboardShortcuts({
   browserTabId,
   workspaceId,
@@ -116,7 +135,12 @@ export function useBrowserPageKeyboardShortcuts({
     }
     const handleKeyDown = (e: KeyboardEvent): void => {
       // keyCode 229 marks IME composition on engines that don't set isComposing.
-      if (isEditableKeyboardTarget(e.target) || e.isComposing || e.keyCode === 229) {
+      if (
+        isEditableKeyboardTarget(e.target) ||
+        e.isComposing ||
+        e.keyCode === 229 ||
+        !annotateKeysOwnTarget(e.target, browserTabId)
+      ) {
         return
       }
       if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) {

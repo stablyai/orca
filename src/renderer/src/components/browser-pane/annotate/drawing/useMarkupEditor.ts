@@ -20,6 +20,7 @@ import {
   DEFAULT_MARKUP_COLOR,
   DEFAULT_MARKUP_FONT_SIZE,
   DEFAULT_MARKUP_WIDTH,
+  setShapes,
   type MarkupShape,
   type MarkupTool
 } from './markup-drawing-model'
@@ -44,8 +45,9 @@ export function useMarkupEditor(
 
   const [size, setSize] = useState<Size>({ width: 0, height: 0, dpr: 1 })
   const [{ doc, gesture }, setState] = useState<MarkupEditorState>(() => ({
+    // As one undoable step, so Undo and Clear work on a reopened drawing.
     doc: initialShapes?.length
-      ? { ...createMarkupDocument(), shapes: [...initialShapes] }
+      ? setShapes(createMarkupDocument(), [...initialShapes])
       : createMarkupDocument(),
     gesture: null
   }))

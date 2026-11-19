@@ -25,6 +25,18 @@ export function useMarkupKeyboardShortcuts(params: MarkupKeyboardParams): void {
     const isMac = navigator.userAgent.includes('Mac')
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        // An IME composition ends on Esc; an open menu or popover (Draw's style or ⋯ menu) closes first.
+        if (
+          event.isComposing ||
+          event.keyCode === 229 ||
+          event.defaultPrevented ||
+          (event.target instanceof Element &&
+            event.target.closest(
+              '[data-slot="dropdown-menu-content"], [data-slot="popover-content"]'
+            ))
+        ) {
+          return
+        }
         if (pendingText) {
           setPendingText(null)
         } else {

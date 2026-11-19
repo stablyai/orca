@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Button } from '@/components/ui/button'
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
-import { MarkupPaletteTools } from './MarkupPaletteTools'
+import { MarkupPaletteTools, type MarkupPaletteDensity } from './MarkupPaletteTools'
 import { BrowserAnnotatePaletteNotes } from './browser-annotate-palette-send'
 import { BrowserAnnotateToolPalette } from './BrowserAnnotateToolPalette'
 import { setAnnotatePaletteRatio } from './annotate-palette-position-store'
@@ -29,7 +29,7 @@ function PalettePage({
   // The palette reads the app-wide saved position; seed it before the palette mounts.
   useState(() => setAnnotatePaletteRatio(ratio))
   const [drawSlot, setDrawSlot] = useState<HTMLElement | null>(null)
-  const [drawCompact, setDrawCompact] = useState(false)
+  const [drawDensity, setDrawDensity] = useState<MarkupPaletteDensity>('full')
   return (
     <div
       ref={boundsRef}
@@ -59,6 +59,7 @@ function PalettePage({
                   count={notes}
                   short={short}
                   onShowNotes={noop}
+                  notesOpen={false}
                   sendOpen={false}
                   onSendOpenChange={noop}
                   sendDisabled={false}
@@ -73,10 +74,10 @@ function PalettePage({
         onGrabCopy={noop}
         onGrabScreenshot={noop}
         onDrawSlotChange={setDrawSlot}
-        onDrawCompactChange={setDrawCompact}
+        onDrawDensityChange={setDrawDensity}
       />
       {tool === 'draw' && drawSlot ? (
-        <DrawSlotContent slot={drawSlot} compact={drawCompact} />
+        <DrawSlotContent slot={drawSlot} density={drawDensity} />
       ) : null}
     </div>
   )
@@ -85,15 +86,15 @@ function PalettePage({
 /** Mirrors MarkupOverlay's palette controls, without a frozen screenshot behind them. */
 function DrawSlotContent({
   slot,
-  compact
+  density
 }: {
   slot: HTMLElement
-  compact: boolean
+  density: MarkupPaletteDensity
 }): React.JSX.Element {
   return createPortal(
     <div className="flex min-w-0 flex-wrap items-center gap-1">
       <MarkupPaletteTools
-        compact={compact}
+        density={density}
         tool="pen"
         onToolChange={noop}
         color="#ef4444"
@@ -109,7 +110,7 @@ function DrawSlotContent({
         onClear={noop}
       />
       <Button size="xs" className="shrink-0" disabled>
-        {compact ? 'Copy' : 'Copy markup'}
+        {density === 'compact' ? 'Copy' : 'Copy markup'}
       </Button>
     </div>,
     slot

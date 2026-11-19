@@ -12,6 +12,7 @@ import {
   usePaletteHorizontalDrag
 } from './use-palette-horizontal-drag'
 import { usePaletteFitLevel } from './use-palette-fit-level'
+import type { MarkupPaletteDensity } from './MarkupPaletteTools'
 import { setAnnotatePaletteRatio, useAnnotatePaletteRatio } from './annotate-palette-position-store'
 import { PaletteGrabActions, PaletteGrip } from './palette-controls'
 import { usePaletteTopOffset } from './use-palette-top-offset'
@@ -26,8 +27,10 @@ type ToolOption = {
 }
 
 /** Steps applied in order until the palette fits: short action labels, then let actions wrap. */
-const FIT_LEVEL_SHORT_ACTIONS = 1
-const FIT_LEVEL_WRAP = 2
+/** Fit steps, in order: Draw folds its tools into ⋯, then short labels with a minimal Draw row, then wrap. */
+const FIT_LEVEL_DRAW_ROW = 1
+const FIT_LEVEL_SHORT_ACTIONS = 2
+const FIT_LEVEL_WRAP = 3
 /**
  * Floating tool switch over the page while Annotate, Grab or Draw is on.
  * Why floating and draggable: every tool stays visible, and the user slides it off whatever they want to pick.
@@ -49,7 +52,7 @@ export function BrowserAnnotateToolPalette({
   onGrabCopy,
   onGrabScreenshot,
   onDrawSlotChange,
-  onDrawCompactChange
+  onDrawDensityChange
 }: {
   /** The page area the palette floats over and may not leave. */
   boundsRef: RefObject<HTMLElement | null>
@@ -75,7 +78,7 @@ export function BrowserAnnotateToolPalette({
   /** Draw's markup tools render into this slot. */
   onDrawSlotChange: (slot: HTMLElement | null) => void
   /** Narrow palette: Draw keeps Pen and the selected tool and a short Copy, before anything wraps. */
-  onDrawCompactChange: (compact: boolean) => void
+  onDrawDensityChange: (density: MarkupPaletteDensity) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const paletteRef = useRef<HTMLDivElement>(null)
@@ -167,8 +170,8 @@ export function BrowserAnnotateToolPalette({
   }, [activeTool, drawSlot, onDrawSlotChange])
   useEffect(() => () => onDrawSlotChange(null), [onDrawSlotChange])
   useEffect(() => {
-    onDrawCompactChange(shortActions)
-  }, [onDrawCompactChange, shortActions])
+    onDrawDensityChange(shortActions ? 'compact' : fitLevel >= FIT_LEVEL_DRAW_ROW ? 'row' : 'full')
+  }, [fitLevel, onDrawDensityChange, shortActions])
 
   // Arrows only move focus: selecting Draw captures the page and switching intent drops a pick, so a tool
   // changes only on an explicit click, Space/Enter or its letter key.
@@ -184,6 +187,7 @@ export function BrowserAnnotateToolPalette({
       <div
         ref={paletteRef}
         data-browser-annotate-palette
+        data-browser-annotate-page={pageId ?? undefined}
         role="group"
         aria-label={t('browser.annotatePalette.label', 'Annotate tools')}
         className={cn(

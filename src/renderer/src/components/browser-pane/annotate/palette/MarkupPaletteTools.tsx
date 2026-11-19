@@ -60,7 +60,10 @@ function PaletteIconButton({
   )
 }
 
-/** Draw's markup tools sized for the annotate palette: a short row plus ⋯, with popups opening downward. */
+/** How much of Draw's toolbar fits: everything, a short row plus ⋯, or Pen + the selected tool plus ⋯. */
+export type MarkupPaletteDensity = 'full' | 'row' | 'compact'
+
+/** Draw's markup tools sized for the annotate palette, folding into ⋯ only when they don't fit. */
 export function MarkupPaletteTools({
   tool,
   onToolChange,
@@ -75,17 +78,21 @@ export function MarkupPaletteTools({
   onUndo,
   onRedo,
   onClear,
-  compact = false
-}: MarkupToolbarProps & { compact?: boolean }): React.JSX.Element {
+  density = 'full'
+}: MarkupToolbarProps & { density?: MarkupPaletteDensity }): React.JSX.Element {
   const t = useTranslate()
   const items = markupToolItems(t)
+  const compact = density === 'compact'
+  const full = density === 'full'
   // The selected tool always stays visible, taking the last row slot when it lives in the menu.
   const baseRow = compact ? COMPACT_ROW_TOOLS : ROW_TOOLS
-  const rowKinds = baseRow.includes(tool)
-    ? baseRow
-    : compact
-      ? [...baseRow, tool]
-      : [...baseRow.slice(0, -1), tool]
+  const rowKinds = full
+    ? items.map((item) => item.kind)
+    : baseRow.includes(tool)
+      ? baseRow
+      : compact
+        ? [...baseRow, tool]
+        : [...baseRow.slice(0, -1), tool]
   const rowItems = rowKinds.flatMap((kind) => items.filter((item) => item.kind === kind))
   const menuItems = items.filter((item) => !rowKinds.includes(item.kind))
   const moreLabel = t('browser.annotatePalette.moreDrawTools', 'More drawing tools')
@@ -104,43 +111,45 @@ export function MarkupPaletteTools({
           <item.icon className="size-3.5" />
         </PaletteIconButton>
       ))}
-      <DropdownMenu modal={false}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <DropdownMenuTrigger asChild>
-              <Button type="button" variant="ghost" size="icon-xs" aria-label={moreLabel}>
-                <Ellipsis className="size-3.5" />
-              </Button>
-            </DropdownMenuTrigger>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={6}>
-            {moreLabel}
-          </TooltipContent>
-        </Tooltip>
-        <DropdownMenuContent align="start" side="bottom">
-          {menuItems.map((item) => (
-            <DropdownMenuItem key={item.kind} onSelect={() => onToolChange(item.kind)}>
-              <item.icon className="size-3.5" />
-              {item.label}
+      {full ? null : (
+        <DropdownMenu modal={false}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="ghost" size="icon-xs" aria-label={moreLabel}>
+                  <Ellipsis className="size-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}>
+              {moreLabel}
+            </TooltipContent>
+          </Tooltip>
+          <DropdownMenuContent align="start" side="bottom">
+            {menuItems.map((item) => (
+              <DropdownMenuItem key={item.kind} onSelect={() => onToolChange(item.kind)}>
+                <item.icon className="size-3.5" />
+                {item.label}
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+            {compact ? (
+              <DropdownMenuItem disabled={!canUndo} onSelect={onUndo}>
+                <Undo2 className="size-3.5" />
+                {t('auto.components.browser-pane.markup.undo', 'Undo')}
+              </DropdownMenuItem>
+            ) : null}
+            <DropdownMenuItem disabled={!canRedo} onSelect={onRedo}>
+              <Redo2 className="size-3.5" />
+              {t('auto.components.browser-pane.markup.redo', 'Redo')}
             </DropdownMenuItem>
-          ))}
-          <DropdownMenuSeparator />
-          {compact ? (
-            <DropdownMenuItem disabled={!canUndo} onSelect={onUndo}>
-              <Undo2 className="size-3.5" />
-              {t('auto.components.browser-pane.markup.undo', 'Undo')}
+            <DropdownMenuItem disabled={!canUndo && !canRedo} onSelect={onClear}>
+              <Trash2 className="size-3.5" />
+              {t('auto.components.browser-pane.markup.clear', 'Clear all')}
             </DropdownMenuItem>
-          ) : null}
-          <DropdownMenuItem disabled={!canRedo} onSelect={onRedo}>
-            <Redo2 className="size-3.5" />
-            {t('auto.components.browser-pane.markup.redo', 'Redo')}
-          </DropdownMenuItem>
-          <DropdownMenuItem disabled={!canUndo && !canRedo} onSelect={onClear}>
-            <Trash2 className="size-3.5" />
-            {t('auto.components.browser-pane.markup.clear', 'Clear all')}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
       {compact ? null : <span className="mx-0.5 h-4 w-px bg-border" aria-hidden />}
       <Popover>
         <Tooltip>
@@ -228,7 +237,7 @@ export function MarkupPaletteTools({
                   )}
                   onClick={() => onFontSizeChange(size)}
                   className={cn(
-                    'flex h-6 min-w-7 items-center justify-center rounded-sm border px-1 text-[11px] tabular-nums',
+                    'flex h-6 min-w-7 items-center justify-center rounded-sm border px-1 text-2xs tabular-nums',
                     fontSize === size ? 'border-ring bg-accent' : 'border-border hover:bg-accent/50'
                   )}
                 >
@@ -249,6 +258,24 @@ export function MarkupPaletteTools({
           <Undo2 className="size-3.5" />
         </PaletteIconButton>
       )}
+      {full ? (
+        <>
+          <PaletteIconButton
+            label={t('auto.components.browser-pane.markup.redo', 'Redo')}
+            disabled={!canRedo}
+            onClick={onRedo}
+          >
+            <Redo2 className="size-3.5" />
+          </PaletteIconButton>
+          <PaletteIconButton
+            label={t('auto.components.browser-pane.markup.clear', 'Clear all')}
+            disabled={!canUndo && !canRedo}
+            onClick={onClear}
+          >
+            <Trash2 className="size-3.5" />
+          </PaletteIconButton>
+        </>
+      ) : null}
     </div>
   )
 }

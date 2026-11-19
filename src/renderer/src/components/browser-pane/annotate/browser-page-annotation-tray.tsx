@@ -1,5 +1,5 @@
 import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import {
   ChevronDown,
   ChevronRight,
@@ -36,9 +36,11 @@ import { browserAnnotationMatchesPageUrl } from './viewport/browser-annotation-p
 import { useBrowserAnnotationImages } from './delivery/use-browser-annotation-images'
 import { BrowserAnnotationImageStrip } from './delivery/browser-annotation-image-strip'
 import type { BrowserPageAnnotationTrayProps } from '../describe-page/browser-page-types'
+import { useAnnotationTrayReveal } from './use-annotation-tray-reveal'
 
 export function BrowserPageAnnotationTray({
   revealSignal = 0,
+  onDismiss,
   browserAnnotations,
   currentUrl,
   annotationTraySendOpen,
@@ -61,19 +63,7 @@ export function BrowserPageAnnotationTray({
   const [editComment, setEditComment] = useState('')
   const [editIntent, setEditIntent] = useState<BrowserAnnotationIntent>('change')
   const editImages = useBrowserAnnotationImages(worktreeId)
-  const [expanded, setExpanded] = useState(true)
-  const headerRef = useRef<HTMLButtonElement>(null)
-  // The palette's note count asks for the list: expand during render, then move focus once it is painted.
-  const [seenRevealSignal, setSeenRevealSignal] = useState(revealSignal)
-  if (revealSignal !== seenRevealSignal) {
-    setSeenRevealSignal(revealSignal)
-    setExpanded(true)
-  }
-  useEffect(() => {
-    if (revealSignal !== 0) {
-      headerRef.current?.focus()
-    }
-  }, [revealSignal])
+  const { expanded, setExpanded, headerRef } = useAnnotationTrayReveal(revealSignal)
   const ToggleChevron = expanded ? ChevronDown : ChevronRight
 
   // Why: a delete or clear while a row is mid-edit must not leave edit state pointing at nothing.
@@ -113,7 +103,18 @@ export function BrowserPageAnnotationTray({
 
   return (
     <Collapsible asChild open={expanded} onOpenChange={setExpanded}>
-      <div className="absolute right-3 bottom-3 z-30 flex max-h-[45%] w-[min(20rem,calc(100%-1.5rem))] flex-col overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-[0_10px_24px_rgba(0,0,0,0.18)]">
+      <div
+        data-slot="browser-annotation-tray"
+        onKeyDown={(event) => {
+          // Opened from the palette's note count: Esc closes the list before it leaves the mode.
+          if (event.key === 'Escape' && onDismiss && !event.nativeEvent.isComposing) {
+            event.preventDefault()
+            event.stopPropagation()
+            onDismiss()
+          }
+        }}
+        className="absolute right-3 bottom-3 z-30 flex max-h-[45%] w-[min(20rem,calc(100%-1.5rem))] flex-col overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-[0_10px_24px_rgba(0,0,0,0.18)]"
+      >
         <div className="flex items-center gap-2 px-3 py-2">
           <Tooltip>
             <TooltipTrigger asChild>
@@ -124,17 +125,12 @@ export function BrowserPageAnnotationTray({
                   className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-sm text-left text-sm font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
                 >
                   <ToggleChevron className="size-4 shrink-0 text-muted-foreground" />
+                  {/* Same noun as the annotate palette's note count. */}
                   {browserAnnotations.length === 1
-                    ? t(
-                        'auto.components.browser.pane.BrowserPane.ea6af700da',
-                        '{{value0}} annotation',
-                        { value0: browserAnnotations.length }
-                      )
-                    : t(
-                        'auto.components.browser.pane.BrowserPane.c13693fe27',
-                        '{{value0}} annotations',
-                        { value0: browserAnnotations.length }
-                      )}
+                    ? t('browser.annotatePalette.noteCountOne', '1 note')
+                    : t('browser.annotatePalette.noteCount', '{{count}} notes', {
+                        count: browserAnnotations.length
+                      })}
                 </button>
               </CollapsibleTrigger>
             </TooltipTrigger>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
@@ -31,6 +31,10 @@ export type BrowserAnnotateToolSwitch = {
   reportShapes: (shapes: readonly MarkupShape[]) => void
   /** Strokes to reopen Draw with after Undo; undefined for a fresh drawing. */
   restoredShapes: readonly MarkupShape[] | undefined
+  /** Key for Draw's editor: a new one per drawing session. */
+  drawSession: number
+  /** The page and document the tools act on; held state for another document is stale. */
+  drawOwner: string
 }
 
 const TOOL_BY_KEY: Record<BrowserAnnotateToolKey, BrowserAnnotateTool> = {
@@ -62,7 +66,8 @@ export function useBrowserAnnotateToolSwitch({
   cancelPendingBrowserCapture,
   markup,
   canPickElements,
-  toolTargetId
+  toolTargetId,
+  documentKey
 }: {
   grab: GrabModeHook
   grabIntent: GrabIntent
@@ -75,11 +80,16 @@ export function useBrowserAnnotateToolSwitch({
   canPickElements: boolean
   /** The guest the picker runs in; Draw waits for its overlay teardown before capturing. */
   toolTargetId: string
+  /** Changes when the page's document changes (navigation, preview reload); a pending Draw for the old one is dropped. */
+  documentKey: string
 }): BrowserAnnotateToolSwitch {
   // Why: between stopping the picker and Draw's capture starting, neither is on; keep the palette on Draw meanwhile.
   // Keyed by page: a page change (preview grant swap, navigation to another tab) drops a pending Draw by itself.
+  const drawOwner = `${toolTargetId}\n${documentKey}`
   const [drawStartingFor, setDrawStartingFor] = useState<string | null>(null)
-  const drawStarting = drawStartingFor !== null && drawStartingFor === toolTargetId
+  const drawStarting = canPickElements && drawStartingFor === drawOwner
+  // A new editor per drawing session, so a reopened drawing never inherits another session's strokes.
+  const [drawSession, setDrawSession] = useState(0)
   const activeTool = getBrowserAnnotateActiveTool(
     grab.state,
     grabIntent,
@@ -89,18 +99,25 @@ export function useBrowserAnnotateToolSwitch({
   // Fences a Draw start still waiting for teardown: any later transition, a page change or unmount supersedes it.
   const transitionRef = useRef(0)
   const shapesRef = useRef<readonly MarkupShape[]>([])
+  const markupActiveRef = useRef(markup.isActive)
+  useLayoutEffect(() => {
+    markupActiveRef.current = markup.isActive
+  }, [markup.isActive])
   const [restoredShapes, setRestoredShapes] = useState<readonly MarkupShape[] | undefined>()
   const undoToastRef = useRef<string | number | null>(null)
+  const dismissUndo = useCallback((): void => {
+    if (undoToastRef.current !== null) {
+      toast.dismiss(undoToastRef.current)
+      undoToastRef.current = null
+    }
+  }, [])
   useEffect(() => {
     return () => {
       transitionRef.current += 1
-      // An Undo from another page would reopen a stale screenshot.
-      if (undoToastRef.current !== null) {
-        toast.dismiss(undoToastRef.current)
-        undoToastRef.current = null
-      }
+      // An Undo from another page or document would reopen a stale screenshot.
+      dismissUndo()
     }
-  }, [toolTargetId])
+  }, [dismissUndo, drawOwner])
 
   const reportShapes = useCallback((shapes: readonly MarkupShape[]): void => {
     shapesRef.current = shapes
@@ -109,7 +126,13 @@ export function useBrowserAnnotateToolSwitch({
   const reopenDrawing = useCallback(
     (saved: MarkupResumeSnapshot, shapes: readonly MarkupShape[]): void => {
       undoToastRef.current = null
+      // A drawing that is open now is never replaced (starting it dismissed this Undo; this is a backstop).
+      // Read live: this runs from a toast created several renders ago.
+      if (markupActiveRef.current) {
+        return
+      }
       transitionRef.current += 1
+      setDrawSession((session) => session + 1)
       setDrawStartingFor(null)
       cancelPendingBrowserCapture()
       setRestoredShapes(shapes)
@@ -141,7 +164,8 @@ export function useBrowserAnnotateToolSwitch({
 
   const startDraw = useCallback(
     (transition: number): void => {
-      setDrawStartingFor(toolTargetId)
+      dismissUndo()
+      setDrawStartingFor(drawOwner)
       cancelPendingBrowserCapture()
       // Why a second, awaited disable: with the pick already cancelled it awaits the overlay teardown script, which
       // the page runs after the cancelled pick's own teardown, so the frozen screenshot carries no highlight.
@@ -157,6 +181,7 @@ export function useBrowserAnnotateToolSwitch({
           }
           setDrawStartingFor(null)
           setRestoredShapes(undefined)
+          setDrawSession((session) => session + 1)
           if (!tornDown) {
             // No clean page to freeze; leave the mode rather than draw over the picker's overlay.
             toast.error(
@@ -170,7 +195,7 @@ export function useBrowserAnnotateToolSwitch({
           void markup.start()
         })
     },
-    [cancelPendingBrowserCapture, markup, toolTargetId]
+    [cancelPendingBrowserCapture, dismissUndo, drawOwner, markup, toolTargetId]
   )
 
   const selectTool = useCallback(
@@ -224,7 +249,14 @@ export function useBrowserAnnotateToolSwitch({
       return
     }
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape' && !event.isComposing) {
+      // Only from this page's palette (focus sits on its Draw button), never from another pane or field.
+      if (
+        event.key === 'Escape' &&
+        !event.isComposing &&
+        event.keyCode !== 229 &&
+        event.target instanceof Element &&
+        event.target.closest('[data-browser-annotate-palette]')
+      ) {
         event.preventDefault()
         exit()
       }
@@ -242,6 +274,8 @@ export function useBrowserAnnotateToolSwitch({
     exit,
     toolTargetId,
     reportShapes,
-    restoredShapes
+    restoredShapes,
+    drawSession,
+    drawOwner
   }
 }

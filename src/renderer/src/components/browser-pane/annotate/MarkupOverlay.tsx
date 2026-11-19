@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { MarkupToolbar } from './markup-tools/MarkupToolbar'
-import { MarkupPaletteTools } from './palette/MarkupPaletteTools'
+import { MarkupPaletteTools, type MarkupPaletteDensity } from './palette/MarkupPaletteTools'
 import type { MarkupBaseImage } from './capture/markup-base-image'
 import type { MarkupShape } from './drawing/markup-drawing-model'
 import { TEXT_FONT_FAMILY } from './drawing/markup-shape-render'
@@ -21,8 +21,8 @@ export type MarkupOverlayProps = {
   controlsContainer?: HTMLElement | null
   /** The annotate palette's Draw slot; when set, only the markup tools and Copy markup render there. */
   paletteSlot?: HTMLElement | null
-  /** The palette is short on room: fewer tools in the row and a short Copy label. */
-  paletteCompact?: boolean
+  /** How much room the palette has: all tools, a row plus ⋯, or a minimal row with a short Copy label. */
+  paletteDensity?: MarkupPaletteDensity
   /** Strokes of a reopened drawing. */
   initialShapes?: readonly MarkupShape[]
   /** Latest strokes, so leaving Draw can offer Undo. */
@@ -36,7 +36,7 @@ export function MarkupOverlay({
   onCancel,
   controlsContainer,
   paletteSlot,
-  paletteCompact = false,
+  paletteDensity = 'full',
   initialShapes,
   onShapesChange
 }: MarkupOverlayProps): React.JSX.Element {
@@ -60,7 +60,7 @@ export function MarkupOverlay({
   const paletteControls = paletteSlot ? (
     <div className="flex min-w-0 flex-wrap items-center gap-1">
       <MarkupPaletteTools
-        compact={paletteCompact}
+        density={paletteDensity}
         tool={editor.tool}
         onToolChange={editor.setTool}
         color={editor.color}
@@ -82,7 +82,7 @@ export function MarkupOverlay({
         onClick={handleDone}
         disabled={busy || !baseLoaded || editor.shapes.length === 0}
       >
-        {paletteCompact
+        {paletteDensity === 'compact'
           ? t('browser.annotatePalette.copy', 'Copy')
           : t('browser.annotatePalette.copyMarkup', 'Copy markup')}
       </Button>
@@ -185,7 +185,11 @@ export function MarkupOverlay({
             if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
               event.preventDefault()
               editor.commitPendingText(event.currentTarget.value)
-            } else if (event.key === 'Escape') {
+            } else if (
+              event.key === 'Escape' &&
+              !event.nativeEvent.isComposing &&
+              event.keyCode !== 229
+            ) {
               event.preventDefault()
               editor.cancelPendingText()
             }

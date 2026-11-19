@@ -13,6 +13,7 @@ export function BrowserAnnotatePaletteNotes({
   count,
   short,
   onShowNotes,
+  notesOpen,
   sendOpen,
   onSendOpenChange,
   sendDisabled,
@@ -22,6 +23,8 @@ export function BrowserAnnotatePaletteNotes({
   /** Narrow palette: the count without the word, Send as an icon. */
   short: boolean
   onShowNotes: () => void
+  /** The notes list is open (the chip toggles it). */
+  notesOpen: boolean
   sendOpen: boolean
   onSendOpenChange: (open: boolean) => void
   sendDisabled: boolean
@@ -40,6 +43,7 @@ export function BrowserAnnotatePaletteNotes({
         variant="ghost"
         className="shrink-0"
         onClick={onShowNotes}
+        aria-expanded={notesOpen}
         title={t('browser.annotatePalette.showNotes', 'Show notes')}
       >
         {short

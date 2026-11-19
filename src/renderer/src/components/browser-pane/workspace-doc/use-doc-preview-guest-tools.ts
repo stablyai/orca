@@ -100,7 +100,8 @@ export function useDocPreviewGuestTools({
     cancelPendingBrowserCapture: grabAnnotations.cancelPendingBrowserCapture,
     markup,
     canPickElements: toolsReady,
-    toolTargetId
+    toolTargetId,
+    documentKey: grantId ?? ''
   })
 
   const elementTools = useMemo<BrowserChromeElementTools>(

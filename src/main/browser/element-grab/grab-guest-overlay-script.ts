@@ -1,10 +1,11 @@
 import { BROWSER_GRAB_SELECTED_ATTRIBUTE } from '../../../shared/browser/annotations/browser-annotation-viewport-bridge'
 
 /**
- * Page band the annotate palette covers while picking: 8px inset + 38px palette + 8px gap.
- * Why a fixed band: the palette always sits at the top of the page, and its exact x position needs no IPC.
+ * Page band the annotate palette can cover while picking: 8px + find bar (34px) + 8px when it moves below the find
+ * bar, then the 38px palette and an 8px gap. Why a fixed band: the guest has no channel for the palette's live
+ * position, and the palette only ever sits in this band at the top of the page.
  */
-export const GRAB_LABEL_RESERVED_TOP_PX = 54
+export const GRAB_LABEL_RESERVED_TOP_PX = 96
 
 export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('div');
   host.id = '__orca-grab-host';

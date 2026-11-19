@@ -1,7 +1,7 @@
 import { useLayoutEffect, useState, type RefObject } from 'react'
 import { PALETTE_EDGE_INSET_PX } from './use-palette-horizontal-drag'
 
-const MAX_FIT_LEVEL = 2
+const MAX_FIT_LEVEL = 3
 
 /**
  * Steps the palette down one compaction level per layout pass until it fits its bounds.
@@ -46,9 +46,9 @@ export function usePaletteFitLevel(
       if (boundsWidth === 0) {
         return
       }
-      // Why wait before the last step: a compact Draw row arrives a render later through its portal, and wrapping
-      // on the interim width would stick even though the compact row fits.
-      if (level === MAX_FIT_LEVEL - 1 && overflows(boundsWidth)) {
+      // Why wait before stepping: Draw's narrower row arrives a render later through its portal, and stepping on
+      // the interim width would overshoot to a smaller palette than needed.
+      if (level > 0 && overflows(boundsWidth)) {
         cancelAnimationFrame(settleFrame)
         settleFrame = requestAnimationFrame(() => {
           settleFrame = requestAnimationFrame(() => setState((prev) => step(prev, boundsWidth)))

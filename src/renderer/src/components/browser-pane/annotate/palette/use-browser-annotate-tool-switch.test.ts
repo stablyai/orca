@@ -103,7 +103,8 @@ function renderBrowserTools(markup: MarkupModeController) {
       cancelPendingBrowserCapture: grabAnnotations.cancelPendingBrowserCapture,
       markup,
       canPickElements: true,
-      toolTargetId: PAGE_ID
+      toolTargetId: PAGE_ID,
+      documentKey: 'http://acme.test/'
     })
     return { grab, grabAnnotations, tools }
   })
@@ -256,7 +257,12 @@ describe('switching annotate tools', () => {
       isActive: true,
       snapshot: vi.fn(() => saved)
     }
-    const { result } = renderBrowserTools(markup)
+    // Cancelling really ends the drawing, as the real controller does.
+    markup.cancel = vi.fn(() => {
+      markup.isActive = false
+      markup.state = 'idle'
+    })
+    const { result, rerender } = renderBrowserTools(markup)
     const stroke: MarkupShape = {
       id: 'stroke-1',
       color: '#ef4444',
@@ -269,6 +275,8 @@ describe('switching annotate tools', () => {
 
     act(() => result.current.tools.exit())
     expect(markup.cancel).toHaveBeenCalledTimes(1)
+    // The pane re-renders with Draw closed before anyone can click Undo.
+    rerender()
     const options: unknown = toastMock.mock.calls.at(-1)?.[1]
     const undo =
       typeof options === 'object' && options !== null && 'action' in options ? options.action : null
@@ -286,6 +294,55 @@ describe('switching annotate tools', () => {
     })
     expect(markup.resume).toHaveBeenCalledWith(saved)
     expect(result.current.tools.restoredShapes).toEqual([stroke])
+  })
+
+  it('never lets Undo replace a drawing that is open', () => {
+    const saved: MarkupResumeSnapshot = {
+      baseImage: { dataUrl: 'data:image/png;base64,AA', width: 800, height: 600 },
+      context: {
+        source: { kind: 'image', element: document.createElement('img') },
+        cssWidth: 800,
+        cssHeight: 600,
+        outputScale: 1
+      }
+    }
+    const markup: MarkupModeController = {
+      ...makeMarkup(),
+      state: 'drawing',
+      isActive: true,
+      snapshot: vi.fn(() => saved)
+    }
+    const { result } = renderBrowserTools(markup)
+    act(() =>
+      result.current.tools.reportShapes([
+        {
+          id: 's',
+          color: '#ef4444',
+          kind: 'rect',
+          from: { x: 1, y: 1 },
+          to: { x: 9, y: 9 },
+          width: 4
+        }
+      ])
+    )
+    act(() => result.current.tools.exit())
+    const options: unknown = toastMock.mock.calls.at(-1)?.[1]
+    const undo =
+      typeof options === 'object' && options !== null && 'action' in options ? options.action : null
+
+    // A new drawing is open by the time Undo is clicked (the mock stays active).
+    act(() => {
+      if (
+        typeof undo === 'object' &&
+        undo !== null &&
+        'onClick' in undo &&
+        typeof undo.onClick === 'function'
+      ) {
+        undo.onClick()
+      }
+    })
+
+    expect(markup.resume).not.toHaveBeenCalled()
   })
 
   it('leaves Draw without an Undo offer when nothing was drawn', () => {

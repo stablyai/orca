@@ -99,6 +99,8 @@ export function usePaletteHorizontalDrag({
       const paletteWidth = palette.offsetWidth
       // A hidden pane measures zero; keep the last layout so the saved position isn't recomputed from nothing.
       if (boundsWidth === 0) {
+        // Hidden mid-drag: end it so the pages get pointer input back.
+        endDragRef.current?.(false)
         return
       }
       // The drag's clamp was computed for the old width; give up the drag rather than move out of bounds.
@@ -185,7 +187,8 @@ export function usePaletteHorizontalDrag({
         const grip = event.currentTarget
         const pointerId = event.pointerId
         // Focus the grip so Esc reaches the drag (and not a focused page, which would exit the mode).
-        grip.focus({ preventScroll: true })
+        // focusVisible:false: a mouse drag shouldn't leave a keyboard focus ring on the grip.
+        grip.focus({ preventScroll: true, focusVisible: false })
         grip.setPointerCapture?.(pointerId)
         // Pages would swallow the pointer once it crosses them; let the drag see every move.
         const releasePassthrough = acquireWebviewsDragPassthrough()

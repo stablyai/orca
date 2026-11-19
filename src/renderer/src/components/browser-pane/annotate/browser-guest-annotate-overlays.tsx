@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { MutableRefObject, RefObject } from 'react'
 import { Copy, Image } from 'lucide-react'
+import type { BrowserGrabPayload } from '../../../../../shared/browser/element-grab/browser-grab-types'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,6 +32,7 @@ import {
 import type { useBrowserPageAnnotationSend } from './delivery/use-browser-page-annotation-send'
 import type { useBrowserPageGrabAnnotations } from './grab/use-browser-page-grab-annotations'
 import { BrowserAnnotateToolPalette } from './palette/BrowserAnnotateToolPalette'
+import type { MarkupPaletteDensity } from './palette/MarkupPaletteTools'
 import { BrowserAnnotatePaletteNotes } from './palette/browser-annotate-palette-send'
 import { BrowserAnnotationSendMenuContent } from './delivery/BrowserAnnotationSendMenuContent'
 import { browserAnnotatePaletteHint } from './palette/browser-annotate-palette-hint'
@@ -72,8 +74,10 @@ export function BrowserGuestAnnotateOverlays({
 }): React.JSX.Element {
   const t = useTranslate()
   const [drawSlot, setDrawSlot] = useState<HTMLElement | null>(null)
-  const [drawCompact, setDrawCompact] = useState(false)
+  const [drawDensity, setDrawDensity] = useState<MarkupPaletteDensity>('full')
   const [notesRevealSignal, setNotesRevealSignal] = useState(0)
+  // While the mode is on, the notes list opens only from the palette's note count, so there is one notes surface.
+  const [notesOpen, setNotesOpen] = useState(false)
   const {
     pendingAnnotationPayload,
     handleAddBrowserAnnotation,
@@ -108,6 +112,9 @@ export function BrowserGuestAnnotateOverlays({
 
   const activeTool = toolSwitch.activeTool
   const drafts = useBrowserAnnotationDrafts(activeTool !== null)
+  if (activeTool === null && notesOpen) {
+    setNotesOpen(false)
+  }
   const pendingDraftKey = pendingAnnotationPayload
     ? browserAnnotationDraftKey(pendingAnnotationPayload)
     : null
@@ -121,7 +128,23 @@ export function BrowserGuestAnnotateOverlays({
     [pendingDraftKey, setDraft]
   )
   // Palette buttons act on the picked element only; hovering keeps using C/S, so the target can't shift en route.
-  const grabPicked = grab.state === 'confirming' && grab.payload !== null && grabIntent === 'copy'
+  // The palette's Copy/Screenshot act on the last pick until the next pick, a tool switch, exit or a document change;
+  // the picker rearming after its own copy doesn't end it.
+  const [heldPick, setHeldPick] = useState<{ payload: BrowserGrabPayload; owner: string } | null>(
+    null
+  )
+  const pickerPick = grab.state === 'confirming' && grabIntent === 'copy' ? grab.payload : null
+  if (pickerPick && pickerPick !== heldPick?.payload) {
+    setHeldPick({ payload: pickerPick, owner: toolSwitch.drawOwner })
+  }
+  if (heldPick && (activeTool !== 'copy' || heldPick.owner !== toolSwitch.drawOwner)) {
+    setHeldPick(null)
+  }
+  const heldPayload =
+    heldPick && activeTool === 'copy' && heldPick.owner === toolSwitch.drawOwner
+      ? heldPick.payload
+      : null
+  const grabPicked = heldPayload !== null
   const runPaletteGrabAction = (action: () => void): void => {
     action()
     // These handlers flag the right-click menu as handled; nothing from that menu is open here.
@@ -165,7 +188,15 @@ export function BrowserGuestAnnotateOverlays({
                   <BrowserAnnotatePaletteNotes
                     count={browserAnnotations.length}
                     short={short}
-                    onShowNotes={() => setNotesRevealSignal((signal) => signal + 1)}
+                    notesOpen={notesOpen}
+                    onShowNotes={() => {
+                      if (notesOpen) {
+                        setNotesOpen(false)
+                        return
+                      }
+                      setNotesOpen(true)
+                      setNotesRevealSignal((signal) => signal + 1)
+                    }}
                     sendOpen={annotationBannerSendOpen}
                     onSendOpenChange={handleAnnotationBannerSendOpenChange}
                     sendDisabled={!browserAnnotationsPrompt}
@@ -186,18 +217,27 @@ export function BrowserGuestAnnotateOverlays({
           }
           grabCopyDone={grabToast?.type === 'success'}
           grabPicked={grabPicked}
-          grabCanScreenshot={
-            grabPicked && Boolean(grab.payload?.screenshot?.dataUrl?.startsWith('data:image/png;'))
-          }
-          onGrabCopy={() => runPaletteGrabAction(handleGrabCopy)}
-          onGrabScreenshot={() => runPaletteGrabAction(handleGrabCopyScreenshot)}
+          grabCanScreenshot={Boolean(
+            heldPayload?.screenshot?.dataUrl?.startsWith('data:image/png;')
+          )}
+          onGrabCopy={() => {
+            if (heldPayload) {
+              runPaletteGrabAction(() => handleGrabCopy(heldPayload))
+            }
+          }}
+          onGrabScreenshot={() => {
+            if (heldPayload) {
+              runPaletteGrabAction(() => handleGrabCopyScreenshot(heldPayload))
+            }
+          }}
           onDrawSlotChange={setDrawSlot}
-          onDrawCompactChange={setDrawCompact}
+          onDrawDensityChange={setDrawDensity}
         />
       ) : null}
       {markup.isActive && markup.baseImage && markupTarget
         ? createPortal(
             <MarkupOverlay
+              key={toolSwitch.drawSession}
               baseImage={markup.baseImage}
               busy={markup.state === 'composing'}
               onComplete={(input) => void markup.complete(input)}
@@ -205,7 +245,7 @@ export function BrowserGuestAnnotateOverlays({
               onCancel={toolSwitch.exit}
               controlsContainer={markupControlsContainer}
               paletteSlot={drawSlot}
-              paletteCompact={drawCompact}
+              paletteDensity={drawDensity}
               initialShapes={toolSwitch.restoredShapes}
               onShapesChange={toolSwitch.reportShapes}
             />,
@@ -238,9 +278,10 @@ export function BrowserGuestAnnotateOverlays({
           onCancel={handleCancelPendingBrowserAnnotation}
         />
       ) : null}
-      {browserAnnotations.length > 0 ? (
+      {browserAnnotations.length > 0 && (activeTool === null || notesOpen) ? (
         <BrowserPageAnnotationTray
           revealSignal={notesRevealSignal}
+          onDismiss={activeTool === null ? undefined : () => setNotesOpen(false)}
           browserAnnotations={browserAnnotations}
           currentUrl={currentUrl}
           annotationTraySendOpen={annotationTraySendOpen}
@@ -296,13 +337,13 @@ export function BrowserGuestAnnotateOverlays({
           />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" sideOffset={4}>
-          <DropdownMenuItem onSelect={handleGrabCopy}>
+          <DropdownMenuItem onSelect={() => handleGrabCopy()}>
             <Copy className="size-3.5" />
             {t('auto.components.browser.pane.BrowserPane.c2ef0359b9', 'Copy Contents')}
             <DropdownMenuShortcut>C</DropdownMenuShortcut>
           </DropdownMenuItem>
           {grab.payload?.screenshot?.dataUrl?.startsWith('data:image/png;base64,') ? (
-            <DropdownMenuItem onSelect={handleGrabCopyScreenshot}>
+            <DropdownMenuItem onSelect={() => handleGrabCopyScreenshot()}>
               <Image className="size-3.5" />
               {t('auto.components.browser.pane.BrowserPane.1ded0d3168', 'Copy Screenshot')}
               <DropdownMenuShortcut>S</DropdownMenuShortcut>

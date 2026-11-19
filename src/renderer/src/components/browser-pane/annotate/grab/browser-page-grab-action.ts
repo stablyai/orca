@@ -10,15 +10,13 @@ import type { BrowserPageGrabToastState } from '../../describe-page/browser-page
 
 /** Snapshot of the picker's target at action start; true while the same Grab session on the same page is on. */
 export function grabHoverStillCurrent(
-  grabRef: MutableRefObject<Pick<GrabModeHook, 'state'>>,
-  grabIntentRef: MutableRefObject<GrabIntent>,
-  toolTargetIdRef: MutableRefObject<string>
+  sessionRef: MutableRefObject<number>,
+  mountedRef: MutableRefObject<boolean>
 ): () => boolean {
-  const startedTarget = toolTargetIdRef.current
-  return () =>
-    grabRef.current.state !== 'idle' &&
-    grabIntentRef.current === 'copy' &&
-    toolTargetIdRef.current === startedTarget
+  // The session number moves on every exit, intent change and page change, so leaving and re-entering Grab
+  // while a read is in flight (A→B→A) still counts as stale.
+  const startedSession = sessionRef.current
+  return () => mountedRef.current && sessionRef.current === startedSession
 }
 
 export function runBrowserGrabActionShortcut({
@@ -92,7 +90,9 @@ export function runBrowserGrabActionShortcut({
         })
       } catch {
         // Why: the guest can be destroyed or the IPC channel torn down mid-shortcut; surface it like a miss instead of an unhandled rejection.
-        showGrabToast('Could not read the hovered element', 'error')
+        if (isStillCurrent()) {
+          showGrabToast('Could not read the hovered element', 'error')
+        }
         return
       }
       if (!isStillCurrent()) {

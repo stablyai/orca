@@ -63,7 +63,7 @@ function Harness(props: {
             onGrabCopy={props.onGrabCopy ?? vi.fn()}
             onGrabScreenshot={props.onGrabScreenshot ?? vi.fn()}
             onDrawSlotChange={vi.fn()}
-            onDrawCompactChange={vi.fn()}
+            onDrawDensityChange={vi.fn()}
           />
         ) : null}
       </div>

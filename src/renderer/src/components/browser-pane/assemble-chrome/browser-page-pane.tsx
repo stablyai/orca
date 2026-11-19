@@ -268,7 +268,8 @@ export function BrowserPagePane({
     cancelPendingBrowserCapture: grabAnnotations.cancelPendingBrowserCapture,
     markup,
     canPickElements: !isBlankTab,
-    toolTargetId: browserTab.id
+    toolTargetId: browserTab.id,
+    documentKey: browserTab.url
   })
   useBrowserPageKeyboardShortcuts({
     browserTabId: browserTab.id,
