@@ -32,8 +32,8 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
     }
     const gaps = this.ptyGapCounts.get(ptyId)
     const generation = this.getPtyLifecycleGeneration(ptyId)
-    const visibleState = await this.readVisibleTerminalState(ptyId)
     const model = this.headlessTerminals.get(ptyId)
+    const visibleState = await this.readVisibleTerminalState(ptyId)
     if (!knownAlternateScreen && !visibleState?.isAlternateScreen) {
       return fresh
     }
