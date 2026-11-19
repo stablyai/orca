@@ -100,12 +100,12 @@ export class MailWakeInvocations {
     })
   }
 
-  retain(tokens: ReadonlySet<string>): void {
-    for (const [token, invocation] of this.invocations) {
-      if (!tokens.has(token)) {
-        invocation.stop.abort()
-        this.invocations.delete(token)
-      }
+  /** Stops watching one settled attempt's process. */
+  release(launchToken: string | undefined): void {
+    const invocation = launchToken ? this.invocations.get(launchToken) : undefined
+    if (launchToken && invocation) {
+      invocation.stop.abort()
+      this.invocations.delete(launchToken)
     }
   }
 }

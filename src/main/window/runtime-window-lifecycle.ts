@@ -234,8 +234,8 @@ export function registerRuntimeWindowLifecycle(
       requestTerminalTabCloseFromRenderer(mainWindow, tabId, options),
     workspaceSleepChanged: (notice) => send('ui:workspaceSleep', notice),
     sleepingMailChanged: (worktreeIds) => send('ui:sleepingMailChanged', { worktreeIds }),
-    resumeSleepingAgents: (worktreeId, paneKey, prepareOnly) =>
-      resumeSleepingAgentsInWindow(mainWindow, send, { worktreeId, paneKey, prepareOnly }),
+    resumeSleepingAgents: (...request) =>
+      resumeSleepingAgentsInWindow(mainWindow, send, ...request),
     applyAgentPaneActivity: (change) => requestAgentPaneActivityFromRenderer(mainWindow, change),
     terminalFitOverrideChanged: (ptyId, mode, cols, rows) =>
       send('runtime:terminalFitOverrideChanged', { ptyId, mode, cols, rows }),

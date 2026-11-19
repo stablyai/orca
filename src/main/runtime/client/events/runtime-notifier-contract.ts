@@ -189,7 +189,8 @@ export type RuntimeNotifier = {
   resumeSleepingAgents?(
     worktreeId: string,
     paneKey?: string,
-    prepareOnly?: boolean
+    prepareOnly?: boolean,
+    launchToken?: string
   ): void | Promise<boolean>
   /** The window applies a client's Agents-list change with its own actions and answers with the verdicts it leaves. */
   applyAgentPaneActivity?(change: AgentPaneActivityChange): Promise<AgentListPublication>

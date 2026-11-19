@@ -1,3 +1,4 @@
+import { takeMailWakeLaunchToken } from '@/lib/agent-session/resume/sleeping-agent-wake-requests'
 import {
   getConnectionIdForWorktreeCopy,
   getConnectionIdFromState
@@ -123,7 +124,7 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
     if (!startupPlan) {
       return null
     }
-    const coldRestoreLaunchToken = createBrowserUuid()
+    const coldRestoreLaunchToken = takeMailWakeLaunchToken(session.cacheKey) ?? createBrowserUuid()
     return {
       agent,
       command: startupPlan.launchCommand,

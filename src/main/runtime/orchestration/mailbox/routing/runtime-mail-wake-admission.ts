@@ -70,14 +70,17 @@ export abstract class RuntimeMailWakeAdmission extends OrcaRuntimeWithPruneMobil
     this.settleMailWakeAttempt(record)
   }
 
-  /** The process a wake launched is gone; its mail stays queued for the agent's next run. */
+  /** The process a wake launched is gone (once the window has restored its panes, a missing one
+   *  counts too); its mail stays queued in the database for the agent's next run. */
   protected mailWakeLost(record: SleptMailRecord): boolean {
     const launch = record.mailWake?.attempt
     const pty = this.getPtyRecordForPaneKey(record.paneKey)
     return (
       !!launch &&
       (this.mailWakeInvocations.ended(record) ||
-        (!!pty && (pty.connected !== true || pty.incarnationId !== launch.incarnationId)))
+        (pty
+          ? pty.connected !== true || pty.launchToken !== launch.launchToken
+          : this.graphStatus === 'ready'))
     )
   }
 
@@ -90,6 +93,10 @@ export abstract class RuntimeMailWakeAdmission extends OrcaRuntimeWithPruneMobil
       const launch = launched?.mailWake?.attempt
       const pty = this.getPtyRecordForPaneKey(paneKey)
       if (signal.aborted || !launched) {
+        return
+      }
+      // Hosts that can't prove an agent from its process (Windows) wait for the agent's own report.
+      if (launch && this.launchedAgentHostProvesAgent(launch.ptyId) === false) {
         return
       }
       if (

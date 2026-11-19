@@ -53,7 +53,12 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
             }
             const resumed =
               (await Promise.resolve(
-                this.notifier?.resumeSleepingAgents?.(current.worktreeId, current.paneKey)
+                this.notifier?.resumeSleepingAgents?.(
+                  current.worktreeId,
+                  current.paneKey,
+                  false,
+                  claimed.mailWake?.id
+                )
               ).catch(() => false)) === true
             if (!resumed) {
               // Nothing was launched, so a later edge may wake this pane again.
@@ -86,17 +91,8 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
 
   protected settleMailWakeAttempt(record: SleptMailRecord): void {
     if (this.mailWakeAttempts.settle(record)) {
+      this.mailWakeInvocations.release(record.mailWake?.id)
       this.publishSleepingMail({ panes: [record.paneKey] })
-    }
-  }
-
-  private retainedAttemptGeneration = -1
-
-  /** Invocation watches follow the attempt set, and only when it changed. */
-  private retainMailWakeInvocations(): void {
-    if (this.retainedAttemptGeneration !== this.mailWakeAttempts.generation) {
-      this.retainedAttemptGeneration = this.mailWakeAttempts.generation
-      this.mailWakeInvocations.retain(this.mailWakeAttempts.launchTokens())
     }
   }
 
@@ -208,13 +204,14 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
       this.publishedHeld = ''
     }
     this.getExistingOrchestrationDb()
-    this.publishSleepingMail(paneKey === undefined ? undefined : { panes: [paneKey] })
+    this.publishSleepingMail(paneKey === undefined ? undefined : { panes: [paneKey] }, true)
   }
 
   private sleepingMailPublicationQueued = false
   private publishedHeldVersion = -1
   private readonly sleepingMailScope = {
     full: true,
+    urgent: true,
     mailboxes: new Set<string>(),
     panes: new Set<string>()
   }
@@ -232,14 +229,15 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
   }
 
   /** Coalesces what changed into one pass: named mailboxes and panes, or every sleeping pane. */
-  protected publishSleepingMail(scope?: {
-    mailboxes?: Iterable<string>
-    panes?: Iterable<string>
-  }): void {
+  protected publishSleepingMail(
+    scope?: { mailboxes?: Iterable<string>; panes?: Iterable<string> },
+    urgent = false
+  ): void {
     const pending = this.sleepingMailScope
     if (!scope) {
       pending.full = true
     }
+    pending.urgent ||= urgent
     for (const mailbox of scope?.mailboxes ?? []) {
       pending.mailboxes.add(mailbox)
     }
@@ -250,8 +248,15 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
       return
     }
     this.sleepingMailPublicationQueued = true
-    queueMicrotask(() => {
+    // A full pass re-queries every sleeper, so unnamed changes share one pass per second.
+    const wait =
+      pending.full && !pending.urgent ? this.lastFullSleepingMailPass + 1_000 - Date.now() : 0
+    const run = () => {
       const full = pending.full
+      pending.urgent = false
+      if (full) {
+        this.lastFullSleepingMailPass = Date.now()
+      }
       const mailboxes = [...pending.mailboxes]
       const panes = [...pending.panes]
       pending.full = false
@@ -285,16 +290,21 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
       } catch {
         /* The runtime can close its database before a queued publication. */
       } finally {
-        this.retainMailWakeInvocations()
         this.publishHeldWorktrees()
         this.sleepingMailPublicationQueued = false
         if (pending.full || pending.mailboxes.size || pending.panes.size) {
           this.publishSleepingMail({})
         }
       }
-    })
+    }
+    if (wait > 0) {
+      setTimeout(run, wait)
+    } else {
+      queueMicrotask(run)
+    }
   }
 
+  private lastFullSleepingMailPass = 0
   private publishedHeld = ''
 
   private publishHeldWorktrees(): void {
