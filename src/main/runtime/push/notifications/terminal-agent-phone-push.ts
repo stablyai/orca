@@ -79,11 +79,12 @@ export class TerminalAgentPhonePush {
         if (news.event.paneKey) {
           this.hooklessNews.noteFinish(news.event.paneKey)
         }
-        // The turn's reply can arrive after the finish was decided.
-        this.send(
-          row === news.row
-            ? news
-            : { ...news, event: this.buildEvent(news.worktreeId, news.paneKey, row, news.labels) }
+        // The turn's reply can arrive after the finish was decided; rebuilt only for a phone that gets it.
+        const replied = row.lastAssistantMessage !== news.row.lastAssistantMessage
+        this.send(news, () =>
+          replied
+            ? { ...news, event: this.buildEvent(news.worktreeId, news.paneKey, row, news.labels) }
+            : news
         )
       },
       setTimer: (run, delayMs) => deps.setTimer(run, delayMs)
@@ -199,12 +200,12 @@ export class TerminalAgentPhonePush {
     }
   }
 
-  private send(news: PaneNews): void {
+  private send(decided: PaneNews, current: () => PaneNews = () => decided): void {
     // Recheck window ownership at delivery to avoid duplicating a newly opened window's push.
-    const { agentState, paneKey } = news.event
+    const { agentState, paneKey } = decided.event
     if (
       this.deps.hasWindow() ||
-      this.deps.isWorkspaceMuted(news.worktreeId) ||
+      this.deps.isWorkspaceMuted(decided.worktreeId) ||
       (paneKey &&
         isCoordinatorOnlyNews(
           withApprovalTitle(agentState, this.deps.readTerminalTitle(paneKey)),
@@ -213,6 +214,7 @@ export class TerminalAgentPhonePush {
     ) {
       return
     }
+    const news = current()
     const settings = this.deps.readNotificationSettings()
     // The window's own fan-out gates the phone on these same preferences.
     const desktopAllowed =
