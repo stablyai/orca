@@ -4,7 +4,7 @@ import { getStructuredAgentSessionTabs } from '@/components/native-chat/session/
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import {
   isRemoteRuntimePtyId,
   parseRemoteRuntimePtyId
@@ -15,7 +15,7 @@ import {
   structuredAgentSessionTabId
 } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
-import { orchestrationContextsEqual } from '@/store/slices/agent-status/agent-status-orchestration-context'
+import { orchestrationContextsEqual } from '@/store/slices/agent-status/orchestration/agent-status-orchestration-context'
 import {
   resolveStructuredAgentSessionOwner,
   structuredAgentSessionOwnerForTab,
@@ -29,7 +29,6 @@ export type VisibleOrchestrationState = WorktreeRuntimeOwnerState &
       AppState,
       | 'unifiedTabsByWorktree'
       | 'agentStatusByPaneKey'
-      | 'retainedAgentsByPaneKey'
       | 'runtimeAgentOrchestrationByPaneKey'
       | 'ptyIdsByTabId'
     >
@@ -101,12 +100,7 @@ let terminalCache:
   | { inputs: unknown[]; hosts: Map<string, string | null>; ptys: Map<string, string | null> }
   | undefined
 function terminalProvenance(state: VisibleOrchestrationState) {
-  const inputs = [
-    state.unifiedTabsByWorktree,
-    state.tabsByWorktree,
-    state.ptyIdsByTabId,
-    state.retainedAgentsByPaneKey
-  ]
+  const inputs = [state.unifiedTabsByWorktree, state.tabsByWorktree, state.ptyIdsByTabId]
   if (terminalCache && inputs.every((value, index) => value === terminalCache?.inputs[index])) {
     return terminalCache
   }
@@ -152,13 +146,6 @@ function terminalProvenance(state: VisibleOrchestrationState) {
       }
     }
   }
-  for (const retained of Object.values(state.retainedAgentsByPaneKey ?? EMPTY)) {
-    visits++
-    const host = ptyHost(retained.tab.ptyId)
-    if (host !== undefined) {
-      merge(hosts, aliasKey(retained.worktreeId, retained.tab.id), host)
-    }
-  }
   terminalCache = { inputs, hosts, ptys }
   return terminalCache
 }
@@ -169,7 +156,6 @@ function projection(state: VisibleOrchestrationState): NonNullable<typeof cache>
   const inputs = [
     state.runtimeAgentOrchestrationByPaneKey,
     state.agentStatusByPaneKey,
-    state.retainedAgentsByPaneKey,
     terminals,
     rows
   ]
@@ -202,7 +188,7 @@ function projection(state: VisibleOrchestrationState): NonNullable<typeof cache>
     adapt(key, context, producerByContext.get(context) ?? LOCAL_EXECUTION_HOST_ID)
   }
   const embedded = (
-    entry: AppState['agentStatusByPaneKey'][string],
+    entry: NonNullable<ReturnType<AppState['agentStatusByPaneKey']['get']>>,
     worktreeId = entry.worktreeId
   ) => {
     visits++
@@ -244,11 +230,8 @@ function projection(state: VisibleOrchestrationState): NonNullable<typeof cache>
       adapt(entry.paneKey, entry.orchestration, host)
     }
   }
-  for (const entry of Object.values(state.agentStatusByPaneKey ?? EMPTY)) {
+  for (const entry of Array.from(state.agentStatusByPaneKey?.values() ?? [])) {
     embedded(entry)
-  }
-  for (const retained of Object.values(state.retainedAgentsByPaneKey ?? EMPTY)) {
-    embedded(retained.entry, retained.worktreeId)
   }
   const previous = cache?.contexts
   const equal =

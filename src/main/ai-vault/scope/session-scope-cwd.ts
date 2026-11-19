@@ -3,12 +3,12 @@ import {
   openTranscriptReadStream,
   readTranscriptSlice,
   wslGatedReadFile
-} from '../../native-chat/wsl-transcript-fs-access'
+} from '../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import {
   isZstdTranscriptPath,
   readZstdTranscriptSlice,
   zstdTranscriptStream
-} from '../../native-chat/transcript-zstd-decompression'
+} from '../../native-chat/transcript-streaming/transcript-zstd-decompression'
 import {
   CLAUDE_CWD_BUCKET_LAYOUT,
   CODEBUDDY_CWD_BUCKET_LAYOUT,
@@ -21,7 +21,7 @@ import type {
   SessionFileCandidate
 } from '../session-scanner-types'
 import { asRecord } from '../parsing/session-record-fields'
-import { extractString } from '../../../shared/trimmed-string'
+import { extractString } from '../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../parsing/session-json-object'
 import { clineManifestCwd } from '../scanners/cline/session-scanner-cline-parser'
 import {

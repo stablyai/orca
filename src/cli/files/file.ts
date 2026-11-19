@@ -1,16 +1,22 @@
 import { getFileOpenPosition } from './file-open-position'
 import type { GitStatusEntry, GitStatusResult } from '../../shared/git/status/git-status-types'
 import type { RuntimeFileOpenResult } from '../../shared/file-access/runtime-editor-file-open'
-import type { RuntimeWorktreeRecord } from '../../shared/runtime-worktree-contracts'
-import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
-import { isRuntimePathAbsolute, relativePathInsideRoot } from '../../shared/cross-platform-path'
-import { isWslUncPath, parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
-import type { CommandHandler, HandlerContext } from '../dispatch'
-import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
-import { printResult } from '../command-result-output'
-import { RuntimeClientError } from '../runtime/types'
+import type { RuntimeWorktreeRecord } from '../../shared/worktree/catalog/runtime-worktree-contracts'
+import type { RuntimeNavigationTarget } from '../../shared/remote-runtime/session-graph/runtime-navigation'
+import {
+  isRuntimePathAbsolute,
+  relativePathInsideRoot
+} from '../../shared/file-access/cross-platform-path'
+import { isWslUncPath, parseWslUncPath, toWindowsWslPath } from '../../shared/file-access/wsl-paths'
+import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
+import { getOptionalStringFlag, getRequiredStringFlag } from '../arguments/flags'
+import { printResult } from '../output/command-result-output'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { callFileOpen } from './file-open-call'
-import { getOptionalWorktreeSelector, resolveCurrentWorktreeSelector } from '../selectors'
+import {
+  getOptionalWorktreeSelector,
+  resolveCurrentWorktreeSelector
+} from '../workspace-selection/workspace-selector'
 
 type FileOpenMode = 'edit' | 'diff'
 type OpenChangedMode = FileOpenMode | 'both'

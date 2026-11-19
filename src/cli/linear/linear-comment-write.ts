@@ -6,9 +6,10 @@ import type {
   LinearCommentEditResult
 } from '../../shared/linear/agent-access'
 import type { LinearCommentAddResult } from '../../shared/linear/agent-result-types'
-import type { CommandHandler } from '../dispatch'
-import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
-import { printResult } from '../command-result-output'
+import type { CommandHandler } from '../dispatch/dispatch'
+import { getOptionalStringFlag, getRequiredStringFlag } from '../arguments/flags'
+import { printResult } from '../output/command-result-output'
+import { callerChat } from '../automations/automation-caller-chat'
 import {
   formatLinearCommentAdd,
   formatLinearCommentDelete,
@@ -30,7 +31,8 @@ export const LINEAR_COMMENT_WRITE_HANDLERS: Record<string, CommandHandler> = {
       ...buildWriteTargetRequest(flags, cwd, client.isRemote),
       body,
       replyTo: getOptionalStringFlag(flags, 'reply-to'),
-      writeId: getOptionalWriteId(flags)
+      writeId: getOptionalWriteId(flags),
+      ...(client.isRemote ? {} : callerChat())
     }
     const response = await client.call<LinearCommentAddResult>('linear.issueAddComment', request, {
       timeoutMs: LINEAR_WRITE_TIMEOUT_MS

@@ -7,18 +7,104 @@ import type { AutomationOwnerPrecondition } from '../../shared/automations/owner
 import { getAutomationLegacyRepoId } from '../../shared/automations/history/automation-run-identity'
 import { formatAutomationPrecheckTimeout } from '../../shared/automations/launch/automation-precheck'
 import { formatAutomationSchedule } from '../../shared/automations/scheduling/automation-schedules'
-import { quoteCliCommandArgument } from '../shell-command-quote'
+import { hasAutomationSchedule } from '../../shared/automation-event-triggers'
+import {
+  describeAutomationEventTrigger,
+  formatAutomationEventTrigger
+} from './automation-event-trigger-spec'
+import { quoteCliCommandArgument } from '../arguments/shell-command-quote'
+import { BOT_CHAT_ID_PREFIX } from '../../shared/bots/bot-chat-row'
+import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import { printResult } from '../output/command-result-output'
 
 export type AutomationListPayload = {
   automations: Automation[]
   /** Present only when the authority qualifies its rows; an older host sends none. */
   items?: AutomationListItem[]
+  /** Added by the CLI: why a bot automation's event rules never fire, by automation id. */
+  wontFire?: Record<string, string>
+  /** Waits whose one run has started; an older host sends none. */
+  firedWaits?: string[]
 }
 
 export type AutomationShowPayload = {
   automation: Automation
   /** Present only when the authority can project an owner; an older host sends none. */
   owner?: AutomationOwnerPrecondition
+}
+
+/** An event-only automation stores a placeholder schedule so older Orcas never run it; JSON shows none. */
+export function automationJson(automation: Automation) {
+  return hasAutomationSchedule(automation)
+    ? automation
+    : { ...automation, rrule: null, dtstart: null, nextRunAt: null }
+}
+
+/** printResult for automation payloads, whose JSON shows an event-only automation with no schedule. */
+export function printAutomationResult<
+  TResult extends Pick<AutomationListPayload, 'automations'> | { automation: Automation }
+>(
+  response: RuntimeRpcSuccess<TResult>,
+  json: boolean,
+  formatter: (value: TResult) => string
+): void {
+  if (!json) {
+    printResult(response, false, formatter)
+    return
+  }
+  const { result } = response
+  const shown =
+    'automations' in result
+      ? { ...result, automations: result.automations.map(automationJson) }
+      : result.automation
+        ? { ...result, automation: automationJson(result.automation) }
+        : result
+  printResult({ ...response, result: shown }, true, () => '')
+}
+
+/** "agent: codex · gpt-6.1-terra · effort high (own)", or the bot's when it has none. */
+function formatBotAgent(target: NonNullable<Automation['bot']>): string {
+  if (target.runsIn !== 'new') {
+    return "agent: the chat's (a run continues the chat on its agent)"
+  }
+  const setup = target.agentSetup
+  if (!setup) {
+    return "agent: the bot's"
+  }
+  const choices = [
+    setup.launch?.model,
+    ...Object.entries(setup.launch?.options ?? {}).map(([key, value]) => `${key} ${value}`)
+  ].filter(Boolean)
+  return `agent: ${[setup.agent, ...choices].join(' · ')} (own)`
+}
+
+// An event-only automation keeps a schedule no Orca reaches; show what starts it instead.
+function formatWhen(automation: Automation): string {
+  const events = (automation.on ?? []).map(describeAutomationEventTrigger)
+  if (automation.once) {
+    return `${formatOnce(automation)}${events.length > 0 ? `: ${events.join('; ')}` : ''}`
+  }
+  if (!hasAutomationSchedule(automation)) {
+    return events.length > 0 ? `runs on events: ${events.join('; ')}` : 'never runs'
+  }
+  const schedule = `${formatAutomationSchedule(automation.rrule)}  next: ${new Date(automation.nextRunAt).toISOString()}`
+  return events.length > 0 ? `${schedule}  also on ${events.length} event(s)` : schedule
+}
+
+// A wait: one run, then Orca deletes it.
+function formatOnce(automation: Automation): string {
+  const by = automation.once?.by
+  return by === undefined
+    ? `runs once, only on an event (ends unrun 30 days after it was made)`
+    : `runs once, on an event or at ${new Date(by).toISOString()}, whichever comes first`
+}
+
+/** A bot automation that runs in a chosen chat, as --runs-in takes it, with that chat's saved title. */
+function formatRunsInChat(automation: Automation): string | null {
+  const chat = automation.bot?.chat
+  return chat
+    ? `runs in: ${BOT_CHAT_ID_PREFIX}${chat.sessionId}${chat.title ? `  ${JSON.stringify(chat.title)}` : ''}`
+    : null
 }
 
 const ORPHAN_HOST_LABEL = 'orphan (no host can run this automation)'
@@ -43,12 +129,19 @@ export function formatAutomationList(result: AutomationListPayload): string {
     return 'No automations found.'
   }
   const hosts = new Map(result.items?.map((item) => [item.automationId, item]) ?? [])
+  const fired = new Set(result.firedWaits)
   return result.automations
     .map((automation) => {
-      const status = automation.enabled ? 'enabled' : 'disabled'
+      const status = fired.has(automation.id)
+        ? 'fired (removed when its run finishes)'
+        : automation.enabled
+          ? 'enabled'
+          : 'disabled'
       const item = hosts.get(automation.id)
       const host = item ? `\nhost: ${formatListItemSelector(item)}` : ''
-      return `${automation.id}  ${automation.name}  ${automation.agentId}  ${status}\n${formatAutomationSchedule(automation.rrule)}  next: ${new Date(automation.nextRunAt).toISOString()}${host}`
+      const wontFire = result.wontFire?.[automation.id]
+      const inChat = formatRunsInChat(automation)
+      return `${automation.id}  ${automation.name}  ${automation.agentId}  ${status}\n${formatWhen(automation)}${inChat ? `\n${inChat}` : ''}${wontFire ? `\n${wontFire}` : ''}${host}`
     })
     .join('\n\n')
 }
@@ -70,10 +163,21 @@ export function formatAutomationShow(result: AutomationShowPayload): string {
     `id: ${automation.id}`,
     `name: ${automation.name}`,
     `provider: ${automation.agentId}`,
+    ...(automation.bot ? [formatBotAgent(automation.bot)] : []),
     ...(automation.extraAgentArgs ? [`extraAgentArgs: ${automation.extraAgentArgs}`] : []),
     `enabled: ${automation.enabled}`,
-    `schedule: ${formatAutomationSchedule(automation.rrule)}`,
-    `rrule: ${automation.rrule}`,
+    ...(automation.bot
+      ? [formatRunsInChat(automation) ?? `runs in: ${automation.bot.runsIn}`]
+      : []),
+    ...(automation.once ? [`once: ${formatOnce(automation)}`] : []),
+    ...(hasAutomationSchedule(automation)
+      ? [`schedule: ${formatAutomationSchedule(automation.rrule)}`, `rrule: ${automation.rrule}`]
+      : [`schedule: none${automation.on?.length ? ' (runs on events)' : ''}`]),
+    // The --on value to keep it, then what it means.
+    ...(automation.on ?? []).map(
+      (trigger) =>
+        `on: ${quoteCliCommandArgument(formatAutomationEventTrigger(trigger))}  (when ${describeAutomationEventTrigger(trigger)})`
+    ),
     `precheck: ${
       automation.precheck
         ? `${automation.precheck.command} (timeout ${formatAutomationPrecheckTimeout(
@@ -81,7 +185,9 @@ export function formatAutomationShow(result: AutomationShowPayload): string {
           )})`
         : 'none'
     }`,
-    `nextRunAt: ${new Date(automation.nextRunAt).toISOString()}`,
+    ...(hasAutomationSchedule(automation)
+      ? [`nextRunAt: ${new Date(automation.nextRunAt).toISOString()}`]
+      : []),
     ...projectLines,
     `workspaceMode: ${automation.workspaceMode}`,
     // The saved choice only: what an unset choice does depends on the host's Orca version.

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
-import { OrcadStdioBridgeUnavailableError } from '../../orcad/orcad-host-unavailable'
+import { OrcadStdioBridgeUnavailableError } from '../../orcad/diagnostics/orcad-host-unavailable'
 import { checkOrcadStdioBridge, type OrcadStdioBridge } from './orcad-stdio-bridge'
 import { orcadBashStdioBridgeCommand } from './orcad-stdio-bridge-script'
 import { OrcadStdioBridgeDecoder } from './orcad-stdio-bridge-stream'
@@ -16,6 +16,7 @@ import {
   guestHome,
   isAlive,
   pathWithoutBash,
+  pathWithUutilsCat,
   processTree
 } from './testing/orcad-bash-stdio-bridge-test-host'
 
@@ -82,6 +83,19 @@ function received(decoder: OrcadStdioBridgeDecoder, expected: number): Promise<B
   })
 }
 
+/** Sends PAYLOAD through a bridge spawned with `env` and expects every byte echoed back. */
+async function expectRelaysPayload(env: Partial<NodeJS.ProcessEnv>): Promise<void> {
+  const child = spawnBridge(echo.port, env)
+  const { decoder, ready } = decode(child.stdout)
+  const bytes = received(decoder, PAYLOAD.length)
+  await expect(ready).resolves.toBe('ready')
+  child.stdin.write(PAYLOAD)
+  expect((await bytes).equals(PAYLOAD)).toBe(true)
+  const exited = exitOf(child)
+  child.stdin.end()
+  await exited
+}
+
 async function listen(server: Server): Promise<number> {
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   const address = server.address()
@@ -140,6 +154,7 @@ describe.runIf(RELAY)('the bash stdio bridge', () => {
     writeFileSync(
       join(bin, 'cat'),
       '#!/bin/sh\n' +
+        `[ "$1" = --version ] && exec ${realCat()} "$@"\n` +
         `trap 'kill $c 2>/dev/null; sleep 0.3; : > "${join(dir, 'killed')}"; exit 0' TERM\n` +
         // POSIX gives a background job /dev/null as stdin even under `<&0`, so hand it over on fd 5
         // as the relay does: the socket reader ends with orcad, the stdin reader blocks until killed.
@@ -191,6 +206,30 @@ describe.runIf(RELAY)('the bash stdio bridge', () => {
     }
   })
 
+  it('relays through gnucat when the distro cat is uutils', async () => {
+    await expectRelaysPayload({
+      HOME: guestHome(scratch, false),
+      PATH: pathWithUutilsCat(scratch, '0.8.0', true)
+    })
+  })
+
+  it('takes the Node bridge when uutils cat has no gnucat', async () => {
+    await expectRelaysPayload({
+      HOME: guestHome(scratch, true),
+      PATH: pathWithUutilsCat(scratch, '0.8.0', false)
+    })
+  })
+
+  it.each(['0.2.2', '0.10.0'])(
+    'keeps relaying through cat outside uutils 0.8-0.9 (%s)',
+    async (version) => {
+      await expectRelaysPayload({
+        HOME: guestHome(scratch, false),
+        PATH: pathWithUutilsCat(scratch, version, false)
+      })
+    }
+  )
+
   it('leaves nothing running when the desktop side vanishes and orcad stays silent', async () => {
     const server = createServer((socket) => socket.resume())
     const port = await listen(server)
@@ -210,18 +249,7 @@ describe.runIf(RELAY)('the bash stdio bridge', () => {
 
 describe.runIf(POSIX)('the bash stdio bridge’s Node fallback', () => {
   it('relays every byte through the pinned Node on a host without bash', async () => {
-    const child = spawnBridge(echo.port, {
-      HOME: guestHome(scratch, true),
-      PATH: pathWithoutBash(scratch)
-    })
-    const { decoder, ready } = decode(child.stdout)
-    const bytes = received(decoder, PAYLOAD.length)
-    await expect(ready).resolves.toBe('ready')
-    child.stdin.write(PAYLOAD)
-    expect((await bytes).equals(PAYLOAD)).toBe(true)
-    const exited = exitOf(child)
-    child.stdin.end()
-    await exited
+    await expectRelaysPayload({ HOME: guestHome(scratch, true), PATH: pathWithoutBash(scratch) })
   })
 
   it('still proves the bridge runs when orcad refuses the dial', async () => {

@@ -1,4 +1,4 @@
-import { readCommandBody } from '../command-body-input'
+import { readCommandBody } from '../arguments/command-body-input'
 import type {
   LinearIssueInclude,
   LinearIssueListRequest,
@@ -11,22 +11,19 @@ import {
   LINEAR_WRITE_BODY_CAP,
   clampLinearIssueDepth
 } from '../../shared/linear/agent-access'
+import { LINEAR_PRIORITY_LABELS } from '../../shared/linear/priority-label'
 import { isLinearUuid } from '../../shared/linear/uuid'
 import {
   getOptionalNonNegativeIntegerFlag,
   getOptionalStringFlag,
   getRepeatedStringFlag,
   getRequiredStringFlag
-} from '../flags'
-import { RuntimeClientError } from '../runtime/types'
+} from '../arguments/flags'
+import { RuntimeClientError } from '../runtime/connection/types'
 
-const LINEAR_PRIORITY_VALUES = new Map([
-  ['none', 0],
-  ['urgent', 1],
-  ['high', 2],
-  ['medium', 3],
-  ['low', 4]
-])
+const LINEAR_PRIORITY_VALUES = new Map<string, number>(
+  Object.entries(LINEAR_PRIORITY_LABELS).map(([priority, label]) => [label, Number(priority)])
+)
 
 export function buildAssigneeSetRequest(
   flags: Map<string, string | boolean>,

@@ -1,8 +1,8 @@
 import {
   backgroundTasksHeaderContent as headerContent,
   type BackgroundTasksHeaderContent
-} from '../../../../../../shared/background-task-header-content'
-import type { BackgroundTaskGroup } from '../../../../../../shared/background-task-roster'
+} from '../../../../../../shared/agent-status/presentation/background-tasks/background-task-header-content'
+import type { BackgroundTaskGroup } from '../../../../../../shared/agent-status/presentation/background-tasks/background-task-roster'
 import { sayBackgroundTaskTranslated } from './background-task-words-text'
 
 export function backgroundTasksHeaderContent(

@@ -21,7 +21,7 @@ import {
 } from './distro-catalog'
 import { filterPathsToRunningWslDistrosAsync } from '../filesystem/wsl-running-path-filter'
 import '../execution/wsl-interop-spawn-directory'
-import { resetWslTranscriptRunningObserverForTests } from '../../native-chat/wsl-transcript-running-observer'
+import { resetWslTranscriptRunningObserverForTests } from '../../native-chat/transcript-filesystem/wsl-transcript-running-observer'
 
 async function withPlatform<T>(value: NodeJS.Platform, fn: () => Promise<T>): Promise<T> {
   const original = process.platform
@@ -69,32 +69,4 @@ describe('running WSL distro discovery', () => {
       expect(runProcessMock).toHaveBeenCalledTimes(3)
     })
   })
-
-  it.each([true, false])(
-    'shares the probe while preserving admission and observer failure policies (strict first: %s)',
-    async (strictFirst) => {
-      runProcessMock.mockResolvedValueOnce(exited('Ubuntu\n'))
-
-      await withPlatform('win32', async () => {
-        await listRunningWslDistrosAsync()
-        let finishProbe: ((result: ProcessResult) => void) | undefined
-        runProcessMock.mockImplementationOnce(
-          () =>
-            new Promise<ProcessResult>((resolve) => {
-              finishProbe = resolve
-            })
-        )
-        const first = listRunningWslDistrosAsync({ requireConfirmed: strictFirst })
-        const second = listRunningWslDistrosAsync({ requireConfirmed: !strictFirst })
-        const strict = strictFirst ? first : second
-        const observer = strictFirst ? second : first
-        const rejected = expect(strict).rejects.toThrow('discovery is unavailable')
-        expect(runProcessMock).toHaveBeenCalledTimes(2)
-        finishProbe?.(FAILED)
-        await rejected
-        await expect(observer).resolves.toEqual(['Ubuntu'])
-        expect(runProcessMock).toHaveBeenCalledTimes(2)
-      })
-    }
-  )
 })

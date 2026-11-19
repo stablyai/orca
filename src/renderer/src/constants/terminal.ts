@@ -1,5 +1,5 @@
-import type { TerminalPaneSplitSource } from '../../../shared/feature-education-telemetry'
-import type { TerminalTabCloseIntent } from '@/components/terminal/terminal-tab-close-intent'
+import type { TerminalPaneSplitSource } from '../../../shared/feature-education/feature-education-telemetry'
+import type { TerminalTabCloseIntent } from '@/components/terminal/tab-lifecycle/terminal-tab-close-intent'
 
 export const TOGGLE_TERMINAL_PANE_EXPAND_EVENT = 'orca-toggle-terminal-pane-expand'
 export const FOCUS_TERMINAL_PANE_EVENT = 'orca-focus-terminal-pane'
@@ -48,6 +48,8 @@ export type SplitTerminalPaneDetail = {
   telemetrySource?: TerminalPaneSplitSource
   newLeafId?: string
   ptyId?: string
+  /** An agent's split: the new pane leaves the user's active pane and keyboard focus alone. */
+  activate?: false
 }
 
 export type RequestActiveTerminalPaneSplitDetail = {

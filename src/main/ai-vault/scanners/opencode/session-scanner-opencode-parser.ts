@@ -2,8 +2,11 @@ import {
   throwIfAiVaultScanCancelled,
   waitForAiVaultScan
 } from '../../scan-lifecycle/ai-vault-scan-cancellation'
-import { wslGatedReaddir, wslGatedReadFile } from '../../../native-chat/wsl-transcript-fs-access'
-import { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
+import {
+  wslGatedReaddir,
+  wslGatedReadFile
+} from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-error'
 import { basename, dirname, join } from 'node:path'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { FileWithMtime, SessionAccumulator } from '../../session-scanner-types'
@@ -16,7 +19,7 @@ import {
 } from '../../parsing/session-scanner-accumulator'
 import { addSessionContent, addPreviewMessage } from '../../parsing/session-scanner-messages'
 import { asRecord } from '../../parsing/session-record-fields'
-import { extractString } from '../../../../shared/trimmed-string'
+import { extractString } from '../../../../shared/text/trimmed-string'
 import { timeObjectValue, timestampMs } from '../../parsing/session-record-time'
 import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
 import { tokenTotal } from '../../parsing/session-scanner-token-values'

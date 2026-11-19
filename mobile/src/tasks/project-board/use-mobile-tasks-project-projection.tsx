@@ -3,12 +3,16 @@ import {
   filterGitHubProjectRowsForRepos,
   findRepoForGitHubProjectRepository
 } from './github-project-repo-match'
-import { githubProjectHost } from '../../../../src/shared/github/project-identity'
+import { githubProjectHost } from '../../../../src/shared/github/projects/project-identity'
 import { hasSettledHostRepoList } from '../repositories/host-repo-list'
-import { isHostedTaskRepo } from '../repositories/hosted-repo-selection'
+import { isHostedTaskRepo, listTaskSourceRepos } from '../repositories/hosted-repo-selection'
 import { useCallback, useMemo } from 'react'
-import { groupRows, sortRows } from '../../../../src/shared/github/project-group-sort'
-import type { ProjectGroup } from '../../../../src/shared/github/project-group-sort'
+import {
+  groupRows,
+  sortRows,
+  type ProjectGroup
+} from '../../../../src/shared/github/projects/project-group-sort'
+
 import type { GitHubProjectRow } from '../mobile-tasks-view-state-types'
 import type { ProjectListEntry } from '../task-list/mobile-tasks-options'
 import type { RepoSummary } from '../mobile-tasks-provider-detail-types'
@@ -19,6 +23,7 @@ import {
   projectSummaryFields
 } from './mobile-tasks-project-fields'
 import { isTaskProvider } from '../../../../src/shared/work-items/task-providers'
+import { pickerRepos } from '../../../../src/shared/project/catalog/hidden-projects'
 
 export function useMobileTasksProjectProjection(model: WorkspaceAndProjectStateModel) {
   const {
@@ -67,13 +72,14 @@ export function useMobileTasksProjectProjection(model: WorkspaceAndProjectStateM
     githubProjectTable?.project.host ?? activeGitHubProject?.host
   )
   const hostedRepos = useMemo(() => repos.filter(isHostedTaskRepo), [repos])
-  const workspaceRepos = useMemo(() => repos.filter((repo) => repo.kind !== 'folder'), [repos])
+  // Hidden projects stay out of the Start work picker, as desktop's composer does.
+  const workspaceRepos = useMemo(
+    () => pickerRepos(repos.filter((repo) => repo.kind !== 'folder')),
+    [repos]
+  )
   const reposById = useMemo(() => new Map(repos.map((repo) => [repo.id, repo])), [repos])
   const selectedHostedRepos = useMemo(
-    () =>
-      effectiveRepoIds.size === 0
-        ? hostedRepos
-        : hostedRepos.filter((repo) => effectiveRepoIds.has(repo.id)),
+    () => listTaskSourceRepos(hostedRepos, effectiveRepoIds),
     [effectiveRepoIds, hostedRepos]
   )
   const findProjectRowRepo = useCallback(

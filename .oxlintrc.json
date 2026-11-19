@@ -227,7 +227,7 @@
           "error",
           {
             "property": "randomUUID",
-            "message": "src/shared is compiled into the web bundle, where crypto.randomUUID is missing in non-secure contexts (Remote Web over plain HTTP). Use createNonSecureContextUuid() from './non-secure-context-uuid', or import randomUUID from 'node:crypto' in main-only code."
+            "message": "src/shared is compiled into the web bundle, where crypto.randomUUID is missing in non-secure contexts (Remote Web over plain HTTP). Use createNonSecureContextUuid() from 'src/shared/identifiers/non-secure-context-uuid.ts', or import randomUUID from 'node:crypto' in main-only code."
           }
         ]
       }
@@ -274,8 +274,8 @@
     {
       "files": [
         "src/main/runtime/rpc/dispatcher.ts",
-        "src/main/plugins/plugin-runtime-rpc.ts",
-        "src/main/plugins/plugin-runtime-binding.ts"
+        "src/main/plugins/runtime/plugin-runtime-rpc.ts",
+        "src/main/plugins/runtime/plugin-runtime-binding.ts"
       ],
       "rules": {
         "no-restricted-imports": [
@@ -308,7 +308,7 @@
   "ignorePatterns": [
     "src/main/acp/generated/acp-protocol.generated.ts",
     "src/shared/rpc-contract/rpc-params-catalog.generated.ts",
-    "src/cli/bundled-skill-guides.ts",
+    "src/cli/skills/bundled-skill-guides.ts",
     "resources/plugins/declarative/*.mjs",
     "**/node_modules",
     "**/dist",

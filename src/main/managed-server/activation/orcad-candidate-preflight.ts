@@ -1,4 +1,4 @@
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 import { preflightInstalledOrcad } from '../install/orcad-remote-preflight'
 
 /** Preflight before any stop; asked to, the candidate also names the daemon generations under the served data root. */

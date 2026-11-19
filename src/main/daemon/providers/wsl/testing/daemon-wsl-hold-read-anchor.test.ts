@@ -8,7 +8,7 @@ import {
   _resetRunningWslDistroCacheForTests,
   resolveRunningWslDistros
 } from '../../../../wsl/discovery/wsl-running-distro-cache'
-import { parseWslDistroHold } from '../../../../../shared/wsl-distro-stopped-hold'
+import { parseWslDistroHold } from '../../../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 import {
   holdPassiveRestoreOfStoppedWslDistro,
   wslHoldReadAnchor

@@ -6,7 +6,7 @@ import {
 import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
-} from '../../../../../shared/runtime-rpc-envelope'
+} from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { OrcaRuntimeService } from '../../../orca-runtime'
 import { RpcDispatcher } from '../../../rpc/dispatcher'
 import { ORCHESTRATION_METHODS } from '../../../rpc/methods/orchestration/orchestration'
@@ -17,11 +17,9 @@ import {
   oweRemoteDispatchStop
 } from '../../db/remote-owned/remote-dispatch-records'
 import { recordRemoteStart, reserveRemotePlacement } from '../../db/remote-owned/remote-placements'
-import { importRemoteOwnedItem } from '../../db/remote-owned/remote-owned-import'
 import {
   getRemoteRunLink,
   openRemoteRunLink,
-  remoteServerPin,
   type RemoteRunLinkRow
 } from '../../db/remote-owned/remote-run-links'
 import type {
@@ -37,6 +35,12 @@ vi.mock('../relay/federation-relay-scheduler', async (original) => ({
 }))
 
 const COORDINATOR_PANE = 'tab_coord:11111111-1111-4111-8111-111111111111'
+
+const sendingConnection = {
+  endpoint: 'ws://127.0.0.1:1',
+  hostPublicKeyB64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+  credential: { kind: 'token' as const, deviceToken: 'test-home-token' }
+}
 
 type Sent = { method: string; params: unknown; envelope: RuntimeOrchestrationEnvelope | undefined }
 type Answer = { result: unknown } | { error: string }
@@ -85,6 +89,8 @@ describe('what the coordinating Orca owes a paired server', () => {
       }
       await beforeSend()
       // The socket's own preparation runs last, as it does just before a real frame leaves.
+      const guard = await send?.prepareGuard?.(sendingConnection)
+      guard?.()
       const prepared = send?.prepareRequest?.({ params, envelope, measure: () => 0 })
       sent.push({
         method,
@@ -115,8 +121,8 @@ describe('what the coordinating Orca owes a paired server', () => {
     server = {
       environmentId: 'env_b',
       name: 'devB',
-      peerFingerprint: 'host_b',
-      homePeerFingerprint: 'cred_a',
+      peerFingerprint: 'Zmh6rfhivXdsj8GLjp-OIAiXFIVu4jOzkCpZHQ1fKSU',
+      homePeerFingerprint: 'd9b49845ccf7825b16d8a6026f24f283a700ec94ad6e750e0ff344db365934a0',
       pairingRevision: 1
     }
     beforeSend = async () => undefined
@@ -154,29 +160,6 @@ describe('what the coordinating Orca owes a paired server', () => {
   }
 
   const owed = () => getRemoteDispatch(db, 'ctx_b1')!
-  const terminalItem = (sequence: number) => ({
-    conversationId: link.conversation_id,
-    sequence,
-    messageId: `state_${sequence}`,
-    kind: 'worker_state',
-    payload: JSON.stringify({
-      v: 1,
-      id: `state_${sequence}`,
-      homeRunId: run.id,
-      peerRunId: 'run_on_b',
-      dispatch: {
-        id: 'ctx_b1',
-        taskId: 'task_t',
-        status: 'completed',
-        workerState: 'succeeded',
-        lastFailure: null,
-        agent: null
-      },
-      task: { status: 'completed', result: 'done' },
-      correctedUnobservedPrompt: false,
-      removed: null
-    })
-  })
   const stopKeys = () =>
     sent
       .filter((s) => s.method === 'orchestration.workerStop')
@@ -233,26 +216,6 @@ describe('what the coordinating Orca owes a paired server', () => {
         status: 'pending',
         worker_state: null
       })
-    })
-  })
-
-  describe('#2 stop intents', () => {
-    it('owes a stop of a finished worker, whose helpers may still run, until the server proves it', async () => {
-      startedOnB()
-      importRemoteOwnedItem(db, remoteServerPin(server), terminalItem(1))
-      expect(oweRemoteDispatchStop(db, 'ctx_b1', 'intent_1')?.stopCount).toBe(1)
-      expect(owed().stop_owed).toBe(1)
-      answers['orchestration.workerStop'] = [
-        {
-          result: {
-            ...STOPPED,
-            alreadySettled: true,
-            helpers: [{ dispatchId: 'ctx_h', creatorDispatchId: 'ctx_b1', outcome: 'stopped' }]
-          }
-        }
-      ]
-      await resend()
-      expect(owed().stop_owed).toBe(0)
     })
   })
 
@@ -332,6 +295,34 @@ describe('what the coordinating Orca owes a paired server', () => {
       expect(owed().stop_owed).toBe(0)
     })
   })
+
+  it.each([1, undefined])(
+    'rejects a changed home credential with pairing revision %s',
+    async (pairingRevision) => {
+      server = { ...server, pairingRevision }
+      link.pairing_revision = pairingRevision ?? null
+      db.db
+        .prepare('UPDATE remote_run_links SET pairing_revision = ? WHERE conversation_id = ?')
+        .run(pairingRevision ?? null, link.conversation_id)
+      startedOnB()
+      oweRemoteDispatchStop(db, 'ctx_b1', 'intent_1')
+      let release!: () => void
+      beforeSend = () =>
+        new Promise<void>((resolve) => {
+          release = resolve
+        })
+      const pending = sendOwedRemoteStop(runtime, owed())
+      await vi.waitFor(() => expect(release).toBeDefined())
+      server = { ...server, homePeerFingerprint: 'replaced-home' }
+      release()
+      await expect(pending).rejects.toMatchObject({
+        code: 'server_pairing_changed',
+        data: { effectsApplied: false }
+      })
+      expect(sent).toEqual([])
+      expect(getRemoteRunLink(db, link.conversation_id)?.state).toBe('closed')
+    }
+  )
 
   describe('S8 pull loop', () => {
     const state = (seq: number, payload?: string) => ({

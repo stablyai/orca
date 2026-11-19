@@ -4,23 +4,23 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { GeneratedTabTitle } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 
 import type { Store } from '../../../persistence/loading-store/store'
-import { WindowSession } from '../../../persistence/terminal-topology/terminal-topology-window-session-fixture'
+import { WindowSession } from '../../../persistence/terminal-topology/testing/terminal-topology-window-session-fixture'
 import {
   emptyTerminalSessionProfile,
   FIXTURE_GIT_WORKTREE_ID as GIT,
   openTopologyStore
-} from '../../../persistence/terminal-topology/terminal-topology-profile-fixture'
+} from '../../../persistence/terminal-topology/testing/terminal-topology-profile-fixture'
 import { applyWindowLayoutCommand } from '../layout/runtime-layout-apply'
 import { installLayoutFrameModelCheck } from './workspace-layout-frame-model-check.test-fixture'
 import './workspace-layout-stream'
 
 const layoutOwner = vi.hoisted(() => ({ isMain: true }))
-vi.mock('../../../../shared/layout-owner-switch', () => ({
+vi.mock('../../../../shared/workspace-layout/layout-owner-switch', () => ({
   get ORCA_LAYOUT_OWNER_IS_MAIN() {
     return layoutOwner.isMain
   }

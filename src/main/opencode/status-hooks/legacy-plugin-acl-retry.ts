@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { resolveCanonicalPluginWritePath } from '../../../shared/opencode-plugin-atomic-write'
+import { resolveCanonicalPluginWritePath } from '../../../shared/agent-launch/plugins/opencode/opencode-plugin-atomic-write'
 import { grantDirAcl } from '../../windows/windows-directory-acl'
 import { isPermissionError } from '../../filesystem/permission-errors'
 

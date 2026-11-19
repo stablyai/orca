@@ -1,6 +1,6 @@
 import { loadElectronAutoUpdater, type ElectronAutoUpdater } from '../electron-updater-loader'
 import { statusesEqual } from '../releases/updater-fallback'
-import type { UpdateCheckOptions, UpdateStatus } from '../../../shared/update-status-types'
+import type { UpdateCheckOptions, UpdateStatus } from '../../../shared/updater/update-status-types'
 import { UpdaterState as BaseUpdaterState } from './updater-state'
 
 export abstract class UpdaterStatus extends BaseUpdaterState {

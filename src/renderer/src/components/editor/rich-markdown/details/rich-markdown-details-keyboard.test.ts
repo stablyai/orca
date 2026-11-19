@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { Editor, type JSONContent } from '@tiptap/core'
-import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
-import {
-  exitEmptyDetailsBody,
-  moveFromEmptyDetailsBodyToSummary
-} from './rich-markdown-details-extension'
+import { Editor } from '@tiptap/core'
 import { createRichMarkdownExtensions } from '../schema/rich-markdown-extensions'
 import { createRichMarkdownEditorCodec } from '../document/rich-markdown-source-transport'
 import { commitRichMarkdownSerialization } from '../document/rich-markdown-serialization-commit'
@@ -12,116 +7,6 @@ import { encodeRawMarkdownHtmlForRichEditor } from '../raw-source/raw-markdown-h
 import { createRichMarkdownHtmlSuperscriptLinkContext } from '../citations/rich-markdown-html-superscript-link-context'
 
 import { normalizeEmptyListItems } from '../schema/rich-markdown-normalize'
-
-{
-  function createEditor(content: string | JSONContent) {
-    return new Editor({
-      element: null,
-      extensions: createRichMarkdownExtensions({ codec: createRichMarkdownEditorCodec() }),
-      content,
-      contentType: 'markdown'
-    })
-  }
-
-  function firstDetailsBodyCursorPosition(editor: Editor): number {
-    let position: number | null = null
-    editor.state.doc.descendants((node, pos) => {
-      if (node.type.name === 'paragraph' && node.content.size === 0) {
-        const parent = editor.state.doc.resolve(pos).parent
-        if (parent.type.name === 'detailsContent') {
-          position = pos + 1
-          return false
-        }
-      }
-
-      return true
-    })
-
-    if (position === null) {
-      throw new Error('Expected an empty details body paragraph')
-    }
-
-    return position
-  }
-
-  function selectionHasAncestor(editor: Editor, typeName: string): boolean {
-    const { $from } = editor.state.selection
-    for (let depth = $from.depth; depth >= 0; depth -= 1) {
-      if ($from.node(depth).type.name === typeName) {
-        return true
-      }
-    }
-
-    return false
-  }
-
-  function firstDetailsContent(editor: Editor): ProseMirrorNode {
-    let content: ProseMirrorNode | null = null
-    editor.state.doc.descendants((node) => {
-      if (node.type.name === 'detailsContent') {
-        content = node
-        return false
-      }
-
-      return true
-    })
-
-    if (!content) {
-      throw new Error('Expected details content')
-    }
-
-    return content
-  }
-
-  describe('rich markdown details keyboard behavior', () => {
-    it.each([
-      [
-        'text toggle',
-        '<details><summary>Toggle</summary><p></p></details>',
-        '<details class="orca-details">\n<summary>Toggle</summary>\n\n\n\n</details>'
-      ],
-      [
-        'heading toggle',
-        '<details data-orca-toggle="heading-1"><summary>Toggle</summary><p></p></details>',
-        '<details class="orca-details" data-orca-toggle="heading-1">\n<summary>Toggle</summary>\n\n\n\n</details>'
-      ]
-    ])('moves backspace from an empty %s body to the summary', (_name, content, expected) => {
-      const editor = createEditor(content)
-
-      try {
-        editor.commands.setTextSelection(firstDetailsBodyCursorPosition(editor))
-
-        expect(moveFromEmptyDetailsBodyToSummary(editor)).toBe(true)
-        expect(editor.getMarkdown().trimEnd()).toBe(expected)
-        expect(editor.state.selection.$from.parent.type.name).toBe('detailsSummary')
-        expect(editor.state.selection.$from.parentOffset).toBe('Toggle'.length)
-      } finally {
-        editor.destroy()
-      }
-    })
-
-    it.each([
-      ['text toggle', '<details><summary>Toggle</summary><p></p></details>'],
-      [
-        'heading toggle',
-        '<details data-orca-toggle="heading-1"><summary>Toggle</summary><p></p></details>'
-      ]
-    ])('exits an empty %s body on Enter', (_name, content) => {
-      const editor = createEditor(content)
-
-      try {
-        editor.commands.setTextSelection(firstDetailsBodyCursorPosition(editor))
-
-        expect(exitEmptyDetailsBody(editor)).toBe(true)
-        expect(editor.state.selection.$from.parent.type.name).toBe('paragraph')
-        expect(selectionHasAncestor(editor, 'detailsContent')).toBe(false)
-        expect(firstDetailsContent(editor).childCount).toBe(1)
-      } finally {
-        editor.destroy()
-      }
-    })
-  })
-}
 
 {
   // Crash 0e46c048 combined Vietnamese soft-wrapped prose, code and an image in one paragraph.

@@ -5,9 +5,13 @@ export type SessionOptionValue = string | boolean
 export type SessionOptionSelectChoice = {
   value: string
   label: string
+  /** Text for a compact segment; `label` stays its accessible name. */
+  shortLabel?: string
   description?: string
   /** Folded under More models; a matching search still lists it. */
   legacy?: true
+  /** Listed only by a matching search; never set on the current choice. */
+  hidden?: true
 }
 
 /** default describes catalog display, never running-agent evidence. dispatched is sent but unread and may be corrected by reports.
@@ -32,6 +36,8 @@ export type SessionOptionDescriptor = {
         type: 'select'
         currentValue?: string
         choices: SessionOptionSelectChoice[]
+        /** Presentation when no value is known; never an input selection. */
+        placeholder?: string
       }
     /** Switches require values or unset renders false against the catalog default; confirmation remains valueSource’s responsibility. */
     | {
@@ -39,12 +45,12 @@ export type SessionOptionDescriptor = {
         currentValue: boolean
       }
   valueSource: SessionOptionValueSource
-  /** Model-pill display only; currentValue remains the accepted selection. */
-  reportedModel?: string
   /** Explicit lane is required: dispatched cannot distinguish PTY from structured transports. */
   transport: NativeChatLiveOptionTransport
   settable: boolean
   disabledReason?: SessionOptionDisabledReason
+  /** Active value when a saved selection intentionally waits for a later input. */
+  activeValue?: string
   /** Picker-only/flip-only PTY commands need action rows rather than invented absolute control states. */
   action?: { type: 'agent-picker' | 'toggle-command' }
 }
@@ -105,6 +111,8 @@ export type NativeChatSessionOptionSettingsMutation =
         value: SessionOptionValue
         adoptModelAsLaunchDefault?: boolean
       }[]
+      /** The chat the picks were made in; picks in a bot's conversation are kept on that bot. */
+      sessionId?: string
     }
   | { type: 'clear-model-if-missing'; agent: AgentType; availableModelIds: readonly string[] }
 

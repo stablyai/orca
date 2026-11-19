@@ -1,6 +1,6 @@
 // Claim requests through journal commit before replying so competing clients cannot answer twice.
 
-import type { AgentSessionPromptResponse } from '../../../shared/agent-session/agent-session-question-answer'
+import type { AgentSessionPromptResponse } from '../../../shared/agent-session/requests/prompts/agent-session-question-answer'
 import '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import {
   AgentSessionPromptAnswerRejectedError,
@@ -117,7 +117,12 @@ export class AcpStructuredPrompts {
     }
     entry.settle(reply)
     // Release the timeline's hold; withdrawal keeps the committed answer.
-    this.lane()?.apply([{ type: 'request.withdrawn', request: entry.key }])
+    const lane = this.lane()
+    lane?.apply([
+      { type: 'request.withdrawn', request: entry.key },
+      // A URL request's completion that arrived before the answer was saved applies now.
+      ...lane.translator.elicitations.answered(entry.key)
+    ])
     if (entry.permission && entry.signal.aborted) {
       // Protocol cancellation already replied while the permission answer was being saved.
       throw new Error(`the agent stopped waiting for the answer to ${input.itemId}`)

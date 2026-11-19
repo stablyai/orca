@@ -1,11 +1,15 @@
-import type { PickerOption } from '../../components/PickerModal'
-import { TaskProviderLogo } from '../../components/TaskProviderLogo'
+import type { PickerOption } from '../../components/sheets/PickerModal'
+import { TaskProviderLogo } from '../../components/icons/TaskProviderLogo'
 import { colors } from '../../theme/mobile-theme'
-import { getLinkedWorkItemSuggestedName } from '../../new-workspace/creation/mobile-workspace-name'
+import {
+  resolveJiraAutoName,
+  resolveLinearAutoName,
+  resolveWorkItemAutoName
+} from '../../new-workspace/source-selection/composer-linked-work-item'
 import type { GitHubProjectSettings } from '../project-board/github-project-reference'
 import type { TaskProvider } from '../../../../src/shared/work-items/task-providers'
-import type { GitHubProjectSortDirection } from '../../../../src/shared/github/project-types'
-import type { ProjectGroup } from '../../../../src/shared/github/project-group-sort'
+import type { GitHubProjectSortDirection } from '../../../../src/shared/github/projects/project-types'
+import type { ProjectGroup } from '../../../../src/shared/github/projects/project-group-sort'
 import type {
   GitHubMode,
   GitHubPreset,
@@ -164,8 +168,26 @@ export function taskWorkspaceFallback(item: ActionableTaskItem): string {
   return item.source.identifier.toLowerCase()
 }
 
+// The composer's seed for the same source, so Start work names the workspace as desktop does.
+function taskWorkspaceSeedName(item: ActionableTaskItem): string {
+  switch (item.provider) {
+    case 'github':
+    case 'gitlab':
+      return resolveWorkItemAutoName({
+        type: item.source.type,
+        number: item.source.number,
+        title: item.source.title,
+        provider: item.provider
+      })
+    case 'linear':
+      return resolveLinearAutoName(item.source)
+    case 'jira':
+      return resolveJiraAutoName(item.source)
+  }
+}
+
 export function taskWorkspaceSuggestedName(item: ActionableTaskItem): string {
-  return getLinkedWorkItemSuggestedName(item) || taskWorkspaceFallback(item)
+  return taskWorkspaceSeedName(item) || taskWorkspaceFallback(item)
 }
 
 // Keep provider reaction content unchanged; this legacy emoji map does not match GitHub tokens or GitLab’s absent content.

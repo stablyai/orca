@@ -1,5 +1,5 @@
 import { Loader2 } from 'lucide-react'
-import type { RuntimeAccessGrant } from '../../../../../../shared/runtime-access-grants'
+import type { RuntimeAccessGrant } from '../../../../../../shared/remote-runtime/host-catalog/runtime-access-grants'
 import { Button } from '../../../ui/button'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
@@ -142,7 +142,7 @@ export function RuntimeAccessGrantList({
         <p className="text-muted-foreground mt-3 text-xs">
           {t(
             'auto.components.settings.RuntimeAccessGrantList.sshAccessCaveat',
-            "Revoking here doesn't stop someone with SSH access to this computer from pairing again. To cut them off, remove their SSH access."
+            'Revoking a link also revokes links made in terminals it opened. Anyone with a terminal on this computer, over SSH or through a link, can still pair again.'
           )}
         </p>
       ) : null}

@@ -1,6 +1,6 @@
 import type * as RuntimeRpcCallModule from '@/runtime/rpc/calls/runtime-rpc-call'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 const HOST_A_HOST_ID: ExecutionHostId = 'local'
 const HOST_B_HOST_ID: ExecutionHostId = 'ssh:ssh-1'
@@ -38,7 +38,7 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => ({
 }))
 
 import { createTestStore, seedStore } from '../../testing/app-store-test-fixture'
-import { makeTab } from '../../terminals/terminal-tab.test-fixture'
+import { makeTab } from '../../terminals/testing/terminal-tab.test-fixture'
 import { makeWorktree } from '../worktrees/worktree.test-fixture'
 import { resetAuthoritativelyRemovedWorktreeMemoryForTests } from '../worktrees/listing/authoritative-worktree-removal-memory'
 import type { AppState } from '../../types'

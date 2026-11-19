@@ -1,5 +1,5 @@
 import { defineMethod } from '../../../core'
-import { GitSwitchBranch } from '../../../../../../shared/rpc-contract/git-params'
+import { GitSwitchBranch } from '../../../../../../shared/rpc-contract/source-control/git-params'
 
 export const GIT_BRANCH_METHODS = [
   defineMethod({

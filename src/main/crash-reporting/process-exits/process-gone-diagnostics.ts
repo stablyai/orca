@@ -1,14 +1,18 @@
 import { app } from 'electron'
-import { sanitizeCrashReportDetails } from '../../../shared/crash-report-redaction'
-import type { CrashReportDetailValue } from '../../../shared/crash-reporting'
+import { sanitizeCrashReportDetails } from '../../../shared/crash-reporting/crash-report-redaction'
+import type { CrashReportDetailValue } from '../../../shared/crash-reporting/crash-reporting'
 import { getSystemMemoryDetails, memoryKBFieldMB } from '../memory/system-memory-details'
-import { getStartupRtPrioOutcome, readZeroRtTimeLimit } from '../../startup/linux-rttime-limit'
+import {
+  getStartupRtPrioOutcome,
+  readZeroRtTimeLimit
+} from '../../startup/linux-runtime/linux-rttime-limit'
 import {
   PRE_GONE_SYSTEM_MEMORY_SAMPLE_INTERVAL_MS,
   preGoneSystemMemoryDetails,
   resetPreGoneSystemMemorySamplingForTest,
   startPreGoneSystemMemorySampling
 } from '../memory/pre-gone-host-memory'
+import { preGonePtyTreeMemoryDetails } from '../memory/pre-gone-pty-tree-memory'
 
 type ProcessMetricLike = {
   pid?: unknown
@@ -309,5 +313,6 @@ export function buildProcessGoneCrashDetails(
     Object.assign(crashDetails, preGoneSampleDetails(preGoneSample, nowMs))
   }
   Object.assign(crashDetails, preGoneSystemMemoryDetails(nowMs))
+  Object.assign(crashDetails, preGonePtyTreeMemoryDetails(nowMs))
   return crashDetails
 }

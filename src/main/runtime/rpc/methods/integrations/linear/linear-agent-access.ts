@@ -2,6 +2,13 @@ import { defineMethod } from '../../../core'
 import { linearError } from '../../../../../linear/issues/context/linear-access-errors'
 import { isLinearUuid } from '../../../../../../shared/linear/uuid'
 import {
+  isSameLinearIssue,
+  WAKING_PLACE_REFUSAL,
+  wakingLinearIssue,
+  withAskedBy
+} from '../../../../../bots/bot-owner-writes'
+import { readBotWriteTurn } from '../../bot-write-turn'
+import {
   AgentIssueContext,
   AgentSearchIssues,
   LinearCommentDelete,
@@ -18,7 +25,7 @@ import {
   LinearSaveIssue,
   LinearTeamLookup,
   LinearWorkspaceRead
-} from '../../../../../../shared/rpc-contract/linear-agent-access-params'
+} from '../../../../../../shared/rpc-contract/linear/linear-agent-access-params'
 
 function parseLinearWriteId(writeId: string | undefined): string | undefined {
   if (writeId === undefined) {
@@ -83,13 +90,14 @@ export const LINEAR_AGENT_ACCESS_METHODS = [
     name: 'linear.agentIssueList',
     permission: 'workspace',
     params: LinearIssueList,
-    handler: async (params, { runtime }) => runtime.linearIssueListForAgents(params)
+    handler: async (params, { runtime, signal }) => runtime.linearIssueListForAgents(params, signal)
   }),
   defineMethod({
     name: 'linear.agentProjectList',
     permission: 'workspace',
     params: LinearProjectList,
-    handler: async (params, { runtime }) => runtime.linearProjectListForAgents(params)
+    handler: async (params, { runtime, signal }) =>
+      runtime.linearProjectListForAgents(params, signal)
   }),
   defineMethod({
     name: 'linear.resolveCurrentIssue',
@@ -119,11 +127,30 @@ export const LINEAR_AGENT_ACCESS_METHODS = [
     name: 'linear.issueAddComment',
     permission: 'workspace',
     params: LinearIssueAddComment,
-    handler: async (params, { runtime, signal }) =>
-      runtime.linearIssueAddComment(
-        { ...params, writeId: parseLinearWriteId(params.writeId) },
+    handler: async ({ callerSessionId, ...params }, { runtime, signal, pairedDeviceId }) => {
+      const write = await readBotWriteTurn(runtime, callerSessionId, pairedDeviceId).catch(
+        (error: unknown) => {
+          console.warn('[bots] could not read the turn for a Linear comment', error)
+          return null
+        }
+      )
+      // Only a run a Linear issue woke pays for this read: its answer there is `orca bot reply`.
+      const waking = wakingLinearIssue(write)
+      if (waking) {
+        const { issue } = await runtime.resolveLinearAgentWriteTarget(params, signal)
+        if (isSameLinearIssue(waking, issue.identifier)) {
+          throw linearError('linear_waking_issue', WAKING_PLACE_REFUSAL)
+        }
+      }
+      return runtime.linearIssueAddComment(
+        {
+          ...params,
+          body: withAskedBy(params.body, write),
+          writeId: parseLinearWriteId(params.writeId)
+        },
         signal
       )
+    }
   }),
   defineMethod({
     name: 'linear.commentEdit',

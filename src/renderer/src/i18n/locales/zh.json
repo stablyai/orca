@@ -84,13 +84,9 @@
       "optionLayoutUnknown": "未知布局 — Option 键输入字符（安全的默认设置）",
       "optionShortcutHint": "选择“两个都”使用 Option 快捷键，选择“关”输入重音字符和符号，或选择“左边”/“右边”让两个 Option 键各司其职",
       "windows": {
-        "administratorApproval": "Windows 将请求批准，请使用您常用的账户",
         "administratorDialogScope": "这会更改整个应用的权限，SSH 和 WSL 保留各自的权限",
         "administratorDocumentation": "阅读指南",
         "administratorLabel": "管理员模式",
-        "administratorPromptCancellation": "取消 Windows 的提示后，Orca 会带着保留的终端重新打开，SSH 和 WSL 的权限仍由其主机控制",
-        "administratorRestartConsequences": "请先保存您的工作，批准后，当前本地终端主机上的终端和代理会关闭，已恢复的标签页会打开新的管理员 shell",
-        "administratorRestartFailed": "Orca 无法重启，请重试，或使用手动说明",
         "administratorScope": "Orca 应用的权限，现有终端可能有所不同",
         "administratorSearchDescription": "查看 Orca 的 Windows 权限，或通过管理员批准进行重启",
         "administratorStatus": "管理员",
@@ -98,7 +94,6 @@
         "checkingAdministrator": "检查中…",
         "closeAdministratorHelp": "关闭",
         "closeLocalSessions": "请保存您的工作，关闭所有本地终端会话，然后退出 Orca",
-        "confirmAdministratorRestart": "以管理员身份重启？",
         "keywordAdmin": "管理员",
         "keywordAdministrator": "管理员",
         "keywordElevated": "提升权限",
@@ -107,7 +102,6 @@
         "keywordUac": "uac",
         "launchAdministrator": "在 Windows 开始菜单中，右键单击 Orca，然后选择“以管理员身份运行”，使用您常用的账户批准 Windows 提示",
         "launchStandard": "从 Windows 开始菜单正常打开 Orca",
-        "manualAdministratorHelp": "手动说明",
         "restartAdministrator": "以管理员身份重启",
         "restartingAdministrator": "正在重启…",
         "retainedTerminalPermissions": "如果新终端仍使用之前的权限，请打开管理会话并选择重新启动守护进程，这会关闭本地终端及其正在运行的命令",
@@ -115,7 +109,12 @@
         "runAdministratorHelp": "管理员指南",
         "standardStatus": "标准用户",
         "unknownAdministrator": "无法确定",
-        "10aafff216": "打开管理会话"
+        "10aafff216": "打开管理会话",
+        "confirmOrcaAdministratorRestart": "以管理员身份重新启动 Orca？",
+        "administratorRestartSummary": "本地终端和代理将会关闭。Windows 会请求你批准。",
+        "orcaCouldNotRestart": "Orca 无法重新启动。",
+        "manualAdministratorSteps": "手动步骤",
+        "restartOrca": "重新启动"
       },
       "limit": {
         "label": "运行中终端的最大数量",
@@ -136,6 +135,14 @@
           "pty": "pty",
           "capacity": "容量"
         }
+      },
+      "wordSeparators": {
+        "description": "双击选择时视为单词边界的字符，包括空格",
+        "noSpaceHint": "未包含空格，双击会跨空格选择"
+      },
+      "fontSize": {
+        "decrease": "减小字体大小",
+        "increase": "增大字体大小"
       }
     },
     "appearance": {
@@ -168,7 +175,8 @@
         "antigravityToggleDescription": "显示当前工作区的 Antigravity 订阅使用情况",
         "grokToggleDescription": "通过 Grok CLI 登录后显示 Grok 订阅额度使用情况",
         "cursorToggleDescription": "通过 cursor-agent 或 Cursor IDE 登录后显示 Cursor 套餐用量",
-        "zcodeToggleDescription": "显示 ZCode 编码计划配额使用情况"
+        "zcodeToggleDescription": "显示 ZCode 编码计划配额使用情况",
+        "museToggleDescription": "显示 Muse CLI 提供的 Muse 订阅配额"
       },
       "menuBarIcon": {
         "description": "在 macOS 菜单栏中保留 Orca 快捷方式和活动指示器",
@@ -185,6 +193,7 @@
         "fontKeywordTypeface": "字体",
         "fontKeywordTypography": "排版",
         "inheritFont": "与 IDE 字体相同",
+        "systemFont": "系统字体",
         "fontPreviewLabel": "聊天字体预览",
         "fontPreview": "这段文字用于预览聊天字体",
         "title": "聊天界面",
@@ -224,6 +233,38 @@
           "monaco": "monaco",
           "syntax": "语法"
         }
+      },
+      "reduceVisualEffects": {
+        "description": "关闭对话框和菜单背后的模糊效果，并在重启后关闭窗口半透明效果，适用于远程桌面和没有 GPU 的计算机",
+        "keywords": {
+          "blur": "模糊",
+          "transparency": "透明度",
+          "performance": "性能",
+          "remote": "远程",
+          "gpu": "显卡"
+        },
+        "08c854149e": "减少视觉效果"
+      },
+      "appIcon": {
+        "importCustom": "自定义…",
+        "replaceCustom": "替换自定义图标…",
+        "removeCustom": "移除自定义图标",
+        "customKeyword": "自定义",
+        "importKeyword": "导入",
+        "importErrors": {
+          "unsupportedFormat": "不支持此图片格式，请选择 PNG 或 JPEG 文件",
+          "unreadable": "无法读取所选文件",
+          "tooLarge": "图片大小超过 {{max}} MB",
+          "notSquare": "应用图标必须是正方形",
+          "tooSmall": "图片尺寸至少需要 {{min}}×{{min}} 像素",
+          "tooBig": "图片尺寸不能超过 {{max}}×{{max}} 像素",
+          "undecodable": "无法解码所选图片",
+          "saveFailed": "无法保存自定义图标"
+        }
+      },
+      "uiZoom": {
+        "zoomOut": "缩小",
+        "zoomIn": "放大"
       }
     },
     "browser": {
@@ -273,7 +314,8 @@
           "location": "位置",
           "notifications": "通知",
           "clipboard": "剪贴板",
-          "localNetwork": "本地网络"
+          "localNetwork": "本地网络",
+          "apps": "应用"
         },
         "title": "站点权限",
         "empty": "尚未允许或阻止任何网站",
@@ -326,10 +368,105 @@
           "added": "已添加 {{name}}",
           "browse": "浏览 Chrome 应用商店",
           "openFailed": "请打开一个工作区以浏览 Chrome 应用商店"
+        },
+        "enabledToggleLabel": "启用或停用浏览器扩展程序"
+      },
+      "passwords": {
+        "searchKeywords": {
+          "passwords": "密码",
+          "autofill": "自动填充",
+          "vault": "密码库",
+          "logins": "登录信息",
+          "import": "导入",
+          "csv": "csv",
+          "touchId": "touch id"
+        },
+        "authFailed": "无法确认是你本人",
+        "copied": "已复制密码，Orca 会在 2 分钟后将其从剪贴板中清除",
+        "search": "搜索 {{count}} 个密码",
+        "add": "添加",
+        "noMatches": "没有匹配的已保存密码",
+        "noUsername": "（无用户名）",
+        "edit": "编辑",
+        "copy": "复制密码",
+        "delete": "删除…",
+        "neverHeading": "{{count}} 个永不保存密码的网站",
+        "removeNever": "移除",
+        "importFailed": "无法导入密码",
+        "importDuplicates": "{{count}} 个已存在",
+        "importConflicts": "{{count}} 个与已保存的密码不同，已保留原密码",
+        "importInvalid": "{{count}} 行无法读取",
+        "importUndecryptable": "{{count}} 个受浏览器保护，请改为从该浏览器导出 CSV",
+        "imported": "已导入 {{count}} 个密码",
+        "deleteAllConfirmDescription": "{{profile}} 配置文件中所有已保存的密码都将被永久删除，此操作无法撤销",
+        "deletedAll": "密码数据已删除",
+        "form": {
+          "invalidSite": "请输入网站地址，例如 example.com",
+          "invalidPassword": "请输入密码",
+          "duplicate": "此网站已保存该用户名的密码",
+          "unavailable": "无法保存此密码",
+          "editTitle": "编辑密码",
+          "addTitle": "添加密码",
+          "site": "网站",
+          "sitePlaceholder": "example.com",
+          "username": "用户名",
+          "password": "密码",
+          "currentHint": "保存你目前在此网站上使用的密码",
+          "note": "备注",
+          "cancel": "取消",
+          "save": "保存",
+          "description": "当你在此网站的登录字段下方选择它时，Orca 会填充它",
+          "usernamePlaceholder": "邮箱或用户名",
+          "addNote": "添加备注"
+        },
+        "hide": "隐藏密码",
+        "show": "显示密码",
+        "offerToSave": "提示保存密码",
+        "offerToSaveDescription": "在 Orca 浏览器中登录网站后，提示保存登录信息",
+        "fillReauth": "填充前要求 Touch ID 验证",
+        "fillReauthDescription": "适用于共用的计算机，显示或复制密码时本来就会要求验证",
+        "noReauth": "此计算机无法通过 Touch ID 确认你的身份，因此显示和填充密码时不会进行验证",
+        "reauthUnavailable": "Touch ID 目前无法使用，因此 Orca 不会显示、复制或填充需要验证的密码",
+        "import": "导入",
+        "importCsv": "从 CSV 文件导入…",
+        "deleteAllTitle": "删除所有密码数据",
+        "deleteAllDescription": "{{profile}} 配置文件中所有已保存的密码、备注和永不保存的网站",
+        "empty": "Orca 会在你登录后提示保存登录信息，你也可以从其他浏览器或 CSV 文件导入",
+        "account": "{{site}} 上的 {{username}}",
+        "lastUsed": "上次使用：{{when}}",
+        "copyFor": "复制 {{account}} 的密码",
+        "editFor": "编辑 {{account}}",
+        "moreActions": "{{account}} 的更多操作",
+        "accountCount": "{{count}} 个账户",
+        "deleteConfirmDescription": "Orca 将不再填充此密码，此操作无法撤销",
+        "deleteConfirm": "删除",
+        "profileDescription": "{{profile}} 配置文件中保存的登录信息，仅当你在登录字段下方选中某一条时，Orca 才会填充",
+        "unavailableTitle": "此计算机上的密码保存功能已关闭",
+        "emptyTitle": "还没有保存的密码",
+        "searchLabel": "搜索密码",
+        "deleteAllAction": "删除…",
+        "title": "密码",
+        "description": "Orca 浏览器中保存的登录信息：可添加、导入、编辑和删除",
+        "httpSuffix": " · http"
+      },
+      "memorySaver": {
+        "unviewedForLabel": "未查看时长",
+        "unviewedForDescription": "标签页多久未被查看后释放其内存",
+        "hoursSuffix": "小时",
+        "title": "内存节省",
+        "description": "释放你未查看的标签页所占用的内存，再次打开时会重新加载",
+        "searchKeywords": {
+          "memory": "内存",
+          "tabs": "标签页",
+          "idle": "idle",
+          "sleep": "休眠",
+          "performance": "性能"
         }
       }
     },
     "agents": {
+      "installedRegion": "已安装的智能体",
+      "availableRegion": "可安装的智能体",
       "permissionsTitle": "权限",
       "permissionsChoiceExplanation": "每个智能体无需询问即可执行的操作。你可以在下方为单个智能体单独设置",
       "permissionEachOwn": "各智能体自己的设置",
@@ -420,11 +557,15 @@
       "defaultSurfaceKeptChat_other": "{{agents}} 按你的设置继续以聊天方式打开。",
       "defaultSurfaceSetAllChat": "全部设为聊天",
       "defaultSurfaceSetAllTerminal": "全部设为终端",
-      "sameAsChoice": "与 {{agent}} 相同 · {{choice}}",
       "modelListFallback": "内置列表。Orca 无法从此主机获取模型列表。",
       "chatUnavailableOnWindows": "{{value0}} Chat 暂不支持 Windows，因此 {{value0}} 会在此主机的终端中打开。macOS 或 Linux 主机上的聊天仍可正常使用。",
       "undetectedCommandHint": "如果 {{agent}} CLI 安装在 PATH 之外，请输入其在此主机上的可执行文件完整路径。",
-      "permissionMixed": "混合"
+      "permissionMixed": "混合",
+      "choiceChipRemove": "移除 {{flag}}",
+      "choiceChipTooltip": "由 {{choice}} 添加，移除后使用默认值",
+      "agentActions": "{{agent}} 操作",
+      "defaultAutoBadge": "默认 · 自动",
+      "newAgentsTitle": "新智能体"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "符号链接",
@@ -435,7 +576,8 @@
     "followSymlinkedDirectories": "跟随符号链接目录",
     "followSymlinkedDirectoriesDescription": "在快速打开中搜索链接文件夹，并在文件资源管理器中展开本地链接文件夹",
     "accounts": {
-      "claudeRemoveFolder": "Orca 会从此计算机删除此账户的 Claude 文件夹及其登录信息，与系统默认共享的聊天记录会保留，如果此账户被选中，您下次启动的 Claude 将使用系统默认"
+      "codexRemoveHome": "Orca 会删除此账户在 {{host}} 上的 Codex 文件夹，包括其中的登录信息、MCP 登录以及仅保存在该文件夹中的 Codex 历史记录，此操作无法撤销。如果此账户被选中，你下次启动的 Codex 将使用系统默认",
+      "claudeRemoveProfile": "Orca 会删除此账户在 {{host}} 上自己的 Claude 文件夹及其中保存的登录信息，你的系统默认登录以及与其共享的聊天记录会保留。如果此账户被选中，你下次启动的 Claude 将使用系统默认"
     },
     "sourceControl": {
       "gitOperationInAnotherWorkspace": "其他工作区正在运行 Git 操作",
@@ -451,10 +593,8 @@
         "terminalsOnly": "仅适用于终端",
         "extraArgs": "额外 CLI 参数",
         "launchOptions": "模型和权限",
-        "savedLaunchOptions": "已保存的选项：{{value0}}。旧版服务器使用其自身的权限设置"
-      },
-      "actionPermissions": {
-        "sameAsAgent": "与 {{agent}} 相同"
+        "savedLaunchOptions": "已保存的选项：{{value0}}。旧版服务器使用其自身的权限设置",
+        "effort": "推理强度"
       }
     },
     "ssh": {
@@ -524,7 +664,7 @@
       "actions": {
         "tab": {
           "newAgentNamed": "新建 {{agent}} 标签页",
-          "newAgent": "新建代理标签页(默认代理)"
+          "newAgent": "新建智能体标签页(默认智能体)"
         }
       },
       "filters": {
@@ -534,7 +674,7 @@
       },
       "conflict": "{{binding}} 与 {{titles}} 冲突",
       "groups": {
-        "agents": "代理",
+        "agents": "智能体",
         "browser": "浏览器",
         "chat": "聊天",
         "editors": "编辑器",
@@ -598,7 +738,191 @@
       "commandHelp": "在文件所在主机的工作区根目录中运行。从 stdin 读取缓冲区，并且只能向 stdout 输出格式化后的文本。使用 ${file} 或 ${relativeFile} 表示路径。参数直接传递，不经过 shell。请勿使用 --write。留空可在此项目中禁用。",
       "include": "包含的 glob（每行一个）",
       "includeHelp": "匹配相对于工作区根目录的路径。没有匹配的 glob 时不会格式化。* 和 ** 会跳过以点开头的名称；请明确列出，例如 .github/**/*.yml。要使用此命令，请在通用 > 编辑器中启用“保存时格式化”。",
-      "710343e374": "格式化程序命令"
+      "710343e374": "格式化程序命令",
+      "placeholder": "npx --no-install prettier --stdin-filepath \"${file}\""
+    },
+    "groupHooks": {
+      "title": "项目设置 > {{name}}",
+      "example": "示例：在每个仓库中创建一个工作树（仅限此计算机）",
+      "useExample": "使用此示例",
+      "description": "创建工作区时在此文件夹中运行的脚本，所有工作区共享此文件夹。本地脚本保存在此计算机上；`orca.yaml` 脚本会与你的团队共享",
+      "invalidSetup": "文件存在，但 Orca 找不到有效的设置脚本。",
+      "supportedKeys": "只定义受支持的键：`scripts` 和 `setup`。",
+      "supportedArchiveKeys": "只定义受支持的键：`scripts`、`setup` 和 `archive`",
+      "invalidArchive": "文件存在，但 Orca 找不到有效的设置或归档脚本"
+    },
+    "general": {
+      "openInMenu": {
+        "keyword": {
+          "windsurf": "windsurf",
+          "devin": "devin",
+          "devinDesktop": "devin desktop",
+          "antigravity": "antigravity"
+        }
+      },
+      "confirmations": {
+        "artifactHelp": "持有其公开链接的人将无法再访问",
+        "pinned": "关闭固定的标签页",
+        "workspace": "删除工作区",
+        "runningHelp": "停止仍在运行的智能体或命令前先询问",
+        "artifact": "删除产物",
+        "automationHelp": "其运行历史记录也会一并删除",
+        "automation": "删除自动化",
+        "title": "操作确认",
+        "running": "关闭运行中的聊天或终端"
+      },
+      "pages": {
+        "folder": "工作区文件夹",
+        "editor": "编辑器与差异",
+        "openIn": "打开方式",
+        "worktrees": "来自其他工具的工作树"
+      },
+      "folder": {
+        "oneFolder": "单一文件夹",
+        "perProject": "按项目分文件夹"
+      },
+      "search": {
+        "keywords": {
+          "claude": "Claude",
+          "auto_save": "自动保存",
+          "source": "来源",
+          "share": "分享",
+          "star": "星标",
+          "gsd": "GSD",
+          "update": "更新",
+          "markdown": "markdown",
+          "diff": "差异",
+          "whitespace": "空白",
+          "ask_before": "询问",
+          "confirmations": "确认",
+          "command_line": "命令行",
+          "artifact": "产物",
+          "version": "版本",
+          "spaces": "空格",
+          "link": "链接",
+          "tabs": "标签页",
+          "trim": "去除",
+          "root": "根目录",
+          "word_wrap": "自动换行",
+          "wrap": "换行",
+          "location": "位置",
+          "custom": "自定义",
+          "indentation": "缩进",
+          "long_lines": "长行",
+          "about": "关于"
+        }
+      },
+      "cli": {
+        "title": "命令行",
+        "otherTerminals": "在其他终端中使用 {{command}}",
+        "skillTitle": "供智能体使用的 Orca 技能",
+        "description": "Orca 自带的终端已内置该命令"
+      },
+      "previewTabs": {
+        "title": "预览标签页",
+        "description": "单击文件时复用同一个预览标签页，直到你编辑或固定它"
+      },
+      "autoSave": {
+        "title": "自动保存",
+        "description": "停止编辑片刻后自动保存"
+      },
+      "editorGroups": {
+        "saving": "保存",
+        "markdown": "Markdown",
+        "editor": "编辑器",
+        "diffs": "差异"
+      },
+      "editor": {
+        "sideBySide": "并排差异",
+        "inline": "内联差异",
+        "description": "保存、编辑器、差异与 Markdown 选项"
+      },
+      "workspaces": {
+        "title": "工作区"
+      },
+      "worktrees": {
+        "addFolder": "添加文件夹…",
+        "customRules": "自定义规则",
+        "cancelAdd": "取消",
+        "hidden": "全部隐藏",
+        "description": "Claude Code、GSD 及其他位置",
+        "shown": "默认显示"
+      },
+      "openIn": {
+        "none": "未添加应用",
+        "description": "工作区“打开方式”菜单中的应用"
+      },
+      "tabs": {
+        "title": "标签页"
+      },
+      "about": {
+        "title": "关于",
+        "version": "Orca {{version}}"
+      }
+    },
+    "openInApp": {
+      "preset": {
+        "devinDesktop": "Devin Desktop",
+        "antigravityIde": "Antigravity IDE"
+      }
+    },
+    "windowMaterial": {
+      "description": "半透明终端背后显示的内容，需要重启",
+      "off": "不透明",
+      "translucent": "半透明",
+      "acrylic": "亚克力模糊",
+      "blur": "模糊",
+      "reducedEffects": "开启“减少视觉效果”或系统“降低透明度”设置时不生效",
+      "needsOpacity": "将背景不透明度调到 1 以下，即可透过终端看到桌面",
+      "linuxCompositor": "是否模糊由你的合成器决定，需要重启",
+      "restartDescription": "重启 Orca 以应用窗口材质更改",
+      "keywords": {
+        "acrylic": "亚克力"
+      },
+      "windowsUnsupported": "需要 Windows 11 22H2 或更高版本",
+      "fc2ba9b528": "窗口材质"
+    },
+    "updateDelay": {
+      "description": "新版本发布后，Orca 会等待所选天数再提供更新",
+      "none": "无",
+      "availableSoon": "{{relative}}向你提供",
+      "availableOn": "{{date}}（{{relative}}）向你提供",
+      "clearedTitle": "Orca {{version}} 已就绪",
+      "heldTitle": "Orca {{version}} 暂缓提供",
+      "released": "发布于 {{released}}",
+      "progress": "距离 Orca {{version}} 可用的剩余时间",
+      "skipDelayOnceHint": "立即检查此版本，你的延迟设置保持不变",
+      "upToDateWithHeld": "已是最新版本，更新的版本将暂缓至 {{date}} 提供",
+      "heldReleaseReady": "有更新的版本可用，检查更新即可获取",
+      "keywordDelay": "延迟",
+      "keywordCooldown": "冷却",
+      "keywordSecurity": "安全",
+      "1b4d825e0e": "更新延迟",
+      "ab7e864374": "关于更新延迟",
+      "ee1d96f74a": "跳过本次延迟"
+    },
+    "breadcrumb": {
+      "settings": "设置",
+      "label": "设置导航路径",
+      "close": "关闭设置"
+    },
+    "search": {
+      "clear": "清除搜索",
+      "results": "设置搜索结果",
+      "noResults": "没有与“{{value0}}”匹配的设置",
+      "moreResults": "还有 {{value0}} 项 · 继续输入以缩小范围"
+    },
+    "voice": {
+      "cleanup": {
+        "recipeDescription": "在听写文本插入前进行整理"
+      }
+    },
+    "bots": {
+      "tidyUp": {
+        "everyNightLine": "每晚凌晨 3 点之后，或这台电脑唤醒后",
+        "everyWeekLine": "每周一次，凌晨 3 点之后，或这台电脑唤醒后",
+        "everyDescriptionAwake": "如果这台电脑当时处于睡眠状态，会在唤醒后运行。只在有新聊天的夜晚之后运行。每次整理都会像一次简短聊天一样使用你的 {{agent}} 套餐。"
+      }
     }
   },
   "menu": {
@@ -911,7 +1235,8 @@
                     "pr": {
                       "suppression": "更新远程运行时以取消关联 GitHub 拉取请求"
                     }
-                  }
+                  },
+                  "dismissRenameError": "更新远程运行时以清除自动命名错误"
                 }
               }
             }
@@ -960,7 +1285,7 @@
             "33290e88ed": "连接配置文件失败",
             "9fcb07a796": "配置文件已连接",
             "2f6c78a039": "刷新配置文件身份验证失败",
-            "a37b5e6d37": "已退出配置文件",
+            "a37b5e6d37": "已从 Orca 退出登录",
             "83600521e7": "退出登录失败",
             "76deec8f58": "切换组织失败",
             "7d4bc516ee": "切换配置文件失败",
@@ -1105,6 +1430,9 @@
             "creation": {
               "f3785eddc2": "新浏览器选项卡"
             }
+          },
+          "availability": {
+            "web": "浮动工作区运行在你自己的计算机上，因此仅在 Orca 桌面应用中可用"
           }
         }
       },
@@ -1489,7 +1817,9 @@
         "settingUpWorkspace": "正在设置工作区…",
         "preparingWorkspace": "正在准备工作区…",
         "creatingWorktree": "正在创建工作树…",
-        "fetchingBaseBranch": "正在获取基础分支…"
+        "fetchingBaseBranch": "正在获取基础分支…",
+        "checkingVmEnvironment": "正在检查虚拟机环境…",
+        "vmChecksFailed": "环境检查失败"
       },
       "duplicatePairedServers": {
         "ambiguousSameServer": "{{value0}} 和 {{value1}} 是同一台服务器被配对了两次，请在“设置 > 远程 Orca 服务器”中移除其中一个"
@@ -1511,7 +1841,11 @@
       },
       "claudeAgentRowView": {
         "subagentNavigationSetup": "请在“设置 → 智能体”中启用 Claude 子智能体导航，然后在 Orca 中启动 Claude 2.1.300+。检查 keybindings.json 是否仍将 Ctrl+Alt+G、H 或 V 绑定到 command:orca-agent-view",
-        "permissionPrompt": "请先回应 Claude 的权限提示，再切换智能体"
+        "permissionPrompt": "请先回应 Claude 的权限提示，再切换智能体",
+        "openParentConversation": "打开父级对话",
+        "parentViewFailed": "Claude 无法打开父级对话，请在 Claude 窗格中重试",
+        "childViewFailed": "Claude 无法打开此智能体，请在 Claude 窗格中重试",
+        "parentNavigationSetup": "Claude 无法打开父级对话，请在“设置 → 智能体”中启用子智能体导航，然后在此窗格中重启 Claude"
       },
       "wslHostWindowsDriveRefusal": {
         "addOnThisComputer": "在此计算机上添加",
@@ -1640,7 +1974,7 @@
       "executionHostFacts": {
         "sshPlatformWithheld": "SSH 主机尚未报告其操作系统，请连接后重试",
         "runtimePlatformWithheld": "Orca 服务器尚未报告其操作系统，请重新连接后重试",
-        "runtimePlatformUpdate": "此 Orca 服务器不报告其操作系统，请更新服务器以在其上启动代理",
+        "runtimePlatformUpdate": "此 Orca 服务器不报告其操作系统，请更新服务器以在其上启动智能体",
         "hostUnresolvedWithheld": "Orca 暂时无法判断此工作区属于哪个主机"
       },
       "fileOwnerRuntimeTarget": {
@@ -1653,7 +1987,9 @@
         "noSavedConversation": "此聊天没有可复制的已保存对话"
       },
       "projectHostSetupOptions": {
-        "locationNotSet": "尚未设置项目位置"
+        "locationNotSet": "尚未设置项目位置",
+        "hostLocalGitProject": "此项目没有匹配的 Git 远程仓库",
+        "hostLocalFolderProject": "文件夹项目无法关联到其他主机"
       },
       "updateCheckClickOptions": {
         "releaseHint": "{{rcKey}}+ 点击检查最新候选发布版(RC)，{{perfKey}}+ 点击检查最新性能测试构建",
@@ -1666,6 +2002,24 @@
       "workspacePortBrowserOpen": {
         "systemBrowserHint": "按住 {{shortcut}} 并点击以在系统浏览器中打开",
         "tooltip": "{{label}}。{{hint}}"
+      },
+      "worktreePaletteEvidence": {
+        "workspaceComment": "工作区评论",
+        "createdByAutomation": "由自动化创建",
+        "linkedTask": "关联的任务",
+        "pullRequest": "PR",
+        "mergeRequest": "合并请求",
+        "linkedIssue": "关联的议题",
+        "listeningPort": "监听端口"
+      },
+      "environmentSetupAgentLaunch": {
+        "noAgent": "此工作区未检测到已启用的 AI 智能体",
+        "noWorkspace": "请先为此项目打开一个工作区，然后重试"
+      },
+      "ephemeralVmEnvironmentCheck": {
+        "backgroundFailed": "新虚拟机工作区的环境检查失败，请在侧边栏中打开它以继续",
+        "openedDegraded": "正在环境检查未通过的虚拟机上创建工作区",
+        "unreachable": "环境检查未能完成：{{error}}"
       }
     },
     "hooks": {
@@ -1680,7 +2034,10 @@
         "5f3d2c8a1b": "解析 MR 基础分支失败",
         "dropPartiallyAttached_one": "{{count}} 个项目中有 {{failureCount}} 个无法附加",
         "dropPartiallyAttached_other": "{{count}} 个项目中有 {{failureCount}} 个无法附加",
-        "dropPartiallyAttached": "{{count}} 个项目中有 {{failureCount}} 个无法附加"
+        "dropPartiallyAttached": "{{count}} 个项目中有 {{failureCount}} 个无法附加",
+        "githubLinkUnresolvedForProject": "无法加载 {{repository}}#{{number}}，请确认它存在、你有权访问，并且它属于所选项目的 origin 或 upstream 仓库",
+        "githubItemUnresolved": "创建工作区前无法解析该 GitHub 条目",
+        "folderSetupSupportCheckFailed": "无法确认此主机是否运行文件夹设置脚本，请重试"
       },
       "useGlobalFileDrop": {
         "38c9f034ff": "无法上传删除的文件",
@@ -1708,7 +2065,8 @@
         "ef223fbb6b": "有设备尝试连接但未配对",
         "11992d0337": "如果这是您的手机或其他 Orca 客户端，请从设置 → 移动端重新配对",
         "6573cfe955": "打开移动端设置",
-        "unresolvedTerminalWorktreeOwner": "由于无法解析工作树所有者，终端创建不可用"
+        "unresolvedTerminalWorktreeOwner": "由于无法解析工作树所有者，终端创建不可用",
+        "unsent_notes_close_canceled": "浏览器标签页 {{value0}} 有未发送的注释，用户选择保持其打开"
       },
       "useSettingsNavigationMetadata": {
         "4a728cd56b": "仍在完善中的新功能，欢迎试用",
@@ -1800,10 +2158,12 @@
         "pasteTooLarge": "粘贴内容过大"
       },
       "useMacosTccPromptNotice": {
-        "title": "看到\"Orca 想要访问…\"提示？",
-        "description": "当 Orca 中运行的代理或终端工具尝试访问受保护的文件时，macOS 可能会显示权限信息，请在\"设置\"中授予\"完全磁盘访问权限\"，以减少此类提示",
-        "openSettings": "打开设置",
-        "dismiss": "不再显示"
+        "dismiss": "不再显示",
+        "titleOne": "macOS 刚刚打断了一个代理",
+        "titleMany": "macOS 已打断你的代理 {{count}} 次",
+        "subtitle": "开启完全磁盘访问权限后，就不会再弹出这些文件访问提示",
+        "enable": "开启完全磁盘访问权限",
+        "close": "关闭"
       },
       "useInstalledAgentSkills": {
         "unreadableSkillSource": "某个技能文件夹没有响应，因此此状态可能不完整"
@@ -2045,7 +2405,10 @@
         "authorOpenedThisIssue": "<author/> 创建了此议题",
         "middotUpdatedRelativeTime": "· 更新于 {{time}}",
         "resolvedThreadBy": "{{author}} 发起的已解决讨论串",
-        "resolvedCommentBy": "{{author}} 发表的已解决评论"
+        "resolvedCommentBy": "{{author}} 发表的已解决评论",
+        "refreshTask": "刷新任务",
+        "refreshTaskFailed": "无法刷新此任务，请重试",
+        "refreshTaskUnsupported": "请更新此服务器上的 Orca，以便在此处刷新任务"
       },
       "GitLabItemDialog": {
         "65e784c1f1": "重新打开",
@@ -2851,7 +3214,8 @@
           "linearProjectRestoreFailed": "恢复已保存的 Linear 项目失败",
           "linearViewNotFound": "未找到已保存的 Linear 视图",
           "linearViewRestoreFailed": "恢复已保存的 Linear 视图失败"
-        }
+        },
+        "gitlabLoadFailed": "无法加载 GitLab 工作项，请刷新重试"
       },
       "Terminal": {
         "73768427cf": "关闭",
@@ -2869,7 +3233,8 @@
         "5b2c1a9e44": "未检测到代理 CLI，请安装一个，或在设置中选择默认代理",
         "b7c1f0a934": "无法连接远程主机，因此 Orca 无法判断工作是否仍在那里运行，仍要关闭窗口吗？",
         "quitSnapshotSaveFailed": "退出已取消：无法保存会话快照（{{value0}}）",
-        "reloadSnapshotSaveFailed": "重新加载已取消：无法保存会话快照（{{value0}}）"
+        "reloadSnapshotSaveFailed": "重新加载已取消：无法保存会话快照（{{value0}}）",
+        "93c2e9d845": "聊天或终端中有正在运行的工作，仍要关闭窗口吗？"
       },
       "TerminalSearch": {
         "db234b7519": "关闭",
@@ -3069,7 +3434,8 @@
             "9cb1a0c984": "添加文字",
             "2e26a06c70": "添加标签",
             "36341ffc66": "分配",
-            "e369bf4fec": "选择"
+            "e369bf4fec": "选择",
+            "linkedPullRequestsOverflow": "另有 {{count}} 个"
           },
           "ProjectGroupHeader": {
             "82a22d2079": "当前",
@@ -3250,6 +3616,7 @@
           "bd162b7d5a": "合并",
           "draft": "草稿",
           "labelCount_other": "{{count}} 个标签",
+          "authorCount_other": "{{count}} 位作者",
           "allStates": "全部",
           "filterPullRequests": "筛选 PR",
           "filterIssues": "筛选议题",
@@ -3400,6 +3767,7 @@
             "1e4b81d892": "扑通",
             "86af8d938c": "咚",
             "80f7cc95b3": "二音",
+            "silent": "静音",
             "017abebfa6": "系统默认值"
           }
         }
@@ -3415,6 +3783,30 @@
             "767951265d": "创建工作树时出现问题",
             "cancelProvisioning": "取消",
             "vmProvisioningLogEmpty": "正在等待环境模板输出…"
+          },
+          "PendingNativeChatCreation": {
+            "sendBlockedFailed": "请重试创建工作树后再发送",
+            "sendBlockedHeld": "工作树就绪后发送",
+            "openingChat": "正在打开聊天…"
+          },
+          "WorktreeSetupSteps": {
+            "prepare": "准备工作区",
+            "fetch": "获取基础分支",
+            "create": "创建工作树",
+            "setup": "设置工作区",
+            "startAgent": "启动 {{agent}}"
+          },
+          "VmBuildSheet": {
+            "checks": "检查环境",
+            "checksFailed": "虚拟机已启动，但环境检查未通过",
+            "create": "创建工作区",
+            "editRecipe": "编辑环境模板",
+            "fixWithAgent": "使用智能体修复",
+            "openAnyway": "仍然打开",
+            "openAnywayHint": "“仍然打开”会保留此虚拟机并按原样在其上创建工作区，“关闭”则会销毁该虚拟机",
+            "provision": "预配虚拟机",
+            "retryChecks": "重试检查",
+            "title": "正在构建虚拟机"
           }
         }
       },
@@ -3439,7 +3831,6 @@
             "7eee951968": "检查工作区安全",
             "191f0bc98e": "关闭",
             "7ae2ad30f4": "刷新",
-            "b2c1331844": "删除不活动的工作区",
             "7f451a3e2c": "无法忽略清理建议",
             "662b8ec3f8": "工作区清理扫描失败",
             "9cc26c019d": "移除",
@@ -3449,9 +3840,10 @@
             "1d3503357d": "删除继续期间，你可以关闭此窗口并稍后回来",
             "4c2990886e": "已删除 {{value0}}/{{value1}}",
             "86ba852118": "{{value0}}，{{value1}} 个失败",
-            "deleteButtonCount": "删除 {{value0}}",
             "archivedStatus": "已归档",
-            "74f6c16279": "返回"
+            "74f6c16279": "返回",
+            "mergedStatus": "已合并",
+            "unchangedStatus": "无新提交"
           },
           "backgroundRemoval": {
             "failed": "未删除工作区：{{value0}}",
@@ -3595,15 +3987,7 @@
         "pane": {
           "CloseTerminalDialog": {
             "1d1a7a9c1f": "取消",
-            "stop_agent_title": "停止此代理？",
-            "stop_command_title": "停止运行中的命令？",
-            "stop_chat_description": "关闭此聊天将停止智能体当前任务",
-            "stop_agent_description": "关闭此终端将停止代理当前任务",
-            "stop_command_description": "关闭此终端将停止其中正在运行的命令",
-            "dont_ask_again": "对有运行中进程的终端不再询问",
-            "stop_agent_confirm": "停止代理",
-            "stop_command_confirm": "停止并关闭",
-            "automatic_resume_warning": "此终端不会自动恢复，若要稍后恢复，请取消并让工作区进入休眠"
+            "stop_agent_title": "停止此代理？"
           },
           "MobileDriverOverlay": {
             "c6460cf584": "收回",
@@ -3652,6 +4036,8 @@
             "15dd899676": "添加到 {{value0}}…"
           },
           "TerminalErrorToast": {
+            "title": "终端问题",
+            "errorTitle": "终端错误",
             "e4aa243f8c": "重新启动守护进程",
             "a7e2fd2699": "提交议题",
             "5c8ce20be6": "如果这种情况持续存在，请",
@@ -3669,7 +4055,8 @@
             "ptyAllocationLimit": "系统无法再分配 pty 设备，请在 Orca 或其他程序中关闭一些不用的终端，然后重试",
             "terminalProcessLimit": "系统无法再启动终端进程，请关闭不用的终端或退出不用的进程，然后重试",
             "hostTerminalCap": "主机上运行的终端数量已达到 Orca 允许的上限，请关闭一个不再需要的终端，然后重试",
-            "ownerHostMismatch": "此终端保存的会话属于另一个主机连接，因此 Orca 无法在此重新附加它，请打开新终端以继续"
+            "ownerHostMismatch": "此终端保存的会话属于另一个主机连接，因此 Orca 无法在此重新附加它，请打开新终端以继续",
+            "copyErrorDetails": "复制错误详情"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "已达到 Git Bash 控制台上限",
@@ -3800,7 +4187,9 @@
             "0d1963f4a6": "此标签页已固定，确定要关闭它吗？",
             "dont_ask_again": "固定标签页不再询问",
             "0b38ee2f86": "取消",
-            "c337c9d75c": "关闭"
+            "c337c9d75c": "关闭",
+            "unsent_notes_title": "放弃未发送的注释？",
+            "unsent_notes_description": "此标签页有尚未发送的注释，关闭后这些注释将被丢弃"
           },
           "TerminalSshReconnectOverlay": {
             "authFailed": "{{value0}} 身份验证失败，请重新连接以继续此终端会话",
@@ -3860,7 +4249,10 @@
             "downloadOpenWithDefaultApp": "下载并使用默认应用打开",
             "downloadOpenFailed": "下载\"{{value0}}\"失败",
             "openInNewTab": "在新标签页中打开",
-            "openInThisGroupRefused": "无法在此分组中打开 {{value0}}"
+            "openInThisGroupRefused": "无法在此分组中打开 {{value0}}",
+            "copyFilePath": "复制文件路径",
+            "copiedFilePath": "已复制文件路径",
+            "copyFilePathFailed": "复制文件路径失败"
           },
           "TerminalQuickCommandsSubmenu": {
             "3ccc7981bb": "主机不可用",
@@ -3878,7 +4270,8 @@
             "restoreWorkspace": "请恢复工作区文件夹或打开可用的工作区，然后重试",
             "tryInTerminal": "请在此文件夹的终端中运行它以查看原因，然后重试",
             "unconfirmed": "无法确认 {{agent}} 已启动。请先检查其终端，再重试",
-            "workspaceGone": "无法启动 {{agent}}，因为其工作区已不可用。"
+            "workspaceGone": "无法启动 {{agent}}，因为其工作区已不可用。",
+            "gitBashConsoleCapacity": "启动 {{agent}} 时，Git Bash 报告此计算机上打开的终端已达到 128 个的上限，请关闭部分 Git Bash 终端后重试"
           },
           "TerminalSleepingPaneOverlay": {
             "pausedDetail": "由于主机意外停止，自动恢复已暂停，您的会话已保存",
@@ -4037,7 +4430,6 @@
             "1d411fb6a5": "为此仓库保存快捷命令",
             "8f1e971966": "添加快捷命令",
             "3220e2da27": "该快捷命令将从您保存的列表中删除",
-            "e8e1a52edb": "删除\"{{value0}}\"？",
             "37e1bb90ce": "运行：{{value0}}",
             "77ac113df0": "开始 {{value0}}: {{value1}}",
             "7b1c9d6ae1": "执行",
@@ -4265,7 +4657,6 @@
             "c8857b40f7": "刷新使用数据",
             "75ded02687": "管理账户…",
             "ff0fbe9311": "当前",
-            "7657e3db9c": "Codex 账户",
             "38b5647724": "Codex 使用量运行时",
             "ba55303942": "打开 Codex 详情和账户切换器",
             "c35af53b73": "登录",
@@ -4273,7 +4664,6 @@
             "5c938d39ac": "周",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "d450654fa2": "Claude 账户",
             "11e2354daf": "Claude 使用量运行时",
             "3dd7ddfae1": "打开 Claude 详情和账户切换器",
             "59c6e7b4e0": "可见会话将立即重启，其他会话会在其工作树变为活动状态时重启",
@@ -4302,7 +4692,10 @@
             "staleCodexSessions_other": "{{count}} 个 Codex 会话仍在使用旧账户",
             "4025a6f62f": "无限制",
             "a95969101f": "{{value0}} 积分",
-            "windowWeeks": "{{value0}} 周"
+            "windowWeeks": "{{value0}} 周",
+            "signedOutAccounts": "已退出登录",
+            "addAnotherAccount": "添加其他账户…",
+            "museUsageMenu": "Muse 使用情况"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "连接账户",
@@ -4543,7 +4936,11 @@
             "compact": "精简",
             "footerDetailAria": "使用情况页脚详情",
             "detailedTooltip": "完整使用情况，包含条形图、标签和百分比",
-            "compactTooltip": "精简使用情况：每个提供方显示一项汇总"
+            "compactTooltip": "精简使用情况：每个提供方显示一项汇总",
+            "notChecked": "未检查",
+            "modelWeeklyLimit": "{{model}} 每周上限：{{usage}}",
+            "resetsIn": "{{duration}}后重置",
+            "resetsNow": "现在重置"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "正在更新 {{value0}}/{{value1}}",
@@ -4670,9 +5067,6 @@
             "ahead": "领先 {{ahead}}",
             "behind": "落后 {{behind}}",
             "activeAgents_other": "{{count}} 个活动智能体",
-            "completedAgents_other": "{{count}} 个已完成的智能体",
-            "activeAndCompletedAgents": "{{active}}，{{completed}}",
-            "completedAgentsRetained_other": "保留了 {{count}} 个已完成的智能体",
             "noTrackedAgents": "没有正在运行的受跟踪智能体",
             "noTerminalTabs": "没有终端标签页",
             "liveTerminalTabs_other": "{{count}} 个终端标签页中有 {{live}} 个正在运行",
@@ -4718,12 +5112,17 @@
           "AccountSwitchList": {
             "used": "已用",
             "left": "剩余",
-            "reset": "重置"
+            "reset": "重置",
+            "accounts": "账户"
           },
           "InlineUsageBars": {
             "now": "现在",
             "resetsNow": "现在重置",
             "resetsIn": "{{duration}}后重置"
+          },
+          "UsageDisplayToggle": {
+            "showRemaining": "显示剩余用量",
+            "showUsed": "显示已用用量"
           }
         }
       },
@@ -5024,7 +5423,8 @@
         },
         "usageFormatters": {
           "notScannedYet": "尚未扫描",
-          "updatedAt": "更新于 {{time}}"
+          "updatedAt": "更新于 {{time}}",
+          "unknownLocation": "未知位置"
         }
       },
       "sparse": {
@@ -5256,8 +5656,6 @@
         "SkillInstallManagementDialog": {
           "8095927ff3": "关闭",
           "64c71cf7b9": "Orca 尚未在此计算机上安装任何技能",
-          "0900db719a": "— 已断开连接",
-          "176fef9516": "· SSH",
           "6cb1fbe039": "此计算机",
           "3677ae58e7": "Orca 通过链接安装的技能。可以重新安装、回退到早期版本或将其删除",
           "44d118a8f7": "由 Orca 安装",
@@ -5291,8 +5689,6 @@
           "a4dfd33095": "单个工作区",
           "c779621aa0": "全局技能",
           "63cc9e31fe": "目标位置",
-          "85d85880df": "· SSH",
-          "71eefd7660": "— 已断开连接",
           "0785d0a503": "— 需要更新",
           "8562dd1e6e": "此计算机",
           "b8a0b706ad": "计算机"
@@ -5411,7 +5807,6 @@
           "loading": "正在加载内容…",
           "deleteFailed": "Orca 无法从云端删除此内容",
           "deleted": "已从云端删除",
-          "confirmDelete": "确认删除",
           "moreActions": "{{name}} 的更多操作",
           "deletePackage": "从云端删除"
         },
@@ -5474,7 +5869,9 @@
           "updateSkipped": "已跳过更新：{{value0}}",
           "updateAvailable": "有可用更新",
           "repairAvailable": "可修复",
-          "installAvailable": "可安装"
+          "installAvailable": "可安装",
+          "otherBuild": "由其他版本的 Orca 安装",
+          "otherBuildKept": "已保留：由其他版本的 Orca 写入"
         },
         "installResult": {
           "installed": "已安装并验证",
@@ -5488,6 +5885,14 @@
         "managedRemoval": {
           "removed": "已移除 {{removed}} 个",
           "removedPreserved_other": "已移除 {{removed}} 个 · 已保留 {{count}} 个已修改的技能"
+        },
+        "skillFreshnessAutoUpdate": {
+          "strandedTitle": "Orca 无法备份你对 {{value0}} 的修改",
+          "strandedDescription": "你的修改仍在 {{value0}} 中，请在再次更新前将其复制到安全的位置",
+          "preservedTitle": "你对 {{value0}} 的修改已单独保存",
+          "preservedDescription": "Orca 已更新该技能，并将你的修改保存到 {{value0}}",
+          "uncertainTitle": "Orca 无法确认 {{value0}} 上的技能更新",
+          "uncertainDescription": "Orca 可能已更新 {{value0}} 上的技能，但无法确认结果；如果你在更新期间编辑过技能，你的副本位于 {{value1}}"
         }
       },
       "sidebar": {
@@ -5600,7 +6005,8 @@
           "a23b22d16f": "已复制",
           "74fc00776f": "错误详情",
           "ca3b225195": "分支自动命名失败",
-          "couldNotGenerateBranchName": "Orca 无法根据智能体的第一条消息为 <name>{{name}}</name> 生成分支名称"
+          "couldNotGenerateBranchName": "Orca 无法根据智能体的第一条消息为 <name>{{name}}</name> 生成分支名称",
+          "dismissing": "正在清除…"
         },
         "CreateProjectLocationField": {
           "95548e33bf": "选择父文件夹...",
@@ -5617,13 +6023,11 @@
           "5cc1a6701c": "打开设置",
           "2b56b35f53": "您可以在\"设置\"中更改此设置",
           "dd3a45bbbd": "下次我们将跳过此确认",
-          "fc23c4cbdf": "删除工作区",
-          "86f0ae1257": "删除工作区",
           "removeFolderProjectInstead": "请移除文件夹项目，而不是删除此工作区",
           "gitBlocksMainWorktree": "Git 不允许移除主工作树",
           "removeBatchFolder_other": "从 Orca 移除<target>{{count}} 个工作区</target>。磁盘上的项目文件夹不会被删除",
           "removeBatchMixed_other": "从 Orca 移除<target>{{count}} 个工作区</target>。Git 工作树也会从 git 和磁盘中移除；文件夹工作区只会移除 Orca 中的工作区条目",
-          "removeBatchGit_other": "从 git 移除<target>{{count}} 个工作区</target>，并删除其工作区文件夹",
+          "removeBatchGit_other": "删除 {{count}} 个工作树及其分支（未合并的分支会保留）。",
           "removeWithChildrenFolder_other": "从 Orca 移除 <target/> 和<descendants>{{count}} 个子工作区</descendants>。磁盘上的项目文件夹不会被删除",
           "removeWithChildrenMixed_other": "从 Orca 移除 <target/> 和<descendants>{{count}} 个子工作区</descendants>。Git 工作树也会从 git 和磁盘中移除；文件夹工作区只会移除 Orca 中的工作区条目",
           "removeWithChildrenGit_other": "从 git 移除 <target/> 和<descendants>{{count}} 个子工作区</descendants>，并删除其工作区文件夹",
@@ -5645,9 +6049,6 @@
           "a940f3c96e": "子工作区将被删除",
           "alsoDeletesChildren_other": "删除此工作区也会删除 {{count}} 个子工作区",
           "moreChildren_other": "另有 {{count}} 个"
-        },
-        "DeleteWorktreeWarningPanels": {
-          "mainWorktreeNotice": "这是<strong>主工作树</strong>（最初的克隆目录）"
         },
         "ImportedWorktreesVisibilityLine": {
           "b7a87dc32f": "在工作树列表中显示",
@@ -5681,11 +6082,11 @@
           "f3e2b868fb": "运行钩子",
           "43b7bec4cd": "别跑",
           "setupChangedTitle": "{{repo}} 的设置脚本已更改 — 运行新版本？",
-          "archiveChangedTitle": "{{repo}} 的存档脚本已更改 — 运行新版本？",
+          "archiveChangedTitle": "{{repo}} 的归档脚本已更改 — 运行新版本？",
           "issueCommandChangedTitle": "{{repo}} 的议题命令已更改 — 运行新版本？",
           "vmRecipeChangedTitle": "{{repo}} 的 VM 配方已更改 — 运行新版本？",
           "setupRunTitle": "运行 {{repo}} 的设置脚本？",
-          "archiveRunTitle": "运行 {{repo}} 的存档脚本？",
+          "archiveRunTitle": "运行 {{repo}} 的归档脚本？",
           "issueCommandRunTitle": "运行 {{repo}} 的议题命令？",
           "vmRecipeRunTitle": "运行 {{repo}} 的 VM 配方？",
           "setupChangedBody": "<code>orca.yaml</code> 自您上次批准后已更改。它会在创建此工作区时运行，请在运行前重新审查",
@@ -5698,14 +6099,13 @@
           "vmRecipeRunBody": "此仓库的 <code>orca.yaml</code> 会在预配 VM 前在您的计算机上运行。仅在信任 <repo/> 时运行",
           "newSetupScript": "新的设置脚本",
           "setupScript": "设置脚本",
-          "newArchiveScript": "新的存档脚本",
-          "archiveScript": "存档脚本",
+          "newArchiveScript": "新的归档脚本",
+          "archiveScript": "归档脚本",
           "newIssueCommand": "新的议题命令",
           "issueCommand": "议题命令",
           "newVmRecipe": "新的 VM 配方",
           "vmRecipe": "VM 配方",
-          "thisRepository": "此仓库",
-          "alwaysTrustRepo": "始终信任 <repo/> 中的 <code>orca.yaml</code>"
+          "thisRepository": "此仓库"
         },
         "PendingWorktreeRow": {
           "af21e953d1": "取消工作树创建",
@@ -5715,11 +6115,9 @@
         },
         "ProjectGroupDeleteDialog": {
           "ca65b78f78": "取消",
-          "591f330288": "删除项目组",
           "2c14ce677a": "正在删除...",
           "0e0e6764af": "包含的项目",
           "55f75628c0": "不会删除磁盘上的项目文件夹",
-          "fec7e9c8ae": "删除组",
           "removeContainedProjects_other": "移除包含的 {{count}} 个项目",
           "deleteGroupDescription": "删除 <name>{{name}}</name>",
           "moreProjects_other": "另有 {{count}} 个"
@@ -5759,10 +6157,8 @@
           "removeDescriptionSsh": "此操作仅将 {{name}} 从 Orca 中移除，文件仍保留在 {{host}} 上 — 重新添加该 SSH 主机即可恢复",
           "removeDescriptionLocal": "此操作仅将 {{name}} 从 Orca 中移除，文件仍保留在您的磁盘上",
           "removeDescriptionVmRecipe": "这将从 Orca 中移除 {{name}}，其 VM 配方决定是否永久删除环境及其文件",
+          "linkedWorkspaceWarning_other": "此项目中的 {{count}} 个工作区也将从 Orca 中移除",
           "openTerminalWarning_other": "此项目中打开的 {{count}} 个终端将被关闭"
-        },
-        "ScrollToCurrentWorkspaceToolbarButton": {
-          "23989bb663": "显示活动工作区"
         },
         "SetupGuideSidebarEntry": {
           "b0a7bfc34c": "从侧边栏隐藏",
@@ -5774,7 +6170,8 @@
           "888b83bf78": "无法保存设置脚本",
           "a49196d538": "当 Orca 创建新工作树时运行",
           "savedSetupCommand": "已保存设置命令",
-          "savedInProjectSettings": "已保存在此<settings>项目的设置</settings>中"
+          "savedInProjectSettings": "已保存在此<settings>项目的设置</settings>中",
+          "importTitle": "导入设置脚本"
         },
         "SetupScriptPromptCardViews": {
           "3933401d28": "配置",
@@ -5791,14 +6188,18 @@
           "ignoresSharedSetup": "此仓库会忽略共享的 <yaml>orca.yaml</yaml> 设置脚本。请添加本地命令，或在“设置”中更改来源",
           "reviewSetupScript": "查看设置脚本",
           "7275f674cc": "已检测的设置",
-          "detectedFromSource": "从 <file>{{source}}</file> 已检测"
+          "detectedFromSource": "从 <file>{{source}}</file> 已检测",
+          "foundSetupScriptIn": "在 <file>{{source}}</file> 中发现了设置脚本"
         },
         "SetupScriptReviewDialog": {
           "title": "查看设置脚本",
           "description": "保存后，Orca 每次为 {{repo}} 创建工作树时都会运行此脚本。",
           "setupScript": "设置脚本",
-          "archiveScript": "存档脚本",
-          "save": "保存本地设置"
+          "archiveScript": "归档脚本",
+          "save": "保存本地设置",
+          "descriptionWithSource": "来自 <file>{{source}}</file>，保存后 Orca 每次为 {{repo}} 创建工作树时都会运行此脚本",
+          "notImported": "未导入",
+          "notImportedHint": "这些设置在 Orca 中没有对应项，不会被保存"
         },
         "SidebarFeedbackDialog": {
           "8bf619e4cf": "取消",
@@ -5846,7 +6247,9 @@
         },
         "SidebarHeader": {
           "92154beb7e": "新工作区",
-          "addProject": "添加项目"
+          "addProject": "添加项目",
+          "expandAllProjects": "展开所有项目",
+          "collapseAllProjects": "折叠所有项目"
         },
         "SidebarNav": {
           "80611a8b10": "搜索",
@@ -6028,7 +6431,8 @@
           "runtimeHostDisconnectedNamed": "{{hostName}} 已断开连接",
           "runtimeHostProject": "Orca 服务器上的项目",
           "runtimeHostProjectNamed": "{{hostName}} 上的项目",
-          "ef18787206": "已排队删除"
+          "ef18787206": "已排队删除",
+          "notificationsMuted": "通知已静音"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "代理",
@@ -6122,7 +6526,10 @@
           "copyPathOption": "路径",
           "copyNameOption": "工作树名称",
           "lineageSubmenu": "父级与子级",
-          "projectGroupSubmenu": "项目组"
+          "projectGroupSubmenu": "项目组",
+          "newChildWorktree": "新建子工作树...",
+          "muteNotifications": "静音通知",
+          "unmuteNotifications": "取消静音通知"
         },
         "WorktreeList": {
           "d880ea0744": "创建一个组并将该项目移入其中",
@@ -6161,7 +6568,19 @@
           "hideChildWorkspaces_other": "隐藏 {{count}} 个子工作区",
           "childCount_other": "{{count}} 个子项",
           "groupProjectsRemained_other": "删除组后，原先包含的 {{count}} 个项目中仍保留了 {{remaining}} 个",
-          "hostServerReplaced": "服务器不同：请先遗忘，再连接"
+          "hostServerReplaced": "服务器不同：请先遗忘，再连接",
+          "projectGroupRefreshScanFailed": "无法扫描此项目组",
+          "projectGroupRefreshNoProjects": "未找到新项目",
+          "projectGroupRefreshPartial": "部分新项目无法添加到该组",
+          "projectGroupRefreshIncomplete": "文件夹扫描提前停止，可能有部分新项目未被找到",
+          "projectGroupRefreshSuccess_other": "已将 {{count}} 个项目添加到 {{group}}",
+          "projectGroupRefreshing": "正在刷新 {{group}}…",
+          "refreshProjectGroup": "刷新项目",
+          "hostVmResumeFailed": "恢复失败",
+          "hostVmSetupFailed": "配置失败",
+          "hostVmSuspended": "已挂起",
+          "hostVmWaking": "正在唤醒…",
+          "hostVmProvisioning": "正在预配…"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "取消",
@@ -6452,11 +6871,7 @@
         },
         "DeleteWorktreeDialogFooter": {
           "c0e972d726": "取消",
-          "cf95e3b5bb": "关闭",
-          "deleteWorkspace": "删除工作区",
-          "deleting": "正在删除…",
-          "forceDelete": "强制删除",
-          "forceDeleting": "正在强制删除…"
+          "cf95e3b5bb": "关闭"
         },
         "local": {
           "base": {
@@ -6690,7 +7105,6 @@
           "sshImportSynced": "已同步 {{value0}} 个主机{{value1}}"
         },
         "ForgetSshWorkspaceDialog": {
-          "ghostBody": "{{host}} 不再是已保存的 SSH 主机，因此此工作区不再连接到活跃主机，只能从 Orca 中移除 — 远程文件和分支保持不变",
           "cancel": "取消",
           "forget": "从 Orca 中移除"
         },
@@ -6757,16 +7171,12 @@
           }
         },
         "PreservedBranchBatchReviewDialog": {
-          "c4bf8e7eaf": "审查保留的分支",
           "f21976c9a8": "选择要强制删除的本地分支，未选择的分支保留在其存储库中",
           "38c947f7c5": "选择全部",
           "9602129d38": "已选择 {{value1}} 中的 {{value0}}",
           "ee39e872d5": "可能会取消合并",
           "676db406fd": "头不可用",
-          "285e1e4882": "取消",
-          "a0f9863597_one": "强制删除 {{count}} 分支",
-          "a0f9863597_other": "强制删除 {{count}} 分支",
-          "a0f9863597": "强制删除 {{count}} 分支"
+          "285e1e4882": "取消"
         },
         "WorktreeListScrollToTopButton": {
           "jumpToTop": "跳转到顶部"
@@ -6839,7 +7249,9 @@
           "turnedOffShort": "已在设置 → 实验性中关闭",
           "serverFilesMissing": "此版本的 Orca 无法运行 WSL 主机（缺少服务器文件）",
           "serverFilesMissingShort": "此版本无法运行 WSL 主机",
-          "removalPending": "移除未完成"
+          "removalPending": "移除未完成",
+          "paused": "此版本已暂停 WSL 主机功能，你已保存的主机及其项目仍可正常使用；添加主机以及将项目移到这些主机上的操作已暂停",
+          "pausedShort": "此版本已暂停添加 WSL 发行版"
         },
         "wslHostRemoval": {
           "keptForOthers": "已从此 Orca 中移除。该主机将继续为 {{value0}} 运行",
@@ -6936,14 +7348,25 @@
         },
         "workspaceKanbanStatusLane": {
           "newWorkspaceInStatus": "在「{{status}}」中新建工作区"
-        }
+        },
+        "AddProjectMenu": {
+          "changeProjectHost": "项目主机：{{host}}",
+          "projectHost": "项目主机",
+          "addRemoteHost": "添加远程主机…",
+          "browseFolder": "浏览文件夹…",
+          "cloneFromUrl": "从 URL 克隆…",
+          "createNewProject": "创建新项目…"
+        },
+        "SetupScriptCodeBlock": {
+          "showLess": "收起",
+          "showMore_other": "再显示 {{count}} 行"
+        },
+        "projectOrderSaveFailed": "无法保存完整的项目顺序"
       },
       "shared": {
         "useDaemonActions": {
           "01af244097": "取消",
           "1bbea41a77": "终止所有终端会话？",
-          "d762b41f41": "重启失败",
-          "b5954e12d3": "重新启动失败 - 检查日志",
           "0e9da1b98e": "守护进程重新启动",
           "71a8d342b0": "终端标签页缺失：{{value0}}/{{value1}}，关闭尝试失败：{{value2}}，精确 PTY 关闭请求已接受：{{value3}}，失败：{{value4}}",
           "2e57c1a940": "守护进程关闭结果未经验证，因为其管理请求失败",
@@ -6954,7 +7377,6 @@
           "c34fb1098d": "终端标签页已关闭，关闭请求已发送",
           "d9657ac204": "终端会话关闭请求已发送",
           "e8f25bd903": "无法完成终端清理",
-          "a702d4196e": "这将关闭所有工作区中的每个终端标签页，并请求关闭其当前终端会话，任何未保存的终端工作将丢失，守护进程本身将继续运行，可以立即打开新终端，此操作不可撤销",
           "01d6b7c64e": "终止每个正在运行的终端窗格并重新启动守护进程，窗格显示\"进程已退出\"并且可以立即重新打开，先前应用程序版本的旧协议会话将被保留，这无法撤销",
           "922548bc66": "重新启动终端守护进程？",
           "confirmRestart": "重启",
@@ -7006,7 +7428,6 @@
           "locationSaveFailed": "无法保存账户位置。请重试。",
           "dbb9626ed1": "取消",
           "63843e37e2": "删除 Claude 账户？",
-          "380a7736cc": "删除后将永久移除该账户的 Codex 主目录、会话历史与 MCP 登录，且不可撤销，若当前在用会回退到系统默认登录",
           "0d47394635": "删除 Codex 账户？",
           "ae3b21eb6c": "opencode.ai/workspace/wrk_…/go",
           "51c9104e13": "登录 opencode.ai 后在 URL 中找到此内容(例如",
@@ -7241,8 +7662,6 @@
             "ba1d9a0607": "边栏色调"
           },
           "b707773a0d": "启用后，关闭窗口会让 Orca 继续在系统托盘中运行，而不是退出",
-          "interfaceDefaultFont": "默认字体",
-          "terminalDefaultFont": "默认字体",
           "interfaceTitle": "界面",
           "terminalTitle": "终端",
           "windowSidebarSummary": "侧边栏、状态栏和文件浏览器",
@@ -7342,7 +7761,10 @@
           "b4e9d3f2a1c5": "已从 {{value1}} 导入 {{value0}} 个 Cookie 到 {{value2}}",
           "c5a273a809": "从 {{value0}}",
           "80bffd32bf": "导入 Cookie",
-          "bd7d68f138": "从文件..."
+          "bd7d68f138": "从文件...",
+          "4054c458e1": "清除默认 cookie",
+          "3b662becd5": "要清除默认配置文件中的 cookie 吗？",
+          "f159cf5a3e": "这可能会让你退出此配置文件中的网站。"
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "如果 cookie 导入不合适，“计算机使用”可以控制本地应用程序，并可以在适用的情况下使用现有的登录浏览器会话。安装 Orca Computer Use 技能； macOS 还需要隐私权限。",
@@ -7562,12 +7984,6 @@
             "title": "代理睡眠",
             "toggleLabel": "切换代理睡眠"
           },
-          "newWorktreeCardStyle": {
-            "copy": "预览更新后的工作树卡片布局、元数据位置、卡片显示菜单选项和状态呈现",
-            "description": "预览更新后的工作树卡片布局、元数据位置、卡片显示菜单选项和状态呈现",
-            "title": "新卡片样式",
-            "toggleLabel": "切换新卡片样式"
-          },
           "nativeChat": {
             "shellEnvNamesLabel": "从 shell 传递的变量",
             "shellEnvNamePlaceholder": "变量名",
@@ -7592,6 +8008,13 @@
             "modeAriaLabel": "代理仪表盘打开模式",
             "modeInWindow": "窗口内",
             "modePopout": "弹出窗口"
+          },
+          "worktreeCardStyle": {
+            "title": "卡片样式",
+            "copy": "选择侧边栏中工作区卡片的样式",
+            "ariaLabel": "卡片样式",
+            "classic": "经典",
+            "experimental": "实验性"
           }
         },
         "FloatingWorkspacePane": {
@@ -7651,7 +8074,9 @@
           "b11d620d45": "默认差异视图",
           "0971ef5c63": "差异显示空白",
           "916c5582f2": "折叠未更改的区域",
-          "6f33c2a32f": "差异自动换行"
+          "6f33c2a32f": "差异自动换行",
+          "markdownDefaultViewDesc": "Markdown 文件默认以此视图打开，也可在 Markdown 标签页中右键点击视图切换器进行更改",
+          "1dd79964bf": "默认 Markdown 视图"
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
@@ -7727,7 +8152,10 @@
           "d2f33670a9": "从Ghostty导入",
           "273e7e81fe": "配置",
           "1f744a72f4": "配置",
-          "9759d2dfa2": "应用更改"
+          "9759d2dfa2": "应用更改",
+          "not_found_choose_file": "此计算机上未找到 Ghostty 配置，请选择一个配置文件，从其他位置导入",
+          "cleared": "已清除",
+          "80e9b42a86": "选择配置文件"
         },
         "BranchPrefixFeedback": {
           "6c40c0908f": "前缀不能包含空格或 ~ ^ : ? * [ \\ 等特殊字符",
@@ -7769,7 +8197,19 @@
           "f2765fbbf6": "GitLab API预算",
           "8cdbaf4b03": "Jira 键大小写",
           "fdbcd676b0": "GitHub API 预算",
-          "074f7aa0d6": "默认对比基准"
+          "074f7aa0d6": "默认对比基准",
+          "prAutoRefreshUpdateFailed": "无法在此主机上更新 PR 自动刷新设置",
+          "prAutoRefreshDefault": "自动",
+          "prAutoRefreshReduced": "降低频率",
+          "prAutoRefreshOff": "手动",
+          "prAutoRefreshAbout": "关于 PR 更新",
+          "prAutoRefreshHintAutomatic": "让拉取请求和检查保持最新",
+          "prAutoRefreshHintLessOften": "降低检查 GitHub 的频率，适合在遇到 GitHub 速率限制时使用",
+          "prAutoRefreshTitle": "PR 更新",
+          "prAutoRefreshDescription": "Orca 检查 GitHub 上拉取请求和 CI 变化的频率",
+          "prAutoRefreshHintOff": "在你推送或点击“刷新”时更新",
+          "prAutoRefreshUnsupportedHost": "请更新 {{host}} 上的 Orca 以更改此设置",
+          "prAutoRefreshUnknownHost": "所选服务器"
         },
         "HiddenExperimentalGroup": {
           "7c4e18d2f6": "在本机启用粗体故障捕获手势：{{samplingShortcut}} 开始采样突发，{{captureShortcut}} 将窗格证据捕获到磁盘",
@@ -7959,7 +8399,9 @@
           "9c41a0d367": "启用通知",
           "f5b0498e1f": "发送测试通知",
           "b3c7207c8f": "通知声音",
-          "38e3bbeb25": "选择自定义文件"
+          "38e3bbeb25": "选择自定义文件",
+          "e1b1724793": "编码智能体请求权限或提出问题",
+          "05f5c5ab50": "智能体需要输入"
         },
         "OpenAiTranscriptionKeyDialog": {
           "d246b2bdb3": "本地运行时密钥使用 Electron 加密存储(如果可用)存储在 ~/.orca 中",
@@ -8010,7 +8452,11 @@
           "workerAutoReleaseDescription": "除非选择“保持打开”，否则工作者完成后 2 分钟会关闭其终端或聊天。如果它再次开始工作，完成后将重新计时 2 分钟。",
           "workerAutoReleaseKeywordClose": "关闭",
           "workerAutoReleaseKeywordRelease": "释放",
-          "8a94078d05": "智能体编排"
+          "8a94078d05": "智能体编排",
+          "coordinatorApprovalsTitle": "允许协调者批准工作者的权限提示",
+          "coordinatorApprovalsDescription": "协调智能体可以允许工作者的权限提示并说明原因，你仍会看到“允许”和“拒绝”，以最先给出的回答为准，此设置仅适用于在这台计算机上运行的工作者",
+          "coordinatorApprovalsKeywordApprove": "批准",
+          "coordinatorApprovalsKeywordPermission": "权限"
         },
         "OrchestrationSetupCard": {
           "e7d2a5146c": "使代理能够通过 Orca 传递上下文并协调工作",
@@ -8066,7 +8512,6 @@
           "c6b155911b": "所有命令",
           "c36912efd5": "从选项卡栏中的\"快捷命令\"按钮运行它们，或者在任何终端内右键单击",
           "3d9dc558e8": "该快捷命令将从您保存的列表中删除",
-          "3edf3deaf8": "删除\"{{value0}}\"？",
           "9fcfc29519": "插入",
           "9b3e338d62": "进入",
           "4ccc63da87": "代理",
@@ -8092,7 +8537,7 @@
           "3b17c81ede": "标签条顺序",
           "6e6a3fcc61": "最近的",
           "a867a0889f": "最近或标签栏",
-          "b5cfdc0198": "制表符顺序"
+          "b5cfdc0198": "标签页顺序"
         },
         "RepositoryHooksSection": {
           "af49e2a19e": "该文件存在，但 Orca 找不到有效的\"scripts\"或\"issueCommand\"定义",
@@ -8119,16 +8564,12 @@
           "5426ecbdcb": "本地脚本将不会运行",
           "95a0411b3e": "模板",
           "175daba180": "例子",
-          "b20c5df6ca": "添加\"orca.yaml\"文件以启用此仓库的共享设置、存档或议题自动化默认值，示例模板：",
-          "56f9a4a1d0": "正在使用 `orca.yaml`",
           "623e0c9f31": "无法解析 `orca.yaml`",
-          "5a67e4793d": "未检测到 `orca.yaml`",
           "07ba35bc68": "检查 `scripts:` 下的缩进，钩子键应使用两个空格，命令行应使用四个空格",
           "787ca433ef": "仅定义支持的键：`scripts`、`setup`、`archive` 和 `issueCommand`",
           "ecc73d9125": "将你的文件与下面可用的模板进行比较，并在需要时复制该结构",
           "0cc712b823": "核心配置文件存在于仓库根目录中，但 Orca 尚无法解析支持的钩子定义",
           "aba825233f": "文件含当前版本无法识别的配置键，请更新 Orca 或检查拼写",
-          "ca424ff135": "共享挂钩和议题自动化默认值在仓库中定义，可供所有使用它的人使用",
           "8bfe65fc60": "使用本地命令",
           "8d6c56bff8": "运行两者",
           "0fa21e19ec": "工作区的名称，通常基于分支名称",
@@ -8166,12 +8607,16 @@
           "issueCommandOptionalDefault": "留空则使用 <yaml>orca.yaml</yaml> 中的仓库默认值（如果有）",
           "commandSourceDescription": "当 <yaml>orca.yaml</yaml> 和本地命令同时存在时，选择要运行哪些命令",
           "issueCommandWslStopped": "WSL 发行版 {{distro}} 已停止。请在其中打开终端以查看或编辑此命令",
-          "bfdb1266ce": "存档脚本",
+          "bfdb1266ce": "归档脚本",
           "1c17e751c4": "何时运行安装程序",
           "da00f141c2": "自定义 GitHub 议题命令",
           "88c6d1e54a": "命令源",
           "01bdba296f": "工作树挂钩",
-          "1ecf0b115a": "设置脚本"
+          "1ecf0b115a": "设置脚本",
+          "yamlDetected": "已已检测 <yaml>orca.yaml</yaml>",
+          "yamlNotDetected": "未检测到 <yaml>orca.yaml</yaml>",
+          "yamlNotDetectedDescription": "添加一个即可与团队共享脚本",
+          "copyTemplate": "复制模板"
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "使用 {{value0}} 仓库颜色",
@@ -8276,7 +8721,7 @@
           "hostWorkspaceWindowClosedHelp": "服务器可达，但其 Orca 窗口已关闭，请在 {{value0}} 上打开 Orca 以使用此配置",
           "07deadaa00": "显示名称",
           "41ccd99b57": "项目运行时",
-          "04eebebbea": "删除项目",
+          "04eebebbea": "移除项目",
           "38df44846b": "默认工作树基础",
           "077dc18a4a": "使用全局",
           "82733ff808": "可用主机",
@@ -8319,7 +8764,7 @@
           "112f3b934f": "源代码控制 AI"
         },
         "RuntimeAccessGrantList": {
-          "sshAccessCaveat": "在此撤销并不能阻止拥有这台电脑 SSH 访问权限的人重新配对，要彻底阻止，请移除其 SSH 访问权限",
+          "sshAccessCaveat": "撤销链接也会撤销在它打开的终端中创建的链接。任何能在这台电脑上使用终端的人（通过 SSH 或链接）仍可重新配对。",
           "6f6d5188ed": "撤销 {{value0}}",
           "434e4a6af6": "当前链接",
           "df142657a5": "尚未使用",
@@ -8521,7 +8966,8 @@
           "builtin_themes": "内置",
           "imported_themes": "已导入",
           "search_terminal_themes": "搜索终端主题",
-          "plugin_themes": "插件"
+          "plugin_themes": "插件",
+          "delete_imported_theme": "删除 {{value0}}"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",
@@ -8531,7 +8977,6 @@
           "6503182299": "入门清单",
           "82db1b7de4": "入门清单，已完成 {{value0}}/{{value1}}，显示设置指南",
           "df38d612b7": "尚未添加项目",
-          "3e483e256b": "没有匹配的项目设置",
           "progressComplete": "已完成 {{value0}}/{{value1}}"
         },
         "ShortcutFilterRail": {
@@ -8781,7 +9226,8 @@
           "d9c0df9673": "行高",
           "bb4ac88514": "字体粗细",
           "5ae74b7796": "终端排版",
-          "a157b95a08": "字体家族"
+          "a157b95a08": "字体家族",
+          "kitty_import": "从 Kitty 导入"
         },
         "TerminalFontSizeSetting": {
           "9b5252c85a": "像素",
@@ -8916,7 +9362,9 @@
           "2318e07c68": "主题模式",
           "3a05b51211": "深色分隔线颜色",
           "3d91303d0d": "浅色主题",
-          "44a006ab99": "深色主题"
+          "44a006ab99": "深色主题",
+          "deleted_imported_theme": "已删除“{{value0}}”",
+          "undo": "撤销"
         },
         "TerminalWindowSection": {
           "1705318506": "ANSI 洋红色",
@@ -9415,7 +9863,11 @@
               "format": "格式",
               "template": "模板",
               "placeholder": "占位符"
-            }
+            },
+            "museUsageDescription": "在状态栏中显示 Muse 订阅配额",
+            "muse": "muse",
+            "meta": "meta",
+            "e8d2710689": "Muse 使用情况"
           }
         },
         "auto": {
@@ -9454,7 +9906,7 @@
             "3910a41f32": "授权",
             "2e7f951773": "导入",
             "66dd641a47": "会话",
-            "29193a51d5": "曲奇饼",
+            "29193a51d5": "Cookie",
             "2d2d995c58": "浏览器",
             "060ac1fcba": "从 Chrome、Edge 或其他浏览器导入 cookie，以使用 Orca 内的现有登录信息",
             "a7a07d5415": "编辑",
@@ -9559,7 +10011,7 @@
               "48557f639c": "登录",
               "d5ad1f7aad": "导入",
               "02837ee497": "会话",
-              "fb8178824f": "曲奇饼",
+              "fb8178824f": "Cookie",
               "ba4eb53b72": "浏览器使用",
               "2fb24d17db": "从 Chrome、Edge 或其他浏览器导入 cookie，以便代理可以重复使用您的登录信息",
               "cee44fb442": "自动化",
@@ -9708,11 +10160,9 @@
             "newWorktreeCardStyle": {
               "card": "卡片",
               "cards": "卡片",
-              "description": "预览更新后的 Worktree 卡片布局、元数据位置、卡片显示菜单选项和状态呈现",
               "menu": "菜单",
               "metadata": "元数据",
               "status": "状态",
-              "title": "新卡片样式",
               "worktree": "工作树",
               "worktrees": "工作树"
             },
@@ -9726,6 +10176,10 @@
               "inWindow": "窗口内",
               "worktrees": "工作树",
               "eaf17a7214": "智能体仪表盘"
+            },
+            "worktreeCardStyle": {
+              "title": "卡片样式",
+              "description": "选择侧边栏中工作区卡片的样式"
             }
           }
         },
@@ -9899,13 +10353,17 @@
             "a361519c97": "默认项目运行时",
             "e2947b3723": "编辑器自动换行",
             "aa367d753d": "折叠未更改的区域",
-            "b180c1041b": "制表符顺序",
+            "b180c1041b": "标签页顺序",
             "0504f69ba0": "检查更新",
             "728a309ce1": "Markdown 评审笔记",
             "66395fb7ff": "编辑器字体",
             "aa1c06eb2c": "默认差异视图",
             "8ad175042b": "Markdown 拼写检查（富文本）",
-            "da5c42780e": "在应用程序中打开"
+            "da5c42780e": "在应用程序中打开",
+            "markdownDefaultViewDesc": "Markdown 文件默认以此视图打开，也可在 Markdown 标签页中右键点击视图切换器进行更改",
+            "markdownSourceKw": "源码",
+            "markdownRichKw": "富文本",
+            "0f9304f821": "默认 Markdown 视图"
           }
         },
         "git": {
@@ -10209,7 +10667,12 @@
             "8517a2dd51": "通知声音",
             "209323590a": "终端响铃",
             "db32fed5aa": "智能体任务完成",
-            "8eeee85a4f": "专注时抑制"
+            "8eeee85a4f": "专注时抑制",
+            "c9b2b656e0": "编码智能体请求权限或提出问题时通知",
+            "b8bf5471d1": "权限",
+            "5b9dafd570": "问题",
+            "009548060d": "输入",
+            "32f70cca40": "智能体需要输入"
           }
         },
         "orchestration": {
@@ -10315,7 +10778,7 @@
             "9cad92fe77": "Orca.yaml 挂钩",
             "6b80f7d3c8": "本地设置脚本",
             "a1a4c51d58": "归档命令",
-            "fbfd2386e8": "存档脚本",
+            "fbfd2386e8": "归档脚本",
             "4c17787d7b": "档案",
             "8655e3387b": "钩子",
             "491b05d6e6": "设置命令",
@@ -10418,9 +10881,9 @@
             "b1b5a4139d": "MCP 配置",
             "7f380f89ea": "显示名称",
             "88d466b2e3": "默认工作树基础",
-            "1617bc353d": "存档脚本",
+            "1617bc353d": "归档脚本",
             "6259586017": "Git AI 作者",
-            "bbbe994528": "删除项目",
+            "bbbe994528": "移除项目",
             "cedbe6c02c": "何时运行安装程序",
             "eefc3e51ef": "GitHub 账户",
             "f94afd4078": "保持 Fork 最新"
@@ -10666,7 +11129,7 @@
             "e3aeea308e": "卡斯卡迪亚代码",
             "35c2311a33": "杰布林单声道",
             "7f7640c29e": "费拉代码",
-            "7ab424c4d3": "结扎",
+            "7ab424c4d3": "连字",
             "afc8d5f790": "连字",
             "103cdb862f": "版式",
             "893aa92997": "为支持的字体渲染编程连字，「自动」仅对已知连字字体启用",
@@ -10765,7 +11228,9 @@
             "3fdccf0277": "垂直内边距",
             "651c993c32": "字体家族",
             "64f6b4fdf6": "焦点跟随鼠标",
-            "18a9f63aff": "浅色模式分隔线颜色"
+            "18a9f63aff": "浅色模式分隔线颜色",
+            "kitty_import": "从 Kitty 导入",
+            "kitty_import_description": "一次性从 kitty.conf 导入支持的设置"
           },
           "windows": {
             "search": {
@@ -10847,7 +11312,10 @@
               "shortcutDescription": "开始听写的按键。",
               "shortcutKeyword": "键盘",
               "keepLoadedTitle": "保持模型加载",
-              "gpuKeyword": "显卡"
+              "gpuKeyword": "显卡",
+              "cleanupDescription": "在文本插入前，用你的智能体修正标点、数字和口头更正",
+              "cleanupKeyword": "纠正词",
+              "cleanupScratchKeyword": "撤回刚才的话"
             }
           }
         },
@@ -10956,7 +11424,9 @@
           "import_theme_other": "导入 {{value0}} 个主题",
           "1bceb1553d": "导入主题",
           "00aaf588da": "选择文件夹",
-          "77f3e3d390": "选择文件"
+          "77f3e3d390": "选择文件",
+          "import_theme": "导入 {{value0}} 个主题",
+          "found_theme": "找到 {{value0}} 个主题"
         },
         "useWarpThemeImport": {
           "unknown_error": "未知错误",
@@ -11192,6 +11662,7 @@
           "e27c8d45bf": "诊断已被环境变量停用"
         },
         "ShortcutCommandBlock": {
+          "retryAfterError": "按下其他快捷键，或按 Esc 取消",
           "eb72c52c28": "按下快捷键，或双击修饰键(例如 {{value0}})，Esc 取消",
           "70b5d25583": "{{value0}} 快捷键",
           "287e07ddde": "已修改",
@@ -11290,7 +11761,11 @@
           "deleteAnywayClicked": "已点击“仍然删除”"
         },
         "EphemeralVmRecipeRow": {
-          "useInWorkspace": "在工作区中使用"
+          "useInWorkspace": "在工作区中使用",
+          "envLimited": "脚本只会收到 passEnv 中列出的变量，以及 PATH、HOME 等基础变量",
+          "envNamesMore": "{{names}} 及另外 {{count}} 个",
+          "envExposedAllowlist": "脚本在这台计算机上运行，并会通过 passEnv 收到这些凭据：{{names}}",
+          "envExposedAll": "脚本在这台计算机上运行，可获得你的全部环境变量，包括 {{names}}，请在环境模板中设置 passEnv，只传递它所需的变量"
         },
         "EphemeralVmRuntimesSection": {
           "cleanupFailed": "清理失败",
@@ -11313,7 +11788,11 @@
           "stopCleanup": "停止清理",
           "cleanupStopped": "清理已停止",
           "stopCleanupFailed": "无法停止云虚拟机清理",
-          "cca21fb369": "刷新 Cloud VM"
+          "cca21fb369": "刷新 Cloud VM",
+          "provisioning": "正在预配",
+          "untrackedRuntimeHint": "Orca 从未收到这台虚拟机的详细信息，清理时只能凭实例 ID {{instanceId}} 运行销毁操作；如果失败，请在你的提供商处删除该虚拟机，然后将其从此列表中移除",
+          "removeFromList": "从列表中移除",
+          "removeFromListFailed": "无法从列表中移除云虚拟机运行时"
         },
         "ephemeralVms": {
           "search": {
@@ -11342,7 +11821,10 @@
           "checking": "正在检查环境模板...",
           "none": "还没有找到环境模板",
           "cloudVmSkillTitle": "云虚拟机设置技能",
-          "cloudVmRefresh": "刷新云虚拟机环境模板"
+          "cloudVmRefresh": "刷新云虚拟机环境模板",
+          "setUpWithAgent": "使用智能体设置",
+          "setUpWithAgentHint": "在 {{repo}} 中启动你的默认智能体，它会编辑 orca.yaml，反复运行 doctor 检查直到通过，然后创建 PR",
+          "setUpWithAgentNoRepo": "请先添加项目"
         },
         "ephemeralVmsExperimentalSetting": {
           "description": "显示仓库自带按需环境的设置控件和工作区运行目标",
@@ -11550,10 +12032,13 @@
             "secrets": "存储自己的加密密钥",
             "settingsOwn": "读取和更改自己的设置",
             "agentsRead": "在智能体状态更改时获得通知",
-            "terminalRun": "在终端中运行命令（包括 SSH）"
+            "terminalRun": "在终端中运行命令（包括 SSH）",
+            "terminalRead": "读取终端的输出（包括 SSH）",
+            "workspaceWrite": "打开你的工作区和文件，并运行内置命令",
+            "agentLaunch": "在你的工作区中启动智能体（包括 SSH）"
           },
           "decisionFailed": "无法保存权限决定，请重试",
-          "fullAccessWarning": "完全访问：作为普通程序运行，可以读取你的文件、使用网络、运行其他程序，并控制 Orca（包括你的终端和智能体）。",
+          "fullAccessWarning": "完全访问：作为普通程序运行，可以读取你的文件、使用你已保存的登录信息和 SSH 密钥、使用网络、运行其他程序，并控制 Orca（包括你的终端和智能体）。",
           "uiWarning": "在 Orca 中运行发布者的代码来绘制其视图。Orca 会显示它能访问什么，并在启用前征求你的同意"
         },
         "PluginConsentProvenance": {
@@ -11661,7 +12146,8 @@
           "title": "移除 {{value0}}？",
           "description": "其数据也会被移除",
           "cancel": "取消",
-          "remove": "移除"
+          "remove": "移除",
+          "pausesAutomations": "它创建的自动化会被暂停，即使你重新安装它，也会保持暂停"
         },
         "PluginRollbackDialog": {
           "title": "回滚 {{value0}}？",
@@ -11752,7 +12238,9 @@
           "worktreeCreated": "创建工作区时",
           "worktreeRemoved": "移除工作区时",
           "agentStatusChanged": "Agent 状态变化时",
-          "detail": "后台代码会运行"
+          "detail": "后台代码会运行",
+          "workspaceChanged": "切换工作区或其终端发生变化时",
+          "editorTypographyChanged": "编辑器字体或缩放比例变化时"
         },
         "pluginInstallAction": {
           "installed": "已安装 {{value0}}",
@@ -11778,7 +12266,8 @@
           "installedManifestUnloadable": "此版本无法在当前 Orca 中加载。请更新或重新安装",
           "invalidArtifact": "工作进程或面板文件缺失或不安全。修复后请刷新",
           "consentChanged": "你审查期间此插件发生了变化。请重新审查",
-          "installGitMoved": "Orca 检查后仓库发生了变化。请重试。"
+          "installGitMoved": "Orca 检查后仓库发生了变化。请重试。",
+          "installReservedIdentity": "此插件使用了为 Orca 官方插件保留的名称，而官方插件只能从 Orca 的目录安装；如果这是你自己的副本或复刻版本，请修改 orca-plugin.json 中的“id”，使其不以“orca-”开头，并将“publisher”设为你自己的名字"
         },
         "plugins": {
           "search": {
@@ -12094,32 +12583,21 @@
             "dialog": {
               "connectFailed": "连接失败",
               "title": "连接 Bitbucket",
-              "description": "使用 Bitbucket Cloud 凭证浏览拉取请求和构建状态，Orca 在保存之前会对其进行验证",
-              "remoteRuntime": "存储在此计算机上，而不是当前的远程运行时中——请改为在远程运行时上设置 ORCA_BITBUCKET_*。环境变量始终优先于此处保存的内容",
-              "environmentManaged": "Bitbucket 已通过 ORCA_BITBUCKET_* 环境变量进行配置，该环境变量优先，取消设置以在 Orca 中保存凭证",
               "authModeLabel": "Bitbucket 认证方法",
               "modeBasic": "电子邮件和 API 令牌",
               "modeToken": "访问令牌",
               "accessToken": "访问令牌",
               "accessTokenPlaceholder": "存储库、项目或工作区访问令牌",
-              "email": "Atlassian 帐户电子邮件",
               "emailPlaceholder": "你@example.com",
               "apiToken": "API令牌",
               "apiTokenPlaceholder": "Atlassian API 令牌",
-              "baseUrl": "API 基本 URL（可选）",
               "baseUrlPlaceholder": "https://api.bitbucket.org/2.0",
-              "tokenHint": "存储库、项目和工作区访问令牌是从匹配的 Bitbucket 设置页面创建的，并且需要读取访问拉取请求的权限",
-              "basicHint": "为您的帐户创建 Atlassian API 令牌，然后将其与拥有它的电子邮件地址配对",
-              "scopesTitle": "请选择以下 Bitbucket API 令牌范围：",
               "scopeUser": "显示您的帐户名称",
               "scopeRepository": "读取构建状态",
               "scopeReadPullRequest": "读取拉取请求",
               "scopeWritePullRequest": "创建拉取请求",
               "scopesWriteNote": "如仅需只读访问，请省略写入范围。写入不包含读取；请分别选择每个范围。",
-              "docsLink": "Bitbucket API 令牌文档",
-              "storageNote": "当操作系统钥匙串可用时，通过加密存储存储在本计算机上，ORCA_BITBUCKET_* 环境变量始终优先于您在此处保存的内容",
               "cancel": "取消",
-              "verifying": "正在验证...",
               "connect": "连接"
             }
           },
@@ -12421,7 +12899,10 @@
           "runtimeNoexec": "此主机不允许从 ~/.orca-remote 运行程序，Orca 无法在那里启动服务器，这通常意味着主目录以 noexec 方式挂载，请联系主机管理员允许在该目录运行程序，然后重新连接",
           "setupContactLost": "Orca 在设置服务器时与此主机失去联系，主机上的任何内容都未被停止，请重新连接以继续",
           "linkedProjects": "此主机的 Orca 服务器已有 {{paths}}，因此此桌面现在使用服务器的副本，此桌面在那里的标签页和 {{count}} 个自动化未被迁移，它在那里创建的工作树会显示为外部工作树",
-          "olderTerminals": "由旧版本 Orca 启动的 {{count}} 个终端仍在此主机上运行，且不会自行停止，请在该版本的 Orca 中关闭它们，或在主机上结束它们，然后重新连接"
+          "olderTerminals": "由旧版本 Orca 启动的 {{count}} 个终端仍在此主机上运行，且不会自行停止，请在该版本的 Orca 中关闭它们，或在主机上结束它们，然后重新连接",
+          "setupFreeHostSpace": "此主机的可用磁盘空间不足，Orca 无法在启动服务器时备份服务器数据，请释放主机上的空间，然后重新连接",
+          "setupStopUnmanagedRuntime": "一个并非由此应用启动的 Orca 服务器似乎仍在使用此主机的 Orca 数据，请在主机上停止它，然后重新连接，可在“设置 > SSH 主机”中此主机的“详情”里查看该进程的名称",
+          "setupSeeDetails": "Orca 无法在此主机上启动其服务器，可在“设置 > SSH 主机”中此主机的“详情”里查看原因"
         },
         "deltaMove": {
           "action": "迁移新项目…",
@@ -12455,7 +12936,8 @@
         "SettingsHostScopePicker": {
           "label": "主机",
           "unavailable": "{{value0}}（不可用）",
-          "unavailableNotice": "此服务器已不再被保存，因此无法显示它的任何内容，请在设置顶部选择其他主机"
+          "unavailableNotice": "此服务器已不再被保存，因此无法显示它的任何内容，请在设置顶部选择其他主机",
+          "loading": "正在加载主机…"
         },
         "wslHostsExperimental": {
           "toggleLabel": "切换“WSL 发行版作为主机”",
@@ -12681,17 +13163,12 @@
           "resultUpdateSkippedAgent": "{{result}} · 已跳过 {{agent}} 中的更新：{{reason}}"
         },
         "recoverServer": {
-          "title": "恢复 Orca 服务器",
-          "description": "此主机上的 Orca 服务器无法启动，因为上一次运行留下的锁仍然存在",
           "checking": "正在检查锁…",
-          "confirmCheck": "没有其他共享此主目录的机器在运行 Orca",
           "cancel": "取消",
           "confirm": "清除锁并重启",
-          "eligible": "此机器的旧地址上没有响应，但 Orca 无法排除另一台同名机器共享此主目录文件夹的可能",
           "host": "主机",
           "lockBoot": "写入于启动时",
           "currentBoot": "当前启动",
-          "warning": "仅在没有其他共享此主目录的机器在此配置文件上运行 Orca 时才继续",
           "none": "已没有可清除的锁。重新连接以启动此主机上的 Orca 服务器",
           "manualCommand": "在主机上运行此命令，或删除“详情”中显示的锁文件：",
           "manualDelete": "确认没有其他机器使用它后，删除“详情”中显示的锁文件",
@@ -12724,7 +13201,11 @@
           "dynamic": "动态",
           "searchThemes": "搜索主题…",
           "noThemes": "没有与搜索内容匹配的主题。",
-          "7ad388ec82": "匹配终端"
+          "7ad388ec82": "匹配终端",
+          "browseThemes": "浏览主题",
+          "moreThemes": "更多主题",
+          "moreThemesLoading": "正在加载主题…",
+          "installingTheme": "正在安装 {{value0}}…"
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {
@@ -12737,7 +13218,8 @@
           "darkTheme": "深色主题",
           "themeSlot": {
             "description": "此模式下的应用配色"
-          }
+          },
+          "languageUnavailable": "{{value0}}（不可用）"
         },
         "PluginAddMenu": {
           "add": "添加插件",
@@ -12850,14 +13332,16 @@
           "updatedTo": "已更新到 {{value0}}"
         },
         "PluginSettingsOverview": {
-          "offTitle": "插件已关闭"
+          "offTitle": "插件已关闭",
+          "offAutomations": "插件创建的自动化已暂停，重新开启插件后仍会保持暂停"
         },
         "PluginFilterPopover": {
           "kind": "类别",
           "catalog": "目录",
           "clear": "清除筛选",
           "themes": "主题",
-          "languages": "语言",
+          "codeLanguages": "语言",
+          "translations": "翻译",
           "icons": "图标",
           "commands": "命令和面板",
           "catalogLabel": "按目录筛选",
@@ -12869,7 +13353,6 @@
         },
         "PluginUpdateAllDialog": {
           "previewError": "无法读取此更新",
-          "newAccess": "新增：{{value0}}",
           "failed": "无法更新 {{value0}}，其他插件已更新",
           "cancel": "取消",
           "updateOne": "更新 1 个插件",
@@ -12883,13 +13366,21 @@
           "allAccess": "查看全部访问权限",
           "newCommands": "命令",
           "newContributions": "代你执行操作的功能",
-          "newEvents": "更多事件",
-          "newPanels": "面板",
+          "newEvents": "响应更多 Orca 事件",
+          "newPanels": "添加面板",
           "newRecipes": "机器配方",
           "newShortcuts": "键盘快捷键",
-          "sourceMoved": "新来源：{{value0}}（原为 {{value1}}）",
           "update": "更新",
-          "review": "查看"
+          "replacesAction": "{{value0}} 代替 Orca 自带的 {{value1}} 运行",
+          "newFileTypes": "更改它打开的文件",
+          "newHooks": "可以更改或阻止 Orca 和你的智能体的操作",
+          "newSettings": "一个设置页面",
+          "newStatusBarItems": "状态栏项目",
+          "opensFileTypes": "打开新的文件类型：{{value0}}",
+          "becomesDefaultEditor": "成为 {{value0}} 的默认编辑器",
+          "needApproval": "需要你的批准",
+          "readyToUpdate": "可以更新",
+          "movedRepository": "来自另一个仓库"
         },
         "PluginDetailInfo": {
           "previous": "上一版本",
@@ -12913,7 +13404,9 @@
           "languageCoverage": "界面语言 · 已翻译 {{value0}}%",
           "newFileMenu": "添加到 + 菜单",
           "editorReplacesViewer": "以此打开 {{value0}}，取代 Orca 的查看器",
-          "editorMayReplaceViewer": "可能以此打开 {{value0}}，取代 Orca 的查看器"
+          "editorMayReplaceViewer": "可能以此打开 {{value0}}，取代 Orca 的查看器",
+          "statusBar": "状态栏",
+          "font": "用于终端、编辑器或界面的字体"
         },
         "PluginInstallConsent": {
           "noOtherAccess": "无其他访问权限",
@@ -12922,7 +13415,8 @@
           "fullAccessUpdates": "更新可能会在不询问的情况下更改其代码",
           "editsFileTypes": "在 Orca 中打开并编辑 {{value0}} 文件，且可读取它所打开的文件",
           "install": "安装并启用",
-          "keepOff": "保持关闭"
+          "keepOff": "保持关闭",
+          "replacesAction": "{{value0}} 代替 Orca 自带的 {{value1}} 运行，你可以在其插件页面中切换回来"
         },
         "PluginPageAction": {
           "contentOnly": "仅内容",
@@ -12968,11 +13462,11 @@
         },
         "PluginUpdateReview": {
           "title": "查看 {{value0}} 的更新",
-          "back": "返回",
           "approve": "批准并更新",
-          "explain": "此更新请求的权限超出了你已批准的版本。只有在这里批准后才会安装。",
-          "before": "之前",
-          "after": "之后"
+          "uncompared": "Orca 无法将此版本与你批准的版本进行比较。更新前请检查它可以访问的内容。",
+          "newInVersion": "此版本新增：",
+          "titleMany": "审核 {{value0}} 个更新",
+          "history": "在 GitHub 上查看更改"
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "其发布者",
@@ -12980,7 +13474,8 @@
           "update": "更新前请确认你信任 {{value0}}。此插件会在 Orca 中运行发布者的代码。",
           "installed": "请确认你信任 {{value0}}。此插件会在 Orca 中运行发布者的代码。",
           "label": "非官方插件：",
-          "translations": "翻译可以更改 Orca 中的任何文字。请确认你信任 {{value0}}。"
+          "translations": "翻译可以更改 Orca 中的任何文字。请确认你信任 {{value0}}。",
+          "community": "社区插件"
         },
         "pluginConsentCopy": {
           "addsCommands": "添加命令",
@@ -12998,11 +13493,15 @@
           "movedTitle": "{{value0}} {{value1}} 来自不同的仓库",
           "accessTitle": "{{value0}} {{value1}} 请求更多访问权限",
           "manyTitle": "{{value0}} 个插件更新等待你审核",
-          "oneDescription": "发布者：{{value0}}。在你审核之前不会更新。",
-          "manyDescription": "在你审核之前不会更新。",
-          "review": "审核",
           "dismiss": "关闭",
-          "movedInstalled": "在你审查之前会保持关闭。"
+          "movedInstalled": "在你审查之前会保持关闭。",
+          "approveAll": "全部批准并更新",
+          "approveOne": "批准并更新",
+          "details": "详情",
+          "failed": "无法更新 {{value0}}",
+          "morePlugins": "以及另外 {{value0}} 个插件",
+          "uncompared": "Orca 无法将其与你批准的版本进行比较。",
+          "held": "{{value0}} 在你审核后发生了变化，因此正在 设置 → 插件 中等待你审核。"
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "请确认你信任此文件夹",
@@ -13038,7 +13537,9 @@
           "create": "创建"
         },
         "SettingsSearchableSelect": {
-          "noMatches": "没有匹配项。"
+          "noMatches": "没有匹配项。",
+          "searchHosts": "搜索主机…",
+          "searchLanguages": "搜索语言…"
         },
         "PluginAuthor": {
           "publisher": "发布者",
@@ -13072,6 +13573,63 @@
             "buckets": "Gemini 模型分组",
             "optional": "其中的占位符为空时省略该组"
           }
+        },
+        "editorTypography": {
+          "fontSizeUnit": "px",
+          "lineHeightAuto": "自动",
+          "ligaturesAutoEnabled": "自动：已为“{{value0}}”启用",
+          "ligaturesAutoDisabled": "自动：已为“{{value0}}”停用",
+          "ligaturesOff": "关闭",
+          "ligaturesAuto": "自动",
+          "ligaturesOn": "开启",
+          "fontSmoothingGrayscale": "灰度",
+          "fontSmoothingNative": "原生",
+          "typographyKw": "排版",
+          "fontSizeDesc": "文件编辑器和差异视图的基础字体大小，留空则跟随终端字体大小",
+          "sizeKw": "大小",
+          "fontWeightDesc": "文件编辑器和差异视图的字体粗细，留空则使用常规粗细（400）",
+          "weightKw": "粗细",
+          "boldKw": "粗体",
+          "lineHeightDesc": "行距为编辑器字体大小的倍数，8 及以上的值按像素计算，留空或填 0 则自动调整",
+          "lineHeightKw": "行高",
+          "spacingKw": "间距",
+          "ligaturesDesc": "在文件编辑器和差异视图中渲染 => 和 !== 等连字",
+          "ligaturesKw": "连字",
+          "ligatureKw": "连字",
+          "fontFeaturesKw": "字体特性",
+          "fontSmoothingDesc": "终端和代码编辑器的文字平滑方式，“原生”字形更粗，更接近其他 macOS 终端",
+          "smoothingKw": "平滑",
+          "antialiasingKw": "抗锯齿",
+          "thinKw": "细字",
+          "d4b7264499": "字体平滑",
+          "8e8a87f9ed": "编辑器行高",
+          "83db4f82b0": "编辑器字体连字",
+          "09d72edc6f": "编辑器字体粗细",
+          "253fc29ebb": "编辑器字体大小"
+        },
+        "PluginSettingsSection": {
+          "reset": "重置",
+          "title": "设置"
+        },
+        "FontAutocomplete": {
+          "installedFontsUnavailable": "无法列出已安装的字体，输入任意已安装字体的名称即可使用"
+        },
+        "TerminalConfigImportModal": {
+          "kitty_title": "从 Kitty 导入",
+          "kitty_description": "查看将从 kitty.conf 及其包含的文件中导入的设置",
+          "kitty_not_found": "此计算机上未找到 kitty.conf，请选择一个配置文件，从其他位置导入"
+        },
+        "RepositoryRemoveProjectSection": {
+          "filesNoteVmRecipe": "虚拟机环境模板会决定是否删除其环境和文件",
+          "filesNote": "文件会保留在磁盘上，你之后可以重新添加它",
+          "hostCount_other": "{{count}} 个主机",
+          "checkoutCount_other": "{{count}} 个检出",
+          "removeButton": "移除…",
+          "dialogTitle": "移除 {{name}}？",
+          "terminalWarning_other": "此项目中 {{count}} 个打开的终端将被关闭",
+          "cancel": "取消",
+          "confirm": "移除",
+          "unknownHost": "未知主机"
         }
       },
       "right": {
@@ -13094,7 +13652,6 @@
             "abf59262fb": "启动智能体前请查看并编辑完整的命令输入",
             "4ede779461": "使用 AI 解决评审冲突",
             "3b203c62f8": "这将从 PR 中永久删除该评论",
-            "ea9b649ce3": "删除评论？",
             "5788d1059d": "无法更新评论主题，检查 GitHub API 预算",
             "07871c0589": "链接另一个 PR",
             "7f4489f370": "刷新",
@@ -13157,10 +13714,8 @@
             "f61af83316": "新建文件夹",
             "37c875d827": "新文件",
             "b3e288bf41": "无法下载\"{{value0}}\"",
-            "f729bcd97d": "无法下载文件夹\"{{value0}}\"",
             "1a3df04ae1": "打开",
             "bce4d4e44f": "下载\"{{value0}}\"",
-            "a4029c996b": "已下载文件夹\"{{value0}}\"",
             "e26010014a": "被 .gitignore 忽略",
             "a06551beee": "进入",
             "66a29dde82": "复制相对路径",
@@ -13559,7 +14114,8 @@
             "markResolved": "标记为已解决",
             "keepFile": "保留文件",
             "keepDeletion": "保留删除",
-            "refreshAll": "全部刷新"
+            "refreshAll": "全部刷新",
+            "statusReadFailed": "Git 无法读取此工作区，显示的更改可能不是最新的"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的代理",
@@ -13918,7 +14474,8 @@
             "9fffaf17c1": "切换右侧边栏 ({{value0}})",
             "aiVaultSessionHistory": "代理",
             "folderWorkspaces": "已附加的工作树",
-            "parentPrChecks": "PR 检查"
+            "parentPrChecks": "PR 检查",
+            "creatingWorkspace": "工作区就绪后可用"
           },
           "right": {
             "panel": {
@@ -13962,8 +14519,7 @@
                   "5ddd8cac7f": "放弃所有已暂存的更改？",
                   "d4df3a61df": "放弃对\"{{value0}}\"的更改？",
                   "5c0bdbc4cb": "恢复\"{{value0}}\"？",
-                  "d97bf697c9": "这将永久删除该文件，此操作无法撤销",
-                  "96c772bee9": "删除\"{{value0}}\"？"
+                  "d97bf697c9": "这将永久删除该文件，此操作无法撤销"
                 },
                 "dialog": {
                   "3bc61dc989": "取消",
@@ -14065,7 +14621,28 @@
                   "titleManualForcePushReplaceRemote_other": "使用 lease 强制推送 {{count}} 个本地提交以更新 {{upstreamName}}，并替换仅存在于远程的提交",
                   "titleUnpublishedForcePushBranch": "使用 lease 强制推送此分支，并在需要时设置上游",
                   "titleUnpublishedForcePushCount_one": "使用 lease 强制推送 {{count}} 个分支提交，并在需要时设置上游",
-                  "titleUnpublishedForcePushCount_other": "使用 lease 强制推送 {{count}} 个分支提交，并在需要时设置上游"
+                  "titleUnpublishedForcePushCount_other": "使用 lease 强制推送 {{count}} 个分支提交，并在需要时设置上游",
+                  "statusConflicts": "有冲突",
+                  "statusNothingStaged": "无暂存内容",
+                  "statusNeedsMessage": "需要提交信息",
+                  "statusNotPublished": "未发布",
+                  "statusNoBranch": "无分支",
+                  "statusUpToDate": "已是最新",
+                  "statusSetsUpstream": "将设置上游",
+                  "statusMayFail": "可能失败",
+                  "statusPublished": "已发布",
+                  "statusStashFirst": "请先存入 stash",
+                  "statusReplaces": "替换 ↓{{behind}}",
+                  "statusCommitFirst": "请先提交",
+                  "statusReviewOpen": "{{shortLabel}} 已打开",
+                  "statusSignIn": "需要登录",
+                  "statusBaseNotOnRemote": "基准分支不在远程",
+                  "statusDefaultBranch": "默认分支",
+                  "statusForkUnsupported": "不支持 Fork",
+                  "statusPushFirst": "请先推送",
+                  "statusForcePushFirst": "请先强制推送",
+                  "statusSyncFirst": "请先同步",
+                  "statusUnsupported": "不支持"
                 }
               },
               "primary": {
@@ -14199,7 +14776,6 @@
             "unresolved": "无法确定哪个主机拥有此工作区，请检查连接后重试"
           },
           "useFileDeletion": {
-            "d979a4fbb5": "永久删除\"{{value0}}\"？",
             "92276aceb7": "删除",
             "7fb9435c86": "这会永久删除远程主机上的目录及其内容，此操作无法撤销",
             "23e98f192f": "这会永久删除远程主机上的文件，此操作无法撤销",
@@ -14380,7 +14956,6 @@
             "resumeInNewCliTooltipChat": "此聊天保持不变"
           },
           "AiVaultSessionDeleteDialog": {
-            "title": "要删除此会话吗？",
             "description": "\"{{value0}}\"将被删除，删除后，也将无法通过 {{value1}} 自身的命令行恢复",
             "remoteDescription": "“{{value0}}”将从 {{value2}} 删除。删除后，也无法再从 {{value1}} 自己的命令行恢复",
             "confirm": "删除"
@@ -14498,10 +15073,14 @@
             "unavailable": "此插件面板已不可用",
             "loading": "正在加载插件面板...",
             "unresponsive": "插件面板停止响应，已被暂停",
-            "loadFailed": "无法加载插件面板"
+            "loadFailed": "无法加载插件面板",
+            "needsDesktop": "此面板只能在 Orca 桌面应用中运行",
+            "needsIsolatedFrames": "此面板不可用：它需要隔离插件框架，而该功能已关闭"
           },
           "activityBar": {
-            "error": "错误"
+            "error": "错误",
+            "disablePlugin": "禁用插件",
+            "disableFailed": "无法禁用插件"
           },
           "AiVaultSessionLimitMenu": {
             "historyDepth": "历史记录数量：{{value0}}",
@@ -14552,8 +15131,8 @@
             "databaseCount_other": "{{value0}} 个数据库",
             "scanning": "正在扫描 {{value0}}",
             "checking": "正在检查 {{value0}}",
-            "scanned": "已扫描 {{value0}}",
-            "agentCheckedCount_other": "{{agent}}：已检查 {{settled}} / {{total}} 个历史记录候选项"
+            "agentCheckedCount_other": "{{agent}}：已检查 {{settled}} / {{total}} 个历史记录候选项",
+            "historyRefreshed": "历史记录已刷新"
           },
           "run": {
             "source": {
@@ -15001,7 +15580,18 @@
             "19c212e25e": "MacBook Pro",
             "2f1a1d10c4": "桌面设备",
             "af761a0c0d": "设置",
-            "5d94e8ddcc": "Orca"
+            "5d94e8ddcc": "Orca",
+            "dc1f3f5535": "继续工作",
+            "c2a0215163": "等待输入",
+            "0c14dac908": "2 分钟",
+            "609517273b": "工作中",
+            "005afbad3d": "刚刚",
+            "04a94cadee": "40 个工作树 · 5 个活跃",
+            "aefd110ea5": "配对桌面设备",
+            "d08ee9c466": "新工作区",
+            "aa44b4a6b2": "浏览议题和评审",
+            "eda5c8d01b": "自动化",
+            "cd2ad5b641": "安排智能体工作并查看运行记录"
           },
           "TerminalSlide": {
             "0bb39f8fe6": "发送",
@@ -15567,12 +16157,12 @@
             "tip": {
               "copy": {
                 "1fcdfc5fe8": "新功能",
-                "f98e9d1bad": "搜索所有代理会话",
-                "990cc29865": "按对话内容查找任意过往会话，然后从代理停止的位置继续",
+                "f98e9d1bad": "搜索所有智能体会话",
+                "990cc29865": "按对话内容查找任意过往会话，然后从智能体停止的位置继续",
                 "91e2719807": "启用会话搜索",
                 "52e9e84809": "提示",
-                "3eacedec93": "用 Orca CLI 让代理驱动 Orca",
-                "8d54d0ff53": "让代理协调子工作树，并在工作树之间通信",
+                "3eacedec93": "用 Orca CLI 让智能体驱动 Orca",
+                "8d54d0ff53": "让智能体协调子工作树，并在工作树之间通信",
                 "0080bc86eb": "安装 CLI 与技能",
                 "9b58bc5d7a": "使用 <shortcut> 跳转到工作树",
                 "655fc3cb5a": "搜索工作树、切换标签、调整设置或新建工作树，全程不必离开键盘",
@@ -15644,13 +16234,6 @@
                       "skillNotInstalled": "Orca CLI 技能尚未安装"
                     }
                   }
-                },
-                "tab": {
-                  "intro": {
-                    "actions": {
-                      "68a5dc6604": "无法隐藏移动模拟器"
-                    }
-                  }
                 }
               }
             }
@@ -15675,17 +16258,6 @@
             "5789936d9a": "在代理控制屏幕时预览 iOS 模拟器",
             "8014b4b80b": "保留",
             "6e051a40b7": "隐藏"
-          },
-          "mobile": {
-            "emulator": {
-              "hidden": {
-                "toast": {
-                  "e8f098a870": "移动模拟器已隐藏",
-                  "c46c979c1d": "随时重新启用移动模拟器",
-                  "600f9a745a": "设置 › 移动模拟器"
-                }
-              }
-            }
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "模拟器键盘输入的粘贴内容过大",
@@ -16095,7 +16667,6 @@
         "RichMarkdownLinkBubble": {
           "1c99b726e0": "删除链接",
           "cdfe166f6f": "编辑链接",
-          "bfc813e909": "打开链接",
           "7b0b945fdc": "粘贴或输入链接...",
           "copyLink": "复制链接"
         },
@@ -16179,10 +16750,9 @@
           "725868c75d": "浏览文件夹",
           "5e7f0d8a80": "文件夹选择器不可用于远程文件",
           "30099dca46": "文件夹",
-          "2d7d39dc63": ".md",
           "c8ac7868e6": "文件名",
           "b6ed807cc6": "名称",
-          "e365f3c638": "为您的 Markdown 文件命名并选择一个文件夹",
+          "description": "为您的文件命名并选择一个文件夹",
           "674b046582": "另存为",
           "nameEmpty": "名称不能为空",
           "nameHasSeparators": "名称不能包含路径分隔符",
@@ -16424,7 +16994,9 @@
                 "description": "此文件不是 UTF-8 文本。保存为 UTF-8 会将无效的 UTF-8 字符替换为 �，且原始字节无法恢复",
                 "action": "保存为 UTF-8"
               }
-            }
+            },
+            "bytesUpdateRequired": "在此处保存二进制文件需要更新版本的 Orca 服务器，请更新 Orca 服务器后重试",
+            "deniedByPlugin": "插件 {{plugin}} 拒绝了此次保存：{{reason}}"
           }
         },
         "CheckRunAnnotations": {
@@ -16560,6 +17132,21 @@
           "remotePathIsDirectory": "远程路径是一个目录",
           "remotePagedReadUnsupported": "远程文件超过了此 Orca 服务器可发送的 512 KB 上限，请更新服务器后再打开",
           "remoteFileTooLarge": "远程文件过大，无法在编辑器中打开（{{bytes}} 字节）"
+        },
+        "PluginEditorNeedsDesktopNotice": {
+          "browser": "{{value0}} 只能在隔离框架中运行，而浏览器客户端无法提供隔离框架",
+          "isolationOff": "{{value0}} 只能在隔离框架中运行，但隔离插件框架已关闭",
+          "heading": "此编辑器需要 Orca 桌面应用",
+          "openSource": "打开源码"
+        },
+        "MarkdownDefaultViewContextMenu": {
+          "label": "默认 Markdown 视图"
+        },
+        "BinaryFileDefaultAppButton": {
+          "downloadFailed": "无法下载“{{value0}}”",
+          "open": "用默认应用打开",
+          "downloadOpen": "下载并用默认应用打开",
+          "openFailed": "这台计算机上没有能打开此文件的应用"
         }
       },
       "diff": {
@@ -16658,17 +17245,11 @@
       "crash": {
         "report": {
           "CrashReportDialog": {
-            "b4951cd27c": "发送报告",
-            "88fea8e84e": "不发送",
-            "50b00dc327": "复制详情",
-            "6d3ebe216a": "诊断文本",
             "835037edc9": "Orca",
             "8e24fe4f75": "已发送错误报告",
             "8b8473c544": "已复制错误报告",
             "765591798d": "正在检查错误报告...",
-            "ead6fc0510": "没有捕获到自动崩溃报告，你仍然可以发送详情，并在可用时包含最近的诊断日志",
-            "b082f27490": "附加最近的诊断日志",
-            "e59f0b9427": "随报告发送经过删减且有大小限制的日志包"
+            "ead6fc0510": "没有捕获到自动崩溃报告，你仍然可以发送详情，并在可用时包含最近的诊断日志"
           },
           "submit": {
             "notice": {
@@ -16691,10 +17272,8 @@
             "closedTitle": "Orca 意外关闭",
             "reportDescription": "发送一份保护隐私的崩溃报告。如有可用，会附上最近经过脱敏的诊断日志",
             "uiErrorDescription": "发送一份保护隐私的诊断报告，帮助我们了解出错的界面部分",
-            "closedDescription": "发送一份保护隐私的诊断报告，帮助我们了解发生了什么",
             "reportNotesPlaceholder": "可选：发生了什么？",
             "uiErrorNotesPlaceholder": "可选：出现此界面错误前你在做什么？",
-            "closedNotesPlaceholder": "可选：Orca 关闭前你在做什么？",
             "renderErrorIn": "{{surface}} 中的 React 渲染错误",
             "renderError": "React 渲染错误"
           }
@@ -16792,6 +17371,15 @@
                     "logins": {
                       "title": "保持登录状态",
                       "body": "把现有登录信息导入 Orca，立即保持登录状态"
+                    },
+                    "extensions": {
+                      "intro": {
+                        "title": "带上你的 Chrome 扩展程序",
+                        "everydayTitle": "你常用的浏览器工具，尽在 Orca",
+                        "body": "从 Chrome 应用商店安装扩展程序，并将其固定在地址栏旁。",
+                        "action": "打开应用商店",
+                        "secondaryAction": "知道了"
+                      }
                     }
                   },
                   "tasks": {
@@ -16880,8 +17468,13 @@
                 "removeWorktree": "删除工作树",
                 "trashWorktree": "垃圾工作树",
                 "addQuickCommand": "添加快捷命令",
-                "newQuickCommand": "新的快捷命令"
-              }
+                "newQuickCommand": "新的快捷命令",
+                "browserRight": "右侧浏览器",
+                "splitBrowser": "拆分浏览器",
+                "browserSplit": "浏览器分屏"
+              },
+              "newBrowserTabSplitRight": "在右侧分屏中新建浏览器标签页",
+              "newBrowserTabSplitRightDescription": "在右侧新建分屏并打开浏览器标签页"
             }
           },
           "palette": {
@@ -17160,11 +17753,11 @@
           "runs": "运行",
           "local": "本地",
           "remote": "远程",
-          "historyUnavailable_other": "{{count}} 个自动化的运行历史不可用。统计仅包含可用的历史记录"
+          "historyUnavailable_other": "{{count}} 个自动化的运行历史不可用。统计仅包含可用的历史记录",
+          "searchLabel": "搜索运行记录"
         },
         "AutomationsPageBreadcrumb": {
-          "ariaLabel": "自动化面包屑导航",
-          "runDetails": "运行详情"
+          "ariaLabel": "自动化面包屑导航"
         },
         "AutomationCustomCronPanel": {
           "3e3b2c369f": "cron",
@@ -17179,7 +17772,10 @@
         },
         "AutomationPromptDisclosure": {
           "showLess": "收起",
-          "showMore": "显示更多"
+          "showMore": "显示更多",
+          "copied": "已复制",
+          "copyFailed": "复制失败",
+          "copyPrompt": "复制提示词"
         },
         "AutomationDetail": {
           "host": "主机",
@@ -17194,8 +17790,6 @@
           "18763ded26": "日程",
           "dbef8dc110": "此 SSH 自动化仅在 Orca 可以到达 SSH 远程主机时运行，如果重新连接需要交互式凭据或主机不可用，则运行将记录为已跳过",
           "1f6026358e": "删除自动化",
-          "d79452fb30": "恢复自动化",
-          "91a4155e95": "暂停自动化",
           "2fb1605beb": "立即运行",
           "221916d93c": "创建自动化来开始安排代理工作",
           "b09b2384fd": "已暂停",
@@ -17214,7 +17808,17 @@
           "precheckNone": "无",
           "migrate": "迁移",
           "migrateNotice": "{{host}} 已升级为新的远程主机。请迁移此自动化以继续运行。",
-          "needsMigration": "需要迁移"
+          "needsMigration": "需要迁移",
+          "repeats": "重复",
+          "missedRunGrace": "错过运行宽限期",
+          "execution": "执行",
+          "notRunYet": "尚未运行",
+          "usageDetail_other": "{{tokens}} Token · 已报告 {{known}}/{{count}} 次运行",
+          "createdBy": "创建者",
+          "createdByPluginTitle": "插件 {{plugin}}",
+          "createdByEnded": "插件已移除或禁用；它在更改此自动化前必须先征得你的同意",
+          "active": "已启用",
+          "runNowStarting": "正在启动…"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "取消",
@@ -17267,18 +17871,12 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "还没有运行",
-          "9974a2b429": "状态",
           "13988187b3": "Token",
           "86a248187e": "花费",
           "149c0b49c7": "工作区",
           "8faaa00726": "执行",
-          "53fc5f07ab": "运行历史",
-          "a00e38d1a3": "不适用",
+          "a00e38d1a3": "—",
           "historyUnavailable": "无法从此主机获取运行历史，这并不表示自动化运行失败或从未运行"
-        },
-        "AutomationRunPageFrame": {
-          "40a511bed4": "运行上下文",
-          "33741dd973": "返回执行"
         },
         "AutomationSchedulePicker": {
           "9e677335b0": "分钟",
@@ -17304,10 +17902,8 @@
           "5ad314118e": "会话"
         },
         "AutomationsPage": {
-          "c3a28c9793": "选择一个自动化来查看运行",
           "295698292f": "重新运行",
           "0e110a3469": "执行",
-          "bb1b2cd31e": "概述",
           "25060635c6": "添加",
           "d207ab4c25": "从模板开始",
           "15e0bfb13b": "删除",
@@ -17315,9 +17911,7 @@
           "2faecab10b": "立即运行",
           "13118faadf": "未知项目",
           "73f630b49d": "取消",
-          "9adfab2596": "删除外部自动化",
           "1e2e41392f": "不要再问",
-          "080dcb5fbb": "删除自动化",
           "19a6e30eae": "刷新自动化",
           "77c2778945": "自动化",
           "e1bf9b1512": "工作区不可用",
@@ -17347,8 +17941,6 @@
           "8500baacb4": "外部来源",
           "36f71740a7": "选定的工作区",
           "cd8397cc32": "每次运行新工作区",
-          "pendingAutomationMissing": "自动化已不可用",
-          "pendingAutomationRunMissing": "运行历史已不可用",
           "paused": "已暂停",
           "missingWorkspace": "缺少工作区",
           "usageUnavailable": "用量不可用",
@@ -17357,7 +17949,6 @@
           "latestSavedOutput": "最近保存的输出",
           "fullOutputUnavailable": "无法加载完整输出。",
           "retryFullOutput": "重试",
-          "backToList": "全部自动化",
           "tableName": "名称",
           "tableProject": "项目",
           "tableHost": "主机",
@@ -17367,10 +17958,10 @@
           "rowActions": "自动化操作",
           "tableLastRun": "最后一次运行",
           "ownerChanged": "此自动化已切换主机，请刷新后重试",
-          "runError": "错误：",
           "deleteAutomationDescription": "删除 <name/> 及其运行历史。不会删除之前运行创建的工作区",
           "deleteExternalAutomationDescription": "从 <host/> 上的 <provider/> 中删除 <name/>",
-          "runUsageSummaryTokens_other": "预估 {{cost}} · {{tokens}} token"
+          "runUsageSummaryTokens_other": "预估 {{cost}} · {{tokens}} token",
+          "setupSkippedChanged": "设置未运行：此次运行分支中的 orca.yaml 设置命令与保存此自动化时批准的命令不同，请重新保存此自动化以审查当前命令"
         },
         "CreateFromPicker": {
           "f061f49e3f": "搜索仓库分支...",
@@ -17393,7 +17984,7 @@
           "c6695e6fbd": "外部自动化",
           "5524365227": "OpenClaw",
           "2b0adbce21": "已暂停",
-          "b3feba84c7": "当前",
+          "b3feba84c7": "已启用",
           "92405f1431": "不可用",
           "dbdcec22bd": "只读",
           "0a2d4359a8": "易于管理",
@@ -17664,11 +18255,12 @@
         },
         "runWorkspaceDisplay": {
           "notLaunched": "未启动",
-          "namedWorkspaceGone": "{{name}}（已不可用）"
+          "removed": "已移除",
+          "namedRemoved": "{{name}} 已被移除"
         },
         "usage": {
           "tokensAndCost_other": "{{tokens}} token · {{cost}}",
-          "costUnavailable": "暂无数据"
+          "costUnavailable": "—"
         },
         "externalDisplay": {
           "sshHost": "SSH 主机",
@@ -17689,6 +18281,44 @@
         },
         "launchSettings": {
           "needsFreshSession": "智能体启动设置要求每次运行都使用新会话。"
+        },
+        "runNotFound": {
+          "crumbRun": "未找到运行记录",
+          "crumbAutomation": "未找到自动化",
+          "runTitle": "此运行记录已不存在",
+          "automationTitle": "此自动化已不存在",
+          "runDescription": "它已被删除，或已不在保留的运行历史记录中",
+          "automationDescription": "它已被删除，或其主机不再列出它",
+          "goToAutomations": "前往自动化",
+          "openThisAutomation": "打开自动化"
+        },
+        "recentRuns": {
+          "title": "最近运行",
+          "allRuns": "全部 {{count}} 次运行",
+          "allRuns_other": "全部 {{count}} 次运行"
+        },
+        "runIdentity": {
+          "triggerManual": "立即运行",
+          "triggerScheduled": "按计划",
+          "newerRun": "较新的运行",
+          "olderRun": "较早的运行",
+          "needsCredentials": "{{host}} 需要凭据才能重新连接，因此此次运行未启动",
+          "signIn": "登录 {{host}}",
+          "output": "输出",
+          "details": "详情",
+          "runNumber": "运行 #{{number}}",
+          "runFailed": "运行失败",
+          "scheduledAt": "计划于 {{time}}",
+          "startedAt": "开始于 {{time}}",
+          "noFailureReason": "此次运行未启动，且没有记录原因"
+        },
+        "runTable": {
+          "result": "结果"
+        },
+        "listGroups": {
+          "attention": "需要处理",
+          "active": "已启用",
+          "paused": "已暂停"
         }
       },
       "agent": {
@@ -17795,21 +18425,20 @@
           "markUnread": "标记为未读",
           "goToWorkspace": "转到工作区",
           "clear": "从列表中清除",
-          "agentSection": "代理",
-          "markManyRead_one": "将 {{count}} 个代理标记为已读",
-          "markManyRead_other": "将 {{count}} 个代理标记为已读",
-          "markManyUnread_one": "将 {{count}} 个代理标记为未读",
-          "markManyUnread_other": "将 {{count}} 个代理标记为未读",
-          "clearMany_one": "从列表中清除 {{count}} 个代理",
-          "clearMany_other": "从列表中清除 {{count}} 个代理",
-          "clearMany": "从列表中清除 {{count}} 个代理",
-          "markManyRead": "将 {{count}} 个代理标记为已读",
-          "markManyUnread": "将 {{count}} 个代理标记为未读"
+          "agentSection": "智能体",
+          "markManyRead_one": "将 {{count}} 个智能体标记为已读",
+          "markManyRead_other": "将 {{count}} 个智能体标记为已读",
+          "markManyUnread_one": "将 {{count}} 个智能体标记为未读",
+          "markManyUnread_other": "将 {{count}} 个智能体标记为未读",
+          "clearMany_one": "从列表中清除 {{count}} 个智能体",
+          "clearMany_other": "从列表中清除 {{count}} 个智能体",
+          "clearMany": "从列表中清除 {{count}} 个智能体",
+          "markManyRead": "将 {{count}} 个智能体标记为已读",
+          "markManyUnread": "将 {{count}} 个智能体标记为未读"
         }
       },
       "confirmation": {
         "dialog": {
-          "8490e5d36a": "确认",
           "56f5c60e0c": "取消",
           "92bac3217e": "不再询问"
         },
@@ -17915,39 +18544,34 @@
         },
         "FolderWorkspaceSourceControl": {
           "openWorktree": "打开此工作树",
-          "reconnect": "请重新连接以查看此工作树的更改。"
+          "reconnect": "请重新连接以查看此工作树的更改。",
+          "changeCount_other": "{{count}} 项更改"
+        },
+        "PluginDeclarativePanel": {
+          "dismissLoadError": "关闭",
+          "invalidTree": "面板发送了 Orca 无法显示的布局",
+          "loadFailed": "{{value0}} 加载失败",
+          "loadFailedKeptLastGood": "{{value0}} 加载失败，正在显示上次成功加载的版本",
+          "pluginMessage": "来自 {{value0}} 的消息：{{value1}}",
+          "reloaded": "已重新加载"
+        },
+        "FolderWorkspaceEmptyState": {
+          "createWorktree": "创建工作树",
+          "created": "已在 {{repo}} 中创建工作树 {{name}}",
+          "createFailed": "无法在 {{repo}} 中创建工作树"
         }
       },
       "link": {
         "routing": {
           "preference": {
             "dialog": {
-              "badge": "终端链接",
-              "preview": "预览",
-              "title": "在 Orca 浏览器中打开终端链接？",
-              "description": "用 Orca 浏览器打开终端链接，或继续使用系统浏览器",
               "orca": {
-                "button": "在 Orca 中打开",
-                "note": "Orca 可以使用已导入的 Cookie 打开已登录的网站"
-              },
-              "settings": {
-                "note": "之后可在设置 → 浏览器中更改"
+                "button": "在 Orca 中打开"
               },
               "system": {
                 "button": "使用系统浏览器"
               },
-              "link": {
-                "label": "链接"
-              },
-              "shortcut": {
-                "note": {
-                  "prefix": "当链接在 Orca 中打开时，",
-                  "suffix": "点击可临时改用系统浏览器"
-                }
-              },
               "keep": {
-                "title": "继续在 Orca 浏览器中打开终端链接？",
-                "description": "或默认使用系统浏览器",
                 "orca": {
                   "button": "继续使用 Orca"
                 }
@@ -18027,7 +18651,10 @@
         "statusConnectionIssue": "连接异常",
         "statusDisconnected": "已断开连接",
         "hostStatus": "{{host}} {{status}}",
-        "availabilityTitle": "可用性：{{hosts}}"
+        "availabilityTitle": "可用性：{{hosts}}",
+        "statusProvisioning": "正在预配",
+        "statusSuspended": "已挂起",
+        "statusWaking": "正在唤醒"
       },
       "ShortcutKeyCombo": {
         "07eb4985a1": "双击 {{value0}}"
@@ -18163,7 +18790,6 @@
       },
       "artifacts": {
         "ArtifactsPage": {
-          "deleteTitle": "删除产物？",
           "deleteDescription": "“{{name}}” 将无法再通过其公开链接访问",
           "delete": "删除",
           "signInAgain": "重新登录 Orca 以加载产物",
@@ -18388,6 +19014,10 @@
           "confirm": "打开 {{app}}",
           "schemeTitle": "打开此 {{scheme}} 链接？",
           "launchFailed": "无法为此 {{scheme}} 链接打开应用，可能尚未安装",
+          "localFileDescription": "一个本地文件想要打开另一个应用程序",
+          "tabSiteDescription": "{{site}} 上的页面想要打开另一个应用程序",
+          "alwaysAllowLocalFiles": "始终允许本地文件打开 {{scheme}} 链接",
+          "alwaysAllow": "始终允许 {{site}} 打开 {{scheme}} 链接",
           "anonymousDescription": "浏览器中的某个页面想要打开另一个应用程序"
         },
         "httpAuth": {
@@ -18417,6 +19047,7 @@
             "midi": "MIDI 设备",
             "idleDetection": "设备使用",
             "localNetwork": "本地网络",
+            "externalApp": "打开 {{scheme}} 链接",
             "windowManagement": "窗口管理"
           },
           "allow": "允许",
@@ -18598,7 +19229,8 @@
         "checksNeedAction_other": "{{count}} 项检查需要处理",
         "checksPending_other": "{{count}} 项检查待完成",
         "allChecksPassing": "所有检查均通过",
-        "checksPassingOfTotal_other": "{{count}} 项检查中有 {{passing}} 项通过"
+        "checksPassingOfTotal_other": "{{count}} 项检查中有 {{passing}} 项通过",
+        "noCheckDetails": "没有可用的检查详细信息"
       },
       "taskPageJiraBoard": {
         "changeStatusFailed": "更改状态失败"
@@ -18634,7 +19266,7 @@
       "plugins": {
         "list": {
           "PluginsSectionDescription": {
-            "openWith": "打开方式（焦点不在可编辑字段中时）"
+            "openWith": "打开方式（在 Orca 文本字段中输入时除外）"
           }
         },
         "pluginInstallCount": {
@@ -18649,6 +19281,40 @@
         },
         "pluginNameDisambiguation": {
           "nameWithPublisher": "{{value0}}（{{value1}}）"
+        },
+        "declarative": {
+          "PluginDeclarativeView": {
+            "unsupported": "{{value0}} 在此版本的 Orca 中不可用"
+          },
+          "KeyValue": {
+            "yes": "是",
+            "no": "否"
+          },
+          "Skeleton": {
+            "loading": "加载中"
+          },
+          "Table": {
+            "yes": "是",
+            "empty": "暂无数据",
+            "loading": "正在加载更多…"
+          },
+          "Tree": {
+            "loading": "加载中…"
+          }
+        },
+        "PluginCommandReplacementRow": {
+          "title": "{{value0}} 代替 Orca 自带的 {{value1}} 运行",
+          "conflict": "未使用：先安装的 {{value0}} 已替代它",
+          "detail": "从其快捷键、命令面板和菜单触发时生效，如果插件失败，则运行 Orca 自带的命令",
+          "switch": "使用 {{value0}} 代替 Orca 自带的 {{value1}}"
+        },
+        "PluginCatalogHighlights": {
+          "justNow": "刚刚",
+          "added": "{{value0}}添加",
+          "featured": "精选",
+          "featuredDetail": "每个类别中安装量最多的一个",
+          "newlyAdded": "最近添加",
+          "newlyAddedDetail": "来自你的所有目录"
         }
       },
       "agent-workspace-trust-decision": {
@@ -18667,6 +19333,9 @@
           "pipelinePending": "流水线等待中",
           "pipelineUnresolved": "流水线未解决"
         }
+      },
+      "NewWorkspaceComposerFooter": {
+        "create": "创建"
       }
     },
     "i18n": {
@@ -18780,7 +19449,7 @@
         "dashboard": {
           "popout": {
             "window": {
-              "title": "Orca 代理仪表板"
+              "title": "Orca 智能体仪表板"
             }
           }
         }
@@ -18814,14 +19483,16 @@
       "install": {
         "checking": "正在检查 {{agent}} 是否已在此主机上就绪…",
         "cliInstall": "安装",
-        "cliRecheck": "再次检查"
+        "cliRecheck": "再次检查",
+        "cliRecheckFailed": "无法检查此主机上已安装的智能体，请重试"
       },
       "reasoning": "推理",
       "contextMenu": {
         "copyOrcaSessionId": "复制 Orca 会话 ID",
         "orcaSessionIdCopied": "已复制 Orca 会话 ID",
         "orcaSessionIdCopyFailed": "无法复制 Orca 会话 ID",
-        "orcaSessionIdTooltip": "Orca 为此聊天分配的 ID，独立于智能体 CLI 自身的会话 ID，智能体通过 Orca 用它来相互指代"
+        "orcaSessionIdTooltip": "Orca 为此聊天分配的 ID，独立于智能体 CLI 自身的会话 ID，智能体通过 Orca 用它来相互指代",
+        "noSessionContext": "没有可用的聊天上下文"
       },
       "failureWords": {
         "theAgent": "智能体",
@@ -18833,7 +19504,6 @@
         "couldNotStart": "{{agent}} 无法启动",
         "editSavedArguments": "请在设置 > 代理 > 参数中编辑",
         "couldNotRestart": "{{agent}} 无法重新启动",
-        "cliTooOld": "{{agent}} {{installedVersion}} 版本过旧，无法用于聊天。请更新到 {{minimumVersion}} 或更高版本",
         "startTimedOut": "{{agent}} 启动时间过长（{{seconds}} 秒后 {{method}} 仍无响应）",
         "startTimedOutKeepsHappening": "如果此问题持续出现，运行此聊天的计算机可能负载过重",
         "notSignedIn": "{{agent}} 尚未登录",
@@ -18941,7 +19611,16 @@
         "providerUnavailable": "{{agent}} 因服务繁忙而无法回复。请选择其他模型，或稍等片刻后重新发送。",
         "providerSafetyStopped": "{{agent}} 在安全检查后停止了此次回复。请检查您的请求后重新发送。",
         "providerResponseFailed": "{{agent}} 未能完成此回复。打开详情了解更多信息。",
-        "selectedModel": "所选模型"
+        "selectedModel": "所选模型",
+        "forkOriginalMissing": "{{agent}} 在原始聊天中找不到此回复，请打开原始聊天并从那里创建分支",
+        "forkOriginalUnavailable": "{{agent}} 无法在原始聊天中从此回复创建分支，请打开原始聊天并从那里创建分支",
+        "forkOriginalMissingNamed": "{{agent}} 在“{{detail}}”中找不到此回复，请打开该聊天并从那里创建分支",
+        "forkOriginalUnavailableNamed": "{{agent}} 无法在“{{detail}}”中从此回复创建分支，请打开该聊天并从那里创建分支",
+        "forkOriginalLatestOnly": "{{agent}} 只能从原始聊天中的最新回复创建分支，请打开该聊天，待最新回复完成后再从它创建分支",
+        "forkOriginalLatestOnlyNamed": "{{agent}} 只能从“{{detail}}”中的最新回复创建分支，请打开该聊天，待最新回复完成后再从它创建分支",
+        "antigravitySystemNotSignedIn": "Antigravity 尚未登录，请在运行此聊天的计算机上运行 `agy` 进行登录，然后重新发送消息",
+        "claudeEffortInvalid": "Claude 推理强度无效，请选择 low、medium、high、xhigh 或 max，然后重新发送",
+        "unconfirmed": "无法确认是否已发送，也没有重新发送"
       },
       "writeNotice": {
         "notDoneReadHistory": "无法加载此聊天的历史记录",
@@ -18966,6 +19645,7 @@
         "historyUnreadable": "Orca 无法读取此聊天的已保存历史记录",
         "historyUnusable": "无法加载此聊天",
         "historyUnavailable": "Orca 目前无法打开此聊天的历史记录",
+        "savedInOtherFolder": "此对话保存在另一个文件夹中",
         "savedByNewerOrca": "这些聊天由更新版本的 Orca 保存",
         "updateOrcaToKeepUsing": "请更新 Orca 以继续使用这些聊天",
         "chatSavedByNewerOrca": "此聊天由更新版本的 Orca 保存",
@@ -19019,7 +19699,8 @@
         "compactAfterRetry": "请先重试您之前的消息，然后再运行 /compact",
         "clearAfterSending": "您之前的消息仍在发送中，发送完成后再运行 /clear",
         "compactAfterSending": "您之前的消息仍在发送中，发送完成后再运行 /compact",
-        "pendingWork": "在使用此命令之前，请等待挂起的工作和消息完成"
+        "pendingWork": "在使用此命令之前，请等待挂起的工作和消息完成",
+        "mailOwnerUnconfirmed": "Orca 无法确认此消息是否仍是发给此聊天的"
       },
       "composer": {
         "planMode": "规划",
@@ -19050,6 +19731,9 @@
         "pasteNotSaved": "此粘贴内容未保存。请重新粘贴或将其移除",
         "pastedTextTooLarge": "此次粘贴会使消息超过单条消息 256 KB 的上限。请缩短后再粘贴",
         "imageUnavailable": "预览不可用",
+        "permissionAppliesNextMessage": "{{saved}} 从下一条消息起生效；当前为 {{active}}",
+        "modelAndEffortValue": "{{model}} · {{effort}}",
+        "modelAndEffort": "模型和推理强度",
         "draftNotSaved": "此草稿尚未保存成功，Orca 会继续尝试",
         "imageNotBroughtBack": "无法随此草稿恢复 {{name}}，请重新附加或将其移除",
         "pastedImageNotBroughtBack": "无法随此草稿恢复这张粘贴的图片，请将其移除，如仍需要请重新粘贴",
@@ -19078,6 +19762,7 @@
         "availableAfterSessionStarts": "会话开始后可用",
         "optionUpdateFailed": "无法更新选项",
         "optionValue": {
+          "none": "无",
           "fast": "快速",
           "minimal": "最小",
           "low": "低",
@@ -19086,7 +19771,8 @@
           "xhigh": "极高",
           "max": "最大",
           "ultra": "极致",
-          "standard": "标准"
+          "standard": "标准",
+          "ultracode": "Ultracode"
         },
         "noCommandsOrSkills": "没有匹配的命令或技能",
         "commands": "命令",
@@ -19244,7 +19930,11 @@
       "resumeInNewChat": {
         "hostUpdateRequired": "请更新此主机上的 Orca 以在聊天界面中继续",
         "notSavedYet": "{{agent}} 尚未保存此对话，请在它回复后重试",
-        "exitUnconfirmed": "{{agent}} 正在另一个终端中运行此对话。请在那里退出它或关闭该终端，然后重试。"
+        "exitUnconfirmed": "{{agent}} 正在另一个终端中运行此对话。请在那里退出它或关闭该终端，然后重试。",
+        "exitUnconfirmedFromTerminal": "{{agent}} 仍在此终端中运行此对话，请在这里退出 {{agent}}，然后从会话历史中打开此对话",
+        "terminalChanged": "运行 {{agent}} 的终端在关闭前发生了变化，因此 Orca 没有关闭它，请重试",
+        "terminalExitUnproven": "Orca 已关闭 {{agent}} 的终端，但无法确认它已停止，因此没有打开聊天，请检查主机连接，然后从会话历史中打开此对话",
+        "resumeFailed": "{{agent}} 无法在聊天中继续，请检查此终端和主机连接，然后重试"
       },
       "state": {
         "loading": {
@@ -19302,6 +19992,48 @@
           "file": "计划文件",
           "reviewTitle": "审阅建议的计划",
           "refineHint": "优化计划会关闭审阅，以便你发送要更改的内容"
+        },
+        "folderTrust": {
+          "title": "信任此文件夹？",
+          "hint": "智能体需要先征得你的同意，才能读取、编辑和运行此文件夹中的文件",
+          "trust": "信任文件夹",
+          "exit": "退出"
+        },
+        "startupMenu": {
+          "title": "{{value0}} 正在终端中等待你做出选择"
+        },
+        "reasonSentAsMessage": "原因（已作为消息发送）",
+        "worker": "工作者 · {{name}}",
+        "openWorker": "打开工作者",
+        "answerFailed": "{{name}}：{{detail}}",
+        "answerNotApplied": "{{name}}：回答未送达此提示",
+        "answerWorkerEnded": "{{name}} 已结束，因此此提示已关闭",
+        "countdown": "如果无人回答，Claude 将在 {{time}} 后自动拒绝",
+        "record": {
+          "showLess": "收起",
+          "showMore": "展开",
+          "cancelled": "<tool>{{tool}}</tool> 的请求已取消",
+          "youAllowed": "你已允许 <tool>{{tool}}</tool>",
+          "youAllowedForSession": "你已在本次会话中允许 <tool>{{tool}}</tool>",
+          "youDenied": "你已拒绝 <tool>{{tool}}</tool>",
+          "youAnswered": "你已回答 <tool>{{tool}}</tool>：{{answer}}",
+          "youAllowedFor": "你已为 <task>{{task}}</task> 允许 <tool>{{tool}}</tool>",
+          "youDeniedFor": "你已为 <task>{{task}}</task> 拒绝 <tool>{{tool}}</tool>",
+          "coordinatorAllowed": "协调者已为 <task>{{task}}</task> 允许 <tool>{{tool}}</tool>",
+          "coordinatorDenied": "协调者已为 <task>{{task}}</task> 拒绝 <tool>{{tool}}</tool>",
+          "allowedInTerminal": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已在工作者的终端中允许",
+          "deniedInTerminal": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已在工作者的终端中拒绝",
+          "allowedInChat": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已在工作者的聊天中允许",
+          "deniedInChat": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已在工作者的聊天中拒绝",
+          "autoDenied": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已在 2:00 后自动拒绝",
+          "waitsInTerminal": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 正在工作者的终端中等待回答",
+          "workerEnded": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已关闭：工作者已结束",
+          "closedUnnamed": "<task>{{task}}</task> 的 <tool>{{tool}}</tool> 已关闭，未记录回答",
+          "coordinatorReason": "协调者的原因",
+          "coordinatorAllowedHere": "协调者已允许 <tool>{{tool}}</tool>",
+          "coordinatorDeniedHere": "协调者已拒绝 <tool>{{tool}}</tool>",
+          "allowedUnnamed": "已允许 <tool>{{tool}}</tool>",
+          "deniedUnnamed": "已拒绝 <tool>{{tool}}</tool>"
         }
       },
       "imagePreview": {
@@ -19330,7 +20062,8 @@
         "partial": "部分差异",
         "changedFiles_other": "{{count}} 个已更改的文件",
         "hide": "隐藏",
-        "hidden": "Orca 将不再显示每轮更改"
+        "hidden": "Orca 将不再显示每轮更改",
+        "showMoreFiles": "再显示 {{count}} 个文件"
       },
       "receipt": {
         "unavailable": "所选答案不可用",
@@ -19361,11 +20094,17 @@
         "orcaStopRemote": "此回复进行期间，{{machine}} 上的 Orca 已停止",
         "orcaStopCanContinue": "你可以在此对话中继续",
         "orcaStopUnnamedServer": "远程服务器",
+        "restartContinued": "重启后 Orca 已让此智能体继续，你自己的提示词没有重新发送",
+        "restartContinueRefused": "重启后 Orca 无法继续此聊天，请发送一条消息来继续",
+        "restartContinueUnconfirmed": "重启后 Orca 已让此智能体继续，但无法确认它是否已继续，请先查看它的最新回复，再发送下一条消息",
+        "restartNotConnected": "重启后 Orca 无法重新连接此聊天，因此没有让智能体继续",
         "permissionDenied": "{{agent}} 拒绝了权限。查看详情。",
         "safetyReviewApproved": "{{agent}} 已批准此操作。查看详情。",
         "safetyReview": "{{agent}} 报告了安全审查警告。查看详情。",
         "truncatedResponse": "提供方响应已截断（原始大小：{{bytes}} 字节）。",
-        "forkedFrom": "分支来源"
+        "forkedFrom": "分支来源",
+        "forkedFromUnknown": "分支来源：另一个聊天",
+        "modelFallback": "Claude 已切换模型：{{from}} → {{to}}"
       },
       "providerFrame": {
         "byteCount_other": "{{count}} 字节"
@@ -19418,7 +20157,7 @@
         "stateUnverifiableCount": "{{value0}} 状态不可用",
         "stateWaitingCount": "{{value0}} 等待",
         "stateWorkingCount": "{{value0}} 处理中",
-        "showAgent": "在对话中显示 {{value0}}"
+        "openAgent": "打开 {{value0}}"
       },
       "railLabel": "你的消息",
       "railImageMessage": "图片附件",
@@ -19452,7 +20191,25 @@
         "tokens": "{{value0}} 个 token",
         "unnamed": "子代理",
         "started_other": "已启动 {{count}} 个子智能体",
-        "ran_other": "已运行 {{count}} 个子智能体"
+        "ran_other": "已运行 {{count}} 个子智能体",
+        "backToMain": "返回主智能体",
+        "mainAgent": "主智能体",
+        "promptFromMain": "来自主智能体的提示词",
+        "clickToOpen": "点击打开",
+        "backTo": "返回 {{value0}}",
+        "path": "子智能体路径",
+        "stateHeading": {
+          "completed": "已完成",
+          "working": "工作中",
+          "idle": "空闲",
+          "failed": "失败",
+          "stopped": "已停止",
+          "unverifiable": "状态不可用"
+        },
+        "noSteps": "暂无步骤",
+        "beforeClear": "此子智能体在聊天被清空之前运行",
+        "stoppedBeforeReply": "回复前已停止",
+        "noReply": "已结束，没有回复"
       },
       "drop": {
         "messageTitle": "拖放以附加到此消息",
@@ -19469,18 +20226,12 @@
         "unreported": "此会话无法提供上下文用量"
       },
       "agentMessage": {
-        "messageFrom": "消息来自",
         "unnamedSender": "一个代理",
-        "messageFromCoordinator": "来自协调者的消息",
-        "startedWorker": "已启动工作者",
-        "handedOffToAgent": "已移交给智能体",
-        "startedAgent": "已启动智能体",
-        "taskFromCoordinator": "来自协调者的任务",
-        "updateFromWorker": "来自工作者的更新",
         "senderReplaced": "{{name}} 已不在其终端中运行；现在有另一个智能体在该终端中运行。如有需要，请从侧边栏打开该终端。",
         "senderAmbiguous": "Orca 无法确定 {{name}} 在哪个终端中运行。请从侧边栏打开终端。",
         "senderNotRunning": "{{name}} 已停止运行。请从侧边栏启动新智能体以继续其工作。",
-        "unnamedSenderSubject": "一个智能体"
+        "unnamedSenderSubject": "一个智能体",
+        "goToAgent": "转到智能体"
       },
       "goal": {
         "placeholder": "描述您的目标，定义可衡量的结果以获得最佳结果",
@@ -19502,7 +20253,8 @@
       "fileLinks": {
         "notFound": "未找到文件：{{value0}}",
         "unverifiable": "无法检查 {{value0}}：{{value1}}",
-        "unresolved": "无法在此工作区中解析 {{value0}}"
+        "unresolved": "无法在此工作区中解析 {{value0}}",
+        "folderUnavailable": "这台计算机无法打开文件夹 {{value0}}"
       },
       "contextUsage": {
         "label": "上下文 {{used}}/{{window}} token，已用 {{percent}}%",
@@ -19523,7 +20275,7 @@
         "listLabel": "排队的消息",
         "steer": "立即发送",
         "send": "发送",
-        "steerHint": "提交且不中断模型",
+        "steerHint": "在智能体工作时立即发送",
         "sendHint": "立即发送此消息",
         "delete": "删除",
         "moreActions": "更多操作",
@@ -19553,7 +20305,9 @@
         "expand": "展开",
         "queued": "已排队",
         "clearAll": "全部清除",
-        "imageCount": "{{count}} 张图片"
+        "imageCount": "{{count}} 张图片",
+        "editReturned": "你编辑的内容已放入聊天输入框",
+        "commandsUnsupported": "排队的消息中无法保存命令"
       },
       "thought": "已思考",
       "thoughtForDuration": "思考了 {{duration}}",
@@ -19569,7 +20323,9 @@
         "start": "启动",
         "unverifiable": "Orca 无法确认 {{distro}} 是否正在运行",
         "startToSend": "请启动 {{distro}} 后再发送",
-        "startDistro": "启动 {{distro}}"
+        "startDistro": "启动 {{distro}}",
+        "connecting": "正在连接到 {{distro}}…",
+        "startFailed": "无法启动 {{distro}}，请在“设置 → 远程 Orca 服务器”中查看"
       },
       "interruptedContinue": {
         "continue": "继续",
@@ -19580,7 +20336,7 @@
       "rewind": {
         "unsupported": "此聊天无法返回到更早的消息",
         "historyNotPaginated": "此旧版 Codex 聊天无法返回到更早的消息，请开始新聊天以使用“回溯到此处”",
-        "busy": "当代理空闲且此聊天中没有等待您处理的内容时可用",
+        "busy": "聊天空闲时可用",
         "staleEpoch": "对话已发生变化，请查看最新消息后重试",
         "invalidTarget": "对话无法返回到此消息，未做任何更改",
         "historyLimit": "此对话过长，无法回溯，未做任何更改",
@@ -19630,7 +20386,8 @@
         "settingsRejected": "Codex 无法应用所选模型和推理强度。此目标更改尚未发送。请检查选择后重试",
         "settingsUnconfirmed": "Codex 未确认所选模型和推理强度。此目标更改尚未发送。请检查聊天后重试",
         "pauseUnconfirmed": "Codex 已停止运行，但尚未确认目标已暂停。请在继续前检查目标",
-        "stopUnconfirmed": "Codex 无法确认停止。请在继续前检查聊天"
+        "stopUnconfirmed": "Codex 无法确认停止。请在继续前检查聊天",
+        "noGoal": "Codex 在此聊天中没有可更改的目标，请使用 /goal 加上目标内容来设定"
       },
       "slashCommandDescriptions": {
         "clearConversation": "清除对话",
@@ -19707,7 +20464,8 @@
         "export": "将会话导出为 HTML",
         "settings": "在终端中打开设置",
         "extensions": "在终端中打开扩展面板",
-        "hotkeys": "在终端中显示键盘快捷键"
+        "hotkeys": "在终端中显示键盘快捷键",
+        "mcpManage": "管理 MCP 服务器"
       },
       "modelDescriptions": {
         "grok_4_7": "xAI 最新的前沿模型",
@@ -19755,18 +20513,13 @@
         "effortApplyFailed": "无法应用推理强度 {{value}}"
       },
       "usageLimitActions": {
-        "continueNow": "立即继续",
-        "leadIn": "无需等待，继续此聊天：",
         "switchAccount": "切换账号",
         "addAccount": "添加账号…",
         "accountUnavailable": "此聊天无法切换到其他账户。请将其移交给其他智能体。"
       },
       "usageLimitAutoContinue": {
         "cancelFailed": "无法取消自动继续。请重试。",
-        "openSetting": "额度重置后自动继续",
-        "cancelled": "Orca 不会自动继续此聊天。",
-        "scheduled": "Orca 将在 {{time}} 继续此聊天。",
-        "cancel": "不要继续"
+        "scheduled": "Orca 将在 {{time}} 继续此聊天。"
       },
       "settings": "聊天设置",
       "textAttachmentPreview": {
@@ -19805,7 +20558,16 @@
         "unconfirmedDetail": "它可能已经打开。请先检查会话历史，再创建分支。",
         "failed": "{{agent}} 无法从此聊天创建分支",
         "hostUnsupported": "此主机运行的是旧版 Orca。请更新主机上的 Orca 后重试。",
-        "failedDetail": "聊天未发生更改。请重试。"
+        "failedDetail": "聊天未发生更改。请重试。",
+        "commandWorking": "{{agent}} 回复期间无法创建分支。回复结束后，请再次运行 /fork。",
+        "mark": "分支 ·",
+        "markedName": "{{mark}} {{name}}",
+        "accessibleName": "分支：{{name}}",
+        "sourceTooltip": "{{name}} 的分支",
+        "unknownSourceTooltip": "另一个聊天的分支",
+        "commandDescription": "从最新回复为此聊天创建分支",
+        "commandNothing": "还没有可用于创建分支的回复",
+        "commandTakesNoText": "请单独发送 /fork，然后在新聊天中输入内容"
       },
       "cardKindHidden": {
         "description": "你可以随时在此处更改",
@@ -19822,7 +20584,120 @@
       "splitRight": "向右拆分",
       "splitDown": "向下拆分",
       "newRowsAnnouncement": "你离开期间有新消息",
-      "newRowsMarker": "新消息"
+      "newRowsMarker": "新消息",
+      "editDeliveryNotice": "编辑",
+      "signIn": {
+        "title": "登录 {{agent}} 即可开始聊天"
+      },
+      "explicitChatWslAddHost": "从 Windows 打开的 WSL 文件夹中无法使用聊天，请将该发行版添加为 WSL 主机（添加项目 → 添加远程主机 → 添加 WSL 发行版）后在那里聊天，或在终端中打开智能体",
+      "githubPeek": {
+        "updated": "更新于 {{time}}",
+        "oneComment": "1 条评论",
+        "comments": "{{count}} 条评论",
+        "unavailable": "预览不可用",
+        "retry": "重试"
+      },
+      "webPeek": {
+        "unavailable": "此页面没有预览"
+      },
+      "creationChatNotOpened": "你的工作树已就绪，但聊天未能打开，请重试以打开聊天并带上你的消息",
+      "usage": {
+        "description": "显示此聊天所用 Codex 账户的用量",
+        "loading": "正在加载 Codex 用量…",
+        "failed": "无法加载 Codex 用量，请重试",
+        "codexVersion": "此 Codex 版本不报告用量，请更新 Codex",
+        "apiKeyAuth": "使用 API 密钥时无法查看 Codex 用量，请使用 ChatGPT 账户登录 Codex 以查看用量",
+        "title": "Codex 用量",
+        "account": "此聊天使用的账户",
+        "retry": "重试",
+        "resetFailed": "无法重置 Codex 限额，请重试",
+        "confirmReset": "这会为 {{account}} 使用一次 Codex 速率限制重置额度，并立即重置所有符合条件的用量窗口",
+        "sharedAccount": "当前共享账户",
+        "outcome": {
+          "reset": "Codex 限额已重置",
+          "nothingToReset": "目前没有需要重置的内容",
+          "noCredit": "此账户已没有剩余的 Codex 重置额度",
+          "alreadyRedeemed": "该重置额度已被使用"
+        }
+      },
+      "mcp": {
+        "title": "MCP 服务器",
+        "close": "关闭",
+        "loading": "正在加载…",
+        "notRunning": "发送下一条消息时连接",
+        "unsupported": "请更新此聊天所在主机上的 Orca，以便在这里管理它们",
+        "readFailed": "无法加载",
+        "retry": "重试",
+        "empty": "此聊天未设置任何服务器",
+        "cancel": "取消",
+        "reconnect": "重新连接",
+        "toggle": "使用 {{name}}",
+        "actionFailed": "无法完成此操作，请重试",
+        "summary": {
+          "connected": "{{count}} 个已连接",
+          "needsAuth_other": "{{count}} 个需要登录",
+          "failed": "{{count}} 个失败",
+          "signingIn": "正在登录 {{name}}"
+        },
+        "source": {
+          "project": "项目",
+          "local": "本地",
+          "user": "用户",
+          "plugin": "插件",
+          "session": "会话"
+        },
+        "status": {
+          "connected": "已连接",
+          "tools_other": "{{count}} 个工具",
+          "pending": "正在连接…",
+          "needsAuth": "需要登录",
+          "failed": "失败",
+          "failedReason": "失败：{{error}}",
+          "disabled": "已禁用",
+          "needsAuthAfterSend": "需要登录，发送一条消息即可在这里登录"
+        },
+        "signIn": {
+          "action": "登录",
+          "waiting": "正在等待登录…",
+          "waitingBrowser": "正在等待浏览器…",
+          "remote": "登录后，浏览器会跳转到一个无法加载的页面，请复制该页面的地址并粘贴到这里",
+          "external": "请在打开的页面上完成登录",
+          "done": "完成",
+          "finish": "完成登录",
+          "openAgain": "重新打开",
+          "addressLabel": "登录页面地址",
+          "unfinished": "尚未完成登录，请在打开的页面上完成，然后点击“完成”",
+          "pastePlaceholder": "http://localhost:…"
+        }
+      },
+      "ciResultLine": {
+        "failingLead": "CI 失败于",
+        "greenLead": "CI 通过于",
+        "at": "的提交",
+        "hide": "不再显示 CI 结果行",
+        "hidden": "Orca 将不再显示 CI 结果行"
+      },
+      "sideChat": {
+        "description": "在此聊天旁的分支中顺便提个问题",
+        "argumentHint": "<问题>",
+        "notReady": "支线聊天尚未就绪，请稍后重试",
+        "replyRunning": "此回复完成后可用",
+        "noReply": "收到第一条回复后可用",
+        "textOnly": "支线聊天只接受文本，请移除附件，然后重新发送",
+        "questionNotSent": "{{agent}} 未收到你的问题",
+        "questionNotSentDetail": "你的问题仍在此聊天中，请再次发送 /btw 重试",
+        "questionUnconfirmed": "{{agent}} 无法确认支线聊天是否已收到你的问题",
+        "questionUnconfirmedDetail": "请先查看支线聊天再重新提问，你的问题仍在此聊天中"
+      },
+      "urlRequest": {
+        "title": "请求登录",
+        "open": "打开登录页面",
+        "decline": "拒绝",
+        "opened": "已在浏览器中打开登录页面",
+        "openAgain": "重新打开",
+        "finished": "登录已完成",
+        "finishedWith": "登录已完成 · {{message}}"
+      }
     },
     "tab": {
       "bar": {
@@ -19905,7 +20780,7 @@
               "comment": "评论",
               "prunable": "可修剪",
               "locked": "已锁定",
-              "retainedAgents": "已完成的代理"
+              "finishedAgents": "已完成的代理"
             }
           },
           "noSizes": "尚未测量工作区大小",
@@ -19963,7 +20838,7 @@
           "pinned": "已固定",
           "unread": "未读",
           "comment": "有评论",
-          "retainedDoneAgents": "已完成的代理记录",
+          "finishedAgents": "已完成的代理",
           "contextPresence": "打开的标签页、终端和评论",
           "completelyEmpty": "没有任何需保留的内容",
           "noWorkspaces": "未找到工作区",
@@ -20041,7 +20916,17 @@
           "selectionVanishedCount_other": "所选的 {{count}} 个工作区已不存在",
           "selectionWithheldCount_other": "所选的 {{count}} 个工作区被当前筛选条件隐藏，已取消选择",
           "selectAllSafetyChecked_other": "选择全部 {{count}} 个已通过安全检查的工作区",
-          "lastActive": "最后活跃：{{value0}}"
+          "lastActive": "最后活跃：{{value0}}",
+          "projectNamed": "项目：{{value0}}",
+          "moreFlags": "显示其余 {{value0}} 个标记",
+          "pathLabel": "路径",
+          "copyPath": "复制路径",
+          "gitNotChecked": "未检查",
+          "workspaceCount_other": "{{count}} 个工作区",
+          "restoreFailed": "无法取消忽略 {{value0}}",
+          "ignoreTooltip": "忽略：批量删除时跳过",
+          "stopIgnoring": "取消忽略",
+          "stopIgnoringNamed": "取消忽略 {{value0}}"
         },
         "scan": {
           "progress": "正在扫描工作区 ({{value0}}/{{value1}})",
@@ -20073,11 +20958,8 @@
           "candidateName": "{{value1}} 上的 {{value0}}"
         },
         "stopAgents": {
-          "titleMany": "停止这些代理？",
           "descriptionOne": "删除将停止代理当前任务",
-          "descriptionMany": "删除将停止这些代理当前任务",
-          "confirm": "停止代理并删除",
-          "confirmOne": "停止代理并删除"
+          "descriptionMany": "删除将停止这些代理当前任务"
         },
         "candidateRow": {
           "gitChip": {
@@ -20085,7 +20967,13 @@
             "dirty": "有更改",
             "unpushed": "未推送",
             "unknown": "未知"
-          }
+          },
+          "ignoredFilesBlocker": "Git 忽略的本地文件",
+          "ignoredFilesNamed": "Git 忽略的文件：{{value0}}",
+          "ignoredFilesUnchecked": "未完整检查 Git 忽略的文件"
+        },
+        "confirm": {
+          "deletingTitle_other": "正在删除 {{count}} 个工作区"
         }
       },
       "creation": {
@@ -20112,32 +21000,29 @@
           "closedToast_one": "已关闭 {{workspace}} 中 {{count}} 个有未保存编辑的文件",
           "closedToast_other": "已关闭 {{workspace}} 中 {{count}} 个有未保存编辑的文件",
           "reopen": "重新打开",
-          "reopenFailed": "部分文件无法重新打开。请打开工作区，然后再次尝试“重新打开”"
-        }
+          "reopenFailed": "部分文件无法重新打开。请打开工作区，然后再次尝试“重新打开”",
+          "line_one": "{{count}} 个文件中未保存的编辑内容将被丢弃：{{files}}",
+          "line_other": "{{count}} 个文件中未保存的编辑内容将被丢弃：{{files}}"
+        },
+        "ignoredFilesLost": "Git 忽略的文件将丢失：{{names}}",
+        "ignoredFilesUnchecked": "无法完整检查 Git 忽略的文件"
+      },
+      "atRiskLocalFiles": {
+        "namesWithCount": "{{names}} +{{value0}}",
+        "namesAndMore": "{{names}} 等"
       }
     },
     "agentSessionContinuation": {
       "preparingContext": "正在准备已保存的聊天上下文…",
       "handOffToAnotherAgent": "移交给另一个代理",
-      "dialogTitle": "移交给另一个代理",
-      "dialogDescription": "从当前进度启动一个新的代理会话，原会话保持不变",
       "untitledSession": "当前会话",
-      "originalAgent": "原代理：{{agent}}",
       "agent": "代理",
       "selectAgent": "选择代理",
       "detectingAgents": "正在此工作区主机上检测代理…",
       "detectionFailed": "无法检测此工作区主机上的代理",
-      "noAgents": "未在此工作区主机上已检测已启用的代理",
+      "noAgents": "No enabled agents were detected on this workspace host.",
       "onlySourceFamilyDetected": "此工作区主机上可用的智能体均与 {{agent}} 共享使用限额。请启用或安装其他智能体。",
       "context": "上下文",
-      "modeFocused": "聚焦续接(推荐)",
-      "modeFocusedDescription": "使用最新进度和当前工作区，仅在需要时读取更早的会话细节",
-      "modeLoadedDescription": "使用此聊天中当前已加载的最近消息和当前工作区",
-      "modeCapturedDescription": "使用捕获的文本和当前工作区",
-      "modeFull": "完整会话记录",
-      "modeFullDescription": "让新代理在继续前读取完整的已保存会话，这可能需要更长时间，并消耗大量上下文、套餐用量或 API 额度",
-      "startsIn": "启动目录：",
-      "startSession": "启动新会话",
       "starting": "正在启动…",
       "noContext": "没有可用于在新会话中继续的上下文",
       "agentDisabled": "{{agent}} 已在代理设置中停用",
@@ -20146,13 +21031,25 @@
       "deliveryFailed": "新的 {{agent}} 会话已启动，但无法发送上下文",
       "launchFailed": "无法启动新的 {{agent}} 会话",
       "deliveryUnconfirmed": "Orca 无法确认 {{agent}} 已收到会话上下文，请检查新会话，如果其输入为空，请自行粘贴",
-      "copyPrompt": "复制提示"
+      "copyPrompt": "复制提示",
+      "dialogTitleSentence": "交给其他代理",
+      "metaWithAgent": "来自 {{agent}} · {{session}} · 原会话保持不变",
+      "meta": "{{session}} · 原会话保持不变",
+      "modeLatestStatus": "最新状态（推荐）",
+      "modeFullTranscript": "完整记录",
+      "modeFullCost": "速度较慢，并会消耗更多套餐额度或 API 额度。",
+      "startSessionSentence": "开始会话"
     },
     "terminalPane": {
       "TerminalContextMenu": {
         "copySessionId": "复制会话 ID",
         "copySessionIdSuccess": "已复制会话 ID",
-        "copySessionIdError": "复制会话 ID 失败"
+        "copySessionIdError": "复制会话 ID 失败",
+        "copySessionIdUnavailable": "没有可复制的会话 ID",
+        "copyOrcaSessionId": "复制 Orca 会话 ID",
+        "orcaSessionIdTooltip": "Orca 为此智能体分配的 ID，与智能体 CLI 自身的会话 ID 不同，智能体之间通过 Orca 用它来指代彼此",
+        "orcaSessionIdCopied": "已复制 Orca 会话 ID",
+        "orcaSessionIdCopyFailed": "复制 Orca 会话 ID 失败"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "更新 {{value0}} 上的 Orca 以打开其工作区之外的文件"
@@ -20165,12 +21062,23 @@
           "theme": "外观",
           "windowsTerminal": "Windows 终端",
           "notifications": "通知",
-          "integrations": "集成"
+          "integrations": "集成",
+          "agentSurface": "聊天或终端"
         },
         "actions": {
           "addFirstProject": "添加第一个项目",
           "continue": "继续",
           "openingAddProject": "正在打开添加项目…"
+        },
+        "agentSurface": {
+          "title": "你希望如何使用智能体？",
+          "pickWhereAgentsOpen": "选择新智能体在哪里打开"
+        },
+        "agentChat": {
+          "subtitle": "选择一个聊天界面智能体，不支持聊天的智能体会改在终端中打开"
+        },
+        "agentTerminal": {
+          "subtitle": "Orca 支持所有 CLI 智能体，选择你最常用的那个"
         }
       },
       "skipConfirmation": {
@@ -20204,7 +21112,8 @@
           "sourceBuiltIn": "内置",
           "sourceCommunity": "终端调色板",
           "themes": "主题"
-        }
+        },
+        "changeAnyTime": "可随时在设置中更改"
       },
       "integrations": {
         "capabilities": {
@@ -20213,6 +21122,57 @@
           "reviewStatus": "在每个工作树中查看议题状态、评审状态和 CI 检查",
           "managePullRequests": "无需离开 Orca，即可阅读、评论和合并拉取请求"
         }
+      },
+      "yoloPermissions": {
+        "overrideDescription": "这些智能体仍会在不询问的情况下运行命令和编辑文件，它们各自的设置会覆盖 Yolo 模式",
+        "fullAccessOverride": "{{agent}} 仍拥有完全访问权限",
+        "useAgentOwnSettings": "使用 {{agent}} 自己的设置",
+        "useOwnSettings": "使用各自的设置",
+        "saveError": "无法更改权限，请重试",
+        "ownSettingsDescription": "关闭时使用各智能体自己的设置，单个智能体的权限设置可覆盖此开关"
+      },
+      "agentStep": {
+        "worksInChat": "支持聊天界面",
+        "chatAgents": "聊天界面智能体",
+        "terminalAgents": "可作为终端智能体使用",
+        "terminalAgentsHint": "不支持聊天界面，因此会改用终端",
+        "chatAvailable": "支持聊天",
+        "agentsOpenIn": "智能体打开方式",
+        "terminalUi": "终端界面",
+        "noAgentsForChat": "<em>未在 PATH 中找到智能体</em>，聊天界面支持 {{agents}}，可安装其中一个，或先继续，稍后再添加智能体",
+        "noChatAgentsDetected": "<em>你的智能体都不支持聊天界面</em>，它们都会在终端中打开，因此更适合选择终端",
+        "opensInTerminalFit": "<em>{{agent}} 会在终端中打开</em>，因此更适合选择终端",
+        "useTerminalInstead": "改用终端",
+        "terminalTipHow": "查看如何在终端中启动智能体",
+        "terminalTip": "可随时在<em>设置 → 聊天界面</em>中切换回来，也可以通过 <em>+</em> 菜单在终端中启动任意智能体",
+        "terminalTipWeb": "可随时在<em>设置 → 入门清单</em>中切换回来，也可以通过 <em>+</em> 菜单在终端中启动任意智能体",
+        "terminalTipCaption": "点击标签栏中的 <em>+</em>，然后选择标有 <em>(CLI)</em> 的智能体，如果已安装聊天智能体的 CLI，将鼠标悬停在其所在行上并点击终端图标即可使用 CLI",
+        "chatTip": "也想用聊天？可随时在<em>设置 → 聊天界面</em>中开启",
+        "turnOnChat": "立即开启"
+      },
+      "agentSurface": {
+        "chat": {
+          "label": "聊天界面",
+          "description": "智能体在聊天中回复，消息和差异会渲染显示",
+          "recommended": "推荐",
+          "terminalFallback": "不支持聊天的 Agent 会改用终端打开。",
+          "noneDetected": "已检测的智能体都不支持聊天界面"
+        },
+        "terminal": {
+          "label": "终端",
+          "description": "使用各智能体原生的 CLI，与官方发布版本完全一致，支持所有 CLI 智能体"
+        },
+        "switchNote": "这不是永久选择，可随时在<em>设置 → 聊天界面</em>中切换",
+        "preview": {
+          "userMessage": "为 fetchUser 添加重试",
+          "agentMessage": "失败的请求现在最多会重试 3 次",
+          "composerPlaceholder": "继续提问…"
+        }
+      },
+      "launchDemo": {
+        "userMessage": "修复不稳定的上传测试",
+        "agentMessage": "找到了，重试计时器没有被 mock",
+        "cliReady": "{{agent}} CLI 已就绪"
       }
     },
     "jiraUserPicker": {
@@ -20266,6 +21226,11 @@
           "scrollback": "回滚",
           "snap": "吸附",
           "position": "位置"
+        },
+        "claudeCodeThemeSync": {
+          "description": "此计算机上的 Claude Code 会使用你的终端配色，并实时跟随主题变化（包括在 Orca 之外），关闭后将恢复你之前的 Claude Code 主题，在 Claude Code 中选择主题会停止同步",
+          "claude": "claude",
+          "9353305ea6": "Claude Code 跟随终端主题"
         }
       },
       "nativeChat": {
@@ -20306,7 +21271,21 @@
         "turnDiffsSearchEdits": "编辑",
         "markNewMessagesTitle": "返回聊天时标记新消息",
         "markNewMessagesCopy": "返回聊天时，在你离开期间收到的内容上方显示“新消息”分隔线；如果你之前在看最新消息，会滚动到该处。",
-        "markNewMessagesSearchUnread": "未读"
+        "markNewMessagesSearchUnread": "未读",
+        "linkPreviewsToggleLabel": "切换链接预览",
+        "linkPreviewsTitle": "链接预览",
+        "linkPreviewsCopy": "将鼠标悬停在网页链接上会显示预览卡片，Orca 会抓取该页面来生成卡片，因此该网站能看到这次请求",
+        "linkPreviewsSearchUnfurl": "链接展开",
+        "linkPreviewsSearchHover": "悬停卡片",
+        "openedPullRequestsSearchPr": "PR",
+        "ciResultLinesTitle": "CI 结果提示",
+        "ciResultLinesCopy": "当智能体创建或推送过的拉取请求上的 CI 运行完成时，在聊天中显示一行提示",
+        "ciResultLinesSearchChecks": "检查",
+        "ciResultLinesSearchPr": "PR",
+        "promptSuggestionsTitle": "建议的提示词",
+        "promptSuggestionsCopy": "Claude 回复后，它对你下一条消息的猜测会显示在空的消息框中。按 Tab 即可使用。每次猜测都是一次额外请求，会计入你的 Claude 用量。",
+        "promptSuggestionsSearchNext": "下一条提示词",
+        "promptSuggestionsSearchGhost": "幽灵文本"
       },
       "voice": {
         "dictationLanguage": {
@@ -20369,6 +21348,7 @@
           "about": {
             "parakeetV3": "速度快。支持 {{languages}} 种欧洲语言。",
             "parakeetV2": "速度快。仅支持英语，英语最准确。",
+            "parakeetUnifiedEn": "仅限英语。说话时即时显示文字。",
             "whisperTiny": "下载最小。适合试用听写。",
             "whisperTurbo": "语言最多，约 100 种。没有 GPU 时较慢。",
             "senseVoice": "速度快。适用于中文、日语和韩语。",
@@ -20407,7 +21387,13 @@
           "listening": "{{model}} 也在听…",
           "heardLabel": "{{model}} 听到的内容",
           "heardNothing": "没有听到任何词。请大声一点。",
-          "heardFailed": "{{model}} 无法转写这段录音。"
+          "heardFailed": "{{model}} 无法转写这段录音。",
+          "cleaningUp": "正在整理…",
+          "tryCleanup": "试用整理",
+          "cleanupFailed": "整理失败：{{reason}}",
+          "cleanupTimedOut": "整理超时",
+          "cleanupOff": "AI 整理已关闭",
+          "afterCleanup": "整理后 · {{agent}}，{{model}} · {{seconds}} 秒"
         },
         "silenceStop": {
           "off": "关闭",
@@ -20440,10 +21426,296 @@
           "description": "模型加载期间，听写会立即开始。",
           "always": "始终",
           "never": "从不"
+        },
+        "openAiCompatible": {
+          "updateFailed": "无法更新服务商",
+          "title": "兼容 OpenAI 的服务商",
+          "description": "仅在选中兼容 OpenAI 的模型时，音频才会发送到此服务，适用于 Groq、Mistral、OpenAI 和本地服务器",
+          "baseUrl": "基础 URL",
+          "baseUrlPlaceholder": "https://api.groq.com/openai/v1",
+          "model": "模型",
+          "modelPlaceholder": "whisper-large-v3-turbo",
+          "apiKey": "API 密钥",
+          "keySaved": "保留已保存的密钥",
+          "keyOptional": "本地服务器可不填",
+          "save": "保存",
+          "rowConfigured": "已为兼容 OpenAI 的模型保存基础 URL 和模型",
+          "rowMissing": "选择兼容 OpenAI 的模型前，请先添加基础 URL 和模型",
+          "edit": "编辑",
+          "removeLabel": "移除兼容 OpenAI 的服务商",
+          "setUp": "设置"
+        },
+        "cleanup": {
+          "consent": {
+            "goesToKnown": "{{company}}，经由这台计算机上的 {{agent}}，计入你的 {{plan}} 套餐用量",
+            "goesToAgent": "取决于这台计算机上的 {{agent}} 将提示词发往何处",
+            "sentLabel": "会发送",
+            "sent": "听写文本、你的词汇和你的指令",
+            "notSentLabel": "不会发送",
+            "notSent": "音频、文件或屏幕上的内容",
+            "goesToLabel": "发送至",
+            "waitLabel": "等待",
+            "wait": "文本会延迟几秒插入",
+            "title": "开启 AI 整理？",
+            "description": "每次听写后，Orca 会先把文本发送给 {{agent}} 整理，然后再插入",
+            "cancel": "取消",
+            "confirm": "开启"
+          },
+          "instructions": {
+            "label": "指令",
+            "custom": "你的自定义指令",
+            "builtIn": "内置：修正标点和数字，处理口头更正，保留我的措辞",
+            "edit": "编辑",
+            "emptyHint": "留空则使用内置指令",
+            "reset": "重置",
+            "cancel": "取消",
+            "save": "保存"
+          },
+          "saveFailed": "无法保存 AI 整理设置",
+          "noAgent": "没有可运行 AI 整理的智能体，请在下方选择一个",
+          "title": "整理",
+          "label": "AI 整理",
+          "description": "在文本插入前修正标点和数字，并处理口头更正，仅将文本发送给 {{agent}}，从不发送音频",
+          "anAgent": "AI 智能体",
+          "agent": "智能体和模型",
+          "agentDescription": "在这台计算机上运行，选用小而快的模型可缩短等待时间",
+          "correctionWord": "更正词",
+          "correctionWordDescription": "说出这个词即可撤回刚说的内容：“四点，{{word}}，五点”",
+          "correctionWordOff": "无"
         }
       },
       "repositoryHooks": {
         "availableEnvVars": "可用的环境变量"
+      },
+      "RepositoryHooksSection": {
+        "folderRunPolicyDescription": "创建新工作区时的默认行为",
+        "folderTitle": "工作区钩子",
+        "folderDescription": "创建或移除工作区时在此文件夹中运行的脚本，所有工作区共用此文件夹；本地脚本保存在本机上，`orca.yaml` 脚本与你的团队共享",
+        "folderSetupDescription": "创建新工作区后运行的本地脚本和共享脚本",
+        "folderArchiveDescription": "移除工作区前运行的本地脚本和共享脚本",
+        "folderSetupFieldDescription": "在新工作区创建后运行，可用于创建子工作树、安装依赖、复制 env 文件",
+        "folderArchiveFieldDescription": "在移除工作区前运行"
+      },
+      "workspaceCleanup": {
+        "title": "工作区清理",
+        "description": "移除你已不再需要的工作区。在移除任何内容之前，Orca 会再次检查是否有未保存的工作",
+        "unsupportedHost": "此主机上的 Orca 版本不支持自动清理，请更新该主机上的 Orca 以使用这些设置",
+        "previewFailed": "无法检查此更改会匹配哪些工作区",
+        "pinFailed": "无法保留 {{name}}",
+        "rules": {
+          "branchNote": "已合并的分支会随工作区一起删除，未合并的分支会保留",
+          "recommended": "推荐",
+          "inactiveDescription": "{{count}} 天没有活动",
+          "advancedDescription": "自动化和编排工作者的工作区",
+          "inactiveFor": "不活跃时长",
+          "days": "天",
+          "then": "然后",
+          "archiveDescription": "归档会释放磁盘空间，并将工作区保留在侧边栏中",
+          "deleteDescription": "删除会移除工作区及其文件夹",
+          "archive": "归档",
+          "delete": "删除",
+          "matchesCount": "当前匹配 {{count}} 个工作区",
+          "hideMatches": "隐藏",
+          "showMatches": "显示",
+          "merged": "删除已合并的工作区",
+          "mergedDescription": "拉取请求已合并，且工作区中的所有内容都已包含在其中",
+          "unchanged": "删除无改动的工作区",
+          "unchangedDescription": "相对默认分支没有新提交，也没有任何编辑",
+          "inactiveCleanUp": "清理不活跃的工作区",
+          "inactive": "删除不活跃的工作区",
+          "automationRuns": "删除已完成的自动化工作区",
+          "automationRunsDescription": "自动化运行创建的工作区，在运行结束后删除",
+          "orchestrationWorkers": "删除已释放的编排工作者工作区",
+          "orchestrationWorkersDescription": "编排工作者使用过的工作区，在协调者释放它之后删除",
+          "inactiveDescription_other": "{{count}} 天没有活动",
+          "matchesCount_other": "当前匹配 {{count}} 个工作区",
+          "checking": "正在检查匹配的工作区…",
+          "checkFailed": "无法检查匹配的工作区"
+        },
+        "protection": {
+          "title": "保护",
+          "keepIgnoredFiles": "保留含有被忽略文件的工作区",
+          "keepIgnoredFilesDescription": ".env 和本地配置这类文件无法恢复，node_modules 和构建产物不算在内",
+          "alwaysKeptLabel": "始终保留",
+          "alwaysKeptList": "已固定的工作区、正在运行的智能体或终端、编辑器中未保存的更改、未提交的更改、未推送的提交"
+        },
+        "activity": {
+          "loadFailed": "无法加载活动记录：{{error}}",
+          "empty": "清理尚未运行过",
+          "unfinished": "未能完成",
+          "nothingRemoved": "没有需要清理的内容",
+          "removedCount": "已移除 {{count}} 个",
+          "keptCount": "已保留 {{count}} 个",
+          "failedCount": "失败 {{count}} 个",
+          "removed": "已移除 · {{count}}",
+          "failed": "失败 · {{count}}",
+          "archived": "已归档",
+          "deleted": "已删除",
+          "kept": "已保留 · {{count}}",
+          "showMore": "再显示 {{count}} 个",
+          "waiting": "已不活跃 {{elapsed}}/{{after}} 天",
+          "title": "活动记录",
+          "notListed_other": "另有 {{count}} 个保留的工作区未列出"
+        },
+        "runFailed": "无法运行清理",
+        "updateFailed": "无法保存清理规则",
+        "enable": {
+          "title": "开启“{{rule}}”？",
+          "description_other": "当前有 {{count}} 个工作区匹配，开启后几秒内会将其删除",
+          "summary": "将删除 {{count}} 个",
+          "cancel": "取消",
+          "turnOn": "开启"
+        },
+        "reason": {
+          "merged": "已合并",
+          "unchanged": "无改动",
+          "inactive": "不活跃",
+          "automationRun": "自动化运行",
+          "orchestrationWorker": "编排工作者",
+          "mergedNumber": "{{label}} · #{{number}}"
+        },
+        "keep": {
+          "pinned": "已固定",
+          "noRuleMatched": "没有匹配的规则",
+          "recentlyActive": "过去一小时内使用过",
+          "activeWorkspace": "当前已打开",
+          "agentRunning": "智能体正在运行",
+          "terminalRunning": "终端正在运行进程",
+          "terminalUnknown": "终端状态未知",
+          "unsavedEditorChanges": "编辑器中未保存的更改",
+          "uncommittedChanges": "未提交的更改",
+          "unpushedCommits": "未推送的提交",
+          "ignoredFiles": "被忽略的文件",
+          "gitUnknown": "无法读取 Git 状态",
+          "archiveUnavailable": "无法归档",
+          "archiveScript": "有归档脚本",
+          "removing": "正在移除中",
+          "waiting": "等待中",
+          "notRemovable": "主工作区或文件夹项目",
+          "projectOff": "此项目已关闭清理",
+          "rulesOff": "未开启任何规则",
+          "withDetail": "{{cause}} · {{detail}}"
+        },
+        "trigger": {
+          "startup": "启动时",
+          "hourly": "每小时",
+          "settings": "规则更改后",
+          "runNow": "立即运行规则",
+          "cli": "通过 CLI"
+        },
+        "search": {
+          "cleanup": "清理",
+          "cleanUp": "清理",
+          "delete": "删除",
+          "automatic": "自动",
+          "pullRequest": "PR",
+          "inactiveDescription": "若干天没有活动",
+          "stale": "陈旧",
+          "days": "天",
+          "automations": "自动化",
+          "orchestration": "编排",
+          "protection": "保护",
+          "activityDescription": "每次清理移除和保留了哪些工作区",
+          "history": "历史记录",
+          "runs": "运行记录",
+          "envFile": ".env",
+          "manual": "手动",
+          "automaticDescription": "自动清理是否已开启、下次运行时间，以及立即运行规则",
+          "runRulesNow": "立即运行规则",
+          "cleanUpNow": "立即清理",
+          "schedule": "计划"
+        },
+        "status": {
+          "lastRunFailed": "上次运行（{{when}}）未能完成：{{error}}",
+          "lastRunNothing": "上次运行（{{when}}）没有移除任何工作区",
+          "lastRunFreed_other": "上次运行（{{when}}）移除了 {{count}} 个工作区，释放了 {{size}}",
+          "lastRunRemoved_other": "上次运行（{{when}}）移除了 {{count}} 个工作区",
+          "nextRun": "下次运行：{{when}}",
+          "justNow": "刚刚",
+          "inUnderAMinute": "不到一分钟后"
+        },
+        "change": {
+          "title": "更改“{{rule}}”？",
+          "description_other": "此更改会让当前多出 {{count}} 个匹配的工作区，应用后几秒内会将其删除",
+          "apply": "应用"
+        },
+        "rulesLoadFailed": "无法加载此主机的清理规则：{{error}}",
+        "retry": "重试",
+        "summary": {
+          "merged": "删除已合并",
+          "unchanged": "删除无改动",
+          "inactiveCleanUp": "清理不活跃",
+          "inactive": "删除不活跃",
+          "automationRuns": "自动化工作区",
+          "orchestrationWorkers": "编排工作者",
+          "off": "关闭"
+        },
+        "disableIgnoredFiles": {
+          "title": "关闭被忽略文件保护？",
+          "description": "对于使用这些清理规则的项目，被忽略的文件将不再阻止自动清理。.env 和本地配置这类文件可能会被删除，且无法恢复",
+          "matches_other": "如果不固定，关闭保护几秒后将额外删除 {{count}} 个工作区",
+          "noMatches": "当前没有额外匹配的工作区，此设置会影响使用这些规则的项目今后的清理",
+          "turnOff": "关闭保护"
+        },
+        "pinAndKeep": {
+          "description": "确认后会固定所选工作区，已固定的工作区在取消固定前不会被自动清理",
+          "named": "固定并保留 {{name}}",
+          "label": "固定并保留"
+        },
+        "manual": {
+          "title": "手动清理",
+          "label": "删除你选择的工作区",
+          "review": "检查工作区",
+          "description": "查看所有工作区，并选择要删除哪些"
+        },
+        "automatic": {
+          "title": "自动清理",
+          "on": "已开启",
+          "off": "已关闭",
+          "offDetail": "开启一条规则，即可按计划移除工作区",
+          "running": "正在移除规则匹配的工作区…",
+          "runningButton": "正在运行…",
+          "runNow": "立即运行规则"
+        }
+      },
+      "repository": {
+        "workspaceCleanup": {
+          "title": "工作区清理",
+          "description": "仅适用于 {{name}} 的规则，选择“使用全局设置”则跟随“设置 / 工作区清理”",
+          "usingGlobal": "正在使用全局设置：{{rules}}",
+          "globalDefault": "全局默认：{{rules}}",
+          "useGlobal": "使用全局设置",
+          "off": "关闭",
+          "custom": "自定义",
+          "rules": "清理规则",
+          "rulesDescription": "此项目适用哪些工作区清理规则",
+          "keywordCleanup": "清理",
+          "keywordDelete": "删除",
+          "keywordMerged": "已合并"
+        }
+      },
+      "bitbucket": {
+        "credentials": {
+          "dialog": {
+            "createToken": "创建令牌",
+            "environmentManagedLine": "已由 ORCA_BITBUCKET_* 环境变量设置。取消设置后才能在此保存。",
+            "savedLocallyOnly": "仅保存在这台电脑上。",
+            "accessTokenNeeds": "需要拉取请求的读取权限。",
+            "atlassianEmail": "Atlassian 邮箱",
+            "requiredScopes": "所需范围",
+            "apiBaseUrl": "API 基础 URL",
+            "close": "关闭",
+            "verifyingEllipsis": "正在验证…"
+          }
+        }
+      },
+      "recoverServer": {
+        "titleOnHost": "清除 {{host}} 上的旧锁？",
+        "titleGeneric": "清除旧锁？",
+        "summary": "之前的运行留下了锁，因此 Orca 的服务器无法启动。",
+        "confirmCheckHomeFolder": "没有其他共享此主文件夹的机器正在运行 Orca",
+        "details": "详细信息",
+        "clearing": "正在清除…"
       }
     },
     "agentChildRow": {
@@ -20499,7 +21771,8 @@
         "yamlSource": "orca.yaml",
         "bothSources": "orca.yaml + 本地",
         "localSource": "本地设置"
-      }
+      },
+      "setupCheckFailed": "无法检查设置脚本配置，请重试"
     },
     "JiraIssueWorkspace": {
       "pendingChange": "另一个议题更改正在进行中"
@@ -20520,6 +21793,18 @@
       "keywordJira": "Jira",
       "keywordDefaultProject": "默认项目",
       "keywordIssuePicker": "议题选择器"
+    },
+    "RepositoryBrowserProfileSection": {
+      "title": "浏览器配置文件",
+      "description": "此项目中新打开的浏览器标签页（包括智能体打开的）会使用此配置文件。让多个项目指向同一个配置文件，即可共享登录状态",
+      "keywordProfile": "浏览器配置文件",
+      "keywordCookies": "Cookie",
+      "keywordSignIn": "登录",
+      "selectLabel": "新标签页使用的配置文件",
+      "inherit": "浏览器设置（{{scope}}）",
+      "deletedOption": "已删除的配置文件",
+      "deleted": "为此项目选择的配置文件已被删除，因此新标签页会沿用浏览器设置",
+      "saveFailed": "无法保存浏览器配置文件，此项目所在主机上的 Orca 可能需要更新"
     },
     "managed-runtime": {
       "cancelled": "已取消安装",
@@ -20601,7 +21886,20 @@
     },
     "tabGroup": {
       "splitPaneLanding": {
-        "newAgent": "新建智能体"
+        "newAgent": "新建智能体",
+        "agents": "智能体",
+        "browser": "浏览器",
+        "chooseAgent": "选择智能体",
+        "closePane": "关闭窗格",
+        "files": "文件",
+        "markdown": "Markdown",
+        "mobileEmulator": "手机模拟器",
+        "new": "新建",
+        "newNamedAgent": "新建 {{agent}} 智能体",
+        "noMatches": "没有匹配项",
+        "searchAgentsAndFiles": "搜索智能体和文件",
+        "searchShort": "搜索",
+        "terminal": "终端"
       }
     },
     "contextualTours": {
@@ -20609,6 +21907,26 @@
         "splitChatPane": {
           "title": "在聊天旁打开窗格",
           "action": "拆分窗格"
+        },
+        "newTab": {
+          "title": "从这里启动新智能体",
+          "body": "点击 + 即可启动智能体、终端或浏览器标签页"
+        },
+        "splitChat": {
+          "body": "按 {terminal.splitRight}，或点击聊天顶部的拆分按钮，两侧各有独立的标签页",
+          "bodyWithoutShortcut": "点击聊天顶部的拆分按钮，两侧各有独立的标签页"
+        },
+        "split": {
+          "bodyWithoutShortcut": "右键点击窗格查看拆分选项"
+        }
+      },
+      "badgeNew": "新功能",
+      "projectsCollapseAll": {
+        "intro": {
+          "title": "一次性折叠所有项目",
+          "body": "按 {sidebar.projects.toggleCollapse}、点击此按钮，或按住 {{modifier}} 点击任意项目标题",
+          "bodyWithoutShortcut": "点击此按钮，或按住 {{modifier}} 点击任意项目标题",
+          "action": "知道了"
         }
       }
     },
@@ -20633,19 +21951,118 @@
       "targetActive": "当前",
       "empty": "没有可发送的备注",
       "selectedTerminalUnavailable": "所选终端已不可用",
-      "activeTerminalUnavailable": "请打开此工作树中的代理终端，然后重新发送备注",
-      "notAgentSession": "{{target}}终端不是可识别的代理会话",
-      "selectedAgentNeedsPermission": "所选代理需要权限",
-      "activeAgentNeedsPermission": "当前代理需要权限",
-      "statusUnverified": "无法验证{{target}}代理的状态",
-      "notReady": "{{target}}代理尚未准备好接收输入",
+      "activeTerminalUnavailable": "请打开此工作树中的智能体终端，然后重新发送备注",
+      "notAgentSession": "{{target}}终端不是可识别的智能体会话",
+      "selectedAgentNeedsPermission": "所选智能体需要权限",
+      "activeAgentNeedsPermission": "当前智能体需要权限",
+      "statusUnverified": "无法验证{{target}}智能体的状态",
+      "approvalUnseen": "{{target}}智能体可能正在等待批准。请在其本轮结束后再发送备注。",
+      "hostUpdateRequired": "请更新{{target}}智能体所在主机上的 Orca 后再发送备注。",
+      "notReady": "{{target}}智能体尚未准备好接收输入",
       "notWritable": "{{target}}智能体未接受这些备注",
       "selectedSubmitFailed": "备注可能已粘贴到所选终端，但 Orca 无法提交",
       "activeSubmitFailed": "备注可能已粘贴到当前终端，但 Orca 无法提交",
       "notWritableSelection": "{{target}}智能体未接受所选内容"
     },
     "dictation": {
-      "stoppedAfterSilenceSeconds": "静音 {{seconds}} 秒后已停止"
+      "stoppedAfterSilenceSeconds": "静音 {{seconds}} 秒后已停止",
+      "cleanupNotice": {
+        "timedOut": "整理超时，已按原文插入",
+        "failed": "整理失败，已按原文插入",
+        "dismiss": "关闭"
+      },
+      "DictationIndicator": {
+        "cleaningUp": "正在整理…",
+        "skipCleanup": "跳过整理，按原文插入"
+      }
+    },
+    "orchestrationCrew": {
+      "mentionAll": "全部提及",
+      "mentionAgent": "提及 {{name}}：",
+      "mentionInMessage": "在消息中提及",
+      "mentionRejected": "终端未接受该智能体引用，请重试",
+      "title": "编排",
+      "sendingUnavailable": "无法发送",
+      "workers_other": "{{count}} 个工作者",
+      "managedBy": "管理者",
+      "managing": "管理对象",
+      "talkingWith": "交流对象",
+      "collapse": "收起编排面板",
+      "show": "显示编排：{{counts}}",
+      "summary": "编排：{{counts}}",
+      "needsYou_other": "{{count}} 个需要你处理",
+      "waitingPrefix": "等待你回复 · ",
+      "noTask": "无共享任务",
+      "open": "打开 {{name}}",
+      "more": "{{name}} 的更多操作",
+      "openChat": "打开其聊天",
+      "copiedAddress": "已复制 {{name}} 的地址",
+      "copyAddress": "复制地址",
+      "showDetails": "显示 {{name}} 的任务和最新消息",
+      "task": "任务",
+      "asksYou": "向你提问",
+      "openFailed": "{{name}}：{{detail}}",
+      "chatUnavailable": "此主机无法打开该聊天，请重试",
+      "terminalExited": "此终端已退出",
+      "openOnHost": "请在 {{host}} 上打开此智能体",
+      "cannotLocate": "此主机找不到此智能体，请重试",
+      "latest": "最新消息",
+      "to": "发给",
+      "from": "来自"
+    },
+    "link": {
+      "routing": {
+        "preference": {
+          "dialog": {
+            "keepInOrcaTitle": "继续在 Orca 中打开终端链接？",
+            "openInOrcaTitle": "在 Orca 中打开终端链接？",
+            "shortcutSummary": "{{shortcut}}-点击可改用系统浏览器打开一次。可在设置中更改。"
+          }
+        }
+      }
+    },
+    "shared": {
+      "useDaemonActions": {
+        "restartFailed": "无法重新启动终端服务。",
+        "killAllSessionsDescription": "结束所有终端会话及其代理，包括没有打开标签页的会话。未保存的工作将会丢失。",
+        "someSessionsUnchecked": "Some sessions couldn’t be checked."
+      }
+    },
+    "ui": {
+      "dialog": {
+        "cancel": "取消",
+        "tryAgain": "重试"
+      }
+    },
+    "terminal": {
+      "pane": {
+        "CloseTerminalDialog": {
+          "stopChatAgentTitle": "要停止此聊天中的代理吗？",
+          "stopAgentInWorkspaceTitle": "要停止“{{name}}”中的代理吗？",
+          "stopRunningCommandTitle": "要停止正在运行的命令吗？",
+          "agentWorkStops": "当前的工作会停止，且不会继续。",
+          "sleepWorkspaceInstead": "改为让工作区睡眠",
+          "stopAgentSentence": "停止代理",
+          "stopAndClose": "停止并关闭"
+        }
+      }
+    },
+    "crash": {
+      "report": {
+        "CrashReportDialogSurface": {
+          "closedSummary": "发送保护隐私的报告，帮助我们修复问题。",
+          "closedNotesQuestion": "你当时在做什么？（可选）"
+        }
+      }
+    },
+    "sidebar": {
+      "ForgetSshWorkspaceDialog": {
+        "removeFromOrcaTitle": "要从 Orca 中移除 {{name}}？",
+        "ghostHostLine": "{{host}} 已不再是已保存的主机。文件会保留在该主机上。",
+        "disconnectedHostLine": "{{host}} 未连接。文件会保留在主机上。",
+        "filesStayLine": "文件会保留在 {{host}} 上。",
+        "removing": "正在移除…"
+      }
     }
   },
   "dashboardPopout": {
@@ -20682,7 +22099,8 @@
     "terminal": {
       "focusWorktree": "打开工作树",
       "close": "关闭",
-      "remotePreviewUnavailable": "无法预览此远程会话——请打开工作区查看终端"
+      "remotePreviewUnavailable": "无法预览此远程会话——请打开工作区查看终端",
+      "previewUnavailable": "暂无预览——请打开工作区查看此智能体"
     },
     "close": "关闭仪表板",
     "settingsTooltip": "看板设置",
@@ -20742,7 +22160,9 @@
         "never": "永不保存此网站的密码",
         "notNow": "暂时不要",
         "update": "更新",
-        "save": "保存"
+        "save": "保存",
+        "saveChip": "保存密码",
+        "updateChip": "更新密码"
       },
       "fill": {
         "noUsername": "（无用户名）",
@@ -20897,7 +22317,8 @@
       "remove": "移除…",
       "empty": "此配置文件未启用任何扩展程序",
       "visitWebStore": "访问 Chrome 应用商店",
-      "manage": "管理扩展程序"
+      "manage": "管理扩展程序",
+      "openWebStoreFailed": "无法打开 Chrome 应用商店。"
     },
     "history": {
       "clear": "清除浏览记录",
@@ -20975,7 +22396,19 @@
       "cleared": "已清除 {{profile}} 中的 Google Cookie",
       "empty": "{{profile}} 中没有可清除的 Google Cookie",
       "remaining": "无法从 {{profile}} 中移除部分 Google Cookie，请重试",
-      "unverified": "无法检查 {{profile}} 的 Google Cookie，请重试"
+      "unverified": "无法检查 {{profile}} 的 Google Cookie，请重试",
+      "fe3f6e1721": "Google Cookie"
+    },
+    "toolbar": {
+      "annotate": "注释",
+      "grab": "抓取",
+      "draw": "绘制",
+      "copyAllNotes": "复制所有注释",
+      "clearNotes": "清除注释",
+      "resetZoom": "重置缩放",
+      "resetViewport": "重置视口尺寸",
+      "findOnPage": "在页面中查找",
+      "profile": "配置文件"
     }
   },
   "runtimeRpc": {
@@ -21036,14 +22469,52 @@
     }
   },
   "sidebar": {
+    "worktreeCardsIntroNotice": {
+      "title": "试试新卡片",
+      "dismiss": "暂不",
+      "body": "每张卡片都会显示智能体状态、未读圆点和子项摘要。",
+      "switchBack": "可随时在<path>工作区选项 › 卡片样式</path>中切换回来",
+      "switchLabel": "卡片样式",
+      "classic": "经典",
+      "new": "新样式",
+      "keep": "保留新样式",
+      "useClassic": "使用经典",
+      "laterToast": "可随时在 工作区选项 › 卡片样式 中试用新卡片",
+      "saveFailedToast": "无法保存卡片样式。请重试。",
+      "keptTitle": "已启用新卡片",
+      "keptBody": "可在这里的“卡片样式”中更改。"
+    },
+    "worktreeCardsUpdateNotice": {
+      "newLabel": "新功能",
+      "title": "工作树卡片",
+      "exampleChildren": "1 个子项",
+      "statusCaption": "标题会标出需要你处理的智能体",
+      "childrenCaption": "父工作树会汇总子工作树",
+      "unreadCaption": "<label>蓝点：</label>未读",
+      "dismiss": "关闭"
+    },
     "revealFiltered": {
       "title": "显示隐藏的工作区？",
       "description": "当前工作区已在侧边栏中隐藏，将其显示会清除侧边栏筛选条件",
       "confirm": "清除筛选条件并显示",
       "cancel": "保留筛选条件"
     },
+    "revealCurrent": {
+      "label": "显示当前项",
+      "noWorkspace": "没有打开任何内容",
+      "fullPageView": "此页面在侧边栏中没有对应的行",
+      "archived": "已归档的工作区不会列在侧边栏中",
+      "botsOff": "机器人已关闭，因此不会列出此机器人",
+      "botHidden": "此机器人已暂停，并被机器人选项隐藏",
+      "renameBotPage": "机器人或群组的页面不是工作树。要重命名，请使用其行菜单中的“重命名”。",
+      "renameUnlisted": "此工作区当前未列在侧边栏中，因此无法在那里重命名。"
+    },
     "wslMoved": {
       "movedToHost": "已移至 {{distro}} 主机",
+      "sectionTitle": "已移至 WSL 主机 ({{count}})",
+      "hide": "从此列表隐藏",
+      "hiddenToast": "已从此列表隐藏 {{name}}",
+      "hiddenToastDescription": "“重新在此电脑上使用”仍在 {{distro}} 主机下的菜单中。",
       "useHere": "重新在此电脑上使用",
       "useHereTitle": "要重新在此电脑上使用 {{name}} 吗？",
       "useHereDescription": "Orca 会按移动前的状态在这里打开此项目。你的代码不受影响：它从未移动。移动后在 {{distro}} 主机上所做的更改（例如新标签页和聊天）会留在主机上，不会回来。与它一起移动的项目也会一起回来。在你于 {{distro}} 主机上将其移除之前，项目也会一直保留在那里。此窗口将重新加载",
@@ -21103,7 +22574,10 @@
         "restartGaveUp_other": "尝试 {{count}} 次后仍无法重启 {{distro}} 中的 Orca 服务器",
         "serviceUnconfirmed": "WSL 服务未确认该发行版是否正在运行",
         "peerCheckFailed": "Orca 无法向 WSL 主机询问此电脑上的另一个 Orca 是否仍在使用该主机：{{detail}}",
-        "removalUnrecorded": "Orca 无法记录此次移除后仍在运行的内容：{{detail}}"
+        "removalUnrecorded": "Orca 无法记录此次移除后仍在运行的内容：{{detail}}",
+        "installLockWait_other": "正在等待此发行版中的另一个 Orca 安装完成。如果未完成，Orca 将在约 {{count}} 分钟后接管。",
+        "installLockWaitGivesUp_other": "正在等待此发行版中的另一个 Orca 安装完成。如果未完成，Orca 将在约 {{count}} 分钟后停止等待。",
+        "installLockWaitHolderGone": "此发行版中的另一个 Orca 安装已停止。Orca 将在几秒内接管。"
       }
     },
     "agentSummary": {
@@ -21148,7 +22622,10 @@
         "notReporting_other": "全部 {{count}} 个智能体未报告状态",
         "unconfirmed_other": "全部 {{count}} 个智能体未确认",
         "needsAttention_other": "全部 {{count}} 个智能体需要处理"
-      }
+      },
+      "idleChildCount": "{{count}} 个空闲",
+      "hideIdleChildren": "隐藏 {{count}} 个空闲子智能体",
+      "showIdleChildren": "显示 {{count}} 个空闲子智能体"
     },
     "cardProperties": {
       "agentModel": "智能体模型"
@@ -21158,9 +22635,50 @@
       "why": "Git、文件和终端将在 Linux 中原生运行，而不是通过 Windows 文件共享。",
       "accept": "作为主机运行",
       "projectNotFound": "找不到要移动的已添加项目。请在侧边栏的项目上使用“移到 {{distro}} 主机…”。",
+      "savedUnderAnotherPath": "此文件夹已作为项目 {{path}} 存在，暂时无法移到 {{distro}} 主机。请移除该项目，然后重新添加此文件夹以移动它。",
       "existingTitle": "添加到 {{distro}} 主机（推荐）",
       "existingWhy": "{{distro}} 已作为主机运行，因此 Git、文件和终端将在 Linux 中原生运行，而不是通过 Windows 文件共享。",
       "existingAccept": "添加到主机"
+    },
+    "hiddenProjects": {
+      "hidden": "已隐藏 {{name}}",
+      "hiddenDescription": "其终端和智能体会继续运行，可在列表下方的“已隐藏的项目”中重新显示",
+      "undo": "撤销",
+      "hideFailed": "无法隐藏 {{name}}，其主机可能需要更新 Orca",
+      "showFailed": "无法重新显示 {{name}}",
+      "listLabel": "已隐藏的项目",
+      "show": "显示",
+      "showAriaLabel": "在侧边栏中显示 {{name}}",
+      "settingsTitle": "在侧边栏中隐藏",
+      "settingsDescription": "在侧边栏、项目选择器和工作区切换器中隐藏此主机上的项目副本，其终端、智能体和自动化会继续运行；在已配对的 Orca 服务器上，此操作会对连接到该服务器的所有人隐藏该项目",
+      "settingsToggleLabel": "在侧边栏中隐藏 {{name}}",
+      "keywordHide": "隐藏",
+      "keywordHidden": "已隐藏",
+      "keywordSidebar": "侧边栏",
+      "hideFromSidebar": "在侧边栏中隐藏",
+      "sectionTitle": "已隐藏的项目（{{count}}）",
+      "allHidden": "所有项目都已隐藏，可从下方的“已隐藏的项目”中重新显示",
+      "undoGone": "{{name}} 已从 Orca 中移除",
+      "settingsGroup": "侧边栏",
+      "showOnHostAriaLabel": "在侧边栏中显示 {{host}} 上的 {{name}}",
+      "keywordShow": "显示",
+      "keywordUnhide": "取消隐藏"
+    },
+    "cardSlot": {
+      "needsYouLabel": "等待你操作",
+      "failedLabel": "上一轮失败",
+      "markedUnread": "你已标记为未读",
+      "unread": "未读结果",
+      "working": "工作中",
+      "monitoring": "正在监控",
+      "offlineLabel": "主机离线",
+      "offline": "离线",
+      "needYouCount": "{{count}} 个需要你处理",
+      "needsYou": "需要你处理",
+      "failed": "失败",
+      "detailsRow": "详情行",
+      "workspaceUnread": "此工作区中有未读内容",
+      "unreadTab": "未读标签页"
     }
   },
   "editor": {
@@ -21188,6 +22706,10 @@
         "noContent": "没有可导出的内容",
         "timedOut": "导出超时"
       }
+    },
+    "diffTooLarge": {
+      "title": "文件过大，无法显示差异",
+      "detail": "此文件的某个版本超过 10 MB，因此 Orca 不会加载它来显示文本差异"
     }
   },
   "featureTips": {
@@ -21281,7 +22803,13 @@
       "demoCookie": "Cookie",
       "switchedNoteTitle": "新智能体将在聊天界面中打开",
       "switchedNoteBody": "更喜欢终端？随时可以切换回来：在设置中搜索 <term>Chat UI</term>。",
-      "openSettings": "打开设置"
+      "openSettings": "打开设置",
+      "changeInSettings": "随时可在<link>设置 → 聊天界面</link>中更改",
+      "switchToTerminal": "切换到终端",
+      "saveFailed": "无法开启聊天界面，请在设置 → 聊天界面中开启",
+      "terminalSaveFailed": "无法切换到终端，请在设置 → 聊天界面中关闭聊天界面",
+      "switched": "新智能体现在默认使用聊天界面，你可以随时在设置 → 聊天界面中切换回来",
+      "dismiss": "关闭"
     }
   },
   "quickOpen": {
@@ -21313,10 +22841,7 @@
       "delete": "删除",
       "restore": "恢复",
       "discard": "放弃",
-      "discardAll": "全部丢弃",
-      "deleteUntrackedTitle_one": "删除 {{count}} 个未跟踪文件？",
-      "deleteUntrackedTitle_other": "删除 {{count}} 个未跟踪文件？",
-      "deleteCount": "删除 {{count}} 个"
+      "discardAll": "全部丢弃"
     },
     "createReviewFailure": {
       "authRequiredCommand": "{{providerName}} 未通过身份验证。下一步：在此环境中运行 {{command}}",
@@ -21474,7 +22999,10 @@
         "kimiProviderLimited": "Kimi 已达到提供者限制，或提供者正忙。请等待后再重试，或降低请求频率",
         "kimiContextOverflow": "Kimi 的上下文已用尽。请缩短提示词或启动新会话，然后重试",
         "kimiConfigInvalid": "Kimi 的配置无效。请在重试前检查执行主机上的模型和提供者配置",
-        "kimiContinueSessionConflict": "Kimi 收到了冲突的选项：--continue, --session。请在重试前修正生成预设或 CLI 参数"
+        "kimiContinueSessionConflict": "Kimi 收到了冲突的选项：--continue, --session。请在重试前修正生成预设或 CLI 参数",
+        "commandTemplateEmptyDictationCleanup": "听写整理的命令模板为空",
+        "dictationCleanupAgentUnsupported": "请在“设置 -> 语音 -> 整理”中为 AI 整理选择受支持的智能体；支持的智能体：{{agents}}，或选择“自定义命令”",
+        "agentCannotGenerateDictationCleanup": "智能体“{{agent}}”不支持听写整理，支持的智能体：{{agents}}，或选择“自定义命令”"
       },
       "enableSourceControlAi": "请在设置 -> Git 中启用源代码控制 AI",
       "chooseBaseBranch": "请先选择基础分支，再生成",
@@ -21612,7 +23140,6 @@
   },
   "sessionSearch": {
     "panel": {
-      "noMatches": "已索引的历史记录中没有匹配的会话，请尝试其他查询或范围",
       "loadMore": "加载更多匹配项",
       "indexedHistory": "已索引的历史记录 · 最佳匹配",
       "hostsSkipped": "未搜索：{{value0}}",
@@ -21645,7 +23172,9 @@
         "unreachable": "无法连接",
         "scopeNotFound": "该主机上未找到搜索范围",
         "agentNotSupported": "不支持该智能体"
-      }
+      },
+      "consentTranscriptIndex": "搜索会匹配会话详情和消息预览，如需搜索完整对话，请启用全文搜索（为本地记录建立索引，内容不会脱敏），配对设备也可以搜索这些内容",
+      "noMatchesToShow": "没有可显示的匹配会话"
     }
   },
   "sessionHistory": {
@@ -21689,7 +23218,8 @@
       "openInSidebar": "在侧边栏中打开",
       "openInSidebarCopy": "输入你记得的内容，或询问代理：“查找我们修复登录超时问题的那个会话”",
       "open": "打开",
-      "enableOnAll": "在所有计算机上启用"
+      "enableOnAll": "在所有计算机上启用",
+      "computersConsent": "每台计算机都会保留各自的智能体对话可搜索索引，已通过身份验证的配对客户端可以接收搜索结果"
     },
     "dialog": {
       "select": "选择",
@@ -21736,12 +23266,15 @@
       "scannerStopped": "会话扫描器意外停止。请刷新以重试"
     },
     "sessionAccount": "账户",
-    "sessionAccountUnknown": "未知"
+    "sessionAccountUnknown": "未知",
+    "antigravityChatToCli": "聊天 → CLI"
   },
   "common": {
     "retry": "重试",
     "cancel": "取消",
-    "unassigned": "未分配"
+    "unassigned": "未分配",
+    "copy": "复制",
+    "delete": "删除"
   },
   "fileExplorer": {
     "root": {
@@ -21761,8 +23294,7 @@
     "trashFailed": {
       "titleRecycleBin": "无法将“{{name}}”移到回收站。是否永久删除？",
       "titleTrash": "无法将“{{name}}”移到废纸篓。是否永久删除？",
-      "description": "此操作无法撤销",
-      "confirm": "永久删除"
+      "description": "此操作无法撤销"
     }
   },
   "sparsePreset": {
@@ -21820,7 +23352,6 @@
       "cancel": "取消"
     },
     "antigravity": {
-      "chatTitle": "Antigravity 聊天",
       "chatSignIn": "登录",
       "chatChangeAccount": "更换帐户",
       "chatRetry": "重试登录",
@@ -21838,23 +23369,13 @@
       "chatFailed": "登录失败，请重试",
       "chatOtherClient": "另一个客户端正在登录",
       "chatReadFailed": "无法检查 {{host}} 上的登录",
-      "signIn": "在此主机上启动 agy 并完成其浏览器登录，然后保存当前帐户，要添加其他帐户，请在 agy 中使用 /logout 并再次登录",
-      "docs": "登录说明",
       "retry": "重试",
-      "identityUnknown": "登录身份不可用",
-      "signedOut": "没有登录本机 agy 帐户",
       "changed": "本机帐户已更改，在启动 agy 之前再次选择已保存的帐户",
-      "save": "保存当前帐户",
       "refresh": "刷新帐户",
       "usage": "刷新使用情况",
-      "working": "正在更新帐户",
       "usageReading": "会话：{{session}} · 每周：{{weekly}}",
       "saved": "已保存的 Google 帐户",
-      "nativeActive": "原生账户",
-      "selected": "已选择",
-      "select": "选择",
       "remove": "移除",
-      "sessions": "选择适用于该主机上的新 agy 会话，现有会话可能会保留其以前的帐户",
       "searchDescription": "在执行主机上保存并选择本机 agy Google 帐户",
       "title": "Antigravity",
       "keyword": {
@@ -21866,13 +23387,42 @@
       "authMethod": "登录方式",
       "personal": "Google 账户",
       "gcpProject": "Google Cloud 项目",
-      "gcpLocation": "Google Cloud 位置",
       "settingsIncomplete": "请选择 Antigravity 账户类型并输入其 Google Cloud 项目和位置。",
       "settingsLoadFailed": "Orca 无法加载 Antigravity 登录设置。请重试。",
       "settingsSaveFailed": "Orca 无法保存 Antigravity 登录设置。请重试。",
       "lastReading": "{{reading}} · 读取于 {{time}}",
       "noReading": "用量未知：尚未读取",
-      "fd47b5a5dd": "Antigravity账户"
+      "fd47b5a5dd": "Antigravity账户",
+      "usageWithReading": "刷新使用情况（{{reading}}）",
+      "windowsChanged": "主机默认账户已更改，请选择已保存的账户以重新应用",
+      "enterprise": "Gemini Enterprise",
+      "projectPlaceholder": "my-project-id",
+      "locationPlaceholder": "us-central1",
+      "chatSeparate": "与你的 agy 终端账户相互独立",
+      "chatBadgeSigningIn": "正在登录",
+      "chatBadgeSignedIn": "已登录",
+      "chatBadgeSignedOut": "未登录",
+      "chatSignInWith": "使用 {{method}} 登录",
+      "chatPasteOpen": "浏览器页面没有加载？",
+      "chatSwitchMethod": "重新登录以切换到 {{method}}",
+      "enterpriseFieldsNeeded": "请输入 Google Cloud 项目和位置",
+      "personalOption": "你的个人 Google AI 套餐",
+      "enterpriseOption": "你所在组织的许可证",
+      "location": "位置",
+      "enterpriseFieldsShort": "请输入项目和位置",
+      "chatUseMethod": "重新登录以使用 {{method}}",
+      "signInEllipsis": "登录…",
+      "loadFailed": "无法加载 agy 账户",
+      "loading": "正在加载账户…",
+      "notSignedIn": "未登录",
+      "runAgy": "在此主机上运行 agy 以登录",
+      "signInHelp": "登录帮助",
+      "currentLogin": "当前 agy 登录账户",
+      "currentNotSaved": "当前 agy 登录账户 · 未保存",
+      "noEmailNotSaved": "agy 未提供邮箱 · 未保存",
+      "saveShort": "保存",
+      "readAt": "读取于 {{time}}",
+      "active": "当前"
     },
     "claude": {
       "added": "已添加账户，选择它即可将其用于您下次启动的 Claude",
@@ -21907,7 +23457,7 @@
         "dontAskAgainHint": "可在设置 → AI 服务商账户中关闭此选项",
         "listLabel": "待重启的 Claude 会话",
         "settingTitle": "Claude 在终端中运行期间切换账户时",
-        "settingDescription": "重启后，每个终端对话都会在新账户上继续。",
+        "settingDescription": "重启后，每个终端对话都会在新账户上继续。忙碌的会话会中断当前工作。",
         "settingRestart": "总是重启",
         "session": "Claude 会话",
         "restartingOther": "正在 {{account}} 上重启 {{count}} 个 Claude 会话",
@@ -21927,11 +23477,18 @@
         "notMovedOther": "另有 {{count}} 个会话未移动",
         "review": "查看",
         "restartCount_other": "重启 {{count}} 个会话",
-        "reviewBody_other": "其他 {{count}} 个 Claude 会话未移至 {{next}}",
-        "body_other": "{{count}} 个 Claude 会话仍在 {{previous}} 上运行。重启后，各对话将在 {{next}} 上继续。忙碌的会话会等待空闲后再重启",
+        "reviewBody_other": "{{count}} 个 Claude 会话未移至 {{next}}",
+        "body_other": "{{count}} 个 Claude 会话仍在 {{previous}} 上运行。重启后，各对话将在 {{next}} 上继续。忙碌的会话会中断当前工作并立即重启",
         "reasonSharedSession": "在另一个窗格中也已打开",
         "sharedOne": "由于另一个窗格打开了同一对话，1 个 Claude 会话将保持在 {{previous}}。重新启动可能会重新打开另一个窗格的对话。",
-        "sharedOther": "由于另一个窗格打开了同一对话，{{count}} 个 Claude 会话将保持在 {{previous}}。重新启动可能会重新打开另一个窗格的对话。"
+        "sharedOther": "由于另一个窗格打开了同一对话，{{count}} 个 Claude 会话将保持在 {{previous}}。重新启动可能会重新打开另一个窗格的对话。",
+        "strandedOne": "1 个 Claude 会话可能仍在 {{previous}} 上。请手动重启以切换",
+        "strandedOther": "{{count}} 个 Claude 会话可能仍在 {{previous}} 上。请手动重启以切换"
+      },
+      "oauthUsage": {
+        "title": "Claude 用量轮询",
+        "description": "使用 Claude Code 登录凭据检查用量、额度和非活跃账号。关闭后，仅显示运行中终端会话提供的实时用量。",
+        "about": "关于 Claude 用量轮询"
       }
     },
     "hostSignIn": {
@@ -21954,7 +23511,17 @@
         "failed": "登录失败。请重试"
       }
     },
-    "remoteScopeAccountsAddHere": "当前显示由 {{value0}} 管理的账户。新账户将在那里登录，您需要在此设备的浏览器中完成操作"
+    "remoteScopeAccountsAddHere": "当前显示由 {{value0}} 管理的账户。新账户将在那里登录，您需要在此设备的浏览器中完成操作",
+    "rename": {
+      "action": "重命名",
+      "title": "重命名账户",
+      "description": "只会更改 Orca 中显示的名称，留空则显示 {{email}}",
+      "label": "显示名称",
+      "reset": "重置为默认",
+      "cancel": "取消",
+      "save": "保存",
+      "unsupportedHost": "请更新 {{host}} 上的 Orca 以在那里更改此设置"
+    }
   },
   "osDocumentOpen": {
     "failed": "无法打开文件"
@@ -21983,28 +23550,22 @@
       "oldTerminalDialogRisk": "共享服务器的 Codex 会话可能会一起结束，并且代理状态可能会错误",
       "oldTerminalDialogCause": "较旧的终端仍然共享 Codex 服务器，打开一个新终端以在单独的服务器上运行 Codex",
       "fix": "使固定",
-      "dialogTitle": "为每个 Codex 选项卡提供自己的服务器",
-      "dialogDescription": "Codex 会话直接在共享一台后台服务器的终端中启动，Orca 将其启动的 Codex 会话分开保存，当会话共享一台服务器时，关闭一个服务器可能会结束其他服务器，并且代理状态可能会错误",
-      "copy": "复制",
       "copied": "已复制",
-      "done": "完成",
-      "step1Title": "关闭 Codex 服务器共享",
-      "step1Note": "这会更改您的 Codex 设置，因此它也适用于 Orca 外部",
-      "step2Title": "停止正在运行的共享服务器",
-      "undo": "要撤消，请运行 codex features enable daemon_auto_start",
-      "step2Warning": "关闭共享服务器的所有打开的 Codex 会话",
-      "turnOff": "关",
       "turningOff": "正在关闭…",
-      "turnedOff": "已关闭",
-      "turnOffFailed": "Orca 无法关闭此功能",
       "stopServer": "停止服务器",
       "stopping": "停止…",
-      "stopped": "已停止",
-      "stopFailed": "Orca 无法停止服务器",
-      "confirmStopTitle": "停止共享服务器？",
-      "confirmStopDescription": "这将关闭所有共享它的开放 Codex 会话，包括 Orca 之外的会话",
       "cancel": "取消",
-      "runs": "跑步"
+      "copyCommand": "复制命令",
+      "howToUndo": "如何撤销",
+      "undoRun": "要重新开启共享，请运行：",
+      "turnOffSharing": "关闭共享",
+      "dialogQuestion": "让每个 Codex 标签页使用自己的服务器？",
+      "stopSummary": "停止正在运行的服务器，并关闭所有使用它的 Codex 会话。",
+      "dialogSummary": "关闭 Codex 服务器共享，在 Orca 之外也会生效。",
+      "alsoStop": "同时停止正在运行的服务器（会关闭所有使用它的 Codex 会话，包括 Orca 之外的）",
+      "couldNotTurnOff": "无法关闭共享。",
+      "stopFailedAfterOff": "共享已关闭，但服务器未停止。",
+      "turnOffAndStop": "Turn off and stop server"
     },
     "paneMove": {
       "failed": "无法将窗格移动到新选项卡"
@@ -22031,11 +23592,11 @@
       "reopenTerminal_other": "重新打开 {{count}} 个终端",
       "reopened_one": "已重新打开 {{count}} 个终端",
       "reopened_other": "已重新打开 {{count}} 个终端",
-      "resumed_one": "已恢复 {{count}} 个代理会话",
-      "resumed_other": "已恢复 {{count}} 个代理会话",
+      "resumed_one": "已恢复 {{count}} 个智能体会话",
+      "resumed_other": "已恢复 {{count}} 个智能体会话",
       "reopenTerminal": "重新打开 {{count}} 个终端",
       "reopened": "已重新打开 {{count}} 个终端",
-      "resumed": "已恢复 {{count}} 个代理会话"
+      "resumed": "已恢复 {{count}} 个智能体会话"
     },
     "severedDaemonBanner": {
       "unknownCount": "其正在运行的终端",
@@ -22066,6 +23627,21 @@
       "gotIt": "知道了",
       "title": "Claude Code 在较宽的终端中会在聊天旁打开自己的差异面板，那个面板属于 Claude，而不是 Orca",
       "body": "要隐藏它，请在 Claude Code 中输入 /diff，Claude 会在之后的会话中记住这一选择"
+    },
+    "windowsFontWeight": {
+      "title": "Windows 上的终端文字现在更细了",
+      "okay": "好的",
+      "lighterText": "更细的终端文字"
+    },
+    "claudeThemeSyncOffer": {
+      "title": "让 Claude Code 匹配你的 Orca 主题？",
+      "description": "此计算机上的 Claude Code 将使用你的终端配色并跟随主题变化（包括在 Orca 之外），你可以在设置中更改此项",
+      "accept": "匹配主题",
+      "accepted": "Claude Code 主题同步已开启",
+      "acceptedDescription": "此计算机上新的 Claude Code 会话将使用你的 Orca 主题",
+      "decline": "不用了",
+      "failed": "无法开启 Claude Code 主题同步",
+      "failedDescription": "请在设置中开启"
     }
   },
   "fileSearch": {
@@ -22136,12 +23712,18 @@
   },
   "worktree": {
     "setupTrust": {
-      "createdBranchSkipped": "设置脚本未运行：此工作区分支中的 orca.yaml 配置命令与你批准的命令不同。"
+      "createdBranchSkipped": "设置脚本未运行：此工作区分支中的 orca.yaml 配置命令与你批准的命令不同。",
+      "runFailed": "无法启动设置脚本",
+      "changedAgain": "设置脚本未运行：在你审查之后，此工作区的 orca.yaml 再次发生了更改",
+      "hostUnsupported": "已批准，请更新工作区主机上的 Orca，以便为现有工作区运行设置脚本",
+      "reviewAction": "审查设置脚本",
+      "branchDiffersTitle": "此工作区的分支包含不同的设置命令",
+      "branchDiffersBody": "工作区已创建，但其分支中的 <code>orca.yaml</code> 与你批准的内容不同，因此设置脚本未运行，请仅在信任 <repo/> 时为此工作区运行这些命令",
+      "branchSetupScript": "分支的设置脚本"
     },
     "nestedRemoval": {
       "refreshFailed": "无法刷新工作区列表",
       "review": "连同嵌套工作树一起删除…",
-      "title": "删除工作区和嵌套工作树？",
       "description": "这将永久删除“{{name}}”、下面列出的每个嵌套工作树及其中的所有文件（包括未提交的更改），它们的终端和代理将被停止",
       "detached": "分离 HEAD",
       "loading": "正在检查嵌套工作树…",
@@ -22149,15 +23731,52 @@
       "cancel": "取消",
       "retry": "重新检查",
       "deleting": "正在删除…",
-      "confirm": "删除所有列出的工作树",
       "preservedBranches": "部分嵌套工作树分支已保留"
     },
-    "setupTerminalTitle": "初始设置"
+    "setupTerminalTitle": "初始设置",
+    "delete": {
+      "detachingChildren": "正在分离子工作区…",
+      "childrenPreservedTitle": "子工作区将被保留",
+      "childrenCannotBeKeptTitle": "无法保留子工作区",
+      "childrenPreservedDescription": "直接子工作区将成为顶级工作区，其文件、终端和嵌套的子工作区都将保留",
+      "detachChildren": "分离并保留子工作区",
+      "nestedChildrenCannotBeKept": "此工作区内的子工作区文件夹需先移到此工作区之外，才能保留",
+      "childrenChanged": "子工作区已更改，请检查工作区列表后重试",
+      "childrenChangedClearPreserve": "子工作区已更改，请取消勾选此选项以重新查看删除内容",
+      "detachFailed": "无法分离所有子工作区，父工作区未被删除。{{error}}",
+      "loss": {
+        "changes_one": "{{count}} 项未提交的更改",
+        "changes_other": "{{count}} 项未提交的更改",
+        "uncountedChanges": "未提交的更改",
+        "unsavedFiles_one": "{{count}} 个未保存的文件",
+        "unsavedFiles_other": "{{count}} 个未保存的文件",
+        "both": "{{changes}}和{{files}}将会丢失",
+        "one": "{{what}}将会丢失",
+        "all": "{{changes}}、{{files}}和 Git 忽略的文件将会丢失",
+        "withIgnored": "{{what}}和 Git 忽略的文件将会丢失",
+        "ignoredOnly": "Git 忽略的文件将会丢失"
+      },
+      "showChanges": "显示更改",
+      "unsavedSuffix": "（未保存）",
+      "onHost": "位于 {{host}}",
+      "forceDeletingEllipsis": "正在强制删除…",
+      "deletingEllipsis": "正在删除…",
+      "forceDelete": "强制删除",
+      "alwaysForceDelete": "始终强制删除",
+      "batchTitle": "要删除 {{count}} 个工作区吗？",
+      "batchVerb": "删除 {{count}} 个工作区",
+      "withChildrenTitle_one": "要删除 {{name}} 和 {{count}} 个子工作区吗？",
+      "withChildrenTitle_other": "要删除 {{name}} 和 {{count}} 个子工作区吗？",
+      "allVerb": "全部删除",
+      "singleTitle": "要删除 {{name}} 吗？",
+      "singleVerb": "删除工作区",
+      "forceExplanation": "存在更改，Git 无法删除该工作树。强制删除仍会移除这些更改。",
+      "errorDetails": "详细信息",
+      "changesIncomplete": "部分更改未能完整检查。"
+    }
   },
   "mediaPreview": {
-    "unavailable": "无法播放此媒体文件，文件可能不可用或使用了不支持的编解码器",
-    "openFailed": "无法在默认应用中打开此文件",
-    "openDefault": "在默认应用中打开"
+    "unavailable": "无法播放此媒体文件，文件可能不可用或使用了不支持的编解码器"
   },
   "projectBoard": {
     "noColumnField": "此看板视图没有可用于分组的单选或迭代字段，因此 Orca 改为列出各项",
@@ -22253,10 +23872,7 @@
     "moreActions": "更多强制删除选项",
     "alwaysForceDeleteBranchesDescription": "适用于将来删除工作区后保留的分支。",
     "moreBranchActions": "更多分支删除选项",
-    "alwaysForceDeleteBranches": "始终删除保留的分支",
-    "moreDeleteOptions": "更多删除选项",
-    "alwaysDelete": "始终删除",
-    "alwaysDeleteTooltip": "今后删除时跳过此确认。"
+    "alwaysForceDeleteBranches": "始终删除保留的分支"
   },
   "workspace": {
     "branchChoice": {
@@ -22335,7 +23951,10 @@
       "allReviewChecks": "评审：{{count}} · 检查：{{status}}",
       "showLinked_other": "显示 {{count}} 个关联的审查和任务",
       "linkedCount_other": "已关联 {{count}} 项",
-      "labels": "标签：{{labels}}"
+      "labels": "标签：{{labels}}",
+      "addEmoji": "添加表情符号",
+      "addEmojiTooltip": "添加表情符号（或输入 :）",
+      "noEmojiFound": "未找到表情符号"
     },
     "attachments": {
       "updateRuntime": "更新远程运行时以更改工作区关联",
@@ -22361,6 +23980,30 @@
       "draft": "{{review}}：草稿",
       "merged": "{{review}}：已合并",
       "open": "{{review}}：开放"
+    },
+    "vm": {
+      "menu": {
+        "waking": "正在唤醒虚拟机…",
+        "retryResume": "重试恢复虚拟机",
+        "resume": "恢复虚拟机",
+        "suspend": "挂起虚拟机",
+        "suspendDescription": "关闭此工作区的面板并挂起其虚拟机，打开工作区时会将其唤醒"
+      },
+      "state": {
+        "provisioning": "虚拟机预配中",
+        "suspended": "虚拟机已挂起",
+        "waking": "虚拟机唤醒中",
+        "resumeFailed": "虚拟机恢复失败",
+        "provisionFailed": "虚拟机配置失败"
+      },
+      "hint": {
+        "provisioning": "正在创建虚拟机",
+        "suspended": "已休眠以节省费用，打开工作区即可将其唤醒",
+        "waking": "正在恢复虚拟机并重新连接",
+        "resumeFailed": "无法恢复虚拟机，请右键点击并选择“恢复虚拟机”以重试",
+        "provisionFailed": "虚拟机未创建，或创建过程被中断，请打开设置将其销毁或移除"
+      },
+      "suspendFailed": "挂起虚拟机工作区失败"
     }
   },
   "tabHoverCard": {
@@ -22459,7 +24102,9 @@
       "chooseTransition": "选择状态更改：",
       "cancel": "取消",
       "noTransition": "{{key}} 没有可转到 {{column}} 的状态更改",
-      "queryTooLong": "Jira 查询过长，请缩短查询或清除筛选条件"
+      "queryTooLong": "Jira 查询过长，请缩短查询或清除筛选条件",
+      "reorderColumn": "重新排列 {{column}}",
+      "reorderColumnHint": "此列中的议题：{{count}}。使用左右方向键移动此列。"
     },
     "favourites": {
       "activeLabel": "Jira 收藏：{{name}}",
@@ -22545,21 +24190,13 @@
     "language": {
       "back": "语言",
       "requestPrompt": "你希望 Orca 支持哪种语言？",
-      "requestSuccess": "语言请求已记录。你可以继续设置",
       "requestError": "无法记录你的请求。请重试",
       "retry": "重试",
       "requestAction": "请求语言支持",
       "title": "显示语言",
-      "device": "系统语言：{{language}}",
-      "unsupported": "系统语言：{{language}}。暂不支持此语言",
-      "unknown": "无法检测系统语言。请在下方选择语言",
-      "loadError": "无法加载此语言。请重试",
-      "saveError": "无法保存你的语言偏好设置。请重试",
-      "other": "其他语言…",
       "settingsError": "无法加载你的设置",
       "loadingSettings": "正在加载设置…",
-      "loading": "正在加载语言…",
-      "saving": "正在保存语言…"
+      "loading": "正在加载语言…"
     }
   },
   "resourceManager": {
@@ -22604,11 +24241,14 @@
       "endHint": "结束此终端及其子进程",
       "claimed": "智能体现在拥有此终端。请刷新后重试",
       "attached": "客户端现在已连接到此终端。请刷新后重试",
-      "unverifiableEnd": "无法验证：主机无法确认结果。终端可能仍在运行"
+      "unverifiableEnd": "无法验证：主机无法确认结果。终端可能仍在运行",
+      "selectAll": "全选终端",
+      "selectAllShort": "全选",
+      "endSelected": "结束所选（{{count}}）",
+      "selectNamed": "选择 {{terminal}}"
     },
     "resources": "资源",
     "ptys": "PTY",
-    "localDaemonScope": "这会影响此计算机上的终端",
     "countUnavailable": "终端数量不可用",
     "openToObserve": "打开“资源”以查看终端会话",
     "refresh": "刷新",
@@ -22729,6 +24369,7 @@
     "controlledByHost": "由 {{host}} 控制"
   },
   "nativeChat": {
+    "linkedMessageMissing": "找不到该消息。",
     "math": {
       "scrollDisplayEquation": "滚动显示公式"
     }
@@ -22765,6 +24406,8 @@
       "tabCloseAll": "关闭所有编辑器标签页",
       "tabRename": "重命名当前标签页",
       "tabReopenClosed": "重新打开已关闭的标签页",
+      "tabMoveLeft": "将活动标签页左移",
+      "tabMoveRight": "将活动标签页右移",
       "tabNextSameType": "下一个标签页（同类型）",
       "tabPreviousSameType": "上一个标签页（同类型）",
       "tabNextAllTypes": "下一个标签页（所有类型）",
@@ -22775,6 +24418,7 @@
       "tabOpenQuickCommandsMenu": "切换快捷命令菜单",
       "editorFind": "在编辑器中查找",
       "editorReplace": "在编辑器中替换",
+      "editorToggleChangesView": "切换更改视图",
       "fileExplorerUndo": "撤销文件操作",
       "fileExplorerRedo": "重做文件操作",
       "fileExplorerCopyPath": "复制文件路径",
@@ -22792,6 +24436,7 @@
       "chatFind": "在聊天中查找",
       "terminalToggleNativeChat": "在聊天界面和终端之间切换",
       "terminalClosePane": "关闭当前窗格",
+      "terminalCopySessionId": "复制会话 ID",
       "terminalSplitRight": "向右拆分终端",
       "terminalSplitDown": "向下拆分终端",
       "terminalSwitchInputSource": "切换输入法/语言（原生）",
@@ -22841,7 +24486,9 @@
       "128cce6e6d": "设置标题…",
       "e9da9f872a": "将评审笔记发送给智能体",
       "1524825c2c": "切换工作区看板",
-      "d286d1ab85": "清除窗格标题"
+      "d286d1ab85": "清除窗格标题",
+      "tabNewBrowserSplitRight": "在右侧拆分窗格中新建浏览器标签页",
+      "5468defe61": "折叠/展开所有项目"
     },
     "group": {
       "global": "全局",
@@ -22990,7 +24637,12 @@
       "mixed": "混合状态",
       "repair": "需要重新配对",
       "update": "需要更新",
-      "serverReplaced": "不同的服务器"
+      "serverReplaced": "不同的服务器",
+      "resumeFailed": "恢复失败",
+      "setupFailed": "配置失败",
+      "provisioning": "预配中",
+      "suspended": "已挂起",
+      "waking": "唤醒中"
     },
     "compat": {
       "compatible": "运行时客户端与服务器兼容",
@@ -23045,7 +24697,11 @@
       "importWarpFolder": "导入 Warp 主题文件夹",
       "images": "图片",
       "repoIconImages": "仓库图标图片",
-      "audio": "音频"
+      "audio": "音频",
+      "importGhosttyConfig": "导入 Ghostty 配置",
+      "importKittyConfig": "导入 Kitty 配置",
+      "pickAppIcon": "选择应用程序图标",
+      "appIconImage": "应用程序图标图片"
     }
   },
   "taskProviders": {
@@ -23170,15 +24826,14 @@
     "viewed": {
       "markFile": "将 {{path}} 标记为已查看",
       "unmarkFile": "取消 {{path}} 的已查看标记"
-    }
+    },
+    "pasteImageFile": "请将图片作为文件粘贴，才能将其附加到 GitHub",
+    "imageUploadFailed": "无法附加图片：{{message}}",
+    "imageUploadError": "GitHub 无法上传此图片",
+    "waitForImageUploads": "请等待图片上传完成，然后重试创建 PR"
   },
   "agentPicker": {
-    "catalogUnsupported": "此主机上无法使用 {{agent}} 模型。你可以保留当前选择或使用参数。",
     "catalogUnsupportedLaunch": "此主机上无法使用 {{agent}} 模型。当前选择仍会生效。",
-    "catalogFailed": "无法加载 {{agent}} 模型。请关闭并重新打开智能体选择器以重试。",
-    "catalogSignIn": "请登录 {{agent}} 以加载模型，然后重新打开智能体选择器。",
-    "catalogInstall": "请在此主机上安装 {{agent}} 以加载模型，然后重新打开智能体选择器。",
-    "catalogUnresolved": "尚未加载 {{agent}} 模型。请关闭并重新打开智能体选择器以重试。",
     "catalogEmpty": "{{agent}} 没有可用模型。",
     "search": "搜索，例如 Opus 5.5…",
     "configure": "配置 {{agent}}",
@@ -23189,18 +24844,18 @@
     "setByArguments": "由参数设置",
     "searchModels": "搜索模型",
     "noModels": "没有与搜索匹配的模型。",
-    "toggleArguments": "切换参数显示",
     "argumentsTerminalHint": "仅适用于终端（CLI）启动",
     "searchAgentModels": "搜索 {{agent}} 模型…",
     "moreModelsWithCount": "更多模型 ({{total}})",
-    "use": "使用",
     "select": "选择智能体",
     "promptPlaceholder": "添加提示词（可选）：/ 选择技能，@ 选择文件",
     "promptPlaceholderFilesOnly": "添加提示词（可选）：@ 选择文件",
     "workspaceStartupFailed": "无法启动 {{agent}}。请检查此设置中的参数并重试。",
     "sameAsTextDefault": "与默认值相同 · {{value0}}",
+    "effortDefault": "默认",
     "chatChoicesNote": "没有 CLI 标志的 {{agent}} 模型或推理力度选项适用于聊天。",
-    "composedChoicesNote": "{{agent}} 的推理力度和速度选项包含在模型参数中。"
+    "composedChoicesNote": "{{agent}} 的推理力度和速度选项包含在模型参数中。",
+    "searchAgents": "搜索智能体…"
   },
   "wslMove": {
     "entry": {
@@ -23391,7 +25046,18 @@
         "settingUp": "项目仍在所选自动化主机上进行设置",
         "error": "项目在所选自动化主机上设置失败",
         "unsupported": "所选自动化主机不支持此项目"
-      }
+      },
+      "blocked": {
+        "trustWorkspace": "智能体正在等待你信任此文件夹",
+        "trustWorkspaceNamed": "{{agent}} 正在等待你信任此文件夹",
+        "update": "智能体正在等待你回应更新提示",
+        "folder": "智能体在询问要在哪个文件夹中工作",
+        "model": "智能体在请你选择模型",
+        "approval": "智能体正在等待你批准一项操作",
+        "signIn": "智能体正在等待你登录",
+        "prompt": "智能体停在了一个需要你回答的提示处"
+      },
+      "agentInterrupted": "智能体在完成此次运行前被中断"
     },
     "extraAgentArgs": {
       "errors": {
@@ -23412,7 +25078,6 @@
     "setupTrust": {
       "reviewTitle": "要批准此自动化的新设置命令吗？",
       "reviewBody": "由于分支的 <code>orca.yaml</code> 设置命令已更改，某次运行跳过了设置。批准后，之后的运行将使用这些命令。仅在你信任 <repo/> 时批准。",
-      "approve": "批准",
       "approved": "已批准设置。此自动化之后的运行将执行它。",
       "skippedSinceApproved": "由于分支的 orca.yaml 设置命令已更改，此次运行未执行设置。这些命令此后已获批准，之后的运行将执行它们。",
       "skippedReview": "设置未运行：此次运行分支中的 orca.yaml 设置命令与此自动化已批准的命令不同。请审查它们，以便之后的运行执行设置。",
@@ -23690,7 +25355,13 @@
       "cleanupInterrupted": "清理已中断。请重试清理以继续",
       "sshTargetRemoveFailed": "无法移除隐藏的 SSH 目标",
       "recipeExitedWithoutCode": "环境模板已退出，退出码未知",
-      "destroyExitedWithoutCode": "销毁操作已退出，退出码未知"
+      "destroyExitedWithoutCode": "销毁操作已退出，退出码未知",
+      "suspendExited": "挂起操作已退出，退出码为 {{exitCode}}",
+      "suspendExitedWithoutCode": "挂起操作已退出，退出码未知",
+      "resumeExited": "恢复操作已退出，退出码为 {{exitCode}}",
+      "resumeExitedWithoutCode": "恢复操作已退出，退出码未知",
+      "recipeTimedOut": "环境模板的 {{mode}} 步骤未在 {{timeout}} 内完成，Orca 已将其停止，请检查环境模板的输出，如果它需要更长时间，可在 orca.yaml 中调高 timeoutSeconds",
+      "provisionInterrupted": "Orca 在创建此虚拟机时停止了，请将其销毁，以释放提供方的所有资源"
     }
   },
   "installDirAcl": {
@@ -23741,7 +25412,8 @@
   "agentSendTargets": {
     "disabledReason": {
       "needsPermission": "智能体需要授权",
-      "statusStale": "智能体状态信息已过期"
+      "approvalUnseen": "智能体可能正在等待批准",
+      "hostUpdateRequired": "请更新此主机上的 Orca 才能发送给此智能体"
     }
   },
   "wslDistroHold": {
@@ -23839,6 +25511,48 @@
     "invalidBranchName": "此分支名称无效。请选择其他名称。",
     "createBranchFailed": "Orca 无法创建分支。请在终端中检查此仓库，然后重试。"
   },
+  "bots": {
+    "deepLink": {
+      "missing": "该对话未在此电脑上打开。"
+    },
+    "activity": {
+      "title": "活动"
+    },
+    "connectors": {
+      "tab": "连接器"
+    },
+    "files": {
+      "tab": "文件"
+    },
+    "upcoming": {
+      "tidyNightAfter": "每晚 {{from}} 之后，或这台电脑唤醒后",
+      "tidyWeekAfter": "每周一次，{{from}} 之后，或这台电脑唤醒后",
+      "lookDueNow": "现在到期 · {{every}}"
+    },
+    "palette": {
+      "placeholder": "搜索机器人、聊天、终端、工作区、任务、设置和操作...",
+      "description": "搜索机器人、聊天、终端、工作区、任务、设置和操作",
+      "scopedPlaceholder": "搜索机器人...",
+      "scopedLabel": "搜索机器人",
+      "scopeHint": "输入 @ 只显示机器人",
+      "chip": "机器人",
+      "chipLabel": "机器人，显示全部",
+      "searchEverything": "在全部内容中搜索“{{text}}”",
+      "searchBotsFor": "在机器人中搜索“{{text}}”",
+      "noMatch": "没有与“{{text}}”匹配的机器人",
+      "noBotsYet": "还没有机器人",
+      "filtersPaused": "筛选仅适用于工作区，不适用于机器人",
+      "showEverything": "显示全部",
+      "footerBots": "机器人",
+      "matchesPurpose": "与用途匹配。",
+      "scopedStatus_other": "仅显示机器人。找到 {{count}} 个结果。",
+      "sidebarSearchLabel": "搜索机器人、工作区和浏览器标签页",
+      "section": "机器人"
+    },
+    "templates": {
+      "browse": "浏览模板"
+    }
+  },
   "speechModelUpdate": {
     "update": "更新",
     "cancel": "取消",
@@ -23873,5 +25587,107 @@
       "notGitRepository": "不是有效的 Git 仓库",
       "importFailed": "无法导入仓库"
     }
+  },
+  "wslDriveProject": {
+    "label": "Git",
+    "converted": "Orca 会在 Windows 上为此项目运行 Git，终端和智能体仍在 {{distro}} 中运行",
+    "checkFailed": "Orca 无法检查此项目",
+    "convertFailed": "Orca 无法切换 Git",
+    "description": "此项目位于 Windows 驱动器上，WSL 中的 Git 在这里速度很慢，还会漏掉在 Windows 中所做的更改，请改用 Git for Windows；终端和智能体仍留在 {{distro}} 中",
+    "useWindowsGit": "使用 Git for Windows",
+    "review": "此项目在 Orca 中的一切都保持不变：其标签页、终端、聊天和工作区都维持原样，正在运行的终端也会继续运行",
+    "lineEndings": "同时为此仓库设置 core.autocrlf，使 WSL 终端中的 git 不再把每个文件都显示为已更改",
+    "cancel": "取消",
+    "confirm": "使用 Git for Windows",
+    "blocker": {
+      "notWsl": "此项目已在 Windows 上运行 Git",
+      "repair": "请先修复此项目的 WSL 运行时：其发行版缺失，或 WSL 不可用",
+      "notWindowsDrive": "此项目的某个文件夹不在 Windows 驱动器上",
+      "gitMissing": "未安装 Git for Windows，请从 git-scm.com 安装，然后重试",
+      "wslWorktrees": "这些工作区由 WSL Git 创建，Git for Windows 无法读取它们：{{paths}}。请移除它们，或让此项目继续使用 WSL Git",
+      "worktreeFolder": "此项目的新工作区被设置为创建在 WSL 内，请先在此项目的设置中选择一个位于 Windows 驱动器上的文件夹"
+    }
+  },
+  "wslDriveUnc": {
+    "label": "位置",
+    "description": "Orca 目前通过 WSL 打开此项目，请改为在 {{drivePath}} 打开：Git 将在 Windows 上运行，在这里会快得多，终端和智能体仍留在 {{distro}} 中",
+    "convert": "在 {{drivePath}} 打开",
+    "review": "Orca 会暂停此项目的终端并重新启动，然后在 {{drivePath}} 重新打开此项目，标签页、终端及其历史记录、聊天和设置都会随之迁移，已暂停的终端会从中断处继续运行",
+    "cancel": "取消",
+    "confirm": "重新启动并转换",
+    "failed": "Orca 无法转换此项目",
+    "restarting": "正在重新启动 Orca 以转换此项目…",
+    "terminalsBusy": "此项目中的部分终端正忙，请等待其完成或将其关闭，然后重试",
+    "pauseFailed": "Orca 无法暂停此项目的终端，因此未做任何更改",
+    "blocker": {
+      "pending": "Orca 已在转换一个项目，该转换将在 Orca 重新启动时完成",
+      "state": "Orca 发现此项目有无法安全转换的已保存状态，因此未做任何更改",
+      "duplicate": "{{drivePath}} 已是 Orca 中的项目",
+      "mixed": "此项目的部分文件夹位于 WSL 内，而不在 Windows 驱动器上",
+      "overlap": "此项目与一个 Orca 无法转换的项目共用文件夹，转换会导致它们被拆分",
+      "notDriveMount": "在此发行版中，该文件夹并不是 {{drivePath}}：它不是从该 Windows 驱动器挂载的",
+      "notConvertible": "此项目不在此计算机的 Windows 驱动器上",
+      "differingState": "Orca 在此文件夹的 WSL 路径和 {{drivePath}} 下分别保存了不同的详细信息，因此未做任何更改",
+      "projectSplit": "此项目还包含一个不参与转换的仓库，因此未做任何更改"
+    }
+  },
+  "plugins": {
+    "frameSaveAs": {
+      "title": "保存文件",
+      "allFiles": "所有文件"
+    },
+    "frameOpenExternal": {
+      "open": "打开",
+      "cancel": "取消",
+      "message": "{{plugin}} 想要打开 {{host}}",
+      "alwaysAllow": "始终允许此插件打开 {{host}}"
+    },
+    "actionConfirmation": {
+      "cancel": "取消",
+      "deleteAutomation": "{{plugin}} 想要删除自动化“{{automation}}”",
+      "deleteAutomationDetail": "此自动化并非由该插件创建，删除后它将停止按计划运行，并从“自动化”中移除",
+      "delete": "删除",
+      "changeAutomation": "{{plugin}} 想要更改自动化“{{automation}}”",
+      "changeAutomationDetail": "此自动化并非由该插件创建，将会更改：{{fields}}",
+      "change": "更改",
+      "changeElevatedAutomationDetail": "此自动化会使用你选择的额外设置（参数、权限模式或预检查命令）运行其智能体，将会更改：{{fields}}",
+      "newPrompt": "新提示词：“{{prompt}}”",
+      "unknownProject": "未知项目",
+      "automationNewWorkspaces": "自动化 {{id}}：按 {{schedule}} 运行，每次都在 {{project}} 中新建工作区",
+      "automationInWorkspace": "自动化 {{id}}：在 {{project}} / {{workspace}} 中按 {{schedule}} 运行"
+    }
+  },
+  "checks": {
+    "gitlabAllowedFailure": "允许失败",
+    "rerunUnsuccessful": "重新运行未成功的检查"
+  },
+  "usage": {
+    "failure": {
+      "unavailable": "用量数据不可用，请点击“刷新”以重新连接",
+      "setting": "无法确认跟踪设置的更改，请再更改一次",
+      "refresh": "上次刷新未能完成，请再次点击“刷新”",
+      "read": "无法加载用量数据，请再次点击“刷新”",
+      "retry": "刷新"
+    }
+  },
+  "crashReport": {
+    "freeze": {
+      "attachmentsOmitted": "已保存的卡死报告和诊断日志未附加：{{value0}}",
+      "description": "发送已保存的卡死报告，帮助我们了解发生了什么",
+      "notSent": "卡死报告未发送",
+      "notes": "可选：Orca 卡死前你在做什么？",
+      "sent": "卡死报告已发送",
+      "sentWithoutAttachments": "详情已发送，但未附带已保存的卡死报告或诊断日志",
+      "summary": "Orca 停止响应",
+      "title": "报告卡死",
+      "uncheckAttachments": "取消勾选“包含已保存的卡顿报告和近期日志（已脱敏）”并重试，或复制详细信息",
+      "includeRedacted": "包含已保存的卡顿报告和近期日志（已脱敏）"
+    },
+    "copyDetails": "复制详情",
+    "sendReport": "发送报告",
+    "dontSend": "不发送",
+    "includeRecentLogsRedacted": "包含近期日志（已脱敏）",
+    "details": "详情",
+    "sending": "正在发送…"
   }
 }

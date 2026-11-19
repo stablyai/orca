@@ -1,4 +1,8 @@
 import {
+  captureHermesSqliteSessionViaWorker,
+  parseHermesSqliteSessionViaWorker
+} from '../scanners/hermes/session-scanner-hermes-worker'
+import {
   throwIfAiVaultScanCancelled,
   waitForAiVaultScan
 } from '../scan-lifecycle/ai-vault-scan-cancellation'
@@ -9,8 +13,6 @@ import { parseDevinSessionFile } from '../scanners/devin/session-scanner-devin-p
 import { parseAntigravitySessionFile } from '../scanners/antigravity/session-scanner-antigravity-parser'
 import { parseDroidSessionFile } from '../scanners/droid/session-scanner-droid-parser'
 import { parseClineSessionFile } from '../scanners/cline/session-scanner-cline-parser'
-import { splitHermesSqliteCandidate } from '../scanners/hermes/session-scanner-hermes-sqlite-paths'
-import { parseHermesSqliteSession } from '../scanners/hermes/session-scanner-hermes-sqlite'
 import { parseGrokSessionFile } from '../scanners/grok/session-scanner-grok-parser'
 import {
   parseMessageGraphSessionFile,
@@ -18,7 +20,7 @@ import {
 } from '../scanners/session-scanner-graph-parsers'
 import { parseKimiSessionFile } from '../scanners/kimi/session-scanner-kimi-parser'
 import { parseMuseSessionFile } from '../scanners/muse/session-scanner-muse-parser'
-import { splitOpenCodeSqliteCandidate } from '../../../shared/opencode-sqlite-session-path'
+import { splitOpenCodeSqliteCandidate } from '../../../shared/agent-session/lifecycle/provider-handles/opencode-sqlite-session-path'
 import { parseJcodeSessionFile } from '../scanners/jcode/session-scanner-jcode-parser'
 import { parseKiroSessionFile } from '../scanners/kiro/session-scanner-kiro-parser'
 import {
@@ -34,8 +36,8 @@ import { parseGeminiSessionFile } from '../scanners/gemini/session-scanner-gemin
 import { parseCodexSessionFile } from '../scanners/codex/session-scanner-codex-parser'
 import { parseCopilotSessionFile } from '../scanners/copilot/session-scanner-copilot-parser'
 import { parseCursorSessionFile } from '../scanners/cursor/session-scanner-cursor-parser'
-import { parseHermesSessionFile } from '../scanners/hermes/session-scanner-hermes-parser'
 import { parseOpenCodeSessionFile } from '../scanners/opencode/session-scanner-opencode-parser'
+import type { SqliteReaderAgent } from '../scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-protocol'
 import type { SessionFileCandidate } from '../session-scanner-types'
 import type { TranscriptMessageSink } from '../transcripts/session-transcript-consumers'
 import type { SkippedTranscriptRecord } from '../transcripts/session-transcript-record-budget'
@@ -46,7 +48,7 @@ async function readOpenCodeSqliteCandidate(
   platform: NodeJS.Platform,
   messages?: TranscriptMessageSink,
   signal?: AbortSignal,
-  agent?: 'opencode2' | 'zcode'
+  agent?: SqliteReaderAgent
 ): Promise<AiVaultSession | null> {
   throwIfAiVaultScanCancelled(signal)
   const request = { ...sqliteCandidate, platform, signal }
@@ -56,7 +58,9 @@ async function readOpenCodeSqliteCandidate(
         ? parseOpenCode2SqliteSessionViaWorker
         : agent === 'zcode'
           ? parseZcodeSqliteSessionViaWorker
-          : parseOpenCodeSqliteSessionViaWorker
+          : agent === 'hermes'
+            ? parseHermesSqliteSessionViaWorker
+            : parseOpenCodeSqliteSessionViaWorker
     const session = await waitForAiVaultScan(parse(request), signal)
     throwIfAiVaultScanCancelled(signal)
     return session
@@ -66,7 +70,9 @@ async function readOpenCodeSqliteCandidate(
       ? captureOpenCode2SqliteSessionViaWorker
       : agent === 'zcode'
         ? captureZcodeSqliteSessionViaWorker
-        : captureOpenCodeSqliteSessionViaWorker
+        : agent === 'hermes'
+          ? captureHermesSqliteSessionViaWorker
+          : captureOpenCodeSqliteSessionViaWorker
   const result = await waitForAiVaultScan(capture(request), signal)
   for (const message of result.messages) {
     throwIfAiVaultScanCancelled(signal)
@@ -131,16 +137,10 @@ export async function parseAgentSessionFile(
     case 'grok':
       return parseGrokSessionFile(candidate.file, platform, messages, signal)
     case 'hermes': {
-      const sqliteCandidate = splitHermesSqliteCandidate(candidate.file.path)
-      if (sqliteCandidate) {
-        return parseHermesSqliteSession({
-          dbPath: sqliteCandidate.dbPath,
-          sessionId: sqliteCandidate.sessionId,
-          platform,
-          messages
-        })
-      }
-      return parseHermesSessionFile(candidate.file, platform, messages, signal)
+      const sqliteCandidate = splitOpenCodeSqliteCandidate(candidate.file.path, 'hermes')
+      return sqliteCandidate
+        ? readOpenCodeSqliteCandidate(sqliteCandidate, platform, messages, signal, 'hermes')
+        : null
     }
     case 'rovo':
       return parseRovoSessionFile(candidate.file, platform, messages, signal)

@@ -1,18 +1,25 @@
 import { execFile, type ChildProcess, type ExecFileOptions } from 'node:child_process'
 import { recordSubprocessSpawn } from '../../../diagnostics/main-thread-churn-probe'
-import { endSubprocessStdin } from '../../../../shared/subprocess-stdin-write'
-import { runProcess } from '@orca/process-host'
+import { endSubprocessStdin } from '../../../../shared/process-streams/subprocess-stdin-write'
+import { createPosixGroupTermination } from '@orca/process-host/posix-group-termination'
+import { nativeExecutableResolver } from '@orca/process-host/native-executable-resolution'
+import { spawnNativeProcess } from '@orca/process-host/native-process-spawn'
 import { resolveSelectedLocalCommand } from '../../../ipc/command-path/command-path-resolver'
-import type { WslProcessGroupTermination } from './wsl-process-group-termination'
 import { createAbortError } from './abort-error'
-import { killSpawnedCommandTree } from './spawned-command-tree-kill'
+import { killAbandonedWorkerChildTree, killSpawnedCommandTree } from './spawned-command-tree-kill'
 import { DEFAULT_GIT_MAX_BUFFER } from '../git-exec-options'
-import type { GitAdmissionTier } from '../../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
 
-import { workerExecFile } from './worker-exec-file'
-import type { WorkerThreadChildProcess } from '../../../worker-thread-child-process/worker-thread-child-process'
+import { spawnedExecFile, workerExecFile } from './worker-exec-file'
+import { emptyExecFileOutput, isExecFileResultObject } from './exec-file-result-shape'
+import {
+  canSpawnOnWorkerThread,
+  isAbandonedWorkerChildError,
+  isWorkerChildStdinWriteError,
+  type WorkerThreadChildProcess
+} from '../../../worker-thread-child-process/worker-thread-child-process'
 
-type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
+export type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
   timeout?: number
   stdin?: string
   terminationBarrier?: boolean
@@ -23,102 +30,13 @@ type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
   onDeadlineKill?: () => void
   onStderr?: (chunk: string) => void
   spawnOnWorkerThread?: boolean
+  /** Native Git only: launch an owned group and retain it after abnormal stop until proof. */
+  ownedPosixGroup?: boolean
+  /** Rechecked synchronously at the spawn call, after any async executable resolution. */
+  canStart?: () => boolean
 }
 
-const GIT_TERMINATION_BARRIER_FALLBACK_TIMEOUT_MS = 2_147_000_000
-
-export async function execFileCaptureToTermination(
-  command: string,
-  args: string[],
-  // Why: runProcess owns this child's streams; git-exec-file refuses onStderr with a barrier.
-  options: Omit<ExecFileCaptureOptions, 'onStderr' | 'stdin'> & { stdin?: string | Uint8Array },
-  termination?: WslProcessGroupTermination
-): Promise<{ stdout: string | Buffer; stderr: string | Buffer }> {
-  // runProcess already reports spawn cost through spawnProcess.
-  let program: string
-  try {
-    program = resolveSelectedLocalCommand(command, {
-      env: options.env,
-      cwd: typeof options.cwd === 'string' ? options.cwd : undefined
-    })
-  } catch (error) {
-    options.onChildTerminated?.()
-    throw error
-  }
-  const captureBytes = options.encoding === 'buffer'
-  const pending = runProcess({
-    program,
-    args,
-    cwd: typeof options.cwd === 'string' ? options.cwd : undefined,
-    env: options.env,
-    timeoutMs: options.timeout ?? GIT_TERMINATION_BARRIER_FALLBACK_TIMEOUT_MS,
-    maxOutputBytes: options.maxBuffer ?? DEFAULT_GIT_MAX_BUFFER,
-    captureStdoutAsBytes: captureBytes,
-    captureStderrAsBytes: captureBytes,
-    signal: options.signal,
-    terminationBarrier: termination ?? true,
-    onChildTerminated: options.onChildTerminated,
-    ...(options.stdin === undefined ? {} : { input: options.stdin })
-  })
-  const result = await pending
-  const stdout = captureBytes ? (result.stdoutBytes ?? Buffer.alloc(0)) : result.stdout
-  const stderrBytes = result.stderrBytes ?? Buffer.alloc(0)
-  const stderr = captureBytes
-    ? termination
-      ? // Why: Latin-1 strips ASCII control markers without changing arbitrary bytes.
-        Buffer.from(termination.stripControlOutput(stderrBytes.toString('latin1')), 'latin1')
-      : stderrBytes
-    : (termination?.stripControlOutput(result.stderr) ?? result.stderr)
-  if (
-    result.code === 0 &&
-    !result.timedOut &&
-    !result.outputTruncated &&
-    !options.signal?.aborted
-  ) {
-    return { stdout, stderr }
-  }
-  if (result.timedOut && !options.signal?.aborted) {
-    options.onDeadlineKill?.()
-  }
-  const cleanStderr = typeof stderr === 'string' ? stderr : stderr.toString('utf8')
-  const error = result.timedOut
-    ? (options.createTimeoutError?.() ?? new Error(`${command} timed out.`))
-    : new Error(
-        options.signal?.aborted
-          ? 'The operation was aborted.'
-          : result.outputTruncated
-            ? // Reject clipped output: JSON/JSONL consumers could otherwise accept an incomplete result.
-              `${command} produced more than ${options.maxBuffer ?? DEFAULT_GIT_MAX_BUFFER} bytes of output.`
-            : cleanStderr.trim() || `${command} exited with ${result.code}.`
-      )
-  if (options.signal?.aborted) {
-    error.name = 'AbortError'
-  }
-  throw Object.assign(error, {
-    code: result.code,
-    killed: result.timedOut || result.signal !== null || options.signal?.aborted === true,
-    signal: result.signal,
-    outputTruncated: result.outputTruncated,
-    stdout,
-    stderr
-  })
-}
-
-function emptyExecFileOutput(options: ExecFileCaptureOptions): string | Buffer {
-  return options.encoding === 'buffer' ? Buffer.alloc(0) : ''
-}
-
-function isExecFileResultObject(
-  value: unknown
-): value is { stdout: string | Buffer; stderr: string | Buffer } {
-  return (
-    value !== null &&
-    typeof value === 'object' &&
-    !Buffer.isBuffer(value) &&
-    'stdout' in value &&
-    'stderr' in value
-  )
-}
+export { execFileCaptureToTermination } from './exec-file-capture-to-termination'
 
 /** A second, passive stderr listener: execFile still captures every byte. */
 function observeStderr(
@@ -149,10 +67,19 @@ export function execFileCapture(
       return
     }
 
+    let readCapture: (() => { stdout: string | Buffer; stderr: string | Buffer }) | undefined
     let settled = false
     let terminating = false
     let child: ChildProcess | WorkerThreadChildProcess | null = null
-    const useWorker = options.spawnOnWorkerThread === true && process.platform === 'darwin'
+    let groupTermination: ReturnType<typeof createPosixGroupTermination> | undefined
+    const ownedPosixGroup = options.ownedPosixGroup === true && process.platform !== 'win32'
+    // Windows CreateProcessW can stall the calling loop for seconds under endpoint security (#11161, #27362).
+    const useWorker =
+      process.platform === 'win32'
+        ? options.spawnOnWorkerThread !== false && canSpawnOnWorkerThread()
+        : options.spawnOnWorkerThread === true && process.platform === 'darwin'
+    const deadline =
+      options.timeout && options.timeout > 0 ? performance.now() + options.timeout : null
     let timer: NodeJS.Timeout | null = null
     let terminationReported = false
     const reportChildTerminated = (): void => {
@@ -188,39 +115,83 @@ export function execFileCapture(
       }
       resolve({ stdout, stderr })
     }
-    const onAbort = (): void => {
+    const stop = (error: Error): void => {
       if (settled || terminating) {
         return
       }
       terminating = true
-      const abortError = createAbortError()
       if (!child) {
         terminating = false
-        finish(abortError)
+        reportChildTerminated()
+        finish(error)
+        return
+      }
+      if (ownedPosixGroup) {
+        if ('stopOwnedGroup' in child) {
+          child.stopOwnedGroup()
+        } else {
+          void groupTermination?.stop()
+        }
+        const output = isExecFileResultObject(error) ? error : readCapture?.()
+        finish(error, output?.stdout, output?.stderr)
         return
       }
       void killSpawnedCommandTree(child).then(() => {
         terminating = false
-        finish(abortError)
+        finish(error)
       })
     }
 
-    try {
-      const spawnStartedAt = performance.now()
-      // Why: our abort listener owns tree cleanup; Node's signal handler could kill wsl.exe before taskkill sees its children.
-      const capture = useWorker ? workerExecFile : execFile
-      child = capture(
-        command,
-        args,
-        {
+    const onAbort = (): void => stop(createAbortError())
+    const onDeadline = (): void => {
+      if (!settled && !terminating) {
+        options.onDeadlineKill?.()
+        stop(options.createTimeoutError?.() ?? new Error(`${command} timed out.`))
+      }
+    }
+    // Lookup is part of the deadline; cancellation must settle even before there is a child.
+    if (options.timeout && options.timeout > 0) {
+      timer = setTimeout(onDeadline, options.timeout)
+    }
+    options.signal?.addEventListener('abort', onAbort, { once: true })
+    if (options.signal?.aborted) {
+      onAbort()
+    }
+
+    const launch = async (): Promise<void> => {
+      try {
+        if (settled) {
+          return
+        }
+        const spawnStartedAt = performance.now()
+        // Why: our abort listener owns tree cleanup; Node's signal handler could kill wsl.exe before taskkill sees its children.
+        const captureOptions = {
           cwd: options.cwd,
           // Hide console-subsystem children so frequent Git calls cannot flash or take focus.
           windowsHide: true,
           encoding: options.encoding,
           maxBuffer: options.maxBuffer ?? DEFAULT_GIT_MAX_BUFFER,
-          env: options.env
-        },
-        (error, stdout, stderr) => {
+          env: options.env,
+          ...(ownedPosixGroup
+            ? {
+                detached: true,
+                ownedPosixGroup: true,
+                onOverflow: stop,
+                onError: stop,
+                ...(process.platform !== 'darwin'
+                  ? { errorCommand: `${command} ${args.join(' ')}` }
+                  : {}),
+                onCapture: (read: () => { stdout: string | Buffer; stderr: string | Buffer }) => {
+                  readCapture = read
+                }
+              }
+            : {})
+        }
+        const complete = (
+          error: Error | null,
+          stdout: string | Buffer,
+          stderr: string | Buffer
+        ): void => {
           if (terminating) {
             return
           }
@@ -230,57 +201,115 @@ export function execFileCapture(
           }
           finish(error, stdout, stderr)
         }
-      )
-      recordSubprocessSpawn(command, args, performance.now() - spawnStartedAt)
-    } catch (error) {
-      reportChildTerminated()
-      finish(error instanceof Error ? error : new Error(String(error)))
-      return
-    }
+        if (!useWorker && process.platform === 'darwin') {
+          const program = resolveSelectedLocalCommand(command, {
+            env: options.env,
+            cwd: typeof options.cwd === 'string' ? options.cwd : undefined
+          })
+          const selection = await nativeExecutableResolver.resolveAsync(program, options.env)
+          if (deadline !== null && performance.now() >= deadline) {
+            onDeadline()
+          }
+          if (settled) {
+            return
+          }
+          if (options.canStart?.() === false) {
+            reportChildTerminated()
+            finish(createAbortError())
+            return
+          }
+          child = spawnedExecFile(command, captureOptions, complete, () =>
+            spawnNativeProcess(
+              program,
+              args,
+              { ...captureOptions, argv0: command },
+              selection,
+              recordSubprocessSpawn
+            )
+          )
+        } else {
+          if (options.canStart?.() === false) {
+            reportChildTerminated()
+            finish(createAbortError())
+            return
+          }
+          // execFile's error text; overflow ends the whole tree, or a hook holding the pipe blocks close.
+          const workerOptions =
+            process.platform === 'win32'
+              ? { ...captureOptions, errorCommand: [command, ...args].join(' '), onOverflow: stop }
+              : captureOptions
+          child = useWorker
+            ? workerExecFile(command, args, workerOptions, complete)
+            : ownedPosixGroup
+              ? spawnedExecFile(command, captureOptions, complete, () =>
+                  spawnNativeProcess(
+                    command,
+                    args,
+                    captureOptions,
+                    undefined,
+                    recordSubprocessSpawn
+                  )
+                )
+              : execFile(command, args, captureOptions, complete)
+          if (useWorker || !ownedPosixGroup) {
+            recordSubprocessSpawn(command, args, performance.now() - spawnStartedAt)
+          }
+        }
+      } catch (error) {
+        reportChildTerminated()
+        finish(error instanceof Error ? error : new Error(String(error)))
+        return
+      }
 
-    child.once('error', (error) => {
-      // A lost worker may have spawned a child whose PID never reached us; only close proves termination.
-      if (!useWorker && !child?.pid) {
+      child.on('error', (error) => {
+        if (useWorker && isWorkerChildStdinWriteError(error)) {
+          return
+        }
+        // A lost worker may have spawned a child whose PID never reached us; only close proves termination.
+        // Plain captures still release admission then: the worker's pipes closed with it, and nothing else would.
+        if (!useWorker && !child?.pid) {
+          reportChildTerminated()
+        } else if (child && !ownedPosixGroup && isAbandonedWorkerChildError(error)) {
+          void killAbandonedWorkerChildTree(child).then(reportChildTerminated)
+        }
+        if (!terminating) {
+          finish(error)
+        }
+      })
+      if (ownedPosixGroup) {
+        if ('stopOwnedGroup' in child) {
+          child.once('group-terminated', reportChildTerminated)
+          child.once('close', () => {
+            if (!terminating) {
+              reportChildTerminated()
+            }
+          })
+        } else {
+          groupTermination = createPosixGroupTermination(child, reportChildTerminated)
+          child.once('close', groupTermination.close)
+        }
+      } else {
+        child.once('close', reportChildTerminated)
+      }
+      if (options.onStderr) {
+        observeStderr(child, options.onStderr)
+      }
+
+      // Non-interactive signers must see EOF instead of waiting on an open pipe.
+      if ('id' in child) {
+        if (options.stdin !== undefined) {
+          child.stdin.write(options.stdin)
+        }
+        child.stdin.end()
+      } else {
+        endSubprocessStdin(child.stdin, options.stdin ?? '')
+      }
+    }
+    void launch().catch((error: unknown) => {
+      if (!child) {
         reportChildTerminated()
       }
-      if (!terminating) {
-        finish(error)
-      }
+      finish(error instanceof Error ? error : new Error(String(error)))
     })
-    child.once('close', reportChildTerminated)
-    if (options.onStderr) {
-      observeStderr(child, options.onStderr)
-    }
-
-    // Non-interactive signers must see EOF instead of waiting on an open pipe.
-    if ('id' in child) {
-      if (options.stdin !== undefined) {
-        child.stdin.write(options.stdin)
-      }
-      child.stdin.end()
-    } else {
-      endSubprocessStdin(child.stdin, options.stdin ?? '')
-    }
-
-    // Why: Node's timeout waits forever on signal-ignoring CLIs; enforce our own deadline with bounded tree cleanup.
-    if (options.timeout && options.timeout > 0) {
-      timer = setTimeout(() => {
-        if (settled || terminating) {
-          return
-        }
-        terminating = true
-        const timeoutError = options.createTimeoutError?.() ?? new Error(`${command} timed out.`)
-        if (!child) {
-          terminating = false
-          finish(timeoutError)
-          return
-        }
-        void killSpawnedCommandTree(child).then(() => {
-          terminating = false
-          finish(timeoutError)
-        })
-      }, options.timeout)
-    }
-    options.signal?.addEventListener('abort', onAbort, { once: true })
   })
 }

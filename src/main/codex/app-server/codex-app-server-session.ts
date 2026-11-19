@@ -1,13 +1,18 @@
-import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { spawnManagedProviderProcess } from '../../provider-process/managed-provider-process'
+import { withLostProviderOutcome } from '../../provider-process/provider-process-exit-status'
 import { resolveProviderChildEnv } from '../../provider-process/provider-process-launch'
 import { processEnvWithoutAgentSession } from '../../../shared/agent-launch/startup/parent-agent-session-env'
 import { stderrIndicatesMissingAppServer } from './codex-app-server-capability-signal'
-import { withCliRuntimeOnPath } from '../../../shared/node-cli-command-resolution'
 import {
-  providerStderrForDisplay,
-  supervisedProviderSpawnFailure
-} from '../../provider-process/provider-spawn-failure-report'
+  CodexAppServerRequestError,
+  CodexAppServerUnsupportedError,
+  CodexAppServerTimeoutError
+} from './codex-app-server-request-error'
+export {
+  CodexAppServerUnsupportedError,
+  CodexAppServerTimeoutError
+} from './codex-app-server-request-error'
+import { withCliRuntimeOnPath } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 import {
   killCodexAppServerProcessTree,
   spawnCodexAppServerProcess,
@@ -25,26 +30,12 @@ export type CodexAppServerInvocation = {
   env?: Record<string, string>
   /** Keys stripped after the overlay, e.g. CODEX_HOME when targeting the real ~/.codex. */
   envToDelete?: readonly string[]
-  timeoutMs: number
+  timeoutMs: number | null
   signal?: AbortSignal
   experimentalApi?: boolean
   /** Kill unsupervised plugin trees before stdin EOF; root exit leaves children behind and blocks tree killing. */
   treeKillOnFinish?: boolean
-}
-
-/** Missing app-server subcommand or RPC method; only this class marks capability caches unsupported. */
-export class CodexAppServerUnsupportedError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'CodexAppServerUnsupportedError'
-  }
-}
-
-export class CodexAppServerTimeoutError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'CodexAppServerTimeoutError'
-  }
+  allowHost?: boolean
 }
 
 export function isCodexAppServerUnsupportedError(error: unknown): boolean {
@@ -101,23 +92,22 @@ export async function runCodexAppServerSession<T>(
     {
       site: CODEX_APP_SERVER_KILL_SITE,
       inheritedEnv: pairedEnv,
+      allowHost: invocation.allowHost ?? spawnImpl === spawnCodexAppServerProcess,
       spawnImpl: (spec) =>
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the managed spec's first three stdio slots are 'pipe', so stdin, stdout and stderr exist.
         spawnImpl(spec.program, [...(spec.args ?? [])], {
           env: spec.env,
           cwd: spec.cwd,
-          // Preserve the supervisor's group-report channel.
+          // Preserve the bootstrap's ownership, gate and exec-status pipes.
           stdio: spec.stdio ?? ['pipe', 'pipe', 'pipe'],
           windowsHide: true,
           ...(spec.detached ? { detached: true } : {})
-        }) as ChildProcessWithoutNullStreams
+        })
     }
   )
   const { child } = managed
 
   const lifetime = new AbortController()
   let exited = false
-  let exitCode: number | null = null
   let nextRequestId = 1
   let timedOut = false
   const pending = new Map<
@@ -125,9 +115,8 @@ export async function runCodexAppServerSession<T>(
     { resolve: (r: JsonRpcResponse) => void; reject: (e: Error) => void }
   >()
 
-  managed.onExit((exit) => {
+  managed.onExit(() => {
     exited = true
-    exitCode = exit.code
   })
   // Spawn failures emit error without exit; reject requests that would otherwise hang.
   let spawnError: Error | null = null
@@ -186,15 +175,18 @@ export async function runCodexAppServerSession<T>(
     failPending(error)
     rejectDeadline(error)
   }
-  const deadline = setTimeout(
-    () =>
-      endSession(
-        new CodexAppServerTimeoutError(
-          `codex app-server session exceeded ${invocation.timeoutMs}ms (${invocation.command})`
+  const deadline =
+    invocation.timeoutMs === null
+      ? undefined
+      : setTimeout(
+          () =>
+            endSession(
+              new CodexAppServerTimeoutError(
+                `codex app-server session exceeded ${invocation.timeoutMs}ms (${invocation.command})`
+              )
+            ),
+          invocation.timeoutMs
         )
-      ),
-    invocation.timeoutMs
-  )
   const onAbort = (): void => endSession(new Error('codex app-server session stopped'))
   if (invocation.signal?.aborted) {
     onAbort()
@@ -262,33 +254,35 @@ export async function runCodexAppServerSession<T>(
           `codex app-server does not support ${method}: ${response.error.message ?? 'method not found'}`
         )
       }
-      throw new Error(
-        `codex app-server ${method} failed: ${response.error.message ?? 'unknown error'}`
+      // Kept structured, so callers tell a refused request (e.g. an unknown method variant) from a failure.
+      throw new CodexAppServerRequestError(
+        method,
+        typeof response.error.code === 'number' ? response.error.code : null,
+        `codex app-server ${method} failed: ${response.error.message ?? 'unknown error'}`,
+        response.error.message
       )
     }
     return response.result
   }
 
-  // The supervisor's spawn-failure report reads as Node's own spawn error line.
   function stderrDetail(): string {
-    return providerStderrForDisplay(managed.stderrTail()).trim().slice(0, STDERR_DETAIL_MAX_CHARS)
+    return managed.stderrTail().trim().slice(0, STDERR_DETAIL_MAX_CHARS)
   }
 
   function buildEarlyExitError(): Error {
-    // A supervisor reports a provider it could not start as exit 127; callers classify that error.
-    const spawnFailure = managed.supervised
-      ? supervisedProviderSpawnFailure(exitCode, managed.stderrTail())
-      : null
-    if (spawnFailure) {
-      return spawnFailure.error
+    if (spawnError) {
+      return spawnError
     }
     if (stderrIndicatesMissingAppServer(managed.stderrTail())) {
       return new CodexAppServerUnsupportedError(
         `codex CLI does not support the app-server subcommand: ${stderrDetail()}`
       )
     }
-    return new Error(
-      `codex app-server exited before completing the session${managed.stderrTail() ? `: ${stderrDetail()}` : ''}`
+    return withLostProviderOutcome(
+      new Error(
+        `codex app-server exited before completing the session${managed.stderrTail() ? `: ${stderrDetail()}` : ''}`
+      ),
+      child
     )
   }
 

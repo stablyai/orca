@@ -2,12 +2,13 @@ import type { AgentPaneChange } from '../../../../agent-hooks/observations/agent
 import { agentVerdictDisplayMark } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { hookRowAgentPhase } from '../../../../../shared/agent-status/lifecycle/agent-transitions'
-import type { RuntimeTerminalRead } from '../../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalRead } from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import {
   TerminalAgentTurnNews,
   type TerminalAgentTurnNewsItem
 } from '../../../push/notifications/terminal-agent-turn-news'
 import type { OrchestrationDb } from '../../db/orchestration-db'
+import { readCoordinatorMailCount } from '../../db/messages/dispatch-read-mail'
 import { redactWorkerTerminalView } from '../../terminal-authority/views/worker-terminal-redaction'
 import {
   reportWorkerTurnStop,
@@ -16,6 +17,8 @@ import {
   type WorkerTurnStopReason,
   type WorkerTurnStopReportDeps
 } from './worker-turn-stop-report'
+import { firstWithin } from '../approvals/first-within'
+import { showsClaudeDialog } from '../../../terminal/wait/claude-open-dialog-hold'
 import type { WorkerApprovalPayload } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 
 export type TerminalWorkerTurnStopsDeps = WorkerTurnStopReportDeps & {
@@ -31,7 +34,7 @@ export type TerminalWorkerTurnStopsDeps = WorkerTurnStopReportDeps & {
 }
 
 /** Report a terminal worker whose turn ended (or stopped at a prompt) while its Dispatch is open. */
-type PreparedStop = TerminalAgentTurnNewsItem & { dispatchId: string | null }
+type PreparedStop = TerminalAgentTurnNewsItem & { dispatchId: string | null; mailTaken?: number }
 
 export class TerminalWorkerTurnStops {
   private readonly news: TerminalAgentTurnNews<PreparedStop>
@@ -42,7 +45,14 @@ export class TerminalWorkerTurnStops {
       // The Dispatch the stop belongs to is the one active when the stop was seen.
       prepare: (news) => {
         const resolved = this.resolve(news.paneKey)
-        return { ...news, dispatchId: resolved && workerTurnStopDispatchId(resolved.target) }
+        const dispatchId = resolved && workerTurnStopDispatchId(resolved.target)
+        return {
+          ...news,
+          dispatchId,
+          ...(resolved && dispatchId
+            ? { mailTaken: readCoordinatorMailCount(resolved.db, dispatchId) }
+            : {})
+        }
       },
       deliver: (stop) => void this.report(stop),
       setTimer: deps.setTimer,
@@ -69,10 +79,10 @@ export class TerminalWorkerTurnStops {
     // A clean finish has the agent's own last words; an error or prompt is on the screen.
     const lastOutput =
       (reason === 'finished' && stop.row.lastAssistantMessage) ||
-      (await this.deps
-        .readScreen(stopped.handle)
-        .then((view) => redactWorkerTerminalView(view).tail.join('\n'))
-        .catch(() => undefined))
+      (await this.readStopScreen(
+        stopped.handle,
+        reason === 'needs-input' && stop.row.agentType === 'claude'
+      ))
     const before = this.stillStopped(stop)
     // One report per approval; the screen shows Claude's own reason for asking.
     const approval =
@@ -92,6 +102,7 @@ export class TerminalWorkerTurnStops {
         stopKey: `${stop.paneKey}:${stop.row.stateStartedAt}`,
         turnStartedAt: stop.row.turnStartedAt,
         reason,
+        mailTaken: stop.mailTaken,
         lastOutput,
         ...(approval ? { approval } : {})
       },
@@ -100,6 +111,18 @@ export class TerminalWorkerTurnStops {
     if (approval && sent) {
       this.deps.markApprovalReported(approval.approvalId)
     }
+  }
+
+  /** A prompt's dialog can paint after its hook posts, as a background subagent's did. */
+  private async readStopScreen(handle: string, awaitDialog: boolean): Promise<string | undefined> {
+    const read = () =>
+      this.deps.readScreen(handle).then((view) => redactWorkerTerminalView(view).tail)
+    const dialog = awaitDialog
+      ? await firstWithin(this.deps.setTimer, () =>
+          read().then((tail) => (showsClaudeDialog(tail) ? tail : null))
+        )
+      : null
+    return (dialog ?? (await read().catch(() => undefined)))?.join('\n')
   }
 
   private stillStopped(stop: PreparedStop) {

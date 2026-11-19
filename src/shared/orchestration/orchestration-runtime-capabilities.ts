@@ -40,6 +40,12 @@ export const ORCHESTRATION_CONTRACT_VERSION = 1 as const
 export const ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY = 'orchestration.contract.v1' as const
 /** Receives agent mail a paired Orca carries for its agents, and queues replies for it to pull. */
 export const ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY = 'orchestration.peer-mail.v1' as const
+/** Peer mail also carries ordinary questions, dispatch instructions and merge-ready messages. */
+export const ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY =
+  'orchestration.peer-mail-types.v1' as const
+/** Peer mail also reaches its bots (`bot:`, `--chat`, questions), admitted as its own bot mail is. */
+export const ORCHESTRATION_PEER_BOT_MAIL_RUNTIME_CAPABILITY =
+  'orchestration.peer-bot-mail.v1' as const
 /** Runs the workers a paired Orca places here as its own, coordinated from that Orca (wire v1). */
 export const ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY =
   'orchestration.remote-owned-workers.v1' as const
@@ -62,5 +68,7 @@ export const ORCHESTRATION_RUNTIME_CAPABILITIES = [
   ORCHESTRATION_ASK_RETURNS_AT_ONCE_RUNTIME_CAPABILITY,
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY,
+  ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY,
+  ORCHESTRATION_PEER_BOT_MAIL_RUNTIME_CAPABILITY,
   ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY
 ] as const

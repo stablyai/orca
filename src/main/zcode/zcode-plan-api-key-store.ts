@@ -1,9 +1,12 @@
-import { getSecretStore } from '../../shared/secret-store'
+import { getSecretStore } from '../../shared/secure-storage/secret-store'
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { hardenExistingSecureFile, writeSecureFile } from '../../shared/secure-storage/secure-file'
-import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
+import {
+  encryptedCredentialProtection,
+  type SecretAtRestProtection
+} from '../../shared/secure-storage/secret-at-rest-protection'
 
 const ZCODE_PLAN_API_KEY_FILE = 'zcode-plan-api-key.enc'
 export const API_KEY_ENVELOPE_PREFIX = 'orca-zcode-plan-api-key:v1:'
@@ -78,7 +81,10 @@ export function getZcodePlanApiKeyProtection(): SecretAtRestProtection | null {
     return null
   }
   try {
-    return decodeApiKeyEnvelope(readFileSync(keyPath)).kind === 'plaintext' ? 'plaintext' : 'sealed'
+    const envelope = decodeApiKeyEnvelope(readFileSync(keyPath))
+    return envelope.kind === 'plaintext'
+      ? 'plaintext'
+      : encryptedCredentialProtection(envelope.payload)
   } catch {
     return null
   }

@@ -7,7 +7,7 @@ import {
   isStructuredAgentSessionMainAgentWorking,
   type StructuredAgentSessionWorkScope
 } from './structured-agent-session-main-agent-working'
-import { agentSessionCurrentContextRows } from '../agent-session-context-clear'
+import { agentSessionCurrentContextRows } from '../conversation-context/agent-session-context-clear'
 
 /** Journal main-agent rule: running turn or unanswered send, including work hidden beneath an attention prompt. */
 export function owesStructuredAgentSessionWork(

@@ -1,13 +1,13 @@
 import { createSessionSearchClient } from '../../shared/ai-vault/search/ai-vault-search-client'
-import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import {
   formatSessionSearchResponse,
   formatSessionSearchStatus
 } from './agent-session-search-format'
-import type { CommandHandler } from '../dispatch'
-import { printResult } from '../command-result-output'
+import type { CommandHandler } from '../dispatch/dispatch'
+import { printResult } from '../output/command-result-output'
 import type { RuntimeClient } from '../runtime/client'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { parseSearchCommand } from './search-command-arguments'
 
 export const MALFORMED_CURSOR_MESSAGE =

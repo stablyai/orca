@@ -1,19 +1,20 @@
-import type { HandlerContext } from '../dispatch'
-import { printResult } from '../command-result-output'
-import { RuntimeClientError } from '../runtime/types'
-import { ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY } from '../../shared/account-runtime-capabilities'
+import type { HandlerContext } from '../dispatch/dispatch'
+import { printResult } from '../output/command-result-output'
+import { RuntimeClientError } from '../runtime/connection/types'
+import { ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY } from '../../shared/remote-runtime/protocol/account-runtime-capabilities'
 import type {
   AntigravityAccountState,
   AntigravityAccountTarget
-} from '../../shared/antigravity-account-types'
+} from '../../shared/agent-accounts/antigravity/antigravity-account-types'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState,
   ManagedDataAccountProvider,
   ManagedDataAccountsState
-} from '../../shared/managed-account-types'
-import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
+} from '../../shared/agent-accounts/managed-account-types'
+import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { getWslAccountTarget } from './account-wsl-location'
+import { getManagedAccountLookupNames } from '../../shared/agent-accounts/managed-account-display-names'
 import {
   formatAccountsBlock,
   formatAntigravityAccounts,
@@ -50,10 +51,6 @@ type ClaudeCodexSnapshot = {
   codex: CodexRateLimitAccountsState
 }
 
-function emailChoices(state: { accounts: readonly { id: string; email: string }[] }) {
-  return state.accounts.map((account) => ({ id: account.id, names: [account.email] }))
-}
-
 function claudeAccounts({ client, json }: HandlerContext): ProviderAccounts {
   const read = () => client.call<ClaudeCodexSnapshot>('accounts.list', { refreshUsage: false })
   const print = async (method: string, accountId: string | null) =>
@@ -65,7 +62,7 @@ function claudeAccounts({ client, json }: HandlerContext): ProviderAccounts {
   return {
     label: 'Claude',
     hasSystemDefault: true,
-    choices: async () => emailChoices((await read()).result.claude),
+    choices: async () => getManagedAccountLookupNames((await read()).result.claude.accounts),
     list: async () => {
       const response = await read()
       printResult({ ...response, result: response.result.claude }, json, (state) =>
@@ -84,7 +81,7 @@ function codexAccounts({ client, cwd, json }: HandlerContext): ProviderAccounts 
   return {
     label: 'Codex',
     hasSystemDefault: true,
-    choices: async () => emailChoices((await read()).result.codex),
+    choices: async () => getManagedAccountLookupNames((await read()).result.codex.accounts),
     list: async () => {
       const response = await read()
       printResult({ ...response, result: response.result.codex }, json, format)

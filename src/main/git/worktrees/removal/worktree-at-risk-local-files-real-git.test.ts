@@ -36,32 +36,7 @@ describe('readWorktreeAtRiskLocalFiles (real git)', () => {
 
   const read = () => readWorktreeAtRiskLocalFiles({ worktreePath, mainCheckoutPath: mainPath })
 
-  it('reports an ignored .env that differs from the main checkout', async () => {
-    await writeFile(join(worktreePath, '.env'), 'TOKEN=feature\n')
-    await mkdir(join(worktreePath, 'local', 'notes'), { recursive: true })
-    await writeFile(join(worktreePath, 'local', 'notes', 'todo.txt'), 'mine\n')
-
-    await expect(read()).resolves.toEqual({
-      count: 2,
-      samplePaths: ['.env', 'local/'],
-      complete: true
-    })
-  })
-
   // File symlinks need Developer Mode or admin rights on Windows.
-  it.skipIf(process.platform === 'win32')(
-    'ignores regenerable output, identical copies and symlinks',
-    async () => {
-      await mkdir(join(worktreePath, 'node_modules', 'pkg'), { recursive: true })
-      await writeFile(join(worktreePath, 'node_modules', 'pkg', 'index.js'), 'x\n')
-      await writeFile(join(worktreePath, 'debug.log'), 'x\n')
-      await writeFile(join(worktreePath, '.env'), 'TOKEN=main\n')
-      await writeFile(join(mainPath, '.env.local'), 'LOCAL=1\n')
-      await symlink(join(mainPath, '.env.local'), join(worktreePath, '.env.local'))
-
-      await expect(read()).resolves.toEqual({ count: 0, samplePaths: [], complete: true })
-    }
-  )
 
   it.skipIf(process.platform === 'win32')(
     'does not count a main-checkout symlink into the worktree as a copy',
@@ -70,9 +45,34 @@ describe('readWorktreeAtRiskLocalFiles (real git)', () => {
       await writeFile(join(worktreePath, '.env'), 'TOKEN=feature\n')
       await symlink(join(worktreePath, '.env'), join(mainPath, '.env'))
 
-      await expect(read()).resolves.toEqual({ count: 1, samplePaths: ['.env'], complete: true })
+      await expect(read()).resolves.toEqual({
+        count: 1,
+        samplePaths: ['.env'],
+        paths: ['.env'],
+        complete: true
+      })
     }
   )
+
+  it('returns the full sorted at-risk path list beyond the 3-path inline sample', async () => {
+    await appendEntry('.gitignore', '.anti-slop-plugin/\n.tmp/\nscratch/\n')
+    await writeFile(join(worktreePath, '.env.local'), 'SECRET=1\n')
+    await mkdir(join(worktreePath, '.anti-slop-plugin'))
+    await writeFile(join(worktreePath, '.anti-slop-plugin', 'rule.json'), '{}')
+    await mkdir(join(worktreePath, '.tmp'))
+    await writeFile(join(worktreePath, '.tmp', 'dump.json'), '{}')
+    await mkdir(join(worktreePath, 'local'))
+    await writeFile(join(worktreePath, 'local', 'notes.txt'), 'draft\n')
+    await mkdir(join(worktreePath, 'scratch'))
+    await writeFile(join(worktreePath, 'scratch', 'todo.md'), 'todo\n')
+
+    await expect(read()).resolves.toEqual({
+      count: 5,
+      samplePaths: ['.env.local', '.anti-slop-plugin/', '.tmp/'],
+      paths: ['.env.local', '.anti-slop-plugin/', '.tmp/', 'local/', 'scratch/'],
+      complete: true
+    })
+  })
 
   it('reports a directory past its comparison budget as unchecked, not safe', async () => {
     await mkdir(join(worktreePath, 'local'))
@@ -82,6 +82,17 @@ describe('readWorktreeAtRiskLocalFiles (real git)', () => {
       await writeFile(join(mainPath, 'local', `${index}.txt`), 'same\n')
     }
 
-    await expect(read()).resolves.toEqual({ count: 0, samplePaths: [], complete: false })
+    await expect(read()).resolves.toEqual({
+      count: 0,
+      samplePaths: [],
+      paths: [],
+      complete: false
+    })
   })
+
+  async function appendEntry(relativePath: string, content: string): Promise<void> {
+    await writeFile(join(worktreePath, relativePath), content, { flag: 'a' })
+    git(['add', relativePath], worktreePath)
+    git(['commit', '-qm', 'extend gitignore'], worktreePath)
+  }
 })

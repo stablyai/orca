@@ -1,9 +1,9 @@
 import type { TerminalCreateOptions } from './terminal-create-options'
-import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
+import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import { createTerminalRevealWarning, ownerSurfacing } from './terminal-presentation'
 import type { RuntimeNotifier } from '../../client/events/runtime-notifier-contract'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
-import type { RuntimeTerminalPresentation } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalPresentation } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
 function terminalRevealViewerOptions(
   opts: Pick<TerminalCreateOptions, 'surfaceOwner' | 'agentLaunchViewer'>

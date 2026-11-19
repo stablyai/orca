@@ -2,20 +2,18 @@ import { isForEachRefExcludeUnsupportedError } from '../../../../shared/git/refs
 import {
   clampRepoSearchRefsScanLimit,
   isRepoSearchRefsScanLimit
-} from '../../../../shared/repo-search-limits'
+} from '../../../../shared/git/refs/repo-search-limits'
+import { getRefSearchTokens } from '../../../../shared/git/refs/ref-search-tokens'
 import { isSafeGitRefName } from '../../../../shared/git/status/git-status-upstream-ref'
 import { getLocalGitCapabilityCache } from '../../command-runner/host-routing/git-capability-state'
 import { gitExecOptions, type LocalGitExecOptions } from './repo-default-base-ref'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
+import { withRepositoryGitCause } from '../../repository-git-cause'
 
 const REF_SEARCH_CANDIDATE_MULTIPLIER = 4
 const REF_SEARCH_LEGACY_HEADROOM = 100
 
 type RefSearchPatternGroup = 'all' | 'segmented' | 'branchRoot'
-
-function getRefSearchTokens(normalizedQuery: string): string[] {
-  return normalizedQuery.split('/').filter((token) => token.length > 0)
-}
 
 function getRefSearchCandidateCount(limit: number, excludesRemoteHead: boolean): number {
   if (!isRepoSearchRefsScanLimit(limit)) {
@@ -118,27 +116,33 @@ export async function runSearchBaseRefsGit(
   }
 ): Promise<{ stdout: string }> {
   const execOptions = gitExecOptions(path, options.git)
-  return getLocalGitCapabilityCache(execOptions).runWithFallback(
-    'for-each-ref-exclude',
+  return withRepositoryGitCause(
+    path,
+    execOptions,
+    { family: 'refs', reason: 'branch-search', cache: 'uncached' },
     () =>
-      gitExecFileAsync(
-        buildSearchBaseRefsArgv(normalizedQuery, limit, {
-          namespace: options.namespace,
-          remoteNames: options.remoteNames,
-          patternGroup: options.patternGroup
-        }),
-        execOptions
-      ),
-    () =>
-      gitExecFileAsync(
-        buildSearchBaseRefsArgv(normalizedQuery, limit, {
-          excludeRemoteHead: false,
-          namespace: options.namespace,
-          remoteNames: options.remoteNames,
-          patternGroup: options.patternGroup
-        }),
-        execOptions
-      ),
-    isForEachRefExcludeUnsupportedError
+      getLocalGitCapabilityCache(execOptions).runWithFallback(
+        'for-each-ref-exclude',
+        () =>
+          gitExecFileAsync(
+            buildSearchBaseRefsArgv(normalizedQuery, limit, {
+              namespace: options.namespace,
+              remoteNames: options.remoteNames,
+              patternGroup: options.patternGroup
+            }),
+            execOptions
+          ),
+        () =>
+          gitExecFileAsync(
+            buildSearchBaseRefsArgv(normalizedQuery, limit, {
+              excludeRemoteHead: false,
+              namespace: options.namespace,
+              remoteNames: options.remoteNames,
+              patternGroup: options.patternGroup
+            }),
+            execOptions
+          ),
+        isForEachRefExcludeUnsupportedError
+      )
   )
 }

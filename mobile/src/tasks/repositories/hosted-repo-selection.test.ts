@@ -1,18 +1,25 @@
 import { describe, expect, it } from 'vitest'
-import { reconcileRepoSelection } from './hosted-repo-selection'
+import { listTaskSourceRepos } from './hosted-repo-selection'
 
-const repos = [
-  { id: 'a', kind: 'worktree' },
-  { id: 'b', kind: 'worktree' },
-  { id: 'folder', kind: 'folder' }
-]
+const upstream = { owner: 'acme', repo: 'web' }
+const desktopRepo = { id: 'desktop-web', executionHostId: 'local' as const, upstream, addedAt: 2 }
+const serverTwin = {
+  id: 'server-web',
+  executionHostId: 'runtime:build-box' as const,
+  upstream,
+  addedAt: 1
+}
+const folder = { id: 'notes', kind: 'folder' as const }
+const repos = [serverTwin, desktopRepo, folder]
 
-describe('reconcileRepoSelection', () => {
-  it('drops ids this host no longer has', () => {
-    expect(reconcileRepoSelection(repos, ['a', 'gone'])).toEqual(new Set(['a']))
-  })
-
-  it('never selects a folder workspace', () => {
-    expect(reconcileRepoSelection(repos, ['folder'])).toEqual(new Set())
+describe('task source repos', () => {
+  it('reads one repo per project, keeping the twin the user picked', () => {
+    expect(listTaskSourceRepos(repos, new Set()).map((repo) => repo.id)).toEqual(['desktop-web'])
+    expect(listTaskSourceRepos(repos, new Set(['server-web'])).map((repo) => repo.id)).toEqual([
+      'server-web'
+    ])
+    expect(
+      listTaskSourceRepos(repos, new Set(['server-web', 'desktop-web'])).map((repo) => repo.id)
+    ).toEqual(['desktop-web'])
   })
 })

@@ -2,9 +2,9 @@ import { memo } from 'react'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { ListRow } from '../../components/list/ListGroup'
 import { useHostClient } from '../../transport/connection/host-client-hooks'
-import { workspaceRouteExecutionHost } from '../../worktree/execution-host-scoped-rpc-client'
+import { workspaceRouteExecutionHost } from '../../worktree/execution-hosts/execution-host-scoped-rpc-client'
 import type { FolderListRow } from './mobile-folder-attached-worktrees'
-import { formatBranchLabel } from '../mobile-source-control-screen-state'
+import { formatBranchLabel } from '../changes/mobile-source-control-screen-state'
 import { useFolderWorktreeStatus } from './use-folder-worktree-status'
 
 type Props = {

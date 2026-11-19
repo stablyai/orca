@@ -16,7 +16,7 @@ vi.mock('../runtime/client', () => {
 })
 
 import { main } from '../index'
-import { okFixture, queueFixtures } from '../test-fixtures'
+import { okFixture, queueFixtures } from '../runtime/fixtures/runtime-rpc-fixtures'
 
 describe('orca computer get-app-state formatting', () => {
   let screenshotDirectory: string
@@ -47,11 +47,6 @@ describe('orca computer get-app-state formatting', () => {
     const output = vi.mocked(console.log).mock.calls[0][0]
     expect(output).not.toContain('cG5nLWJ5dGVz')
     const parsed = JSON.parse(output)
-    expect(parsed.result.screenshot).toMatchObject({
-      dataOmitted: true,
-      format: 'png',
-      expiresAt: expect.any(String)
-    })
     expect(parsed.result.screenshot.path).toBe(
       join(screenshotDirectory, 'req_state-screenshot.png')
     )

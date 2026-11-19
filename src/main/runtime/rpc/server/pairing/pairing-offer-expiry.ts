@@ -5,7 +5,7 @@ import {
   type DeviceEntry,
   type TokenDeviceEntry
 } from './device-entry'
-import type { DeviceScope } from '../../../../../shared/runtime-session-contracts'
+import type { DeviceScope } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RuntimeDeviceGrant } from '../../callers/rpc-method-permission'
 
 // Desktop UI offers only; headless serve passes no TTL so its offers never expire.
@@ -30,11 +30,13 @@ export function reusablePairingOffer(
   offers: readonly TokenDeviceEntry[],
   grants: readonly RuntimeDeviceGrant[],
   offerTtlMs: number | undefined,
+  createdByDeviceId?: string,
   now = Date.now()
 ): TokenDeviceEntry | null {
   return (
     offers.find(
       (d) =>
+        d.createdByDeviceId === createdByDeviceId &&
         sameGrants(d, grants) &&
         (offerTtlMs === undefined
           ? d.offerExpiresAt === undefined

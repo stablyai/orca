@@ -1,11 +1,11 @@
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
-import { parseExecutionHostId } from '../../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { ensureHooksConfirmed } from '@/runtime/repo-hooks/ensure-hooks-confirmed'
 import { runtimeTargetForOwnerEnvironment } from '../../../../runtime/rpc/targets/runtime-client-target'
 import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control/warnings/source-control-huge-repo-warning-dismissals'
 import { forgetWorktreeSleepIntent } from '@/lib/workspace/sleep/worktree-sleep-intent'
 import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
-import { isArchiveHookRemovalError } from '../../../../../../shared/worktree/archive-hook-removal-gate'
+import { isArchiveHookRemovalError } from '../../../../../../shared/worktree/removal/archive-hook-removal-gate'
 import {
   resolveWorktreeOperationRouteResult,
   resolveWorktreeOperationRouteResultForHost
@@ -24,7 +24,7 @@ import {
   classifyWorktreeForceDeleteReason,
   getLockedWorktreeRemovalReason,
   isLockedWorktreeRemovalError
-} from '../../../../../../shared/worktree/removal'
+} from '../../../../../../shared/worktree/removal/removal'
 import '../../../../../../shared/git/branches/preserved-branch-cleanup'
 import { getWorktreeDeleteStateKey } from './worktree-delete-state'
 import { pruneHostedReviewLinkMutationGenerations } from '../metadata/hosted-review-link-mutation'

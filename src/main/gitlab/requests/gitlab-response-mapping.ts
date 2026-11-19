@@ -1,6 +1,11 @@
 import { gitLabPipelineJobOutcome } from '../../../shared/source-control/checks/gitlab/gitlab-pipeline-checks'
-import type { CheckStatus } from '../../../shared/github/pull-request-types'
-import type { GitLabIssueInfo, GitLabWorkItem, MRInfo, MRState } from '../../../shared/gitlab-types'
+import type { CheckStatus } from '../../../shared/github/pull-requests/pull-request-types'
+import type {
+  GitLabIssueInfo,
+  GitLabWorkItem,
+  MRInfo,
+  MRState
+} from '../../../shared/gitlab/gitlab-types'
 
 import { summarizeProviderChecks } from '../../../shared/source-control/checks/provider-check-summary'
 

@@ -4,7 +4,7 @@ import type {
   CodexAppServerConnectionHandlers
 } from '../../../../codex/app-server/codex-app-server-connection-types'
 import type { openCodexAppServerConnection } from '../../../../codex/app-server/codex-app-server-connection'
-import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import { attachFingerprintFields } from '../../../../native-chat/agent-session-wire/acquisition/structured-agent-session-attach'
 import { isRecord } from '../../../rpc/orchestration/callers/session.test-fixture'
 
@@ -143,13 +143,14 @@ export function operationId(): string {
   return `${Date.now()}-${operations.toString(16).padStart(32, '0')}`
 }
 
-export function attachParams(sessionId: string, fixtureRoot: string) {
+/** `folder` attaches it in a folder workspace instead of the git worktree. */
+export function attachParams(sessionId: string, fixtureRoot: string, folder?: string) {
   const params = {
     location: {
       executionHostId: 'local' as const,
       wslDistro: null,
-      workspaceId: WORKSPACE,
-      workspaceKind: 'git-worktree' as const
+      workspaceId: folder ? `folder:${folder}` : WORKSPACE,
+      workspaceKind: folder ? ('folder' as const) : ('git-worktree' as const)
     },
     provider: 'codex' as const,
     agent: 'codex' as const,
@@ -184,4 +185,16 @@ export function resetProviderFaults(): void {
   providerFaults.crashOnTurnStart = 'off'
   providerFaults.starts = 0
   providerFaults.turnStarts = 0
+}
+
+/** A chat got the whole orchestration message: its subject and its reply command. */
+export function isWholeMail(text: string): boolean {
+  return text.includes('\nSubject: ') && /\[[^\]\n]*: orca(-dev)? orchestration /.test(text)
+}
+
+export function turnText(turn: { text: string }): string {
+  const input: unknown = JSON.parse(turn.text)
+  return Array.isArray(input)
+    ? input.map((item: unknown) => (isRecord(item) ? String(item.text) : '')).join('')
+    : ''
 }

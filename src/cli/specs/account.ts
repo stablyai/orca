@@ -1,4 +1,5 @@
-import { LOCAL_COMMAND_FLAGS, type CommandSpec } from '../args'
+import { LOCAL_COMMAND_FLAGS } from '../arguments/args'
+import type { CommandSpec } from '../discovery/command-spec'
 
 // Terminal login lets headless hosts manage accounts without the desktop login UI.
 export const ACCOUNT_COMMAND_SPECS: CommandSpec[] = [
@@ -63,7 +64,7 @@ export const ACCOUNT_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...LOCAL_COMMAND_FLAGS, 'agent', 'account'],
     notes: [
       'Deletes the credentials Orca saved for that account (and, for OpenCode and Devin, the conversation data in its profile). Stop its running agents first. System credentials are never removed.',
-      'Select another Antigravity account before removing the one in use.'
+      'The Antigravity account agy is signed in to cannot be removed. Removing the selected account clears the selection, so agy launches with its own login.'
     ]
   }
 ]

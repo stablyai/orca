@@ -7,7 +7,7 @@ import {
   AI_VAULT_SESSION_HANDOFF_TIMEOUT_MS,
   isAiVaultDatabaseAgent
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-session-handoff'
-import { withTimeout } from '../../../../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../../../../shared/concurrency/promise-timeout-fallback'
 
 export function canContinueAiVaultSessionInNewSession(
   session: AiVaultSession,
@@ -89,10 +89,7 @@ function previewTranscript(session: AiVaultSession): string {
 
 function vaultTranscriptPath(session: AiVaultSession): string | null {
   // These rows name an account-wide database; handing that path over would expose every conversation in it.
-  if (
-    isAiVaultDatabaseAgent(session.agent) ||
-    (session.agent === 'hermes' && session.filePath.endsWith(`#${session.sessionId}`))
-  ) {
+  if (isAiVaultDatabaseAgent(session.agent)) {
     return null
   }
   return session.filePath.trim() || null

@@ -13,12 +13,12 @@ import type {
   BrowserNetworkLogResult
 } from '../../../shared/browser/runtime/runtime-browser-contracts'
 import { BrowserError } from '../browser-error'
-import {
-  parseShellArgs,
-  stripAgentBrowserTargetArgs
-} from './protocol/agent-browser-passthrough-arguments'
+import { parseShellArgs } from '../../../shared/shell-args'
+import { assertAgentBrowserPassthroughStaysOnPage } from './protocol/agent-browser-passthrough-arguments'
+import { agentBrowserCookieSetArguments } from './protocol/agent-browser-cookie-set-arguments'
 import { AgentBrowserBridgeInteractionCommands } from './commands/agent-browser-bridge-interaction-commands'
 import { sendGuestCdpCommand } from '../cdp/debugger/guest-cdp-command'
+import { deleteCookieByName } from '../cookies/browser-cookie-delete-by-name'
 import {
   toBrowserConsoleResult,
   toBrowserNetworkLogResult,
@@ -47,45 +47,26 @@ export class AgentBrowserBridge extends AgentBrowserBridgeInteractionCommands {
     browserPageId?: string
   ): Promise<BrowserCookieSetResult> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      const args = ['cookies', 'set', cookie.name ?? '', cookie.value ?? '']
-      if (cookie.domain) {
-        args.push('--domain', cookie.domain)
-      }
-      if (cookie.path) {
-        args.push('--path', cookie.path)
-      }
-      if (cookie.secure) {
-        args.push('--secure')
-      }
-      if (cookie.httpOnly) {
-        args.push('--httpOnly')
-      }
-      if (cookie.sameSite) {
-        args.push('--sameSite', cookie.sameSite)
-      }
-      if (cookie.expires != null) {
-        args.push('--expires', String(cookie.expires))
-      }
+      const args = agentBrowserCookieSetArguments(cookie)
       return (await this.execAgentBrowser(sessionName, args)) as BrowserCookieSetResult
     })
   }
 
   async cookieDelete(
-    name?: string,
+    name: string,
     domain?: string,
-    _url?: string,
+    url?: string,
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserCookieDeleteResult> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      const args = ['cookies', 'clear']
-      if (name) {
-        args.push('--name', name)
-      }
-      if (domain) {
-        args.push('--domain', domain)
-      }
-      return (await this.execAgentBrowser(sessionName, args)) as BrowserCookieDeleteResult
+    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (_sessionName, target) => {
+      const wc = this.requireTargetWebContents(target)
+      // agent-browser's `cookies clear` ignores filters and wipes the profile's whole cookie jar.
+      return deleteCookieByName((method, params) => sendGuestCdpCommand(wc, method, params), name, {
+        domain,
+        url,
+        pageUrl: wc.getURL()
+      })
     })
   }
 
@@ -169,7 +150,7 @@ export class AgentBrowserBridge extends AgentBrowserBridgeInteractionCommands {
       const session = this.sessions.get(sessionName)
       if (session) {
         this.pendingInterceptRestore.delete(sessionName)
-        session.activeInterceptPatterns = patterns ?? ['*']
+        session.activeInterceptPatterns = patterns?.length ? patterns : ['*']
       }
       return result
     })
@@ -272,8 +253,8 @@ export class AgentBrowserBridge extends AgentBrowserBridgeInteractionCommands {
   }
 
   async exec(command: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
-    // Passthrough arguments must not override Orca's selected page or CDP proxy.
-    const args = stripAgentBrowserTargetArgs(parseShellArgs(command.trim()))
+    const args = parseShellArgs(command.trim())
+    assertAgentBrowserPassthroughStaysOnPage(args)
     return this.enqueueTargetedCommand(
       worktreeId,
       browserPageId,

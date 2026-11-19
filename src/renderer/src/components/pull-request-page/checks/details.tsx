@@ -1,17 +1,17 @@
 import React from 'react'
 import { ExternalLink, LoaderCircle, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
+import CommentMarkdown from '@/components/comment-markdown/CommentMarkdown'
 import { cn } from '@/lib/class-names'
-import { getCheckConclusion } from '@/components/pr-check-counts'
+import { getCheckConclusion } from '@/components/github/pr-check-counts'
 import {
   formatCheckTimestamp,
   getCheckDetailsKey,
   getCheckStatusLabel
 } from '@/components/github/pr-check-presentation'
-import type { CheckDetailsLoadState } from '@/components/github-checks-tab-state'
+import type { CheckDetailsLoadState } from '@/components/github/github-checks-tab-state'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import type { PRCheckDetail } from '../../../../../shared/github/check-types'
+import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
 import { assignUniqueListKeys } from './details-list-keys'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 

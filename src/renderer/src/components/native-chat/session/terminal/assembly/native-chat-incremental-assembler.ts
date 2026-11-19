@@ -3,9 +3,9 @@
 import {
   hasImagePromptMarker,
   isImageSourceUserTurn
-} from '../../../../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
+} from '../../../../../../../shared/native-chat/transcript/images/native-chat-image-transcript-markers'
 import type { NativeChatMessage } from '../../../../../../../shared/native-chat/native-chat-types'
-import { compareNativeChatDisplayMessages as compareMessages } from '../../../../../../../shared/native-chat/transcript/native-chat-message-order'
+import { compareNativeChatDisplayMessages as compareMessages } from '../../../../../../../shared/native-chat/transcript/messages/native-chat-message-order'
 import { mergeOne, sortForImageNormalization } from './native-chat-session-assembler'
 
 export type IncrementalChatAssembler = {
@@ -78,7 +78,7 @@ function isTailAppend(
   ) {
     return false
   }
-  // Prompt-first image folding displays companions before the prompt; retain their source high-water mark.
+  // Image units sort by their prompt, so a companion can outrank the row after it; retain the source high-water mark.
   const previous = current.at(-2)
   const boundary = previous && compareMessages(previous, last) > 0 ? previous : last
   for (const message of incoming) {

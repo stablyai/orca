@@ -1,20 +1,20 @@
 import { app, ipcMain, MessageChannelMain, utilityProcess, type WebContents } from 'electron'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
-import { BackendPortRpc } from '../../shared/backend-port-rpc'
+import { BackendPortRpc } from '../../shared/backend/backend-port-rpc'
 import {
   BACKEND_CONNECTION_CHANGED,
   BACKEND_PORT_DELIVERY,
   BACKEND_PORT_REQUEST,
   BACKEND_UTILITY_PROCESS_NAME,
   type AutomationUsageClient
-} from '../../shared/backend-service-contract'
+} from '../../shared/backend/backend-service-contract'
 import { backendMessagePort } from '../backend/backend-message-port'
 import {
   currentWorkerEntryLayout,
   resolveWorkerThreadEntryPath
 } from '../worker-threads/worker-thread-entry-path'
 import { ManagedOrcadEventWindow } from '../managed-server/lifecycle/orcad-managed-event-window'
-import { ORCAD_SHUTDOWN_DEADLINE_MS } from '../orcad/orcad-stop-deadlines'
+import { ORCAD_SHUTDOWN_DEADLINE_MS } from '../orcad/host-lifecycle/managed-stop/orcad-stop-deadlines'
 import {
   createBackendDesktopCapabilities,
   trustsBackendRenderer,
@@ -24,7 +24,7 @@ import {
 import type { UsageWorktreeSource } from '../usage/worktree-attribution/usage-worktree-metadata'
 
 export { captureBackendBootstrap } from './backend-bootstrap'
-import { capturedBootstrap } from './backend-bootstrap'
+import { capturedBootstrap, sendBackendBootstrap } from './backend-bootstrap'
 
 export class BackendSupervisor {
   private child: ReturnType<typeof utilityProcess.fork> | null = null
@@ -97,19 +97,22 @@ export class BackendSupervisor {
 
   automationClient(provider: 'claudeUsage' | 'codexUsage'): AutomationUsageClient {
     return {
-      getAutomationRunUsage: async (input) => {
-        const ready = this.ensureReady(true)
-        const control = this.control
-        await ready
-        if (!this.desiredRunning || !control || this.control !== control) {
-          throw new Error('Usage disconnected. Try again after it reconnects.')
-        }
+      getAutomationRunUsage: async (input) =>
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The private usage service returns its typed automation result for this provider method.
-        return (await control.call(`${provider}:getAutomationRunUsage`, input)) as Awaited<
+        (await this.callControl(`${provider}:getAutomationRunUsage`, input)) as Awaited<
           ReturnType<AutomationUsageClient['getAutomationRunUsage']>
         >
-      }
     }
+  }
+
+  async callControl(method: string, params: unknown): Promise<unknown> {
+    const ready = this.ensureReady(true)
+    const control = this.control
+    await ready
+    if (!this.desiredRunning || !control || this.control !== control) {
+      throw new Error('Usage disconnected. Try again after it reconnects.')
+    }
+    return control.call(method, params)
   }
 
   stop(): Promise<void> {
@@ -297,7 +300,7 @@ export class BackendSupervisor {
       }
       settleExit()
     })
-    child.postMessage({ type: 'bootstrap', config: capturedBootstrap }, [port2])
+    sendBackendBootstrap(child, port2, () => this.child === child)
     return ready
   }
 }

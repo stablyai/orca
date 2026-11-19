@@ -1,17 +1,17 @@
-import type { CommandHandler } from '../dispatch'
+import type { CommandHandler } from '../dispatch/dispatch'
 import { formatLogcat } from './emulator-logcat-format'
 import { parseEmulatorPermissionRequest } from './emulator-permissions-args'
-import { printResult } from '../command-result-output'
-import { resolveRepoPathArgument } from '../repo-path-arguments'
+import { printResult } from '../output/command-result-output'
+import { resolveRepoPathArgument } from '../projects/repo-path-arguments'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
   getRequiredFiniteNumber,
   getRequiredStringFlag
-} from '../flags'
-import { getEmulatorCommandTarget } from '../selectors'
-import { RuntimeClientError } from '../runtime/types'
-import { EMULATOR_ATTACH_RPC_TIMEOUT_MS } from '../../shared/emulator-attach-timeouts'
+} from '../arguments/flags'
+import { getEmulatorCommandTarget } from './emulator-command-target'
+import { RuntimeClientError } from '../runtime/connection/types'
+import { EMULATOR_ATTACH_RPC_TIMEOUT_MS } from '../../shared/emulator/emulator-attach-timeouts'
 
 type EmulatorAttachResult = {
   info?: {

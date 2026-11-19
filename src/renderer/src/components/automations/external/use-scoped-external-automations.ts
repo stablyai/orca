@@ -23,6 +23,7 @@ export type ScopedExternalAutomationsView = {
   managers: readonly ScopedExternalAutomationManager[]
   /** Scopes that answered with neither a manager nor a denial. */
   failures: readonly ScopedExternalAutomationFailure[]
+  loading: boolean
   /** Reloads every in-view scope; safe to call from the page's refresh path. */
   reload: () => Promise<void>
   runExternalAction: (
@@ -41,6 +42,7 @@ export function useScopedExternalAutomations({
   scopeEntries
 }: ScopedExternalAutomationsInput): ScopedExternalAutomationsView {
   const [result, setResult] = useState(EMPTY_VIEW)
+  const [loading, setLoading] = useState(true)
   useExternalAutomationScopeRetention(scopeEntries)
 
   const scopes = useMemo(() => externalAutomationScopes(scopeEntries), [scopeEntries])
@@ -60,7 +62,12 @@ export function useScopedExternalAutomations({
   const reload = useCallback(async (): Promise<void> => {
     const token = ++loadTokenRef.current
     loadedSignatureRef.current = signatureRef.current
-    const next = await listScopedExternalAutomationManagers(scopesRef.current)
+    setLoading(true)
+    const next = await listScopedExternalAutomationManagers(scopesRef.current).finally(() => {
+      if (token === loadTokenRef.current) {
+        setLoading(false)
+      }
+    })
     if (token !== loadTokenRef.current) {
       return
     }
@@ -78,6 +85,7 @@ export function useScopedExternalAutomations({
   }, [signature, reload])
 
   return {
+    loading,
     managers: result.managers,
     failures: result.failures,
     reload,

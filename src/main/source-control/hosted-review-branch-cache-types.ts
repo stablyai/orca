@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../shared/execution-host'
+import type { ExecutionHostId } from '../../shared/execution-host/execution-host'
 import type { HostedReviewInfo } from '../../shared/source-control/hosted-review/hosted-review-contracts'
 
 export type CacheEntry = {

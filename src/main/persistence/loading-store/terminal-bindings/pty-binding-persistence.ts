@@ -1,4 +1,5 @@
-import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../../shared/execution-host'
+// oxfmt-ignore
+import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { rollbackFailedPtyBinding } from './pty-binding-write-rollback'
@@ -14,7 +15,7 @@ import { resolveHostId, type SessionHostPartitionOperations } from '../workspace
 import {
   withdrawUnstartedPane,
   type UnstartedPaneKept
-} from '../../terminal-topology/unstarted-pane-withdraw'
+} from '../../terminal-topology/pane-admission/unstarted-pane-withdraw'
 import { evaluatePtyBindingFastLane } from './pty-binding-fast-lane'
 import { durabilityOnlyBindingResult, isDurabilityOnlyMatch } from './pty-binding-durability-only'
 import { ptyBindingIsRefused } from './pty-binding-refusals'
@@ -41,7 +42,7 @@ import {
 import type {
   TerminalPaneAdmission,
   TerminalPaneAdmissionOutcome
-} from '../../terminal-topology/terminal-pane-admission'
+} from '../../terminal-topology/pane-admission/terminal-pane-admission'
 import type {
   CommandOf,
   LayoutRefusalCode

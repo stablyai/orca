@@ -1,14 +1,14 @@
 import type * as AppServerSession from './app-server/codex-app-server-session'
-import type * as LocalHistory from '../native-chat/codex-local-history'
-import type * as RolloutStream from '../native-chat/codex-rollout-history-stream'
-import { readCodexLocalHistory } from '../native-chat/codex-local-history'
-import { readCodexRolloutBytes } from '../native-chat/codex-rollout-history-stream'
+import type * as LocalHistory from '../native-chat/transcript-history/codex/codex-local-history'
+import type * as RolloutStream from '../native-chat/transcript-history/codex/codex-rollout-history-stream'
+import { readCodexLocalHistory } from '../native-chat/transcript-history/codex/codex-local-history'
+import { readCodexRolloutBytes } from '../native-chat/transcript-history/codex/codex-rollout-history-stream'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
-import { agentSessionRecordFixture } from '../native-chat/agent-session-record-test-fixture'
+import { agentSessionRecordFixture } from '../native-chat/testing/agent-session-record-test-fixture'
 import { copyCodexConversation } from './codex-conversation-copy'
 import { CodexAppServerTimeoutError } from './app-server/codex-app-server-session'
 import type { CodexAppServerRpc } from './app-server/codex-app-server-session'
@@ -26,14 +26,17 @@ const state = vi.hoisted(() => {
     session
   }
 })
-vi.mock('../native-chat/codex-local-history', async (importOriginal) => {
+vi.mock('../native-chat/transcript-history/codex/codex-local-history', async (importOriginal) => {
   const original = await importOriginal<typeof LocalHistory>()
   return { ...original, readCodexLocalHistory: vi.fn(original.readCodexLocalHistory) }
 })
-vi.mock('../native-chat/codex-rollout-history-stream', async (importOriginal) => {
-  const original = await importOriginal<typeof RolloutStream>()
-  return { ...original, readCodexRolloutBytes: vi.fn(original.readCodexRolloutBytes) }
-})
+vi.mock(
+  '../native-chat/transcript-history/codex/codex-rollout-history-stream',
+  async (importOriginal) => {
+    const original = await importOriginal<typeof RolloutStream>()
+    return { ...original, readCodexRolloutBytes: vi.fn(original.readCodexRolloutBytes) }
+  }
+)
 vi.mock('../native-chat/session-file-resolver', () => ({
   resolveSessionFilePath: async (_agent: string, id: string) => state.paths.get(id) ?? null
 }))
@@ -110,7 +113,7 @@ function copy(
   selected = `${SOURCE}:a1`,
   settled = true,
   turnId?: string,
-  options: { signal?: AbortSignal; selectedItemId?: string } = {}
+  options: { signal?: AbortSignal; selectedItemId?: string; model?: string } = {}
 ) {
   return copyCodexConversation(
     {
@@ -118,7 +121,8 @@ function copy(
         sessionId: 'orca-source',
         provider: 'codex',
         accountHome: { variable: 'CODEX_HOME', path: root },
-        launchArgs: ['--model', 'saved-model']
+        launchArgs: ['--model', 'saved-model'],
+        ...(options.model === undefined ? {} : { options: { model: options.model } })
       }),
       identity: {
         sessionId: 'orca-source',
@@ -213,3 +217,37 @@ it('cannot dispatch an abandoned preparation after its lifetime ends, but keeps 
     caller.signal.reason
   )
 })
+
+it.each([
+  { selected: 'gpt-terra', read: 'gpt-astra', expected: 'gpt-terra', provider: 'thread-provider' },
+  { selected: '', read: 'gpt-terra', expected: 'gpt-terra', provider: 'thread-provider' },
+  { selected: undefined, read: 'gpt-terra', expected: 'gpt-terra', provider: 'thread-provider' },
+  { selected: undefined, read: undefined, expected: undefined, provider: undefined }
+])(
+  "forks on the chat's model (selected $selected, thread $read)",
+  async ({ selected, read, expected, provider }) => {
+    state.request.mockImplementation(async (method) => {
+      if (method === 'thread/read') {
+        return {
+          thread: {
+            id: SOURCE,
+            historyMode: 'paginated',
+            model: read,
+            modelProvider: 'thread-provider'
+          }
+        }
+      }
+      if (method === 'thread/fork') {
+        return { thread: { id: CHILD } }
+      }
+      return { data: [{ id: 'selected', status: 'completed' }], nextCursor: null }
+    })
+    await expect(copy(undefined, true, 'selected', { model: selected })).resolves.toMatchObject({
+      sessionId: CHILD
+    })
+    const fork = state.request.mock.calls.find(([method]) => method === 'thread/fork')?.[1]
+    expect(fork).toMatchObject({ threadId: SOURCE })
+    expect(fork?.model).toBe(expected)
+    expect(fork?.modelProvider).toBe(provider)
+  }
+)

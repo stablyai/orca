@@ -1,4 +1,4 @@
-import type { CommandHandler } from '../dispatch'
+import type { CommandHandler } from '../dispatch/dispatch'
 import {
   callAgentLaunch,
   formatAgentLaunch,
@@ -6,10 +6,13 @@ import {
   parseCliAgent,
   readCliAgentLaunch
 } from './agent-launch-request'
-import { getRequiredStringFlag } from '../flags'
-import { printResult } from '../command-result-output'
-import { RuntimeClientError } from '../runtime/types'
-import { getRequiredWorktreeSelector, resolveCurrentWorktreeSelector } from '../selectors'
+import { getRequiredStringFlag } from '../arguments/flags'
+import { printResult } from '../output/command-result-output'
+import { RuntimeClientError } from '../runtime/connection/types'
+import {
+  getRequiredWorktreeSelector,
+  resolveCurrentWorktreeSelector
+} from '../workspace-selection/workspace-selector'
 
 export const AGENT_LAUNCH_HANDLERS: Record<string, CommandHandler> = {
   'agent launch': async ({ flags, client, cwd, json, rawArgs }) => {

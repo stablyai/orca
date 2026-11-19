@@ -1,11 +1,30 @@
 // @protected-copy: delete-workspace confirmation buttons.
-import type { JSX, Ref } from 'react'
-import { LoaderCircle, Trash2 } from 'lucide-react'
+import { useId, useState, type JSX } from 'react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { DialogFooter } from '@/components/ui/dialog'
+import { DialogCancel } from '@/components/ui/dialog-parts'
+import { Label } from '@/components/ui/label'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
-import { WorktreeForceDeleteButton } from './WorktreeForceDeleteButton'
-import { deleteWorkspacesCountLabel } from '../context-menu/workspace-batch-action-labels'
+
+async function saveDeletionPreference(
+  save: () => Promise<void>,
+  onSavingChange: (saving: boolean) => void,
+  onError: (error: unknown) => void
+): Promise<boolean> {
+  onSavingChange(true)
+  try {
+    await save()
+    return true
+  } catch (error) {
+    onError(error)
+    return false
+  } finally {
+    onSavingChange(false)
+  }
+}
 
 export function DeleteWorktreeDialogFooter({
   isMainWorktree,
@@ -13,102 +32,104 @@ export function DeleteWorktreeDialogFooter({
   isDetachingChildren = false,
   deleteDisabled = false,
   canForceDelete,
-  isBatchDelete,
-  worktreeCount,
-  canDeleteAllLineage,
-  lineageDeleteTargetCount,
-  onCancel,
+  deleteLabel,
   onForceDelete,
   onSavingChange,
   onDelete,
-  onAlwaysDelete,
-  confirmButtonRef
+  onAlwaysDelete
 }: {
   isMainWorktree: boolean
   isDeleting: boolean
   isDetachingChildren?: boolean
   deleteDisabled?: boolean
   canForceDelete: boolean
-  isBatchDelete: boolean
-  worktreeCount: number
-  canDeleteAllLineage: boolean
-  lineageDeleteTargetCount: number
-  onCancel: () => void
+  /** The verb for this delete: "Delete workspace", "Delete 3 workspaces", "Delete all". */
+  deleteLabel: string
   onForceDelete: () => void
   onSavingChange: (saving: boolean) => void
   onDelete: () => void
   /** Saves the skip-confirmation preference; omitted where skipping is not allowed. */
   onAlwaysDelete?: () => Promise<void>
-  confirmButtonRef: Ref<HTMLButtonElement>
 }): JSX.Element {
   const t = useTranslate()
+  const checkboxId = useId()
+  const [remember, setRemember] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const saveRemembered = canForceDelete
+    ? async (): Promise<void> => {
+        await useAppStore.getState().updateSettingsOrThrow({ alwaysForceDeleteWorktrees: true })
+      }
+    : onAlwaysDelete
+  const busy = isDeleting || saving
   const label = isDetachingChildren
     ? t('worktree.delete.detachingChildren', 'Detaching children...')
     : isDeleting
       ? canForceDelete
-        ? t('auto.components.sidebar.DeleteWorktreeDialogFooter.forceDeleting', 'Force Deleting...')
-        : t('auto.components.sidebar.DeleteWorktreeDialogFooter.deleting', 'Deleting...')
-      : isBatchDelete
-        ? deleteWorkspacesCountLabel(worktreeCount, t)
-        : canDeleteAllLineage
-          ? deleteWorkspacesCountLabel(lineageDeleteTargetCount, t)
-          : canForceDelete
-            ? t('auto.components.sidebar.DeleteWorktreeDialogFooter.forceDelete', 'Force Delete')
-            : t(
-                'auto.components.sidebar.DeleteWorktreeDialogFooter.deleteWorkspace',
-                'Delete Workspace'
-              )
+        ? t('worktree.delete.forceDeletingEllipsis', 'Force deleting…')
+        : t('worktree.delete.deletingEllipsis', 'Deleting…')
+      : canForceDelete
+        ? t('worktree.delete.forceDelete', 'Force delete')
+        : deleteLabel
+
+  // Why save first: the preference only counts when the user goes through with the delete.
+  const confirm = async (): Promise<void> => {
+    const run = canForceDelete ? onForceDelete : onDelete
+    if (remember && saveRemembered) {
+      const saved = await saveDeletionPreference(
+        saveRemembered,
+        (value) => {
+          setSaving(value)
+          onSavingChange(value)
+        },
+        (error) => {
+          toast.error(
+            t('workspaceDeletion.preferenceSaveFailed', 'Could not save deletion preference'),
+            { description: error instanceof Error ? error.message : String(error) }
+          )
+        }
+      )
+      if (!saved) {
+        return
+      }
+    }
+    run()
+  }
 
   return (
-    <>
-      <Button variant="outline" onClick={onCancel} disabled={isDeleting}>
+    <DialogFooter
+      start={
+        !isMainWorktree && saveRemembered ? (
+          <>
+            <Checkbox
+              id={checkboxId}
+              checked={remember}
+              disabled={busy}
+              onCheckedChange={(checked) => setRemember(checked === true)}
+            />
+            <Label htmlFor={checkboxId} variant="dialog-muted">
+              {canForceDelete
+                ? t('worktree.delete.alwaysForceDelete', 'Always force delete')
+                : t('auto.components.confirmation.dialog.92bac3217e', "Don't ask again")}
+            </Label>
+          </>
+        ) : null
+      }
+    >
+      <DialogCancel disabled={busy}>
         {isMainWorktree
           ? t('auto.components.sidebar.DeleteWorktreeDialogFooter.cf95e3b5bb', 'Close')
           : t('auto.components.sidebar.DeleteWorktreeDialogFooter.c0e972d726', 'Cancel')}
-      </Button>
-      {!isMainWorktree && canForceDelete ? (
-        <WorktreeForceDeleteButton
-          buttonRef={confirmButtonRef}
-          size="default"
-          disabled={isDeleting || deleteDisabled}
-          onForceDelete={onForceDelete}
-          onSavingChange={onSavingChange}
-          onAlwaysForceDelete={() =>
-            useAppStore.getState().updateSettingsOrThrow({ alwaysForceDeleteWorktrees: true })
-          }
-        >
-          {isDeleting ? <LoaderCircle className="size-4 animate-spin" /> : <Trash2 />}
-          {label}
-        </WorktreeForceDeleteButton>
-      ) : !isMainWorktree && onAlwaysDelete ? (
-        <WorktreeForceDeleteButton
-          buttonRef={confirmButtonRef}
-          size="default"
-          disabled={isDeleting || deleteDisabled}
-          onForceDelete={onDelete}
-          onSavingChange={onSavingChange}
-          onAlwaysForceDelete={onAlwaysDelete}
-          moreActionsLabel={t('workspaceDeletion.moreDeleteOptions', 'More delete options')}
-          alwaysForceDeleteLabel={t('workspaceDeletion.alwaysDelete', 'Always delete')}
-          alwaysForceDeleteDescription={t(
-            'workspaceDeletion.alwaysDeleteTooltip',
-            'Skip this confirmation for future deletions.'
-          )}
-        >
-          {isDeleting ? <LoaderCircle className="size-4 animate-spin" /> : <Trash2 />}
-          {label}
-        </WorktreeForceDeleteButton>
-      ) : !isMainWorktree ? (
+      </DialogCancel>
+      {isMainWorktree ? null : (
         <Button
-          ref={confirmButtonRef}
+          size="sm"
           variant="destructive"
-          onClick={onDelete}
-          disabled={isDeleting || deleteDisabled}
+          onClick={() => void confirm()}
+          disabled={busy || deleteDisabled}
         >
-          {isDeleting ? <LoaderCircle className="size-4 animate-spin" /> : <Trash2 />}
           {label}
         </Button>
-      ) : null}
-    </>
+      )}
+    </DialogFooter>
   )
 }

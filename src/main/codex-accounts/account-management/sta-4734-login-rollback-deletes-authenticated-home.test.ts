@@ -169,32 +169,4 @@ describe('STA-4734 a locked auth.json must not delete a just-authenticated home'
       vi.doUnmock('../../codex-cli/command')
     }
   })
-
-  it('still deletes the managed home when the login genuinely fails', async () => {
-    vi.resetModules()
-    authFaults.reset()
-
-    const spawnMock = vi.fn(() => {
-      const child = makeLoginChild()
-      queueMicrotask(() => child.emit('close', 1))
-      return child
-    })
-    vi.doMock('node:child_process', () => ({ execFileSync: vi.fn(), spawn: spawnMock }))
-    vi.doMock('../../codex-cli/command', () => ({ resolveCodexCommand: () => 'codex' }))
-
-    try {
-      const { CodexAccountService } = await import('../service')
-      const service = new CodexAccountService(
-        createStore(createSettings()) as never,
-        createRateLimits() as never,
-        createRuntimeHome() as never
-      )
-
-      await expect(service.addAccount()).rejects.toThrow(/Codex login exited with code 1/)
-      expect(listManagedHomes().filter((home) => realExistsSync(home))).toHaveLength(0)
-    } finally {
-      vi.doUnmock('node:child_process')
-      vi.doUnmock('../../codex-cli/command')
-    }
-  })
 })

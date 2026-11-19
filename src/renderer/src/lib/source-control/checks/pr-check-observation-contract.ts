@@ -2,8 +2,8 @@ import {
   getTaskSourceCacheScope,
   type TaskSourceContext
 } from '../../../../../shared/work-items/task-source-context'
-import { RUNTIME_CONNECTION_CHANGED_MESSAGE } from '../../../web/web-runtime-request-registry'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import { RUNTIME_CONNECTION_CHANGED_MESSAGE } from '../../../web/runtime/client/web-runtime-request-registry'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { AppState } from '../../../store/types'
 import type { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
 import { GITHUB_COMPLETE_PR_CHECK_OBSERVATION_CAPABILITY } from '../../../../../shared/source-control/runtime/source-control-runtime-capabilities'

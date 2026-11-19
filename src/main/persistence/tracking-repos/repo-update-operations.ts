@@ -1,16 +1,19 @@
-import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { Repo } from '../../../shared/repo-types'
-import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { RepoHostTarget } from '../../../shared/repo-host-identity'
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
-import { isLegacyRepoForExternalWorktreeVisibility } from '../../../shared/external-worktree-visibility'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+import type { Repo } from '../../../shared/repository/repo-types'
+import {
+  type ExecutionHostId,
+  getRepoExecutionHostId
+} from '../../../shared/execution-host/execution-host'
+import type { RepoHostTarget } from '../../../shared/repository/repo-host-identity'
+
+import { isLegacyRepoForExternalWorktreeVisibility } from '../../../shared/worktree/visibility/external-worktree-visibility'
 import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control/ai/settings/source-control-ai-repo-settings'
 import { normalizeRepoWorkspaceCleanupPolicy } from '../../../shared/workspace-cleanup/workspace-cleanup-policy'
-import { normalizeWorktreeVisibilitySourcePreferences } from '../../../shared/worktree/visibility-sources'
-import type { GhAccountBinding } from '../../../shared/github/account-binding'
-import { invalidateGhAccountTokenCache } from '../../github/gh-account-token'
+import { normalizeWorktreeVisibilitySourcePreferences } from '../../../shared/worktree/visibility/visibility-sources'
+import type { GhAccountBinding } from '../../../shared/github/accounts/account-binding'
+import { invalidateGhAccountTokenCache } from '../../github/accounts/gh-account-token'
 import { sanitizeRepoUpdatesForPersistence } from './repo-sanitization'
-import { isFolderRepo } from '../../../shared/repo-kind'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import { findExtraFolderWorkspaceIds } from '../../workspaces/catalog/folder-workspace-meta-presence'
 
 export type RepoUpdateMutationOperations = {
@@ -122,7 +125,9 @@ export class RepoUpdatePersistenceOperations {
       sourceControlAi?: Repo['sourceControlAi'] | null
       workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
+      hiddenAt?: Repo['hiddenAt'] | null
       ghAccount?: GhAccountBinding | null
+      browserProfileId?: string | null
     }
   ): Repo | null {
     const repo = findRepoRowForHostScopedWrite(
@@ -194,6 +199,10 @@ export class RepoUpdatePersistenceOperations {
       delete repo.issueSourcePreference
       delete sanitizedUpdates.issueSourcePreference
     }
+    if ('browserProfileId' in sanitizedUpdates && sanitizedUpdates.browserProfileId == null) {
+      delete repo.browserProfileId
+      delete sanitizedUpdates.browserProfileId
+    }
     if ('ghAccount' in sanitizedUpdates && sanitizedUpdates.ghAccount == null) {
       delete repo.ghAccount
       delete sanitizedUpdates.ghAccount
@@ -232,6 +241,13 @@ export class RepoUpdatePersistenceOperations {
     ) {
       delete repo.externalWorktreeDiscoverySuppressedAt
       delete sanitizedUpdates.externalWorktreeDiscoverySuppressedAt
+    }
+    if (
+      'hiddenAt' in sanitizedUpdates &&
+      (sanitizedUpdates.hiddenAt === undefined || sanitizedUpdates.hiddenAt === null)
+    ) {
+      delete repo.hiddenAt
+      delete sanitizedUpdates.hiddenAt
     }
     if (
       'sourceControlAi' in sanitizedUpdates &&

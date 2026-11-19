@@ -1,7 +1,7 @@
 import type { RuntimeFileOpenResult } from '../../shared/file-access/runtime-editor-file-open'
-import type { HandlerContext } from '../dispatch'
-import { RuntimeClientError } from '../runtime/types'
-import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
+import type { HandlerContext } from '../dispatch/dispatch'
+import { RuntimeClientError } from '../runtime/connection/types'
+import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 const NO_APP_WINDOW_MESSAGE =
   'This Orca server has no app window, so it cannot open files as tabs. Nothing was opened.'

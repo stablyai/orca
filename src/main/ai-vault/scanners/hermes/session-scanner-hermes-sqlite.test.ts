@@ -1,609 +1,490 @@
-import '../../../foreign-sqlite-readers/foreign-sqlite-reader.test-fixture'
 import { mkdtempSync, rmSync } from 'node:fs'
-import { mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AiVaultScanIssue } from '../../../../shared/ai-vault/contracts/ai-vault-types'
-import SyncDatabase from '../../../sqlite/sync-database'
-import { listHermesSqliteSessions, parseHermesSqliteSession } from './session-scanner-hermes-sqlite'
-import { buildHermesSqliteCandidatePath } from './session-scanner-hermes-sqlite-paths'
-import { scanAiVaultSessions } from '../../session-scanner'
-import { isolatedScanRoots } from '../../scanner-fixtures/session-scanner-test-fixtures'
-import { parseAgentSessionFile } from '../../parsing/session-scanner-agent-parser'
-import { readAiVaultFirstUserPrompt } from '../../prompts/session-first-user-prompt-read'
-import type { SessionFileCandidate } from '../../session-scanner-types'
-import { readWholeTranscript } from '../../transcripts/session-transcript-reader'
+import { afterEach, expect, it } from 'vitest'
+import Database from '../../../sqlite/sync-database'
+import { withFullFirstUserPromptCapture } from '../../prompts/session-scanner-first-user-prompt-capture'
+import { readHermesConversation } from './hermes-state-db-conversations'
+import { readMessageBodies, readMessageIdentities } from './hermes-state-db-messages'
+import { readHermesSchema } from './hermes-state-db-schema'
 import {
-  registerTranscriptConsumer,
-  resetTranscriptConsumersForTests,
-  type TranscriptMessage
-} from '../../transcripts/session-transcript-consumers'
+  captureHermesSqliteSession,
+  listHermesSqliteSessions,
+  parseHermesSqliteSession
+} from './session-scanner-hermes-sqlite'
 
-describe('Hermes SQLite support', () => {
-  const cleanupDirs: string[] = []
+let tempDirs: string[] = []
 
-  afterEach(() => {
-    resetTranscriptConsumersForTests()
-    for (const dir of cleanupDirs.splice(0)) {
-      rmSync(dir, { recursive: true, force: true })
-    }
-  })
-
-  function createTestDb(dbPath: string) {
-    const db = new SyncDatabase(dbPath)
-    db.exec(`
-      CREATE TABLE sessions (
-        id TEXT PRIMARY KEY,
-        title TEXT,
-        cwd TEXT,
-        model TEXT,
-        created_at TEXT,
-        updated_at TEXT
-      );
-      CREATE TABLE messages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        session_id TEXT,
-        role TEXT,
-        content TEXT,
-        created_at TEXT
-      );
-    `)
-    return db
+afterEach(() => {
+  for (const dir of tempDirs) {
+    rmSync(dir, { recursive: true, force: true })
   }
+  tempDirs = []
+})
 
-  it('lists and parses sessions from state.db', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-hermes-sqlite-'))
-    cleanupDirs.push(dir)
-    const dbPath = join(dir, 'state.db')
-    const db = createTestDb(dbPath)
+// The columns Hermes 0.23 (schema 33) gives these tables that the scanner reads.
+function createStateDb(): { db: Database.Database; path: string } {
+  const dir = mkdtempSync(join(tmpdir(), 'orca-hermes-state-'))
+  tempDirs.push(dir)
+  const path = join(dir, 'state.db')
+  const db = new Database(path)
+  db.exec(`
+    CREATE TABLE sessions (
+      id TEXT PRIMARY KEY, source TEXT NOT NULL, session_key TEXT, model TEXT, model_config TEXT,
+      parent_session_id TEXT, started_at REAL NOT NULL, ended_at REAL, end_reason TEXT,
+      message_count INTEGER DEFAULT 0, cwd TEXT, title TEXT, last_activity_at REAL,
+      archived INTEGER NOT NULL DEFAULT 0, hidden INTEGER NOT NULL DEFAULT 0,
+      transcript_revision INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, role TEXT NOT NULL,
+      content TEXT, tool_call_id TEXT, tool_calls TEXT, tool_name TEXT, timestamp REAL NOT NULL,
+      reasoning TEXT, reasoning_content TEXT, active INTEGER NOT NULL DEFAULT 1,
+      compacted INTEGER NOT NULL DEFAULT 0, display_metadata TEXT, message_uid TEXT,
+      display_order INTEGER
+    );
+    CREATE TABLE state_meta (key TEXT PRIMARY KEY, value TEXT);
+  `)
+  return { db, path }
+}
 
-    db.prepare(
-      `INSERT INTO sessions (id, title, cwd, model, created_at, updated_at)
-       VALUES ('hermes-sqlite-1', 'SQLite Session Title', '/tmp/hermes-work', 'hermes-v3', '2026-06-01T10:00:00Z', '2026-06-01T10:05:00Z')`
-    ).run()
+type SessionFields = {
+  id: string
+  parent?: string
+  startedAt: number
+  endReason?: string
+  endedAt?: number
+  cwd?: string
+  title?: string
+  modelConfig?: Record<string, unknown>
+  hidden?: boolean
+  archived?: boolean
+  sessionKey?: string
+  source?: string
+}
 
-    db.prepare(
-      `INSERT INTO messages (session_id, role, content, created_at)
-       VALUES ('hermes-sqlite-1', 'user', 'Hello Hermes', '2026-06-01T10:00:00Z')`
-    ).run()
-
-    db.prepare(
-      `INSERT INTO messages (session_id, role, content, created_at)
-       VALUES ('hermes-sqlite-1', 'assistant', 'Hello from Hermes assistant', '2026-06-01T10:01:00Z')`
-    ).run()
-
-    db.close()
-
-    const issues: AiVaultScanIssue[] = []
-    const candidates = await listHermesSqliteSessions({
-      dbPaths: [dbPath],
-      limit: 10,
-      issues
-    })
-
-    expect(issues).toEqual([])
-    expect(candidates).toHaveLength(1)
-    expect(candidates[0].file.path).toBe(buildHermesSqliteCandidatePath(dbPath, 'hermes-sqlite-1'))
-
-    const parsed = await parseHermesSqliteSession({
-      dbPath,
-      sessionId: 'hermes-sqlite-1',
-      platform: 'darwin'
-    })
-
-    expect(parsed).not.toBeNull()
-    expect(parsed?.agent).toBe('hermes')
-    expect(parsed?.sessionId).toBe('hermes-sqlite-1')
-    expect(parsed?.title).toBe('SQLite Session Title')
-    expect(parsed?.cwd).toBe('/tmp/hermes-work')
-    expect(parsed?.model).toBe('hermes-v3')
-    expect(parsed?.messageCount).toBe(2)
-    expect(parsed?.resumeCommand).toBe("cd '/tmp/hermes-work' && hermes --resume 'hermes-sqlite-1'")
-    expect(
-      await parseHermesSqliteSession({ dbPath, sessionId: 'missing-session', platform: 'darwin' })
-    ).toBeNull()
-  })
-
-  it.each(['sqlite', 'json'])(
-    'publishes full %s messages without changing the session',
-    async (format) => {
-      const dir = mkdtempSync(join(tmpdir(), 'orca-hermes-consumer-'))
-      cleanupDirs.push(dir)
-      const messages = Array.from({ length: 8 }, (_, index) => ({
-        role: index % 2 === 0 ? 'user' : 'assistant',
-        content: `Turn ${index}: ${'x'.repeat(400)}`
-      }))
-      const sessionId = 'hermes-consumer'
-      const modifiedAt = '2026-06-01T10:00:00.000Z'
-      let filePath: string
-      if (format === 'sqlite') {
-        const dbPath = join(dir, 'state.db')
-        const db = createTestDb(dbPath)
-        db.prepare('INSERT INTO sessions (id, created_at, updated_at) VALUES (?, ?, ?)').run(
-          sessionId,
-          modifiedAt,
-          modifiedAt
-        )
-        const insertMessage = db.prepare(
-          'INSERT INTO messages (session_id, role, content) VALUES (?, ?, ?)'
-        )
-        for (const message of messages) {
-          insertMessage.run(sessionId, message.role, message.content)
-        }
-        db.close()
-        filePath = buildHermesSqliteCandidatePath(dbPath, sessionId)
-      } else {
-        filePath = join(dir, `session_${sessionId}.json`)
-        await writeFile(filePath, JSON.stringify({ session_id: sessionId, messages }))
-      }
-      const candidate: SessionFileCandidate = {
-        agent: 'hermes',
-        codexHome: null,
-        file: { path: filePath, mtimeMs: Date.parse(modifiedAt), modifiedAt }
-      }
-      const unobserved = await parseAgentSessionFile(candidate, process.platform)
-      const received: TranscriptMessage[] = []
-      const finish = vi.fn()
-      registerTranscriptConsumer({
-        beginRead: () => ({ message: (message) => received.push(message), finish })
-      })
-
-      const session = await readWholeTranscript({ candidate, platform: process.platform })
-
-      expect(session).toEqual(unobserved)
-      expect(session?.messageCount).toBe(8)
-      expect(session?.previewMessages).toHaveLength(5)
-      expect(received).toEqual(
-        messages.map((message) => ({ role: message.role, text: message.content, timestamp: null }))
-      )
-      expect(finish).toHaveBeenCalledExactlyOnceWith({ session, byteOffset: 0, incomplete: false })
-    }
+function addSession(db: Database.Database, session: SessionFields): void {
+  db.prepare(
+    `INSERT INTO sessions (id, source, session_key, model, model_config, parent_session_id,
+       started_at, ended_at, end_reason, cwd, title, hidden, archived)
+     VALUES (?, ?, ?, 'fake-model', ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    session.id,
+    session.source ?? 'cli',
+    session.sessionKey ?? null,
+    session.modelConfig ? JSON.stringify(session.modelConfig) : null,
+    session.parent ?? null,
+    session.startedAt,
+    session.endedAt ?? null,
+    session.endReason ?? null,
+    session.cwd ?? null,
+    session.title ?? null,
+    session.hidden ? 1 : 0,
+    session.archived ? 1 : 0
   )
+}
 
-  it('reports a corrupt SQLite database read as incomplete', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-hermes-read-error-'))
-    cleanupDirs.push(dir)
-    const dbPath = join(dir, 'state.db')
-    await writeFile(dbPath, 'not a SQLite database')
-    const finish = vi.fn()
-    const message = vi.fn()
-    registerTranscriptConsumer({ beginRead: () => ({ message, finish }) })
-
-    await expect(
-      readWholeTranscript({
-        candidate: {
-          agent: 'hermes',
-          codexHome: null,
-          file: {
-            path: buildHermesSqliteCandidatePath(dbPath, 'hermes-read-error'),
-            mtimeMs: 1,
-            modifiedAt: new Date(1).toISOString()
-          }
-        },
-        platform: process.platform
-      })
-    ).rejects.toThrow('file is not a database')
-
-    expect(message).not.toHaveBeenCalled()
-    expect(finish).toHaveBeenCalledExactlyOnceWith({
-      session: null,
-      byteOffset: 0,
-      incomplete: true,
-      cancelled: false
-    })
-  })
-
-  it('scans Hermes SQLite session alongside legacy JSON files with deduplication', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-hermes-scan-'))
-    cleanupDirs.push(root)
-    const roots = isolatedScanRoots(root)
-    const dbPath = join(root, 'state.db')
-    const db = createTestDb(dbPath)
-
-    db.prepare(
-      `INSERT INTO sessions (id, title, cwd, model, created_at, updated_at)
-       VALUES ('sqlite-sess-1', 'SQLite Session', '/tmp/hermes-sqlite', 'hermes-0.19', '2026-07-01T10:00:00Z', '2026-07-01T10:10:00Z')`
-    ).run()
-
-    db.prepare(
-      `INSERT INTO messages (session_id, role, content, created_at)
-       VALUES ('sqlite-sess-1', 'user', 'Prompt for SQLite', '2026-07-01T10:00:00Z')`
-    ).run()
-
-    db.close()
-
-    // Add legacy JSON session with duplicate session_id to test dedup
-    await mkdir(roots.hermesSessionsDir, { recursive: true })
-    await writeFile(
-      join(roots.hermesSessionsDir, 'session_sqlite-sess-1.json'),
-      JSON.stringify({
-        session_id: 'sqlite-sess-1',
-        model: 'hermes-legacy',
-        cwd: '/tmp/legacy',
-        messages: [{ role: 'user', content: 'Legacy content' }]
-      })
-    )
-
-    // Add legacy JSON session with distinct session_id (old session before updating Hermes)
-    await writeFile(
-      join(roots.hermesSessionsDir, 'session_legacy-old.json'),
-      JSON.stringify({
-        session_id: 'legacy-old',
-        model: 'hermes-legacy',
-        cwd: '/tmp/legacy-old',
-        messages: [{ role: 'user', content: 'Old Legacy Session' }]
-      })
-    )
-
-    const scanResult = await scanAiVaultSessions({
-      ...roots,
-      hermesStateDbPaths: [dbPath],
-      platform: 'darwin',
-      limit: 10
-    })
-
-    const hermesSessions = scanResult.sessions.filter((s) => s.agent === 'hermes')
-    expect(hermesSessions).toHaveLength(2)
-
-    const sqliteSession = hermesSessions.find((s) => s.sessionId === 'sqlite-sess-1')
-    expect(sqliteSession).toBeDefined()
-    expect(sqliteSession?.title).toBe('SQLite Session')
-    expect(sqliteSession?.cwd).toBe('/tmp/hermes-sqlite')
-
-    const legacySession = hermesSessions.find((s) => s.sessionId === 'legacy-old')
-    expect(legacySession).toBeDefined()
-    expect(legacySession?.title).toBe('Old Legacy Session')
-
-    const unlimitedResult = await scanAiVaultSessions({
-      ...roots,
-      hermesStateDbPaths: [dbPath],
-      platform: 'darwin',
-      limit: 1,
-      unlimited: true
-    })
-    expect(unlimitedResult.issues).toEqual([])
-    expect(unlimitedResult.sessions.filter((s) => s.agent === 'hermes')).toEqual(hermesSessions)
-  })
-
-  it('parses numeric timestamp strings in state.db rows', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-hermes-numeric-ts-'))
-    cleanupDirs.push(dir)
-    const dbPath = join(dir, 'state.db')
-    const db = createTestDb(dbPath)
-
-    db.prepare(
-      `INSERT INTO sessions (id, title, cwd, model, created_at, updated_at)
-       VALUES ('ts-sess-1', 'Numeric Timestamp Session', '/tmp/work', 'hermes-v3', '1722000000', '1722000300')`
-    ).run()
-
-    db.prepare(
-      `INSERT INTO messages (session_id, role, content, created_at)
-       VALUES ('ts-sess-1', 'user', 'Hello', '1722000000')`
-    ).run()
-    db.close()
-
-    const candidates = await listHermesSqliteSessions({ dbPaths: [dbPath], limit: 10, issues: [] })
-    expect(candidates).toHaveLength(1)
-    expect(candidates[0].file.mtimeMs).toBe(1722000300000)
-  })
-
-  it('sorts candidate sessions across multiple databases by recency', async () => {
-    const dir1 = mkdtempSync(join(tmpdir(), 'orca-hermes-db1-'))
-    const dir2 = mkdtempSync(join(tmpdir(), 'orca-hermes-db2-'))
-    cleanupDirs.push(dir1, dir2)
-
-    const dbPath1 = join(dir1, 'state.db')
-    const dbPath2 = join(dir2, 'state.db')
-
-    const db1 = createTestDb(dbPath1)
-    db1
-      .prepare(
-        `INSERT INTO sessions (id, created_at, updated_at) VALUES ('older-sess', '2026-01-01T10:00:00Z', '2026-01-01T10:00:00Z')`
-      )
-      .run()
-    db1
-      .prepare(
-        `INSERT INTO messages (session_id, role, content) VALUES ('older-sess', 'user', 'msg')`
-      )
-      .run()
-    db1.close()
-
-    const db2 = createTestDb(dbPath2)
-    db2
-      .prepare(
-        `INSERT INTO sessions (id, created_at, updated_at) VALUES ('newer-sess', '2026-06-01T10:00:00Z', '2026-06-01T10:00:00Z')`
-      )
-      .run()
-    db2
-      .prepare(
-        `INSERT INTO messages (session_id, role, content) VALUES ('newer-sess', 'user', 'msg')`
-      )
-      .run()
-    db2.close()
-
-    const candidates = await listHermesSqliteSessions({
-      dbPaths: [dbPath1, dbPath2],
-      limit: 10,
-      issues: []
-    })
-
-    expect(candidates).toHaveLength(2)
-    expect(candidates[0].file.path).toContain('newer-sess')
-    expect(candidates[1].file.path).toContain('older-sess')
-  })
-
-  it('deduplicates legacy JSON files against SQLite sessions beyond the limit', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-hermes-limit-dedup-'))
-    cleanupDirs.push(root)
-    const roots = isolatedScanRoots(root)
-
-    const dbPath = join(root, 'state.db')
-    const db = createTestDb(dbPath)
-
-    db.prepare(
-      `INSERT INTO sessions (id, updated_at) VALUES ('sess-newer', '2026-07-02T10:00:00Z')`
-    ).run()
-    db.prepare(
-      `INSERT INTO messages (session_id, role, content) VALUES ('sess-newer', 'user', 'msg')`
-    ).run()
-
-    db.prepare(
-      `INSERT INTO sessions (id, updated_at) VALUES ('sess-older', '2026-07-01T10:00:00Z')`
-    ).run()
-    db.prepare(
-      `INSERT INTO messages (session_id, role, content) VALUES ('sess-older', 'user', 'msg')`
-    ).run()
-    db.close()
-
-    await mkdir(roots.hermesSessionsDir, { recursive: true })
-    await writeFile(
-      join(roots.hermesSessionsDir, 'session_sess-older.json'),
-      JSON.stringify({
-        session_id: 'sess-older',
-        messages: [{ role: 'user', content: 'Legacy duplicate' }]
-      })
-    )
-
-    const scanResult = await scanAiVaultSessions({
-      ...roots,
-      hermesStateDbPaths: [dbPath],
-      platform: 'darwin',
-      limit: 10,
-      limitPerAgent: 1
-    })
-
-    const hermesSessions = scanResult.sessions.filter((s) => s.agent === 'hermes')
-    // sess-older should be deduplicated out even though it's beyond the candidate limit of 1
-    expect(hermesSessions.map((s) => s.sessionId)).toEqual(['sess-newer'])
-  })
-
-  // Why: the shipped schema carries none of created_at/updated_at — recency
-  // lives in started_at/ended_at/last_activity_at as REAL epoch seconds.
-  function createShippedSchemaDb(dbPath: string) {
-    const db = new SyncDatabase(dbPath)
-    db.exec(`
-      CREATE TABLE sessions (
-        id TEXT PRIMARY KEY,
-        title TEXT,
-        cwd TEXT,
-        model TEXT,
-        started_at REAL NOT NULL,
-        ended_at REAL,
-        last_activity_at REAL
-      );
-      CREATE TABLE messages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        session_id TEXT,
-        role TEXT,
-        content TEXT,
-        timestamp REAL
-      );
-    `)
-    return db
+function addMessage(
+  db: Database.Database,
+  message: {
+    session: string
+    role: string
+    content?: string | null
+    at: number
+    active?: 0 | 1
+    compacted?: 0 | 1
+    toolCalls?: unknown
+    displayMetadata?: Record<string, unknown>
+    slot?: number
+    uid?: string
   }
-
-  it('dates sessions from the shipped schema instead of falling back to now', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-hermes-shipped-schema-'))
-    cleanupDirs.push(dir)
-    const dbPath = join(dir, 'state.db')
-    const db = createShippedSchemaDb(dbPath)
-
-    const insertSession = db.prepare(
-      `INSERT INTO sessions (id, title, cwd, model, started_at, ended_at, last_activity_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    )
-    insertSession.run('sess-activity', 'Activity', '/tmp/hermes', 'hermes-v3', 1000, null, 5000)
-    insertSession.run('sess-ended', 'Ended', '/tmp/hermes', 'hermes-v3', 2000, 3000, null)
-    insertSession.run('sess-started', 'Started', '/tmp/hermes', 'hermes-v3', 4000, null, null)
-
-    const insertMessage = db.prepare(
-      `INSERT INTO messages (session_id, role, content, timestamp) VALUES (?, 'user', 'msg', ?)`
-    )
-    insertMessage.run('sess-activity', 1000)
-    insertMessage.run('sess-ended', 2000)
-    insertMessage.run('sess-started', 4000)
-    db.close()
-
-    const issues: AiVaultScanIssue[] = []
-    const candidates = await listHermesSqliteSessions({ dbPaths: [dbPath], limit: 10, issues })
-
-    expect(issues).toEqual([])
-    expect(candidates.map((c) => c.file.mtimeMs)).toEqual([5_000_000, 4_000_000, 3_000_000])
-
-    const parsed = await parseHermesSqliteSession({
-      dbPath,
-      sessionId: 'sess-activity',
-      platform: 'darwin'
-    })
-    expect(parsed?.title).toBe('Activity')
-    expect(parsed?.messageCount).toBe(1)
-  })
-
-  it('keeps the legacy JSON when the migration left a message-less SQLite shell', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-hermes-shell-dedup-'))
-    cleanupDirs.push(root)
-    const roots = isolatedScanRoots(root)
-
-    const dbPath = join(root, 'state.db')
-    const db = createTestDb(dbPath)
-    // Migrated shell: the session row came over, its turns did not.
-    db.prepare(
-      `INSERT INTO sessions (id, updated_at) VALUES ('sess-shell', '2026-07-01T10:00:00Z')`
-    ).run()
-    db.close()
-
-    await mkdir(roots.hermesSessionsDir, { recursive: true })
-    await writeFile(
-      join(roots.hermesSessionsDir, 'session_sess-shell.json'),
-      JSON.stringify({
-        session_id: 'sess-shell',
-        messages: [{ role: 'user', content: 'Turns only the JSON still has' }]
-      })
-    )
-
-    const scanResult = await scanAiVaultSessions({
-      ...roots,
-      hermesStateDbPaths: [dbPath],
-      platform: 'darwin',
-      limit: 10
-    })
-
-    const shell = scanResult.sessions.find((s) => s.sessionId === 'sess-shell')
-    expect(shell).toBeDefined()
-    expect(shell?.messageCount).toBe(1)
-  })
-
-  it('recovers an older SQLite session in a workspace beyond the global candidate limit', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-hermes-scope-'))
-    cleanupDirs.push(root)
-    const roots = isolatedScanRoots(root)
-    const dbPath = join(root, 'state.db')
-    const db = createShippedSchemaDb(dbPath)
-    const workspace = join(root, 'workspace')
-    const insertSession = db.prepare('INSERT INTO sessions (id, cwd, started_at) VALUES (?, ?, ?)')
-    insertSession.run('target-old', workspace, 1_800_000_000)
-    insertSession.run('other-new', join(root, 'other'), 1_800_000_100)
-    insertSession.run('other-newest', join(root, 'other'), 1_800_000_200)
-    db.exec(`INSERT INTO messages (session_id, role, content, timestamp)
-      SELECT id, 'user', 'hello', started_at FROM sessions`)
-    db.close()
-    await mkdir(roots.hermesSessionsDir, { recursive: true })
-    await writeFile(
-      join(roots.hermesSessionsDir, 'session_target-old.json'),
-      JSON.stringify({
-        session_id: 'target-old',
-        cwd: workspace,
-        messages: [{ role: 'user', content: 'stale JSON' }]
-      })
-    )
-
-    const result = await scanAiVaultSessions({
-      ...roots,
-      hermesStateDbPaths: [dbPath],
-      limit: 1,
-      limitPerAgent: 2,
-      scopePaths: [workspace]
-    })
-
-    expect(result.issues).toEqual([])
-    expect(result.sessions.map((session) => session.sessionId)).toEqual([
-      'other-newest',
-      'target-old'
-    ])
-    expect(result.sessions.find((session) => session.sessionId === 'target-old')?.filePath).toBe(
-      buildHermesSqliteCandidatePath(dbPath, 'target-old')
-    )
-  })
-
-  it('refreshes a cached session after a message append despite an invalid timestamp', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-hermes-append-'))
-    cleanupDirs.push(root)
-    const dbPath = join(root, 'state.db')
-    const db = createShippedSchemaDb(dbPath)
-    db.exec(`
-      INSERT INTO sessions (id, started_at) VALUES ('active-session', 1800000000), ('other-session', 1800000030);
-      INSERT INTO messages (session_id, role, content, timestamp) VALUES
-        ('active-session', 'user', 'hello', 1800000000),
-        ('active-session', 'tool', 'invalid clock', 5e246),
-        ('other-session', 'user', 'other question', 1800000030);
-    `)
-    const options = { ...isolatedScanRoots(root), hermesStateDbPaths: [dbPath], limit: 10 }
-    try {
-      const first = await scanAiVaultSessions(options)
-      expect(first.sessions.map((session) => session.sessionId)).toEqual([
-        'other-session',
-        'active-session'
-      ])
-      expect(
-        first.sessions.find((session) => session.sessionId === 'active-session')?.messageCount
-      ).toBe(1)
-      db.exec(`INSERT INTO messages (session_id, role, content, timestamp)
-        VALUES ('active-session', 'assistant', 'new answer', 1800000060)`)
-
-      const second = await scanAiVaultSessions(options)
-      expect(second.sessions.map((session) => session.sessionId)).toEqual([
-        'active-session',
-        'other-session'
-      ])
-      expect(second.sessions[0].messageCount).toBe(2)
-      expect(second.sessions[0].previewMessages.map((message) => message.text)).toEqual([
-        'hello',
-        'new answer'
-      ])
-    } finally {
-      db.close()
-    }
-  })
-
-  it.each(['created_at', 'timestamp'])(
-    'preserves %s message ordering when the schema has no id column',
-    async (timeColumn) => {
-      const root = mkdtempSync(join(tmpdir(), 'orca-hermes-message-order-'))
-      cleanupDirs.push(root)
-      const dbPath = join(root, 'state.db')
-      const db = new SyncDatabase(dbPath)
-      db.exec(`
-        CREATE TABLE sessions (id TEXT PRIMARY KEY, created_at REAL);
-        CREATE TABLE messages (session_id TEXT, role TEXT, content TEXT, ${timeColumn} REAL);
-        INSERT INTO sessions (id, created_at) VALUES ('time-ordered', 1800000000);
-        INSERT INTO messages (session_id, role, content, ${timeColumn}) VALUES
-          ('time-ordered', 'user', 'Later question', 1800000060),
-          ('time-ordered', 'user', 'Opening question', 1800000010);
-      `)
-      db.close()
-
-      const parsed = await parseHermesSqliteSession({
-        dbPath,
-        sessionId: 'time-ordered',
-        platform: 'darwin'
-      })
-      expect(parsed?.title).toBe('Opening question')
-      expect(parsed?.previewMessages.map((message) => message.text)).toEqual([
-        'Opening question',
-        'Later question'
-      ])
-    }
+): void {
+  db.prepare(
+    `INSERT INTO messages (session_id, role, content, tool_calls, timestamp, active, compacted, display_metadata, display_order, message_uid)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    message.session,
+    message.role,
+    message.content ?? null,
+    message.toolCalls ? JSON.stringify(message.toolCalls) : null,
+    message.at,
+    message.active ?? 1,
+    message.compacted ?? 0,
+    message.displayMetadata ? JSON.stringify(message.displayMetadata) : null,
+    message.slot ?? null,
+    message.uid ?? (message.slot === undefined ? null : `uid-${message.slot}`)
   )
+}
 
-  it('reads the complete opening prompt in insertion order when timestamps go backward', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-hermes-first-prompt-'))
-    cleanupDirs.push(root)
-    const dbPath = join(root, 'state.db')
-    const db = createShippedSchemaDb(dbPath)
-    const prompt = `Review the complete request.\n\n${'detail '.repeat(80).trimEnd()}`
-    db.exec(`INSERT INTO sessions (id, started_at) VALUES ('full-prompt', 1800000000)`)
-    db.prepare(`INSERT INTO messages (session_id, role, content, timestamp)
-      VALUES ('full-prompt', 'user', ?, 1800000010)`).run(prompt)
-    db.exec(`INSERT INTO messages (session_id, role, content, timestamp)
-      VALUES ('full-prompt', 'user', 'Later question', 1800000000)`)
-    db.close()
+function exchange(db: Database.Database, session: string, prompt: string, at: number): void {
+  addMessage(db, { session, role: 'user', content: prompt, at })
+  addMessage(db, { session, role: 'assistant', content: `Echo: ${prompt}`, at: at + 1 })
+}
 
-    const result = await readAiVaultFirstUserPrompt({
-      agent: 'hermes',
-      sessionId: 'full-prompt',
-      filePath: buildHermesSqliteCandidatePath(dbPath, 'full-prompt')
-    })
-    expect(result.prompt).toBe(prompt)
+function listedIds(path: string, limit = 50): string[] {
+  return listHermesSqliteSessions({ dbPaths: [path], limit, issues: [] }).map(
+    (candidate) => candidate.file.path
+  )
+}
+
+it('lists the conversations Hermes itself lists, newest first', () => {
+  const { db, path } = createStateDb()
+  addSession(db, { id: 'cli', startedAt: 1_800_000_000, cwd: '/repo' })
+  exchange(db, 'cli', 'first question', 1_800_000_010)
+  addSession(db, { id: 'empty', startedAt: 1_800_000_500 })
+  addSession(db, { id: 'hidden', startedAt: 1_800_000_100, hidden: true })
+  exchange(db, 'hidden', 'bot mode', 1_800_000_110)
+  addSession(db, { id: 'archived', startedAt: 1_800_000_200, archived: true })
+  exchange(db, 'archived', 'old', 1_800_000_210)
+  addSession(db, {
+    id: 'subagent',
+    parent: 'cli',
+    startedAt: 1_800_000_020,
+    modelConfig: { _delegate_from: 'cli' }
   })
+  exchange(db, 'subagent', 'delegated task', 1_800_000_030)
+  addSession(db, {
+    id: 'branch',
+    parent: 'cli',
+    startedAt: 1_800_000_300,
+    modelConfig: { _branched_from: 'cli' }
+  })
+  exchange(db, 'branch', 'branched question', 1_800_000_310)
+  addSession(db, { id: 'third-party', startedAt: 1_800_000_400, source: 'tool' })
+  exchange(db, 'third-party', 'tool run', 1_800_000_410)
+  db.close()
+
+  expect(listedIds(path)).toEqual([`${path}#branch`, `${path}#cli`])
+  // A limited list reads only the most recent session rows; it must agree with the whole sweep.
+  expect(listedIds(path, 1)).toEqual([`${path}#branch`])
+  expect(listedIds(path, Infinity)).toEqual(listedIds(path))
+})
+
+it('finds an older conversation behind more recent sessions Hermes does not list', () => {
+  const { db, path } = createStateDb()
+  addSession(db, { id: 'visible', startedAt: 1_800_000_000, cwd: '/repo' })
+  exchange(db, 'visible', 'plan the release', 1_800_000_010)
+  for (let index = 0; index < 60; index++) {
+    const id = `subagent-${index}`
+    addSession(db, {
+      id,
+      parent: 'visible',
+      startedAt: 1_800_001_000 + index,
+      modelConfig: { _delegate_from: 'visible' }
+    })
+    exchange(db, id, 'delegated task', 1_800_001_000 + index)
+  }
+  db.close()
+
+  expect(listedIds(path, 1)).toEqual([`${path}#visible`])
+})
+
+it('reads a compressed conversation as one row through the continuation Hermes resumes', () => {
+  const { db, path } = createStateDb()
+  addSession(db, {
+    id: 'root',
+    startedAt: 1_800_000_000,
+    endReason: 'compression',
+    endedAt: 1_800_000_050,
+    cwd: '/repo',
+    title: 'Fix the parser'
+  })
+  exchange(db, 'root', 'before compression', 1_800_000_010)
+  addSession(db, { id: 'tip', parent: 'root', startedAt: 1_800_000_050 })
+  exchange(db, 'tip', 'after compression', 1_800_000_060)
+  // A closed duplicate continuation from a reconnect; Hermes resumes the open one.
+  addSession(db, {
+    id: 'stale',
+    parent: 'root',
+    startedAt: 1_800_000_051,
+    endedAt: 1_800_000_052,
+    endReason: 'agent_close'
+  })
+  exchange(db, 'stale', 'abandoned branch', 1_800_000_051)
+  db.close()
+
+  const [candidate] = listHermesSqliteSessions({ dbPaths: [path], limit: 50, issues: [] })
+  expect(candidate.file.path).toBe(`${path}#root`)
+  expect(candidate.file.modifiedAt).toBe(new Date(1_800_000_061_000).toISOString())
+  const session = parseHermesSqliteSession({ dbPath: path, sessionId: 'root', platform: 'darwin' })
+  expect(session).toMatchObject({
+    sessionId: 'root',
+    title: 'Fix the parser',
+    cwd: '/repo',
+    messageCount: 4,
+    filePath: `${path}#root`,
+    resumeCommand: "cd '/repo' && hermes -p default --resume 'root'"
+  })
+  expect(session?.previewMessages.map((message) => message.text)).toEqual([
+    'before compression',
+    'Echo: before compression',
+    'after compression',
+    'Echo: after compression'
+  ])
+})
+
+it('paints what Hermes displays after an in-place compaction, without rewound or model-only rows', () => {
+  const { db, path } = createStateDb()
+  addSession(db, { id: 'chat', startedAt: 1_800_000_000 })
+  const original = { session: 'chat', active: 0 as const, compacted: 1 as const }
+  addMessage(db, { ...original, role: 'user', content: 'first', at: 1_800_000_001, slot: 1 })
+  addMessage(db, {
+    ...original,
+    role: 'assistant',
+    content: null,
+    at: 1_800_000_002,
+    slot: 2,
+    toolCalls: [
+      { id: 'c1', type: 'function', function: { name: 'terminal', arguments: '{"command":"ls"}' } }
+    ]
+  })
+  addMessage(db, { ...original, role: 'tool', content: 'README.md', at: 1_800_000_003, slot: 3 })
+  addMessage(db, { ...original, role: 'assistant', content: 'Done.', at: 1_800_000_004, slot: 4 })
+  addMessage(db, {
+    session: 'chat',
+    role: 'user',
+    content: 'rewound',
+    at: 1_800_000_005,
+    active: 0
+  })
+  // Compaction keeps a live copy of the tail in the same slot and adds its summary.
+  addMessage(db, { session: 'chat', role: 'user', content: 'first', at: 1_800_000_001, slot: 1 })
+  addMessage(db, {
+    session: 'chat',
+    role: 'assistant',
+    content: 'Summary of the chat',
+    at: 1_800_000_006,
+    slot: 6
+  })
+  addMessage(db, {
+    session: 'chat',
+    role: 'assistant',
+    content: 'Done.',
+    at: 1_800_000_004,
+    slot: 4
+  })
+  addMessage(db, {
+    session: 'chat',
+    role: 'user',
+    content: 'model-only',
+    at: 1_800_000_007,
+    displayMetadata: { model_only: true }
+  })
+  db.close()
+
+  const { session, messages } = captureHermesSqliteSession({
+    dbPath: path,
+    sessionId: 'chat',
+    platform: 'darwin'
+  })
+  expect(session).toMatchObject({ title: 'first', messageCount: 4 })
+  expect(messages.map(({ role, text }) => [role, text])).toEqual([
+    ['user', 'first'],
+    ['tool', 'terminal: ls'],
+    ['tool', 'README.md'],
+    ['assistant', 'Done.'],
+    ['assistant', 'Summary of the chat']
+  ])
+})
+
+it('names a local reset lineage by its owner and lists only its newest segment', () => {
+  const { db, path } = createStateDb()
+  addSession(db, { id: 'local-a', startedAt: 1_800_000_000, endReason: 'session_reset' })
+  exchange(db, 'local-a', 'before reset', 1_800_000_010)
+  addSession(db, {
+    id: 'local-b',
+    parent: 'local-a',
+    startedAt: 1_800_000_100,
+    modelConfig: { _reset_from: 'local-a' }
+  })
+  exchange(db, 'local-b', 'after reset', 1_800_000_110)
+  db.prepare('INSERT INTO state_meta (key, value) VALUES (?, ?)').run(
+    'gateway.local_policy.v1:local-a',
+    JSON.stringify({ session_id: 'local-a', lineage: ['local-a', 'local-b'] })
+  )
+  db.close()
+
+  expect(listedIds(path)).toEqual([`${path}#local-a`])
+  const session = parseHermesSqliteSession({
+    dbPath: path,
+    sessionId: 'local-a',
+    platform: 'darwin'
+  })
+  expect(session?.previewMessages.map((message) => message.text)).toEqual([
+    'after reset',
+    'Echo: after reset'
+  ])
+})
+
+it('moves the row revision on a rewind or a retitle that leaves every timestamp alone', () => {
+  const { db, path } = createStateDb()
+  addSession(db, { id: 'chat', startedAt: 1_800_000_000 })
+  exchange(db, 'chat', 'one', 1_800_000_010)
+  exchange(db, 'chat', 'two', 1_800_000_020)
+  const revision = () =>
+    listHermesSqliteSessions({ dbPaths: [path], limit: 50, issues: [] })[0].file.sizeBytes
+  const first = revision()
+  db.prepare("UPDATE messages SET active = 0 WHERE content LIKE '%two'").run()
+  const rewound = revision()
+  db.prepare("UPDATE sessions SET title = 'Renamed' WHERE id = 'chat'").run()
+  const renamed = revision()
+  const retitle = db.prepare("UPDATE sessions SET title = ? WHERE id = 'chat'")
+  retitle.run('Plan \u{1F600}')
+  const grinning = revision()
+  retitle.run('Plan \u{1F601}')
+  const beaming = revision()
+  db.close()
+
+  expect(new Set([first, rewound, renamed, grinning, beaming]).size).toBe(5)
+})
+
+it('keeps a message rewound in a continuation hidden, and a compacted tool result whole', () => {
+  const { db, path } = createStateDb()
+  addSession(db, {
+    id: 'root',
+    startedAt: 1_800_000_000,
+    endReason: 'compression',
+    endedAt: 1_800_000_050
+  })
+  addMessage(db, { session: 'root', role: 'user', content: 'ask', at: 1_800_000_001, slot: 1 })
+  addMessage(db, {
+    session: 'root',
+    role: 'tool',
+    content: 'full output',
+    at: 1_800_000_002,
+    slot: 2,
+    active: 0,
+    compacted: 1
+  })
+  addMessage(db, {
+    session: 'root',
+    role: 'tool',
+    content: '[truncated]',
+    at: 1_800_000_002,
+    slot: 5,
+    uid: 'uid-2'
+  })
+  addMessage(db, {
+    session: 'root',
+    role: 'assistant',
+    content: 'undone answer',
+    at: 1_800_000_003,
+    slot: 3
+  })
+  addSession(db, { id: 'tip', parent: 'root', startedAt: 1_800_000_050 })
+  // Rotation carries the tail into the continuation under the same message_uid; then it is rewound.
+  addMessage(db, {
+    session: 'tip',
+    role: 'assistant',
+    content: 'undone answer',
+    at: 1_800_000_003,
+    slot: 3,
+    active: 0
+  })
+  // Display slots number each segment on its own; slot 1 here is not the parent's slot 1.
+  addMessage(db, {
+    session: 'tip',
+    role: 'user',
+    content: 'next',
+    at: 1_800_000_060,
+    slot: 1,
+    uid: 'uid-next'
+  })
+  db.close()
+
+  const { messages } = captureHermesSqliteSession({
+    dbPath: path,
+    sessionId: 'root',
+    platform: 'darwin'
+  })
+  expect(messages.map(({ role, text }) => [role, text])).toEqual([
+    ['user', 'ask'],
+    ['tool', 'full output'],
+    ['user', 'next']
+  ])
+})
+
+it('names an untitled conversation from a multimodal first prompt longer than the preview cut', () => {
+  const { db, path } = createStateDb()
+  addSession(db, { id: 'chat', startedAt: 1_800_000_000 })
+  const parts = [
+    { type: 'text', text: 'Describe this screenshot' },
+    { type: 'image_url', image_url: { url: `data:image/png;base64,${'A'.repeat(20_000)}` } }
+  ]
+  addMessage(db, {
+    session: 'chat',
+    role: 'user',
+    content: `\u0000json:${JSON.stringify(parts)}`,
+    at: 1_800_000_010
+  })
+  const schema = readHermesSchema(db, path)!
+  const rows = readMessageIdentities(db, schema, readHermesConversation(db, schema, 'chat')!)
+  for (const options of [{ full: false }, { full: true, textChars: 100 }, { full: true }]) {
+    const [row] = readMessageBodies(db, schema, rows, { ...options, tools: false })
+    // The image's base64 stays in SQLite; its part keeps its place.
+    expect(row.content).toBe(`\u0000json:${JSON.stringify([parts[0], { type: 'image_url' }])}`)
+  }
+  db.close()
+
+  const session = parseHermesSqliteSession({ dbPath: path, sessionId: 'chat', platform: 'darwin' })
+  expect(session?.title).toBe('Describe this screenshot')
+})
+
+it('shows nothing of a cut multimodal first prompt whose parts do not parse', () => {
+  const { db, path } = createStateDb()
+  addSession(db, { id: 'chat', startedAt: 1_800_000_000 })
+  addMessage(db, {
+    session: 'chat',
+    role: 'user',
+    content: `\u0000json:[{"type":"text","text":"${'A'.repeat(20_000)}"`,
+    at: 1_800_000_010
+  })
+  db.close()
+
+  const session = parseHermesSqliteSession({ dbPath: path, sessionId: 'chat', platform: 'darwin' })
+  expect(session?.title).toBe('Hermes chat')
+  expect(session?.previewMessages).toEqual([])
+})
+
+it('reads a whole first prompt longer than the preview cut', async () => {
+  const { db, path } = createStateDb()
+  addSession(db, { id: 'chat', startedAt: 1_800_000_000 })
+  exchange(db, 'chat', 'x'.repeat(20_000), 1_800_000_010)
+  db.close()
+
+  const prompt = await withFullFirstUserPromptCapture(
+    async () =>
+      parseHermesSqliteSession({ dbPath: path, sessionId: 'chat', platform: 'darwin' })
+        ?.firstUserPrompt
+  )
+  expect(prompt).toHaveLength(20_000)
+})
+
+it('reads the oldest released store, which has no cwd, visibility or display columns', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'orca-hermes-state-'))
+  tempDirs.push(dir)
+  const path = join(dir, 'state.db')
+  const db = new Database(path)
+  // Hermes v2026.3.12, schema 4.
+  db.exec(`
+    CREATE TABLE sessions (id TEXT PRIMARY KEY, source TEXT NOT NULL, user_id TEXT, model TEXT,
+      model_config TEXT, system_prompt TEXT, parent_session_id TEXT, started_at REAL NOT NULL,
+      ended_at REAL, end_reason TEXT, message_count INTEGER DEFAULT 0, tool_call_count INTEGER DEFAULT 0,
+      input_tokens INTEGER DEFAULT 0, output_tokens INTEGER DEFAULT 0, title TEXT);
+    CREATE TABLE messages (id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, role TEXT NOT NULL,
+      content TEXT, tool_call_id TEXT, tool_calls TEXT, tool_name TEXT, timestamp REAL NOT NULL,
+      token_count INTEGER, finish_reason TEXT);
+  `)
+  db.prepare(
+    "INSERT INTO sessions (id, source, model, started_at, title) VALUES ('old', 'cli', 'm', 1773300000, 'Old chat')"
+  ).run()
+  db.prepare(
+    "INSERT INTO messages (session_id, role, content, timestamp) VALUES ('old', 'user', 'hi', 1773300001), ('old', 'assistant', 'hello', 1773300002)"
+  ).run()
+  db.close()
+
+  expect(listedIds(path)).toEqual([`${path}#old`])
+  expect(
+    parseHermesSqliteSession({ dbPath: path, sessionId: 'old', platform: 'linux' })
+  ).toMatchObject({ title: 'Old chat', messageCount: 2, cwd: null })
 })

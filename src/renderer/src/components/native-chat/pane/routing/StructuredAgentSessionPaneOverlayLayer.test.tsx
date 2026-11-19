@@ -1,26 +1,24 @@
 // @vitest-environment happy-dom
 
 import { act, cleanup, render } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { Tab, TabGroup } from '../../../../../../shared/tab-types'
+import type { Tab, TabGroup } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 
 type MockAppState = {
   unifiedTabsByWorktree: Record<string, readonly Tab[]>
   groupsByWorktree: Record<string, readonly TabGroup[]>
   activeGroupIdByWorktree: Record<string, string>
-  runtimeEnvironmentId: string | null
   focusGroup: (worktreeId: string, groupId: string) => void
 }
 
-const mocks = vi.hoisted(() => ({
-  store: null as null | { setState: (state: Partial<MockAppState>) => void },
-  focusGroup: vi.fn(),
-  mountsByTabId: new Map<string, number>(),
-  unmountsByTabId: new Map<string, number>(),
-  groupIdByTabId: new Map<string, string | undefined>(),
-  targetByTabId: new Map<string, unknown>()
-}))
+const mocks = vi.hoisted(() => {
+  const state: {
+    store: null | { setState: (state: Partial<MockAppState>) => void }
+    mounts: string[]
+  } = { store: null, mounts: [] }
+  return state
+})
 
 vi.mock('@/store', async () => {
   const { create } = await import('zustand')
@@ -28,50 +26,24 @@ vi.mock('@/store', async () => {
     unifiedTabsByWorktree: {},
     groupsByWorktree: {},
     activeGroupIdByWorktree: {},
-    runtimeEnvironmentId: null,
-    focusGroup: mocks.focusGroup
+    focusGroup: () => {}
   }))
   mocks.store = useAppStore
   return { useAppStore }
 })
 
-vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
-  getExecutionHostIdForWorktree: (state: MockAppState) =>
-    state.runtimeEnvironmentId ? `runtime:${state.runtimeEnvironmentId}` : 'local'
+vi.mock('@/runtime/native-chat/session-ownership/structured-agent-session-owner', () => ({
+  structuredAgentSessionOwnerForTab: () => 'local',
+  structuredAgentSessionTargetForHost: () => ({ kind: 'local' })
 }))
 
 vi.mock('../../NativeChatView', async () => {
-  const { useEffect } = await import('react')
+  const { useState } = await import('react')
   return {
-    default: function MockNativeChatView({
-      tabId,
-      groupId,
-      isVisible,
-      isFocusedGroup,
-      target
-    }: {
-      tabId: string
-      groupId?: string
-      isVisible: boolean
-      isFocusedGroup: boolean
-      target: unknown
-    }) {
-      mocks.groupIdByTabId.set(tabId, groupId)
-      mocks.targetByTabId.set(tabId, target)
-      useEffect(() => {
-        mocks.mountsByTabId.set(tabId, (mocks.mountsByTabId.get(tabId) ?? 0) + 1)
-        return () => {
-          mocks.unmountsByTabId.set(tabId, (mocks.unmountsByTabId.get(tabId) ?? 0) + 1)
-        }
-      }, [tabId])
-      return (
-        <span
-          data-chat-tab-id={tabId}
-          data-chat-visible={String(isVisible)}
-          data-chat-focused-group={String(isFocusedGroup)}
-          data-native-chat-working="true"
-        />
-      )
+    default: function MockNativeChatView({ tabId }: { tabId: string }) {
+      // Hidden Activity re-runs effects on reveal; a state initializer runs once per real mount.
+      useState(() => mocks.mounts.push(tabId))
+      return <span data-chat-tab-id={tabId} />
     }
   }
 })
@@ -80,92 +52,68 @@ import StructuredAgentSessionPaneOverlayLayer from './StructuredAgentSessionPane
 
 const WORKTREE_ID = 'wt-1'
 const GROUP_ID = 'group-1'
-
-const FIRST_TAB_ID = 'structured-agent-session-session-1'
-const SECOND_TAB_ID = 'structured-agent-session-session-2'
+const TAB_IDS = ['chat-1', 'chat-2', 'chat-3']
 
 describe('StructuredAgentSessionPaneOverlayLayer', () => {
-  beforeEach(() => {
-    mocks.focusGroup.mockClear()
-    mocks.mountsByTabId.clear()
-    mocks.unmountsByTabId.clear()
-    mocks.groupIdByTabId.clear()
-    mocks.targetByTabId.clear()
-    mocks.store?.setState(createState(FIRST_TAB_ID))
-  })
-
   afterEach(cleanup)
 
-  it('keeps materialized chat surfaces mounted while activation only swaps visibility', () => {
+  it('mounts a chat view when its tab is first shown and keeps it mounted afterwards', () => {
+    mocks.mounts.length = 0
+    mocks.store?.setState({
+      unifiedTabsByWorktree: { [WORKTREE_ID]: TAB_IDS.map(chatTab) },
+      groupsByWorktree: { [WORKTREE_ID]: [group('chat-1')] },
+      activeGroupIdByWorktree: { [WORKTREE_ID]: GROUP_ID }
+    })
     const view = render(
       <StructuredAgentSessionPaneOverlayLayer worktreeId={WORKTREE_ID} isWorktreeActive />
     )
-    const firstBefore = chatSurface(view.container, FIRST_TAB_ID)
-    const secondBefore = chatSurface(view.container, SECOND_TAB_ID)
+    expect(mountedChats(view.container)).toEqual(['chat-1'])
 
-    expect(firstBefore.dataset.chatVisible).toBe('true')
-    expect(secondBefore.dataset.chatVisible).toBe('false')
-    expect(mocks.mountsByTabId).toEqual(
-      new Map([
-        [FIRST_TAB_ID, 1],
-        [SECOND_TAB_ID, 1]
-      ])
-    )
+    act(() => mocks.store?.setState({ groupsByWorktree: { [WORKTREE_ID]: [group('chat-2')] } }))
+    expect(mountedChats(view.container)).toEqual(['chat-1', 'chat-2'])
 
-    act(() => {
-      mocks.store?.setState({
-        groupsByWorktree: {
-          [WORKTREE_ID]: [createGroup(SECOND_TAB_ID)]
-        }
-      })
+    act(() => mocks.store?.setState({ groupsByWorktree: { [WORKTREE_ID]: [group('chat-1')] } }))
+    expect(mountedChats(view.container)).toEqual(['chat-1', 'chat-2'])
+    expect(mocks.mounts).toEqual(['chat-1', 'chat-2'])
+  })
+
+  it('forgets a closed chat, so a reopened background tab waits until it is shown', () => {
+    mocks.store?.setState({
+      unifiedTabsByWorktree: { [WORKTREE_ID]: TAB_IDS.map(chatTab) },
+      groupsByWorktree: { [WORKTREE_ID]: [group('chat-1')] },
+      activeGroupIdByWorktree: { [WORKTREE_ID]: GROUP_ID }
     })
-
-    const firstAfter = chatSurface(view.container, FIRST_TAB_ID)
-    const secondAfter = chatSurface(view.container, SECOND_TAB_ID)
-    expect(firstAfter).toBe(firstBefore)
-    expect(secondAfter).toBe(secondBefore)
-    expect(firstAfter.dataset.chatVisible).toBe('false')
-    expect(secondAfter.dataset.chatVisible).toBe('true')
-    expect(mocks.mountsByTabId.get(FIRST_TAB_ID)).toBe(1)
-    expect(mocks.mountsByTabId.get(SECOND_TAB_ID)).toBe(1)
-    expect(mocks.unmountsByTabId.size).toBe(0)
-    expect(mocks.groupIdByTabId).toEqual(
-      new Map([
-        [FIRST_TAB_ID, GROUP_ID],
-        [SECOND_TAB_ID, GROUP_ID]
-      ])
+    const view = render(
+      <StructuredAgentSessionPaneOverlayLayer worktreeId={WORKTREE_ID} isWorktreeActive />
     )
+    act(() => mocks.store?.setState({ groupsByWorktree: { [WORKTREE_ID]: [group('chat-2')] } }))
+    act(() => mocks.store?.setState({ groupsByWorktree: { [WORKTREE_ID]: [group('chat-1')] } }))
+    act(() =>
+      mocks.store?.setState({
+        unifiedTabsByWorktree: { [WORKTREE_ID]: ['chat-1', 'chat-3'].map(chatTab) }
+      })
+    )
+    act(() =>
+      mocks.store?.setState({ unifiedTabsByWorktree: { [WORKTREE_ID]: TAB_IDS.map(chatTab) } })
+    )
+    expect(mountedChats(view.container)).toEqual(['chat-1'])
   })
 })
 
-function createState(activeTabId: string): MockAppState {
-  return {
-    unifiedTabsByWorktree: {
-      [WORKTREE_ID]: [
-        structuredTab(FIRST_TAB_ID, 'session-1', 0),
-        structuredTab(SECOND_TAB_ID, 'session-2', 1)
-      ]
-    },
-    groupsByWorktree: { [WORKTREE_ID]: [createGroup(activeTabId)] },
-    activeGroupIdByWorktree: { [WORKTREE_ID]: GROUP_ID },
-    runtimeEnvironmentId: null,
-    focusGroup: mocks.focusGroup
-  }
+function mountedChats(container: HTMLElement): string[] {
+  return [...container.querySelectorAll<HTMLElement>('[data-chat-tab-id]')].map(
+    (element) => element.dataset.chatTabId ?? ''
+  )
 }
 
-function createGroup(activeTabId: string): TabGroup {
-  return {
-    id: GROUP_ID,
-    worktreeId: WORKTREE_ID,
-    activeTabId,
-    tabOrder: [FIRST_TAB_ID, SECOND_TAB_ID]
-  }
+function group(activeTabId: string): TabGroup {
+  return { id: GROUP_ID, worktreeId: WORKTREE_ID, activeTabId, tabOrder: TAB_IDS }
 }
 
-function structuredTab(id: string, sessionId: string, sortOrder: number): Tab {
+function chatTab(id: string, sortOrder: number): Tab {
   return {
     id,
-    entityId: sessionId,
+    entityId: `session-${id}`,
     groupId: GROUP_ID,
     worktreeId: WORKTREE_ID,
     contentType: 'agent-session',
@@ -176,12 +124,4 @@ function structuredTab(id: string, sessionId: string, sortOrder: number): Tab {
     sortOrder,
     createdAt: sortOrder + 1
   }
-}
-
-function chatSurface(container: HTMLElement, tabId: string): HTMLElement {
-  const surface = container.querySelector<HTMLElement>(`[data-chat-tab-id="${tabId}"]`)
-  if (!surface) {
-    throw new Error(`missing structured chat surface ${tabId}`)
-  }
-  return surface
 }

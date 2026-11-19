@@ -1,17 +1,26 @@
+import type { AgentMessageSource } from '../../shared/agent-session/journal/agent-session-message-source'
+import { chatMailPlace } from '../external-conversations/external-conversation-links'
+import * as botGroups from '../bots/bot-group-runtime'
+import { chatReplyFollowUp } from './rpc/methods/orchestration/messaging/reply-follow-up'
 import type { SessionOptionValue } from '../../shared/native-chat/input/native-chat-session-options'
 import { conversationRecordReader } from './orchestration/addressing/session-lineage/structured-session-lineage'
+import { botSessionHooks } from '../bots/bot-turn-ended'
 import type { RuntimeLinearCommandSurface } from './integrations/linear/runtime-linear-command-surface'
 import { installRuntimeLinearCommandSurface } from './integrations/linear/runtime-linear-command-surface'
 import { publishNativeChatPreferenceChanges } from './agent-session/launch/runtime-native-chat-preference-events'
 import { publishSettingsChanges } from './client/settings/runtime-settings-change-events'
-import { publishWorkspaceViewChanges } from './sidebar-inputs/runtime-workspace-view-change-events'
+import {
+  publishBotSidebarViewChanges,
+  publishWorkspaceViewChanges
+} from './client/settings/runtime-workspace-view-change-events'
+import { syncPRAutoRefreshCadence } from '../github/pull-requests/refresh/pr-auto-refresh-cadence-sync'
 import {
   OrcaRuntimeWithSidebarTemporal,
   sidebarFactsRuntime
 } from './sidebar-inputs/orca-runtime-sidebar-temporal'
 import { OrcaRuntimeWithAgentTransitions } from './construction/orca-runtime-agent-transitions'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-list/feed/sidebar-inputs-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-owner-switch'
 import type { RuntimeCommandSurfaceHost } from './construction/runtime-installed-command-surfaces'
 import type {
   AgentLaunchTabPublished,
@@ -26,20 +35,15 @@ import type { AgentSessionRecordStore } from './agent-session/records/agent-sess
 import { peekOpenedAgentSessionRecordStore } from './agent-session/records/agent-session-record-store-slot'
 import { createAgentLaunchRecordWarmupGate } from './construction/agent-launch-record-warmup-gate'
 import * as WorkspaceLayouts from './terminal/surface/workspace-layout-stream'
-import type { RemoteLayoutSnapshot } from '../../shared/remote-layout-snapshot'
+import type { RemoteLayoutSnapshot } from '../../shared/remote-runtime/session-graph/remote-layout-snapshot'
 import { registerDetectedWorktreeScanInvalidation } from '../ipc/worktrees/listing/register-detected-worktree-scan-invalidation'
-import {
-  listReferenceWorkspaces,
-  selectWarmedReferenceWorkspace,
-  listWorkspaceReferences
-} from './workspaces/references/runtime-reference-catalog'
-import { findWorkspaceReferences } from './workspaces/references/runtime-reference-find'
+import { WorkspaceReferenceQueries } from './runtime-workspace-reference-queries'
+import { registerWorktreeCatalogRoutes } from './workspaces/catalog/worktree-catalog-live-route'
 import {
   createReferenceAgentIndex,
   referenceConnectionHosts
 } from './workspaces/references/runtime-reference-agents'
-import type { RuntimeReferenceFindParams } from '../../shared/runtime-reference-contracts'
-import { getRepoExecutionHostId } from '../../shared/execution-host'
+import type { RuntimeReferenceFindParams } from '../../shared/workspace-attachments/runtime-reference-contracts'
 import type { LayoutApplyReply } from '../../shared/workspace-layout/workspace-layout-command-types'
 import { rekeyMovedPaneOwners } from './terminal/identity/moved-pane-owner-rekey'
 import * as Layout from './terminal/layout/runtime-layout-apply'
@@ -48,24 +52,26 @@ import {
   installStructuredAgentAvailability as installAvailability,
   type StructuredAgentAvailabilityReader as AvailabilityReader
 } from './agent-session/launch/structured-agent-availability'
-import { PairedServerRowsProducer } from './sidebar-inputs/paired-server-rows-producer'
-import { RepoIconDataUrls } from './sidebar-inputs/repo-icon-data-urls'
-import { WorkspaceRowsProducer } from './sidebar-inputs/workspace-rows-producer'
+import { PairedServerRowsProducer } from './sidebar-inputs/workspace-rows/paired-server-rows-producer'
+import { RepoIconDataUrls } from './sidebar-inputs/repo-icons/repo-icon-data-urls'
+import { WorkspaceRowsProducer } from './sidebar-inputs/workspace-rows/workspace-rows-producer'
 import { getMainHttpClient } from '../network/http-client'
 import { getRuntimeDesktopSurface } from './construction/runtime-desktop-surface'
-import { CollapseWriteOrder } from './sidebar-inputs/workspace-view-collapse-writes'
-import { SidebarInputsFeed } from './sidebar-inputs/sidebar-inputs-feed'
+import { CollapseWriteOrder } from './client/settings/workspace-view-collapse-writes'
+import { SidebarInputsFeed } from './sidebar-inputs/feed/sidebar-inputs-feed'
 import { sidebarInputsFeedDomains } from './sidebar-inputs/sidebar-inputs-feed-domains'
-import { requireSwitchedOn } from './sidebar-inputs/require-switched-on'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-session-contracts'
-import { getHostDisplayLabelOverrides } from '../../shared/host-setting-overrides'
+import { requireSwitchedOn } from './construction/require-sidebar-inputs-enabled'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { getHostDisplayLabelOverrides } from '../../shared/execution-host/host-setting-overrides'
 import type { OrchestrationDb } from './orchestration/db/orchestration-db'
 import { continueRestoredWorkerMailSoon } from './rpc/methods/orchestration/messaging/settled-worker-follow-through'
+import { scrubBotToolSecrets } from './rpc/methods/bots-tools'
 import {
   PeerMailRelay,
   type PeerServerAnswerStatus
 } from './orchestration/federation/peer-mail/peer-mail-relay'
 import { structuredAgentSessionHostTabId } from '../../shared/agent-session/view/structured-agent-session-host-tab-id'
+import { runtimeBotChatTreeIndex } from '../bots/bot-chat-tree-host'
 
 const OrcaRuntimeSidebarBase: typeof OrcaRuntimeWithAgentTransitions = ORCA_SIDEBAR_INPUTS_IS_MAIN
   ? OrcaRuntimeWithSidebarTemporal
@@ -73,16 +79,41 @@ const OrcaRuntimeSidebarBase: typeof OrcaRuntimeWithAgentTransitions = ORCA_SIDE
 
 // oxlint-disable-next-line typescript/no-unsafe-declaration-merging -- SAFETY: The existing Linear installer supplies the canonical prototype surface.
 class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
+  protected override assertStructuredQueuedMessageAllowed(sessionId: string, messageId: string) {
+    botGroups.assertBotGroupQueuedMessageAllowed(this, sessionId, messageId)
+  }
+
+  // Bot rules only for bot sessions; lazy, as the base builds its mail delivery first.
+  protected override structuredMailOwner() {
+    return botGroups.botMailOwner(this)
+  }
+
+  protected override structuredMailReplyFollowUp = chatReplyFollowUp(this)
+
+  protected override chatConversationPlace(sessionId: string, from: AgentMessageSource) {
+    return this.store ? chatMailPlace(this.store, sessionId, from) : null
+  }
+
+  protected override leaveBotGroups(botId: string): Promise<void> {
+    return botGroups.runtimeBotGroups(this).removeBot(botId)
+  }
+
+  /** Moves a bot's saved tool values out of its folder and Claude's config before its CLI runs. */
+  protected override scrubBotToolSecrets(bot: Parameters<typeof scrubBotToolSecrets>[1]) {
+    return scrubBotToolSecrets(this, bot)
+  }
+
   // Lazy: the database can open, and arm relays, while the runtime is still constructing.
   declare private peerMailRelay: PeerMailRelay | undefined
 
-  override ensureOrchestrationFederationRelay(
-    runId?: string,
-    options?: { keepAwake?: boolean }
-  ): void {
-    super.ensureOrchestrationFederationRelay(runId, options)
+  override ensureOrchestrationFederationRelay(runId?: string, opt?: { keepAwake?: boolean }): void {
+    super.ensureOrchestrationFederationRelay(runId, opt)
+    this.ensureOrchestrationPeerMailRelay()
+  }
+
+  ensureOrchestrationPeerMailRelay(environmentId?: string): void {
     this.peerMailRelay ??= new PeerMailRelay(this, () => this.orchestrationEnvironmentTransport)
-    this.peerMailRelay.ensure()
+    this.peerMailRelay.ensure(environmentId)
   }
 
   /** What the pull loop last heard from a paired server, without asking it. */
@@ -151,49 +182,27 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
       )
     : null
 
-  private selectReferenceCatalogWorkspace(selector: string, cwd?: string) {
-    return selectWarmedReferenceWorkspace(
-      this.requireStore(),
-      {
-        cached: () => this.resolvedWorktrees.peek()?.worktrees,
-        scan: () => this.listResolvedWorktrees()
-      },
-      selector,
-      cwd
-    )
-  }
-
-  async listWorkspaceReferences(selector: string, cwd?: string) {
-    return listWorkspaceReferences(await this.selectReferenceCatalogWorkspace(selector, cwd))
-  }
-
-  async findWorkspaceReferences(params: RuntimeReferenceFindParams) {
-    if (params.worktree && params.repo) {
-      throw new Error('--repo and --worktree cannot be combined')
-    }
-    let workspaces = params.worktree
-      ? [await this.selectReferenceCatalogWorkspace(params.worktree, params.cwd)]
-      : listReferenceWorkspaces(this.requireStore(), this.resolvedWorktrees.peek()?.worktrees)
-    if (params.repo) {
-      const repo = await this.resolveRepoSelector(params.repo)
-      workspaces = workspaces.filter(
-        (row) =>
-          row.kind === 'worktree' &&
-          row.repoId === repo.id &&
-          row.hostId === getRepoExecutionHostId(repo)
+  private readonly references = new WorkspaceReferenceQueries({
+    store: () => this.requireStore(),
+    cachedWorktrees: () => this.resolvedWorktrees.peek()?.worktrees,
+    scanWorktrees: () => this.listResolvedWorktrees(),
+    resolveRepo: (selector) => this.resolveRepoSelector(selector),
+    agents: async (workspaceKeys) =>
+      createReferenceAgentIndex(
+        this,
+        this.getOrchestrationDbIfAvailable(),
+        conversationRecordReader(await this.openAgentSessionRecordStore()),
+        workspaceKeys,
+        referenceConnectionHosts(this.listRepos())
       )
-    }
-    return findWorkspaceReferences(params, {
-      workspaces,
-      agents: async (workspaceKeys) =>
-        createReferenceAgentIndex(
-          this,
-          this.getOrchestrationDbIfAvailable(),
-          conversationRecordReader(await this.openAgentSessionRecordStore()),
-          workspaceKeys,
-          referenceConnectionHosts(this.listRepos())
-        )
-    })
+  })
+
+  listWorkspaceReferences(selector: string, cwd?: string) {
+    return this.references.list(selector, cwd)
+  }
+
+  findWorkspaceReferences(params: RuntimeReferenceFindParams) {
+    return this.references.find(params)
   }
 
   constructor(...args: ConstructorParameters<typeof OrcaRuntimeWithAgentTransitions>) {
@@ -201,9 +210,14 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     // Headless hosts must register both invalidators themselves; they never load desktop IPC.
     registerDetectedWorktreeScanInvalidation()
     registerWorktreeChangeInvalidator((repoId) => this.invalidateWorktreeCatalog(repoId))
+    registerWorktreeCatalogRoutes(this.store)
     publishWorkspaceViewChanges(this.store, (event) => this.emitClientEvent(event))
+    publishBotSidebarViewChanges(this.store, () => this.notifyBotsChanged({ kinds: ['bot'] }))
     publishNativeChatPreferenceChanges(this.store, (event) => this.emitClientEvent(event))
     publishSettingsChanges(this.store, (event) => this.emitClientEvent(event))
+    this.botSessions = botSessionHooks(this)
+    this.botChatTreeIndex = runtimeBotChatTreeIndex(this)
+    syncPRAutoRefreshCadence(this.store)
   }
 
   /** What mobileRelay.hosts.list answers changed. */
@@ -257,7 +271,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
   /** Startup settled; opening still waits for a launch-capable client. */
   noteAgentLaunchStartupSettled(): void {
     this.agentLaunchRecordWarmup.startupSettled()
-    // Desktop and serve: CI-line watches start here, past first paint, chat or no chat.
+    // Retry only: watches are admitted by the host's serving milestone, which this timer can precede.
     this.startPullRequestWatches()
   }
 
@@ -289,6 +303,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
 
   protected continueRestoredWorkerMail(db: OrchestrationDb): void {
     continueRestoredWorkerMailSoon(this, db, () => this._orchestrationDb === db)
+    botGroups.startBotGroupsSoon(this, () => this._orchestrationDb === db)
   }
 
   /** Read-only layout stream; layout.subscribe is not advertised yet. */

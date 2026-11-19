@@ -1,6 +1,6 @@
 # Legacy synchronous atomics uses per file; counts may only go DOWN.
-# Only explicit worker/utility entry files are exempt; their imports remain guarded.
+# Worker/utility entries and modules only they import are exempt; anything event-loop code imports stays guarded.
 1 src/main/runtime/rpc/server/pairing/device-registry-disk-merge.ts
-1 src/main/startup/ensure-virtual-display.ts
-1 src/shared/windows-retry-file-operations.ts
-1 src/shared/windows-transient-lock-removal.ts
+1 src/main/startup/linux-display/ensure-virtual-display.ts
+1 src/shared/file-write/windows-retry-file-operations.ts
+1 src/shared/file-write/windows-transient-lock-removal.ts

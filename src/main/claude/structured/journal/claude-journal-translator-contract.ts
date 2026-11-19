@@ -1,6 +1,6 @@
 import type { ClaudeTaskInvocations } from '../../background-tasks/claude-task-invocations'
 import type { ClaudeJournalBoundDelivery } from './claude-journal-bound-delivery'
-import type { AgentSessionContextReport } from '../../../../shared/agent-session/agent-session-context-usage'
+import type { AgentSessionContextReport } from '../../../../shared/agent-session/conversation-context/agent-session-context-usage'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type {
   StructuredAgentSessionEventSink,
@@ -12,12 +12,13 @@ import type {
   ClaudeContextReportTarget
 } from '../../context-usage/claude-context-facts'
 import type { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
-import type { ClaudeStructuredSessionEvent } from '../claude-structured-session-event'
+import type { ClaudeStructuredSessionEvent } from '../lifecycle/claude-structured-session-event'
 import type { ClaudeCommandStart } from '../turns/claude-command-turn'
+import type { ClaudeOpenTurn } from '../turns/claude-open-turn'
 
 import type { AgentSessionDeltaCoalescerDeps } from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
 import type { ClaudeGoalBackgroundWork } from '../../background-tasks/claude-background-task-tracker'
-import type { AgentSessionAccountKind } from '../../../../shared/agent-session/agent-session-availability'
+import type { AgentSessionAccountKind } from '../../../../shared/agent-session/failures/agent-session-availability'
 
 export type ClaudeJournalTranslatorDeps = {
   sink: StructuredAgentSessionEventSink
@@ -32,6 +33,8 @@ export type ClaudeJournalTranslatorDeps = {
   goalBackgroundWork?: () => ClaudeGoalBackgroundWork
   /** True when this acquisition's pending startup took a turnless failure result and will fail with it. */
   acceptStartupFailure?: (message: Record<string, unknown>) => boolean
+  /** True while a send written with priority `now` has not been echoed. */
+  steerAwaitingEcho?: () => boolean
 }
 
 export type ClaudeJournalTranslator = {
@@ -48,8 +51,10 @@ export type ClaudeJournalTranslator = {
   beginCommand: (start: ClaudeCommandStart) => void
   forgetCommand: (turnId: string) => void
   commandInterruptRequested: (turnId: string) => void
-  /** Root work since cycle init makes the open turn eligible for folded sends. */
-  readonly openTurnInLiveProviderCycle: boolean
+  readonly turnCycle: Pick<
+    ClaudeOpenTurn,
+    'openedInLiveProviderCycle' | 'ownsLiveProviderCycle' | 'confirmProviderCycle'
+  >
   readonly openTurnHasInputWork: boolean
   flush: () => void
   childTaskParent?: (taskId: string, run?: string) => string | undefined
@@ -61,6 +66,8 @@ export type ClaudeJournalTranslator = {
   readonly pendingStreamedBlocks: number
   /** Advances on conversation activity; history catch-up refuses to finish past it. */
   readonly contextActivity: number
+  markContextActivity: () => void
+  subscribeContextActivity: (listener: () => void) => () => void
   /** Every final snapshot and turn settlement this acquisition tried was admitted. */
   readonly finalOutputAdmitted: boolean
   subscribeContextUsageRequests: (listener: ClaudeContextReportListener) => () => void

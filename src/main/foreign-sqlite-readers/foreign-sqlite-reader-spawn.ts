@@ -11,14 +11,13 @@ import type {
   OpenCodePromptFailureQuery,
   OpenCodePromptFailureResult
 } from './opencode-prompt-failure-result'
-import type { HermesSessionsQuery, HermesSessionsResult } from './hermes-sessions-result'
 
 function defaultWorkerFactory(): Worker {
   const workerPath = resolveForeignSqliteReaderEntryPath(currentWorkerEntryLayout(__dirname))
   if (!existsSync(workerPath)) {
     throw new Error(`Foreign SQLite reader entry not found: ${workerPath}`)
   }
-  return spawnWorkerThread(workerPath)
+  return spawnWorkerThread(workerPath, { name: 'orca-foreign-sqlite-reader' })
 }
 
 let sharedClient: ForeignSqliteReaderClient | null = null
@@ -30,10 +29,6 @@ function getSharedClient(): ForeignSqliteReaderClient {
 
 export function readCursorDesktopProfile(dbPath: string): Promise<CursorDesktopProfileReadResult> {
   return getSharedClient().readCursorProfile(dbPath)
-}
-
-export function readHermesSessions(query: HermesSessionsQuery): Promise<HermesSessionsResult> {
-  return getSharedClient().readHermesSessions(query)
 }
 
 export function readOpenCodePromptFailure(

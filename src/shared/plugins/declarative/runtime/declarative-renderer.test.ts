@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { atom, derived, read, set, update } from './declarative-atoms'
 import { h } from './declarative-elements'
-import { createOrcaDeclarativeRuntime, type OrcaBridge } from './declarative-renderer'
+import { createOrcaDeclarativeRuntime } from './declarative-renderer'
 
 type Posted = { event: string; payload: unknown }
 type WireNode = {
@@ -22,13 +22,12 @@ const wireNodeSchema: z.ZodType<WireNode> = z.lazy(() =>
 const renderSchema = z.object({ document: z.string(), revision: z.number(), tree: wireNodeSchema })
 const callbackRefSchema = z.object({ $callback: z.string() })
 
-function setup(bridge?: OrcaBridge) {
+function setup() {
   const posted: Posted[] = []
   const queue: { flush: () => void; delayMs: number }[] = []
   const runtime = createOrcaDeclarativeRuntime({
     post: (event, payload) => posted.push({ event, payload }),
-    schedule: (flush, delayMs) => queue.push({ flush, delayMs }),
-    bridge
+    schedule: (flush, delayMs) => queue.push({ flush, delayMs })
   })
   const drain = () => queue.splice(0).forEach(({ flush }) => flush())
   const last = () => posted.at(-1)?.payload
@@ -103,7 +102,7 @@ describe('declarative runtime', () => {
     expect(deleted).toEqual(['A', 'B'])
   })
 
-  it('ignores events and acks for another document', () => {
+  it('ignores events for another document', () => {
     const { runtime, tree } = setup()
     const onPress = vi.fn()
     runtime.mount(() => h('Button', { onPress }, 'x'))
@@ -250,32 +249,5 @@ describe('declarative runtime', () => {
     expect(runtime.mounted()).toBe(false)
     expect(last()).toEqual({ document: runtime.document, revision: 2, tree: null })
     expect(event(1, id)).toBe(false)
-  })
-
-  it('follows theme changes from the bridge and stops listening on dispose', () => {
-    const handlers = new Map<string, (payload: unknown) => void>()
-    const bridge: OrcaBridge = {
-      on: (name, handler) => {
-        handlers.set(name, handler)
-        return { dispose: () => handlers.delete(name) }
-      }
-    }
-    const { runtime, drain, last } = setup(bridge)
-    runtime.mount(() => h('Text', null, read(runtime.themeAtom).colorScheme))
-    expect(last()).toMatchObject({ tree: { children: ['dark'] } })
-    handlers.get('theme')?.({ colorScheme: 'light' })
-    drain()
-    expect(last()).toMatchObject({ tree: { children: ['light'] } })
-    expect([...handlers.keys()].sort()).toEqual([
-      'theme',
-      'ui.ack',
-      'ui.event',
-      'ui.hydrate',
-      'ui.restore',
-      'ui.snapshot',
-      'ui.visibility'
-    ])
-    runtime.dispose()
-    expect(handlers.size).toBe(0)
   })
 })

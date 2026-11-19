@@ -9,14 +9,14 @@ import type {
 import {
   CLAUDE_TASK_NOTIFICATION_MARKER,
   readClaudeTaskNotification
-} from '../../../../shared/claude-task-notification-text'
+} from '../../../../shared/agent-hook-listener/providers/claude/background-tasks/claude-task-notification-text'
 import {
   openTranscriptReadStream,
   wslGatedReaddir,
   wslGatedReadFile,
   wslGatedStat
-} from '../../../native-chat/wsl-transcript-fs-access'
-import { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
+} from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-error'
 import { recordSessionScanIssue, scanIssueTextFromError } from '../../parsing/session-scan-issues'
 import { sessionIdFromFileName, sessionSortTime } from '../../parsing/session-scanner-accumulator'
 import { parseClaudeSessionFile } from './session-scanner-primary-parsers'
@@ -26,7 +26,7 @@ import {
   SUBAGENT_TRANSCRIPT_PREFIX
 } from './session-scanner-subagent-transcripts'
 import { asRecord } from '../../parsing/session-record-fields'
-import { extractString } from '../../../../shared/trimmed-string'
+import { extractString } from '../../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../../parsing/session-json-object'
 import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
 

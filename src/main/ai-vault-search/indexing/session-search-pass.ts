@@ -1,3 +1,7 @@
+import {
+  physicalSessionCandidates,
+  type SessionFileChoice
+} from '../../ai-vault/session-scanner-types'
 import type { AiVaultScanIssue } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   cursorChatMetaRefusals,
@@ -25,6 +29,7 @@ import type {
   SessionSearchIndexStore
 } from '../storage/session-search-store-types'
 import { sessionSearchEnumeratedContainers } from '../discovery/session-search-synthetic-sources'
+import type { SessionDiscoveryStatCache } from '../../ai-vault/discovery/session-discovery-stat-cache'
 
 // Bound recent-cycle retirement work and prioritize rows within the recency window.
 const RETIREMENT_ROWS_PER_CYCLE = 512
@@ -40,8 +45,12 @@ export type SessionSearchPassArgs = {
   recentPerAgent: number
   /** Roots with transcripts on the previous pass; undefined before any observation. */
   previousRootsWithFiles?: ReadonlySet<string>
-  /** The deadline stops transcript reads; discovery and retirement still finish. */
-  overdue?: () => boolean
+  /** Armed after discovery; the returned check stops transcript reads, while retirement still finishes. */
+  readDeadline?: () => () => boolean
+  /** A sweep repeated to finish deferred reads skips the retention purge its first pass ran. */
+  skipPurge?: boolean
+  /** Lets discovery reuse stats of quiet indexed files. */
+  statCache?: SessionDiscoveryStatCache
   /** Cache directory reads across discovery-health and retirement checks for this pass. */
   listings: SessionSearchDirectoryReader
   signal?: AbortSignal
@@ -64,13 +73,14 @@ export async function runSessionSearchPass(
 ): Promise<SessionSearchPassResult> {
   const { store, signal } = args
   await store.prepare?.()
-  if (args.full) {
+  if (args.full && !args.skipPurge) {
     // Apply narrowed retention before the new instance’s first discovery.
     await store.purgeOlderThan(store.retentionCutoff, signal)
   }
   return withCursorChatMetaScan(async () => {
     const swept = await discoverSessionSearchCandidates(args.roots, {
       limitPerAgent: args.full ? Number.POSITIVE_INFINITY : args.recentPerAgent,
+      statCache: args.statCache,
       signal
     })
     const issues: AiVaultScanIssue[] = [...swept.issues]
@@ -83,10 +93,14 @@ export async function runSessionSearchPass(
       const read = await runSessionSearchIndexPass(store, swept.candidates, {
         signal,
         rows,
-        overdue: args.overdue
+        overdue: args.readDeadline?.()
       })
       outOfTime = read.outOfTime
       left = read.left
+      // Rows retired as outranked copies are not deleted sources.
+      for (const path of read.retired) {
+        rows.delete(path)
+      }
     } catch (error) {
       if (!signal?.aborted) {
         throw error
@@ -108,12 +122,18 @@ export async function runSessionSearchPass(
           roots,
           // Only unlimited discovery can prove a synthetic session is absent from its container.
           enumeratedContainers: args.full
-            ? sessionSearchEnumeratedContainers(swept.candidates, issues)
+            ? sessionSearchEnumeratedContainers(
+                swept.candidates.flatMap(physicalSessionCandidates),
+                issues
+              )
             : undefined,
           emptiedRoots: previousRootsWithFiles
             ? sessionSearchEmptiedRoots(previousRootsWithFiles, rootsWithFiles)
             : new Set(),
           listings: args.listings,
+          referenceOnlyRoots: swept.discoveries
+            .filter((discovery) => discovery.agent === 'hermes')
+            .map((discovery) => discovery.rootDir),
           directoryLimit: RETIREMENT_DIRECTORIES_PER_PASS,
           signal
         })
@@ -153,11 +173,13 @@ export async function runSessionSearchPass(
 /** Retire undiscovered rows; recent cycles check only the newest rows under discovered roots. */
 function retirementCandidates(
   rows: ReadonlyMap<string, SessionSearchFileRow>,
-  swept: { candidates: readonly { file: { path: string } }[] },
+  swept: { candidates: readonly SessionFileChoice[] },
   roots: readonly string[],
   full: boolean
 ): string[] {
-  const discovered = new Set(swept.candidates.map((candidate) => candidate.file.path))
+  const discovered = new Set(
+    swept.candidates.flatMap(physicalSessionCandidates).map((candidate) => candidate.file.path)
+  )
   const undiscovered = [...rows.values()].filter((row) => !discovered.has(row.path))
   if (full) {
     return undiscovered.map((row) => row.path)

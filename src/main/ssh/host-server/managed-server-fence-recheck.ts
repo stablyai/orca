@@ -1,5 +1,5 @@
 /** Recheck transient update fences until released so connect status clears without reconnecting. */
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { checkManagedServerUpdate } from './managed-server-update-check'
 import { managedResultAfterUpdate, unservedManagedResult } from './managed-server-serving-gate'
 import type {

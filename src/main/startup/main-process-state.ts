@@ -1,5 +1,5 @@
 import type { BackendSupervisor } from '../backend-desktop/backend-supervisor'
-import type { AutomationUsageClient } from '../../shared/backend-service-contract'
+import type { AutomationUsageClient } from '../../shared/backend/backend-service-contract'
 import { type BrowserWindow, type Tray, app } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
 import type { StatsCollector } from '../stats/collector'
@@ -8,16 +8,16 @@ import type { CodexAccountService } from '../codex-accounts/service'
 import type { CodexRuntimeHomeService } from '../codex-accounts/runtime-home-service'
 import type { ClaudeAccountService } from '../claude-accounts/service'
 import type { ClaudeRuntimeAuthService } from '../claude-accounts/runtime-auth-service'
+import type { OrcaAccountService } from '../orca-profiles/orca-account-service'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { RateLimitService } from '../rate-limits/service/rate-limit-service'
 import type { OrcaRuntimeRpcServer } from '../runtime/rpc/server/runtime-rpc'
-import type { DesktopRelayService } from '../runtime/mobile-cloud-relay/desktop-relay-service'
-import type { DesktopRelayServiceInstaller } from '../runtime/mobile-cloud-relay/desktop-relay-service-installer'
+import type { RelayHost } from '../runtime/mobile-cloud-relay/relay-host-install'
 import type { DesktopPushService } from '../runtime/push/desktop-push-service'
 import type { StarNagService } from '../star-nag/service'
 import type { AgentAwakeService } from '../power/agent-awake-service'
 import type { CrashReportStore } from '../crash-reporting/reports/crash-report-store'
-import type { AutomationService } from '../automations/service'
+import type { AutomationService } from '../automations/automation-service'
 import type { PluginService } from '../plugins/plugin-service'
 import type { PluginKillListService } from '../plugins/catalog/plugin-kill-list-service'
 import type { PluginInstallStatsService } from '../plugins/catalog/plugin-install-stats-service'
@@ -29,24 +29,25 @@ import type { KeybindingService } from '../keybindings/keybinding-service'
 import type { MobileRelayStatusDetail } from '../../shared/remote-runtime/relay/mobile-relay-status'
 import type { AgentBrowserBridge } from '../browser/agent-browser/agent-browser-bridge'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
-import type { GpuFallbackMarker, GpuFallbackEnvironment } from './gpu-fallback-marker'
+import type { GpuFallbackMarker, GpuFallbackEnvironment } from './gpu-recovery/gpu-fallback-marker'
 import type { createCodexSessionMigrationScheduler } from '../codex/history/backfill/codex-session-migration-scheduler'
-import type { getDevInstanceIdentity } from './dev-instance-identity'
-import type { createServeDesktopActivationGate } from './serve-desktop-activation'
+import type { getDevInstanceIdentity } from './profile-startup/dev-instance-identity'
+import type { createServeDesktopActivationGate } from './serve-launch/serve-desktop-activation'
 import type { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
-import type { createWindowsShellPathHydration } from './windows-shell-path-hydration'
-import type { ServeOptions } from './main-process-serve'
+import type { createWindowsShellPathHydration } from './shell-environment/windows-shell-path-hydration'
+import type { ServeOptions } from './serve-launch/serve-options'
 import type { HangDetectionMarker } from '../hang-watchdog/hang-detection-marker'
 import { ServeReadinessPublisher } from '../server/serve-readiness'
-import { PluginInstallLinkState, SkillShareDeepLinkState } from './skill-share-deep-link-state'
-import { OsOpenedDocumentState } from './os-opened-documents'
+import { DeepLinkState } from './deep-link-state'
+import { PluginInstallLinkState } from './open-routing/skill-share-deep-link-state'
+import { OsOpenedDocumentState } from './open-routing/os-opened-documents'
 import {
   DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD,
   DEFAULT_GPU_CRASH_FALLBACK_WINDOW_MS,
   GpuCrashFallbackTracker
 } from '../crash-reporting/recovery/gpu-crash-fallback-decision'
 import type { GpuCrashDiagnosticsRecorder } from '../crash-reporting/capture/gpu-crash-diagnostics'
-import { createWebContentsTimedFlag } from './web-contents-timed-flag'
+import { createWebContentsTimedFlag } from './main-window/web-contents-timed-flag'
 import type { ProfileStateStorageClassification } from '../persistence/profile-state/database/profile-state-storage-classification'
 import type { ProfileStateRuntimeAdmission } from '../persistence/profile-state/access/profile-state-access'
 
@@ -83,6 +84,7 @@ export const mainProcessState = {
   /** User quit bypasses running-process confirmation during close. */
   isQuitting: false,
   store: null as Store | null,
+  profileShutdownCheckpoint: null as Promise<void> | null,
   profileStateStartup: createInitialProfileStateStartup(),
   profileStateAdmission: createInitialProfileStateAdmission(),
   stats: null as StatsCollector | null,
@@ -94,13 +96,14 @@ export const mainProcessState = {
   codexSessionMigration: null as ReturnType<typeof createCodexSessionMigrationScheduler> | null,
   claudeAccounts: null as ClaudeAccountService | null,
   claudeRuntimeAuth: null as ClaudeRuntimeAuthService | null,
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot to the service assigned by main-process-account-services.
+  orcaAccount: null as OrcaAccountService | null,
   runtime: null as OrcaRuntimeService | null,
   rateLimits: null as RateLimitService | null,
   runtimeRpc: null as OrcaRuntimeRpcServer | null,
   serveReadinessPublisher: new ServeReadinessPublisher(),
-  desktopRelayService: null as DesktopRelayService | null,
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot to the installer assigned by main-process-relay-startup.
-  desktopRelayInstaller: null as DesktopRelayServiceInstaller | null,
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot to the relay host assigned by main-process-relay-startup.
+  relayHost: null as RelayHost | null,
   desktopPushService: null as DesktopPushService | null,
   desktopRelayStatus,
   pendingUnpairedDeviceAuthFailure: false,
@@ -113,6 +116,7 @@ export const mainProcessState = {
   crashReports: null as CrashReportStore | null,
   unsubscribeAgentAwakeStatusChanges: null as (() => void) | null,
   unsubscribeSystemResumeBroadcast: null as (() => void) | null,
+  unsubscribeWakeSignalClock: null as (() => void) | null,
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot to the stop function assigned by main-process-observers.
   stopDesktopPresenceReporter: null as (() => void) | null,
   watcherShutdownPromise: null as Promise<void> | null,
@@ -136,7 +140,7 @@ export const mainProcessState = {
   pendingOpenSettings: createWebContentsTimedFlag(),
   // Why: a confirmed Quit Completely can open the window; its renderer pulls this one-shot on mount.
   pendingQuitAndStopAllSessions: createWebContentsTimedFlag(),
-  skillShareDeepLinks: new SkillShareDeepLinkState(),
+  deepLinks: new DeepLinkState(),
   pluginInstallLinks: new PluginInstallLinkState(),
   // Buffer OS Open With before any renderer listener exists.
   osOpenedDocuments: new OsOpenedDocumentState(),
