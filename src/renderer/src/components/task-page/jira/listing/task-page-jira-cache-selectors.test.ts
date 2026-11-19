@@ -34,17 +34,4 @@ describe('findTaskPageJiraIssue', () => {
 
     expect(findTaskPageJiraIssue({}, searchCache, 'ALP-1')?.status.name).toBe('Done')
   })
-
-  it('keeps the issue-cache copy, which carries optimistic edits, when both copies have the same update time', () => {
-    const edited = { ...issue('Done', '2026-11-19T12:30:28.209+0200'), title: 'Edited title' }
-    const fromSearch = issue('Done', '2026-11-19T12:30:28.209+0200')
-
-    const found = findTaskPageJiraIssue(
-      { 'site-1::ALP-1': { data: edited, fetchedAt: 0 } },
-      { 'site-1::project = ALP::30': { data: [fromSearch], fetchedAt: 5 } },
-      'ALP-1'
-    )
-
-    expect(found?.title).toBe('Edited title')
-  })
 })

@@ -7,10 +7,54 @@ import type { JiraIssue } from '../../../../../../shared/jira/jira-types'
 
 type JiraIssueCache = Record<string, CacheEntry<JiraIssue>>
 type JiraSearchCache = Record<string, CacheEntry<JiraIssue[]>>
+type CachedJiraIssueCopy = { cacheKey: string; issue: JiraIssue }
 
 export type TaskPageJiraIssueLookupOptions = {
   sourceContext?: TaskSourceContext | null
   siteId?: string | null
+}
+
+const copiesBySnapshot = new WeakMap<
+  JiraIssueCache,
+  WeakMap<JiraSearchCache, Map<string, CachedJiraIssueCopy[]>>
+>()
+
+// Why: the list looks up every row per cache change; one pass per snapshot keeps that linear.
+function cachedJiraIssueCopies(
+  jiraIssueCache: JiraIssueCache,
+  jiraSearchCache: JiraSearchCache
+): Map<string, CachedJiraIssueCopy[]> {
+  let bySearchCache = copiesBySnapshot.get(jiraIssueCache)
+  if (!bySearchCache) {
+    bySearchCache = new WeakMap()
+    copiesBySnapshot.set(jiraIssueCache, bySearchCache)
+  }
+  const cached = bySearchCache.get(jiraSearchCache)
+  if (cached) {
+    return cached
+  }
+  const copies = new Map<string, CachedJiraIssueCopy[]>()
+  const add = (cacheKey: string, issue: JiraIssue | null | undefined): void => {
+    if (!issue) {
+      return
+    }
+    const forKey = copies.get(issue.key)
+    if (forKey) {
+      forKey.push({ cacheKey, issue })
+    } else {
+      copies.set(issue.key, [{ cacheKey, issue }])
+    }
+  }
+  for (const [cacheKey, entry] of Object.entries(jiraIssueCache)) {
+    add(cacheKey, entry?.data)
+  }
+  for (const [cacheKey, entry] of Object.entries(jiraSearchCache)) {
+    for (const issue of entry?.data ?? []) {
+      add(cacheKey, issue)
+    }
+  }
+  bySearchCache.set(jiraSearchCache, copies)
+  return copies
 }
 
 export function findTaskPageJiraIssue(
@@ -26,25 +70,21 @@ export function findTaskPageJiraIssue(
     options.sourceContext?.provider === 'jira'
       ? getTaskSourceCacheScope(options.sourceContext)
       : null
-  const matchesLookup = (
-    cacheKey: string,
-    issue: JiraIssue | null | undefined
-  ): issue is JiraIssue => {
-    if (!issue || issue.key !== jiraIssueKey) {
-      return false
-    }
-    if (options.siteId && issue.siteId !== options.siteId) {
-      return false
-    }
-    // Scope drawer lookup by site/source so identical issue keys cannot borrow another host/account’s cache.
-    return sourceScope === null || cacheKey.startsWith(`${sourceScope}::`)
-  }
 
   // Why: entries for older searches outlive their TTL, so the first match can be a stale copy.
-  // Keep the most recently updated copy; ties keep the issue cache first, which carries optimistic edits.
+  // Keep the most recently updated copy; optimistic edits are patched into every copy.
   let newest: JiraIssue | null = null
   let newestTime = Number.NEGATIVE_INFINITY
-  const consider = (issue: JiraIssue): void => {
+  for (const { cacheKey, issue } of cachedJiraIssueCopies(jiraIssueCache, jiraSearchCache).get(
+    jiraIssueKey
+  ) ?? []) {
+    if (options.siteId && issue.siteId !== options.siteId) {
+      continue
+    }
+    // Scope drawer lookup by site/source so identical issue keys cannot borrow another host/account’s cache.
+    if (sourceScope !== null && !cacheKey.startsWith(`${sourceScope}::`)) {
+      continue
+    }
     const time = Date.parse(issue.updatedAt)
     const comparable = Number.isNaN(time) ? Number.NEGATIVE_INFINITY : time
     if (newest === null || comparable > newestTime) {
@@ -52,20 +92,5 @@ export function findTaskPageJiraIssue(
       newestTime = comparable
     }
   }
-
-  for (const [cacheKey, entry] of Object.entries(jiraIssueCache)) {
-    const cached = entry?.data
-    if (matchesLookup(cacheKey, cached)) {
-      consider(cached)
-    }
-  }
-
-  for (const [cacheKey, entry] of Object.entries(jiraSearchCache)) {
-    const found = entry?.data?.find((issue) => matchesLookup(cacheKey, issue))
-    if (found) {
-      consider(found)
-    }
-  }
-
   return newest
 }
