@@ -67,7 +67,11 @@ export function rememberRunCoordinatorHandle(
     )
     .run(runId, terminalHandle)
   if (changed.changes) {
-    this.crewChanges.notify(new Set(['topology']))
+    this.crewChanges.notify(
+      Object.assign(new Set(['topology'] as const), {
+        trafficAddresses: new Set([`run:${runId}`, terminalHandle])
+      })
+    )
   }
 }
 
@@ -151,8 +155,8 @@ export function routeAllUnreadDirectMessagesToRunMailbox(
   this: OrchestrationDb,
   runId: string,
   directHandle: string
-): void {
-  this.db
+): number {
+  return this.db
     .prepare(
       `UPDATE messages SET to_handle = ?
        WHERE run_id = ? AND to_handle = ? AND read = 0
@@ -164,7 +168,7 @@ export function routeAllUnreadDirectMessagesToRunMailbox(
              AND ${workerSeatGrabSql('alias')}
          )`
     )
-    .run(`run:${runId}`, runId, directHandle)
+    .run(`run:${runId}`, runId, directHandle).changes
 }
 
 export type RunCoordinatorMailRoutingMethods = {

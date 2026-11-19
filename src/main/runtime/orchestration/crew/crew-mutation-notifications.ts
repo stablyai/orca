@@ -39,7 +39,6 @@ const mutations = [
   'reconcileFederatedWorkerStart',
   'reconcileMissingWorkerTerminal',
   'promoteReadyTasks',
-  'bindRun',
   'createRun',
   'createQuestion',
   'answerQuestion',
@@ -56,7 +55,6 @@ const mutations = [
   'settleWorkerStop',
   'settleDeadWorkerTerminalReleases',
   'markWorkerStopUnknown',
-  'unbindOtherRunsForCoordinator',
   'recordAttemptObservation',
   'resetAll',
   'resetTasks',
@@ -84,7 +82,7 @@ const idOf = (value: unknown): string | undefined =>
   typeof value === 'object' && value !== null && 'id' in value && typeof value.id === 'string'
     ? value.id
     : undefined
-const runMailbox: MailboxScope = (_args, result) => {
+const createdRun: MailboxScope = (_args, result) => {
   const id = idOf(result)
   return id ? [`run:${id}`] : undefined
 }
@@ -98,12 +96,7 @@ const namedDispatch: MailboxScope = ([id]) =>
 /** The mailboxes whose owner a mutation can change, named by the mutation itself; progress records
  *  touch none. Mutations without an entry leave their scope unknown, which consumers treat as all. */
 const mailboxScopes: Partial<Record<(typeof mutations)[number], MailboxScope>> = {
-  bindRun: ([params]) => {
-    const runId =
-      typeof params === 'object' && params !== null && 'runId' in params ? params.runId : null
-    return typeof runId === 'string' ? [`run:${runId}`] : undefined
-  },
-  createRun: runMailbox,
+  createRun: createdRun,
   createDispatchContext: createdDispatch,
   createStartingWorkerDispatch: createdDispatch,
   markWorkerDispatchReady: namedDispatch,
@@ -117,22 +110,13 @@ const mailboxScopes: Partial<Record<(typeof mutations)[number], MailboxScope>> =
     }
     const id = 'id' in params ? params.id : undefined
     const entity = 'entity' in params ? params.entity : undefined
-    if (typeof id !== 'string') {
-      return undefined
-    }
     // A worker row is keyed by its dispatch id; a task names no mailbox.
-    return entity === 'dispatch' || entity === 'worker' ? [`dispatch:${id}`] : undefined
+    return typeof id === 'string' && (entity === 'dispatch' || entity === 'worker')
+      ? [`dispatch:${id}`]
+      : undefined
   },
   recordWorkerStage: () => [],
   recordAttemptObservation: () => []
-}
-
-/** Every row a mutation inserts, updates or deletes moves this counter; triggers included. */
-function rowsWritten(db: OrchestrationDb): number {
-  const row = db.db.prepare('SELECT total_changes() AS n').get()
-  return typeof row === 'object' && row !== null && 'n' in row && typeof row.n === 'number'
-    ? row.n
-    : Number.NaN
 }
 
 /** Wake after the synchronous outer mutation; nested writes coalesce and rolled-back reads compare equal. */
@@ -208,12 +192,7 @@ export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationP
       configurable: true,
       writable: true,
       value(this: OrchestrationDb, ...args: unknown[]) {
-        const writtenBefore = rowsWritten(this)
         const result = original.apply(this, args)
-        // Why: a call that wrote nothing (e.g. rebinding the bound coordinator) changed no reader.
-        if (rowsWritten(this) === writtenBefore) {
-          return result
-        }
         if (
           typeof result === 'object' &&
           result !== null &&
