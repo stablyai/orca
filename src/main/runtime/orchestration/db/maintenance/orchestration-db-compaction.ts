@@ -3,6 +3,8 @@ import { dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { potentiallyLiveRemoteAttachmentSql } from '../federation/remote-attachment-liveness'
 import { runChild, runCompactionChild } from './orchestration-db-compaction-children'
+import { openServeBundlePark } from '../../../../../shared/remote-runtime/serve-supervisor/serve-bundle-park'
+import { ORCAD_BROWSER_PARK_LABEL } from '../../../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
 
 const MIB = 1024 * 1024
 const MIN_FREE_BYTES = 32 * MIB
@@ -230,6 +232,20 @@ export async function compactOrchestrationDb(
     await runChild(filename, { recoverOnly: true }, Math.max(leftMs, 0))
   }
   return result
+}
+
+/** A macOS app update stops a headless server to replace the bundle; that stop must not wait on compaction. */
+export function isAppBundleParkedForInstall(): boolean {
+  try {
+    return (
+      openServeBundlePark({
+        executable: process.execPath,
+        label: ORCAD_BROWSER_PARK_LABEL
+      })?.holds() ?? false
+    )
+  } catch {
+    return true
+  }
 }
 
 /** Last step of a clean quit, after every other teardown settled: nothing else uses the file. */

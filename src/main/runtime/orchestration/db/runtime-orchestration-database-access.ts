@@ -88,10 +88,10 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
       return true
     }
     const page = db.db.prepare(
-      'SELECT rowid AS row_id, coordinator_handle, coordinator_pane_key FROM runs WHERE rowid > ? ORDER BY rowid LIMIT ?'
+      'SELECT rowid AS row_id, coordinator_handle, coordinator_pane_key FROM runs WHERE rowid < ? ORDER BY rowid DESC LIMIT ?'
     )
-    // Paged with yields, so a long Run history never holds quit past its cap.
-    for (let after = 0; ;) {
+    // Newest first, since a live coordinator is almost always on a recent Run; paged with yields.
+    for (let after = Number.MAX_SAFE_INTEGER; ;) {
       const runs = page.all(after, RUNS_PER_ACTIVITY_PAGE)
       const live = runs.some(
         (run) =>

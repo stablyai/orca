@@ -48,9 +48,11 @@ export async function activateBackendRuntime(
   // Registered first, so it runs last, after every other cleanup; skipped when any of them failed.
   registerCleanup(async ({ failed }) => {
     if (!failed && compactionOwner) {
-      const { compactOrchestrationDbAtQuit } =
+      const { compactOrchestrationDbAtQuit, isAppBundleParkedForInstall } =
         await import('../runtime/orchestration/db/maintenance/orchestration-db-compaction')
-      await compactOrchestrationDbAtQuit(compactionOwner)
+      if (!isAppBundleParkedForInstall()) {
+        await compactOrchestrationDbAtQuit(compactionOwner)
+      }
     }
   })
   const { ready: daemonStartup } = await prepareBackendDaemon(
