@@ -102,7 +102,6 @@
 2 src/main/claude/hooks/claude-profile-hook-target.ts
 3 src/main/claude/hooks/statusline-install.ts
 6 src/main/claude/hooks/windows-hook-files.ts
-1 src/main/claude/transcripts/claude-rewind-transcript.ts
 1 src/main/cli/appimage/appimage-copy-pre-extraction.ts
 3 src/main/cli/appimage/appimage-extracted-root.ts
 1 src/main/cli/appimage/appimage-extraction-pruning.ts
@@ -316,7 +315,6 @@
 4 src/main/muse/hook-service.ts
 2 src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts
 1 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
-1 src/main/native-chat/transcript-discovery/host-readable-transcript-path.ts
 2 src/main/native-chat/transcript-filesystem/process/wsl-transcript-fs-process-spawn.ts
 2 src/main/node-runtime/managed-runtime-release-install.ts
 7 src/main/node-runtime/managed-runtime-release.ts
@@ -603,8 +601,8 @@
 3 src/shared/remote-runtime/serve-supervisor/serve-abort-park.ts
 7 src/shared/remote-runtime/serve-supervisor/serve-bundle-park.ts
 1 src/shared/remote-runtime/serve-supervisor/serve-user-data-path.ts
-14 src/shared/secure-storage/secure-file.ts
 1 src/shared/secure-storage/secure-file-async-write.ts # one renameSync per publish, in the same turn as the shouldPublish fence so a sign-out clear cannot land between; staging and fsync are async
+14 src/shared/secure-storage/secure-file.ts
 1 src/shared/secure-storage/secure-path-metadata-snapshot.ts
 2 src/shared/secure-storage/secure-path-windows-acl.ts
 2 src/shared/secure-storage/windows-security-addon.ts

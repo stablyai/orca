@@ -3,7 +3,7 @@
 # This is a RATCHET: counts may only go DOWN.
 # Prune: node config/scripts/static-analysis/ratchets/runtime-lifecycle/check-main-blocking-helper-ratchet.mjs --prune
 1 src/main/acp/conversation-copy/acp-conversation-copies.ts
-3 src/main/acp/conversation-copy/acp-conversation-copy.ts
+2 src/main/acp/conversation-copy/acp-conversation-copy.ts
 5 src/main/acp/launch/acp-launch-command.ts
 2 src/main/acp/launch/acp-private-temp.ts
 1 src/main/acp/launch/acp-structured-launch-resolution.ts
@@ -222,7 +222,6 @@
 2 src/main/claude/agent-view/agent-view-plugin.ts
 1 src/main/claude/agent-view/agent-view-service.ts
 1 src/main/claude/child-process/claude-agent-sdk-process-spawn.ts
-1 src/main/claude/claude-cli-conversations.ts
 1 src/main/claude/claude-stream-json-connection.ts
 1 src/main/claude/configuration/claude-diff-panel-auto-open.ts
 13 src/main/claude/configuration/claude-folder-trust-file.ts
@@ -233,17 +232,10 @@
 2 src/main/claude/hooks/claude-profile-hook-target.ts
 1 src/main/claude/hooks/statusline-install.ts
 3 src/main/claude/hooks/windows-hook-files.ts
-2 src/main/claude/structured/claude-structured-session-adapter.ts
 2 src/main/claude/structured/launch/claude-structured-child-env.ts
-1 src/main/claude/structured/launch/claude-structured-launch-home.ts
 1 src/main/claude/structured/launch/claude-structured-launch-resolution.ts
 1 src/main/claude/theme-sync/claude-code-theme-sync-schedule.ts
 10 src/main/claude/theme-sync/claude-code-theme-sync.ts
-2 src/main/claude/transcripts/claude-conversation-copy.ts
-4 src/main/claude/transcripts/claude-rewind-fork.ts
-2 src/main/claude/transcripts/claude-rewind-transcript.ts
-2 src/main/claude/transcripts/claude-transcript-catch-up.ts
-1 src/main/claude/transcripts/claude-transcript-recovery.ts
 12 src/main/cli/appimage/appimage-copy-pre-extraction.ts
 29 src/main/cli/appimage/appimage-extracted-root.ts
 5 src/main/cli/appimage/appimage-extraction-pruning.ts
@@ -291,7 +283,7 @@
 1 src/main/codex-usage/store.ts
 1 src/main/codex/app-server/codex-app-server-connection.ts
 2 src/main/codex/app-server/codex-app-server-session.ts
-2 src/main/codex/codex-conversation-copy.ts
+1 src/main/codex/codex-conversation-copy.ts
 2 src/main/codex/configuration/agent-state-file-reader.ts
 1 src/main/codex/configuration/codex-path-observation.ts
 22 src/main/codex/configuration/homes/codex-home-paths.ts
@@ -327,13 +319,12 @@
 3 src/main/codex/history/index/codex-state-db-backfill-recovery-process.ts
 5 src/main/codex/history/index/codex-state-db-backfill-recovery.ts
 5 src/main/codex/history/index/codex-state-db.ts
-2 src/main/codex/history/journal-views/codex-cli-conversations.ts
+1 src/main/codex/history/journal-views/codex-cli-conversations.ts
 3 src/main/codex/history/resume/codex-ai-vault-session-resume.ts
 2 src/main/codex/history/resume/codex-legacy-session-resume.ts
 6 src/main/codex/history/resume/codex-session-resume-home.ts
 4 src/main/codex/history/resume/codex-session-resume-launch-preparation.ts
 1 src/main/codex/history/resume/codex-session-resume-preparation.ts
-3 src/main/codex/history/resume/codex-thread-account-move.ts
 1 src/main/codex/history/rollouts/codex-session-file-listing.ts
 2 src/main/codex/history/rollouts/codex-session-link.ts
 2 src/main/codex/history/shared-store/wsl-codex-account-history.ts
@@ -575,7 +566,6 @@
 1 src/main/grok-accounts/status.ts
 1 src/main/grok/grok-hook-backup-cleanup.ts
 1 src/main/grok/grok-text-task.ts
-1 src/main/grok/grok-transcript-import.ts
 17 src/main/grok/hook-service.ts
 1 src/main/hang-watchdog/hang-detection-marker.ts
 1 src/main/hang-watchdog/main-thread-hang-watchdog.ts
@@ -652,7 +642,6 @@
 2 src/main/ipc/linear/project-handlers.ts
 4 src/main/ipc/linear/register-handlers.ts
 4 src/main/ipc/linear/team-handlers.ts
-1 src/main/ipc/native-chat.ts
 7 src/main/ipc/notebook.ts
 1 src/main/ipc/notifications/notification-authorization-status.ts
 2 src/main/ipc/notifications/notifications.ts
@@ -831,7 +820,7 @@
 1 src/main/native-chat/agent-session-journal/durable-rows/journal-row-table.ts
 2 src/main/native-chat/agent-session-journal/history-import/adopted-transcript-source.ts
 1 src/main/native-chat/agent-session-journal/history-import/journal-hermes-import.ts
-5 src/main/native-chat/agent-session-journal/history-import/journal-legacy-import.ts
+4 src/main/native-chat/agent-session-journal/history-import/journal-legacy-import.ts
 1 src/main/native-chat/agent-session-journal/journal-domain-import-discard.ts
 1 src/main/native-chat/agent-session-journal/journal-domain-input-eligibility.ts
 2 src/main/native-chat/agent-session-journal/journal-domain-item-display.ts
@@ -862,8 +851,7 @@
 2 src/main/native-chat/conversation-adoption/codex-adoption-preparation.ts
 1 src/main/native-chat/conversation-adoption/structured-agent-cli-conversations.ts
 3 src/main/native-chat/conversation-files/native-chat-media-path.ts
-3 src/main/native-chat/session-file-resolver.ts
-1 src/main/native-chat/transcript-discovery/host-readable-transcript-path.ts
+2 src/main/native-chat/session-file-resolver.ts
 1 src/main/native-chat/transcript-discovery/transcript-path-admission.ts
 3 src/main/native-chat/transcript-filesystem/process/wsl-transcript-fs-process-dispatch.ts
 1 src/main/native-chat/transcript-filesystem/process/wsl-transcript-fs-process-spawn.ts
@@ -875,10 +863,6 @@
 4 src/main/native-chat/transcript-history/opencode/transcript-opencode.ts
 2 src/main/native-chat/transcript-history/opencode/transcript-opencode2-fork-coverage.ts
 2 src/main/native-chat/transcript-history/opencode/transcript-opencode2-sqlite.ts
-1 src/main/native-chat/transcript-read-cache.ts
-1 src/main/native-chat/transcript-reader.ts
-1 src/main/native-chat/transcript-tail-reader.ts
-3 src/main/native-chat/transcript-watch.ts
 1 src/main/network/macos-tailscale-dns-diagnostic.ts
 3 src/main/node-runtime/managed-runtime-installation.ts
 1 src/main/node-runtime/managed-runtime-release-install.ts
@@ -1284,7 +1268,6 @@
 2 src/main/runtime/orchestration/legacy-remote/legacy-remote-db-methods.ts
 3 src/main/runtime/orchestration/legacy-remote/remote-dispatch-attachment-create.ts
 2 src/main/runtime/orchestration/workers/lifecycle/context-only-dispatch-release.ts
-1 src/main/runtime/orchestration/workers/transcripts/worker-transcript-read.ts
 2 src/main/runtime/push/push-unregister-outbox.ts
 1 src/main/runtime/repositories/folder-workspace-deletion.ts
 3 src/main/runtime/repositories/runtime-nested-repo-import.ts
@@ -1311,7 +1294,6 @@
 1 src/main/runtime/rpc/methods/host-management/managed-runtime-install.ts
 1 src/main/runtime/rpc/methods/mobile-delivery/bundled-mobile-web-bundle.ts
 8 src/main/runtime/rpc/methods/mobile-delivery/mobile-web-bundle.ts
-1 src/main/runtime/rpc/methods/native-chat/native-chat.ts
 1 src/main/runtime/rpc/methods/orcad/orcad-migration.ts
 1 src/main/runtime/rpc/methods/orchestration/messaging/check-mail-reconciliation.ts
 1 src/main/runtime/rpc/methods/orchestration/runs/runs.ts
