@@ -198,31 +198,28 @@ function createTab(
     return created
   }
   // Engine tabs reach no client: this host's own agents get one only by asking (--headless).
-  const agentAsksForEngine =
-    params?.placement !== undefined || caller?.pairedDeviceId || caller?.opensPageLink
+  const refuseEngine =
+    hasEngine && !(params?.placement || caller?.pairedDeviceId || caller?.opensPageLink)
   const engineOr = (mismatch: string | null): (() => Promise<unknown>) =>
-    hasEngine && !agentAsksForEngine
-      ? () => Promise.reject(hiddenEngineTabRefusal(mismatch))
-      : createOnEngine
+    refuseEngine ? () => Promise.reject(hiddenEngineTabRefusal(mismatch)) : createOnEngine
   // The engine keeps profiles orcad cannot describe to a desktop.
-  if (
-    hasEngine &&
-    params?.profileId !== undefined &&
-    params.profileId !== DEFAULT_BROWSER_PROFILE_ID
-  ) {
+  if (hasEngine && params?.profileId && params.profileId !== DEFAULT_BROWSER_PROFILE_ID) {
     return engineOr(`Browser profile ${params.profileId} exists only in this host's own browser.`)()
   }
-  if (opensOnPairedDesktop(host, params, caller, hasEngine)) {
+  const mismatch = pairedDesktopTabMismatch(params)
+  // An older desktop can't be asked, but one already hosting here can still take the tab.
+  const asked = opensOnPairedDesktop(host, params, caller, hasEngine)
+  if (asked || (refuseEngine && mismatch === null && hasPairedPageHost(host))) {
     const fallback = engineOr(null)
     return createBrowserPageOnPairedHost(
       host,
       params ?? {},
       orcadBrowserProfileId(params?.profileId),
-      hasEngine ? async () => requireCreatedPage(await fallback()) : undefined,
+      hasEngine && asked ? async () => requireCreatedPage(await fallback()) : undefined,
       caller?.signal
     )
   }
-  return engineOr(pairedDesktopTabMismatch(params))()
+  return engineOr(mismatch)()
 }
 
 function requireCreatedPage(value: unknown): { browserPageId: string } {
