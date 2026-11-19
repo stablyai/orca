@@ -23,10 +23,15 @@ function describeDevice(socket: ConnectionSocket): string {
 export class RuntimeClientConnectionLog {
   private readonly devices = new Map<string, DeviceActivity>()
   private timer: NodeJS.Timeout | null = null
+  private closed = false
 
   constructor(private readonly write: (line: string) => void = (line) => console.info(line)) {}
 
   record(event: 'connected' | 'disconnected', socket: ConnectionSocket): void {
+    // Late callbacks from a stopped server's sockets belong to no session.
+    if (this.closed) {
+      return
+    }
     const label = describeDevice(socket)
     let activity = this.devices.get(label)
     if (!activity) {
@@ -74,6 +79,10 @@ export class RuntimeClientConnectionLog {
    * then start fresh so a missed close can't skew later counts.
    */
   close(): void {
+    if (this.closed) {
+      return
+    }
+    this.closed = true
     this.flushWindow(true)
     this.devices.clear()
     if (this.timer) {
@@ -90,18 +99,4 @@ export class RuntimeClientConnectionLog {
     // Logging alone must never keep the process alive.
     this.timer.unref()
   }
-}
-
-const runtimeClientConnectionLog = new RuntimeClientConnectionLog()
-
-export function logClientConnection(
-  event: 'connected' | 'disconnected',
-  socket: ConnectionSocket
-): void {
-  runtimeClientConnectionLog.record(event, socket)
-}
-
-/** Writes the open window so a stopping host's log still shows who was attached last. */
-export function closeClientConnectionLog(): void {
-  runtimeClientConnectionLog.close()
 }

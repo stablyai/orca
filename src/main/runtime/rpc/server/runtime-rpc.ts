@@ -2,7 +2,6 @@
 import { RuntimeRpcMobilePairing } from './runtime-rpc-mobile-pairing'
 import { publishHostDescriptor } from '../../hosts/platform-probe/host-descriptor'
 import type { OrcaRuntimeRpcServerOptions } from './runtime-rpc-pairing-types'
-import { closeClientConnectionLog } from './runtime-rpc-client-connection-log'
 
 export type RuntimeRpcClientActivity = {
   openConnections: number
@@ -58,8 +57,9 @@ export class OrcaRuntimeRpcServer extends RuntimeRpcMobilePairing {
     )
     // Relay input is fenced before quit; direct auth may still update lastSeen while transports close.
     this.deviceRegistry?.flushPendingLastSeen()
-    // Sockets are closed now, so the summary includes their disconnects.
-    closeClientConnectionLog()
+    // Direct sockets have closed; relay sockets may still close later, so close() also records who is attached.
+    this.clientConnectionLog?.close()
+    this.clientConnectionLog = null
     const failedStop = stopResults.find((result) => result.status === 'rejected')
     if (failedStop?.status === 'rejected') {
       throw failedStop.reason

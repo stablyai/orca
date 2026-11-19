@@ -54,7 +54,7 @@ describe('RuntimeClientConnectionLog', () => {
     ])
   })
 
-  it('records every attached device on close and treats the next connection as new', () => {
+  it('records every attached device on close and ignores the stopped session afterwards', () => {
     const lines: string[] = []
     const log = new RuntimeClientConnectionLog((line) => lines.push(line))
 
@@ -62,7 +62,11 @@ describe('RuntimeClientConnectionLog', () => {
     vi.advanceTimersByTime(10 * 60_000)
     log.record('connected', socket('cli'))
     log.close()
-    log.record('connected', socket('after-restart'))
+    // A relay socket from the stopped server closing late is ignored.
+    log.record('disconnected', socket('phone', 'device-b'))
+    log.record('connected', socket('late'))
+    const next = new RuntimeClientConnectionLog((line) => lines.push(line))
+    next.record('connected', socket('after-restart'))
 
     expect(lines).toEqual([
       '[runtime-rpc] client connected device=device-b scope=runtime transport=direct connection=phone',
