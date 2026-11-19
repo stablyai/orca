@@ -119,22 +119,17 @@ export default function TerminalPaneHeaderOverlay({
     if (paneCount < 2) {
       return
     }
-    const cleanups = panes.map((pane) => {
+    const listeners = new AbortController()
+    for (const pane of panes) {
       const mark = (hovered: boolean) => (): void => {
         layerRef.current
           ?.querySelector(`[data-pane-header-leaf="${CSS.escape(pane.leafId)}"]`)
           ?.toggleAttribute('data-pane-hovered', hovered)
       }
-      const enter = mark(true)
-      const leave = mark(false)
-      pane.container.addEventListener('pointerenter', enter)
-      pane.container.addEventListener('pointerleave', leave)
-      return () => {
-        pane.container.removeEventListener('pointerenter', enter)
-        pane.container.removeEventListener('pointerleave', leave)
-      }
-    })
-    return () => cleanups.forEach((cleanup) => cleanup())
+      pane.container.addEventListener('pointerenter', mark(true), { signal: listeners.signal })
+      pane.container.addEventListener('pointerleave', mark(false), { signal: listeners.signal })
+    }
+    return () => listeners.abort()
   }, [paneCount, panes])
 
   const renderPaneHeader = (
