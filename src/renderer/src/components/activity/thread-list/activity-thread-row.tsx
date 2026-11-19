@@ -88,8 +88,10 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
 }): React.JSX.Element {
   const t = useTranslate()
   useUiLanguageRevision()
-  const { taskTitle, statusLine, statusKind, needsAttention, workspaceLabel } =
-    activityThreadRowCopy(thread, t)
+  const { taskTitle, statusLine, statusKind, needsAttention, projectLabel } = activityThreadRowCopy(
+    thread,
+    t
+  )
   const showMarkdownStatus = statusKind === 'message'
   const agentLabel = formatAgentTypeLabel(thread.agentType)
 
@@ -172,8 +174,8 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
               <span className="inline-flex shrink-0" title={agentLabel}>
                 <AgentTypeIcon agentType={thread.agentType} size={13} />
               </span>
-              <span className="min-w-0 flex-1 truncate" title={workspaceLabel}>
-                {workspaceLabel}
+              <span className="min-w-0 flex-1 truncate" title={projectLabel}>
+                {projectLabel}
               </span>
               <TooltipProvider delayDuration={800} skipDelayDuration={0}>
                 {canJump && showJumpAction ? (

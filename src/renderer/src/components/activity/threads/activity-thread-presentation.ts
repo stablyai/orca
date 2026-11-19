@@ -236,19 +236,20 @@ export type ActivityThreadRowCopy = {
   statusLine: string
   statusKind: ActivityThreadStatusKind
   needsAttention: boolean
-  workspaceLabel: string
+  /** Project the chat belongs to; a branch or workspace name tells people less in a cross-project list. */
+  projectLabel: string
 }
 
 function normalizeScanLabel(value: string): string {
   return value.trim().toLowerCase().replace(/[-_]+/g, ' ').replace(/\s+/g, ' ')
 }
 
-function previewDuplicatesIdentity(preview: string, title: string, workspace: string): boolean {
+function previewDuplicatesIdentity(preview: string, labels: readonly string[]): boolean {
   const normalized = normalizeScanLabel(preview)
   if (!normalized) {
     return true
   }
-  return normalized === normalizeScanLabel(title) || normalized === normalizeScanLabel(workspace)
+  return labels.some((label) => normalized === normalizeScanLabel(label))
 }
 
 export function activityThreadRowCopy(
@@ -256,6 +257,7 @@ export function activityThreadRowCopy(
   t?: Translate
 ): ActivityThreadRowCopy {
   const workspaceLabel = getActivityThreadWorkspaceTitle(thread.worktree)
+  const projectLabel = thread.repo?.displayName.trim() || workspaceLabel
   const taskTitle = thread.paneTitle.trim() || workspaceLabel
   const renderedPreview = activityThreadResponseRenderPreview({
     responsePreview: thread.responsePreview
@@ -267,7 +269,7 @@ export function activityThreadRowCopy(
   if (
     state !== 'unverifiable' &&
     renderedPreview &&
-    !previewDuplicatesIdentity(renderedPreview, taskTitle, workspaceLabel)
+    !previewDuplicatesIdentity(renderedPreview, [taskTitle, workspaceLabel, projectLabel])
   ) {
     return {
       taskTitle,
@@ -275,7 +277,7 @@ export function activityThreadRowCopy(
       // Monitoring is a distinct live state, not a tool-running row state.
       statusKind: showsAgentToolPreview(toolPreviewState) ? 'tool' : 'message',
       needsAttention,
-      workspaceLabel
+      projectLabel
     }
   }
   if (state !== 'done' && state !== 'idle') {
@@ -284,8 +286,8 @@ export function activityThreadRowCopy(
       statusLine: threadAgentStateLabel(thread, t),
       statusKind: 'state',
       needsAttention,
-      workspaceLabel
+      projectLabel
     }
   }
-  return { taskTitle, statusLine: '', statusKind: 'none', needsAttention, workspaceLabel }
+  return { taskTitle, statusLine: '', statusKind: 'none', needsAttention, projectLabel }
 }
