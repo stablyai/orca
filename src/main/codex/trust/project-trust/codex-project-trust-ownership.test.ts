@@ -21,7 +21,9 @@ import { removeOrcaCreatedProjectTrustEntries } from './codex-project-trust-work
 import type * as TomlAtomicWrite from '../../configuration/toml/config-toml-atomic-write'
 
 // Runs just before each config publication, between the grant's read and its write.
-const beforePublish = vi.hoisted(() => ({ run: null as null | ((configPath: string) => void) }))
+const beforePublish: { run: null | ((configPath: string) => void) } = vi.hoisted(() => ({
+  run: null
+}))
 
 vi.mock('../../configuration/toml/config-toml-atomic-write', async (importOriginal) => {
   const actual = await importOriginal<typeof TomlAtomicWrite>()
@@ -234,6 +236,28 @@ describe('Orca-created project trust lifecycle', () => {
     for (const configPath of [managedConfigPath, systemConfigPath]) {
       expect(readFileSync(configPath, 'utf-8')).not.toContain(`[projects."${PROJECT}"]`)
     }
+  })
+
+  it('records a table a redo creates before it publishes the next config', async () => {
+    writeFileSync(managedConfigPath, `[projects."${PROJECT}"]\ntrust_level = "untrusted"\n`)
+    let ledgerWhenSystemPublished: Record<string, unknown> | null = null
+    beforePublish.run = (configPath) => {
+      if (configPath === managedConfigPath && ledgerWhenSystemPublished === null) {
+        writeFileSync(managedConfigPath, 'model = "gpt-5"\n')
+      }
+      if (configPath === systemConfigPath) {
+        ledgerWhenSystemPublished = readLedger()
+      }
+    }
+
+    await markCodexProjectTrusted(PROJECT, [managedConfigPath, systemConfigPath])
+
+    expect(Object.keys(ledgerWhenSystemPublished ?? {}).sort()).toEqual(
+      [managedConfigPath, systemConfigPath].sort()
+    )
+    expect(readFileSync(managedConfigPath, 'utf-8')).toBe(
+      `model = "gpt-5"\n\n[projects."${PROJECT}"]\ntrust_level = "trusted"\n`
+    )
   })
 
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(

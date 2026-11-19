@@ -75,17 +75,22 @@ function planGrant(configPath: string, projectPath: string): ConfigEdit {
   }
 }
 
-/** Publishes the edit, redoing it from a fresh read when another writer changed the file first. */
+/**
+ * Publishes the edit, redoing it from a fresh read when another writer changed the file first.
+ * `recordAhead` runs before every publication so its record is in the ledger before its table.
+ */
 function publishEdit(
   configPath: string,
   edit: ConfigEdit,
-  replan: () => ConfigEdit
+  replan: () => ConfigEdit,
+  recordAhead: (record: CreatedTrustRecord | null) => void
 ): CreatedTrustRecord | null {
   let current = edit
   for (let attempt = 0; attempt < PUBLISH_ATTEMPTS; attempt++) {
     if (current.updated === (current.raw ?? '') && current.raw !== null) {
       return current.record
     }
+    recordAhead(current.record)
     if (publishIfUnchanged(configPath, current.raw, current.updated)) {
       return current.record
     }
@@ -94,16 +99,17 @@ function publishEdit(
   throw new Error(`${configPath} kept changing while Orca updated its project trust`)
 }
 
+/** The records the ledger added, or null when it could not be published. */
 function applyLedger(
   ledgerPath: string,
   changes: Parameters<AgentTrustOwnershipLedger['apply']>[0]
-): CreatedTrustRecord[] {
+): CreatedTrustRecord[] | null {
   try {
     return openLedger(ledgerPath).apply(changes)
   } catch (error) {
     // Why: a grant without its record only loses cleanup, never safety.
     console.warn('[codex-config] Failed to record the created project trust entry:', error)
-    return []
+    return null
   }
 }
 
@@ -129,12 +135,38 @@ export function grantCodexProjectTrust(
     // Why: configs before the unreadable one are still granted, as when each was written in turn.
     failure = error
   }
-  const intended = edits.flatMap(({ edit }) => (edit.record ? [edit.record] : []))
-  const added = applyLedger(ledgerPath, { record: intended })
+  // Records the ledger now holds for this grant, and the subset this grant added.
+  const recorded: CreatedTrustRecord[] = []
+  const added: CreatedTrustRecord[] = []
+  const recordAhead = (records: CreatedTrustRecord[]): void => {
+    const missing = records.filter((record) => !recorded.some((other) => sameRecord(record, other)))
+    if (missing.length === 0) {
+      return
+    }
+    // Why: a redo can change a config's table bytes; swap out the record this grant added for it.
+    const stale = added.filter((old) =>
+      missing.some((record) => record.configPath === old.configPath)
+    )
+    const newlyAdded = applyLedger(ledgerPath, { record: missing, forget: stale })
+    if (newlyAdded) {
+      for (const old of stale) {
+        added.splice(added.indexOf(old), 1)
+        recorded.splice(recorded.indexOf(old), 1)
+      }
+      recorded.push(...missing)
+      added.push(...newlyAdded)
+    }
+  }
+  recordAhead(edits.flatMap(({ edit }) => (edit.record ? [edit.record] : [])))
   const landed: CreatedTrustRecord[] = []
   try {
     for (const { configPath, edit } of edits) {
-      const record = publishEdit(configPath, edit, () => planGrant(configPath, projectPath))
+      const record = publishEdit(
+        configPath,
+        edit,
+        () => planGrant(configPath, projectPath),
+        (ahead) => recordAhead(ahead ? [ahead] : [])
+      )
       if (record) {
         landed.push(record)
       }
@@ -143,8 +175,10 @@ export function grantCodexProjectTrust(
     failure ??= error
   }
   const forget = added.filter((record) => !landed.some((other) => sameRecord(record, other)))
-  const record = landed.filter((record) => !intended.some((other) => sameRecord(record, other)))
-  applyLedger(ledgerPath, { record, forget })
+  const record = landed.filter((record) => !recorded.some((other) => sameRecord(record, other)))
+  if (forget.length > 0 || record.length > 0) {
+    applyLedger(ledgerPath, { record, forget })
+  }
   if (failure !== undefined) {
     throw failure
   }
