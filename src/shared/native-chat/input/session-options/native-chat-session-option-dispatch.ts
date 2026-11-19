@@ -15,6 +15,8 @@ export type NativeChatSessionOptionDispatchCommand = (
     detectAgentInteraction?: CatalogAgentInteractionDetection
     expectedChoiceLabel?: string
     delivery?: CatalogCommandDelivery
+    /** Let queued chat sends go first instead of cancelling them. */
+    afterQueuedSends?: boolean
   }
 ) =>
   | Promise<NativeChatSessionOptionDispatchResult | void>

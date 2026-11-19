@@ -72,7 +72,9 @@ export function useNativeChatSessionOptionCommand(args: {
       let observer: ClaudeModelSwitchConfirmationObserver | null = null
       try {
         // Drain delayed chat Enter/Ctrl+U before observing so they cannot answer the model dialog or hide confirmation markers.
-        cancelNativeChatPtySends(target.ptyId)
+        if (!options?.afterQueuedSends) {
+          cancelNativeChatPtySends(target.ptyId)
+        }
         await waitForNativeChatPtyIdle(target.ptyId)
         if (!mountedRef.current || sendController.signal.aborted) {
           throw new Error(

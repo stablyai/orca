@@ -16,7 +16,10 @@ vi.mock('@/runtime/hosted-terminals/input/runtime-terminal-verified-input', () =
 }))
 
 import { sendNativeChatMessage } from './native-chat-runtime-send'
-import { resetNativeChatPtySendQueuesForTests } from './native-chat-pty-send-queue'
+import {
+  cancelNativeChatPtySends,
+  resetNativeChatPtySendQueuesForTests
+} from './native-chat-pty-send-queue'
 import { nativeChatExpectedLine, nativeChatLineShowsMessage } from './native-chat-paste-landed'
 
 const CTRL_U = '\x15'
@@ -72,6 +75,23 @@ describe('sendNativeChatMessage input line ownership', () => {
 
     await vi.advanceTimersByTimeAsync(100)
     expect(writes).toEqual(['Reply with PONG', '\r'])
+  })
+
+  // A session command cancelling the queue used to leave the message looking sent.
+  it('reports a send cancelled by a session command as not sent, but not its own cancel', async () => {
+    const rejected: string[] = []
+    const first = sendNativeChatMessage('pty-1', 'first', {
+      clearInput: '',
+      onWriteRejected: () => rejected.push('first')
+    })
+    const second = sendNativeChatMessage('pty-1', 'second', {
+      clearInput: '',
+      onWriteRejected: () => rejected.push('second')
+    })
+    first.cancel()
+    cancelNativeChatPtySends('pty-1')
+    await expect(second.outcome).resolves.toBe('not-submitted')
+    expect(rejected).toEqual(['second'])
   })
 })
 

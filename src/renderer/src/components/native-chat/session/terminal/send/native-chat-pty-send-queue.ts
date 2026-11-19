@@ -5,7 +5,8 @@ export type NativeChatPtySubmissionOutcome = 'not-submitted' | 'uncertain' | 'su
 // the agent composer. Each sequence owns the line until its Enter fires.
 //
 // Option commands (model switch) cancel/await this queue first so a delayed chat
-// Enter cannot land on Claude's model confirmation dialog.
+// Enter cannot land on Claude's model confirmation dialog; cancelled sends report
+// 'not-submitted' through `onPreempted` so their messages show as not sent.
 
 export type NativeChatPtySendQueueHandle = {
   /** `keepInput` skips the unsubmitted-input clear, e.g. while a dialog owns the agent's input. */
@@ -20,13 +21,16 @@ export type NativeChatPtySendQueueHandle = {
 export type EnqueueNativeChatPtySendOptions = {
   /** Clear leftover TUI input only if cancellation follows start but precedes submission. */
   onCancelUnsubmitted?: () => void
+  /** Another sequence cancelled this one before it submitted; the outcome is 'not-submitted'. */
+  onPreempted?: () => void
 }
 
 type PtyQueueState = {
   tail: Promise<void>
   freeAt: number
   depth: number
-  handles: Set<NativeChatPtySendQueueHandle>
+  /** Each queued handle with its preempt, the cancel issued by anyone other than its sender. */
+  handles: Map<NativeChatPtySendQueueHandle, () => void>
 }
 
 const ptyQueues = new Map<string, PtyQueueState>()
@@ -34,7 +38,7 @@ const ptyQueues = new Map<string, PtyQueueState>()
 function getOrCreateState(ptyId: string): PtyQueueState {
   let state = ptyQueues.get(ptyId)
   if (!state) {
-    state = { tail: Promise.resolve(), freeAt: Date.now(), depth: 0, handles: new Set() }
+    state = { tail: Promise.resolve(), freeAt: Date.now(), depth: 0, handles: new Map() }
     ptyQueues.set(ptyId, state)
   }
   return state
@@ -42,7 +46,7 @@ function getOrCreateState(ptyId: string): PtyQueueState {
 
 export function resetNativeChatPtySendQueuesForTests(): void {
   for (const state of ptyQueues.values()) {
-    for (const handle of state.handles) {
+    for (const handle of state.handles.keys()) {
       handle.cancel()
     }
   }
@@ -54,8 +58,8 @@ export function cancelNativeChatPtySends(ptyId: string): void {
   if (!state) {
     return
   }
-  for (const handle of state.handles) {
-    handle.cancel()
+  for (const preempt of state.handles.values()) {
+    preempt()
   }
 }
 
@@ -169,30 +173,41 @@ export function enqueueNativeChatPtySend(
   const settled = runPromise.then(settleQueueEntry, settleQueueEntry)
   state.tail = settled
 
+  const cancel = (keepInput = false): void => {
+    if (cancelled) {
+      return
+    }
+    cancelled = true
+    for (const timer of timers) {
+      clearTimeout(timer)
+    }
+    const shouldClear = bodyStarted && !submitted
+    // Refund only this sequence’s window; later queued Enters still hold the line and their cards.
+    state.freeAt = Math.max(Date.now(), state.freeAt - Math.max(0, durationMs))
+    finishEntry()
+    dropHandle()
+    if (shouldClear && !keepInput) {
+      options?.onCancelUnsubmitted?.()
+    }
+  }
+
+  const preempt = (): void => {
+    if (cancelled || submitted) {
+      return
+    }
+    result = 'not-submitted'
+    cancel()
+    options?.onPreempted?.()
+  }
+
   const handle: NativeChatPtySendQueueHandle = {
-    cancel: (keepInput = false) => {
-      if (cancelled) {
-        return
-      }
-      cancelled = true
-      for (const timer of timers) {
-        clearTimeout(timer)
-      }
-      const shouldClear = bodyStarted && !submitted
-      // Refund only this sequence’s window; later queued Enters still hold the line and their cards.
-      state.freeAt = Math.max(Date.now(), state.freeAt - Math.max(0, durationMs))
-      finishEntry()
-      dropHandle()
-      if (shouldClear && !keepInput) {
-        options?.onCancelUnsubmitted?.()
-      }
-    },
+    cancel,
     settleAfterMs,
     settled,
     outcome,
     bodyStarted: () => bodyStarted,
     finished: () => finished
   }
-  state.handles.add(handle)
+  state.handles.set(handle, preempt)
   return handle
 }

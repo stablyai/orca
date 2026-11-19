@@ -75,6 +75,7 @@ export function useNativeChatSessionOptions(args: {
       return null
     }
     const scopeKey = targetPtyId ?? terminalTabId
+    let held: NativeChatTurnHeldOptionSurface | null = null
     const discoveredModels = discoveryContext
       ? readNativeChatEnrichedModels(agent, discoveryContext.hostKey)
       : null
@@ -94,7 +95,9 @@ export function useNativeChatSessionOptions(args: {
       mode: targetPtyId ? 'live' : 'draft',
       modelLabel: sayNativeChatSessionOptionTranslated('model'),
       reportedValues,
-      dispatchCommand,
+      // A pick replayed at turn end waits for messages queued during the turn rather than cancelling them.
+      dispatchCommand: (command, options) =>
+        dispatchCommand(command, { ...options, afterQueuedSends: held?.sendingHeldPick() != null }),
       canSwitchOmpModel,
       onAgentPicker,
       persistSelection: ({ modelId, optionId, value, adoptModelAsLaunchDefault }) =>
@@ -105,13 +108,14 @@ export function useNativeChatSessionOptions(args: {
           picks: [{ modelId, optionId, value, adoptModelAsLaunchDefault }]
         })
     })
-    return surface
+    held = surface
       ? holdNativeChatOptionPicksDuringTurns({
           surface,
           scopeKey: heldPickScope(agent, scopeKey),
           onHeldPickFailed: toastSessionOptionUpdateFailure
         })
       : null
+    return held
   }, [
     agent,
     canSwitchOmpModel,

@@ -1,6 +1,5 @@
 import {
   type NativeChatPtySubmissionOutcome,
-  cancelNativeChatPtySends,
   enqueueNativeChatPtySend,
   waitForNativeChatPtyIdle
 } from './native-chat-pty-send-queue'
@@ -102,12 +101,12 @@ export function sendNativeChatMessage(
   )
 }
 
+/** Callers decide whether queued chat sends are cancelled or waited for first. */
 export async function typeNativeChatCommand(
   ptyId: string,
   command: string,
   signal?: AbortSignal
 ): Promise<boolean> {
-  cancelNativeChatPtySends(ptyId)
   await waitForNativeChatPtyIdle(ptyId)
   const outcome = await typeAgentTuiCommand({
     command,

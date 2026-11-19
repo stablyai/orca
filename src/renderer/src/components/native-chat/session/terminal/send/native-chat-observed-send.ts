@@ -113,6 +113,10 @@ export function sendNativeChatObservedWrites(
         () => markSubmitted('not-submitted')
       )
     },
-    { onCancelUnsubmitted: () => clearUnsubmittedAgentInput(ptyId, options) }
+    {
+      onCancelUnsubmitted: () => clearUnsubmittedAgentInput(ptyId, options),
+      // A session command cancelled the queued send: nothing was submitted, as with a refused write.
+      onPreempted: options.onWriteRejected
+    }
   )
 }
