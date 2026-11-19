@@ -137,6 +137,16 @@ describe('compactOrchestrationDb', () => {
     expect(inspect(file)).toEqual({ autoVacuum: 0, integrity: 'ok' })
   })
 
+  it('counts an activity check that ran out of time as the one try', async () => {
+    const file = legacyDatabase()
+
+    expect((await compactOrchestrationDb(file, { isActive: () => 'timeout' })).kind).toBe(
+      'timed-out'
+    )
+    expect(await compactOrchestrationDb(file)).toEqual({ kind: 'deferred', timeouts: 1 })
+    expect(inspect(file).autoVacuum).toBe(0)
+  })
+
   it('stops trying after one stopped attempt until the live data shrinks', async () => {
     const file = legacyDatabase()
     await compactOrchestrationDb(file, { budgetMs: 0 })

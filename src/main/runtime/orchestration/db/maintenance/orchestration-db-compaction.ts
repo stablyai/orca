@@ -202,7 +202,7 @@ export type OrchestrationDbQuitOwner = {
   /** The database file, or null when there is none. */
   orchestrationDbFileForQuit(): string | null
   /** Orchestration work in flight, including live coordinators only this process can see. */
-  hasActiveOrchestrationWork(): Promise<boolean>
+  hasActiveOrchestrationWork(deadline: number): Promise<boolean | 'timeout'>
   /** Closes this process's connection and keeps it closed. */
   closeOrchestrationDbForQuit(): void
 }
@@ -217,7 +217,8 @@ export async function compactOrchestrationDb(
   filename: string,
   options: {
     budgetMs?: number
-    isActive?: () => boolean | Promise<boolean>
+    /** True, false, or 'timeout' when it couldn't decide by `deadline` (performance.now()). */
+    isActive?: (deadline: number) => boolean | 'timeout' | Promise<boolean | 'timeout'>
     release?: () => void
   } = {}
 ): Promise<OrchestrationDbCompaction> {
@@ -249,7 +250,17 @@ export async function compactOrchestrationDb(
   if (await walBacklogExceeds(filename, MAX_WAL_BYTES)) {
     return { kind: 'busy' }
   }
-  if (await isActive()) {
+  const active = await isActive(started + budgetMs)
+  if (active === 'timeout') {
+    // A history too long to check in time would cost the full wait on every quit; count it as the one try.
+    const timedOut = { kind: 'timed-out' as const, ms: Math.round(performance.now() - started) }
+    await settlesWithin(
+      writeDeferral(filename, { liveBytes, timeouts: (deferral?.timeouts ?? 0) + 1 }),
+      MARKER_WRITE_MS
+    )
+    return timedOut
+  }
+  if (active) {
     return { kind: 'active' }
   }
   // Recorded before the wait, so a quit cut off mid-attempt still counts as the one wait it paid. A disk
@@ -380,7 +391,7 @@ async function compactAtQuit(owner: OrchestrationDbQuitOwner | null | undefined)
       return
     }
     const result = await compactOrchestrationDb(filename, {
-      isActive: () => owner.hasActiveOrchestrationWork(),
+      isActive: (deadline) => owner.hasActiveOrchestrationWork(deadline),
       release: () => owner.closeOrchestrationDbForQuit()
     })
     if (result.kind === 'failed') {

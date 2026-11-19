@@ -76,8 +76,9 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
     return existsSync(filename) ? filename : null
   }
 
-  /** In-flight orchestration work, including Runs whose coordinator is still alive in a terminal. */
-  async hasActiveOrchestrationWork(): Promise<boolean> {
+  /** In-flight orchestration work, including Runs whose coordinator is still alive in a terminal;
+   *  'timeout' when the Run history couldn't be read by `deadline` (performance.now()). */
+  async hasActiveOrchestrationWork(deadline: number): Promise<boolean | 'timeout'> {
     const db = this._orchestrationDb
     if (!db) {
       return false
@@ -108,6 +109,9 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
       await yieldToEventLoop()
       if (this._orchestrationDb !== db) {
         return true
+      }
+      if (performance.now() >= deadline) {
+        return 'timeout'
       }
     }
   }
