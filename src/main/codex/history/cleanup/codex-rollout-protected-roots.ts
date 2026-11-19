@@ -2,6 +2,7 @@ import { realpath, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { isPathInsideOrEqual } from '../../../../shared/file-access/cross-platform-path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
+import { assertWslUncPathRunning } from '../../../wsl/filesystem/wsl-unc-access-gate'
 
 /** Orca's homes to delete in, and roots (the user's import folder) no deletion may reach. */
 export type RolloutHomes = { homes: readonly string[]; protectedRoots: readonly string[] }
@@ -47,7 +48,8 @@ async function isHomeRealPath(homes: readonly string[], realPath: string): Promi
 
 /**
  * Each protected root for the rollout at `stem` (`YYYY/MM/DD/<name>`), unless it is the very folder
- * of a home Orca deletes from. A root that can't be read for a reason other than being gone throws.
+ * of a home Orca deletes from. A root that can't be read for a reason other than being gone, or
+ * sits in a WSL distro that isn't running, throws.
  */
 export async function resolveProtectedRoots(
   { homes, protectedRoots }: RolloutHomes,
@@ -61,6 +63,8 @@ export async function resolveProtectedRoots(
   const dated = dirname(stem).split('/')
   const resolved: ProtectedRoot[] = []
   for (const root of protectedRoots) {
+    // Reading a stopped distro's folder boots it; the chat waits for a sweep where it runs.
+    await assertWslUncPathRunning(root)
     const realPath = await realpathUnlessAbsent(root)
     if (!realPath) {
       continue
