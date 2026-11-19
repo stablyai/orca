@@ -9,6 +9,7 @@ import {
 } from '../../../../shared/browser/client-hosting/browser-client-file-channel-protocol'
 import { normalizeBrowserDownloadFilename } from '../../../../shared/browser/downloads/browser-download-filename'
 import { removeTree } from '../../../../shared/file-write/windows-transient-lock-removal'
+import { BrowserClientPageCommandError } from '../../client-pages/execution/browser-client-page-command-failure'
 
 export type BrowserClientStagedUpload = {
   stagingId: string
@@ -115,9 +116,13 @@ export class BrowserClientUploadStaging {
       await this.evictPageOverflow(record)
       return { stagingId, localFilePaths }
     } catch (error) {
-      // Preserve the staging error; failed cleanup remains recorded for a later retry.
+      // The staging error stays as the cause; failed cleanup remains recorded for a later retry.
       await this.release(stagingId).catch(() => undefined)
-      throw error
+      throw new BrowserClientPageCommandError('browser_client_upload_staging_failed', {
+        cause: error,
+        detail:
+          'upload could not save the files on the paired desktop showing this page. Check that desktop has free disk space, then retry.'
+      })
     }
   }
 
