@@ -7540,9 +7540,9 @@
           "8fbe1f37c1": "Environnement",
           "2d133152fa": "Aucun environnement par défaut",
           "3f1bdf3cb4": "Le texte d'environnement est trop volumineux pour être analysé sans risque.",
-          "codexSessionSource": "Home Codex d'où importer",
-          "codexSessionSourceInfo": "À propos de l'import de l'historique Codex",
-          "codexSessionSourceTooltip": "Orca exécute Codex dans un home isolé. Pointez ceci vers votre home Codex existant pour en importer l'historique de sessions. Si vide, ~/.codex est utilisé.",
+          "codexSessionSource": "Importer les conversations Codex depuis",
+          "codexSessionSourceInfo": "À propos de l'import des conversations Codex",
+          "codexSessionSourceTooltip": "Tant que l'historique est partagé entre les comptes, Orca copie les conversations de ce home Codex dans ~/.codex pour que /resume les liste. Les échanges ajoutés dans ce dossier après la copie d'une conversation n'atteignent pas la copie.",
           "noAgentsDetected": "Aucun agent détecté. Si un agent est installé, la détection a peut-être expiré.",
           "9f30095d49": "Permissions des agents"
         },

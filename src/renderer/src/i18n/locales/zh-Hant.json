@@ -7506,9 +7506,9 @@
           "8fbe1f37c1": "環境",
           "2d133152fa": "無預設環境",
           "3f1bdf3cb4": "環境文字過長，無法安全解析。",
-          "codexSessionSource": "要匯入的 Codex 主目錄",
-          "codexSessionSourceInfo": "關於匯入 Codex 歷史記錄",
-          "codexSessionSourceTooltip": "Orca 在隔離的主目錄中執行 Codex。將此項指向您現有的 Codex 主目錄以匯入工作階段歷史記錄。留空則使用 ~/.codex。",
+          "codexSessionSource": "從此處匯入 Codex 對話",
+          "codexSessionSourceInfo": "關於匯入 Codex 對話",
+          "codexSessionSourceTooltip": "在帳號之間共用歷史記錄時，Orca 會將此 Codex 主目錄中的對話複製到 ~/.codex，讓 /resume 列出它們。對話複製後在此資料夾中新增的內容不會出現在副本中。",
           "noAgentsDetected": "未偵測到代理程式。若已安裝代理程式，可能是偵測作業逾時。",
           "9f30095d49": "代理程式權限"
         },
