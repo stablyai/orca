@@ -94,20 +94,23 @@ export class ReattachedPaintLedger {
     return Promise.race([entry, budget]).finally(() => clearTimeout(timer))
   }
 
-  /** Saves this quit's terminals over the ledger within a small budget. Recent entries for
+  /** Saves this quit's terminals, once identified, over the ledger within a small budget. Recent entries for
    *  terminals this run never attached (`tracked` lacks them) are kept for a later start. */
-  save(entries: Map<string, ReattachedPaintEntry>, tracked: ReadonlySet<string>): Promise<void> {
+  save(
+    entries: Promise<Map<string, ReattachedPaintEntry>>,
+    tracked: ReadonlySet<string>
+  ): Promise<void> {
     let timer: NodeJS.Timeout | undefined
     const budget = new Promise<void>((resolve) => {
       timer = setTimeout(resolve, SAVE_BUDGET_MS)
     })
-    const write = this.load()
-      .then((previous) => {
+    const write = Promise.all([this.load(), entries])
+      .then(([previous, current]) => {
         const now = Date.now()
         const kept = [...previous].filter(
           ([ptyId, entry]) => !tracked.has(ptyId) && now - (entry.savedAt ?? 0) < UNTRACKED_ENTRY_MS
         )
-        const saved = [...entries].map(([ptyId, entry]) => [ptyId, { ...entry, savedAt: now }])
+        const saved = [...current].map(([ptyId, entry]) => [ptyId, { ...entry, savedAt: now }])
         const file: LedgerFile = {
           version: LEDGER_VERSION,
           entries: Object.fromEntries([...kept, ...saved])
@@ -145,20 +148,25 @@ export type PaintLedgerPty = TerminalCommandPaintRecord & {
 }
 
 /** This terminal's ledger entry at quit; `sequence` is the daemon's output count, or undefined
- *  when the host gives none. Only screen-ruled agents need one. */
-export function reattachedPaintEntry(
+ *  when the host gives none. `identify` reads the agent in front when no launch, title or mail
+ *  recorded one, as for an agent the user typed. Only screen-ruled agents need an entry. */
+export async function reattachedPaintEntry(
   pty: PaintLedgerPty,
-  sequence: number | undefined
-): ReattachedPaintEntry | null {
-  const agent = pty.foregroundAgent ?? pty.launchAgent ?? pty.launchCommandAgent
-  return pty.connected &&
-    pty.incarnationId &&
-    sequence !== undefined &&
-    isTuiAgent(agent) &&
-    readsTrustedScreen(agent) &&
-    !!pty.commandPaint?.hasAttributedPaint()
-    ? { incarnationId: pty.incarnationId, sequence, agent }
-    : null
+  sequence: number | undefined,
+  identify: () => Promise<TerminalAgent | null>
+): Promise<ReattachedPaintEntry | null> {
+  if (
+    !pty.connected ||
+    !pty.incarnationId ||
+    sequence === undefined ||
+    !pty.commandPaint?.hasAttributedPaint()
+  ) {
+    return null
+  }
+  const { incarnationId } = pty
+  const agent =
+    pty.foregroundAgent ?? pty.launchAgent ?? pty.launchCommandAgent ?? (await identify())
+  return isTuiAgent(agent) && readsTrustedScreen(agent) ? { incarnationId, sequence, agent } : null
 }
 
 let ledger: ReattachedPaintLedger | null = null

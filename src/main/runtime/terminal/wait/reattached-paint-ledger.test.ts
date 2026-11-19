@@ -28,6 +28,8 @@ function hermesPane(record: TerminalCommandPaintRecord = {}): PaintLedgerPty {
   })
 }
 
+const noIdentity = async (): Promise<null> => null
+
 function paint(pty: TerminalCommandPaintRecord, chunk: string): void {
   observeTerminalCommandPaint(pty, chunk, chunk, 1_000)
 }
@@ -45,10 +47,10 @@ it("restores a quiet agent's retained frame as its paint when nothing was writte
   const before = hermesPane()
   paint(before, '\x1b]133;C\x07')
   paint(before, '❯ Ask me anything…')
-  const entry = reattachedPaintEntry(before, 4_096)
+  const entry = await reattachedPaintEntry(before, 4_096, noIdentity)
   expect(entry).toEqual({ incarnationId: 'inc-1', sequence: 4_096, agent: 'hermes' })
   await new ReattachedPaintLedger(join(dir, 'ledger.json')).save(
-    new Map([['pty-1', entry!]]),
+    Promise.resolve(new Map([['pty-1', entry!]])),
     new Set(['pty-1'])
   )
 
@@ -62,26 +64,26 @@ it("restores a quiet agent's retained frame as its paint when nothing was writte
   after.commandPaint?.vouchRetainedPaint()
   expect(hasTerminalCommandPainted(after)).toBe(true)
   // Proven again at the next quit, until a command boundary.
-  expect(reattachedPaintEntry(after, 4_096)).not.toBeNull()
+  expect(await reattachedPaintEntry(after, 4_096, noIdentity)).not.toBeNull()
 })
 
-it('records nothing for a command whose paint was never attributed', () => {
+it('records nothing for a command whose paint was never attributed', async () => {
   const markerless = hermesPane()
   paint(markerless, '❯ Ask me anything…')
-  expect(reattachedPaintEntry(markerless, 10)).toBeNull()
+  expect(await reattachedPaintEntry(markerless, 10, noIdentity)).toBeNull()
 
   const unpainted = hermesPane()
   paint(unpainted, '\x1b]133;C\x07')
-  expect(reattachedPaintEntry(unpainted, 10)).toBeNull()
+  expect(await reattachedPaintEntry(unpainted, 10, noIdentity)).toBeNull()
 
   const finished = hermesPane()
   paint(finished, '\x1b]133;C\x07❯ Ask me anything…')
   paint(finished, '\x1b]133;D;0\x07')
-  expect(reattachedPaintEntry(finished, 10)).toBeNull()
+  expect(await reattachedPaintEntry(finished, 10, noIdentity)).toBeNull()
 
   const notReattachedHost = hermesPane()
   paint(notReattachedHost, '\x1b]133;C\x07❯ Ask me anything…')
-  expect(reattachedPaintEntry(notReattachedHost, undefined)).toBeNull()
+  expect(await reattachedPaintEntry(notReattachedHost, undefined, noIdentity)).toBeNull()
 })
 
 it('keeps the proof of a terminal this run never attached', async () => {
@@ -89,11 +91,26 @@ it('keeps the proof of a terminal this run never attached', async () => {
   dirs.push(dir)
   const path = join(dir, 'ledger.json')
   const entry = { incarnationId: 'inc-a', sequence: 7, agent: 'hermes' }
-  await new ReattachedPaintLedger(path).save(new Map([['pty-a', entry]]), new Set(['pty-a']))
+  await new ReattachedPaintLedger(path).save(
+    Promise.resolve(new Map([['pty-a', entry]])),
+    new Set(['pty-a'])
+  )
   // A run that attached only pty-b, now unproven, saves nothing of its own.
-  await new ReattachedPaintLedger(path).save(new Map(), new Set(['pty-b']))
+  await new ReattachedPaintLedger(path).save(Promise.resolve(new Map()), new Set(['pty-b']))
   expect(await new ReattachedPaintLedger(path).read('pty-a')).toMatchObject(entry)
   // A run that attached pty-a drops it once it is no longer proven.
-  await new ReattachedPaintLedger(path).save(new Map(), new Set(['pty-a']))
+  await new ReattachedPaintLedger(path).save(Promise.resolve(new Map()), new Set(['pty-a']))
   expect(await new ReattachedPaintLedger(path).read('pty-a')).toBeNull()
+})
+
+// #44696 Windows QA: an agent the user typed has no launch, title or mail record of its identity.
+it('identifies a typed agent at quit when nothing recorded who is in front', async () => {
+  const typed = Object.assign(hermesPane(), { foregroundAgent: null })
+  paint(typed, '\x1b]133;C\x07❯ Ask me anything…')
+  expect(await reattachedPaintEntry(typed, 12, async () => 'hermes')).toEqual({
+    incarnationId: 'inc-1',
+    sequence: 12,
+    agent: 'hermes'
+  })
+  expect(await reattachedPaintEntry(typed, 12, noIdentity)).toBeNull()
 })
