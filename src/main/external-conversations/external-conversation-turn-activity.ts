@@ -12,14 +12,21 @@ import {
   nativeChatTaskListTool,
   type NativeChatTaskList
 } from '../../shared/native-chat/input/task-lists/native-chat-task-list'
-import type { LinkedConversation } from './external-conversation-links'
-import { conversationPane, type ConversationPane } from './external-conversation-types'
+import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
+import type { ConversationPane } from './external-conversation-types'
 
 // A thread's status is one message edited in place: slower than its source's edit limit, and slow
 // enough that a burst of quick tools shows as its last.
 export const TURN_ACTIVITY_MIN_GAP_MS = 3_000
 
 export type ActivityEvent = ConversationPane & ConnectorTurnActivity
+
+// Only what telling reads, so anything that knows these can stand in for a chat's row and link.
+type ActivityRow = Pick<AgentStatusIpcPayload, 'state' | 'mainAgent' | 'toolName' | 'toolInput'>
+type ActivityLink = {
+  link: Pick<ExternalConversationLink, 'source' | 'externalId' | 'paneKey' | 'sessionId'>
+  workspace: { worktreeId: string }
+}
 
 type Told = { turnId: number; said: string; at: number; steps?: ConnectorTurnActivityStep[] }
 
@@ -45,10 +52,10 @@ export class ConversationTurnActivity {
   constructor(
     private readonly deps: {
       emit: (event: ActivityEvent) => void
-      readHookRow: (paneKey: string) => AgentStatusIpcPayload | null
+      readHookRow: (paneKey: string) => ActivityRow | null
       /** The chat's running turn, once its conversation was told it started. */
       toldTurn: (paneKey: string) => number | null
-      linkedFor: (paneKey: string) => LinkedConversation | null
+      linkedFor: (paneKey: string) => ActivityLink | null
       /** The plan the chat's running turn last wrote (its todo list); null with none. */
       turnPlan?: (sessionId: string) => Promise<NativeChatTaskList | null>
       now?: () => number
@@ -88,7 +95,9 @@ export class ConversationTurnActivity {
     this.told.set(paneKey, { turnId, said, at: now, ...(steps ? { steps } : {}) })
     this.deps.emit({
       kind: 'activity',
-      ...conversationPane(linked.link, linked.workspace.worktreeId),
+      conversation: { source: linked.link.source, externalId: linked.link.externalId },
+      worktreeId: linked.workspace.worktreeId,
+      paneKey: linked.link.paneKey,
       turnId,
       ...(text === undefined ? {} : { text }),
       ...(steps ? { steps } : {})
@@ -96,12 +105,7 @@ export class ConversationTurnActivity {
   }
 
   /** The row shows the agent writing its plan: the journal has it whole, the row only a preview. */
-  private readPlan(
-    paneKey: string,
-    turnId: number,
-    sessionId: string,
-    row: AgentStatusIpcPayload
-  ): void {
+  private readPlan(paneKey: string, turnId: number, sessionId: string, row: ActivityRow): void {
     if (!nativeChatTaskListTool(row.toolName ?? '')) {
       // Another tool since: the next plan call is a new one, whatever its preview reads.
       this.planRead.delete(paneKey)

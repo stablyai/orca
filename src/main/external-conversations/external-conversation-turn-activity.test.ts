@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { AgentStatusState } from '../../shared/agent-status/contracts/agent-status-types'
 import { ConversationTurnActivity } from './external-conversation-turn-activity'
 
 const PANE = 'tab:1'
@@ -7,7 +7,7 @@ function harness() {
   const told: (string | undefined)[] = []
   const plans: unknown[] = []
   let plan: { content: string; status: 'pending' | 'in_progress' | 'completed' }[] = []
-  let row: Partial<AgentStatusIpcPayload> | null = null
+  let row: { state: AgentStatusState; toolName: string; toolInput: string } | null = null
   let turnId: number | null = 5
   const activity = new ConversationTurnActivity({
     emit: (event) => {
@@ -15,16 +15,15 @@ function harness() {
       plans.push(event.steps)
     },
     turnPlan: async () => ({ tasks: plan }),
-    readHookRow: () => row as AgentStatusIpcPayload | null,
+    readHookRow: () => row,
     toldTurn: () => turnId,
-    linkedFor: () =>
-      ({
-        link: { source: 'slack', externalId: 'T1:C1:1.0', paneKey: PANE },
-        workspace: { worktreeId: 'wt' }
-      }) as never
+    linkedFor: () => ({
+      link: { source: 'slack', externalId: 'T1:C1:1.0', paneKey: PANE, sessionId: 's1' },
+      workspace: { worktreeId: 'wt' }
+    })
   })
-  const tool = (toolName: string, toolInput: string, state = 'working') => {
-    row = { state, toolName, toolInput } as Partial<AgentStatusIpcPayload>
+  const tool = (toolName: string, toolInput: string, state: AgentStatusState = 'working') => {
+    row = { state, toolName, toolInput }
     activity.observe(PANE)
   }
   return {
