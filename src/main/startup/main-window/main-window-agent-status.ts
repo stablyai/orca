@@ -51,8 +51,7 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       return
     }
     const launchConfig = state.runtime?.getLaunchStatementForPaneKey(paneKey, payload.agentType)
-    // Topology rides the binding as a symbol the IPC clone drops; a tmux host's conversation must
-    // reach the window as shared so it leaves no resume checkpoint.
+    // A tmux host's conversation reaches the window as shared so it leaves no resume checkpoint.
     const shared = cliWriterTopology(row) === 'shared' ? { sharedHost: true as const } : {}
     if (providerSessionOnly) {
       // An ended agent's retained identity is no conversation for the window to checkpoint.

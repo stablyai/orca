@@ -41,3 +41,8 @@ it('keeps a restated verdict on the reporting terminal, but not a later stamped 
   })
   expect(resumedAcceptedTurn(resumed, { ...restated, turnEndedAt: 3_000 }, 'osc')).toBeNull()
 })
+
+it('takes the host from the resuming hook, so a tmux row resumed in the pane is pane-owned', () => {
+  const tmuxRow = { ...resumed, executionHost: 'shared' as const }
+  expect(resumedAcceptedTurn(tmuxRow, restated, 'osc')?.executionHost).toBeUndefined()
+})

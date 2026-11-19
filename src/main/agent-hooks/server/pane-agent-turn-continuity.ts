@@ -36,14 +36,18 @@ export function resumedAcceptedTurn(
     agentPresence: _sleptOwner,
     restoredUnconfirmed: _restored,
     paneSleep: _sleep,
+    executionHost: previousHost,
     ...accepted
   } = previous
+  // The host follows the binding: a resuming hook's binding brings its own.
+  const executionHost = incoming.providerSession ? incoming.executionHost : previousHost
   return {
     ...accepted,
     connectionId: incoming.connectionId,
     ...(incoming.providerSession ? { providerSession: incoming.providerSession } : {}),
     ...(incoming.agentPresence ? { agentPresence: incoming.agentPresence } : {}),
-    ...(incoming.terminalHandle ? { terminalHandle: incoming.terminalHandle } : {})
+    ...(incoming.terminalHandle ? { terminalHandle: incoming.terminalHandle } : {}),
+    ...(executionHost ? { executionHost } : {})
   }
 }
 
