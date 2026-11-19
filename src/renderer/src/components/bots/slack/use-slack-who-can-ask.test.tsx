@@ -34,6 +34,7 @@ vi.mock('@/store', () => {
     settings: {
       hostSettingOverrides: {
         'runtime:server-1': { displayLabel: 'Atlas Server' },
+        'runtime:server-2': { displayLabel: 'server-2' },
         local: { displayLabel: 'Atlas Server' }
       }
     }
@@ -470,6 +471,11 @@ describe('BotWhoCanAskInsetList', () => {
     vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
     renderInset('local')
     expect(screen.getByText(/Atlas Server/, { selector: 'p' })).toBeVisible()
+  })
+
+  it('keeps a configured server name that matches its host ID', () => {
+    renderInset('runtime:server-2')
+    expect(screen.getByText(/server-2/, { selector: 'p' })).toBeVisible()
   })
 
   it('names the paired server exposed by giving access', () => {

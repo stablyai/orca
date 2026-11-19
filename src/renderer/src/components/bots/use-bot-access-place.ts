@@ -20,6 +20,10 @@ function serverName(state: AppState, hostId: ExecutionHostId): string | null {
       ? (getHostSettingOverride(state.settings, hostId, 'displayLabel') ?? null)
       : null
   }
+  const override = getHostSettingOverride(state.settings, hostId, 'displayLabel')
+  if (override) {
+    return override
+  }
   const label = selectExecutionHostDisplayLabel(state, hostId)
   return label === getExecutionHostLabel(hostId) ? null : label
 }
