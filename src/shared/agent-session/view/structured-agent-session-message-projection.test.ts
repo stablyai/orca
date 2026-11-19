@@ -8,7 +8,7 @@ import { projectStructuredAgentSessionMessages } from './structured-agent-sessio
 const failure = {
   kind: 'startFailed',
   refusal: { code: 'agent_session_operation_invalid', details: { ownerVerdict: 'exited' } }
-}
+} as const
 
 function send(id: string, sequence: number): AgentJournalRenderItem {
   return {
