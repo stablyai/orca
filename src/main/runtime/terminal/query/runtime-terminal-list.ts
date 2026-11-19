@@ -52,6 +52,8 @@ type RuntimeTerminalListDependencies = {
   ): { hostIds: ExecutionHostId[]; omittedHostIds: ExecutionHostId[] }
   /** Layout-owner builds: main lists every saved pane of the workspace, a live terminal or not. */
   listsEveryPane?: (worktreeId: string) => boolean
+  /** Agent Sleep stopped this pane's process; it is listed as the idle agent it stands for. */
+  isSleptAgentLeaf: (leaf: RuntimeLeafRecord) => boolean
 }
 
 export class RuntimeTerminalList {
@@ -132,7 +134,8 @@ export class RuntimeTerminalList {
         if (
           !leaf.ptyId &&
           liveWorktreeIds.has(leaf.worktreeId) &&
-          !(ORCA_LAYOUT_OWNER_IS_MAIN && this.deps.listsEveryPane?.(leaf.worktreeId))
+          !(ORCA_LAYOUT_OWNER_IS_MAIN && this.deps.listsEveryPane?.(leaf.worktreeId)) &&
+          !this.deps.isSleptAgentLeaf(leaf)
         ) {
           continue
         }

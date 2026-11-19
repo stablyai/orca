@@ -118,6 +118,15 @@ async function openWorkerTerminal(
   resource: WorkerTerminalResourceRow,
   release: LeftoverShellRelease
 ): Promise<string | null> {
+  // Agent Sleep stopped the worker's process, not its conversation: the follow-up wakes it in place.
+  const slept = runtime.sleptAgentHandleForPane(resource.pane_key)
+  if (
+    slept &&
+    (slept === resource.terminal_handle ||
+      slept === db.getDispatchContextById(resource.owner_dispatch_id)?.assignee_handle)
+  ) {
+    return slept
+  }
   const inspected = await inspectWorkerTerminal(runtime, db, resource.owner_dispatch_id)
   if (inspected.status === 'unverifiable') {
     throw unverifiable(resource.owner_dispatch_id, inspected.reason ?? 'unknown')
@@ -198,7 +207,8 @@ export async function userTabHoldingSession(
       row.agentType === session.agent &&
       !row.structuredHost &&
       agentProviderSessionsEqual(session.agent, row.providerSession, session.providerSession)
-        ? runtime.getTerminalHandleForPaneKey(row.paneKey)
+        ? (runtime.sleptAgentHandleForPane(row.paneKey) ??
+          runtime.getTerminalHandleForPaneKey(row.paneKey))
         : null
     if (handle && (await runtime.isTerminalRunningAgent(handle))) {
       return handle

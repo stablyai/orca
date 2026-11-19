@@ -30,6 +30,15 @@ export abstract class OrcaRuntimeWithMailDeliveryRefusal extends OrcaRuntimeWith
     if (candidate && agent !== candidate) {
       return { kind: 'not-live', agentName: tuiAgentDisplayName(agent ?? '') ?? 'The agent' }
     }
+    // Why: Agent Sleep is stopping this agent; its mail waits for the slept-agent wake, not this process.
+    if (this.intentionalPtyStops.isReversibleStopInFlight(ptyId)) {
+      return {
+        kind: 'asleep',
+        agentName: tuiAgentDisplayName(agent ?? '') ?? 'The agent',
+        openTab: true,
+        waking: true
+      }
+    }
     const hold = this.ptyDeliveryHold(ptyId, stagedText, candidate)
     if (hold) {
       return { kind: hold }
