@@ -83,7 +83,7 @@ function isRecordedDaemon(record, recordPath) {
   )
 }
 
-function readDaemonPids(userDataDir) {
+export function readDaemonPids(userDataDir) {
   const daemonDir = path.join(userDataDir, 'daemon')
   if (!fs.existsSync(daemonDir)) {
     return []
@@ -106,7 +106,7 @@ function readDaemonPids(userDataDir) {
   return pids
 }
 
-function descendantPids(rootPid) {
+export function descendantPids(rootPid) {
   const childrenByParent = new Map()
   try {
     for (const line of execFileSync('ps', ['-eo', 'pid=,ppid='], { encoding: 'utf8' }).split(

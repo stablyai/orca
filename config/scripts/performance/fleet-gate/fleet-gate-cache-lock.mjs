@@ -9,7 +9,7 @@ const sleeper = new Int32Array(new SharedArrayBuffer(4))
 const held = new Set()
 
 /** pid plus its start time, so a reused pid never passes for the run that made a lock. */
-function processIdentity(pid) {
+export function processIdentity(pid) {
   try {
     // LC_ALL=C: every run must print a given start time the same way.
     const started = execFileSync('ps', ['-o', 'lstart=', '-p', String(pid)], {

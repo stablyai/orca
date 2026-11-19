@@ -9,6 +9,12 @@ import { buildCounterbalancedSchedule } from '../measurement/counterbalanced-ben
 import { CACHE_ROOT, ensureBuild, git, pruneCache, resolveCommit } from './fleet-gate-builds.mjs'
 import { lockCacheEntryAsync, releaseHeldLocks } from './fleet-gate-cache-lock.mjs'
 import { copyProfile, stopCopyDaemons } from './fleet-gate-copies.mjs'
+import {
+  createRunDir,
+  killLiveCopiesNow,
+  reapStaleRunDirs,
+  registerCopy
+} from './fleet-gate-run-dirs.mjs'
 import { startVirtualDisplay } from './fleet-gate-display.mjs'
 import { waitForAppWindow } from './fleet-gate-app-ready.mjs'
 import { parseArgs } from './fleet-gate-args.mjs'
@@ -71,6 +77,9 @@ function launchArgs(buildDir) {
 
 function isolatedEnv(runDir, userDataDir) {
   const home = path.join(runDir, 'home')
+  // Temp files stay in the run folder, which the gate (or the next gate's reap) deletes.
+  const tmp = path.join(runDir, 'tmp')
+  fs.mkdirSync(tmp, { recursive: true })
   for (const dir of [
     '',
     '.config',
@@ -113,6 +122,7 @@ function isolatedEnv(runDir, userDataDir) {
     ORCA_DISABLE_MACOS_LOGIN_SHELL: '1',
     HOME: home,
     USERPROFILE: home,
+    TMPDIR: tmp,
     XDG_CONFIG_HOME: path.join(home, '.config'),
     XDG_CACHE_HOME: path.join(home, '.cache'),
     XDG_DATA_HOME: path.join(home, '.local/share'),
@@ -145,6 +155,7 @@ async function launchCopy({ buildDir, runDir, userDataDir, label, outDir, extraE
   }
   // Captured now: app.process() throws once the app object is closed.
   const child = app.process()
+  const forget = registerCopy(runDir, child.pid, userDataDir)
   const stderrTail = []
   let ownershipText = ''
   child.stderr?.on('data', (chunk) => {
@@ -170,6 +181,7 @@ async function launchCopy({ buildDir, runDir, userDataDir, label, outDir, extraE
       child.kill('SIGKILL')
     }
     await stopCopyDaemons(userDataDir)
+    forget()
     liveCleanups.delete(close)
   }
   liveCleanups.add(close)
@@ -283,7 +295,7 @@ async function seedUnderLock({ seedsDir, seedDir, oldSha, oldBuild, outDir }) {
     return { seedDir, receipt: existing }
   }
   console.log(`[fleet-gate] seeding a synthetic fleet with ${oldSha.slice(0, 12)}`)
-  const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'orca-fleet-seed-'))
+  const runDir = createRunDir('seed')
   try {
     const receipt = await buildSyntheticFleetSeed({
       seedDir,
@@ -408,6 +420,10 @@ async function main() {
   }
   const outDir = options.out ?? path.join(CACHE_ROOT, 'reports')
   fs.mkdirSync(outDir, { recursive: true })
+  const reaped = await reapStaleRunDirs()
+  if (reaped > 0) {
+    console.log(`[fleet-gate] reaped ${String(reaped)} run folder(s) a stopped gate left behind`)
+  }
   // Synchronous cache work comes first, before stop handlers exist, so a stop signal still ends it at once.
   const builds = { old: ensureBuild(repoRoot, oldSha), new: ensureBuild(repoRoot, newSha) }
   if (!options.seed) {
@@ -425,7 +441,7 @@ async function main() {
   const shas = { old: oldSha, new: newSha }
   const runs = []
   const schedule = buildCounterbalancedSchedule(options.runs, 'old', 'new')
-  const runsRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'orca-fleet-gate-'))
+  const runsRoot = createRunDir('gate')
   const windowScenarios = options.scenarios.filter((name) => name !== 'burst')
   const bursts = []
   try {
@@ -524,7 +540,8 @@ async function stopEverything() {
 
 /** A stopped gate still stops its copies, their daemons, the CPU load and Xvfb, and frees its cache locks. */
 function installStopHandlers() {
-  for (const signal of ['SIGINT', 'SIGTERM']) {
+  // SIGHUP: the terminal or remote session running the gate went away.
+  for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
     process.once(signal, () => {
       stopping = true
       console.error(`[fleet-gate] ${signal}: stopping copies`)
@@ -536,6 +553,9 @@ function installStopHandlers() {
     })
   }
 }
+
+// Last resort for any exit path that skipped the graceful closes.
+process.on('exit', killLiveCopiesNow)
 
 // Exit explicitly: a launched copy's driver handles otherwise keep the process (and its qa-gate slot) alive.
 main()
