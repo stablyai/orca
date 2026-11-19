@@ -18,7 +18,6 @@ import type { useActivityThreadSelection } from './use-activity-thread-selection
 import { ACTIVITY_INDEX_ACTION_ID, useActivityIndexHints } from './use-activity-index-hints'
 import type { ActivityIndexHintViewport } from './use-activity-index-hints'
 import type { Virtualizer } from '@tanstack/react-virtual'
-import type { ActivityGroupBy } from '../../../../../shared/agent-status/presentation/agents-view-thread-filters'
 
 const PLAIN_CLICK = { metaKey: false, ctrlKey: false, shiftKey: false }
 // Long enough for the selection to re-render, short enough that a later status reorder cannot scroll.
@@ -78,7 +77,7 @@ export function useActivityInboxShortcuts({
   selectedItemIndex,
   virtualItems,
   virtualizer,
-  groupBy,
+  activeStickyHeaderIndex,
   onMarkThreadsRead
 }: {
   /** Enables the shortcuts; runs when the last row is cleared. */
@@ -94,7 +93,7 @@ export function useActivityInboxShortcuts({
     Virtualizer<HTMLDivElement, Element>,
     'getVirtualItems' | 'scrollOffset' | 'scrollRect' | 'scrollToIndex'
   >
-  groupBy: ActivityGroupBy
+  activeStickyHeaderIndex: number | null
   onMarkThreadsRead: (threads: readonly AgentPaneThread[]) => void
 }): ReadonlyMap<string, number> | null {
   const enabled = onDeselect !== undefined
@@ -103,7 +102,7 @@ export function useActivityInboxShortcuts({
     virtualRows: virtualizer.getVirtualItems(),
     scrollOffset: virtualizer.scrollOffset ?? 0,
     viewportHeight: virtualizer.scrollRect?.height ?? null,
-    stickyHeaders: groupBy !== 'none'
+    stickyHeaderIndex: activeStickyHeaderIndex
   })
   const { scrollToIndex } = virtualizer
   // Keep one listener per mount; status pings re-render the list constantly.

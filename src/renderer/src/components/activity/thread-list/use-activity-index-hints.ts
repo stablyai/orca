@@ -45,8 +45,8 @@ export type ActivityIndexHintViewport = {
   scrollOffset: number
   /** Null before the list is measured; then rendered rows stand in for the visible ones. */
   viewportHeight: number | null
-  /** Group headers pin to the top and cover the row under them. */
-  stickyHeaders: boolean
+  /** The group header pinned to the top, which covers the row under it; null when ungrouped. */
+  stickyHeaderIndex: number | null
 }
 
 /** First item index whose row is fully below the top edge and any pinned group header. */
@@ -54,11 +54,10 @@ function firstUncoveredItemIndex({
   virtualItems,
   virtualRows,
   scrollOffset,
-  stickyHeaders
+  stickyHeaderIndex
 }: ActivityIndexHintViewport): number {
-  const headerRow = stickyHeaders
-    ? virtualRows.find((row) => virtualItems[row.index]?.type === 'header')
-    : undefined
+  // Rows also hold the previous group's header; only the pinned one covers the top.
+  const headerRow = virtualRows.find((row) => row.index === stickyHeaderIndex)
   const top = scrollOffset + (scrollOffset > 0 ? (headerRow?.size ?? 0) : 0)
   // No row starts below the top edge: nothing is fully visible, so number nothing.
   return virtualRows.find((row) => row.start >= top)?.index ?? virtualItems.length

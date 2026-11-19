@@ -243,17 +243,6 @@ export function ActivityThreadListPane({
     useFlushSync: false
   })
 
-  const hintNumberByPaneKey = useActivityInboxShortcuts({
-    onDeselect: onInboxDeselect,
-    selection,
-    selectedPaneKey,
-    selectedItemIndex,
-    virtualItems,
-    virtualizer,
-    groupBy,
-    onMarkThreadsRead
-  })
-
   // Row heights differ between densities; drop stale measurements on toggle (not on mount).
   const measuredCompactModeRef = useRef(compactMode)
   useEffect(() => {
@@ -302,6 +291,16 @@ export function ActivityThreadListPane({
           virtualItems: virtualizer.getVirtualItems()
         })
       : null
+  const hintNumberByPaneKey = useActivityInboxShortcuts({
+    onDeselect: onInboxDeselect,
+    selection,
+    selectedPaneKey,
+    selectedItemIndex,
+    virtualItems,
+    virtualizer,
+    activeStickyHeaderIndex,
+    onMarkThreadsRead
+  })
 
   const resizable = onResizeStart !== undefined
   return (
