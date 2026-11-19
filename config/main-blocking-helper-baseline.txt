@@ -132,7 +132,6 @@
 4 src/main/browser-passwords/browser-password-chromium-import.ts
 3 src/main/browser-passwords/browser-password-store.ts
 1 src/main/browser-passwords/browser-password-vault-file.ts
-1 src/main/browser/agent-browser/helper-process/agent-browser-binary.ts
 2 src/main/browser/agent-browser/helper-process/agent-browser-bridge-execution.ts
 1 src/main/browser/agent-browser/session-lifecycle/agent-browser-bridge-lifecycle.ts
 2 src/main/browser/agent-browser/session-lifecycle/agent-browser-session-reset.ts
@@ -947,7 +946,6 @@
 3 src/main/orcad/artifact-slots/orcad-daemon-slot-pins.ts
 3 src/main/orcad/browser-providers/electron/electron-serve-browser-process.ts
 1 src/main/orcad/browser-providers/electron/electron-sidecar-profile.ts
-1 src/main/orcad/browser-providers/orcad-agent-browser-binary.ts
 3 src/main/orcad/browser-providers/orcad-browser-provider.ts
 1 src/main/orcad/browser-providers/orcad-browser-startup.ts
 1 src/main/orcad/browser-providers/orcad-sidecar-runtime-client.ts

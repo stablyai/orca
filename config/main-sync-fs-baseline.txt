@@ -42,7 +42,6 @@
 1 src/main/browser-passwords/browser-password-chromium-import.ts
 2 src/main/browser-passwords/browser-password-vault-file.ts
 2 src/main/browser/agent-browser/helper-process/agent-browser-binary.ts
-2 src/main/browser/agent-browser/helper-process/agent-browser-dependency-binary.ts
 2 src/main/browser/agent-browser/helper-process/agent-browser-process-environment.ts
 1 src/main/browser/agent-browser/session-lifecycle/agent-browser-session-reset.ts
 1 src/main/browser/bundled-main-file-path.ts
