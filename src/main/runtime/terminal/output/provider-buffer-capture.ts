@@ -43,6 +43,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     opts: { scrollbackRows?: number; signal?: AbortSignal; recovery?: true },
     generation: number
   ): Promise<PtyProviderBufferSnapshot | null> {
+    const providerOwnedScreenAtStart = this.providerSnapshotPreferredPtys.has(ptyId)
     const liveModeTracker = new TerminalKittyKeyboardModeTracker()
     let liveModeTrackers = this.providerModeSnapshotScansByPtyId.get(ptyId)
     if (!liveModeTrackers) {
@@ -77,7 +78,10 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
         if (liveModeTracker.hasObservedAlternateScreenSwitch) {
           modeTracker.scan(liveModeTracker.isAlternateScreen ? '\x1b[?1049h' : '\x1b[?1049l')
         }
-        this.providerModeTrackersByPtyId.set(ptyId, modeTracker)
+        // A model that took the screen back during this capture already parses every chunk's mode.
+        if (!providerOwnedScreenAtStart || this.providerSnapshotPreferredPtys.has(ptyId)) {
+          this.providerModeTrackersByPtyId.set(ptyId, modeTracker)
+        }
         effectiveAlternateScreen = modeTracker.isAlternateScreen
       }
       const providerOffset = this.providerSequenceOffsetByPtyId.get(ptyId) ?? 0
