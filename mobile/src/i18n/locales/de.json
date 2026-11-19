@@ -1653,7 +1653,10 @@
       "removeHostMessage": "„{{name}}“ entfernen? Eine erneute Kopplung ist später möglich.",
       "sleep": "In Ruhezustand versetzen",
       "unpin": "Anheftung aufheben",
-      "rename": "Umbenennen"
+      "rename": "Umbenennen",
+      "markRead": "Als gelesen markieren",
+      "markUnread": "Als ungelesen markieren",
+      "moveToStatus": "In Status verschieben"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Checks: fehlgeschlagen",

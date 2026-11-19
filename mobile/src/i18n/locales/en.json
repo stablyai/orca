@@ -828,7 +828,12 @@
       "primaryWorktreeDeleteHint": "Primary worktree — can't be deleted. Remove the project instead.",
       "removeHost": "Remove Host",
       "removeHostMessage": "Remove \"{{name}}\"? You can re-pair later.",
-      "deleteFailed": "Failed to delete \"{{name}}\""
+      "deleteFailed": "Failed to delete \"{{name}}\"",
+      "markRead": "Mark Read",
+      "markUnread": "Mark Unread",
+      "muteNotifications": "Mute Notifications",
+      "unmuteNotifications": "Unmute Notifications",
+      "moveToStatus": "Move to Status"
     },
     "workspaceRenameSheet": {
       "title": "Rename Workspace",
@@ -1633,6 +1638,24 @@
         "anotherComputer": "another computer",
         "fromVia": "From {{name}} via {{computer}}",
         "fromViaPhone": "From {{name}}, typed on {{phone}} via {{computer}}"
+      },
+      "fork": {
+        "pending": "Forking this chat…",
+        "commandWorking": "Can’t fork while {{agent}} is replying. Run /fork again when it finishes.",
+        "commandNothing": "There’s no response to fork yet.",
+        "commandTakesNoText": "Send /fork on its own, then write in the new chat.",
+        "commandDescription": "Fork this chat from its latest response"
+      },
+      "usage": {
+        "description": "Show usage for this chat’s Codex account",
+        "sharedAccount": "Current shared account",
+        "failed": "Codex usage couldn’t be loaded. Try again.",
+        "codexVersion": "This Codex version doesn’t report usage. Update Codex.",
+        "apiKeyAuth": "Codex usage isn’t available with an API key. Sign in to Codex with a ChatGPT account to view usage.",
+        "title": "Codex usage",
+        "loading": "Loading Codex usage…",
+        "account": "Account used by this chat",
+        "retry": "Retry"
       }
     },
     "hostOfflineBanner": {
@@ -3131,6 +3154,9 @@
     "currentSideChat": {
       "open": "New side chat",
       "mark": "btw"
+    },
+    "orcaCommands": {
+      "desktopOnly": "Available in the desktop app"
     }
   },
   "chat": {
@@ -5027,7 +5053,10 @@
       "loading": "Loading activity…",
       "unavailable": "Activity is unavailable on this host.",
       "retry": "Retry",
-      "lastRead": "Showing the last activity read."
+      "lastRead": "Showing the last activity read.",
+      "readFailedTitle": "Couldn’t load activity",
+      "unavailableTitle": "Activity unavailable",
+      "emptyTitle": "No activity yet"
     },
     "automations": {
       "couldNotFinish": "Couldn’t finish",
@@ -5037,7 +5066,8 @@
       "empty": "Ask in chat to set up an automation.",
       "newAutomation": "New automation",
       "runQueued": "Automation run queued.",
-      "runFailed": "Couldn’t start the run"
+      "runFailed": "Couldn’t start the run",
+      "emptyTitle": "No automations yet"
     },
     "settings": {
       "remove": "Remove",
@@ -5156,7 +5186,6 @@
       "runsOnHost": "Runs on {{host}}.",
       "shuffle": "Another picture",
       "namePlaceholder": "Name your bot",
-      "creating": "Creating…",
       "create": "Create",
       "fromTemplate": "Start from a template",
       "takesOverList": "Takes over {{names}}. Their agents keep running.",
@@ -5187,7 +5216,6 @@
       "newBot": "New bot"
     },
     "groups": {
-      "connectToTheExecutionHostToOpenThisGroup": "Connect to the execution host to open this group.",
       "manageMembers": "Manage members",
       "newGroup": "New group",
       "cancel": "Cancel",
@@ -5360,7 +5388,8 @@
       "working": "{{count}} working",
       "itemsNeedYou": "Items, {{count}} need you",
       "chats": "Chats",
-      "files": "Files"
+      "files": "Files",
+      "backTo": "Back to {{name}}"
     },
     "items": {
       "chat": {
@@ -5419,7 +5448,8 @@
         "needsYou": "Needs you only",
         "label": "Filter items",
         "all": "All chats",
-        "remove": "Remove filter {{name}}"
+        "remove": "Remove filter {{name}}",
+        "clear": "Clear filter"
       },
       "tab": "Items",
       "field": {
@@ -5545,8 +5575,7 @@
         "title": "No items yet",
         "body": "When {{bot}} takes on something for you, it shows up here with what it is doing and what it needs from you.",
         "needsYou": "Nothing needs you.",
-        "filtered": "No items match.",
-        "short": "No items yet. When {{bot}} takes something on, it shows up here."
+        "filtered": "No items match."
       },
       "toast": {
         "markedDone": "Marked {{title}} done",
@@ -5578,7 +5607,8 @@
         "pickTitle": "Snooze until",
         "pickDay": "Snooze until which day?",
         "pickHour": "At what time?"
-      }
+      },
+      "readFailedTitle": "Couldn’t load items"
     },
     "needs": {
       "permissionTool": "Permission · {{tool}}",
@@ -5924,6 +5954,9 @@
             "cabdc2a9e0": "Claude sign-in credentials could not be read.",
             "a7517cccb6": "Claude usage is unavailable right now.",
             "8418ec448d": "{{value0}} usage could not be refreshed. Agent sessions may still be signed in."
+          },
+          "StatusBar": {
+            "c676918adc": "System default"
           }
         }
       }
@@ -6009,6 +6042,13 @@
           "noSubscriptionApiKeyBilling": "No subscription plan — API key billing",
           "claudeWaitingCredentialRotate": "Claude usage refresh is waiting for the live Claude terminal to rotate its credentials.",
           "unknown": "Unknown error"
+        }
+      },
+      "codex": {
+        "session": {
+          "restart": {
+            "9f0b1c2d3e": "Codex account"
+          }
         }
       }
     }

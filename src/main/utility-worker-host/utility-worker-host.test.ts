@@ -82,7 +82,18 @@ parentPort.on('message', (message) =>
   )
 })
 let dyingEntry = ''
+let oomEntry = ''
 beforeAll(() => {
+  // Loads, then fails its first request with the error Node gives a worker out of heap.
+  oomEntry = join(root, 'oom.js')
+  writeFileSync(
+    oomEntry,
+    `const { parentPort } = require('node:worker_threads')
+parentPort.postMessage('loaded')
+parentPort.on('message', () => {
+  throw Object.assign(new Error('out of memory'), { code: 'ERR_WORKER_OUT_OF_MEMORY' })
+})`
+  )
   quietEntry = join(root, 'quiet.js')
   writeFileSync(quietEntry, 'setInterval(() => undefined, 1000)')
   // Loads, then dies on its first request before replying, as an out-of-memory parse would.
@@ -319,6 +330,30 @@ describe('UtilityWorkerHost', () => {
     await worker.terminate()
   })
 
+  it("records an out-of-memory worker's work while its host keeps running", async () => {
+    fork.mockImplementation(threadUtilityProcess)
+    const worker = new UtilityWorkerHost(
+      'test host',
+      () => hostEntry,
+      inProcess,
+      (workers) => ({ r0_readOp: `point:continuation-context x${workers.length}` })
+    ).spawn({ filename: oomEntry, name: 'orca-journal-sql-reader', workerData: {} })
+    await nextMessage(worker)
+    const failed = new Promise<Error>((resolve) => worker.once('error', resolve))
+    breadcrumb.mockClear()
+    worker.postMessage('read')
+    expect((await failed).message).toBe('out of memory')
+    expect(breadcrumb).toHaveBeenCalledWith(
+      'worker_thread_failed',
+      expect.objectContaining({
+        serviceName: 'test host',
+        role: 'orca-journal-sql-reader',
+        code: 'ERR_WORKER_OUT_OF_MEMORY',
+        r0_readOp: 'point:continuation-context x1'
+      })
+    )
+    await worker.terminate()
+  })
   it("puts the host's last heap report into its exit breadcrumb", async () => {
     const children: ReturnType<typeof threadUtilityProcess>[] = []
     fork.mockImplementation(() => {

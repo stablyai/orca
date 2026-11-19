@@ -192,7 +192,7 @@ describe('a cached page opened before the verdict', () => {
 })
 
 describe('a resume onto a newer build', () => {
-  it('asks the host for a newer build behind the running page', () => {
+  it('stages the newer build on resume and reopens the same route when pages agree', () => {
     const resumed = run(readySession().session, { type: 'app-resumed' })
     expect(resumed.effects).toEqual([{ kind: 'read-manifest' }])
     const staged = run(resumed.session, {
@@ -201,10 +201,8 @@ describe('a resume onto a newer build', () => {
     })
     expect(staged.effects).toEqual([{ kind: 'stage-update' }])
     expect(staged.session.state).toMatchObject({ kind: 'ready', sessionId: 'session-one' })
-  })
 
-  it('reopens the same route on the staged build once every page agreed', () => {
-    const swapped = run(readySession().session, { type: 'update-swap' })
+    const swapped = run(staged.session, { type: 'update-swap' })
     expect(swapped.effects).toEqual([{ kind: 'open-cache' }])
     const newer = {
       ...CACHED,

@@ -52,6 +52,11 @@ import {
 import { agentSessionFailureDetailText } from '../../../../../../shared/agent-session/failures/agent-session-failure-quoted-detail'
 import { readWholeAgentSessionFailureFact } from '../../../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureSentence } from '../../../../../../shared/agent-session/failures/agent-session-failure-words'
+import {
+  agentCliInstallationFailureWords,
+  sayAgentSessionFailureEnglish
+} from '../../../../../../shared/agent-session/failures/agent-session-failure-copy'
+import { structuredAgentSessionHostPlace } from '../../pane/ownership/use-structured-agent-session-host-label'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import { nativeChatAntigravitySignInContent } from '../../host-access/native-chat-antigravity-settings'
 
@@ -108,7 +113,9 @@ export function NativeChatNoticeRow({
   const orcaStopView = useNativeChatOrcaStopView()
 
   if (block.presentation === PULL_REQUEST_EVENT_PRESENTATION) {
-    return <NativeChatPullRequestEventLine block={block} messageId={messageId} />
+    return (
+      <NativeChatPullRequestEventLine block={block} messageId={messageId} timestamp={timestamp} />
+    )
   }
   const look = nativeChatNoticeLook(block)
   if (look.kind === 'forked-from') {
@@ -272,6 +279,14 @@ export function NativeChatNoticeRow({
           (surface) => block.text === agentSessionFailureSentence(failure, surface, { agentName })
         )
       : undefined
+  // The host calls itself this computer; a too-old CLI's words name the host as this reader does.
+  const cliTooOldSurface =
+    failure?.kind === 'startFailed' &&
+    agentCliInstallationFailureWords(failure.refusal, sayAgentSessionFailureEnglish)
+      ? (['row', 'rejection'] as const).find(
+          (surface) => block.text === agentSessionFailureSentence(failure, surface, { agentName })
+        )
+      : undefined
   const text = named
     ? nativeChatOrcaStopRowText(
         orcaStop.cause,
@@ -293,7 +308,14 @@ export function NativeChatNoticeRow({
             { agentName, wslDistro },
             sayAgentSessionFailureTranslated
           )
-        : (agentSessionRestartNoteText(block.text, t) ?? agentSessionGoalControlWords(block.text))
+        : failure && cliTooOldSurface
+          ? agentSessionFailureSentence(
+              failure,
+              cliTooOldSurface,
+              { agentName, hostName: structuredAgentSessionHostPlace(remoteHost, hostLabel, t) },
+              sayAgentSessionFailureTranslated
+            )
+          : (agentSessionRestartNoteText(block.text, t) ?? agentSessionGoalControlWords(block.text))
   const failureDetail = agentSessionFailureDetailText(failure)
   if (block.orcaStop === undefined && failure?.kind === 'usageLimitReached') {
     return (

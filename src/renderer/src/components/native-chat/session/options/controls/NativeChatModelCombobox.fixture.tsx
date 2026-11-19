@@ -28,6 +28,22 @@ function picker(cliUpdate: SessionOptionsCliUpdate) {
   })
 }
 
-export const claudeUpdate = picker({ agent: 'claude', phase: 'idle', start: () => {} })
-export const claudeUpdating = picker({ agent: 'claude', phase: 'running', start: () => {} })
-export const codexUpdateFailed = picker({ agent: 'codex', phase: 'failed', start: () => {} })
+const noop = () => {}
+export const claudeUpdate = picker({
+  agent: 'claude',
+  phase: 'idle',
+  start: noop,
+  openFailure: noop
+})
+export const claudeUpdating = picker({
+  agent: 'claude',
+  phase: 'running',
+  start: noop,
+  openFailure: noop
+})
+export const codexUpdateFailed = picker({
+  agent: 'codex',
+  phase: 'failed',
+  start: noop,
+  openFailure: noop
+})

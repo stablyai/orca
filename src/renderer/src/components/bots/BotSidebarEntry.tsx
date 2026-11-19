@@ -24,7 +24,7 @@ import { ROOT_PROJECT_GROUP_HEADER_BUCKET } from '@/components/sidebar/worktree-
 import { BotRow } from './BotRow'
 import { BotSidebarChats } from './BotSidebarChats'
 import { botListsUnderRow } from '../../../../shared/bots/bot-sidebar-tree'
-import { useBotChatTree } from './use-bot-chat-tree'
+import { useBotOwnChatTree } from './use-bot-chat-tree'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
 import { useBotHostOffline } from '@/lib/bot-host-views'
 import { useBotWorkspaceOrder } from './use-bot-workspace-order'
@@ -197,7 +197,7 @@ function BotSidebarList({
   onOpen: () => void
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const chatTree = useBotChatTree(bot)
+  const chatTree = useBotOwnChatTree(bot)
   const entryKey = botSidebarEntryKey(bot)
   useEffect(() => {
     if (chatTree.state === 'ready') {

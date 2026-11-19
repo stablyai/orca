@@ -1,7 +1,7 @@
 // One of Orca's asks in a bot's Needs you group, in an item row's anatomy: a glyph for its kind, its
 // title, what it asks. The row body opens where it was asked; hover or focus shows the same action
 // named. Asks have no checkbox, age or status menu: answering happens where they were asked.
-import { memo } from 'react'
+import { createContext, memo, useContext } from 'react'
 import { CircleAlert, CircleHelp, Shield, UserPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -11,6 +11,11 @@ import { openBotAutomation } from './bot-automation-open'
 import { BotItemNumberColumn } from './items/BotItemNumberColumn'
 import { BOT_ITEM_ROW_HOVER_ACTIONS } from './items/bot-item-row-hover-actions'
 import { useNeedsYouRowCommit } from './use-needs-you-focus'
+import type { Bot } from '../../../../shared/bot-types'
+import { BotItemRowFace } from './items/BotItemRowFace'
+
+/** The bot an ask is from, in a group's merged Needs you; the rows under it show its face. */
+export const NeedRowBot = createContext<Bot | null>(null)
 
 export type NeedKind = 'approval' | 'question' | 'sign-in' | 'access' | 'stopped'
 
@@ -46,7 +51,8 @@ export function NeedRow({
   number = null,
   host = null,
   code = null,
-  action
+  action,
+  skip = null
 }: {
   kind: NeedKind
   title: string
@@ -62,9 +68,12 @@ export function NeedRow({
   code?: string | null
   /** Where it opens; null when nowhere can, and `detail` says where it runs. */
   action: NeedAction | null
+  /** Settles the ask in place, before the action. */
+  skip?: NeedAction | null
 }): React.JSX.Element {
   const t = useTranslate()
   useNeedsYouRowCommit()
+  const face = useContext(NeedRowBot)
   const text = (
     <>
       <span className="block truncate text-[13px] leading-5 text-foreground">{title}</span>
@@ -107,6 +116,7 @@ export function NeedRow({
       <span className="flex h-5 w-4 shrink-0 items-center justify-center">
         <NeedGlyph kind={kind} />
       </span>
+      {face ? <BotItemRowFace bot={face} /> : null}
       {action ? (
         <button
           type="button"
@@ -119,12 +129,32 @@ export function NeedRow({
       ) : (
         <span className="min-w-0 flex-1">{body}</span>
       )}
-      {action ? (
+      {action || skip ? (
         // The body is the row's tab stop and name; this shows its action, fading over the title.
-        <span aria-hidden className={BOT_ITEM_ROW_HOVER_ACTIONS}>
-          <Button variant="ghost" size="xs" className="h-6" tabIndex={-1} onClick={action.onOpen}>
-            {action.label}
-          </Button>
+        <span className={cn(BOT_ITEM_ROW_HOVER_ACTIONS, 'gap-0.5')}>
+          {skip ? (
+            <Button
+              variant="ghost"
+              size="xs"
+              className="h-6"
+              aria-label={actionFor(t, skip.label, title)}
+              onClick={skip.onOpen}
+            >
+              {skip.label}
+            </Button>
+          ) : null}
+          {action ? (
+            <Button
+              variant="ghost"
+              size="xs"
+              className="h-6"
+              aria-hidden
+              tabIndex={-1}
+              onClick={action.onOpen}
+            >
+              {action.label}
+            </Button>
+          ) : null}
         </span>
       ) : null}
     </div>

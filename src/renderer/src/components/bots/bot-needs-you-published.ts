@@ -1,7 +1,7 @@
 // The Needs you count (`botNeedsYouCount`) as the surfaces that already read it publish it: the bot's
 // panel, its Items tab badge and the panel toggle. The sidebar row and Cmd+J read it from here, so they
 // start no host read of their own; with no publisher for a bot they count from what they hold.
-import { useEffect, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useSyncExternalStore } from 'react'
 import { botRefKey, type BotRef } from '@/lib/bot-hosts'
 
 const published = new Map<string, Map<symbol, number>>()
@@ -47,6 +47,19 @@ export function usePublishBotNeedsYou(bot: BotRef | null, count: number): void {
       emit()
     }
   }, [key, count])
+}
+
+/** Several bots' published counts, summed: a group's Items tab badge, which its open panel publishes. */
+export function usePublishedBotsNeedsYou(bots: readonly BotRef[]): number {
+  const keys = bots.map(botRefKey).join('\n')
+  const read = useCallback(
+    (): number =>
+      keys === ''
+        ? 0
+        : keys.split('\n').reduce((sum, key) => sum + (readPublishedBotNeedsYou(key) ?? 0), 0),
+    [keys]
+  )
+  return useSyncExternalStore(subscribe, read, read)
 }
 
 /** The bot's published count; each row re-renders only when its own number changes. */

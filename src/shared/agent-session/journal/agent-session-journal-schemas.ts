@@ -212,6 +212,7 @@ const KnownItemBody = z.discriminatedUnion('kind', [
     kind: z.literal('approval'),
     title: z.string(),
     displayName: z.string().optional(),
+    toolName: z.string().optional(),
     description: z.string().optional(),
     decisionReason: z.string().optional(),
     blockedPath: z.string().optional(),

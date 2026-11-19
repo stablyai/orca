@@ -34,7 +34,8 @@ const OTHER = owner(folderWorkspaceKey('fw-other'))
 function renderAnswer(
   text: string,
   chat: ReturnType<typeof owner>,
-  turn: { inAutomationTurn?: boolean; inActingTurn?: boolean } = {}
+  turn: { inAutomationTurn?: boolean; inActingTurn?: boolean } = {},
+  live = false
 ): void {
   render(
     <TooltipProvider>
@@ -49,6 +50,8 @@ function renderAnswer(
           }}
           expandSignal={false}
           {...turn}
+          activeTurnIsWorking={live}
+          trailingRun={live}
           onScrollMessageToTop={vi.fn()}
         />
       </NativeChatVisualOwnerContext.Provider>
@@ -70,15 +73,20 @@ describe('a bot’s quiet result in its home chat', () => {
     expect(screen.queryByText(/NO_REPLY/)).toBeNull()
   })
 
-  it('leaves a marker that is not at the end as written', () => {
-    renderAnswer('NO_REPLY is the quiet word', BOT_HOME)
-    expect(screen.getByText('NO_REPLY is the quiet word')).toBeInTheDocument()
-    expect(screen.queryByText('Nothing to report')).toBeNull()
-  })
-
   it('draws no line under the automation row that opened its turn', () => {
     renderAnswer('NO_REPLY', BOT_HOME, { inAutomationTurn: true })
     expect(screen.queryByText('Nothing to report')).toBeNull()
+    expect(screen.queryByText(/NO_REPLY/)).toBeNull()
+  })
+
+  it('never draws the marker while the row still reads as live', () => {
+    for (const text of ['NO_REP', 'NO_REPLY', '**NO_REPLY**\n']) {
+      renderAnswer(text, BOT_HOME, {}, true)
+      expect(screen.queryByText(/NO_REP|\*\*/)).toBeNull()
+      cleanup()
+    }
+    renderAnswer('Checked the inbox.\n\nNO_REPLY', BOT_HOME, {}, true)
+    expect(screen.getByText('Checked the inbox.')).toBeInTheDocument()
     expect(screen.queryByText(/NO_REPLY/)).toBeNull()
   })
 

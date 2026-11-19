@@ -18,4 +18,7 @@ export type AgentCliUpdate = {
   runnable: boolean
 }
 
-export type AgentCliUpdateRunResult = { ok: true } | { ok: false; output: string }
+export type AgentCliUpdateRunResult =
+  | { ok: true }
+  /** `command` is set once Orca ran one; absent when nothing ran or the host predates it. */
+  | { ok: false; output: string; command?: string }
