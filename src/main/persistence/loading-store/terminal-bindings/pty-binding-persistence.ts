@@ -168,7 +168,7 @@ export class PtyBindingPersistenceOperations {
       const persisted = await runtime.runDurableMutation(() => {
         const args = typeof input === 'function' ? input() : input
         if (!args) {
-          return { value: false, persist: false }
+          return { value: false, persist: false, writtenHostIds: [] }
         }
         // Measure admitted execution after queue wait, before current-state checks.
         span = startPtyBindingSpan({
