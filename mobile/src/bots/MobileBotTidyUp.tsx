@@ -1,7 +1,6 @@
 // The desktop's Memory upkeep on the phone: Tidy-up's switch, How often, Tidy now, and the last
 // run's changes with Undo, which reverts the whole run (its one History row).
-import { Pressable, Text } from 'react-native'
-import { ChevronLeft } from 'lucide-react-native'
+import { Text } from 'react-native'
 import {
   botTidyUp,
   TIDY_UP_EVERY_CHOICES,
@@ -11,6 +10,7 @@ import {
   type TidyUpEvery
 } from '../../../src/shared/bots/bot-tidy-up'
 import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
+import { SheetHeader } from '../components/nav-bar/SheetHeader'
 import {
   ChoiceRows,
   DrillRow,
@@ -18,7 +18,6 @@ import {
 } from '../host-screen/workspace-options/workspace-option-rows'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useBackClaim } from '../navigation/use-back-claim'
-import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { lookedWhen } from './bot-up-next-copy'
 import type { SheetBot } from './bot-sheet-operations'
@@ -195,20 +194,14 @@ export function MobileTidyUpPage(props: {
   const run = props.view?.last ?? null
   return (
     <>
-      <Pressable
-        style={optionStyles.optionBack}
-        onPress={props.onBack}
-        accessibilityRole="button"
-        accessibilityLabel={t('bots.lookAround.back', 'Back to Settings')}
-      >
-        <ChevronLeft size={16} color={colors.textSecondary} />
-        <Text style={optionStyles.optionBackText}>{t('bots.sheet.settings', 'Settings')}</Text>
-      </Pressable>
-      <Text style={[optionStyles.filterModalTitle, optionStyles.optionPageTitle]}>
-        {props.page === 'every'
-          ? t('bots.tidyUp.every', 'How often')
-          : t('bots.tidyUp.summaryTitle', 'Last tidy-up')}
-      </Text>
+      <SheetHeader
+        title={
+          props.page === 'every'
+            ? t('bots.tidyUp.every', 'How often')
+            : t('bots.tidyUp.summaryTitle', 'Last tidy-up')
+        }
+        onBack={{ label: t('bots.lookAround.back', 'Back to Settings'), onPress: props.onBack }}
+      />
       {props.page === 'every' ? (
         <ChoiceRows
           choices={TIDY_UP_EVERY_CHOICES.map((id) => ({ id, label: everyLabel(t, id) }))}

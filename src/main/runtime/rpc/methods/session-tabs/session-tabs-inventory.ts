@@ -1,4 +1,4 @@
-import { projectSessionTabsForClient } from './session-tabs-client-projection'
+import { projectSessionTabsForInventoryStream } from './session-tabs-client-projection'
 export { projectSessionTabsForClient } from './session-tabs-client-projection'
 import {
   collectSessionTabsInventory,
@@ -53,7 +53,7 @@ export async function subscribeSessionTabsInventory(
   const canonicalSnapshotsByWorktree = new Map<string, SessionTabsChange>()
   const projectChange = (snapshot: SessionTabsChange): SessionTabsChange =>
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: projection rewrites only tabs and groups; the change fields it was handed pass through.
-    projectSessionTabsForClient(
+    projectSessionTabsForInventoryStream(
       snapshot,
       context.clientKind,
       context.capabilitySource?.current ?? context.clientCapabilities

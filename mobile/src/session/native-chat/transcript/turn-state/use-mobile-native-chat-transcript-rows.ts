@@ -110,7 +110,7 @@ export function useMobileNativeChatTranscriptRows({
             historyHead,
             messages: rows,
             rows: rows.map((message, index) =>
-              nativeChatTurnFoldRow(message, turnKeys[index], receipts?.has(message.id) === true)
+              nativeChatTurnFoldRow(message, turnKeys[index], receipts?.get(message.id))
             ),
             settledTurnKeys: new Set(
               Object.entries(completedByTurn).flatMap(([key, status]) =>

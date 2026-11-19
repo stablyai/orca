@@ -92,16 +92,16 @@ describe('the cell box xterm laid out', () => {
     expect(handle().fitDimensions(FRAME)).toEqual({ cols: 54, rows: 47 })
   })
 
-  it('fits from the box the current document reported, not one an earlier document did', () => {
-    const { handle, notify, webView } = mount()
-    notify({ type: 'web-ready', cellBox: cellAt(scale) })
+  it('fits only from the current document’s cell box at the current text scale', () => {
+    const { handle, notify, webView } = mount(1.5)
+    notify({ type: 'web-ready', cellBox: cellAt(1.5) })
+    expect(handle().fitDimensions(FRAME)).toEqual({ cols: 55, rows: 47 })
+
     act(() => webView().props.onLoadStart())
+    expect(handle().fitDimensions(FRAME)).toBeNull()
     notify({ type: 'web-ready', cellBox: null })
     expect(handle().fitDimensions(FRAME)).toBeNull()
-  })
-
-  it("fits only from a ready box at the app's text scale", () => {
-    const { handle, notify, webView } = mount(1.5)
+    act(() => webView().props.onLoadStart())
     notify({ type: 'web-ready', cellBox: cellAt(1) })
     expect(handle().fitDimensions(FRAME)).toBeNull()
     act(() => webView().props.onLoadStart())
@@ -109,18 +109,14 @@ describe('the cell box xterm laid out', () => {
     expect(handle().fitDimensions(FRAME)).toEqual({ cols: 55, rows: 47 })
   })
 
-  it('sends nothing before a ready: a load start drops what was queued', () => {
+  it('drops queued and coalesced commands on a reload or a lost content process', () => {
+    vi.useFakeTimers()
     const { handle, notify, webView } = mount()
     handle().init({ cols: 55, rows: 47, initialData: 'snapshot', frame: null })
     expect(postedTypes()).toEqual([])
     act(() => webView().props.onLoadStart())
     notify({ type: 'web-ready', cellBox: cellAt(scale) })
     expect(postedTypes()).not.toContain('init')
-  })
-
-  it('drops queued and coalesced commands on a reload or a lost content process', () => {
-    vi.useFakeTimers()
-    const { handle, notify, webView } = mount()
     act(() => webView().props.onLoadStart())
     handle().write('for the reloaded document')
     act(() => webView().props.onLoadStart())

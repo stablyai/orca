@@ -33,7 +33,7 @@ import {
   botItemSnoozeTimeFormat
 } from '../../../../../shared/bots/bot-item-snooze'
 import { botErrorMessage } from '../bot-presentation'
-import { snoozeBotItems } from './use-bot-items'
+import { botItemsByBot, snoozeBotItems } from './use-bot-items'
 
 /** A wake time as rows and menus say it: "6:00 PM", "Thu 9:00 AM" or "Nov 30, 9:00 AM". */
 export function formatBotItemSnoozeTime(until: number, now: number): string {
@@ -49,10 +49,16 @@ export type BotItemSnoozing = {
 }
 
 /** Snooze writes for one bot's items; `done` runs once the host took one (a list clears its checks). */
-export function useBotItemSnoozing(bot: BotRef, done?: () => void): BotItemSnoozing {
+/** `bot`: the items' bot, or each item's own in a group's merged list. */
+export function useBotItemSnoozing(
+  bot: BotRef | ((item: BotItem) => BotRef),
+  done?: () => void
+): BotItemSnoozing {
   const [picking, setPicking] = useState<readonly BotItem[] | null>(null)
   const snooze = (items: readonly BotItem[], until: number | null): void => {
-    void snoozeBotItems(bot, items, until)
+    void Promise.all(
+      botItemsByBot(items, bot).map(([ref, mine]) => snoozeBotItems(ref, mine, until))
+    )
       .then(() => done?.())
       .catch((error: unknown) => toast.error(botErrorMessage(error)))
   }

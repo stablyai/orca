@@ -17,6 +17,7 @@ import type {
   OrchestrationWorkerServer
 } from './environment-transport'
 import { OrchestrationError } from '../orchestration-error'
+import { UnsentRequestError } from './unsent-request-error'
 import {
   clearFederationAckCheckpoints,
   releaseFederationAckCheckpoint
@@ -161,7 +162,7 @@ export class RuntimeOrchestrationFederation {
       internal?.expectedEnvironmentPairingRevision
     )
     if (statusResponse.ok === false) {
-      throw new OrchestrationError(
+      throw new UnsentRequestError(
         statusResponse.error.code,
         statusResponse.error.message,
         statusResponse.error.data

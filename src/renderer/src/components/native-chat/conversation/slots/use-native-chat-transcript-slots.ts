@@ -75,7 +75,7 @@ export function useNativeChatTranscriptSlots({
         historyHead,
         messages,
         rows: messages.map((message, index) =>
-          nativeChatTurnFoldRow(message, turnKeys[index], receipts.has(message.id))
+          nativeChatTurnFoldRow(message, turnKeys[index], receipts.get(message.id))
         ),
         settledTurnKeys: new Set(
           Object.entries(turnStatuses.completedByTurn).flatMap(([key, status]) =>

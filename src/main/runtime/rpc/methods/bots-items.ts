@@ -38,7 +38,7 @@ const LIST = defineMethod({
     const page = await runtime.botItems.store().list({
       botId: bot.id,
       statuses,
-      ...(chatId !== undefined ? { chatId } : {}),
+      ...(chatId !== undefined ? { chatIds: [chatId] } : {}),
       ...(link ? { link } : {}),
       limit: limit + 1,
       ...(cursor ? { cursor } : {})

@@ -42,18 +42,38 @@ describe('how the structured lane draws its rows, as desktop does', () => {
         { type: 'image-ref' as const, path: '/tmp/elephant.png' }
       ]
     }
-    const messages = [userMessage('u1'), toolRow('work'), answer('final'), generated]
+    const cardAnswer: NativeChatMessage = {
+      ...userMessage('card-answer'),
+      orcaNotice: 'card-answer'
+    }
+    const quiet: NativeChatMessage = {
+      ...answer('quiet'),
+      blocks: [{ type: 'text', text: 'NO_REPLY' }]
+    }
+    const messages = [
+      userMessage('u1'),
+      toolRow('work'),
+      answer('final'),
+      generated,
+      cardAnswer,
+      quiet
+    ]
     act(() => {
       renderer = create(
         createElement(Harness, {
           messages,
           enabled: true,
           isWorking: false,
-          settledTurns: new Map([['u1', { startedAt: 0, workedSeconds: 3 }]])
+          settledTurns: new Map([
+            ['u1', { startedAt: 0, workedSeconds: 3 }],
+            ['card-answer', { startedAt: 4_000, workedSeconds: 7 }]
+          ])
         })
       )
     })
     const read = () => renderer!.root.findByType(Result).props.disclosure
+    expect(read().listMessages.map((row: NativeChatMessage) => row.id)).not.toContain('card-answer')
+    expect(read().listMessages.map((row: NativeChatMessage) => row.id)).not.toContain('quiet')
     const final = read().listMessages.find((row: NativeChatMessage) => row.id === 'final')!
     expect(final.blocks).toEqual([
       { type: 'text', text: 'Done.' },

@@ -36,6 +36,7 @@ import type { MobileBrowserViewMode } from '../screencast/browser-screencast-req
 import type { MobileBrowserTab } from '../../session/tabs/mobile-session-tabs'
 import type { BrowserDialogState } from '../screencast/mobile-browser-stream-events'
 import { FieldTextInput } from '../../components/composer-input/FieldTextInput'
+import type { MobileCertificateProceedFailure } from '../certificate/mobile-browser-certificate-proceed'
 
 // Why: seeds layer 0 as the visible one; the pacer owns opacity after mount, so a render must not.
 const FRAME_LAYER_STYLES: [StyleProp<ViewStyle>, StyleProp<ViewStyle>] = [
@@ -49,6 +50,7 @@ type MobileBrowserPaneViewProps = {
   bottomInset: number
   browserViewMode: MobileBrowserViewMode
   busy: boolean
+  certificateTrustSupported: boolean
   controlsDisabled: boolean
   dialog: BrowserDialogState | null
   error: string | null
@@ -61,6 +63,7 @@ type MobileBrowserPaneViewProps = {
   layoutRef: RefObject<BrowserTouchLayout | null>
   navigateToAddress: () => Promise<void>
   panResponder: PanResponderInstance
+  proceedCertificate: (challengeId: string) => Promise<MobileCertificateProceedFailure | null>
   pointerModifiers: BrowserPointerModifier[]
   reloadPage: () => void
   retryFailedLoad: () => void
@@ -93,6 +96,7 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
     bottomInset,
     browserViewMode,
     busy,
+    certificateTrustSupported,
     controlsDisabled,
     dialog,
     error,
@@ -106,6 +110,7 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
     navigateToAddress,
     panResponder,
     pointerModifiers,
+    proceedCertificate,
     reloadPage,
     retryFailedLoad,
     renderedFrameSource,
@@ -255,8 +260,12 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
         {tab.loadError ? (
           <MobileBrowserLoadFailure
             loadError={tab.loadError}
+            certificateFailure={tab.certificateFailure}
+            browserPageId={tab.browserPageId}
+            certificateTrustSupported={certificateTrustSupported}
             retryDisabled={controlsDisabled}
             onRetry={retryFailedLoad}
+            onProceedCertificate={proceedCertificate}
           />
         ) : null}
         {!renderedFrameSource || busy || error ? (

@@ -259,7 +259,7 @@ export function NativeChatMessageList({
     sessionId: session.sessionId,
     ready: session.readPhase === 'ready',
     isVisible,
-    loadEarlier,
+    loadEarlier: olderHistory.loadEarlier,
     holdHistory: historyRetention.leaveEnd,
     releaseHistory: historyRetention.returnToEnd,
     scrollRef,
@@ -312,6 +312,7 @@ export function NativeChatMessageList({
     onToggleExpandedTurn: toggleExpandedTurn,
     onOpenSubagent: scope.open,
     onScrollMessageToTop: scrollMessageToTop,
+    readerAtEnd,
     onRevealDiff: navigation.revealDiff
   })
 

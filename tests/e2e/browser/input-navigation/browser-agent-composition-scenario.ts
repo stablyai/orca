@@ -1,4 +1,4 @@
-// Refuse agent presses during terminal IME composition: blur would commit unfinished text to the shell (#28700).
+// Refuse agent presses and page focus moves during terminal IME composition: either ends the unfinished text (#28700, STA-15780).
 
 import type { Page } from '@stablyai/playwright-test'
 import '../../desktop/electron-fixtures/orca-app'
@@ -20,7 +20,7 @@ async function readCompositionLog(page: Page): Promise<string[]> {
   })
 }
 
-export async function runAgentClickDuringUserCompositionScenario(page: Page): Promise<void> {
+export async function runAgentInputDuringUserCompositionScenario(page: Page): Promise<void> {
   const server = await startProbeServer()
   try {
     const pageId = await openBackgroundProbeTab(page, server.url)
@@ -45,16 +45,19 @@ export async function runAgentClickDuringUserCompositionScenario(page: Page): Pr
     const cdp = await page.context().newCDPSession(page)
     await cdp.send('Input.imeSetComposition', { text: 'zhong', selectionStart: 5, selectionEnd: 5 })
 
-    const refused: unknown = await page.evaluate(
-      (id) =>
-        window.api.runtime.call({
-          method: 'browser.click',
-          params: { page: id, element: '#target' }
-        }),
-      pageId
-    )
-    expect(JSON.stringify(refused)).toContain('typing with an input method')
+    // Fill never borrows window focus, but its page focus move still discards the composition on macOS.
+    for (const [method, params] of [
+      ['browser.click', { element: '#target' }],
+      ['browser.fill', { element: '#probe', value: 'agent' }]
+    ] as const) {
+      const refused: unknown = await page.evaluate(
+        ({ id, m, p }) => window.api.runtime.call({ method: m, params: { page: id, ...p } }),
+        { id: pageId, m: method, p: params }
+      )
+      expect(JSON.stringify(refused)).toContain('typing with an input method')
+    }
     expect(await evalInPage(page, pageId, 'window.__clicks')).toBe('0')
+    expect(await evalInPage(page, pageId, 'document.getElementById("probe").value')).toBe('')
     expect(await readCompositionLog(page)).toEqual([])
 
     await cdp.send('Input.insertText', { text: '中' })

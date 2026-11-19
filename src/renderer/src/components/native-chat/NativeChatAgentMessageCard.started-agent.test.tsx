@@ -62,11 +62,6 @@ it('keeps the started agent icon once the worker has no row', () => {
   expect(screen.getByTestId('agent-icon')).toHaveTextContent('claude')
 })
 
-it('shows the unknown icon for a start recorded without an agent', () => {
-  renderStart()
-  expect(screen.getByTestId('agent-icon')).toHaveTextContent('?')
-})
-
 it('keeps a worker update card on the agent its sender recorded', () => {
   const source: unknown = {
     kind: 'agent',

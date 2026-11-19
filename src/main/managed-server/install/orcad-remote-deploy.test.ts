@@ -271,7 +271,11 @@ describe('deployOrcad', () => {
     'restores uploaded executable modes with optional browser %s',
     async (browserTarget) => {
       const directory = mkdtempSync(join(tmpdir(), 'orcad-install-modes-'))
-      const binaries = ['ripgrep/linux-x64/rg', 'bin/orca-provider-exec']
+      const binaries = [
+        'ripgrep/linux-x64/rg',
+        'bin/orca-provider-exec',
+        'node_modules/node-pty/build/Release/journal-file-lock'
+      ]
       if (browserTarget) {
         binaries.push(`agent-browser-${browserTarget}`)
       }

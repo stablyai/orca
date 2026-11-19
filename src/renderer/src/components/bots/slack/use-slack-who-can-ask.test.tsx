@@ -145,12 +145,13 @@ describe('useSlackWhoCanAsk', () => {
       screen.getByText('Not everyone is listed. Search by name to find someone.')
     ).toBeDefined()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Add 1 person' }))
+    fireEvent.click(screen.getByRole('option', { name: 'Priya Shah' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add 2 people' }))
     const dialog = await screen.findByRole('dialog')
-    expect(within(dialog).getByText('Give Jane Doe access to Reviewer?')).toBeInTheDocument()
+    expect(within(dialog).getByText('Give 2 people access to Reviewer?')).toBeInTheDocument()
     expect(
       within(dialog).getByText(
-        'Jane Doe will be able to ask Reviewer from Slack (Globex) and control it remotely: start, steer, approve and stop its work, using its access on this computer.'
+        'They will be able to ask Reviewer from Slack (Globex) and control it remotely: start, steer, approve and stop its work, using its access on this computer.'
       )
     ).toBeInTheDocument()
     expect(
@@ -174,7 +175,8 @@ describe('useSlackWhoCanAsk', () => {
             name: 'Jane Doe',
             avatarUrl: 'https://avatars.slack-edge.com/jane_72.png',
             source: 'slack'
-          }
+          },
+          { id: 'U-priya', name: 'Priya Shah', source: 'slack' }
         ]
       })
     )
