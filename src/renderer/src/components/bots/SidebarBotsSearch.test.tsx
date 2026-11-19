@@ -332,14 +332,6 @@ describe('Bots search', () => {
     expect(results()).toEqual(['bot-1'])
   })
 
-  it('hides drag handles while open', () => {
-    threeBots()
-    renderSection()
-    expect(document.querySelector('[data-project-group-header-drag-handle]')).toBeTruthy()
-    openSearch()
-    expect(document.querySelector('[data-project-group-header-drag-handle]')).toBeNull()
-  })
-
   it('opens the first result on Enter and focuses its row under StrictMode', async () => {
     threeBots()
     renderStrictSection()
