@@ -69,7 +69,7 @@ export async function writeDiffCommentsToHost(
   )
 }
 
-/** The notes a worktree's host holds now, read through an update that changes nothing. */
+/** The notes a worktree's host holds now; this computer's are read through an update that changes nothing. */
 export async function readDiffCommentsFromHost(
   owner: Extract<DiffCommentOwner, { kind: 'worktree' }>
 ): Promise<DiffComment[]> {
@@ -87,7 +87,7 @@ export async function readDiffCommentsFromHost(
   }
   const { worktree } = await callRuntimeRpc<{ worktree?: { diffComments?: DiffComment[] } }>(
     { kind: 'environment', environmentId: endpoint.environmentId },
-    'worktree.set',
+    'worktree.show',
     { worktree: toRuntimeWorktreeSelector(owner.worktreeId) },
     { timeoutMs: 15_000 }
   )
