@@ -1903,6 +1903,24 @@
       },
       "stepFailed": "Orca could not finish this step.",
       "finishFailed": "Orca could not do that."
+    },
+    "notifications": {
+      "perfNotices": {
+        "disk": {
+          "label": "Disk almost full",
+          "description": "Show a warning in Orca when your disk is almost full."
+        },
+        "hiddenTabs": {
+          "label": "Hidden browser tabs",
+          "description": "Suggest Memory Saver when many hidden browser tabs stay loaded."
+        },
+        "search": {
+          "disk": "disk",
+          "warning": "warning",
+          "tabs": "tabs",
+          "memory": "memory"
+        }
+      }
     }
   },
   "menu": {
@@ -29410,5 +29428,19 @@
     "title": "Some background work paused after crashing repeatedly",
     "description": "Claude chat recovery is off until you retry. Copy, rewind and Space scans resume when you start them again.",
     "retry": "Retry"
+  },
+  "perfNotices": {
+    "hiddenTabs": {
+      "title": "{{count}} hidden browser tabs are still loaded",
+      "description_one": "Memory Saver frees tabs you haven't viewed in {{count}} hour.",
+      "description_other": "Memory Saver frees tabs you haven't viewed in {{count}} hours.",
+      "turnOnMemorySaver": "Turn on Memory Saver"
+    },
+    "disk": {
+      "title": "Your disk is almost full",
+      "description": "{{free}} left. Clean up workspaces you no longer need to free space.",
+      "cleanUp": "Clean up workspaces"
+    },
+    "dontShowAgain": "Don't show again"
   }
 }
