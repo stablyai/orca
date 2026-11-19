@@ -2,6 +2,7 @@ import { useState, type RefObject } from 'react'
 import { agentSessionPromptQuestions } from '../../../../../shared/agent-session/requests/prompts/agent-session-question-answer'
 import { structuredQuestionCard } from '../../../../../shared/native-chat/input/questions/structured-agent-question-card'
 import { chatApprovalFromJournal } from '../../../../../shared/native-chat/input/native-chat-interactive-prompt'
+import { restoredApprovalOptions } from '../../../../../shared/agent-session/requests/prompts/agent-session-restored-prompt'
 import { NativeChatApprovalCard } from './NativeChatApprovalCard'
 import { NativeChatStructuredQuestionCard } from './NativeChatStructuredQuestionCard'
 import { NativeChatPromptStrip } from './NativeChatPromptCollapse'
@@ -49,8 +50,7 @@ export function NativeChatStructuredPromptCard({
   ) : null
   if (prompt?.body.kind === 'approval') {
     const body = restored
-      ? // Stop means nothing to an agent that isn't running; only allow and deny carry over.
-        { ...prompt.body, options: prompt.body.options.filter((option) => option.intent) }
+      ? { ...prompt.body, options: restoredApprovalOptions(prompt.body.options) }
       : prompt.body
     return (
       <>

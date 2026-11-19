@@ -7,7 +7,10 @@ import {
   ORCHESTRATION_COORDINATOR_APPROVAL_CALLER_PREFIX,
   ORCHESTRATION_PERSON_APPROVAL_CALLER_PREFIX
 } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
-import { AGENT_EXIT_PROMPT_ENDING } from '../../../../../shared/agent-session/requests/prompts/agent-session-restored-prompt'
+import {
+  AGENT_EXIT_PROMPT_ENDING,
+  restoredApprovalOptions
+} from '../../../../../shared/agent-session/requests/prompts/agent-session-restored-prompt'
 
 /** Which shield the line shows: an answer either way, or a prompt that closed with none. */
 export type NativeChatApprovalRecordTone = 'allowed' | 'denied' | 'open' | 'closed'
@@ -66,7 +69,11 @@ export function ownApprovalRecordLine(
       values: { tool }
     }
   }
-  const option = body.options.find((entry) => entry.id === resolution.selectedOptionId)
+  const options =
+    resolution.endedBy === AGENT_EXIT_PROMPT_ENDING
+      ? restoredApprovalOptions(body.options)
+      : body.options
+  const option = options.find((entry) => entry.id === resolution.selectedOptionId)
   const resolvedBy = resolution.resolvedBy ?? ''
   // Orca answers a worker's prompt only by allowing or refusing this one call.
   const allows = option?.intent === 'allow_once'

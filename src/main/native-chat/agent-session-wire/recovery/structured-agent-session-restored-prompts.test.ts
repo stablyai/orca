@@ -10,6 +10,8 @@ import {
   type RestoredPromptJournal,
   type StructuredAgentSessionRestoredPromptsDeps
 } from './structured-agent-session-restored-prompts'
+import { parseAgentSessionOperationTimestamp } from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
+import type { StructuredAgentSessionTurnCompletionSubscriber } from '../observations/structured-agent-session-turn-completion-feed'
 import { restoredAgentJournalPrompt } from '../../../../shared/agent-session/requests/prompts/agent-session-restored-prompt'
 
 const SESSION = 'session-1'
@@ -55,6 +57,7 @@ function rig({ startRejected = false, sendRefused = false } = {}) {
     ['old', approval('old', 'digest-a', 'cancelled')]
   ])
   let emit: ((event: AgentSessionTurnCompletionEvent) => void) | null = null
+  let onState: StructuredAgentSessionTurnCompletionSubscriber['onState'] | null = null
   let running = false
   const sent: string[] = []
   const respond = vi.fn<StructuredAgentSessionRestoredPromptsDeps['respond']>(async () => REFUSED)
@@ -135,8 +138,10 @@ function rig({ startRejected = false, sendRefused = false } = {}) {
     respond,
     subscribeTurnCompletions: (subscriber) => {
       emit = subscriber.emit
+      onState = subscriber.onState ?? null
       return () => {
         emit = null
+        onState = null
       }
     },
     now: () => 1_000
@@ -187,6 +192,20 @@ function rig({ startRejected = false, sendRefused = false } = {}) {
     answer,
     reask,
     listening: () => emit !== null,
+    reaskAsFirstState: async (itemId: string, digest: string) => {
+      items.set(itemId, approval(itemId, digest, 'pending'))
+      onState?.({
+        scope: {
+          workspaceId: 'w',
+          executionHostId: 'local',
+          wslDistro: null,
+          workspaceKind: 'git-worktree'
+        },
+        sessionId: SESSION,
+        pendingPromptIds: [itemId]
+      })
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    },
     agentExits: () => {
       running = false
     }
@@ -210,6 +229,9 @@ describe('answering a prompt whose agent exited before the restart', () => {
     await r.reask('new', 'digest-a')
     expect(r.respond).toHaveBeenCalledTimes(1)
     expect(r.respond.mock.calls[0]?.[1]).toMatchObject({ itemId: 'new', optionId: 'allow' })
+    // The host refuses any other operation id shape.
+    const envelope = r.respond.mock.calls[0]![1].envelope
+    expect(parseAgentSessionOperationTimestamp(envelope.clientOperationId)).toBe(1_000)
     expect(r.listening()).toBe(false)
 
     // The answer is spent: a second identical ask goes to the person.
@@ -282,5 +304,34 @@ describe('answering a prompt whose agent exited before the restart', () => {
     expect(r.items.get('old')!.body).toMatchObject({
       resolution: { state: 'cancelled', selectedOptionId: null, endedBy: 'agent_exit' }
     })
+  })
+
+  it('answers a re-ask the chat reattached for its agent announces as its first state', async () => {
+    const r = rig()
+    await r.answer('allow')
+    await r.reaskAsFirstState('new', 'digest-a')
+
+    expect(r.respond.mock.calls[0]?.[1]).toMatchObject({ itemId: 'new', optionId: 'allow' })
+  })
+
+  it('denies with an added Deny when the request offered only Allow and Stop', async () => {
+    const r = rig()
+    const old = r.items.get('old')!
+    if (old.body.kind === 'approval') {
+      r.items.set('old', {
+        ...old,
+        body: {
+          ...old.body,
+          options: [
+            { id: 'accept', label: 'Allow', intent: 'allow_once' },
+            { id: 'cancel', label: 'Stop' }
+          ]
+        }
+      })
+    }
+    const result = await r.answer('restored-deny')
+
+    expect(result.ok).toBe(true)
+    expect(r.sent[0]).toContain('The user denied it.')
   })
 })

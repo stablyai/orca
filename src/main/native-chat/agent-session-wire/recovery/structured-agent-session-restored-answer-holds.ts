@@ -11,13 +11,14 @@ import type {
   AgentJournalItemBody,
   AgentJournalResolution
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
+import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { restoredPromptOptionFor } from '../../../../shared/agent-session/requests/prompts/agent-session-restored-prompt'
 import type { AgentSessionTurnCompletionEvent } from '../../../../shared/agent-session/view/agent-session-turn-completion-wire'
 import type { RestoredPromptJournal } from './structured-agent-session-restored-prompts'
 import type { StructuredAgentSessionTurnCompletionSubscriber } from '../observations/structured-agent-session-turn-completion-feed'
 import type { AgentSessionPromptRequest } from '../operations/structured-agent-session-turns-prompt'
 import type { StructuredAgentSessionCaller } from '../host/structured-agent-session-host-types'
+import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 
 type PromptBody = Extract<AgentJournalItemBody, { kind: 'approval' | 'question' }>
 
@@ -43,10 +44,13 @@ export type RestoredAnswerHoldsDeps = {
   subscribeTurnCompletions: (
     subscriber: StructuredAgentSessionTurnCompletionSubscriber
   ) => () => void
+  logger: () => StructuredAgentSessionLogger
+  now: () => number
 }
 
-const hex16 = (parts: readonly unknown[]): string =>
-  createHash('sha256').update(JSON.stringify(parts)).digest('hex').slice(0, 16)
+// Host authority accepts only `<13-digit ms>-<32 hex>` ids; the hash keeps a retry idempotent.
+const operationId = (at: number, parts: readonly unknown[]): string =>
+  `${String(Math.trunc(at)).padStart(13, '0')}-${createHash('sha256').update(JSON.stringify(parts)).digest('hex').slice(0, 32)}`
 
 /** The live request's answer carrying the restored one's meaning; null when it has none. */
 function reaskedAnswer(
@@ -85,8 +89,13 @@ export class RestoredAnswerHolds {
       id: RESTORED_PROMPT_ANSWER_CALLER,
       includePrompts: true,
       emit: (event) => this.onEvent(event),
-      // A closed chat's agent is gone, and so is the request its answer waited for.
-      onClosed: (closed) => this.drop(closed)
+      // A chat reattached as its agent starts announces its first state here, without an edge.
+      onState: (state) => {
+        const raised = state.pendingPromptIds.at(-1)
+        if (raised !== undefined) {
+          this.reasked(state.sessionId, raised)
+        }
+      }
     })
   }
 
@@ -108,12 +117,21 @@ export class RestoredAnswerHolds {
       // The turn ended without asking again: the answer is spent.
       this.drop(event.completion.sessionId)
     } else if (event.type === 'prompt') {
-      const { sessionId, promptId } = event.prompt
-      const hold = this.holds.get(sessionId)
-      if (hold) {
-        this.drop(sessionId)
-        void this.answerReasked(sessionId, promptId, hold).catch(() => {})
-      }
+      this.reasked(event.prompt.sessionId, event.prompt.promptId)
+    }
+  }
+
+  private reasked(sessionId: string, promptId: string): void {
+    const hold = this.holds.get(sessionId)
+    if (hold) {
+      this.drop(sessionId)
+      void this.answerReasked(sessionId, promptId, hold).catch((error: unknown) =>
+        this.deps.logger().warn('answering a re-asked restored prompt failed', {
+          scope: 'restored-prompt-answer',
+          sessionId,
+          error
+        })
+      )
     }
   }
 
@@ -141,15 +159,15 @@ export class RestoredAnswerHolds {
       kind: body.kind,
       ...answer
     }
-    await this.deps.respond(
+    const result = await this.deps.respond(
       { callerKey: RESTORED_PROMPT_ANSWER_CALLER },
       {
         ...request,
         envelope: {
           sessionId,
-          clientOperationId: `restored-answer:${hex16([sessionId, item.itemId])}`,
+          clientOperationId: operationId(this.deps.now(), [sessionId, item.itemId]),
           expectedRuntimeFence: this.deps.conversationFence(sessionId),
-          payloadFingerprint: computeAgentSessionPayloadFingerprint({
+          payloadFingerprint: structuredAgentSessionPayloadFingerprint({
             method: `agentSession.respondTo:${body.kind}`,
             sessionId,
             fields: {
@@ -162,5 +180,12 @@ export class RestoredAnswerHolds {
         }
       }
     )
+    if (!result.ok) {
+      this.deps.logger().warn('a re-asked restored prompt refused its stored answer', {
+        scope: 'restored-prompt-answer',
+        sessionId,
+        code: result.refusal.code
+      })
+    }
   }
 }

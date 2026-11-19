@@ -16,6 +16,7 @@ import { refuse } from '../../../../shared/agent-session/failures/agent-session-
 import { AGENT_SESSION_RESTART_CONTINUATION_NOTE } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-continuation'
 import {
   AGENT_EXIT_PROMPT_ENDING,
+  restoredApprovalOptions,
   restoredPromptContinuationMessage
 } from '../../../../shared/agent-session/requests/prompts/agent-session-restored-prompt'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
@@ -78,7 +79,9 @@ export class StructuredAgentSessionRestoredPrompts {
       conversation: deps.conversation,
       conversationFence: (sessionId) => deps.continuationHost().conversationFence(sessionId),
       respond: deps.respond,
-      subscribeTurnCompletions: deps.subscribeTurnCompletions
+      subscribeTurnCompletions: deps.subscribeTurnCompletions,
+      logger: () => deps.continuationHost().logger,
+      now: deps.now
     })
   }
 
@@ -94,14 +97,18 @@ export class StructuredAgentSessionRestoredPrompts {
     }
     const { journal } = await this.deps.conversation(sessionId)
     const item = await journal.reads.item(params.itemId)
-    const body = item?.body
+    const asked = item?.body
     if (
       !item ||
-      (body?.kind !== 'approval' && body?.kind !== 'question') ||
-      body.resolution.endedBy !== AGENT_EXIT_PROMPT_ENDING
+      (asked?.kind !== 'approval' && asked?.kind !== 'question') ||
+      asked.resolution.endedBy !== AGENT_EXIT_PROMPT_ENDING
     ) {
       return live()
     }
+    const body =
+      asked.kind === 'approval'
+        ? { ...asked, options: restoredApprovalOptions(asked.options) }
+        : asked
     const choice = readPromptChoice(body, params)
     if (!choice) {
       return invalid('optionRejected', `The answer does not fit item ${params.itemId}.`)
@@ -112,13 +119,6 @@ export class StructuredAgentSessionRestoredPrompts {
     }
     if ((await journal.reads.restoredPrompt())?.itemId !== item.itemId || !body.requestDigest) {
       return invalid('promptGone', `Item ${params.itemId} can no longer be answered.`)
-    }
-    // Stop has no meaning for an agent that isn't running; only allow and deny carry over.
-    if (
-      body.kind === 'approval' &&
-      !body.options.some((option) => option.id === choice.selectedOptionId && option.intent)
-    ) {
-      return invalid('optionRejected', `Option ${choice.selectedOptionId} can't be restored.`)
     }
     const resolution: AgentJournalResolution = {
       state: 'resolved',

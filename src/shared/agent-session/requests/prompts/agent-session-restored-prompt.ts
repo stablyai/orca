@@ -4,6 +4,7 @@
 import type {
   AgentJournalApprovalItem,
   AgentJournalPromptIntent,
+  AgentJournalPromptOption,
   AgentJournalQuestionItem,
   AgentJournalRenderItem
 } from '../../journal/agent-session-journal-types'
@@ -74,6 +75,25 @@ export function restoredAgentJournalPrompt(
     }
   }
   return { ...item, body: item.body }
+}
+
+/** Deny for a restored card whose request offered only Stop to refuse it (some Codex requests):
+ *  the agent hears it was denied, and a re-ask with no deny of its own goes to the person. */
+export const RESTORED_DENY_OPTION: AgentJournalPromptOption = {
+  id: 'restored-deny',
+  label: 'Deny',
+  intent: 'reject_once'
+}
+
+/** A restored approval's choices: Stop means nothing to an agent that isn't running, so only allow
+ *  and deny carry over, and deny is always one of them. */
+export function restoredApprovalOptions(
+  options: readonly AgentJournalPromptOption[]
+): AgentJournalPromptOption[] {
+  const kept = options.filter((option) => option.intent)
+  return kept.some((option) => option.intent?.startsWith('reject'))
+    ? kept
+    : [...kept, RESTORED_DENY_OPTION]
 }
 
 /** The re-asked request's option with the chosen option's meaning; ids can differ between asks. */
