@@ -208,11 +208,6 @@ async function removeCopyMarker(
   }
 }
 
-function isWslDistroRefusal(error: unknown): boolean {
-  return error instanceof WslDistroStoppedError || error instanceof WslDistroUnverifiableError
-}
-
-/** Any failure counts against the chat, except the import folder's distro not running: that rethrows. */
 async function deleteRollout(
   target: RolloutTarget,
   listHomes: () => Promise<RolloutHomes>,
@@ -292,8 +287,9 @@ async function deleteRollout(
       protectedRoots
     ).catch(() => undefined)
   } catch (error) {
-    if (isWslDistroRefusal(error)) {
-      throw error
+    // The import folder's distro isn't running: the chat stays, as an open one does, for a later sweep.
+    if (error instanceof WslDistroStoppedError || error instanceof WslDistroUnverifiableError) {
+      return
     }
     console.warn('[workspace-cleanup] Failed to delete Codex rollout:', target.filePath, error)
     result.failed += 1
@@ -313,16 +309,8 @@ export async function deleteCodexRolloutsPermanently(
 ): Promise<DeleteResult> {
   const result: DeleteResult = { deleted: 0, failed: 0, freedBytes: 0 }
   const deletedPaths: string[] = []
-  try {
-    for (const target of targets) {
-      await deleteRollout(target, listHomes, shouldDelete, result, deletedPaths)
-    }
-  } catch (error) {
-    // The import folder's distro isn't running: every chat left needs it checked, so all stay, as
-    // open ones do, for a later sweep.
-    if (!isWslDistroRefusal(error)) {
-      throw error
-    }
+  for (const target of targets) {
+    await deleteRollout(target, listHomes, shouldDelete, result, deletedPaths)
   }
   await invalidateDeletedAiVaultSessionPaths(deletedPaths)
   if (deletedPaths.length > 0) {

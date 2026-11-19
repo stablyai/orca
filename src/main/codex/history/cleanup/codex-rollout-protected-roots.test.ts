@@ -25,14 +25,16 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-it('refuses to protect an import folder whose distro stopped since it was last seen running', async () => {
+it('refuses to protect an import folder whose distro stopped since it was last seen running, seconds ago', async () => {
   vi.stubGlobal('process', { ...process, platform: 'win32' })
   realpath.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
   stat.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
   probe.mockResolvedValueOnce(['Ubuntu'])
   await assertWslUncPathRunning(IMPORT_FOLDER)
-  // It stops with nothing in it to tell Orca.
+  // Two seconds later it has stopped, with nothing in it to tell Orca.
   probe.mockResolvedValue([])
+  const later = performance.now() + 2_000
+  vi.stubGlobal('performance', { now: () => later })
 
   await expect(
     resolveProtectedRoots(

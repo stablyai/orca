@@ -14,6 +14,7 @@ vi.mock('../../../wsl/discovery/distro-catalog', async () => {
   }
 })
 
+import { _resetRunningWslDistroCacheForTests } from '../../../wsl/discovery/wsl-running-distro-cache'
 import { deleteCodexRolloutsPermanently } from './codex-rollout-permanent-delete'
 
 let root: string
@@ -24,6 +25,7 @@ afterEach(() => {
   rmSync(root, { recursive: true, force: true })
 })
 
+/** One sweep, with each chat in its own deleted workspace folder, while the import folder's distro is stopped. */
 async function sweepWhileImportDistroStopped(chats: number) {
   root = mkdtempSync(join(tmpdir(), 'orca-codex-stopped-import-'))
   vi.stubEnv('ORCA_USER_DATA_PATH', join(root, 'user-data'))
@@ -43,31 +45,35 @@ async function sweepWhileImportDistroStopped(chats: number) {
     writeFileSync(filePath, 'chat\n')
     return { agent: 'codex' as const, filePath }
   })
-  vi.stubGlobal('process', { ...process, platform: 'win32' })
+  _resetRunningWslDistroCacheForTests()
   probe.mockReset()
   probe.mockResolvedValue([])
-  const result = await deleteCodexRolloutsPermanently(
-    targets,
-    async () => true,
-    async () => ({ homes: [home], protectedRoots: ['\\\\wsl.localhost\\Ubuntu\\home\\me\\.codex'] })
-  )
+  // However long a sweep takes here, it stays inside one lease.
+  const clock = performance.now()
+  vi.stubGlobal('performance', { now: () => clock })
+  vi.stubGlobal('process', { ...process, platform: 'win32' })
+  const results = []
+  for (const target of targets) {
+    results.push(
+      await deleteCodexRolloutsPermanently(
+        [target],
+        async () => true,
+        async () => ({
+          homes: [home],
+          protectedRoots: ['\\\\wsl.localhost\\Ubuntu\\home\\me\\.codex']
+        })
+      )
+    )
+  }
   vi.unstubAllGlobals()
   return {
-    result,
+    deleted: results.reduce((sum, result) => sum + result.deleted + result.failed, 0),
     probes: probe.mock.calls.length,
-    kept: targets.filter((t) => existsSync(t.filePath)).length
+    kept: targets.filter((target) => existsSync(target.filePath)).length
   }
 }
 
-it("asks WSL once a sweep, however many chats wait on the import folder's stopped distro", async () => {
-  expect(await sweepWhileImportDistroStopped(10)).toEqual({
-    result: { deleted: 0, failed: 0, freedBytes: 0 },
-    probes: 1,
-    kept: 10
-  })
-  expect(await sweepWhileImportDistroStopped(100)).toEqual({
-    result: { deleted: 0, failed: 0, freedBytes: 0 },
-    probes: 1,
-    kept: 100
-  })
+it("asks WSL once, however many chats and folders wait on the import folder's stopped distro", async () => {
+  expect(await sweepWhileImportDistroStopped(10)).toEqual({ deleted: 0, probes: 1, kept: 10 })
+  expect(await sweepWhileImportDistroStopped(100)).toEqual({ deleted: 0, probes: 1, kept: 100 })
 })

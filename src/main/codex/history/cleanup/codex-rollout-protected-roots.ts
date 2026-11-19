@@ -4,6 +4,9 @@ import { isPathInsideOrEqual } from '../../../../shared/file-access/cross-platfo
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { assertWslUncPathRunning } from '../../../wsl/filesystem/wsl-unc-access-gate'
 
+// A stop nothing reported leaves the shared 15 s "running" standing; a sweep asks WSL at most once a second.
+const CLEANUP_WSL_RUNNING_LEASE_MS = 1_000
+
 /** Orca's homes to delete in, and roots (the user's import folder) no deletion may reach. */
 export type RolloutHomes = { homes: readonly string[]; protectedRoots: readonly string[] }
 
@@ -63,9 +66,8 @@ export async function resolveProtectedRoots(
   const dated = dirname(stem).split('/')
   const resolved: ProtectedRoot[] = []
   for (const root of protectedRoots) {
-    // Reading a stopped distro's folder boots it; the chat waits for a sweep where it runs. Asked
-    // afresh: a stop nothing reported leaves an earlier "running" standing.
-    await assertWslUncPathRunning(root, null, { leaseMs: 0 })
+    // Reading a stopped distro's folder boots it; the chat waits for a sweep where it runs.
+    await assertWslUncPathRunning(root, null, { leaseMs: CLEANUP_WSL_RUNNING_LEASE_MS })
     const realPath = await realpathUnlessAbsent(root)
     if (!realPath) {
       continue
