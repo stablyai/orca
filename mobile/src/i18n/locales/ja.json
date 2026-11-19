@@ -937,12 +937,10 @@
       "dismissDrawer": "ドロワーを閉じる"
     },
     "newWorkspaceSetupScriptField": {
-      "hooks": "フック",
       "label": "セットアップスクリプト",
-      "run": "実行",
-      "runSetupCommand": "セットアップコマンドを実行",
+      "runSetup": "セットアップを実行",
       "skip": "スキップ",
-      "waitForSetup": "セットアップが完了するまで待ってから Agent を開始してください",
+      "startAgentAfterSetup": "セットアップ後に Agent を開始",
       "waitForSetupSaveFailed": "セットアップ時の起動設定を保存できませんでした。"
     },
     "newWorkspaceSshConnectionField": {

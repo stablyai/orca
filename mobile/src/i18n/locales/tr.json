@@ -941,12 +941,10 @@
       "dismissDrawer": "Alt paneli kapat"
     },
     "newWorkspaceSetupScriptField": {
-      "hooks": "HOOK'LAR",
       "label": "Kurulum betiği",
-      "run": "Çalıştır",
-      "runSetupCommand": "Kurulum komutunu çalıştır",
+      "runSetup": "Kurulumu çalıştır",
       "skip": "Atla",
-      "waitForSetup": "Ajanı başlatmadan önce setup'ın tamamlanmasını bekle",
+      "startAgentAfterSetup": "Ajanı kurulumdan sonra başlat",
       "waitForSetupSaveFailed": "Kurulum başlangıç davranışı kaydedilemedi."
     },
     "newWorkspaceSshConnectionField": {

@@ -937,12 +937,10 @@
       "dismissDrawer": "하단 패널 닫기"
     },
     "newWorkspaceSetupScriptField": {
-      "hooks": "훅",
       "label": "설정 스크립트",
-      "run": "실행",
-      "runSetupCommand": "설정 명령 실행",
+      "runSetup": "설정 실행",
       "skip": "건너뛰기",
-      "waitForSetup": "agent를 시작하기 전에 설정이 완료될 때까지 기다리세요.",
+      "startAgentAfterSetup": "설정 후 agent 시작",
       "waitForSetupSaveFailed": "시작 동작 저장 실패"
     },
     "newWorkspaceSshConnectionField": {

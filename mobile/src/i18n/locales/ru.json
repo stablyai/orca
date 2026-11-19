@@ -1017,12 +1017,10 @@
       "dismissDrawer": "Закрыть панель"
     },
     "newWorkspaceSetupScriptField": {
-      "hooks": "ХУКИ",
       "label": "Скрипт настройки",
-      "run": "Запустить",
-      "runSetupCommand": "Выполнить команду настройки",
+      "runSetup": "Выполнить настройку",
       "skip": "Пропустить",
-      "waitForSetup": "Дождаться завершения настройки перед запуском агента",
+      "startAgentAfterSetup": "Запускать агента после настройки",
       "waitForSetupSaveFailed": "Не удалось сохранить поведение при запуске настройки."
     },
     "newWorkspaceSshConnectionField": {

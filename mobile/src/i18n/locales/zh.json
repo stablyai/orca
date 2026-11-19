@@ -1078,12 +1078,10 @@
       "dismissDrawer": "关闭抽屉"
     },
     "newWorkspaceSetupScriptField": {
-      "hooks": "钩子",
       "label": "设置脚本",
-      "run": "执行",
-      "runSetupCommand": "执行设置命令",
+      "runSetup": "执行设置",
       "skip": "跳过",
-      "waitForSetup": "等待设置完成后再启动代理",
+      "startAgentAfterSetup": "设置完成后再启动代理",
       "waitForSetupSaveFailed": "保存设置启动行为失败"
     },
     "newWorkspaceSshConnectionField": {

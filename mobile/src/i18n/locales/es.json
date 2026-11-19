@@ -979,12 +979,10 @@
       "dismissDrawer": "Cerrar panel"
     },
     "newWorkspaceSetupScriptField": {
-      "hooks": "HOOKS",
       "label": "Script de configuración",
-      "run": "Ejecutar",
-      "runSetupCommand": "Ejecutar comando de configuración",
+      "runSetup": "Ejecutar configuración",
       "skip": "Omitir",
-      "waitForSetup": "Esperar a que termine el setup antes de iniciar el agente",
+      "startAgentAfterSetup": "Iniciar el agente tras la configuración",
       "waitForSetupSaveFailed": "Error al guardar el comportamiento de inicio"
     },
     "newWorkspaceSshConnectionField": {
