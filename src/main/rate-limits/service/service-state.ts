@@ -213,18 +213,24 @@ export abstract class RateLimitServiceState {
 
   protected updateState(next: InternalRateLimitState): void {
     this.state = next
-    void this.pushToRenderer().catch((error: unknown) =>
-      console.warn('[rate-limits] Failed to publish usage state', error)
-    )
+    this.pushToRenderer()
   }
 
-  protected pushToRenderer(): Promise<void> {
+  getAccountRefreshGenerations(): readonly [claude: number, codex: number] {
+    return [this.claudeFetchGeneration, this.codexFetchGeneration]
+  }
+
+  protected pushToRenderer(): void {
     if (this.publicationStopped) {
-      return Promise.resolve()
+      return
     }
     this.publicationPending = true
-    this.publicationInFlight ??= Promise.resolve().then(() => this.publishLatestState())
-    return this.publicationInFlight
+    if (!this.publicationInFlight) {
+      this.publicationInFlight = Promise.resolve().then(() => this.publishLatestState())
+      void this.publicationInFlight.catch((error: unknown) =>
+        console.warn('[rate-limits] Failed to publish usage state', error)
+      )
+    }
   }
 
   private async publishLatestState(): Promise<void> {

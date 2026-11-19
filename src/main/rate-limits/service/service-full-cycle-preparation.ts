@@ -40,10 +40,12 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const claudeProvenance = claudeAuthPreparation?.provenance ?? 'system'
     const codexTarget = this.codexFetchTarget
     const codexGeneration = this.codexFetchGeneration
+    // Gate only Codex, never siblings, when its runtime is skipped (#STA-4422).
     const codexHome = await this.resolveCodexHome(codexTarget)
     const antigravityFetchAllowed =
       (this.antigravityUsageEnabledResolver?.() ?? true) &&
       (options?.force || !this.shouldSkipAutomatedFetch('antigravity', this.state.antigravity))
+    // A login change seen here invalidates before the baseline below, so this read still counts.
     const recorder = antigravityFetchAllowed ? this.antigravityAccountUsageRecorder : null
     const antigravityRead = recorder ? await this.beginAntigravityAccountRead(recorder) : null
     if (signal.aborted) {
@@ -93,8 +95,10 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const codexStateBeforeFetch =
       previousState.codex?.status === 'fetching' ? null : previousState.codex
     const geminiCliOAuthEnabled = this.geminiCliOAuthEnabledResolver?.() ?? false
+    // Probe auth during fetch, not hot renderer/mobile getState calls.
     const grokAuthReadResult = readGrokAuthSession()
     this.grokAuthConfigured = grokAuthReadResult.status === 'ok'
+    // Config changes discard old-account usage; hash credentials because only identity changes matter.
     const apiKeyFingerprint = openCodeGoApiKey
       ? createHash('sha256').update(openCodeGoApiKey).digest('hex')
       : ''
@@ -113,6 +117,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     }
     const miniMaxGeneration = this.minimaxFetchGeneration
     const zcodePlanApiKey = zcodePlanConfigResult.config.apiKey
+    // Hash credentials because only changes matter, never retain the raw key here.
     const currentZcodeConfigHash = zcodePlanApiKey
       ? `${zcodePlanConfigResult.config.site}|${createHash('sha256').update(zcodePlanApiKey).digest('hex')}`
       : (zcodePlanConfigResult.error ?? '')
@@ -131,6 +136,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     this.updateState({
       ...previousState,
       claude: this.claudeStateAtCycleStart(previousState.claude),
+      // A gated slot makes no attempt and cannot settle a fetching chip.
       codex: codexFetchGated
         ? codexStateBeforeFetch
         : this.withFetchingStatus(previousState.codex, 'codex'),
@@ -169,6 +175,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       (value) => ({ status: 'fulfilled', value }) as const,
       (reason) => ({ status: 'rejected', reason }) as const
     )
+    // Hidden meters avoid the CLI spawn; the separate promise keeps other providers responsive.
     const antigravityResultPromise = (
       antigravityFetchAllowed
         ? fetchAntigravityRateLimits({ signal, target: antigravityTarget }).then((limits) =>
@@ -216,10 +223,13 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
         fetchGeminiRateLimits(geminiCliOAuthEnabled),
         fetchOpenCodeGoUsage({
           settingsApiKey: openCodeGoApiKey,
+          // Store/env keys become known only when the fetch resolves them.
           onApiKeyResolved: (resolution) => {
+            // A credential change invalidates stale in-flight presence results.
             if (opencodeGeneration !== this.opencodeFetchGeneration) {
               return
             }
+            // An undecryptable or briefly unreadable saved key still counts, so the bar stays up.
             this.openCodeGoApiKeyConfigured =
               resolution.status === 'found' ||
               openCodeGoApiKeyError !== null ||
@@ -244,6 +254,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     if (signal.aborted) {
       return null
     }
+    // Decryption diagnosis fills only an otherwise undiagnosed empty result; preserve actual cookie failures.
     if (
       openCodeGoApiKeyError &&
       opencodeGoResult.status === 'fulfilled' &&

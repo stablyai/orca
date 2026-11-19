@@ -19,12 +19,22 @@ export function subscribeRuntimeAccountChanges(
   let active = true
   let revision = 0
   let running = false
-  let pending: { revision: number; usage?: AccountsSnapshot['rateLimits'] } | undefined
+  let pending:
+    | {
+        revision: number
+        generations: readonly [number, number]
+        usage?: AccountsSnapshot['rateLimits']
+      }
+    | undefined
   const publish = (usage?: AccountsSnapshot['rateLimits']) => {
     if (!active) {
       return
     }
-    pending = { revision: ++revision, usage }
+    // Usage-only updates must not invalidate a completed roster read.
+    if (!usage) {
+      revision++
+    }
+    pending = { revision, generations: services.rateLimits.getAccountRefreshGenerations(), usage }
     if (running) {
       return
     }
@@ -43,7 +53,14 @@ export function subscribeRuntimeAccountChanges(
                   rateLimits: change.usage
                 }
               : await snapshots.stream()
-            if (active && revision === change.revision) {
+            const currentGenerations = services.rateLimits.getAccountRefreshGenerations()
+            if (
+              active &&
+              revision === change.revision &&
+              change.generations.every(
+                (generation, index) => generation === currentGenerations[index]
+              )
+            ) {
               listener(snapshot)
             }
           } catch (error) {
