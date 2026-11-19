@@ -238,4 +238,26 @@ describe('createRemoteRuntimePtyTransport', () => {
       vi.useRealTimers()
     }
   })
+
+  it('delivers a permitted public query-reply without driving-only batching', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      canSendInput: (_id, kind) => kind === 'query-reply'
+    })
+    try {
+      await transport.connect({ url: '', callbacks: {} })
+      expect(transport.sendInput('blocked-command', 'driving')).toBe(false)
+      expect(transport.sendInput('\x1b[?1;2c', 'query-reply')).toBe(true)
+      const input = subscriptionSendBinary.mock.calls
+        .map(([bytes]) => decodeTerminalStreamFrame(bytes))
+        .filter((frame) => frame?.opcode === TerminalStreamOpcode.Input)
+        .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+      expect(input).toEqual(['\x1b[?1;2c'])
+    } finally {
+      transport.destroy?.()
+    }
+  })
 })
