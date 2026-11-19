@@ -13,6 +13,30 @@ export type LocalPtyInventoryReader = (
   options?: { bySpawnPaneKey?: boolean }
 ) => Promise<PtyProcessInfo | null>
 
+type InventoryIndex = {
+  byId: Map<string, PtyProcessInfo>
+  bySpawnPaneKey: Map<string, PtyProcessInfo[]>
+}
+
+function indexInventory(rows: PtyProcessInfo[]): InventoryIndex {
+  const byId = new Map<string, PtyProcessInfo>()
+  const bySpawnPaneKey = new Map<string, PtyProcessInfo[]>()
+  for (const row of rows) {
+    if (!byId.has(row.id)) {
+      byId.set(row.id, row)
+    }
+    if (row.paneKey !== undefined) {
+      const spawned = bySpawnPaneKey.get(row.paneKey)
+      if (spawned) {
+        spawned.push(row)
+      } else {
+        bySpawnPaneKey.set(row.paneKey, [row])
+      }
+    }
+  }
+  return { byId, bySpawnPaneKey }
+}
+
 /** Reuse the daemon's authenticated inventory; never resolve an SSH pane from the client. */
 export function createLocalPtyInventoryReader(options: InventoryOptions): LocalPtyInventoryReader {
   let pending: Promise<PtyProcessInfo[]> | undefined
@@ -38,10 +62,17 @@ export function createLocalPtyInventoryReader(options: InventoryOptions): LocalP
     }
     return pending
   }
+  // Sleep capture looks up every pane against one snapshot; index it once per snapshot.
+  const indexes = new WeakMap<PtyProcessInfo[], InventoryIndex>()
   const find = (rows: PtyProcessInfo[], paneKey: string, id: string | undefined | null) => {
+    let index = indexes.get(rows)
+    if (!index) {
+      index = indexInventory(rows)
+      indexes.set(rows, index)
+    }
     // Before a restored pane reattaches, the provider's own spawn record still names its PTY.
-    const spawned = id ? [] : rows.filter((entry) => entry.paneKey === paneKey)
-    return (id ? rows.find((entry) => entry.id === id) : spawned.length === 1 && spawned[0]) || null
+    const spawned = id ? undefined : index.bySpawnPaneKey.get(paneKey)
+    return (id ? index.byId.get(id) : spawned?.length === 1 && spawned[0]) || null
   }
   return async (paneKey, lookup) => {
     const id = options.getPtyId(paneKey)
