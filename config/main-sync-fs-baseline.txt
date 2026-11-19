@@ -249,7 +249,7 @@
 9 src/main/filesystem/durable-file-write.ts
 3 src/main/filesystem/file-content-observation.ts # Existing reads/existence checks relocated from observed callers; no new synchronous I/O.
 2 src/main/filesystem/local-file-io/filesystem-path-containment.ts
-2 src/main/filesystem/rolling-file-backup.ts
+3 src/main/filesystem/rolling-file-backup.ts # +1 Windows-only chmod inside the existing sync backup copy: clears the read-only attribute so a later rename over the backup cannot fail (STA-16113)
 2 src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry-path.ts
 1 src/main/foreign-sqlite-readers/foreign-sqlite-reader-spawn.ts
 5 src/main/git/repositories/discovery/repo-detection.ts
