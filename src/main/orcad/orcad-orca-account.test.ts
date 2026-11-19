@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { flushUnsavedCloudSessions } from '../orca-profiles/cloud-session/profile-cloud-session-owner'
 import { getOrcaServerSignIn, installOrcaServerSignIn } from '../orca-profiles/orca-server-sign-in'
 import type { BackendServiceCleanup } from '../backend/service-composition'
@@ -9,8 +8,6 @@ afterEach(() => installOrcaServerSignIn(null))
 
 describe('installOrcadOrcaAccount', () => {
   it('installs the account sign-in, flushes unsaved rotations on SIGTERM, and uninstalls on cleanup', async () => {
-    const quitHandlers: (() => void)[] = []
-    installFakeAppEnvironment({ onWillQuit: (handler) => quitHandlers.push(handler) })
     const cleanups: BackendServiceCleanup[] = []
 
     const served: string[] = []
@@ -28,7 +25,7 @@ describe('installOrcadOrcaAccount', () => {
     expect(served).toEqual(['profile-1'])
 
     expect(getOrcaServerSignIn()).not.toBeNull()
-    expect(quitHandlers).toContain(flushUnsavedCloudSessions)
+    expect(cleanups).toContain(flushUnsavedCloudSessions)
     for (const cleanup of cleanups) {
       await cleanup({ failed: false })
     }

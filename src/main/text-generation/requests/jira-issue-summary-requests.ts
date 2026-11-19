@@ -57,7 +57,7 @@ export async function generateJiraIssueSummaryRequest(
       ...textGenerationFailure('jiraDescriptionRequired')
     }
   }
-  if (!getStatus().sites?.some((site) => site.id === args.siteId)) {
+  if (!(await getStatus()).sites?.some((site) => site.id === args.siteId)) {
     return {
       success: false,
       ...textGenerationFailure('jiraAccountDisconnected')
@@ -108,7 +108,7 @@ export async function generateJiraIssueSummaryRequest(
     if (!localEnv.ok) {
       return { success: false, error: localEnv.error }
     }
-    if (!getStatus().sites?.some((site) => site.id === args.siteId)) {
+    if (!(await getStatus()).sites?.some((site) => site.id === args.siteId)) {
       return {
         success: false,
         ...textGenerationFailure('jiraAccountDisconnected')

@@ -62,7 +62,7 @@ function desktopHost(poll: () => Promise<ServerSignInPollResult>, watchSignOut =
     account: watchSignOut
       ? account
       : {
-          getAuthStatus: () => account.getAuthStatus(),
+          getAuthStatus: async () => await account.getAuthStatus(),
           signInWithCode: (...args) => account.signInWithCode(...args),
           selectOrg: (orgId) => account.selectOrg(orgId),
           signOut: () => account.signOut(),
@@ -134,7 +134,7 @@ describe('approve-in-browser sign-in against a desktop sign-out', () => {
 
       expect((await settled(server, start)).phase).not.toBe('signedIn')
       expect(cloud.exchange).not.toHaveBeenCalled()
-      expect(account.getAuthStatus().state).not.toBe('connected')
+      expect((await account.getAuthStatus()).state).not.toBe('connected')
     }
   )
 
@@ -152,7 +152,7 @@ describe('approve-in-browser sign-in against a desktop sign-out', () => {
     exchanged.open(exchangeFor('user-a'))
 
     expect((await settled(server, start)).phase).not.toBe('signedIn')
-    expect(account.getAuthStatus().state).not.toBe('connected')
+    expect((await account.getAuthStatus()).state).not.toBe('connected')
     await vi.waitFor(() =>
       expect(cloud.revoke).toHaveBeenCalledWith(
         expect.anything(),

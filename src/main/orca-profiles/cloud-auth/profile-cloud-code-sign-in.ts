@@ -29,7 +29,7 @@ export async function signInCurrentOrcaProfileWithCode(
   } catch (error) {
     return {
       status: 'failed',
-      auth: auth(),
+      auth: await auth(),
       error: error instanceof Error ? error.message : String(error)
     }
   }
@@ -42,14 +42,14 @@ export async function signInCurrentOrcaProfileWithCode(
     guards
   })
   if (outcome.status === 'cancelled') {
-    return { status: 'cancelled', auth: auth() }
+    return { status: 'cancelled', auth: await auth() }
   }
   if (outcome.status === 'refused') {
-    return { status: 'failed', auth: auth(), error: outcome.error }
+    return { status: 'failed', auth: await auth(), error: outcome.error }
   }
   return {
     status: 'connected',
-    auth: auth(),
+    auth: await auth(),
     activeProfileId: outcome.list.activeProfileId,
     profiles: outcome.list.profiles
   }

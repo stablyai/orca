@@ -55,7 +55,7 @@ function installSealing(sealing: SecretSealing): void {
 function harness(overrides: Partial<OrcaServerSignInDeps> = {}) {
   let auth = signedOut()
   const account = {
-    getAuthStatus: vi.fn(() => auth),
+    getAuthStatus: vi.fn(async () => auth),
     signInWithCode: vi.fn(
       async (
         _config: unknown,
@@ -226,7 +226,7 @@ describe('OrcaServerSignIn', () => {
 
     installSealing({ kind: 'host-key', warning: 'Anyone who can read this account can unseal.' })
     const allowed = track(harness())
-    expect(allowed.server.status().storage).toEqual({
+    expect((await allowed.server.status()).storage).toEqual({
       kind: 'host-key',
       warning: 'Anyone who can read this account can unseal.'
     })

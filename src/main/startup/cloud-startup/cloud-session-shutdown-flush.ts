@@ -1,7 +1,9 @@
-import { powerMonitor } from 'electron'
-import { flushUnsavedCloudSessions } from '../../orca-profiles/cloud-session/profile-cloud-session-owner'
+import { app, powerMonitor, type Event } from 'electron'
 
-// OS shutdown may skip before-quit and lose rotated tokens; Windows reports session-end per window.
+// Route OS shutdown through awaited quit teardown; Windows reports session-end per window.
 export function installCloudSessionShutdownFlush(): void {
-  powerMonitor.on('shutdown', flushUnsavedCloudSessions)
+  powerMonitor.on('shutdown', (event?: Event) => {
+    event?.preventDefault()
+    app.quit()
+  })
 }

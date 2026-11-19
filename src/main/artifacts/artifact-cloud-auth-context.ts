@@ -1,10 +1,7 @@
 import { createHash } from 'node:crypto'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import type { ActiveOrcaProfileState } from '../orca-profiles/profile-index-store'
-import {
-  readCloudSession,
-  takeCloudSessionTicket
-} from '../orca-profiles/cloud-session/profile-cloud-session-owner'
+import { takeCloudSessionTicket } from '../orca-profiles/cloud-session/profile-cloud-session-owner'
 import {
   type ArtifactShareScope,
   captureArtifactShareLifecycle,
@@ -80,8 +77,7 @@ function authContext(
   // session signs out without unlinking, so neither is visible to assertCurrent yet.
   const sessionEnded = (): boolean =>
     Boolean(expectedCloud) &&
-    (takeCloudSessionTicket(active.profile.id, userDataPath).generation !== sessionGeneration ||
-      readCloudSession(active.profile.id, userDataPath).status !== 'found')
+    takeCloudSessionTicket(active.profile.id, userDataPath).generation !== sessionGeneration
   return {
     profileId: active.profile.id,
     scope,

@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import {
   classifyUnenvelopedCredential,
   isMockKeychainCiphertext,
@@ -6,12 +6,11 @@ import {
 } from '../../shared/secure-storage/secret-at-rest-protection'
 
 /** Classify unenveloped token/ciphertext bytes without decrypting or prompting for the keychain. */
-export function readCredentialFileProtection(path: string): SecretAtRestProtection | null {
-  if (!existsSync(path)) {
-    return null
-  }
+export async function readCredentialFileProtection(
+  path: string
+): Promise<SecretAtRestProtection | null> {
   try {
-    const raw = readFileSync(path)
+    const raw = await readFile(path)
     return raw.length === 0
       ? null
       : isMockKeychainCiphertext(raw)

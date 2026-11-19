@@ -11,6 +11,7 @@ export type WindowsSecurityAddon = typeof WindowsSecurityModule
 export type WindowsSecurity = {
   addon: Omit<WindowsSecurityAddon, 'currentUserSid'>
   userSid: string
+  modulePath?: string
 }
 
 /** FILE_ALL_ACCESS, what SDDL prints as `FA`. */
@@ -52,7 +53,8 @@ function loadOnce(): WindowsSecurity | { error: string } {
   for (const candidate of candidates) {
     try {
       // Reading the SID is also what makes the package load its deferred .node binary.
-      return prepare(requireFromHere(candidate()))
+      const modulePath = candidate()
+      return { ...prepare(requireFromHere(modulePath)), modulePath }
     } catch (error) {
       failures.push(error instanceof Error ? error.message : String(error))
     }

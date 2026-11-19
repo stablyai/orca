@@ -81,7 +81,7 @@ describe('Orca cloud session store', () => {
 
   it('keeps local sign-ins in memory when encryption has no protected seal', async () => {
     const store = await loadSessionStore()
-    expect(store.saveOrcaCloudSession('local-default', userDataPath, makeSession())).toBe(
+    expect(await store.saveOrcaCloudSession('local-default', userDataPath, makeSession())).toBe(
       'encrypted'
     )
     setSecretStore({
@@ -91,17 +91,17 @@ describe('Orca cloud session store', () => {
       describeProtectionGap: () => 'built-in test key',
       describeSealing: () => ({ kind: 'none', reason: 'built-in test key' })
     })
-    expect(store.saveOrcaCloudSession('local-default', userDataPath, makeSession())).toBe(
+    expect(await store.saveOrcaCloudSession('local-default', userDataPath, makeSession())).toBe(
       'memory-only'
     )
     expect(
-      store.saveOrcaCloudSession('local-default', userDataPath, makeSession(), {
+      await store.saveOrcaCloudSession('local-default', userDataPath, makeSession(), {
         spentOnFailure: true
       })
     ).toBe('memory-only')
     expect(existsSync(store.getOrcaCloudSessionPath('local-default', userDataPath))).toBe(false)
     const restarted = await loadSessionStore()
-    expect(restarted.readOrcaCloudSession('local-default', userDataPath)).toEqual({
+    expect(await restarted.readOrcaCloudSession('local-default', userDataPath)).toEqual({
       status: 'missing',
       persistence: 'none'
     })
@@ -112,7 +112,7 @@ describe('Orca cloud session store', () => {
     writePlaintextSessionFile('profile-1', makeSession())
     const store = await loadSessionStore()
 
-    expect(store.readOrcaCloudSession('profile-1', userDataPath)).toEqual({
+    expect(await store.readOrcaCloudSession('profile-1', userDataPath)).toEqual({
       status: 'decrypt-failed',
       persistence: 'none',
       error: 'Unsafe session format.'
@@ -136,7 +136,7 @@ describe('Orca cloud session store', () => {
     )
     const store = await loadSessionStore()
 
-    expect(store.readOrcaCloudSession('local-default', userDataPath)).toEqual({
+    expect(await store.readOrcaCloudSession('local-default', userDataPath)).toEqual({
       status: 'found',
       session,
       persistence: 'encrypted'
@@ -154,21 +154,21 @@ describe('Orca cloud session store', () => {
     }
     setSecretStore(hostKeyStore)
     let store = await loadSessionStore()
-    store.saveOrcaCloudSession('local-default', userDataPath, makeSession())
+    await store.saveOrcaCloudSession('local-default', userDataPath, makeSession())
     const path = store.getOrcaCloudSessionPath('local-default', userDataPath)
     expect(JSON.parse(readFileSync(path, 'utf-8')).format).toBe('orcad-host-key-v1')
 
     setSecretStore(new ElectronSecretStore())
     store = await loadSessionStore()
-    expect(store.readOrcaCloudSession('local-default', userDataPath)).toMatchObject({
+    expect(await store.readOrcaCloudSession('local-default', userDataPath)).toMatchObject({
       status: 'decrypt-failed',
       error: "This Orca account sign-in was saved by Orca's headless server. Sign in again here."
     })
 
-    store.saveOrcaCloudSession('local-default', userDataPath, makeSession())
+    await store.saveOrcaCloudSession('local-default', userDataPath, makeSession())
     setSecretStore(hostKeyStore)
     store = await loadSessionStore()
-    expect(store.readOrcaCloudSession('local-default', userDataPath)).toMatchObject({
+    expect(await store.readOrcaCloudSession('local-default', userDataPath)).toMatchObject({
       status: 'decrypt-failed',
       error: 'This Orca account sign-in was saved by the Orca app. Sign in again on this server.'
     })

@@ -58,7 +58,11 @@ export class OrcaServerSignIn {
           next.endsWith(':approve')
       }
     )
-    const stopInvalidation = onOrcaCloudSessionInvalidated(() => this.publish())
+    const stopInvalidation = onOrcaCloudSessionInvalidated(() => {
+      void this.publish().catch((error: unknown) =>
+        console.warn('[orca-account] Failed to publish invalidated session:', error)
+      )
+    })
     // The desktop window signs out through the account service directly, not through signOut() here.
     const stopSignOutWatch = deps.account.onSignOutStarted?.(() => this.cancelActive())
     this.stopInvalidation = () => {
@@ -67,8 +71,8 @@ export class OrcaServerSignIn {
     }
   }
 
-  status(): OrcaAccountServerStatus {
-    return toServerStatus(this.deps.account.getAuthStatus(), readOrcaAccountStorage())
+  async status(): Promise<OrcaAccountServerStatus> {
+    return toServerStatus(await this.deps.account.getAuthStatus(), readOrcaAccountStorage())
   }
 
   onChanged(listener: (status: OrcaAccountServerStatus) => void): () => void {
@@ -142,13 +146,13 @@ export class OrcaServerSignIn {
   }
 
   async refreshIfSignedIn(): Promise<void> {
-    if (this.deps.account.getAuthStatus().state !== 'connected') {
+    if ((await this.deps.account.getAuthStatus()).state !== 'connected') {
       return
     }
     const result = await this.deps.account.refreshAuth().catch(() => null)
     if (result?.status === 'reconnect-required') {
       console.info('[orca-account] Session expired; sign in again')
-      this.publish()
+      await this.publish()
     }
   }
 
@@ -161,8 +165,8 @@ export class OrcaServerSignIn {
     this.listeners.clear()
   }
 
-  private publish(): OrcaAccountServerStatus {
-    const status = this.status()
+  private async publish(): Promise<OrcaAccountServerStatus> {
+    const status = await this.status()
     for (const listener of this.listeners) {
       listener(status)
     }

@@ -82,7 +82,7 @@ describe('scoped Jira Cloud tokens over HTTP', () => {
     })
     const jira = await loadClient()
     await jira.connect({ ...CREDENTIAL, email: '' })
-    const client = jira.getClients()[0]
+    const client = (await jira.getClients())[0]
     if (!client) {
       throw new Error('Expected connected scoped Jira client')
     }

@@ -56,14 +56,35 @@ afterEach(() => {
 })
 
 describe('Connect Linear’s login on this Mac', () => {
+  it('finishes a pending login save before disconnect removes its workspace', async () => {
+    const { client, store } = await load()
+    const io = await import('../../credentials/credential-file-io')
+    const registry = await import('./linear-workspace-registry')
+    const stage = io.stageCredentialFile
+    const entered = Promise.withResolvers<void>()
+    const resume = Promise.withResolvers<void>()
+    vi.spyOn(io, 'stageCredentialFile').mockImplementationOnce(async (...args) => {
+      entered.resolve()
+      await resume.promise
+      return stage(...args)
+    })
+    const saving = store.keepConnectedLinearLogin(login(NOW + 20 * HOUR), linked)
+    await entered.promise
+    const clearing = client.disconnect('org-acme')
+    resume.resolve()
+    await Promise.all([saving, clearing])
+    expect(await store.readWorkspaceLogin('org-acme')).toBeNull()
+    expect((await registry.getWorkspaceFile()).workspaces).toEqual([])
+  })
+
   it('adds the workspace it signed in to and calls Linear as the person with it', async () => {
     const { client, store } = await load()
-    store.keepConnectedLinearLogin(login(NOW + 20 * HOUR), linked)
-    expect(client.getStatus()).toMatchObject({
+    await store.keepConnectedLinearLogin(login(NOW + 20 * HOUR), linked)
+    expect(await client.getStatus()).toMatchObject({
       connected: true,
       workspaces: [{ id: 'org-acme', organizationName: 'Acme', displayName: 'ada' }]
     })
-    expect(client.getClients('org-acme')[0]?.credential).toEqual({
+    expect((await client.getClients('org-acme'))[0]?.credential).toEqual({
       accessToken: 'lin_oauth_access_1',
       reauthorize: expect.any(Function)
     })
@@ -75,29 +96,29 @@ describe('Connect Linear’s login on this Mac', () => {
 
   it('leaves the active workspace where it was', async () => {
     const { client, store } = await load()
-    store.keepConnectedLinearLogin(login(NOW + 20 * HOUR), linked)
-    store.keepConnectedLinearLogin(login(NOW + 20 * HOUR), {
+    await store.keepConnectedLinearLogin(login(NOW + 20 * HOUR), linked)
+    await store.keepConnectedLinearLogin(login(NOW + 20 * HOUR), {
       ...linked,
       workspace: { id: 'org-beta', name: 'Beta', urlKey: 'beta' }
     })
-    expect(client.getStatus().activeWorkspaceId).toBe('org-acme')
+    expect((await client.getStatus()).activeWorkspaceId).toBe('org-acme')
   })
 
   it('uses a saved API key before the login', async () => {
     const { client, store, paths } = await load()
-    store.keepConnectedLinearLogin(login(NOW + 20 * HOUR), linked)
+    await store.keepConnectedLinearLogin(login(NOW + 20 * HOUR), linked)
     const { saveWorkspaceToken } = await import('./linear-token-store')
-    saveWorkspaceToken('org-acme', 'lin_api_key')
-    expect(client.getClients('org-acme')[0]?.credential).toEqual({ apiKey: 'lin_api_key' })
+    await saveWorkspaceToken('org-acme', 'lin_api_key')
+    expect((await client.getClients('org-acme'))[0]?.credential).toEqual({ apiKey: 'lin_api_key' })
     // Disconnecting the workspace forgets both.
-    client.disconnect('org-acme')
+    await client.disconnect('org-acme')
     expect(existsSync(paths.getWorkspaceLoginPath('org-acme'))).toBe(false)
-    expect(client.getStatus().connected).toBe(false)
+    expect((await client.getStatus()).connected).toBe(false)
   })
 
   it('stores the login encrypted, never as plain text', async () => {
     const { store, paths } = await load()
-    store.keepConnectedLinearLogin(login(NOW + 20 * HOUR), linked)
+    await store.keepConnectedLinearLogin(login(NOW + 20 * HOUR), linked)
     const { readFileSync } = await import('node:fs')
     expect(readFileSync(paths.getWorkspaceLoginPath('org-acme'), 'utf-8')).toMatch(/^sealed:/)
   })
@@ -112,7 +133,7 @@ describe('Refreshing the login', () => {
 
   it('refreshes a login near its end with the client id alone, and saves the rotated pair', async () => {
     const { store, refresh } = await load()
-    store.keepConnectedLinearLogin(login(NOW + HOUR / 2), linked)
+    await store.keepConnectedLinearLogin(login(NOW + HOUR / 2), linked)
     const request = answer(200, {
       access_token: 'lin_oauth_access_2',
       refresh_token: 'lin_refresh_2',
@@ -131,14 +152,14 @@ describe('Refreshing the login', () => {
       refresh_token: 'lin_refresh_1',
       client_id: 'client-1'
     })
-    expect(store.readWorkspaceLogin('org-acme')).toEqual({
+    expect(await store.readWorkspaceLogin('org-acme')).toEqual({
       ...login(NOW + 86_399_000, '2')
     })
   })
 
   it('leaves a login with hours left alone', async () => {
     const { store, refresh } = await load()
-    store.keepConnectedLinearLogin(login(NOW + 20 * HOUR), linked)
+    await store.keepConnectedLinearLogin(login(NOW + 20 * HOUR), linked)
     const request = answer(200, {})
     await refresh.refreshDueLinearLogins({ now: () => NOW, request })
     expect(request).not.toHaveBeenCalled()
@@ -146,18 +167,18 @@ describe('Refreshing the login', () => {
 
   it('forgets a login Linear refuses for good, so Orca says to connect again', async () => {
     const { client, store, refresh } = await load()
-    store.keepConnectedLinearLogin(login(NOW - HOUR), linked)
+    await store.keepConnectedLinearLogin(login(NOW - HOUR), linked)
     await refresh.refreshDueLinearLogins({
       now: () => NOW,
       request: answer(400, { error: 'invalid_grant' })
     })
-    expect(store.readWorkspaceLogin('org-acme')).toBeNull()
-    expect(client.getStatus().connected).toBe(false)
+    expect(await store.readWorkspaceLogin('org-acme')).toBeNull()
+    expect((await client.getStatus()).connected).toBe(false)
   })
 
   it('keeps the login when Linear can’t be reached or answers oddly', async () => {
     const { store, refresh } = await load()
-    store.keepConnectedLinearLogin(login(NOW - HOUR), linked)
+    await store.keepConnectedLinearLogin(login(NOW - HOUR), linked)
     await refresh.refreshLinearLogin('org-acme', {
       now: () => NOW,
       request: vi.fn(async () => {
@@ -168,18 +189,18 @@ describe('Refreshing the login', () => {
       now: () => NOW,
       request: answer(500, { error: 'server_error' })
     })
-    expect(store.readWorkspaceLogin('org-acme')).toEqual(login(NOW - HOUR))
+    expect(await store.readWorkspaceLogin('org-acme')).toEqual(login(NOW - HOUR))
   })
 
   it('stops counting as signed in once the last login or key for a workspace is gone', async () => {
     const { client, store, tokens } = await load()
-    store.keepConnectedLinearLogin(login(NOW + 20 * HOUR), linked)
-    tokens.saveWorkspaceToken('org-acme', 'lin_api_1')
+    await store.keepConnectedLinearLogin(login(NOW + 20 * HOUR), linked)
+    await tokens.saveWorkspaceToken('org-acme', 'lin_api_1')
     // A refresh Linear refused (invalid_grant) drops the login; the API key still signs in.
-    store.clearWorkspaceLogin('org-acme')
-    expect(client.getStatus().connected).toBe(true)
+    await store.clearWorkspaceLogin('org-acme')
+    expect((await client.getStatus()).connected).toBe(true)
     // With the key file gone too, the registered workspace no longer counts.
-    tokens.clearTokenFile('org-acme')
-    expect(client.getStatus()).toMatchObject({ connected: false, workspaces: [] })
+    await tokens.clearTokenFile('org-acme')
+    expect(await client.getStatus()).toMatchObject({ connected: false, workspaces: [] })
   })
 })

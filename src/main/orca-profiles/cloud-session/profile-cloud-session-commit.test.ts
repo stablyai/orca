@@ -97,8 +97,8 @@ function commit(
   })
 }
 
-function storedRefreshToken(): string | null {
-  const stored = readCloudSession(profileId, userDataPath)
+async function storedRefreshToken(): Promise<string | null> {
+  const stored = await readCloudSession(profileId, userDataPath)
   return stored.status === 'found' ? stored.session.refreshToken : null
 }
 
@@ -107,8 +107,8 @@ async function revokedTokens(): Promise<string[]> {
   return client.revokeOrcaCloudSession.mock.calls.map(([, session]) => session.refreshToken)
 }
 
-function signInAs(exchange: OrcaCloudSessionExchangeResponse): void {
-  signInCloudSession(profileId, userDataPath, exchange)
+async function signInAs(exchange: OrcaCloudSessionExchangeResponse): Promise<void> {
+  await signInCloudSession(profileId, userDataPath, exchange)
   linkOrcaProfileToCloud(profileId, exchange.cloud, userDataPath)
 }
 
@@ -117,7 +117,7 @@ function linkedUserId(): string | undefined {
 }
 
 describe('commitExchangedCloudSession', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     userDataPath = mkdtempSync(join(tmpdir(), 'orca-session-commit-'))
     installSealing({ kind: 'os-keychain' })
     client.revokeOrcaCloudSession.mockReset()
@@ -125,7 +125,7 @@ describe('commitExchangedCloudSession', () => {
     cleanup.failBeforeIndex = false
     cleanup.failAfterIndex = false
     profileId = ensureActiveOrcaProfile(userDataPath).profile.id
-    signInAs(exchangeFor('user-a', 'a-token'))
+    await signInAs(exchangeFor('user-a', 'a-token'))
   })
 
   afterEach(() => {
@@ -137,7 +137,7 @@ describe('commitExchangedCloudSession', () => {
       status: 'committed'
     })
 
-    const stored = readCloudSession(profileId, userDataPath)
+    const stored = await readCloudSession(profileId, userDataPath)
     expect(linkedUserId()).toBe('user-b')
     expect(stored.status === 'found' && stored.session.identity).toEqual({
       userId: 'user-b',
@@ -155,7 +155,7 @@ describe('commitExchangedCloudSession', () => {
     })
 
     expect(linkedUserId()).toBe('user-a')
-    expect(storedRefreshToken()).toBe('a-token')
+    expect(await storedRefreshToken()).toBe('a-token')
     expect(await revokedTokens()).toEqual(['b-token'])
   })
 
@@ -168,7 +168,7 @@ describe('commitExchangedCloudSession', () => {
     })
 
     expect(linkedUserId()).toBe('user-b')
-    expect(storedRefreshToken()).toBe('b-token')
+    expect(await storedRefreshToken()).toBe('b-token')
     expect(await revokedTokens()).toEqual(['a-token'])
     const active = ensureActiveOrcaProfile(userDataPath)
     await expect(readFreshOrcaCloudSession(config, active, userDataPath)).resolves.toMatchObject({
@@ -180,7 +180,7 @@ describe('commitExchangedCloudSession', () => {
   it('restores a pre-upgrade session under its own account, never as the new one', async () => {
     // Saved before sessions carried an identity.
     const legacy = exchangeFor('user-a', 'legacy-a')
-    saveOrcaCloudSession(profileId, userDataPath, {
+    await saveOrcaCloudSession(profileId, userDataPath, {
       accessToken: legacy.accessToken,
       refreshToken: legacy.refreshToken,
       expiresAt: legacy.expiresAt,
@@ -193,7 +193,7 @@ describe('commitExchangedCloudSession', () => {
       status: 'refused'
     })
 
-    const restored = readCloudSession(profileId, userDataPath)
+    const restored = await readCloudSession(profileId, userDataPath)
     expect(restored.status === 'found' && restored.session).toMatchObject({
       refreshToken: 'legacy-a',
       identity: { userId: 'user-a', cloudProfileId: 'cp-user-a' }
@@ -209,7 +209,7 @@ describe('commitExchangedCloudSession', () => {
       status: 'refused',
       error: 'EIO: profile index unreadable'
     })
-    expect(storedRefreshToken()).toBe('a-token')
+    expect(await storedRefreshToken()).toBe('a-token')
     expect(await revokedTokens()).toEqual(['b-token'])
   })
 
@@ -255,7 +255,7 @@ describe('commitExchangedCloudSession', () => {
     await expect(commit(exchangeFor('user-a', 'a2-token'))).resolves.toMatchObject({
       status: 'committed'
     })
-    expect(readCloudSession(profileId, userDataPath)).toMatchObject({
+    expect(await readCloudSession(profileId, userDataPath)).toMatchObject({
       status: 'found',
       persistence: 'memory-only'
     })
@@ -268,7 +268,7 @@ describe('commitExchangedCloudSession', () => {
     await expect(
       commit(exchangeFor('user-b', 'b-token'), { signal: cancelled.signal })
     ).resolves.toEqual({ status: 'cancelled' })
-    expect(storedRefreshToken()).toBe('a-token')
+    expect(await storedRefreshToken()).toBe('a-token')
     expect(await revokedTokens()).toEqual(['b-token'])
   })
 
@@ -294,7 +294,7 @@ describe('commitExchangedCloudSession', () => {
       status: 'refused',
       error: 'Links belong to A.'
     })
-    expect(storedRefreshToken()).toBe('a-token')
+    expect(await storedRefreshToken()).toBe('a-token')
     expect(mayCommit).toHaveBeenCalledWith({
       profileId,
       nextUserId: 'user-b',

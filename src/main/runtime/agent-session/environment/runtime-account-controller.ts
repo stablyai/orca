@@ -28,7 +28,6 @@ import type { CodexResetCreditExpectedScope } from '../../../../shared/agent-acc
 import type { CommitMessageAgentEnvironmentResolvers } from '../../../text-generation/execution/commit-message-agent-environment'
 import {
   getClaudeSelectionTargetForAccount,
-  getSelectedClaudeAccountIdForTarget,
   type ClaudeAccountSelectionTarget
 } from '../../../claude-accounts/selection/runtime-selection'
 import {
@@ -37,7 +36,10 @@ import {
 } from '../../../../shared/agent-launch/startup/host-account-launch-env'
 import type { HostClaudeProfileRefresh } from './host-claude-profile-refresh'
 import { HostAccountLaunchEnvState } from './host-account-launch-env-state'
-import { subscribeRuntimeAccountChanges } from './runtime-account-change-subscription'
+import {
+  selectedClaudeAccountId,
+  subscribeRuntimeAccountChanges
+} from './runtime-account-change-subscription'
 import type { ManagedAccountNameProvider } from '../../../../shared/agent-accounts/managed-account-display-names'
 
 export type RuntimeAccountServices = {
@@ -125,23 +127,27 @@ export class RuntimeAccountController {
     return this.services?.claudeAccounts.getRuntimeConfigDir(target) ?? null
   }
 
-  getSnapshot(): AccountsSnapshot {
+  getClaudeAccountsSnapshot(): ClaudeRateLimitAccountsState {
+    return this.requireServices().claudeAccounts.listAccounts()
+  }
+
+  async getSnapshot(): Promise<AccountsSnapshot> {
     const { claudeAccounts, codexAccounts, rateLimits } = this.requireServices()
     return {
       ...this.dataAccountsSnapshot(),
       claude: claudeAccounts.listAccounts(),
-      codex: codexAccounts.listAccounts(),
-      rateLimits: rateLimits.getState()
+      codex: await codexAccounts.listAccounts(),
+      rateLimits: await rateLimits.getState()
     }
   }
 
-  getStreamSnapshot(): AccountsSnapshot {
+  async getStreamSnapshot(): Promise<AccountsSnapshot> {
     const { claudeAccounts, codexAccounts, rateLimits } = this.requireServices()
     return {
       ...this.streamDataAccountsSnapshot(),
       claude: claudeAccounts.listAccounts(),
-      codex: codexAccounts.listAccounts(),
-      rateLimits: rateLimits.getState()
+      codex: await codexAccounts.listAccounts(),
+      rateLimits: await rateLimits.getState()
     }
   }
 
@@ -332,17 +338,4 @@ export class RuntimeAccountController {
     }
     return this.services
   }
-}
-
-function selectedClaudeAccountId(
-  state: ClaudeRateLimitAccountsState,
-  target: ClaudeAccountSelectionTarget
-): string | null {
-  return getSelectedClaudeAccountIdForTarget(
-    {
-      activeClaudeManagedAccountId: state.activeAccountId,
-      activeClaudeManagedAccountIdsByRuntime: state.activeAccountIdsByRuntime
-    },
-    target
-  )
 }

@@ -1,0 +1,98 @@
+import type {
+  OrcaCloudCapabilities,
+  OrcaCloudOrgSummary,
+  OrcaProfileCloudSummary,
+  OrcaProfileListState
+} from '../../../shared/orca-profiles/orca-profiles'
+import { linkOrcaProfileToCloud } from '../cloud-auth/profile-cloud-index'
+import { loadOrCreateProfileIndex } from '../profile-index-store'
+import { orcaCloudSessionKey, type OrcaCloudSession } from './profile-cloud-session-store'
+import type { OrcaCloudSessionExchangeResponse } from './profile-cloud-session-exchange'
+
+// All session reads/writes pass through this owner; callers request changes instead of replacing state.
+
+export type SessionOwnerState = {
+  // Sign-in/out fences older in-flight changes.
+  generation: number
+  fenceVersion: number
+  // Org changes invalidate old metadata replies, but their rotated tokens must still land.
+  linkVersion: number
+  // Ignore disk after sign-out even if deletion failed.
+  signedOut: boolean
+}
+
+export type CloudSessionTicket = { generation: number; linkVersion: number }
+
+export type CloudSessionServerReply = {
+  cloud?: OrcaProfileCloudSummary
+  organizations?: OrcaCloudOrgSummary[]
+  capabilities: OrcaCloudCapabilities
+}
+
+const owners = new Map<string, SessionOwnerState>()
+
+export function ownerOf(profileId: string, userDataPath: string): SessionOwnerState {
+  const key = orcaCloudSessionKey(profileId, userDataPath)
+  let owner = owners.get(key)
+  if (!owner) {
+    owner = { generation: 0, fenceVersion: 0, linkVersion: 0, signedOut: false }
+    owners.set(key, owner)
+  }
+  return owner
+}
+
+export function isSameOrgAsLink(
+  profileId: string,
+  userDataPath: string,
+  cloud: OrcaProfileCloudSummary
+): boolean {
+  const linked = loadOrCreateProfileIndex(userDataPath).profiles.find(
+    (profile) => profile.id === profileId
+  )?.cloud
+  return (linked?.activeOrgId ?? '') === (cloud.activeOrgId ?? '')
+}
+
+export function relink(
+  owner: SessionOwnerState,
+  profileId: string,
+  userDataPath: string,
+  cloud: OrcaProfileCloudSummary
+): OrcaProfileListState {
+  const orgChanged = !isSameOrgAsLink(profileId, userDataPath, cloud)
+  const list = linkOrcaProfileToCloud(profileId, cloud, userDataPath)
+  if (orgChanged) {
+    owner.linkVersion++
+  }
+  return list
+}
+
+/** Take before requests whose replies mutate the session. */
+export function takeCloudSessionTicket(
+  profileId: string,
+  userDataPath: string
+): CloudSessionTicket {
+  const owner = ownerOf(profileId, userDataPath)
+  return { generation: owner.generation, linkVersion: owner.linkVersion }
+}
+
+export function sessionFromExchange(exchange: OrcaCloudSessionExchangeResponse): OrcaCloudSession {
+  return {
+    accessToken: exchange.accessToken,
+    refreshToken: exchange.refreshToken,
+    expiresAt: exchange.expiresAt,
+    organizations: exchange.organizations,
+    capabilities: exchange.capabilities,
+    identity: { userId: exchange.cloud.userId, cloudProfileId: exchange.cloud.cloudProfileId }
+  }
+}
+
+export function invalidateCloudSessionChanges(profileId: string, userDataPath: string): void {
+  const owner = ownerOf(profileId, userDataPath)
+  owner.fenceVersion++
+  advanceCloudSessionGeneration(owner)
+}
+
+export function advanceCloudSessionGeneration(owner: SessionOwnerState): void {
+  owner.generation++
+  owner.linkVersion++
+}

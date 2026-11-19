@@ -95,13 +95,13 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const codexProvenance = codexFetchGated
       ? null
       : this.getCodexProvenance(codexTarget, codexHomePath)
-    const openCodeGoConfig = this.resolveOpenCodeGoConfig()
+    const openCodeGoConfig = await this.resolveOpenCodeGoConfig()
     const cookie = openCodeGoConfig.sessionCookie
     const workspaceIdOverride = openCodeGoConfig.workspaceIdOverride
     const openCodeGoApiKey = openCodeGoConfig.apiKey
     const openCodeGoApiKeyError = openCodeGoConfig.apiKeyError
     const openCodeGoApiKeyReadSkipped = openCodeGoConfig.apiKeyReadSkipped
-    const miniMaxConfigResult = this.resolveMiniMaxConfig()
+    const miniMaxConfigResult = await this.resolveMiniMaxConfig()
     const miniMaxCookie = miniMaxConfigResult.config.sessionCookie
     const miniMaxGroupId = miniMaxConfigResult.config.groupId
     const miniMaxModels = miniMaxConfigResult.config.models
@@ -132,7 +132,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     }
     const miniMaxGeneration = this.minimaxFetchGeneration
 
-    const zcodePlanConfigResult = this.resolveZcodePlanConfig()
+    const zcodePlanConfigResult = await this.resolveZcodePlanConfig()
     const zcodePlanApiKey = zcodePlanConfigResult.config.apiKey
     // Hash credentials because only changes matter, never retain the raw key here.
     const currentZcodeConfigHash = zcodePlanApiKey

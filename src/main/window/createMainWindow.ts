@@ -182,7 +182,7 @@ export function createMainWindow(
 
   // Unlike query-session-end, session-end cannot be canceled before this signal is recorded.
   if (process.platform === 'win32') {
-    mainWindow.on('session-end', (event) => {
+    mainWindow.on('session-end', async (event) => {
       markSystemSessionEnding()
       // Record positive OS shutdown evidence; task-kill and shutdown tree deaths otherwise look identical.
       recordDurableCrashBreadcrumb('system_session_end', {
@@ -190,7 +190,7 @@ export function createMainWindow(
           ? event.reasons.filter((reason) => typeof reason === 'string').join(',')
           : ''
       })
-      flushUnsavedCloudSessions()
+      await flushUnsavedCloudSessions()
       // Windows emits no will-quit for an OS shutdown or logoff, so its teardown never records it.
       recordAgentSessionRuntimeEnd('quit')
     })

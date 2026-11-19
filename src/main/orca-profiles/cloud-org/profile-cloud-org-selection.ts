@@ -17,11 +17,11 @@ export async function selectCloudOrg(input: {
 }): Promise<OrcaProfileListState | null> {
   const profileId = input.active.profile.id
   const cloud = input.active.profile.cloud
-  const stored = readCloudSession(profileId, input.userDataPath)
+  const stored = await readCloudSession(profileId, input.userDataPath)
   if (!cloud || stored.status !== 'found') {
     return null
   }
-  const ticket = beginCloudSessionRelink(profileId, input.userDataPath)
+  const ticket = await beginCloudSessionRelink(profileId, input.userDataPath)
   let selected
   try {
     selected = await selectOrcaCloudOrg(input.config, stored.session, input.orgId)
@@ -47,7 +47,7 @@ export async function selectCloudOrg(input: {
   ) {
     throw new Error('orca_cloud_org_selection_identity_mismatch')
   }
-  const list = commitCloudSessionRelink(profileId, input.userDataPath, ticket, selected)
+  const list = await commitCloudSessionRelink(profileId, input.userDataPath, ticket, selected)
   if (!list) {
     throw new Error('stale_cloud_session_mutation')
   }

@@ -148,7 +148,7 @@ export function registerOrcaProfileHandlers(
     multiProfileUi: isMultiProfileUiEnabled()
   }))
 
-  ipcMain.handle('orcaProfiles:authStatus', (): OrcaProfileAuthStatus =>
+  ipcMain.handle('orcaProfiles:authStatus', (): Promise<OrcaProfileAuthStatus> =>
     orcaAccount.getAuthStatus()
   )
 

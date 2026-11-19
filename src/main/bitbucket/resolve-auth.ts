@@ -30,14 +30,14 @@ export function storedAuthConfig(
 }
 
 // Preserve environment auth precedence; decrypt stored secrets only for API calls.
-export function resolveBitbucketAuthConfig(): BitbucketAuthConfig {
+export async function resolveBitbucketAuthConfig(): Promise<BitbucketAuthConfig> {
   const env = getEnvAuthConfig()
   if (hasAuth(env)) {
     return env
   }
   try {
-    const secret = loadStoredBitbucketSecret({ force: true })
-    return secret ? storedAuthConfig(getStoredBitbucketMetadata(), secret) : env
+    const secret = await loadStoredBitbucketSecret({ force: true })
+    return secret ? storedAuthConfig(await getStoredBitbucketMetadata(), secret) : env
   } catch {
     return env
   }

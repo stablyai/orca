@@ -116,7 +116,7 @@ describe('ArtifactCloudService record authorization', () => {
     const pending = service.share(writeRequest)
     await vi.waitFor(() => expect(resolvePost).toBeTypeOf('function'))
 
-    signOutCloudSession(profileId, userDataPath)
+    await signOutCloudSession(profileId, userDataPath)
     unlinkOrcaProfileFromCloud(profileId, userDataPath)
     linkOrcaProfileToCloud(profileId, cloudB, userDataPath)
     resolvePost?.(createResponse())

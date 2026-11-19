@@ -56,17 +56,21 @@ export class RateLimitService extends RateLimitServiceAccountRefresh {
 
   setOpenCodeGoConfigResolver(
     resolver: () => OpenCodeGoRateLimitConfig,
-    apiKeyResolver?: () => string | null
+    apiKeyResolver?: () => string | null | Promise<string | null>
   ): void {
     this.openCodeGoConfigResolver = resolver
     this.openCodeGoApiKeyResolver = apiKeyResolver ?? null
   }
 
-  setMiniMaxConfigResolver(resolver: () => MiniMaxRateLimitConfig): void {
+  setMiniMaxConfigResolver(
+    resolver: () => MiniMaxRateLimitConfig | Promise<MiniMaxRateLimitConfig>
+  ): void {
     this.miniMaxConfigResolver = resolver
   }
 
-  setZcodePlanConfigResolver(resolver: () => ZcodePlanRateLimitConfig): void {
+  setZcodePlanConfigResolver(
+    resolver: () => ZcodePlanRateLimitConfig | Promise<ZcodePlanRateLimitConfig>
+  ): void {
     this.zcodePlanConfigResolver = resolver
   }
 
@@ -205,15 +209,17 @@ export class RateLimitService extends RateLimitServiceAccountRefresh {
     this.mainWindow = null
   }
 
-  getState(): RateLimitState {
+  async getState(): Promise<RateLimitState> {
+    const [minimaxCookieConfigured, minimaxApiKeyConfigured, zcodePlanApiKeyConfigured] =
+      await Promise.all([hasMiniMaxSessionCookie(), hasMiniMaxApiKey(), hasZcodePlanApiKey()])
     this.pruneInactiveClaudeState()
     this.pruneInactiveCodexState()
     return {
       ...this.state,
       // Filesystem-stored cookie presence keeps MiniMax visible across renderer reloads.
-      minimaxCookieConfigured: hasMiniMaxSessionCookie(),
-      minimaxApiKeyConfigured: hasMiniMaxApiKey(),
-      zcodePlanApiKeyConfigured: hasZcodePlanApiKey(),
+      minimaxCookieConfigured,
+      minimaxApiKeyConfigured,
+      zcodePlanApiKeyConfigured,
       opencodeGoApiKeyConfigured: this.openCodeGoApiKeyConfigured,
       grokAuthConfigured: this.grokAuthConfigured,
       cursorAuthConfigured: this.cursorAuthConfigured,

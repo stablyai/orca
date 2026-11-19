@@ -86,20 +86,38 @@ export const ORCA_ACCOUNT_METHODS = [
     params: null,
     handler: async (_params, { runtime, connectionId }, emit) => {
       const account = server()
-      await new Promise<void>((resolve) => {
-        const unsubscribe = account.onChanged((status) => emit({ type: 'status', status }))
-        const subscriptionId = `orca-account-${connectionId ?? 'inproc'}-${++subscriptionSeq}`
-        runtime.registerSubscriptionCleanup(
-          subscriptionId,
-          () => {
-            unsubscribe()
-            emit({ type: 'end' })
-            resolve()
-          },
-          connectionId
-        )
-        emit({ type: 'ready', subscriptionId, status: account.status() })
+      const stopped = Promise.withResolvers<void>()
+      let active = true
+      let ready = false
+      let latest: Awaited<ReturnType<typeof account.status>> | undefined
+      const unsubscribe = account.onChanged((status) => {
+        if (ready) {
+          emit({ type: 'status', status })
+        } else {
+          latest = status
+        }
       })
+      const subscriptionId = `orca-account-${connectionId ?? 'inproc'}-${++subscriptionSeq}`
+      runtime.registerSubscriptionCleanup(
+        subscriptionId,
+        () => {
+          active = false
+          unsubscribe()
+          emit({ type: 'end' })
+          stopped.resolve()
+        },
+        connectionId
+      )
+      try {
+        const status = await account.status()
+        if (active) {
+          emit({ type: 'ready', subscriptionId, status: latest ?? status })
+          ready = true
+        }
+        await stopped.promise
+      } finally {
+        runtime.cleanupSubscription(subscriptionId)
+      }
     }
   }),
   defineMethod({

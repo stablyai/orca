@@ -4,10 +4,10 @@ import { getOrcaCloudAuthConfig, isOrcaCloudDevAuthEnabled } from './profile-clo
 import { readCloudSession } from '../cloud-session/profile-cloud-session-owner'
 import { sessionBelongsToProfile } from '../cloud-session/profile-cloud-session-identity'
 
-export function getOrcaProfileAuthStatusFromProfile(
+export async function getOrcaProfileAuthStatusFromProfile(
   active: ActiveOrcaProfileState,
   userDataPath: string
-): OrcaProfileAuthStatus {
+): Promise<OrcaProfileAuthStatus> {
   const configState = getOrcaCloudAuthConfig()
   const devAuthEnabled = isOrcaCloudDevAuthEnabled()
   const configured = configState.configured || devAuthEnabled
@@ -22,7 +22,7 @@ export function getOrcaProfileAuthStatusFromProfile(
     }
   }
 
-  const session = readCloudSession(active.profile.id, userDataPath)
+  const session = await readCloudSession(active.profile.id, userDataPath)
   if (!configured) {
     return {
       activeProfileId: active.profile.id,

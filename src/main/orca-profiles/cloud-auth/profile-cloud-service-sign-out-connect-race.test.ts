@@ -126,10 +126,12 @@ describe('Orca cloud sign-out vs newer connect', () => {
     await expect(connectCurrentOrcaProfile(userDataPath, openNoBrowser)).resolves.toMatchObject({
       status: 'connected'
     })
-    expect(getCurrentOrcaProfileAuthStatus(userDataPath).cloud?.email).toBe('ada@example.com')
+    expect((await getCurrentOrcaProfileAuthStatus(userDataPath)).cloud?.email).toBe(
+      'ada@example.com'
+    )
     finishRevoke()
     await expect(signingOut).resolves.toMatchObject({ status: 'signed-out' })
-    expect(getCurrentOrcaProfileAuthStatus(userDataPath)).toMatchObject({
+    expect(await getCurrentOrcaProfileAuthStatus(userDataPath)).toMatchObject({
       state: 'connected',
       cloud: { email: 'ada@example.com' }
     })

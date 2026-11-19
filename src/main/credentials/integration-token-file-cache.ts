@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs'
+import { inCredentialFileOrder } from './credential-file-io'
+import { readFile } from 'node:fs/promises'
 import type { IntegrationCredentialService } from '../../shared/secure-storage/integration-credential-errors'
 import {
   CredentialDecryptionError,
@@ -18,12 +19,12 @@ export function createIntegrationTokenFileCache(args: {
   filePath: (id: string) => string
 }) {
   const entries = new Map<string, IntegrationStateFileCache<TokenFileState>>()
-  const stateFor = (id: string): TokenFileState => {
+  const stateFor = async (id: string): Promise<TokenFileState> => {
     let entry = entries.get(id)
     if (!entry) {
       entry = createIntegrationStateFileCache<TokenFileState>({
         filePath: () => args.filePath(id),
-        readFromDisk: () => ({ present: credentialFileHasContent(args.filePath(id)) })
+        readFromDisk: async () => ({ present: await credentialFileHasContent(args.filePath(id)) })
       })
     }
     entries.delete(id)
@@ -37,34 +38,49 @@ export function createIntegrationTokenFileCache(args: {
     }
     return entry.get()
   }
+  async function readToken(id: string, force = true): Promise<string | null> {
+    // Stamp before decrypting so a concurrent rotation cannot pin older bytes as current.
+    const state = await stateFor(id)
+    if (state.token !== undefined) {
+      return state.token
+    }
+    if (!force || !state.present) {
+      return null
+    }
+    try {
+      const token = readStoredCredentialToken(args.service, await readFile(args.filePath(id)))
+      if ((await stateFor(id)) !== state) {
+        return readToken(id, force)
+      }
+      state.token = token ?? undefined
+      state.error = undefined
+      return token
+    } catch (error) {
+      if ((await stateFor(id)) !== state) {
+        return readToken(id, force)
+      }
+      if (error instanceof CredentialDecryptionError) {
+        state.error = error.message
+        throw error
+      }
+      return null
+    }
+  }
   return {
-    has(id: string): boolean {
-      return stateFor(id).present
+    async has(id: string): Promise<boolean> {
+      return inCredentialFileOrder(
+        `${args.filePath(id)}.mutation`,
+        async () => (await stateFor(id)).present
+      )
     },
-    read(id: string, force = true): string | null {
-      // Stamp before decrypting so a concurrent rotation cannot pin older bytes as current.
-      const state = stateFor(id)
-      if (state.token !== undefined) {
-        return state.token
-      }
-      if (!force || !state.present) {
-        return null
-      }
-      try {
-        const token = readStoredCredentialToken(args.service, readFileSync(args.filePath(id)))
-        state.token = token ?? undefined
-        state.error = undefined
-        return token
-      } catch (error) {
-        if (error instanceof CredentialDecryptionError) {
-          state.error = error.message
-          throw error
-        }
-        return null
-      }
+    read(id: string, force = true): Promise<string | null> {
+      return inCredentialFileOrder(`${args.filePath(id)}.mutation`, () => readToken(id, force))
     },
-    error(id: string): string | undefined {
-      return stateFor(id).error
+    async error(id: string): Promise<string | undefined> {
+      return inCredentialFileOrder(
+        `${args.filePath(id)}.mutation`,
+        async () => (await stateFor(id)).error
+      )
     },
     forget(id: string): void {
       entries.delete(id)

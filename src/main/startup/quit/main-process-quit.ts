@@ -63,7 +63,6 @@ function installBeforeQuitHandler(): void {
       })
     }
     state.isQuitting = true
-    flushUnsavedCloudSessions()
     fenceMainProcessCloudOnQuit()
     state.runtimeRpc?.setMobileRelayPairingProvider(null)
     state.unsubscribeAgentAwakeStatusChanges?.()
@@ -307,6 +306,7 @@ function installWillQuitHandler(): void {
       .catch(() => {
         /* swallow — telemetry must never prevent app.quit() */
       })
+      .then(() => flushUnsavedCloudSessions())
       // Last before quitting, so it saves every extension write accepted during teardown.
       .then(() =>
         Promise.all([

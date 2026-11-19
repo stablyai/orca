@@ -125,9 +125,13 @@ export abstract class RateLimitServiceState {
     wslDistro: null
   }
   protected openCodeGoConfigResolver: (() => OpenCodeGoRateLimitConfig) | null = null
-  protected openCodeGoApiKeyResolver: (() => string | null) | null = null
-  protected miniMaxConfigResolver: (() => MiniMaxRateLimitConfig) | null = null
-  protected zcodePlanConfigResolver: (() => ZcodePlanRateLimitConfig) | null = null
+  protected openCodeGoApiKeyResolver: (() => string | null | Promise<string | null>) | null = null
+  protected miniMaxConfigResolver:
+    | (() => MiniMaxRateLimitConfig | Promise<MiniMaxRateLimitConfig>)
+    | null = null
+  protected zcodePlanConfigResolver:
+    | (() => ZcodePlanRateLimitConfig | Promise<ZcodePlanRateLimitConfig>)
+    | null = null
   protected geminiCliOAuthEnabledResolver: GeminiCliOAuthEnabledResolver | null = null
   protected claudeOAuthUsageEnabledResolver: ClaudeOAuthUsageEnabledResolver | null = null
   protected antigravityUsageEnabledResolver: AntigravityUsageEnabledResolver | null = null
@@ -158,7 +162,7 @@ export abstract class RateLimitServiceState {
     }
   }
 
-  protected abstract getState(): RateLimitState
+  protected abstract getState(): Promise<RateLimitState>
 
   protected buildInactiveArray(
     cache: Map<string, ProviderRateLimits>,
@@ -205,11 +209,17 @@ export abstract class RateLimitServiceState {
 
   protected updateState(next: InternalRateLimitState): void {
     this.state = next
-    this.pushToRenderer()
+    void this.pushToRenderer().catch((error: unknown) =>
+      console.warn('[rate-limits] Failed to publish usage state', error)
+    )
   }
 
-  protected pushToRenderer(): void {
-    const state = this.getState()
+  protected async pushToRenderer(): Promise<void> {
+    const snapshot = this.state
+    const state = await this.getState()
+    if (this.state !== snapshot) {
+      return
+    }
     for (const listener of this.stateListeners) {
       try {
         listener(state)
