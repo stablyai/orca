@@ -16,9 +16,9 @@ import {
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'
 import type { BotAvatarOutfit } from '../../../../../shared/bots/bot-avatar-outfit'
+import { useSaveOnClose } from './use-save-on-close'
 
 type BotLookUpdate = Pick<BotUpdateParams['updates'], 'avatarColor' | 'avatarOutfit'>
-import { useSaveOnClose } from './use-save-on-close'
 
 export const BOT_PICTURE_SAVE_DELAY_MS = 500
 
