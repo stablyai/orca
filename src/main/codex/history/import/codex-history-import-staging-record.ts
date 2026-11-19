@@ -1,8 +1,9 @@
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { readFile, rm } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { lstatIfPresent } from '../../../filesystem/merged-directory-link'
 import { removeStagedCopy } from '../rollouts/codex-rollout-staged-copy'
+import { replaceImportFile } from './codex-history-import-ledger'
 
 const STAGED_IMPORT = /^\.orca-import-[^-]+-.+\.tmp$/
 // Staged copies accumulate here only while removals keep failing; at this many, staging stops.
@@ -29,8 +30,7 @@ async function writeRecord(recordPath: string, staged: string[]): Promise<void> 
     await rm(recordPath, { force: true })
     return
   }
-  await mkdir(dirname(recordPath), { recursive: true })
-  await writeFile(recordPath, `${staged.join('\n')}\n`)
+  await replaceImportFile(recordPath, `${staged.join('\n')}\n`)
 }
 
 /**

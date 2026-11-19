@@ -114,16 +114,21 @@ export function hasUnsavedImportLedger(path: string): boolean {
   return unsaved.has(path)
 }
 
-export async function writeImportLedger(path: string, ledger: ImportLedger): Promise<void> {
-  unsaved.add(path)
+/** Replaces `path` whole, so a crash mid-write leaves the previous contents. */
+export async function replaceImportFile(path: string, contents: string): Promise<void> {
   await mkdir(dirname(path), { recursive: true })
   const temporary = `${path}.${process.pid}.tmp`
   try {
-    await writeFile(temporary, JSON.stringify(ledger))
+    await writeFile(temporary, contents)
     await renameFileWithWindowsRetryAsync(temporary, path)
   } catch (error) {
     await rm(temporary, { force: true })
     throw error
   }
+}
+
+export async function writeImportLedger(path: string, ledger: ImportLedger): Promise<void> {
+  unsaved.add(path)
+  await replaceImportFile(path, JSON.stringify(ledger))
   unsaved.delete(path)
 }

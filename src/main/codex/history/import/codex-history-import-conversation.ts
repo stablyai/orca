@@ -29,7 +29,7 @@ export type ConversationCopy = {
 /**
  * Stages one conversation's copy outside the history queue, then publishes it with a short job in
  * it. `refused`: nothing joined the store and a later pass tries again (its source failed or
- * changed, a deletion came, or the setting changed). `failed`: the store refused a write.
+ * changed, a deletion came, or the setting changed). `failed`: the store refused a write, or the staging record is full.
  */
 export async function copyConversationIntoStore(
   args: CodexHistoryImportArgs,

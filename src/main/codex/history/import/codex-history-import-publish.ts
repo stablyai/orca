@@ -26,7 +26,7 @@ export type StagedImport = {
 
 /**
  * `refused`: published nothing, and the conversation stays unhandled for a later pass.
- * `store-holds`: the store already has a form of it. `failed`: the store refused a write.
+ * `store-holds`: the store already has a form of it. `failed`: the store refused a write, or the staging record is full.
  */
 export type ImportPublishOutcome = 'copied' | 'existing' | 'store-holds' | 'refused' | 'failed'
 
