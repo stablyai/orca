@@ -24,6 +24,7 @@ const REPAINT_DEBOUNCE_MS = 150
 // Why: a trailing debounce alone never fires while an agent streams edits into the file.
 const REPAINT_MAX_WAIT_MS = 500
 const MAX_GUTTER_LINES = 20_000
+const BASELINE_RETRY_DELAYS_MS = [2000, 8000, 30_000] as const
 
 function readOverviewRulerColors(): GitChangeOverviewRulerColors {
   const styles = getComputedStyle(document.documentElement)
@@ -47,6 +48,43 @@ async function readGitHeadBaseline(fileId: string): Promise<GitHeadBaseline> {
     { filePath: file.relativePath, staged: false, compareAgainstHead: true }
   )
   return toGitHeadBaseline(result)
+}
+
+/** Returns a cancel that drops pending results and retries. */
+function loadBaselineWithRetry(
+  baselineKey: string,
+  fileId: string,
+  onBaseline: (baseline: GitHeadBaseline) => void
+): () => void {
+  let cancelled = false
+  let retryTimer: ReturnType<typeof setTimeout> | null = null
+  const load = (attempt: number): void => {
+    loadGitHeadBaseline(baselineKey, () => readGitHeadBaseline(fileId)).then(
+      (loaded) => {
+        if (!cancelled) {
+          onBaseline(loaded)
+        }
+      },
+      () => {
+        if (cancelled) {
+          return
+        }
+        // Why: the gutter is ambient; an unreadable baseline drops the marks without an error surface.
+        onBaseline(null)
+        // Why: a remote read can fail while the connection recovers, and nothing else reloads the same key.
+        if (attempt < BASELINE_RETRY_DELAYS_MS.length) {
+          retryTimer = setTimeout(() => load(attempt + 1), BASELINE_RETRY_DELAYS_MS[attempt])
+        }
+      }
+    )
+  }
+  load(0)
+  return () => {
+    cancelled = true
+    if (retryTimer !== null) {
+      clearTimeout(retryTimer)
+    }
+  }
 }
 
 /** Marks buffer lines that differ from HEAD. Disabled, it reads no Git and computes no diffs. */
@@ -107,24 +145,8 @@ export function useMonacoGitChangeGutter(params: {
       setBaseline(cached)
       return
     }
-    let superseded = false
     // Why: the previous baseline stays painted until the new one lands, so marks do not blink over SSH.
-    loadGitHeadBaseline(baselineKey, () => readGitHeadBaseline(fileId)).then(
-      (loaded) => {
-        if (!superseded) {
-          setBaseline(loaded)
-        }
-      },
-      () => {
-        // Why: the gutter is ambient; an unreadable baseline drops the marks without an error surface.
-        if (!superseded) {
-          setBaseline(null)
-        }
-      }
-    )
-    return () => {
-      superseded = true
-    }
+    return loadBaselineWithRetry(baselineKey, fileId, setBaseline)
   }, [baselineKey, fileId])
 
   useEffect(() => {
