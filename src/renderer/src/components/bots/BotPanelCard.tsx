@@ -1,4 +1,4 @@
-// One section of a bot's panel: a heading lined up with the rows' icons, over a card of rows.
+// One section of a bot's panel: a heading over a card of rows.
 import { useId } from 'react'
 import { cn } from '@/lib/class-names'
 import type { BotPanelFold } from './use-bot-panel-fold'
@@ -51,8 +51,13 @@ export function BotPanelCard({
   )
   return (
     <section ref={ref} className={cn('flex flex-col gap-1', className)}>
-      {/* Card border 1px + card padding 4px + row padding 8px: the heading starts where row icons do. */}
-      <div className="flex min-h-6 items-center justify-between gap-2 pr-[9px] pl-[13px]">
+      {/* The fold arrow leads, as on the items groups; a card without one keeps its title in line. */}
+      <div
+        className={cn(
+          'flex min-h-6 items-center justify-between gap-2 pr-[9px]',
+          fold ? 'pl-1' : 'pl-5'
+        )}
+      >
         <h3 className="flex min-w-0 items-center text-xs font-semibold text-foreground">
           {fold ? (
             <button
@@ -62,8 +67,8 @@ export function BotPanelCard({
               onClick={() => fold.onOpenChange(!open)}
               className="group/fold flex min-h-6 min-w-0 items-center gap-1 rounded-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
-              {label}
               <BotFoldChevron open={open} className="size-3 group-hover/fold:text-foreground" />
+              {label}
             </button>
           ) : (
             <span className="flex min-h-6 items-center gap-1">{label}</span>

@@ -80,7 +80,12 @@ export function createBotChatSearchHook({
       }
       // The last answer stays up while the next is asked, so rows don't blank between keys.
       return {
-        hits: answer ? botChatSearchHits(answer.result) : [],
+        hits: answer
+          ? botChatSearchHits(
+              answer.result,
+              chats.find((chat) => chat.origin === 'home' && !chat.closed) ?? null
+            )
+          : [],
         more: answer?.result.more ?? 0,
         pending,
         failed: false,

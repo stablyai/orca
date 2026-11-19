@@ -66,12 +66,14 @@ export class PeerMailRelay {
     private readonly transport: () => OrchestrationEnvironmentTransport | null
   ) {}
 
-  ensure(): void {
+  ensure(targetEnvironmentId?: string): void {
     if (!this.transport()) {
       return
     }
     const db = this.runtime.getOrchestrationDb()
-    for (const environmentId of peerMailRelayEnvironments(db)) {
+    for (const environmentId of targetEnvironmentId === undefined
+      ? peerMailRelayEnvironments(db)
+      : [targetEnvironmentId]) {
       const current = this.loops.get(environmentId)
       if (current && !current.stopped && current.db === db) {
         continue

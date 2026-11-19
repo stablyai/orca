@@ -159,6 +159,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
 
   private botSessionHooks: BotSessionHooks = {
     turnEnded: () => {},
+    requestFailed: () => {},
     groupRoomOf: () => null,
     recentChats: async () => null,
     unansweredQuestionNote: async () => null,
@@ -273,7 +274,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
         chats: botChatJournal(),
         work: this.botWork,
         lookAround: this.lookAround,
-        requestTurnEnded: (sessionId) => this.botSessions.turnEnded(sessionId),
+        requestTurnEnded: (sessionId, ended) => this.botSessions.turnEnded(sessionId, ended),
         recentChats: (botId, sessionId, message) =>
           this.botSessions.recentChats(botId, sessionId, message),
         unansweredQuestionNote: (sessionId) => this.botSessions.unansweredQuestionNote(sessionId),

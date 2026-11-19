@@ -57,6 +57,16 @@ export function chatThatTookIt(sent: {
   }
 }
 
+/** The Home Chat may be linked to another conversation: a wait's answer for its gone chat's thread
+ *  must not post there. */
+function withoutConversation(run: BotRunFields | undefined): BotRunFields | undefined {
+  if (!run?.automationRun?.toConversation) {
+    return run
+  }
+  const { toConversation: _dropped, ...automationRun } = run.automationRun
+  return { ...run, automationRun }
+}
+
 export function botAutomationSessions(
   deps: BotAutomationSessionDependencies
 ): Omit<BotAutomationSessions, 'release'> {
@@ -86,7 +96,9 @@ export function botAutomationSessions(
     sendToBotChat: async (bot, chatId, text, run, homeIfGone) => {
       const chat = await deps.chatTakingMail(bot, chatId)
       if (!chat && homeIfGone) {
-        return chatThatTookIt(await deps.chats.sendToChat(bot.id, text, undefined, run))
+        return chatThatTookIt(
+          await deps.chats.sendToChat(bot.id, text, undefined, withoutConversation(run))
+        )
       }
       if (!chat) {
         throw new Error(botChatGone(bot.name, chatId))

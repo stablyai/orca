@@ -5,7 +5,7 @@ import type {
   JiraIssueListFilters,
   JiraSiteSelection
 } from '../../shared/jira/jira-types'
-import { buildJiraPresetJql } from '../../shared/jira/jira-preset-jql'
+import { buildJiraPresetJql, searchJiraPreset } from '../../shared/jira/jira-preset-jql'
 import { acquire, release } from './request-queue'
 import { apiBasePath, jiraRequest, type JiraClientForSite } from './authenticated-request'
 import { clearToken, getClients, isAuthError } from './client'
@@ -43,8 +43,13 @@ async function readIssuesForClient(
   if ('jql' in query) {
     return searchIssuesForClient(entry, query.jql, limit, agileFields, signal)
   }
+  if (entry.site.authType === 'server') {
+    return searchJiraPreset(query.filter, query.filters, (jql) =>
+      searchIssuesForClient(entry, jql, limit, agileFields, signal)
+    )
+  }
   const jql = buildJiraPresetJql(query.filter, query.filters)
-  if (query.filter !== 'all' || entry.site.authType === 'server') {
+  if (query.filter !== 'all') {
     return searchIssuesForClient(entry, jql, limit, agileFields, signal)
   }
   const projects = await readProjectsForClient(entry, signal, true)

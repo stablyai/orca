@@ -278,7 +278,18 @@ const transcript = [
     'bot',
     bulk.map((entry) => moved(entry, 'planned', 'working'))
   ),
-  words('t2', 'assistant', 'Reopened the token fix and started everything.')
+  words('t2', 'assistant', 'Reopened the token fix and started everything.'),
+  notes('t2', { kind: 'chat', chatId: 'chat-2', title: 'Release prep' }, [
+    moved(exp, 'planned', 'working')
+  ]),
+  notes('t2', 'owner', [
+    {
+      ...exp,
+      status: 'working',
+      event: 'commented',
+      text: 'Is this the same timeout as last week?'
+    }
+  ])
 ]
 
 const context: NativeChatTranscriptRowContext = {
@@ -288,6 +299,7 @@ const context: NativeChatTranscriptRowContext = {
   expandedTurnIds: new Set(),
   onToggleExpandedTurn: () => {},
   onScrollMessageToTop: () => {},
+  readerAtEnd: () => true,
   onRevealDiff: () => {}
 }
 

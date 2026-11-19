@@ -30,6 +30,7 @@ import {
 import type { MobileGitStatusEntry } from './git/git-status-reply-schema'
 import { getMobileCommitFailureStagedEntries } from './commits/mobile-commit-failure-recovery'
 import { useMobileSourceControlCommitFailure } from './commits/use-mobile-source-control-commit-failure'
+import { useMobileSourceControlAiEnabled } from './commits/use-mobile-source-control-ai-enabled'
 import {
   buildMobileGitStatusEntryViews,
   formatBranchLabel,
@@ -85,6 +86,14 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     onStatusLoadSuccess: clearCommitFailureRecovery
   })
   const { screenState, branchCompareState, mountedRef, setRootRef, loadStatus, settings } = loaders
+  const commitMessageAiEnabled = useMobileSourceControlAiEnabled({
+    hostId,
+    client,
+    connState,
+    worktreeId,
+    executionHost,
+    hostEnabled: settings.sourceControlAiEnabled
+  })
 
   const { router, openDiffForFile } = useMobileSourceControlOpeners({ hostId, worktreeId, name })
 
@@ -220,6 +229,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     commitMessage,
     setCommitMessage,
     generatingMessage,
+    commitMessageAiEnabled,
     showBranchPicker,
     setShowBranchPicker,
     localBranches,

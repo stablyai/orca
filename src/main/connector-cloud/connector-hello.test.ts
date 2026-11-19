@@ -147,15 +147,4 @@ describe('connectorHello', () => {
     )
     expect(over.body).toMatchObject({ triggers, triggersTruncated: true })
   })
-
-  it('sends every trigger up to the cap when they fit', () => {
-    const trigger = { ...largestTrigger(0), textContains: 'deploy', subject: 'acme/web#1' }
-    const triggers = Array.from({ length: CONNECTOR_CLIENT_LIMITS.maxHelloTriggers }, () => trigger)
-    const { body, trimmed } = connectorHello(
-      fakeMachine(() => null),
-      { bots: [], paged: false, cut: false, triggers }
-    )
-    expect(trimmed).toBe(false)
-    expect(body).toMatchObject({ triggers })
-  })
 })

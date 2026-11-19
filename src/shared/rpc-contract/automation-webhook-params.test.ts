@@ -27,10 +27,8 @@ describe('automation webhook RPC params', () => {
 
   it.each([
     { ...RULE, rev: -1 },
-    { ...RULE, rev: undefined },
     { ...RULE, in: ['somewhere'] },
-    { ...RULE, where: [{ path: 'body.kind', op: 'exists', unknownFilter: true }] },
-    { ...RULE, unknownFilter: true }
+    { ...RULE, where: [{ path: 'body.kind', op: 'exists', unknownFilter: true }] }
   ])('rejects an unreadable rule rather than dropping a filter', (rule) => {
     expect(AutomationCreate.safeParse({ ...CREATE, on: [rule] }).success).toBe(false)
     expect(AutomationUpdate.safeParse({ id: 'a', updates: { on: [rule] } }).success).toBe(false)

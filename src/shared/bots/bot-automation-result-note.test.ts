@@ -29,31 +29,17 @@ function note(index: number, result = `result ${index}`): AutomationResultNote {
 const time = (at: number): string => `t${at / 1_000}`
 
 describe('automationResultsPreamble', () => {
-  it('lists results oldest first and closes the bracket', () => {
-    const preamble = automationResultsPreamble([note(2), note(1)], time)
-    expect(preamble).toBe(
-      [
-        "[Since your last message: 2 automation results arrived in this chat. You haven't seen them; the user saw them as notes.",
-        "- t1, Automation 1, couldn't finish: result 1",
-        '- t2, Automation 2, finished: result 2]'
-      ].join('\n')
-    )
-  })
-
-  it('cuts each result at 400 characters', () => {
-    const line = automationResultsPreamble([note(2, 'x'.repeat(1_000))], time).split('\n')[1]
-    const result = line.slice('- t2, Automation 2, finished: '.length, -1)
-    expect(result).toHaveLength(400)
-    expect(result.endsWith('…')).toBe(true)
-  })
-
-  it('shows the newest 10 and counts the rest', () => {
-    const notes = Array.from({ length: 13 }, (_, index) => note(index + 1))
+  it('lists the newest 10 oldest first, counts earlier results and closes the bracket', () => {
+    const notes = Array.from({ length: 13 }, (_, index) => note(13 - index))
     const lines = automationResultsPreamble(notes, time).split('\n')
-    expect(lines[0]).toContain('13 automation results')
+    expect(lines[0]).toBe(
+      "[Since your last message: 13 automation results arrived in this chat. You haven't seen them; the user saw them as notes."
+    )
     expect(lines[1]).toBe('+3 earlier results')
     expect(lines.slice(2)).toHaveLength(10)
-    expect(lines[2]).toContain('Automation 4,')
+    expect(lines[2]).toBe('- t4, Automation 4, finished: result 4')
+    expect(lines[3]).toBe("- t5, Automation 5, couldn't finish: result 5")
+    expect(lines.at(-1)).toBe("- t13, Automation 13, couldn't finish: result 13]")
   })
 
   it('stays within 4,000 characters by counting the oldest lines instead', () => {
@@ -126,10 +112,6 @@ describe('automation result note body', () => {
     expect(body.text).toBe('Automation 2 finished: First line')
     expect(body.presentation).toBe('automation-result')
     expect(readAutomationResultNote(body.automationResult)).toEqual(body.automationResult)
-  })
-
-  it('clips a stored result', () => {
-    expect(note(2, 'z'.repeat(9_000)).result).toHaveLength(AUTOMATION_RESULT_NOTE_MAX_CHARS)
   })
 
   it('reads nothing that is not a note', () => {

@@ -21,7 +21,7 @@ describe('isBotBackgroundRun', () => {
     expect(isBotBackgroundRun(store, { sessionId: 'look-50' })).toBe(false)
     look(50)
     expect(isBotBackgroundRun(store, { sessionId: 'look-50' })).toBe(true)
-    expect(store.get('b1').runs).toHaveLength(50)
+    expect(store.get('b1').runs.some((run) => run.sessionId === 'look-0')).toBe(false)
     expect(isBotBackgroundRun(store, { sessionId: 'look-0' })).toBe(true)
     expect(isBotBackgroundRun(store, { sessionId: 'a-chat' })).toBe(false)
   })
