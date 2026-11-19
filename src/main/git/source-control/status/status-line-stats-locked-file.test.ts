@@ -8,12 +8,24 @@ import type { GitStatusEntry } from '../../../../shared/git/status/git-status-ty
 import type * as GitExecFileModule from '../../command-runner/git-exec-file'
 import { getStatus } from './status-read'
 import { attachLineStats } from './status-line-stats'
-import { invalidateGitReadCaches } from '../git-read-cache-invalidation'
+import {
+  INCOMPLETE_NUMSTAT_FALLBACK_TTL_MS,
+  invalidateGitReadCaches
+} from '../git-read-cache-invalidation'
 
-const gitFailures = vi.hoisted(() => ({
-  wholeNumstat: false,
-  pathspec: null as string | null
-}))
+const gitFailures = vi.hoisted(
+  (): {
+    wholeNumstat: boolean
+    pathspec: string | null
+    wholeNumstatCalls: number
+    pathspecCalls: number
+  } => ({
+    wholeNumstat: false,
+    pathspec: null,
+    wholeNumstatCalls: 0,
+    pathspecCalls: 0
+  })
+)
 
 // Fail the whole-worktree pass on demand while per-path retries still reach real Git.
 vi.mock('../../command-runner/git-exec-file', async (importOriginal) => {
@@ -24,6 +36,7 @@ vi.mock('../../command-runner/git-exec-file', async (importOriginal) => {
       if (args.includes('--numstat')) {
         const pathspecStart = args.indexOf('--')
         if (gitFailures.wholeNumstat && pathspecStart === -1) {
+          gitFailures.wholeNumstatCalls++
           return Promise.reject(new Error('error: cannot hash locked.txt'))
         }
         if (
@@ -31,6 +44,7 @@ vi.mock('../../command-runner/git-exec-file', async (importOriginal) => {
           gitFailures.pathspec !== null &&
           args.includes(gitFailures.pathspec)
         ) {
+          gitFailures.pathspecCalls++
           return Promise.reject(new Error('error: cannot hash locked.txt'))
         }
       }
@@ -84,6 +98,8 @@ beforeEach(async () => {
   invalidateGitReadCaches()
   gitFailures.wholeNumstat = false
   gitFailures.pathspec = null
+  gitFailures.wholeNumstatCalls = 0
+  gitFailures.pathspecCalls = 0
   vi.stubEnv('ORCA_GIT_STATUS_NUMSTAT_REUSE', '0')
   root = await mkdtemp(join(tmpdir(), 'orca-status-locked-'))
   repo = join(root, 'repo')
@@ -163,6 +179,30 @@ describe('per-path numstat fallback', () => {
       { path: 'readable.txt', status: 'modified', area: 'unstaged', added: 2, removed: 0 },
       { path: 'locked.txt', status: 'modified', area: 'unstaged' }
     ])
+  })
+
+  it('backs off an incomplete fallback for 5 seconds, then retries', async () => {
+    await commitBaseline({
+      'locked.txt': 'red\ngreen\nblue\n'
+    })
+    await writeFile(join(repo, 'locked.txt'), 'red\ngreen\nblue\nyellow\n')
+    gitFailures.wholeNumstat = true
+    gitFailures.pathspec = ':(literal)locked.txt'
+    const entries: GitStatusEntry[] = [{ path: 'locked.txt', status: 'modified', area: 'unstaged' }]
+    vi.setSystemTime(1_000_000)
+
+    expect(await attachLineStats(repo, entries)).toBe(false)
+    expect(gitFailures.wholeNumstatCalls).toBe(1)
+    expect(gitFailures.pathspecCalls).toBe(1)
+
+    expect(await attachLineStats(repo, entries)).toBe(false)
+    expect(gitFailures.wholeNumstatCalls).toBe(1)
+    expect(gitFailures.pathspecCalls).toBe(1)
+
+    vi.setSystemTime(1_000_000 + INCOMPLETE_NUMSTAT_FALLBACK_TTL_MS + 1)
+    expect(await attachLineStats(repo, entries)).toBe(false)
+    expect(gitFailures.wholeNumstatCalls).toBe(2)
+    expect(gitFailures.pathspecCalls).toBe(2)
   })
 })
 

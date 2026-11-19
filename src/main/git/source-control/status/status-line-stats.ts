@@ -14,7 +14,12 @@ import {
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { gitOptionalLocksDisabledEnv } from '../../command-runner/git-environment/git-process-env'
 import { resolveWorktreeFilesystemPath } from '../worktree-filesystem-path'
-import { settledNumstatCache } from '../git-read-cache-invalidation'
+import {
+  clearIncompleteNumstatFallback,
+  getIncompleteNumstatFallbackExpiry,
+  setIncompleteNumstatFallback,
+  settledNumstatCache
+} from '../git-read-cache-invalidation'
 import { readStampedGitConfig, type StampedGitConfig } from '../input-stamps/stamped-git-config'
 import { addGitattributesStampPaths } from '../input-stamps/gitattributes-stamp-paths'
 import { readWorktreePathsDiffStamp } from '../input-stamps/worktree-diff-stamp'
@@ -106,15 +111,31 @@ async function readNumstatWithFallback(
   entries: readonly GitStatusEntry[],
   options: GitRuntimeOptions
 ): Promise<NumstatPass | null> {
+  options.signal?.throwIfAborted()
+  const cachedFallback = getIncompleteNumstatFallbackExpiry(worktreePath, cached, detectRenames)
+  if (cachedFallback !== null) {
+    return { stats: cachedFallback.stats, complete: false }
+  }
   try {
-    return { stats: await runNumstat(worktreePath, cached, detectRenames, options), complete: true }
+    const pass = {
+      stats: await runNumstat(worktreePath, cached, detectRenames, options),
+      complete: true
+    }
+    clearIncompleteNumstatFallback(worktreePath, cached, detectRenames)
+    return pass
   } catch (error) {
     // Propagate cancellation; ordinary numstat failures may degrade to uncounted rows.
     if (options.signal?.aborted) {
       throw error
     }
   }
-  return runNumstatPerEntry(worktreePath, cached, detectRenames, entries, options)
+  const fallback = await runNumstatPerEntry(worktreePath, cached, detectRenames, entries, options)
+  if (!fallback?.complete) {
+    setIncompleteNumstatFallback(worktreePath, cached, detectRenames, fallback?.stats ?? new Map())
+  } else {
+    clearIncompleteNumstatFallback(worktreePath, cached, detectRenames)
+  }
+  return fallback
 }
 
 // Statting more files than this costs about as much as the numstat it would skip.
