@@ -243,7 +243,8 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
     ['macOS suspended, then another command', ['146', '0'], true],
     ['macOS suspended, then a listing and another command', ['146', 'listing', '0'], true],
     ['suspended, resumed (fg), then quit', ['148', 'fg', '0'], false],
-    ['quit where the host gives no shell proof (remote, Windows)', ['unproven'], false]
+    ['quit where the host gives no shell proof (remote, Windows)', ['unproven'], false],
+    ['quit of an agent no Orca launch held (typed at the prompt)', ['typed'], false]
   ] as const)('%s', async (_, finishes, keepsRecovery) => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(1_000)
@@ -336,6 +337,10 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
         tick()
         if (status === 'unmarked') {
           await server.reconcilePaneProcessExit(PANE_KEY)
+        } else if (status === 'typed') {
+          // The runtime's notice for a mark that finds no launch held.
+          server.retireProcessAuthority(PANE_KEY, { confirmedExit: true, launchRetired: true })
+          await new Promise((resolve) => setImmediate(resolve))
         } else if (status === 'fg') {
           stopped = false
         } else if (status === 'listing') {

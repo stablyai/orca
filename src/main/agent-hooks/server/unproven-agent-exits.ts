@@ -6,7 +6,7 @@ type UnprovenExit = { proving: boolean; again: boolean }
 export class UnprovenAgentExits {
   private readonly panes = new Map<string, UnprovenExit>()
 
-  /** `prove` answers whether the pane is settled: its exit was confirmed, or a newer row owns it. */
+  /** `prove` answers whether the pane is settled: its agent's exit was confirmed. */
   constructor(private readonly prove: (paneKey: string) => Promise<boolean>) {}
 
   /** A launch retired; `unseen`: its agent may still end unseen, `proveNow`: a mark said it ended.
@@ -34,7 +34,11 @@ export class UnprovenAgentExits {
     }
   }
 
-  onCommandFinished(paneKey: string): void {
+  /** `unseen`: arm a pane no earlier retirement armed, whose agent may still end unseen. */
+  onCommandFinished(paneKey: string, unseen = false): void {
+    if (unseen && !this.panes.has(paneKey)) {
+      this.panes.set(paneKey, { proving: false, again: false })
+    }
     const entry = this.panes.get(paneKey)
     if (!entry || entry.proving) {
       if (entry) {

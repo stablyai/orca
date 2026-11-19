@@ -29,15 +29,17 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
     }
   ): void {
     const resolved = this.resolvePaneKeyAlias(paneKey)
-    if (options?.launchRetired) {
-      this.unprovenExits.onCommandFinished(resolved)
-      return
-    }
     const identity = this.paneAgentIdentity(paneKey)
     const shared = identity?.processTopology === 'shared'
     // A command mark can come from a shell nested in a live agent; one with no process to probe
     // ends only on the host's word that the pane's shell is alone.
-    const unprovable = Boolean(identity) && !shared && !this.hasVerifiableAgentProcess(paneKey)
+    const unprovable =
+      identity?.ended === false && !shared && !this.hasVerifiableAgentProcess(paneKey)
+    if (options?.launchRetired) {
+      // An agent typed at the prompt holds no launch; its quit is proved the same way.
+      this.unprovenExits.onCommandFinished(resolved, unprovable)
+      return
+    }
     const awaitsHost = options?.confirmedExit === true && !this.hasVerifiableAgentProcess(paneKey)
     const confirmedExit = options?.confirmedExit === true && !awaitsHost
     const { paneKeys, authorityChanged } = this.revokeProcessAuthority(paneKey)
@@ -62,8 +64,9 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
   private async confirmCommandFinishedExit(resolved: string): Promise<boolean> {
     const row = this.state.lastStatusByPaneKey.get(resolved)
     const alone = await this.terminalPaneLifecycle?.confirmShellAlone?.(resolved)
+    // A newer row may be the same conversation's; only a later proof can settle it.
     if (this.state.lastStatusByPaneKey.get(resolved) !== row) {
-      return true
+      return false
     }
     if (alone === false) {
       return false
