@@ -280,6 +280,8 @@ module.exports = {
     '!out/.orcad-*{,/**/*}',
     // Why: the pinned Node a local orcad build references (~120 MB) and its download cache.
     '!out/runtimes{,/**/*}',
+    // Why: dev-only, host-arch addon builds; packaged apps load the signed per-arch copies from Resources.
+    '!out/native{,/**/*}',
     '!out/node-runtime-cache{,/**/*}',
     '!config{,/**/*}',
     // Cloud services deploy separately; their sources are not desktop runtime resources.
