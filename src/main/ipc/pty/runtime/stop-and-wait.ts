@@ -178,11 +178,11 @@ async function shutDownPtyForStop(
 ): Promise<{ stopped: boolean } | PtyStopAwaitingProof> {
   const { runtime, getLocalPtyProviderStartupPromise, shutdownProviderAndDetectExit } = deps
   runtime?.markPtyStopRequested?.(ptyId)
-  const relayStopped = await stopLegacyRelayBridgedPtyAndWait(deps, ptyId, opts)
-  if (relayStopped !== null) {
-    return { stopped: relayStopped }
-  }
   const connectionId = getPtySshConnectionId(ptyId)
+  const relayStop = stopLegacyRelayBridgedPtyAndWait(deps, ptyId, opts)
+  if (relayStop) {
+    return { stopped: await relayStop }
+  }
   // Share one absolute teardown deadline across sequential awaits and RPC leaves.
   const { deadlineMs } = opts
   const startupPromise = getLocalPtyProviderStartupPromise(resolvePtyExecutionHost(ptyId))

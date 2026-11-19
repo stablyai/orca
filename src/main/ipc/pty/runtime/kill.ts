@@ -80,21 +80,30 @@ export function legacyRelayOwesStop(ptyId: string, keepHistory: boolean | undefi
   return !keepHistory && Boolean(getPtySshConnectionId(ptyId)) && isLegacyRelayBridgedPty(ptyId)
 }
 
-/** Stops a legacy-relay-bridged PTY and waits for the bridge's proof; null when not bridged. */
-export async function stopLegacyRelayBridgedPtyAndWait(
+/** Stops a legacy-relay-bridged PTY and waits for the bridge's proof; null, synchronously, when
+ *  not bridged, so other stops pick their provider and incarnation before yielding. */
+export function stopLegacyRelayBridgedPtyAndWait(
   deps: PtyRuntimeControllerDeps,
   ptyId: string,
   opts: { keepHistory?: boolean; deadlineMs?: number }
-): Promise<boolean | null> {
+): Promise<boolean> | null {
   if (!getPtySshConnectionId(ptyId) || !isLegacyRelayBridgedPty(ptyId)) {
     return null
   }
   // A reversible stop must not leave the bridge's durable stop behind, so the pane stays live.
   if (opts.keepHistory) {
-    return false
+    return Promise.resolve(false)
   }
+  return stopBridgedPtyAndWait(deps, ptyId, opts.deadlineMs)
+}
+
+async function stopBridgedPtyAndWait(
+  deps: PtyRuntimeControllerDeps,
+  ptyId: string,
+  deadlineMs: number | undefined
+): Promise<boolean> {
   const stoppingIncarnationId = ptyIncarnationById.get(ptyId)
-  const deadline = opts.deadlineMs ?? Date.now() + OBSERVED_EXIT_RECORD_WAIT_MS
+  const deadline = deadlineMs ?? Date.now() + OBSERVED_EXIT_RECORD_WAIT_MS
   const stopped = await Promise.race([
     stopLegacyRelayPaneAndWait(ptyId, deadline),
     delay(Math.max(1, deadline - Date.now())).then(() => null)
