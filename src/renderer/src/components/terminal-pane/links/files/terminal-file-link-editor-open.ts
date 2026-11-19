@@ -41,7 +41,7 @@ function isOpenedEditorViewCurrent(worktreeId: string, opened: EditorOpenResult)
 export function openLinkedFileInEditor(
   file: Omit<OpenFile, 'id' | 'isDirty' | 'language' | 'mode'>,
   intent: EditorOpenLinkIntent | null,
-  position: { line: number | null; column: number | null },
+  position: { line: number | null; column: number | null; length?: number },
   isCurrentRequest: () => boolean
 ): EditorOpenResult | null {
   const language = detectLanguage(file.filePath)
@@ -74,6 +74,7 @@ export function openLinkedFileInEditor(
       shown.fileId,
       {
         viewStateId: shown.viewStateId,
+        ...(position.length ? { matchLength: position.length } : {}),
         canApply: () => isCurrentRequest() && isOpenedEditorViewCurrent(file.worktreeId, shown)
       }
     )

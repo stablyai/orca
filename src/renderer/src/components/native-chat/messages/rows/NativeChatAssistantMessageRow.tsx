@@ -7,7 +7,7 @@ import type { NativeChatMessage } from '../../../../../../shared/native-chat/nat
 import type { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/native-chat-row-content'
 import type { MessageRowProps } from './NativeChatMessageRow'
 import { NativeChatPacedMarkdown } from '../../markdown/NativeChatPacedMarkdown'
-import { NATIVE_CHAT_QUOTE_SOURCE_PROPS } from '../../selection-quotes/native-chat-quote-selection'
+import { nativeChatQuoteSourceProps } from '../../selection-quotes/native-chat-quote-selection'
 import { NativeChatToolRun } from '../../tools/runs/NativeChatToolRun'
 import {
   NativeChatCodeBlock,
@@ -101,7 +101,7 @@ export function NativeChatAssistantMessageRow({
           className="text-sm"
           renderCodeBlock={isSystem ? NativeChatPlainCodeBlock : NativeChatCodeBlock}
           linkifyFilePaths
-          {...(isSystem ? {} : NATIVE_CHAT_QUOTE_SOURCE_PROPS)}
+          {...(isSystem ? {} : nativeChatQuoteSourceProps(message.id))}
           visualMessageId={message.role === 'assistant' ? message.id : undefined}
           // Only the live turn’s prose frontier can be mid-sentence; structured rows have no per-row streaming flag.
           streaming={messageIsStreaming(message, activeTurnIsWorking, trailingRun)}

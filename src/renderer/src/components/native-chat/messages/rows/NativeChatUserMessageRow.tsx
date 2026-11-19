@@ -127,6 +127,7 @@ export function NativeChatUserMessageRow({
                       rowKey={message.id}
                       content={text}
                       variant="document"
+                      quoteChips
                       className="text-sm"
                       renderCodeBlock={NativeChatCodeBlock}
                     />

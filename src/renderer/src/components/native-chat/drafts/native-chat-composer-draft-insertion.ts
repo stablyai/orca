@@ -41,7 +41,9 @@ export function insertNativeChatComposerDraftText(
       ...draft,
       ...(options?.owner ? { owner: options.owner } : {}),
       text: next,
-      document: appendPromptDocumentText(draft.document, draft.text, next)
+      document: appendPromptDocumentText(draft.document, draft.text, next, {
+        literal: options?.paste
+      })
     }
   }
   const before = readNativeChatComposerDraft(scope)

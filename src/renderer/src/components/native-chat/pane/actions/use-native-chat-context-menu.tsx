@@ -29,11 +29,11 @@ import { useAppStore } from '@/store'
 import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
 import { findEditablePrimarySelectionPasteTarget } from '@/lib/clipboard/primary-selection/primary-selection-paste'
 import { NativeChatCopyOrcaSessionIdMenuItem } from './NativeChatCopyOrcaSessionIdMenuItem'
-import { NativeChatSelectionQuote } from '../../selection-quotes/NativeChatSelectionQuote'
 import {
-  formatNativeChatQuote,
-  readNativeChatTranscriptSelection
-} from '../../selection-quotes/native-chat-quote-selection'
+  addTranscriptQuote,
+  NativeChatSelectionQuote
+} from '../../selection-quotes/NativeChatSelectionQuote'
+import { readNativeChatTranscriptSelection } from '../../selection-quotes/native-chat-quote-selection'
 import { NativeChatPaneMenuItems } from './NativeChatPaneMenuItems'
 import { NativeChatStructuredPaneMenuItems } from './NativeChatStructuredPaneMenuItems'
 import type { NativeChatComposerHandle } from '../../composer/native-chat-composer-types'
@@ -295,7 +295,7 @@ export function useNativeChatContextMenu({
             target={target}
             onQuote={(text) => {
               flushSync(() => setState((prev) => ({ ...prev, open: false })))
-              composerRef.current?.appendText(formatNativeChatQuote(text))
+              addTranscriptQuote(composerRef.current, text, target.quoteSource)
             }}
             rewind={rewind}
           />

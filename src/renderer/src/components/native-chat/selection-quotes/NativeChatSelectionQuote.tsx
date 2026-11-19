@@ -1,4 +1,4 @@
-import type { RefObject } from 'react'
+import { useRef, type RefObject } from 'react'
 import { useAppStore } from '../../../store/index'
 import type { NativeChatComposerHandle } from '../composer/native-chat-composer-types'
 import {
@@ -7,6 +7,7 @@ import {
   readNativeChatTranscriptSelection
 } from './native-chat-quote-selection'
 import { SelectionAddToChatPopover } from './SelectionAddToChatPopover'
+import { rememberNativeChatQuoteSource, type QuoteSource } from './native-chat-quote-sources'
 
 function copyTranscriptSelectionOnSelect(root: HTMLElement): void {
   if (!useAppStore.getState().settings?.terminalClipboardOnSelect) {
@@ -19,6 +20,18 @@ function copyTranscriptSelectionOnSelect(root: HTMLElement): void {
   }
 }
 
+/** Adds a transcript quote to the composer, and remembers its message for the sent quote's jump. */
+export function addTranscriptQuote(
+  composer: NativeChatComposerHandle | null,
+  text: string,
+  source: QuoteSource | null
+): void {
+  if (source) {
+    rememberNativeChatQuoteSource(text, source)
+  }
+  composer?.appendText(formatNativeChatQuote(text))
+}
+
 export function NativeChatSelectionQuote({
   rootRef,
   composerRef,
@@ -28,15 +41,20 @@ export function NativeChatSelectionQuote({
   composerRef: RefObject<NativeChatComposerHandle | null>
   enabled: boolean
 }): React.JSX.Element {
+  const offeredSource = useRef<QuoteSource | null>(null)
   return (
     <SelectionAddToChatPopover
       rootRef={rootRef}
       enabled={enabled}
-      readQuotable={(root) =>
-        composerRef.current?.acceptsText() ? readNativeChatQuotableSelection(root) : null
-      }
+      readQuotable={(root) => {
+        const quotable = composerRef.current?.acceptsText()
+          ? readNativeChatQuotableSelection(root)
+          : null
+        offeredSource.current = quotable?.source ?? null
+        return quotable
+      }}
       onSelectionSettled={copyTranscriptSelectionOnSelect}
-      onAdd={(text) => composerRef.current?.appendText(formatNativeChatQuote(text))}
+      onAdd={(text) => addTranscriptQuote(composerRef.current, text, offeredSource.current)}
     />
   )
 }

@@ -24,13 +24,15 @@ import {
   fileReferenceContent,
   NativeChatFileReference,
   NativeChatImageReference,
+  NativeChatQuote,
   NativeChatSkill,
   promptLeafText,
   promptText,
   promptTextOffset,
   promptTextPosition
 } from './native-chat-prompt-document'
-import { promptTextContent } from './native-chat-prompt-document-text'
+import { promptTextContent, withQuoteChipsParsed } from './native-chat-prompt-document-text'
+import { reparseQuoteChips } from './native-chat-quote-reparse'
 import type {
   NativeChatComposerInput,
   NativeChatPromptEditorProps
@@ -103,6 +105,7 @@ function NativePromptEditor({
         NativeChatSkill,
         NativeChatFileReference,
         NativeChatImageReference,
+        NativeChatQuote,
         NativeChatUnkernedRunDecorations,
         // A disabled box still says why it is disabled, as the plain text box's placeholder does.
         Placeholder.configure({
@@ -110,7 +113,9 @@ function NativePromptEditor({
           showOnlyWhenEditable: false
         })
       ],
-      content: adopted.current?.document || promptTextContent(initialValue),
+      content: adopted.current?.document
+        ? withQuoteChipsParsed(adopted.current.document)
+        : promptTextContent(initialValue),
       editable: !disabled,
       editorProps: {
         attributes: {
@@ -130,7 +135,7 @@ function NativePromptEditor({
           if (text == null) {
             return false
           }
-          const content = editor?.schema.nodeFromJSON(promptTextContent(text))
+          const content = editor?.schema.nodeFromJSON(promptTextContent(text, { literal: true }))
           if (!content) {
             return false
           }
@@ -246,7 +251,7 @@ function NativePromptEditor({
         ? {
             insertAgentReferences: (references) => insertAgentReferences(editor, references),
             insertText: (text) => {
-              const content = editor.schema.nodeFromJSON(promptTextContent(text))
+              const content = editor.schema.nodeFromJSON(promptTextContent(text, { literal: true }))
               editor.view.dispatch(
                 editor.state.tr.replaceSelection(new Slice(content.content, 1, 1))
               )
@@ -268,7 +273,7 @@ function NativePromptEditor({
               adopted.current = readNativeChatDraftSnapshot(scopeKey, value)
               const stored = adopted.current?.document
               if (stored) {
-                editor.commands.setContent(stored, { emitUpdate: false })
+                editor.commands.setContent(withQuoteChipsParsed(stored), { emitUpdate: false })
                 applyPosition(previousRange)
                 return
               }
@@ -299,6 +304,7 @@ function NativePromptEditor({
               )
               editor.commands.command(({ tr }) => {
                 tr.replaceRange(from, to, new Slice(content.content, 1, 1))
+                reparseQuoteChips(tr)
                 tr.setMeta('preventUpdate', true)
                 return true
               })

@@ -92,3 +92,9 @@
     }
   }
 }
+
+/* The quoted text, for a short time after a sent quote jumps back to it. */
+::highlight(native-chat-quote-jump) {
+  background-color: color-mix(in srgb, var(--markdown-search-match-active) 60%, transparent);
+  color: inherit;
+}

@@ -59,6 +59,8 @@ type TerminalFileOpenDeps = {
   openInSourceGroup?: boolean
   /** Opt-in menu request; the legacy flag remains editor-only. */
   openInSourceGroupSurface?: 'internal' | 'browser'
+  /** Highlights this many characters from the revealed column in the editor, for a short time. */
+  revealLength?: number
 }
 
 export function openDetectedFilePath(
@@ -305,7 +307,7 @@ export function openDetectedFilePath(
           : {})
       },
       linkIntent,
-      { line, column },
+      { line, column, length: deps.revealLength },
       isCurrentRequest
     )
     if (!opened) {

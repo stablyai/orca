@@ -8,7 +8,8 @@ import { useAppStore } from '../../../store/index'
 import type { NativeChatComposerHandle } from '../composer/native-chat-composer-types'
 import { NativeChatMarkdown } from '../markdown/NativeChatMarkdown'
 import { NativeChatSelectionQuote } from './NativeChatSelectionQuote'
-import { NATIVE_CHAT_QUOTE_SOURCE_PROPS } from './native-chat-quote-selection'
+import { nativeChatQuoteSourceProps } from './native-chat-quote-selection'
+import { nativeChatQuoteSource } from './native-chat-quote-sources'
 
 vi.mock('@/i18n/i18n', async (importOriginal) => ({
   ...(await importOriginal<typeof I18n>()),
@@ -34,7 +35,7 @@ function Chat({ mathSource }: { mathSource?: string }): React.JSX.Element {
     <div ref={rootRef}>
       <div data-native-chat-scroll="">
         <p data-testid="user">my own prompt</p>
-        <div {...NATIVE_CHAT_QUOTE_SOURCE_PROPS}>
+        <div {...nativeChatQuoteSourceProps('reply-1')}>
           {mathSource ? (
             <NativeChatMarkdown data-testid="first" content={mathSource} variant="document" />
           ) : (
@@ -99,6 +100,22 @@ describe('NativeChatSelectionQuote', () => {
 
     releaseSelection(screen.getByTestId('first'), screen.getByTestId('next'))
     expect(screen.queryByRole('button', { name: 'Add to chat' })).toBeNull()
+  })
+
+  it('adds the quote and remembers the message it came from', () => {
+    render(<Chat />)
+    releaseSelection(screen.getByTestId('first'))
+    fireEvent.click(screen.getByRole('button', { name: 'Add to chat' }))
+    expect(appendText).toHaveBeenCalledWith('> Use the draft store.\n>\n> It already appends.\n\n')
+    // The place is in the reply element's own text.
+    expect(nativeChatQuoteSource('Use the draft store.\n\nIt already appends.')).toEqual({
+      messageId: 'reply-1',
+      place: {
+        offset: 0,
+        length: 41,
+        hash: 'otso1p:41'
+      }
+    })
   })
 })
 
