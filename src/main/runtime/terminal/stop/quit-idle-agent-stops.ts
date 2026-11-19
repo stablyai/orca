@@ -172,7 +172,7 @@ export abstract class OrcaRuntimeWithQuitIdleAgentStops extends OrcaRuntimeWithW
   ): Promise<boolean> {
     // A write since selection (a delivered turn, a paired client) may have started work.
     if (this.terminalRunFacts.readLastInputAt(ptyId) !== inputAt) {
-      console.info('[quit] Idle agent written to since it was picked; kept running:', ptyId)
+      console.info('[quit] An idle agent was written to since it was picked; kept running')
       return false
     }
     // Reversible: the exit must not retire the saved conversation the next launch resumes.
@@ -181,7 +181,7 @@ export abstract class OrcaRuntimeWithQuitIdleAgentStops extends OrcaRuntimeWithW
     try {
       done = await stopAndWait(ptyId, { keepHistory: true, deadlineMs })
     } catch (error) {
-      console.warn('[quit] Idle agent stayed running:', ptyId, error)
+      console.warn('[quit] An idle agent stayed running:', error)
     } finally {
       settleStop(done)
     }
