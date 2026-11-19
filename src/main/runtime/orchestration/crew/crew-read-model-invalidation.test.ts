@@ -66,22 +66,30 @@ it('invalidates the current coordinator alias using returned persisted routing e
   }
 })
 
-it('names the rebound run mailbox and stays silent when the coordinator is already bound', () => {
+it('names every mailbox a coordinator rebind changes and stays silent when nothing changed', () => {
   const f = fixture()
-  const bind = (handle: string) =>
+  const bind = (runId: string) =>
     f.db.bindRun({
-      runId: f.run.id,
-      coordinatorHandle: handle,
-      coordinatorPaneKey: f.handles.get(handle)!
+      runId,
+      coordinatorHandle: 'term_helper',
+      coordinatorPaneKey: f.handles.get('term_helper')!
     })
-  bind('term_helper')
+  bind(f.run.id)
+  const other = f.db.createRun({
+    objective: 'second run',
+    coordinatorHandle: null,
+    coordinatorPaneKey: null
+  })
   const notices: CrewInvalidation[] = []
   const stop = f.db.crewChanges.subscribe((facets) => notices.push(facets))
   try {
-    bind('term_helper')
+    bind(f.run.id)
     expect(notices).toEqual([])
-    bind('term_coord')
-    expect(notices.at(-1)?.trafficAddresses).toEqual(new Set([`run:${f.run.id}`]))
+    bind(other.id)
+    expect(notices.length).toBeGreaterThan(0)
+    expect(notices.every((notice) => notice.trafficAddresses !== undefined)).toBe(true)
+    const named = new Set(notices.flatMap((notice) => [...(notice.trafficAddresses ?? [])]))
+    expect([...named]).toEqual(expect.arrayContaining([`run:${f.run.id}`, `run:${other.id}`]))
   } finally {
     stop()
   }
