@@ -30,10 +30,6 @@ import { receiptMailboxOwnershipHold } from '../../orchestration/mailbox/deliver
 export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithMailDeliveryRefusal {
   protected resolvePtyExitWaiters(pty: RuntimePtyWorktreeRecord, ptyId: string): void {
     for (const waiter of this.terminalWaiters.forPty(ptyId)) {
-      // Agent Sleep stopped the process, not the agent: its exit wait follows the woken process.
-      if (waiter.condition === 'exit' && this.carrySleptAgentExitWait(waiter)) {
-        continue
-      }
       if (waiter.condition === 'exit') {
         this.terminalWaiters.resolve(waiter, buildPtyTerminalWaitResult(waiter.handle, 'exit', pty))
       } else {

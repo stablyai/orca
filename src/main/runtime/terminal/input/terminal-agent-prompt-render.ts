@@ -234,6 +234,22 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
         }
       })
     }
-    return this.terminalWait.wait(handle, options)
+    const condition = options?.condition ?? 'exit'
+    const timeoutMs = options?.timeoutMs
+    const deadline = timeoutMs && timeoutMs > 0 ? Date.now() + timeoutMs : null
+    const settled = this.terminalWait.wait(handle, options)
+    // Why: Agent Sleep's stop ends the process, not the agent; the handle waits on as a slept agent.
+    return condition !== 'exit'
+      ? settled
+      : settled.then(
+          (result) =>
+            (result.status === 'exited' &&
+              this.waitForSleptAgent(handle, {
+                condition,
+                signal: options?.signal,
+                ...(deadline === null ? {} : { timeoutMs: Math.max(1, deadline - Date.now()) })
+              })) ||
+            result
+        )
   }
 }

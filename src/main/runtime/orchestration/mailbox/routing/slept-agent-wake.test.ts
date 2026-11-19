@@ -79,6 +79,29 @@ describe('Agent-slept window pane wake', () => {
     db.close()
   })
 
+  it("waits on through Agent Sleep's stop when the exit wait began while the agent was awake", async () => {
+    const db = createDatabase('orca-slept-wake-')
+    const rows: AgentStatusIpcPayload[] = []
+    const { runtime } = await createRuntime(db, { getAgentStatusSnapshotForPane: () => rows })
+    await driveToLiveIdle(runtime)
+    const handle = runtime.getTerminalHandleForPaneKey(PANE_KEY)!
+    const waiting = runtime.waitForTerminal(handle, { condition: 'exit', timeoutMs: 5_000 })
+    const settled = vi.fn()
+    void waiting.then(settled, settled)
+
+    rows.push(statusRow({ receivedAt: 1, paneSleep: { ptyId: PTY_ID } }))
+    const settleStop = runtime.intentionalPtyStops.mark(PTY_ID, 'reversible', 'mailbox-incarnation')
+    await runtime.onPtyExit(PTY_ID, 0, 'mailbox-incarnation', { providerExitObserved: true })
+    settleStop(true)
+    await runtime.syncWindowGraph(1, graph(null))
+    await Promise.resolve()
+    expect(settled).not.toHaveBeenCalled()
+
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    await expect(waiting).resolves.toMatchObject({ handle, status: 'exited', satisfied: true })
+    db.close()
+  })
+
   it('keeps a moved slept pane its handle and its exit wait pending', async () => {
     const { db, runtime, handle } = await sleptPane()
     const waiting = runtime.waitForTerminal(handle, { condition: 'exit', timeoutMs: 5_000 })

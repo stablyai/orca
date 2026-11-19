@@ -5,7 +5,6 @@ import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitCondition
 } from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
-import type { TerminalWaiter } from '../../../terminal/wait/terminal-waiter'
 import { RuntimeSleptMailboxWakes } from './slept-mailbox-runtime'
 import { joinWithin } from './slept-agent-wake-join'
 
@@ -21,8 +20,6 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
   private stopWatchingWokenHandles: (() => void) | null = null
   private recheckingSleptWaits = false
   private sleptRecheckQueued = false
-  /** Exit waits begun before the sleep, carried to the woken process, with the leaf id they slept in. */
-  private readonly carriedExitWaits = new Map<TerminalWaiter, string>()
 
   /** The pane an Agent-slept handle names: parked with no process, and not under the user's own Sleep. */
   protected sleptAgentPaneForHandle(
@@ -138,17 +135,6 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
     )
   }
 
-  /** An exit wait on the process Agent Sleep stopped follows the agent to its woken process. */
-  protected carrySleptAgentExitWait(waiter: TerminalWaiter): boolean {
-    const record = this.handles.get(waiter.handle)
-    if (!record || !this.sleptAgentPaneForHandle(waiter.handle)) {
-      return false
-    }
-    this.carriedExitWaits.set(waiter, record.leafId)
-    this.watchWokenHandles()
-    return true
-  }
-
   protected override onSleptLeafGraphSynced(): void {
     // A check can restore a parked name, which notifies identity changes again.
     if (this.recheckingSleptWaits) {
@@ -166,31 +152,7 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
     for (const check of this.wokenHandleChecks) {
       check()
     }
-    for (const [waiter, leafId] of this.carriedExitWaits) {
-      const ptyId = this.wokenHandlePtyId(waiter.handle)
-      const pane = ptyId ? 'open' : this.sleptPaneState(waiter.handle, leafId)
-      if (!this.terminalWaiters.has(waiter)) {
-        this.carriedExitWaits.delete(waiter)
-      } else if (ptyId) {
-        this.carriedExitWaits.delete(waiter)
-        this.terminalWaiters.move(waiter, ptyId)
-      } else if (pane === 'lost') {
-        // The window's graph went away: the same answer an awake agent's wait gets.
-        this.carriedExitWaits.delete(waiter)
-        this.terminalWaiters.reject(waiter, 'terminal_handle_stale')
-      } else if (pane === 'closed') {
-        // Closing a slept pane ends its agent, as closing an idle one does.
-        this.carriedExitWaits.delete(waiter)
-        this.terminalWaiters.resolve(waiter, {
-          handle: waiter.handle,
-          condition: 'exit',
-          satisfied: true,
-          status: 'exited',
-          exitCode: null
-        })
-      }
-    }
-    if (this.wokenHandleChecks.size === 0 && this.carriedExitWaits.size === 0) {
+    if (this.wokenHandleChecks.size === 0) {
       this.stopWatchingWokenHandles?.()
       this.stopWatchingWokenHandles = null
     }
