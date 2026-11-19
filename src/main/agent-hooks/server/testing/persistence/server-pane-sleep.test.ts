@@ -289,6 +289,13 @@ it.each(['claude', 'codex'] as const)(
       },
       ended: false
     })
+    // An app restart while asleep keeps it the slept conversation, not one that quit.
+    server.stop()
+    await server.start({ env: 'production', userDataPath: home })
+    expect(server.paneAgentIdentity(PANE)).toMatchObject({
+      status: { paneSleep: { ptyId: 'pty-1' } },
+      ended: false
+    })
   }
 )
 
