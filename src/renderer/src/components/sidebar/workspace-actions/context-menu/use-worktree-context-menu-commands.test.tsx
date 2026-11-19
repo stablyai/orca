@@ -50,6 +50,7 @@ function runNewChildWorktree(args: {
       createGroupDialogActiveRef: { current: false },
       createProjectGroup: state.createProjectGroup,
       isMultiContext: false,
+      mainWorktreeId: null,
       moveProjectToGroup: state.moveProjectToGroup,
       scopeRef: { current: null },
       setCreateGroupDialogOpen: () => {},

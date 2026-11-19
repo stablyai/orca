@@ -20,9 +20,27 @@ import {
   planWorkspaceStatusAssignment,
   preserveDeleteSiblingPosition
 } from './worktree-context-menu-policy'
+import {
+  runWorktreeMergeReviewAccept,
+  runWorktreeMergeReviewReject,
+  runWorktreeMergeReviewSync,
+  type WorktreeMergeReviewActionArgs
+} from '../merge-review/merge-review-flow'
 import type { useAppStore } from '@/store/index'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
+
+function mergeReviewActionArgs(args: {
+  worktree: Worktree
+  mainWorktreeId: string | null
+}): WorktreeMergeReviewActionArgs {
+  return {
+    worktreePath: args.worktree.path,
+    worktreeId: args.worktree.id,
+    repoId: args.worktree.repoId,
+    mainWorktreeId: args.mainWorktreeId
+  }
+}
 
 function resolveChildWorktreeRepository(repos: readonly Repo[], worktree: Worktree): Repo | null {
   return resolveReviewRepository(repos, {
@@ -42,6 +60,7 @@ export function useWorktreeContextMenuCommands(args: {
   folderWorkspaceId: string | null
   getState: () => ReturnType<typeof useAppStore.getState>
   isMultiContext: boolean
+  mainWorktreeId: string | null
   moveProjectToGroup: ReturnType<typeof useAppStore.getState>['moveProjectToGroup']
   onAssignWorkspaceStatus?: (worktreeIds: readonly string[], status: string) => void
   openModal: ReturnType<typeof useAppStore.getState>['openModal']
@@ -224,11 +243,23 @@ export function useWorktreeContextMenuCommands(args: {
       })
     }
   }, [args.validParent])
+  const handleMergeReviewSync = useCallback(() => {
+    runWorktreeMergeReviewSync(mergeReviewActionArgs(args))
+  }, [args])
+  const handleMergeReviewAccept = useCallback(() => {
+    runWorktreeMergeReviewAccept(mergeReviewActionArgs(args))
+  }, [args])
+  const handleMergeReviewReject = useCallback(() => {
+    runWorktreeMergeReviewReject(mergeReviewActionArgs(args))
+  }, [args])
   return {
     canCreateChildWorktree: canCreateChildWorktree({
       ...args,
       repo: resolveChildWorktreeRepository(args.getState().repos, args.worktree)
     }),
+    handleMergeReviewAccept,
+    handleMergeReviewReject,
+    handleMergeReviewSync,
     handleAssignWorkspaceStatus,
     handleCloseTerminals,
     handleCopyName,

@@ -22,6 +22,7 @@ import { WorktreeNotificationMuteMenuItem } from './WorktreeNotificationMuteMenu
 import { WslMovedWorkspaceUseHereMenuItem } from '@/components/wsl-move/WslMovedUseHereMenuItem'
 import { WslMoveFolderWorkspaceMenuItem } from '@/components/wsl-move/WslMoveProjectMenuItem'
 import { WorktreeContextMenuDeleteItems } from './WorktreeContextMenuDeleteItems'
+import { WorktreeMergeReviewMenuItems } from './WorktreeMergeReviewMenuItems'
 import {
   WorktreeCopySubMenu,
   WorktreeLineageSubMenu,
@@ -202,6 +203,8 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
             onAssignWorkspaceStatus={handleAssignWorkspaceStatus}
             workspaceStatuses={workspaceStatuses}
           />
+          <DropdownMenuSeparator />
+          <WorktreeMergeReviewMenuItems model={model} />
           {!isMultiContext && (
             <WorktreeHandToBotMenuItem worktree={worktree} disabled={isDeleting} />
           )}
