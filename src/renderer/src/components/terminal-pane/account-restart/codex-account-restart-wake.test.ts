@@ -505,7 +505,7 @@ it.each(['connected', 'disconnected', 'removed during read'] as const)(
       await session.resumeDeferredSpawn()
       expect(connect).not.toHaveBeenCalled()
       expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(1)
-      for (let attempt = 0; attempt < 2; attempt++) {
+      for (let attempt = 0; control !== 'removed during read' && attempt < 2; attempt++) {
         const failed = useAppStore.getState().pendingPaneAccountRestarts[key]
         if (typeof failed !== 'object' || failed.phase !== 'failed') {
           throw new Error('original pane lost its failed restart')

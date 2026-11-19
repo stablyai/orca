@@ -21,7 +21,7 @@ export function settleCodexAccountRestart(
     deferred: boolean
     retireOptions: () => void
   }
-): void {
+): boolean {
   const state = useAppStore.getState()
   const retireOptions = (): void => {
     if (session.deps.accountRestartToken !== token) {
@@ -34,21 +34,21 @@ export function settleCodexAccountRestart(
   const request = currentCodexAccountRestart(state, token)
   if (!request) {
     retireOptions()
-    return
+    return false
   }
   if (outcome.deferred && request.phase === 'deferred') {
-    return
+    return false
   }
   if (session.disposed || outcome.generation !== session.transportStreamGeneration) {
     if (!request.resultPtyId && readAccountRestartReceipt(outcome.error)?.outcome === 'terminal') {
       failCodexAccountRestart(token, outcome.error, outcome.deferred ? 'deferred' : 'failed')
-      return
+      return false
     }
     state.updateCodexAccountRestart(token, {
       phase: 'unresolved',
       error: ACCOUNT_RESTART_VIEW_CHANGED
     })
-    return
+    return false
   }
   if (
     outcome.ptyId &&
@@ -62,11 +62,12 @@ export function settleCodexAccountRestart(
     session.deps.invalidateRetainedInlineScrollback(session.pane.leafId)
     retireOptions()
     state.updateCodexAccountRestart(token, null)
-    return
+    return true
   }
   failCodexAccountRestart(
     token,
     outcome.error ?? ACCOUNT_RESTART_OUTCOME_UNKNOWN,
     outcome.deferred ? 'deferred' : 'failed'
   )
+  return false
 }

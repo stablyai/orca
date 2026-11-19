@@ -55,13 +55,20 @@ export async function connectIpcPty(
   if (context.isDestroyed()) {
     return
   }
-  if (options.sessionId && hasPreHandlerPtyExit(options.sessionId)) {
+  if (options.sessionId && options.expectedIncarnationId) {
+    discardPreHandlerPtyExitFromForeignIncarnation(options.sessionId, options.expectedIncarnationId)
+  }
+  if (
+    options.sessionId &&
+    (!shouldContinue || shouldContinue()) &&
+    hasPreHandlerPtyExit(options.sessionId, options.expectedIncarnationId)
+  ) {
     context.bind(options.sessionId)
     handlers.registerData(options.sessionId)
     if (context.isDestroyed()) {
       return
     }
-    handlers.registerExit(options.sessionId)
+    handlers.registerExit(options.sessionId, options.expectedIncarnationId)
     if (!context.isExpectedExitCurrent()) {
       return
     }

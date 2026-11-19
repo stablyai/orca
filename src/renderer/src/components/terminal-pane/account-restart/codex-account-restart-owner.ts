@@ -180,7 +180,23 @@ export async function prepareCodexAccountRestartOwner(
     return condition
   }
   if (request.resultPtyId) {
-    throw new Error('terminal_pane_owner_changed')
+    if (
+      snapshot.owner &&
+      'connected' in terminal &&
+      terminal.connected === true &&
+      'ptyId' in terminal &&
+      terminal.ptyId === snapshot.owner.ptyId &&
+      'handle' in terminal &&
+      typeof terminal.handle === 'string' &&
+      ((environmentId
+        ? toRemoteRuntimePtyId(terminal.handle, environmentId)
+        : snapshot.owner.ptyId) !== request.resultPtyId ||
+        (request.resultIncarnationId &&
+          snapshot.owner.incarnationId !== request.resultIncarnationId))
+    ) {
+      throw new Error('terminal_pane_owner_changed')
+    }
+    throw new Error(ACCOUNT_RESTART_OUTCOME_UNKNOWN)
   }
   if (request.phase === 'unresolved' || request.phase === 'dispatched') {
     if (

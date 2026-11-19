@@ -217,10 +217,15 @@ export async function restartDetachedAccountRequest(
       const deferral = { reason, resume, accountRestart: token }
       setPaneSpawnDeferral(token.key, deferral)
       if (reason !== 'paused') {
-        queueDeferredRestoreRetry(token.key, current.environmentId, async () => {
+        const retry = async (): Promise<boolean> => {
           await resume()
-          return currentCodexAccountRestart(useAppStore.getState(), token)?.phase !== 'deferred'
-        })
+          const current = currentCodexAccountRestart(useAppStore.getState(), token)
+          if (current?.phase === 'deferred' && getPaneSpawnDeferral(token.key) === deferral) {
+            queueDeferredRestoreRetry(token.key, current.environmentId, retry)
+          }
+          return current?.phase !== 'deferred'
+        }
+        queueDeferredRestoreRetry(token.key, current.environmentId, retry)
       }
     }
   } finally {
