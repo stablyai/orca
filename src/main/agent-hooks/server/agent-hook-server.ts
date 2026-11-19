@@ -109,10 +109,11 @@ export class AgentHookServer extends AgentHookServerLifecycle {
   /** Include retained exits proven at or after `exitedSince`. */
   async checkAgentPresenceSince(
     paneKey: string,
-    exitedSince: number
+    exitedSince: number,
+    options?: { forSleep?: true }
   ): Promise<AgentProcessVerdict | null> {
     // A quit whose shell-alone proof is still running must be read as that proof decides.
-    await this.unprovenExits.settled(this.resolvePaneKeyAlias(paneKey))
+    await this.unprovenExits.settled(this.resolvePaneKeyAlias(paneKey), options?.forSleep)
     const verdict = await this.checkAgentPresence(paneKey)
     // A replaced owner's probe result counts only if its exit was retained.
     if (verdict !== null && verdict !== 'exited') {

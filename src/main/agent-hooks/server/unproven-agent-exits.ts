@@ -67,14 +67,25 @@ export class UnprovenAgentExits {
       })
   }
 
-  /** Answers a sleep capture with one current proof: the running one, else a fresh one for a pane
-   *  still tracked (its last proof may have been voided by input). Queued re-proofs aren't
-   *  awaited, so marks arriving faster than proofs can't hold a sleep back. */
-  async settled(paneKey: string): Promise<void> {
+  /** Other readers await only the running proof. A sleep capture gets one current proof: the
+   *  running one, else a fresh one for a pane
+   *  still tracked (its last proof may have been voided by input), plus a re-proof already queued.
+   *  Marks arriving after the sleep starts aren't awaited, so they can't hold it back. */
+  async settled(paneKey: string, forSleep = false): Promise<void> {
     const entry = this.panes.get(paneKey)
+    if (!forSleep) {
+      await entry?.proof
+      return
+    }
     if (entry && !entry.proving) {
       this.onCommandFinished(paneKey)
     }
+    // A mark seen before the sleep (a quit after a nested mark) already queued the proof that
+    // decides it; await that one too, but none queued later.
+    const queued = entry?.again === true
     await entry?.proof
+    if (queued && this.panes.get(paneKey) === entry && entry?.proving) {
+      await entry.proof
+    }
   }
 }

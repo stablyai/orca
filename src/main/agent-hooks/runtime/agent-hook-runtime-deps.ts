@@ -83,10 +83,10 @@ export function agentHookRuntimeDeps(
       readChildWorkHandles: (subject) => server.getStructuredChildWorkHandles(subject)
     },
     readHookCliWriterObservation: (row) => server.readCliWriterObservation(row),
-    checkHookAgentPresence: (paneKey, exitedSince) =>
+    checkHookAgentPresence: (paneKey, exitedSince, options) =>
       exitedSince === undefined
         ? server.checkAgentPresence(paneKey)
-        : server.checkAgentPresenceSince(paneKey, exitedSince),
+        : server.checkAgentPresenceSince(paneKey, exitedSince, options),
     reconcileAgentStatusForEndedProcess: (paneKeys, sleep) => {
       const keys = [...paneKeys]
       if (sleep) {
