@@ -338,9 +338,7 @@ export function BrowserPane({
             />
           ) : null}
 
-          {showLinkRoutingSplit ? (
-            <BrowserLinkRoutingSplitSetting settings={settings} updateSettings={updateSettings} />
-          ) : null}
+          <BrowserLinkRoutingSplitSetting settings={settings} updateSettings={updateSettings} />
         </SettingsGroup>
       ) : null}
 
