@@ -1,5 +1,6 @@
 import type { EventEmitter } from 'node:events'
 import type * as NodeChildProcess from 'node:child_process'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as WorkerChildModule from '../../../worker-thread-child-process/worker-thread-child-process'
 
@@ -21,7 +22,7 @@ vi.mock('node:child_process', async (importOriginal) => {
   return {
     ...actual,
     spawn: (command: string, args: string[], options: NodeChildProcess.SpawnOptions) => {
-      if (command !== 'taskkill') {
+      if (command !== windowsSystem32Binary('taskkill.exe')) {
         return actual.spawn(command, args, options)
       }
       const killer = Object.assign(new EventEmitter(), { unref: () => {}, kill: () => true })
@@ -43,7 +44,7 @@ vi.mock('../../../worker-thread-child-process/worker-thread-child-process', asyn
     spawnProcessOnWorkerThread: (
       spec: Parameters<typeof WorkerChildModule.spawnProcessOnWorkerThread>[0]
     ) => {
-      if (spec.program !== 'taskkill') {
+      if (spec.program !== windowsSystem32Binary('taskkill.exe')) {
         return worker.spawn(spec)
       }
       const killer = new actual.WorkerThreadChildProcess(99, () => true)
