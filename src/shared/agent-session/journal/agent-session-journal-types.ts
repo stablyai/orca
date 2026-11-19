@@ -193,7 +193,15 @@ export type {
   AgentJournalUnknownKind
 } from './agent-session-journal-approval-subject'
 
-export type AgentJournalApprovalItem = {
+/** What every approval and question carries: its choices, the request it stands for, and its answer. */
+type AgentJournalPromptFields = {
+  options: AgentJournalPromptOption[]
+  /** Digest of the provider's full request, without request ids; matches the same request re-asked. */
+  requestDigest?: string
+  resolution: AgentJournalResolution
+}
+
+export type AgentJournalApprovalItem = AgentJournalPromptFields & {
   kind: 'approval'
   title: string
   displayName?: string
@@ -204,22 +212,15 @@ export type AgentJournalApprovalItem = {
   subject?: AgentJournalApprovalSubject
   personOnly?: true
   detail: string | null
-  options: AgentJournalPromptOption[]
-  /** Digest of the provider's full request, without request ids; matches the same request re-asked. */
-  requestDigest?: string
-  resolution: AgentJournalResolution
 }
 
-export type AgentJournalQuestionItem = {
+export type AgentJournalQuestionItem = AgentJournalPromptFields & {
   kind: 'question'
   question: string
-  options: AgentJournalPromptOption[]
   questions?: AgentJournalQuestion[]
   /** Present when the provider accepts an answer outside the offered options. */
   freeTextQuestionId?: string
   freeTextInput?: AgentJournalFreeTextInput
-  requestDigest?: string
-  resolution: AgentJournalResolution
 }
 
 export const AGENT_JOURNAL_TURN_LIFECYCLE_STATES = [

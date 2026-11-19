@@ -19,8 +19,6 @@ import { StructuredAgentSessionBackgroundTaskChannel as BackgroundTasks } from '
 import { StructuredAgentSessionClientDelivery } from '../publication/subscribers/structured-agent-session-client-delivery'
 import { createStructuredAgentSessionPublicationWiring } from './structured-agent-session-publication-wiring'
 import * as resume from '../recovery/structured-agent-session-restart-resume-host'
-import { StructuredAgentSessionRestoredPrompts } from '../recovery/structured-agent-session-restored-prompts'
-import type { StructuredAgentSessionRestartResume } from '../recovery/structured-agent-session-restart-resume-contract'
 import { structuredAgentSessionRestartResumeSurfaces } from '../recovery/structured-agent-session-restart-resume-wiring'
 import * as conversation from '../delivery/structured-agent-session-host-delivery'
 import { wireStructuredAgentSessionQueuedMessages as wireQueuedMessages } from '../delivery/structured-agent-session-queued-wiring'
@@ -61,7 +59,7 @@ export class StructuredAgentSessionHost {
   private readonly conversationDelivery: conversation.StructuredAgentSessionConversationDelivery
   private readonly eventRecovery: EventRecovery
   private readonly backgroundTasks: BackgroundTasks
-  readonly restartResume: StructuredAgentSessionRestartResume
+  readonly restartResume: ReturnType<typeof resume.createStructuredAgentSessionRestartResume>
 
   readonly usageLimitContinue: ReturnType<typeof usageLimit.start>
 
@@ -229,7 +227,6 @@ export class StructuredAgentSessionHost {
 
   /** Quit stops delivery and queued-card handover. */
   stopDelivery = () => {
-    this.restoredPrompts.dispose()
     this.sessions.endPublications()
     ;[this.conversationDelivery, this.queued.drain].forEach((d) => d.dispose())
     this.usageLimitContinue.dispose()
@@ -275,23 +272,11 @@ export class StructuredAgentSessionHost {
 
   private mutations = mutationWiring.structuredAgentSessionMutationDelegates(
     () => this.mutationContext(),
-    () => this.attachContext()
+    () => this.attachContext(),
+    () => this.restartResume.continuationHost
   )
   cancel = this.mutations.cancel
-  private readonly restoredPrompts = new StructuredAgentSessionRestoredPrompts({
-    conversation: (sessionId) => this.lifetime.conversation(sessionId),
-    agentRunning: (sessionId) =>
-      (this.sessions.get(sessionId)?.child ?? null) !== null ||
-      this.runtimeState.hasDeliveryWork(sessionId),
-    continuationHost: () => this.restartResume.continuationHost,
-    respond: (caller, params) => this.respondToPrompt(caller, params),
-    subscribeTurnCompletions: (subscriber) => this.clientDelivery.subscribeTurnCompletions(subscriber),
-    resolvedBy: (caller) => caller.callerKey,
-    now: () => this.now()
-  })
-  /** A prompt whose agent exited waiting on it is answered by resuming the chat. */
-  respondToPrompt: typeof this.mutations.respondToPrompt = (caller, params) =>
-    this.restoredPrompts.respond(caller, params, () => this.mutations.respondToPrompt(caller, params))
+  respondToPrompt = this.mutations.respondToPrompt
   approveAutoReviewDenial = this.mutations.approveAutoReviewDenial
   setOption = this.mutations.setOption
   changeThreadGoal = this.mutations.changeThreadGoal

@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalApprovalItem,
-  AgentJournalRenderItem
+  AgentJournalRenderItem,
+  AgentJournalResolution
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import { refuse } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionTurnCompletionEvent } from '../../../../shared/agent-session/view/agent-session-turn-completion-wire'
 import {
   StructuredAgentSessionRestoredPrompts,
@@ -10,6 +12,10 @@ import {
 } from './structured-agent-session-restored-prompts'
 
 const SESSION = 'session-1'
+const REFUSED = {
+  ok: false as const,
+  refusal: refuse('agent_session_operation_invalid', { reason: 'promptGone' }, 'not live')
+}
 const OPTIONS: AgentJournalApprovalItem['options'] = [
   { id: 'allow', label: 'Allow', intent: 'allow_once' },
   { id: 'deny', label: 'Deny', intent: 'reject_once' }
@@ -50,19 +56,20 @@ function rig() {
   let emit: ((event: AgentSessionTurnCompletionEvent) => void) | null = null
   let running = false
   const sent: string[] = []
-  const respond = vi.fn(async () => ({ ok: false as const, refusal: {} as never }))
+  const respond = vi.fn<StructuredAgentSessionRestoredPromptsDeps['respond']>(async () => REFUSED)
   const journal = {
     reads: {
       item: async (id: string) => items.get(id) ?? null,
       generation: async () => ({ items: [...items.values()] }),
       cursor: async () => ({ epoch: 'e', sequence: 9 })
     },
-    mutatePrompt: async (input: { itemId: string; resolution: never }) => {
+    mutatePrompt: async (input: { itemId: string; resolution: AgentJournalResolution }) => {
       const current = items.get(input.itemId)!
+      const body = current.body.kind === 'approval' ? current.body : null
       items.set(input.itemId, {
         ...current,
         revision: current.revision + 1,
-        body: { ...(current.body as AgentJournalApprovalItem), resolution: input.resolution }
+        ...(body ? { body: { ...body, resolution: input.resolution } } : {})
       })
       return { itemId: input.itemId, revision: current.revision + 1 }
     }
@@ -95,11 +102,13 @@ function rig() {
         emit = null
       }
     },
-    resolvedBy: () => 'desktop',
     now: () => 1_000
-  } as unknown as StructuredAgentSessionRestoredPromptsDeps
-  const prompts = new StructuredAgentSessionRestoredPrompts(deps)
-  const live = vi.fn(async () => ({ ok: false as const, refusal: {} as never }))
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake journal and continuation host implement only the members this class calls.
+  const prompts = new StructuredAgentSessionRestoredPrompts(
+    deps as unknown as StructuredAgentSessionRestoredPromptsDeps
+  )
+  const live = vi.fn(async () => REFUSED)
   const answer = (optionId: string) =>
     prompts.respond(
       { callerKey: 'desktop' },
@@ -124,7 +133,12 @@ function rig() {
       prompt: {
         sessionId: SESSION,
         promptId: itemId,
-        scope: {} as never,
+        scope: {
+          workspaceId: 'w',
+          executionHostId: 'local',
+          wslDistro: null,
+          workspaceKind: 'git-worktree'
+        },
         journalCursor: { epoch: 'e', sequence: 10 },
         raisedAt: 2_000
       }
@@ -150,7 +164,7 @@ describe('answering a prompt whose agent exited before the restart', () => {
 
     await r.reask('new', 'digest-a')
     expect(r.respond).toHaveBeenCalledTimes(1)
-    expect(r.respond.mock.calls[0]![1]).toMatchObject({ itemId: 'new', optionId: 'allow' })
+    expect(r.respond.mock.calls[0]?.[1]).toMatchObject({ itemId: 'new', optionId: 'allow' })
     expect(r.listening()).toBe(false)
 
     // The answer is spent: a second identical ask goes to the person.
@@ -173,7 +187,7 @@ describe('answering a prompt whose agent exited before the restart', () => {
 
     expect(r.sent[0]).toContain('The user denied it.')
     await r.reask('new', 'digest-a')
-    expect(r.respond.mock.calls[0]![1]).toMatchObject({ itemId: 'new', optionId: 'deny' })
+    expect(r.respond.mock.calls[0]?.[1]).toMatchObject({ itemId: 'new', optionId: 'deny' })
   })
 
   it('refuses a restored card once the chat has moved on, without starting the agent', async () => {

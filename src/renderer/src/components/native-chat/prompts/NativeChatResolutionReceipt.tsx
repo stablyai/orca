@@ -1,4 +1,5 @@
 import { NativeChatQuestionText } from './NativeChatQuestionText'
+import { AGENT_EXIT_PROMPT_ENDING } from '../../../../../shared/agent-session/requests/prompts/agent-session-restored-prompt'
 import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatMessageTimestamp } from '../messages/rows/NativeChatMessageTimestamp'
 import { NativeChatAwaitingInputRow } from './NativeChatAwaitingInputRow'
@@ -112,7 +113,15 @@ export function NativeChatResolutionReceipt({
           <>
             <span>
               {resolution.state === 'cancelled'
-                ? t('components.native-chat.receipt.cancelled', NATIVE_CHAT_RECEIPT_COPY.cancelled)
+                ? resolution.endedBy === AGENT_EXIT_PROMPT_ENDING
+                  ? t(
+                      'components.native-chat.receipt.agentExited',
+                      NATIVE_CHAT_RECEIPT_COPY.agentExited
+                    )
+                  : t(
+                      'components.native-chat.receipt.cancelled',
+                      NATIVE_CHAT_RECEIPT_COPY.cancelled
+                    )
                 : t('components.native-chat.receipt.resolved', NATIVE_CHAT_RECEIPT_COPY.resolved)}
             </span>
             {resolution.resolvedBy ? (

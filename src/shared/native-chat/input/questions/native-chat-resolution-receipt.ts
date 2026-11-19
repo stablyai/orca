@@ -15,6 +15,7 @@ export const NATIVE_CHAT_RECEIPT_COPY = {
   unavailable: 'Selected answer unavailable',
   resolved: 'Resolved',
   cancelled: 'Cancelled',
+  agentExited: 'Not answered before the agent stopped',
   resolver: 'Answered on {{device}}',
   cancelledBy: 'Cancelled on {{device}}'
 } as const

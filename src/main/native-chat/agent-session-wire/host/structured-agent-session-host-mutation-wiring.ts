@@ -16,6 +16,10 @@ import { readStructuredAgentSessionOptions } from '../options/structured-agent-s
 import type { StructuredAgentSessionOptionsReader } from '../options/structured-agent-session-resting-options'
 import { IN_PROCESS_OPTIONS_READER } from '../options/structured-agent-session-option-observation'
 import { approveStructuredAutoReviewDenial } from '../operations/structured-auto-review-approval'
+import {
+  StructuredAgentSessionRestoredPrompts,
+  type StructuredAgentSessionRestoredPromptsDeps
+} from '../recovery/structured-agent-session-restored-prompts'
 import { settleStructuredAgentSessionLateDispatch } from '../operations/structured-agent-session-late-dispatch'
 import * as agentStart from '../startup/structured-agent-session-agent-start'
 import { joinClosingStructuredAgentSessionChild } from '../termination/structured-agent-session-child-close'
@@ -90,6 +94,7 @@ export function createStructuredAgentSessionHostMutationContext(
     stopAgent: (sessionId, ending) => input.lifetime.stopAgent(sessionId, ending),
     wakeQueuedDrain: (sessionId) => input.queued.drain.schedule(sessionId),
     acquireAborts: input.runtimeState.acquireAborts,
+    subscribeTurnCompletions: input.clientDelivery.subscribeTurnCompletions,
     now: input.now
   }
 }
@@ -97,8 +102,26 @@ export function createStructuredAgentSessionHostMutationContext(
 /** Resolve context per call so moved maps/fences cannot become stale closures. */
 export function structuredAgentSessionMutationDelegates(
   context: () => StructuredAgentSessionMutationContext,
-  attachContext: () => StructuredAgentSessionAttachContext
+  attachContext: () => StructuredAgentSessionAttachContext,
+  continuationHost: StructuredAgentSessionRestoredPromptsDeps['continuationHost']
 ) {
+  const live = (
+    caller: StructuredAgentSessionCaller,
+    params: Parameters<typeof respondToStructuredAgentSessionPrompt>[2]
+  ) => respondToStructuredAgentSessionPrompt(context(), caller, params)
+  // A prompt whose agent exited waiting on it is answered by resuming the chat.
+  const restoredPrompts = new StructuredAgentSessionRestoredPrompts({
+    conversation: (sessionId) => context().conversation(sessionId),
+    agentRunning: (sessionId) =>
+      (context().sessions.get(sessionId)?.child ?? null) !== null ||
+      context().startFlights.get(sessionId) !== undefined,
+    continuationHost,
+    respond: (caller, params) =>
+      restoredPrompts.respond(caller, params, () => live(caller, params)),
+    subscribeTurnCompletions: (subscriber) =>
+      context().subscribeTurnCompletions?.(subscriber) ?? (() => {}),
+    now: () => context().now()
+  })
   return {
     cancel: (
       caller: StructuredAgentSessionCaller,
@@ -107,7 +130,7 @@ export function structuredAgentSessionMutationDelegates(
     respondToPrompt: (
       caller: StructuredAgentSessionCaller,
       params: Parameters<typeof respondToStructuredAgentSessionPrompt>[2]
-    ) => respondToStructuredAgentSessionPrompt(context(), caller, params),
+    ) => restoredPrompts.respond(caller, params, () => live(caller, params)),
     approveAutoReviewDenial: (sessionId: string, itemId: string) =>
       approveStructuredAutoReviewDenial(context(), sessionId, itemId),
     setOption: (

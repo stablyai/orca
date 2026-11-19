@@ -10,7 +10,9 @@ export type RestartContinuationWording = Pick<AgentSessionResumeMarker, 'activit
   message?: string
 }
 
-export function restartContinuationBody(marker: RestartContinuationWording): AgentJournalMessageItem {
+export function restartContinuationBody(
+  marker: RestartContinuationWording
+): AgentJournalMessageItem {
   return {
     kind: 'message',
     role: 'user',

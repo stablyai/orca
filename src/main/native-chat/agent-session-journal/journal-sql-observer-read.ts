@@ -24,7 +24,10 @@ function withRestoredPromptAttention(
     return state
   }
   const { turnOutcome: _cut, ...summary } = state.summary
-  return { ...state, summary: { ...summary, status: 'attention', statusStartedAt: restored.observedAt } }
+  return {
+    ...state,
+    summary: { ...summary, status: 'attention', statusStartedAt: restored.observedAt }
+  }
 }
 
 /** Status, cuts and current work share one ready snapshot and one captured live authority. */

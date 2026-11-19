@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionClientDelivery } from '../publication/subscribers/structured-agent-session-client-delivery'
 import type { AgentChildWorkEvidence } from '../../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import type {
   AgentSessionMutationEnvelope,
@@ -53,6 +54,8 @@ export type StructuredAgentSessionMutationContext = {
     telemetryCallerKey?: string
   ) => Promise<StructuredAgentSessionStartClaim>
   startFlights: Pick<StructuredAgentSessionStartFlights, 'get'>
+  /** Prompt and completion edges, for a restored prompt's answer waiting on the resumed agent. */
+  subscribeTurnCompletions?: StructuredAgentSessionClientDelivery['subscribeTurnCompletions']
   startupAttempts: Pick<StructuredAgentSessionStartupAttempts, 'readiness'>
   deliveryOrder: StructuredAgentSessionDeliveryOrder
   trackProviderOperation?: <T>(operation: Promise<T>) => Promise<T>

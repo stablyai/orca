@@ -21089,6 +21089,7 @@
         "unavailable": "Selected answer unavailable",
         "emptyAnswer": "Empty answer",
         "cancelled": "Cancelled",
+        "agentExited": "Not answered before the agent stopped",
         "resolved": "Resolved",
         "resolver": "Answered on {{device}}",
         "cancelledBy": "Cancelled on {{device}}",
