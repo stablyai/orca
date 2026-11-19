@@ -3,7 +3,7 @@ name: Publish Codex history cleanup policy
 # Maintainer-only publisher: dispatch main to next, soak, then promote identical bytes to stable; emergency-off turns every kind off on both channels at once. Use GITHUB_TOKEN so release-policy accepts bot-authored prereleases.
 # Create the `codex-history-cleanup-policy` environment with required reviewers before the first dispatch, or GitHub creates it unprotected. Emergency-off waits for the same approval.
 # Pull requests touching the policy or its publisher run only the validation, so a bad edit fails before merge.
-# Emergency-off has its own concurrency group, so a pending publish never delays or cancels it. Limit: it still installs dependencies, since it imports the app's parser.
+# Emergency-off shares the publishes' concurrency group and cancels a running one (even one awaiting approval), so no publish can land after it. A publish dispatched while off is still pending replaces it: off then shows cancelled, so rerun it. Limit: it still installs dependencies, since it imports the app's parser.
 on:
   pull_request:
     paths:
@@ -26,7 +26,7 @@ on:
           - promote-stable
           - emergency-off
       revision:
-        description: 'emergency-off only: the lowest revision to use (1 to 2147483647), above any ever published; needed to replace a channel whose revision cannot be read'
+        description: 'emergency-off only: the lowest revision to use (1 to 2146483647), above any ever published; needed to replace a channel whose revision cannot be read'
         required: false
         type: string
         default: ''
@@ -36,8 +36,8 @@ permissions:
 
 concurrency:
   # Per ref, so a wrong-ref dispatch never replaces a pending one from main.
-  group: ${{ format('codex-history-cleanup-policy-{0}-{1}', github.event_name == 'pull_request' && 'validate' || inputs.action == 'emergency-off' && 'emergency-off' || 'publish', github.ref) }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ format('codex-history-cleanup-policy-{0}-{1}', github.event_name == 'pull_request' && 'validate' || 'publish', github.ref) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || inputs.action == 'emergency-off' }}
 
 jobs:
   # A dispatch from another ref must fail visibly, not skip green while nothing was published.
