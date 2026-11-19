@@ -3,7 +3,6 @@ import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-owners
 import { makeTabGroup, makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
-import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { createWorkspaceTabPaletteIndex } from './workspace-tab-palette-index'
 import { buildSearchableWorkspaceTabEntries } from './workspace-tab-palette-entry-builder'
 import type { BuildSearchableWorkspaceTabsOptions } from './workspace-tab-search-types'
@@ -43,7 +42,7 @@ function fleet(
           onOtherTabRead()
           return label
         }
-      }) as Tab
+      })
     })
     groupsByWorktree[worktree.id] = [
       makeTabGroup({ id: `group-${worktree.id}`, worktreeId: worktree.id, tabOrder: ids })

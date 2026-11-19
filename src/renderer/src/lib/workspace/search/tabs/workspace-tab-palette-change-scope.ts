@@ -1,16 +1,20 @@
 import { shallow } from 'zustand/shallow'
 import type { BuildSearchableWorkspaceTabsOptions } from './workspace-tab-search-types'
 
-// Records keyed by workspace id; a change to one workspace's value rebuilds only its entries.
-const WORKSPACE_KEYED_INPUTS = [
-  'unifiedTabsByWorktree',
-  'tabsByWorktree',
-  'groupsByWorktree',
-  'activeGroupIdByWorktree',
-  'activeTabIdByWorktree',
-  'activeFileIdByWorktree',
-  'activeTabTypeByWorktree'
-] as const
+type WorkspaceKeyedRecord = Readonly<Record<string, unknown>>
+
+// Records keyed by workspace id (read, never written here); a change to one workspace's value rebuilds only its entries.
+const WORKSPACE_KEYED_INPUTS: readonly ((
+  options: BuildSearchableWorkspaceTabsOptions
+) => WorkspaceKeyedRecord)[] = [
+  (options) => options.unifiedTabsByWorktree,
+  (options) => options.tabsByWorktree,
+  (options) => options.groupsByWorktree,
+  (options) => options.activeGroupIdByWorktree,
+  (options) => options.activeTabIdByWorktree,
+  (options) => options.activeFileIdByWorktree,
+  (options) => options.activeTabTypeByWorktree
+]
 
 function stableEntryInputs({
   agentStatusByPaneKey: _agentStatusByPaneKey,
@@ -35,9 +39,9 @@ function changedWorkspaceIds(
   options: BuildSearchableWorkspaceTabsOptions
 ): Set<string> {
   const changed = new Set<string>()
-  for (const field of WORKSPACE_KEYED_INPUTS) {
-    const before: Record<string, unknown> = previous[field]
-    const after: Record<string, unknown> = options[field]
+  for (const read of WORKSPACE_KEYED_INPUTS) {
+    const before = read(previous)
+    const after = read(options)
     if (before === after) {
       continue
     }
