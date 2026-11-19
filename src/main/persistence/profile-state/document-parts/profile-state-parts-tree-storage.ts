@@ -6,7 +6,10 @@ import {
   isRecord,
   ProfileStateDocumentCorruptionError
 } from '../documents/profile-state-document-validation'
-import { emitProfileStateDomainPayload } from './profile-state-document-parts'
+import {
+  emitProfileStateDomainPayload,
+  type ProfileStateDocumentPathPart
+} from './profile-state-document-parts'
 import {
   partsLeaf,
   partsTreeFromStoredParts,
@@ -30,7 +33,12 @@ export type CommittedPartsTree = {
 }
 
 function parsePath(key: string, domain: string): string[] {
-  const path: unknown = JSON.parse(key)
+  let path: unknown
+  try {
+    path = JSON.parse(key)
+  } catch {
+    path = undefined
+  }
   if (!Array.isArray(path) || !path.every((segment) => typeof segment === 'string')) {
     throw new ProfileStateDocumentCorruptionError(
       `Profile state document part key is invalid: ${domain}`,
@@ -40,11 +48,15 @@ function parsePath(key: string, domain: string): string[] {
   return path
 }
 
+function hashPathParts(parts: Iterable<ProfileStateDocumentPathPart>): string {
+  const hash = createHash('sha256')
+  emitProfileStateDomainPayload(parts, (piece) => hash.update(piece, 'utf8'))
+  return hash.digest('hex')
+}
+
 /** sha256 of the document the tree stores, streamed so the whole text is never built. */
 export function hashPartsTree(root: PartsNode): string {
-  const hash = createHash('sha256')
-  emitProfileStateDomainPayload(partsTreeParts(root), (piece) => hash.update(piece, 'utf8'))
-  return hash.digest('hex')
+  return hashPathParts(partsTreeParts(root))
 }
 
 /** The tree for parts this writer just stored whole, so the next patch needs no read. */
@@ -91,15 +103,18 @@ export function readCommittedPartsTree(
       leaf: partsLeaf(row.payload, row.content_hash)
     })
   }
-  const root = partsTreeFromStoredParts(parts)
-  if (hashPartsTree(root) !== stored.contentHash) {
+  // Hash in stored order, as readers assemble it; the tree would re-sort integer-like keys.
+  if (
+    hashPathParts(parts.map(({ path, leaf }) => ({ path, payload: leaf.payload }))) !==
+    stored.contentHash
+  ) {
     throw new ProfileStateDocumentCorruptionError(
       `Profile state document parts hash mismatch: ${domain}`,
       domain
     )
   }
   return {
-    root,
+    root: partsTreeFromStoredParts(parts),
     rows,
     contentHash: stored.contentHash,
     revision: stored.revision,

@@ -10,7 +10,8 @@ import { profileStateWriterPatching as patching } from './profile-state-patched-
 
 // Perf contract (#44784): each session patch (one per PTY bind) re-serialized the whole session domain and
 // read every stored part, so a spawn burst over ~1,900 workspaces paid ~10M chars per bind. A one-entry patch
-// must serialize, write and read the same amount at N and 10N workspaces.
+// must serialize, write and read the same amount at N and 10N workspaces. The whole-document hash still
+// streams every part: older builds verify it.
 
 const temporaryDirectories: string[] = []
 afterEach(() => {

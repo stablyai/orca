@@ -132,13 +132,15 @@ export function emitProfileStateDomainPayload(
 export function assembleProfileStateDomainPayload(
   parts: readonly ProfileStateDocumentPart[]
 ): string {
-  let out = ''
-  emitProfileStateDomainPayload(
-    parts.map(({ key, payload }) => ({ path: parsePartKey(key), payload })),
-    (piece) => {
-      out += piece
+  function* pathParts(): Generator<ProfileStateDocumentPathPart> {
+    for (const { key, payload } of parts) {
+      yield { path: parsePartKey(key), payload }
     }
-  )
+  }
+  let out = ''
+  emitProfileStateDomainPayload(pathParts(), (piece) => {
+    out += piece
+  })
   return out
 }
 
