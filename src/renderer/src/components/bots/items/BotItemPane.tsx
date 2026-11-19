@@ -1,7 +1,7 @@
 // The open item in the list's place: the back row with its place in the list and ↓ ↑ to the next and
 // previous item, over the item itself. Esc, and Back's chord (Cmd+[ / Alt+Left), go back from anywhere
-// in it, and typing anywhere in it goes to the comment box. The row stays up across steps, so a
-// clicked arrow keeps focus; offline only the item is off.
+// in it, and typing or dictating anywhere in it goes to the comment box. The row stays up across
+// steps, so a clicked arrow keeps focus; offline only the item is off.
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { ArrowLeft, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,7 @@ import type { BotItem } from '../../../../../shared/bots/bot-items'
 import { BotItemView } from './BotItemView'
 import type { BotItemCommentBoxHandle } from './BotItemCommentBox'
 import { typeIntoBotItemComment } from './bot-item-comment-typing'
+import { registerDictationInputOwner } from '../../dictation/dictation-insertion-target'
 import { BotItemsReadFailed } from './BotItemsReadFailed'
 import { BotAvatar } from '../BotAvatar'
 import type { BotItemWalkState } from './use-bot-item-walk'
@@ -81,6 +82,12 @@ export function BotItemPaneFrame({
   // Open: focus here, so Esc works while the item reads; the item takes it once it shows.
   useEffect(() => {
     root.current?.focus({ preventScroll: true })
+  }, [])
+  useEffect(() => {
+    const pane = root.current
+    return pane
+      ? registerDictationInputOwner(pane, { focusInput: () => comment.current?.focus() })
+      : undefined
   }, [])
   return (
     <div

@@ -28,10 +28,10 @@ import {
   type JournalLegacyFailure
 } from './journal-legacy-reconcile-marks'
 import {
-  captureJournalLegacySourceReceipt,
   JOURNAL_LEGACY_SOURCE_RECEIPT,
   sameJournalLegacySource
 } from './journal-legacy-source-receipt'
+import { captureJournalLegacySourceReceipt } from './journal-legacy-source-capture'
 
 /** Set after a pass absorbed every original chat, so each chat here carries its revision. */
 export const JOURNAL_LEGACY_REVISIONS_KEPT = 'journal.legacy-revisions-kept.v1'

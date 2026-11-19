@@ -60,13 +60,6 @@ function renderAnswer(
 }
 
 describe('a bot’s quiet result in its home chat', () => {
-  it('shows what came before the marker with no caption', () => {
-    renderAnswer('Checked the inbox; nothing new.\n\nNO_REPLY\n', BOT_HOME)
-    expect(screen.getByText('Checked the inbox; nothing new.')).toBeInTheDocument()
-    expect(screen.queryByText('Nothing to report')).toBeNull()
-    expect(screen.queryByText(/NO_REPLY/)).toBeNull()
-  })
-
   it('draws no caption when its turn did something others see', () => {
     renderAnswer('NO_REPLY', BOT_HOME, { inActingTurn: true })
     expect(screen.queryByText('Nothing to report')).toBeNull()
@@ -80,14 +73,9 @@ describe('a bot’s quiet result in its home chat', () => {
   })
 
   it('never draws the marker while the row still reads as live', () => {
-    for (const text of ['NO_REP', 'NO_REPLY', '**NO_REPLY**\n']) {
-      renderAnswer(text, BOT_HOME, {}, true)
-      expect(screen.queryByText(/NO_REP|\*\*/)).toBeNull()
-      cleanup()
-    }
-    renderAnswer('Checked the inbox.\n\nNO_REPLY', BOT_HOME, {}, true)
+    renderAnswer('Checked the inbox.\n\nNO_REP', BOT_HOME, {}, true)
     expect(screen.getByText('Checked the inbox.')).toBeInTheDocument()
-    expect(screen.queryByText(/NO_REPLY/)).toBeNull()
+    expect(screen.queryByText(/NO_REP/)).toBeNull()
   })
 
   it('leaves any other chat’s message as written', () => {

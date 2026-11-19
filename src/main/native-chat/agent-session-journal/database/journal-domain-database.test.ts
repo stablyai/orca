@@ -1,7 +1,5 @@
-import {
-  captureJournalLegacySourceReceipt,
-  JOURNAL_LEGACY_SOURCE_RECEIPT
-} from './journal-legacy-source-receipt'
+import { JOURNAL_LEGACY_SOURCE_RECEIPT } from './journal-legacy-source-receipt'
+import { captureJournalLegacySourceReceipt } from './journal-legacy-source-capture'
 import { createHash } from 'node:crypto'
 import {
   existsSync,

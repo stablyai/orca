@@ -37,7 +37,11 @@ describe('a still-streaming answer', () => {
       inActingTurn: false
     }).words
 
-  it('keeps a closing code fence and words that only start like the marker', () => {
+  it('hides a growing marker and preserves surrounding prose and Markdown', () => {
+    expect(streaming('NO_REP')).toBe('')
+    expect(streaming('NO_REPLY')).toBe('')
+    expect(streaming('**NO_REPLY**\n')).toBe('')
+    expect(streaming('Checked the queue.\n\nNO_REPL')).toBe('Checked the queue.')
     expect(streaming('```ts\nconst a = 1\n```')).toBe('```ts\nconst a = 1\n```')
     expect(streaming('Not yet')).toBe('Not yet')
     expect(streaming('NO_REPLYING')).toBe('NO_REPLYING')
