@@ -82,7 +82,7 @@ async function deferredSession() {
   return mountSession(request)
 }
 
-function mountSession(request: CodexAccountRestart) {
+function mountSession(request: CodexAccountRestart, arm = true) {
   const retained = new Map([[leaf, 'saved output']])
   const connect = vi.fn()
   const value = mountedSpawnSession(request, retained, connect)
@@ -110,7 +110,9 @@ function mountSession(request: CodexAccountRestart) {
   const session = value as unknown as ConnectPanePtySession
   installSpawnDeferredSleep(session)
   bindStartFreshSpawn(session)
-  session.enterSpawnDeferredSleep('paused', request.startup, {}, true)
+  if (arm) {
+    session.enterSpawnDeferredSleep('paused', request.startup, {}, true)
+  }
   sessions.push(session)
   return {
     session,
@@ -354,7 +356,7 @@ it('re-arms a receipt-backed paused restart after its view is replaced and resum
   if (typeof current !== 'object') {
     throw new Error('missing retained restart')
   }
-  const replacement = mountSession(current)
+  const replacement = mountSession(current, false)
   replacement.session.deps.accountRestartToken = undefined
   await routeCodexAccountRestartWake(replacement.session)
   expect(replacement.connect).not.toHaveBeenCalled()
@@ -398,7 +400,7 @@ it('reattaches a proven undispatched original without resuming or creating on an
   if (typeof current !== 'object') {
     throw new Error('missing failure')
   }
-  const view = mountSession(current)
+  const view = mountSession(current, false)
   view.session.deps.accountRestartToken = undefined
   view.session.buildColdRestoreAgentResumeStartup = () => first.request.startup as never
   const attachments: unknown[] = []
