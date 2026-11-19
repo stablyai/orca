@@ -42,7 +42,7 @@ import { getWorkspaceCleanupRunner } from '../../workspaces/cleanup/workspace-cl
 import { closeBrowserExtensionProfileDocumentStores } from '../../browser/extensions/profile-storage/browser-extension-profile-document-store'
 import { shutdownWatchersOnce } from './filesystem-watcher-quit-shutdown'
 import { flushBrowserSessionCookiesOnQuit } from '../../browser/cookies/session-restore/browser-session-cookie-restore'
-import type { QuitStopTarget } from '../../runtime/terminal/stop/quit-idle-agent-stops'
+import { selectIdleAgentQuitStops, stopIdleAgentsAfterFinalSave } from './quit-idle-agent-stop-step'
 
 // First will-quit pass awaits teardown; the re-fired pass must exit without starting writes again.
 let daemonDisconnectDone = false
@@ -50,21 +50,6 @@ let daemonDisconnectDone = false
 const GROK_HOOK_CLEANUP_DEADLINE_MS = 2_000
 // Allow pack-refs time to terminate and unlink its lock.
 const REF_MAINTENANCE_QUIT_DEADLINE_MS = 2_000
-// Each idle agent's history checkpoint and stop; one that misses it keeps running, as before.
-const IDLE_AGENT_QUIT_STOP_DEADLINE_MS = 4_000
-
-/** Update installs keep every session for warm reattach; serve panes belong to paired clients. */
-function selectIdleAgentQuitStops(updateQuitInProgress: boolean): QuitStopTarget[] {
-  if (updateQuitInProgress || state.isServeMode) {
-    return []
-  }
-  try {
-    return state.runtime?.selectIdleAgentTerminalsForQuit() ?? []
-  } catch (error) {
-    console.warn('[quit] Failed to pick idle agents to stop:', error)
-    return []
-  }
-}
 
 function installBeforeQuitHandler(): void {
   app.on('before-quit', (event: Event) => {
@@ -168,7 +153,6 @@ function installWillQuitHandler(): void {
       REF_MAINTENANCE_QUIT_DEADLINE_MS
     ).then(() => {})
     state.uninstallRepoMaintenanceIdleGate = null
-    // Pick idle agents while hook rows and remote viewers still exist; teardown below clears them.
     const idleAgentQuitStops = selectIdleAgentQuitStops(updateQuitInProgress)
     // Chat teardown reads background work afterward; clearing status loses subagent/command-only resume offers.
     agentHookServer.stop({ keepStatus: true })
@@ -281,15 +265,7 @@ function installWillQuitHandler(): void {
       if (isDevParentShutdownRequested()) {
         return daemon.shutdownDaemon()
       }
-      // Stop idle agents only after their resume records are durable, so next launch resumes them as after a reboot.
-      if (idleAgentQuitStops.length > 0 && (await storeFlush)) {
-        await state.runtime
-          ?.stopIdleAgentTerminalsForQuit(
-            idleAgentQuitStops,
-            Date.now() + IDLE_AGENT_QUIT_STOP_DEADLINE_MS
-          )
-          .catch((error) => console.warn('[quit] Failed to stop idle agents:', error))
-      }
+      await stopIdleAgentsAfterFinalSave(idleAgentQuitStops, storeFlush)
       return daemon.disconnectDaemon()
     })
     // Bound unsettled transports and these final writes so quit cannot hang (#9447). Failures still exit; atomic swaps preserve old files if the final debounce is lost.
