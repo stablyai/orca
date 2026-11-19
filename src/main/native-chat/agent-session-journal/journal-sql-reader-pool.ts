@@ -1,4 +1,7 @@
-import type { JournalSqlForkReader, JournalSqlConversionReader } from './journal-sql-reader-slot'
+import type {
+  JournalSqlForkReader,
+  JournalSqlConversionReader
+} from './journal-sql-reader-reservations'
 import { ReaderSlot } from './journal-sql-reader-slot'
 import { JOURNAL_SQL_READERS } from './journal-sql-reader-requests'
 import type { JournalForkPreparationInput } from './journal-fork-preparation'
@@ -20,6 +23,12 @@ import type {
   JournalDomainHistoryRequest,
   JournalDomainHistoryWork
 } from './journal-domain-history-page'
+import { JournalReaderAdmission } from './journal-sql-reader-admission'
+import { JournalReaderReplyCredit } from './journal-sql-reader-reply-credit'
+import {
+  trackJournalReaderRetention,
+  type JournalReaderRetention
+} from './journal-sql-reader-retention'
 
 /** Four WAL readers isolate slow pages; each request executes entirely on its assigned connection. */
 export class JournalSqlReaderPool {
@@ -30,6 +39,9 @@ export class JournalSqlReaderPool {
   private conversionSlot?: ReaderSlot
   private forkSlot?: ReaderSlot
   private forkRelease?: PromiseWithResolvers<void>
+  private readonly replyCredit = new JournalReaderReplyCredit()
+  /** Lifetime totals of readers already replaced, so the pool's totals never go backwards. */
+  private readonly replaced = { receivedBytes: 0, consumedBytes: 0, creditWaitsExpired: 0 }
 
   constructor(
     private readonly filename: string,
@@ -40,7 +52,31 @@ export class JournalSqlReaderPool {
     ),
     private readonly cacheOutline?: (cache: JournalOutlineCache) => void,
     private readonly assertReadable?: () => void
-  ) {}
+  ) {
+    trackJournalReaderRetention(this)
+  }
+
+  retention(): JournalReaderRetention {
+    const total: JournalReaderRetention = {
+      inFlight: 0,
+      unconsumed: 0,
+      waiting: 0,
+      oldestWaitMs: 0,
+      ...this.replaced,
+      outstandingBytes: this.replyCredit.outstandingBytes()
+    }
+    for (const slot of this.slots) {
+      const stats = slot.admissionStats()
+      total.inFlight += stats.inFlight
+      total.unconsumed += stats.unconsumed
+      total.waiting += stats.waiting
+      total.oldestWaitMs = Math.max(total.oldestWaitMs, stats.oldestWaitMs)
+      total.receivedBytes += stats.receivedBytes
+      total.consumedBytes += stats.consumedBytes
+      total.creditWaitsExpired += stats.creditWaitsExpired
+    }
+    return total
+  }
 
   async prepareFork(
     input: JournalForkPreparationInput,
@@ -100,15 +136,20 @@ export class JournalSqlReaderPool {
     return (await this.domainHistoryFrame(request)).result
   }
 
+  /** Aborting withdraws a read still waiting for admission. */
   async domainHistoryFrame(
     request: JournalDomainHistoryRequest,
-    work?: JournalDomainHistoryWork
+    work?: JournalDomainHistoryWork,
+    signal?: AbortSignal
   ): Promise<JournalDomainHistoryFrame> {
-    const response = await this.slot().request({
-      kind: 'domain-history',
-      request,
-      ...(work ? { work } : {})
-    })
+    const response = await this.slot().request(
+      {
+        kind: 'domain-history',
+        request,
+        ...(work ? { work } : {})
+      },
+      { signal }
+    )
     if (response.type !== 'page') {
       throw new Error('journal reader returned no domain history page')
     }
@@ -176,6 +217,10 @@ export class JournalSqlReaderPool {
     for (let index = this.slots.length - 1; index >= 0; index--) {
       if (this.slots[index]!.failed) {
         const [failed] = this.slots.splice(index, 1)
+        const stats = failed!.admissionStats()
+        this.replaced.receivedBytes += stats.receivedBytes
+        this.replaced.consumedBytes += stats.consumedBytes
+        this.replaced.creditWaitsExpired += stats.creditWaitsExpired
         const closed = failed!.close().finally(() => this.retiring.delete(closed))
         this.retiring.add(closed)
       }
@@ -184,7 +229,13 @@ export class JournalSqlReaderPool {
       .filter((slot) => slot !== this.forkSlot && (!forFork || slot !== this.conversionSlot))
       .toSorted((a, b) => a.pendingCount - b.pendingCount)[0]
     if ((!slot || slot.pendingCount > 0) && this.slots.length < JOURNAL_SQL_READERS) {
-      slot = new ReaderSlot(this.filename, this.originalFilename, this.workerPath)
+      slot = new ReaderSlot(
+        this.filename,
+        this.originalFilename,
+        this.workerPath,
+        new JournalReaderAdmission(),
+        this.replyCredit
+      )
       this.slots.push(slot)
     }
     return slot!
@@ -201,4 +252,4 @@ export class JournalSqlReaderPool {
 }
 
 /** The source transaction is released before this reader emits any child page. */
-export { JournalSqlForkReader, JournalSqlConversionReader } from './journal-sql-reader-slot'
+export { JournalSqlForkReader, JournalSqlConversionReader } from './journal-sql-reader-reservations'

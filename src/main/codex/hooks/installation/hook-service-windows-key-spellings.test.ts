@@ -39,12 +39,13 @@ import {
 const homes = setupCodexHookHomes(homedirMock, getPathMock)
 
 describe('a managed home on Windows', () => {
-  it('rewrites the backslash approval key that Codex reads when only the forward-slash one is left', async () => {
+  it('restores missing backslash approvals and replaces legacy forward-slash tables', async () => {
     lookupInternals.resetForTesting()
     startCodexHookHashLookup(Promise.resolve())
     const service = new CodexHookService()
     expect((await service.install()).state).toBe('installed')
-    const tomlPath = join(homes.userDataDir, 'codex-runtime-home', 'home', 'config.toml')
+    const home = join(homes.userDataDir, 'codex-runtime-home', 'home')
+    const tomlPath = join(home, 'config.toml')
     const installed = readFileSync(tomlPath, 'utf-8')
     const backslashTables = installed.match(/^\[hooks\.state\.'C:\\[^\n]*$/gm) ?? []
     expect(backslashTables.length).toBeGreaterThan(0)
@@ -54,30 +55,19 @@ describe('a managed home on Windows', () => {
       installed.replace(/^\[hooks\.state\.'C:\\[^\n]*\n(?:(?!\[)[^\n]*\n?)*/gm, '')
     )
     expect(readFileSync(tomlPath, 'utf-8')).not.toMatch(/^\[hooks\.state\.'C:\\/m)
-    expect(service.getStatus(join(homes.userDataDir, 'codex-runtime-home', 'home')).state).toBe(
-      'partial'
-    )
+    expect(service.getStatus(home).state).toBe('partial')
 
     expect((await service.install()).state).toBe('installed')
 
     expect(readFileSync(tomlPath, 'utf-8').match(/^\[hooks\.state\.'C:\\[^\n]*$/gm)).toEqual(
       backslashTables
     )
-  })
-
-  it('replaces a legacy forward-slash table with the backslash one, as main repairs it', async () => {
-    lookupInternals.resetForTesting()
-    startCodexHookHashLookup(Promise.resolve())
-    const service = new CodexHookService()
-    await service.install()
-    const home = join(homes.userDataDir, 'codex-runtime-home', 'home')
-    const tomlPath = join(home, 'config.toml')
     const source = `C:${join(home, 'hooks.json').replace(/\//g, '\\')}`
     const canonical = `[hooks.state.'${source}:permission_request:0:0']`
     const legacy = `[hooks.state."${source.replace(/\\/g, '/')}:permission_request:0:0"]`
-    const installed = readFileSync(tomlPath, 'utf-8')
-    expect(installed).toContain(canonical)
-    writeFileSync(tomlPath, installed.replace(canonical, legacy))
+    const restored = readFileSync(tomlPath, 'utf-8')
+    expect(restored).toContain(canonical)
+    writeFileSync(tomlPath, restored.replace(canonical, legacy))
 
     expect(service.getStatus(home).state).toBe('partial')
     expect((await service.install()).state).toBe('installed')

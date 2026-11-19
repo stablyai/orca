@@ -187,7 +187,18 @@
       "webView": "Desktop-Ansicht der Website anzeigen"
     },
     "loadFailure": {
-      "retry": "Erneut versuchen"
+      "retry": "Erneut versuchen",
+      "connectionNotSecure": "Die Verbindung ist nicht sicher",
+      "certificateNameMismatch": "Das Zertifikat stimmt nicht mit {{value0}} überein.",
+      "certificateDateInvalid": "Das Zertifikat für {{value0}} ist zum aktuellen Datum und zur aktuellen Uhrzeit nicht gültig.",
+      "certificateAuthorityInvalid": "Orca vertraut der Zertifizierungsstelle nicht, die das Zertifikat für {{value0}} ausgestellt hat.",
+      "certificateVerificationFailed": "Orca konnte das Zertifikat für {{value0}} nicht überprüfen.",
+      "proceedUnsafe": "Trotzdem fortfahren (unsicher)",
+      "connecting": "Verbindung wird hergestellt…",
+      "certificateChallengeExpired": "Diese Zertifikatsgenehmigung ist abgelaufen. Die Seite erneut laden, um eine neue anzufordern.",
+      "certificateChallengeChanged": "Die Zertifikatsanfrage hat sich geändert. Die Seite erneut laden und die neue Warnung prüfen.",
+      "certificateProceedFailed": "Orca konnte diese Zertifikatsanfrage nicht genehmigen. Die Seite neu laden und erneut versuchen.",
+      "certificateChallengeUnavailable": "Diese Zertifikatsanfrage ist nicht mehr verfügbar. Die Seite erneut laden, um eine neue anzufordern."
     }
   },
   "chat": {
@@ -2793,6 +2804,9 @@
     },
     "nativeChatView": {
       "linkedMessageMissing": "Diese Nachricht wurde nicht gefunden."
+    },
+    "browserProfile": {
+      "default": "Standard"
     }
   },
   "settings": {
