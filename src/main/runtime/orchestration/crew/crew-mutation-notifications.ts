@@ -88,12 +88,57 @@ const dispatchOf = (value: unknown): string | undefined =>
       ? value.dispatchId
       : undefined
 
-/** Worker progress writes touch one dispatch's own row, never which dispatches a crew shows. */
-const dispatchScopedMutations: ReadonlySet<keyof OrchestrationDb> = new Set([
+/** Progress writes change one shown row's stage or liveness, never who a crew shows: patched, not rebuilt. */
+const progressMutations: ReadonlySet<keyof OrchestrationDb> = new Set([
   'recordWorkerStage',
   'markWorkerDispatchReady',
   'recordAttemptObservation'
 ])
+
+/** Lifecycle writes about one existing Dispatch (or one remote attachment, keyed by it). */
+const dispatchMutations: ReadonlySet<keyof OrchestrationDb> = new Set([
+  'reconcileFederatedWorkerStart',
+  'reconcileMissingWorkerTerminal',
+  'failWorkerStart',
+  'markWorkerStartUnknown',
+  'beginWorkerStop',
+  'settleWorkerStop',
+  'markWorkerStopUnknown',
+  'abandonWorkerDispatch',
+  'completeDispatch',
+  'failDispatch',
+  'markRemoteAttachmentReady',
+  'recordRemoteAttachmentStage',
+  'updateRemoteAttachmentSetupEvidence',
+  'failRemoteAttachment',
+  'beginRemoteAttachmentStop',
+  'settleRemoteAttachmentStop',
+  'markRemoteAttachmentStopUnknown',
+  'requestRemoteAttachmentTerminalRelease',
+  'settleRemoteAttachmentInRelayTransaction'
+])
+
+/** Collects every Dispatch the call wrote, by the worker status notice; null once one was created or removed. */
+function collectDispatchWrites<T>(db: OrchestrationDb, run: () => T): [T, Set<string> | null] {
+  let written: Set<string> | null = new Set()
+  const previous = db.crewDispatchNotice
+  db.crewDispatchNotice = (id, change) => {
+    previous?.(id, change)
+    if (!written) {
+      return
+    }
+    if (change !== 'written' || !id) {
+      written = null
+    } else {
+      written.add(id)
+    }
+  }
+  try {
+    return [run(), written]
+  } finally {
+    db.crewDispatchNotice = previous
+  }
+}
 
 /** Wake after the synchronous outer mutation; nested writes coalesce and rolled-back reads compare equal. */
 export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationPrototype }): void {
@@ -168,7 +213,11 @@ export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationP
       configurable: true,
       writable: true,
       value(this: OrchestrationDb, ...args: unknown[]) {
-        const result = original.apply(this, args)
+        const scoped =
+          (progressMutations.has(name) || dispatchMutations.has(name)) && dispatchOf(args[0])
+        const [result, written] = scoped
+          ? collectDispatchWrites(this, () => original.apply(this, args))
+          : [original.apply(this, args), null]
         if (
           typeof result === 'object' &&
           result !== null &&
@@ -187,12 +236,16 @@ export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationP
         ) {
           return result
         }
-        const dispatchId = dispatchScopedMutations.has(name) ? dispatchOf(args[0]) : undefined
-        this.crewChanges.notify(
-          dispatchId
-            ? scopedCrewChange(['topology'], { dispatchIds: new Set([dispatchId]) })
-            : new Set([trafficMutations.has(name) ? 'traffic' : 'topology'])
-        )
+        if (scoped && written) {
+          written.add(scoped)
+          this.crewChanges.notify(
+            scopedCrewChange([progressMutations.has(name) ? 'assignments' : 'topology'], {
+              dispatchIds: written
+            })
+          )
+        } else {
+          this.crewChanges.notify(new Set([trafficMutations.has(name) ? 'traffic' : 'topology']))
+        }
         return result
       }
     })

@@ -102,6 +102,7 @@ export function buildCrewSnapshot(
           remoteAttachment.process === deps.processForHandle?.(self.terminalHandle)
         )
       }))
+  relevance?.addOwnDispatches(aliasesFor(self.address), remoteAttachment?.id)
   const ownedRunAddresses = host.sourceInputs.ownedRuns(self)
   for (const current of host.sourceInputs.runInputs(ownedRunAddresses)) {
     const coordinator = party(current.session, current.handle, current.pane, `run:${current.id}`)

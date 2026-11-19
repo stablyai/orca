@@ -1,6 +1,7 @@
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 
-export type CrewFacet = 'topology' | 'records' | 'status' | 'names' | 'traffic'
+/** `assignments`: scoped Dispatches' own rows changed (stage, liveness), not who a crew shows. */
+export type CrewFacet = 'topology' | 'assignments' | 'records' | 'status' | 'names' | 'traffic'
 export type CrewInvalidation = ReadonlySet<CrewFacet> & {
   readonly recordIds?: readonly string[]
   readonly trafficAddresses?: ReadonlySet<string>
@@ -8,7 +9,7 @@ export type CrewInvalidation = ReadonlySet<CrewFacet> & {
   readonly paneKeys?: ReadonlySet<string>
   /** As `paneKeys`, for chats named by their Orca session. */
   readonly sessionIds?: ReadonlySet<string>
-  /** A topology change about these dispatches only; dispatches no crew row shows are skipped. */
+  /** A topology or assignments change about these dispatches only; dispatches no crew row shows are skipped. */
   readonly dispatchIds?: ReadonlySet<string>
 }
 
@@ -39,6 +40,18 @@ export class CrewRelevance {
     }
     if (tab) {
       this.tabs.add(tab)
+    }
+  }
+
+  /** A party's own Dispatches and remote attachment place it under its manager; their writes can change it. */
+  addOwnDispatches(aliases: readonly string[], remoteAttachment: string | undefined): void {
+    for (const alias of aliases) {
+      if (alias.startsWith('dispatch:')) {
+        this.dispatches.add(alias.slice('dispatch:'.length))
+      }
+    }
+    if (remoteAttachment) {
+      this.dispatches.add(remoteAttachment)
     }
   }
 

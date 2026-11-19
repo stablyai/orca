@@ -3,19 +3,28 @@ import { CrewRelevance, type CrewFacet, type CrewInvalidation } from './crew-cha
 import { buildCrewSnapshot } from './crew-party-snapshot'
 import type { CrewReadDependencies } from './crew-read-dependencies'
 import type { OrchestrationCrewSnapshot } from '../../../../shared/orchestration/orchestration-crew'
+import { readCrewAssignmentIds } from './crew-query'
 import {
   createCrewHostDerivation,
+  patchCrewAssignmentStages,
   refreshCrewStatuses,
   type CrewHostDerivation
 } from './crew-host-derivation'
 
 /** One host derivation is shared by all mounted parties; the last subscriber releases its inputs. */
+/** Past this many skipped Dispatches the next read rebuilds instead of tracking more. */
+const STALE_CAP = 4096
+
 export class CrewReadModel {
   private host: CrewHostDerivation | undefined
   /** What the current host's reads showed; reset with the host, refilled by the reads every wake starts. */
   private relevance: CrewRelevance | undefined
-  /** Scoped wakes skipped since the host was built: a party subscribing later may show them. */
-  private skipped: 'status' | 'topology' | undefined
+  /** Status wakes skipped since the host was built: a party subscribing later may show them. */
+  private skipped: 'status' | undefined
+  /** Dispatches whose writes were skipped since the host was built; a read that shows one rebuilds. */
+  private readonly stale = new Set<string>()
+  /** Shown Dispatches whose own rows changed, patched on the next read. */
+  private readonly patches = new Set<string>()
   private readonly listeners = new Set<() => void>()
   private readonly renamed = new Set<string>()
   private readonly dirty = new Set<CrewFacet>()
@@ -53,12 +62,24 @@ export class CrewReadModel {
       this.skipped ??= 'status'
       return false
     }
-    if (facets.dispatchIds && facetList.every((facet) => facet === 'topology')) {
-      if ([...facets.dispatchIds].some((id) => relevance.dispatches.has(id))) {
-        return true
+    if (
+      facets.dispatchIds &&
+      facetList.every((facet) => facet === 'topology' || facet === 'assignments')
+    ) {
+      let shown = false
+      for (const id of facets.dispatchIds) {
+        if (relevance.dispatches.has(id)) {
+          shown = true
+          if (facets.has('assignments')) {
+            this.patches.add(id)
+          }
+        } else if (this.stale.size < STALE_CAP) {
+          this.stale.add(id)
+        } else {
+          this.dirty.add('topology')
+        }
       }
-      this.skipped = 'topology'
-      return false
+      return shown
     }
     return true
   }
@@ -90,10 +111,8 @@ export class CrewReadModel {
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener)
     this.unwatch ??= this.watch(this.invalidate, this.readRelevance)
-    // A party joining reads rows the skipped wakes may have changed.
-    if (this.skipped === 'topology') {
-      this.dirty.add('topology')
-    } else if (this.skipped === 'status') {
+    // A party joining reads rows the skipped wakes may have changed; stale Dispatches it shows rebuild on read.
+    if (this.skipped === 'status') {
       this.dirty.add('status').add('names')
     }
     this.skipped = undefined
@@ -105,6 +124,8 @@ export class CrewReadModel {
         this.host = undefined
         this.relevance = undefined
         this.skipped = undefined
+        this.stale.clear()
+        this.patches.clear()
         this.dirty.clear()
         this.trafficAddresses.clear()
         this.broadTraffic = false
@@ -114,6 +135,25 @@ export class CrewReadModel {
   }
 
   read = (address: string): OrchestrationCrewSnapshot => {
+    const snapshot = this.readOnce(address)
+    // A row now showing a Dispatch whose write was skipped reads stale assignments: rebuild once.
+    if (this.host && this.relevance && this.stale.size > 0) {
+      for (const id of this.relevance.dispatches) {
+        if (this.stale.has(id)) {
+          this.dirty.add('topology')
+          return this.readOnce(address)
+        }
+      }
+    }
+    return snapshot
+  }
+
+  private rebuilt(host: CrewHostDerivation): CrewHostDerivation {
+    this.stale.clear()
+    return host
+  }
+
+  private readOnce(address: string): OrchestrationCrewSnapshot {
     const now = Date.now()
     const dirty = new Set(this.dirty)
     const renamed = new Set(this.renamed)
@@ -123,6 +163,21 @@ export class CrewReadModel {
     this.trafficAddresses.clear()
     this.broadTraffic = false
     const previousHost = this.host
+    if (this.host && this.patches.size > 0 && !dirty.has('topology') && !dirty.has('records')) {
+      const patched = this.host.deps.db
+        ? patchCrewAssignmentStages(
+            this.host,
+            readCrewAssignmentIds(this.host.deps.db, [...this.patches]),
+            this.patches
+          )
+        : this.host
+      if (patched) {
+        this.host = patched
+      } else {
+        dirty.add('topology')
+      }
+    }
+    this.patches.clear()
     if (
       !this.host ||
       dirty.has('topology') ||
@@ -144,6 +199,7 @@ export class CrewReadModel {
       }
       this.host = host
       this.skipped = undefined
+      this.stale.clear()
     } else if (dirty.has('status') || dirty.has('names')) {
       const previous = this.host
       this.host = undefined
@@ -155,8 +211,11 @@ export class CrewReadModel {
         previous.registry.refreshRecordNames(deps.records, renamed)
         this.host = isDeepStrictEqual(identities(previous.deps.statuses), identities(statuses))
           ? refreshCrewStatuses(previous, statuses)
-          : createCrewHostDerivation({ ...sources, records: previous.deps.records, statuses }, () =>
-              Math.max(32, this.listeners.size * 2)
+          : this.rebuilt(
+              createCrewHostDerivation(
+                { ...sources, records: previous.deps.records, statuses },
+                () => Math.max(32, this.listeners.size * 2)
+              )
             )
         if (this.skipped === 'status') {
           this.skipped = undefined
