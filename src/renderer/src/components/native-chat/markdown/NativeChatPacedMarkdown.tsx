@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useReducer, useRef, type ComponentProps } from 'react'
 import { NativeChatMarkdown } from './NativeChatMarkdown'
-import { useNativeChatPacedText } from './use-native-chat-paced-text'
 import { createNativeChatRedrawPaceHook } from '../../../../../shared/native-chat/transcript/row-content/use-native-chat-redraw-pace'
 
 /** Style, layout and paint of the frame after a commit: from that frame's animation callback to
@@ -36,16 +35,14 @@ export function NativeChatPacedMarkdown({
   rowKey: string
   streaming: boolean
 }): React.JSX.Element {
-  const paced = useNativeChatPacedText(rowKey, content, streaming)
-  const growing = streaming || paced.revealing
-  const drawn = useNativeChatRedrawPace(paced.text, growing)
+  const drawn = useNativeChatRedrawPace(content, streaming)
   return (
     <NativeChatMarkdown
       {...props}
       rowKey={rowKey}
       content={drawn}
-      streaming={growing}
-      fadeWords={paced.fading}
+      streaming={streaming}
+      fadeWords={false}
     />
   )
 }
