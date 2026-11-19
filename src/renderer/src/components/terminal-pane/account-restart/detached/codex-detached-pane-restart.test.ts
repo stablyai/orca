@@ -71,6 +71,7 @@ it('does nothing for a manual restart of a leafless detached pane', async () => 
 
   expect(spawn).not.toHaveBeenCalled()
   expect(queueTabStartupCommand).not.toHaveBeenCalled()
+  expect(useAppStore.getState().pendingPaneManualRestarts).toEqual({})
 })
 
 it('requeues a manual restart into the manual queue when the tab mounts mid-claim', async () => {
@@ -100,6 +101,8 @@ it('requeues a manual restart into the manual queue when the tab mounts mid-clai
 
   await sweepUnclaimedCodexPaneRestarts()
 
+  // Both the claim check and the requeue check ran, so the entry really left the queue and came back.
+  expect(hasRegisteredRuntimeTerminalTab).toHaveBeenCalledTimes(2)
   expect(useAppStore.getState().pendingPaneManualRestarts).toEqual({ [PTY_ID]: 'codex' })
   expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
   expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({})
