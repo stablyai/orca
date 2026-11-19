@@ -191,7 +191,7 @@ export function createTerminalPaneManagerOptions(
         sourceOwner: activePane ? context.getHttpLinkSourceOwnerForPane(paneId) : { kind: 'local' },
         requestOpenLinksInAppPreference,
         linkActionContext: context.getLinkActionContext(paneId),
-        actionDestinations: context.getHttpLinkActionDestinations(paneId)
+        actionDestinations: context.getHttpLinkActionDestinations(paneId, url)
       })
     },
     linkOpenHint: context.getUrlOpenLinkHint,
