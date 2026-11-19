@@ -217,6 +217,25 @@ describe('terminal session names', () => {
     expect(stored()[key]).toMatchObject({ title: 'X', tabId: 'tab-c' })
   })
 
+  it("a refused rename replayed later is not undone by another window's handoff of the old name", () => {
+    let now = 1_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now++)
+    save('s1', 'X', 'tab-a')
+    const named = getTerminalSessionNameEntry('local', 's1')
+    const setItem = vi.spyOn(localStorage, 'setItem').mockImplementationOnce(() => {
+      throw new Error('QuotaExceededError')
+    })
+    save('s1', 'Y', 'tab-a')
+    setItem.mockRestore()
+    // Another window then hands the old name X to tab-c: used later, but named before Y.
+    const key = terminalSessionNameKey('local', 's1')
+    const other = stored()
+    other[key] = { ...named, tabId: 'tab-c', usedAt: now + 1_000 }
+    localStorage.setItem(TERMINAL_SESSION_NAMES_STORAGE_KEY, JSON.stringify(other))
+    save('s2', 'Unrelated', 'tab-3')
+    expect(stored()[key]).toMatchObject({ title: 'Y', tabId: 'tab-a' })
+  })
+
   it('a handoff keeps the naming time storage holds, not a stale copy', () => {
     let now = 1_000
     vi.spyOn(Date, 'now').mockImplementation(() => now++)

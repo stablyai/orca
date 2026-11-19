@@ -124,8 +124,15 @@ function applyMutations(current: Entries, mutations: readonly Mutation[], replay
   for (const mutation of mutations) {
     if ('entry' in mutation) {
       const stored = current.get(mutation.key)
-      // A refused save replayed later must not undo a newer save or handoff another window made.
-      if (replay && stored && lastUsedAt(stored) > lastUsedAt(mutation.entry)) {
+      // A refused save replayed later must not undo a newer one another window made: a different
+      // name is newer if it was named later; the same name moved to another tab, if moved later.
+      if (
+        replay &&
+        stored &&
+        (stored.title === mutation.entry.title
+          ? lastUsedAt(stored) > lastUsedAt(mutation.entry)
+          : stored.savedAt > mutation.entry.savedAt)
+      ) {
         continue
       }
       if (
