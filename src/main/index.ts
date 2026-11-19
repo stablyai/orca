@@ -119,20 +119,32 @@ function requestDesktopActivation(argv: readonly string[] = [], origin?: 'os-ope
   }
   if (
     origin === 'os-open' &&
-    shouldHandOffServeDesktopActivation({
+    process.platform === 'darwin' &&
+    app.isPackaged &&
+    state.isServeMode
+  ) {
+    const initializing = state.desktopActivationGate?.getState() === 'initializing'
+    void shouldHandOffServeDesktopActivation({
       isServeMode: state.isServeMode,
       isPackaged: app.isPackaged,
       userDataPath: app.getPath('userData')
     })
-  ) {
-    // Initial AppKit activation belongs to server startup, not a desktop request.
-    if (
-      !state.isQuitting &&
-      !isQuittingForUpdate() &&
-      state.desktopActivationGate?.getState() !== 'initializing'
-    ) {
-      requestDesktopHandoff({ userRequested: true })
-    }
+      .then((handOff) => {
+        if (state.isQuitting || isQuittingForUpdate()) {
+          return
+        }
+        if (handOff) {
+          // Initial AppKit activation belongs to server startup, not a desktop request.
+          if (!initializing) {
+            requestDesktopHandoff({ userRequested: true })
+          }
+        } else {
+          state.desktopActivationGate?.requestActivation({ background: false })
+        }
+      })
+      .catch((error: unknown) => {
+        console.warn('[window] Failed to resolve the desktop activation profile', error)
+      })
     return
   }
   state.desktopActivationGate?.requestActivation({

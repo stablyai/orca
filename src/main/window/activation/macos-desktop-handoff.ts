@@ -1,27 +1,25 @@
 import { app } from 'electron'
 import { dirname, resolve } from 'node:path'
-import { homedir } from 'node:os'
-import { isSameUserDataPath } from '../../../shared/remote-runtime/serve-supervisor/serve-user-data-path'
+import { isSameUserDataPathAsync } from '../../../shared/remote-runtime/serve-supervisor/serve-user-data-path'
 import { macCoordinationRoot } from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
 import { spawnProcess } from '@orca/process-host'
 import { applyBackgroundActivationPolicy } from './foreground-activation-policy'
 
-export function shouldHandOffServeDesktopActivation(options: {
+export async function shouldHandOffServeDesktopActivation(options: {
   isServeMode: boolean
   isPackaged: boolean
   userDataPath: string
   platform?: NodeJS.Platform
-  homeDir?: string
-}): boolean {
+}): Promise<boolean> {
   return (
     (options.platform ?? process.platform) === 'darwin' &&
     options.isPackaged &&
     options.isServeMode &&
-    !isSameUserDataPath(
+    !(await isSameUserDataPathAsync(
       options.userDataPath,
-      macCoordinationRoot(options.homeDir ?? homedir()),
+      macCoordinationRoot(app.getPath('home')),
       'darwin'
-    )
+    ))
   )
 }
 
@@ -33,7 +31,6 @@ export function handOffToDesktopApp(
     executablePath?: string
     reapplyActivationPolicy?: () => void
     env?: Readonly<Record<string, string | undefined>>
-    homeDir?: string
     userRequested?: true
   } = {}
 ): void {
@@ -42,11 +39,7 @@ export function handOffToDesktopApp(
   }
   // Only an explicit OS open can override a production host’s background launch; E2E remains isolated.
   if (!isAutomatedLaunch(options.env ?? process.env, options.userRequested === true)) {
-    launchDesktopInstance(
-      args,
-      options.executablePath,
-      macCoordinationRoot(options.homeDir ?? homedir())
-    )
+    launchDesktopInstance(args, options.executablePath, macCoordinationRoot(app.getPath('home')))
   }
   // Handling an open can promote the background host into the Dock.
   if (options.reapplyActivationPolicy) {
