@@ -8,7 +8,7 @@ import { profileStateDatabaseFile } from '../../../../shared/orca-profiles/profi
 import { writeProfileStateDomains } from './profile-state-domain-writes'
 import { profileStateWriterPatching as patching } from './profile-state-patched-domains'
 
-// Perf contract (PR_NUMBER): each session patch (one per PTY bind) re-serialized the whole session domain and
+// Perf contract (#44784): each session patch (one per PTY bind) re-serialized the whole session domain and
 // read every stored part, so a spawn burst over ~1,900 workspaces paid ~10M chars per bind. A one-entry patch
 // must serialize, write and read the same amount at N and 10N workspaces.
 
