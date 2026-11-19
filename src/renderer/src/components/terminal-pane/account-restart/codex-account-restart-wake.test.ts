@@ -8,6 +8,10 @@ import { bindStartFreshSpawn } from '../pty-connection/spawn/fresh-spawn-start'
 import { defersToMainPaneStart } from '../pty-connection/spawn/main-pane-start-request'
 import { runDeferredSessionAttach } from '../pty-connection/deferred-session-attach'
 import { showFramePatch } from '@/store/slices/tabs/moved-tab-selection'
+import {
+  admitTerminalNoticeLifetime,
+  retireTerminalNoticeLifetime
+} from '../provider-notices/terminal-notice-lifetime'
 import { routeCodexAccountRestartWake } from './codex-account-restart-wake'
 import type { CodexAccountRestart } from '@/store/terminals/terminal-contracts'
 import type { ConnectPanePtySession } from '../pty-connection/connect-pane-pty-session'
@@ -26,11 +30,13 @@ import {
 } from './codex-account-restart.test-fixture'
 
 vi.mock('@/lib/agent-session/accounts/agent-account-restart-startup', () => ({
-  captureAgentAccountRestartResumeInput: () => ({ providerSession: { id: 'conversation-1' } }),
+  captureAgentAccountRestartResumeInput: () => ({
+    providerSession: { key: 'session_id', id: 'conversation-1' }
+  }),
   buildPaneAccountRestartStartup: () => ({
     command: 'codex resume conversation-1',
     launchAgent: 'codex',
-    resumeProviderSession: { id: 'conversation-1' }
+    resumeProviderSession: { key: 'session_id', id: 'conversation-1' }
   })
 }))
 const call = vi.fn()
@@ -127,7 +133,7 @@ it.each(['deferred overlay', 'legacy attach'] as const)(
     })
     connect.mockImplementation(async (options) => {
       expect(options.command).toBe('codex resume conversation-1')
-      expect(options.resumeProviderSession).toEqual({ id: 'conversation-1' })
+      expect(options.resumeProviderSession).toEqual({ key: 'session_id', id: 'conversation-1' })
       expect(options.resumeSpawnIntent).toBe('user-resume')
       expect(options.accountRestart.expected).toEqual({
         kind: 'endpoint',
@@ -418,3 +424,77 @@ it('reattaches a proven undispatched original without resuming or creating on an
   expect(view.retained.get(leaf)).toBe('saved output')
   expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(1)
 })
+
+it.each(['connected', 'disconnected', 'removed during read'] as const)(
+  'requires current connected foreign ownership: %s',
+  async (control) => {
+    const { session, connect } = await deferredSession()
+    const state = useAppStore.getState()
+    const foreignLeaf = '00000000-0000-4000-8000-000000000003'
+    const foreignKey = `foreign:${foreignLeaf}`
+    useAppStore.setState({
+      tabsByWorktree: {
+        wt: [
+          ...state.tabsByWorktree.wt,
+          { ...state.tabsByWorktree.wt[0], id: 'foreign', ptyId: 'foreign-pty' }
+        ]
+      },
+      ptyIdsByTabId: { ...state.ptyIdsByTabId, foreign: ['foreign-pty'] },
+      terminalLayoutsByTabId: {
+        ...state.terminalLayoutsByTabId,
+        foreign: {
+          root: { type: 'leaf', leafId: foreignLeaf },
+          activeLeafId: foreignLeaf,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [foreignLeaf]: 'foreign-pty' }
+        }
+      },
+      agentStatusByPaneKey: acceptedAgentStatuses([
+        [
+          foreignKey,
+          {
+            state: 'waiting',
+            prompt: '',
+            updatedAt: 1,
+            stateStartedAt: 1,
+            stateHistory: [],
+            agentType: 'codex',
+            paneKey: foreignKey,
+            providerSession: { key: 'session_id', id: 'conversation-1' }
+          }
+        ]
+      ])
+    })
+    admitTerminalNoticeLifetime('foreign-pty', { incarnationId: 'inc-foreign', fresh: true })
+    call.mockImplementation(async () => {
+      if (control === 'removed during read') {
+        useAppStore.setState({
+          ptyIdsByTabId: { ...useAppStore.getState().ptyIdsByTabId, foreign: [] }
+        })
+      }
+      const answer = snapshot({ ptyId: 'foreign-pty', incarnationId: 'inc-foreign' })
+      return {
+        ...answer,
+        result: {
+          terminal: {
+            ...answer.result.terminal,
+            ptyId: 'foreign-pty',
+            connected: control !== 'disconnected'
+          }
+        }
+      }
+    })
+    try {
+      await session.resumeDeferredSpawn()
+      expect(connect).not.toHaveBeenCalled()
+      expect(selectCodexStaleSessionCount(useAppStore.getState())).toBe(
+        control === 'connected' ? 0 : 1
+      )
+      expect(
+        useAppStore.getState().terminalLayoutsByTabId.foreign.ptyIdsByLeafId?.[foreignLeaf]
+      ).toBe('foreign-pty')
+    } finally {
+      retireTerminalNoticeLifetime('foreign-pty')
+    }
+  }
+)
