@@ -11,6 +11,7 @@ import { getProviderForPty } from '../provider/registry'
 import { inspectPtyProviderProcess } from '../../../providers/pty/process-inspection'
 import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
 import { isRemoteExecutionHostPtyId } from '../../../../shared/execution-host/remote-execution-host-pty-id'
+import { confirmRootShellAloneFromProcessTable } from '../../../runtime/terminal/lifecycle/run-terminal-shell-alone'
 
 export function bindTerminalPaneStatusLifecycle(
   runtime: OrcaRuntimeService | undefined,
@@ -110,17 +111,22 @@ export function bindTerminalPaneStatusLifecycle(
   agentHookServer.pruneUnplacedSleepingPanes()
 }
 
-/** The shell alone holds the PTY, with no stopped job behind it. The daemon's proof needs prompt
- *  marks, which cmd and Git Bash often lack; Windows shells stop no jobs, so the host's job census
- *  finding no child beside a shell foreground suffices there. Elsewhere only the host's shell-alone
- *  proof counts; never fall back to a foreground name, which a live unrecognized agent shares. */
+/** The shell alone holds the PTY, with no job behind it, stopped or running. A daemon answers
+ *  shell ownership from prompt marks, so POSIX reads the PTY's root shell from a fresh process
+ *  table instead, local or daemon alike. Windows shells stop no jobs, so the host's job census
+ *  finding no child beside a shell foreground suffices there. Never fall back to a foreground
+ *  name, which a live unrecognized agent shares. */
 async function confirmShellAlone(ptyId: string, incarnationId?: string): Promise<boolean> {
   const provider = getProviderForPty(ptyId)
-  if ((await provider.confirmShellForeground?.(ptyId, { noLiveDescendants: true })) === true) {
-    return true
-  }
   if (process.platform !== 'win32') {
-    return false
+    const processes = await provider.listProcesses({ ptyIds: [ptyId] }).catch(() => [])
+    const rootPid = processes.find((entry) => entry.id === ptyId)?.rootProcessId
+    return rootPid
+      ? confirmRootShellAloneFromProcessTable(rootPid, { noLiveDescendants: true })
+      : false
+  }
+  if ((await provider.confirmShellForeground?.(ptyId)) === true) {
+    return true
   }
   const inspection = await inspectPtyProviderProcess(provider, ptyId, {
     scanChildProcesses: true,

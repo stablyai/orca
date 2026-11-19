@@ -3,14 +3,18 @@ import type { AgentHookServer } from '../../../agent-hooks/server/agent-hook-ser
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { bindTerminalPaneStatusLifecycle } from './terminal-pane-status-lifecycle'
 
-const { setTerminalPaneLifecycle, getProviderForPty } = vi.hoisted(() => ({
+const { setTerminalPaneLifecycle, getProviderForPty, confirmRootShellAlone } = vi.hoisted(() => ({
   setTerminalPaneLifecycle: vi.fn<AgentHookServer['setTerminalPaneLifecycle']>(),
-  getProviderForPty: vi.fn()
+  getProviderForPty: vi.fn(),
+  confirmRootShellAlone: vi.fn()
 }))
 vi.mock('../../../agent-hooks/server/agent-hook-server', () => ({
   agentHookServer: { setTerminalPaneLifecycle, pruneUnplacedSleepingPanes: () => {} }
 }))
 vi.mock('../provider/registry', () => ({ getProviderForPty }))
+vi.mock('../../../runtime/terminal/lifecycle/run-terminal-shell-alone', () => ({
+  confirmRootShellAloneFromProcessTable: confirmRootShellAlone
+}))
 
 const platform = process.platform
 afterEach(() => Object.defineProperty(process, 'platform', { value: platform }))
@@ -93,13 +97,21 @@ it.each([
     Object.defineProperty(process, 'platform', { value: os })
     const launch = { agentArgs: '', agentEnv: {} }
     let currentLaunch = evidence === 'held' ? launch : evidence === 'gone' ? null : undefined
+    const proveShellAlone = async () => {
+      if (replaced) {
+        currentLaunch = { agentArgs: '--resume next', agentEnv: {} }
+      }
+      return shellAlone
+    }
+    // POSIX reads the PTY's root shell from the process table, whatever the provider says.
+    confirmRootShellAlone.mockImplementation(async (rootPid: number, options: unknown) =>
+      rootPid === 4242 && JSON.stringify(options) === '{"noLiveDescendants":true}'
+        ? proveShellAlone()
+        : false
+    )
     getProviderForPty.mockReturnValue({
-      confirmShellForeground: async () => {
-        if (replaced) {
-          currentLaunch = { agentArgs: '--resume next', agentEnv: {} }
-        }
-        return shellAlone
-      },
+      listProcesses: async () => [{ id: 'pty-1', rootProcessId: 4242 }],
+      confirmShellForeground: os === 'win32' ? proveShellAlone : async () => true,
       // Windows answers from its job census; a foreground name alone is not that census.
       inspectProcess: async () => ({
         foregroundProcess: foreground,

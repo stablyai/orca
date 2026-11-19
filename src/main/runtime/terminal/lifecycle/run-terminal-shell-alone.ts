@@ -5,15 +5,19 @@ import { getProcessTableIndex } from '../../../../shared/process-observation/tab
 import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
 import type { TerminalProcessInspection } from '../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 
-/** POSIX: the PTY's root shell owns the terminal's foreground group and nothing under it is stopped. */
-export async function confirmRootShellAloneFromProcessTable(rootPid: number): Promise<boolean> {
+/** POSIX: the PTY's root shell owns the terminal's foreground group and nothing under it is stopped
+ *  (nor, for exit proof, still running). */
+export async function confirmRootShellAloneFromProcessTable(
+  rootPid: number,
+  options?: { noLiveDescendants?: boolean }
+): Promise<boolean> {
   try {
     const root = getProcessTableIndex(await getFreshProcessTableSnapshot()).byPid.get(rootPid)
     const executable = root?.command.trim().split(/\s+/, 1)[0] ?? ''
     if (!isShellProcess(executable)) {
       return false
     }
-    return await confirmShellForegroundProcess(rootPid, executable)
+    return await confirmShellForegroundProcess(rootPid, executable, options)
   } catch {
     return false
   }

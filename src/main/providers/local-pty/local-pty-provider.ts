@@ -214,8 +214,8 @@ export class LocalPtyProvider implements IPtyProvider {
     return confirmLocalPtyForegroundProcess(id)
   }
 
-  confirmShellForeground(id: string, options?: { noLiveDescendants?: boolean }): Promise<boolean> {
-    return confirmLocalPtyShellForeground(id, options)
+  confirmShellForeground(id: string): Promise<boolean> {
+    return confirmLocalPtyShellForeground(id)
   }
 
   async serialize(_ids: string[]): Promise<string> {
