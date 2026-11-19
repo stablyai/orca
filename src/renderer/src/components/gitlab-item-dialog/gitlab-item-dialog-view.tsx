@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 import { CircleDot, ExternalLink, GitMerge, LoaderCircle, RefreshCw, Send, X } from 'lucide-react'
 import * as VisuallyHidden from 'radix-ui/visually-hidden'
@@ -126,7 +127,10 @@ export function GitLabItemDialogView({
                     className="size-7"
                   >
                     {loading ? (
-                      <LoaderCircle className="size-3.5 animate-spin" />
+                      <LoaderCircle
+                        ref={observeVisibleAnimation}
+                        className="size-3.5 visible-animate-spin"
+                      />
                     ) : (
                       <RefreshCw className="size-3.5" />
                     )}
@@ -227,7 +231,10 @@ export function GitLabItemDialogView({
                   className="shrink-0 gap-1.5"
                 >
                   {commentSubmitting ? (
-                    <LoaderCircle className="size-3.5 animate-spin" />
+                    <LoaderCircle
+                      ref={observeVisibleAnimation}
+                      className="size-3.5 visible-animate-spin"
+                    />
                   ) : (
                     <Send className="size-3.5" />
                   )}
@@ -258,7 +265,10 @@ export function GitLabItemDialogView({
                       onClick={() => void primaryActions.handleMerge()}
                     >
                       {actionInFlight === 'merge' ? (
-                        <LoaderCircle className="size-3.5 animate-spin" />
+                        <LoaderCircle
+                          ref={observeVisibleAnimation}
+                          className="size-3.5 visible-animate-spin"
+                        />
                       ) : null}
                       {t('auto.components.GitLabItemDialog.16b3412570', 'Merge')}
                     </Button>
@@ -271,7 +281,10 @@ export function GitLabItemDialogView({
                       onClick={() => void primaryActions.handleClose()}
                     >
                       {actionInFlight === 'close' ? (
-                        <LoaderCircle className="size-3.5 animate-spin" />
+                        <LoaderCircle
+                          ref={observeVisibleAnimation}
+                          className="size-3.5 visible-animate-spin"
+                        />
                       ) : null}
                       {t('auto.components.GitLabItemDialog.a199eb364b', 'Close')}
                     </Button>
@@ -284,7 +297,10 @@ export function GitLabItemDialogView({
                       onClick={() => void primaryActions.handleReopen()}
                     >
                       {actionInFlight === 'reopen' ? (
-                        <LoaderCircle className="size-3.5 animate-spin" />
+                        <LoaderCircle
+                          ref={observeVisibleAnimation}
+                          className="size-3.5 visible-animate-spin"
+                        />
                       ) : null}
                       {t('auto.components.GitLabItemDialog.65e784c1f1', 'Reopen')}
                     </Button>

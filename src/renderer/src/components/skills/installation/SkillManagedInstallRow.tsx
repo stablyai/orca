@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { ChevronRight, Loader2, MonitorUp, RotateCcw, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -138,7 +139,10 @@ export function SkillManagedInstallRow({
             {details ? (
               <Button size="sm" disabled={busy} onClick={() => onInstall()}>
                 {busy ? (
-                  <Loader2 className="size-3.5 animate-spin" />
+                  <Loader2
+                    ref={observeVisibleAnimation}
+                    className="size-3.5 visible-animate-spin"
+                  />
                 ) : (
                   <RotateCcw className="size-3.5" />
                 )}

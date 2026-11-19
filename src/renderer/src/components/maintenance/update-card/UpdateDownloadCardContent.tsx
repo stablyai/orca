@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Minus } from 'lucide-react'
 import type { ChangelogData } from '../../../../../shared/updater/update-status-types'
 import { getReleaseNotesUrlForVersion } from '../../../../../shared/updater/release-channel'
@@ -64,7 +65,8 @@ export function UpdateDownloadingContent({
         <div className="relative overflow-hidden rounded-md">
           {!mediaLoaded && (
             <div
-              className="w-full bg-muted/50 animate-pulse rounded-md"
+              ref={observeVisibleAnimation}
+              className="w-full bg-muted/50 visible-animate-pulse rounded-md"
               style={{ aspectRatio: '16/9' }}
             />
           )}

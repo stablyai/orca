@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useCallback, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -94,7 +95,10 @@ export function SshTargetStatusRow({
         </div>
       </div>
       {busy || connectInFlight ? (
-        <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" />
+        <Loader2
+          ref={observeVisibleAnimation}
+          className="size-3 shrink-0 visible-animate-spin text-muted-foreground"
+        />
       ) : canConnectSshStatus(status) ? (
         <button
           type="button"

@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Fragment, type ReactElement, type ReactNode } from 'react'
 import { RefreshCw, SlidersHorizontal } from 'lucide-react'
 import { Button } from '../ui/button'
@@ -151,7 +152,10 @@ export function UsageTrackingPaneShell(props: UsageTrackingPaneShellProps): Reac
                   disabled={props.isRefreshing}
                   aria-label={props.refreshAriaLabel}
                 >
-                  <RefreshCw className={`size-3.5 ${props.isRefreshing ? 'animate-spin' : ''}`} />
+                  <RefreshCw
+                    ref={observeVisibleAnimation}
+                    className={`size-3.5 ${props.isRefreshing ? 'visible-animate-spin' : ''}`}
+                  />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>

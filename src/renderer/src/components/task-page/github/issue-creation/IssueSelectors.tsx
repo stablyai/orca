@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { useMemo, useCallback } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
@@ -62,7 +63,12 @@ export function GitHubIssueLabelSelector({
                 ))}
               </span>
             )}
-            {loading ? <LoaderCircle className="ml-auto size-3.5 animate-spin" /> : null}
+            {loading ? (
+              <LoaderCircle
+                ref={observeVisibleAnimation}
+                className="ml-auto size-3.5 visible-animate-spin"
+              />
+            ) : null}
           </Button>
         </PopoverTrigger>
         <PopoverContent className="popover-scroll-content scrollbar-sleek w-64 p-1" align="start">
@@ -159,7 +165,12 @@ export function GitHubIssueAssigneeSelector({
                 </span>
               </span>
             )}
-            {loading ? <LoaderCircle className="ml-auto size-3.5 animate-spin" /> : null}
+            {loading ? (
+              <LoaderCircle
+                ref={observeVisibleAnimation}
+                className="ml-auto size-3.5 visible-animate-spin"
+              />
+            ) : null}
           </Button>
         </PopoverTrigger>
         <PopoverContent className="popover-scroll-content scrollbar-sleek w-72 p-1" align="start">

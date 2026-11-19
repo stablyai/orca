@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Blocks, ChevronLeft, Loader2, PackageCheck, SearchX } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
@@ -61,7 +62,10 @@ export function PluginPageMissing({
         {t('auto.components.settings.PluginDetailPage.back', 'Plugins')}
       </Button>
       {loading ? (
-        <Loader2 className="mx-auto mt-10 size-4 animate-spin text-muted-foreground" />
+        <Loader2
+          ref={observeVisibleAnimation}
+          className="mx-auto mt-10 size-4 visible-animate-spin text-muted-foreground"
+        />
       ) : (
         <p className="mt-6 text-sm text-muted-foreground">
           {t(

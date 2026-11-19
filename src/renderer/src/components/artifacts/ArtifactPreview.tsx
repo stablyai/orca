@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useEffect, useRef, useState } from 'react'
 import { AlertCircle, Loader2 } from 'lucide-react'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../shared/browser/guest-lifecycle/browser-guest-web-preferences'
@@ -146,7 +147,10 @@ export function ArtifactPreview({ shareUrl }: { shareUrl: string }): React.JSX.E
     >
       {state === 'loading' ? (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-editor-surface">
-          <Loader2 className="size-5 animate-spin text-muted-foreground" />
+          <Loader2
+            ref={observeVisibleAnimation}
+            className="size-5 visible-animate-spin text-muted-foreground"
+          />
         </div>
       ) : null}
       {state === 'unavailable' ? (

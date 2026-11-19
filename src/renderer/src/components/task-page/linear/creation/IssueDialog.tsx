@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
@@ -157,7 +158,10 @@ export function TaskPageLinearIssueDialog({
             >
               {newLinearIssueSubmitting ? (
                 <>
-                  <LoaderCircle className="size-3.5 animate-spin mr-1" />
+                  <LoaderCircle
+                    ref={observeVisibleAnimation}
+                    className="size-3.5 visible-animate-spin mr-1"
+                  />
                   {t('auto.components.TaskPage.8ff6fdc368', 'Creating…')}
                 </>
               ) : (

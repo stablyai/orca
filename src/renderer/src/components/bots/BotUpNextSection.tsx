@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { autoUpdate } from '@floating-ui/dom'
 import { ChevronDown, ChevronUp, LoaderCircle, RefreshCw, X } from 'lucide-react'
@@ -113,13 +114,13 @@ function UpNextHeader({
         aria-expanded={stepsOpen}
         onClick={onToggleSteps}
       >
-        <LoaderCircle className="size-3 animate-spin" />
+        <LoaderCircle ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
         {label}
         <Chevron className="size-3" />
       </button>
     ) : (
       <span className="flex h-6 items-center gap-1 text-2xs text-muted-foreground">
-        <LoaderCircle className="size-3 animate-spin" />
+        <LoaderCircle ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
         {label}
       </span>
     )

@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Loader2 } from 'lucide-react'
 import type { EphemeralVmRuntimeRecord } from '../../../../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import { useTranslate } from '@/i18n/use-translate'
@@ -56,7 +57,9 @@ export function EphemeralVmCleanupStopDialog({
             {t('auto.components.settings.EphemeralVmCleanupStopDialog.cancel', 'Keep cleaning')}
           </Button>
           <Button onClick={onConfirm} disabled={isStopping}>
-            {isStopping ? <Loader2 className="animate-spin" /> : null}
+            {isStopping ? (
+              <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+            ) : null}
             {isStopping
               ? t('auto.components.settings.EphemeralVmCleanupStopDialog.stopping', 'Stopping…')
               : t('auto.components.settings.EphemeralVmCleanupStopDialog.confirm', 'Stop cleanup')}

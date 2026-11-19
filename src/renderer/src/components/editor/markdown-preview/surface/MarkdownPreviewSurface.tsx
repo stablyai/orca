@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Loader2 } from 'lucide-react'
 import { useCallback, useMemo, useState, type RefObject } from 'react'
 import { parseMarkdownDocLinkHref } from '../../markdown/documents/markdown-doc-links'
@@ -220,7 +221,7 @@ export function MarkdownPreviewSurface({
                 </p>
               ) : (
                 <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="size-4 animate-spin" />
+                  <Loader2 ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
                   {t('editor.markdownPreview.preparing', 'Preparing preview…')}
                 </p>
               )}

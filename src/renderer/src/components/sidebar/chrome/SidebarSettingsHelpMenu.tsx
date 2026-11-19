@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { DiscordIcon } from '../../icons/DiscordIcon'
 import React, { useState } from 'react'
 import {
@@ -302,7 +303,7 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
               title={updateCheckHint}
             >
               {updateStatus.state === 'checking' ? (
-                <Loader2 className="size-3.5 animate-spin" />
+                <Loader2 ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
               ) : (
                 <RefreshCw className="size-3.5" />
               )}

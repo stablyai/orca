@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useState } from 'react'
 import { RotateCw } from 'lucide-react'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
@@ -119,7 +120,10 @@ function RestartBanner(): React.JSX.Element {
         disabled={relaunching}
         onClick={() => void relaunch()}
       >
-        <RotateCw className={`size-3 ${relaunching ? 'animate-spin' : ''}`} />
+        <RotateCw
+          ref={observeVisibleAnimation}
+          className={`size-3 ${relaunching ? 'visible-animate-spin' : ''}`}
+        />
         {relaunching
           ? t('auto.components.settings.TerminalWindowSection.907131d741', 'Restarting…')
           : t('auto.components.settings.TerminalWindowSection.8abdab9f7c', 'Restart now')}

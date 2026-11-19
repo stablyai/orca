@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useMemo, useSyncExternalStore, type ReactNode } from 'react'
 import { useAppStore } from '@/store/index'
 import { Button } from '@/components/ui/button'
@@ -199,7 +200,11 @@ function GitHubPeekContent({
           <PeekFooter item={state.value} />
         </>
       ) : otherRepoFallback !== undefined ? null : state.status === 'loading' ? (
-        <div aria-hidden className="flex flex-col gap-1.5 motion-safe:animate-pulse">
+        <div
+          ref={observeVisibleAnimation}
+          aria-hidden
+          className="flex flex-col gap-1.5 motion-safe:visible-animate-pulse"
+        >
           <div className="h-3.5 w-11/12 rounded bg-muted" />
           <div className="h-3.5 w-1/2 rounded bg-muted" />
           <div className="mt-0.5 h-3 w-1/3 rounded bg-muted" />

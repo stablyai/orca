@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import type { KeyboardEvent, ReactNode, Ref } from 'react'
 import { LoaderCircle, RefreshCw, Search, X } from 'lucide-react'
@@ -133,7 +134,7 @@ export function AiVaultPanelHeader({
             className="size-6"
           >
             {loading ? (
-              <LoaderCircle className="size-3 animate-spin" />
+              <LoaderCircle ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
             ) : (
               <RefreshCw className="size-3" />
             )}
@@ -176,7 +177,12 @@ export function AiVaultPanelHeader({
           }}
           spellCheck={false}
         />
-        {loading ? <LoaderCircle className="size-3 animate-spin text-muted-foreground" /> : null}
+        {loading ? (
+          <LoaderCircle
+            ref={observeVisibleAnimation}
+            className="size-3 visible-animate-spin text-muted-foreground"
+          />
+        ) : null}
         {query ? (
           <Button
             type="button"

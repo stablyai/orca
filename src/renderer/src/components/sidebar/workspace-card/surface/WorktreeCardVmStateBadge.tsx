@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { AlertTriangle, Loader2, Moon } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -84,7 +85,8 @@ export function VmStateIcon({
     case 'waking':
       return (
         <Loader2
-          className={cn(sizeClassName, 'animate-spin text-muted-foreground')}
+          ref={observeVisibleAnimation}
+          className={cn(sizeClassName, 'visible-animate-spin text-muted-foreground')}
           aria-hidden="true"
         />
       )

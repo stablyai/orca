@@ -2189,7 +2189,7 @@ html.native-shell .app-layout {
   grid-template-rows: 1fr;
 }
 
-/* Keep rotation on the compositor: JS style writes caused typing stalls (#12359). */
+/* Keep rotation in CSS: JS style writes caused typing stalls (#12359). */
 /* One day per iteration avoids per-second React animation events; still 12 steps/second. */
 @keyframes agent-spinner-rotate {
   to {
@@ -2198,7 +2198,44 @@ html.native-shell .app-layout {
 }
 
 .agent-working-spinner {
-  animation: agent-spinner-rotate 86400s steps(1036800, end) infinite;
+  animation: none;
+
+  &[data-animation-running] {
+    animation: agent-spinner-rotate 86400s steps(1036800, end) infinite;
+  }
+}
+
+@utility visible-animate-spin {
+  animation: var(--animate-spin);
+  animation-play-state: paused;
+
+  &[data-animation-running] {
+    animation-play-state: running;
+  }
+}
+
+@utility visible-animate-pulse {
+  animation: var(--animate-pulse);
+  animation-play-state: paused;
+
+  &[data-animation-running] {
+    animation-play-state: running;
+  }
+}
+
+/* Retained hidden surfaces keep guest paint but need no CSS animation frames; pseudo-elements don't inherit play state. */
+[data-retained-animation-paused],
+[data-retained-animation-paused]::before,
+[data-retained-animation-paused]::after,
+[data-retained-animation-paused] *,
+[data-retained-animation-paused] *::before,
+[data-retained-animation-paused] *::after {
+  animation-play-state: paused !important;
+}
+
+/* Rings drop their animation instead of pausing so the restart re-anchors the shared phase. */
+[data-retained-animation-paused] .agent-working-spinner {
+  animation: none !important;
 }
 
 /* Offscreen subtrees pause their loops; the agent ring drops its animation instead so reveal re-anchors phase. */
@@ -2212,7 +2249,8 @@ html.native-shell .app-layout {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .agent-working-spinner {
+  .agent-working-spinner,
+  .agent-working-spinner[data-animation-running] {
     animation: none;
   }
 }
@@ -4253,6 +4291,63 @@ body:has([data-contextual-tour-target='tab-create-menu'][data-state='open'])
   border: 2px solid var(--ai-action-accent);
   background: color-mix(in srgb, var(--ai-action-accent) 18%, transparent);
   opacity: 0;
+}
+
+/* Electron reports no load percentage, so the line eases toward 90% and the real stop finishes it.
+   CSS rather than script animation so retained hidden pages pause it like every other loop. */
+@keyframes browser-load-trickle {
+  0% {
+    transform: scaleX(0);
+    opacity: 0;
+    animation-timing-function: ease-out;
+  }
+  1% {
+    transform: scaleX(0.15);
+    opacity: 1;
+    animation-timing-function: ease-out;
+  }
+  6.667% {
+    transform: scaleX(0.45);
+    opacity: 1;
+    animation-timing-function: ease-out;
+  }
+  20% {
+    transform: scaleX(0.7);
+    opacity: 1;
+    animation-timing-function: ease-out;
+  }
+  50% {
+    transform: scaleX(0.85);
+    opacity: 1;
+    animation-timing-function: ease-out;
+  }
+  100% {
+    transform: scaleX(0.9);
+    opacity: 1;
+  }
+}
+
+/* Reduced motion: a still, dimmed full-width line that still reads as "working". */
+@keyframes browser-load-still {
+  from {
+    transform: scaleX(1);
+    opacity: 0;
+  }
+  to {
+    transform: scaleX(1);
+    opacity: 0.5;
+  }
+}
+
+/* The delay keeps fast loads (most local dev servers) from showing anything. */
+.browser-load-progress[data-browser-load-progress='loading'] {
+  animation: browser-load-trickle 30s linear 200ms forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .browser-load-progress[data-browser-load-progress='loading'] {
+    animation: browser-load-still 150ms linear 200ms forwards;
+  }
 }
 
 /* While an agent drives the page, a soft inner glow breathes at its edge. */

@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Loader2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { OrcadManagedStaleLockReclaimResult } from '../../../../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
@@ -175,7 +176,7 @@ function OpenRecoverServerDialog({
         </DialogHeader>
         {!check && !error ? (
           <p className="flex items-center gap-2 text-[13px] text-muted-foreground">
-            <Loader2 className="size-3.5 animate-spin" />
+            <Loader2 ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
             {t('auto.components.settings.recoverServer.checking', 'Checking the lock…')}
           </p>
         ) : null}

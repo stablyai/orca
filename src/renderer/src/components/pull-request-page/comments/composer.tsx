@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useGitHubImagePending } from '@/components/github/use-github-image-uploads'
 import { githubCommentImageUploadAddress } from '@/components/github/github-comment-image-upload-address'
 import React, { useCallback, useRef, useState } from 'react'
@@ -182,7 +183,7 @@ export function GHCommentComposer({
             aria-label={t('auto.components.PullRequestPage.161d91ef02', 'Send comment')}
           >
             {submitting ? (
-              <LoaderCircle className="size-4 animate-spin" />
+              <LoaderCircle ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
             ) : (
               <Send className="size-4" />
             )}

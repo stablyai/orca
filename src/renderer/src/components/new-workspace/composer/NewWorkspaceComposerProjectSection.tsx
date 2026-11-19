@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { useMemo } from 'react'
 import { FolderPlus, LoaderCircle, PlugZap } from 'lucide-react'
 import type { AddRemoteHostMode } from '@/components/sidebar/host-admission/ssh/AddRemoteHostDialog'
@@ -260,7 +261,10 @@ export function NewWorkspaceComposerProjectSection({
             className="shrink-0"
           >
             {selectedRepoConnectInProgress ? (
-              <LoaderCircle className="size-3.5 animate-spin" />
+              <LoaderCircle
+                ref={observeVisibleAnimation}
+                className="size-3.5 visible-animate-spin"
+              />
             ) : (
               <PlugZap className="size-3.5" />
             )}

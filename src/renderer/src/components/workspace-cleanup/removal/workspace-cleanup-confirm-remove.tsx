@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { Folder, Loader2, Monitor, Trash2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -136,7 +137,10 @@ export function WorkspaceCleanupConfirmRemove({
         {progress ? (
           <div className="border-b border-border bg-muted/25 px-5 py-3">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Loader2 className="size-3.5 shrink-0 animate-spin" />
+              <Loader2
+                ref={observeVisibleAnimation}
+                className="size-3.5 shrink-0 visible-animate-spin"
+              />
               <span className="font-medium text-foreground">
                 {formatWorkspaceCleanupRemovalProgress(progress, t)}
               </span>

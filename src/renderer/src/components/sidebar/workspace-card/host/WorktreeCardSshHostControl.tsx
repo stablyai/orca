@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useCallback } from 'react'
 import { Loader2, Server, ServerOff } from 'lucide-react'
 import { toastSshConnectFailure } from '@/ssh/ssh-connect-failure-toast'
@@ -247,7 +248,10 @@ export function WorktreeCardSshHostControl({
           }}
         >
           {connecting ? (
-            <Loader2 className="size-2.5 animate-spin motion-reduce:animate-none" />
+            <Loader2
+              ref={observeVisibleAnimation}
+              className="size-2.5 visible-animate-spin motion-reduce:animate-none"
+            />
           ) : (
             iconOnly && <ServerOff className="size-2.5" />
           )}

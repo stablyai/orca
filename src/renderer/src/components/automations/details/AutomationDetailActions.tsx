@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { Loader2, MoreHorizontal, Pause, Pencil, Play, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -70,7 +71,7 @@ export function AutomationDetailActions({
               aria-busy={isRunNowPending || undefined}
             >
               {isRunNowPending ? (
-                <Loader2 className="size-4 animate-spin" />
+                <Loader2 ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
               ) : (
                 <Play className="size-4" />
               )}

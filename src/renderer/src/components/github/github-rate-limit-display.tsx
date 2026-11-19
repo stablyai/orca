@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Gauge, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/class-names'
@@ -227,7 +228,10 @@ export function GitHubRateLimitPanel({
             'Refresh GitHub API budget'
           )}
         >
-          <RefreshCw className={cn('size-3.5', isFetching && 'animate-spin')} />
+          <RefreshCw
+            ref={observeVisibleAnimation}
+            className={cn('size-3.5', isFetching && 'visible-animate-spin')}
+          />
         </button>
       </div>
       {hasError ? (

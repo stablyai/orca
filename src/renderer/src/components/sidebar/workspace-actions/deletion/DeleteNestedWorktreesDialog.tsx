@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useMemo, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
@@ -154,7 +155,9 @@ export function DeleteNestedWorktreesDialog({
         disabled={deleting}
         onClick={() => void review()}
       >
-        {deleting ? <LoaderCircle className="size-4 animate-spin" /> : null}
+        {deleting ? (
+          <LoaderCircle ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
+        ) : null}
         {deleting
           ? t('worktree.nestedRemoval.deleting', 'Deleting…')
           : t('worktree.nestedRemoval.review', 'Delete with nested worktrees…')}
@@ -202,7 +205,7 @@ export function DeleteNestedWorktreesDialog({
             </div>
           ) : !error ? (
             <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
-              <LoaderCircle className="size-4 animate-spin" />
+              <LoaderCircle ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
               {t('worktree.nestedRemoval.loading', 'Checking nested worktrees…')}
             </p>
           ) : null}
@@ -239,7 +242,12 @@ export function DeleteNestedWorktreesDialog({
                 disabled={!plan || deleting}
                 onClick={() => void remove()}
               >
-                {deleting ? <LoaderCircle className="size-4 animate-spin" /> : null}
+                {deleting ? (
+                  <LoaderCircle
+                    ref={observeVisibleAnimation}
+                    className="size-4 visible-animate-spin"
+                  />
+                ) : null}
                 {deleting
                   ? t('worktree.nestedRemoval.deleting', 'Deleting…')
                   : t('common.delete', 'Delete')}

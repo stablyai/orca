@@ -11,7 +11,10 @@ import {
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
-import { observeOffscreenAnimation } from '@/lib/window-activity/offscreen-animation-pause'
+import {
+  observeOffscreenAnimation,
+  observeVisibleAnimation
+} from '@/lib/window-activity/offscreen-animation-pause'
 import { useTranslate } from '@/i18n/use-translate'
 import { CHECK_COLOR, CHECK_ICON, checkPresentationKey } from './check-presentation'
 import { CheckRunDetails } from './check-run-details'
@@ -117,7 +120,12 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
             </span>
           )}
           <span className="flex-1" />
-          {checksLoading && <LoaderCircle className="size-3 animate-spin text-muted-foreground" />}
+          {checksLoading && (
+            <LoaderCircle
+              ref={observeVisibleAnimation}
+              className="size-3 visible-animate-spin text-muted-foreground"
+            />
+          )}
         </button>
       )}
 
@@ -126,7 +134,10 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
         checks.length === 0 &&
         !pipelineCheck ? (
         <div className="flex items-center justify-center py-8">
-          <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
+          <LoaderCircle
+            ref={observeVisibleAnimation}
+            className="size-5 visible-animate-spin text-muted-foreground"
+          />
         </div>
       ) : checks.length === 0 && checksError ? (
         <div role="alert" className="px-4 py-8 text-[11px] break-words text-destructive">
@@ -257,10 +268,11 @@ function CheckStatusIcon({ check }: { check: PRCheckDetail }): React.JSX.Element
       <TooltipTrigger asChild>
         <span role="img" aria-label={label} className="flex shrink-0">
           <Icon
+            ref={observeVisibleAnimation}
             className={cn(
               'size-3.5',
               CHECK_COLOR[conclusion] ?? 'text-muted-foreground',
-              conclusion === 'pending' && 'animate-spin motion-reduce:animate-none'
+              conclusion === 'pending' && 'visible-animate-spin motion-reduce:animate-none'
             )}
           />
         </span>

@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import type React from 'react'
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
@@ -313,7 +314,10 @@ export function RemoteFileBrowser({
           )}
         />
         {showPreviewLoading && (
-          <LoaderCircle className="size-3.5 absolute right-2 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground" />
+          <LoaderCircle
+            ref={observeVisibleAnimation}
+            className="size-3.5 absolute right-2 top-1/2 -translate-y-1/2 visible-animate-spin text-muted-foreground"
+          />
         )}
       </div>
 

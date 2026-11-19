@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { ArrowDown, ArrowUp, Braces, LoaderCircle, UndoDot } from 'lucide-react'
@@ -158,7 +159,7 @@ export function CommentCodeContext({
   if (!contents) {
     return (
       <div className="mb-3 flex items-center gap-2 rounded-md border border-border/40 bg-muted/20 px-3 py-2 text-[12px] text-muted-foreground">
-        <LoaderCircle className="size-3.5 animate-spin" />
+        <LoaderCircle ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
         {t('auto.components.GitHubItemDialog.db61d76cd5', 'Loading code context…')}
       </div>
     )

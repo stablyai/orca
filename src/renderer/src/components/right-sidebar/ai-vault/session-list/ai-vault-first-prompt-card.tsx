@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import type React from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Check, Copy, LoaderCircle, TextCursorInput } from 'lucide-react'
@@ -165,7 +166,10 @@ export function FirstPromptCard({
           <div className="flex min-w-0 items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
             <span>{t('auto.components.right.sidebar.AiVaultSessionDetails.userRole', 'You')}</span>
             {loading || copying ? (
-              <LoaderCircle className="size-3 shrink-0 animate-spin text-muted-foreground/70" />
+              <LoaderCircle
+                ref={observeVisibleAnimation}
+                className="size-3 shrink-0 visible-animate-spin text-muted-foreground/70"
+              />
             ) : null}
           </div>
           {copyHidden ? null : (

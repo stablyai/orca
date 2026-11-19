@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { ChevronRight, RefreshCw } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
@@ -301,6 +302,7 @@ export function UsageRosterPanel({
   const sorted = [...providers].sort(
     (a, b) => providerPrimaryMaxUsed(b, t) - providerPrimaryMaxUsed(a, t)
   )
+  const refreshAnimation = isRefreshing ? 'visible-animate-spin' : ''
 
   return (
     <div className="@container w-full text-xs">
@@ -320,7 +322,7 @@ export function UsageRosterPanel({
             aria-label={t('auto.components.status.bar.StatusBar.3325d996cb', 'Refresh rate limits')}
             className="size-5 justify-center p-0"
           >
-            <RefreshCw size={12} className={isRefreshing ? 'animate-spin' : ''} />
+            <RefreshCw ref={observeVisibleAnimation} size={12} className={refreshAnimation} />
           </DropdownMenuItem>
         </div>
         <UsageDisplayToggle asMenuItem />

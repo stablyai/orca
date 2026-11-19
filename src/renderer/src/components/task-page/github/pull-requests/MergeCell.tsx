@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
 import type { GitHubPRMergeMethod } from '../../../../../../shared/github/pull-requests/pull-request-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
@@ -206,7 +207,10 @@ export function PRMergeCell({
               )}
             >
               {merging ? (
-                <LoaderCircle className="size-3 animate-spin text-muted-foreground" />
+                <LoaderCircle
+                  ref={observeVisibleAnimation}
+                  className="size-3 visible-animate-spin text-muted-foreground"
+                />
               ) : (
                 <GitMerge className="size-3" />
               )}

@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { LoaderCircle, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -27,7 +28,7 @@ export function ReviewerRequestedList({
   if (loading && !hasReviewerMetadata) {
     return (
       <div className="flex items-center gap-2 py-1 text-[12px] text-muted-foreground">
-        <LoaderCircle className="size-3.5 animate-spin" />
+        <LoaderCircle ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
         {t('auto.components.PullRequestPage.acbd110867', 'Loading reviewers')}
       </div>
     )

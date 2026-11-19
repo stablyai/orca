@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useState, type ReactNode } from 'react'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -232,7 +233,8 @@ export function NativeChatAutomationCardDetails({
     <div className="@container mt-3 border-t border-border pt-3">
       {details.status === 'loading' ? (
         <Loader2
-          className="size-4 animate-spin text-muted-foreground"
+          ref={observeVisibleAnimation}
+          className="size-4 visible-animate-spin text-muted-foreground"
           aria-label={t('components.native-chat.automationSaved.loading', 'Loading')}
         />
       ) : details.status === 'deleted' ? (

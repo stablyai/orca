@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { GitFork, Loader2 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
@@ -35,7 +36,7 @@ export function NativeChatForkAction({
           }}
         >
           {fork.pendingItemId === itemId ? (
-            <Loader2 className="size-3.5 animate-spin" />
+            <Loader2 ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
           ) : (
             <GitFork className="size-3.5" />
           )}

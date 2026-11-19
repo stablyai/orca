@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { SecuritySurface } from '@/components/ui/security-surface'
 import { useEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
@@ -210,7 +211,7 @@ export function BrowserLoadFailureOverlay({
         >
           {activeProceedAttempt?.state === 'submitting' && activeProceedAttempt.showConnecting ? (
             <>
-              <Loader2 className="animate-spin" />
+              <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
               {t('browser.loadFailure.connecting', 'Connecting…')}
             </>
           ) : (

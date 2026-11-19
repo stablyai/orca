@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useId, useState } from 'react'
 import {
   AlertCircle,
@@ -62,7 +63,11 @@ function ActionButton({
       // Explicitly dim aria-disabled because ui/button styles only native disabled.
       className="flex-1 gap-1.5 aria-disabled:cursor-default aria-disabled:opacity-50"
     >
-      {action.isPending ? <Loader2 className="size-3.5 animate-spin" /> : leadingIcon}
+      {action.isPending ? (
+        <Loader2 ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
+      ) : (
+        leadingIcon
+      )}
       {action.isPending && action.pendingLabel ? action.pendingLabel : action.label}
     </Button>
   )

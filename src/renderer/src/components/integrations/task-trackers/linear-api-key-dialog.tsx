@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import {
   taskProviderErrorMessage,
   taskProviderErrorText
@@ -265,7 +266,10 @@ export function LinearApiKeyDialog({
           >
             {connectState === 'connecting' ? (
               <>
-                <LoaderCircle className="size-4 animate-spin" />
+                <LoaderCircle
+                  ref={observeVisibleAnimation}
+                  className="size-4 visible-animate-spin"
+                />
                 {t('auto.components.linear.api.key.dialog.834a52c084', 'Verifying...')}
               </>
             ) : (

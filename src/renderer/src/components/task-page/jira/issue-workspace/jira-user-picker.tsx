@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { useEffect, useMemo, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 
@@ -132,7 +133,12 @@ export function JiraUserPicker({
           <span className={value ? 'truncate' : 'truncate text-muted-foreground'}>
             {triggerLabel}
           </span>
-          {loading ? <LoaderCircle className="size-3 shrink-0 animate-spin" /> : null}
+          {loading ? (
+            <LoaderCircle
+              ref={observeVisibleAnimation}
+              className="size-3 shrink-0 visible-animate-spin"
+            />
+          ) : null}
         </button>
       </PopoverTrigger>
       <PopoverContent className="popover-scroll-content scrollbar-sleek w-64 p-1" align="start">

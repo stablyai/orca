@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { LoaderCircle, RotateCw, TriangleAlert, X } from 'lucide-react'
 import { toast } from 'sonner'
@@ -203,7 +204,12 @@ export function SeveredTerminalDaemonBanner(): React.JSX.Element | null {
               {t('terminal.severedDaemonBanner.cancel', 'Cancel')}
             </Button>
             <Button variant="destructive" disabled={restarting} onClick={() => void restart()}>
-              {restarting ? <LoaderCircle className="size-4 animate-spin" /> : null}
+              {restarting ? (
+                <LoaderCircle
+                  ref={observeVisibleAnimation}
+                  className="size-4 visible-animate-spin"
+                />
+              ) : null}
               {t('terminal.severedDaemonBanner.confirm', 'Restart and end processes')}
             </Button>
           </DialogFooter>

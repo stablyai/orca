@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
 import { useTranslate } from '@/i18n/use-translate'
 import {
@@ -73,8 +74,14 @@ export function TaskPageLinearIssueBoard({
             length: 12
           }).map((_, i) => (
             <div key={i} className="px-3 py-3">
-              <div className="h-4 w-4/5 animate-pulse rounded bg-muted/70" />
-              <div className="mt-2 h-3 w-3/5 animate-pulse rounded bg-muted/60" />
+              <div
+                ref={observeVisibleAnimation}
+                className="h-4 w-4/5 visible-animate-pulse rounded bg-muted/70"
+              />
+              <div
+                ref={observeVisibleAnimation}
+                className="mt-2 h-3 w-3/5 visible-animate-pulse rounded bg-muted/60"
+              />
             </div>
           ))}
         </div>

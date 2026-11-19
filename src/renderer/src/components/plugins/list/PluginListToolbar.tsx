@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { RefreshCw } from 'lucide-react'
 import type { PluginMarketplaceHostSourceState } from '../../../../../preload/api/plugins/plugin-host-api'
 import { useTranslate } from '@/i18n/use-translate'
@@ -46,7 +47,10 @@ export function PluginListToolbar({
             aria-label={refreshLabel}
             onClick={onRefresh}
           >
-            <RefreshCw className={refreshBusy ? 'animate-spin' : undefined} />
+            <RefreshCw
+              ref={observeVisibleAnimation}
+              className={refreshBusy ? 'visible-animate-spin' : undefined}
+            />
           </Button>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={4}>

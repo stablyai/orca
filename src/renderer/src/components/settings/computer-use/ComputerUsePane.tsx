@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Accessibility, Camera, ExternalLink, RefreshCw, ShieldCheck } from 'lucide-react'
 import { toast } from 'sonner'
@@ -317,7 +318,10 @@ export function ComputerUsePane(): React.JSX.Element {
               disabled={resetting}
               onClick={() => void refresh()}
             >
-              <RefreshCw className={`size-3.5 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw
+                ref={observeVisibleAnimation}
+                className={`size-3.5 ${loading ? 'visible-animate-spin' : ''}`}
+              />
               {t('auto.components.settings.ComputerUsePane.d95d1cfab8', 'Refresh')}
             </Button>
           </div>

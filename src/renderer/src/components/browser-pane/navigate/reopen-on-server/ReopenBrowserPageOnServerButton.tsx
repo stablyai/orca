@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -100,7 +101,7 @@ export function ReopenBrowserPageOnServerButton({
           )}
           aria-hidden={!showPending}
         >
-          <Loader2 className="size-3.5 animate-spin" />
+          <Loader2 ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
           {t('browser.reopenOnServer.pending', 'Reopening…')}
         </span>
       </span>

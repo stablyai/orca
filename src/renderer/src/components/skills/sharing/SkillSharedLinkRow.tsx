@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useState } from 'react'
 import { ChevronRight, Clipboard, Link2Off, Loader2, MoreHorizontal, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -153,7 +154,9 @@ export function SkillSharedLinkRow({
               disabled={busy || deleting}
               onClick={() => (confirming === 'revoke' ? onRevoke() : void deletePackage())}
             >
-              {busy || deleting ? <Loader2 className="animate-spin" /> : null}
+              {busy || deleting ? (
+                <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+              ) : null}
               {confirming === 'revoke'
                 ? t('auto.components.settings.shareSkills.confirmUnshare', 'Confirm unshare')
                 : t('common.delete', 'Delete')}
@@ -232,7 +235,7 @@ export function SkillSharedLinkRow({
             </div>
           ) : (
             <p className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Loader2 className="size-3 animate-spin" />
+              <Loader2 ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
               {t('auto.components.skills.SkillSharedLinkRow.loading', 'Loading contents…')}
             </p>
           )}

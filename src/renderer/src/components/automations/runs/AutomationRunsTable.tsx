@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { useEffect, useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Loader2 } from 'lucide-react'
@@ -88,7 +89,7 @@ export function AutomationRunsTable({
         </div>
         {loading && entries.length === 0 ? (
           <div className="flex min-h-0 flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" />
+            <Loader2 ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
             {t('auto.components.automations.AutomationRunsDashboard.loading', 'Loading runs…')}
           </div>
         ) : entries.length === 0 ? (

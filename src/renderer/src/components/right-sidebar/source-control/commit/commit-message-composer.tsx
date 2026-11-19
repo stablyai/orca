@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { RefreshCw, Sparkles, Square } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -59,7 +60,10 @@ export function CommitMessageComposer({
                 )}
                 className="group absolute right-1.5 top-1.5 inline-flex size-5 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-destructive/40"
               >
-                <RefreshCw className="size-3.5 animate-spin group-hover:hidden group-focus-visible:hidden" />
+                <RefreshCw
+                  ref={observeVisibleAnimation}
+                  className="size-3.5 visible-animate-spin group-hover:hidden group-focus-visible:hidden"
+                />
                 <Square className="hidden size-3.5 fill-current group-hover:block group-focus-visible:block" />
               </button>
             </TooltipTrigger>

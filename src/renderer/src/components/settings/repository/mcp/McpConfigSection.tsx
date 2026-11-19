@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, FileCode2, LoaderCircle, Plus, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
@@ -324,7 +325,10 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
             )}
           >
             {loading ? (
-              <LoaderCircle className="size-3.5 animate-spin" />
+              <LoaderCircle
+                ref={observeVisibleAnimation}
+                className="size-3.5 visible-animate-spin"
+              />
             ) : (
               <RefreshCw className="size-3.5" />
             )}
@@ -350,7 +354,9 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
         className="flex items-center justify-between py-3 text-xs text-muted-foreground"
       >
         <span>{formatMcpConfigSummary(configs, t)}</span>
-        {loading ? <LoaderCircle className="size-3.5 animate-spin" /> : null}
+        {loading ? (
+          <LoaderCircle ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
+        ) : null}
       </div>
       {visibleConfigs.length === 0 ? (
         <div

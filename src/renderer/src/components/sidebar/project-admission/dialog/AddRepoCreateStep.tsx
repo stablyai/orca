@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { useMemo, useState, type ReactNode } from 'react'
 import { ChevronDown, GitBranch, Loader2 } from 'lucide-react'
 import { DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
@@ -178,7 +179,7 @@ export function CreateStep({
               </p>
               {showGitChecking ? (
                 <p className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                  <Loader2 className="size-3 animate-spin" />
+                  <Loader2 ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
                   {t(
                     'auto.components.sidebar.AddRepoCreateStep.2a762f3b19',
                     'Checking Git on this host...'

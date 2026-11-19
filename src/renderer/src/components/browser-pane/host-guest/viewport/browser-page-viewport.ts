@@ -299,6 +299,8 @@ export function applyBrowserPageViewportLayout(
     return
   }
   viewport.shell.inert = !layout.active
+  // Portaled page overlays (agent glow) live here, outside the pane's own pause attribute.
+  viewport.shell.toggleAttribute('data-retained-animation-paused', !layout.active)
   if (layout.active) {
     viewport.shell.removeAttribute('aria-hidden')
   } else {

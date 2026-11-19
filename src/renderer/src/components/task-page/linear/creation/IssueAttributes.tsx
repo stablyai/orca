@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { useTranslate } from '@/i18n/use-translate'
@@ -62,7 +63,10 @@ export function TaskPageLinearIssueAttributes({
           </div>
           {newLinearStates.loading ? (
             <div className="flex items-center justify-center p-4">
-              <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
+              <LoaderCircle
+                ref={observeVisibleAnimation}
+                className="size-4 visible-animate-spin text-muted-foreground"
+              />
             </div>
           ) : (
             <div>
@@ -133,7 +137,10 @@ export function TaskPageLinearIssueAttributes({
           </div>
           {newLinearMembers.loading ? (
             <div className="flex items-center justify-center p-4">
-              <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
+              <LoaderCircle
+                ref={observeVisibleAnimation}
+                className="size-4 visible-animate-spin text-muted-foreground"
+              />
             </div>
           ) : (
             <div>
@@ -269,7 +276,10 @@ export function TaskPageLinearIssueAttributes({
           </div>
           {newLinearIssueProjectsLoading ? (
             <div className="flex items-center justify-center p-4">
-              <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
+              <LoaderCircle
+                ref={observeVisibleAnimation}
+                className="size-4 visible-animate-spin text-muted-foreground"
+              />
             </div>
           ) : (
             <div>
@@ -325,7 +335,10 @@ export function TaskPageLinearIssueAttributes({
           </div>
           {newLinearLabels.loading ? (
             <div className="flex items-center justify-center p-4">
-              <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
+              <LoaderCircle
+                ref={observeVisibleAnimation}
+                className="size-4 visible-animate-spin text-muted-foreground"
+              />
             </div>
           ) : (
             <div>

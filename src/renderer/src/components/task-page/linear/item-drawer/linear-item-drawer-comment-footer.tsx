@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { taskProviderErrorText } from '@/lib/work-items/task-provider-error-copy'
 import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 import React, { useCallback, useRef, useState } from 'react'
@@ -158,7 +159,10 @@ export function LinearIssueCommentFooter({
             aria-label={t('auto.components.LinearItemDrawer.d369841269', 'Send comment')}
           >
             {submitting ? (
-              <LoaderCircle className="size-3.5 animate-spin" />
+              <LoaderCircle
+                ref={observeVisibleAnimation}
+                className="size-3.5 visible-animate-spin"
+              />
             ) : (
               <Send className="size-3.5" />
             )}
@@ -193,7 +197,7 @@ export function LinearIssueCommentFooter({
         aria-label={t('auto.components.LinearItemDrawer.d369841269', 'Send comment')}
       >
         {submitting ? (
-          <LoaderCircle className="size-3.5 animate-spin" />
+          <LoaderCircle ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
         ) : (
           <Send className="size-3.5" />
         )}

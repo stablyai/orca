@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import {
   ArrowRight,
@@ -74,7 +75,12 @@ export function LinearIssueWorkspaceHeader({
         <ChevronRight className="size-3.5 shrink-0" />
         <span className="shrink-0 font-mono">{issue.identifier}</span>
         <span className="min-w-0 truncate font-medium text-foreground">{issue.title}</span>
-        {issueLoading ? <LoaderCircle className="size-3.5 shrink-0 animate-spin" /> : null}
+        {issueLoading ? (
+          <LoaderCircle
+            ref={observeVisibleAnimation}
+            className="size-3.5 shrink-0 visible-animate-spin"
+          />
+        ) : null}
       </div>
       <div className="flex shrink-0 items-center gap-1">
         <span className="hidden px-2 text-sm text-muted-foreground md:inline">2 / 17</span>

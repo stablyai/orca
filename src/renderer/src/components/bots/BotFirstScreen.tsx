@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useMemo, useState } from 'react'
 import { Check, LoaderCircle, RotateCcw, X } from 'lucide-react'
 import { botTarget } from '@/lib/bot-hosts'
@@ -146,7 +147,12 @@ function RowMark({ state }: { state: FirstLookRow['state'] }): React.JSX.Element
     case 'done':
       return <Check className="size-3.5 text-chat-foreground-faint" />
     case 'running':
-      return <LoaderCircle className="size-3.5 animate-spin text-chat-foreground-faint" />
+      return (
+        <LoaderCircle
+          ref={observeVisibleAnimation}
+          className="size-3.5 visible-animate-spin text-chat-foreground-faint"
+        />
+      )
     case 'stopped':
       return <X className="size-3.5 text-chat-foreground-faint" />
   }
@@ -273,10 +279,11 @@ export function BotFirstScreen({
   return (
     <div className="scrollbar-sleek absolute inset-0 flex flex-col items-center justify-center overflow-y-auto px-6 pb-10">
       <BotAvatar
+        ref={observeVisibleAnimation}
         bot={bot}
         className={cn(
           'size-20 rounded-2xl text-3xl',
-          !failed && isVisible && 'animate-pulse motion-reduce:animate-none'
+          !failed && isVisible && 'visible-animate-pulse motion-reduce:animate-none'
         )}
       />
       <span className="pt-4 text-xl font-semibold text-chat-foreground-strong">{bot.name}</span>

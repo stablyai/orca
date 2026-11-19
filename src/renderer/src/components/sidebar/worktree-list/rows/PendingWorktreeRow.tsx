@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { AlertTriangle, Loader2, X } from 'lucide-react'
 import { useAppStore } from '@/store/index'
@@ -25,7 +26,10 @@ function HostCreationRow({ repoName }: { repoName: string | null }): React.JSX.E
   return (
     <div className="flex w-full items-center gap-2 rounded-md border border-transparent px-2 py-1.5">
       <span className="flex size-4 shrink-0 items-center justify-center">
-        <Loader2 className="size-4 animate-spin text-muted-foreground" />
+        <Loader2
+          ref={observeVisibleAnimation}
+          className="size-4 visible-animate-spin text-muted-foreground"
+        />
       </span>
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[13px] font-medium text-sidebar-foreground">
@@ -76,7 +80,10 @@ export function PendingWorktreeRow({
           {isError ? (
             <AlertTriangle className="size-3.5 text-destructive" />
           ) : (
-            <Loader2 className="size-4 animate-spin text-muted-foreground" />
+            <Loader2
+              ref={observeVisibleAnimation}
+              className="size-4 visible-animate-spin text-muted-foreground"
+            />
           )}
         </span>
         <span className="min-w-0 flex-1">

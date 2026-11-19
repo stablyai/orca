@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { ExternalLink, Layers3 } from 'lucide-react'
 
@@ -31,11 +32,26 @@ function LinearCustomViewTableSkeleton(): React.JSX.Element {
           key={index}
           className="grid gap-3 px-3 py-3 md:grid-cols-[minmax(220px,1.5fr)_120px_120px_120px_130px_60px]"
         >
-          <div className="h-4 w-4/5 animate-pulse rounded bg-muted/70" />
-          <div className="h-4 w-20 animate-pulse rounded bg-muted/60" />
-          <div className="h-4 w-20 animate-pulse rounded bg-muted/60" />
-          <div className="h-4 w-20 animate-pulse rounded bg-muted/60" />
-          <div className="h-4 w-24 animate-pulse rounded bg-muted/60" />
+          <div
+            ref={observeVisibleAnimation}
+            className="h-4 w-4/5 visible-animate-pulse rounded bg-muted/70"
+          />
+          <div
+            ref={observeVisibleAnimation}
+            className="h-4 w-20 visible-animate-pulse rounded bg-muted/60"
+          />
+          <div
+            ref={observeVisibleAnimation}
+            className="h-4 w-20 visible-animate-pulse rounded bg-muted/60"
+          />
+          <div
+            ref={observeVisibleAnimation}
+            className="h-4 w-20 visible-animate-pulse rounded bg-muted/60"
+          />
+          <div
+            ref={observeVisibleAnimation}
+            className="h-4 w-24 visible-animate-pulse rounded bg-muted/60"
+          />
           <div />
         </div>
       ))}

@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { FileText, ListChecks, LoaderCircle, MessageSquare, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -180,7 +181,10 @@ export function GitHubItemDialogPRTabs({
             <TabsContent value="files" className="mt-0 h-full min-h-0 overflow-hidden">
               {(loading || !detailsLoaded) && files.length === 0 ? (
                 <div className="flex items-center justify-center py-10">
-                  <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
+                  <LoaderCircle
+                    ref={observeVisibleAnimation}
+                    className="size-5 visible-animate-spin text-muted-foreground"
+                  />
                 </div>
               ) : !canUseFilesRepoContext ? (
                 // Why: without a repo path or runtime host the viewer would call IPC with empty ids; diff loads and review comments both fail silently.

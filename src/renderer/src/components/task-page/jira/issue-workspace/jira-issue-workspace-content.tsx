@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import type { LucideIcon } from 'lucide-react'
 import { ArrowRight, LoaderCircle, RefreshCw, Save, Send } from 'lucide-react'
 import { JiraIssueMarkdown } from './jira-issue-markdown'
@@ -78,7 +79,10 @@ export function JiraIssueWorkspaceContent({
                 disabled={pendingField === 'title'}
               >
                 {pendingField === 'title' ? (
-                  <LoaderCircle className="size-4 animate-spin" />
+                  <LoaderCircle
+                    ref={observeVisibleAnimation}
+                    className="size-4 visible-animate-spin"
+                  />
                 ) : (
                   <Save className="size-4" />
                 )}
@@ -101,7 +105,10 @@ export function JiraIssueWorkspaceContent({
                 disabled={pendingField === 'labels'}
               >
                 {pendingField === 'labels' ? (
-                  <LoaderCircle className="size-4 animate-spin" />
+                  <LoaderCircle
+                    ref={observeVisibleAnimation}
+                    className="size-4 visible-animate-spin"
+                  />
                 ) : (
                   <Save className="size-4" />
                 )}
@@ -152,7 +159,10 @@ export function JiraIssueWorkspaceContent({
                 className="gap-1"
               >
                 {commentsLoading ? (
-                  <LoaderCircle className="size-3 animate-spin" />
+                  <LoaderCircle
+                    ref={observeVisibleAnimation}
+                    className="size-3 visible-animate-spin"
+                  />
                 ) : (
                   <RefreshCw className="size-3" />
                 )}
@@ -166,7 +176,10 @@ export function JiraIssueWorkspaceContent({
             </div>
           ) : commentsLoading && comments.length === 0 ? (
             <div className="flex items-center justify-center py-8">
-              <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
+              <LoaderCircle
+                ref={observeVisibleAnimation}
+                className="size-4 visible-animate-spin text-muted-foreground"
+              />
             </div>
           ) : comments.length === 0 ? (
             <p className="text-sm text-muted-foreground">
@@ -273,7 +286,7 @@ export function JiraIssueCommentComposer({
           className="self-end gap-2"
         >
           {commentSubmitting ? (
-            <LoaderCircle className="size-4 animate-spin" />
+            <LoaderCircle ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
           ) : (
             <Send className="size-4" />
           )}

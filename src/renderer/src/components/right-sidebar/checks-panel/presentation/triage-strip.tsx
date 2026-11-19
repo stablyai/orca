@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { isCompletePRCheckOwner } from '../../../../../../shared/github/checks/complete-pr-check-owner'
 import React from 'react'
 import {
@@ -153,7 +154,7 @@ export function PRTriageStrip({
               onClick={onFixChecksWithAI}
             >
               {isFixingChecksWithAI ? (
-                <RefreshCw className="size-3 animate-spin" />
+                <RefreshCw ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
               ) : (
                 <Sparkles className="size-3" />
               )}
@@ -174,8 +175,9 @@ export function PRTriageStrip({
       <div className="border-b border-border px-3 py-2">
         <div className="flex min-w-0 items-center gap-2">
           <LoaderCircle
+            ref={observeVisibleAnimation}
             className={cn(
-              'size-3.5 shrink-0 animate-spin motion-reduce:animate-none',
+              'size-3.5 shrink-0 visible-animate-spin motion-reduce:animate-none',
               CHECK_COLOR.pending
             )}
           />
@@ -294,7 +296,7 @@ export function ConflictTriageStrip({
           onClick={onResolveConflictsWithAI}
         >
           {isResolvingConflictsWithAI ? (
-            <RefreshCw className="size-3 animate-spin" />
+            <RefreshCw ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
           ) : (
             <Sparkles className="size-3" />
           )}

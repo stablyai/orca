@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import LinearIssueWorkspace from '@/components/task-page/linear/issue-workspace/LinearIssueWorkspace'
 import { LoaderCircle } from 'lucide-react'
@@ -45,7 +46,10 @@ export function TaskPageLinearContent({
     />
   ) : !linearStatusReady ? (
     <div className="mt-4 flex items-center justify-center py-14">
-      <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
+      <LoaderCircle
+        ref={observeVisibleAnimation}
+        className="size-5 visible-animate-spin text-muted-foreground"
+      />
     </div>
   ) : !linearConnected ? (
     <div className="mt-4 flex flex-col items-center justify-center rounded-md border border-border/50 bg-muted/50 px-6 py-14 text-center shadow-sm">

@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { useAppStore } from '@/store/index'
@@ -224,7 +225,10 @@ export default function FolderWorkspacePrChecksPanel({
                   'Refresh PR checks'
                 )}
               >
-                <RefreshCw className={cn('size-3.5', isRefreshing && 'animate-spin')} />
+                <RefreshCw
+                  ref={observeVisibleAnimation}
+                  className={cn('size-3.5', isRefreshing && 'visible-animate-spin')}
+                />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">

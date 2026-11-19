@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useCallback } from 'react'
 import { Loader2, Server, ServerOff } from 'lucide-react'
 import { toastSshConnectFailure } from '@/ssh/ssh-connect-failure-toast'
@@ -161,7 +162,7 @@ export function TerminalSshReconnectOverlay({
       >
         <div className="flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-muted-foreground">
           {isConnecting ? (
-            <Loader2 className="size-4 animate-spin" />
+            <Loader2 ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
           ) : (
             <ServerOff className="size-4" />
           )}
@@ -249,7 +250,7 @@ export function TerminalSshReconnectOverlay({
           >
             {!showConnect || isConnecting ? (
               <>
-                <Loader2 className="size-3.5 animate-spin" />
+                <Loader2 ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
                 {sshConnectingLabel(t)}
               </>
             ) : (

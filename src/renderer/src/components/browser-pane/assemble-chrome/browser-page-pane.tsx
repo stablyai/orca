@@ -305,6 +305,7 @@ export function BrowserPagePane({
   return (
     <div
       data-browser-page-pane-id={browserTab.id}
+      data-retained-animation-paused={!isActive ? '' : undefined}
       className={cn(
         'absolute inset-0 flex min-h-0 flex-1 flex-col',
         isActive

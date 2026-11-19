@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import type React from 'react'
 import { useId, useState } from 'react'
 import { CircleCheck, Clock, Info, Loader2 } from 'lucide-react'
@@ -233,7 +234,9 @@ export function DelayedUpdatePanel({
                 'Check for this release now. Your delay setting stays the same.'
               )}
             >
-              {checking ? <Loader2 className="animate-spin" /> : null}
+              {checking ? (
+                <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+              ) : null}
               {t('settings.updateDelay.ee1d96f74a', 'Skip delay once')}
             </Button>
           )}

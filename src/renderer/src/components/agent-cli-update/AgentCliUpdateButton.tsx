@@ -7,6 +7,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import type { AgentDetectionTarget } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 import { agentCliUpdateHostTarget } from '@/store/slices/runtime-host-updates/agent-cli-updates'
 import { useAgentCliUpdate } from './use-agent-cli-update'
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { AgentCliUpdateFailedChip } from './AgentCliUpdateFailedChip'
 
 // WSL distros and direct SSH hosts aren't checked; Orca's own server there would run the update.
@@ -64,7 +65,9 @@ export function AgentCliUpdateButton({
           disabled={running}
           onClick={() => void start()}
         >
-          {running ? <Loader2 className="animate-spin" /> : null}
+          {running ? (
+            <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+          ) : null}
           {running
             ? t('agentCliUpdate.updating', 'Updating…')
             : t('agentCliUpdate.update', 'Update')}

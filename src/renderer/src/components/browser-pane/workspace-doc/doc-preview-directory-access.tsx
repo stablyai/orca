@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useCallback, useRef, useState, type RefObject } from 'react'
 import { AlertCircle, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -156,7 +157,9 @@ export function DocPreviewDirectoryAccessBanner({
         {t('auto.components.editor.HtmlDocPreview.dismissAccessRequest', 'Dismiss')}
       </Button>
       <Button type="button" size="xs" disabled={busy} onClick={() => void onAllow()}>
-        {busy ? <Loader2 className="size-3 animate-spin" /> : null}
+        {busy ? (
+          <Loader2 ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
+        ) : null}
         {labels.length === 1
           ? t('auto.components.editor.HtmlDocPreview.allowDirectory', 'Allow folder')
           : t('auto.components.editor.HtmlDocPreview.allowDirectories', 'Allow {{count}} folders', {

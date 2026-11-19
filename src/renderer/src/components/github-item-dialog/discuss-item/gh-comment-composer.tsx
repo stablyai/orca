@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { useCallback, useState } from 'react'
 import { LoaderCircle, Send } from 'lucide-react'
 import { toast } from 'sonner'
@@ -144,7 +145,7 @@ export function GHCommentComposer({
             aria-label={t('auto.components.GitHubItemDialog.0a73f59e85', 'Send comment')}
           >
             {submitting ? (
-              <LoaderCircle className="size-4 animate-spin" />
+              <LoaderCircle ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
             ) : (
               <Send className="size-4" />
             )}

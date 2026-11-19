@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
 import { useAppStore } from '@/store/index'
 import { cn } from '@/lib/class-names'
@@ -178,7 +179,10 @@ export function TaskPageGitHubList({
                 >
                   {retryingSourceKeys.has(s.sourceKey) ? (
                     <span className="flex items-center gap-1">
-                      <LoaderCircle className="h-3 w-3 animate-spin" />
+                      <LoaderCircle
+                        ref={observeVisibleAnimation}
+                        className="h-3 w-3 visible-animate-spin"
+                      />
                       {t('auto.components.TaskPage.5b6b2af943', 'Retrying…')}
                     </span>
                   ) : (
@@ -216,7 +220,10 @@ export function TaskPageGitHubList({
             >
               {retryingSourceKeys.has(r.sourceKey) ? (
                 <span className="flex items-center gap-1">
-                  <LoaderCircle className="h-3 w-3 animate-spin" />
+                  <LoaderCircle
+                    ref={observeVisibleAnimation}
+                    className="h-3 w-3 visible-animate-spin"
+                  />
                   {t('auto.components.TaskPage.5b6b2af943', 'Retrying…')}
                 </span>
               ) : (
@@ -234,39 +241,69 @@ export function TaskPageGitHubList({
             }).map((_, i) => (
               <div key={i} className={cn('grid min-h-12 gap-3 px-3 py-2.5', githubTaskGridClass)}>
                 <div className={GITHUB_TASK_STICKY_ID_CELL_CLASS}>
-                  <div className="h-6 w-16 animate-pulse rounded-md bg-muted/70" />
+                  <div
+                    ref={observeVisibleAnimation}
+                    className="h-6 w-16 visible-animate-pulse rounded-md bg-muted/70"
+                  />
                 </div>
                 <div className={GITHUB_TASK_STICKY_TITLE_CELL_CLASS}>
-                  <div className="h-3.5 w-3/5 animate-pulse rounded bg-muted/70" />
-                  <div className="mt-1.5 h-3 w-2/5 animate-pulse rounded bg-muted/60" />
+                  <div
+                    ref={observeVisibleAnimation}
+                    className="h-3.5 w-3/5 visible-animate-pulse rounded bg-muted/70"
+                  />
+                  <div
+                    ref={observeVisibleAnimation}
+                    className="mt-1.5 h-3 w-2/5 visible-animate-pulse rounded bg-muted/60"
+                  />
                 </div>
                 {!showPRManagementColumns ? (
                   <div className="flex items-center">
-                    <div className="h-3 w-24 animate-pulse rounded bg-muted/60" />
+                    <div
+                      ref={observeVisibleAnimation}
+                      className="h-3 w-24 visible-animate-pulse rounded bg-muted/60"
+                    />
                   </div>
                 ) : null}
                 {showPRManagementColumns ? (
                   <>
                     <div className="flex items-center">
-                      <div className="h-5 w-20 animate-pulse rounded-full bg-muted/70" />
+                      <div
+                        ref={observeVisibleAnimation}
+                        className="h-5 w-20 visible-animate-pulse rounded-full bg-muted/70"
+                      />
                     </div>
                     <div className="flex items-center">
-                      <div className="h-5 w-20 animate-pulse rounded-full bg-muted/70" />
+                      <div
+                        ref={observeVisibleAnimation}
+                        className="h-5 w-20 visible-animate-pulse rounded-full bg-muted/70"
+                      />
                     </div>
                     <div className="flex items-center">
-                      <div className="h-5 w-20 animate-pulse rounded-full bg-muted/70" />
+                      <div
+                        ref={observeVisibleAnimation}
+                        className="h-5 w-20 visible-animate-pulse rounded-full bg-muted/70"
+                      />
                     </div>
                   </>
                 ) : (
                   <div className="flex items-center">
-                    <div className="h-5 w-14 animate-pulse rounded-full bg-muted/70" />
+                    <div
+                      ref={observeVisibleAnimation}
+                      className="h-5 w-14 visible-animate-pulse rounded-full bg-muted/70"
+                    />
                   </div>
                 )}
                 <div className="flex items-center">
-                  <div className="h-3 w-20 animate-pulse rounded bg-muted/60" />
+                  <div
+                    ref={observeVisibleAnimation}
+                    className="h-3 w-20 visible-animate-pulse rounded bg-muted/60"
+                  />
                 </div>
                 <div className="flex items-center justify-start lg:justify-end">
-                  <div className="h-7 w-16 animate-pulse rounded-md bg-muted/70" />
+                  <div
+                    ref={observeVisibleAnimation}
+                    className="h-7 w-16 visible-animate-pulse rounded-md bg-muted/70"
+                  />
                 </div>
               </div>
             ))}

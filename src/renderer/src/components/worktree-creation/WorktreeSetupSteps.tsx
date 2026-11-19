@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { Circle, CircleCheck, CircleX, Loader2, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -31,7 +32,11 @@ export function StepIcon({ state }: { state: WorktreeSetupStep['state'] }): Reac
   switch (state) {
     case 'running':
       return (
-        <Loader2 aria-hidden className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
+        <Loader2
+          ref={observeVisibleAnimation}
+          aria-hidden
+          className="size-3.5 shrink-0 visible-animate-spin text-muted-foreground"
+        />
       )
     case 'done':
       return <CircleCheck aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />

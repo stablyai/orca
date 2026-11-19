@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useEffect, useRef, useState, type ComponentType, type ReactNode, type Ref } from 'react'
 import { CircleStop, Loader2 } from 'lucide-react'
 import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -24,7 +25,7 @@ function AddRepoNestedScanProgressNotice({
   const t = useTranslate()
   return (
     <div className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
-      <Loader2 className="size-3.5 shrink-0 animate-spin" />
+      <Loader2 ref={observeVisibleAnimation} className="size-3.5 shrink-0 visible-animate-spin" />
       <span className="min-w-0 flex-1">{busyLabel}</span>
       {nestedScanInProgress && nestedScanId ? (
         <Tooltip>
@@ -38,7 +39,10 @@ function AddRepoNestedScanProgressNotice({
               title={t('auto.components.sidebar.AddRepoStartSteps.69ea7f8dc4', 'Stop scanning')}
               onClick={onStopNestedScan}
             >
-              <Loader2 className="size-3.5 animate-spin text-annotation-highlight group-hover:hidden group-focus-visible:hidden" />
+              <Loader2
+                ref={observeVisibleAnimation}
+                className="size-3.5 visible-animate-spin text-annotation-highlight group-hover:hidden group-focus-visible:hidden"
+              />
               <CircleStop className="hidden size-3.5 group-hover:block group-focus-visible:block" />
             </Button>
           </TooltipTrigger>

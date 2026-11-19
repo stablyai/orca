@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Plus, Minus, X, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
@@ -25,7 +26,10 @@ export function BulkActionBar({
       <div className="flex items-center gap-2 justify-between bg-accent/30 p-1.5 pr-2 rounded-md border border-border/50">
         <div className="flex items-center gap-2 text-xs font-medium text-foreground ml-1">
           {isExecuting ? (
-            <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+            <Loader2
+              ref={observeVisibleAnimation}
+              className="size-3.5 visible-animate-spin text-muted-foreground"
+            />
           ) : (
             <span className="tabular-nums">
               {t(

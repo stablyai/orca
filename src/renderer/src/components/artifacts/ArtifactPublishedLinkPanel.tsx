@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useCallback, useRef, useState } from 'react'
 import { Check, Copy, ExternalLink, Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -136,7 +137,10 @@ export function ArtifactPublishedLinkPanel({
               )}
               aria-hidden={!publishing}
             >
-              <Loader2 className={cn(publishing && 'animate-spin')} />
+              <Loader2
+                ref={observeVisibleAnimation}
+                className={cn(publishing && 'visible-animate-spin')}
+              />
               {t('auto.components.artifacts.ArtifactPublishedLinkPanel.updating', 'Updating…')}
             </span>
           </span>

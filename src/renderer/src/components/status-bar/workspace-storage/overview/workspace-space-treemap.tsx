@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useMemo } from 'react'
 import { Loader2, ZoomIn, ZoomOut } from 'lucide-react'
 import type { WorkspaceSpaceWorktree } from '../../../../../../shared/workspace-disk-space/workspace-space-types'
@@ -87,7 +88,9 @@ export function WorkspaceSpaceTreemap({
           </Button>
         ) : null}
         <span className="flex items-center gap-2">
-          {isScanning ? <Loader2 className="size-4 animate-spin" /> : null}
+          {isScanning ? (
+            <Loader2 ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
+          ) : null}
           {isScanning
             ? t(
                 'auto.components.status.bar.WorkspaceSpaceManagerPanel.c5135e7e4a',

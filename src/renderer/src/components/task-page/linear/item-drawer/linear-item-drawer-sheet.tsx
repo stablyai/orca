@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import {
   ArrowRight,
@@ -200,7 +201,10 @@ export function renderLinearItemDrawerSheet(
                 </div>
                 {commentsLoading && comments.length === 0 ? (
                   <div className="flex items-center justify-center py-6">
-                    <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
+                    <LoaderCircle
+                      ref={observeVisibleAnimation}
+                      className="size-4 visible-animate-spin text-muted-foreground"
+                    />
                   </div>
                 ) : comments.length === 0 ? (
                   <p className="text-[13px] text-muted-foreground">

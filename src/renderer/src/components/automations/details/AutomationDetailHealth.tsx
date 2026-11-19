@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { cn } from '@/lib/class-names'
 import type { Automation } from '../../../../../shared/automations/automation-definition'
@@ -38,6 +39,7 @@ function HealthCell({
       >
         {showDot ? (
           <span
+            ref={observeVisibleAnimation}
             className={cn(
               'size-2 shrink-0 rounded-full',
               failed
@@ -45,7 +47,7 @@ function HealthCell({
                 : tone === 'succeeded'
                   ? 'bg-status-success'
                   : tone === 'running'
-                    ? 'animate-pulse bg-foreground motion-reduce:animate-none'
+                    ? 'visible-animate-pulse bg-foreground motion-reduce:animate-none'
                     : 'bg-muted-foreground/70'
             )}
             aria-hidden="true"

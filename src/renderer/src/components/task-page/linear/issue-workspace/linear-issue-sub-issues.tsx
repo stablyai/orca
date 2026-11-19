@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import '@/store/slices/linear/linear-issue-read'
 import { observeLinearIssueRead } from '@/store/slices/linear/linear-issue-read-lifecycle'
 import {
@@ -207,7 +208,10 @@ export function LinearIssueSubIssues({
                 </span>
               ) : null}
               {openingSubIssueId === subIssue.id ? (
-                <LoaderCircle className="size-3.5 shrink-0 animate-spin" />
+                <LoaderCircle
+                  ref={observeVisibleAnimation}
+                  className="size-3.5 shrink-0 visible-animate-spin"
+                />
               ) : (
                 <ArrowRight className="size-3.5 shrink-0" />
               )}
@@ -246,7 +250,12 @@ export function LinearIssueSubIssues({
                 onClick={() => void handleCreate()}
                 disabled={!title.trim() || submitting}
               >
-                {submitting ? <LoaderCircle className="size-3.5 animate-spin" /> : null}
+                {submitting ? (
+                  <LoaderCircle
+                    ref={observeVisibleAnimation}
+                    className="size-3.5 visible-animate-spin"
+                  />
+                ) : null}
                 {t('auto.components.LinearIssueWorkspace.42589845bc', 'Create')}
               </Button>
             </div>

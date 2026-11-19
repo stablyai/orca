@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { AlertTriangle, Loader, Pin } from 'lucide-react'
 import { GhAuthErrorHelp } from '../auth-errors/GhAuthErrorHelp'
@@ -108,7 +109,7 @@ export function ProjectViewPickStep({
       <div className="max-h-[340px] overflow-y-auto p-1 scrollbar-sleek">
         {loading ? (
           <div className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
-            <Loader className="size-3 animate-spin" />
+            <Loader ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
             {t('auto.components.github.project.ProjectPicker.72a05c04a6', 'Loading views…')}
           </div>
         ) : views.length === 0 ? (

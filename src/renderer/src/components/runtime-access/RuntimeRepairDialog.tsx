@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Loader2, Link2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
@@ -180,7 +181,11 @@ function RuntimeRepairForm({
           {t('auto.components.settings.RuntimeHostAccessForm.cancel', 'Cancel')}
         </Button>
         <Button type="submit" disabled={!parsed.ok || busy}>
-          {busy ? <Loader2 className="animate-spin" /> : <Link2 />}
+          {busy ? (
+            <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+          ) : (
+            <Link2 />
+          )}
           {t('auto.components.settings.RuntimeRepairDialog.submit', 'Re-pair')}
         </Button>
       </DialogFooter>

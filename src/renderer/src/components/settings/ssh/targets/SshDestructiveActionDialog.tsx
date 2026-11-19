@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Info, Loader2 } from 'lucide-react'
 import { Button } from '../../../ui/button'
 import {
@@ -99,7 +100,9 @@ export function SshDestructiveActionDialog({
             {t('auto.components.settings.SshDestructiveActionDialog.895b216267', 'Cancel')}
           </Button>
           <Button variant="destructive" onClick={onConfirm} disabled={isBusy} className="gap-1.5">
-            {isBusy ? <Loader2 className="size-3 animate-spin" /> : null}
+            {isBusy ? (
+              <Loader2 ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
+            ) : null}
             {isBusy ? (busyLabel ?? actionLabel) : actionLabel}
           </Button>
         </DialogFooter>

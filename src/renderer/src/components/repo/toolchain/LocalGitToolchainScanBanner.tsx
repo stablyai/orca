@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { Copy, RefreshCw, TriangleAlert } from 'lucide-react'
 import { toast } from 'sonner'
@@ -152,7 +153,11 @@ export function LocalGitToolchainScanBanner(): React.JSX.Element | null {
               disabled={pending}
               onClick={() => void rescan()}
             >
-              <RefreshCw className={cn(pending && 'animate-spin')} aria-hidden="true" />
+              <RefreshCw
+                ref={observeVisibleAnimation}
+                className={cn(pending && 'visible-animate-spin')}
+                aria-hidden="true"
+              />
               {t('auto.components.sidebar.LocalGitToolchainScanBanner.retry', 'Retry now')}
             </Button>
           </div>

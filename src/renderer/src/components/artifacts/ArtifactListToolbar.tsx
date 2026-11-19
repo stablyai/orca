@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -36,7 +37,10 @@ export function ArtifactListToolbar({
             disabled={isRefreshing}
             className="shrink-0 border border-border bg-background shadow-none hover:bg-muted/50"
           >
-            <RefreshCw className={cn('size-4', isRefreshing && 'animate-spin')} />
+            <RefreshCw
+              ref={observeVisibleAnimation}
+              className={cn('size-4', isRefreshing && 'visible-animate-spin')}
+            />
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>

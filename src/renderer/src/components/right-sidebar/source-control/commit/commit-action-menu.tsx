@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { ChevronDown, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -44,7 +45,7 @@ export function CommitActionMenu({
               className="w-full rounded-r-none px-3 text-[11px]"
             >
               {showSpinner ? (
-                <Loader2 className="size-3.5 animate-spin" />
+                <Loader2 ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
               ) : PrimaryIcon ? (
                 <PrimaryIcon className="size-3.5" aria-hidden="true" />
               ) : null}
@@ -68,7 +69,10 @@ export function CommitActionMenu({
                   aria-label={moreCommitAndRemoteActionsLabel}
                 >
                   {showChevronSpinner ? (
-                    <Loader2 className="size-3.5 animate-spin" />
+                    <Loader2
+                      ref={observeVisibleAnimation}
+                      className="size-3.5 visible-animate-spin"
+                    />
                   ) : (
                     <ChevronDown className="size-3.5" />
                   )}

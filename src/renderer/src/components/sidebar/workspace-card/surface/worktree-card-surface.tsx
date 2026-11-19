@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { LoaderCircle } from 'lucide-react'
 
@@ -116,7 +117,10 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-background/50 backdrop-blur-[1px]">
           <div className="inline-flex items-center gap-1.5 rounded-full bg-background px-3 py-1 text-[11px] font-medium text-foreground shadow-sm border border-border/50">
             {!isQueuedForDeletion ? (
-              <LoaderCircle className="size-3.5 animate-spin text-muted-foreground" />
+              <LoaderCircle
+                ref={observeVisibleAnimation}
+                className="size-3.5 visible-animate-spin text-muted-foreground"
+              />
             ) : null}
             {deleteLabel}
           </div>

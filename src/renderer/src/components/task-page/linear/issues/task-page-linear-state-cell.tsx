@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { getLinearSourceScope } from '../../../../store/slices/linear/linear-slice-scope'
 import { writeLinearIssue } from '../../../../lib/work-items/linear/linear-issue-write'
 import { taskProviderErrorMessage } from '../../../../lib/work-items/task-provider-error-copy'
@@ -115,7 +116,10 @@ export function LinearStateCell({
           />
           <span className="truncate">{issue.state.name}</span>
           {pending || states.loading ? (
-            <LoaderCircle className="size-3 shrink-0 animate-spin opacity-70" />
+            <LoaderCircle
+              ref={observeVisibleAnimation}
+              className="size-3 shrink-0 visible-animate-spin opacity-70"
+            />
           ) : (
             <ChevronDown className="size-3 shrink-0 opacity-55" />
           )}
@@ -130,7 +134,7 @@ export function LinearStateCell({
           <div className="px-2 py-3 text-center text-[12px] text-destructive">{states.error}</div>
         ) : states.loading ? (
           <div className="flex items-center gap-2 px-2 py-3 text-[12px] text-muted-foreground">
-            <LoaderCircle className="size-3 animate-spin" />
+            <LoaderCircle ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
             {t('auto.components.TaskPage.cc13109b5d', 'Loading states')}
           </div>
         ) : states.data.length > 0 ? (

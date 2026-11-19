@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Copy, ExternalLink, Loader2, MoreHorizontal, Trash2 } from 'lucide-react'
 import type { ArtifactListItem } from '../../../../shared/artifacts/artifacts'
 import { Button } from '@/components/ui/button'
@@ -61,7 +62,11 @@ export function ArtifactActions({
               'More artifact actions'
             )}
           >
-            {deleting ? <Loader2 className="animate-spin" /> : <MoreHorizontal />}
+            {deleting ? (
+              <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+            ) : (
+              <MoreHorizontal />
+            )}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">

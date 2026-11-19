@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { Loader2, RotateCcw } from 'lucide-react'
 import { useAppStore } from '@/store'
@@ -109,7 +110,10 @@ export default function WorktreeCreationPanel({
         ) : (
           <div className="flex min-h-0 max-w-3xl flex-col gap-2 text-xs text-muted-foreground">
             <div className="flex items-center gap-2">
-              <Loader2 className="size-3.5 shrink-0 animate-spin" />
+              <Loader2
+                ref={observeVisibleAnimation}
+                className="size-3.5 shrink-0 visible-animate-spin"
+              />
               <span id={progressLabelId} className="tabular-nums">
                 {getCreationProgressLabel(entry, t)}
               </span>

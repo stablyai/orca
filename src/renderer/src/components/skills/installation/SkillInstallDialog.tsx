@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -273,7 +274,7 @@ export function SkillInstallDialog({
         {resolvingInitialLink ? (
           // Avoid flashing the paste form while the supplied link’s review loads.
           <p className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" />
+            <Loader2 ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
             {t('auto.components.skills.SkillInstallDialog.opening', 'Opening this link…')}
           </p>
         ) : !preview ? (

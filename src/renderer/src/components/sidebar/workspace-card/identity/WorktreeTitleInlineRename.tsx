@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
@@ -300,8 +301,9 @@ export function WorktreeTitleInlineRename({
           />
           {saving ? (
             <LoaderCircle
+              ref={observeVisibleAnimation}
               className={cn(
-                'pointer-events-none absolute top-1/2 size-3 -translate-y-1/2 animate-spin text-muted-foreground',
+                'pointer-events-none absolute top-1/2 size-3 -translate-y-1/2 visible-animate-spin text-muted-foreground',
                 savingSpinnerClassName
               )}
             />

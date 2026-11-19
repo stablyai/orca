@@ -4,6 +4,7 @@ import { ChevronDown, Loader2, ShieldQuestion, X } from 'lucide-react'
 import { NativeChatApprovalDetail } from './NativeChatApprovalDetail'
 import { approvalDetailPreview } from '../../../../../shared/agent-session/requests/prompts/agent-session-approval-detail-preview'
 import { cn } from '@/lib/class-names'
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatMarkdown } from '../markdown/NativeChatMarkdown'
 import { approvalBlockedPathToShow } from '../../../../../shared/agent-session/requests/prompts/agent-session-approval-blocked-path'
@@ -354,7 +355,11 @@ export function NativeChatApprovalCard({
                     >
                       {isSubmitting && opt.send === submittingOption ? (
                         <span className="inline-flex items-center gap-1.5">
-                          <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                          <Loader2
+                            ref={observeVisibleAnimation}
+                            className="size-3.5 visible-animate-spin"
+                            aria-hidden
+                          />
                           {optionLabel(opt)}
                         </span>
                       ) : (

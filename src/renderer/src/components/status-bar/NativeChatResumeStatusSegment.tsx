@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { AlertCircle, CheckCircle2, Loader2, RotateCcw } from 'lucide-react'
 import { useLocalStructuredChatsInUse } from '../../runtime/native-chat/local-sessions/local-structured-chats'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -208,7 +209,12 @@ function NativeChatRuntimeResumeStatusSegment({
           machineName={machineName}
           iconOnly={iconOnly}
           count={view?.counts.total ?? 0}
-          icon={<Loader2 className="size-3 animate-spin text-muted-foreground" />}
+          icon={
+            <Loader2
+              ref={observeVisibleAnimation}
+              className="size-3 visible-animate-spin text-muted-foreground"
+            />
+          }
           {...resumingText(view?.counts.done ?? 0, view?.counts.total ?? 0, t)}
         />
       )}

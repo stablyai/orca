@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import type React from 'react'
 import { useEffect, useRef, type RefObject } from 'react'
 import { ChevronRight, LoaderCircle } from 'lucide-react'
@@ -71,7 +72,10 @@ export function RemoteFileBrowserEntryList({
       >
         {loading ? (
           <div className="flex items-center justify-center h-full">
-            <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
+            <LoaderCircle
+              ref={observeVisibleAnimation}
+              className="size-5 visible-animate-spin text-muted-foreground"
+            />
           </div>
         ) : error ? (
           <div className="flex items-center justify-center h-full px-4">

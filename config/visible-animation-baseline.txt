@@ -1,0 +1,2 @@
+# Raw spin/pulse class tokens in Electron renderer sources. Baseline: 0.
+# Web-only entry points and mobile-page.css do not run in Electron UI windows.

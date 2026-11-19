@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { ChevronDown, ExternalLink, GitMerge, LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -51,7 +52,10 @@ export function PRActionsMergeMenu({
               )}
             >
               {mergePending ? (
-                <LoaderCircle className="size-3.5 animate-spin" />
+                <LoaderCircle
+                  ref={observeVisibleAnimation}
+                  className="size-3.5 visible-animate-spin"
+                />
               ) : (
                 <GitMerge className="size-3.5" />
               )}

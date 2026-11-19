@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 // Who can ask, as one list of real people: requests waiting first (their actions under the full
 // name), the owner, the people added (✕ on hover), and Add people last.
 import React from 'react'
@@ -119,7 +120,11 @@ export function BotWhoCanAskInsetList({
               )}
             >
               <span className="flex size-5.5 shrink-0 items-center justify-center rounded-full border border-dashed border-muted-foreground/50">
-                {saving ? <Loader2 className="size-3 animate-spin" /> : <Plus className="size-3" />}
+                {saving ? (
+                  <Loader2 ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
+                ) : (
+                  <Plus className="size-3" />
+                )}
               </span>
               <span className="min-w-0 flex-1 truncate font-medium">
                 {t('bots.whoCanAsk.addPeople', 'Add people')}

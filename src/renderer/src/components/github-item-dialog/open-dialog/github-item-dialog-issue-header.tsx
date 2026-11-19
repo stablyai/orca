@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import {
   ArrowRight,
@@ -115,7 +116,10 @@ export function GitHubItemDialogIssueHeader({
                       onClick={() => void refreshTask()}
                       aria-label={t('auto.components.GitHubItemDialog.refreshTask', 'Refresh task')}
                     >
-                      <RefreshCw className={cn('size-4', refreshing && 'animate-spin')} />
+                      <RefreshCw
+                        ref={observeVisibleAnimation}
+                        className={cn('size-4', refreshing && 'visible-animate-spin')}
+                      />
                     </Button>
                   </span>
                 </TooltipTrigger>

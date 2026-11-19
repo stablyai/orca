@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { BookMarked, Check, ExternalLink, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -175,7 +176,7 @@ export function GitHubInstalledRepositories({
         <GitHubFinishInBrowser trip={trip} url={installUrl} />
       ) : githubAwait === 'checking' ? (
         <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" />
+          <Loader2 ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
           {t('bots.github.setup.checkingInstalls', 'Checking GitHub for changes…')}
         </p>
       ) : githubAwait === 'unchanged' ? (

@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useGitHubImagePending } from '@/components/github/use-github-image-uploads'
 import type { GitHubImageUploadAddress } from '@/components/github/github-image-upload'
 import React from 'react'
@@ -91,7 +92,10 @@ export function ConversationDescription({
                 onClick={save}
               >
                 {bodySaving ? (
-                  <LoaderCircle className="size-3.5 animate-spin" />
+                  <LoaderCircle
+                    ref={observeVisibleAnimation}
+                    className="size-3.5 visible-animate-spin"
+                  />
                 ) : (
                   <Check className="size-3.5" />
                 )}
@@ -122,7 +126,10 @@ export function ConversationDescription({
       <div className="px-4 py-4 text-[14px] leading-relaxed text-foreground">
         {loading && !detailsLoaded ? (
           <div className="flex items-center justify-center py-5">
-            <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
+            <LoaderCircle
+              ref={observeVisibleAnimation}
+              className="size-4 visible-animate-spin text-muted-foreground"
+            />
           </div>
         ) : bodyEditing ? (
           <MentionTextarea

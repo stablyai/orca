@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Loader2, RefreshCw } from 'lucide-react'
 import type React from 'react'
 import { useCallback, useEffect, useState } from 'react'
@@ -299,7 +300,11 @@ export function EphemeralVmRuntimesSection(): React.JSX.Element | null {
                   onClick={() => void refresh()}
                   disabled={isLoading || cleaningId !== null}
                 >
-                  {isLoading ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+                  {isLoading ? (
+                    <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+                  ) : (
+                    <RefreshCw />
+                  )}
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>

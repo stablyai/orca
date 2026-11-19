@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useState } from 'react'
 import { CalendarClock, ExternalLink, RefreshCw, Sparkles } from 'lucide-react'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
@@ -103,7 +104,10 @@ export function GrokUsagePane(): React.JSX.Element {
                     'Refresh Grok usage'
                   )}
                 >
-                  <RefreshCw className={`size-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+                  <RefreshCw
+                    ref={observeVisibleAnimation}
+                    className={`size-3.5 ${isFetching ? 'visible-animate-spin' : ''}`}
+                  />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>

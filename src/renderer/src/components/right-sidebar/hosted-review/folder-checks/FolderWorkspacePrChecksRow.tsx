@@ -1,7 +1,10 @@
 import { ChevronRight, ExternalLink, GitMerge } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
-import { observeOffscreenAnimation } from '@/lib/window-activity/offscreen-animation-pause'
+import {
+  observeOffscreenAnimation,
+  observeVisibleAnimation
+} from '@/lib/window-activity/offscreen-animation-pause'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { useTranslate } from '@/i18n/use-translate'
 import type {
@@ -90,10 +93,11 @@ export function FolderWorkspacePrChecksRow({
           >
             {showStatusIcon ? (
               <StatusIcon
+                ref={observeVisibleAnimation}
                 className={cn(
                   'size-3 shrink-0',
                   CHECK_COLOR[row.checkTone],
-                  animateStatusIcon && 'animate-spin motion-reduce:animate-none'
+                  animateStatusIcon && 'visible-animate-spin motion-reduce:animate-none'
                 )}
               />
             ) : null}

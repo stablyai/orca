@@ -10,14 +10,17 @@ import { BOT_MASCOT_URLS } from './bot-mascots'
 export function BotAvatar({
   bot,
   className,
-  style
+  style,
+  ref
 }: {
   bot: Pick<Bot, 'id' | 'name' | 'avatar'> & BotOnHost
   className?: string
   style?: React.CSSProperties
+  ref?: React.Ref<HTMLSpanElement>
 }): React.JSX.Element {
   return (
     <BotAvatarTile
+      ref={ref}
       src={useBotAvatarSrc(bot)}
       fallback={botFallback(bot)}
       className={className}
@@ -52,15 +55,18 @@ export function BotAvatarTile({
   src,
   fallback,
   className,
-  style
+  style,
+  ref
 }: {
   src: string | null
   fallback: string
   className?: string
   style?: React.CSSProperties
+  ref?: React.Ref<HTMLSpanElement>
 }): React.JSX.Element {
   return (
     <span
+      ref={ref}
       aria-hidden
       style={style}
       className={cn(

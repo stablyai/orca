@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { useMemo, useState } from 'react'
 import { Folder, Info, LoaderCircle, Plus, Server, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -115,7 +116,12 @@ function ProjectRow(props: {
         icon={folderIcon}
         name={name}
         description={t('settings.bots.skills.reading', 'Reading its skills…')}
-        trailing={<LoaderCircle className="size-4 animate-spin text-muted-foreground" />}
+        trailing={
+          <LoaderCircle
+            ref={observeVisibleAnimation}
+            className="size-4 visible-animate-spin text-muted-foreground"
+          />
+        }
       />
     )
   }

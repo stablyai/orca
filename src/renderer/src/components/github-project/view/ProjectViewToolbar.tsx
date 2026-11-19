@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { useEffect, useRef, useState } from 'react'
 import { ExternalLink, RefreshCw, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -125,7 +126,10 @@ export function ProjectViewToolbar({ tableState }: { tableState: ProjectViewTabl
             aria-label={refreshLabel}
             title={refreshLabel}
           >
-            <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
+            <RefreshCw
+              ref={observeVisibleAnimation}
+              className={cn('size-3.5', loading && 'visible-animate-spin')}
+            />
           </Button>
         </>
       ) : null}

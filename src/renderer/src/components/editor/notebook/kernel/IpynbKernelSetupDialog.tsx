@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 // @protected-copy: notebook trust and kernel setup copy.
 import { Copy, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -175,7 +176,9 @@ export function IpynbKernelSetupDialog({
                   : installIpykernel(filePath))
               }
             >
-              {working ? <Loader2 className="animate-spin" /> : null}
+              {working ? (
+                <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+              ) : null}
               {error && !working
                 ? t('auto.components.editor.IpynbViewer.tryAgain', 'Try again')
                 : copy.action}

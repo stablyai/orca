@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -38,7 +39,7 @@ export function FileExplorerTreeStatus({
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground">
-        <Loader2 className="size-4 animate-spin" />
+        <Loader2 ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
       </div>
     )
   }

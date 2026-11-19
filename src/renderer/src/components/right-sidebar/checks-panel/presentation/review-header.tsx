@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { Ellipsis, GitMerge, Link, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -86,7 +87,10 @@ export function ChecksPanelReviewHeader({
         onClick={onRefresh}
         disabled={isRefreshing}
       >
-        <RefreshCw className={cn('size-3.5', isRefreshing && 'animate-spin')} />
+        <RefreshCw
+          ref={observeVisibleAnimation}
+          className={cn('size-3.5', isRefreshing && 'visible-animate-spin')}
+        />
       </button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

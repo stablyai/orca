@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useEffect, useRef, useState } from 'react'
 import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
 import { Button } from '@/components/ui/button'
@@ -151,8 +152,9 @@ function DictationPendingDots() {
     <span className="ml-1.5 inline-flex gap-1 align-middle">
       {[0, 150, 300].map((delayMs) => (
         <span
+          ref={observeVisibleAnimation}
           key={delayMs}
-          className="size-1 animate-pulse rounded-full bg-muted-foreground motion-reduce:animate-none"
+          className="size-1 visible-animate-pulse rounded-full bg-muted-foreground motion-reduce:animate-none"
           style={{ animationDelay: `${delayMs}ms` }}
         />
       ))}
@@ -262,7 +264,7 @@ function DictationPill({ captureLive, anchor, failure, queued, cleanup }: Dictat
               className="grid size-6 shrink-0 place-items-center rounded-full bg-secondary text-muted-foreground"
             >
               {showSpinner ? (
-                <Loader2 className="size-3.5 animate-spin" />
+                <Loader2 ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
               ) : (
                 <Check className="size-3.5" strokeWidth={2.5} />
               )}

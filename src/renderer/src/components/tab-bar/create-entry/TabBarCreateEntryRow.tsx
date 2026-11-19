@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { tabAgentLaunchOptionDisabled } from './tab-agent-launch-options'
 import { terminalPendingLabel } from '../../agent/launch-menu/new-tab-agent-menu-model'
 import React, { useEffect, useRef, useState } from 'react'
@@ -44,7 +45,13 @@ export function EntryStatusRow({
 }): React.JSX.Element {
   return (
     <div className="flex min-h-6 items-center gap-1.5 rounded-[7px] px-1 text-[11px] leading-5 text-muted-foreground">
-      {loading ? <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden="true" /> : null}
+      {loading ? (
+        <Loader2
+          ref={observeVisibleAnimation}
+          className="size-3.5 shrink-0 visible-animate-spin"
+          aria-hidden="true"
+        />
+      ) : null}
       <span className="truncate">{message}</span>
     </div>
   )
@@ -153,7 +160,11 @@ export function EntryActionRow({
       onPointerMove={setupEntry ? undefined : onHover}
     >
       {loading ? (
-        <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden="true" />
+        <Loader2
+          ref={observeVisibleAnimation}
+          className="size-3.5 shrink-0 visible-animate-spin"
+          aria-hidden="true"
+        />
       ) : (
         presentation.icon
       )}

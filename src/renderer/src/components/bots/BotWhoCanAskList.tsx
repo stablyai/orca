@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { Loader2, Plus, TriangleAlert, Undo2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -158,7 +159,11 @@ export function BotWhoCanAskList({
                     : undefined
                 }
               >
-                {saving ? <Loader2 className="animate-spin" /> : <Plus />}
+                {saving ? (
+                  <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+                ) : (
+                  <Plus />
+                )}
                 {t('bots.whoCanAsk.add', 'Add')}
               </Button>
             </PopoverTrigger>

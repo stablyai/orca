@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import type { GhAccountBinding } from '../../../../../../shared/github/accounts/account-binding'
@@ -235,7 +236,10 @@ export function RepositoryGitHubAccountSection({
             )}
             className="size-6 shrink-0"
           >
-            <RefreshCw className={loading ? 'size-3.5 animate-spin' : 'size-3.5'} />
+            <RefreshCw
+              ref={observeVisibleAnimation}
+              className={loading ? 'size-3.5 visible-animate-spin' : 'size-3.5'}
+            />
           </Button>
         </div>
         <Select

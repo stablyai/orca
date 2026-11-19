@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Download, Loader2, ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DialogFooter } from '@/components/ui/dialog'
@@ -47,7 +48,11 @@ export function SkillInstallDialogFooter({
       </Button>
       {!hasPreview && !resolvingInitialLink ? (
         <Button type="button" disabled={busy || !link.trim()} onClick={onInspect}>
-          {busy ? <Loader2 className="size-4 animate-spin" /> : <ShieldCheck className="size-4" />}
+          {busy ? (
+            <Loader2 ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
+          ) : (
+            <ShieldCheck className="size-4" />
+          )}
           {busy
             ? t('auto.components.skills.SkillInstallReviewContent.69236de8d6', 'Checking…')
             : t('auto.components.skills.SkillInstallReviewContent.157de228b4', 'Inspect skill')}
@@ -66,7 +71,11 @@ export function SkillInstallDialogFooter({
           onClick={() => onInstall()}
           className="w-32"
         >
-          {busy ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+          {busy ? (
+            <Loader2 ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
+          ) : (
+            <Download className="size-4" />
+          )}
           {busy
             ? t('auto.components.skills.SkillInstallDialog.241e72f9d6', 'Installing…')
             : result

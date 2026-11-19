@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { skillPlanHasDetails } from '@/lib/skills/presentation/skill-freshness-display-status'
 import { SkillSetupRow } from './SkillSetupRow'
 import { bundledSkillSetupActionLabel } from './bundled-skill-setup-copy'
@@ -128,7 +129,7 @@ function BundledAgentSkillSetupPanel({
           disabled={installDisabled || installing || !ready || action.kind === 'loading'}
         >
           {installing ? (
-            <Loader2 className="size-3.5 animate-spin" />
+            <Loader2 ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
           ) : (
             <Download className="size-3.5" />
           )}
@@ -159,7 +160,10 @@ function BundledAgentSkillSetupPanel({
           }}
           disabled={loading}
         >
-          <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
+          <RefreshCw
+            ref={observeVisibleAnimation}
+            className={cn('size-3.5', loading && 'visible-animate-spin')}
+          />
           {t('auto.components.settings.AgentSkillSetupPanel.c689392435', 'Re-check')}
         </Button>
       ) : null}

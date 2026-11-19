@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useEffect, useState } from 'react'
 import { Loader2, Lock } from 'lucide-react'
 import { toast } from 'sonner'
@@ -157,7 +158,9 @@ export function OpenAiCompatibleProviderDialog({
           </p>
           <DialogFooter>
             <Button type="submit" disabled={!canSave}>
-              {pending ? <Loader2 className="size-4 animate-spin" /> : null}
+              {pending ? (
+                <Loader2 ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
+              ) : null}
               {t('components.settings.voice.openAiCompatible.save', 'Save')}
             </Button>
           </DialogFooter>

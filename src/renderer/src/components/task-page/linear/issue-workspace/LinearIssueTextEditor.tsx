@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { writeLinearIssue } from '@/lib/work-items/linear/linear-issue-write'
 import { taskProviderErrorMessage } from '@/lib/work-items/task-provider-error-copy'
 import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
@@ -189,7 +190,10 @@ export function LinearIssueTextEditor({
             <span>{t('auto.components.LinearIssueTextEditor.947ba2d6f4', 'to save')}</span>
           </div>
           {savingField === 'title' ? (
-            <LoaderCircle className="absolute right-2 top-2 size-4 animate-spin text-muted-foreground" />
+            <LoaderCircle
+              ref={observeVisibleAnimation}
+              className="absolute right-2 top-2 size-4 visible-animate-spin text-muted-foreground"
+            />
           ) : null}
         </div>
       ) : null}

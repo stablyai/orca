@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { useCallback, useMemo } from 'react'
 import { LoaderCircle, GitMerge, ChevronDown, GitPullRequestClosed } from 'lucide-react'
 import { useAppStore } from '@/store/index'
@@ -224,7 +225,10 @@ export default function HostedReviewActions({
                     disabled={primaryMergeDisabled}
                   >
                     {merging ? (
-                      <LoaderCircle className="size-3.5 animate-spin" />
+                      <LoaderCircle
+                        ref={observeVisibleAnimation}
+                        className="size-3.5 visible-animate-spin"
+                      />
                     ) : (
                       <GitMerge className="size-3.5" />
                     )}
@@ -280,7 +284,10 @@ export default function HostedReviewActions({
                   )}
                 >
                   {stateUpdating === 'closed' ? (
-                    <LoaderCircle className="size-3.5 animate-spin" />
+                    <LoaderCircle
+                      ref={observeVisibleAnimation}
+                      className="size-3.5 visible-animate-spin"
+                    />
                   ) : (
                     <ChevronDown className="size-3.5" />
                   )}

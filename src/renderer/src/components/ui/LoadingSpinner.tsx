@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { Hourglass, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/class-names'
@@ -6,7 +7,11 @@ import { cn } from '@/lib/class-names'
 export function LoadingSpinner({ className }: { className?: string }): React.JSX.Element {
   return (
     <>
-      <Loader2 aria-hidden="true" className={cn('animate-spin motion-reduce:hidden', className)} />
+      <Loader2
+        ref={observeVisibleAnimation}
+        aria-hidden="true"
+        className={cn('visible-animate-spin motion-reduce:hidden', className)}
+      />
       <Hourglass aria-hidden="true" className={cn('motion-safe:hidden', className)} />
     </>
   )

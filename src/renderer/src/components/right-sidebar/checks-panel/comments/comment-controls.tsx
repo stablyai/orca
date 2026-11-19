@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { useCallback, useRef, useState } from 'react'
 import {
   Bot,
@@ -137,7 +138,10 @@ export function ResolveButton({
   return (
     <span ref={setResolveButtonRootRef} className="contents">
       {loading || inFlight ? (
-        <LoaderCircle className="size-3 animate-spin text-muted-foreground shrink-0" />
+        <LoaderCircle
+          ref={observeVisibleAnimation}
+          className="size-3 visible-animate-spin text-muted-foreground shrink-0"
+        />
       ) : (
         <button
           className="text-[10px] px-1.5 py-0.5 rounded transition-colors shrink-0 text-muted-foreground hover:text-foreground hover:bg-accent"

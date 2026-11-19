@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
 import {
   getGitHubPRStateChips,
@@ -272,7 +273,10 @@ export function TaskPageGitHubFilters({
                 className="size-8 cursor-pointer border-border/60 bg-background text-foreground shadow-xs hover:bg-muted/60 disabled:pointer-events-auto disabled:cursor-wait"
               >
                 {githubTasksBusy ? (
-                  <LoaderCircle className="size-4 animate-spin" />
+                  <LoaderCircle
+                    ref={observeVisibleAnimation}
+                    className="size-4 visible-animate-spin"
+                  />
                 ) : (
                   <RefreshCw className="size-4" />
                 )}

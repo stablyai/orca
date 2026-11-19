@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useState } from 'react'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { ExternalLink, Loader2, Lock, LockOpen, RefreshCw, ShieldCheck } from 'lucide-react'
@@ -225,7 +226,7 @@ export function ZcodePlanAccountsSection({
               className="shrink-0"
             >
               {refreshing ? (
-                <Loader2 className="size-3 animate-spin" />
+                <Loader2 ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
               ) : (
                 <RefreshCw className="size-3" />
               )}
@@ -329,7 +330,9 @@ export function ZcodePlanAccountsSection({
               disabled={credentialBusy || !keyEditable || !apiKeyDraft.trim()}
               className="shrink-0"
             >
-              {credentialBusy ? <Loader2 className="size-3 animate-spin" /> : null}
+              {credentialBusy ? (
+                <Loader2 ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
+              ) : null}
               {apiKeyConfigured
                 ? t('auto.components.settings.ZcodePlanAccountsSection.replace', 'Replace')
                 : t('auto.components.settings.ZcodePlanAccountsSection.save', 'Save')}

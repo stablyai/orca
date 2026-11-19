@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { GitMerge, GitPullRequestArrow, RefreshCw, Sparkles, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -103,7 +104,9 @@ export function ConflictSummaryCard({
             disabled={isAbortingOperation}
             onClick={() => onAbortOperation(conflictOperation)}
           >
-            {isAbortingOperation ? <RefreshCw className="size-3.5 animate-spin" /> : null}
+            {isAbortingOperation ? (
+              <RefreshCw ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
+            ) : null}
             {conflictOperation === 'rebase'
               ? t('auto.components.right.sidebar.SourceControl.425f138269', 'Abort rebase')
               : t('auto.components.right.sidebar.SourceControl.540ca8f78c', 'Abort merge')}
@@ -181,7 +184,7 @@ export function OperationBanner({
             onClick={onCompleteMerge}
           >
             {isCompletingMerge ? (
-              <RefreshCw className="size-3.5 animate-spin" />
+              <RefreshCw ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
             ) : (
               <GitMerge className="size-3.5" />
             )}
@@ -213,7 +216,9 @@ export function OperationBanner({
             disabled={isAbortingOperation || isCompletingMerge}
             onClick={() => onAbortOperation(conflictOperation)}
           >
-            {isAbortingOperation ? <RefreshCw className="size-3.5 animate-spin" /> : null}
+            {isAbortingOperation ? (
+              <RefreshCw ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
+            ) : null}
             {conflictOperation === 'rebase'
               ? t('auto.components.right.sidebar.SourceControl.425f138269', 'Abort rebase')
               : t('auto.components.right.sidebar.SourceControl.540ca8f78c', 'Abort merge')}

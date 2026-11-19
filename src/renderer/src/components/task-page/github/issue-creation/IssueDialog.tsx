@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
 import { useRef, useState } from 'react'
 import { getGitHubRuntimeRepoId } from '@/lib/work-items/github/github-source-runtime-context'
@@ -267,7 +268,10 @@ export function TaskPageGitHubIssueDialog({
           >
             {newIssueSubmitting ? (
               <>
-                <LoaderCircle className="size-4 animate-spin" />
+                <LoaderCircle
+                  ref={observeVisibleAnimation}
+                  className="size-4 visible-animate-spin"
+                />
                 {t('auto.components.TaskPage.8ff6fdc368', 'Creating…')}
               </>
             ) : (

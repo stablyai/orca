@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import type React from 'react'
 import { Check, Copy, Loader2 } from 'lucide-react'
 import { Trans } from 'react-i18next'
@@ -203,7 +204,10 @@ export function OrcaUninstallFooter({
               !running && 'invisible'
             )}
           >
-            <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" />
+            <Loader2
+              ref={observeVisibleAnimation}
+              className="size-3.5 visible-animate-spin motion-reduce:animate-none"
+            />
             {t('settings.uninstall.uninstalling', 'Uninstalling…')}
           </span>
         </span>

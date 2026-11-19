@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { AlertTriangle, HardDrive, Loader2, RefreshCw, X } from 'lucide-react'
 import { Button } from '../../../ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '../../../ui/popover'
@@ -95,7 +96,7 @@ export function WorkspaceSpaceManagerOverview({
         >
           {isScanning ? (
             progress?.state === 'cancelling' ? (
-              <Loader2 className="size-3.5 animate-spin" />
+              <Loader2 ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
             ) : (
               <X className="size-3.5" />
             )
@@ -114,7 +115,7 @@ export function WorkspaceSpaceManagerOverview({
 
       {isScanning ? (
         <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="size-4 shrink-0 animate-spin" />
+          <Loader2 ref={observeVisibleAnimation} className="size-4 shrink-0 visible-animate-spin" />
           <span className="truncate">
             {analysis
               ? t(

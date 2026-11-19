@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 // The bot's sharing, as state: not shared with Share bot…, or its live link with Copy link and Manage
 // sharing…. Both open the one Share dialog, which holds Publish, Update link and Stop sharing.
 import { useCallback, useEffect, useState } from 'react'
@@ -133,7 +134,7 @@ function BotShareLinkView({ bot }: { bot: Bot }): React.JSX.Element {
     return (
       <SettingsInsetGroup>
         <SettingsInsetRow
-          icon={<Loader2 className="animate-spin" />}
+          icon={<Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />}
           title={t('bots.share.loadingLinks', 'Loading shared links…')}
           muted
         />

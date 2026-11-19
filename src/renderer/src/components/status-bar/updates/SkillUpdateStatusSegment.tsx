@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
@@ -21,7 +22,12 @@ export function SkillUpdateStatusSegment({
   const segment = (() => {
     if (run.state === 'running') {
       return {
-        icon: <Loader2 className="size-3 animate-spin text-muted-foreground" />,
+        icon: (
+          <Loader2
+            ref={observeVisibleAnimation}
+            className="size-3 visible-animate-spin text-muted-foreground"
+          />
+        ),
         label: t(
           'auto.components.status.bar.SkillUpdateStatusSegment.runningLabel',
           'Updating skills'

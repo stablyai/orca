@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import {
   CircleCheckIcon,
   InfoIcon,
@@ -107,7 +108,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
           info: <InfoIcon className="size-4" />,
           warning: <TriangleAlertIcon className="size-4" />,
           error: <OctagonXIcon className="size-4" />,
-          loading: <Loader2Icon className="size-4 animate-spin" />
+          loading: (
+            <Loader2Icon ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
+          )
         }}
         style={TOASTER_STYLE}
         {...props}

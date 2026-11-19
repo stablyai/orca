@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { JSX } from 'react'
 import { ArrowRight, CircleDot } from 'lucide-react'
@@ -278,7 +279,10 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
       >
         <div className="flex items-center gap-1.5 px-1 pb-1.5 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
           {workspaceCreating ? (
-            <span className="inline-block size-[9px] animate-spin rounded-full border-[1.5px] border-yellow-500 border-t-transparent" />
+            <span
+              ref={observeVisibleAnimation}
+              className="inline-block size-[9px] visible-animate-spin rounded-full border-[1.5px] border-status-warning border-t-transparent"
+            />
           ) : (
             <span className="inline-block size-[9px] rounded-full bg-emerald-500" />
           )}

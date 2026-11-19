@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Plus } from 'lucide-react'
 import { Button } from '../../../ui/button'
@@ -70,7 +71,8 @@ function SaveIndicator({ status }: { status: 'idle' | 'saving' | 'saved' }) {
       aria-live="polite"
     >
       <span
-        className={`size-1.5 rounded-full ${isSaving ? 'animate-pulse bg-amber-500' : 'bg-emerald-500'}`}
+        ref={observeVisibleAnimation}
+        className={`size-1.5 rounded-full ${isSaving ? 'visible-animate-pulse bg-status-warning' : 'bg-status-success'}`}
       />
       {isSaving
         ? t('auto.components.settings.RepositoryHooksSection.81057d5f71', 'Saving...')

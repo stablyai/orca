@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useEffect, useRef, useState } from 'react'
 import { Loader2, RefreshCw } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
@@ -252,7 +253,10 @@ export function AntigravityAccountsSection({
                 onClick={() => void run('List')}
               >
                 {busy ? (
-                  <Loader2 className="animate-spin text-muted-foreground" />
+                  <Loader2
+                    ref={observeVisibleAnimation}
+                    className="visible-animate-spin text-muted-foreground"
+                  />
                 ) : (
                   <RefreshCw className="text-muted-foreground" />
                 )}

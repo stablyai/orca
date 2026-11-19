@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Loader2 } from 'lucide-react'
 import type { RuntimeAccessGrant } from '../../../../../../shared/remote-runtime/host-catalog/runtime-access-grants'
 import { Button } from '../../../ui/button'
@@ -130,7 +131,9 @@ export function RuntimeAccessGrantList({
                     { value0: grantDisplayName(grant, t, intlLocale) }
                   )}
                 >
-                  {isRevoking ? <Loader2 className="animate-spin" /> : null}
+                  {isRevoking ? (
+                    <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+                  ) : null}
                   {t('auto.components.settings.RuntimeAccessGrantList.revoke', 'Revoke')}
                 </Button>
               </div>

@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useBundledSkillInstallAction } from '@/hooks/skills/installation/use-bundled-skill-install-action'
 import { bundledSkillSetupActionLabel } from '../../../skills/setup/bundled-skill-setup-copy'
 import { ORCA_CLI_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
@@ -247,7 +248,11 @@ function BrowserSkillInstallForRuntime({
         }
         onClick={() => void handleInstall()}
       >
-        {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
+        {busy ? (
+          <Loader2 ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
+        ) : (
+          <Download className="size-3.5" />
+        )}
         {busy
           ? t('auto.components.feature.wall.FeatureWallBrowserAction.5f97caf76b', 'Installing…')
           : installAction.kind === 'replace'

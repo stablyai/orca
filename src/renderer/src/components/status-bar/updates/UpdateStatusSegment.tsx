@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { AlertCircle, CheckCircle2, Clock3, Download, Loader2 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -56,7 +57,12 @@ export function UpdateStatusSegment({
     }
     if (status.state === 'downloaded' && status.installing) {
       return {
-        icon: <Loader2 className="size-3 animate-spin text-muted-foreground" />,
+        icon: (
+          <Loader2
+            ref={observeVisibleAnimation}
+            className="size-3 visible-animate-spin text-muted-foreground"
+          />
+        ),
         label: t('updates.installBlock.preparingLabel', 'Preparing update'),
         tooltip: t(
           'updates.installBlock.preparingSummary',

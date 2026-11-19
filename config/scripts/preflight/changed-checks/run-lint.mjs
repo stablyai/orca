@@ -51,6 +51,7 @@ export const LINT_STEPS = [
   'check:node-runtime-pin',
   'check:path-literal-ratchet',
   'check:host-list-render-ratchet',
+  'check:visible-animation-ratchet',
   'verify:skill-bundle-manifest',
   'check:reliability-gates',
   'verify:bundled-skill-guides',

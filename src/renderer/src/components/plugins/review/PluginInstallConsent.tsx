@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useId } from 'react'
 import { AlertTriangle, Check, Loader2, ShieldAlert } from 'lucide-react'
 import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
@@ -166,7 +167,11 @@ export function PluginInstallConsent({
           {reading && !failed ? (
             // Why no verdict yet: "no other access" must wait for the files the button waits for.
             <p className="flex items-center gap-2 text-muted-foreground">
-              <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden="true" />
+              <Loader2
+                ref={observeVisibleAnimation}
+                className="size-4 shrink-0 visible-animate-spin"
+                aria-hidden="true"
+              />
               {t(
                 'auto.components.settings.PluginDetailSections.accessLoading',
                 'Reading the plugin…'
@@ -204,7 +209,11 @@ export function PluginInstallConsent({
             </p>
           ) : (
             <p className="flex items-center gap-2 text-muted-foreground">
-              <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden="true" />
+              <Loader2
+                ref={observeVisibleAnimation}
+                className="size-4 shrink-0 visible-animate-spin"
+                aria-hidden="true"
+              />
               {t(
                 'auto.components.settings.PluginDetailSections.accessLoading',
                 'Reading the plugin…'

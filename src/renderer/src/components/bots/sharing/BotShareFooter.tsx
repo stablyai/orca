@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 // The Share dialog's frame pieces: the signed-out body, the contents section and the footer, whose
 // actions follow the bot's link and the dialog's phase.
 import { Loader2, RefreshCw, Share2, UserRound } from 'lucide-react'
@@ -163,7 +164,9 @@ export function Footer({
           disabled={phase.kind === 'stopping' || !link}
           onClick={onStop}
         >
-          {phase.kind === 'stopping' ? <Loader2 className="animate-spin" /> : null}
+          {phase.kind === 'stopping' ? (
+            <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+          ) : null}
           {t('bots.share.stopSharing', 'Stop sharing')}
         </Button>
       </div>
@@ -233,7 +236,11 @@ export function Footer({
       )
       primary = (
         <Button type="button" disabled={off} onClick={onPublish}>
-          {busy || state.building ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+          {busy || state.building ? (
+            <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+          ) : (
+            <RefreshCw />
+          )}
           {busy ? t('bots.share.updating', 'Updating…') : t('bots.share.updateLink', 'Update link')}
         </Button>
       )
@@ -246,7 +253,11 @@ export function Footer({
     )
     primary = (
       <Button type="button" disabled={off} onClick={onPublish}>
-        {busy || (state.building && candidate) ? <Loader2 className="animate-spin" /> : <Share2 />}
+        {busy || (state.building && candidate) ? (
+          <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+        ) : (
+          <Share2 />
+        )}
         {busy
           ? t('bots.share.publishing', 'Publishing…')
           : t('bots.share.publishLink', 'Publish link')}

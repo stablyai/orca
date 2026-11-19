@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useMemo } from 'react'
 import { Check, LoaderCircle, X } from 'lucide-react'
 import { botTarget, type BotOnHost } from '@/lib/bot-hosts'
@@ -118,7 +119,10 @@ export function BotLookSteps({
           <StepIcon step={step} />
           <span className="min-w-0 flex-1 truncate">{stepText(step)}</span>
           {step.state === 'running' ? (
-            <LoaderCircle className="size-3 shrink-0 animate-spin" />
+            <LoaderCircle
+              ref={observeVisibleAnimation}
+              className="size-3 shrink-0 visible-animate-spin"
+            />
           ) : step.state === 'failed' ? (
             <X className="size-3 shrink-0" />
           ) : (

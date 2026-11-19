@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React, { useCallback, useRef, useState } from 'react'
 import { FolderPlus, Loader2 } from 'lucide-react'
 import {
@@ -163,7 +164,7 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
           </Button>
           <Button onClick={handleConfirm} disabled={!folderPath || isAdding}>
             {isAdding ? (
-              <Loader2 className="size-4 animate-spin" />
+              <Loader2 ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
             ) : (
               <FolderPlus className="size-4" />
             )}

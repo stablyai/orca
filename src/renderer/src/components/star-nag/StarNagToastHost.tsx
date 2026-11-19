@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useEffect, useRef, useState } from 'react'
 import { Check, ExternalLink, Loader2, Star, X } from 'lucide-react'
 import { toast } from 'sonner'
@@ -148,7 +149,7 @@ function StarNagToast({
           disabled={busy || status === 'starred' || status === 'opened'}
         >
           {busy ? (
-            <Loader2 className="size-3.5 animate-spin" />
+            <Loader2 ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
           ) : mode === 'web' ? (
             <ExternalLink className="size-3.5" />
           ) : (

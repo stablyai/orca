@@ -8,6 +8,7 @@ import { useAppStore } from '@/store/index'
 import { toast } from 'sonner'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { cn } from '@/lib/class-names'
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { recomputeOn } from '@/lib/recompute-on'
 import { AgentCommandFailedDialog } from '@/components/agent-command-failure/AgentCommandFailedDialog'
 import { useBranchAutoRenameRetry } from './use-branch-auto-rename-retry'
@@ -207,7 +208,13 @@ export function AutoRenameFailedDialog({
                 }
               }}
             >
-              {retry.running ? <LoaderCircle className="animate-spin" aria-hidden /> : null}
+              {retry.running ? (
+                <LoaderCircle
+                  ref={observeVisibleAnimation}
+                  className="visible-animate-spin"
+                  aria-hidden
+                />
+              ) : null}
               <SwapLabel busy={retry.running} idle={tryAgainLabel} busyLabel={namingLabel} />
             </Button>
           ) : null}

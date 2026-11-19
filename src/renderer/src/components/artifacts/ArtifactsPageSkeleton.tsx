@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { ARTIFACTS_TABLE_GRID_CLASS } from './artifacts-table-layout'
@@ -7,7 +8,12 @@ import {
 } from '@/lib/list-interaction/list-table-layout'
 
 function SkeletonBar({ className }: { className?: string }): React.JSX.Element {
-  return <div className={cn('animate-pulse rounded bg-muted/60', className)} />
+  return (
+    <div
+      ref={observeVisibleAnimation}
+      className={cn('visible-animate-pulse rounded bg-muted/60', className)}
+    />
+  )
 }
 
 const TABLE_ROW_SKELETONS = [

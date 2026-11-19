@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { Loader, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -126,7 +127,7 @@ function ProjectBrowseRows(props: Props): React.JSX.Element {
       >
         {props.browseLoading ? (
           <div className="flex items-center gap-2 px-2 py-2 text-xs text-muted-foreground">
-            <Loader className="size-3 animate-spin" />
+            <Loader ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
             {t('auto.components.github.project.ProjectPicker.7b6d39627e', 'Loading…')}
           </div>
         ) : null}

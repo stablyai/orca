@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Check, Loader2 } from 'lucide-react'
 
 export type StepState = 'pending' | 'done' | 'in-progress'
@@ -19,7 +20,7 @@ export function StepBadge({
   if (state === 'in-progress') {
     return (
       <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-        <Loader2 className="size-3.5 animate-spin" />
+        <Loader2 ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
       </div>
     )
   }

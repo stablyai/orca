@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useSourceControlScope, useSourceControlScopeOwner } from './worktree-scope'
 import React, { useState } from 'react'
 import { ChevronDown, RefreshCw, SlidersHorizontal, Sparkle } from 'lucide-react'
@@ -110,7 +111,10 @@ export function SourceControlFixSplitButton({
             onClick={() => void onFixWithDefaultAgent()}
           >
             {isLaunching ? (
-              <RefreshCw className={cn(iconClassName, 'animate-spin')} />
+              <RefreshCw
+                ref={observeVisibleAnimation}
+                className={cn(iconClassName, 'visible-animate-spin')}
+              />
             ) : (
               <Sparkle className={iconClassName} />
             )}

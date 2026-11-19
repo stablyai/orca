@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useState, type ReactNode } from 'react'
 import { ChevronDown, Loader2, QrCode, RefreshCw } from 'lucide-react'
 import { Button } from '../../../ui/button'
@@ -95,7 +96,10 @@ export function MobilePairingSetupSection({
               )}
               className="text-muted-foreground"
             >
-              <RefreshCw className={refreshingNetworkInterfaces ? 'animate-spin' : ''} />
+              <RefreshCw
+                ref={observeVisibleAnimation}
+                className={refreshingNetworkInterfaces ? 'visible-animate-spin' : ''}
+              />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={6}>
@@ -194,7 +198,7 @@ export function MobilePairingSetupSection({
         <div className="space-y-2">
           <Button onClick={onGenerateQr} disabled={generateDisabled} size="sm" className="gap-1.5">
             {loading ? (
-              <Loader2 className="size-3.5 animate-spin" />
+              <Loader2 ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
             ) : hasQrCode ? (
               <RefreshCw className="size-3.5" />
             ) : (

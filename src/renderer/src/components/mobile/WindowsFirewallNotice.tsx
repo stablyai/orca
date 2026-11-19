@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { CircleAlert, Loader2, ShieldCheck } from 'lucide-react'
 import { toast } from 'sonner'
@@ -199,7 +200,7 @@ export function WindowsFirewallNotice({
           ) : (
             <Button type="button" size="sm" onClick={() => void repair()} disabled={repairing}>
               {repairing ? (
-                <Loader2 className="animate-spin" />
+                <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
               ) : (
                 <ShieldCheck aria-hidden="true" />
               )}

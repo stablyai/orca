@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { AlertTriangle, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/class-names'
@@ -128,7 +129,10 @@ export function VmBuildSheet({
           <div className="flex items-center gap-2 text-sm font-medium text-foreground">
             <span className="grid size-4 shrink-0 place-items-center">
               {building ? (
-                <Loader2 className="size-4 text-muted-foreground motion-safe:animate-spin" />
+                <Loader2
+                  ref={observeVisibleAnimation}
+                  className="size-4 text-muted-foreground motion-safe:visible-animate-spin"
+                />
               ) : (
                 <AlertTriangle className="size-4 text-destructive motion-safe:animate-in motion-safe:fade-in-0 motion-safe:zoom-in-90 motion-safe:duration-200" />
               )}

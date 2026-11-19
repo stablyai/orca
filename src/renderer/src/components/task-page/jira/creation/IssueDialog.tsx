@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
 import {
   Dialog,
@@ -243,7 +244,10 @@ export function TaskPageJiraIssueDialog({
           <TaskPageJiraIssueAssigneeField model={model} />
           {jiraCreateFieldsLoading ? (
             <div className="flex items-center gap-2 rounded-md border border-border/50 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-              <LoaderCircle className="size-3.5 animate-spin" />
+              <LoaderCircle
+                ref={observeVisibleAnimation}
+                className="size-3.5 visible-animate-spin"
+              />
               {t('auto.components.TaskPage.cbcdcbe244', 'Loading required Jira fields…')}
             </div>
           ) : null}
@@ -367,7 +371,10 @@ export function TaskPageJiraIssueDialog({
           >
             {newJiraIssueSubmitting ? (
               <>
-                <LoaderCircle className="size-4 animate-spin" />
+                <LoaderCircle
+                  ref={observeVisibleAnimation}
+                  className="size-4 visible-animate-spin"
+                />
                 {t('auto.components.TaskPage.8ff6fdc368', 'Creating…')}
               </>
             ) : (

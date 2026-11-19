@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Loader2 } from 'lucide-react'
 import { useEffect, useState, type CSSProperties } from 'react'
 import { useEmulatorFrameStream } from './use-emulator-frame-stream'
@@ -123,7 +124,10 @@ export function EmulatorScreenStreamContent({
     <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-muted/20 text-muted-foreground">
       {loading || waitingForFrame ? (
         <>
-          <Loader2 className="size-6 animate-spin text-primary" />
+          <Loader2
+            ref={observeVisibleAnimation}
+            className="size-6 visible-animate-spin text-primary"
+          />
           <span className="text-xs">
             {t(
               'auto.components.emulator.pane.emulator.screen.stream.content.5f818f12ab',

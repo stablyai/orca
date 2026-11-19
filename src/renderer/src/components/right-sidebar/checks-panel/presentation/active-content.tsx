@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import {
   forgeCredentialTarget,
   forgeOwnerHostIdForWorkspace
@@ -167,7 +168,10 @@ export function ChecksPanelActiveContent({
               disabled={titleSaving}
             >
               {titleSaving ? (
-                <LoaderCircle className="size-3.5 animate-spin" />
+                <LoaderCircle
+                  ref={observeVisibleAnimation}
+                  className="size-3.5 visible-animate-spin"
+                />
               ) : (
                 <Check className="size-3.5" />
               )}

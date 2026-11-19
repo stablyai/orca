@@ -11,6 +11,10 @@ import type { CheckDetailsLoadState } from '@/components/github/github-checks-ta
 import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
 import { CheckDetailsPanel } from './details'
 import { useTranslate } from '@/i18n/use-translate'
+import {
+  observeOffscreenAnimation,
+  observeVisibleAnimation
+} from '@/lib/window-activity/offscreen-animation-pause'
 
 export function CheckRow({
   check,
@@ -34,7 +38,11 @@ export function CheckRow({
   const statusLabel = getCheckStatusLabel(check, t)
   const key = getCheckDetailsKey(check)
   return (
-    <div key={key} className="min-w-0">
+    <div
+      ref={conclusion === 'pending' ? observeOffscreenAnimation : undefined}
+      key={key}
+      className="min-w-0"
+    >
       <button
         type="button"
         onClick={() => onToggle(check)}
@@ -51,7 +59,12 @@ export function CheckRow({
           )}
         />
         <Icon
-          className={cn('size-3.5 shrink-0', color, conclusion === 'pending' && 'animate-spin')}
+          ref={observeVisibleAnimation}
+          className={cn(
+            'size-3.5 shrink-0',
+            color,
+            conclusion === 'pending' && 'visible-animate-spin'
+          )}
         />
         <span className="min-w-0 flex-1 truncate text-[12px] text-foreground">{check.name}</span>
         <span className="shrink-0 text-[11px] text-muted-foreground">{statusLabel}</span>

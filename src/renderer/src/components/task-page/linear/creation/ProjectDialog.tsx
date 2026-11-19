@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
 import {
   Dialog,
@@ -146,7 +147,10 @@ export function TaskPageLinearProjectDialog({
           >
             {newLinearProjectSubmitting ? (
               <>
-                <LoaderCircle className="size-4 animate-spin" />
+                <LoaderCircle
+                  ref={observeVisibleAnimation}
+                  className="size-4 visible-animate-spin"
+                />
                 {t('auto.components.TaskPage.1b59a07674', 'Creating...')}
               </>
             ) : (

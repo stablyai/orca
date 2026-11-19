@@ -14,6 +14,7 @@ import {
 import { preventMiddleButtonDefault } from '../strip/middle-button-default-guard'
 import { TAB_LABEL_WIDTH_CLASSES } from '../strip/tab-width-rules'
 import { useTabStripSlotProps } from '../strip/use-tab-strip-slot-props'
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 
 /** Paired-client pages have no unified tab: expose presence and close without persisted ordering, pinning or drag actions. */
 export default function ClientHostedBrowserTab({
@@ -66,7 +67,8 @@ export default function ClientHostedBrowserTab({
         >
           {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
           <PageIcon
-            className={`mr-1 size-3 shrink-0 ${loading ? 'motion-safe:animate-spin' : ''} ${row.hostAbsent ? 'text-muted-foreground' : 'text-blue-500'}`}
+            ref={observeVisibleAnimation}
+            className={`mr-1 size-3 shrink-0 ${loading ? 'motion-safe:visible-animate-spin' : ''} ${row.hostAbsent ? 'text-muted-foreground' : 'text-callout-note'}`}
             aria-hidden
           />
           <span

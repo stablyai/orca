@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Loader2, Trash2 } from 'lucide-react'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { useTranslate } from '@/i18n/use-translate'
@@ -59,7 +60,9 @@ export function RuntimeEnvironmentSwitchDialog({
             {t('auto.components.settings.RuntimeEnvironmentsPane.af53761f31', 'Cancel')}
           </Button>
           <Button onClick={onConfirm} disabled={switchingValue !== null}>
-            {switchingValue !== null ? <Loader2 className="animate-spin" /> : null}
+            {switchingValue !== null ? (
+              <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+            ) : null}
             {t('auto.components.settings.RuntimeEnvironmentsPane.d2e00809e4', 'Switch')}
           </Button>
         </DialogFooter>
@@ -120,7 +123,11 @@ export function RuntimeEnvironmentRemoveDialog({
             {t('auto.components.settings.RuntimeEnvironmentsPane.af53761f31', 'Cancel')}
           </Button>
           <Button variant="destructive" onClick={onConfirm} disabled={removingId !== null}>
-            {removingId !== null ? <Loader2 className="animate-spin" /> : <Trash2 />}
+            {removingId !== null ? (
+              <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+            ) : (
+              <Trash2 />
+            )}
             {t('auto.components.settings.RuntimeEnvironmentsPane.d25f0688b1', 'Remove')}
           </Button>
         </DialogFooter>

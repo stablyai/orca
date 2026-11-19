@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { SkillSetupCommand } from './SkillSetupCommand'
 import { SkillSetupRow } from './SkillSetupRow'
 // COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
@@ -240,7 +241,7 @@ export function WslAgentSkillSetupPanel({
           disabled={terminalOpen || installDisabled || terminalOpening}
         >
           {terminalOpening ? (
-            <Loader2 className="size-3.5 animate-spin" />
+            <Loader2 ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
           ) : (
             <Terminal className="size-3.5" />
           )}
@@ -272,7 +273,10 @@ export function WslAgentSkillSetupPanel({
               : loading
           }
         >
-          <RefreshCw className={cn('size-3.5', (loading || terminalOpening) && 'animate-spin')} />
+          <RefreshCw
+            ref={observeVisibleAnimation}
+            className={cn('size-3.5', (loading || terminalOpening) && 'visible-animate-spin')}
+          />
           {setupCommandFailedCode !== null
             ? t('auto.components.settings.AgentSkillSetupPanel.retrySetup', 'Retry')
             : t('auto.components.settings.AgentSkillSetupPanel.c689392435', 'Re-check')}

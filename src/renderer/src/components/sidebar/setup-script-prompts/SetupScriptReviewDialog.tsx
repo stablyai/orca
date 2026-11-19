@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { Download, LoaderCircle } from 'lucide-react'
 import { Trans } from 'react-i18next'
@@ -121,7 +122,10 @@ export function SetupScriptReviewDialog({
           </Button>
           <Button onClick={onSave} disabled={isSaving}>
             {isSaving ? (
-              <LoaderCircle className="size-3.5 animate-spin" />
+              <LoaderCircle
+                ref={observeVisibleAnimation}
+                className="size-3.5 visible-animate-spin"
+              />
             ) : (
               <Download className="size-3.5" />
             )}

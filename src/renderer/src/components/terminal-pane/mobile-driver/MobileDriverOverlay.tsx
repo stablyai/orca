@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import type { RuntimeTerminalDriverState } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { useCallback, useEffect, useId, useRef, useState, type ReactElement } from 'react'
 import { Minimize2, Smartphone } from 'lucide-react'
@@ -226,8 +227,9 @@ function LoudOverlay({
           <Smartphone className="size-4 text-muted-foreground" aria-hidden="true" />
           {tone === 'driving' ? (
             <span
+              ref={observeVisibleAnimation}
               aria-hidden="true"
-              className="absolute -right-0.5 -top-0.5 size-1.5 animate-pulse rounded-full bg-foreground ring-2 ring-card motion-reduce:animate-none"
+              className="absolute -right-0.5 -top-0.5 size-1.5 visible-animate-pulse rounded-full bg-foreground ring-2 ring-card motion-reduce:animate-none"
             />
           ) : null}
         </div>

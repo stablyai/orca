@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import * as React from 'react'
 import * as SwitchPrimitive from 'radix-ui/switch'
 import { Loader2 } from 'lucide-react'
@@ -54,9 +55,10 @@ function Switch({
       >
         {pending ? (
           <Loader2
+            ref={observeVisibleAnimation}
             aria-hidden="true"
             className={cn(
-              'animate-spin text-muted-foreground motion-reduce:animate-none',
+              'visible-animate-spin text-muted-foreground motion-reduce:animate-none',
               size === 'compact' ? 'size-2' : 'size-2.5'
             )}
           />

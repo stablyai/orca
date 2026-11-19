@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import {
   taskProviderErrorMessage,
   taskProviderErrorText
@@ -104,7 +105,10 @@ export function JiraIssueTransitionControl({
         >
           {issue.status.name}
           {loading || pending ? (
-            <Loader2 className="size-3 animate-spin motion-reduce:animate-none" />
+            <Loader2
+              ref={observeVisibleAnimation}
+              className="size-3 visible-animate-spin motion-reduce:animate-none"
+            />
           ) : error ? (
             <CircleAlert className="size-3" />
           ) : (

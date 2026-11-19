@@ -13,6 +13,7 @@ import {
   type UIZoomDirection
 } from '../../shared/app-lifecycle/windows/ui-zoom-level'
 import { wslHostsWindowArguments } from '../wsl/host-lifecycle/wsl-host-gate'
+import { MAIN_THREAD_ANIMATION_ARGUMENTS } from './presentation/main-thread-animation-arguments'
 
 let spaceWindow: BrowserWindow | null = null
 
@@ -67,7 +68,7 @@ export function createOrFocusWorkspaceSpaceWindow(store: Store): BrowserWindow {
       sandbox: true,
       partition: 'orca-workspace-space-window',
       webviewTag: false,
-      ...(wslArguments.length > 0 ? { additionalArguments: wslArguments } : {})
+      additionalArguments: [...MAIN_THREAD_ANIMATION_ARGUMENTS, ...wslArguments]
     }
   })
   spaceWindow = window

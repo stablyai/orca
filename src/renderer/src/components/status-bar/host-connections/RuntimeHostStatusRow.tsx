@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useCallback, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
@@ -242,7 +243,12 @@ export function RuntimeHostStatusRow({
           </span>
           <span aria-hidden="true">·</span>
           <span className={`inline-flex min-w-0 items-center gap-1 ${statusTone}`}>
-            {showSpinner ? <Loader2 className="size-2.5 shrink-0 animate-spin" /> : null}
+            {showSpinner ? (
+              <Loader2
+                ref={observeVisibleAnimation}
+                className="size-2.5 shrink-0 visible-animate-spin"
+              />
+            ) : null}
             <span className="truncate">{blocked?.label ?? runtimeStatusLabel(state, t)}</span>
           </span>
         </div>
@@ -251,7 +257,10 @@ export function RuntimeHostStatusRow({
   )
 
   const actionButton = busy ? (
-    <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" />
+    <Loader2
+      ref={observeVisibleAnimation}
+      className="size-3 shrink-0 visible-animate-spin text-muted-foreground"
+    />
   ) : actionLabel && action ? (
     hasSubmenu ? (
       <span
@@ -347,7 +356,9 @@ export function RuntimeHostStatusRow({
               void handleAction()
             }}
           >
-            {busy ? <Loader2 className="size-3 animate-spin" /> : null}
+            {busy ? (
+              <Loader2 ref={observeVisibleAnimation} className="size-3 visible-animate-spin" />
+            ) : null}
             {actionLabel}
           </DropdownMenuItem>
         ) : null}

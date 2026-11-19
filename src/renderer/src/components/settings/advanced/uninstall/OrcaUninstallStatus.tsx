@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import type React from 'react'
 import { Check, CircleAlert, CircleMinus, Loader2 } from 'lucide-react'
 import type { OrcaUninstallEntryState } from '../../../../../../shared/uninstall/orca-uninstall-types'
@@ -43,8 +44,9 @@ export function OrcaUninstallStatusIcon({
   if (kind === 'running') {
     return (
       <Loader2
+        ref={observeVisibleAnimation}
         aria-label={t('settings.uninstall.status.running', 'Removing')}
-        className="size-3.5 animate-spin text-muted-foreground motion-reduce:animate-none"
+        className="size-3.5 visible-animate-spin text-muted-foreground motion-reduce:animate-none"
       />
     )
   }

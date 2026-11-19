@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 // COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { Loader2 } from 'lucide-react'
@@ -329,7 +330,7 @@ export function OnboardingInlineCommandTerminal({
             />
           ) : (
             <div className="flex h-full items-center justify-center gap-2 text-xs text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" />
+              <Loader2 ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
               {t(
                 'auto.components.onboarding.OnboardingInlineCommandTerminal.4123609efd',
                 'Starting terminal...'

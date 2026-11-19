@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import type React from 'react'
 import { AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -28,7 +29,12 @@ export function RemoteServerUpdateStatusSegment({
 
   const segment = running
     ? {
-        icon: <RefreshCw className="size-3 animate-spin text-muted-foreground" />,
+        icon: (
+          <RefreshCw
+            ref={observeVisibleAnimation}
+            className="size-3 visible-animate-spin text-muted-foreground"
+          />
+        ),
         label: t(
           'auto.components.status.bar.RemoteServerUpdateStatusSegment.updating',
           'Updating {{value0}}/{{value1}}',

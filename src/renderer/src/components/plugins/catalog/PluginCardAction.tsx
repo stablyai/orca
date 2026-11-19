@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Loader2 } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -98,7 +99,7 @@ export function PluginCardAction({
   if (phase?.kind === 'installing') {
     return (
       <Button variant="outline" size="xs" className="w-32" disabled>
-        <Loader2 className="animate-spin" />
+        <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
         {installButtonLabel(phase, t)}
       </Button>
     )

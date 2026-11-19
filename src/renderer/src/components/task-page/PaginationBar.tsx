@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import React from 'react'
 import { getPageNumbers } from '@/components/task-page/task-page-pagination-page-numbers'
 import { cn } from '@/lib/class-names'
@@ -65,7 +66,10 @@ export function PaginationBar({
             className={numClass(entry)}
           >
             {loadingTarget === entry ? (
-              <LoaderCircle className="size-3.5 animate-spin" />
+              <LoaderCircle
+                ref={observeVisibleAnimation}
+                className="size-3.5 visible-animate-spin"
+              />
             ) : (
               entry + 1
             )}

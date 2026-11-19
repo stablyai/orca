@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useState, useSyncExternalStore } from 'react'
 import { AlertTriangle, CheckCircle2, Loader2, RefreshCw } from 'lucide-react'
 import type {
@@ -42,7 +43,10 @@ function RunHeadline({ run }: { run: SkillUpdateRun }): React.JSX.Element | null
   if (run.state === 'running') {
     return (
       <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-        <Loader2 className="size-4 animate-spin text-muted-foreground" />
+        <Loader2
+          ref={observeVisibleAnimation}
+          className="size-4 visible-animate-spin text-muted-foreground"
+        />
         {t('auto.components.skills.SkillFreshnessUpdateDialog.progressAria', 'Updating skills')}
       </div>
     )
@@ -182,7 +186,10 @@ function SkillUpdateFooter({
           disabled={isRunning || checking}
           onClick={onRecheck}
         >
-          <RefreshCw className={checking ? 'animate-spin' : undefined} />
+          <RefreshCw
+            ref={observeVisibleAnimation}
+            className={checking ? 'visible-animate-spin' : undefined}
+          />
           {t('auto.components.skills.SkillFreshnessUpdateDialog.checkNow', 'Re-check')}
         </Button>
       )}

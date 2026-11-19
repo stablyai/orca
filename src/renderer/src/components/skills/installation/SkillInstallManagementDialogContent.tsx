@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -95,7 +96,9 @@ export function SkillInstallManagementDialogContent({
         localLabel={copy.localMachine}
         environments={runtimeEnvironments}
       />
-      {busy && installs.length === 0 ? <Loader2 className="mx-auto size-5 animate-spin" /> : null}
+      {busy && installs.length === 0 ? (
+        <Loader2 ref={observeVisibleAnimation} className="mx-auto size-5 visible-animate-spin" />
+      ) : null}
       {!busy && installs.length === 0 ? (
         <p className="rounded-md border border-border p-4 text-sm text-muted-foreground">
           {copy.noInstalls}

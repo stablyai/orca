@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
@@ -139,7 +140,9 @@ export function PluginDevelopmentDialog({
               aria-describedby={error ? 'plugin-development-path-error' : undefined}
             />
             <Button type="submit" variant="outline" size="sm" disabled={busy}>
-              {busy ? <Loader2 className="animate-spin" /> : null}
+              {busy ? (
+                <Loader2 ref={observeVisibleAnimation} className="visible-animate-spin" />
+              ) : null}
               {t('auto.components.settings.PluginDevelopmentSection.add', 'Add path')}
             </Button>
           </form>

@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { Loader2 } from 'lucide-react'
 import type {
   ChangelogData,
@@ -100,7 +101,10 @@ export function UpdateCardStateContent({
       return (
         <div className="flex flex-col gap-3 p-4" aria-busy="true">
           <div className="flex items-center gap-2">
-            <Loader2 className="size-4 animate-spin text-muted-foreground" />
+            <Loader2
+              ref={observeVisibleAnimation}
+              className="size-4 visible-animate-spin text-muted-foreground"
+            />
             <h3 className="text-sm font-semibold">
               {t('updates.installBlock.preparingTitle', 'Preparing your update')}
             </h3>

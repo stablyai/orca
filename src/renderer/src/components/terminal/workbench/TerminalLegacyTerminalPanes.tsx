@@ -59,6 +59,7 @@ export function TerminalLegacyTerminalPanes({
                     : 'absolute inset-0 hidden'
               }
               aria-hidden={!isVisible}
+              data-retained-animation-paused={!isVisible ? '' : undefined}
             >
               {(tabsByWorktree[workspace.id] ?? []).map((tab) => {
                 const isActiveTerminalTab =

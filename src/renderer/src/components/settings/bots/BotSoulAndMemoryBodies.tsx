@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 // A bot's SOUL.md editor and MEMORY.md panel, read from its home on the computer that runs it.
 import { Loader2 } from 'lucide-react'
 import type { BotRef } from '@/lib/bot-hosts'
@@ -50,7 +51,7 @@ function BotHomeFileBody({
   }
   return (
     <div className="flex min-h-24 items-center justify-center gap-2 text-xs text-muted-foreground">
-      <Loader2 className="size-4 animate-spin" />
+      <Loader2 ref={observeVisibleAnimation} className="size-4 visible-animate-spin" />
       {t('bots.settingsView.reading', 'Reading {{file}}…', { file: name })}
     </div>
   )

@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -195,7 +196,10 @@ export function WorkspaceCleanupAutomaticSection({
     <Button variant="outline" size="sm" disabled={running} onClick={onCleanUpNow}>
       {running ? (
         <>
-          <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" />
+          <Loader2
+            ref={observeVisibleAnimation}
+            className="size-3.5 visible-animate-spin motion-reduce:animate-none"
+          />
           {t('components.settings.workspaceCleanup.automatic.runningButton', 'Running…')}
         </>
       ) : (

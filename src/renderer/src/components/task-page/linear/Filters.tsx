@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
@@ -187,13 +188,22 @@ export function TaskPageLinearFilters({
                 className="size-8 border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
               >
                 {(linearMode === 'issues' || linearMode === 'in-orca') && linearLoading ? (
-                  <LoaderCircle className="size-4 animate-spin" />
+                  <LoaderCircle
+                    ref={observeVisibleAnimation}
+                    className="size-4 visible-animate-spin"
+                  />
                 ) : linearMode === 'projects' &&
                   (linearProjectsLoading || linearProjectDetailLoading) ? (
-                  <LoaderCircle className="size-4 animate-spin" />
+                  <LoaderCircle
+                    ref={observeVisibleAnimation}
+                    className="size-4 visible-animate-spin"
+                  />
                 ) : linearMode === 'views' &&
                   (linearCustomViewsLoading || linearCustomViewContentsLoading) ? (
-                  <LoaderCircle className="size-4 animate-spin" />
+                  <LoaderCircle
+                    ref={observeVisibleAnimation}
+                    className="size-4 visible-animate-spin"
+                  />
                 ) : (
                   <RefreshCw className="size-4" />
                 )}

@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useAppStore } from '@/store/index'
@@ -37,7 +38,10 @@ export function VoiceCleanupTry({ text }: { text: string }): React.JSX.Element |
         onClick={() => void run()}
       >
         {result === 'running' ? (
-          <Loader2 className="animate-spin motion-reduce:animate-none" />
+          <Loader2
+            ref={observeVisibleAnimation}
+            className="visible-animate-spin motion-reduce:animate-none"
+          />
         ) : null}
         {result === 'running'
           ? t('components.settings.voice.micTest.cleaningUp', 'Cleaning up…')

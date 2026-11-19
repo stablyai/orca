@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ExternalLink, HardDrive, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -65,7 +66,7 @@ function getFullDiskAccessButtonLabel(
 
 function FullDiskAccessButtonIcon(props: FullDiskAccessButtonState): React.JSX.Element {
   if (props.requesting) {
-    return <Loader2 className="size-3.5 animate-spin" />
+    return <Loader2 ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
   }
   return <ExternalLink className="size-3.5" />
 }

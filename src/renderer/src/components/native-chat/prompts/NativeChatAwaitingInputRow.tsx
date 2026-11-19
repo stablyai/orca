@@ -1,3 +1,4 @@
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { NativeChatQuestionText } from './NativeChatQuestionText'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/class-names'
@@ -60,7 +61,10 @@ export function NativeChatAwaitingInputRow({
         iconName="message-square-more"
         className="text-chat-foreground-faint"
       />
-      <span className={cn('shrink-0', pending && 'animate-pulse motion-reduce:animate-none')}>
+      <span
+        ref={observeVisibleAnimation}
+        className={cn('shrink-0', pending && 'visible-animate-pulse motion-reduce:animate-none')}
+      >
         {label}
       </span>
       {question !== null && toggles && open ? null : (
