@@ -213,7 +213,7 @@ describe('bot items over RPC', () => {
   })
 
   it('makes no item for a bot that refuses the request', async () => {
-    const { dispatcher, host: items } = itemsRuntime()
+    const { dispatcher } = itemsRuntime()
     sendToBot.mockRejectedValue(new OrchestrationError('bot_paused', 'Docs is paused.'))
 
     const refused = await dispatcher.dispatch(
@@ -229,10 +229,6 @@ describe('bot items over RPC', () => {
       error: { message: 'Docs is paused.' }
     })
     expect(sendToBot).toHaveBeenCalledTimes(1)
-    expect(await items.store().list({ botId: 'docs', statuses: ['planned'], limit: 10 })).toEqual({
-      items: [],
-      counts: {}
-    })
     expect(
       await dispatcher.dispatch(request('bots.items.list', { botId: 'docs', all: true }))
     ).toMatchObject({ ok: true, result: { items: [] } })
@@ -253,30 +249,7 @@ describe('bot items over RPC', () => {
     expect(sendToBot).not.toHaveBeenCalled()
   })
 
-  it('makes an item for another bot with a repeated link stored once', async () => {
-    const { dispatcher } = itemsRuntime()
-    sendToBot.mockImplementation(async (_context: unknown, mail: { messageId: string }) => {
-      messages.set(mail.messageId, { to_handle: `orca_session_id:${DOCS_CHAT}` })
-      return { receipt: {}, nudge: () => {} }
-    })
-
-    const made = await dispatcher.dispatch(
-      request('bots.items.add', {
-        callerSessionId: RANGER_CHAT,
-        title: 'Fix the onboarding invite link',
-        forBot: 'bot:Docs',
-        links: Array.from({ length: 51 }, () => 'https://example.com/spec')
-      })
-    )
-
-    expect(made).toMatchObject({
-      ok: true,
-      result: { item: { links: [{ kind: 'url', ref: 'https://example.com/spec' }] } }
-    })
-    expect(sendToBot).toHaveBeenCalledTimes(1)
-  })
-
-  it('makes an item for another bot in the chat its request landed in', async () => {
+  it('makes an item with deduplicated links in the chat its request landed in', async () => {
     const { dispatcher } = itemsRuntime()
     sendToBot.mockImplementation(
       async (_context: unknown, mail: { messageId: string; to: string }) => {
@@ -290,7 +263,8 @@ describe('bot items over RPC', () => {
       request('bots.items.add', {
         callerSessionId: RANGER_CHAT,
         title: 'Fix the onboarding invite link',
-        forBot: 'bot:Docs'
+        forBot: 'bot:Docs',
+        links: Array.from({ length: 51 }, () => 'https://example.com/spec')
       })
     )
 
@@ -300,10 +274,12 @@ describe('bot items over RPC', () => {
         item: {
           owner: { botId: 'docs' },
           chat: { id: DOCS_CHAT },
-          madeBy: { botId: 'ranger', chatId: RANGER_CHAT }
+          madeBy: { botId: 'ranger', chatId: RANGER_CHAT },
+          links: [{ kind: 'url', ref: 'https://example.com/spec' }]
         }
       }
     })
+    expect(sendToBot).toHaveBeenCalledOnce()
   })
 
   it("mails the item's chat once for each owner change, a close with nothing running included", async () => {
