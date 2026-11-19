@@ -1,29 +1,40 @@
 import { useLayoutEffect, useState } from 'react'
+import type { AppState } from '../types'
+import type { RootSelectorState } from './app-store-channels'
 
-type Entry = { read: () => unknown; last: unknown }
+type Selector = (state: RootSelectorState) => unknown
 
 // Committed root selectors only, keyed by a per-hook token so the hook never mutates its own state.
-const committed = new Map<object, Entry>()
-// Leading edge, at most once per interval, a bounded slice per pass: costs stay flat as mounted selectors grow,
+const committed = new Map<object, Selector>()
+// At most one pass per interval, a bounded slice per pass: costs stay flat as mounted selectors grow,
 // and successive passes walk the whole registry.
 const CHECK_INTERVAL_MS = 1000
 const CHECK_BUDGET = 200
 let nextCheckAt = 0
-let cursor: Iterator<Entry> | null = null
+let cursor: Iterator<Selector> | null = null
 
-/** Development only: records, at commit, what each mounted root selector showed. */
-export function useRecordedRootSelection(read: () => unknown): void {
+/** Development only: records each mounted root selector at commit. */
+export function useRecordedRootSelection(selector: Selector): void {
   const [token] = useState(() => ({}))
   // Commit time, not render: a render React discards must not replace what is on screen.
   useLayoutEffect(() => {
-    committed.set(token, { read, last: read() })
+    committed.set(token, selector)
     return () => {
       committed.delete(token)
     }
   })
 }
 
-function checkCommittedRootSelectors(): void {
+/**
+ * After a channel-only write skipped root selectors. Only channel fields differ between the two
+ * states, so a selector whose result differs between them reads a channel field.
+ */
+export function checkSkippedRootSelectors(state: AppState, previousState: AppState): void {
+  const now = performance.now()
+  if (now < nextCheckAt) {
+    return
+  }
+  nextCheckAt = now + CHECK_INTERVAL_MS
   for (let checked = 0; checked < CHECK_BUDGET; checked++) {
     cursor ??= committed.values()
     const next = cursor.next()
@@ -31,29 +42,20 @@ function checkCommittedRootSelectors(): void {
       cursor = null
       return
     }
-    const entry = next.value
-    let value: unknown
+    const selector = next.value
+    let moved: boolean
     try {
-      value = entry.read()
+      // Previous first, so memoizing selectors end primed with the current state.
+      const before = selector(previousState)
+      moved = !Object.is(selector(state), before)
     } catch {
       continue
     }
-    if (!Object.is(value, entry.last)) {
-      entry.last = value
+    if (moved) {
       console.error(
         'A root app-store selector changed on a channel-only write; read channel fields through useAppStoreWithChannels.',
-        entry.read
+        selector
       )
     }
   }
-}
-
-/** After a channel-only write skipped root selectors: any whose result moved read a channel field. */
-export function checkSkippedRootSelectors(): void {
-  const now = performance.now()
-  if (now < nextCheckAt) {
-    return
-  }
-  nextCheckAt = now + CHECK_INTERVAL_MS
-  checkCommittedRootSelectors()
 }
