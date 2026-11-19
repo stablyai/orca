@@ -1,14 +1,19 @@
 import type { RpcContext } from '../../core'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
-import { SessionLinkStore } from '../../../orchestration/session-links/session-link-store'
+import { sessionLinks } from '../../../orchestration/session-links/worker/session-link-worker-client'
+import type { SessionLinks } from '../../../orchestration/session-links/worker/session-link-worker-protocol'
 import { sessionLinkCandidates } from '../../../orchestration/session-links/session-link-participants'
 import { requireSessionLinkGroupSupport } from '../../../orchestration/session-links/session-link-group'
 import { sessionLinkActor } from './session-link-authority'
 
-export function linkWrite<T>(action: () => T): T {
+/** A refusal applied nothing; an unreachable worker keeps its own error, which says it may have. */
+export async function linkWrite<T>(action: () => T | Promise<T>): Promise<T> {
   try {
-    return action()
+    return await action()
   } catch (error) {
+    if (error instanceof OrchestrationError && error.code === 'session_link_unavailable') {
+      throw error
+    }
     throw new OrchestrationError(
       'session_link_refused',
       error instanceof Error ? error.message : String(error),
@@ -16,22 +21,22 @@ export function linkWrite<T>(action: () => T): T {
     )
   }
 }
-export function snapshot(context: RpcContext, id: string, groupSupport?: true) {
-  const store = new SessionLinkStore(context.runtime.getOrchestrationDb())
-  const link = store.get(id)
+export async function snapshot(context: RpcContext, id: string, groupSupport?: true) {
+  const links = sessionLinks(context.runtime.getOrchestrationDb())
+  const link = await links.get(id)
   sessionLinkActor(context, link)
-  linkWrite(() => requireSessionLinkGroupSupport(link, groupSupport))
-  return { link, events: store.events(id) }
+  await linkWrite(() => requireSessionLinkGroupSupport(link, groupSupport))
+  return { link, events: await links.events(id) }
 }
 
 export async function verifyResumeParticipants(
-  store: SessionLinkStore,
+  links: SessionLinks,
   id: string,
   context: RpcContext
 ): Promise<void> {
-  const link = store.get(id)
+  const link = await links.get(id)
   const candidates = await sessionLinkCandidates(context.runtime)
-  linkWrite(() => {
+  await linkWrite(() => {
     if (
       !link.participants.every((participant) =>
         candidates.some(

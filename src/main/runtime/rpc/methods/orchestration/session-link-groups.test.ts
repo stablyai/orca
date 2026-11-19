@@ -3,6 +3,7 @@ import { eraseRpcMethods, type RpcContext } from '../../core'
 import { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
 import { OrcaRuntimeService } from '../../../orca-runtime'
 import { SessionLinkStore } from '../../../orchestration/session-links/session-link-store'
+import { inProcessSessionLinks } from '../../../orchestration/session-links/worker/session-link-worker.test-fixture'
 import { sessionLinkCandidates } from '../../../orchestration/session-links/session-link-participants'
 import { sessionLinkTestParticipants as pair } from '../../../orchestration/session-links/session-link-test-fixture'
 import { SESSION_LINK_METHODS } from './session-link-methods'
@@ -65,6 +66,7 @@ beforeEach(() => {
   db = new OrchestrationDb(':memory:')
   runtime = new OrcaRuntimeService()
   runtime.setOrchestrationDb(db)
+  inProcessSessionLinks(db)
   store = new SessionLinkStore(db)
   owner = { runtime, caller: { kind: 'paired-device', deviceId: 'windows' }, clientKind: 'runtime' }
   vi.mocked(sessionLinkCandidates).mockResolvedValue([...pair, gemini])
@@ -152,18 +154,20 @@ it('refuses agent/mobile membership changes, stale versions, occupied chats and 
 
 it('routes new messages to exactly the selected peer, replies to their author, and owner notes to everyone', async () => {
   await call('linkAddParticipants', add())
-  expect(() => call('linkSend', send('ambiguous'), agent(pair[1].sessionId))).toThrow('--to')
-  expect(() =>
+  await expect(call('linkSend', send('ambiguous'), agent(pair[1].sessionId))).rejects.toThrow(
+    '--to'
+  )
+  await expect(
     call('linkSend', send('outside', { to: 'unrelated-chat' }), agent(pair[1].sessionId))
-  ).toThrow('--to')
-  call(
+  ).rejects.toThrow('--to')
+  await call(
     'linkSend',
     send('check', { to: gemini.sessionId, kind: 'checkpoint' }),
     agent(pair[1].sessionId)
   )
   const checkpoint = store.events('link').find((e) => e.requestId === 'check')!
   expect(checkpoint.recipient).toBe(gemini.sessionId)
-  call(
+  await call(
     'linkSend',
     send('answer', { kind: 'reply', replyTo: checkpoint.id, body: 'Verified.' }),
     agent(gemini.sessionId)
@@ -173,14 +177,14 @@ it('routes new messages to exactly the selected peer, replies to their author, a
     recipient: pair[1].sessionId,
     replyTo: checkpoint.id
   })
-  call('linkSend', send('owner', { kind: 'owner-note' }))
+  await call('linkSend', send('owner', { kind: 'owner-note' }))
   expect(
     store
       .events('link')
       .filter((e) => e.requestId === 'owner')
       .map((e) => e.recipient)
   ).toEqual([...pair, gemini].map((p) => p.sessionId))
-  call(
+  await call(
     'linkSend',
     send('ask', { kind: 'owner-request', body: 'Continue?' }),
     agent(gemini.sessionId)
@@ -190,15 +194,15 @@ it('routes new messages to exactly the selected peer, replies to their author, a
 })
 
 it('retains the original recipients when an owner send is retried after membership grows', async () => {
-  call('linkSend', send('owner', { kind: 'owner-note' }))
+  await call('linkSend', send('owner', { kind: 'owner-note' }))
   const events = store.events('link')
   await call('linkAddParticipants', add())
-  call('linkSend', send('owner', { kind: 'owner-note' }))
+  await call('linkSend', send('owner', { kind: 'owner-note' }))
   expect(store.events('link').filter((e) => e.requestId === 'owner')).toEqual(events)
 })
 
 it('replays owner continuation after adding a peer without duplicating the decision or accepting changed answer content', async () => {
-  call('linkSend', send('ask', { kind: 'owner-request' }), agent(pair[0].sessionId))
+  await call('linkSend', send('ask', { kind: 'owner-request' }), agent(pair[0].sessionId))
   const answer = {
     id: 'link',
     operationId: 'decision',
@@ -235,10 +239,12 @@ it('replays owner continuation after adding a peer without duplicating the decis
 it('refuses old clients before effects on group reads, sends, controls and policy changes', async () => {
   await call('linkAddParticipants', add())
   const before = store.events('link')
-  expect(() => call('linkCurrent', { sessionId: pair[0].sessionId })).toThrow('Update this Orca')
-  expect(() =>
+  await expect(call('linkCurrent', { sessionId: pair[0].sessionId })).rejects.toThrow(
+    'Update this Orca'
+  )
+  await expect(
     call('linkSend', { ...send('old', { kind: 'owner-note' }), groupSupport: undefined })
-  ).toThrow('Update this Orca')
+  ).rejects.toThrow('Update this Orca')
   await expect(
     call('linkControl', { id: 'link', operationId: 'old', version: 2, action: 'pause' })
   ).rejects.toThrow('Update this Orca')
@@ -251,7 +257,7 @@ it('refuses old clients before effects on group reads, sends, controls and polic
     })
   ).rejects.toThrow('Update this Orca')
   expect(store.events('link')).toEqual(before)
-  expect(call('linkShow', { id: 'link', groupSupport: true })).toMatchObject({
+  await expect(call('linkShow', { id: 'link', groupSupport: true })).resolves.toMatchObject({
     link: { participants: [...pair, gemini] }
   })
 })

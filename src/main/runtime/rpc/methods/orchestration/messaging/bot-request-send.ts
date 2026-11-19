@@ -1,4 +1,4 @@
-import { assertSessionLinkMailBoundary } from '../../../../orchestration/session-links/session-link-mail-boundary'
+import { sessionLinkMailBoundary } from '../../../../orchestration/session-links/session-link-mail-boundary'
 /** Stores mail to a bot with Orca's record of the request beside it, after the checks pass. */
 
 import { isBotGroupMemberSession } from '../../../../../../shared/bots/bot-group'
@@ -240,6 +240,7 @@ async function admitBotRequestMail(
     depth: record.depth,
     record: JSON.stringify(record)
   }
+  const linkBoundary = await sessionLinkMailBoundary(db, acting.sessionId)
   /** `reserved`: the request's place is already held, so only its mail is stored. */
   /** `held`: the chat a failed turn holds that this request was kept out of, named to the sender. */
   const admit = (address: string, reserved = false, held: string | null = null) => {
@@ -255,7 +256,7 @@ async function admitBotRequestMail(
     if (!recipient.ok) {
       throw new OrchestrationError(recipient.code, recipient.message)
     }
-    assertSessionLinkMailBoundary(db, acting.sessionId, recipient.to)
+    linkBoundary.assert(recipient.to)
     // The bot may have been paused or removed while the Chat was found.
     check()
     if (groupScope) {

@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from '../db/orchestration-db'
 import { SessionLinkParticipant } from '../../../../shared/session-link'
 import { SessionLinkStore } from './session-link-store'
+import { inProcessSessionLinks } from './worker/session-link-worker.test-fixture'
+import type { SessionLinks } from './worker/session-link-worker-protocol'
 import { redriveSessionLinks } from './session-link-delivery'
 import { stopSessionLinkTurns } from './session-link-stop'
 import { sessionLinkMessageBody } from './session-link-message'
@@ -26,12 +28,14 @@ vi.mock('../../../native-chat/agent-session-wire/host/structured-agent-session-r
 describe('session link delivery through the real structured host', () => {
   let db: OrchestrationDb
   let store: SessionLinkStore
+  let links: SessionLinks
   beforeEach(async () => {
     const { host } = hostTestState()
     vi.mocked(getStructuredAgentSessionHost).mockReturnValue(host)
     await attach()
     await host.deps.store.setSessionTabVisibility(SESSION, true, 'tab-link')
     db = new OrchestrationDb(':memory:')
+    links = inProcessSessionLinks(db)
     store = new SessionLinkStore(db)
     store.create('link-test', 'Slice 1b', [
       SessionLinkParticipant.parse({
@@ -222,8 +226,8 @@ describe('session link delivery through the real structured host', () => {
       }
       return cancel(caller, params)
     })
-    await expect(stopSessionLinkTurns(store, 'link-test', 'urgent-stop')).rejects.toThrow('Crash')
-    await stopSessionLinkTurns(store, 'link-test', 'urgent-stop')
+    await expect(stopSessionLinkTurns(links, 'link-test', 'urgent-stop')).rejects.toThrow('Crash')
+    await stopSessionLinkTurns(links, 'link-test', 'urgent-stop')
     expect(calls[0]).toBe(calls[1])
     expect(cancelTurn).toHaveBeenCalledOnce()
   })
@@ -233,7 +237,7 @@ describe('session link delivery through the real structured host', () => {
     const current = message()
     await redriveSessionLinks(db, SESSION)
     await providerTurn('running', current.operationId)
-    await stopSessionLinkTurns(store, 'link-test', 'current-control', {
+    await stopSessionLinkTurns(links, 'link-test', 'current-control', {
       sessionId: SESSION,
       operationId: current.operationId
     })
@@ -255,7 +259,7 @@ describe('session link delivery through the real structured host', () => {
     })
     await redriveSessionLinks(db, SESSION)
     await providerTurn('running', next.operationId, 'turn-2')
-    await stopSessionLinkTurns(store, 'link-test', 'current-control', {
+    await stopSessionLinkTurns(links, 'link-test', 'current-control', {
       sessionId: SESSION,
       operationId: current.operationId
     })
@@ -277,7 +281,7 @@ describe('session link delivery through the real structured host', () => {
     })
     await redriveSessionLinks(db, SESSION)
     await providerTurn('running', next.operationId, 'turn-2')
-    await stopSessionLinkTurns(store, 'link-test', 'background-stop', {
+    await stopSessionLinkTurns(links, 'link-test', 'background-stop', {
       sessionId: SESSION,
       operationId: first.operationId
     })
@@ -297,7 +301,7 @@ describe('session link delivery through the real structured host', () => {
     message()
     await redriveSessionLinks(db, SESSION)
     await providerTurn('completed', store.event('report')?.operationId)
-    await stopSessionLinkTurns(store, 'link-test', 'stop-idle')
+    await stopSessionLinkTurns(links, 'link-test', 'stop-idle')
     expect(cancelTurn).not.toHaveBeenCalled()
     expect(
       store.events('link-test').find((e) => e.kind === 'control' && e.recipient === SESSION)?.detail
@@ -306,11 +310,11 @@ describe('session link delivery through the real structured host', () => {
 
   it('does not retarget an idle stop receipt after a later continuation', async () => {
     const { cancelTurn } = hostTestState()
-    await stopSessionLinkTurns(store, 'link-test', 'idle-control')
+    await stopSessionLinkTurns(links, 'link-test', 'idle-control')
     const next = message()
     await redriveSessionLinks(db, SESSION)
     await providerTurn('running', next.operationId)
-    await stopSessionLinkTurns(store, 'link-test', 'idle-control')
+    await stopSessionLinkTurns(links, 'link-test', 'idle-control')
     expect(cancelTurn).not.toHaveBeenCalled()
     expect(store.events('link-test')).toContainEqual(
       expect.objectContaining({
@@ -323,12 +327,12 @@ describe('session link delivery through the real structured host', () => {
   it('retains an unconfirmed stop when the host was absent instead of targeting a future turn', async () => {
     const { host, cancelTurn } = hostTestState()
     vi.mocked(getStructuredAgentSessionHost).mockReturnValue(null)
-    await stopSessionLinkTurns(store, 'link-test', 'host-absent')
+    await stopSessionLinkTurns(links, 'link-test', 'host-absent')
     vi.mocked(getStructuredAgentSessionHost).mockReturnValue(host)
     const next = message()
     await redriveSessionLinks(db, SESSION)
     await providerTurn('running', next.operationId)
-    await stopSessionLinkTurns(store, 'link-test', 'host-absent')
+    await stopSessionLinkTurns(links, 'link-test', 'host-absent')
     expect(cancelTurn).not.toHaveBeenCalled()
     expect(store.events('link-test')).toContainEqual(
       expect.objectContaining({
@@ -342,7 +346,7 @@ describe('session link delivery through the real structured host', () => {
     const { cancelTurn } = hostTestState()
     message()
     await redriveSessionLinks(db, SESSION)
-    await stopSessionLinkTurns(store, 'link-test', 'stop-before-turn')
+    await stopSessionLinkTurns(links, 'link-test', 'stop-before-turn')
     expect(cancelTurn).not.toHaveBeenCalled()
     expect(store.events('link-test').find((e) => e.kind === 'control')?.detail).toBe(
       'stop-unconfirmed'
@@ -352,7 +356,7 @@ describe('session link delivery through the real structured host', () => {
   it('leaves an unrelated human-triggered turn running on urgent link stop', async () => {
     const { host, cancelTurn } = hostTestState()
     await host.send({ callerKey: 'human' }, hostTestSendParams('Work on the owner task'))
-    await stopSessionLinkTurns(store, 'link-test', 'stop-other')
+    await stopSessionLinkTurns(links, 'link-test', 'stop-other')
     expect(cancelTurn).not.toHaveBeenCalled()
   })
 

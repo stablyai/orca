@@ -3,6 +3,8 @@ import { eraseRpcMethods, type RpcContext } from '../../core'
 import { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
 import { OrcaRuntimeService } from '../../../orca-runtime'
 import { SessionLinkStore } from '../../../orchestration/session-links/session-link-store'
+import { inProcessSessionLinks } from '../../../orchestration/session-links/worker/session-link-worker.test-fixture'
+import type { SessionLinks } from '../../../orchestration/session-links/worker/session-link-worker-protocol'
 import { SESSION_LINK_METHODS } from './session-link-methods'
 import { stopSessionLinkTurns } from '../../../orchestration/session-links/session-link-stop'
 import { sessionLinkCandidates } from '../../../orchestration/session-links/session-link-participants'
@@ -24,11 +26,13 @@ describe('session link caller authority', () => {
   let db: OrchestrationDb
   let runtime: OrcaRuntimeService
   let store: SessionLinkStore
+  let links: SessionLinks
   beforeEach(() => {
     vi.mocked(sessionLinkCandidates).mockResolvedValue(participants)
     db = new OrchestrationDb(':memory:')
     runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
+    links = inProcessSessionLinks(db)
     store = new SessionLinkStore(db)
     store.create('link-1', 'Checkout slice 2', [participants[0], participants[1]])
   })
@@ -57,18 +61,18 @@ describe('session link caller authority', () => {
     return handler.handler(handler.params?.parse(params), context)
   }
 
-  it('lets an authenticated paired desktop read the host link and send an owner note', () => {
+  it('lets an authenticated paired desktop read the host link and send an owner note', async () => {
     const remote: RpcContext = {
       runtime,
       caller: { kind: 'paired-device', deviceId: 'windows' },
       clientKind: 'runtime'
     }
-    expect(
+    await expect(
       call('orchestration.linkCurrent', { sessionId: 'codex_implement' }, remote)
-    ).toMatchObject({
+    ).resolves.toMatchObject({
       link: { id: 'link-1' }
     })
-    call(
+    await call(
       'orchestration.linkSend',
       {
         id: 'link-1',
@@ -82,7 +86,7 @@ describe('session link caller authority', () => {
     expect(store.events('link-1').every((event) => event.actor === 'owner')).toBe(true)
   })
 
-  it('does not infer owner authority from unproven or mobile client metadata', () => {
+  it('does not infer owner authority from unproven or mobile client metadata', async () => {
     for (const context of [
       { runtime, clientKind: 'runtime' as const },
       { runtime, caller: { kind: 'local-cli' as const }, clientKind: 'runtime' as const },
@@ -92,9 +96,9 @@ describe('session link caller authority', () => {
         clientKind: 'mobile' as const
       }
     ]) {
-      expect(() =>
+      await expect(
         call('orchestration.linkCurrent', { sessionId: 'codex_implement' }, context)
-      ).toThrow('Read only')
+      ).rejects.toThrow('Read only')
     }
   })
 
@@ -124,8 +128,8 @@ describe('session link caller authority', () => {
     expect(store.list()).toHaveLength(1)
   })
 
-  it('never accepts an agent as the owner or a bare --from claim as participant authority', () => {
-    expect(() =>
+  it('never accepts an agent as the owner or a bare --from claim as participant authority', async () => {
+    await expect(
       call(
         'orchestration.linkSend',
         {
@@ -136,19 +140,19 @@ describe('session link caller authority', () => {
         },
         agent()
       )
-    ).toThrow('Only the owner')
-    expect(() =>
+    ).rejects.toThrow('Only the owner')
+    await expect(
       call(
         'orchestration.linkSend',
         { id: 'link-1', operationId: 'unbound', body: 'Hello', kind: 'message' },
         { runtime, caller: { kind: 'local-cli' } }
       )
-    ).toThrow('not a participant')
+    ).rejects.toThrow('not a participant')
     expect(store.events('link-1')).toEqual([])
   })
 
   it('records peer provenance and lets either actual participant leave while retaining the journal', async () => {
-    call(
+    await call(
       'orchestration.linkSend',
       {
         id: 'link-1',
@@ -208,7 +212,7 @@ describe('session link caller authority', () => {
   })
 
   it('requires an actual owner note before an owner-decision pause can resume', async () => {
-    call(
+    await call(
       'orchestration.linkSend',
       { id: 'link-1', operationId: 'money', body: 'Need a paid run.', kind: 'owner-request' },
       agent()
@@ -222,7 +226,7 @@ describe('session link caller authority', () => {
         context
       )
     ).rejects.toThrow('Answer the owner decision')
-    call(
+    await call(
       'orchestration.linkSend',
       {
         id: 'link-1',
@@ -244,13 +248,13 @@ describe('session link caller authority', () => {
   })
   it('keeps owner decisions answerable with a full peer queue and cannot clear them by changing the pause reason', async () => {
     for (let i = 0; i < 11; i++) {
-      call(
+      await call(
         'orchestration.linkSend',
         { id: 'link-1', operationId: `status-${i}`, body: `Status ${i}`, kind: 'message' },
         agent()
       )
     }
-    call(
+    await call(
       'orchestration.linkSend',
       { id: 'link-1', operationId: 'money', body: 'Need owner decision.', kind: 'owner-request' },
       agent()
@@ -273,7 +277,7 @@ describe('session link caller authority', () => {
         context
       )
     ).rejects.toThrow('Answer the owner decision')
-    call(
+    await call(
       'orchestration.linkSend',
       {
         id: 'link-1',
@@ -321,7 +325,7 @@ describe('session link caller authority', () => {
         },
         agent()
       )
-      expect(stopSessionLinkTurns).toHaveBeenLastCalledWith(store, 'link-1', 'leave-safely', {
+      expect(stopSessionLinkTurns).toHaveBeenLastCalledWith(links, 'link-1', 'leave-safely', {
         sessionId: 'codex_implement',
         operationId: event.operationId
       })
@@ -366,7 +370,7 @@ describe('session link caller authority', () => {
       { id: 'link-1', operationId: 'owner-stop', version: 1, action: 'stop' },
       { runtime, caller: { kind: 'desktop' } }
     )
-    expect(stopSessionLinkTurns).toHaveBeenLastCalledWith(store, 'link-1', 'owner-stop', undefined)
+    expect(stopSessionLinkTurns).toHaveBeenLastCalledWith(links, 'link-1', 'owner-stop', undefined)
   })
 
   it('requires the desktop owner to resolve an unknown delivery and refuses stale or already settled reviews', async () => {
@@ -390,14 +394,16 @@ describe('session link caller authority', () => {
       operationId: 'owner-review',
       version: store.get('link-1').version
     }
-    expect(() => call('orchestration.linkResolve', input, agent())).toThrow('Only the owner')
-    expect(() =>
+    await expect(call('orchestration.linkResolve', input, agent())).rejects.toThrow(
+      'Only the owner'
+    )
+    await expect(
       call(
         'orchestration.linkResolve',
         { ...input, version: 1 },
         { runtime, caller: { kind: 'desktop' } }
       )
-    ).toThrow('changed')
+    ).rejects.toThrow('changed')
     await expect(
       call(
         'orchestration.linkControl',
@@ -405,20 +411,20 @@ describe('session link caller authority', () => {
         { runtime, caller: { kind: 'desktop' } }
       )
     ).rejects.toThrow('Review the unconfirmed delivery')
-    call('orchestration.linkResolve', input, { runtime, caller: { kind: 'desktop' } })
-    call('orchestration.linkResolve', input, { runtime, caller: { kind: 'desktop' } })
+    await call('orchestration.linkResolve', input, { runtime, caller: { kind: 'desktop' } })
+    await call('orchestration.linkResolve', input, { runtime, caller: { kind: 'desktop' } })
     expect(store.get('link-1').state).toBe('paused')
     expect(store.event(event.id)).toMatchObject({
       state: 'cancelled',
       operationId: event.operationId
     })
-    expect(() =>
+    await expect(
       call(
         'orchestration.linkResolve',
         { ...input, operationId: 'another-review', version: store.get('link-1').version },
         { runtime, caller: { kind: 'desktop' } }
       )
-    ).toThrow('unconfirmed')
+    ).rejects.toThrow('unconfirmed')
     await call(
       'orchestration.linkControl',
       {

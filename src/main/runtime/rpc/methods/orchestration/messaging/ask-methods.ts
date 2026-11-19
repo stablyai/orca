@@ -156,7 +156,7 @@ export const ORCHESTRATION_ASK_METHODS = [
         }
         // An explicit Run or coordinator target still reaches the Run; otherwise the asker's creator.
         const to = params.to && params.to !== reportTo ? `run:${run.id}` : reportTo
-        assertSessionLinkMailBoundary(db, orchestrationCaller?.orcaSessionId, to)
+        await assertSessionLinkMailBoundary(db, orchestrationCaller?.orcaSessionId, to)
         const created = db.createQuestion({
           runId: run.id,
           dispatchId: askingDispatch.id,

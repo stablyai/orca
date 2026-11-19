@@ -4,25 +4,25 @@ import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle
 import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { mintAgentSessionOperationId } from '../mailbox/structured-pointer/structured-pointer-operation-id'
-import type { SessionLinkStore } from './session-link-store'
+import type { SessionLinks } from './worker/session-link-worker-protocol'
 
 export type SessionLinkControlTurn = { sessionId: string; operationId: string }
 
 export async function stopSessionLinkTurns(
-  store: SessionLinkStore,
+  links: SessionLinks,
   id: string,
   operationId: string,
   callingTurn?: SessionLinkControlTurn
 ): Promise<void> {
   const host = getStructuredAgentSessionHost()
-  const link = store.get(id)
+  const link = await links.get(id)
   await Promise.all(
     link.participants.map(async (participant) => {
       const sessionId = participant.sessionId
       const eventId = createHash('sha256')
         .update(JSON.stringify([id, operationId, sessionId, 'stop']))
         .digest('hex')
-      const previous = store.event(eventId)
+      const previous = await links.event(eventId)
       const receipt = {
         id: eventId,
         linkId: id,
@@ -44,18 +44,18 @@ export async function stopSessionLinkTurns(
       }
       if (!host) {
         if (!previous) {
-          store.write({ ...receipt, operationId: '', detail: 'stop-unconfirmed' })
+          await links.write({ ...receipt, operationId: '', detail: 'stop-unconfirmed' })
         }
         return
       }
       const record = host.deps.store.getConversation(sessionId)
       if (!record) {
         if (!previous) {
-          store.write({ ...receipt, operationId: '', detail: 'stop-unconfirmed' })
+          await links.write({ ...receipt, operationId: '', detail: 'stop-unconfirmed' })
         }
         return
       }
-      const events = store.events(id)
+      const events = await links.events(id)
       const inputIds = events
         .filter((event) => event.recipient === sessionId && event.operationId)
         .map((event) => event.operationId)
@@ -98,7 +98,7 @@ export async function stopSessionLinkTurns(
         turn
       ) {
         if (!previous) {
-          store.write({
+          await links.write({
             ...receipt,
             operationId: '',
             targetTurnId: turn.turnId,
@@ -109,7 +109,7 @@ export async function stopSessionLinkTurns(
       }
       if (!turn || !ownTurn) {
         if (!previous) {
-          store.write({
+          await links.write({
             ...receipt,
             operationId: '',
             detail: turn
@@ -132,7 +132,7 @@ export async function stopSessionLinkTurns(
         targetTurnId: turn.turnId,
         detail: 'stop-pending'
       }
-      store.write(intent)
+      await links.write(intent)
       const result = await host.cancel(
         { callerKey: `trusted-local:session-link:${id}` },
         {
@@ -149,7 +149,7 @@ export async function stopSessionLinkTurns(
           ...fields
         }
       )
-      store.write({
+      await links.write({
         ...intent,
         detail: result.ok && result.value.cancelled ? 'stop-acknowledged' : 'stop-unconfirmed'
       })

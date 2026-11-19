@@ -234,7 +234,7 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
   onStructuredSessionTabHidden(sessionId: string): void {
     try {
       const db = this.getExistingOrchestrationDb()
-      pauseSessionLinkForSession(db, sessionId)
+      void pauseSessionLinkForSession(db, sessionId)
       for (const worker of db ? closedChatWorkersForSession(sessionId, db) : []) {
         this.failActiveDispatchOnExit(worker.handle, worker.paneKey, OPERATOR_CLOSE_EXIT_CAUSE)
       }
@@ -248,7 +248,7 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
   /** Settlement drops anything parked for the session; nothing will ever redrive it again. */
   forgetStructuredSessionMail(sessionId: string): void {
     this.orchestrationStructuredMailboxPointerDelivery.forgetSession(sessionId)
-    pauseSessionLinkForSession(this.sessionLinkDb(), sessionId)
+    void pauseSessionLinkForSession(this.sessionLinkDb(), sessionId)
   }
 
   /** After a check, move, takeover or reset, delete the cards that would hand a chat mail it no

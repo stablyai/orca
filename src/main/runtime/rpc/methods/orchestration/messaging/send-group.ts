@@ -3,7 +3,7 @@ import type {
   MessageType
 } from '../../../../orchestration/db/orchestration-records'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
-import { assertSessionLinkMailBoundary } from '../../../../orchestration/session-links/session-link-mail-boundary'
+import { sessionLinkMailBoundary } from '../../../../orchestration/session-links/session-link-mail-boundary'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { resolveGroupAddress } from '../../../../orchestration/addressing/groups/group-addressing'
@@ -268,8 +268,9 @@ export async function sendGroupMessage(args: {
     )
   }
 
+  const linkBoundary = await sessionLinkMailBoundary(db, sender.orcaSessionId)
   for (const recipient of uniqueRecipients) {
-    assertSessionLinkMailBoundary(db, sender.orcaSessionId, recipient.to)
+    linkBoundary.assert(recipient.to)
   }
 
   const threadId = params.threadId ?? `thread_${Date.now()}`

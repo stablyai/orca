@@ -1,4 +1,4 @@
-import type { SessionLinkStore } from '../../../orchestration/session-links/session-link-store'
+import type { SessionLinks } from '../../../orchestration/session-links/worker/session-link-worker-protocol'
 import type { SessionLinkControlTurn } from '../../../orchestration/session-links/session-link-stop'
 import type { RpcContext } from '../../core'
 import type { SessionLink } from '../../../../../shared/session-link'
@@ -41,20 +41,20 @@ export function sessionLinkActor(context: RpcContext, link: SessionLink): string
   return participant.sessionId
 }
 
-export function sessionLinkControlTurn(
-  store: SessionLinkStore,
+export async function sessionLinkControlTurn(
+  links: SessionLinks,
   link: SessionLink,
   actor: string,
   operationId: string | undefined
-): SessionLinkControlTurn | undefined {
+): Promise<SessionLinkControlTurn | undefined> {
   if (actor === 'owner') {
     return undefined
   }
   if (
     !operationId ||
-    !store
-      .events(link.id)
-      .some((event) => event.recipient === actor && event.operationId === operationId)
+    !(await links.events(link.id)).some(
+      (event) => event.recipient === actor && event.operationId === operationId
+    )
   ) {
     throw new OrchestrationError(
       'control_turn_required',

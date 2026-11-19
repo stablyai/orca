@@ -1,23 +1,47 @@
-import { isOrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address'
+import {
+  isOrcaSessionId,
+  type OrcaSessionId
+} from '../../../../shared/agent-session/identity/orca-session-address'
+import type { SessionLink } from '../../../../shared/session-link'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import { currentRunCoordinatorOrcaSessionId } from '../db/runs/run-coordinator-orca-session'
 import { canonicalOrcaSessionId } from '../addressing/session-lineage/canonical-orca-session-id'
 import { resolveOrchestrationParty } from '../addressing/orchestration-party'
 import { OrchestrationError } from '../orchestration-error'
-import { SessionLinkStore } from './session-link-store'
+import { sessionLinks } from './worker/session-link-worker-client'
 
-export function assertSessionLinkMailBoundary(
+export type SessionLinkMailBoundary = { assert(to: string): void }
+
+/** The sender's link, read once, so a send can check each recipient where it resolves it. */
+export async function sessionLinkMailBoundary(
+  db: OrchestrationDb,
+  sender: string | null | undefined
+): Promise<SessionLinkMailBoundary> {
+  const linked = sender && isOrcaSessionId(sender) ? sender : null
+  const link = linked ? await sessionLinks(db).forSession(canonicalOrcaSessionId(linked)) : null
+  return {
+    assert: (to) => {
+      if (linked && link) {
+        assertOutsideLink(db, link, linked, to)
+      }
+    }
+  }
+}
+
+export async function assertSessionLinkMailBoundary(
   db: OrchestrationDb,
   sender: string | null | undefined,
   to: string
+): Promise<void> {
+  ;(await sessionLinkMailBoundary(db, sender)).assert(to)
+}
+
+function assertOutsideLink(
+  db: OrchestrationDb,
+  link: SessionLink,
+  sender: OrcaSessionId,
+  to: string
 ): void {
-  if (!sender || !isOrcaSessionId(sender)) {
-    return
-  }
-  const link = new SessionLinkStore(db).forSession(canonicalOrcaSessionId(sender))
-  if (!link) {
-    return
-  }
   let recipient: string | null | undefined
   if (to.startsWith('run:')) {
     const run = db.getRun(to.slice(4))

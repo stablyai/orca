@@ -1,4 +1,5 @@
 import { SessionLinkStore } from '../../session-links/session-link-store'
+import { inProcessSessionLinks } from '../../session-links/worker/session-link-worker.test-fixture'
 import { SessionLinkParticipant } from '../../../../../shared/session-link'
 import { queuedCardTexts } from './structured-chat-coordinator-journal.test-fixture'
 import { readTestHostJournal } from '../../../../native-chat/agent-session-journal/journal-observation.test-support'
@@ -471,6 +472,7 @@ it('refuses linked-peer mail before starting a settled worker follow-up', async 
       task: 'Review',
       context: ''
     })
+  inProcessSessionLinks(db)
   const links = new SessionLinkStore(db)
   links.create('worker-link', 'Review', [participant(COORDINATOR), participant(identity.sessionId)])
   links.control('worker-link', 'owner', 'pause-link', 1, 'pause')

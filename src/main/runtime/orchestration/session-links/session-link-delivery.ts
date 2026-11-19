@@ -6,7 +6,8 @@ import { sendAgentTurn } from '../turn-delivery/send-agent-turn'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import { conversationRecordReader } from '../addressing/session-lineage/structured-session-lineage'
 import { structuredSessionMailReach } from '../mailbox/routing/structured-session-mail-address'
-import { SessionLinkStore } from './session-link-store'
+import { sessionLinks } from './worker/session-link-worker-client'
+import type { SessionLinks } from './worker/session-link-worker-protocol'
 
 const flights = new WeakMap<OrchestrationDb, { running: Set<string>; dirty: Set<string> }>()
 
@@ -23,10 +24,10 @@ export function scheduleSessionLinkDelivery(
 
 export async function redriveSessionLinks(db: OrchestrationDb, sessionId?: string): Promise<void> {
   const jobs: Promise<void>[] = []
-  const store = new SessionLinkStore(db)
+  const links = sessionLinks(db)
   const flight = flights.get(db) ?? { running: new Set<string>(), dirty: new Set<string>() }
   flights.set(db, flight)
-  for (const link of store.pending(sessionId)) {
+  for (const link of await links.pending(sessionId)) {
     for (const participant of link.participants) {
       if (sessionId && sessionId !== participant.sessionId) {
         continue
@@ -36,7 +37,7 @@ export async function redriveSessionLinks(db: OrchestrationDb, sessionId?: strin
         continue
       }
       flight.running.add(participant.sessionId)
-      const job = deliverNext(store, link.id, participant.sessionId)
+      const job = deliverNext(db, links, link.id, participant.sessionId)
         .catch((error) => {
           console.warn(
             '[session-link] delivery retained',
@@ -56,26 +57,22 @@ export async function redriveSessionLinks(db: OrchestrationDb, sessionId?: strin
 }
 
 async function deliverNext(
-  store: SessionLinkStore,
+  db: OrchestrationDb,
+  links: SessionLinks,
   linkId: string,
   sessionId: string
 ): Promise<void> {
-  const event = sessionLinkNextMessage(store.events(linkId), sessionId)
+  const event = sessionLinkNextMessage(await links.events(linkId), sessionId)
   const host = getStructuredAgentSessionHost()
   if (!host) {
     return
   }
-  const link = store.get(linkId)
+  const link = await links.get(linkId)
   const participant = link.participants.find((p) => p.sessionId === sessionId)
   const record = host.deps.store.getConversation(sessionId)
   const visible = host.deps.store.getVisibleSessionTabIndex()
   const reach =
-    record &&
-    structuredSessionMailReach(
-      conversationRecordReader(host.deps.store),
-      record,
-      store.orchestration
-    )
+    record && structuredSessionMailReach(conversationRecordReader(host.deps.store), record, db)
   if (
     !visible.present ||
     !visible.sessionIds.includes(sessionId) ||
@@ -86,7 +83,7 @@ async function deliverNext(
     record.location.workspaceId !== participant.workspaceId ||
     (record.providerContextBoundary?.operationId ?? '') !== participant.context
   ) {
-    store.pause(linkId, 'participant-changed')
+    await links.pause(linkId, 'participant-changed')
     if (!event || !['dispatching', 'blocked'].includes(event.state) || !record) {
       return
     }
@@ -97,11 +94,11 @@ async function deliverNext(
   const work = await host.currentWorkAtRest(sessionId)
   if (event.state === 'dispatching' || (event.state === 'blocked' && event.retryable === false)) {
     const answer = await host.sendAnswer(sessionId, event.operationId)
-    if (store.event(event.id)?.state === 'cancelled') {
+    if ((await links.event(event.id))?.state === 'cancelled') {
       return
     }
     if (answer.kind === 'withdrawn') {
-      store.write({
+      await links.write({
         ...event,
         state: 'cancelled',
         detail: 'The queued message was removed in the recipient chat.'
@@ -112,23 +109,23 @@ async function deliverNext(
       return
     }
     if (answer.kind === 'accepted') {
-      store.write({ ...event, state: 'accepted', detail: '' })
+      await links.write({ ...event, state: 'accepted', detail: '' })
     } else if (answer.kind === 'rejected' || answer.kind === 'refused') {
-      store.write({
+      await links.write({
         ...event,
         state: 'blocked',
         retryable: true,
         detail: 'Agent refused delivery.'
       })
-      store.pause(linkId, 'delivery-refused')
+      await links.pause(linkId, 'delivery-refused')
     } else {
-      store.write({
+      await links.write({
         ...event,
         state: 'blocked',
         retryable: false,
         detail: 'Delivery outcome is unknown. Check the chat; this operation will not be resent.'
       })
-      store.pause(linkId, 'delivery-unknown')
+      await links.pause(linkId, 'delivery-unknown')
     }
     // A crash can occur after an external effect but before its receipt: never mint another operation here.
     return
@@ -145,7 +142,7 @@ async function deliverNext(
   if (!(await canAdmitBackgroundMessage(host, sessionId))) {
     return
   }
-  const reserved = store.reserve(linkId, event.id)
+  const reserved = await links.reserve(linkId, event.id)
   if (!reserved) {
     return
   }
@@ -162,16 +159,12 @@ async function deliverNext(
         expectedRuntimeFence: record.currentFence,
         delivery: 'now',
         beforeRun: async () => {
-          const current = store.get(linkId)
+          const current = await links.get(linkId)
           const currentVisible = host.deps.store.getVisibleSessionTabIndex()
           const currentRecord = host.deps.store.getConversation(sessionId)
           const currentReach =
             currentRecord &&
-            structuredSessionMailReach(
-              conversationRecordReader(host.deps.store),
-              currentRecord,
-              store.orchestration
-            )
+            structuredSessionMailReach(conversationRecordReader(host.deps.store), currentRecord, db)
           if (
             !currentVisible.present ||
             !currentVisible.sessionIds.includes(sessionId) ||
@@ -191,37 +184,37 @@ async function deliverNext(
       }
     })
     if (outcome.kind === 'refused') {
-      store.write({
+      await links.write({
         ...reserved,
         state: 'blocked',
         retryable: true,
         detail: outcome.refusal.message
       })
-      store.pause(linkId, 'delivery-refused')
+      await links.pause(linkId, 'delivery-refused')
     } else if (outcome.kind === 'queued') {
       // The host owns this ID; the journal edge reconciles its eventual outcome.
-      store.write({ ...reserved, detail: 'Accepted by the session queue.' })
+      await links.write({ ...reserved, detail: 'Accepted by the session queue.' })
     } else if (outcome.submission?.dispatchState === 'accepted') {
-      store.write({ ...reserved, state: 'accepted', detail: '' })
+      await links.write({ ...reserved, state: 'accepted', detail: '' })
     } else if (outcome.submission?.dispatchState === 'rejected') {
-      store.write({
+      await links.write({
         ...reserved,
         state: 'blocked',
         retryable: true,
         detail: outcome.submission.reason ?? 'Agent refused delivery.'
       })
-      store.pause(linkId, 'delivery-refused')
+      await links.pause(linkId, 'delivery-refused')
     }
   } catch (error) {
     if (!held) {
       throw error
     }
-    store.write({
+    await links.write({
       ...reserved,
       state: 'blocked',
       retryable: true,
       detail: 'Delivery held before dispatch.'
     })
-    store.pause(linkId, 'delivery-held')
+    await links.pause(linkId, 'delivery-held')
   }
 }

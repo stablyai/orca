@@ -33,7 +33,10 @@ export type MessageInsert = {
   senderDispatchId?: string
 }
 
-export function insertMessage(this: OrchestrationDb, msg: MessageInsert): MessageRow {
+/** The runtime's database, or another connection to its file (the session link worker's). */
+type MessageInsertTarget = Pick<OrchestrationDb, 'db'> & { requireRun(runId: string): void }
+
+export function insertMessage(this: MessageInsertTarget, msg: MessageInsert): MessageRow {
   // Unbound senders get a lazily created unbound Run; the legacy Run denotes pre-Runs data to skew probes.
   const runId = msg.runId ?? UNBOUND_RUN_ID
   if (msg.runId == null) {
@@ -112,7 +115,7 @@ export function commitWorkerDoneMessageMutation<T>(this: OrchestrationDb, mutati
 }
 
 export type MessageInsertMethods = {
-  insertMessage: typeof insertMessage
+  insertMessage: (this: OrchestrationDb, msg: MessageInsert) => MessageRow
   insertMessages: typeof insertMessages
   commitWorkerDoneMessageMutation: typeof commitWorkerDoneMessageMutation
 }

@@ -41,6 +41,9 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
     'src/main/agent-hooks/identity/agent-identity-worker-entry.ts'
   ),
   'bots-db-worker-entry': resolve('src/main/bots/db-worker/bots-db-worker-entry.ts'),
+  'session-link-worker-entry': resolve(
+    'src/main/runtime/orchestration/session-links/worker/session-link-worker-entry.ts'
+  ),
   'session-scanner-service-entry': resolve(
     'src/main/ai-vault/scan-service/session-scanner-service-entry.ts'
   ),

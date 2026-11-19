@@ -70,7 +70,11 @@ export async function startWorkerFollowUp(args: {
 }): Promise<WorkerFollowUpOutcome> {
   const { ctx, db } = args
   const { latest, resource } = args.plan
-  assertSessionLinkMailBoundary(db, ctx.orchestrationCaller?.orcaSessionId, `dispatch:${latest.id}`)
+  await assertSessionLinkMailBoundary(
+    db,
+    ctx.orchestrationCaller?.orcaSessionId,
+    `dispatch:${latest.id}`
+  )
   const { subject, body } = args.message
   let delivery: WorkerFollowUpDelivery = 'follow_up'
   let reopening = false

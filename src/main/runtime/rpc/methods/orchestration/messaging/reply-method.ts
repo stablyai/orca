@@ -52,7 +52,11 @@ export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
   ) => {
     const db = runtime.getOrchestrationDb()
     const { original } = access
-    assertSessionLinkMailBoundary(db, orchestrationCaller?.orcaSessionId, original.from_handle)
+    await assertSessionLinkMailBoundary(
+      db,
+      orchestrationCaller?.orcaSessionId,
+      original.from_handle
+    )
     if (access.kind === 'helper') {
       const { question, answerer } = access
       const answered = db.answerQuestion({

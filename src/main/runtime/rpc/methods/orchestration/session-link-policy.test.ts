@@ -3,6 +3,7 @@ import { eraseRpcMethods, type RpcContext } from '../../core'
 import { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
 import { OrcaRuntimeService } from '../../../orca-runtime'
 import { SessionLinkStore } from '../../../orchestration/session-links/session-link-store'
+import { inProcessSessionLinks } from '../../../orchestration/session-links/worker/session-link-worker.test-fixture'
 import { sessionLinkTestParticipants as participants } from '../../../orchestration/session-links/session-link-test-fixture'
 import { SESSION_LINK_METHODS } from './session-link-methods'
 import { testOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
@@ -35,6 +36,7 @@ describe('owner-controlled collaboration policy', () => {
     db = new OrchestrationDb(':memory:')
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
+    inProcessSessionLinks(db)
     store = new SessionLinkStore(db)
     store.create('link', 'Synthetic local review', participants)
     owner = { runtime, caller: { kind: 'desktop' } }

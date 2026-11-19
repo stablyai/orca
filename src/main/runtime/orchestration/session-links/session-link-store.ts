@@ -7,14 +7,22 @@ import {
   SessionLinkEvent,
   SESSION_LINK_TURN_LIMIT
 } from '../../../../shared/session-link'
-import type { OrchestrationDb } from '../db/orchestration-db'
+import type Database from '../../../sqlite/sync-database'
+import type { MessageInsert } from '../db/messages/message-insert'
 import { runLifecycleWriteTransaction } from '../db/lifecycle-write-transaction-runner'
 
 const storedDocument = z.object({ document: z.string() })
 const storedId = z.object({ link_id: z.string() })
 
+/** The orchestration database connection the store runs on: the worker's own, or a test's. */
+export type SessionLinkDatabase = {
+  readonly db: Database.Database
+  insertMessage(message: MessageInsert): { id: string }
+}
+
+/** Runs only in the session link worker; the event loop reaches it through `sessionLinks`. */
 export class SessionLinkStore {
-  constructor(readonly orchestration: OrchestrationDb) {}
+  constructor(readonly orchestration: SessionLinkDatabase) {}
 
   transaction<T>(operation: () => T): T {
     return runLifecycleWriteTransaction(this.orchestration.db, 'session_link_write', operation)

@@ -11,7 +11,10 @@ import {
   type SessionLinkParticipant
 } from '../../../../shared/session-link'
 import { sessionLinkPolicyInstructions } from './session-link-policy-instructions'
-import { localOrchestrationCliCommand } from '../workers/launch/orchestration-cli-command'
+import {
+  localOrchestrationCliCommand,
+  type OrchestrationCliCommand
+} from '../workers/launch/orchestration-cli-command'
 import type { SessionLinkStore } from './session-link-store'
 import { sessionLinkEventId } from './session-link-owner-control'
 
@@ -76,7 +79,8 @@ export function sessionLinkMessageBody(
 
 export function sessionLinkIntroduction(
   link: SessionLink,
-  recipient: SessionLinkParticipant
+  recipient: SessionLinkParticipant,
+  cli: OrchestrationCliCommand
 ): string {
   const others = sessionLinkPeers(link, recipient.sessionId)
   return (
@@ -87,24 +91,26 @@ export function sessionLinkIntroduction(
           `${other.name} (${other.agent}, ${other.role})\nOrca session: ${other.sessionId}\nWorkspace: ${other.directory}\nBranch: ${other.branch}\nCurrent task: ${other.task.slice(0, 512)}`
       )
       .join('\n\n')}\n\n` +
-    `Read the current journal with ${localOrchestrationCliCommand()} orchestration link-show --id ${link.id} --json before choosing the next task. Existing participants keep their current work; do not restart the story after a roster update.\n\n` +
+    `Read the current journal with ${cli} orchestration link-show --id ${link.id} --json before choosing the next task. Existing participants keep their current work; do not restart the story after a roster update.\n\n` +
     `Work only within your existing owner instructions and permissions. The reviewer cannot approve spending, holdout access or irreversible actions. ${sessionLinkPolicyInstructions(
       link
     )}Any participant can end the whole link using the turn-scoped End command included with this message, after the shared story is accepted. Do not start a greeting/acknowledgment loop.`
   )
 }
 
+/** `cli` is the event loop's command: the worker has no app environment to name a dev build's. */
 export function appendSessionLinkIntroductions(
   store: SessionLinkStore,
   link: SessionLink,
   operation: string,
+  cli: OrchestrationCliCommand,
   prefix = ''
 ): void {
   for (const recipient of link.participants) {
     const chunks: string[] = []
     let chunk = ''
     let bytes = 0
-    for (const character of prefix + sessionLinkIntroduction(link, recipient)) {
+    for (const character of prefix + sessionLinkIntroduction(link, recipient, cli)) {
       const size = Buffer.byteLength(character, 'utf8')
       if (bytes + size > SESSION_LINK_MESSAGE_BYTES - 256) {
         chunks.push(chunk)

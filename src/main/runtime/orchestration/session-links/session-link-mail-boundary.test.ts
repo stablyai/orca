@@ -5,6 +5,7 @@ import { testOrcaSessionId } from '../../../../shared/agent-session/identity/orc
 import { resolveOrchestrationParty } from '../addressing/orchestration-party'
 import { SessionLinkStore } from './session-link-store'
 import { assertSessionLinkMailBoundary } from './session-link-mail-boundary'
+import { inProcessSessionLinks } from './worker/session-link-worker.test-fixture'
 
 vi.mock('../addressing/orchestration-party', () => ({ resolveOrchestrationParty: vi.fn() }))
 const sender = testOrcaSessionId('codex-work')
@@ -14,6 +15,7 @@ describe('linked peer mail boundary', () => {
   let db: OrchestrationDb
   beforeEach(() => {
     db = new OrchestrationDb(':memory:')
+    inProcessSessionLinks(db)
     const participant = (sessionId: string) =>
       SessionLinkParticipant.parse({
         sessionId,
@@ -37,21 +39,25 @@ describe('linked peer mail boundary', () => {
     }))
   })
   afterEach(() => db.close())
-  it('rejects direct peer mail on active and paused links, leaving unrelated mail alone', () => {
+  it('rejects direct peer mail on active and paused links, leaving unrelated mail alone', async () => {
     for (const address of ['term_review', `orca_session_id:${recipient}`]) {
-      expect(() => assertSessionLinkMailBoundary(db, sender, address)).toThrow('link-send')
+      await expect(assertSessionLinkMailBoundary(db, sender, address)).rejects.toThrow('link-send')
     }
     new SessionLinkStore(db).control('pair', 'owner', 'pause', 1, 'pause')
-    expect(() => assertSessionLinkMailBoundary(db, sender, 'term_review')).toThrow('link-send')
-    expect(() => assertSessionLinkMailBoundary(db, sender, 'term_other')).not.toThrow()
+    await expect(assertSessionLinkMailBoundary(db, sender, 'term_review')).rejects.toThrow(
+      'link-send'
+    )
+    await expect(assertSessionLinkMailBoundary(db, sender, 'term_other')).resolves.toBeUndefined()
   })
-  it('resolves Run and Dispatch aliases, including older handle-only bindings, before allowing mail', () => {
+  it('resolves Run and Dispatch aliases, including older handle-only bindings, before allowing mail', async () => {
     const run = db.createRun({
       objective: 'Review',
       coordinatorHandle: 'term_review',
       coordinatorPaneKey: null
     })
-    expect(() => assertSessionLinkMailBoundary(db, sender, `run:${run.id}`)).toThrow('link-send')
+    await expect(assertSessionLinkMailBoundary(db, sender, `run:${run.id}`)).rejects.toThrow(
+      'link-send'
+    )
     const task = db.createTask({ runId: run.id, spec: 'Review checkpoint' })
     const dispatch = db.createDispatchContext({
       taskId: task.id,
@@ -59,16 +65,16 @@ describe('linked peer mail boundary', () => {
       creator: { kind: 'system' },
       maxDepth: 5
     })
-    expect(() => assertSessionLinkMailBoundary(db, sender, `dispatch:${dispatch.id}`)).toThrow(
-      'link-send'
-    )
+    await expect(
+      assertSessionLinkMailBoundary(db, sender, `dispatch:${dispatch.id}`)
+    ).rejects.toThrow('link-send')
     const chatRun = db.createRun({
       objective: 'Chat review',
       coordinatorHandle: null,
       coordinatorPaneKey: null,
       coordinatorOrcaSessionId: recipient
     })
-    expect(() => assertSessionLinkMailBoundary(db, sender, `run:${chatRun.id}`)).toThrow(
+    await expect(assertSessionLinkMailBoundary(db, sender, `run:${chatRun.id}`)).rejects.toThrow(
       'link-send'
     )
   })

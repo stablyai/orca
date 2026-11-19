@@ -9,6 +9,8 @@ import { sessionLinkPeers } from '../../../../shared/session-link'
 import { sessionLinkEventId } from './session-link-owner-control'
 import { appendSessionLinkIntroductions } from './session-link-message'
 import type { SessionLinkStore } from './session-link-store'
+import type { OrchestrationCliCommand } from '../workers/launch/orchestration-cli-command'
+import type { SessionLinks } from './worker/session-link-worker-protocol'
 
 export function sessionLinkNeedsGroupSupport(link: Pick<SessionLink, 'participants'>): boolean {
   return (
@@ -26,16 +28,16 @@ export function requireSessionLinkGroupSupport(
   }
 }
 
-export function sessionLinkRecipients(
-  store: SessionLinkStore,
+export async function sessionLinkRecipients(
+  links: SessionLinks,
   link: SessionLink,
   actor: string,
   params: z.infer<typeof LinkSendParams>
-): SessionLinkParticipant[] {
-  const previous = store
-    .events(link.id)
-    .filter((e) => e.actor === actor && e.requestId === params.operationId)
-  const reply = params.replyTo ? store.event(params.replyTo) : null
+): Promise<SessionLinkParticipant[]> {
+  const previous = (await links.events(link.id)).filter(
+    (e) => e.actor === actor && e.requestId === params.operationId
+  )
+  const reply = params.replyTo ? await links.event(params.replyTo) : null
   const peers = actor === 'owner' ? link.participants : sessionLinkPeers(link, actor)
   if ((actor === 'owner' || params.kind === 'owner-request') && params.to) {
     throw new Error('Owner messages do not take a peer recipient.')
@@ -76,7 +78,8 @@ export function sessionLinkRecipients(
 export function addSessionLinkParticipants(
   store: SessionLinkStore,
   params: z.infer<typeof LinkAddParticipantsParams>,
-  candidates: SessionLinkParticipant[]
+  candidates: SessionLinkParticipant[],
+  cli: OrchestrationCliCommand
 ): SessionLink {
   return store.transaction(() => {
     const id = sessionLinkEventId(params.id, 'owner', params.operationId)
@@ -137,6 +140,7 @@ export function addSessionLinkParticipants(
       store,
       next,
       id,
+      cli,
       'The owner added participants. The existing story and journal are unchanged.\n\n'
     )
     return next

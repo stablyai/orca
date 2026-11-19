@@ -173,7 +173,7 @@ export const ORCHESTRATION_SEND_METHODS = [
           sendWarnings.push(recipient.warning)
         }
       }
-      assertSessionLinkMailBoundary(db, orchestrationCaller?.orcaSessionId, to)
+      await assertSessionLinkMailBoundary(db, orchestrationCaller?.orcaSessionId, to)
       const withSendWarnings = <T extends object>(
         receipt: T
       ): T & { warnings?: SendRecipientWarning[] } =>

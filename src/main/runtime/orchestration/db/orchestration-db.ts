@@ -50,7 +50,11 @@ class OrchestrationDbCore {
   /** The user's auto-close switch; this runtime's choice also governs the remote workers it coordinates. */
   workerAutoReleaseEnabled: (() => boolean) | undefined
 
+  /** The file this database opened; the session link worker joins it on its own connection. */
+  readonly path: (string & {}) | ':memory:'
+
   constructor(dbPath: (string & {}) | ':memory:') {
+    this.path = dbPath
     this.db = new Database(dbPath)
     // Before WAL and any table, so a new file returns free pages in bounded steps; an existing one needs a VACUUM.
     this.db.pragma('auto_vacuum = INCREMENTAL')
