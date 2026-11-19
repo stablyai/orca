@@ -23,6 +23,8 @@ import {
 // Ungated backstops bound missed same-granule index writes on coarse-timestamp filesystems.
 // Plain polling also re-reads known entries only on these ticks: a 2 s walk of a large fleet kept main busy at idle.
 const INDEX_BACKSTOP_TICKS = 15
+// A valid locked or no-checkout worktree never settles; after one quiet backstop interval it waits for the backstop too.
+const UNSETTLED_ENTRY_QUIET_TICKS = INDEX_BACKSTOP_TICKS
 
 // Match existing probe pools to bound fleet stat fanout without flooding libuv (#17828).
 const GIT_COMMON_SNAPSHOT_CONCURRENCY = 8
@@ -64,7 +66,8 @@ async function snapshotGitCommon(
   statInPlaceLeaves = false,
   onDirGateMiss?: () => void,
   onRootMissing?: () => void,
-  walkKnownEntries = true
+  walkKnownEntries = true,
+  unsettledQuietTicks = new Map<string, number>()
 ): Promise<GitCommonSnapshot> {
   const worktreesDir = join(commonDirPath, 'worktrees')
   const [worktreesDirSignature, primarySignatures, statusRefSignatures] = await Promise.all([
@@ -91,21 +94,30 @@ async function snapshotGitCommon(
   const entries = new Map<string, GitCommonEntrySnapshot>()
   await forEachWithConcurrency(entryPaths, GIT_COMMON_SNAPSHOT_CONCURRENCY, async (entryPath) => {
     const previousEntry = previous?.entries.get(entryPath)
-    if (previousEntry && !walkKnownEntries && isGitCommonEntrySettled(previousEntry)) {
+    const quietTicks = unsettledQuietTicks.get(entryPath) ?? 0
+    if (
+      previousEntry &&
+      !walkKnownEntries &&
+      (isGitCommonEntrySettled(previousEntry) || quietTicks >= UNSETTLED_ENTRY_QUIET_TICKS)
+    ) {
       entries.set(entryPath, previousEntry)
       return
     }
-    entries.set(
+    const entry = await snapshotGitCommonEntry(
       entryPath,
-      await snapshotGitCommonEntry(
-        entryPath,
-        previousEntry,
-        forceFullScan,
-        statInPlaceLeaves,
-        onDirGateMiss
-      )
+      previousEntry,
+      forceFullScan,
+      statInPlaceLeaves,
+      onDirGateMiss
     )
+    unsettledQuietTicks.set(entryPath, entry === previousEntry ? quietTicks + 1 : 0)
+    entries.set(entryPath, entry)
   })
+  for (const entryPath of unsettledQuietTicks.keys()) {
+    if (!entries.has(entryPath)) {
+      unsettledQuietTicks.delete(entryPath)
+    }
+  }
   // Full-scan metrics count ungated metadata sweeps, not the cheap per-tick directory listing.
   return {
     worktreesDirSignature,
@@ -146,6 +158,7 @@ export async function startGitCommonPolling(
   // Filesystems can ignore child renames in directory metadata; detected misses force ungated sweeps.
   let entryDirGateTrusted = true
   let dirGateMissTicks = 0
+  const unsettledQuietTicks = new Map<string, number>()
   let snapshot = await snapshotGitCommon(
     commonDirPath,
     undefined,
@@ -197,7 +210,8 @@ export async function startGitCommonPolling(
         snapshot.worktreesDirSignature === 'missing'
           ? () => options.onRootMissing?.(false)
           : undefined,
-        isReconciliation || shouldForceFullScan
+        isReconciliation || shouldForceFullScan,
+        unsettledQuietTicks
       )
       if (disposed) {
         return
