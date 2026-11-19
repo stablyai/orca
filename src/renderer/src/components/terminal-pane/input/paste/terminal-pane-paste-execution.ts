@@ -1,3 +1,4 @@
+import { recordRecentTerminalImage } from '../recent-terminal-images'
 import { useAppStore } from '../../../../store/index'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
@@ -158,6 +159,7 @@ export function createTerminalPanePasteExecution(
       copiedFiles: createPaneClipboardCopiedFiles(pane),
       connectionId,
       runtimeEnvironmentId,
+      onLocalImagePasted: (path) => recordRecentTerminalImage(pane.terminal, path, true),
       protectedMultilineTextPasteOptions: resolvePaneProtectedMultilinePasteOptions(pane),
       pasteText: (text, options) =>
         executePanePasteText(pane, source, activeElementAtDispatch, text, options),

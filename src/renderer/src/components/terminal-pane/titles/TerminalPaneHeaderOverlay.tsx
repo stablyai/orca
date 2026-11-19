@@ -1,3 +1,4 @@
+import { TerminalRecentImages } from './TerminalRecentImages'
 import type { PaneTitleOverlayRect } from './pane-title-overlay-rects'
 import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import type { CSSProperties, RefObject } from 'react'
@@ -208,7 +209,15 @@ export default function TerminalPaneHeaderOverlay({
                     {title}
                   </button>
                 ) : null}
-                <div className="pane-title-actions ml-auto flex shrink-0 items-center gap-0">
+                <div className="pane-title-actions ml-auto flex min-w-0 items-center gap-0">
+                  {showAlwaysOnHeaders && !(isActivePane && canShowTerminal) && (
+                    <TerminalRecentImages
+                      pane={pane}
+                      worktreeId={worktreeId}
+                      worktreePath={cwd}
+                      sourceTabId={tabId}
+                    />
+                  )}
                   {canContinueAgentSessionInNewSession && isActivePane ? (
                     <Tooltip>
                       <TooltipTrigger asChild>
