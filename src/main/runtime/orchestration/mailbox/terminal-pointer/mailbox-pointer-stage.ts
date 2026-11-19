@@ -1,3 +1,4 @@
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { formatMessagePointer } from '../formatting/message-formatting'
 import type {
   OrchestrationMailboxPointerMessage,
@@ -22,15 +23,26 @@ import {
   type WriteSettlement
 } from '../../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
+const DEFAULT_POINTER_ENTER_DELAY_MS = 500
+
+export function pointerEnterDelayMs(): number {
+  const configured = Number(process.env.ORCA_E2E_ORCHESTRATION_POINTER_ENTER_DELAY_MS)
+  return Number.isFinite(configured) && configured >= 1 && configured <= 60_000
+    ? configured
+    : DEFAULT_POINTER_ENTER_DELAY_MS
+}
+
 type StagePointerArgs<TWaiter extends OrchestrationMessageWaiter> = {
   deps: PointerDeliveryDependencies<TWaiter>
   state: OrchestrationMailboxPointerState
   terminal: OrchestrationMailboxTerminal
+  agent?: TuiAgent
   mailboxHandle: string
   messages: readonly OrchestrationMailboxPointerMessage[]
   heldDeliveryId?: string
   newestSequence: number
   enterDelayMs: number
+  onUncertainDelivery?: (ptyId: string) => void
   settle: (ptyId: string, flight: OrchestrationMailboxDeliveryFlight) => void
   redrive: (mailboxHandle: string, force?: boolean) => void
 }
@@ -39,7 +51,7 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
   args: StagePointerArgs<TWaiter>
 ): void {
   const { ptyId } = args.terminal
-  const expectedTarget = args.deps.resolveSubmitTarget(ptyId)
+  const expectedTarget = args.deps.resolveSubmitTarget(ptyId, undefined, undefined, args.agent)
   if (!expectedTarget) {
     return
   }
@@ -59,8 +71,17 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
   ) {
     return
   }
+  const pointerText = formatMessagePointer(
+    args.messages.length,
+    args.mailboxHandle,
+    args.deps.getCliCommand(expectedTarget.terminal.handle),
+    args.heldDeliveryId,
+    expectedTarget.terminal.handle
+  )
   const flight = args.state.beginFlight(ptyId)
   flight.processIncarnation = expectedTarget.processIncarnation
+  flight.agent = expectedTarget.agent
+  flight.stagedPointerText = pointerText.trim()
   flight.stagedMessageIds = args.messages.map((message) => message.id)
   try {
     if (
@@ -85,7 +106,7 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
       preserveAmbiguousWrite()
       return
     }
-    finishPointerWriteAndStageEnter(args, ptyId, flight, expectedTarget, settlement)
+    finishPointerWriteAndStageEnter(args, ptyId, flight, expectedTarget, settlement, pointerText)
   }
   const preserveAmbiguousWrite = (): void => {
     if (!args.state.isCurrentFlight(ptyId, flight)) {
@@ -93,18 +114,10 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
     }
     args.state.deactivateWatermark(args.mailboxHandle, args.newestSequence, ptyId)
     args.settle(ptyId, flight)
+    args.onUncertainDelivery?.(ptyId)
   }
   try {
-    const writeResult = args.deps.writePty(
-      ptyId,
-      formatMessagePointer(
-        args.messages.length,
-        args.mailboxHandle,
-        args.deps.getCliCommand(expectedTarget.terminal.handle),
-        args.heldDeliveryId,
-        expectedTarget.terminal.handle
-      )
-    )
+    const writeResult = args.deps.writePty(ptyId, pointerText)
     if (isSettledWrite(writeResult)) {
       settlePointerWrite(writeResult)
       return
@@ -120,7 +133,8 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
   ptyId: string,
   flight: OrchestrationMailboxDeliveryFlight,
   expectedTarget: OrchestrationMailboxPointerSubmitTarget,
-  settlement: Extract<WriteSettlement, { outcome: 'accepted' | 'refused' }>
+  settlement: Extract<WriteSettlement, { outcome: 'accepted' | 'refused' }>,
+  pointerText: string
 ): void {
   let delayedSettle = false
   try {
@@ -144,10 +158,15 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
           getDb: args.deps.getDb,
           resolveSubmitTarget: args.deps.resolveSubmitTarget,
           isLeafPtyProvenAbsent: args.deps.isLeafPtyProvenAbsent,
+          readForeground: args.deps.readForeground,
+          readComposerText: args.deps.readComposerText,
+          isAgentSettledForDelivery: args.deps.isAgentSettledForDelivery,
           isPtyAwaitingUserInput: args.deps.isPtyAwaitingUserInput,
           writePty: args.deps.writePty,
           settle: args.settle,
-          redrive: args.redrive
+          redrive: args.redrive,
+          onDeliveryDecision: args.deps.onDeliveryDecision,
+          onUncertainDelivery: args.onUncertainDelivery
         },
         {
           mailboxHandle: args.mailboxHandle,
@@ -155,7 +174,8 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
           newestSequence: args.newestSequence,
           ptyId,
           flight,
-          expectedTarget
+          expectedTarget,
+          stagedText: pointerText.trim()
         }
       )
     flight.submitEnter = submitEnter
@@ -163,6 +183,7 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
       ? args.state.takeDeferredEnter(ptyId)
       : null
     if (!deferredEnter && !flight.deferredUntilIdle) {
+      // TODO(STA-16235): one PTY-host submission for the text and its Enter, holding other input.
       flight.enterTimer = setTimeout(() => {
         flight.enterTimer = null
         flight.submitEnter = null

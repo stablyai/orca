@@ -56,6 +56,7 @@ describe('orchestration mailbox pointer submit', () => {
         state,
         getDb: () => db,
         resolveSubmitTarget: () => expectedTarget,
+        readForeground: async () => 'unknown',
         isLeafPtyProvenAbsent: async () => false,
         isPtyAwaitingUserInput: () => false,
         writePty,
@@ -163,6 +164,7 @@ describe('orchestration mailbox pointer submit', () => {
           getDb: () => db,
           resolveSubmitTarget: () =>
             options.replaced ? { terminal, processIncarnation: 'inc-replaced' } : expectedTarget,
+          readForeground: async () => 'unknown',
           isLeafPtyProvenAbsent: async () => options.absent ?? false,
           isPtyAwaitingUserInput: () => options.dialogOpen ?? false,
           writePty,

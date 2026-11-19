@@ -1,3 +1,12 @@
+import type {
+  PointerDeliveryDependencies,
+  PointerDeliveryOptions
+} from './mailbox-pointer-delivery-contract'
+import type {
+  OrchestrationMailboxDeliveryFlight,
+  OrchestrationMailboxPointerState
+} from './mailbox-pointer-state'
+import type { OrchestrationMailboxTerminal } from '../routing/mailbox-owner'
 import '../../db/orchestration-db'
 import '../../db/contract-constants'
 import { ORCHESTRATION_DELIVERY_BATCH_LIMIT } from '../../db/messages/mailbox-routing-page'
@@ -89,4 +98,73 @@ export function shouldReleaseOrchestrationPointer(
       messages.map((message) => message.id)
     ) ?? true
   )
+}
+
+export function hasPendingMailboxPointerFlight<T extends OrchestrationMessageWaiter>(
+  deps: PointerDeliveryDependencies<T>,
+  terminal: OrchestrationMailboxTerminal,
+  flight: OrchestrationMailboxDeliveryFlight | undefined
+): boolean {
+  const db = deps.getDb()
+  if (
+    !db ||
+    !flight ||
+    flight.processIncarnation !== deps.resolveSubmitTarget(terminal.ptyId)?.processIncarnation
+  ) {
+    return false
+  }
+  return flight.stagedMessageIds.some((id) => {
+    const row = db.getMessageById(id)
+    return (
+      !!row &&
+      row.read === 0 &&
+      (row.pointer_enter_pending ?? 0) > 0 &&
+      row.delivery_contract === 'current_delivery' &&
+      row.pointer_pty_id === terminal.ptyId &&
+      row.pointer_process_incarnation === flight.processIncarnation &&
+      !hasUnfilteredOrchestrationWaiter(deps.getMessageWaiters(row.to_handle)) &&
+      deps.mailboxOwner.resolve(terminal, row.to_handle, { routeDirectMail: false }) ===
+        row.to_handle
+    )
+  })
+}
+
+export function resumeDeferredMailboxPointer<T extends OrchestrationMessageWaiter>(
+  deps: PointerDeliveryDependencies<T>,
+  state: OrchestrationMailboxPointerState,
+  terminal: OrchestrationMailboxTerminal,
+  coldParked: boolean,
+  options?: PointerDeliveryOptions
+): boolean {
+  const ptyId = terminal.ptyId
+  if (!state.hasFlight(ptyId)) {
+    return false
+  }
+  const db = options && state.hasRecoveryFlight(ptyId) ? deps.getDb() : null
+  if (db && options) {
+    const newer = selectOrchestrationPointerBatch({
+      db,
+      mailboxHandle: options.mailboxHandle,
+      waiters: deps.getMessageWaiters(options.mailboxHandle),
+      reservedTypes: options.reservedTypes,
+      excludeRunOwnedDirect: options.mailboxHandle === terminal.handle
+    }).messages.at(-1)
+    if (newer) {
+      state.noteMailSequence(ptyId, newer.sequence)
+    }
+  }
+  if (
+    !state.hasActiveFlight(ptyId) &&
+    (state.hasRecoveryFlight(ptyId) ||
+      ((!coldParked || terminal.lastAgentStatus === 'idle') &&
+        deps.isAgentSettledForDelivery(
+          ptyId,
+          undefined,
+          undefined,
+          state.flightForPty(ptyId)?.agent
+        )))
+  ) {
+    state.takeDeferredEnter(ptyId)?.()
+  }
+  return true
 }

@@ -3,10 +3,8 @@ import type { RemoteForegroundEvidence } from '../../../../shared/terminal/pty/f
 import type { ProcessTableRow } from '../../../../shared/process-observation/tables/process-table-snapshot'
 import type * as TerminalForegroundGroup from '../../../pty/process-retirement/terminal-process-rows'
 
-import {
-  readAdoptedRootAgentForeground,
-  readLaunchedAgentForeground
-} from './launched-agent-foreground'
+import { readLaunchedAgentForeground, readMailboxForeground } from './launched-agent-foreground'
+import { readAdoptedRootAgentForeground } from './exact-agent-foreground'
 
 const paneTerminal = vi.hoisted(() => {
   const state: { rows: ProcessTableRow[] | null } = { rows: null }
@@ -103,6 +101,37 @@ describe('the relay’s foreground group as proof of a launched agent', () => {
 // Guarded pastes must use terminal-local probes instead of slow whole-machine scans.
 
 describe('owner-held recipient observations', () => {
+  it('keeps a positively observed editor distinct from an unrelated executable name read', async () => {
+    expect(
+      await readMailboxForeground(
+        {
+          supportsForegroundObservation: () => true,
+          getForegroundProcess: async () => 'vim',
+          inspectProcess: async () => ({
+            foregroundProcess: 'vim',
+            hasChildProcesses: true,
+            foregroundObservation: {
+              ptyId: 'pty-1',
+              ptyIncarnationId: 'inc',
+              authorityGeneration: 'owner',
+              observationEpoch: 1,
+              capturedAgeMs: 0,
+              verdict: 'observed',
+              source: 'pty-master',
+              foregroundKind: 'non-shell',
+              processName: 'vim'
+            }
+          }),
+          confirmForegroundProcess: async () => 'claude'
+        },
+        { remote: false, windows: false },
+        'pty-1',
+        undefined,
+        'inc'
+      )
+    ).toEqual({ foreground: 'unknown' })
+  })
+
   it('keeps an unresolved owner unknown and never fills a fresh unavailable result with cached identity', async () => {
     const cachedName = vi.fn(async () => 'claude')
     const inventory = vi.fn()

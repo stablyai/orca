@@ -1,3 +1,4 @@
+import { isEquivalentPaneKey } from '../../db/pane-key-match'
 import type { AgentStatus } from '../../../../../shared/agent-status/title/agent-title-core'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 
@@ -62,9 +63,18 @@ export class OrchestrationMailboxOwner {
       return null
     }
     const { handle: terminalHandle, paneKeys } = terminal
-    const runs = this.runsBoundToTerminal(db, terminal)
+    if (requestedMailbox?.startsWith('run:')) {
+      const run = db.getRun(requestedMailbox.slice('run:'.length))
+      const paneKey = run?.coordinator_pane_key
+      return run &&
+        !run.legacy &&
+        paneKey &&
+        paneKeys.some((key) => isEquivalentPaneKey(key, paneKey))
+        ? this.resolveRunMailbox(db, terminal, run.id, requestedMailbox, options)
+        : null
+    }
     // A coordinator of several Runs owns each one's mailbox; unnamed mail goes to its current Run.
-    const run = runs.find((bound) => requestedMailbox === `run:${bound.id}`) ?? runs[0]
+    const run = firstDefined(paneKeys, (paneKey) => db.getCurrentRunForPane?.(paneKey))
     if (run) {
       return this.resolveRunMailbox(db, terminal, run.id, requestedMailbox, options)
     }
@@ -105,24 +115,22 @@ export class OrchestrationMailboxOwner {
   }
 
   /** The terminal's mailbox, then every other Run it coordinates that has mail, so an input edge wakes each. */
-  resolveAll(terminal: OrchestrationMailboxTerminal): string[] {
-    const mailboxHandle = this.resolve(terminal)
+  resolveAll(
+    terminal: OrchestrationMailboxTerminal,
+    options: { routeDirectMail?: boolean } = {}
+  ): string[] {
+    const mailboxHandle = this.resolve(terminal, undefined, options)
     if (!mailboxHandle) {
       return []
     }
     const db = this.deps.getDb()
-    const others = db
-      ? this.runsBoundToTerminal(db, terminal)
-          .map((run) => `run:${run.id}`)
-          .filter((handle) => handle !== mailboxHandle)
+    // Why only Runs with work: a coordinator's finished Runs pile up, and each held-mail probe asks this.
+    const withMail = db
+      ? terminal.paneKeys.flatMap(
+          (paneKey) => db.runMailboxesWithPointerWorkForPane?.(paneKey) ?? []
+        )
       : []
-    // One query instead of probing every finished Run; a Run without mail has nothing to deliver.
-    const withMail = db && others.length > 0 ? db.getMailboxesWithPointerWork(others) : new Set()
-    return [mailboxHandle, ...new Set(others.filter((handle) => withMail.has(handle)))]
-  }
-
-  private runsBoundToTerminal(db: OrchestrationDb, terminal: OrchestrationMailboxTerminal) {
-    return terminal.paneKeys.flatMap((paneKey) => db.runsBoundToPane?.(paneKey) ?? [])
+    return [mailboxHandle, ...new Set(withMail.filter((handle) => handle !== mailboxHandle))]
   }
 
   routeForeignDirectMessages(terminal: OrchestrationMailboxTerminal): RoutedOrchestrationMailbox[] {

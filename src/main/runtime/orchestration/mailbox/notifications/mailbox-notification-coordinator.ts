@@ -1,4 +1,5 @@
 import type { OrchestrationDb } from '../../db/orchestration-db'
+import { MAILBOX_POINTER_RESERVED } from '../../db/messages/mailbox-pointer-enter-state'
 import type {
   OrchestrationMailboxOwner,
   OrchestrationMailboxTerminal,
@@ -47,27 +48,51 @@ export class OrchestrationMailboxNotificationCoordinator<
     }
   }
 
-  /** Whether delivery has work for this terminal: a pointer reservation to recover, or unread, undelivered mail no waiter or held batch claims. */
+  /** Retryable flights and eligible new mail own wakes; uncertain unread claims do not. */
   hasDeliverableMail(terminal: OrchestrationMailboxTerminal): boolean {
-    const db = this.deps.getDb()
-    return (
-      !!db &&
-      this.deps.mailboxOwner.resolveAll(terminal).some((mailboxHandle) => {
+    try {
+      const db = this.deps.getDb()
+      if (!db) {
+        return false
+      }
+      if (this.deps.pointerDelivery.hasPendingFlightMail(terminal)) {
+        return true
+      }
+      const owned = this.deps.mailboxOwner.resolveAll(terminal, { routeDirectMail: false })
+      const handles = [...new Set([...owned, terminal.handle])]
+      const owed = handles.some((mailboxHandle) => {
         const waiters = this.deps.getMessageWaiters(mailboxHandle)
         return (
           // Mirrors deliver(): an unfiltered waiter preempts recovery too.
           !hasUnfilteredOrchestrationWaiter(waiters) &&
-          (db.getPendingMailboxPointerMessages(mailboxHandle).length > 0 ||
+          (db
+            .getPendingMailboxPointerMessages(mailboxHandle)
+            .some((row) => row.pointer_enter_pending === MAILBOX_POINTER_RESERVED) ||
             selectOrchestrationPointerBatch({
               db,
               mailboxHandle,
               waiters,
               reservedTypes: undefined,
-              excludeRunOwnedDirect: mailboxHandle === terminal.handle
+              excludeRunOwnedDirect: owned[0] === terminal.handle
             }).messages.length > 0)
         )
       })
-    )
+      if (!owed && db.getMailboxesWithPointerWork(handles).size === 0) {
+        this.deps.pointerDelivery.completeRecovery(terminal.ptyId)
+      }
+      return owed
+    } catch {
+      // A closed or unavailable database cannot own a live delivery retry.
+      return false
+    }
+  }
+
+  settleDelivery(terminal: OrchestrationMailboxTerminal | null): boolean {
+    if (!terminal || !this.deps.pointerDelivery.requiresCurrentScreen(terminal.ptyId)) {
+      return false
+    }
+    this.hasDeliverableMail(terminal)
+    return !this.deps.pointerDelivery.requiresCurrentScreen(terminal.ptyId)
   }
 
   notifyMessageArrived(handle: string, messageType?: string): void {

@@ -37,6 +37,7 @@ describe('orchestration typed pointer submission', () => {
       harness.write.mock.calls.filter(([, payload]) => payload === '\r').length
 
     await driveToLiveIdle(harness.runtime)
+    await vi.advanceTimersByTimeAsync(0)
     expect(pointerCount(harness.write)).toBe(1)
     const checked = await checkBoundMailbox(harness.runtime)
     expect(checked).toMatchObject({ runId: run.id, count: 1 })

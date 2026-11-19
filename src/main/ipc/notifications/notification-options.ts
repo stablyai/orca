@@ -20,6 +20,9 @@ export function buildNotificationOptions(
   body: string
   silent?: boolean
 } {
+  if (args.content) {
+    return args.content
+  }
   if (args.source === 'terminal-bell') {
     const attention = translate('notifications.bell.attentionRequested', 'Attention requested')
     return {

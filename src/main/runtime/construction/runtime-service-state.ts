@@ -7,7 +7,7 @@ import { RuntimeOrchestrationSenderNames } from '../orchestration/mailbox/sender
 import { isStructuredWorkerHandle } from '../../../shared/orchestration/workers/structured-worker-handle'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/agent-session/identity/orca-session-address-prefix'
 import { resolveStructuredWorkerAuthority } from '../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
-import { OrcaRuntimeWithAgentOrchestrationDependencies } from '../orchestration/crew/runtime-agent-orchestration-dependencies'
+import { OrcaRuntimeWithPtyForegroundState } from './runtime-pty-foreground-state'
 import { RuntimeTerminalAgentPresence } from '../terminal/query/runtime-terminal-agent-presence'
 import type { RuntimeNotifier } from '../client/events/runtime-notifier-contract'
 import { RuntimeClientEventBus } from '../client/events/runtime-client-event-bus'
@@ -22,10 +22,6 @@ import { BotWorktreeLineageController } from '../workspaces/lineage/runtime-bot-
 import { createRuntimeAgentProjections } from './runtime-agent-projections'
 import { RuntimeTerminalList } from '../terminal/query/runtime-terminal-list'
 import { RuntimeManagedWorktreeQueries } from '../workspaces/catalog/runtime-managed-worktree-queries'
-import { RuntimePtyForegroundAgent } from '../terminal/lifecycle/runtime-pty-foreground-agent'
-import { OpenCodeRunLifetimeStatus } from '../terminal/output/opencode-run-lifetime-status'
-import { readLocalPtyForegroundCommandLine } from '../terminal/lifecycle/local-pty-foreground-command-line'
-import { isAgentStatusHooksEnabledForAgent } from '../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { RuntimeTerminalAgentStatusQuery } from '../terminal/query/runtime-terminal-agent-status-query'
 import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import { OrchestrationMailboxOwner } from '../orchestration/mailbox/routing/mailbox-owner'
@@ -47,7 +43,7 @@ import { TUI_IDLE_QUIESCENCE_MS } from '../terminal/wait/terminal-idle-policy'
 import { readScreenClearingBlockedTail } from '../terminal/wait/blocked-tail-screen-clear'
 import { structuredMailboxCustody } from '../orchestration/mailbox/routing/structured-session-mail-target'
 
-export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithAgentOrchestrationDependencies {
+export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithPtyForegroundState {
   protected readonly stopRequestedPtyIds = new Set<string>()
 
   protected readonly ptyExitListenersByPtyId = new Map<string, Set<() => void>>()
@@ -150,50 +146,6 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     listKnownHostIds: () => this.listKnownExecutionHostIds()
   })
 
-  protected readonly ptyForegroundAgent = new RuntimePtyForegroundAgent({
-    getController: () => this.ptyController,
-    getPty: (ptyId) => this.ptysById.get(ptyId) ?? null,
-    touchSnapshot: (ptyId) => this.touchMobileSessionSnapshotsForPty(ptyId),
-    finishDelayedSnapshot: (ptyId, changed) => {
-      if (this.mobileSessionTabListeners.size > 0) {
-        this.mobileSessionTabsAgentStatusHeartbeat.observeSemanticTitle(ptyId)
-      }
-      if (!changed) {
-        this.touchMobileSessionSnapshotsForPty(ptyId)
-      }
-    }
-  })
-
-  protected readonly openCodeRunLifetime = new OpenCodeRunLifetimeStatus({
-    isStopping: (ptyId) =>
-      this.intentionalPtyStops
-        .claimExit(ptyId, this.ptysById.get(ptyId)?.incarnationId)
-        .includes('reversible'),
-    isObservablePty: (ptyId) => {
-      const pty = this.ptysById.get(ptyId)
-      // SSH/WSL foregrounds belong to the host/guest, not this process.
-      return !!pty && !pty.connectionId && !pty.wslDistro && !this.wslDistroByPtyId.has(ptyId)
-    },
-    isStatusEnabled: (agent) =>
-      isAgentStatusHooksEnabledForAgent(this.store?.getSettings?.(), agent),
-    readForegroundProcessName: async (ptyId) => {
-      const read = await this.ptyForegroundAgent.read(ptyId)
-      return read?.available ? read.process : null
-    },
-    readForegroundCommandLine: (ptyId, foregroundProcess) =>
-      readLocalPtyForegroundCommandLine(ptyId, foregroundProcess),
-    // Renderer command-finished can drop unchanged status rows; publish Done after that fact.
-    publish: (ptyId, payload, yieldsToHookSince) =>
-      this.runAfterPendingTerminalSideEffectFacts(ptyId, () =>
-        this.emitTerminalAgentStatusEvents(
-          ptyId,
-          { payloads: [payload] },
-          { origin: 'process', yieldsToHookSince }
-        )
-      ),
-    now: () => Date.now()
-  })
-
   protected readonly terminalAgentStatus = new RuntimeTerminalAgentStatusQuery({
     getController: () => this.ptyController,
     getLivePty: (handle) => this.getLivePtyForHandle(handle),
@@ -245,12 +197,19 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     deliveryTarget: this.orchestrationMailboxDeliveryTarget,
     getDb: () => this._orchestrationDb,
     getTerminal: (ptyId) => this.getOrchestrationMailboxTerminal(ptyId),
-    isAgentSettledForDelivery: (ptyId) => this.checkDeliverySettledAndArmRecheck(ptyId),
+    readForeground: (ptyId, agent) => this.readMailboxForeground(ptyId, agent),
+    readComposerText: (ptyId, agent) => this.readMailboxComposerText(ptyId, agent),
+    isForegroundCandidate: (terminal) => this.isMailboxForegroundCandidate(terminal),
+    needsForegroundEvaluation: (ptyId) => this.needsMailboxForegroundEvaluation(ptyId),
+    onDeliveryDecision: (ptyId, decision) => this.armDeliveryRecheck(ptyId, decision),
+    isAgentSettledForDelivery: this.isAgentSettledForDelivery.bind(this),
     isPtyAwaitingUserInput: (ptyId) => this.isPtyAwaitingUserInput(ptyId),
     getMessageWaiters: (mailboxHandle) => this.messageWaiters.get(mailboxHandle),
     getCliCommand: (terminalHandle) => this.getTerminalOrchestrationCliCommand(terminalHandle),
-    resolveSubmitTarget: (ptyId) => this.resolveOrchestrationPointerSubmitTarget(ptyId),
+    resolveSubmitTarget: (ptyId, foreground, stagedText, agent) =>
+      this.resolveOrchestrationPointerSubmitTarget(ptyId, foreground, stagedText, agent),
     isLeafPtyProvenAbsent: (ptyId) => this.isLeafPtyProvenAbsent(ptyId),
+    redriveTerminal: (ptyId) => this.deliverPendingMessagesForPty(ptyId),
     redriveMailbox: (mailboxHandle, reservedTypes) =>
       this.deliverPendingMessagesForHandle(mailboxHandle, reservedTypes),
     writePty: (ptyId, data) => this.writeOrchestrationPointerPty(ptyId, data)

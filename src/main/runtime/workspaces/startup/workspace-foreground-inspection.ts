@@ -3,13 +3,16 @@ import { OrcaRuntimeWithListManagedWorktrees } from '../managed-workspace-operat
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
   describeLaunchedAgentHost,
-  readAdoptedRootAgentForeground,
-  readExactAgentForeground,
   readLaunchedAgentForeground,
   type ExactAgentName,
+  readMailboxForeground,
   type LaunchedAgentForeground,
   type LaunchedAgentHost
 } from '../../terminal/wait/launched-agent-foreground'
+import {
+  readAdoptedRootAgentForeground,
+  readExactAgentForeground
+} from '../../terminal/wait/exact-agent-foreground'
 import { reattachedRestTitleAgent } from '../../terminal/wait/reattached-rest-title'
 
 export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWithListManagedWorktrees {
@@ -20,7 +23,7 @@ export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWit
   /** Read at the physical owner; discard a result that outlived this runtime binding. */
   async readLaunchedAgentForeground(
     ptyId: string,
-    agent: TuiAgent,
+    agent?: TuiAgent,
     exact?: ExactAgentName
   ): Promise<LaunchedAgentForeground> {
     const pty = this.ptysById.get(ptyId)
@@ -82,6 +85,24 @@ export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWit
       return Promise.resolve('unknown')
     }
     return readAdoptedRootAgentForeground(this.ptyController, root.pid, ptyId, agent)
+  }
+
+  async inspectMailboxForeground(ptyId: string, agent?: TuiAgent) {
+    const pty = this.ptysById.get(ptyId)
+    const incarnation = pty?.incarnationId
+    const controller = this.ptyController
+    const result = await readMailboxForeground(
+      controller,
+      this.launchedAgentHost(ptyId),
+      ptyId,
+      agent,
+      incarnation ?? undefined
+    )
+    return this.ptyController === controller &&
+      this.ptysById.get(ptyId) === pty &&
+      pty?.incarnationId === incarnation
+      ? result
+      : { foreground: 'unknown' as const }
   }
 
   /** Whether the pane's execution host can find a launched agent in front: a Windows one cannot. */

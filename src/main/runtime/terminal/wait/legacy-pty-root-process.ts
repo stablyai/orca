@@ -1,0 +1,155 @@
+import type { RuntimePtyController } from '../lifecycle/runtime-pty-controller-contract'
+import { readProcessStartTimeMs } from '../../agent-session/ownership/agent-session-process-identity-probe'
+import { isProcessAlive } from '../../../daemon/endpoint/identity/daemon-process-inspection'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
+
+type ListingController = Pick<RuntimePtyController, 'listProcesses'>
+type RememberedRoot = {
+  incarnationId: string | undefined
+  pid: number
+  /** Undefined until first used: a shared listing names roots it does not verify. */
+  startedAtMs?: number | null
+}
+
+const FULL_LISTING_RETRY_MS = 60_000
+const rootByPtyId = new Map<string, RememberedRoot>()
+let sharedListing: Promise<void> | null = null
+// Why: a listing answered before a terminal retired must not restore its root; each lookup fences its own span.
+const lookupFences = new Set<Set<string>>()
+let fullListingUnavailableUntil = 0
+
+/** A local terminal's root process, or 'replaced' when the PTY is no longer the expected incarnation.
+ * Why remembered: an older daemon lists every session to answer for one, and the root never changes within an incarnation. */
+export async function readLegacyPtyRootProcessId(
+  controller: ListingController,
+  ptyId: string,
+  expectedIncarnationId?: string,
+  remember = true
+): Promise<number | 'replaced' | null> {
+  if (!remember) {
+    return readTargetRoot(controller, ptyId, expectedIncarnationId)
+  }
+  const retired = new Set<string>()
+  lookupFences.add(retired)
+  try {
+    return await readRememberedRoot(controller, ptyId, expectedIncarnationId, retired)
+  } finally {
+    lookupFences.delete(retired)
+  }
+}
+
+async function readRememberedRoot(
+  controller: ListingController,
+  ptyId: string,
+  expectedIncarnationId: string | undefined,
+  retired: ReadonlySet<string>
+): Promise<number | 'replaced' | null> {
+  let remembered = rootByPtyId.get(ptyId)
+  if (!remembered || !matchesIncarnation(remembered, expectedIncarnationId)) {
+    if (Date.now() >= fullListingUnavailableUntil) {
+      // Why one shared listing: each cold terminal listing every session alone costs terminals × sessions.
+      sharedListing ??= fenced(rememberAllRoots, controller).finally(() => {
+        sharedListing = null
+      })
+      // Why fall back: an unrelated daemon's failure must not blind this terminal's own owner.
+      await sharedListing.catch(() => {
+        fullListingUnavailableUntil = Date.now() + FULL_LISTING_RETRY_MS
+      })
+    }
+    remembered = rootByPtyId.get(ptyId)
+    if (!remembered || !matchesIncarnation(remembered, expectedIncarnationId)) {
+      const root = await readTargetRoot(controller, ptyId, expectedIncarnationId)
+      if (typeof root !== 'number' || retired.has(ptyId)) {
+        return root
+      }
+      // Falls through so its start time is pinned now, not at a later probe after a PID reuse.
+      remembered = { incarnationId: expectedIncarnationId, pid: root }
+      rootByPtyId.set(ptyId, remembered)
+    }
+  }
+  const startedAtMs = await readProcessStartTimeMs(remembered.pid)
+  if (remembered.startedAtMs === undefined) {
+    remembered.startedAtMs = startedAtMs
+  }
+  // Why the start time and liveness: a reused PID, or an exited root, must not stand in for this terminal's root.
+  if (
+    startedAtMs === remembered.startedAtMs &&
+    (startedAtMs !== null || isProcessAlive(remembered.pid))
+  ) {
+    return remembered.pid
+  }
+  // The next probe relists; this one proves nothing about a root that changed under it.
+  rootByPtyId.delete(ptyId)
+  return null
+}
+
+/** The root lives as long as its terminal: bounded by live PTYs, not a size cap that would thrash. */
+export function forgetLegacyPtyRoot(ptyId: string): void {
+  rootByPtyId.delete(ptyId)
+  for (const retired of lookupFences) {
+    retired.add(ptyId)
+  }
+}
+
+function matchesIncarnation(root: RememberedRoot, expected: string | undefined): boolean {
+  // Why an absent incarnation matches: older daemons report none, and the start time fences replacement.
+  return !root.incarnationId || !expected || root.incarnationId === expected
+}
+
+async function fenced(
+  list: (controller: ListingController, retired: ReadonlySet<string>) => Promise<void>,
+  controller: ListingController
+): Promise<void> {
+  const retired = new Set<string>()
+  lookupFences.add(retired)
+  try {
+    await list(controller, retired)
+  } finally {
+    lookupFences.delete(retired)
+  }
+}
+
+async function rememberAllRoots(
+  controller: ListingController,
+  retired: ReadonlySet<string>
+): Promise<void> {
+  const listed = new Map<string, { incarnationId: string | undefined; pid: number }>()
+  for (const pane of (await controller.listProcesses?.(LOCAL_EXECUTION_HOST_ID)) ?? []) {
+    if (pane.rootProcessId && !retired.has(pane.id)) {
+      listed.set(pane.id, { incarnationId: pane.incarnationId, pid: pane.rootProcessId })
+    }
+  }
+  // Why prune: a session gone from the full listing has ended, whether or not this runtime saw it exit.
+  for (const ptyId of rootByPtyId.keys()) {
+    if (!listed.has(ptyId)) {
+      rootByPtyId.delete(ptyId)
+    }
+  }
+  for (const [ptyId, root] of listed) {
+    const known = rootByPtyId.get(ptyId)
+    if (known?.pid !== root.pid || known.incarnationId !== root.incarnationId) {
+      rootByPtyId.set(ptyId, root)
+    }
+  }
+}
+
+async function readTargetRoot(
+  controller: ListingController,
+  ptyId: string,
+  expectedIncarnationId: string | undefined
+): Promise<number | 'replaced' | null> {
+  const target = (
+    await controller.listProcesses?.(LOCAL_EXECUTION_HOST_ID, {
+      ptyIds: [ptyId],
+      targetOwnerOnly: true
+    })
+  )?.find((pane) => pane.id === ptyId)
+  if (
+    expectedIncarnationId &&
+    target?.incarnationId &&
+    target.incarnationId !== expectedIncarnationId
+  ) {
+    return 'replaced'
+  }
+  return target?.rootProcessId ?? null
+}
