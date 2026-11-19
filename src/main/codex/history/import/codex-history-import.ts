@@ -273,6 +273,7 @@ export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<
         break
       }
       let result: FolderResult | null
+      const handledBefore = handled.size
       try {
         result = await importFolder(args, folder, source, handled, store, seedOnly)
       } catch (error) {
@@ -287,12 +288,20 @@ export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<
         continue
       }
       if (result) {
-        source.folders[folder] = {
+        const entry: ImportedFolder = {
           ...(result.mtimeNs ? { mtimeNs: result.mtimeNs } : {}),
           ...(result.waiting ? { waiting: result.waiting } : {})
         }
+        // A stop that changed nothing writes nothing, so the waiting launch isn't held by a save.
+        if (
+          result.linked > 0 ||
+          handled.size !== handledBefore ||
+          JSON.stringify(entry) !== JSON.stringify(source.folders[folder] ?? {})
+        ) {
+          unsaved += 1
+        }
+        source.folders[folder] = entry
         linked += result.linked
-        unsaved += 1
         if (result.stopped) {
           stopped = true
           break
