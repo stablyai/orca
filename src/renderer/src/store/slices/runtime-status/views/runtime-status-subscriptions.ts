@@ -266,18 +266,24 @@ function diffStatuses(
 
 // Keyed by getState: the store's hook and the api its slices receive are different objects sharing it.
 const subscriptionsByStore = new WeakMap<
-  RuntimeStatusStore['getState'],
+  object,
   ReturnType<typeof createRuntimeStatusSubscriptions>
 >()
+
+/** Test doubles of the store may carry no getState; the double itself then keys its owner. */
+function ownerKey(store: { getState?: unknown }): object {
+  return typeof store.getState === 'function' ? store.getState : store
+}
 
 /** The one host-status subscription owner for this store, shared by every view of it. */
 export function runtimeStatusSubscriptionsFor(
   store: RuntimeStatusStore
 ): ReturnType<typeof createRuntimeStatusSubscriptions> {
-  let subscriptions = subscriptionsByStore.get(store.getState)
+  const key = ownerKey(store)
+  let subscriptions = subscriptionsByStore.get(key)
   if (!subscriptions) {
     subscriptions = createRuntimeStatusSubscriptions(store)
-    subscriptionsByStore.set(store.getState, subscriptions)
+    subscriptionsByStore.set(key, subscriptions)
   }
   return subscriptions
 }

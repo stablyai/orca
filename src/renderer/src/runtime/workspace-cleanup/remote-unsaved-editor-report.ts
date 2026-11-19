@@ -4,6 +4,11 @@ import { errorMessage } from '../../../../shared/errors/error-message'
 import { hasRuntimeRpcErrorCode } from '../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
+import {
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
 import { createNonSecureContextUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 import { getRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
@@ -31,29 +36,27 @@ function unsavedWorktreeIdsByEnvironment(state: UnsavedReportState): Map<string,
   return new Map([...byEnvironment].map(([environmentId, ids]) => [environmentId, [...ids].sort()]))
 }
 
-/** Every field the report and file-owner routing read; a report built from equal inputs is current. */
-const REPORT_INPUT_KEYS = [
-  'activeWorkspaceExecutionHostId',
-  'activeWorktreeId',
-  'detectedWorktreesByRepo',
-  'editorDrafts',
-  'folderWorkspaces',
-  'openFiles',
-  'projectGroups',
-  'removedRuntimeEnvironmentIds',
-  'repos',
-  'restoredRuntimeHostIdByWorkspaceSessionKey',
-  'runtimeEnvironmentCatalogHydrated',
-  'runtimeEnvironments',
-  'settings',
-  'worktreesByRepo'
-] as const satisfies readonly (keyof UnsavedReportState)[]
-
-/** Check key-list completeness too: satisfies validates membership only, silently missing new inputs and sending stale reports. */
-type MissingReportInputKey = Exclude<keyof UnsavedReportState, (typeof REPORT_INPUT_KEYS)[number]>
-/** Require an empty missing-key union; an empty array typed MissingKey[] accepts every union and proves nothing. */
-type AssertNoMissingReportInputKey<T extends never> = T
-export type ReportInputKeysAreComplete = AssertNoMissingReportInputKey<MissingReportInputKey>
+/** Every field the report and file-owner routing read; the mapped type fails to compile until a new one is listed. */
+const REPORT_INPUTS: {
+  [K in keyof UnsavedReportState]-?: (state: UnsavedReportState) => unknown
+} = {
+  activeWorkspaceExecutionHostId: (state) => state.activeWorkspaceExecutionHostId,
+  activeWorktreeId: (state) => state.activeWorktreeId,
+  detectedWorktreesByRepo: selectDetectedWorktreesByRepo,
+  editorDrafts: (state) => state.editorDrafts,
+  folderWorkspaces: selectFolderWorkspaces,
+  openFiles: (state) => state.openFiles,
+  projectGroups: (state) => state.projectGroups,
+  removedRuntimeEnvironmentIds: (state) => state.removedRuntimeEnvironmentIds,
+  repos: (state) => state.repos,
+  restoredRuntimeHostIdByWorkspaceSessionKey: (state) =>
+    state.restoredRuntimeHostIdByWorkspaceSessionKey,
+  runtimeEnvironmentCatalogHydrated: (state) => state.runtimeEnvironmentCatalogHydrated,
+  runtimeEnvironments: (state) => state.runtimeEnvironments,
+  settings: (state) => state.settings,
+  worktreesByRepo: selectWorktreesByRepo
+}
+const readReportInputs = Object.values(REPORT_INPUTS)
 
 const UNKNOWN = '\0unknown'
 const REPORTER_ID_KEY = 'orca.workspaceCleanup.unsavedEditorReporterId'
@@ -86,7 +89,7 @@ export function installRemoteUnsavedEditorReport(): () => void {
   let reports = new Map<string, string[]>()
   const currentReports = (): ReadonlyMap<string, string[]> => {
     const state = useAppStore.getState()
-    const inputs = REPORT_INPUT_KEYS.map((key) => state[key])
+    const inputs = readReportInputs.map((read) => read(state))
     if (reportInputs?.every((value, index) => value === inputs[index]) !== true) {
       reports = unsavedWorktreeIdsByEnvironment(state)
       reportInputs = inputs
@@ -191,7 +194,7 @@ export function installRemoteUnsavedEditorReport(): () => void {
     if (state.runtimeEnvironments !== previous.runtimeEnvironments) {
       noteEnvironments(state)
     }
-    if (REPORT_INPUT_KEYS.some((key) => state[key] !== previous[key])) {
+    if (readReportInputs.some((read) => read(state) !== read(previous))) {
       sync()
     }
   })
