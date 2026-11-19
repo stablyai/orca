@@ -160,3 +160,31 @@ it('says the history refreshed only when the list shows and the note clears', as
   await waitFor(() => expect(screen.queryByText(NOTE)).toBeNull())
   expect(screen.getByText('History refreshed')).not.toBeNull()
 })
+
+it('does not show a published scan as loading again during a later refresh', async () => {
+  const first = deferred()
+  listSessions.mockReturnValueOnce(first.promise)
+  renderPanel()
+  await screen.findByText(NOTE)
+  await act(async () => pushProgress({ scanKey: lastScanKey, progress: activeScan() }))
+  await act(async () =>
+    pushProgress({
+      scanKey: lastScanKey,
+      progress: { ...activeScan(), stage: 'finished', settledAt: 1_700_000_005_000 }
+    })
+  )
+  await act(async () => first.resolve())
+  await waitFor(() => expect(screen.queryByText(NOTE)).toBeNull())
+  expect(screen.getByText('History refreshed')).not.toBeNull()
+
+  // A later refresh answers from cache: no new scan reports progress.
+  const later = deferred()
+  listSessions.mockReturnValueOnce(later.promise)
+  await act(async () => screen.getByRole('button', { name: 'Refresh Session History' }).click())
+  expect(await screen.findByText(NOTE)).not.toBeNull()
+  expect(screen.getByText('History refreshed')).not.toBeNull()
+  expect(screen.queryByText(/Loading sessions/)).toBeNull()
+
+  await act(async () => later.resolve())
+  await waitFor(() => expect(screen.queryByText(NOTE)).toBeNull())
+})

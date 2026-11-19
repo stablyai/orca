@@ -40,6 +40,8 @@ export function useAiVaultSessionRefresh(
   loading: boolean
   /** A foreground refresh is in flight, including while a cached list is shown without a spinner. */
   refreshing: boolean
+  /** Counts lists this hook has shown, so a wait can tell its own list from an earlier one. */
+  listRevision: number
   scopePending: boolean
   refresh: (args?: AiVaultRefreshArgs) => Promise<void>
   scanResult: AiVaultListResult | null
@@ -62,6 +64,7 @@ export function useAiVaultSessionRefresh(
   const associationsRef = useRef(associations)
   const [loading, setLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
+  const [listRevision, setListRevision] = useState(0)
   const [failure, setFailure] = useState<{ scopeKey: string; cause: string } | null>(null)
   const [terminalScopeKey, setTerminalScopeKey] = useState<string | null>(null)
   const requestTokenRef = useRef<string>(undefined!)
@@ -193,6 +196,8 @@ export function useAiVaultSessionRefresh(
         scanKey === currentScanScopeKey() &&
         associationCurrent()
       // Why: the finished list may wait for typing to pause; loading and the outstanding flag clear in the commit that shows it.
+      // A launch that ends without handing a list to the gate (error, cancel, superseded first) clears them in finally instead,
+      // keeping the flag for a queued foreground request. "Published" means accepted by the gate, not yet painted.
       let published = false
       try {
         const previous = conditionalSnapshotRef.current
@@ -218,6 +223,7 @@ export function useAiVaultSessionRefresh(
             return
           }
           applyListed(list, true)
+          setListRevision((revision) => revision + 1)
           setLoading(false)
           // A queued foreground request keeps the flag until its own list lands.
           if (!(pendingRefreshRef.current && pendingForegroundRef.current)) {
@@ -237,15 +243,11 @@ export function useAiVaultSessionRefresh(
         }
       } finally {
         refreshInFlightRef.current = false
-        if (mountedRef.current && refreshIdRef.current === refreshId) {
-          if (!published) {
-            setLoading(false)
-          }
+        // A published list settles both in its own commit; a queued foreground request already holds the flag.
+        if (mountedRef.current && refreshIdRef.current === refreshId && !published) {
+          setLoading(false)
           // A queued foreground request is still outstanding until its own refresh settles.
-          const queuedForeground = pendingRefreshRef.current && pendingForegroundRef.current
-          if (queuedForeground || !published) {
-            setRefreshing(queuedForeground)
-          }
+          setRefreshing(pendingRefreshRef.current && pendingForegroundRef.current)
         }
         if (pendingRefreshRef.current && mountedRef.current) {
           pendingRefreshRef.current = false
@@ -316,6 +318,7 @@ export function useAiVaultSessionRefresh(
     error,
     loading: loading || scopePending,
     refreshing,
+    listRevision,
     scopePending,
     refresh,
     scanResult: shown?.result ?? null,

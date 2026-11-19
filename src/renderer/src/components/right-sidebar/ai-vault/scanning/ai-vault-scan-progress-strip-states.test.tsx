@@ -51,3 +51,41 @@ it('does not turn an earlier finished scan back into loading', () => {
   render(<AiVaultScanProgressStrip progress={finished('earlier')} listPending />)
   expect(screen.getByText('History refreshed')).toBeTruthy()
 })
+
+function Strip(props: { progress: AiVaultScanProgress; pending: boolean; generation: string }) {
+  return (
+    <AiVaultScanProgressStrip
+      progress={props.progress}
+      listPending={props.pending}
+      listGeneration={props.generation}
+    />
+  )
+}
+
+it('does not revive a published scan when a later wait for the same list starts', () => {
+  const { rerender } = render(<Strip progress={scan('reading', 12)} pending generation="0:a" />)
+  rerender(<Strip progress={finished()} pending generation="0:a" />)
+  expect(screen.getByTitle('Loading sessions: 12 files')).toBeTruthy()
+  // Its list is shown, then a later refresh waits on a cached answer with no new scan.
+  rerender(<Strip progress={finished()} pending={false} generation="1:a" />)
+  rerender(<Strip progress={finished()} pending generation="1:a" />)
+  expect(screen.getByText('History refreshed')).toBeTruthy()
+  expect(screen.queryByText(/Loading sessions/)).toBeNull()
+})
+
+it('does not attribute a retained scan to a different list', () => {
+  const { rerender } = render(<Strip progress={scan('reading', 12)} pending generation="0:a" />)
+  rerender(<Strip progress={finished()} pending generation="0:a" />)
+  // The wait moves to another list before the first one is shown.
+  rerender(<Strip progress={finished()} pending generation="0:b" />)
+  expect(screen.getByText('History refreshed')).toBeTruthy()
+  expect(screen.queryByText(/Loading sessions/)).toBeNull()
+})
+
+it('does not hold a scan that ran while no list was awaited', () => {
+  const { rerender } = render(
+    <Strip progress={scan('reading', 12)} pending={false} generation="0:a" />
+  )
+  rerender(<Strip progress={finished()} pending generation="0:a" />)
+  expect(screen.getByText('History refreshed')).toBeTruthy()
+})

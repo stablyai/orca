@@ -156,6 +156,7 @@ export default function AiVaultPanel({
     error,
     loading,
     refreshing: historyRefreshing,
+    listRevision,
     scopePending,
     refresh,
     scanResult,
@@ -192,6 +193,8 @@ export default function AiVaultPanel({
   const stripProgress = searching ? null : scanProgress
   // The panel's own load has not shown its list yet; the note and the strip's done state wait for it.
   const historyLoading = loading || historyRefreshing
+  // Changes when a list is shown or a different list is requested, so the strip never revives an earlier scan.
+  const listGeneration = `${listRevision}\n${requestedScanKey}`
   // Keep session maps independent of active workspace switches to avoid rebuilding them during navigation (#10841).
   const sessionProjectById = useMemo(
     () =>
@@ -303,7 +306,11 @@ export default function AiVaultPanel({
       />
 
       {stripProgress ? (
-        <AiVaultScanProgressStrip {...stripProgress} listPending={historyLoading} />
+        <AiVaultScanProgressStrip
+          {...stripProgress}
+          listPending={historyLoading}
+          listGeneration={listGeneration}
+        />
       ) : null}
 
       {!searching && error ? (

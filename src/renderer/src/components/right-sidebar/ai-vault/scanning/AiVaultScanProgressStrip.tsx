@@ -206,26 +206,35 @@ export function AiVaultScanProgressStrip({
   progress: reported,
   agents = reported.agents,
   active: reportedActive = reported.settledAt === null,
-  listPending = false
+  listPending = false,
+  listGeneration = ''
 }: {
   progress: AiVaultScanProgress
   agents?: AiVaultScanAgentProgress[]
   active?: boolean
   /** The panel's own load is still waiting to show its list. */
   listPending?: boolean
+  /** Changes when a list is shown or a different list is requested; a hold never outlives it. */
+  listGeneration?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const [open, setOpen] = useState(false)
-  const [watchedScanId, setWatchedScanId] = useState<string | null>(null)
-  if (reportedActive && reported.scanId !== watchedScanId) {
-    setWatchedScanId(reported.scanId)
+  const [watched, setWatched] = useState<{ scanId: string; generation: string } | null>(null)
+  // Why: remember only a scan seen running while this list was awaited, so a later wait never revives a finished scan.
+  if (
+    reportedActive &&
+    listPending &&
+    (watched?.scanId !== reported.scanId || watched.generation !== listGeneration)
+  ) {
+    setWatched({ scanId: reported.scanId, generation: listGeneration })
   }
-  // Why: a scan seen running can finish before its list is shown; stay loading so the strip, note and list change together.
+  // Why: that scan can finish before its list is shown; stay loading so the strip, note and list change together.
   const held =
     listPending &&
     !reportedActive &&
     reported.stage === 'finished' &&
-    reported.scanId === watchedScanId
+    watched?.scanId === reported.scanId &&
+    watched.generation === listGeneration
   const progress: AiVaultScanProgress = held ? { ...reported, stage: 'finding' } : reported
   const active = reportedActive || held
   const finished = progress.stage === 'finished'
