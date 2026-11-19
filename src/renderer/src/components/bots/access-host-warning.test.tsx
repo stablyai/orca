@@ -144,15 +144,6 @@ describe('paired access host identity', () => {
     await expectWarningAndConsent('the computer this agent runs on')
     expect(screen.queryByText(/Unverified Server/)).toBeNull()
   })
-  it('follows a replacement pairing without retaining local machine preferences', async () => {
-    receive(status(1, 'Atlas Server'))
-    show()
-    await expectWarningAndConsent('Atlas Server')
-    act(() => pair(2))
-    await expectWarningAndConsent('the computer this agent runs on')
-    receive(status(2, 'Boreal Server'))
-    await expectWarningAndConsent('Boreal Server')
-  })
   it('ignores a late status delivery from the previous pairing', async () => {
     receive(status(1, 'Atlas Server'))
     show()

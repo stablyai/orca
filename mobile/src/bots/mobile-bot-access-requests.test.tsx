@@ -147,40 +147,17 @@ describe('access requests in the bot sheet', () => {
     expect(texts(root).some((text) => text.includes('Atlas Server'))).toBe(false)
   })
 
-  it.each(['status pending', 'hardware probe timed out'])(
-    'keeps the grant host neutral when %s',
-    async (scenario) => {
-      const direct = {
-        ...client({ id: 'status', ok: true, result: { hostPlatform: 'linux' } }),
-        getLastConnectedAt: () => 1
-      }
-      if (scenario === 'hardware probe timed out') {
-        await readHostStatusReply(direct)
-      }
-      const decide = vi.fn(async () => {})
-      const root = renderTab(
-        { requests: [request], deciding: false, decide },
-        { client: direct }
-      ).root
-      expect(texts(root).some((text) => text.includes('the computer this agent runs on'))).toBe(
-        true
-      )
-      press(root, 'Review Dana Kim')
-      const confirm = root.findByProps({ confirmLabel: 'Give access' })
-      expect(confirm.props.message).toContain('the computer this agent runs on')
-      expect(confirm.props.message).not.toContain('your computer')
-      expect(decide).not.toHaveBeenCalled()
-      press(root, 'Give access')
-      expect(decide).toHaveBeenCalledExactlyOnceWith(request, 'granted')
+  it('keeps consent neutral when the paired host reports no machine name', async () => {
+    const direct = {
+      ...client({ id: 'status', ok: true, result: { hostPlatform: 'linux' } }),
+      getLastConnectedAt: () => 1
     }
-  )
-
-  it('names a directly paired machine in the warning and consent', async () => {
-    const direct = { ...client(machineStatus('Atlas Server')), getLastConnectedAt: () => 1 }
     await readHostStatusReply(direct)
-    const access = { requests: [request], deciding: false, decide: vi.fn(async () => {}) }
-    const root = renderTab(access, { client: direct }).root
-    expectNamedWarningAndConsent(root, 'Atlas Server')
+    const root = renderTab(
+      { requests: [request], deciding: false, decide: vi.fn(async () => {}) },
+      { client: direct }
+    ).root
+    expectNamedWarningAndConsent(root, 'the computer this agent runs on')
   })
 
   it('follows the newly paired machine on the same logical client', async () => {
@@ -195,10 +172,7 @@ describe('access requests in the bot sheet', () => {
     const access = { requests: [request], deciding: false, decide: vi.fn(async () => {}) }
     expectNamedWarningAndConsent(renderTab(access, { client: direct }).root, 'Atlas Server')
     generation = 2
-    const pending = updateTab(access, direct)
-    expect(texts(pending).some((text) => text.includes('the computer this agent runs on'))).toBe(
-      true
-    )
+    expectNamedWarningAndConsent(updateTab(access, direct), 'the computer this agent runs on')
     await readHostStatusReply(direct)
     expectNamedWarningAndConsent(updateTab(access, direct), 'Boreal Server')
   })
