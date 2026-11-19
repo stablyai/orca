@@ -15,7 +15,11 @@ import '../../db/attempt-outcome-projection'
 import { createRootDispatch } from '../../db/root-dispatch-test-fixture'
 import { TerminalWorkerTurnStops } from './terminal-worker-turn-stops'
 import { stopReportId } from './worker-turn-stop-report'
-import { observeWorker, reconsiderWorkerRest } from './worker-presence-report'
+import {
+  observeWorker,
+  reconsiderCreatorRest,
+  reconsiderWorkerRest
+} from './worker-presence-report'
 import type { WorkerApprovalPayload } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 
 const PANE = makePaneKey('tab-worker', '11111111-1111-4111-8111-111111111111')
@@ -562,6 +566,62 @@ describe('worker exits', () => {
     expect(ctx.mail().map((message) => message.subject)).toEqual([
       'Worker exited without reporting'
     ])
+  })
+})
+
+describe('worker rests', () => {
+  const rest = (ctx: ReturnType<typeof setup>, fence: string) =>
+    observeWorker(
+      ctx.db,
+      { kind: 'local', dispatch: ctx.dispatch },
+      {
+        presence: 'at-rest',
+        fence,
+        legacyStopKey: fence,
+        rest: { from: HANDLE, reason: 'finished', lastOutput: 'Done.' }
+      },
+      ctx.deps
+    )
+
+  it('counts a committed report as sent though waking the coordinator failed', () => {
+    const ctx = setup()
+    ctx.notify.mockImplementation(() => {
+      throw new Error('wake failed')
+    })
+    expect(rest(ctx, 'proc:1')).toBe(true)
+    // Another idle turn with no new coordinator mail repeats what the coordinator was told.
+    rest(ctx, 'proc:2')
+    expect(ctx.mail()).toHaveLength(1)
+  })
+
+  it("decides a creator's held-back finish again once its last helper settles", () => {
+    const ctx = setup()
+    const task = ctx.db.createTask({ spec: 'help', runId: ctx.run.id })
+    const helper = createRootDispatch(ctx.db, task.id, 'term_helper')
+    ctx.db.db
+      .prepare('UPDATE dispatch_contexts SET creator_dispatch_id = ? WHERE id = ?')
+      .run(ctx.dispatch.id, helper.id)
+    rest(ctx, 'proc:1')
+    expect(ctx.mail()).toHaveLength(0)
+    ctx.db.completeDispatch(helper.id)
+    reconsiderCreatorRest(`dispatch:${helper.id}`, ctx.deps)
+    expect(ctx.mail()).toHaveLength(1)
+  })
+
+  it('does not report a rest whose stop the coordinator asked for while its screen was read', async () => {
+    const ctx = setup()
+    const current = { row: hookRow({ stateStartedAt: 300 }) }
+    const stops = terminal(ctx, current, {
+      readScreen: async () => {
+        ctx.db.getWorkerDispatch = () =>
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reporter reads only the state.
+          ({ state: 'stopping' }) as ReturnType<typeof ctx.db.getWorkerDispatch>
+        return screen(['$'])
+      }
+    })
+    current.row = hookRow({ state: 'waiting', stateStartedAt: 300 })
+    await stops.reportRestingPane(PANE)
+    expect(ctx.mail()).toHaveLength(0)
   })
 })
 

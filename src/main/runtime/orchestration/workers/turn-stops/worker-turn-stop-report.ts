@@ -109,9 +109,10 @@ export function sendWorkerReport(
     return false
   }
   const woken: [string, string][] = []
+  let sent: boolean
   try {
     // The report and the record of having sent it commit together.
-    const sent = runLifecycleWriteTransaction(db.db, 'worker_stop_report', () => {
+    sent = runLifecycleWriteTransaction(db.db, 'worker_stop_report', () => {
       const inMail =
         target.kind === 'local'
           ? mailWorkerReport(db, target.dispatch, stop, { id, subject, payload }, deps, woken)
@@ -121,14 +122,19 @@ export function sendWorkerReport(
       }
       return inMail
     })
-    for (const [handle, type] of woken) {
-      deps.notify(handle, type)
-    }
-    return sent
   } catch (error) {
     console.warn('[orchestration] failed to send a worker stop report', dispatchId, error)
     return false
   }
+  // Committed is sent: a wake that fails does not unsend it.
+  for (const [handle, type] of woken) {
+    try {
+      deps.notify(handle, type)
+    } catch (error) {
+      console.warn('[orchestration] waking for a worker stop report failed', handle, error)
+    }
+  }
+  return sent
 }
 
 type WorkerReportMail = { id: string; subject: string; payload: Record<string, unknown> }

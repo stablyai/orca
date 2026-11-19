@@ -36,9 +36,12 @@ export function createRestartOfferDismissals(): {
       const { count, abandoned } = await dismiss(sessionIds, beforeClearAll, audience)
       // Exactly what this dismissal removed under the capsule's lock: an offer another window
       // continued first is not abandoned.
-      const dismissed = abandoned.map((marker) => ({
+      const dismissed = abandoned.map(({ marker, unconfirmed }) => ({
         sessionId: marker.sessionId,
-        cut: restartCutOfMarker(marker)
+        cut: {
+          ...restartCutOfMarker(marker),
+          ...(unconfirmed ? { continuationUnconfirmed: true as const } : {})
+        }
       }))
       if (dismissed.length > 0) {
         for (const listener of listeners) {

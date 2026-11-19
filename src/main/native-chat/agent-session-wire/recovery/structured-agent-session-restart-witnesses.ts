@@ -29,7 +29,7 @@ export type StructuredAgentSessionRestartWitnesses = {
   ) => Promise<number>
   /** Ends a launch's automatic turn; what still waits is left to a person from then on. */
   passOverAutomatic: (recordedBy: number) => Promise<void>
-  cutOf: StructuredAgentSessionRestartResume['cutOf']
+  cuts: Pick<StructuredAgentSessionRestartResume, 'offeredCuts' | 'cutOf'>
   /** Explicit actions supersede unwritten witnesses only for readable agents in their audience. */
   clear: (audience?: (agent: string) => boolean) => void
 }
@@ -91,6 +91,21 @@ export function createStructuredAgentSessionRestartWitnesses(deps: {
       settledSince
     })
   }
+  // Every chat's offered cut, from one read of the capsule.
+  const offeredCuts = async (): Promise<Map<string, StructuredAgentSessionRestartCut>> => {
+    const now = deps.now()
+    const cuts = new Map<string, StructuredAgentSessionRestartCut>()
+    for (const failure of (await deps.capsule?.listFailed(now)) ?? []) {
+      cuts.set(failure.marker.sessionId, {
+        ...restartCutOfMarker(failure.marker),
+        ...(failure.outcome === 'unconfirmed' ? { continuationUnconfirmed: true as const } : {})
+      })
+    }
+    for (const marker of (await deps.capsule?.list(now)) ?? []) {
+      cuts.set(marker.sessionId, restartCutOfMarker(marker))
+    }
+    return cuts
+  }
   return {
     begin: (next) => {
       clear()
@@ -143,21 +158,19 @@ export function createStructuredAgentSessionRestartWitnesses(deps: {
       }
       return markers.length
     },
-    cutOf: async (sessionId) => {
-      const now = deps.now()
-      const offer =
-        (await deps.capsule?.list(now))?.find((marker) => marker.sessionId === sessionId) ??
-        (await deps.capsule?.listFailed(now))?.find(
-          (failure) => failure.marker.sessionId === sessionId
-        )?.marker
-      if (offer) {
-        return restartCutOfMarker(offer)
+    cuts: {
+      offeredCuts,
+      cutOf: async (sessionId, offered) => {
+        const offer = (offered ?? (await offeredCuts())).get(sessionId)
+        if (offer) {
+          return offer
+        }
+        const journal = deps.sessions.get(sessionId)?.journal
+        const cut = journal ? await journal.reads.orcaStopCut() : null
+        const turn = cut && journal ? await journal.reads.item(cut.turnItemId) : null
+        const turnId = readAgentJournalTurn(turn?.body)?.turnId
+        return cut && turnId ? { cause: cut.cause, turnId } : null
       }
-      const journal = deps.sessions.get(sessionId)?.journal
-      const cut = journal ? await journal.reads.orcaStopCut() : null
-      const turn = cut && journal ? await journal.reads.item(cut.turnItemId) : null
-      const turnId = readAgentJournalTurn(turn?.body)?.turnId
-      return cut && turnId ? { cause: cut.cause, turnId } : null
     },
     passOverAutomatic: async (recordedBy) => {
       await deps.enqueue(async () => deps.capsule?.passOverAutomatic(recordedBy, deps.now()))

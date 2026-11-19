@@ -116,7 +116,8 @@ export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessio
                 isOrcaSessionId(sessionId) ? canonicalOrcaSessionId(sessionId) : sessionId,
               open: (sessionId) => host.revealSession(sessionId).catch(() => null),
               lastOutput: (sessionId) => host.readStatusSummary(sessionId)?.lastAssistantMessage,
-              cutOf: (sessionId) => host.restartResume.cutOf(sessionId)
+              offeredCuts: () => host.restartResume.offeredCuts(),
+              cutOf: (sessionId, offered) => host.restartResume.cutOf(sessionId, offered)
             }
           : null
       })

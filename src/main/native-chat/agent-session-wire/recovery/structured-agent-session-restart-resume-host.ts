@@ -300,7 +300,7 @@ export function createStructuredAgentSessionRestartResume(
   return {
     adoptCrashCuts: witnesses.recordCrashCuts,
     passOverAutomatic: witnesses.passOverAutomatic,
-    cutOf: witnesses.cutOf,
+    ...witnesses.cuts,
     beginTeardown: witnesses.begin,
     captureBeforeStop: witnesses.beforeStop,
     confirmStopped: witnesses.stopped,

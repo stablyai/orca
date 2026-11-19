@@ -16,7 +16,10 @@ import {
 } from './restart-worker-stop-report'
 import { chatWorkerDispatches } from './chat-worker-error-escalation'
 import { observeWorker } from './worker-presence-report'
-import type { StructuredAgentSessionRestartResume } from '../../../../native-chat/agent-session-wire/recovery/structured-agent-session-restart-resume-contract'
+import type {
+  StructuredAgentSessionRestartCut,
+  StructuredAgentSessionRestartResume
+} from '../../../../native-chat/agent-session-wire/recovery/structured-agent-session-restart-resume-contract'
 
 const PANE = makePaneKey('tab-worker', '11111111-1111-4111-8111-111111111111')
 const HANDLE = 'term_worker'
@@ -103,7 +106,8 @@ describe('worker stops across a restart', () => {
     cut: Awaited<ReturnType<StructuredAgentSessionRestartResume['cutOf']>>,
     open: () => Promise<unknown> = async () => undefined,
     cutByLastRun: ReadonlySet<string> = new Set([CHAT_SESSION]),
-    lineageRoot: (sessionId: string) => string = (sessionId) => sessionId
+    lineageRoot: (sessionId: string) => string = (sessionId) => sessionId,
+    offered: ReadonlyMap<string, StructuredAgentSessionRestartCut> = new Map()
   ) =>
     reportWorkerStopsAcrossRestart({
       db: ctx.db,
@@ -112,6 +116,7 @@ describe('worker stops across a restart', () => {
       chats: {
         cutByLastRun,
         lineageRoot,
+        offeredCuts: async () => offered,
         open,
         lastOutput: () => 'Running the migration.',
         cutOf: async () => cut
@@ -283,5 +288,119 @@ describe('worker stops across a restart', () => {
     expect(report?.subject).toBe('Worker lost without reporting')
     expect(report?.body).toContain('its agent may still be running')
     expect(report?.body).not.toContain('A message restarts it')
+  })
+
+  it('does not tell a coordinator that a dismissed worker whose continuation was never confirmed exited', () => {
+    const ctx = setup(formatOrcaSessionAddress(CHAT_SESSION))
+    reportDismissedCutWorkers(
+      { db: ctx.db, reportDeps: ctx.reportDeps, lastOutput: () => undefined },
+      [
+        {
+          sessionId: CHAT_SESSION,
+          cut: { cause: 'quit', turnId: 'turn-1', continuationUnconfirmed: true }
+        }
+      ]
+    )
+    const [report] = ctx.mail()
+    expect(report?.subject).toBe('Worker lost without reporting')
+    expect(report?.body).toContain('never saw it start, and its restart offer was dismissed')
+    expect(report?.body).not.toContain('A message restarts it')
+  })
+
+  it('keeps a rest held back by a wait silent while its chat still waits on a restart decision', async () => {
+    const ctx = setup(formatOrcaSessionAddress(CHAT_SESSION))
+    const [worker] = chatWorkerDispatches(CHAT_SESSION, ctx.db)
+    observeWorker(
+      ctx.db,
+      { kind: 'local', dispatch: worker!.dispatch },
+      {
+        presence: 'at-rest',
+        fence: 'prompt:ask-1',
+        legacyStopKey: 'prompt:ask-1',
+        rest: { from: worker!.from, reason: 'needs-input', lastOutput: undefined }
+      },
+      { ...ctx.reportDeps, isWaitingForMail: () => true }
+    )
+    // The setting is off: nothing was cut by this start's own action, and the offer waits.
+    await chatPass(
+      ctx,
+      null,
+      undefined,
+      new Set(),
+      undefined,
+      new Map([[CHAT_SESSION, { cause: 'crash', turnId: 'turn-1', waitingOnPerson: true }]])
+    )
+    expect(ctx.mail()).toEqual([])
+  })
+
+  it.each(['stopping', 'stop_unknown'] as const)(
+    'does not report a terminal worker whose stop its coordinator asked for (%s)',
+    async (state) => {
+      const ctx = setup(HANDLE)
+      ctx.db.getWorkerDispatch = () =>
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pass reads only the state.
+        ({ state }) as ReturnType<typeof ctx.db.getWorkerDispatch>
+      const stops = restingTerminal(ctx, 'done')
+      await reportWorkerStopsAcrossRestart({
+        db: ctx.db,
+        reportDeps: ctx.reportDeps,
+        reportRestingPane: (paneKey) => stops.reportRestingPane(paneKey),
+        chats: null
+      })
+      expect(ctx.mail()).toEqual([])
+    }
+  )
+
+  it("does not visit a paired server's worker its coordinator is stopping", async () => {
+    const db = new OrchestrationDb(':memory:')
+    db.createRemoteDispatchAttachment({
+      runId: 'run-home',
+      dispatchId: 'ctx_remote',
+      taskId: 'task_remote',
+      homePeerFingerprint: 'home_peer',
+      protocolVersion: 1,
+      runtimeEpoch: 'worker_epoch',
+      mutationReceipt: {
+        callerFingerprint: 'home_peer',
+        requestId: 'attach_remote',
+        method: 'orchestration.federationAttachStart',
+        payloadHash: 'attach_hash'
+      }
+    })
+    db.db
+      .prepare("UPDATE remote_dispatch_attachments SET state = 'stop_unknown', pane_key = ?")
+      .run(PANE)
+    const visited: string[] = []
+    await reportWorkerStopsAcrossRestart({
+      db,
+      reportDeps: { getDb: () => db, isWaitingForMail: () => false, notify: vi.fn() },
+      reportRestingPane: async (paneKey) => void visited.push(paneKey),
+      chats: null
+    })
+    expect(visited).toEqual([])
+  })
+
+  it("decides again another worker's held-back rest while one pane's screen read hangs", async () => {
+    const ctx = setup(HANDLE)
+    const task = ctx.db.createTask({ spec: 'chat work', runId: ctx.run.id })
+    const chat = createRootDispatch(ctx.db, task.id, formatOrcaSessionAddress(CHAT_SESSION))
+    observeWorker(
+      ctx.db,
+      { kind: 'local', dispatch: chat },
+      {
+        presence: 'at-rest',
+        fence: 'turn:turn-1',
+        legacyStopKey: 'turn:turn-1',
+        rest: { from: 'chat', reason: 'needs-input', lastOutput: undefined }
+      },
+      { ...ctx.reportDeps, isWaitingForMail: () => true }
+    )
+    void reportWorkerStopsAcrossRestart({
+      db: ctx.db,
+      reportDeps: ctx.reportDeps,
+      reportRestingPane: () => new Promise(() => {}),
+      chats: null
+    })
+    await vi.waitFor(() => expect(ctx.mail()).toHaveLength(1))
   })
 })

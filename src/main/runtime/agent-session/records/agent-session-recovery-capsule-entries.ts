@@ -250,12 +250,22 @@ function abandonedBy(
       entry.state === 'in-progress' ? [entry.marker.sessionId] : []
     )
   )
-  const abandoned = [
-    ...state.entries.filter((entry) => entry.state === 'pending' && removed(entry.marker)),
-    ...state.failed.filter(
-      (failure) => removed(failure.marker) && !continuing.has(failure.marker.sessionId)
+  const abandoned: AbandonedOffer[] = [
+    ...state.entries.flatMap((entry) =>
+      entry.state === 'pending' && removed(entry.marker) ? [{ marker: entry.marker }] : []
+    ),
+    ...state.failed.flatMap((failure) =>
+      removed(failure.marker) && !continuing.has(failure.marker.sessionId)
+        ? [
+            {
+              marker: failure.marker,
+              // A handoff the agent never confirmed may still be running.
+              ...(failure.outcome === 'unconfirmed' ? { unconfirmed: true as const } : {})
+            }
+          ]
+        : []
     )
-  ].map((record) => record.marker)
+  ]
   const sessions = [...state.entries, ...state.failed].filter(({ marker }) => removed(marker))
   return {
     count: new Set(sessions.map(({ marker }) => marker.sessionId)).size,
@@ -265,6 +275,8 @@ function abandonedBy(
 
 /** What a dismissal removed. `abandoned` holds only offers nothing was continuing: one being
  *  continued is removed too, but its work goes on. */
-export type RecoveryDismissal = { count: number; abandoned: AgentSessionResumeMarker[] }
+export type AbandonedOffer = { marker: AgentSessionResumeMarker; unconfirmed?: true }
+
+export type RecoveryDismissal = { count: number; abandoned: AbandonedOffer[] }
 
 export const NO_RECOVERY_DISMISSAL: RecoveryDismissal = { count: 0, abandoned: [] }

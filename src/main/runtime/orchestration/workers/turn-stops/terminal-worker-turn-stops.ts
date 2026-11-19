@@ -19,6 +19,7 @@ import {
   type WorkerTurnStopReportDeps
 } from './worker-turn-stop-report'
 import { observeWorker, type WorkerRest } from './worker-presence-report'
+import { isWorkerStopRequested } from '../lifecycle/worker-exit-observation'
 import { firstWithin } from '../approvals/first-within'
 import { showsClaudeDialog } from '../../../terminal/wait/claude-open-dialog-hold'
 import type { WorkerApprovalPayload } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
@@ -127,7 +128,9 @@ export class TerminalWorkerTurnStops {
     const resolved = this.stillStopped(stop)
     if (
       !resolved ||
-      (this.deps.getProcessIncarnation(resolved.handle) ?? resolved.handle) !== incarnation
+      (this.deps.getProcessIncarnation(resolved.handle) ?? resolved.handle) !== incarnation ||
+      // A stop its coordinator asked for is no news, however long the reads took.
+      isWorkerStopRequested(workerState(resolved.db, resolved.target))
     ) {
       return
     }
@@ -217,4 +220,10 @@ export function resolveTerminalWorkerDispatch(
     })
     ? { db, handle, target: { kind: 'remote', attachment } }
     : null
+}
+
+function workerState(db: OrchestrationDb, target: WorkerTurnStopDispatch) {
+  return target.kind === 'local'
+    ? db.getWorkerDispatch?.(target.dispatch.id)?.state
+    : db.getRemoteDispatchAttachment(target.attachment.dispatch_id)?.state
 }

@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS worker_presence (
   reported_mail_count  INTEGER,
   updated_at           TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE INDEX IF NOT EXISTS worker_presence_undecided ON worker_presence(dispatch_id)
+  WHERE report IS NOT NULL AND presence != 'working';
 `
 
 export type WorkerPresence = 'working' | 'resting' | 'prompt' | 'gone'

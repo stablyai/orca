@@ -169,6 +169,28 @@ export function reconsiderRestAfterWait(mailbox: string, deps: WorkerTurnStopRep
   }
 }
 
+/** A helper that settled no longer holds back its creator's clean finish, once none is left open. */
+export function reconsiderCreatorRest(mailbox: string, deps: WorkerTurnStopReportDeps): void {
+  const db = deps.getDb()
+  if (!db || !mailbox.startsWith('dispatch:')) {
+    return
+  }
+  try {
+    const helper = db.getDispatchContextById(mailbox.slice('dispatch:'.length))
+    const creator = helper?.creator_dispatch_id
+    if (
+      creator &&
+      helper.status !== 'pending' &&
+      helper.status !== 'dispatched' &&
+      !db.hasOpenHelperDispatch(creator)
+    ) {
+      reconsiderWorkerRest(db, creator, deps)
+    }
+  } catch (error) {
+    console.warn('[orchestration] reconsidering a creator rest failed', mailbox, error)
+  }
+}
+
 /** The open Dispatch, or the active attachment of a paired server's worker, whose worker this is. */
 function currentWorkerTarget(
   db: OrchestrationDb,

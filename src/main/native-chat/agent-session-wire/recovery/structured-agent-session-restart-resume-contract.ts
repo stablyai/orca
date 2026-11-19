@@ -16,6 +16,8 @@ export type StructuredAgentSessionRestartCut = {
   waitingOnPerson?: true
   /** A crash that did not prove the agent exited: it may still be running. */
   exitUnproven?: true
+  /** Orca handed the cut back to the agent but never saw it taken: it may be running. */
+  continuationUnconfirmed?: true
 }
 
 export type RestartContinuationOptions = {
@@ -45,8 +47,14 @@ export type StructuredAgentSessionRestartResume = {
   ) => Promise<number>
   /** Ends this launch's automatic turn: offers recorded by then that still wait are left to a person. */
   passOverAutomatic: (recordedBy: number) => Promise<void>
-  /** The cut a restart left in this chat: its offer, else the journal's own stop row. */
-  cutOf: (sessionId: string) => Promise<StructuredAgentSessionRestartCut | null>
+  /** Every chat's offered cut, from one read of the offers. */
+  offeredCuts: () => Promise<ReadonlyMap<string, StructuredAgentSessionRestartCut>>
+  /** The cut a restart left in this chat: its offer (from `offered` when read already), else the
+   *  journal's own stop row. */
+  cutOf: (
+    sessionId: string,
+    offered?: ReadonlyMap<string, StructuredAgentSessionRestartCut>
+  ) => Promise<StructuredAgentSessionRestartCut | null>
   /** Unnamed actions continue visible offers; named actions may also retry selected failures.
    *  `automatic` continues only what the capsule's ledger allows (see automaticallyContinuable). */
   continueAfterRestart: (

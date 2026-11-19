@@ -68,13 +68,20 @@ describe('durable restart offers', () => {
     }
   )
 
+  it('names a dismissed handoff the agent never confirmed as possibly still running', async () => {
+    await capsule.record([marker()], NOW)
+    await fileFailure({ outcome: 'unconfirmed' })
+    const dismissed = await capsule.dismiss([SESSION], NOW)
+    expect(dismissed.abandoned).toEqual([{ marker: expect.anything(), unconfirmed: true }])
+  })
+
   it('names as abandoned only the offers a dismissal removed that nothing was continuing', async () => {
     await capsule.record([marker(), marker({ sessionId: 'second' })], NOW)
     await capsule.beginResume([SESSION], 'operation-a', NOW)
 
     const dismissed = await capsule.dismiss('all', NOW)
     expect(dismissed.count).toBe(2)
-    expect(dismissed.abandoned.map((offer) => offer.sessionId)).toEqual(['second'])
+    expect(dismissed.abandoned.map((offer) => offer.marker.sessionId)).toEqual(['second'])
     expect((await capsule.dismiss('all', NOW)).abandoned).toEqual([])
   })
 
