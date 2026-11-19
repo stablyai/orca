@@ -6,7 +6,11 @@ import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
 import { ORCA_ACP_CLIENT_INFO } from '../acp/launch/acp-client-info'
 import type { Implementation } from '../acp/generated/acp-protocol.generated'
 import { ANTIGRAVITY_ACP_DIALECT } from '../acp/acp-dialects/antigravity-dialect'
-import type { StructuredAgentSessionHistory } from '../native-chat/conversation-adoption/structured-agent-cli-conversations'
+import {
+  resumeInvocationFromOptions,
+  type StructuredAgentSessionHistory
+} from '../native-chat/conversation-adoption/structured-agent-cli-conversations'
+import { ANTIGRAVITY_TRANSCRIPT_IMPORT } from './antigravity-transcript-import'
 import {
   AntigravityChatAuthConfigSchema,
   resolveAntigravityChatAuthConfig
@@ -42,11 +46,16 @@ import {
   isAntigravityHostAccountHome
 } from './antigravity-host-acp'
 
-// Chats cannot adopt agy's terminal conversations.
+// Chats and terminals share agy's conversation store when a chat runs the host's `agy acp`.
+// agy parses Go flags, so a single dash and `--flag=value` spell the same options.
 const ANTIGRAVITY_SESSION_HISTORY: StructuredAgentSessionHistory = {
   rowAgents: ['antigravity'],
   rowSessionId: (link) => link.handle.nativeId,
-  parseResumeArgs: () => null
+  parseResumeArgs: (args) =>
+    resumeInvocationFromOptions(args, {
+      targetless: ['-c', '--continue', '-continue'],
+      markers: ['--conversation', '-conversation']
+    })
 }
 
 // Servers before 1.5.1 offer non-Gemini models only to allowlisted editors such as Zed.
@@ -93,7 +102,7 @@ const ANTIGRAVITY_MANAGED_LAUNCH_SPEC = {
     discardSession: discardAntigravityListingSession
   },
   instructions: deliverAntigravityInstructions,
-  transcriptImport: null,
+  transcriptImport: ANTIGRAVITY_TRANSCRIPT_IMPORT,
   sessionHistory: ANTIGRAVITY_SESSION_HISTORY,
   privateTempDirectory: true,
   // The server otherwise writes its workflow tool into every chat workspace.
