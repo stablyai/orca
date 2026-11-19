@@ -1,3 +1,4 @@
+import type { TerminalIdentityReadContext } from '../query/terminal-identity-read-context'
 import { sleepingRecordsEquivalentIgnoringCaptureTime } from '../../../../shared/agent-session/lifecycle/resume/agent-resume-record-equivalence'
 import { OrcaRuntimeWithStopTerminalsForWorktree } from './worktree-terminal-stop'
 import { launchStatement } from '../launch/launch-evidence'
@@ -150,7 +151,10 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
   >()
   private hookStatusResumeWrites: Promise<void> = Promise.resolve()
 
-  protected abstract getPtyRecordForPaneKey(paneKey: string): RuntimePtyWorktreeRecord | null
+  protected abstract getPtyRecordForPaneKey(
+    paneKey: string,
+    context?: TerminalIdentityReadContext
+  ): RuntimePtyWorktreeRecord | null
 
   /** Main's word on the Orca launch running in this pane now; the one check every saved note passes. */
   getLaunchStatementForPaneKey: PaneLaunchConfigOf = (paneKey, agent) =>
@@ -267,7 +271,8 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
       statuses,
       session,
       worktreeIdOf: (paneKey) => this.getTerminalWorktreeIdForPaneKey(paneKey),
-      launchConfigOf: this.getLaunchStatementForPaneKey,
+      launchConfigOf: (paneKey, agent) =>
+        launchStatement(this.getPtyRecordForPaneKey(paneKey, context), agent),
       capturedAt: Date.now()
     })
   }

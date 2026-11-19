@@ -67,10 +67,14 @@ export class UnprovenAgentExits {
       })
   }
 
-  /** Resolves once the pane's running proof answers, so a sleep capture reads the quit it is
-   *  still proving. A queued re-proof isn't awaited: marks arriving faster than proofs can't hold
-   *  a sleep back. */
+  /** Answers a sleep capture with one current proof: the running one, else a fresh one for a pane
+   *  still tracked (its last proof may have been voided by input). Queued re-proofs aren't
+   *  awaited, so marks arriving faster than proofs can't hold a sleep back. */
   async settled(paneKey: string): Promise<void> {
-    await this.panes.get(paneKey)?.proof
+    const entry = this.panes.get(paneKey)
+    if (entry && !entry.proving) {
+      this.onCommandFinished(paneKey)
+    }
+    await entry?.proof
   }
 }

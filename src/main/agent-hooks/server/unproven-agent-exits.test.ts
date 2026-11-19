@@ -20,3 +20,16 @@ it('re-proves once for a mark that lands while the first proof still reads a liv
   exits.onCommandFinished('pane')
   expect(answers).toHaveLength(2)
 })
+
+it('proves a tracked pane afresh for a sleep, whose last proof was voided', async () => {
+  const answers: boolean[] = [false, true]
+  let proofs = 0
+  const exits = new UnprovenAgentExits(async () => answers[proofs++] ?? false)
+  exits.launchRetired('pane', true, true)
+  await new Promise((resolve) => setImmediate(resolve))
+  expect(exits.has('pane')).toBe(true)
+  // Sleep asks once more; the quit is proved now and the pane settles.
+  await exits.settled('pane')
+  await new Promise((resolve) => setImmediate(resolve))
+  expect(exits.has('pane')).toBe(false)
+})
