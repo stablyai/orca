@@ -1,8 +1,9 @@
 import type { Dirent } from 'node:fs'
-import { readdir, rm } from 'node:fs/promises'
+import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { rolloutTwinPath } from '../rollouts/codex-rollout-compressed-twin'
+import { removeStagedCopy } from '../rollouts/codex-rollout-copy'
 
 export async function readEntries(folder: string): Promise<Dirent[]> {
   try {
@@ -18,9 +19,9 @@ export async function readEntries(folder: string): Promise<Dirent[]> {
 // Staged by an import that stopped before cleaning up; passes are serialized, so none is live.
 const IMPORT_STAGED_COPY = /^\.orca-import-.+\.tmp$/
 
-async function removeStagedCopy(path: string): Promise<void> {
+async function sweepStagedCopy(path: string): Promise<void> {
   try {
-    await rm(path, { force: true })
+    await removeStagedCopy(path)
   } catch (error) {
     console.warn('[codex-history-import] Could not remove staged copy:', path, error)
   }
@@ -39,7 +40,7 @@ export class StoreNames {
         const kept = new Set<string>()
         for (const { name } of entries) {
           if (IMPORT_STAGED_COPY.test(name)) {
-            await removeStagedCopy(join(this.storeHome, folder, name))
+            await sweepStagedCopy(join(this.storeHome, folder, name))
           } else {
             kept.add(name)
           }
