@@ -13,17 +13,15 @@ const OSC_133_PREFIX = '\x1b]133;'
 const JOB_STOP_STATUSES: ReadonlySet<number> = new Set([145, 146, 147, 148, 149, 150])
 const MAX_OSC_CARRY_LENGTH = 4096
 
+// Why stop at the first ESC: an ST is the first ESC after the payload, so the search never walks past
+// the next marker; a BEL-terminated burst of markers is scanned once rather than once per marker.
 function findOscTerminator(data: string, startIndex: number): OscTerminator | null {
   const bel = data.indexOf('\x07', startIndex)
-  const st = data.indexOf('\x1b\\', startIndex)
-
-  if (bel === -1 && st === -1) {
-    return null
+  const esc = data.indexOf('\x1b', startIndex)
+  if (esc !== -1 && (bel === -1 || esc < bel) && data[esc + 1] === '\\') {
+    return { index: esc, length: 2 }
   }
-  if (bel !== -1 && (st === -1 || bel < st)) {
-    return { index: bel, length: 1 }
-  }
-  return { index: st, length: 2 }
+  return bel === -1 ? null : { index: bel, length: 1 }
 }
 
 function parseBestEffortExitCode(value: string | undefined): number | null {
@@ -93,21 +91,23 @@ export function createOsc133CommandFinishedScanner(
 
   const scan = (data: string): number => {
     lastFinishEnd = -1
-    let combined = carry + data
+    const combined = carry + data
     // `combined` starts at this index in `data`; negative while it still holds the carry.
-    let combinedStartInChunk = -carry.length
+    const combinedStartInChunk = -carry.length
     carry = ''
+    let offset = 0
 
-    while (combined.length > 0) {
-      const start = combined.indexOf(OSC_133_PREFIX)
+    while (offset < combined.length) {
+      const start = combined.indexOf(OSC_133_PREFIX, offset)
       if (start === -1) {
-        carry = findPrefixCarry(combined)
-        if (carry.length < combined.length) {
+        const rest = combined.slice(offset)
+        carry = findPrefixCarry(rest)
+        if (carry.length < rest.length) {
           noteOutput()
         }
         break
       }
-      if (start > 0) {
+      if (start > offset) {
         noteOutput()
       }
 
@@ -127,8 +127,7 @@ export function createOsc133CommandFinishedScanner(
         combined.slice(payloadStart, terminator.index),
         combinedStartInChunk + sequenceEnd
       )
-      combined = combined.slice(sequenceEnd)
-      combinedStartInChunk += sequenceEnd
+      offset = sequenceEnd
     }
     return lastFinishEnd
   }
