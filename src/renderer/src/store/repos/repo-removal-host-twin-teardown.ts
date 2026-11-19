@@ -48,7 +48,10 @@ function captureMixedAccountRestarts(
   hostId: ExecutionHostId,
   removed: RemovedHostTwinState
 ): ReadonlyMap<string, MixedAccountRestart> {
-  const candidates = Object.entries(state.pendingPaneAccountRestarts).filter(
+  if (removed.mixedTabPtyIds.size === 0) {
+    return new Map()
+  }
+  const candidates = Object.entries(state.pendingPaneAccountRestarts ?? {}).filter(
     ([key, r]) =>
       isCodexAccountRestart(r) &&
       r.hostId === hostId &&
@@ -107,11 +110,10 @@ function matchesCapturedAccountRestart(
     return false
   }
   const bound = state.terminalLayoutsByTabId[r.tabId]?.ptyIdsByLeafId?.[r.leafId]
+  const incarnation = bound ? getTerminalNoticeLifetime(bound)?.incarnationId : undefined
   return (
     !bound ||
-    (bound === captured.oldPtyId &&
-      (!getTerminalNoticeLifetime(bound)?.incarnationId ||
-        getTerminalNoticeLifetime(bound)?.incarnationId === captured.oldIncarnationId))
+    (bound === captured.oldPtyId && (!incarnation || incarnation === captured.oldIncarnationId))
   )
 }
 

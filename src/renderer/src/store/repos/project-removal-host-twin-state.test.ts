@@ -330,14 +330,19 @@ describe('removing a remote project keeps its local twin', () => {
       }
       const removal = store.getState().removeProject(PROJECT_ID, { hostId })
       await started
-      const layout = store.getState().terminalLayoutsByTabId[tab.id]
-      store
-        .getState()
-        .setTabLayout(tab.id, { ...layout, ptyIdsByLeafId: { [survivor]: otherPtyId } })
-      store.getState().clearTabPtyId(tab.id, oldPtyId)
-      expect(store.getState().pendingPaneAccountRestarts[key]).toBe(request)
-      expect(store.getState().terminalLayoutsByTabId[tab.id].ptyIdsByLeafId?.[leaf]).toBeUndefined()
-      resume()
+      try {
+        const layout = store.getState().terminalLayoutsByTabId[tab.id]
+        store
+          .getState()
+          .setTabLayout(tab.id, { ...layout, ptyIdsByLeafId: { [survivor]: otherPtyId } })
+        store.getState().clearTabPtyId(tab.id, oldPtyId)
+        expect(store.getState().pendingPaneAccountRestarts[key]).toBe(request)
+        expect(
+          store.getState().terminalLayoutsByTabId[tab.id].ptyIdsByLeafId?.[leaf]
+        ).toBeUndefined()
+      } finally {
+        resume()
+      }
       await removal
       expect(store.getState().pendingPaneAccountRestarts[key]).toBeUndefined()
       expect(store.getState().ptyIdsByTabId[tab.id]).toEqual([otherPtyId])
