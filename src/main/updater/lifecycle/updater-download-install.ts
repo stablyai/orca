@@ -14,7 +14,7 @@ import { UpdaterRemoteStatus } from './updater-remote-status'
 import { prepareThisProcessShipItStaging } from '../mac-install/shipit-leftover-recovery'
 
 export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
-  protected quitAndInstall(): void {
+  protected quitAndInstall(automatic = false): void {
     if (
       this.localBuildSelectionInProgress ||
       this.pinnedBuildSelectionInProgress ||
@@ -48,7 +48,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     }
     // Defer quit one tick so the renderer can flush state before windows close.
     this.pendingQuitAndInstallTimer = setTimeout(() => {
-      void this.performQuitAndInstall()
+      void this.performQuitAndInstall(automatic)
     }, QUIT_AND_INSTALL_DELAY_MS)
   }
 
@@ -57,7 +57,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     { eligible, backgroundCheck }: { eligible: boolean; backgroundCheck: boolean }
   ): void {
     this.automaticDownloadOfferVersion =
-      eligible && status.state === 'available' ? status.version : null
+      eligible && backgroundCheck && status.state === 'available' ? status.version : null
     const autoDownload =
       backgroundCheck &&
       this.pendingUserInitiatedCheckAfterInFlight === null &&
@@ -66,6 +66,21 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     this.sendStatus(autoDownload ? { ...status, automaticDownload: true } : status)
     if (autoDownload) {
       this.downloadAvailableUpdateAutomatically()
+    }
+  }
+
+  protected publishDownloadStatus(status: UpdateStatus): void {
+    if (status.state !== 'downloaded' || status.version !== this.automaticDownloadVersion) {
+      this.sendStatus(status)
+      return
+    }
+    if (this.pendingQuitAndInstallTimer || this.quitAndInstallInProgress) {
+      return
+    }
+    const automatic = this.getAutomaticUpdates?.() === true
+    this.sendStatus(automatic ? { ...status, installing: true } : status, { force: true })
+    if (automatic) {
+      this.quitAndInstall(true)
     }
   }
 

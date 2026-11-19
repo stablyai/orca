@@ -9,7 +9,7 @@ type BeforeReload = (options: { webContentsId: number; ignoreCache: boolean }) =
 /** saved: durable; failed: renderer refused (cancel); unreachable: reload as before; superseded: document already gone. */
 type PrepareOutcome = 'saved' | 'failed' | 'unreachable' | 'superseded'
 type NativeUnload = {
-  prepare(): Promise<PrepareOutcome>
+  prepare(purpose?: 'update'): Promise<PrepareOutcome>
   /** Tells the last prepared document that main will not reload it after all. */
   cancelPrepared(): void
   beforeReload?: BeforeReload
@@ -22,6 +22,7 @@ const NATIVE_UNLOAD_PREPARE_DEADLINE_MS =
 type ReloadOptions = { ignoreCache: boolean; replacedByClose?: boolean }
 const reloads = new WeakMap<WebContents, { options: ReloadOptions; promise: Promise<void> }>()
 const coordinators = new WeakMap<WebContents, NativeUnload>()
+const updatesInFlight = new WeakSet<WebContents>()
 // Value is whether the close is part of a quit.
 const closesInFlight = new WeakMap<WebContents, boolean>()
 
@@ -68,7 +69,7 @@ export function installNativeUnloadCoordinator(
         cancelPreparedUnload(lastRequest.frame, lastRequest.requestId)
       }
     },
-    prepare() {
+    prepare(purpose) {
       if (pending) {
         return pending
       }
@@ -98,7 +99,9 @@ export function installNativeUnloadCoordinator(
           }
         }
         const giveUp = (reason: string): void => {
-          console.warn(`[window] Renderer ${reason}; reloading anyway`)
+          console.warn(
+            `[window] Renderer ${reason}${purpose === 'update' ? '' : '; reloading anyway'}`
+          )
           // A slow renderer gets its ordinary unload guards back before the reload's beforeunload.
           cancelPreparedUnload(frame, requestId)
           settle('unreachable')
@@ -128,7 +131,11 @@ export function installNativeUnloadCoordinator(
       const prepared = pending
       // Sent after `pending` is assigned so a throwing send clears it instead of caching 'unreachable'.
       try {
-        frame.send('app:prepare-native-unload', requestId)
+        if (purpose === 'update') {
+          frame.send('app:prepare-native-unload', requestId, purpose)
+        } else {
+          frame.send('app:prepare-native-unload', requestId)
+        }
       } catch {
         settlePending?.('unreachable')
       }
@@ -157,13 +164,38 @@ export function installNativeUnloadCoordinator(
   })
 }
 
+/** A background update requires the current document's durable checkpoint. */
+export async function prepareRendererForUpdate(
+  contents: WebContents
+): Promise<(() => void) | null> {
+  const coordinator = coordinators.get(contents)
+  if (
+    !coordinator ||
+    reloads.has(contents) ||
+    closesInFlight.has(contents) ||
+    updatesInFlight.has(contents)
+  ) {
+    return null
+  }
+  updatesInFlight.add(contents)
+  const outcome = await coordinator.prepare('update')
+  if (outcome !== 'saved') {
+    updatesInFlight.delete(contents)
+    return null
+  }
+  return () => {
+    coordinator.cancelPrepared()
+    updatesInFlight.delete(contents)
+  }
+}
+
 export async function reloadWithRendererCheckpoint(
   contents: WebContents,
   ignoreCache = false,
   beforeReload?: BeforeReload
 ): Promise<void> {
   // A reload would discard the quit close the renderer is still answering, silently dropping the quit.
-  if (closesInFlight.get(contents) === true) {
+  if (closesInFlight.get(contents) === true || updatesInFlight.has(contents)) {
     return
   }
   const existing = reloads.get(contents)

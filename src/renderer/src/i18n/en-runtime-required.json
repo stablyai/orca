@@ -3276,6 +3276,7 @@
   },
   "updates": {
     "failure": {
+      "automaticInstallCheckpointFailed": "Orca could not save the current window before restarting. Try installing the update again.",
       "channelUnsupportedPlatform": "{{channel}} builds are produced only for macOS and Windows.",
       "invalidReleaseTag": "\"{{tag}}\" is not a valid release tag.",
       "linuxPackageExternallyManaged": "This copy of Orca is managed by your system package manager, so Orca cannot install updates itself. Update Orca through your distribution instead.",

@@ -54,11 +54,15 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
   }
 
   applyAutomaticUpdatesSetting(): void {
-    this.downloadAvailableUpdateAutomatically()
+    if (this.currentStatus.state === 'downloaded' && !this.currentStatus.installing) {
+      this.publishDownloadStatus(this.currentStatus)
+    } else {
+      this.downloadAvailableUpdateAutomatically()
+    }
   }
 
-  quitAndInstall(): void {
-    super.quitAndInstall()
+  quitAndInstall(automatic = false): void {
+    super.quitAndInstall(automatic)
   }
 
   isQuittingForUpdate(): boolean {
@@ -227,7 +231,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
       sendCheckFailureStatus: (message, userInitiated, source, sourceError) =>
         this.sendCheckFailureStatus(message, userInitiated, source, sourceError),
       sendErrorStatus: (message, userInitiated) => this.sendErrorStatus(message, userInitiated),
-      sendStatus: (status) => this.sendStatus(status),
+      sendStatus: (status) => this.publishDownloadStatus(status),
       publishUpdateOffer: (status, options) => this.publishUpdateOffer(status, options),
       scheduleAutomaticUpdateCheck: (delayMs) => this.scheduleAutomaticUpdateCheck(delayMs),
       shouldSuppressMissingManifestPrereleaseFallbackEvent: (message, error) =>

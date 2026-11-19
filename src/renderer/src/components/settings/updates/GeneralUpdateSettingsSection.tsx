@@ -154,7 +154,8 @@ export function GeneralUpdateSettingsSection({
               <RefreshCw className="size-3.5" />
               {t('auto.components.UpdateCard.b3b02a9d84', 'Try again')}
             </Button>
-          ) : updateStatus.state === 'downloaded' ? (
+          ) : updateStatus.state === 'downloaded' &&
+            !(updateStatus.automaticDownload && updateStatus.installing) ? (
             <Button
               variant="default"
               size="sm"
@@ -254,8 +255,8 @@ export function GeneralUpdateSettingsSection({
             <>
               {t('auto.components.settings.GeneralUpdateSettingsSection.a6b37929dc', 'Version')}{' '}
               {updateStatus.version}{' '}
-              {updateStatus.automaticDownload
-                ? t('settings.automaticUpdates.readyStatus', 'will install when you quit Orca.')
+              {updateStatus.installing
+                ? t('settings.automaticUpdates.installingStatus', 'is being installed.')
                 : t(
                     'auto.components.settings.GeneralUpdateSettingsSection.d89806cc89',
                     'is ready to install.'

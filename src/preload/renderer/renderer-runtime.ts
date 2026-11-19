@@ -73,7 +73,7 @@ const nativeUnloadRequests = new Set<string>()
 let preparedNativeUnload: string | undefined
 
 // Main asks before menu, shortcut, DevTools and in-app reloads; prepare exactly like the renderer's own restart.
-ipcRenderer.on('app:prepare-native-unload', (_event, requestId: unknown) => {
+ipcRenderer.on('app:prepare-native-unload', (_event, requestId: unknown, purpose: unknown) => {
   if (typeof requestId !== 'string') {
     return
   }
@@ -94,8 +94,10 @@ ipcRenderer.on('app:prepare-native-unload', (_event, requestId: unknown) => {
       return
     }
     // Preparation consumed the staging reason; republish so the toast names why the reload stopped.
-    publishShutdownCheckpointFailureReason(formatShutdownCheckpointFailureReason(error))
-    window.dispatchEvent(new Event(ORCA_NATIVE_UNLOAD_FAILED_EVENT))
+    if (purpose !== 'update') {
+      publishShutdownCheckpointFailureReason(formatShutdownCheckpointFailureReason(error))
+      window.dispatchEvent(new Event(ORCA_NATIVE_UNLOAD_FAILED_EVENT))
+    }
     ipcRenderer.send('app:native-unload-prepared', { requestId, ok: false })
   })
 })

@@ -121,7 +121,6 @@ export function UpdateCardStateContent({
     ) : (
       <UpdateReadyToInstallContent
         version={status.version}
-        installsOnQuit={status.automaticDownload}
         onRestart={onInstallRetry}
         onClose={onCollapse}
       />

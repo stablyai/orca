@@ -8,6 +8,7 @@ vi.mock('electron', async () => {
 })
 import {
   installNativeUnloadCoordinator,
+  prepareRendererForUpdate,
   reloadWithRendererCheckpoint,
   replacePendingReloadWithClose
 } from './native-unload-coordinator'
@@ -38,7 +39,8 @@ function fixture() {
     frame,
     reply,
     reload: (ignoreCache = false) => reloadWithRendererCheckpoint(webContents, ignoreCache),
-    replaceWithClose: () => replacePendingReloadWithClose(webContents)
+    replaceWithClose: () => replacePendingReloadWithClose(webContents),
+    prepareForUpdate: () => prepareRendererForUpdate(webContents)
   }
 }
 
@@ -89,4 +91,20 @@ describe('native reload checkpoint', () => {
     // The page suspended its unload guards for the reload; the close must find them restored.
     expect(frame.send).toHaveBeenLastCalledWith('app:native-unload-canceled', expect.any(String))
   })
+})
+
+it('keeps the prepared update document in place until the installer proceeds or cancels', async () => {
+  const { contents, reply, reload, prepareForUpdate } = fixture()
+  const prepared = prepareForUpdate()
+  reply(true)
+  const cancel = await prepared
+  expect(cancel).not.toBeNull()
+  await reload()
+  expect(contents.reload).not.toHaveBeenCalled()
+
+  cancel?.()
+  const reloading = reload()
+  reply(true)
+  await reloading
+  expect(contents.reload).toHaveBeenCalled()
 })

@@ -1,4 +1,7 @@
 import { useState } from 'react'
+import { Info } from 'lucide-react'
+import { Button } from '../../ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
@@ -26,8 +29,27 @@ export function AutomaticUpdatesSetting(): React.JSX.Element {
   return (
     <SearchableSetting title={title} description={description}>
       <SettingsSwitchRow
-        label={title}
-        description={description}
+        label={
+          <span className="inline-flex items-center gap-1.5">
+            {title}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={t('settings.automaticUpdates.info', 'About automatic updates')}
+                >
+                  <Info className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4} className="max-w-xs">
+                {description}
+              </TooltipContent>
+            </Tooltip>
+          </span>
+        }
+        ariaLabel={title}
         checked={enabled}
         onChange={toggleAutomaticUpdates}
         disabled={!settingsLoaded || saving}

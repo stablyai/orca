@@ -75,7 +75,14 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
     return `${userInitiated ? 'user' : 'auto'}:${message}`
   }
 
+  protected cancelAutomaticInstall(version: string): void {
+    this.resetQuitForUpdateState()
+    this.sendStatus({ state: 'downloaded', version }, { force: true })
+  }
+
   protected resetQuitForUpdateState(): void {
+    this.cancelAutomaticInstallPreparation?.()
+    this.cancelAutomaticInstallPreparation = null
     this.quitAndInstallInProgress = false
     this.quittingForUpdate = false
     this.updateInstallCommitted = false

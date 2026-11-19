@@ -68,6 +68,7 @@ export abstract class UpdaterState {
   protected pendingQuitAndInstallTimer: ReturnType<typeof setTimeout> | null = null
   protected macDeferredStagingTimer: ReturnType<typeof setTimeout> | null = null
   protected quitAndInstallInProgress = false
+  protected cancelAutomaticInstallPreparation: (() => void) | null = null
   protected updateInstallMode: UpdateInstallMode = 'interactive'
   protected lastInstallDeferralVersion = {
     download: null as string | null,

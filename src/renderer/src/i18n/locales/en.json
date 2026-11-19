@@ -1906,9 +1906,10 @@
     },
     "automaticUpdates": {
       "saveFailed": "Could not save automatic updates.",
-      "readyStatus": "will install when you quit Orca.",
       "title": "Automatic updates",
-      "description": "Download desktop updates in the background and install them when you quit Orca."
+      "description": "When a background check finds an update, Orca downloads it and restarts to install it automatically.",
+      "info": "About automatic updates",
+      "installingStatus": "is being installed."
     }
   },
   "menu": {
@@ -25317,6 +25318,7 @@
     "wslMoveInstallHeld": "A project is moving to its WSL host. Install the update once the move finishes.",
     "wslMoveUndoInstallHeld": "A project is coming back from its WSL host. Install the update once that finishes.",
     "failure": {
+      "automaticInstallCheckpointFailed": "Orca could not save the current window before restarting. Try installing the update again.",
       "releaseNotReady": "A newer release isn't available for this device yet. Check again later.",
       "updateServerUnreachable": "Couldn't reach the update server. Try again in a few minutes.",
       "channelUnsupportedPlatform": "{{channel}} builds are produced only for macOS and Windows.",
@@ -25347,9 +25349,9 @@
       "rateLimitedInMinutesSignedOut_other": "GitHub rate limit reached. Try again in about {{count}} minutes, or run `gh auth login` so Orca can use your account's higher limit."
     },
     "automatic": {
-      "readySummary": "Orca {{version}} is ready. It will install the next time you quit.",
-      "later": "Later",
-      "restartNow": "Restart now"
+      "downloading": "Downloading Orca {{version}}…",
+      "installing": "Installing Orca {{version}}…",
+      "restarting": "Orca will restart automatically."
     }
   },
   "jira": {
