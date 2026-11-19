@@ -32,6 +32,16 @@ export function assertLegacyChatSettled(store: Database.Database, sessionId: str
   }
 }
 
+/** Before walking any chat: one pending anywhere would refuse the walk once it reached that chat. */
+export function assertNoLegacyComparesDue(store: Database.Database): void {
+  const due = store.prepare('SELECT 1 FROM agent_session_store_meta WHERE key>? AND key<? LIMIT 1')
+  for (const prefix of [JOURNAL_LEGACY_COMPARE, JOURNAL_LEGACY_COPY_DUE]) {
+    if (due.get(prefix, prefixEnd(prefix))) {
+      throw new JournalLegacyRetentionError('an older Orca chat is still being compared')
+    }
+  }
+}
+
 /**
  * Copies the reconcile kept for chats an older Orca continued take their history from the
  * original when they convert, which clears their mapping. Pages of those still mapped at `copies`,

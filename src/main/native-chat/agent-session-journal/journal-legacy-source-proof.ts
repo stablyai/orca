@@ -11,7 +11,7 @@ import {
   type LegacyClaim,
   type LegacySessionHold
 } from './journal-legacy-content-proof'
-import { readLegacyCopiesProofPage } from './journal-legacy-proof-copies'
+import { assertNoLegacyComparesDue, readLegacyCopiesProofPage } from './journal-legacy-proof-copies'
 import type Database from '../../sqlite/sync-database'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 
@@ -65,6 +65,7 @@ export function readJournalLegacyProofPage(
   destination: Database.Database
 ): LegacyProofPage {
   if (cursor.table === 0 && cursor.after === null) {
+    assertNoLegacyComparesDue(destination)
     for (const { name, columns } of JOURNAL_DOMAIN_PROFILE_TABLES) {
       const present = new Set(
         destination

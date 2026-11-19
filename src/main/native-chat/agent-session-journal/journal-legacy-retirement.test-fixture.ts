@@ -142,11 +142,18 @@ export async function profile(
     'legacyProof' | 'importState' | 'recycleSourceReaders' | 'releaseSourceReaders'
   >
   const ensured: string[] = []
+  /** Converting a chat named here fails once with its error, as a lost reader would. */
+  const failOnce = new Map<string, Error>()
   const conversions = {
     ensure: async (id: string) => {
       ensured.push(id)
       if (options.failConversion?.sessionId === id) {
         throw options.failConversion.error
+      }
+      const once = failOnce.get(id)
+      if (once) {
+        failOnce.delete(id)
+        throw once
       }
       if (journalDomainImportState(db, id).state === 'ready') {
         return 'epoch'
@@ -195,6 +202,7 @@ export async function profile(
     source,
     readers,
     convert: conversions.ensure,
-    ensured
+    ensured,
+    failOnce
   }
 }

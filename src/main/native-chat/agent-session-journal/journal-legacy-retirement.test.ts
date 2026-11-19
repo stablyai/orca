@@ -550,4 +550,34 @@ it('converts the copies the reconcile keeps, and keeps the original while a chat
   expect(companions(oversized.filename)).toContain(oversized.filename)
   expect(oversized.ensured.filter((id) => id === 'unopened')).toHaveLength(1)
   expect(String(oversized.errors.at(-1))).toContain('too large to convert')
+
+  // A copy whose conversion fails once is converted on the next attempt, with none skipped.
+  const twoCopies = await profile()
+  olderOrcaChat(twoCopies.filename, 'second')
+  await initializeJournalDomainDatabase(twoCopies.root)
+  await twoCopies.convert('unopened')
+  await twoCopies.convert('second')
+  continueInOlderOrca(twoCopies.filename, 'unopened')
+  continueInOlderOrca(twoCopies.filename, 'second')
+  await initializeJournalDomainDatabase(twoCopies.root)
+  const copies = twoCopies.db
+    .prepare(
+      `SELECT substr(key,28) AS id FROM agent_session_store_meta
+      WHERE key LIKE 'journal.legacy-copy-source:%' ORDER BY key`
+    )
+    .all()
+    .map((row) => String(row.id))
+  expect(copies).toHaveLength(2)
+  twoCopies.failOnce.set(copies[1]!, new Error('journal SQL reader exited'))
+  vi.useFakeTimers({ toFake: ['performance'] })
+  const twoCopiesRetirement = twoCopies.launch()
+  await twoCopiesRetirement.run()
+  expect(companions(twoCopies.filename)).toContain(twoCopies.filename)
+  vi.advanceTimersByTime(60_000)
+  await twoCopiesRetirement.run()
+  vi.useRealTimers()
+  expect(companions(twoCopies.filename)).toEqual([])
+  for (const copy of copies) {
+    expect(journalDomainImportState(twoCopies.db, copy).state).toBe('ready')
+  }
 })
