@@ -7506,9 +7506,9 @@
           "8fbe1f37c1": "環境",
           "2d133152fa": "無預設環境",
           "3f1bdf3cb4": "環境文字過長，無法安全解析。",
-          "codexSessionSource": "要匯入的 Codex 主目錄",
-          "codexSessionSourceInfo": "關於匯入 Codex 歷史記錄",
-          "codexSessionSourceTooltip": "Orca 在隔離的主目錄中執行 Codex。將此項指向您現有的 Codex 主目錄以匯入工作階段歷史記錄。留空則使用 ~/.codex。",
+          "codexSessionSource": "從此處匯入 Codex 對話",
+          "codexSessionSourceInfo": "關於匯入 Codex 對話",
+          "codexSessionSourceTooltip": "在帳號之間共用歷史記錄時，Orca 會將此 Codex 主目錄中的對話複製到 ~/.codex，讓 /resume 列出它們。對話複製後在此資料夾中新增的內容不會出現在副本中。",
           "noAgentsDetected": "未偵測到代理程式。若已安裝代理程式，可能是偵測作業逾時。",
           "9f30095d49": "代理程式權限"
         },
@@ -19695,9 +19695,6 @@
         "failed": "無法繼續此聊天。請重試，或傳送一則訊息。",
         "explanation": "繼續後，代理程式會先檢查其上一步是否已完成。"
       },
-      "antigravitySignIn": {
-        "sentence": "Antigravity 尚未登入。請前往 <settings>設定 → 帳戶 → Antigravity</settings> 登入，再重新傳送訊息。"
-      },
       "claudeSignIn": {
         "signingIn": "正在登入…"
       },
@@ -20812,16 +20809,17 @@
   },
   "featureTips": {
     "voice": {
-      "demoPrompt": "審查這份差異的邊界情況，並為發現的問題新增測試。",
-      "startDictation": "開始聽寫",
-      "agentPromptTitle": "代理程式提示詞",
-      "listening": "正在聆聽…",
       "unassignedInstruction": "在聚焦的窗格中使用語音聽寫前，請先設定聽寫快速鍵。",
       "shortcutInstruction": "將焦點移至終端機、編輯器或代理程式提示詞輸入框，然後按 <shortcut/> 開始語音聽寫。再按一次 <shortcut/> 即可停止。",
       "changeInSettings": "隨時在<link>設定 → 語音</link>中變更模型、聽寫模式或快速鍵。",
       "title": "在任何窗格中聽寫",
       "description": "在任何已聚焦的窗格中開始語音聽寫，再次使用快速鍵即可停止。",
-      "cta": "設定語音聽寫"
+      "cta": "設定語音聽寫",
+      "demoFirstPhrase": "在小螢幕上，結帳按鈕會蓋住頁尾。",
+      "demoSecondPhrase": "能加個測試嗎？",
+      "demoUserPrompt": "加上付款徽標",
+      "demoTabTitle": "結帳頁尾",
+      "demoReply": "已在結帳頁尾加上付款徽標。"
     },
     "sessionSearch": {
       "enableFailed": "無法開啟工作階段搜尋。請重試。",
@@ -22345,7 +22343,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "切換工作樹",
+      "worktreePalette": "全域搜尋",
       "worktreeNavigateUp": "上一個工作樹",
       "worktreeNavigateDown": "下一個工作樹",
       "workspaceCreate": "建立工作樹",
@@ -22457,6 +22455,9 @@
       "45347db2a3": "分頁導覽",
       "aab2837fa5": "快速指令",
       "3492a954c8": "終端機窗格"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "切換工作樹"
     }
   },
   "gpuFallback": {

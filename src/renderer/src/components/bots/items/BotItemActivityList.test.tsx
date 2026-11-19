@@ -64,7 +64,7 @@ it("opens an answer's file link and navigates between its answer and question", 
   render(
     <NativeChatFileLinkExistenceContext value={existence}>
       <NativeChatLinkClickContext value={opened}>
-        <BotItemActivityList bot={BOT} item={makeTestBotItem(6)} events={events} />
+        <BotItemActivityList bot={BOT} item={makeTestBotItem(6)} events={events} askShown={false} />
       </NativeChatLinkClickContext>
     </NativeChatFileLinkExistenceContext>
   )
@@ -79,4 +79,30 @@ it("opens an answer's file link and navigates between its answer and question", 
 
   fireEvent.click(screen.getByRole('button', { name: /^Answered at .+\. Go to the answer$/ }))
   expect(document.activeElement?.getAttribute('data-bot-item-comment-id')).toBe('e4')
+})
+
+it('renders linked references without their stored prefixes', () => {
+  const events: BotItemEvent[] = [
+    {
+      id: 'e2',
+      kind: 'linked',
+      actor: ASKER,
+      data: {
+        links: [
+          'url:https://example.invalid/reviews/a-long-reference?view=full',
+          'file:/workspace/sample/notes.md'
+        ]
+      },
+      at: 200
+    }
+  ]
+  render(
+    <BotItemActivityList bot={BOT} item={makeTestBotItem(6)} events={events} askShown={false} />
+  )
+
+  const row = screen.getByText(/linked/).closest('div')!
+  expect(row.textContent).toContain(
+    'linked https://example.invalid/reviews/a-long-reference?view=full, /workspace/sample/notes.md'
+  )
+  expect(row.textContent).not.toMatch(/url:|file:/)
 })

@@ -98,6 +98,8 @@ function tabContent(access: BotAccessRequests | null, options: TabOptions = {}) 
       routeBot: { ...routeBot, bot: options.bot ?? routeBot.bot },
       client: options.client ?? null,
       showToast: () => {},
+      online: true,
+      hostName: 'Studio Mac',
       accessRequests: access,
       lookAround: null
     })
@@ -280,6 +282,8 @@ describe('who can ask in the bot sheet', () => {
           routeBot: { ...routeBot, bot: shared },
           client: client(new Error('closed')),
           showToast,
+          online: true,
+          hostName: 'Studio Mac',
           accessRequests: null,
           lookAround: null
         })

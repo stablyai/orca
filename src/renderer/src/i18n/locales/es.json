@@ -7267,9 +7267,9 @@
           "8fbe1f37c1": "Entorno",
           "2d133152fa": "Sin entorno predeterminado",
           "3f1bdf3cb4": "El texto de entorno es demasiado grande para analizarlo de forma segura.",
-          "codexSessionSource": "Directorio Codex a importar",
-          "codexSessionSourceInfo": "Sobre la importación del historial de Codex",
-          "codexSessionSourceTooltip": "Orca ejecuta Codex en un directorio aislado. Señala aquí a tu directorio Codex existente para importar el historial de sesiones. Dejar vacío usa ~/.codex.",
+          "codexSessionSource": "Importar conversaciones de Codex desde",
+          "codexSessionSourceInfo": "Sobre la importación de conversaciones de Codex",
+          "codexSessionSourceTooltip": "Mientras el historial se comparte entre cuentas, Orca copia las conversaciones de este directorio Codex a ~/.codex para que /resume las muestre. Los turnos añadidos en esta carpeta después de copiar una conversación no llegan a la copia.",
           "03e1a5081a": "on {{value0}}",
           "25a41a9aad": "Volver a detectar los agentes instalados en este servidor",
           "remoteDetectionFailed": "No se pudieron detectar los agentes instalados. Verifique la conexión del host e inténtelo nuevamente.",
@@ -19772,9 +19772,6 @@
         "replaceDescription": "Reanudar “{{title}}” aquí detendrá lo que {{agent}} está haciendo en este chat.",
         "replaceTitle": "¿Reemplazar este chat?"
       },
-      "antigravitySignIn": {
-        "sentence": "Antigravity no ha iniciado sesión. Inicia sesión en <settings>Ajustes → Cuentas → Antigravity</settings>. Después, vuelve a enviar tu mensaje."
-      },
       "claudeSignIn": {
         "signingIn": "Iniciando sesión…"
       },
@@ -21322,16 +21319,17 @@
       "cta": "Activar la búsqueda de sesiones"
     },
     "voice": {
-      "demoPrompt": "Revisa este diff en busca de casos límite y agrega pruebas para lo que encuentres.",
-      "startDictation": "Iniciar dictado",
-      "agentPromptTitle": "Prompt del agente",
-      "listening": "Escuchando...",
       "unassignedInstruction": "Asigna un atajo de dictado antes de iniciar el dictado por voz en un panel enfocado.",
       "shortcutInstruction": "Enfoca un terminal, un editor o un campo de entrada del agente y pulsa <shortcut/> para iniciar el dictado por voz. Pulsa <shortcut/> de nuevo para detenerlo.",
       "changeInSettings": "Cambia el modelo, el modo de dictado o el atajo cuando quieras en <link>Ajustes → Voz</link>.",
       "title": "Dicta en cualquier panel",
       "description": "Inicia el dictado de voz en cualquier panel con el foco y vuelve a usar el atajo para detenerlo.",
-      "cta": "Configurar el dictado de voz"
+      "cta": "Configurar el dictado de voz",
+      "demoFirstPhrase": "El botón de pago tapa el pie en pantallas pequeñas.",
+      "demoSecondPhrase": "¿Añades un test?",
+      "demoUserPrompt": "Añade logos de pago",
+      "demoTabTitle": "Pie del checkout",
+      "demoReply": "Añadí logos de pago al pie del checkout."
     },
     "eyebrowNew": "Nuevo",
     "eyebrowTip": "Consejo",
@@ -23060,7 +23058,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "Cambiar de worktree",
+      "worktreePalette": "Buscar en todo",
       "worktreeNavigateUp": "Worktree anterior",
       "worktreeNavigateDown": "Worktree siguiente",
       "workspaceCreate": "Crear worktree",
@@ -23172,6 +23170,9 @@
       "45347db2a3": "Navegación entre pestañas",
       "aab2837fa5": "Comandos rápidos",
       "3492a954c8": "Paneles del terminal"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "Cambiar de worktree"
     }
   },
   "gpuFallback": {

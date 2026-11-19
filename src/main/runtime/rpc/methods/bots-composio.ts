@@ -1,7 +1,6 @@
 // `bots.composio.*`: a bot's Composio apps. Orca reads the app list and the bot's sign-ins with the
 // owner's key on the bot's host; the key itself is set only from the owner's Orca.
 import { randomUUID } from 'node:crypto'
-import { botToolsSupported } from '../../../../shared/bot-tools'
 import { composioSetupCardBody } from '../../../../shared/composio/composio-setup-card'
 import { composioAppName } from '../../../../shared/composio/composio-curated-apps'
 import {
@@ -32,7 +31,7 @@ import { createComposioIngress } from './bots-composio-ingress'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
 import { ownerOnly } from './bots-caller-gates'
-import { botToolsCli } from './bots-tools'
+import { botToolsHome } from './bots-tools'
 
 const instances = new WeakMap<
   OrcaRuntimeService,
@@ -53,12 +52,8 @@ export function instanceOf(runtime: OrcaRuntimeService) {
   if (!instance) {
     const bots: ComposioBots = new ComposioBots({
       keys: { read: readComposioKey, save: saveComposioKey, clear: clearComposioKey },
-      cliOf: async (botId) => botToolsCli(runtime, botOf(runtime, botId)),
-      botIds: () =>
-        runtime.bots
-          .list()
-          .filter((bot) => botToolsSupported(bot.agent))
-          .map((bot) => bot.id),
+      cliOf: async (botId) => botToolsHome(runtime, botOf(runtime, botId)),
+      botIds: () => runtime.bots.list().map((bot) => bot.id),
       botExists: (botId) => runtime.bots.list().some((bot) => bot.id === botId),
       nameOf: (botId) => runtime.bots.list().find((bot) => bot.id === botId)?.name ?? botId,
       onChange: () => runtime.notifyBotsChanged({ kinds: ['settings'] }),

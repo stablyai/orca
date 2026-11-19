@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path'
 import '../../../filesystem/atomic-file-publication'
 import { renameFileWithWindowsRetry } from '../../../../shared/file-write/windows-retry-file-operations'
 import { writeRollingFileBackup } from '../../../filesystem/rolling-file-backup'
+import { assertGuardedFileCurrent } from '../../../filesystem/concurrent-file-edit-guard'
 import {
   observeFilePublication,
   observedExistsSync as existsSync,
@@ -30,11 +31,16 @@ export function writeTomlConfigAtomically(
       encoding: 'utf-8',
       mode: resolveCodexConfigTomlFileMode(writePath)
     })
+    // A rejected update must not rotate the backup first.
+    assertGuardedFileCurrent(writePath)
     if (existsSync(writePath)) {
       writeRollingFileBackup(writePath, `${writePath}.bak`)
     }
     // Checked before every rename attempt, so only the re-read is left between check and rename.
-    const stillCurrent = options ? () => options.stillCurrent(writePath) : undefined
+    const stillCurrent = (): boolean => {
+      assertGuardedFileCurrent(writePath)
+      return options ? options.stillCurrent(writePath) : true
+    }
     if (!renameFileWithWindowsRetry(temporaryPath, writePath, stillCurrent)) {
       return false
     }

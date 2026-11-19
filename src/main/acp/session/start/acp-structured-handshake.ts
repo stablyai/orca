@@ -123,7 +123,7 @@ export async function initializeAcpStructuredSession(
           const opened = await connection.start(
             {
               cwd,
-              mcpServers: [],
+              mcpServers: launch.mcpServers ?? [],
               sessionId: resume.sessionId,
               ...(launch.sessionMeta && launch.sessionMetaOnReopen
                 ? { _meta: launch.sessionMeta }
@@ -190,7 +190,7 @@ export async function initializeAcpStructuredSession(
     started = await connection.start(
       {
         cwd: launch.cwd,
-        mcpServers: [],
+        mcpServers: launch.mcpServers ?? [],
         ...(launch.sessionMeta ? { _meta: launch.sessionMeta } : {}),
         ...setup
       },

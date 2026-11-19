@@ -153,7 +153,8 @@ export function sanitizeHydratedEntry(
   const hostTurn = readHostTurnRecord(record.hostTurn)
   return {
     paneKey,
-    ...(payload.state === 'done' && payload.sessionBoundary !== true && !providerSessionOnly
+    // A sleep also settles a conversation that had no turn yet (a session boundary).
+    ...(payload.state === 'done' && !providerSessionOnly
       ? { paneSleep: readPaneSleep(record.paneSleep) }
       : {}),
     agentPresence: readAgentProcessPresence(record.agentPresence),

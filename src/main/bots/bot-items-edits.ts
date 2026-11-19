@@ -6,6 +6,7 @@ import { BotItemError } from './bot-item-error'
 import {
   assertBotItemAddable,
   assertBotItemText,
+  botItemCommentData,
   linkWords,
   uniqueBotItemLinks,
   mailsItemChat,
@@ -90,10 +91,13 @@ export class BotItemsEdits extends BotItemsReads {
     if (changes.reason !== undefined && changes.status !== 'canceled') {
       throw new BotItemError('invalid_argument', '--reason goes with --status canceled.')
     }
-    if (changes.status === 'needs_you' && !changes.comment?.trim()) {
+    if (changes.ask !== undefined && changes.status !== 'needs_you') {
+      throw new BotItemError('invalid_argument', '--ask goes with --status needs-you.')
+    }
+    if (changes.status === 'needs_you' && !changes.comment?.trim() && !changes.ask) {
       throw new BotItemError(
         'invalid_argument',
-        'Needs you comes with the question for your owner: `orca bot item set <n> --status needs-you --comment "..."`.'
+        'Needs you comes with the question for your owner: `orca bot item set <n> --status needs-you --ask "..." --option "..." --option "..."`, or `--comment "..."` for an open question.'
       )
     }
     if (changes.comment !== undefined && changes.status === undefined) {
@@ -134,7 +138,11 @@ export class BotItemsEdits extends BotItemsReads {
         : undefined
     const edited = Object.keys(fields).length > 0
     const commentText = changes.comment?.trim() ? changes.comment : undefined
-    if (!edited && status === undefined && commentText === undefined) {
+    const commentData =
+      commentText !== undefined || changes.ask
+        ? botItemCommentData(commentText, changes.ask, status === 'needs_you')
+        : undefined
+    if (!edited && status === undefined && commentData === undefined) {
       return { uid, eventId: null, unchanged: true }
     }
     const closing = status === 'done' || status === 'canceled'
@@ -154,9 +162,9 @@ export class BotItemsEdits extends BotItemsReads {
       eventId = this.appendEvent(uid, 'edited', actor, { fields, ...note }, mail, now)
     }
     const comment =
-      commentText === undefined
+      commentData === undefined
         ? null
-        : this.appendEvent(uid, 'commented', actor, { text: commentText }, mail, now)
+        : this.appendEvent(uid, 'commented', actor, commentData, mail, now)
     eventId = comment ?? eventId
     if (status !== undefined && !reopening) {
       eventId = move(comment)

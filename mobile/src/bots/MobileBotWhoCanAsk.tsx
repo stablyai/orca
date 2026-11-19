@@ -11,11 +11,14 @@ import {
   botStartingPermission,
   type BotAccessFix
 } from '../../../src/shared/bots/bot-access-reach'
+import type { BotMember } from '../../../src/shared/bot-types'
 import { ConfirmContent } from '../components/sheets/ConfirmModal'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
 import { MobileBotTextButton } from './MobileBotTextButton'
 import { phoneBotReachLines, type PhoneAccessBot } from './bot-access-request-copy'
 import { optionStyles } from './mobile-bot-option-styles'
+import { memberSourceLabel } from './mobile-bot-sheet-copy'
 
 // The phone can't read the app's chat permission, nor turn Google off: those stay on the desktop.
 const PHONE_FIXES: Record<
@@ -24,6 +27,31 @@ const PHONE_FIXES: Record<
 > = {
   'only-me': { headingId: 'fixOnlyMe', actionId: 'fixOnlyMeAction' },
   'ask-for-approval': { headingId: 'fixAsk', actionId: 'fixAskAction' }
+}
+
+/** One person who can ask, with Remove. */
+export function MobileBotMemberRow(props: {
+  member: BotMember
+  disabled: boolean
+  onRemove: () => void
+}) {
+  const t = useMobileTranslation()
+  return (
+    <ListRow
+      title={props.member.name}
+      subtitle={memberSourceLabel(props.member)}
+      accessory={
+        <MobileBotTextButton
+          label={t('bots.settings.remove', 'Remove')}
+          accessibilityLabel={t('bots.settings.removeName', 'Remove {{name}}', {
+            name: props.member.name
+          })}
+          disabled={props.disabled}
+          onPress={props.onRemove}
+        />
+      }
+    />
+  )
 }
 
 /** The desktop's Who can ask summary and advice, from the same shared model, for the bot sheet. */

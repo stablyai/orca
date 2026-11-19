@@ -7687,9 +7687,9 @@
           "8fbe1f37c1": "Umgebung",
           "2d133152fa": "Keine Standardumgebung",
           "3f1bdf3cb4": "Der Umgebungstext ist zu groß, um sicher analysiert zu werden.",
-          "codexSessionSource": "Codex-Home-Verzeichnis für den Import",
-          "codexSessionSourceInfo": "Informationen zum Import des Codex-Verlaufs",
-          "codexSessionSourceTooltip": "Orca führt Codex in einem isolierten Home-Verzeichnis aus. Hier das vorhandene Codex-Home-Verzeichnis angeben, um dessen Sitzungsverlauf zu importieren. Bei leerem Feld wird ~/.codex verwendet.",
+          "codexSessionSource": "Codex-Unterhaltungen importieren aus",
+          "codexSessionSourceInfo": "Informationen zum Import von Codex-Unterhaltungen",
+          "codexSessionSourceTooltip": "Solange der Verlauf kontoübergreifend geteilt wird, kopiert Orca die Unterhaltungen dieses Codex-Home-Verzeichnisses nach ~/.codex, damit /resume sie anzeigt. Beiträge, die nach dem Kopieren in diesem Ordner hinzukommen, erreichen die Kopie nicht.",
           "noAgentsDetected": "Keine Agenten erkannt. Falls einer installiert ist, hat die Erkennung möglicherweise das Zeitlimit überschritten.",
           "9f30095d49": "Agentenberechtigungen"
         },
@@ -20007,9 +20007,6 @@
         "failed": "Dieser Chat konnte nicht fortgesetzt werden. Erneut versuchen oder eine Nachricht senden.",
         "explanation": "Beim Fortfahren prüft der Agent zuerst, ob sein letzter Schritt abgeschlossen wurde."
       },
-      "antigravitySignIn": {
-        "sentence": "Antigravity ist nicht angemeldet. Unter <settings>Einstellungen → Konten → Antigravity</settings> anmelden. Danach die Nachricht erneut senden."
-      },
       "claudeSignIn": {
         "signingIn": "Anmeldung läuft…"
       },
@@ -21132,16 +21129,17 @@
   },
   "featureTips": {
     "voice": {
-      "demoPrompt": "Diesen Diff auf Sonderfälle prüfen und Tests für alle gefundenen Fälle hinzufügen.",
-      "startDictation": "Diktat starten",
-      "agentPromptTitle": "Agenten-Prompt",
-      "listening": "Warte auf Spracheingabe…",
       "unassignedInstruction": "Vor dem Diktieren in einem fokussierten Bereich ein Tastenkürzel für das Diktat zuweisen.",
       "shortcutInstruction": "Ein Terminal, einen Editor oder einen Agenten-Prompt fokussieren und <shortcut/> drücken, um das Diktat zu starten. Zum Beenden erneut <shortcut/> drücken.",
       "changeInSettings": "Modell, Diktatmodus oder Tastenkürzel jederzeit unter <link>Einstellungen → Spracheingabe</link> ändern.",
       "title": "In jedem Bereich diktieren",
       "description": "Das Diktat in einem fokussierten Bereich starten und mit demselben Tastenkürzel wieder beenden.",
-      "cta": "Sprachdiktat einrichten"
+      "cta": "Sprachdiktat einrichten",
+      "demoFirstPhrase": "Der Checkout-Button überdeckt auf kleinen Bildschirmen den Footer.",
+      "demoSecondPhrase": "Und einen Test dazu?",
+      "demoUserPrompt": "Zahlungslogos einbauen",
+      "demoTabTitle": "Checkout-Footer",
+      "demoReply": "Zahlungslogos im Checkout-Footer ergänzt."
     },
     "sessionSearch": {
       "enableFailed": "Die Sitzungssuche konnte nicht aktiviert werden. Erneut versuchen.",
@@ -22839,7 +22837,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "Worktree wechseln",
+      "worktreePalette": "Alles durchsuchen",
       "worktreeNavigateUp": "Zum vorherigen Worktree wechseln",
       "worktreeNavigateDown": "Zum nächsten Worktree wechseln",
       "workspaceCreate": "Worktree erstellen",
@@ -22951,6 +22949,9 @@
       "45347db2a3": "Tab-Navigation",
       "aab2837fa5": "Schnellbefehle",
       "3492a954c8": "Terminal-Bereiche"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "Worktree wechseln"
     }
   },
   "gpuFallback": {

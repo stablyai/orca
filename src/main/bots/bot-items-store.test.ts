@@ -48,7 +48,8 @@ describe('bot items store', () => {
     expect(asking?.status).toBe('needs_you')
     expect(store.needsYou().map((row) => row.botId)).toEqual(['bot-a'])
     const question = store.viewRows([uid]).questions[uid]
-    expect(question?.data).toEqual({ text: 'Ship behind a flag?' })
+    // Marked: a recorded answer or the owner's reply closes it; a later unrelated comment never does.
+    expect(question?.data).toEqual({ text: 'Ship behind a flag?', answerable: true })
 
     store.set(uid, { status: 'working' }, owner)
     expect(store.get(uid)?.questionEvent).toBeNull()
@@ -464,5 +465,107 @@ describe('bot items store', () => {
     store.close(later, 'done', undefined, owner, NOW + 2 * HOUR)
     expect(store.events(later, 0, 50).some((event) => event.kind === 'unsnoozed')).toBe(false)
     expect(store.get(later)?.snoozedUntil).toBeNull()
+  })
+})
+
+describe("the owner's answer to an item's open question", () => {
+  const me = { kind: 'owner' } as const
+  const MERGE = {
+    questions: [{ prompt: 'Merge now?', options: [{ label: 'Merge' }, { label: 'Wait' }] }]
+  }
+
+  function asked(): { store: BotItemsStore; uid: string; question: number } {
+    const store = open()
+    const { uid } = store.add(input(), owner)
+    store.set(uid, { status: 'needs_you', ask: MERGE }, owner)
+    return { store, uid, question: store.get(uid)!.questionEvent! }
+  }
+
+  it('records it and moves the item to In progress; the same answer id again writes nothing more', () => {
+    const { store, uid, question } = asked()
+
+    const first = store.ownerAnswer(uid, question, [{ picks: [1] }], 'answer-1', me)
+    const written = store.eventsBefore(uid, 0, 50).length
+    const retry = store.ownerAnswer(uid, question, [{ picks: [1] }], 'answer-1', me)
+
+    const events = store.eventsBefore(uid, 0, 50)
+    expect(store.get(uid)?.status).toBe('working')
+    // It names its question as a plain reply does, and its move says an answer made it.
+    expect(events.find((event) => event.id === first.eventId)?.data).toMatchObject({
+      text: '1. Merge now? → Wait',
+      answers: `e${question}`,
+      decisions: [{ picks: [1] }]
+    })
+    expect(
+      events.find((event) => event.kind === 'status' && event.data.from === 'needs_you')?.data
+    ).toEqual({ from: 'needs_you', to: 'working', cause: 'answer' })
+    expect(retry).toEqual({ uid, eventId: first.eventId, unchanged: true })
+    expect(store.eventsBefore(uid, 0, 50)).toHaveLength(written)
+  })
+
+  it('refuses a second answer once the question closed, writing nothing', () => {
+    const { store, uid, question } = asked()
+    store.ownerAnswer(uid, question, [{ picks: [0] }], 'phone', me)
+    const written = store.eventsBefore(uid, 0, 50).length
+
+    expect(() => store.ownerAnswer(uid, question, [{ picks: [1] }], 'desktop', me)).toThrow(
+      /no longer open/
+    )
+    expect(store.eventsBefore(uid, 0, 50)).toHaveLength(written)
+  })
+
+  it('refuses a choice the question does not offer, and the question stays open', () => {
+    const { store, uid, question } = asked()
+
+    expect(() => store.ownerAnswer(uid, question, [{ picks: [5] }], 'answer-1', me)).toThrow(
+      /no such option/
+    )
+    expect(store.get(uid)?.status).toBe('needs_you')
+  })
+})
+
+describe('what an answer keeps', () => {
+  const me = { kind: 'owner' } as const
+
+  it('refuses a partial answer to an ask of several decisions, and the question stays open', () => {
+    const store = open()
+    const { uid } = store.add(input(), owner)
+    store.set(
+      uid,
+      {
+        status: 'needs_you',
+        ask: {
+          questions: [
+            { prompt: 'Title?', options: [{ label: 'A' }, { label: 'B' }] },
+            { prompt: 'Merge?', options: [{ label: 'Yes' }, { label: 'No' }] }
+          ]
+        }
+      },
+      owner
+    )
+    const question = store.get(uid)!.questionEvent!
+
+    expect(() =>
+      store.ownerAnswer(uid, question, [{ picks: [0] }, { picks: [] }], 'partial', me)
+    ).toThrow(/Decision 2 needs an answer/)
+    expect(store.get(uid)?.status).toBe('needs_you')
+  })
+
+  it("keeps a prose question's words on its answer, for a receipt whose question is off the page", () => {
+    const store = open()
+    const { uid } = store.add(input(), owner)
+    store.set(uid, { status: 'needs_you', comment: 'Merge PR 880 now?' }, owner)
+
+    const { eventId } = store.ownerAnswer(
+      uid,
+      store.get(uid)!.questionEvent!,
+      [{ picks: [], text: 'Yes' }],
+      'answer-1',
+      me
+    )
+
+    expect(
+      store.eventsBefore(uid, 0, 50).find((event) => event.id === eventId)?.data
+    ).toMatchObject({ text: 'Yes', asked: 'Merge PR 880 now?' })
   })
 })

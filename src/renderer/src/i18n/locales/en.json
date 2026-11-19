@@ -1584,7 +1584,6 @@
         "readOnly": "Read-only here. Change them in {{agent}}.",
         "plugin": "Plugin",
         "title": "Tools",
-        "unsupported": "This bot uses the tools set up in {{agent}} itself.",
         "details": {
           "reading": "Reading tool details…",
           "editTitle": "Edit tool",
@@ -8834,9 +8833,9 @@
           "8fbe1f37c1": "Environment",
           "2d133152fa": "No default environment",
           "3f1bdf3cb4": "Environment text is too large to parse safely.",
-          "codexSessionSource": "Codex home to import from",
-          "codexSessionSourceInfo": "About importing Codex history",
-          "codexSessionSourceTooltip": "Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex.",
+          "codexSessionSource": "Import Codex conversations from",
+          "codexSessionSourceInfo": "About importing Codex conversations",
+          "codexSessionSourceTooltip": "While history is shared across accounts, Orca copies this Codex home's conversations into ~/.codex so /resume lists them. Turns added in this folder after a conversation is copied don't reach the copy.",
           "noAgentsDetected": "No agents detected. If one is installed, the probe may have timed out.",
           "9f30095d49": "Agent permissions"
         },
@@ -17386,11 +17385,9 @@
           "feature": {
             "tip": {
               "copy": {
-                "1fcdfc5fe8": "New",
                 "f98e9d1bad": "Search every agent session",
                 "990cc29865": "Find any past conversation by what was said in it, then pick up where the agent left off.",
                 "91e2719807": "Turn on session search",
-                "52e9e84809": "Tip",
                 "3eacedec93": "Let agents drive Orca with the Orca CLI",
                 "8d54d0ff53": "Enable agents to coordinate child worktrees and communicate between worktrees.",
                 "0080bc86eb": "Install CLI & Skills",
@@ -21813,9 +21810,6 @@
         "explanation": "Continue, and the agent first checks whether its last step finished.",
         "usageLimitExplanation": "Asks the agent to continue where it left off. Use it once the limit resets."
       },
-      "antigravitySignIn": {
-        "sentence": "Antigravity isn't signed in. Sign in under <settings>Settings → Accounts → Antigravity</settings>. Then send your message again."
-      },
       "signIn": {
         "title": "Sign in to {{agent}} to start chatting"
       },
@@ -22499,6 +22493,16 @@
         "showMore": "Show more",
         "running": "Running",
         "failed": "Failed"
+      },
+      "signInNotice": {
+        "signedIn": "Signed in. Send again.",
+        "notSent": "Not sent: {{agent}} isn't signed in.",
+        "notSignedIn": "{{agent}} isn't signed in.",
+        "opensAntigravitySettings": "Opens Settings → Accounts → Antigravity",
+        "signIn": "Sign in",
+        "signsInClaudeAccount": "Signs in this Claude account",
+        "runsCommand": "Runs {{command}} in a terminal",
+        "thenSlashCommand": "Sign in, then type {{slashCommand}}."
       }
     },
     "tab": {
@@ -23918,16 +23922,17 @@
   },
   "featureTips": {
     "voice": {
-      "demoPrompt": "Review this diff for edge cases and add tests for anything you find.",
-      "startDictation": "Start dictation",
-      "agentPromptTitle": "Agent prompt",
-      "listening": "Listening...",
       "unassignedInstruction": "Assign a dictation shortcut before starting voice dictation in a focused pane.",
       "shortcutInstruction": "Focus a terminal, editor, or agent prompt, then press <shortcut/> to start voice dictation. Press <shortcut/> again to stop.",
       "changeInSettings": "Change the model, dictation mode, or shortcut anytime in <link>Settings → Voice</link>.",
       "title": "Dictate into any pane",
       "description": "Start voice dictation in any focused pane, then use the shortcut again to stop.",
-      "cta": "Set up voice dictation"
+      "cta": "Set up voice dictation",
+      "demoFirstPhrase": "The checkout button overlaps the footer on small screens.",
+      "demoSecondPhrase": "Can you add a test?",
+      "demoUserPrompt": "Add payment badges",
+      "demoTabTitle": "Checkout footer",
+      "demoReply": "Added payment badges to the checkout footer."
     },
     "sessionSearch": {
       "enableFailed": "Could not turn on session search. Try again.",
@@ -25871,7 +25876,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "Switch worktree",
+      "worktreePalette": "Search everything",
       "worktreeNavigateUp": "Previous worktree",
       "worktreeNavigateDown": "Next worktree",
       "workspaceCreate": "Create worktree",
@@ -25987,6 +25992,9 @@
       "aab2837fa5": "Quick commands",
       "3492a954c8": "Terminal panes",
       "bots": "Bots"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "Switch worktree"
     }
   },
   "gpuFallback": {
@@ -28787,7 +28795,6 @@
       "lastTidied": "last tidied {{when}}",
       "memoryFiles_one": "MEMORY.md and {{count}} topic file",
       "memoryFiles_other": "MEMORY.md and {{count}} topic files",
-      "toolsInAgent": "Set up in {{agent}}",
       "toolsFrom": "{{count}} from {{agent}}",
       "toolsMore": "{{count}} more from {{agent}}",
       "withAccess": "{{service}} {{people}} with access",
@@ -28950,9 +28957,6 @@
     },
     "items": {
       "activity": {
-        "answered": "Answered",
-        "askedYou": "asked you",
-        "asksYou": "asks you",
         "canceled": "canceled this",
         "changed": "changed {{field}}",
         "closed": "marked this done",
@@ -28968,6 +28972,7 @@
         "retry": "Retry",
         "discard": "Discard",
         "reopened": "reopened this",
+        "waitingOnYou": "Waiting on you",
         "workerFailed": "Worker stopped:",
         "workerFinished": "Worker finished:",
         "workerStarted": "Worker started:",
@@ -29028,7 +29033,6 @@
       "chatFallback": "Chat",
       "comment": {
         "add": "Add a comment…",
-        "answering": "Answering:",
         "chatDeleted": "{{chat}} was deleted, so files can't be attached here.",
         "hostTooOld": "{{host}} needs an update to attach files to comments.",
         "label": "Comment",
@@ -29144,6 +29148,27 @@
         "inHours_one": "In {{count}} hours",
         "inHours_other": "In {{count}} hours",
         "pickCustom": "Pick a date and time"
+      },
+      "ask": {
+        "closed": "That question closed before your answer went. Your answer is kept on the item.",
+        "asks": "{{name}} asks",
+        "asksAt": "{{name}} asks · {{time}}",
+        "answeredInComment": "Answered in a comment",
+        "notAnswered": "Not answered",
+        "youAnswered": "You answered:",
+        "skipped": "Skipped",
+        "answeredEarlier": "You answered an earlier question",
+        "hostCannotRecord": "This Orca host can’t record answers yet, so nothing was sent. Update Orca on the bot’s computer; your answer is kept here.",
+        "answeredElsewhere": "Answered elsewhere before yours went. Your answer is kept here.",
+        "changed": "This question changed before your answer went. Your answer is kept here.",
+        "withdrawn": "This question closed before your answer went. Your answer is kept here.",
+        "copied": "Copied",
+        "copy": "Copy",
+        "toComment": "Put in the comment box",
+        "dismiss": "Dismiss",
+        "commentNotAnswer": "A comment, with any files, goes to the bot and moves this item to In progress, but isn’t recorded as your answer. Expand the question to answer it.",
+        "uncertain": "This question closed while your answer was being sent, and no reply came, so it may not have gone. Check Activity; your answer is kept here.",
+        "oursEditedAfter": "Your answer was recorded. Words of yours it didn’t include are kept here."
       }
     },
     "search": {
@@ -29446,7 +29471,8 @@
     "tryAgain": "Try again",
     "update": "Update",
     "versions": "{{installed}} → {{latest}}",
-    "modelRequires": "Requires {{product}} {{version}}",
+    "modelRequiresClaude": "Requires Claude Code CLI {{version}}",
+    "modelRequiresCodex": "Requires Codex CLI {{version}}",
     "claudeProduct": "Claude Code",
     "codexProduct": "Codex CLI",
     "commandCopied": "Command copied",
@@ -29462,9 +29488,10 @@
     "statusUpdatingTooltip": "Agent CLI updates are running",
     "statusFailed": "CLI update failed",
     "statusFailedTooltip": "Open to see what went wrong",
-    "statusOne": "CLI update",
-    "statusCount": "{{count}} CLI updates",
+    "statusCount_one": "{{count}} CLI update",
+    "statusCount_other": "{{count}} CLI updates",
     "statusTooltip": "Newer agent CLI versions are out",
+    "failedButton": "Update failed",
     "failedChip": "update failed",
     "failedChipLabel": "Update failed: view error",
     "failedChipTooltip": "Update failed. Click to see details.",

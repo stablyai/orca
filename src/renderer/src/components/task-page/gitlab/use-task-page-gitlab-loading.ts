@@ -1,5 +1,5 @@
 import type { TaskPageProviderMetadataModel } from '../use-task-page-provider-metadata'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { translate } from '@/i18n/i18n'
 import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
 import { knownUnreachableRuntimeHostError } from '@/runtime/hosts/connections/runtime-host-connection-state'
@@ -91,8 +91,15 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
     gitlabMRInvolvement,
     selectedReposKey
   )
+  // Filter chips also bump the nonce; only a bump with the same query is Refresh.
+  const lastRefreshRef = useRef({ nonce: gitlabRefreshNonce, query: '' })
   // Fetch issues and MRs separately so a failure stays scoped to its tab.
   useEffect(() => {
+    // Consumed before any early return, so a Refresh that loads nothing here is never replayed later.
+    const query = `${gitlabView}:${activeGitlabFilter ?? ''}:${gitlabMRInvolvement ?? ''}`
+    const userRefresh =
+      gitlabRefreshNonce !== lastRefreshRef.current.nonce && query === lastRefreshRef.current.query
+    lastRefreshRef.current = { nonce: gitlabRefreshNonce, query }
     if (taskSource !== 'gitlab') {
       return
     }
@@ -178,7 +185,7 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
                 }
               })
           }
-    recheckUnreachableTaskSourceHosts()
+    recheckUnreachableTaskSourceHosts(userRefresh ? { force: true } : undefined)
     const isOnUnreachableHost = (repo: Repo): boolean => {
       const hostId = getTaskPageRepoSourceContext(repo, 'gitlab')?.hostId
       return hostId !== undefined && unreachableTaskSourceHostIds.has(hostId)
