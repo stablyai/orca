@@ -18897,7 +18897,8 @@
           "workspaceDisconnected": "無法執行「{{action}}」— 工作區已中斷連線。",
           "noTabGroup": "無法執行「{{action}}」— 沒有可用的分頁群組。",
           "noMovableChat": "無法執行「{{action}}」— 沒有作用中且可移動的聊天。",
-          "clientUnsupported": "無法執行「{{action}}」— 此用戶端與執行環境不支援此操作。"
+          "clientUnsupported": "無法執行「{{action}}」— 此用戶端與執行環境不支援此操作。",
+          "noMovablePane": "無法執行「{{action}}」— 目前的分頁沒有可移動的分割窗格。"
         }
       },
       "plugins": {
@@ -20940,10 +20941,25 @@
         "copySessionId": "複製工作階段 ID",
         "copySessionIdSuccess": "已複製工作階段 ID",
         "copySessionIdError": "複製工作階段 ID 失敗",
-        "copySessionIdUnavailable": "沒有可複製的工作階段 ID"
+        "copySessionIdUnavailable": "沒有可複製的工作階段 ID",
+        "movePaneToNewTab": "移到新分頁"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "更新 {{value0}} 上的 Orca，以開啟其工作區以外的檔案"
+      },
+      "paneDragHandle": {
+        "tooltip": "拖曳以移到新分頁"
+      },
+      "paneDrop": {
+        "newTabPill": "新分頁"
+      },
+      "movePaneToNewTab": {
+        "paletteTitle": "將窗格移到新分頁",
+        "paletteDescription": "將目前的分割窗格移到獨立的分頁。",
+        "verbs": {
+          "splitToTab": "分割轉分頁",
+          "detachPane": "分離窗格"
+        }
       }
     },
     "settings": {
@@ -23337,7 +23353,8 @@
       "1524825c2c": "顯示或隱藏工作區看板",
       "d286d1ab85": "清除窗格標題",
       "botItemPrevious": "上一個項目",
-      "botItemNext": "下一個項目"
+      "botItemNext": "下一個項目",
+      "terminalMovePaneToNewTab": "將窗格移到新分頁"
     },
     "group": {
       "global": "全域",

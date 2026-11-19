@@ -20633,7 +20633,8 @@
           "workspaceDisconnected": "“{{action}}” çalıştırılamıyor — çalışma alanının bağlantısı kesildi.",
           "noTabGroup": "“{{action}}” çalıştırılamıyor — kullanılabilir sekme grubu yok.",
           "noMovableChat": "“{{action}}” çalıştırılamıyor — taşınabilir etkin sohbet yok.",
-          "clientUnsupported": "“{{action}}” çalıştırılamıyor — bu istemci ve çalışma zamanı bunu desteklemiyor."
+          "clientUnsupported": "“{{action}}” çalıştırılamıyor — bu istemci ve çalışma zamanı bunu desteklemiyor.",
+          "noMovablePane": "“{{action}}” çalıştırılamıyor — etkin sekmede taşınabilecek bölünmüş bölme yok."
         }
       },
       "plugins": {
@@ -23339,10 +23340,25 @@
         "copyOrcaSessionId": "Orca Oturum Kimliğini Kopyala",
         "orcaSessionIdTooltip": "Orca’nın bu ajana verdiği kimliktir. Ajanın CLI'sindeki oturum kimliğinden ayrıdır. Ajanlar Orca üzerinden birbirlerine başvururken bu kimliği kullanır.",
         "orcaSessionIdCopied": "Orca oturum kimliği kopyalandı",
-        "orcaSessionIdCopyFailed": "Orca oturum kimliği kopyalanamıyor"
+        "orcaSessionIdCopyFailed": "Orca oturum kimliği kopyalanamıyor",
+        "movePaneToNewTab": "Yeni Sekmeye Taşı"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "Çalışma alanları dışındaki dosyaları açmak için {{value0}} üzerindeki Orca'yı güncelleyin"
+      },
+      "paneDragHandle": {
+        "tooltip": "Yeni sekmeye taşımak için sürükleyin"
+      },
+      "paneDrop": {
+        "newTabPill": "Yeni sekme"
+      },
+      "movePaneToNewTab": {
+        "paletteTitle": "Bölmeyi Yeni Sekmeye Taşı",
+        "paletteDescription": "Etkin bölünmüş bölmeyi kendi sekmesine taşır.",
+        "verbs": {
+          "splitToTab": "bölmeyi sekmeye",
+          "detachPane": "bölmeyi ayır"
+        }
       }
     },
     "settings": {
@@ -26340,7 +26356,8 @@
       "botItemNext": "Sonraki öğe",
       "tabNewBrowserSplitRight": "Sağdaki yeni bölmede tarayıcı sekmesi aç",
       "5468defe61": "Tüm projeleri daralt veya genişlet",
-      "botItemBack": "Öğelere dön"
+      "botItemBack": "Öğelere dön",
+      "terminalMovePaneToNewTab": "Bölmeyi yeni sekmeye taşı"
     },
     "group": {
       "global": "Genel",

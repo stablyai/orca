@@ -19171,7 +19171,8 @@
           "workspaceDisconnected": "「{{action}}」を実行できません。ワークスペースが切断されています。",
           "noTabGroup": "「{{action}}」を実行できません。利用可能なタブグループがありません。",
           "noMovableChat": "「{{action}}」を実行できません。移動できるアクティブなチャットがありません。",
-          "clientUnsupported": "「{{action}}」を実行できません。このクライアントとランタイムは対応していません。"
+          "clientUnsupported": "「{{action}}」を実行できません。このクライアントとランタイムは対応していません。",
+          "noMovablePane": "「{{action}}」を実行できません — アクティブなタブに移動できる分割ペインがありません。"
         }
       },
       "plugins": {
@@ -21436,10 +21437,25 @@
         "copyOrcaSessionId": "Orca セッション ID をコピー",
         "orcaSessionIdTooltip": "この Agent に対する Orca の ID です。Agent CLI 独自のセッション ID とは別のものです。Agent は Orca を通じて互いを指すときにこれを使います。",
         "orcaSessionIdCopied": "Orca セッション ID をコピーしました",
-        "orcaSessionIdCopyFailed": "Orca セッション ID をコピーできませんでした"
+        "orcaSessionIdCopyFailed": "Orca セッション ID をコピーできませんでした",
+        "movePaneToNewTab": "新しいタブに移動"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "ワークスペース外のファイルを開くには、{{value0}} の Orca を更新してください"
+      },
+      "paneDragHandle": {
+        "tooltip": "ドラッグして新しいタブに移動"
+      },
+      "paneDrop": {
+        "newTabPill": "新しいタブ"
+      },
+      "movePaneToNewTab": {
+        "paletteTitle": "ペインを新しいタブに移動",
+        "paletteDescription": "アクティブな分割ペインを独立したタブに移動します。",
+        "verbs": {
+          "splitToTab": "分割をタブへ",
+          "detachPane": "ペインを切り離す"
+        }
       }
     },
     "jiraUserPicker": {
@@ -24652,7 +24668,8 @@
       "1524825c2c": "ワークスペースボードの切り替え",
       "d286d1ab85": "ペインのタイトルをクリア",
       "botItemPrevious": "前の項目",
-      "botItemNext": "次の項目"
+      "botItemNext": "次の項目",
+      "terminalMovePaneToNewTab": "ペインを新しいタブに移動"
     },
     "group": {
       "global": "グローバル",

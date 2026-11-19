@@ -19718,7 +19718,8 @@
           "workspaceDisconnected": "无法运行“{{action}}” — 工作区已断开连接",
           "noTabGroup": "无法运行“{{action}}” — 没有可用的标签页组",
           "noMovableChat": "无法运行“{{action}}” — 没有活动且可移动的聊天",
-          "clientUnsupported": "无法运行“{{action}}” — 此客户端和运行时不支持该操作"
+          "clientUnsupported": "无法运行“{{action}}” — 此客户端和运行时不支持该操作",
+          "noMovablePane": "无法运行“{{action}}”— 当前标签页没有可移动的分屏窗格。"
         }
       },
       "plugins": {
@@ -22146,10 +22147,25 @@
         "copyOrcaSessionId": "复制 Orca 会话 ID",
         "orcaSessionIdTooltip": "Orca 为此智能体分配的 ID，与智能体 CLI 自身的会话 ID 不同，智能体之间通过 Orca 用它来指代彼此",
         "orcaSessionIdCopied": "已复制 Orca 会话 ID",
-        "orcaSessionIdCopyFailed": "复制 Orca 会话 ID 失败"
+        "orcaSessionIdCopyFailed": "复制 Orca 会话 ID 失败",
+        "movePaneToNewTab": "移到新标签页"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "更新 {{value0}} 上的 Orca 以打开其工作区之外的文件"
+      },
+      "paneDragHandle": {
+        "tooltip": "拖动以移到新标签页"
+      },
+      "paneDrop": {
+        "newTabPill": "新标签页"
+      },
+      "movePaneToNewTab": {
+        "paletteTitle": "将窗格移到新标签页",
+        "paletteDescription": "将当前分屏窗格移到单独的标签页。",
+        "verbs": {
+          "splitToTab": "分屏转标签页",
+          "detachPane": "分离窗格"
+        }
       }
     },
     "onboarding": {
@@ -25892,7 +25908,8 @@
       "tabNewBrowserSplitRight": "在右侧拆分窗格中新建浏览器标签页",
       "5468defe61": "折叠/展开所有项目",
       "botItemPrevious": "上一个事项",
-      "botItemNext": "下一个事项"
+      "botItemNext": "下一个事项",
+      "terminalMovePaneToNewTab": "将窗格移到新标签页"
     },
     "group": {
       "global": "全局",

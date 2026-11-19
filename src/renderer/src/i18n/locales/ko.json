@@ -19692,7 +19692,8 @@
           "workspaceDisconnected": "“{{action}}” 실행 불가 — 워크스페이스 연결이 끊어졌습니다.",
           "noTabGroup": "“{{action}}” 실행 불가 — 사용 가능한 탭 그룹이 없습니다.",
           "noMovableChat": "“{{action}}” 실행 불가 — 이동 가능한 활성 채팅이 없습니다.",
-          "clientUnsupported": "“{{action}}” 실행 불가 — 이 클라이언트와 런타임에서 지원하지 않습니다."
+          "clientUnsupported": "“{{action}}” 실행 불가 — 이 클라이언트와 런타임에서 지원하지 않습니다.",
+          "noMovablePane": "“{{action}}”을(를) 실행할 수 없음 — 활성 탭에 이동할 수 있는 분할 창이 없습니다."
         }
       },
       "plugins": {
@@ -22371,10 +22372,25 @@
         "copyOrcaSessionId": "Orca 세션 ID 복사",
         "orcaSessionIdTooltip": "이 에이전트의 Orca ID입니다. 에이전트 CLI 자체의 세션 ID와는 별개입니다. 에이전트는 Orca를 통해 서로를 가리킬 때 이 ID를 사용합니다.",
         "orcaSessionIdCopied": "Orca 세션 ID를 복사했습니다",
-        "orcaSessionIdCopyFailed": "Orca 세션 ID를 복사하지 못했습니다"
+        "orcaSessionIdCopyFailed": "Orca 세션 ID를 복사하지 못했습니다",
+        "movePaneToNewTab": "새 탭으로 이동"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "워크스페이스 밖의 파일을 열려면 {{value0}}의 Orca를 업데이트하세요"
+      },
+      "paneDragHandle": {
+        "tooltip": "드래그하여 새 탭으로 이동"
+      },
+      "paneDrop": {
+        "newTabPill": "새 탭"
+      },
+      "movePaneToNewTab": {
+        "paletteTitle": "창을 새 탭으로 이동",
+        "paletteDescription": "활성 분할 창을 별도의 탭으로 이동합니다.",
+        "verbs": {
+          "splitToTab": "분할을 탭으로",
+          "detachPane": "창 분리"
+        }
       }
     },
     "jiraUserPicker": {
@@ -25992,7 +26008,8 @@
       "1524825c2c": "워크스페이스 보드 전환",
       "d286d1ab85": "창 제목 지우기",
       "botItemPrevious": "이전 항목",
-      "botItemNext": "다음 항목"
+      "botItemNext": "다음 항목",
+      "terminalMovePaneToNewTab": "창을 새 탭으로 이동"
     },
     "group": {
       "global": "글로벌",

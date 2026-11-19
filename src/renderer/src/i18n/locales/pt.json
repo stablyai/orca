@@ -20642,7 +20642,8 @@
           "workspaceDisconnected": "Não é possível executar “{{action}}” — o espaço de trabalho está desconectado.",
           "noTabGroup": "Não é possível executar “{{action}}” — nenhum grupo de abas está disponível.",
           "noMovableChat": "Não é possível executar “{{action}}” — nenhum chat que possa ser movido está ativo.",
-          "clientUnsupported": "Não é possível executar “{{action}}” — este cliente e este runtime não oferecem suporte a essa ação."
+          "clientUnsupported": "Não é possível executar “{{action}}” — este cliente e este runtime não oferecem suporte a essa ação.",
+          "noMovablePane": "Não é possível executar “{{action}}” — a aba ativa não tem um painel dividido que possa ser movido."
         }
       },
       "plugins": {
@@ -22868,10 +22869,25 @@
         "copySessionId": "Copiar ID da Sessão",
         "copySessionIdSuccess": "ID da sessão copiado",
         "copySessionIdError": "Não foi possível copiar o ID da sessão",
-        "copySessionIdUnavailable": "Nenhum ID de sessão para copiar"
+        "copySessionIdUnavailable": "Nenhum ID de sessão para copiar",
+        "movePaneToNewTab": "Mover para nova aba"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "Atualize o Orca em {{value0}} para abrir arquivos fora dos espaços de trabalho dele"
+      },
+      "paneDragHandle": {
+        "tooltip": "Arraste para mover para uma nova aba"
+      },
+      "paneDrop": {
+        "newTabPill": "Nova aba"
+      },
+      "movePaneToNewTab": {
+        "paletteTitle": "Mover painel para nova aba",
+        "paletteDescription": "Move o painel dividido ativo para uma aba própria.",
+        "verbs": {
+          "splitToTab": "dividir em aba",
+          "detachPane": "desanexar painel"
+        }
       }
     },
     "settings": {
@@ -24596,7 +24612,8 @@
       "1524825c2c": "Alternar Quadro do Espaço de Trabalho",
       "d286d1ab85": "Limpar Título do Painel",
       "botItemPrevious": "Item anterior",
-      "botItemNext": "Próximo item"
+      "botItemNext": "Próximo item",
+      "terminalMovePaneToNewTab": "Mover painel para nova aba"
     },
     "group": {
       "global": "Global",

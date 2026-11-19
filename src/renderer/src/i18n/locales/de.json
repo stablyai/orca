@@ -19149,7 +19149,8 @@
           "workspaceDisconnected": "„{{action}}“ kann nicht ausgeführt werden — der Arbeitsbereich ist nicht verbunden.",
           "noTabGroup": "„{{action}}“ kann nicht ausgeführt werden — keine Tab-Gruppe verfügbar.",
           "noMovableChat": "„{{action}}“ kann nicht ausgeführt werden — kein verschiebbarer Chat ist aktiv.",
-          "clientUnsupported": "„{{action}}“ kann nicht ausgeführt werden — dieser Client und diese Laufzeitumgebung unterstützen die Aktion nicht."
+          "clientUnsupported": "„{{action}}“ kann nicht ausgeführt werden — dieser Client und diese Laufzeitumgebung unterstützen die Aktion nicht.",
+          "noMovablePane": "„{{action}}“ kann nicht ausgeführt werden – der aktive Tab hat keinen verschiebbaren geteilten Bereich."
         }
       },
       "plugins": {
@@ -21264,10 +21265,25 @@
         "copySessionId": "Sitzungs-ID kopieren",
         "copySessionIdSuccess": "Sitzungs-ID kopiert",
         "copySessionIdError": "Sitzungs-ID konnte nicht kopiert werden",
-        "copySessionIdUnavailable": "Keine Sitzungs-ID zum Kopieren"
+        "copySessionIdUnavailable": "Keine Sitzungs-ID zum Kopieren",
+        "movePaneToNewTab": "In neuen Tab verschieben"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "Orca auf {{value0}} aktualisieren, um Dateien außerhalb seiner Arbeitsbereiche zu öffnen"
+      },
+      "paneDragHandle": {
+        "tooltip": "Ziehen, um in einen neuen Tab zu verschieben"
+      },
+      "paneDrop": {
+        "newTabPill": "Neuer Tab"
+      },
+      "movePaneToNewTab": {
+        "paletteTitle": "Bereich in neuen Tab verschieben",
+        "paletteDescription": "Den aktiven geteilten Bereich in einen eigenen Tab verschieben.",
+        "verbs": {
+          "splitToTab": "Bereich in Tab",
+          "detachPane": "Bereich lösen"
+        }
       }
     },
     "settings": {
@@ -23836,7 +23852,8 @@
       "1524825c2c": "Arbeitsbereichsübersicht ein-/ausblenden",
       "d286d1ab85": "Bereichstitel leeren",
       "botItemPrevious": "Vorheriges Element",
-      "botItemNext": "Nächstes Element"
+      "botItemNext": "Nächstes Element",
+      "terminalMovePaneToNewTab": "Bereich in neuen Tab verschieben"
     },
     "group": {
       "global": "Global",

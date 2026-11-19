@@ -18827,7 +18827,8 @@
           "workspaceDisconnected": "No se puede ejecutar «{{action}}» — el espacio de trabajo está desconectado.",
           "noTabGroup": "No se puede ejecutar «{{action}}» — no hay ningún grupo de pestañas disponible.",
           "noMovableChat": "No se puede ejecutar «{{action}}» — no hay ningún chat activo que se pueda mover.",
-          "clientUnsupported": "No se puede ejecutar «{{action}}» — este cliente y este entorno de ejecución no lo admiten."
+          "clientUnsupported": "No se puede ejecutar «{{action}}» — este cliente y este entorno de ejecución no lo admiten.",
+          "noMovablePane": "No se puede ejecutar “{{action}}”: la pestaña activa no tiene un panel dividido que se pueda mover."
         }
       },
       "plugins": {
@@ -20948,10 +20949,25 @@
         "copySessionId": "Copiar ID de sesión",
         "copySessionIdSuccess": "ID de sesión copiado",
         "copySessionIdError": "No se pudo copiar el ID de sesión",
-        "copySessionIdUnavailable": "No hay ningún ID de sesión para copiar"
+        "copySessionIdUnavailable": "No hay ningún ID de sesión para copiar",
+        "movePaneToNewTab": "Mover a una pestaña nueva"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "Actualiza Orca en {{value0}} para abrir archivos fuera de sus espacios de trabajo"
+      },
+      "paneDragHandle": {
+        "tooltip": "Arrastra para mover a una pestaña nueva"
+      },
+      "paneDrop": {
+        "newTabPill": "Pestaña nueva"
+      },
+      "movePaneToNewTab": {
+        "paletteTitle": "Mover panel a una pestaña nueva",
+        "paletteDescription": "Mueve el panel dividido activo a su propia pestaña.",
+        "verbs": {
+          "splitToTab": "dividir en pestaña",
+          "detachPane": "separar panel"
+        }
       }
     },
     "agentChildRow": {
@@ -24059,7 +24075,8 @@
       "1524825c2c": "Alternar tablero de espacios de trabajo",
       "d286d1ab85": "Borrar título del panel",
       "botItemPrevious": "Elemento anterior",
-      "botItemNext": "Elemento siguiente"
+      "botItemNext": "Elemento siguiente",
+      "terminalMovePaneToNewTab": "Mover panel a una pestaña nueva"
     },
     "group": {
       "global": "Global",

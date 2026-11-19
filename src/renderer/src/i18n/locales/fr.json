@@ -19148,7 +19148,8 @@
           "workspaceDisconnected": "Impossible d’exécuter « {{action}} » — l’espace de travail est déconnecté.",
           "noTabGroup": "Impossible d’exécuter « {{action}} » — aucun groupe d’onglets n’est disponible.",
           "noMovableChat": "Impossible d’exécuter « {{action}} » — aucun chat déplaçable n’est actif.",
-          "clientUnsupported": "Impossible d’exécuter « {{action}} » — ce client et cet environnement d’exécution ne le prennent pas en charge."
+          "clientUnsupported": "Impossible d’exécuter « {{action}} » — ce client et cet environnement d’exécution ne le prennent pas en charge.",
+          "noMovablePane": "Impossible d’exécuter « {{action}} » : l’onglet actif n’a aucun volet scindé déplaçable."
         }
       },
       "plugins": {
@@ -21353,10 +21354,25 @@
         "copySessionId": "Copier l'ID de session",
         "copySessionIdSuccess": "ID de session copié",
         "copySessionIdError": "Impossible de copier l'ID de session",
-        "copySessionIdUnavailable": "Aucun ID de session à copier"
+        "copySessionIdUnavailable": "Aucun ID de session à copier",
+        "movePaneToNewTab": "Déplacer vers un nouvel onglet"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "Mettez à jour Orca sur {{value0}} pour ouvrir des fichiers en dehors de ses espaces de travail"
+      },
+      "paneDragHandle": {
+        "tooltip": "Faites glisser pour déplacer vers un nouvel onglet"
+      },
+      "paneDrop": {
+        "newTabPill": "Nouvel onglet"
+      },
+      "movePaneToNewTab": {
+        "paletteTitle": "Déplacer le volet vers un nouvel onglet",
+        "paletteDescription": "Déplace le volet scindé actif dans son propre onglet.",
+        "verbs": {
+          "splitToTab": "volet vers onglet",
+          "detachPane": "détacher le volet"
+        }
       }
     },
     "settings": {
@@ -24080,7 +24096,8 @@
       "1524825c2c": "Afficher/masquer le tableau des espaces de travail",
       "d286d1ab85": "Effacer le titre du volet",
       "botItemPrevious": "Élément précédent",
-      "botItemNext": "Élément suivant"
+      "botItemNext": "Élément suivant",
+      "terminalMovePaneToNewTab": "Déplacer le volet vers un nouvel onglet"
     },
     "group": {
       "global": "Global",
