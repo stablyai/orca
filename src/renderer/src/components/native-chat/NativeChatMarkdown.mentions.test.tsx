@@ -115,7 +115,7 @@ describe("Slack mention tokens in an agent's reply", () => {
     const { container } = render(
       <NativeChatSlackPeopleContext value={new Map([['U05BRPQSABY', 'Jinjing']])}>
         <NativeChatMarkdown
-          content="Hi <!here> <@U05BRPQSABY> The limit, see `<@U05BRPQSABY>`; ask <@U2>"
+          content="Hi <!here> <@U05BRPQSABY> The limit, see `<@U05BRPQSABY>` and $<@U2>$; ask <@U2>"
           variant="document"
         />
       </NativeChatSlackPeopleContext>
@@ -123,5 +123,6 @@ describe("Slack mention tokens in an agent's reply", () => {
     expect(chips(container)).toEqual(['@here', '@Jinjing'])
     expect(container.querySelector('code')?.textContent).toBe('<@U05BRPQSABY>')
     expect(container.textContent).toContain('ask @user')
+    expect(container.textContent).toContain('<@U2>')
   })
 })

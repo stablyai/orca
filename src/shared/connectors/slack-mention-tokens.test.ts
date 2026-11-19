@@ -1,5 +1,4 @@
 import remarkGfm from 'remark-gfm'
-import remarkMath from 'remark-math'
 import remarkParse from 'remark-parse'
 import { unified } from 'unified'
 import { describe, expect, it } from 'vitest'
@@ -11,7 +10,7 @@ const PEOPLE = new Map([['U05BRPQSABY', 'Jinjing']])
 
 // Mentions read as `[@Name]`, so the test sees which text became one.
 function shown(markdown: string): string {
-  const tree: Node = unified().use(remarkParse).use(remarkGfm).use(remarkMath).parse(markdown)
+  const tree: Node = unified().use(remarkParse).use(remarkGfm).parse(markdown)
   showSlackMentionTokens(tree, PEOPLE, (text) => ({ type: 'mention', value: `[${text}]` }))
   const flat = (node: Node): string =>
     node.type === 'html'
@@ -38,7 +37,7 @@ describe('showSlackMentionTokens', () => {
   })
 
   it('leaves code, math, HTML and other angle text as written', () => {
-    expect(shown('`<@U05BRPQSABY>` and $<@U1>$')).toBe('<@U05BRPQSABY> and <@U1>')
+    expect(shown('`<@U05BRPQSABY>` stays')).toBe('<@U05BRPQSABY> stays')
     expect(shown('```\n<!here>\n```')).toBe('<!here>')
     expect(shown('<!-- <!here> --> <b>x</b>')).toBe('{html:<!-- <!here> --> <b>x</b>}')
     expect(shown('a <!-- note --> <b>x</b> <https://x.dev> <word>')).toBe(
