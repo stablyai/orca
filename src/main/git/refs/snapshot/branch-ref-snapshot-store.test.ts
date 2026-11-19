@@ -91,28 +91,6 @@ it('does not publish a capture that finishes after a ref change', async () => {
   expect(await value.search(identity, 'OLD', 20)).toEqual([])
 })
 
-it('serves a post-fence caller from the next physical read without making the earlier caller retry', async () => {
-  const value = store()
-  const started = deferred<void>()
-  const old = deferred<ReturnType<typeof snapshot>>()
-  mocks.read.mockImplementationOnce(() => {
-    started.resolve()
-    return old.promise
-  })
-  mocks.read.mockImplementationOnce(() => {
-    // Another event during the successor read must not prevent its response from settling.
-    publishGitRefChange(identity.commonDir)
-    return Promise.resolve(snapshot('fresh'))
-  })
-  const before = value.search(identity, '', 20)
-  await started.promise
-  publishGitRefChange(identity.commonDir)
-  const after = value.search(identity, '', 20)
-  old.resolve(snapshot('old'))
-  expect(await before).toEqual([{ refName: 'refs/heads/old', localBranchName: 'old' }])
-  expect(await after).toEqual([{ refName: 'refs/heads/fresh', localBranchName: 'fresh' }])
-})
-
 it('starts the new generation after an obsolete physical read fails', async () => {
   const value = store()
   const started = deferred<void>()

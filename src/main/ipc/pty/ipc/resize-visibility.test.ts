@@ -65,17 +65,12 @@ afterEach(() => {
 })
 
 describe('pty:setRendererPtyVisible', () => {
-  it('reveals a main-hidden pty once a pane reports it visible', () => {
-    emit('pty:setRendererPtyVisible', { id: PTY_ID, visible: true })
-
-    expect(shouldDropHiddenRendererPtyData(PTY_ID, undefined)).toBe(false)
-    expect(unhideMarkers()).toHaveLength(1)
-  })
-
   it("does not resend the visible report's marker on the pane's first-sync release", () => {
     emit('pty:setRendererPtyVisible', { id: PTY_ID, visible: true })
-    emit('pty:setHiddenRendererPty', { id: PTY_ID, hidden: false })
+    expect(shouldDropHiddenRendererPtyData(PTY_ID, undefined)).toBe(false)
+    expect(unhideMarkers()).toHaveLength(1)
 
+    emit('pty:setHiddenRendererPty', { id: PTY_ID, hidden: false })
     expect(unhideMarkers()).toHaveLength(1)
 
     emit('pty:setHiddenRendererPty', { id: PTY_ID, hidden: true })
