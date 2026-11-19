@@ -15,6 +15,7 @@ import type {
 import {
   gitCommonDirectorySignature,
   gitCommonFileSignature,
+  isGitCommonEntrySettled,
   snapshotGitCommonEntry,
   type GitCommonEntrySnapshot
 } from './worktree-git-common-entry-snapshot'
@@ -82,7 +83,7 @@ async function snapshotGitCommon(
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       entryPaths = []
     } else {
-      // Transient readdir failures are not deletion proof; retain entries and let their own stats detect removals.
+      // Transient readdir failures are not deletion proof; retain entries until a later listing drops them.
       entryPaths = previous ? [...previous.entries.keys()] : []
     }
   }
@@ -90,7 +91,7 @@ async function snapshotGitCommon(
   const entries = new Map<string, GitCommonEntrySnapshot>()
   await forEachWithConcurrency(entryPaths, GIT_COMMON_SNAPSHOT_CONCURRENCY, async (entryPath) => {
     const previousEntry = previous?.entries.get(entryPath)
-    if (previousEntry && !walkKnownEntries) {
+    if (previousEntry && !walkKnownEntries && isGitCommonEntrySettled(previousEntry)) {
       entries.set(entryPath, previousEntry)
       return
     }
