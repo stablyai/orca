@@ -478,6 +478,21 @@
       "minutes_one": "{{count}}m",
       "minutes_other": "{{count}}m"
     },
+    "agentMap": {
+      "detail": {
+        "resolution": {
+          "cancelled": "cancelled",
+          "pending": "pending",
+          "resolved": "resolved"
+        },
+        "turnState": {
+          "completed": "Completed",
+          "interrupted": "Interrupted",
+          "running": "Running",
+          "unverifiable": "Unverifiable"
+        }
+      }
+    },
     "backgroundTask": {
       "countAgents_one": "{{count}} agent",
       "countAgents_other": "{{count}} agents",

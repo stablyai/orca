@@ -195,7 +195,7 @@ export const CreateAgentSessionParams: z.ZodType<RuntimeCreateAgentSessionReques
     trustWorktreeId: WorktreeSelector.optional(),
     presentation: Presentation.optional(),
     placement: Placement.optional(),
-    viewMode: z.enum(['terminal', 'chat']).optional(),
+    viewMode: z.enum(['terminal', 'chat', 'map']).optional(),
     /** Sent only to hosts advertising `agent-session.account-env.v1`; outside the fingerprint. */
     accountEnv: AgentLaunchAccountEnv.optional()
   })

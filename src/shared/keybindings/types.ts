@@ -130,6 +130,7 @@ export type KeybindingActionId =
   | 'terminal.switchInputSource'
   | 'terminal.toggleNativeChat'
   | 'botItem.back'
+  | 'terminal.toggleAgentMap'
   | PluginKeybindingActionId
 
 export type KeybindingOverrides = Partial<Record<KeybindingActionId, string[]>>

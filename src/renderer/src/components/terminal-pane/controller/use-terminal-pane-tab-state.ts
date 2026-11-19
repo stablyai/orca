@@ -15,12 +15,13 @@ export function useTerminalPaneTabState({
   worktreeId
 }: Pick<TerminalPaneTitleController, 'tabId' | 'worktreeId'>) {
   // Bundle unified-tab reads to reduce lookups and subscriptions per mounted tab.
-  const { unifiedTabId, isChatViewMode, unifiedTabLabel, isTabPinned } = useAppStore(
+  const { unifiedTabId, isChatViewMode, isMapViewMode, unifiedTabLabel, isTabPinned } = useAppStore(
     useShallow((store) =>
       selectUnifiedTerminalTabFields(store.unifiedTabsByWorktree, worktreeId, tabId)
     )
   )
   const effectiveChatViewMode = isChatViewMode
+  const effectiveMapViewMode = isMapViewMode
   const runtimePaneTitlesByPaneId = useAppStore(
     useShallow((store) => store.runtimePaneTitlesByTabId[tabId] ?? {})
   )
@@ -43,6 +44,7 @@ export function useTerminalPaneTabState({
     unifiedTabLabel,
     isTabPinned,
     effectiveChatViewMode,
+    effectiveMapViewMode,
     runtimePaneTitlesByPaneId,
     tabAgentTypeByLeaf,
     savedLayout,

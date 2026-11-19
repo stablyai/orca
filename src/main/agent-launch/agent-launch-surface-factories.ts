@@ -17,6 +17,7 @@ import type { SetupTrustMismatch } from '../../shared/worktree/create-types'
 import type { AgentLaunchParams } from '../../shared/rpc-contract/agent-launch/agent-launch-params'
 import { toAgentLaunchPreferences } from '../../shared/agent-launch/choices/agent-launch-preferences'
 import { assertOpenCodeModelLaunchPreferencesAbsent } from '../opencode/model-launch/opencode-model-startup-plan'
+import type { TerminalViewMode } from '../../shared/terminal-view-mode.ts'
 
 /** Inject creation so orchestration can add subscriptions without duplicating launch sequencing. */
 export type AgentLaunchSurfaceFactory = {
@@ -46,7 +47,7 @@ export type AgentLaunchSurfaceFactory = {
     launchSource?: string
     /** Caller-minted pane; reject with AgentLaunchPaneAlreadyLiveError if live. */
     paneKey?: string
-    viewMode?: 'terminal' | 'chat'
+    viewMode?: TerminalViewMode
     /** Account routing overrides merged over the agent environment. */
     accountEnv?: Readonly<Record<string, string>>
   }): Promise<{

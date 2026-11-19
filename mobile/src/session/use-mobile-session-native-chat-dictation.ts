@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import type { MobileSessionItemLink } from './mobile-session-item-target'
 import { useMobileSessionDictation } from './use-mobile-session-dictation'
 import { useMobileNativeChatController } from './native-chat/use-mobile-native-chat-controller'
+import { useMobileAgentMapOverlay } from './agent-map/use-mobile-agent-map-overlay'
 import { useMobileNativeChatReadability } from './native-chat/transcript/viewport/use-mobile-native-chat-readability'
 import { useMobileNativeChatInputLease } from './native-chat/composer/field/use-mobile-native-chat-input-lease'
 import { useMobileNativeChatSendError } from './native-chat/composer/delivery/use-mobile-native-chat-send-error'
@@ -66,6 +67,15 @@ export function useMobileSessionNativeChatDictation(
     onQueuedEditNotice: showToast,
     onSendResolved: nativeChatSendError.clear
   })
+  const agentMap = useMobileAgentMapOverlay({
+    hostId,
+    worktreeId,
+    activeSessionTab,
+    activeSessionTabId,
+    nativeChatTranscriptIsLocalReadable,
+    isTabMapView: nativeChatController.isTabMapView,
+    setTabView: nativeChatController.setTabView
+  })
   const { toggleTabChatView, showNativeChat, showNativeChatRef } = nativeChatController
   nativeChatSendError.bannerMountedRef.current = showNativeChat
   nativeChatSendError.keepWhile(nativeChatController.nativeChatCommandRefusalCauses)
@@ -100,6 +110,7 @@ export function useMobileSessionNativeChatDictation(
     markNativeChatInputLeaseReady,
     clearNativeChatInputLease,
     nativeChatController,
+    agentMap,
     getSendCompletionGeneration,
     toggleTabChatView,
     showNativeChat,

@@ -1,6 +1,7 @@
 import type { AiVaultSessionTitle } from '../../ai-vault/contracts/ai-vault-session-title'
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import type { ExecutionHostId } from '../../execution-host/execution-host'
+import type { TerminalViewMode } from '../../terminal-view-mode.ts'
 
 export type TabGroupSplitDirection = 'horizontal' | 'vertical'
 
@@ -84,8 +85,8 @@ export type Tab = {
   isPinned?: boolean // pinned tabs survive "close others"
   /** Provider backing a structured agent-session tab. */
   agentSessionAgent?: AgentType
-  /** Chat overlays retain the mounted terminal; missing/legacy mode uses raw xterm. */
-  viewMode?: 'terminal' | 'chat'
+  /** Chat/map overlays retain the mounted terminal; missing/legacy mode uses raw xterm. */
+  viewMode?: TerminalViewMode
   /** Timestamp when the tab was last focused / activated by the user. */
   lastFocusedAt?: number
 }

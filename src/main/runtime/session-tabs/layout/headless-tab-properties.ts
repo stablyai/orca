@@ -16,6 +16,7 @@ import {
   sameStringRecord,
   terminalLayoutNodeEqual
 } from '../../../../shared/workspace-layout/terminal-topology/terminal-layout-equality'
+import type { TerminalViewMode } from '../../../../shared/terminal-view-mode'
 
 type HeadlessPaneLayoutEdit = {
   tabId: string
@@ -121,7 +122,7 @@ export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithHeadle
   protected persistHeadlessSessionTabProps(
     worktreeId: string,
     tabId: string,
-    props: { color?: string | null; isPinned?: boolean; viewMode?: 'terminal' | 'chat' }
+    props: { color?: string | null; isPinned?: boolean; viewMode?: TerminalViewMode }
   ): void {
     const session = this.getWorkspaceSessionForWorktree(worktreeId)
     if (!session || !this.store?.setWorkspaceSession) {
@@ -180,7 +181,7 @@ export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithHeadle
       customTitle?: string | null
       color?: string | null
       isPinned?: boolean
-      viewMode?: 'terminal' | 'chat'
+      viewMode?: TerminalViewMode
     }
   ): void {
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)

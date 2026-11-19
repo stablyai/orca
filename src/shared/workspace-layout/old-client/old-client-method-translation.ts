@@ -18,6 +18,7 @@ import {
   type WorkspaceLayout,
   type WorkspaceLayoutModel
 } from '../workspace-layout-model'
+import type { TerminalViewMode } from '../../terminal-view-mode'
 
 /** Preserve session.tabs.move error codes for older clients. */
 export type SessionTabMoveErrorCode =
@@ -99,7 +100,7 @@ function paneIdInUse(model: WorkspaceLayoutModel, leafId: string): boolean {
 export function translateCreateTerminalTab(
   workspaceKey: string,
   workspace: WorkspaceLayout | undefined,
-  params: { afterTabId?: string; targetGroupId?: string; viewMode?: 'terminal' | 'chat' }
+  params: { afterTabId?: string; targetGroupId?: string; viewMode?: TerminalViewMode }
 ): MethodTranslation {
   const after = params.afterTabId && workspace && resolveSessionTabRow(workspace, params.afterTabId)
   return to({
@@ -118,7 +119,7 @@ export function translateSetTabProps(
     tabId: string
     color?: string | null
     isPinned?: boolean
-    viewMode?: 'terminal' | 'chat'
+    viewMode?: TerminalViewMode
   }
 ): MethodTranslation {
   const target = resolveSessionTabRow(workspace, params.tabId)

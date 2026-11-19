@@ -16,6 +16,7 @@ import {
   mergeMobileSessionSnapshotTabs,
   mergeMobileSessionTabGroups
 } from '../../session-lifecycle/projection/mobile-session-tab-merge'
+import type { TerminalViewMode } from '../../../../shared/terminal-view-mode'
 
 export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding {
   /** `ref` is the terminal whose title changed or the pane key whose start facts did. */
@@ -49,7 +50,7 @@ export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal exten
       activate: boolean
       selectIfNoActiveTab?: boolean
       startupCwd?: string
-      viewMode?: 'terminal' | 'chat'
+      viewMode?: TerminalViewMode
       split?: { splitFromLeafId: string; direction: 'horizontal' | 'vertical' }
       notify?: boolean
     }

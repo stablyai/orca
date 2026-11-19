@@ -3,6 +3,7 @@ import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/t
 export type UnifiedTerminalTabFields = {
   unifiedTabId: string | undefined
   isChatViewMode: boolean
+  isMapViewMode: boolean
   unifiedTabLabel: string | undefined
   isTabPinned: boolean
 }
@@ -59,6 +60,7 @@ export function selectUnifiedTerminalTabFields(
   return {
     unifiedTabId: tab?.id,
     isChatViewMode: tab?.viewMode === 'chat',
+    isMapViewMode: tab?.viewMode === 'map',
     unifiedTabLabel: tab?.label,
     isTabPinned: tab?.isPinned === true
   }

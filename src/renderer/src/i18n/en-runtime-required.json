@@ -2698,6 +2698,21 @@
           "line_other": "Unsaved edits in {{count}} files will be discarded: {{files}}"
         }
       }
+    },
+    "agentSessionMap": {
+      "detail": {
+        "resolution": {
+          "cancelled": "cancelled",
+          "pending": "pending",
+          "resolved": "resolved"
+        },
+        "turnState": {
+          "completed": "Completed",
+          "interrupted": "Interrupted",
+          "running": "Running",
+          "unverifiable": "Unverifiable"
+        }
+      }
     }
   },
   "dashboard": {

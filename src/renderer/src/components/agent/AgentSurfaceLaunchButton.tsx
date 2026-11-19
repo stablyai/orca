@@ -1,11 +1,12 @@
 import React from 'react'
 import { MessageSquare, SquareTerminal } from 'lucide-react'
 import { cn } from '@/lib/class-names'
+import type { TerminalViewMode } from '../../../../shared/terminal-view-mode.ts'
 
 type AgentSurfaceLaunchButtonProps = Omit<React.ComponentProps<'button'>, 'children' | 'title'> & {
   title: string
   /** The surface this button opens instead of its row's own. */
-  surface: 'terminal' | 'chat'
+  surface: TerminalViewMode
   /** Why it is disabled; the button keeps its action as its name and describes the wait. */
   reason?: string
 }

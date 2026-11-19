@@ -11,6 +11,7 @@ import {
   captureRuntimeEnvironmentCall,
   isWebRuntimeSessionActive
 } from '../../web-session-tabs-sync/identity/web-runtime-session-environment'
+import type { TerminalViewMode } from '../../../../../shared/terminal-view-mode'
 
 // Push color/pin to the authoritative host for persistence; undefined means unchanged.
 export function setWebRuntimeTabProps(args: {
@@ -18,7 +19,7 @@ export function setWebRuntimeTabProps(args: {
   tabId: string
   color?: string | null
   isPinned?: boolean
-  viewMode?: 'terminal' | 'chat'
+  viewMode?: TerminalViewMode
   customTitle?: string | null
 }): boolean {
   const environmentId = runtimeEnvironmentIdUnlessTwin(
