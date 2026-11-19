@@ -144,7 +144,7 @@ const OWNER_SWATCH_CLS = {
 function OwnerSwatch({ owner }: { owner: keyof typeof OWNER_SWATCH_CLS }): React.JSX.Element {
   return (
     <span
-      className={cn('inline-block size-2 shrink-0 rounded-[2px]', OWNER_SWATCH_CLS[owner])}
+      className={cn('inline-block size-2 shrink-0 rounded-xs', OWNER_SWATCH_CLS[owner])}
       aria-hidden
     />
   )
@@ -152,6 +152,12 @@ function OwnerSwatch({ owner }: { owner: keyof typeof OWNER_SWATCH_CLS }): React
 
 /** Bar widths in percent of this machine's memory. Summed per-process bytes can count shared
  *  pages twice, so owners shrink to fit the used part and available keeps its true share. */
+function barScale(split: ResourceOwnerSplit): number {
+  const used = Math.max(0, split.hostTotal - split.available)
+  const owned = split.orca.memory + split.agents.memory + split.yourProcesses.memory
+  return owned > used && owned > 0 ? used / owned : 1
+}
+
 function barWidths(split: ResourceOwnerSplit): Record<ResourceOwnerKey, number> {
   const total = split.hostTotal
   if (total <= 0) {
@@ -159,7 +165,7 @@ function barWidths(split: ResourceOwnerSplit): Record<ResourceOwnerKey, number> 
   }
   const used = Math.max(0, total - split.available)
   const owned = split.orca.memory + split.agents.memory + split.yourProcesses.memory
-  const scale = owned > used && owned > 0 ? used / owned : 1
+  const scale = barScale(split)
   const pct = (bytes: number): number => (bytes / total) * 100
   return {
     orca: pct(split.orca.memory * scale),
@@ -336,6 +342,14 @@ export function renderResourceUsageSummary(
               'Combined CPU load. Values above 100% mean more than one core is working at once.'
             )}
           </p>
+          {barScale(ownerSplit) < 1 ? (
+            <p>
+              {t(
+                'resourceManager.owner.overlapScaled',
+                'Shared memory is counted in more than one process here, so the bar scales Orca, Agents and Your processes down to fit what this machine reports as used.'
+              )}
+            </p>
+          ) : null}
           <p>{memoryMetricCopy.description}</p>
           {commitMetricCopy && showCommit ? <p>{commitMetricCopy.description}</p> : null}
         </div>

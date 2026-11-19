@@ -32,6 +32,8 @@ import {
 } from '../../../lib/workspace/ownership/unified-tab-host-ownership'
 import { useTranslate } from '../../../i18n/use-translate'
 
+const NO_SESSIONS: readonly DaemonSession[] = []
+
 export function useResourceUsageDerivedModel({
   open,
   resourceSnapshot,
@@ -154,12 +156,14 @@ export function useResourceUsageDerivedModel({
 
   // Why: keyed to the 2 s snapshot and daemon inventory only, not titles or bindings; agent status is
   // read here rather than subscribed because it churns many times a second.
+  // Why: closed, the inventory still publishes terminal exits; ignore them, since the snapshot is frozen.
+  const splitSessions = open ? sessions : NO_SESSIONS
   const ownerSplit = useMemo(
     () =>
       resourceSnapshot
-        ? splitSnapshotByOwner(resourceSnapshot, sessions, readAgentPaneKeys())
+        ? splitSnapshotByOwner(resourceSnapshot, splitSessions, readAgentPaneKeys())
         : null,
-    [resourceSnapshot, sessions]
+    [resourceSnapshot, splitSessions]
   )
 
   // Why: orphan detection needs daemon inventory; keep it open-only so the closed badge never triggers a background global session scan.

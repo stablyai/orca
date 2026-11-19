@@ -30,8 +30,10 @@ export function splitSnapshotByOwner(
       const daemon = daemonById.get(session.sessionId)
       // Why: boot-hydrated samples carry no pane key; the daemon's binding still does.
       const paneKey = session.paneKey ?? daemon?.paneKey ?? null
+      // Why: a pane keeps its agent status after the agent exits; the daemon's proven absence wins.
       const isAgent =
-        daemon?.agentOwnership === 'present' || (paneKey !== null && agentPaneKeys.has(paneKey))
+        daemon?.agentOwnership === 'present' ||
+        (daemon?.agentOwnership !== 'absent' && paneKey !== null && agentPaneKeys.has(paneKey))
       const bucket = isAgent ? agents : yourProcesses
       bucket.cpu += session.cpu
       bucket.memory += session.memory

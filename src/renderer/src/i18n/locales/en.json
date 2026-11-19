@@ -25714,7 +25714,8 @@
       "description": "Orca is the app. Agents and Your processes are terminals you run in Orca. Other apps and system is everything else on this machine.",
       "privateBytes": "Committed by Orca and terminals",
       "availableOfTotal": "{{available}} available of {{total}}",
-      "available": "Available"
+      "available": "Available",
+      "overlapScaled": "Shared memory is counted in more than one process here, so the bar scales Orca, Agents and Your processes down to fit what this machine reports as used."
     }
   },
   "browserExtensions": {
