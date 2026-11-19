@@ -1,3 +1,4 @@
+import { worktreeCardStyleUpdates } from '@/store/appearance/worktree-card-style'
 import { Fragment, useMemo, type ComponentType, type JSX } from 'react'
 import { useAppStore } from '@/store'
 import {
@@ -98,7 +99,9 @@ function CardStyleOption({ preserveWorkspaceBoardOpen }: OptionItemProps): JSX.E
           value={experimental ? 'experimental' : 'classic'}
           onValueChange={(value) => {
             const next = value === 'experimental'
-            void updateSettings({ experimentalNewWorktreeCardStyle: next }).then(() => {
+            void updateSettings(
+              worktreeCardStyleUpdates(next, useAppStore.getState().settings)
+            ).then(() => {
               const state = useAppStore.getState()
               if ((state.settings?.experimentalNewWorktreeCardStyle === true) !== next) {
                 return

@@ -14,3 +14,13 @@ export function selectDrawsNewWorktreeCards(state: DrawnWorktreeCardStyleState):
       state.settings?.experimentalNewWorktreeCardStyle === true)
   )
 }
+
+export function worktreeCardStyleUpdates(
+  enabled: boolean,
+  settings: DrawnWorktreeCardStyleState['settings']
+) {
+  return {
+    experimentalNewWorktreeCardStyle: enabled,
+    ...(enabled && settings?.compactWorktreeHeader === true ? { compactWorktreeHeader: false } : {})
+  }
+}
