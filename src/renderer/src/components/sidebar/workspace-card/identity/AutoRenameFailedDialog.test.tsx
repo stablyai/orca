@@ -128,11 +128,6 @@ const ignoreOpenChange = (_open: boolean): void => {}
 const EXCERPT_ERROR = 'Pi CLI command failed with code 1: No API key found for github-copilot.'
 
 describe('AutoRenameFailedDialog retry', () => {
-  it('offers Dismiss and Try again, without a footer Close button', async () => {
-    await renderFailure()
-    expect(footerButtons()).toEqual(['Dismiss', 'Try again'])
-  })
-
   it('offers only Dismiss when retry is unavailable for this workspace', async () => {
     await renderFailure(false)
     expect(footerButtons()).toEqual(['Dismiss'])
@@ -140,6 +135,7 @@ describe('AutoRenameFailedDialog retry', () => {
 
   it('disables both buttons while naming, then closes when the branch is renamed', async () => {
     await renderFailure()
+    expect(footerButtons()).toEqual(['Dismiss', 'Try again'])
     const attempt = Promise.withResolvers<BranchAutoRenameRetryResult>()
     retryBranchAutoRename.mockReturnValue(attempt.promise)
     await act(async () => button('Try again')?.click())
