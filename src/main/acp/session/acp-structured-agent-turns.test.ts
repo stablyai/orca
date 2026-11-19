@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
+import {
+  agentJournalTurnBody,
+  readAgentJournalTurn
+} from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { isBackgroundTaskBlock } from '../../../shared/native-chat/native-chat-types'
 import {
   closeProviderTimelineRigs,
@@ -9,7 +12,6 @@ import { ANTIGRAVITY_ACP_DIALECT } from '../acp-dialects/antigravity-dialect'
 import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
 import type { AgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import { structuredAgentSessionCommandTurn } from '../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
-import { agentJournalTurnBody } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { StructuredAgentRegistry } from '../../native-chat/agent-session-wire/providers/structured-agent-registry'
 import { acpStructuredAgentDefinition } from './acp-structured-agent-definitions'
 import {
@@ -43,15 +45,12 @@ async function open(spec: AcpLaunchSpec = WAKING) {
   })
   // Lets a test hold the journal backed up.
   const sink = rig.rig.eventSink
-  rig.rig.eventSink = new Proxy(sink, {
-    get: (target, key) =>
-      key === 'tryAppendTransition' && target.tryAppendTransition
-        ? (transition: Parameters<NonNullable<typeof sink.tryAppendTransition>>[0]) =>
-            journal.refusing
-              ? { accepted: false, reason: 'backpressure' }
-              : target.tryAppendTransition?.(transition)
-        : Reflect.get(target, key)
-  })
+  const append = sink.tryAppendTransition?.bind(sink)
+  rig.rig.eventSink = {
+    ...sink,
+    tryAppendTransition: (transition) =>
+      journal.refusing || !append ? { accepted: false, reason: 'backpressure' } : append(transition)
+  }
   await rig.acquire()
   return { rig, clock, evidence, journal }
 }
