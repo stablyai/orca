@@ -129,6 +129,7 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
         prepared = `${accountHome}\0${shared}`
       }
       this.prepareAllAccountHistoryInBackground()
+      this.importCodexHistoryInBackground()
       return this.prepareForCodexLaunch(target, launchEnv, options)
     }
     const wslTarget = this.resolveWslDefaultTarget(target)

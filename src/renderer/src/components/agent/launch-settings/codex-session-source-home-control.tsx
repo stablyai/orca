@@ -95,14 +95,17 @@ export function AgentSessionSourceHomeInput({
   return (
     <div className="flex flex-col gap-1">
       <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        {t('auto.components.settings.AgentsPane.codexSessionSource', 'Codex home to import from')}
+        {t(
+          'auto.components.settings.AgentsPane.codexSessionSource',
+          'Import Codex conversations from'
+        )}
         <Tooltip>
           <TooltipTrigger asChild>
             <button
               type="button"
               aria-label={t(
                 'auto.components.settings.AgentsPane.codexSessionSourceInfo',
-                'About importing Codex history'
+                'About importing Codex conversations'
               )}
               className="grid size-4 place-items-center rounded text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
             >
@@ -112,7 +115,7 @@ export function AgentSessionSourceHomeInput({
           <TooltipContent side="top" sideOffset={6} className="max-w-xs">
             {t(
               'auto.components.settings.AgentsPane.codexSessionSourceTooltip',
-              'Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex.'
+              "While history is shared across accounts, Orca adds this Codex home's conversations to ~/.codex so /resume lists them. Avoid continuing one conversation here and in Codex outside Orca at the same time."
             )}
           </TooltipContent>
         </Tooltip>

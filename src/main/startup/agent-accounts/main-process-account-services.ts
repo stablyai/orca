@@ -32,6 +32,11 @@ export function initializeMainProcessAccountServices(): void {
   })
   state.rateLimits = services.rateLimits
   state.codexRuntimeHome = services.codexRuntimeHome
+  store.onSettingsChanged((updates) => {
+    if ('codexSessionSourceHome' in updates || 'codexShareHistoryAcrossAccounts' in updates) {
+      services.codexRuntimeHome.importCodexHistoryInBackground({ settingChanged: true })
+    }
+  })
   state.codexAccounts = services.codexAccounts
   state.claudeRuntimeAuth = services.claudeRuntimeAuth
   state.claudeAccounts = services.claudeAccounts
