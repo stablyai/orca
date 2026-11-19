@@ -119,7 +119,7 @@ afterEach(() => {
   fileContextOwners.mockReturnValue(new Map())
 })
 
-it('opens at the newest event and stays there as events arrive', () => {
+it('follows new events until the reader scrolls up, then offers Jump to latest', () => {
   show(3)
   const view = render(<BotItemView bot={BOT} uid="uid-6" />)
   expect(scroller().scrollTop).toBe(CONTENT)
@@ -127,14 +127,7 @@ it('opens at the newest event and stays there as events arrive', () => {
   scroller().scrollTop = 0
   show(4)
   view.rerender(<BotItemView bot={BOT} uid="uid-6" />)
-
   expect(scroller().scrollTop).toBe(CONTENT)
-  expect(pill().dataset.shown).toBe('false')
-})
-
-it('shows Jump to latest once scrolled up from the end, and jumps there when clicked', () => {
-  show(3)
-  const view = render(<BotItemView bot={BOT} uid="uid-6" />)
   expect(pill().dataset.shown).toBe('false')
 
   readerScrollsToTop()
@@ -165,13 +158,28 @@ it('scrolls to the end after a comment is sent', async () => {
   expect(scroller().scrollTop).toBe(CONTENT)
 })
 
-it('focuses the comment box when its card is clicked inside the focusable item pane', () => {
+it('focuses the comment box from its card and preserves focus outside it when submitting', async () => {
   show(3, makeTestBotItem(6, { question: { eventId: 'e3', text: 'Which flow?' } }))
   render(<BotItemView bot={BOT} uid="uid-6" />)
 
   fireEvent.click(screen.getByText('Which flow?'))
 
-  expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Comment' }))
+  const box = screen.getByRole('textbox', { name: 'Comment' })
+  expect(document.activeElement).toBe(box)
+  changePrompt(box, 'Use the proposed flow')
+  box.blur()
+  expect(box.contains(document.activeElement)).toBe(false)
+
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Comment' })))
+
+  expect(sent).toHaveBeenCalledExactlyOnceWith(
+    BOT,
+    'uid-6',
+    'Use the proposed flow',
+    [],
+    expect.any(String)
+  )
+  expect(box.contains(document.activeElement)).toBe(false)
 })
 
 it('places its file opens beside the bot workspace focused tab, as a click in that chat would', () => {
