@@ -4,8 +4,6 @@
 // its answers went under: the same answer again reuses its id, and an answer under any of them is
 // this card's own.
 import { useSyncExternalStore } from 'react'
-import type { BotRef } from '@/lib/bot-hosts'
-import { commentOnBotItem, showBotItem } from './use-bot-items'
 import { normalizeBotItemAnswers } from '../../../../../shared/bots/bot-item-ask'
 import type { AskPrompt } from '../../../../../shared/native-chat/input/questions/native-chat-ask-types'
 
@@ -25,13 +23,9 @@ export type BotItemAnswerDraft = {
   answeredId?: string
   /** An answer went and no reply came: it may be recorded. */
   uncertain?: true
-  /** An older host took it as a plain comment, not a recorded answer. */
-  sentAsComment?: true
-  /** The comment for an older host got no reply: it may have gone. It goes again only when the owner
-   *  says so, after checking Activity. */
-  commentUnconfirmed?: { text: string }
-  /** That comment is going again now. */
-  commentSending?: true
+  /** The bot's host predates recorded answers and refused this one, writing nothing. Nothing else is
+   *  sent for it: a plain comment there would answer whichever question is open when it lands. */
+  hostCannotRecord?: true
 }
 
 // The card's mark for "the typed words are the answer" among a question's picks.
@@ -95,20 +89,13 @@ export function saveBotItemAnswerDraft(
   drafts.set(key, { ...drafts.get(key), prompt, selections, otherText })
 }
 
-/** A change the page shows (sending, sent as a comment), which re-renders who reads drafts. */
+/** A change the page shows (sending, refused by an older host), which re-renders who reads drafts. */
 export function markBotItemAnswerDraft(
   key: string,
   patch: Partial<
     Pick<
       BotItemAnswerDraft,
-      | 'sent'
-      | 'attempts'
-      | 'sending'
-      | 'answeredId'
-      | 'uncertain'
-      | 'sentAsComment'
-      | 'commentUnconfirmed'
-      | 'commentSending'
+      'sent' | 'attempts' | 'sending' | 'answeredId' | 'uncertain' | 'hostCannotRecord'
     >
   >
 ): void {
@@ -123,48 +110,6 @@ export function dropBotItemAnswerDraft(key: string): void {
   if (drafts.has(key)) {
     drafts.delete(key)
     changed()
-  }
-}
-
-// Drafts whose comment is being posted now: one post at a time each, whoever asks.
-const commentsInFlight = new Set<string>()
-
-/** An older host's comment for this answer to `question` (its event id), one post at a time per draft:
- *  on a reply it is sent; with none it may have gone, and the page says so and waits for the owner's
- *  Send again. Never retried on its own, and a failure never undoes a post that already went. Posted
- *  only while `question` is still the item's open question: an older host takes a comment on a
- *  waiting item as the answer to whichever question is open, so after a replacement it would answer
- *  that one. Otherwise nothing goes and the answer stays kept. `settled` runs after any of these. */
-export async function sendBotItemAnswerAsComment(
-  bot: BotRef,
-  uid: string,
-  key: string,
-  question: string,
-  text: string,
-  settled?: () => void
-): Promise<void> {
-  if (commentsInFlight.has(key)) {
-    return
-  }
-  commentsInFlight.add(key)
-  markBotItemAnswerDraft(key, { commentSending: true })
-  try {
-    // Read right before the post: the host has no write that checks the question itself.
-    const { item } = await showBotItem(bot, uid, { after: question })
-    if (item.status !== 'needs_you' || item.question?.eventId !== question) {
-      markBotItemAnswerDraft(key, { commentUnconfirmed: undefined })
-      return
-    }
-    await commentOnBotItem(bot, uid, text, [])
-    markBotItemAnswerDraft(key, { sentAsComment: true, commentUnconfirmed: undefined })
-  } catch {
-    if (!drafts.get(key)?.sentAsComment) {
-      markBotItemAnswerDraft(key, { commentUnconfirmed: { text } })
-    }
-  } finally {
-    commentsInFlight.delete(key)
-    markBotItemAnswerDraft(key, { commentSending: undefined })
-    settled?.()
   }
 }
 
@@ -186,7 +131,7 @@ function hasContent(draft: BotItemAnswerDraft): boolean {
 }
 
 /** This item's drafts the page must show: for a question no longer open here, or one an older host
- *  took (or may have taken) as a comment. Not while its answer is in flight. */
+ *  refused. Not while its answer is in flight. */
 export function botItemAnswerDraftsToRecover(
   all: Drafts,
   botKey: string,
@@ -199,7 +144,7 @@ export function botItemAnswerDraftsToRecover(
     return key.startsWith(prefix) &&
       !draft.sending &&
       hasContent(draft) &&
-      (eventId !== openEventId || draft.sentAsComment || draft.commentUnconfirmed)
+      (eventId !== openEventId || draft.hostCannotRecord)
       ? [{ key, eventId, draft }]
       : []
   })

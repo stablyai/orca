@@ -18,12 +18,16 @@ const read = vi.hoisted((): { current: BotItemViewRead | null } => ({ current: n
 const sent = vi.hoisted(() => vi.fn(() => Promise.resolve()))
 vi.mock('./use-bot-item-view', () => ({ useBotItemView: () => read.current }))
 const answered = vi.hoisted(() => vi.fn((..._args: unknown[]) => Promise.resolve('answered')))
+const statusSet = vi.hoisted(() => vi.fn())
+// The host's read of the item, as it holds it now.
+const hostRead = vi.hoisted(() =>
+  vi.fn((..._args: unknown[]) => Promise.resolve({ item: read.current!.item, events: [] }))
+)
 vi.mock('./use-bot-items', () => ({
   commentOnBotItem: sent,
-  setBotItemsStatus: vi.fn(),
+  setBotItemsStatus: statusSet,
   answerBotItem: answered,
-  // The host's own read: the item as it holds it now.
-  showBotItem: () => Promise.resolve({ item: read.current!.item, events: [] })
+  showBotItem: hostRead
 }))
 const fileContextOwners = vi.hoisted(() => vi.fn((..._args: unknown[]) => new Map()))
 vi.mock('../BotGroupTranscriptOwner', () => ({ useBotGroupFileContexts: fileContextOwners }))
@@ -122,6 +126,8 @@ afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
   sent.mockReset()
+  statusSet.mockReset()
+  hostRead.mockReset()
   // Back to its own implementation, so one test's refusal never reaches the next.
   answered.mockReset()
   openAppHttpLink.mockClear()
@@ -359,7 +365,13 @@ it('keeps the answer being typed when the question is replaced, and offers it ba
   expect(screen.getByPlaceholderText('Type your answer')).toHaveProperty('value', '')
 })
 
-it('says an older host kept the answer only as a comment, with the words kept', async () => {
+/** Nothing but the answer itself ever reached the host: no comment and no status move. */
+function expectOnlyAnswerCalls(): void {
+  expect(sent).not.toHaveBeenCalled()
+  expect(statusSet).not.toHaveBeenCalled()
+}
+
+it("says an older host can't record the answer, keeps the words, and writes nothing else", async () => {
   answered.mockResolvedValueOnce('unsupported')
   renderAt(askingItem(23))
   typeAnswer('Ship B')
@@ -367,8 +379,10 @@ it('says an older host kept the answer only as a comment, with the words kept', 
   await act(() => new Promise((resolve) => setTimeout(resolve, 0)))
 
   const notice = screen.getByRole('status')
-  expect(notice.textContent).toContain('Sent as a comment, not recorded as an answer')
+  expect(notice.textContent).toContain('can’t record answers yet, so nothing was sent')
   expect(notice.textContent).toContain('Ship B')
+  expect(within(notice).queryByRole('button', { name: 'Put in the comment box' })).toBeNull()
+  expectOnlyAnswerCalls()
 })
 
 it("shows the bot's context in the card while the question's event is off the loaded page", () => {
@@ -457,32 +471,6 @@ it('reads the item again when the host says the question closed, and offers the 
   await flush()
 
   expect(screen.getByRole('status').textContent).toContain('Ship B')
-})
-
-it("never resends an unconfirmed older-host comment on its own; only the owner's Send again does", async () => {
-  answered.mockResolvedValue('unsupported')
-  sent.mockRejectedValueOnce(new Error('connection lost'))
-  const page = rerenderable(askingItem(33))
-  typeAnswer('Ship B')
-  fireEvent.click(screen.getByRole('button', { name: /Submit/ }))
-  await flush()
-  // A read that brings a matching comment settles nothing; Submit again posts nothing.
-  page.reconcileTo(askingItem(33), [
-    ...eventsUpTo(3),
-    { id: 'e4', kind: 'commented', actor: { kind: 'owner' }, data: { text: 'Ship B' }, at: 4 }
-  ])
-  act(() => read.current!.retry())
-  fireEvent.click(screen.getByRole('button', { name: 'Expand' }))
-  fireEvent.click(screen.getByRole('button', { name: /Submit/ }))
-  await flush()
-  expect(screen.getByRole('status').textContent).toContain('Not confirmed')
-  expect(sent).toHaveBeenCalledTimes(1)
-
-  fireEvent.click(screen.getByRole('button', { name: 'Send again' }))
-  await flush()
-
-  expect(sent).toHaveBeenCalledTimes(2)
-  expect(screen.getByRole('status').textContent).toContain('Sent as a comment')
 })
 
 it("knows an earlier attempt's recorded answer as its own after a changed answer was sent", async () => {
@@ -577,79 +565,71 @@ it('keeps what the owner changed after sending when that earlier answer turns ou
   expect(screen.getByRole('status').textContent).toContain('Ship B instead')
 })
 
-async function unconfirmedComment(number: number): Promise<ReturnType<typeof rerenderable>> {
-  answered.mockResolvedValue('unsupported')
-  sent.mockRejectedValueOnce(new Error('connection lost'))
-  const page = rerenderable(askingItem(number))
-  typeAnswer('Ship B')
-  fireEvent.click(screen.getByRole('button', { name: /Submit/ }))
-  await flush()
-  return page
-}
-
-it('posts once however fast Send again is pressed', async () => {
-  await unconfirmedComment(42)
-  let land: () => void = () => {}
-  sent.mockImplementationOnce(() => new Promise<void>((resolve) => (land = resolve)))
-
-  fireEvent.click(screen.getByRole('button', { name: 'Send again' }))
-  fireEvent.click(screen.getByRole('button', { name: 'Send again' }))
-  // The post goes once the host's read says the question is still open.
-  await flush()
-  land()
-  await flush()
-
-  expect(sent).toHaveBeenCalledTimes(2)
-  expect(screen.getByRole('status').textContent).toContain('Sent as a comment')
-})
-
-it("never answers a replacement question with an older host's comment for the one it replaced", async () => {
-  // The host replaces the question while it refuses the answer as one it can't record.
-  answered.mockImplementationOnce(() => {
-    read.current = {
-      ...read.current!,
-      item: askingItem(36, { eventId: 'e9', text: 'Which color?' })
-    }
-    return Promise.resolve('unsupported')
-  })
+it("writes nothing for an older host's refusal when the question is replaced while the answer is out", async () => {
+  let refuse: (outcome: string) => void = () => {}
+  answered.mockImplementationOnce(() => new Promise((resolve) => (refuse = resolve)))
   const page = rerenderable(askingItem(36))
-  page.reconcileTo(askingItem(36, { eventId: 'e9', text: 'Which color?' }), eventsUpTo(9))
   typeAnswer('Ship B')
   fireEvent.click(screen.getByRole('button', { name: /Submit/ }))
+  // Q2 replaces Q1 after the answer went and before the host's refusal comes back.
+  page.reconcileTo(askingItem(36, { eventId: 'e9', text: 'Which color?' }), eventsUpTo(9))
+  act(() => read.current!.retry())
+  refuse('unsupported')
   await flush()
 
-  expect(sent).not.toHaveBeenCalled()
+  expectOnlyAnswerCalls()
+  expect(answered).toHaveBeenCalledExactlyOnceWith(
+    BOT,
+    'uid-36',
+    'e3',
+    expect.anything(),
+    expect.any(String)
+  )
   const notice = screen.getByRole('status')
-  expect(notice.textContent).toContain('This question changed before your answer went')
+  expect(notice.textContent).toContain('can’t record answers yet')
   expect(notice.textContent).toContain('Ship B')
 })
 
-it('posts nothing on Send again once the question it answers was replaced', async () => {
-  const page = await unconfirmedComment(44)
-  page.reconcileTo(askingItem(44, { eventId: 'e9', text: 'Which color?' }), eventsUpTo(9))
-  act(() => read.current!.retry())
-
-  fireEvent.click(screen.getByRole('button', { name: 'Send again' }))
+it('writes nothing for an older host even when Q2 lands right after any read of Q1', async () => {
+  answered.mockResolvedValue('unsupported')
+  const page = rerenderable(askingItem(38))
+  // Whatever reads the item sees Q1 open; Q2 replaces it before anything that read could write.
+  hostRead.mockImplementation(() => {
+    const snapshot = read.current!.item
+    page.reconcileTo(askingItem(38, { eventId: 'e9', text: 'Which color?' }), eventsUpTo(9))
+    act(() => read.current!.retry())
+    return Promise.resolve({ item: snapshot, events: [] })
+  })
+  typeAnswer('Ship B')
+  fireEvent.click(screen.getByRole('button', { name: /Submit/ }))
+  await flush()
+  for (const again of screen.queryAllByRole('button', { name: 'Send again' })) {
+    fireEvent.click(again)
+  }
   await flush()
 
-  // Only the first attempt, whose reply was lost, ever posted.
-  expect(sent).toHaveBeenCalledTimes(1)
-  expect(screen.getByRole('status').textContent).toContain(
-    'This question changed before your answer went'
-  )
+  expectOnlyAnswerCalls()
 })
 
-it('reads Activity again after Send again', async () => {
-  const page = await unconfirmedComment(43)
-  page.reconcileTo(askingItem(43), [
-    ...eventsUpTo(3),
-    { id: 'e4', kind: 'commented', actor: { kind: 'owner' }, data: { text: 'Ship B' }, at: 4 }
-  ])
-
-  fireEvent.click(screen.getByRole('button', { name: 'Send again' }))
+it('writes nothing on retries to an older host, before or after the question is replaced', async () => {
+  answered.mockResolvedValue('unsupported')
+  const page = rerenderable(askingItem(37))
+  typeAnswer('Ship B')
+  fireEvent.click(screen.getByRole('button', { name: /Submit/ }))
+  await flush()
+  // The owner opens the card again and sends the same answer.
+  fireEvent.click(screen.getByRole('button', { name: 'Expand' }))
+  fireEvent.click(screen.getByRole('button', { name: /Submit/ }))
+  await flush()
+  // Then Q2 replaces Q1, and the owner answers it too.
+  page.reconcileTo(askingItem(37, { eventId: 'e9', text: 'Which color?' }), eventsUpTo(9))
+  act(() => read.current!.retry())
+  typeAnswer('Blue')
+  fireEvent.click(screen.getByRole('button', { name: /Submit/ }))
   await flush()
 
-  expect(screen.getByText('e4')).toBeTruthy()
+  expectOnlyAnswerCalls()
+  expect(answered.mock.calls.map((call) => call[2])).toEqual(['e3', 'e3', 'e9'])
 })
 
 const ENVIRONMENT = {

@@ -43,6 +43,13 @@ export type BotItemOwnerSnoozeInput = {
   until: number | null
 }
 
+/** A retried answer's first write, by item, question and answer id. An answer is always written after
+ *  its question, so only the item's events since the question are read, through the (item_uid, id)
+ *  index: that question's own few replies, not the item's whole history. */
+export const BOT_ITEM_ANSWER_REPLAY_SQL = `SELECT id FROM item_events
+  WHERE item_uid = ? AND id > ? AND kind = 'commented'
+    AND json_extract(data, '$.answers') = ? AND json_extract(data, '$.answerId') = ? LIMIT 1`
+
 export class BotItemsOwner extends BotItemsWrites {
   /** `images` were admitted and claimed on the host first; attachments alone make a comment.
    *  `requestId`: the sender's id for this comment; sent again (a retry after a lost answer), it
@@ -188,11 +195,8 @@ export class BotItemsOwner extends BotItemsWrites {
   /** The answer this `answerId` already wrote to the question, if any. */
   private answerWithId(uid: string, questionEventId: number, answerId: string): number | null {
     const row: unknown = this.db
-      .prepare(
-        `SELECT id FROM item_events WHERE item_uid = ? AND kind = 'commented'
-           AND json_extract(data, '$.answers') = ? AND json_extract(data, '$.answerId') = ? LIMIT 1`
-      )
-      .get(uid, botItemEventId(questionEventId), answerId)
+      .prepare(BOT_ITEM_ANSWER_REPLAY_SQL)
+      .get(uid, questionEventId, botItemEventId(questionEventId), answerId)
     return typeof row === 'object' && row !== null && 'id' in row && typeof row.id === 'number'
       ? row.id
       : null

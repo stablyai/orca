@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import SyncDatabase from '../sqlite/sync-database'
 import type { BotItemAddInput, BotItemBotActor } from './bot-items-input'
 import { BotItemsStore } from './bot-items-store'
+import { BOT_ITEM_ANSWER_REPLAY_SQL } from './bot-items-owner'
+import { migrateBotItems } from './bot-items-schema'
 
 const owner: BotItemBotActor = { kind: 'bot', botId: 'bot-a', chatId: 'chat-home' }
 const otherChat: BotItemBotActor = { kind: 'bot', botId: 'bot-a', chatId: 'chat-side' }
@@ -567,5 +569,23 @@ describe('what an answer keeps', () => {
     expect(
       store.eventsBefore(uid, 0, 50).find((event) => event.id === eventId)?.data
     ).toMatchObject({ text: 'Yes', asked: 'Merge PR 880 now?' })
+  })
+})
+
+describe("a retried answer's lookup", () => {
+  it("reads only the item's events after the question, through the item index", () => {
+    const db = new SyncDatabase(':memory:')
+    migrateBotItems(db)
+    const plan = db
+      .prepare(`EXPLAIN QUERY PLAN ${BOT_ITEM_ANSWER_REPLAY_SQL}`)
+      .all('uid-1', 3, 'e3', 'answer-1')
+      .map((row) => String(row.detail))
+    db.close()
+
+    expect(plan).toEqual([
+      expect.stringMatching(
+        /^SEARCH item_events USING INDEX idx_item_events_item \(item_uid=\? AND id>\?\)$/
+      )
+    ])
   })
 })

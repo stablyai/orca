@@ -87,7 +87,6 @@ export function BotItemAskSlot({
       item={item}
       events={events}
       openEventId={question?.eventId ?? null}
-      onReconcile={onReconcile}
     />
   )
   if (!question) {

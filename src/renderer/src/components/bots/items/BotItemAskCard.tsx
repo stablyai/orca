@@ -13,7 +13,6 @@ import type { Bot } from '../../../../../shared/bot-types'
 import type { BotItem } from '../../../../../shared/bots/bot-items'
 import {
   botItemAnswerProblem,
-  botItemAnswerText,
   normalizeBotItemAnswers,
   botItemAnswersOf,
   botItemAskPrompt
@@ -33,8 +32,7 @@ import {
   botItemAnswerDraftKey,
   markBotItemAnswerDraft,
   readBotItemAnswerDraft,
-  saveBotItemAnswerDraft,
-  sendBotItemAnswerAsComment
+  saveBotItemAnswerDraft
 } from './bot-item-answer-drafts'
 import { useClearOfFloatingTrigger } from './use-clear-of-floating-trigger'
 
@@ -109,9 +107,8 @@ export function BotItemAskCard({
       return
     }
     const existing = readBotItemAnswerDraft(draftKey)
-    // An older host may already have this answer as a comment: it goes again only from the notice.
     // Another mount of this card may still be sending it.
-    if (existing?.commentUnconfirmed || existing?.sentAsComment || existing?.sending) {
+    if (existing?.sending) {
       return
     }
     // The same answer again reuses its id, so the host records it once; every id is kept with the
@@ -121,7 +118,13 @@ export function BotItemAskCard({
     const sent =
       existing?.sent?.key === key ? existing.sent : { key, id: createNonSecureContextUuid() }
     const attempts = { [sent.id]: key, ...existing?.attempts }
-    markBotItemAnswerDraft(draftKey, { sent, attempts, sending: true, uncertain: undefined })
+    markBotItemAnswerDraft(draftKey, {
+      sent,
+      attempts,
+      sending: true,
+      uncertain: undefined,
+      hostCannotRecord: undefined
+    })
     inFlight.current = true
     setSubmitting(true)
     // Whatever the reply, busy ends with it and the item is read again: the card shows what the host
@@ -133,18 +136,13 @@ export function BotItemAskCard({
       onReconcile()
     }
     void answerBotItem(bot, item.uid, question.eventId, answers, sent.id)
-      .then(async (outcome) => {
+      .then((outcome) => {
         if (outcome === 'answered') {
           markBotItemAnswerDraft(draftKey, { answeredId: sent.id })
         } else if (outcome === 'unsupported') {
-          // An older host keeps it only as a comment, posted once.
-          await sendBotItemAnswerAsComment(
-            bot,
-            item.uid,
-            draftKey,
-            question.eventId,
-            botItemAnswerText(ask, answers)
-          )
+          // An older host refused it and wrote nothing. Nothing else goes in its place: a plain comment
+          // there answers whichever question is open when it lands, which may no longer be this one.
+          markBotItemAnswerDraft(draftKey, { hostCannotRecord: true })
           onCollapse()
         } else {
           toast.info(

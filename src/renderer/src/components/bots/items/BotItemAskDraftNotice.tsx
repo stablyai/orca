@@ -1,6 +1,6 @@
 // An answer the owner was giving when its question went away (replaced, withdrawn, answered on another
-// device) or that an older host took only as a comment: said plainly, with the words kept to copy or put
-// in the comment box, never dropped.
+// device) or that an older host can't record: said plainly, with the words kept to copy (or put in the
+// comment box, for a question no longer open), never dropped and never sent on their own.
 import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -16,7 +16,6 @@ import {
   botItemAnswerDraftText,
   botItemAnswerDraftsToRecover,
   dropBotItemAnswerDraft,
-  sendBotItemAnswerAsComment,
   useBotItemAnswerDrafts,
   type BotItemAnswerDraft
 } from './bot-item-answer-drafts'
@@ -24,8 +23,7 @@ import {
 type Fate =
   | 'ours'
   | 'oursEditedAfter'
-  | 'unconfirmed'
-  | 'sentAsComment'
+  | 'hostCannotRecord'
   | 'answeredElsewhere'
   | 'uncertain'
   | 'changed'
@@ -50,11 +48,8 @@ function fateOf(
       ? 'ours'
       : 'oursEditedAfter'
   }
-  if (draft.commentUnconfirmed) {
-    return 'unconfirmed'
-  }
-  if (draft.sentAsComment) {
-    return 'sentAsComment'
+  if (draft.hostCannotRecord) {
+    return 'hostCannotRecord'
   }
   if (answer) {
     return 'answeredElsewhere'
@@ -69,14 +64,11 @@ export function BotItemAskDraftNotices({
   bot,
   item,
   events,
-  openEventId,
-  onReconcile
+  openEventId
 }: {
   bot: Bot
   item: BotItem
   events: readonly BotItemEvent[]
-  /** Reads the item again. */
-  onReconcile: () => void
   /** The question whose card takes answers now; its draft is the card's own. */
   openEventId: string | null
 }): React.JSX.Element | null {
@@ -104,13 +96,9 @@ export function BotItemAskDraftNotices({
       'bots.items.ask.oursEditedAfter',
       'Your answer was recorded. Words of yours it didn’t include are kept here.'
     ),
-    unconfirmed: t(
-      'bots.items.ask.unconfirmed',
-      'Not confirmed: it may have been sent as a comment. Check the activity, then Send again if it’s missing.'
-    ),
-    sentAsComment: t(
-      'bots.items.ask.sentAsComment',
-      'Sent as a comment, not recorded as an answer: the bot’s computer runs an older Orca.'
+    hostCannotRecord: t(
+      'bots.items.ask.hostCannotRecord',
+      'This Orca host can’t record answers yet, so nothing was sent. Update Orca on the bot’s computer; your answer is kept here.'
     ),
     answeredElsewhere: t(
       'bots.items.ask.answeredElsewhere',
@@ -131,7 +119,7 @@ export function BotItemAskDraftNotices({
   }
   return (
     <div className="flex shrink-0 flex-col gap-2 px-3.5 pt-2">
-      {shown.map(({ key, eventId, draft, fate }) => {
+      {shown.map(({ key, draft, fate }) => {
         const text = botItemAnswerDraftText(draft)
         if (fate === 'ours') {
           return null
@@ -148,26 +136,6 @@ export function BotItemAskDraftNotices({
               {text}
             </p>
             <div className="mt-2 flex flex-wrap gap-1.5">
-              {draft.commentUnconfirmed ? (
-                <Button
-                  size="xs"
-                  variant="outline"
-                  disabled={draft.commentSending}
-                  onClick={() =>
-                    // One post at a time; Activity is read again whichever way it goes.
-                    void sendBotItemAnswerAsComment(
-                      bot,
-                      item.uid,
-                      key,
-                      eventId,
-                      draft.commentUnconfirmed!.text,
-                      onReconcile
-                    )
-                  }
-                >
-                  {t('bots.items.ask.sendAgain', 'Send again')}
-                </Button>
-              ) : null}
               <Button
                 size="xs"
                 variant="outline"
@@ -179,7 +147,8 @@ export function BotItemAskDraftNotices({
               >
                 {t('bots.items.ask.copy', 'Copy')}
               </Button>
-              {fate === 'sentAsComment' || fate === 'unconfirmed' ? null : (
+              {/* A comment on a waiting item there would answer whichever question is open. */}
+              {fate === 'hostCannotRecord' ? null : (
                 <Button
                   size="xs"
                   variant="outline"
