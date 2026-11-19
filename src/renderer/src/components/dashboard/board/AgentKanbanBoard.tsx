@@ -14,6 +14,7 @@ import { installWindowVisibilityInterval } from '@/lib/window-activity/window-vi
 import { AgentKanbanLaneCardList } from './AgentKanbanLaneCardList'
 import { AgentDashboardToolbar } from './AgentDashboardToolbar'
 import type { AgentDashboardView } from './AgentDashboardViewToggle'
+import { loadAgentDashboardView, saveAgentDashboardView } from './agent-dashboard-view-storage'
 import { AgentFleetView } from '../fleet/AgentFleetView'
 import { AgentTerminalDialog } from '../terminal-preview/AgentTerminalDialog'
 import {
@@ -148,7 +149,11 @@ export function AgentKanbanBoard({
   const [query, setQuery] = useState('')
   const searchInputRef = useRef<HTMLInputElement>(null)
   const [filters, setFilters] = useState<DashboardFilters>(EMPTY_DASHBOARD_FILTERS)
-  const [view, setView] = useState<AgentDashboardView>('board')
+  const [view, setView] = useState(loadAgentDashboardView)
+  const handleViewChange = useCallback((next: AgentDashboardView) => {
+    setView(next)
+    saveAgentDashboardView(next)
+  }, [])
   const filteredCards = useMemo(
     () => filterDashboardCards(visibleCards, query, filters),
     [visibleCards, filters, query]
@@ -274,7 +279,7 @@ export function AgentKanbanBoard({
           onFiltersChange={setFilters}
           searchInputRef={searchInputRef}
           view={view}
-          onViewChange={setView}
+          onViewChange={handleViewChange}
         />
         {view === 'board' ? (
           <div className="scrollbar-sleek flex min-h-0 flex-1 overflow-x-auto p-3">

@@ -10,6 +10,10 @@ import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-
 import type { FleetCardOpener } from './FleetNetworkNode'
 import { FleetProjectSection } from './FleetProjectSection'
 import { FleetSummaryBand } from './FleetSummaryBand'
+import {
+  loadFleetCollapsedProjects,
+  saveFleetCollapsedProjects
+} from './fleet-collapsed-projects-storage'
 import { buildFleetView } from './fleet-view-model'
 
 export function AgentFleetView({
@@ -31,17 +35,17 @@ export function AgentFleetView({
   const view = useMemo(() => buildFleetView(cards), [cards])
   const [width, setWidth] = useState<number | null>(null)
   const measureRef = useMeasuredWidth(setWidth)
-  const [collapsedKeys, setCollapsedKeys] = useState<ReadonlySet<string>>(() => new Set())
-  const setProjectOpen = (key: string, open: boolean): void =>
-    setCollapsedKeys((previous) => {
-      const next = new Set(previous)
-      if (open) {
-        next.delete(key)
-      } else {
-        next.add(key)
-      }
-      return next
-    })
+  const [collapsedKeys, setCollapsedKeys] = useState(loadFleetCollapsedProjects)
+  const setProjectOpen = (key: string, open: boolean): void => {
+    const next = new Set(collapsedKeys)
+    if (open) {
+      next.delete(key)
+    } else {
+      next.add(key)
+    }
+    setCollapsedKeys(next)
+    saveFleetCollapsedProjects(next)
+  }
   return (
     <div ref={measureRef} className={cn('@container flex flex-col gap-3', className)}>
       <FleetSummaryBand summary={view.summary} buckets={buckets} />

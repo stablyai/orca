@@ -5,13 +5,20 @@ import {
   type DashboardCard
 } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import { AgentKanbanBoard } from '../board/AgentKanbanBoard'
+import { saveAgentDashboardView } from '../board/agent-dashboard-view-storage'
 import { AgentFleetView } from './AgentFleetView'
+import { saveFleetCollapsedProjects } from './fleet-collapsed-projects-storage'
 import { buildFleetMockSnapshot, FLEET_MOCK_NOW } from './fleet-snapshot-fixtures'
 
 const WIDE = 1240
 const NARROW = 520
 const ENGLISH = { settings: { ...getDefaultSettings('/tmp'), uiLanguage: 'en' as const } }
 const { cards, repoIconsByRepoId } = buildFleetMockSnapshot(FLEET_MOCK_NOW)
+
+function clearStoredDashboardChoices(): void {
+  saveAgentDashboardView('board')
+  saveFleetCollapsedProjects(new Set())
+}
 
 function fleetFixture(
   width: number,
@@ -20,6 +27,7 @@ function fleetFixture(
 ) {
   return defineFixture({
     store: ENGLISH,
+    setup: clearStoredDashboardChoices,
     width,
     interact,
     render: () => (
@@ -57,6 +65,7 @@ const boardSnapshot = buildFleetMockSnapshot(Date.now())
 
 export const boardFleetToggle = defineFixture({
   store: ENGLISH,
+  setup: clearStoredDashboardChoices,
   width: WIDE,
   render: () => <AgentKanbanBoard snapshot={boardSnapshot} containerClassName="h-[760px] w-full" />,
   interact: (frame) => {
