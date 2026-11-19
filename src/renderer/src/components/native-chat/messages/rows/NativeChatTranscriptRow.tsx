@@ -25,7 +25,7 @@ import { isActionableStructuredAgentSessionPrompt } from '../../../../../../shar
 import { NativeChatNewRowsMarker } from '../../viewport/new-rows/NativeChatNewRowsMarker'
 import { useNativeChatSlackMirrorPost } from '../../slack-mirror/NativeChatSlackMirrorPost'
 import { slackMirrorPostLine } from '../../../../../../shared/connectors/slack-mirror-post-line'
-import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
+import { nativeChatRowEndsInOwnBubbleMeta } from './native-chat-own-bubble-meta'
 import type { NativeChatNewRowsMarkerState } from '../../viewport/new-rows/native-chat-new-rows-marker'
 
 /** Memoize shared context so unchanged rows keep their props during transcript updates. */
@@ -70,17 +70,14 @@ function newRowsMarkerSpacing(
     // A turn with no prompt opens on its bar, which needs the deeper trim too.
     return slot.statusAbove && slot.status ? '-mb-3' : '-mb-1.5'
   }
-  // Only where the hover row is drawn last: a time or a copy button (an image-only prompt with no
-  // time has none), and no delivery or Slack post line drawn under it.
+  // Only where your bubble's hover row is the last thing drawn: no delivery or Slack post line under it.
   const afterHoverMeta =
     slot.drawsMessage &&
     !slot.receipt &&
     !slot.itemNotes &&
-    slot.message.role === 'user' &&
-    !slot.message.from &&
     deliveryNotice === undefined &&
     !slackPostLineDraws &&
-    (slot.message.timestamp !== null || deriveNativeChatRowContent(slot.message.blocks).hasText)
+    nativeChatRowEndsInOwnBubbleMeta(slot.message)
   return cn('-mb-3', afterHoverMeta && '-mt-6')
 }
 
