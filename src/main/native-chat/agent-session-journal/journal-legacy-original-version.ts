@@ -34,7 +34,12 @@ export function queueHeld(
   // Settled rows are never read: only waiting text can differ (the content scan refuses rows it
   // can't read).
   // Unordered, so the first waiting row is read without SQLite sorting the whole queue first.
+  let rows = 0
   for (const row of source.prepare(UNSETTLED_QUEUE_ANY_ORDER_SQL).iterate(sessionId)) {
+    // Measured before; bounded again in case an older Orca queued more since.
+    if (++rows > LEGACY_QUEUE_MAX_ROWS) {
+      throw oversizedQueue()
+    }
     const queued = readStoredQueuedMessageRow(row)
     if (!queued || !isUnsettledQueuedMessage(queued)) {
       return false
@@ -161,10 +166,10 @@ const QUEUED_TEXT_COLUMNS = [
  * The chat's waiting text, measured in SQL with no row read into JS, and over at most one row past
  * the limit however long the queue is.
  */
-function assertLegacyQueueBounded(
+export function assertLegacyQueueBounded(
   source: Database.Database,
   sessionId: string,
-  recordBytes: number,
+  recordBytes = 0,
   queue = true
 ): void {
   if (recordBytes > LEGACY_QUEUE_MAX_BYTES) {

@@ -5,6 +5,7 @@ import {
   journalLegacyChatRevisionKey
 } from './database/journal-legacy-source'
 import {
+  assertLegacyQueueBounded,
   hasTable,
   originalVersion,
   personEditsDiffer,
@@ -62,7 +63,12 @@ export function legacySessionHold(
   const converted = here?.epoch !== null && here?.epoch !== undefined
   // Converting never replaces a chat already converted here, so text an older Orca queued in it
   // since is kept with the original's version.
-  const queueDiffers = converted && hasQueue && !queueHeld(source, store, sessionId)
+  // A converted chat's queue is compared card by card; it is measured in SQL first, so an
+  // outsized one keeps the original before any of its rows is read.
+  const queueDiffers =
+    converted &&
+    hasQueue &&
+    (assertLegacyQueueBounded(source, sessionId), !queueHeld(source, store, sessionId))
   if (!recorded) {
     // The reconcile tracks chats by record (and a journal from before records has none), so history
     // an older Orca added to a converted chat without one is read by no pass: it keeps the original.

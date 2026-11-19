@@ -134,9 +134,7 @@ it('keeps the original for a chat with 100k waiting messages without reading the
     )
     expect(error).toBeInstanceOf(JournalLegacyRetentionError)
     expect((error as JournalLegacyRetentionError).reason).toBe('source-oversize')
-    // Kept as an original, a queue is measured before any row is read. Compared card by card, it
-    // streams, and the first message this store lacks ends the comparison.
-    expect(counted.rows).toBeLessThanOrEqual(chat === 'deleted-here' ? 0 : 1)
+    expect(counted.rows).toBe(0)
     expect(counted.sorted).toEqual([])
     // 100k rows of 512 characters would be about 60 MiB of text before any serialization.
     expect(process.memoryUsage().heapUsed - heapBefore).toBeLessThan(16 * 1024 * 1024)
