@@ -150,7 +150,7 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
 
   /** Why: main counts delivered chars, which can drift from the daemon's count across a reattach. */
   anchorProviderSequence(ptyId: string, outputSequence: number, providerSeq: number): void {
-    if (!Number.isFinite(providerSeq)) {
+    if (!this.providerSequenceInitializedPtys.has(ptyId) || !Number.isFinite(providerSeq)) {
       return
     }
     const offset = outputSequence - providerSeq
@@ -165,7 +165,7 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
       offset === previous ? (revision ?? 0) : (revision ?? 0) + 1
     )
     if (revision === undefined) {
-      if (offset !== previous && this.providerSequenceInitializedPtys.has(ptyId)) {
+      if (offset !== previous) {
         console.warn('[terminal] provider stream position re-anchored', {
           ptyId,
           drift: offset - previous
@@ -196,30 +196,20 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
     const sequenceAtSpawnStart = Math.min(currentSequence, Math.floor(runtimeSequenceAtSpawnStart))
     const postSpawnSequence = currentSequence - sequenceAtSpawnStart
     const wasInitialized = this.providerSequenceInitializedPtys.has(ptyId)
-    const earlyAnchorOffset =
-      !wasInitialized && this.providerSequenceAnchorRevisions.has(ptyId)
-        ? this.providerSequenceOffsetByPtyId.get(ptyId)
-        : undefined
     const replacesExistingRuntimeGeneration = wasInitialized || sequenceAtSpawnStart > 0
-    // Early stamps of a continued session, or of a fresh spawn, belong to the stream being synced.
-    const keepsEarlyAnchor =
-      earlyAnchorOffset !== undefined &&
-      (providerSequence.generation === 'continued' || !replacesExistingRuntimeGeneration)
     const providerOffset =
       providerSequence.generation === 'reset'
         ? sequenceAtSpawnStart
-        : wasInitialized
-          ? (this.providerSequenceOffsetByPtyId.get(ptyId) ?? 0)
-          : 0
+        : (this.providerSequenceOffsetByPtyId.get(ptyId) ?? 0)
     const providerBaseline = providerOffset + baseline
 
     if (providerSequence.generation === 'reset') {
       this.advancePtyLifecycleGeneration(ptyId)
+      this.providerSequenceAnchorRevisions.delete(ptyId)
+      this.gapRecoveryAwaitingStamp.delete(ptyId)
       // Why: daemon respawn/cold restore starts a new absolute domain. Old
       // emulator state cannot remain authoritative over the replacement.
       if (replacesExistingRuntimeGeneration) {
-        this.providerSequenceAnchorRevisions.delete(ptyId)
-        this.gapRecoveryAwaitingStamp.delete(ptyId)
         this.disposeHeadlessTerminal(ptyId)
         // The replacing stream has had no gap; the generation advance already fences older reads.
         this.ptyGapCounts.delete(ptyId)
@@ -248,13 +238,6 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
     this.ptyOutputSequenceById.set(ptyId, synchronizedSequence)
     this.providerSequenceInitializedPtys.add(ptyId)
     this.providerSequenceOffsetByPtyId.set(ptyId, providerOffset)
-    if (keepsEarlyAnchor) {
-      // Rebase early stamps by the same amount as the bytes they were counted against.
-      this.providerSequenceOffsetByPtyId.set(
-        ptyId,
-        earlyAnchorOffset + synchronizedSequence - currentSequence
-      )
-    }
 
     const snapshotMayCoverMissingState =
       (providerSequence.generation === 'continued' && !wasInitialized) ||
@@ -279,9 +262,6 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
       headless.writeChain = headless.writeChain.then(() => {
         headless.outputSequence = synchronizedSequence
       })
-    }
-    if (keepsEarlyAnchor) {
-      this.onProviderSequenceAnchored(ptyId)
     }
     return synchronizedSequence
   }
