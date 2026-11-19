@@ -31,12 +31,15 @@ export function subagentEntryDetail(entry: NativeChatSubagentEntry): string | nu
 
 /** What the subagent said, without the markdown marks a plain row or preview can't render. */
 export function subagentMessageText(markdown: string): string {
-  return markdown
-    .replace(/^\s*```.*$/gm, '')
-    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/^\s{0,3}(?:#{1,6}\s+|>\s?|[-*+]\s+)/gm, '')
-    .replace(/[`*~]|__/g, '')
-    .trim()
+  return (
+    markdown
+      .replace(/^\s*```.*$/gm, '')
+      .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+      .replace(/^\s{0,3}(?:#{1,6}\s+|>\s?|[-*+]\s+)/gm, '')
+      // Code spans are literal: keep the `~`, `*` and `__` in paths and globs, drop only the backticks.
+      .replace(/(`+)([^`]+?)\1|[`*~]|__/g, (_mark, _ticks, code: string | undefined) => code ?? '')
+      .trim()
+  )
 }
 
 /** `claude-opus-5-5` reads as `Opus 5.5`, `gpt-5.5` as `GPT-5.5`: the chat already names the provider. */
