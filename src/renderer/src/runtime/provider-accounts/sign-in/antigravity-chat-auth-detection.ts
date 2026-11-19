@@ -12,11 +12,11 @@ type Entry = {
   owner: RuntimeClientTarget
   detection: AntigravityChatAuthDetection | null
   fetchedAt: number
-  inFlight: Promise<void> | null
+  inFlight: Promise<boolean> | null
   /** The host's sign-in revision the last read saw; a newer one forces a read. */
   revision: number
   /** The one read queued behind `inFlight` for every forced caller. */
-  forced: Promise<void> | null
+  forced: Promise<boolean> | null
   observers: number
 }
 
@@ -53,11 +53,12 @@ const sameDetection = (
   b: AntigravityChatAuthDetection | null
 ): boolean => JSON.stringify(a) === JSON.stringify(b)
 
-/** Re-reads the host's credentials; a fresh read is reused unless `force`. */
+/** Re-reads the host's credentials; a fresh read is reused unless `force`. Resolves to whether
+ *  the host answered: a failed read keeps the last answer. */
 export function refreshAntigravityChatAuthDetection(
   owner: RuntimeClientTarget,
   options: { force?: boolean; now?: () => number } = {}
-): Promise<void> {
+): Promise<boolean> {
   const entry = entryFor(owner)
   const now = options.now ?? Date.now
   if (entry.inFlight) {
@@ -73,7 +74,7 @@ export function refreshAntigravityChatAuthDetection(
     return queued.forced
   }
   if (!options.force && entry.fetchedAt > 0 && now() - entry.fetchedAt < FRESH_MS) {
-    return Promise.resolve()
+    return Promise.resolve(true)
   }
   const read = callAntigravityChatAuthDetect(entry.owner)
     .then((detection) => {
@@ -82,9 +83,10 @@ export function refreshAntigravityChatAuthDetection(
         entry.detection = detection
         listeners.forEach((listener) => listener())
       }
+      return true
     })
-    // A failed read keeps the last answer; the next mount, focus or sign-in change asks again.
-    .catch(() => undefined)
+    // The next mount, focus or sign-in change asks again.
+    .catch(() => false)
     .finally(() => {
       entry.inFlight = null
     })

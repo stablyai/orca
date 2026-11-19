@@ -90,8 +90,10 @@ async function applyAntigravityChatAuthMethod(
   t: Translate
 ): Promise<void> {
   try {
-    // Keep a saved project and location: switching away and back must not drop them.
-    const saved = await callAntigravityChatAuthConfig(target)
+    // Keep a saved project and location across switches, as detection does; Enterprise's
+    // project is its license's, not one gcloud should use.
+    const current = await callAntigravityChatAuthConfig(target)
+    const saved = current?.method === 'oauth-business' ? null : current
     await callAntigravityChatAuthConfig(target, {
       method,
       ...(saved?.gcpProject ? { gcpProject: saved.gcpProject } : {}),
@@ -182,8 +184,9 @@ export function NativeChatAntigravityAuthProvider({
       if (busy.current) {
         return
       }
-      await refreshAntigravityChatAuthDetection(target, { force: true })
-      const current = readAntigravityChatAuthDetection(target)
+      const answered = await refreshAntigravityChatAuthDetection(target, { force: true })
+      // A failed re-read leaves an old count, which can't rule out chats started since.
+      const current = answered ? readAntigravityChatAuthDetection(target) : null
       if (action !== GOOGLE_SIGN_IN && current?.method === action) {
         return
       }

@@ -57,12 +57,10 @@ const savedChatMethod = (runtime: OrcaRuntimeService) => () =>
   readAntigravityChatAuthConfig(runtime.requireStore())?.method ?? null
 
 function detectChatAuth(runtime: OrcaRuntimeService) {
-  // One cached environment read serves the key check and the ADC lookup; never a login shell.
-  const env = resolveHostStructuredAgentLaunchEnvironment(
-    'antigravity',
-    runtime.requireStore().getSettings(),
-    true
-  )
+  // One environment read serves the key check and the ADC lookup. It serves the shell capture
+  // chats launch from, refreshed in the background at most every 10s; it waits only for the
+  // first capture after a start, so a GEMINI_API_KEY exported by the profile is seen.
+  const env = chatLaunchEnv(runtime)()
   const launchEnv = () => env
   void seedAntigravityChatAuth(savedChatMethod(runtime))
   return detectAntigravityChatAuth({

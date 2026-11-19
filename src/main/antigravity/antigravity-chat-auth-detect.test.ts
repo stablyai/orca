@@ -61,6 +61,26 @@ describe('detectAntigravityChatAuth', () => {
     expect(detection.adc).toEqual({ available: true, project: 'sa-project' })
   })
 
+  it("names the project a switch to gcloud would keep, but not Enterprise's", async () => {
+    const gcloud = folder({
+      'application_default_credentials.json': JSON.stringify({ quota_project_id: 'adc-project' })
+    })
+    const keyed = await detectAntigravityChatAuth(
+      sources(
+        { CLOUDSDK_CONFIG: gcloud },
+        { config: () => ({ method: 'gemini-api-key', gcpProject: 'kept' }) }
+      )
+    )
+    const enterprise = await detectAntigravityChatAuth(
+      sources(
+        { CLOUDSDK_CONFIG: gcloud },
+        { config: () => ({ method: 'oauth-business', gcpProject: 'license', gcpLocation: 'us' }) }
+      )
+    )
+    expect(keyed.adc.project).toBe('kept')
+    expect(enterprise.adc.project).toBe('adc-project')
+  })
+
   it('reports nothing when the host has no key or ADC file', async () => {
     const detection = await detectAntigravityChatAuth(sources({ CLOUDSDK_CONFIG: folder() }))
     expect(detection.apiKey).toEqual({ available: false, source: null })

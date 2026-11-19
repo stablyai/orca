@@ -43,7 +43,8 @@ export async function detectAntigravityChatAuth(
     readGoogle('oauth-business')
   ])
   const adcAvailable = await isFile(agentPlatformCredentialsFile(env))
-  const saved = config?.method === 'agent-platform' ? config : {}
+  // A switch to gcloud keeps a saved project, as the apply does; Enterprise's is its own.
+  const saved = config && config.method !== 'oauth-business' ? config : {}
   const project = adcAvailable ? (await resolveAgentPlatformProject(saved, env)).project : null
   return {
     method,
