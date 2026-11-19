@@ -7,17 +7,22 @@ const fixture = vi.hoisted(() => ({ state: {} }))
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => fixture.state } }))
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
 let resolvedPaneHandle = 'terminal-1'
-const { runtimeCall, subscriptionSendBinary, latestSubscribePayload, resetRemoteRuntimeTransport } =
-  createRemoteRuntimeTransportMocks({
-    getCallbacks: () => subscriptionCallbacks,
-    setCallbacks: (callbacks) => {
-      subscriptionCallbacks = callbacks
-    },
-    getResolvedPaneHandle: () => resolvedPaneHandle,
-    setResolvedPaneHandle: (handle) => {
-      resolvedPaneHandle = handle
-    }
-  })
+const {
+  runtimeCall,
+  runtimeSubscribe,
+  subscriptionSendBinary,
+  latestSubscribePayload,
+  resetRemoteRuntimeTransport
+} = createRemoteRuntimeTransportMocks({
+  getCallbacks: () => subscriptionCallbacks,
+  setCallbacks: (callbacks) => {
+    subscriptionCallbacks = callbacks
+  },
+  getResolvedPaneHandle: () => resolvedPaneHandle,
+  setResolvedPaneHandle: (handle) => {
+    resolvedPaneHandle = handle
+  }
+})
 beforeEach(resetRemoteRuntimeTransport)
 afterEach(() => vi.clearAllMocks())
 
@@ -108,3 +113,83 @@ it.each(['subscription', 'recovery'] as const)(
     }
   }
 )
+
+it('does not return a predecessor create result after subscription yields to a successor attachment', async () => {
+  const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+  const opening = Promise.withResolvers<void>()
+  const subscribe = runtimeSubscribe.getMockImplementation()
+  runtimeSubscribe.mockImplementation(async (...args: unknown[]) => {
+    await opening.promise
+    return subscribe?.(...args)
+  })
+  const hostCall = runtimeCall.getMockImplementation()
+  runtimeCall.mockImplementation((request: { method: string }) =>
+    request.method === 'terminal.create'
+      ? Promise.resolve({
+          ok: true,
+          result: { terminal: { handle: 'created', incarnationId: 'inc-created' } }
+        })
+      : hostCall?.(request)
+  )
+  const transport = createRemoteRuntimePtyTransport('env-1', {
+    worktreeId: 'wt-1',
+    tabId: 'fresh-tab',
+    leafId: 'pane:1'
+  })
+  try {
+    const predecessor = transport.connect({ url: '', callbacks: {} })
+    await vi.waitFor(() => expect(transport.getPtyId()).toBe('remote:env-1@@created'))
+    transport.detach?.({ preserveExitObserver: false })
+    transport.attach({ existingPtyId: 'remote:env-1@@successor', callbacks: {} })
+    opening.resolve()
+    await expect(predecessor).resolves.toBeUndefined()
+    expect(transport.getPtyId()).toBe('remote:env-1@@successor')
+  } finally {
+    opening.resolve()
+    transport.disconnect()
+  }
+})
+
+it('preserves exact host launch refusal facts through attach-only account recovery', async () => {
+  const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+  const hostCall = runtimeCall.getMockImplementation()
+  runtimeCall.mockImplementation((request: { method: string }) =>
+    request.method === 'terminal.resolvePane'
+      ? Promise.resolve({
+          ok: true,
+          result: {
+            terminal: {
+              handle: 'terminal-1',
+              connected: true,
+              incarnationId: 'inc-1',
+              agentResumeRefused: 'chat-home',
+              agentResumeUnavailable: true
+            }
+          }
+        })
+      : hostCall?.(request)
+  )
+  const transport = createRemoteRuntimePtyTransport('env-1', {
+    worktreeId: 'wt-1',
+    tabId: 'web-terminal-host-tab-1',
+    leafId: 'pane:1'
+  })
+  try {
+    const result = await transport.connect({
+      url: '',
+      sessionId: 'remote:env-1@@terminal-1',
+      attachOnlyView: true,
+      isAccountRestartCurrent: () => true,
+      callbacks: {}
+    })
+    expect(result).toMatchObject({
+      id: 'remote:env-1@@terminal-1',
+      incarnationId: 'inc-1',
+      isReattach: true,
+      agentResumeRefused: 'chat-home',
+      agentResumeUnavailable: true
+    })
+  } finally {
+    transport.disconnect()
+  }
+})
