@@ -156,7 +156,7 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
     )
   }
 
-  /** Links conversations from the import folder setting into ~/.codex; only while sharing is on. */
+  /** Copies conversations from the import folder setting into ~/.codex; only while sharing is on. */
   importCodexHistoryInBackground(options: { settingChanged?: boolean } = {}): void {
     void this.accountHistoryPasses.importHistory(() => this.store.getSettings(), options)
   }

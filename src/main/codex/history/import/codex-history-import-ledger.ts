@@ -3,23 +3,18 @@ import { dirname } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { renameFileWithWindowsRetryAsync } from '../../../../shared/file-write/windows-retry-file-operations'
 
-/** One import folder's day folder (or `archived_sessions`) as last read. */
+/** One import folder's day folder (or `archived_sessions`) as last read; older ledgers' `waiting` is ignored. */
 export type ImportedFolder = {
   /** Its mtime when read; absent while it still needs another read. */
   mtimeNs?: string
-  /**
-   * Plain rollouts left out for a newer compressed copy in the store, by their mtime: Codex may
-   * still append to one, so a change to any reads the folder again.
-   */
-  waiting?: Record<string, string>
 }
 
 export type ImportedSource = {
   /** `dev:ino` of the import folder; a replaced folder starts over. */
   identity: string
   /**
-   * Rollout names (without `.zst`) already linked or found in the store, wherever they sit in the import folder
-   * now (Codex archives by moving): never linked again, so one the user deleted stays deleted.
+   * Rollout names (without `.zst`) already copied or found in the store, wherever they sit in the import folder
+   * now (Codex archives by moving): never copied again, so one the user deleted stays deleted.
    */
   handled: string[]
   folders: Record<string, ImportedFolder>
@@ -46,13 +41,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isImportedFolder(value: unknown): value is ImportedFolder {
-  return (
-    isRecord(value) &&
-    (value.mtimeNs === undefined || typeof value.mtimeNs === 'string') &&
-    (value.waiting === undefined ||
-      (isRecord(value.waiting) &&
-        Object.values(value.waiting).every((mtime) => typeof mtime === 'string')))
-  )
+  return isRecord(value) && (value.mtimeNs === undefined || typeof value.mtimeNs === 'string')
 }
 
 function isImportedSource(value: unknown): value is ImportedSource {
@@ -72,7 +61,7 @@ const loaded = new Map<string, Promise<ImportLedger>>()
 
 /**
  * A missing ledger starts empty. A damaged one starts empty and `recovered`: which conversations
- * the user deleted is lost with it, so nothing already in an import folder is linked again.
+ * the user deleted is lost with it, so nothing already in an import folder is copied again.
  */
 export function readImportLedger(path: string): Promise<ImportLedger> {
   let ledger = loaded.get(path)

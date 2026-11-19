@@ -123,7 +123,7 @@ export class CodexAccountHistoryPasses {
   }
 
   /**
-   * Links the import folder's conversations that ~/.codex lacks into it, in the queue with the
+   * Copies the import folder's conversations that ~/.codex lacks into it, in the queue with the
    * history passes and yielding to a waiting launch: at most once per interval, unless the
    * setting changed. The settings are read again when it starts and while it runs.
    */
@@ -151,7 +151,7 @@ export class CodexAccountHistoryPasses {
         this.activePasses += 1
         this.startedPasses += 1
         try {
-          const linked = await importCodexHistory({
+          const copied = await importCodexHistory({
             importHome,
             storeHome: getSystemCodexHomePath(),
             ledgerPath: IMPORT_LEDGER_PATH(),
@@ -161,7 +161,7 @@ export class CodexAccountHistoryPasses {
               this.requests.hasLaunchWaiting('host') ||
               resolveImportHome(getSettings()) !== importHome
           })
-          if (linked !== null) {
+          if (copied !== null) {
             this.importedAt.set(key, Date.now())
           }
         } catch (error) {

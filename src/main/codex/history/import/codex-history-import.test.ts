@@ -1,4 +1,5 @@
 import {
+  appendFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -21,7 +22,6 @@ const TAKEN = 'rollout-2026-11-18T11-00-00-0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a52.
 const COMPRESSED = 'rollout-2026-11-18T12-00-00-0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a53.jsonl'
 const ARCHIVED = 'rollout-2026-10-02T09-00-00-0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a54.jsonl'
 const LATER = 'rollout-2026-11-18T13-00-00-0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a55.jsonl'
-const BOTH = 'rollout-2026-11-18T14-00-00-0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a56.jsonl'
 
 const roots: string[] = []
 
@@ -51,33 +51,36 @@ function setup(): { importHome: string; storeHome: string; run: () => Promise<nu
 }
 
 describe('importCodexHistory', () => {
-  it('links missing active and archived rollouts and never replaces the store’s own', async () => {
+  it('copies missing rollouts without touching the import folder, and any store form wins', async () => {
     const { importHome, storeHome, run } = setup()
-    writeFileSync(join(importHome, DAY, NEW), 'new\n')
+    const imported = join(importHome, DAY, NEW)
+    writeFileSync(imported, 'new\n')
+    const sourceTime = new Date('2026-03-01T00:00:00Z')
+    utimesSync(imported, sourceTime, sourceTime)
     writeFileSync(join(importHome, DAY, TAKEN), 'import copy\n')
     writeFileSync(join(storeHome, DAY, TAKEN), 'store copy\n')
-    writeFileSync(join(importHome, DAY, COMPRESSED), 'old plain\n')
-    writeFileSync(join(storeHome, DAY, `${COMPRESSED}.zst`), 'newer compressed')
+    // The store's compressed form wins even over a newer plain form here.
+    writeFileSync(join(importHome, DAY, COMPRESSED), 'newer plain\n')
+    writeFileSync(join(storeHome, DAY, `${COMPRESSED}.zst`), 'older compressed')
     const older = new Date('2026-01-01T00:00:00Z')
     const newer = new Date('2026-02-01T00:00:00Z')
-    utimesSync(join(importHome, DAY, COMPRESSED), older, older)
-    utimesSync(join(storeHome, DAY, `${COMPRESSED}.zst`), newer, newer)
-    // Both forms in the import folder: the plain one holds turns appended after compression.
-    writeFileSync(join(importHome, DAY, `${BOTH}.zst`), 'compressed')
-    writeFileSync(join(importHome, DAY, BOTH), 'compressed plus newer turns\n')
-    utimesSync(join(importHome, DAY, `${BOTH}.zst`), older, older)
-    utimesSync(join(importHome, DAY, BOTH), newer, newer)
+    utimesSync(join(storeHome, DAY, `${COMPRESSED}.zst`), older, older)
+    utimesSync(join(importHome, DAY, COMPRESSED), newer, newer)
     writeFileSync(join(importHome, 'archived_sessions', ARCHIVED), 'archived\n')
 
-    expect(await run()).toBe(4)
+    expect(await run()).toBe(2)
 
-    expect(statSync(join(storeHome, DAY, NEW)).ino).toBe(statSync(join(importHome, DAY, NEW)).ino)
+    const copy = join(storeHome, DAY, NEW)
+    expect(statSync(copy).ino).not.toBe(statSync(imported).ino)
+    expect(readFileSync(copy, 'utf8')).toBe('new\n')
+    expect(statSync(copy).mtimeMs).toBe(sourceTime.getTime())
+    appendFileSync(copy, 'continued in Orca\n')
+    expect(readFileSync(imported, 'utf8')).toBe('new\n')
     expect(readFileSync(join(storeHome, 'archived_sessions', ARCHIVED), 'utf8')).toBe('archived\n')
     expect(readFileSync(join(storeHome, DAY, TAKEN), 'utf8')).toBe('store copy\n')
     expect(existsSync(join(storeHome, DAY, COMPRESSED))).toBe(false)
-    expect(readFileSync(join(storeHome, DAY, BOTH), 'utf8')).toBe('compressed plus newer turns\n')
     expect(readdirSync(join(storeHome, '..', 'index-pending')).sort()).toEqual(
-      [ARCHIVED, BOTH, `${BOTH}.zst`, NEW].sort()
+      [ARCHIVED, NEW].sort()
     )
   })
 
