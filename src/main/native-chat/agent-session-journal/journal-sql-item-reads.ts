@@ -147,7 +147,7 @@ export function readJournalDomainItems(
         context: readJournalDomainContinuationContext(db, target)
       }
     case 'message-options': {
-      const body = visibleItem(
+      const body = journalVisibleItem(
         db,
         prefix,
         agentJournalSubmissionKey(operation.clientMessageId)
@@ -245,7 +245,7 @@ export function journalCanonicalItemId(db: Database.Database, prefix: Prefix) {
   }
 }
 
-function visibleItem(
+export function journalVisibleItem(
   db: Database.Database,
   prefix: Prefix,
   itemId: string

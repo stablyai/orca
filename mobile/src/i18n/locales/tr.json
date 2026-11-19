@@ -187,7 +187,18 @@
       "webView": "Web sitesinin masaüstü görünümünü göster"
     },
     "loadFailure": {
-      "retry": "Yeniden dene"
+      "retry": "Yeniden dene",
+      "connectionNotSecure": "Bağlantı güvenli değil",
+      "certificateNameMismatch": "Sertifika {{value0}} ile eşleşmiyor.",
+      "certificateDateInvalid": "{{value0}} için sertifika, geçerli tarih ve saatte geçerli değil.",
+      "certificateAuthorityInvalid": "Orca, {{value0}} için sertifikayı veren yetkiliye güvenmiyor.",
+      "certificateVerificationFailed": "Orca, {{value0}} için sertifikayı doğrulayamadı.",
+      "proceedUnsafe": "Yine de Devam Et (Güvenli Değil)",
+      "connecting": "Bağlanıyor…",
+      "certificateChallengeExpired": "Bu sertifika onayının süresi doldu. Yeni bir onay istemek için sayfayı yeniden deneyin.",
+      "certificateChallengeChanged": "Sertifika isteği değişti. Sayfayı yeniden deneyin ve yeni uyarıyı inceleyin.",
+      "certificateProceedFailed": "Orca bu sertifika isteğini onaylayamadı. Sayfayı yeniden deneyin ve tekrar deneyin.",
+      "certificateChallengeUnavailable": "Bu sertifika isteği artık kullanılamıyor. Yeni bir istek için sayfayı yeniden deneyin."
     }
   },
   "chat": {
@@ -938,7 +949,9 @@
       "label": "Kurulum betiği",
       "run": "Çalıştır",
       "runSetupCommand": "Kurulum komutunu çalıştır",
-      "skip": "Atla"
+      "skip": "Atla",
+      "waitForSetup": "Ajanı başlatmadan önce setup'ın tamamlanmasını bekle",
+      "waitForSetupSaveFailed": "Kurulum başlangıç davranışı kaydedilemedi."
     },
     "newWorkspaceSshConnectionField": {
       "connect": "Bağlan",
@@ -1640,7 +1653,10 @@
       "removeHostMessage": "“{{name}}” kaldırılsın mı? Daha sonra yeniden eşleştirebilirsiniz.",
       "sleep": "Uyut",
       "unpin": "Sabitlemeyi Kaldır",
-      "rename": "Yeniden adlandır"
+      "rename": "Yeniden adlandır",
+      "markRead": "Okundu Olarak İşaretle",
+      "markUnread": "Okunmadı Olarak İşaretle",
+      "moveToStatus": "Duruma Taşı"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Kontroller: Başarısız",
@@ -2791,6 +2807,9 @@
     },
     "nativeChatView": {
       "linkedMessageMissing": "Bu mesaj bulunamadı."
+    },
+    "browserProfile": {
+      "default": "Varsayılan"
     }
   },
   "settings": {

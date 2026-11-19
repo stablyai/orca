@@ -20,6 +20,7 @@ import { PluginInstallTrustDialogHost } from '../components/plugins/dialogs/Plug
 import { TelemetryFirstLaunchSurface } from '../components/onboarding/telemetry/TelemetryFirstLaunchSurface'
 import { ZoomOverlay } from './chrome/ZoomOverlay'
 import { WslMoveDialogHost } from '../components/wsl-move/WslMoveDialog'
+import { AgentCliUpdateFailedDialogHost } from '../components/agent-cli-update/AgentCliUpdateFailedDialogHost'
 import { MacosUpdateRequirementHost } from '../components/macos-update-requirement/MacosUpdateRequirementHost'
 import { shouldRenderPetOverlay } from '../components/pet/pet-overlay-visibility'
 import { useAppStore } from '../store/index'
@@ -224,6 +225,7 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
             <NodeDistMirrorDialog />
           </ModalBoundary>
         ) : null}
+        <AgentCliUpdateFailedDialogHost />
         {/* The viewer must outlive the virtualized chat row that opened it. */}
         {activeModal === 'diagram-viewer' ? (
           <ModalBoundary boundaryId="modal.diagram-viewer" resetKey>

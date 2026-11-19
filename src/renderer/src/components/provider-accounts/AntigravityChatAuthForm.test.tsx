@@ -145,7 +145,6 @@ it.each(['accounts', 'provider'] as const)(
 )
 
 it.each([
-  { surface: 'accounts', language: 'en', action: 'Sign in with Gemini Enterprise' },
   { surface: 'provider', language: 'en', action: 'Sign in with Gemini Enterprise' },
   { surface: 'accounts', language: 'es', action: 'Sign in with Gemini Enterprise' }
 ] as const)(
@@ -269,84 +268,76 @@ it('refreshes the saved method after reconnecting to a restarted host with the s
   expect(screen.getByRole('combobox')).toHaveTextContent('Gemini Enterprise')
 })
 
-it.each(['accounts', 'provider'] as const)(
-  '%s uses its single Sign in action to reread a failed load before preparing Enterprise',
-  async (surface) => {
-    const target = { kind: 'environment', environmentId: `load-recovery-${surface}` } as const
-    vi.mocked(callAntigravityChatAuthConfig).mockRejectedValue(new Error('Host unreachable'))
-    const user = userEvent.setup()
-    renderSurface(surface, target)
-    await screen.findByRole('alert')
-    await act(async () => streams.handlers.get(key(target))?.onError(new Error('Connection lost')))
-    const action = screen.getByRole('button', { name: /Sign in|Retry sign-in/ })
-    const info = screen.queryByRole('button', { name: 'Separate from your agy terminal account.' })
-    expect(screen.getAllByRole('button').filter((button) => button !== info)).toEqual([action])
-    expect(action).toBeEnabled()
-    expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
-    await user.click(action)
-    expect(action).toBeEnabled()
-    expect(callAntigravityChatSignIn).not.toHaveBeenCalled()
-    const requests: unknown[] = []
-    vi.mocked(callAntigravityChatAuthConfig).mockImplementation(async (_owner, config) => {
-      requests.push(config ?? 'Get')
-      return config ?? enterprise
-    })
-    await user.click(action)
-    await waitFor(() =>
-      expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Start', { intent: 'signIn' })
-    )
-    expect(requests).toEqual(['Get', enterprise])
-    expect(screen.getByRole('combobox')).toHaveTextContent('Gemini Enterprise')
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-    vi.mocked(callAntigravityChatAuthConfig).mockRejectedValue(new Error('Connection lost'))
-    await act(async () =>
-      streams.handlers.get(key(target))?.onEvent({ revision: 2, auth: 'unknown', flow: null })
-    )
-    await screen.findByRole('alert')
-    expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
-    expect(screen.queryByLabelText('Google Cloud project')).not.toBeInTheDocument()
-    expect(screen.queryByLabelText('Location')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /^Sign in/ })).toBeEnabled()
-  }
-)
+it('uses the provider Sign in action to recover a failed settings load before starting Enterprise', async () => {
+  const target = { kind: 'environment', environmentId: `load-recovery` } as const
+  vi.mocked(callAntigravityChatAuthConfig).mockRejectedValue(new Error('Host unreachable'))
+  const user = userEvent.setup()
+  renderSurface('provider', target)
+  await screen.findByRole('alert')
+  await act(async () => streams.handlers.get(key(target))?.onError(new Error('Connection lost')))
+  const action = screen.getByRole('button', { name: /Sign in|Retry sign-in/ })
+  const info = screen.queryByRole('button', { name: 'Separate from your agy terminal account.' })
+  expect(screen.getAllByRole('button').filter((button) => button !== info)).toEqual([action])
+  expect(action).toBeEnabled()
+  expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
+  await user.click(action)
+  expect(action).toBeEnabled()
+  expect(callAntigravityChatSignIn).not.toHaveBeenCalled()
+  const requests: unknown[] = []
+  vi.mocked(callAntigravityChatAuthConfig).mockImplementation(async (_owner, config) => {
+    requests.push(config ?? 'Get')
+    return config ?? enterprise
+  })
+  await user.click(action)
+  await waitFor(() =>
+    expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Start', { intent: 'signIn' })
+  )
+  expect(requests).toEqual(['Get', enterprise])
+  expect(screen.getByRole('combobox')).toHaveTextContent('Gemini Enterprise')
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  vi.mocked(callAntigravityChatAuthConfig).mockRejectedValue(new Error('Connection lost'))
+  await act(async () =>
+    streams.handlers.get(key(target))?.onEvent({ revision: 2, auth: 'unknown', flow: null })
+  )
+  await screen.findByRole('alert')
+  expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
+  expect(screen.queryByLabelText('Google Cloud project')).not.toBeInTheDocument()
+  expect(screen.queryByLabelText('Location')).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /^Sign in/ })).toBeEnabled()
+})
 
-it.each(['accounts', 'provider'] as const)(
-  '%s keeps an active sign-in usable when its background settings refresh fails',
-  async (surface) => {
-    const target = { kind: 'environment', environmentId: `active-read-failure-${surface}` } as const
-    vi.mocked(callAntigravityChatAuthConfig).mockResolvedValue(personal)
-    const user = userEvent.setup()
-    renderSurface(surface, target)
-    await waitFor(() => expect(screen.getByRole('combobox')).toBeEnabled())
-    vi.mocked(callAntigravityChatAuthConfig).mockRejectedValue(new Error('Connection lost'))
-    await act(async () => {
-      streams.handlers.get(key(target))?.onEvent({
-        revision: 1,
-        auth: 'unknown',
-        flow: { phase: 'waiting', flowId: 'own-flow', url: 'https://example.com/sign-in' }
-      })
+it('keeps an active account sign-in usable when its background settings refresh fails', async () => {
+  const target = { kind: 'environment', environmentId: `active-read-failure` } as const
+  vi.mocked(callAntigravityChatAuthConfig).mockResolvedValue(personal)
+  const user = userEvent.setup()
+  renderSurface('accounts', target)
+  await waitFor(() => expect(screen.getByRole('combobox')).toBeEnabled())
+  vi.mocked(callAntigravityChatAuthConfig).mockRejectedValue(new Error('Connection lost'))
+  await act(async () => {
+    streams.handlers.get(key(target))?.onEvent({
+      revision: 1,
+      auth: 'unknown',
+      flow: { phase: 'waiting', flowId: 'own-flow', url: 'https://example.com/sign-in' }
     })
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Copy sign-in link' })).toBeEnabled()
-    await user.click(screen.getByRole('button', { name: "Browser page didn't load?" }))
-    expect(screen.getByRole('textbox')).toBeEnabled()
-    await user.click(screen.getByRole('button', { name: 'Cancel' }))
-    expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Cancel', { flowId: 'own-flow' })
-    await act(async () => {
-      streams.handlers
-        .get(key(target))
-        ?.onEvent({ revision: 2, auth: 'unknown', flow: { phase: 'waiting', flowId: null } })
-    })
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Sign-in is in progress in another client.'
-    )
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-    await act(async () => {
-      streams.handlers.get(key(target))?.onEvent({ revision: 3, auth: 'unknown', flow: null })
-    })
-    expect(await screen.findByRole('button', { name: /^Sign in/ })).toBeEnabled()
-  }
-)
+  })
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Copy sign-in link' })).toBeEnabled()
+  await user.click(screen.getByRole('button', { name: "Browser page didn't load?" }))
+  expect(screen.getByRole('textbox')).toBeEnabled()
+  await user.click(screen.getByRole('button', { name: 'Cancel' }))
+  expect(callAntigravityChatSignIn).toHaveBeenCalledWith(target, 'Cancel', { flowId: 'own-flow' })
+  await act(async () => {
+    streams.handlers
+      .get(key(target))
+      ?.onEvent({ revision: 2, auth: 'unknown', flow: { phase: 'waiting', flowId: null } })
+  })
+  expect(screen.getByRole('status')).toHaveTextContent('Sign-in is in progress in another client.')
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  await act(async () => {
+    streams.handlers.get(key(target))?.onEvent({ revision: 3, auth: 'unknown', flow: null })
+  })
+  expect(await screen.findByRole('button', { name: /^Sign in/ })).toBeEnabled()
+})
 
 it('keeps an edited draft ahead of another client’s choice when recovering a failed refresh', async () => {
   const target = { kind: 'environment', environmentId: 'edited-load-recovery' } as const

@@ -18945,7 +18945,6 @@
         "sendAgainToTryOnceMore": "請重新傳送您的訊息，再試一次。",
         "couldNotStart": "{{agent}} 無法啟動。",
         "couldNotRestart": "{{agent}} 無法重新啟動。",
-        "cliTooOld": "{{agent}} {{installedVersion}} 版本過舊，無法用於聊天。請更新至 {{minimumVersion}} 或較新版本。",
         "startTimedOut": "{{agent}} 啟動時間過長（{{seconds}} 秒後仍未回應 {{method}}）。",
         "startTimedOutKeepsHappening": "如果此問題持續發生，執行此聊天的電腦可能負載過高。",
         "notSignedIn": "{{agent}} 尚未登入。",

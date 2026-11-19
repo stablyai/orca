@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { FileText, Globe, SquareTerminal } from 'lucide-react-native'
+import { FileText, Globe, SquareTerminal, UserRound } from 'lucide-react-native'
 import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
 import {
   ActionSheetContent,
@@ -40,6 +40,8 @@ type Props = {
   /** Rows that lead the agents, such as a bot's own new chat. */
   leadingAgentActions: ActionSheetAction[]
   canCreateBrowser: boolean
+  /** The profile a new browser tab opens in; null hides the row (one profile, or an older host). */
+  browserProfileLabel: string | null
   canCreateMarkdownNote: boolean
   onClose: () => void
   onCreateAgent: (agent: TuiAgent, nativeChatDefault: boolean | undefined) => void
@@ -48,6 +50,8 @@ type Props = {
   onCreateTerminal: (shell?: BuiltInWindowsTerminalShell) => void
   /** Runs after the sheet has gone, so it may open another modal. */
   onCreateBrowser: () => void
+  /** Runs after the sheet has gone, so it may open the picker. */
+  onChooseBrowserProfile: () => void
   onCreateMarkdownNote: () => void
 }
 
@@ -76,12 +80,14 @@ export function MobileNewTabSheet({
   agentStatusRow,
   leadingAgentActions,
   canCreateBrowser,
+  browserProfileLabel,
   canCreateMarkdownNote,
   onClose,
   onCreateAgent,
   terminalShells,
   onCreateTerminal,
   onCreateBrowser,
+  onChooseBrowserProfile,
   onCreateMarkdownNote
 }: Props) {
   useMobileColorScheme()
@@ -207,6 +213,16 @@ export function MobileNewTabSheet({
             leading={<Globe size={16} color={iconColor} />}
             navigates
             onPress={() => closeThen(onCreateBrowser)}
+          />
+        ) : null}
+        {canCreateBrowser && browserProfileLabel !== null ? (
+          <ListRow
+            key="browserProfile"
+            title={t('session.browserProfile.title', 'Profile')}
+            leading={<UserRound size={16} color={iconColor} />}
+            value={browserProfileLabel}
+            navigates
+            onPress={() => closeThen(onChooseBrowserProfile)}
           />
         ) : null}
         {canCreateMarkdownNote ? (

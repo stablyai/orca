@@ -101,10 +101,9 @@ vi.mock('./use-bot-chat-tree', async () => {
     mocks.treeListeners.add(listener)
     return () => mocks.treeListeners.delete(listener)
   }
-  return {
-    useBotChatTree: (bot: Bot | null) =>
-      useSyncExternalStore(subscribe, () => (bot && mocks.trees.get(bot.id)) ?? mocks.pending)
-  }
+  const useTree = (bot: Bot | null) =>
+    useSyncExternalStore(subscribe, () => (bot && mocks.trees.get(bot.id)) ?? mocks.pending)
+  return { useBotChatTree: useTree, useBotOwnChatTree: useTree }
 })
 vi.mock('./NewBotDialog', () => ({ NewBotDialog: () => null }))
 vi.mock('@/components/dismiss/confirmation/confirmation-dialog-context', () => ({

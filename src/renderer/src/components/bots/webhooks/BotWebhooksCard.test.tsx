@@ -56,6 +56,7 @@ async function openRow(): Promise<void> {
 
 afterEach(() => {
   cleanup()
+  vi.useRealTimers()
   confirm.mockReset()
   setWebhookHostTransportForTests(null)
   Reflect.deleteProperty(window, 'api')
@@ -70,20 +71,7 @@ describe('BotWebhooksCard', () => {
     expect(screen.queryByText('Webhooks')).toBeNull()
   })
 
-  it('shows no row when this Orca has no webhooks methods', async () => {
-    renderRow(() => {
-      throw new RuntimeRpcCallError({
-        id: '1',
-        ok: false,
-        error: { code: 'method_not_found', message: 'Unknown method' },
-        _meta: { runtimeId: 'r' }
-      })
-    })
-    await waitFor(() => expect(host).toHaveBeenCalled())
-    expect(screen.queryByText('Webhooks')).toBeNull()
-  })
-
-  it('asks a host without webhooks again only every few minutes', async () => {
+  it('hides Webhooks for an unsupported host and backs off before reading it again', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     renderRow(() => {
       throw new RuntimeRpcCallError({
@@ -93,7 +81,10 @@ describe('BotWebhooksCard', () => {
         _meta: { runtimeId: 'r' }
       })
     })
-    await waitFor(() => expect(host).toHaveBeenCalledTimes(1))
+    await waitFor(() =>
+      expect(host).toHaveBeenCalledWith(expect.anything(), 'webhooks.list', { botId: 'bot-1' })
+    )
+    expect(screen.queryByText('Webhooks')).toBeNull()
     await act(async () => {
       await vi.advanceTimersByTimeAsync(60_000)
     })
@@ -102,7 +93,6 @@ describe('BotWebhooksCard', () => {
       await vi.advanceTimersByTimeAsync(5 * 60_000)
     })
     expect(host).toHaveBeenCalledTimes(2)
-    vi.useRealTimers()
   })
 
   it('lists hooks with their destination, filters and recent calls', async () => {
@@ -125,6 +115,55 @@ describe('BotWebhooksCard', () => {
     expect(screen.getByText('wrong key or signature · nothing kept')).toBeTruthy()
     // Nothing secret is on screen.
     expect(document.body.textContent).not.toContain('orcawh_')
+  })
+
+  it('generates or pastes a signing secret from the Webhooks row', async () => {
+    renderRow((method) =>
+      method === 'webhooks.list'
+        ? { hooks: [webhookSummaryFixture()] }
+        : method === 'webhooks.calls'
+          ? { calls: [] }
+          : {}
+    )
+    const secretWrites = () =>
+      host.mock.calls.filter(([, method]) => method === 'webhooks.secret').map((call) => call[2])
+    const openSecret = () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Add a signature…' }))
+    await openRow()
+    openSecret()
+    expect(screen.getByRole('radio', { name: 'Orca makes one' }).getAttribute('aria-checked')).toBe(
+      'true'
+    )
+    expect(screen.queryByLabelText('Standard Webhooks secret')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Generate secret' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(secretWrites()).toEqual([
+      expect.objectContaining({ adapter: 'standard', generate: true })
+    ])
+    expect(secretWrites()[0]).not.toHaveProperty('secret')
+
+    openSecret()
+    fireEvent.click(screen.getByRole('radio', { name: 'Paste the sender’s' }))
+    const save = screen.getByRole('button', { name: 'Save' })
+    expect(save.hasAttribute('disabled')).toBe(true)
+    fireEvent.change(screen.getByLabelText('Standard Webhooks secret'), {
+      target: { value: '  pasted-test-value  ' }
+    })
+    fireEvent.click(save)
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(secretWrites()[1]).toMatchObject({ adapter: 'standard', secret: 'pasted-test-value' })
+    expect(secretWrites()[1]).not.toHaveProperty('generate')
+
+    openSecret()
+    fireEvent.keyDown(screen.getByRole('combobox', { name: 'Sender' }), { key: 'ArrowDown' })
+    fireEvent.click(await screen.findByRole('option', { name: 'GitHub' }))
+    expect(screen.queryByRole('radiogroup')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Generate secret' })).toBeTruthy()
+
+    fireEvent.keyDown(screen.getByRole('combobox', { name: 'Sender' }), { key: 'ArrowDown' })
+    fireEvent.click(await screen.findByRole('option', { name: 'Sentry' }))
+    expect(screen.queryByRole('radiogroup')).toBeNull()
+    expect(screen.getByLabelText('Sentry secret')).toBeTruthy()
   })
 
   it('rotates with the old key stopped only when the owner picks it', async () => {

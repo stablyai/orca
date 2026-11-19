@@ -1,3 +1,4 @@
+import { legacyProofReply } from './journal-legacy-proof-reply'
 import { JournalForkPreparation } from './journal-fork-preparation'
 import { parentPort, workerData } from 'node:worker_threads'
 import { existsSync } from 'node:fs'
@@ -16,7 +17,18 @@ import {
 } from './database/journal-legacy-source'
 import { compareJournalLegacyChat } from './database/journal-legacy-compare'
 import { installWorkerSendLedger } from '../../worker-threads/worker-send-ledger'
-import { limitJournalReaderReply } from './journal-sql-reader-reply-limit'
+import { measureJournalReaderReply } from './journal-sql-reader-reply-limit'
+import {
+  forceJournalReaderReplyCredit,
+  JOURNAL_READER_REPLY_CREDIT_WAIT_MS,
+  JOURNAL_READER_REPLY_CREDIT_WAIT_SLICE_MS,
+  JOURNAL_READER_REPLY_RECENT_RELEASE_MS,
+  JOURNAL_READER_REPLY_STALL_WAIT_MS,
+  journalReaderReplyCreditReleases,
+  returnJournalReaderReplyCredit,
+  tryTakeJournalReaderReplyCredit,
+  type JournalReaderReplyCreditGrant
+} from './journal-sql-reader-reply-credit'
 
 installWorkerSendLedger('orca-journal-sql-reader')
 
@@ -32,9 +44,70 @@ let db: Database.Database | undefined
 let original: Database.Database | undefined
 let fork: { id: number; preparation: JournalForkPreparation } | undefined
 const conversions = new Map<number, JournalDomainImport['pages']>()
+const replyCredit = creditGrant(workerData.replyCredit)
 function reply(message: JournalSqlReaderReply): void {
   // An oversized reply fails its request instead of the receiving thread running out of memory.
-  port.postMessage(limitJournalReaderReply(message))
+  const { reply: limited, bytes } = measureJournalReaderReply(message)
+  // Releases free other readers' state, so they never wait behind credit.
+  if (bytes === undefined || !replyCredit || limited.type === 'released') {
+    port.postMessage(limited)
+    return
+  }
+  const granted = takeJournalReaderReplyCredit(replyCredit, bytes)
+  try {
+    port.postMessage({ ...limited, bytes, ...(granted ? {} : { creditWaitExpired: true }) })
+  } catch (error) {
+    // Main will never see this reply, so it can never return the credit.
+    returnJournalReaderReplyCredit(replyCredit, bytes)
+    throw error
+  }
+}
+
+/** Blocks this reader, never main, until its reply fits; false when it gave up waiting. */
+function takeJournalReaderReplyCredit(
+  grant: JournalReaderReplyCreditGrant,
+  bytes: number
+): boolean {
+  const releases = journalReaderReplyCreditReleases(grant)
+  const started = Date.now()
+  let lastRelease = Atomics.load(releases.counters, releases.index)
+  let lastReleaseAt = -Infinity
+  while (true) {
+    const released = Atomics.load(releases.counters, releases.index)
+    if (tryTakeJournalReaderReplyCredit(grant, bytes)) {
+      return true
+    }
+    const at = Date.now()
+    if (released !== lastRelease) {
+      lastRelease = released
+      lastReleaseAt = at
+    }
+    const waited = at - started
+    if (
+      (at - lastReleaseAt < JOURNAL_READER_REPLY_RECENT_RELEASE_MS &&
+        waited >= JOURNAL_READER_REPLY_CREDIT_WAIT_MS) ||
+      waited >= JOURNAL_READER_REPLY_STALL_WAIT_MS
+    ) {
+      forceJournalReaderReplyCredit(grant, bytes)
+      return false
+    }
+    Atomics.wait(
+      releases.counters,
+      releases.index,
+      released,
+      JOURNAL_READER_REPLY_CREDIT_WAIT_SLICE_MS
+    )
+  }
+}
+
+function creditGrant(value: unknown): JournalReaderReplyCreditGrant | undefined {
+  if (typeof value !== 'object' || value === null || !('index' in value) || !('credit' in value)) {
+    return undefined
+  }
+  const { index, credit } = value
+  return typeof index === 'number' && credit instanceof SharedArrayBuffer
+    ? { index, credit }
+    : undefined
 }
 try {
   db = new Database(workerData.filename, { readonly: true, fileMustExist: true, timeout: 5000 })
@@ -97,6 +170,9 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
         break
       case 'database':
         reply({ type: 'database', id, result: readJournalSqlDatabase(db, operation.operation) })
+        break
+      case 'legacy-proof':
+        reply(legacyProofReply(openOriginal, db, id, operation.cursor))
         break
       case 'conversion-prepare': {
         // Each frozen-source read is its own short statement; no snapshot spans the restore.

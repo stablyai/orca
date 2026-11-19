@@ -134,13 +134,6 @@ describe('Suggestions', () => {
     )
   })
 
-  it('says why Look now was refused', async () => {
-    mocks.rpc.mockRejectedValueOnce(new Error('look_now_running'))
-    render(<BotUpNextSection bot={bot} upNext={upNext()} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Look now' }))
-    await waitFor(() => expect(mocks.toastMessage).toHaveBeenCalledWith('Already looking around.'))
-  })
-
   it('shows while looking, and not at all with nothing to suggest', () => {
     const { rerender, container } = render(
       <BotUpNextSection bot={bot} upNext={upNext({ running: true }, [])} />
@@ -179,7 +172,7 @@ describe('while the bot’s computer is offline', () => {
     setBotHostListing({ hosts: [{ hostId: 'local', state: 'live' }], updateNeeded: [] })
   )
 
-  it('keeps Start and Dismiss off, saying why, instead of sending them to the host', () => {
+  it('describes unavailable actions while offline and enables them on reconnect', async () => {
     render(<BotUpNextSection bot={serverBot} upNext={upNext()} />)
     const start = screen.getByRole<HTMLButtonElement>('button', { name: 'Start' })
     const dismiss = screen.getByRole<HTMLButtonElement>('button', { name: 'Dismiss' })
@@ -195,23 +188,20 @@ describe('while the bot’s computer is offline', () => {
     fireEvent.click(start)
     fireEvent.click(dismiss)
     expect(mocks.rpc).not.toHaveBeenCalled()
-  })
 
-  it('acts again once the computer is back', async () => {
     mocks.rpc.mockResolvedValueOnce({ dismissed: true })
-    render(<BotUpNextSection bot={serverBot} upNext={upNext()} />)
     act(() => {
       listHost('live')
     })
-    const dismiss = screen.getByRole<HTMLButtonElement>('button', { name: 'Dismiss' })
-    expect(dismiss.disabled).toBe(false)
-    expect(description(dismiss)).toBeNull()
+    const liveDismiss = screen.getByRole<HTMLButtonElement>('button', { name: 'Dismiss' })
+    expect(liveDismiss.disabled).toBe(false)
+    expect(description(liveDismiss)).toBeNull()
     expect(
       screen
         .getByRole('button', { name: new RegExp(`^${review.title}`) })
         .getAttribute('aria-describedby')
     ).toBeNull()
-    fireEvent.click(dismiss)
+    fireEvent.click(liveDismiss)
     await waitFor(() =>
       expect(mocks.rpc).toHaveBeenCalledWith(
         expect.anything(),
@@ -233,6 +223,7 @@ describe('Suggestions while a look starts', () => {
     render(<BotUpNextSection bot={bot} upNext={upNext({ lastLookedAt: 1 })} />)
     fireEvent.click(screen.getByRole('button', { name: 'Look now' }))
     await waitFor(() => expect(screen.queryByText('Looking around…')).toBeNull())
+    expect(mocks.toastMessage).toHaveBeenCalledWith('Already looking around.')
   })
 })
 
