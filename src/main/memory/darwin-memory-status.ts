@@ -11,8 +11,9 @@ function addonCandidates(): string[] {
     candidates.push(join(process.resourcesPath, 'orca_memory_status.node'))
   }
   // Dev runs keep the addon in out/native; bundled main code sits in out/main or out/main/chunks.
+  // Why __dirname: both CommonJS bundles (desktop main and headless) define it; import.meta.dirname is empty there.
   for (const up of ['..', '../..']) {
-    candidates.push(join(import.meta.dirname, up, 'native', 'orca_memory_status.node'))
+    candidates.push(join(__dirname, up, 'native', 'orca_memory_status.node'))
   }
   return candidates
 }
@@ -42,7 +43,10 @@ export function readDarwinMemoryFreePercent(): number | null {
   if (process.platform !== 'darwin') {
     return null
   }
-  reader ??= loadReader()
+  // Why undefined, not ??=: a failed load is remembered as null, so it never retries per snapshot.
+  if (reader === undefined) {
+    reader = loadReader()
+  }
   if (!reader) {
     return null
   }
