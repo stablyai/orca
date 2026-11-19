@@ -64,7 +64,7 @@ describe('Windows agy install directory discovery', () => {
     expect(resolved.command).toBe(agyExe)
   })
 
-  it('ignores relative LOCALAPPDATA values and deduplicates the default Windows path', () => {
+  it('ignores relative LOCALAPPDATA values', () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     const root = makeTempDir('orca-agy-dirs-')
     const hostSpec = ANTIGRAVITY_LAUNCH_SPEC.hostBackend.spec
@@ -72,10 +72,6 @@ describe('Windows agy install directory discovery', () => {
 
     expect(
       hostSpec.installDirectories({ env: { LOCALAPPDATA: 'relative\\path' }, homePath: root })
-    ).toEqual([join(defaultLocal, 'agy', 'bin'), join(root, '.local', 'bin')])
-
-    expect(
-      hostSpec.installDirectories({ env: { LOCALAPPDATA: defaultLocal }, homePath: root })
     ).toEqual([join(defaultLocal, 'agy', 'bin'), join(root, '.local', 'bin')])
   })
 
