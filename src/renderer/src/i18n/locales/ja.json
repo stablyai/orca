@@ -802,8 +802,31 @@
     },
     "repository": {
       "iconPickErrors": {
-        "notPng": "リポジトリアイコンには PNG ファイルを使用してください。",
-        "tooLarge": "リポジトリアイコンの画像は 256 KB 以下にしてください。"
+        "notPng": "PNG または JPEG 画像を選択してください。",
+        "tooLarge": "画像は {{limit}} 以下にしてください。",
+        "dimensionsTooLarge": "画像のサイズが大きすぎます。",
+        "invalidImage": "この画像を読み込めませんでした。",
+        "cannotCompress": "この画像を {{limit}} 以下に圧縮できませんでした。"
+      },
+      "iconPreview": {
+        "upload": "PNG または JPEG をアップロード",
+        "uploadHelp": "PNG と JPEG をアップロードできます。大きい画像と JPEG は {{limit}} 以下の PNG に変換されます。",
+        "prepareTitle": "プロジェクトアイコンの準備",
+        "previewTitle": "プロジェクトアイコンのプレビュー",
+        "compressAction": "圧縮してプレビュー",
+        "convertAction": "変換してプレビュー",
+        "compressing": "圧縮中…",
+        "converting": "変換中…",
+        "compressDescription": "この PNG は {{limit}} を超えています。圧縮して小さいコピーをプレビューしてください。",
+        "compressJpegDescription": "この JPEG は {{limit}} を超えています。圧縮して小さい PNG をプレビューしてください。",
+        "convertDescription": "JPEG 画像は使用前に PNG へ変換されます。",
+        "largePreview": "大きいプレビュー",
+        "sidebarPreview": "サイドバーでのサイズ",
+        "originalSize": "元のサイズ: {{size}}",
+        "resultSize": "結果: {{size}}",
+        "use": "このアイコンを使用",
+        "reselect": "選び直す",
+        "cancel": "キャンセル"
       }
     },
     "windowMaterial": {
@@ -8606,10 +8629,8 @@
         "RepositoryIconPicker": {
           "2b7d27b93c": "{{value0}} リポジトリカラーを使用する",
           "useRepoIcon": "{{value0}} リポジトリアイコンを使用する",
-          "fde066a63b": "PNG アップロードは 256KB 以下である必要があります。",
           "cc1286e263": "ファビコン",
           "03ca1a4e9b": "example.com",
-          "381b4844fd": "PNG をアップロードする",
           "7da623abcc": "デフォルトで使用 — 所有者がカスタムイメージを設定していない場合でも、GitHub は常にイメージを提供します。",
           "c490787d24": "絵文字",
           "b2d7fd2116": "アイコン",

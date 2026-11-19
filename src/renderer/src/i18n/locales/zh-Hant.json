@@ -998,8 +998,31 @@
     },
     "repository": {
       "iconPickErrors": {
-        "notPng": "存放庫圖示必須是 PNG 檔案。",
-        "tooLarge": "存放庫圖示圖片不得超過 256 KB。"
+        "notPng": "請選擇 PNG 或 JPEG 圖片。",
+        "tooLarge": "圖片不得超過 {{limit}}。",
+        "dimensionsTooLarge": "圖片尺寸過大。",
+        "invalidImage": "無法讀取此圖片。",
+        "cannotCompress": "無法將此圖片壓縮至 {{limit}} 以內。"
+      },
+      "iconPreview": {
+        "upload": "上傳 PNG 或 JPEG",
+        "uploadHelp": "支援上傳 PNG 和 JPEG。較大的圖片和 JPEG 圖片會轉換為不超過 {{limit}} 的 PNG。",
+        "prepareTitle": "準備專案圖示",
+        "previewTitle": "預覽專案圖示",
+        "compressAction": "壓縮並預覽",
+        "convertAction": "轉換並預覽",
+        "compressing": "正在壓縮…",
+        "converting": "正在轉換…",
+        "compressDescription": "此 PNG 大於 {{limit}}。請壓縮後再預覽較小的副本。",
+        "compressJpegDescription": "此 JPEG 大於 {{limit}}。請壓縮後再預覽較小的 PNG。",
+        "convertDescription": "JPEG 圖片須先轉換為 PNG 才能使用。",
+        "largePreview": "大圖預覽",
+        "sidebarPreview": "側邊欄大小",
+        "originalSize": "原始大小：{{size}}",
+        "resultSize": "結果大小：{{size}}",
+        "use": "使用此圖示",
+        "reselect": "重新選擇",
+        "cancel": "取消"
       }
     },
     "editorFormatOnSave": {
@@ -8508,10 +8531,8 @@
         "RepositoryIconPicker": {
           "2b7d27b93c": "使用 {{value0}} 存放庫顏色",
           "useRepoIcon": "使用 {{value0}} 存放庫圖示",
-          "fde066a63b": "PNG 上傳必須為 256KB 或更小。",
           "cc1286e263": "網站圖示",
           "03ca1a4e9b": "example.com",
-          "381b4844fd": "上傳 PNG",
           "7da623abcc": "預設使用 — GitHub 始終提供一個，即使所有者尚未設定自訂影像。",
           "c490787d24": "表情符號",
           "b2d7fd2116": "圖示",

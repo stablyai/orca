@@ -1,4 +1,7 @@
-import type { RepoIconPickResult } from '../../../shared/repository/appearance/repo-icon-pick-failure-copy'
+import type {
+  RepoIconPickResult,
+  RepoIconPreviewResult
+} from '../../../shared/repository/appearance/repo-icon-pick-result'
 import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { ShellPathExistence } from '../../../shared/file-access/path-existence-batch'
 import type {
@@ -33,6 +36,7 @@ export type ShellApi = {
   pickAttachments: () => Promise<string[]>
   pickImage: () => Promise<string | null>
   pickRepoIconImage: () => Promise<RepoIconPickResult>
+  previewRepoIconImage: (token: string) => Promise<RepoIconPreviewResult>
   pickAudio: () => Promise<string | null>
   pickDirectory: (args: { defaultPath?: string }) => Promise<string | null>
 }

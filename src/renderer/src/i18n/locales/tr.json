@@ -1027,8 +1027,31 @@
     },
     "repository": {
       "iconPickErrors": {
-        "notPng": "Repo simgeleri PNG dosyaları olmalıdır.",
-        "tooLarge": "Repo simgesi görseli 256 KB veya daha küçük olmalıdır."
+        "notPng": "Bir PNG veya JPEG görseli seçin.",
+        "tooLarge": "Görsel {{limit}} veya daha küçük olmalıdır.",
+        "dimensionsTooLarge": "Görsel boyutları çok büyük.",
+        "invalidImage": "Bu görsel okunamadı.",
+        "cannotCompress": "Bu görsel {{limit}} boyutuna sıkıştırılamadı."
+      },
+      "iconPreview": {
+        "upload": "PNG veya JPEG yükle",
+        "uploadHelp": "PNG ve JPEG yükleyebilirsiniz. Büyük görseller ve JPEG'ler {{limit}} veya daha küçük bir PNG'ye dönüştürülür.",
+        "prepareTitle": "Proje simgesini hazırla",
+        "previewTitle": "Proje simgesi önizlemesi",
+        "compressAction": "Sıkıştır ve önizle",
+        "convertAction": "Dönüştür ve önizle",
+        "compressing": "Sıkıştırılıyor…",
+        "converting": "Dönüştürülüyor…",
+        "compressDescription": "Bu PNG {{limit}} boyutundan büyük. Daha küçük bir kopyayı önizlemek için sıkıştırın.",
+        "compressJpegDescription": "Bu JPEG {{limit}} boyutundan büyük. Daha küçük bir PNG'yi önizlemek için sıkıştırın.",
+        "convertDescription": "JPEG görseller kullanılmadan önce PNG'ye dönüştürülür.",
+        "largePreview": "Büyük önizleme",
+        "sidebarPreview": "Kenar çubuğu boyutu",
+        "originalSize": "Orijinal: {{size}}",
+        "resultSize": "Sonuç: {{size}}",
+        "use": "Bu simgeyi kullan",
+        "reselect": "Yeniden seç",
+        "cancel": "İptal"
       }
     },
     "editorFormatOnSave": {
@@ -8801,10 +8824,8 @@
         "RepositoryIconPicker": {
           "2b7d27b93c": "{{value0}} reposunun rengini kullan",
           "useRepoIcon": "{{value0}} repo simgesini kullan",
-          "fde066a63b": "PNG yüklemeleri 256KB veya daha küçük olmalıdır.",
           "cc1286e263": "Favicon",
           "03ca1a4e9b": "example.com",
-          "381b4844fd": "PNG Yükle",
           "7da623abcc": "Varsayılan olarak kullanılır - sahibi özel bir görsel ayarlamamış olsa bile GitHub her zaman bir tane sağlar.",
           "c490787d24": "Emoji",
           "b2d7fd2116": "Simge",

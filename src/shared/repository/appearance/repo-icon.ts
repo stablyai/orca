@@ -9,6 +9,8 @@ export type RepoIcon =
 
 export const MAX_REPO_ICON_UPLOAD_BYTES = 256 * 1024
 export const MAX_REPO_ICON_DATA_URL_LENGTH = 400 * 1024
+// Compressing a 15 MB transparent PNG is legitimate; bound what crosses IPC.
+export const MAX_REPO_ICON_INPUT_BYTES = 64 * 1024 * 1024
 
 const LUCIDE_ICON_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9]*$/
 const isRepoIconImageSource = (value: string): value is RepoIconImageSource =>

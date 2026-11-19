@@ -1,8 +1,7 @@
 import { translateMain } from '../../i18n/main-i18n'
 import { BrowserWindow, ipcMain, shell } from 'electron'
 import { showSingleFlightOpenDialog } from '../dialogs/single-flight-open-dialog'
-import { readFile, stat } from 'node:fs/promises'
-import { basename, extname, posix, win32 } from 'node:path'
+import { posix, win32 } from 'node:path'
 import type {
   ShellOpenExternalEditorRequest,
   ShellOpenExternalEditorResult,
@@ -10,11 +9,6 @@ import type {
   ShellOpenLocalPathResult
 } from '../../../shared/shell/opening/shell-open-types'
 import type { RuntimeFileOpenPosition } from '../../../shared/file-access/runtime-editor-file-open'
-import { MAX_REPO_ICON_UPLOAD_BYTES } from '../../../shared/repository/appearance/repo-icon'
-import {
-  repoIconPickFailure,
-  type RepoIconPickResult
-} from '../../../shared/repository/appearance/repo-icon-pick-failure-copy'
 import type { Store } from '../../persistence/loading-store/store'
 import {
   launchExternalEditor,
@@ -37,10 +31,7 @@ import {
 } from './shell-owned-path-target'
 import { inspectLinkedFile } from './linked-file-inspection'
 import { registerShellPathExistenceHandlers } from './shell-path-existence-handlers'
-
-const REPO_ICON_IMAGE_MIME_TYPES: Record<string, string> = {
-  '.png': 'image/png'
-}
+import { registerShellRepoIconHandlers } from './shell-repo-icon-handlers'
 
 async function openInFileManager(
   pathValue: string,
@@ -270,41 +261,7 @@ export function registerShellHandlers(
     return result.filePaths[0]
   })
 
-  ipcMain.handle('shell:pickRepoIconImage', async (event): Promise<RepoIconPickResult> => {
-    const result = await showSingleFlightOpenDialog(
-      {
-        properties: ['openFile'],
-        filters: [
-          {
-            name: translateMain('native.dialog.repoIconImages', 'Repo icon images'),
-            extensions: ['png']
-          }
-        ]
-      },
-      BrowserWindow.fromWebContents(event.sender)
-    )
-    if (result.canceled || result.filePaths.length === 0) {
-      return null
-    }
-
-    const filePath = result.filePaths[0]
-    const extension = extname(filePath).toLowerCase()
-    const mimeType = REPO_ICON_IMAGE_MIME_TYPES[extension]
-    if (!mimeType) {
-      return repoIconPickFailure('notPng')
-    }
-
-    const stats = await stat(filePath)
-    if (stats.size > MAX_REPO_ICON_UPLOAD_BYTES) {
-      return repoIconPickFailure('tooLarge')
-    }
-
-    const buffer = await readFile(filePath)
-    return {
-      dataUrl: `data:${mimeType};base64,${buffer.toString('base64')}`,
-      fileName: basename(filePath)
-    }
-  })
+  registerShellRepoIconHandlers()
 
   ipcMain.handle('shell:pickAudio', async (event): Promise<string | null> => {
     const result = await showSingleFlightOpenDialog(

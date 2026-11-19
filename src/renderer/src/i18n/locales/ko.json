@@ -526,8 +526,31 @@
     },
     "repository": {
       "iconPickErrors": {
-        "notPng": "저장소 아이콘은 PNG 파일이어야 합니다.",
-        "tooLarge": "저장소 아이콘 이미지는 256 KB 이하여야 합니다."
+        "notPng": "PNG 또는 JPEG 이미지를 선택하세요.",
+        "tooLarge": "이미지는 {{limit}} 이하여야 합니다.",
+        "dimensionsTooLarge": "이미지 크기가 너무 큽니다.",
+        "invalidImage": "이 이미지를 읽을 수 없습니다.",
+        "cannotCompress": "이 이미지를 {{limit}} 이하로 압축할 수 없습니다."
+      },
+      "iconPreview": {
+        "upload": "PNG 또는 JPEG 업로드",
+        "uploadHelp": "PNG 및 JPEG를 업로드할 수 있습니다. 큰 이미지와 JPEG는 {{limit}} 이하의 PNG로 변환됩니다.",
+        "prepareTitle": "프로젝트 아이콘 준비",
+        "previewTitle": "프로젝트 아이콘 미리보기",
+        "compressAction": "압축하고 미리보기",
+        "convertAction": "변환하고 미리보기",
+        "compressing": "압축 중…",
+        "converting": "변환 중…",
+        "compressDescription": "이 PNG는 {{limit}}보다 큽니다. 압축하여 더 작은 사본을 미리보세요.",
+        "compressJpegDescription": "이 JPEG는 {{limit}}보다 큽니다. 압축하여 더 작은 PNG를 미리보세요.",
+        "convertDescription": "JPEG 이미지는 사용하기 전에 PNG로 변환됩니다.",
+        "largePreview": "큰 미리보기",
+        "sidebarPreview": "사이드바 크기",
+        "originalSize": "원본: {{size}}",
+        "resultSize": "결과: {{size}}",
+        "use": "이 아이콘 사용",
+        "reselect": "다시 선택",
+        "cancel": "취소"
       }
     },
     "editorFormatOnSave": {
@@ -7940,10 +7963,8 @@
         "RepositoryIconPicker": {
           "2b7d27b93c": "{{value0}} repo 색상 사용",
           "useRepoIcon": "{{value0}} repo 아이콘 사용",
-          "fde066a63b": "PNG 업로드는 256KB 이하여야 합니다.",
           "cc1286e263": "파비콘",
           "03ca1a4e9b": "example.com",
-          "381b4844fd": "PNG 업로드",
           "7da623abcc": "기본적으로 사용됨 — GitHub는 소유자가 사용자 정의 이미지를 설정하지 않은 경우에도 항상 하나를 제공합니다.",
           "c490787d24": "이모티콘",
           "b2d7fd2116": "아이콘",

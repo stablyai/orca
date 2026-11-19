@@ -1,4 +1,7 @@
-import type { RepoIconPickResult } from '../../../shared/repository/appearance/repo-icon-pick-failure-copy'
+import type {
+  RepoIconPickResult,
+  RepoIconPreviewResult
+} from '../../../shared/repository/appearance/repo-icon-pick-result'
 import { ipcRenderer } from 'electron'
 import type {
   ShellOpenExternalEditorRequest,
@@ -50,6 +53,9 @@ export const shellApi = {
 
   pickRepoIconImage: (): Promise<RepoIconPickResult> =>
     ipcRenderer.invoke('shell:pickRepoIconImage'),
+
+  previewRepoIconImage: (token: string): Promise<RepoIconPreviewResult> =>
+    ipcRenderer.invoke('shell:previewRepoIconImage', token),
 
   pickAudio: (): Promise<string | null> => ipcRenderer.invoke('shell:pickAudio'),
 

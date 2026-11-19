@@ -1,7 +1,10 @@
 // One English table for repo icon upload refusals: main builds the wire `error`, the renderer translates by code.
 export const REPO_ICON_PICK_FAILURE_COPY = {
-  notPng: 'Repo icons must be PNG files.',
-  tooLarge: 'Repo icon image must be 256KB or smaller.'
+  notPng: 'Choose a PNG or JPEG image.',
+  tooLarge: 'Image must be {{limit}} or smaller.',
+  dimensionsTooLarge: 'Image dimensions are too large.',
+  invalidImage: 'This image could not be read.',
+  cannotCompress: 'This image could not be compressed to {{limit}}.'
 } as const
 
 export type RepoIconPickFailureCode = keyof typeof REPO_ICON_PICK_FAILURE_COPY
@@ -9,8 +12,16 @@ export type RepoIconPickFailureCode = keyof typeof REPO_ICON_PICK_FAILURE_COPY
 /** Wire shape: `error` stays English; the renderer translates known codes. */
 export type RepoIconPickFailure = { ok: false; error: string; errorCode?: string }
 
-export type RepoIconPickResult = { dataUrl: string; fileName: string } | RepoIconPickFailure | null
-
-export function repoIconPickFailure(errorCode: RepoIconPickFailureCode): RepoIconPickFailure {
-  return { ok: false, error: REPO_ICON_PICK_FAILURE_COPY[errorCode], errorCode }
+export function repoIconPickFailure(
+  errorCode: RepoIconPickFailureCode,
+  values?: Readonly<Record<string, string>>
+): RepoIconPickFailure {
+  const template = REPO_ICON_PICK_FAILURE_COPY[errorCode]
+  return {
+    ok: false,
+    error: values
+      ? template.replace(/\{\{(\w+)\}\}/g, (match, name: string) => values[name] ?? match)
+      : template,
+    errorCode
+  }
 }
