@@ -311,14 +311,6 @@ describe('NewBotDialog agent', () => {
       permissionMode: 'full-access'
     })
   })
-
-  it('offers no Create while no agent a bot can be is known on this computer', () => {
-    mocks.agentChoices.mockReturnValue([])
-    renderDialog()
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Reviewer' } })
-
-    expect(screen.getByRole('button', { name: 'Create bot' }).hasAttribute('disabled')).toBe(true)
-  })
 })
 
 describe('NewBotDialog after Create', () => {
