@@ -32,6 +32,8 @@ type PaneNews = {
   event: MobileNotificationDispatchEvent
 }
 
+type TurnNews = PaneNews & { paneKey: string; row: AgentStatusIpcPayload }
+
 export type TerminalAgentPhonePushDeps = {
   /** A desktop window owns this host and pushes its phones itself. */
   hasWindow: () => boolean
@@ -53,7 +55,7 @@ export type TerminalAgentPhonePushDeps = {
 export class TerminalAgentPhonePush {
   // The burst gate the window's fan-out applies, per workspace.
   private readonly recentDispatches = new Map<string, number>()
-  private readonly turnNews: TerminalAgentTurnNews<PaneNews>
+  private readonly turnNews: TerminalAgentTurnNews<TurnNews>
   private readonly hooklessNews: TerminalHooklessNews
 
   constructor(private readonly deps: TerminalAgentPhonePushDeps) {
@@ -61,13 +63,20 @@ export class TerminalAgentPhonePush {
       readHookRow: (paneKey) => deps.readHookRow(paneKey),
       prepare: ({ paneKey, worktreeId, row }) => ({
         worktreeId,
+        paneKey,
+        row,
         event: this.buildEvent(worktreeId, paneKey, row)
       }),
-      deliver: (news) => {
+      deliver: (news, row) => {
         if (news.event.paneKey) {
           this.hooklessNews.noteFinish(news.event.paneKey)
         }
-        this.send(news)
+        // The turn's reply can arrive after the finish was decided.
+        this.send(
+          row === news.row
+            ? news
+            : { ...news, event: this.buildEvent(news.worktreeId, news.paneKey, row) }
+        )
       },
       setTimer: (run, delayMs) => deps.setTimer(run, delayMs)
     })
