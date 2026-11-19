@@ -5,13 +5,11 @@ import type { AutomationRunMessage } from '../../../../../src/shared/automations
 import { automationRunInstructions } from '../../../../../src/shared/automations/automation-run-message'
 import {
   automationRunAccess,
-  automationRunAccessibleName,
   automationRunEventCopyText,
   automationRunEventLink,
   automationRunFacts,
   automationRunLabel,
   automationRunQuoteAuthor,
-  automationRunReason,
   sayAutomationRunEnglish,
   type AutomationRunRowState,
   type AutomationRunWording
@@ -27,7 +25,6 @@ import { automationRunMark } from '../../../../../src/shared/automations/automat
 import { colors, typography } from '../../../theme/mobile-theme'
 import { openExternalLink } from '../../../platform/external-links/external-link'
 import { MobileAutomationRunInstructions } from './MobileAutomationRunInstructions'
-import { useMobileNativeChatDisclosure } from './viewport/mobile-native-chat-disclosure-store'
 import { scaledType, styles as chat } from './messages/mobile-native-chat-message-styles'
 import { mobileNativeChatRowId } from './viewport/mobile-native-chat-reading-place'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
@@ -86,8 +83,8 @@ export function MobileAutomationRunMessage({
   )
 }
 
-/** A bot automation's run, on the mobile agent card: its name, then what fired and why on a second
- *  line (320 pt can't fit all three on one). Opens in place to its instructions and the event. */
+/** An automation's run as a status row: "<trigger> · <name>", or "Couldn't start <name>". Opens in place
+ *  to its error, instructions and the event. */
 export function MobileNativeChatAutomationRunRow({
   messageId,
   run,
@@ -110,38 +107,25 @@ export function MobileNativeChatAutomationRunRow({
 }): React.JSX.Element {
   const wording = useMobileAutomationRowWording(run.automation)
   const { say } = wording
-  const [open, setOpen] = useMobileNativeChatDisclosure(`automation-run:${messageId}`, false)
-  const label = automationRunLabel(run, say)
-  const reason = automationRunReason(run, state, timestamp, wording)
+  const notStarted = state === 'not-started'
   const instructions = automationRunInstructions(text, run)
   const facts = automationRunFacts(run, timestamp, wording)
   const meta = scaledType(typography.metaSize, fontScale, 4)
   const { event } = run
   const access = event ? automationRunAccess(event, say) : null
   const link = event ? automationRunEventLink(event, say) : null
-  const at = timestamp ? time(timestamp) : null
   return (
     <MobileAutomationRowFrame
       testID="automation-run-row"
       mark={automationRunMark(run)}
+      lead={notStarted ? say('couldNotStart') : automationRunLabel(run, say)}
+      leadIsVerb={notStarted}
       name={run.automation.name}
-      meta={[label, reason, at].filter(Boolean).join(' · ')}
-      failed={state === 'not-started'}
-      accessibilityLabel={automationRunAccessibleName(
-        { label, name: run.automation.name, reason, time: at },
-        say
-      )}
-      open={open}
-      onToggle={() => setOpen(!open)}
+      status={state === 'queued' ? say('queued') : null}
+      failed={notStarted}
+      timestamp={timestamp}
+      disclosureKey={`automation-run:${messageId}`}
       fontScale={fontScale}
-      action={
-        instructions ? (
-          <MobileSourceCopyButton
-            text={instructions}
-            accessibilityLabel={say('copyInstructions')}
-          />
-        ) : null
-      }
     >
       <>
         {error ? (
@@ -173,6 +157,13 @@ export function MobileNativeChatAutomationRunRow({
               fontScale={fontScale}
               say={say}
             />
+            <View style={styles.actions}>
+              <MobileSourceCopyButton
+                text={instructions}
+                accessibilityLabel={say('copyInstructions')}
+              />
+              <Text style={[styles.meta, meta]}>{say('copyInstructions')}</Text>
+            </View>
           </>
         ) : null}
         {facts || event?.text ? <Text style={[styles.heading, meta]}>{say('event')}</Text> : null}

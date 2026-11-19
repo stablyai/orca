@@ -19,7 +19,7 @@ import {
   type BotItemFilterScope
 } from './items/BotItemsFilter'
 import { BotItemsList } from './items/BotItemsList'
-import { BotItemsLoading } from './items/BotItemsSection'
+import { BotItemsLoading } from './items/BotItemsLoading'
 import { BotItemsReadFailed } from './items/BotItemsReadFailed'
 import { BotItemPane } from './items/BotItemPane'
 import { botItemWalkReturnRow } from './items/bot-item-walk'

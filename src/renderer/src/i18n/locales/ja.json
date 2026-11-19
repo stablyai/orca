@@ -6319,7 +6319,6 @@
           "e029a2d775": "状態",
           "c2c7a45cda": "なし",
           "hosts": "ホスト",
-          "showSection": "表示",
           "allHostsDetail": "すべてのホストを表示",
           "configuredSshHost": "設定済み SSH",
           "projectSshHost": "プロジェクト SSH",
@@ -6332,7 +6331,6 @@
           "automation": "オートメーション",
           "folderPathIdentity": "ブランチ / フォルダーパス",
           "cli": "Orca CLI",
-          "workspaceOptions": "ワークスペースのオプション",
           "optionsActiveFilters_other": "ワークスペースのオプション（{{count}} 個のフィルターが有効）",
           "optionsFilterCount_other": "ワークスペースのオプション（{{count}} 個のフィルター）"
         },
@@ -7591,9 +7589,9 @@
           "8fbe1f37c1": "環境",
           "2d133152fa": "デフォルト環境なし",
           "3f1bdf3cb4": "環境テキストが大きすぎるため安全に解析できません。",
-          "codexSessionSource": "インポートする Codex ホーム",
-          "codexSessionSourceInfo": "Codex 履歴のインポートについて",
-          "codexSessionSourceTooltip": "Orca は分離されたホームで Codex を実行します。既存の Codex ホームを指定してセッション履歴をインポートします。空の場合、~/.codexを使用します。",
+          "codexSessionSource": "Codex の会話のインポート元",
+          "codexSessionSourceInfo": "Codex の会話のインポートについて",
+          "codexSessionSourceTooltip": "アカウント間で履歴を共有している間、Orca はこの Codex ホームの会話を ~/.codex にコピーし、/resume に表示されるようにします。コピー後にこのフォルダーで追加されたやり取りはコピーに反映されません。",
           "03e1a5081a": "{{value0}} 上",
           "25a41a9aad": "このサーバーにインストールされている Agent を再検出",
           "remoteDetectionFailed": "インストールされている Agent を検出できませんでした。ホストへの接続を確認して、もう一度お試しください。",
@@ -16101,11 +16099,9 @@
           "feature": {
             "tip": {
               "copy": {
-                "1fcdfc5fe8": "新機能",
                 "f98e9d1bad": "すべての Agent セッションを検索",
                 "990cc29865": "過去の会話を内容から見つけて、Agent が中断したところから再開できます。",
                 "91e2719807": "セッション検索を有効にする",
-                "52e9e84809": "ヒント",
                 "3eacedec93": "Orca CLI で Agent に Orca を操作させる",
                 "8d54d0ff53": "Agent が子ワークツリーを連携させ、ワークツリー間で通信できるようにします。",
                 "0080bc86eb": "CLI とスキルをインストール",
@@ -20356,9 +20352,6 @@
         "replaceDescription": "ここで「{{title}}」を再開すると、このチャットで {{agent}} が行っている処理が停止します。",
         "replace": "置き換える"
       },
-      "antigravitySignIn": {
-        "sentence": "Antigravity にサインインしていません。<settings>設定 → アカウント → Antigravity</settings>でサインインしてから、メッセージをもう一度送信してください。"
-      },
       "signIn": {
         "title": "チャットを始めるには {{agent}} にサインインしてください"
       },
@@ -22290,16 +22283,17 @@
   },
   "featureTips": {
     "voice": {
-      "demoPrompt": "特殊なケースについてはこの差分を確認し、見つかったものについてはテストを追加してください。",
-      "startDictation": "ディクテーションを開始する",
-      "agentPromptTitle": "Agent プロンプト",
-      "listening": "リスニング…",
       "unassignedInstruction": "フォーカスされたペインで音声ディクテーションを開始する前に、ディクテーションショートカットを割り当てます。",
       "shortcutInstruction": "ターミナル、エディター、または Agent のプロンプトにフォーカスし、<shortcut/> を押すと音声入力を開始します。もう一度 <shortcut/> を押すと停止します。",
       "changeInSettings": "モデル、ディクテーションモード、ショートカットは、<link>設定 → 音声</link>でいつでも変更できます。",
       "title": "どのペインでも音声入力",
       "description": "フォーカス中のペインで音声ディクテーションを開始し、停止するには同じショートカットをもう一度押します。",
-      "cta": "音声ディクテーションを設定"
+      "cta": "音声ディクテーションを設定",
+      "demoFirstPhrase": "小さい画面でチェックアウトボタンがフッターに重なっています。",
+      "demoSecondPhrase": "テストも追加できる？",
+      "demoUserPrompt": "決済バッジを追加して",
+      "demoTabTitle": "チェックアウトのフッター",
+      "demoReply": "フッターに決済バッジを追加しました。"
     },
     "sessionSearch": {
       "ageHours": "2時間前",
@@ -23899,7 +23893,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "ワークツリーを切り替え",
+      "worktreePalette": "すべてを検索",
       "worktreeNavigateUp": "前のワークツリー",
       "worktreeNavigateDown": "次のワークツリー",
       "workspaceCreate": "ワークツリーを作成",
@@ -24013,6 +24007,9 @@
       "45347db2a3": "タブナビゲーション",
       "aab2837fa5": "クイックコマンド",
       "3492a954c8": "ターミナルペイン"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "ワークツリーを切り替え"
     }
   },
   "gpuFallback": {
@@ -25154,8 +25151,7 @@
     },
     "upcoming": {
       "tidyNightAfter": "毎晩{{from}}以降、またはこのコンピューターのスリープ解除後",
-      "tidyWeekAfter": "週に1回{{from}}以降、またはこのコンピューターのスリープ解除後",
-      "lookDueNow": "今すぐ実行予定 · {{every}}"
+      "tidyWeekAfter": "週に1回{{from}}以降、またはこのコンピューターのスリープ解除後"
     },
     "palette": {
       "placeholder": "ボット、チャット、ターミナル、ワークスペース、タスク、設定、操作を検索します…",

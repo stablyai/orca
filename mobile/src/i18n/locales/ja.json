@@ -616,10 +616,6 @@
       "imageTooLarge": "画像が大きすぎて添付できません。",
       "permissionDenied": "写真へのアクセスが拒否されました。"
     },
-    "agentMessage": {
-      "handedOffToAgent": "Agentに引き継ぎました",
-      "startedAgent": "Agentを開始しました"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "添付ファイルの応答を読み取れません。もう一度お試しください。",
       "incompleteReply": "添付ファイルが変更されたか、応答が不完全でした。閉じてもう一度お試しください。",
@@ -4467,7 +4463,7 @@
   "bots": {
     "link": {
       "pairTitle": "コンピュータをペアリング",
-      "pairRequired": "このリンクを開くには、このスマートフォンをコンピュータとペアリングしてください。",
+      "pairRequired": "このリンクを開くには、このスマートフォンをコンピュータとペアリングしてから、もう一度リンクを開いてください。",
       "pairAction": "コンピュータをペアリング",
       "openFailed": "このリンクを開けませんでした",
       "ambiguous": "このボットは{{names}}にあります。使用するコンピュータのOrcaでチャットを開いてください。",

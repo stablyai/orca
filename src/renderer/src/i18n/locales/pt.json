@@ -702,16 +702,17 @@
   },
   "featureTips": {
     "voice": {
-      "demoPrompt": "Revise este diff em busca de casos extremos e adicione testes para tudo o que encontrar.",
-      "startDictation": "Iniciar ditado",
-      "agentPromptTitle": "Prompt do agente",
-      "listening": "Ouvindo...",
       "unassignedInstruction": "Atribua um atalho de ditado antes de iniciar o ditado por voz em um painel em foco.",
       "shortcutInstruction": "Coloque o foco em um terminal, editor ou prompt de agente e pressione <shortcut/> para iniciar o ditado por voz. Pressione <shortcut/> novamente para parar.",
       "changeInSettings": "Altere o modelo, o modo de ditado ou o atalho a qualquer momento em <link>Configurações → Voz</link>.",
       "title": "Dite em qualquer painel",
       "description": "Inicie o ditado por voz em qualquer painel em foco e use o atalho novamente para parar.",
-      "cta": "Configurar ditado por voz"
+      "cta": "Configurar ditado por voz",
+      "demoFirstPhrase": "O botão de pagamento cobre o rodapé em telas pequenas.",
+      "demoSecondPhrase": "Pode pôr um teste?",
+      "demoUserPrompt": "Adicione selos de pagamento",
+      "demoTabTitle": "Rodapé do checkout",
+      "demoReply": "Adicionei selos de pagamento ao rodapé."
     },
     "sessionSearch": {
       "enableFailed": "Não foi possível ativar a busca de sessões. Tente novamente.",
@@ -5973,9 +5974,9 @@
           "8fbe1f37c1": "Ambiente",
           "2d133152fa": "Nenhum ambiente padrão",
           "3f1bdf3cb4": "O texto do ambiente é muito grande para interpretar com segurança.",
-          "codexSessionSource": "Diretório do Codex de onde importar",
-          "codexSessionSourceInfo": "Sobre importar o histórico do Codex",
-          "codexSessionSourceTooltip": "O Orca executa o Codex em um diretório isolado. Aponte isso para o diretório Codex existente para importar esse histórico de sessão. Vazio usa ~/.codex.",
+          "codexSessionSource": "Importar conversas do Codex de",
+          "codexSessionSourceInfo": "Sobre importar conversas do Codex",
+          "codexSessionSourceTooltip": "Enquanto o histórico é compartilhado entre contas, o Orca copia as conversas deste diretório Codex para ~/.codex para que o /resume as liste. Turnos adicionados nesta pasta depois que uma conversa é copiada não chegam à cópia.",
           "noAgentsDetected": "Nenhum agente detectado. Se um estiver instalado, a verificação pode ter expirado.",
           "9f30095d49": "Permissões do Agente"
         },
@@ -11748,7 +11749,6 @@
         },
         "SidebarWorkspaceOptionsMenu": {
           "hosts": "Hosts",
-          "showSection": "Mostrar",
           "allHostsDetail": "Mostrar todos os hosts",
           "configuredSshHost": "SSH configurado",
           "projectSshHost": "SSH do projeto",
@@ -11797,7 +11797,6 @@
           "219ebf1961": "Nome da branch",
           "folderPathIdentity": "Branch / caminho da pasta",
           "cli": "CLI do Orca",
-          "workspaceOptions": "Opções do espaço de trabalho",
           "host": "Host",
           "optionsActiveFilters_one": "Opções do espaço de trabalho ({{count}} filtro ativo)",
           "optionsActiveFilters_other": "Opções do espaço de trabalho ({{count}} filtros ativos)",
@@ -21464,9 +21463,6 @@
         "explanation": "Ao continuar, o agente verifica primeiro se a última etapa foi concluída.",
         "usageLimitExplanation": "Pede ao agente para continuar de onde parou. Use-o quando o limite for redefinido."
       },
-      "antigravitySignIn": {
-        "sentence": "Você não está conectado ao Antigravity. Entre em <settings>Configurações → Contas → Antigravity</settings>. Depois envie sua mensagem novamente."
-      },
       "claudeSignIn": {
         "signingIn": "Entrando…"
       },
@@ -23621,7 +23617,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "Alternar worktree",
+      "worktreePalette": "Buscar tudo",
       "worktreeNavigateUp": "Worktree anterior",
       "worktreeNavigateDown": "Próximo worktree",
       "workspaceCreate": "Criar worktree",
@@ -23734,6 +23730,9 @@
       "45347db2a3": "Navegação entre abas",
       "aab2837fa5": "Comandos Rápidos",
       "3492a954c8": "Painéis do terminal"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "Alternar worktree"
     }
   },
   "gpuFallback": {
@@ -24795,8 +24794,7 @@
     },
     "upcoming": {
       "tidyNightAfter": "Todas as noites após {{from}}, ou assim que este computador estiver ativo",
-      "tidyWeekAfter": "Uma vez por semana após {{from}}, ou assim que este computador estiver ativo",
-      "lookDueNow": "Previsto agora · {{every}}"
+      "tidyWeekAfter": "Uma vez por semana após {{from}}, ou assim que este computador estiver ativo"
     },
     "palette": {
       "placeholder": "Buscar bots, chats, terminais, worktrees, configurações e ações...",

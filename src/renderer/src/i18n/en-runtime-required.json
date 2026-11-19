@@ -19,7 +19,9 @@
   },
   "agentCliUpdate": {
     "heading_one": "{{count}} CLI update available",
-    "heading_other": "{{count}} CLI updates available"
+    "heading_other": "{{count}} CLI updates available",
+    "statusCount_one": "{{count}} CLI update",
+    "statusCount_other": "{{count}} CLI updates"
   },
   "agentLaunch": {
     "opencode": {
@@ -1510,10 +1512,11 @@
       "confirmLinear": "Update Linear issues as you",
       "confirmMaySkipApprovals": "May act without asking first",
       "confirmNoApprovals": "Acts without asking first",
-      "confirmWarning": "They’ll act as you on this computer.",
-      "controlMany": "They can control {{name}} remotely: start, steer, approve and stop its work, using its access on {{computer}}.",
-      "controlNone": "Anyone you add can control {{name}} remotely, using its access on {{computer}}.",
-      "controlOne": "{{person}} can control {{name}} remotely: start, steer, approve and stop its work, using its access on {{computer}}.",
+      "confirmWarning": "They’ll act as you on {{computer}}.",
+      "controlMany": "They can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
+      "controlNone": "Anyone you add can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
+      "controlOne": "{{person}} can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
+      "executionComputer": "the computer this agent runs on",
       "fixAsk": "Start new conversations in Ask for approval",
       "fixAskAction": "Switch",
       "fixAskConfirm": "Start new conversations in Ask for approval?",
@@ -1530,6 +1533,7 @@
       "fixOnlyMeConfirmDetail": "{{people}} can no longer ask {{name}}. Giving them access again asks you first.",
       "fixOnlyMeDetail": "Removes the people you added here.",
       "fixOnlyMeFailed": "Couldn’t remove {{names}}. Try again.",
+      "here": "here",
       "newBot": "New bot…",
       "permissionFellBack": "{{agent}} has no {{mode}} mode, so {{name}} uses Ask for approval.",
       "place": "{{connector}} ({{workspace}})",
@@ -1552,7 +1556,9 @@
       "summaryOne": "You and {{person}} can ask {{name}}.",
       "summaryOnlyYou": "Only you can ask {{name}}.",
       "summarySome": "You, {{people}} and {{last}} can ask {{name}}.",
+      "there": "there",
       "thisComputer": "this computer",
+      "thisServer": "this server",
       "titleMany": "Give {{count}} people access to {{name}}?",
       "titleOne": "Give {{person}} access to {{name}}?",
       "trust": "Add only people you’d trust at your keyboard.",
@@ -1611,9 +1617,6 @@
       "unavailableBot": "Unavailable bot"
     },
     "items": {
-      "activity": {
-        "you": "You"
-      },
       "pill": {
         "moveCount_one": "Move {{count}} item to",
         "moveCount_other": "Move {{count}} items to"

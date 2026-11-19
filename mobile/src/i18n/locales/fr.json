@@ -655,10 +655,6 @@
       "imageTooLarge": "Image trop volumineuse pour être jointe",
       "permissionDenied": "Accès aux photos refusé"
     },
-    "agentMessage": {
-      "handedOffToAgent": "Confié à un agent",
-      "startedAgent": "Agent démarré"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "La réponse de la pièce jointe est illisible. Réessayez.",
       "incompleteReply": "La pièce jointe a changé ou sa réponse était incomplète. Fermez-la et réessayez.",
@@ -4486,7 +4482,7 @@
   "bots": {
     "link": {
       "pairTitle": "Jumeler un ordinateur",
-      "pairRequired": "Pour ouvrir ce lien, jumelez ce téléphone à un ordinateur.",
+      "pairRequired": "Pour ouvrir ce lien, jumelez ce téléphone à un ordinateur, puis rouvrez le lien.",
       "pairAction": "Jumeler un ordinateur",
       "openFailed": "Impossible d’ouvrir ce lien",
       "ambiguous": "Ce bot se trouve sur {{names}}. Ouvrez la conversation dans Orca sur l’ordinateur de votre choix.",

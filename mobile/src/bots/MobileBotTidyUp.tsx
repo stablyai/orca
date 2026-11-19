@@ -1,5 +1,6 @@
 // The desktop's Memory upkeep on the phone: Tidy-up's switch, How often, Tidy now, and the last
 // run's changes with Undo, which reverts the whole run (its one History row).
+import type { ReactNode } from 'react'
 import { Text } from 'react-native'
 import {
   botTidyUp,
@@ -184,6 +185,9 @@ export function MobileTidyUpPage(props: {
   save: (change: Partial<BotTidyUp>) => void
   onUndo: (rowId: string) => void
   onBack: () => void
+  /** Offline: How often and Undo are off. */
+  disabled: boolean
+  banner: ReactNode
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
@@ -202,17 +206,19 @@ export function MobileTidyUpPage(props: {
         }
         onBack={{ label: t('bots.lookAround.back', 'Back to Settings'), onPress: props.onBack }}
       />
+      {props.banner}
       {props.page === 'every' ? (
         <ChoiceRows
           choices={TIDY_UP_EVERY_CHOICES.map((id) => ({ id, label: everyLabel(t, id) }))}
           selected={botTidyUp(props.bot).every}
+          disabled={props.disabled}
           onSelect={(every) => {
             props.save({ every })
             props.onBack()
           }}
         />
       ) : run ? (
-        <Summary run={run} busy={props.busy} onUndo={props.onUndo} />
+        <Summary run={run} busy={props.busy || props.disabled} onUndo={props.onUndo} />
       ) : null}
     </>
   )

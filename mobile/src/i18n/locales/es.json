@@ -655,10 +655,6 @@
       "imageTooLarge": "Imagen demasiado grande para adjuntarla",
       "permissionDenied": "Permiso de acceso a las fotos denegado"
     },
-    "agentMessage": {
-      "handedOffToAgent": "Entregado a un agente",
-      "startedAgent": "Agente iniciado"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "La respuesta del adjunto no se puede leer. Inténtalo de nuevo.",
       "incompleteReply": "El adjunto cambió o su respuesta estaba incompleta. Ciérralo e inténtalo de nuevo.",
@@ -4486,7 +4482,7 @@
   "bots": {
     "link": {
       "pairTitle": "Vincular un ordenador",
-      "pairRequired": "Para abrir este enlace, vincula este teléfono con un ordenador.",
+      "pairRequired": "Para abrir este enlace, vincula este teléfono con un ordenador y vuelve a abrir el enlace.",
       "pairAction": "Vincular un ordenador",
       "openFailed": "No se pudo abrir este enlace",
       "ambiguous": "Este bot está en {{names}}. Abre el chat en Orca en el ordenador que quieras.",

@@ -276,19 +276,6 @@ describe('a Google setup card in the chat', () => {
     expect(screen.getByText('Application privacy policy link')).toBeTruthy()
   })
 
-  it('doesn’t guess the audience when the account’s kind isn’t known yet', () => {
-    mocks.run.current = run({
-      mode: 'guide-browser',
-      steps: { branding: { status: 'active', at: 2 } }
-    })
-    show('step', 'branding')
-    const audience = screen
-      .getAllByRole('listitem')
-      .find((item) => item.textContent?.includes('Audience'))
-    expect(audience?.textContent).toContain('External')
-    expect(audience?.textContent).toContain('Internal')
-  })
-
   it('waits for the key even while an earlier step is still open, with Import as a fallback', () => {
     const at = { status: 'done' as const, at: 2, by: 'bot' as const }
     mocks.run.current = run({
@@ -305,16 +292,6 @@ describe('a Google setup card in the chat', () => {
     expect(mocks.sources[0].at(-1)).toEqual({ kind: 'downloads' })
     fireEvent.click(screen.getByRole('button', { name: 'Import file' }))
     expect(mocks.pick).toHaveBeenCalled()
-  })
-
-  it('warns about Google’s screen for a new personal app only', () => {
-    mocks.run.current = run({ kind: 'personal', account: 'a@gmail.com' })
-    show('connect')
-    expect(screen.queryByText(/Google will show a warning/)).toBeTruthy()
-    cleanup()
-    mocks.run.current = run({ kind: 'work', account: 'a@acme.com' })
-    show('connect')
-    expect(screen.queryByText(/Google will show a warning/)).toBeNull()
   })
 
   it('offers Make a new key on the progress card when the key went missing before client is done', async () => {

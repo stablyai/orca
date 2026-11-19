@@ -616,10 +616,6 @@
       "imageTooLarge": "이미지가 너무 커서 첨부할 수 없습니다.",
       "permissionDenied": "사진 접근 권한 거부됨"
     },
-    "agentMessage": {
-      "handedOffToAgent": "에이전트에게 넘김",
-      "startedAgent": "에이전트 시작됨"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "첨부 파일 응답을 읽을 수 없습니다. 다시 시도하세요.",
       "incompleteReply": "첨부 파일이 변경되었거나 응답이 불완전합니다. 닫고 다시 시도하세요.",
@@ -4382,7 +4378,7 @@
   "bots": {
     "link": {
       "pairTitle": "컴퓨터 페어링",
-      "pairRequired": "이 링크를 열려면 이 휴대폰을 컴퓨터와 페어링하세요.",
+      "pairRequired": "이 링크를 열려면 이 휴대폰을 컴퓨터와 페어링한 다음 링크를 다시 여세요.",
       "pairAction": "컴퓨터 페어링",
       "openFailed": "이 링크를 열 수 없습니다",
       "ambiguous": "이 봇은 {{names}}에 있습니다. 원하는 컴퓨터의 Orca에서 채팅을 여세요.",

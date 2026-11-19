@@ -675,15 +675,6 @@
       "imageTooLarge": "Imagem grande demais para anexar",
       "permissionDenied": "Permissão de acesso às fotos negada"
     },
-    "agentMessage": {
-      "handedOffToAgent": "Entregue a um agente",
-      "startedAgent": "Agente iniciado",
-      "startedWorker": "Worker iniciado",
-      "taskFromCoordinator": "Tarefa do coordenador",
-      "messageFromCoordinator": "Mensagem do coordenador",
-      "updateFromWorker": "Atualização do worker",
-      "messageFrom": "Mensagem de"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "A resposta do anexo não pode ser lida. Tente novamente.",
       "incompleteReply": "O anexo foi alterado ou a resposta estava incompleta. Feche-o e tente novamente.",
@@ -5066,7 +5057,7 @@
   "bots": {
     "link": {
       "pairTitle": "Emparelhar um computador",
-      "pairRequired": "Para abrir este link, emparelhe este telefone com um computador.",
+      "pairRequired": "Para abrir este link, emparelhe este telefone com um computador e abra o link novamente.",
       "pairAction": "Emparelhar um computador",
       "openFailed": "Não foi possível abrir este link",
       "ambiguous": "Este bot está em {{names}}. Abra a conversa no Orca no computador que você quiser.",

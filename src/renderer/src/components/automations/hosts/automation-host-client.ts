@@ -214,7 +214,7 @@ export async function deleteAutomationForTarget(
 }
 
 export async function runAutomationNowForTarget(
-  automation: Automation,
+  automation: Pick<Automation, 'id' | 'runContext'>,
   sourceTarget?: AutomationHostTarget | null
 ): Promise<AutomationRun> {
   const target = getAutomationOwnerTarget(automation, sourceTarget)

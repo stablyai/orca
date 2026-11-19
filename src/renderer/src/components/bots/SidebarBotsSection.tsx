@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
-import { botRefKey, callBotRpc } from '@/lib/bot-hosts'
+import { callBotRpc } from '@/lib/bot-hosts'
 import { Bot as BotIcon, Download, LayoutTemplate, Link2, Plus, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -58,6 +58,7 @@ import { BotsCollapseAllButton } from './BotsCollapseAllButton'
 import { useBotsSidebarReveal } from './bots-sidebar-reveal'
 import { BotsRevealProvider } from './bots-sidebar-reveal-context'
 import { SidebarBotsEmptyState } from './SidebarBotsEmptyState'
+import { BotSidebarVirtualRows } from './BotSidebarVirtualRows'
 
 // The + menu's rows only: 28px tall (a 20px line in the item's own 4px padding), roomier than other menus.
 const BOT_MENU_ROW = 'flex min-h-5 items-center gap-2'
@@ -213,22 +214,15 @@ export function SidebarBotsSection({
           tooltip: collapseLabel,
           onToggle: toggleBots
         }}
+        titleAccessory={
+          !collapsed && collapseAll && !searchOpen ? (
+            <BotsCollapseAllButton collapseAll={collapseAll} />
+          ) : null
+        }
         summary={
           collapsed ? (
             <BotCollapsedPreview facts={facts} onOpenBot={openFromFace} onExpand={toggleBots} />
-          ) : (
-            <span className="flex min-w-0 flex-1 items-center gap-0.5">
-              {/* A 0 next to the onboarding card says nothing. */}
-              {entries.length > 0 ? (
-                <span className="pointer-events-none text-left text-xs text-muted-foreground">
-                  {entries.length}
-                </span>
-              ) : null}
-              {collapseAll && !searchOpen ? (
-                <BotsCollapseAllButton collapseAll={collapseAll} />
-              ) : null}
-            </span>
-          )
+          ) : null
         }
         // Folded, the header is just its title and faces; the controls unmount so Tab can't reach them.
         actions={
@@ -342,7 +336,7 @@ export function SidebarBotsSection({
             ref={listRef}
             data-bot-sidebar-list=""
             className={cn(
-              'bot-sidebar-scrollbar relative flex min-h-0 flex-col overflow-y-auto overscroll-y-contain',
+              'bot-sidebar-scrollbar relative flex min-h-0 flex-col overflow-y-auto overscroll-y-contain [overflow-anchor:none]',
               entries.length > 0 && 'pb-1 pl-1',
               collapsed && 'hidden'
             )}
@@ -360,40 +354,45 @@ export function SidebarBotsSection({
               )
             ) : collapsed ? null : (
               <>
-                {entries.map((entry, index) => {
-                  const entryDrag: BotSidebarEntryDrag | undefined = draggable
-                    ? {
-                        index,
-                        dragging: drag.state.draggingGroupId === entry.id,
-                        settling: drag.state.draggingGroupId !== null,
-                        offset: drag.state.previewOffsetsById?.get(entry.id) ?? 0,
-                        onPointerDown: (event) => drag.onHandlePointerDown(event, entry.id)
-                      }
-                    : undefined
-                  return entry.kind === 'group' ? (
-                    <BotSidebarDragFrame key={entry.id} id={entry.id} drag={entryDrag}>
-                      <BotGroupRow
-                        group={entry.group}
+                <BotSidebarVirtualRows
+                  entries={entries}
+                  listRef={listRef}
+                  draggingId={drag.state.draggingGroupId}
+                  revealId={reveal.request?.target.entryKey}
+                  renderEntry={(entry, index) => {
+                    const entryDrag: BotSidebarEntryDrag | undefined = draggable
+                      ? {
+                          index,
+                          dragging: drag.state.draggingGroupId === entry.id,
+                          settling: drag.state.draggingGroupId !== null,
+                          offset: drag.state.previewOffsetsById?.get(entry.id) ?? 0,
+                          onPointerDown: (event) => drag.onHandlePointerDown(event, entry.id)
+                        }
+                      : undefined
+                    return entry.kind === 'group' ? (
+                      <BotSidebarDragFrame id={entry.id} drag={entryDrag}>
+                        <BotGroupRow
+                          group={entry.group}
+                          home={entry.home}
+                          members={botGroupMemberBots(entry.group, bots)}
+                          isActive={activeGroupId === entry.group.id}
+                          onOpen={onOpenBot}
+                          onManageMembers={() => setEditingGroup(entry.group)}
+                          onDelete={() => void deleteGroup(entry.group)}
+                          dragHandle={draggable}
+                        />
+                      </BotSidebarDragFrame>
+                    ) : (
+                      <BotSidebarEntry
+                        bot={entry.bot}
                         home={entry.home}
-                        members={botGroupMemberBots(entry.group, bots)}
-                        isActive={activeGroupId === entry.group.id}
+                        isActive={activeWorkspaceId === folderWorkspaceKey(entry.home.id)}
                         onOpen={onOpenBot}
-                        onManageMembers={() => setEditingGroup(entry.group)}
-                        onDelete={() => void deleteGroup(entry.group)}
-                        dragHandle={draggable}
+                        drag={entryDrag}
                       />
-                    </BotSidebarDragFrame>
-                  ) : (
-                    <BotSidebarEntry
-                      key={botRefKey(entry.bot)}
-                      bot={entry.bot}
-                      home={entry.home}
-                      isActive={activeWorkspaceId === folderWorkspaceKey(entry.home.id)}
-                      onOpen={onOpenBot}
-                      drag={entryDrag}
-                    />
-                  )
-                })}
+                    )
+                  }}
+                />
                 {drag.state.draggingGroupId !== null && drag.state.dropIndicatorY !== null ? (
                   <WorktreeSidebarDropIndicator y={drag.state.dropIndicatorY} />
                 ) : null}

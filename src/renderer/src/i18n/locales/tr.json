@@ -6522,7 +6522,6 @@
         },
         "SidebarWorkspaceOptionsMenu": {
           "hosts": "Host'lar",
-          "showSection": "Göster",
           "allHostsDetail": "Tüm host'ları göster",
           "configuredSshHost": "Yapılandırılmış SSH",
           "projectSshHost": "Proje SSH",
@@ -6572,7 +6571,6 @@
           "219ebf1961": "Branch adı",
           "folderPathIdentity": "Branch / klasör yolu",
           "cli": "Orca CLI",
-          "workspaceOptions": "Çalışma alanı seçenekleri",
           "optionsActiveFilters_one": "Çalışma alanı seçenekleri ({{count}} etkin filtre)",
           "optionsActiveFilters_other": "Çalışma alanı seçenekleri ({{count}} etkin filtre)",
           "optionsFilterCount_one": "Çalışma alanı seçenekleri ({{count}} filtre)",
@@ -7799,9 +7797,9 @@
           "8fbe1f37c1": "Ortam",
           "2d133152fa": "Varsayılan ortam yok",
           "3f1bdf3cb4": "Ortam metni güvenli bir şekilde ayrıştırılamayacak kadar büyük.",
-          "codexSessionSource": "İçe aktarılacak Codex ana dizini",
-          "codexSessionSourceInfo": "Codex geçmişini içe aktarma hakkında",
-          "codexSessionSourceTooltip": "Orca, Codex'i izole bir ana dizinde çalıştırır. Bu oturum geçmişini içe aktarmak için bunu mevcut Codex ana dizininize yönlendirin. Boş bırakılırsa ~/.codex kullanılır.",
+          "codexSessionSource": "Codex konuşmalarını şuradan içe aktar",
+          "codexSessionSourceInfo": "Codex konuşmalarını içe aktarma hakkında",
+          "codexSessionSourceTooltip": "Geçmiş hesaplar arasında paylaşıldığı sürece Orca, bu Codex ana dizinindeki konuşmaları /resume listelesin diye ~/.codex'e kopyalar. Bir konuşma kopyalandıktan sonra bu klasörde eklenen turlar kopyaya ulaşmaz.",
           "noAgentsDetected": "Ajan algılanmadı. Bir tanesi yüklüyse, yoklama zaman aşımına uğramış olabilir.",
           "9f30095d49": "Ajan İzinleri"
         },
@@ -20156,9 +20154,6 @@
         "failed": "Bu sohbete devam edilemedi. Yeniden deneyin veya bir mesaj gönderin.",
         "explanation": "Devam ettiğinizde ajan önce son adımının tamamlanıp tamamlanmadığını kontrol eder."
       },
-      "antigravitySignIn": {
-        "sentence": "Antigravity'de oturum açılmamış. <settings>Ayarlar → Hesaplar → Antigravity</settings> bölümünden oturum açın. Ardından mesajınızı yeniden gönderin."
-      },
       "claudeSignIn": {
         "signingIn": "Oturum açılıyor…"
       },
@@ -21276,16 +21271,17 @@
   },
   "featureTips": {
     "voice": {
-      "demoPrompt": "Bu diff'i uç durumlar için inceleyin ve bulduğunuz her şey için test ekleyin.",
-      "startDictation": "Sesli yazmayı başlat",
-      "agentPromptTitle": "Ajan istemi",
-      "listening": "Dinleniyor...",
       "unassignedInstruction": "Odaklanmış bir bölmede sesli yazmayı başlatmadan önce bir sesli yazma kısayolu atayın.",
       "shortcutInstruction": "Bir terminale, düzenleyiciye veya ajan istemine odaklanın, ardından sesli dikteyi başlatmak için <shortcut/> tuşuna basın. Durdurmak için tekrar <shortcut/> tuşuna basın.",
       "changeInSettings": "Modeli, dikte modunu veya kısayolu istediğiniz zaman <link>Ayarlar → Ses</link> bölümünde değiştirin.",
       "title": "Herhangi bir bölmede sesli yazın",
       "description": "Odaklanmış bir bölmede sesli yazmayı başlatın, ardından durdurmak için aynı kısayolu tekrar kullanın.",
-      "cta": "Sesli yazmayı ayarla"
+      "cta": "Sesli yazmayı ayarla",
+      "demoFirstPhrase": "Küçük ekranlarda ödeme düğmesi altbilgiyle çakışıyor.",
+      "demoSecondPhrase": "Bir test ekler misin?",
+      "demoUserPrompt": "Ödeme rozetleri ekle",
+      "demoTabTitle": "Ödeme altbilgisi",
+      "demoReply": "Ödeme altbilgisine rozetler eklendi."
     },
     "sessionSearch": {
       "enableFailed": "Oturum araması açılmadı. Tekrar deneyin.",
@@ -22826,7 +22822,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "Worktree değiştir",
+      "worktreePalette": "Her şeyde ara",
       "worktreeNavigateUp": "Önceki worktree",
       "worktreeNavigateDown": "Sonraki worktree",
       "workspaceCreate": "Worktree oluştur",
@@ -22938,6 +22934,9 @@
       "45347db2a3": "Sekmeler arası gezinme",
       "aab2837fa5": "Hızlı komutlar",
       "3492a954c8": "Terminal bölmeleri"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "Worktree değiştir"
     }
   },
   "gpuFallback": {
@@ -23813,8 +23812,7 @@
     },
     "upcoming": {
       "tidyNightAfter": "Her gece {{from}} sonrasında veya bu bilgisayar uyandığında",
-      "tidyWeekAfter": "Haftada bir, {{from}} sonrasında veya bu bilgisayar uyandığında",
-      "lookDueNow": "Şimdi zamanı · {{every}}"
+      "tidyWeekAfter": "Haftada bir, {{from}} sonrasında veya bu bilgisayar uyandığında"
     },
     "palette": {
       "placeholder": "Botlarda, sohbetlerde, terminallerde, çalışma alanlarında, görevlerde, ayarlarda ve işlemlerde ara...",

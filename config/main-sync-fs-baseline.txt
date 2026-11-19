@@ -12,7 +12,6 @@
 1 src/main/agent-launch/trust/agent-trust-ownership-ledger.ts
 2 src/main/agent-launch/trust/agent-trust-path-canonicalization.ts # moved out of agent-trust-presets.ts (its count dropped by 2) so the Codex trust worker shares it
 12 src/main/agent-launch/trust/agent-trust-presets.ts
-2 src/main/agent-launch/trust/antigravity-workspace-trust-ownership.ts
 1 src/main/agent-launch/trust/execution-host-workspace-trust.ts
 1 src/main/ai-vault-search/worker/session-search-worker-client.ts
 4 src/main/ai-vault/parse-cache/session-parse-cache-legacy-json.ts
@@ -43,7 +42,6 @@
 1 src/main/browser-passwords/browser-password-chromium-import.ts
 2 src/main/browser-passwords/browser-password-vault-file.ts
 2 src/main/browser/agent-browser/helper-process/agent-browser-binary.ts
-2 src/main/browser/agent-browser/helper-process/agent-browser-dependency-binary.ts
 2 src/main/browser/agent-browser/helper-process/agent-browser-process-environment.ts
 1 src/main/browser/agent-browser/session-lifecycle/agent-browser-session-reset.ts
 1 src/main/browser/bundled-main-file-path.ts
@@ -156,8 +154,8 @@
 2 src/main/codex/history/resume/codex-session-resume-home.ts
 1 src/main/codex/history/rollouts/codex-session-file-listing.ts
 2 src/main/codex/history/rollouts/codex-session-link.ts
-1 src/main/codex/hooks/installation/codex-hook-local-install.ts
-2 src/main/codex/hooks/installation/codex-hook-local-maintenance.ts
+1 src/main/codex/hooks/installation/codex-hook-local-maintenance.ts
+1 src/main/codex/hooks/installation/codex-hook-managed-strip.ts # moved from codex-hook-local-maintenance with the managed-hook strip
 1 src/main/codex/hooks/reconciliation/codex-hook-legacy-cleanup.ts
 2 src/main/codex/hooks/reconciliation/codex-hook-status.ts
 1 src/main/codex/hooks/reconciliation/codex-real-home-hooks-json.ts

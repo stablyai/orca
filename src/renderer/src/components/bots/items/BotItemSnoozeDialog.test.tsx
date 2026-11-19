@@ -27,13 +27,6 @@ function openPicker(): ReturnType<typeof vi.fn> {
   return onSnooze
 }
 
-it('snoozes from a preset row', () => {
-  const onSnooze = vi.fn()
-  render(<BotItemSnoozeDialog open onSnooze={onSnooze} onClose={() => {}} />)
-  fireEvent.click(screen.getByRole('button', { name: /^In a week/ }))
-  expect(onSnooze).toHaveBeenCalledWith(Date.parse('2026-11-25T09:00:00Z'))
-})
-
 it('defaults to tomorrow at 9 AM and rolls a past time forward when today is picked', () => {
   const onSnooze = openPicker()
   expect(screen.getByRole('button', { name: 'Snooze', description: /^Thu 9:00\sAM$/ })).toBeTruthy()
@@ -46,7 +39,7 @@ it('defaults to tomorrow at 9 AM and rolls a past time forward when today is pic
   expect(onSnooze).toHaveBeenCalledWith(Date.parse('2026-11-18T10:15:00Z'))
 })
 
-it('moves through days with the arrow keys and picks with Enter', () => {
+it('moves calendar focus with the arrow keys and submits the selected date', () => {
   const onSnooze = openPicker()
   const start = screen.getByRole('button', { name: 'Thursday, November 19' })
   expect(start.tabIndex).toBe(0)

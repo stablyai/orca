@@ -209,21 +209,21 @@ describe('the Linked row of a worker the chat started', () => {
 describe('back-to-back rows about one thing', () => {
   const workers = [worker('d1', 10, 30)]
 
-  it('merges a Started row and its Dispatch’s updates into the newest, earlier ones newest first', () => {
-    expect(
-      drawn(
-        [
-          prompt('t1'),
-          started('s', 'd1', 10),
-          update('u1', 'term_w', 20),
-          update('u2', 'term_w', 30)
-        ],
-        {
-          turnKeys: ['t1', 't1', 't1', 't1'],
-          workers
-        }
-      )
-    ).toEqual(['t1', 'u2<u1,s'])
+  it('merges new Dispatch updates in place, keeping earlier events newest first', () => {
+    const rows = [
+      prompt('t1'),
+      said('a'),
+      started('s', 'd1', 10),
+      update('u1', 'term_w', 20),
+      update('u2', 'term_w', 30)
+    ]
+    const turnKeys = ['t1', 't1', 't1', 't1', 't1']
+    expect(drawn(rows.slice(0, 3), { turnKeys: turnKeys.slice(0, 3), workers })).toEqual([
+      't1',
+      'a',
+      's'
+    ])
+    expect(drawn(rows, { turnKeys, workers })).toEqual(['t1', 'a', 'u2<u1,s'])
   })
 
   it('keeps apart Dispatches that reused one terminal', () => {
@@ -264,13 +264,5 @@ describe('back-to-back rows about one thing', () => {
         }
       )
     ).toEqual(['t1', 'r1<n1', 'n2'])
-  })
-
-  it('changes only the last drawn row when a newer row arrives', () => {
-    const rows = [prompt('t1'), said('a'), started('s', 'd1', 10), update('u1', 'term_w', 20)]
-    const before = drawn(rows.slice(0, 3), { turnKeys: ['t1', 't1', 't1'], workers })
-    const after = drawn(rows, { turnKeys: ['t1', 't1', 't1', 't1'], workers })
-    expect(before).toEqual(['t1', 'a', 's'])
-    expect(after).toEqual(['t1', 'a', 'u1<s'])
   })
 })

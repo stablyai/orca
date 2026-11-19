@@ -16,6 +16,7 @@ export function SidebarSectionDragOverlay({
       }
       const clone = cloneSidebarDragSource(activeNode, [
         'data-sidebar-section',
+        'data-sidebar-section-header',
         'data-sidebar-section-fold',
         'data-sidebar-section-title',
         'data-contextual-tour-target'

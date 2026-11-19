@@ -3,7 +3,7 @@ import { useDraggable, useDroppable } from '@dnd-kit/core'
 import { useCombinedRefs } from '@dnd-kit/utilities'
 import { cn } from '@/lib/class-names'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { SidebarSectionFoldChevron } from './sidebar-section-fold'
+import { animateSidebarSectionFold, SidebarSectionFoldChevron } from './sidebar-section-fold'
 
 export type SidebarSectionFold = {
   collapsed: boolean
@@ -56,6 +56,7 @@ export function SidebarSectionHeader({
   return (
     <div
       ref={headerRef}
+      data-sidebar-section-header={fold ? sectionId : undefined}
       className={cn(
         'group/sidebar-header mt-2 flex h-8 min-w-0 shrink-0 items-center justify-between gap-1.5 px-2',
         isDragging && 'pointer-events-none opacity-0',
@@ -86,7 +87,7 @@ export function SidebarSectionHeader({
                 disabled={fold.disabled}
                 data-sidebar-section-fold={sectionId}
                 onClick={(event) => {
-                  fold.onToggle()
+                  animateSidebarSectionFold(event.currentTarget, fold.onToggle)
                   // A clicked header must not keep focus once the pointer leaves.
                   if (event.detail > 0) {
                     event.currentTarget.blur()

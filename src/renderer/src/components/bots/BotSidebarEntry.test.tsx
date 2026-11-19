@@ -40,7 +40,7 @@ const mocks = vi.hoisted(
     reviewById: {},
     smartOrder: null,
     offline: false,
-    chatTree: { state: 'unsupported', chats: [], workspaceChats: {} },
+    chatTree: { state: 'failed', chats: [], workspaceChats: {} },
     chatTreeReads: []
   })
 )
@@ -224,7 +224,7 @@ beforeEach(() => {
   mocks.smartOrder = null
   mocks.offline = false
   mocks.reviewById = {}
-  mocks.chatTree = { state: 'unsupported', chats: [], workspaceChats: {} }
+  mocks.chatTree = { state: 'failed', chats: [], workspaceChats: {} }
   mocks.chatTreeReads = []
 })
 
@@ -431,6 +431,9 @@ describe('BotSidebarEntry', () => {
       expect(background.hasAttribute('aria-current')).toBe(false)
 
       fireEvent.click(front, { detail: 1 })
+      expect(front.getAttribute('aria-expanded')).toBe('true')
+      fireEvent.click(front, { detail: 2 })
+      fireEvent.keyDown(front, { key: 'Enter', repeat: true })
       expect(front.getAttribute('aria-expanded')).toBe('true')
       fireEvent.click(front, { detail: 1 })
       expect(front.getAttribute('aria-expanded')).toBe('false')

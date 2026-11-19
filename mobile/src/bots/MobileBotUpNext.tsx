@@ -28,6 +28,7 @@ export type UpNextActions = {
   /** Null while no chat shows to put the request in. */
   start: ((suggestionId: string) => void) | null
   dismiss: (suggestionId: string) => void
+  /** Off while one runs or the host is offline. */
   busy: boolean
 }
 

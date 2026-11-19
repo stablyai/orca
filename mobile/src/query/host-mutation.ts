@@ -184,7 +184,7 @@ async function confirmOnceConnected<TVars, TResult>(
   }
 }
 
-function useClientState(client: RpcClient | null): ConnectionState {
+export function useClientState(client: RpcClient | null): ConnectionState {
   const subscribe = useCallback(
     (onChange: () => void) => (client ? client.onStateChange(onChange) : () => {}),
     [client]

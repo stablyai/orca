@@ -620,10 +620,6 @@
       "imageTooLarge": "Bild zum Anhängen zu groß",
       "permissionDenied": "Zugriff auf Fotos verweigert"
     },
-    "agentMessage": {
-      "handedOffToAgent": "An Agenten übergeben",
-      "startedAgent": "Agent gestartet"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "Die Antwort zum Anhang ist nicht lesbar. Erneut versuchen.",
       "incompleteReply": "Der Anhang wurde geändert oder die Antwort war unvollständig. Schließen und erneut versuchen.",
@@ -4384,7 +4380,7 @@
   "bots": {
     "link": {
       "pairTitle": "Computer koppeln",
-      "pairRequired": "Kopple dieses Telefon mit einem Computer, um diesen Link zu öffnen.",
+      "pairRequired": "Kopple dieses Telefon mit einem Computer, um diesen Link zu öffnen, und öffne den Link dann erneut.",
       "pairAction": "Computer koppeln",
       "openFailed": "Link konnte nicht geöffnet werden",
       "ambiguous": "Dieser Bot ist auf {{names}}. Öffne den Chat in Orca auf dem gewünschten Computer.",

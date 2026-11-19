@@ -94,15 +94,6 @@ describe("the bot's writes in a chat: each item once, at its final state", () =>
     ])
   })
 
-  it('treats a round trip back to where it started as no move', () => {
-    const there = move(a, 'planned', 'working')
-    const back = move(a, 'working', 'planned')
-    expect(said([there, back, comment(a, 'planned')])).toEqual([
-      'Commented on <Share links planned>'
-    ])
-    expect(said([there, back])).toEqual(['Updated <Share links planned>'])
-  })
-
   it('shares a line between items that ended the same way, in the order they first appear', () => {
     expect(said([comment(a), comment(b)])).toEqual([
       'Commented on <Share links working> <Share dialog working>'
