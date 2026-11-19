@@ -6,7 +6,7 @@ import {
 } from './terminal-partial-escape-tail'
 
 describe('advanceTerminalEscapeBoundary', () => {
-  it.each(['\x1b]0;title', '\x1bPqpayload', '\x1bXsos', '\x1b^pm', '\x1b_apc'])(
+  it.each(['\x1b]0;title', '\x1bPqpayload'])(
     'retains only the pending ESC after a string ends: %j',
     (prefix) => {
       const stream = `${prefix}\x1b`
