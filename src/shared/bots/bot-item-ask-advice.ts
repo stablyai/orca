@@ -75,6 +75,10 @@ function repliesWithOption(words: string): boolean {
   return false
 }
 
+function hasProseChoices(words: string): boolean {
+  return PROSE_CHOICES.some((pattern) => pattern.test(words)) || repliesWithOption(words)
+}
+
 const URL_END = new Set(['.', ',', ';', ':', '!', '?', ')'])
 const SCHEME = /[A-Za-z0-9+.-]/
 const TARGET_STOP = /[\s()[\]]/
@@ -245,7 +249,8 @@ export function botItemAskAdvice({
   if (ask) {
     const context = ask.context?.trim() ?? ''
     const prompts = ask.questions.map((question) => question.prompt)
-    if (prompts.some((prompt) => !prompt.includes('?'))) {
+    // A question mark inside a URL or code is not the question's own.
+    if (prompts.some((prompt) => !prose(prompt).includes('?'))) {
       found.add('no_question')
     }
     if (prompts.some((prompt) => prompt.length > QUESTION_LIMIT)) {
@@ -258,11 +263,15 @@ export function botItemAskAdvice({
     const options = ask.questions.flatMap((question) =>
       question.options.flatMap((option) => [option.label, option.detail ?? ''])
     )
+    // Choices the bot wrote into its question or context rather than as buttons.
+    if (hasProseChoices(prose([context, ...prompts].join('\n')))) {
+      found.add('prose_choices')
+    }
     words = prose([context, ...prompts, ...options].join('\n'))
   } else {
     const text = comment ?? ''
     words = prose(text)
-    if (PROSE_CHOICES.some((pattern) => pattern.test(words)) || repliesWithOption(words)) {
+    if (hasProseChoices(words)) {
       found.add('prose_choices')
     }
     if (!words.includes('?')) {

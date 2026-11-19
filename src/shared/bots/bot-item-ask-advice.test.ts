@@ -168,6 +168,36 @@ describe('botItemAskAdvice', () => {
     expect(botItemAskAdvice({ comment: 'D4 needs P2 fixes on M4 Air; land it?' })).toBeNull()
   })
 
+  it('reads an ask question without the question marks of its URLs and code', () => {
+    const ask = (prompt: string) => ({ questions: [{ prompt, options: [] }] })
+    expect(codes({ ask: ask('Read https://example.com/?page=1') })).toEqual(['no_question'])
+    expect(codes({ ask: ask('Run `ls?` now') })).toEqual(['no_question'])
+    expect(botItemAskAdvice({ ask: ask('Is https://example.com/?page=1 the one?') })).toBeNull()
+  })
+
+  it('flags choices written into an ask question or its context, never its buttons', () => {
+    expect(
+      codes({
+        ask: { questions: [{ prompt: 'Ship it? Reply **yes**, or **wait**.', options: [] }] }
+      })
+    ).toEqual(['prose_choices'])
+    expect(codes({ ask: { ...CLEAN_ASK, context: 'Options: (a) ship now; (b) wait.' } })).toEqual([
+      'prose_choices'
+    ])
+    expect(
+      botItemAskAdvice({
+        ask: {
+          questions: [
+            {
+              prompt: 'Which scope?',
+              options: [{ label: 'A) simple (recommended)' }, { label: 'B) full' }]
+            }
+          ]
+        }
+      })
+    ).toBeNull()
+  })
+
   it('reads the decisions of an ask, not the text written for older hosts', () => {
     expect(
       codes({
