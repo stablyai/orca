@@ -3,18 +3,14 @@ import { isAbsolute, join, relative, sep } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
-import { lstatIfPresent } from '../../../filesystem/merged-directory-link'
 import {
   COMPRESSED_ROLLOUT_SUFFIX,
-  compressedRolloutsFirst,
-  plainWins,
   rolloutTwinPath
 } from '../rollouts/codex-rollout-compressed-twin'
-import { copyCodexRolloutWithoutOverwrite } from '../rollouts/codex-rollout-copy'
-import { linkCodexRolloutUnlessHeld } from '../rollouts/codex-rollout-deletion-guard'
 import { parseCodexRolloutThreadId } from '../rollouts/codex-rollout-thread-id'
 import { isCodexSessionRolloutFileName } from '../rollouts/codex-session-file-listing'
 import { readEntries, StoreNames } from './codex-history-store-names'
+import { canHardLinkIn, copyIntoStore, pickImportForm } from './codex-history-import-publish'
 import {
   hasUnsavedImportLedger,
   readImportLedger,
@@ -102,44 +98,15 @@ async function unusableReason(importHome: string, storeHome: string): Promise<st
   return null
 }
 
-type FolderResult = ImportedFolder & { copied: number; stopped: boolean }
-
-// With both forms here, only the one holding every turn is copied: a newer plain form, otherwise
-// the non-empty compressed one.
-async function losesToFolderTwin(
-  folder: string,
-  name: string,
-  folderNames: Set<string>
-): Promise<boolean> {
-  const twin = rolloutTwinPath(name)
-  if (!folderNames.has(twin)) {
-    return false
-  }
-  const [self, other] = await Promise.all([
-    lstatIfPresent(join(folder, name)),
-    lstatIfPresent(join(folder, twin))
-  ])
-  if (!self?.isFile() || !other?.isFile()) {
-    return false
-  }
-  const compressed = name.endsWith(COMPRESSED_ROLLOUT_SUFFIX)
-  return compressed === (compressed ? plainWins(other, self) : plainWins(self, other))
+type FolderResult = ImportedFolder & {
+  copied: number
+  stopped: boolean
+  /** Ends the pass: the store can't take a copy. */
+  halt?: 'no-hard-links' | 'failed'
 }
 
-async function copyIntoStore(from: string, to: string): Promise<'copied' | 'existing' | 'failed'> {
-  try {
-    // Held from the first byte copied to the link, so a deletion can't race the new name.
-    const outcome = await linkCodexRolloutUnlessHeld(from, () =>
-      copyCodexRolloutWithoutOverwrite(from, to, { purpose: 'import', requireStableSource: true })
-    )
-    return outcome === 'copied' || outcome === 'existing' ? outcome : 'failed'
-  } catch (error) {
-    if (!isDefinitiveAbsence(error)) {
-      console.warn(`[codex-history-import] Could not copy ${from}:`, error)
-    }
-    return 'failed'
-  }
-}
+// A pass that found the store without hard links isn't repeated until the setting changes or Orca restarts.
+const withoutHardLinks = new Set<string>()
 
 async function importFolder(
   args: CodexHistoryImportArgs,
@@ -167,16 +134,15 @@ async function importFolder(
   let copied = 0
   let failed = false
   let targetReady = false
-  const names = (await readEntries(path))
-    .filter((entry) => entry.isFile() && isCodexSessionRolloutFileName(entry.name))
-    .map((entry) => entry.name)
-    .sort(compressedRolloutsFirst)
-  const folderNames = new Set(names)
-  for (const name of names) {
-    if (args.shouldStop()) {
-      return { copied, stopped: true }
+  // Each conversation is decided once, whichever forms it has here, so a stop keeps the progress.
+  const forms = new Map<string, string[]>()
+  for (const entry of await readEntries(path)) {
+    if (entry.isFile() && isCodexSessionRolloutFileName(entry.name)) {
+      const key = rolloutKey(entry.name)
+      forms.set(key, [...(forms.get(key) ?? []), entry.name])
     }
-    const key = rolloutKey(name)
+  }
+  for (const [key, keyForms] of forms) {
     if (seedOnly) {
       handled.add(key)
       continue
@@ -185,36 +151,54 @@ async function importFolder(
     if (handled.has(key)) {
       continue
     }
+    if (args.shouldStop()) {
+      return { copied, stopped: true }
+    }
     const targetNames = await store.names(target)
     // Any form the store holds wins, here or filed in the other place, whatever its mtime.
     if (
-      targetNames.has(name) ||
-      targetNames.has(rolloutTwinPath(name)) ||
-      (await store.holds(archived ? datedFolderOf(name) : ARCHIVED, name))
+      targetNames.has(key) ||
+      targetNames.has(rolloutTwinPath(key)) ||
+      (await store.holds(archived ? datedFolderOf(key) : ARCHIVED, key))
     ) {
       handled.add(key)
       continue
     }
-    if (await losesToFolderTwin(path, name, folderNames)) {
+    const name = await pickImportForm(path, key, keyForms)
+    if (!name) {
+      failed = true
       continue
     }
     if (!targetReady) {
       await mkdir(join(args.storeHome, target), { recursive: true })
+      if (!(await canHardLinkIn(join(args.storeHome, target)))) {
+        return { copied, stopped: false, halt: 'no-hard-links' }
+      }
       await mkdir(args.indexPendingDir, { recursive: true })
       targetReady = true
     }
     // Recorded before publishing, so the store's index learns every rollout that joins it.
     await writeFile(join(args.indexPendingDir, name), '')
-    const outcome = await copyIntoStore(join(path, name), join(args.storeHome, target, name))
-    if (outcome !== 'failed') {
+    const outcome = await copyIntoStore(
+      join(path, name),
+      join(args.storeHome, target, name),
+      args.shouldStop
+    )
+    if (outcome === 'copied' || outcome === 'existing') {
       copied += outcome === 'copied' ? 1 : 0
       handled.add(key)
       targetNames.add(name)
-    } else {
-      // No heal runs while this pass is active, so the marker can't settle the thread as missing.
-      await rm(join(args.indexPendingDir, name), { force: true, maxRetries: 3 })
-      failed = true
+      continue
     }
+    // No heal runs while this pass is active, so the marker can't settle the thread as missing.
+    await rm(join(args.indexPendingDir, name), { force: true, maxRetries: 3 })
+    if (outcome === 'stopped') {
+      return { copied, stopped: true }
+    }
+    if (outcome !== 'retry') {
+      return { copied, stopped: false, halt: outcome }
+    }
+    failed = true
   }
   const after = (await stat(path, { bigint: true })).mtimeNs
   // A folder that changed while read, or a copy that failed or saw its source change, is read again.
@@ -231,6 +215,9 @@ async function importFolder(
  * Returns how many were copied, or null when it stopped early (progress so far is kept).
  */
 export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<number | null> {
+  if (withoutHardLinks.has(args.importHome)) {
+    return 0
+  }
   const reason = await unusableReason(args.importHome, args.storeHome)
   if (reason) {
     if (reason !== 'missing') {
@@ -303,6 +290,15 @@ export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<
         copied += result.copied
         if (result.stopped) {
           stopped = true
+          break
+        }
+        if (result.halt) {
+          if (result.halt === 'no-hard-links') {
+            withoutHardLinks.add(args.importHome)
+            console.warn(
+              `[codex-history-import] Not importing from ${args.importHome}: ${args.storeHome} has no hard links`
+            )
+          }
           break
         }
         if (unsaved >= LEDGER_SAVE_EVERY) {

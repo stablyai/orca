@@ -31,7 +31,11 @@ afterEach(() => {
   }
 })
 
-function setup(): { importHome: string; storeHome: string; run: () => Promise<number | null> } {
+function setup(stopAfterChecks = Infinity): {
+  importHome: string
+  storeHome: string
+  run: () => Promise<number | null>
+} {
   const root = mkdtempSync(join(tmpdir(), 'codex-import-'))
   roots.push(root)
   const importHome = join(root, 'old-codex')
@@ -39,14 +43,16 @@ function setup(): { importHome: string; storeHome: string; run: () => Promise<nu
   mkdirSync(join(importHome, DAY), { recursive: true })
   mkdirSync(join(importHome, 'archived_sessions'), { recursive: true })
   mkdirSync(join(storeHome, DAY), { recursive: true })
-  const run = (): Promise<number | null> =>
-    importCodexHistory({
+  const run = (): Promise<number | null> => {
+    let checks = 0
+    return importCodexHistory({
       importHome,
       storeHome,
       ledgerPath: join(root, 'import-ledger.json'),
       indexPendingDir: join(root, 'index-pending'),
-      shouldStop: () => false
+      shouldStop: () => ++checks > stopAfterChecks
     })
+  }
   return { importHome, storeHome, run }
 }
 
@@ -102,5 +108,25 @@ describe('importCodexHistory', () => {
     expect(existsSync(join(storeHome, DAY, NEW))).toBe(false)
     expect(existsSync(join(storeHome, 'archived_sessions', `${NEW}.zst`))).toBe(false)
     expect(readFileSync(join(storeHome, DAY, LATER), 'utf8')).toBe('later\n')
+  })
+
+  it('keeps progress across passes a launch stops, with both forms of each conversation here', async () => {
+    // Each pass checks for a launch twice before its first conversation, so it copies one.
+    const { importHome, storeHome, run } = setup(3)
+    const older = new Date('2026-01-01T00:00:00Z')
+    const newer = new Date('2026-02-01T00:00:00Z')
+    for (const name of [NEW, TAKEN, COMPRESSED]) {
+      writeFileSync(join(importHome, DAY, `${name}.zst`), 'compressed')
+      writeFileSync(join(importHome, DAY, name), 'plain with later turns\n')
+      utimesSync(join(importHome, DAY, `${name}.zst`), older, older)
+      utimesSync(join(importHome, DAY, name), newer, newer)
+    }
+
+    expect(await run()).toBeNull()
+    expect(await run()).toBeNull()
+    expect(await run()).toBe(1)
+
+    expect(readdirSync(join(storeHome, DAY)).sort()).toEqual([COMPRESSED, NEW, TAKEN].sort())
+    expect(readFileSync(join(storeHome, DAY, TAKEN), 'utf8')).toBe('plain with later turns\n')
   })
 })
