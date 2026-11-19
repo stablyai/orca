@@ -336,6 +336,7 @@ describe('Home bots', () => {
       })
     )
     expect(result.rows).toEqual([])
+    expect(result.computers.map((entry) => entry.executionHost)).not.toContain('runtime:build-box')
     expect(result.listable).toBe(false)
     expect(result.unavailable.map((entry) => [entry.label, entry.reason])).toEqual([
       ['Linux box', 'unreachable'],
@@ -396,29 +397,6 @@ describe('Home bots', () => {
       ['Nightly CI', 'air', undefined]
     ])
     expect(result.needsYou).toBe(2)
-  })
-
-  it('offers no server behind a computer whose Bots switch is off', () => {
-    const result = homeBotRows(
-      input({
-        hosts: [{ id: 'studio', name: 'Studio Mac' }],
-        botsByHost: {
-          studio: on(
-            computer('studio', 'local', listed('studio', [], { enabled: false })),
-            computer('studio', 'runtime:build-box', listed('studio', [bot('ci', 'CI')]), {
-              serverLabel: 'build-box'
-            })
-          )
-        }
-      })
-    )
-    const offered = pairedNewBotComputers(
-      result.computers,
-      (entry) => result.labels.get(entry.key) ?? ''
-    )
-    expect(offered.map((entry) => [entry.label, entry.refusal])).toEqual([
-      ['Studio Mac', 'Bots are off on Studio Mac']
-    ])
   })
 
   it('leaves out a computer that isn’t connected', () => {
