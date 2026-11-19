@@ -309,7 +309,7 @@ export function presenceReportId(dispatchId: string, generation: number): string
 }
 
 /** Approvals open and close on their own, so each keeps one report whatever the worker does meanwhile. */
-function approvalReportId(dispatchId: string, approvalId: string): string {
+export function approvalReportId(dispatchId: string, approvalId: string): string {
   return stopReportId(dispatchId, `approval:${approvalId}`)
 }
 

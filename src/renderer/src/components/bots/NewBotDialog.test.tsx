@@ -183,9 +183,12 @@ describe('NewBotDialog picture intake', () => {
           ? (data.text ?? '')
           : ''
   })
+  // The picker's own caption line, a direct child of the picker (the carousel's announcer sits inside it).
   const line = (): string =>
-    screen.getByRole('button', { name: 'Previous picture' }).closest('[role="group"]')
-      ?.nextElementSibling?.textContent ?? ''
+    screen
+      .getByRole('button', { name: 'Previous picture' })
+      .closest('[role="group"]')
+      ?.parentElement?.querySelector(':scope > [aria-live]')?.textContent ?? ''
 
   it('takes pasted image data from anywhere in the dialog, the Name field included', async () => {
     const { picture } = renderDialog()
@@ -272,16 +275,24 @@ describe('NewBotDialog picture intake', () => {
 })
 
 describe('NewBotDialog agent', () => {
+  it('does not create a bot when the selected computer has no chat agent', () => {
+    mocks.agentChoices.mockReturnValue([])
+    renderDialog()
+
+    const form = screen.getByLabelText('Name').closest('form')
+    if (!form) {
+      throw new Error('Expected the bot creation form')
+    }
+    fireEvent.submit(form)
+
+    expect(mocks.createBot).not.toHaveBeenCalled()
+  })
+
   it('starts on the first agent this computer has when Claude Code is not one', async () => {
     mocks.agentChoices.mockReturnValue(['grok', 'omp'])
     mocks.createBot.mockResolvedValue(created)
     const { submit } = renderDialog()
 
-    const change = screen.getByRole('button', { name: /Change$/ })
-    expect(change.textContent).toContain('Grok')
-    fireEvent.click(change)
-    expect(screen.getByRole('button', { name: 'Agent grok' })).toBeTruthy()
-    expect(screen.getByText('Where the bot runs.')).toBeTruthy()
     await submit()
     expect(mocks.createBot.mock.calls[0]?.[1]).toMatchObject({ agent: 'grok' })
     expect(mocks.createBot.mock.calls[0]?.[1]).not.toHaveProperty('launch')
@@ -292,23 +303,13 @@ describe('NewBotDialog agent', () => {
     mocks.createBot.mockResolvedValue(created)
     const { submit } = renderDialog()
 
-    fireEvent.click(screen.getByRole('button', { name: /Change$/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Agent claude' }))
-    expect(screen.getByText(/Runs on/).textContent).toContain('high')
     await submit()
     expect(mocks.createBot.mock.calls[0]?.[1]).toMatchObject({
       agent: 'claude',
       launch: { model: 'opus', options: { effort: 'high' } },
       permissionMode: 'full-access'
     })
-  })
-
-  it('offers no Create while no agent a bot can be is known on this computer', () => {
-    mocks.agentChoices.mockReturnValue([])
-    renderDialog()
-    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Reviewer' } })
-
-    expect(screen.getByRole('button', { name: 'Create bot' }).hasAttribute('disabled')).toBe(true)
   })
 })
 
