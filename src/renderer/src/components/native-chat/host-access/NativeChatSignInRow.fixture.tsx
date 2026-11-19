@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
+import { NATIVE_CHAT_APPEARANCE_ROOT_CLASS } from '../appearance/native-chat-appearance-style'
 import { NativeChatComposerNotices } from '../composer/controls/NativeChatComposerNotices'
 import { structuredSessionNotices } from '../messages/notices/native-chat-structured-session-notices'
 import { NativeChatNoticeRow } from '../messages/notices/NativeChatNoticeRow'
@@ -175,7 +176,7 @@ function Scene({ agent, fontSize }: { agent: FixtureAgent; fontSize?: number }) 
       }
     : undefined
   return (
-    <div className="native-chat-appearance space-y-5 p-3" style={style}>
+    <div className={`${NATIVE_CHAT_APPEARANCE_ROOT_CLASS} space-y-5 p-3`} style={style}>
       {AGENTS[agent].states.map((state) => {
         const setups = setupsFor(agent, state)
         const setup = setups.alone
@@ -253,7 +254,7 @@ type StartFailureSetup = 'alone' | 'both' | 'resolved'
 /** Start failures' transcript rows, each carrying the longer sentence an older host sent. */
 function StartFailureRows({ setup }: { setup: StartFailureSetup }) {
   return (
-    <div className="native-chat-appearance space-y-4 p-3">
+    <div className={`${NATIVE_CHAT_APPEARANCE_ROOT_CLASS} space-y-4 p-3`}>
       {AGENT_IDS.map((agent) => (
         <NativeChatHostSetupContext.Provider
           key={agent}
@@ -306,7 +307,7 @@ const UNRELATED_ERROR = "Your draft couldn't be saved. Copy it before closing th
 /** The composer's Sign in beside an unrelated error: signing in must not read over that error. */
 function WithSessionError() {
   return (
-    <div className="native-chat-appearance space-y-5 p-3">
+    <div className={`${NATIVE_CHAT_APPEARANCE_ROOT_CLASS} space-y-5 p-3`}>
       {(['signedOut', 'signedIn'] as const).map((state) => (
         <section key={state} className="space-y-2">
           <h3 className="text-2xs font-semibold tracking-wide text-muted-foreground uppercase">
