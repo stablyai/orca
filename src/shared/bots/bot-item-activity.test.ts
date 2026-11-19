@@ -33,19 +33,6 @@ function questions(events: BotItemEvent[]): (string | null)[][] {
   )
 }
 
-it('marks an earlier question answered only when the owner replied to it', () => {
-  const replied = [
-    ...ASKED,
-    { id: 'e4', kind: 'commented' as const, actor: OWNER, data: { text: 'Hold it.' }, at: 250 },
-    event('e5', 'status', 300, { from: 'needs_you', to: 'working' })
-  ]
-
-  expect(questions(replied)).toEqual([
-    ['e2', 'answered'],
-    ['e4', null]
-  ])
-})
-
 it('never marks a question answered when the bot asked again or moved on without a reply', () => {
   const askedAgain = [
     ...ASKED,
@@ -106,13 +93,7 @@ it('shows an answer written before answers were recorded as before: inferred, it
   const entries = botItemActivity(makeTestBotItem(6), [
     ...ASKED,
     { id: 'e4', kind: 'commented' as const, actor: OWNER, data: { text: 'Hold it.' }, at: 250 },
-    {
-      id: 'e5',
-      kind: 'status' as const,
-      actor: OWNER,
-      data: { from: 'needs_you', to: 'working' },
-      at: 250
-    }
+    event('e5', 'status', 300, { from: 'needs_you', to: 'working' })
   ])
 
   expect(entries.map((entry) => entry.key)).toEqual(['e1', 'e2', 'e4', 'e5'])

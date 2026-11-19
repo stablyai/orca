@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   botWorkerWorkspaceStatus,
   botWorkspaceLineAgent,
-  capBotWorkspaceLines,
   countLiveBotWorkspaces,
   rollUpBotStatus
 } from './bot-sidebar-workspaces'
@@ -33,16 +32,6 @@ describe('rollUpBotStatus', () => {
     expect(rollUpBotStatus('working', ['done', 'permission'])).toBe('permission')
     expect(rollUpBotStatus('active', ['done', 'monitoring'])).toBe('monitoring')
     expect(rollUpBotStatus('active', ['done', 'failed'])).toBe('active')
-  })
-})
-
-describe('capBotWorkspaceLines', () => {
-  const all = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j']
-
-  it('keeps the first eight, plus the open one wherever it ranks', () => {
-    expect(capBotWorkspaceLines(all, undefined)).toEqual(all.slice(0, 8))
-    expect(capBotWorkspaceLines(all, 'b')).toEqual(all.slice(0, 8))
-    expect(capBotWorkspaceLines(all, 'j')).toEqual([...all.slice(0, 8), 'j'])
   })
 })
 

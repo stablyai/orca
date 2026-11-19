@@ -12,6 +12,12 @@ import type { JournalSqlWorkRead, JournalSqlWorkResult } from './journal-work-re
 import type { AgentSessionJournalReads } from './journal-reads'
 import type { JournalSqlPointRead, JournalSqlPointReadResult } from './journal-sql-point-read'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
+import type {
+  JournalAcpHistory,
+  JournalAcpHistoryItems,
+  JournalAcpHistoryRead,
+  JournalAcpHistoryRow
+} from './journal-domain-acp-history'
 import type { BotMemorySources } from '../../../shared/bots/bot-memory-source'
 import type { AgentSessionForkedFrom } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type {
@@ -67,6 +73,12 @@ export type JournalSqlReads = AgentSessionJournalReads & {
   /** The newest accepted send whose provider id or opener row is this row. */
   acceptedSendOfRow(itemId: string | null): Promise<AgentJournalSubmission | null>
   historySourceItems(clientMessageIds: readonly string[]): Promise<AgentJournalRenderItem[]>
+  /** One page of ACP catch-up's turn facts, never saved bodies. */
+  acpHistory(read: Omit<JournalAcpHistoryRead, 'kind'>): Promise<JournalAcpHistory>
+  /** Position and placement of the named visible rows. */
+  acpHistoryRows(itemIds: readonly string[]): Promise<JournalAcpHistoryRow[]>
+  /** One byte-budgeted page of saved rows by key, as an item visit shortens them. */
+  acpHistoryItems(itemIds: readonly string[]): Promise<JournalAcpHistoryItems>
   hasProviderTurn(nativeId: string, sinceFence?: number): Promise<boolean>
   savedItemIds(itemIds: readonly string[]): Promise<string[]>
   forkMarkerGroup(
@@ -177,6 +189,12 @@ export function journalSqlReads(
       }
       return items
     },
+    acpHistory: async (input) => (await read({ kind: 'acp-history', ...input })).history,
+    acpHistoryRows: async (itemIds) => (await read({ kind: 'acp-history-rows', itemIds })).rows,
+    acpHistoryItems: async (itemIds) => {
+      const { items, canonical, consumed } = await read({ kind: 'acp-history-items', itemIds })
+      return { items, canonical, consumed }
+    },
     hasProviderTurn: async (namespace, sinceFence) =>
       (
         await read({
@@ -211,6 +229,7 @@ export function journalSqlReads(
     messageOptions: async (clientMessageId) =>
       (await read({ kind: 'message-options', clientMessageId })).options,
     continuationContext: async () => (await read({ kind: 'continuation-context' })).context,
+    continuationSpill: async (spill) => (await read({ kind: 'continuation-spill', spill })).bytes,
     restartCut: async () => (await read({ kind: 'restart-cut' })).cut,
     latestPrompt: async () => (await read({ kind: 'latest-prompt' })).prompt,
     restartProgress: async (cursor) => (await read({ kind: 'restart-progress', cursor })).progress,

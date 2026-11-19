@@ -25,13 +25,22 @@ function mount(uid: string, listed?: ReturnType<typeof makeTestBotItem>) {
   return renderHook(() => useBotItemView(BOT, uid, listed))
 }
 
-it('shows the list row at once, then reopens from its last read and reads only what came after', async () => {
+it('seeds the view immediately, preserves it on an empty refresh and reopens from its last event', async () => {
   const item = makeTestBotItem(11)
   show.mockResolvedValueOnce({ item, events: [event] })
   const first = mount(item.uid, item)
   expect(first.result.current.item).toBe(item)
   expect(first.result.current.eventsRead).toBe(false)
   await waitFor(() => expect(first.result.current.events).toEqual([event]))
+  const shown = first.result.current
+
+  show.mockResolvedValueOnce({ item: { ...item }, events: [] })
+  await act(async () => {
+    emitBotsChangedWindowEvent('local', { botIds: [BOT.id], kinds: ['items'] })
+  })
+  await waitFor(() => expect(show).toHaveBeenCalledTimes(2))
+  expect(first.result.current.item).toBe(shown.item)
+  expect(first.result.current.events).toBe(shown.events)
   first.unmount()
 
   show.mockReturnValueOnce(new Promise(() => {}))
@@ -39,21 +48,4 @@ it('shows the list row at once, then reopens from its last read and reads only w
   expect(again.result.current.events).toEqual([event])
   expect(again.result.current.eventsRead).toBe(true)
   expect(show).toHaveBeenLastCalledWith(BOT, item.uid, { after: 'e5' })
-})
-
-it('keeps the shown state when a change notice changed nothing', async () => {
-  show.mockReset()
-  const item = makeTestBotItem(12)
-  show.mockResolvedValueOnce({ item, events: [event] })
-  const view = mount(item.uid)
-  await waitFor(() => expect(view.result.current.events).toEqual([event]))
-  const shown = view.result.current
-
-  show.mockResolvedValueOnce({ item: { ...item }, events: [] })
-  await act(async () => {
-    emitBotsChangedWindowEvent('local', { botIds: [BOT.id], kinds: ['items'] })
-  })
-  await waitFor(() => expect(show).toHaveBeenCalledTimes(2))
-  expect(view.result.current.item).toBe(shown.item)
-  expect(view.result.current.events).toBe(shown.events)
 })
