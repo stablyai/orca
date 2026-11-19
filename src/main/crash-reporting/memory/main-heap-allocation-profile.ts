@@ -9,7 +9,8 @@ import { readSamplingProfile, summarizeSamplingProfile } from './heap-allocation
  * Main and its worker threads share one ~3.25 GB V8 cage, and it fills before main's own heap limit,
  * so V8's near-heap-limit hooks never fire and a heap snapshot would need the heap's size again.
  * Instead, V8's sampling heap profiler runs once the cage is busy, and its live allocation sites
- * are recorded as the cage nears full. Names come only from Orca's own bundle.
+ * are recorded from 1.5 GB (at most every 30 minutes) and as the cage nears full. Names come only
+ * from Orca's own bundle.
  */
 const SAMPLING_INTERVAL_BYTES = 512 * 1024
 const GB = 2 ** 30
@@ -17,9 +18,13 @@ const MB = 2 ** 20
 // Early enough that a fast fill from here to the cage limit is still sampled.
 const START_BYTES = 1 * GB
 const STOP_BYTES = 0.75 * GB
-const FIRST_READ_BYTES = 2.5 * GB
+// Early enough that a 1.5-2 GB peak under swap names its owner, not only a fill toward the cage limit.
+const FIRST_READ_BYTES = 1.5 * GB
 // Each read runs a full GC on main, so later reads wait for real growth.
 const READ_GROWTH_BYTES = 512 * MB
+// Below this, a read is a diagnosis rather than a crash annotation, so its full GC is rate-limited.
+const UNRATED_READ_BYTES = 2.5 * GB
+const EARLY_READ_MIN_INTERVAL_MS = 30 * 60_000
 const ANNOTATED_SITES = 2
 const ANNOTATION_MAX_LENGTH = 127
 
@@ -33,6 +38,8 @@ type Sampling = {
 }
 
 let sampling: Sampling | undefined
+// Outlives stop/start so a heap that keeps crossing the start line can't buy a GC each time.
+let lastEarlyReadAtMs = Number.NEGATIVE_INFINITY
 
 function post(
   session: Session,
@@ -58,6 +65,13 @@ export function noteMainCageHeap(totalBytes: number, mainBytes: number): void {
   }
   if (!sampling.ready || sampling.reading || totalBytes < sampling.nextReadBytes) {
     return
+  }
+  if (totalBytes < UNRATED_READ_BYTES) {
+    const now = Date.now()
+    if (now - lastEarlyReadAtMs < EARLY_READ_MIN_INTERVAL_MS) {
+      return
+    }
+    lastEarlyReadAtMs = now
   }
   read(sampling, totalBytes, mainBytes)
 }
