@@ -64,6 +64,7 @@ type AgentHistoryRead =
       activeWorktreePath: string | null
       // The status feed's association revision when the scan started; a later one makes these rows stale.
       associationRevision: number
+      capabilities?: readonly string[]
     }
 
 type ScanScope = { scopeFilterPaths: string[]; activeWorktreePath: string | null }
@@ -103,7 +104,8 @@ async function readAgentHistory(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same reader, same container check; the issue rows are the host's AiVaultScanIssue, classified by `kind` like desktop History (an unknown kind still reads as a notice).
     issues: result.issues as AiVaultScanIssue[],
     ...scan,
-    associationRevision
+    associationRevision,
+    capabilities: status.capabilities
   }
 }
 
@@ -192,7 +194,11 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
   // Wait for worktree list before fetching to avoid unrelated history; once loaded, proceed even if workspace is missing.
   // Not gated on the connection: the query keeps its connected-edge watcher, and a read while down fails fast.
   const enabled = client !== null && worktreesLoaded
-  const result = useHostQuery(historyQuery, host, target, input, { enabled })
+  const result = useHostQuery(historyQuery, host, target, input, {
+    enabled,
+    refetchInterval:
+      connState === 'connected' ? (data) => (data?.kind === 'ready' ? 15_000 : false) : false
+  })
   const { data: read, error, isFetching, isRefetching, refetch } = result
 
   // A changed association moves rows between providers and chats: a scope whose last read started before it
@@ -297,6 +303,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
 
   return {
     connState,
+    capabilities: read?.kind === 'ready' ? read.capabilities : undefined,
     scope,
     screenState,
     refreshing,

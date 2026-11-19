@@ -5,7 +5,10 @@ import {
 } from '../../../../src/navigation/workspace-execution-host'
 import { useLocalSearchParams } from 'expo-router'
 import { MobileWebShellScreen } from '../../../../src/mobile-web-shell/MobileWebShellScreen'
-import { shellScreenRoute } from '../../../../src/mobile-web-shell/routing/shell-screen-route'
+import {
+  shellScreenRoute,
+  shellScreenRouteKey
+} from '../../../../src/mobile-web-shell/routing/shell-screen-route'
 import { PageRouteUnavailableScreen } from '../../../../src/mobile-web-shell/presentation/PageRouteUnavailableScreen'
 import { firstParam } from '../../../../src/navigation/route-param-reader'
 
@@ -17,13 +20,19 @@ export default withWorkspaceRoute(function MobileAgentSessionHistoryScreen() {
     worktreeId?: string | string[]
     name?: string | string[]
     origin?: string | string[]
+    action?: string | string[]
+    sessionId?: string | string[]
   }>()
   const hostId = firstParam(params.hostId)
   const worktreeId = firstParam(params.worktreeId)
   const name = firstParam(params.name)
   const origin = firstParam(params.origin)
   const executionHost = useWorkspaceExecutionHost()
+  const action = firstParam(params.action)
+  const sessionId = firstParam(params.sessionId)
   const routeParams = {
+    ...(['cli', 'handoff'].includes(action) ? { action } : {}),
+    ...(sessionId ? { sessionId } : {}),
     ...(name === '' ? {} : { name }),
     ...(origin === '' ? {} : { origin }),
     ...workspaceRouteParams(executionHost)
@@ -41,5 +50,5 @@ export default withWorkspaceRoute(function MobileAgentSessionHistoryScreen() {
     return <PageRouteUnavailableScreen hostId={hostId} />
   }
   // Key by route to dispose the old grant-bearing bridge and await fresh init; prop changes would retain the previous route’s grants.
-  return <MobileWebShellScreen key={route.pathname} hostId={hostId} route={route} />
+  return <MobileWebShellScreen key={shellScreenRouteKey(route)} hostId={hostId} route={route} />
 })

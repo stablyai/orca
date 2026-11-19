@@ -14,6 +14,8 @@ export const sessionCreatedTerminalTabSchema = z
       id: z.string().min(1),
       terminal: salvagedOptional('terminal', z.string().nullable()),
       title: salvagedOptional('title', z.string()),
+      parentTabId: salvagedOptional('parentTabId', z.string()),
+      leafId: salvagedOptional('leafId', z.string()),
       terminalTheme: salvagedOptional('terminalTheme', z.unknown())
     })
   })

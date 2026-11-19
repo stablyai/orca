@@ -1,3 +1,5 @@
+import { getMobileNativeChatCliForkActions } from './native-chat/history/mobile-native-chat-cli-fork'
+import { resolveMobileNativeChat } from './native-chat/conversation/mobile-native-chat-eligibility'
 import { useContext, type RefObject } from 'react'
 import type { HostInstance } from 'react-native'
 import {
@@ -7,6 +9,7 @@ import {
   GitBranch,
   ListChecks,
   Plus,
+  SquareTerminal,
   SquareChevronRight
 } from 'lucide-react-native'
 import { MobileAgentSessionHistoryIcon } from '../agent-history/MobileAgentSessionHistoryIcon'
@@ -51,6 +54,32 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
   } = controller
   const botActions = useContext(MobileSessionBotActionsContext)
   const tabActionsDisabled = createTabBusy || connState !== 'connected'
+  const resolution = resolveMobileNativeChat(
+    activeSessionTab,
+    controller.nativeChatTranscriptIsLocalReadable
+  )
+  const chatActions: ActionSheetAction[] = !showNativeChat
+    ? []
+    : activeSessionTab?.type === 'agent-session'
+      ? getMobileNativeChatCliForkActions({
+          controller,
+          tab: activeSessionTab,
+          onDismiss: () => setShowHeaderMoreActions(false)
+        })
+      : showAgentSessionHistoryAction &&
+          resolution?.sessionId &&
+          (resolution.agent === 'codex' || resolution.agent === 'claude')
+        ? [
+            {
+              id: 'resumeInNewCli',
+              label: t('session.nativeChatCliFork.resumeInNewCli', 'Resume in New CLI'),
+              icon: SquareTerminal,
+              disabled: tabActionsDisabled,
+              onPress: () =>
+                openAgentSessionHistory({ action: 'cli', sessionId: resolution.sessionId ?? '' })
+            }
+          ]
+        : []
   const panels: ActionSheetAction[] = [
     ...(!isFloatingWorkspaceRoute
       ? [
@@ -122,6 +151,10 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
       ? 'terminal'
       : null
   const view: ActionSheetAction[] = [
+    ...chatActions.map((action) => ({
+      ...action,
+      disabled: tabActionsDisabled || action.disabled
+    })),
     ...(canSplitTerminals || terminalSplitActive
       ? [
           {

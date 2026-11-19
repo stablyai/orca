@@ -449,7 +449,11 @@
       "agentSessionHistory": "Agent Session History"
     },
     "resume": {
-      "hostConnectionChanged": "Host connection changed. Retry resume."
+      "hostConnectionChanged": "Host connection changed. Retry resume.",
+      "forkUnsupported": "This agent cannot resume in a new CLI conversation.",
+      "cliUpdateRequired": "Update Orca on this host to resume this chat in a new CLI.",
+      "refreshFailed": "Unable to refresh this session. Try again.",
+      "sessionChanged": "This session is no longer available. Refresh history and choose it again."
     },
     "interrupted": {
       "failed": "Couldn't resume the interrupted chats.",
@@ -469,6 +473,23 @@
       "agents": "Agents",
       "sort": "Sort",
       "noAgents": "No agents"
+    },
+    "actions": {
+      "title": "Session actions",
+      "handoff": "Hand off to Another Agent",
+      "updateHost": "Update Orca on this host to use this action",
+      "resume": "Resume",
+      "resumePicker": "Resume…",
+      "handoffPicker": "Hand off to Another Agent…"
+    },
+    "handoff": {
+      "detectFailed": "Could not detect agents on this host.",
+      "detecting": "Detecting agents on this workspace host…",
+      "context": "Start a fresh session with the latest conversation context.",
+      "empty": "No enabled agents were detected on this host.",
+      "noContext": "No conversation context is available to hand off.",
+      "updateRequired": "Update Orca on this host to hand off a session.",
+      "unconfirmed": "The agent started, but context delivery was not confirmed. Check the new session before retrying."
     }
   },
   "diagnostics": {

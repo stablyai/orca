@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { MobileForkMarkedName } from '../session/fork/MobileForkMarkedName'
 import { mobileForkAccessibleName } from '../session/fork/mobile-fork-marked-name'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { ChevronDown, Play } from 'lucide-react-native'
+import { ChevronDown, Play, Ellipsis } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -28,6 +28,8 @@ type Props = {
   showCurrentWorktreeBadge: boolean
   resumeActionState?: MobileAgentHistoryResumeActionState
   onResume?: (session: AiVaultSession) => void | Promise<void>
+  onActions?: (session: AiVaultSession) => void
+  resumeLabel?: string
   onPress: () => void
 }
 
@@ -38,6 +40,8 @@ export function AgentHistorySessionRow({
   showCurrentWorktreeBadge,
   resumeActionState,
   onResume,
+  onActions,
+  resumeLabel,
   onPress
 }: Props) {
   useMobileColorScheme()
@@ -52,6 +56,7 @@ export function AgentHistorySessionRow({
   return (
     <Pressable
       onPress={onPress}
+      onLongPress={session && onActions ? () => onActions(session) : undefined}
       accessibilityRole="button"
       accessibilityState={{ expanded }}
       accessibilityLabel={card.forked ? mobileForkAccessibleName(card.title) : card.title}
@@ -114,9 +119,10 @@ export function AgentHistorySessionRow({
               hitSlop={8}
               accessibilityRole="button"
               accessibilityLabel={
-                isAntigravityReferenceSession(session)
+                resumeLabel ??
+                (isAntigravityReferenceSession(session)
                   ? t('agentHistory.sessionHistoryList.continueInCli', 'Continue in CLI')
-                  : t('agentHistory.sessionHistoryList.resumeSession', 'Resume agent session')
+                  : t('agentHistory.sessionHistoryList.resumeSession', 'Resume agent session'))
               }
             >
               {resumeActionState?.loading ? (
@@ -124,6 +130,21 @@ export function AgentHistorySessionRow({
               ) : (
                 <Play size={14} color={colors.textPrimary} fill={colors.textPrimary} />
               )}
+            </Pressable>
+          ) : null}
+          {session && onActions ? (
+            <Pressable
+              style={styles.resumeButton}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={t('agentHistory.actions.title', 'Session actions')}
+              disabled={resumeDisabled}
+              onPress={(event) => {
+                event.stopPropagation()
+                onActions(session)
+              }}
+            >
+              <Ellipsis size={16} color={colors.textSecondary} />
             </Pressable>
           ) : null}
         </View>

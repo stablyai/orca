@@ -19,6 +19,8 @@ type Props = {
   showCurrentWorktreeBadges: boolean
   resumeActionStateBySessionId?: ReadonlyMap<string, MobileAgentHistoryResumeActionState>
   onResume?: (session: AiVaultSession) => void | Promise<void>
+  onActions?: (session: AiVaultSession) => void
+  resumeLabel?: string
   onRefresh: () => void
   /** Clears the bottom search bar floating over the list. */
   bottomPadding?: number
@@ -31,6 +33,8 @@ export function MobileAgentSessionHistoryList({
   showCurrentWorktreeBadges,
   resumeActionStateBySessionId,
   onResume,
+  onActions,
+  resumeLabel,
   onRefresh,
   bottomPadding = 0
 }: Props) {
@@ -50,12 +54,16 @@ export function MobileAgentSessionHistoryList({
         showCurrentWorktreeBadge={showCurrentWorktreeBadges}
         resumeActionState={resumeActionStateBySessionId?.get(item.id)}
         onResume={onResume}
+        onActions={onActions}
+        resumeLabel={resumeLabel}
         onPress={() => toggleExpanded(item.id)}
       />
     ),
     [
       expandedId,
       onResume,
+      onActions,
+      resumeLabel,
       resumeActionStateBySessionId,
       sessionsById,
       showCurrentWorktreeBadges,

@@ -149,8 +149,8 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     })
   }
 
-  const openAgentSessionHistory = () => {
-    const params = new URLSearchParams({ name: worktreeName || '', origin: 'session' })
+  const openAgentSessionHistory = (options?: { action: 'cli'; sessionId: string }) => {
+    const params = new URLSearchParams({ name: worktreeName || '', origin: 'session', ...options })
     router.push(
       workspaceRouteHref(
         `/h/${hostId}/agent-history/${encodeURIComponent(worktreeId)}?${params.toString()}`,
@@ -159,7 +159,7 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     )
   }
   const showAgentSessionHistoryAction =
-    !isFolderWorkspaceRoute && !isFloatingWorkspaceRoute && agentSessionHistorySupported === true
+    !isFloatingWorkspaceRoute && agentSessionHistorySupported === true
   const showChecksAction = shouldShowSessionHeaderChecksAction({
     isFolderWorkspaceRoute: isFolderWorkspaceRoute || isFloatingWorkspaceRoute,
     repoContextLoaded: prRepoContextLoaded,

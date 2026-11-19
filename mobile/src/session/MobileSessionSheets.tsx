@@ -294,10 +294,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         // Back to the new-tab sheet, where the chosen profile now shows.
         onAfterClose={() => setShowCreateTabDrawer(true)}
       />
-      <MobileAgentSessionTabActionSheet
-        controller={controller}
-        workspaceOnPairedHost={onPairedHost}
-      />
+      <MobileAgentSessionTabActionSheet controller={controller} />
       <ActionSheetModal
         visible={leaveDrafts != null}
         title={t('session.sheets.unsavedMarkdown', 'Unsaved markdown changes')}

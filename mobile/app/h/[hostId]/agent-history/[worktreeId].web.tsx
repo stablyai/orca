@@ -10,6 +10,8 @@ export default withWorkspaceRoute(function MobileAgentSessionHistoryScreen() {
     worktreeId?: string | string[]
     name?: string | string[]
     origin?: string | string[]
+    action?: string | string[]
+    sessionId?: string | string[]
   }>()
   return (
     <MobileAgentSessionHistoryPanel
@@ -17,6 +19,8 @@ export default withWorkspaceRoute(function MobileAgentSessionHistoryScreen() {
       worktreeId={firstParam(params.worktreeId)}
       name={firstParam(params.name)}
       origin={firstParam(params.origin)}
+      action={firstParam(params.action)}
+      sessionId={firstParam(params.sessionId)}
     />
   )
 })

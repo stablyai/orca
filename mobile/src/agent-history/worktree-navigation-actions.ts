@@ -1,4 +1,5 @@
-import { GitBranch } from 'lucide-react-native'
+import { supportsMobileExistingAgentLaunch } from '../session/agent-launch/mobile-existing-agent-launch'
+import { GitBranch, Play, MessageSquarePlus } from 'lucide-react-native'
 import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
 import { colors } from '../theme/mobile-theme'
 import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
@@ -61,6 +62,38 @@ export function buildWorktreeNavigationActions(args: Args): ActionSheetAction[] 
         args.onDone()
       }
     })
+    for (const kind of ['resume', 'handoff'] as const) {
+      const supported =
+        kind === 'resume' || supportsMobileExistingAgentLaunch(args.hostCapabilities)
+      actions.push({
+        id: kind === 'resume' ? 'resumeAgentSession' : 'handoffAgentSession',
+        label:
+          kind === 'resume'
+            ? translate('agentHistory.actions.resumePicker', 'Resume…')
+            : translate('agentHistory.actions.handoffPicker', 'Hand off to Another Agent…'),
+        icon: kind === 'resume' ? Play : MessageSquarePlus,
+        disabled: !supported,
+        hint: supported
+          ? undefined
+          : translate(
+              'agentHistory.actions.updateHost',
+              'Update Orca on this host to use this action'
+            ),
+        onPress: () => {
+          const params = new URLSearchParams({
+            name: args.worktreeName,
+            ...(kind === 'handoff' ? { action: kind } : {})
+          })
+          args.navigate(
+            workspaceRouteHref(
+              `/h/${encodeURIComponent(args.hostId)}/agent-history/${encodeURIComponent(args.worktreeId)}?${params}`,
+              executionHost
+            )
+          )
+          args.onDone()
+        }
+      })
+    }
   }
   return actions
 }

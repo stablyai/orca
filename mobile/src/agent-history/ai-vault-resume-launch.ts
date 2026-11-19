@@ -4,6 +4,7 @@ import type {
 } from '../../../src/shared/agent-session/lifecycle/agent-session-resume'
 import {
   buildAiVaultLocalResumeStartup,
+  buildAiVaultForkStartup,
   type AiVaultResumeCommandSession,
   type AiVaultResumeLaunchSettings
 } from '../../../src/shared/ai-vault/resume/ai-vault-resume-startup'
@@ -39,6 +40,7 @@ export function readMobileAiVaultResumeHost(statusResult: unknown) {
 
 export type MobileAiVaultResumeLaunch = {
   command: string
+  cwd?: string
   env?: Record<string, string>
   envToDelete?: string[]
   launchConfig?: SleepingAgentLaunchConfig
@@ -51,18 +53,36 @@ export function buildMobileAiVaultResumeLaunch(args: {
   workspacePlatform: NodeJS.Platform
   hostTerminalWindowsShell?: string | null
   settings?: AiVaultResumeLaunchSettings | null
+  fork?: boolean
 }): MobileAiVaultResumeLaunch {
   const commandOverride = args.settings?.agentCmdOverrides?.[args.session.agent]
+  const host = resolveAiVaultResumeHostShell({
+    session: args.session,
+    workspacePlatform: args.workspacePlatform,
+    localLiveShell: () => resolveWindowsShellStartupFamily(args.hostTerminalWindowsShell)
+  })
+  const fork = args.fork
+    ? buildAiVaultForkStartup({
+        session: args.session,
+        host,
+        settings: args.settings,
+        commandOverride
+      })
+    : null
+  if (args.fork && !fork) {
+    throw new Error(
+      translate(
+        'agentHistory.resume.forkUnsupported',
+        'This agent cannot resume in a new CLI conversation.'
+      )
+    )
+  }
   const startup =
+    fork ??
     buildAiVaultRemoteResumeStartup(args.session, commandOverride) ??
     buildAiVaultLocalResumeStartup({
       session: args.session,
-      host: resolveAiVaultResumeHostShell({
-        session: args.session,
-        workspacePlatform: args.workspacePlatform,
-        // Why: the command is typed into the host's new pane, so quote for its live shell, not the phone's.
-        localLiveShell: () => resolveWindowsShellStartupFamily(args.hostTerminalWindowsShell)
-      }),
+      host,
       settings: args.settings,
       commandOverride,
       embedCwd: true
@@ -98,6 +118,7 @@ export async function resumeAiVaultSessionInTerminal(
     {
       worktree: `id:${worktreeId}`,
       ...(launchAtCreate ? { command: launch.command } : {}),
+      ...(launch.cwd ? { cwd: launch.cwd } : {}),
       ...(launch.env ? { env: launch.env } : {}),
       ...(launch.envToDelete ? { envToDelete: launch.envToDelete } : {}),
       ...(launch.launchConfig ? { launchConfig: launch.launchConfig } : {}),

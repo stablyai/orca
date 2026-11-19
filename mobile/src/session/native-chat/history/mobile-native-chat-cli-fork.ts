@@ -8,10 +8,8 @@ import { SESSION_TABS_CHAT_FORK_CLI_RUNTIME_CAPABILITY } from '../../../../../sr
 export function canOfferMobileNativeChatCliFork(args: {
   agent: string
   hostCapabilities: readonly string[] | undefined
-  workspaceOnPairedHost: boolean
 }): boolean {
   return (
-    args.workspaceOnPairedHost &&
     agentForksConversations(args.agent) &&
     args.hostCapabilities?.includes(SESSION_TABS_CHAT_FORK_CLI_RUNTIME_CAPABILITY) === true
   )
@@ -20,20 +18,11 @@ export function canOfferMobileNativeChatCliFork(args: {
 export function getMobileNativeChatCliForkActions(args: {
   controller: Pick<MobileSessionController, 'client' | 'hostCapabilities' | 'handleCreateTerminal'>
   tab: { sessionId: string; agent: string } | null
-  workspaceOnPairedHost: boolean
   onDismiss: () => void
 }): ActionSheetAction[] {
   const { client, hostCapabilities, handleCreateTerminal } = args.controller
   const { tab } = args
-  if (
-    !client ||
-    !tab ||
-    !canOfferMobileNativeChatCliFork({
-      agent: tab.agent,
-      hostCapabilities,
-      workspaceOnPairedHost: args.workspaceOnPairedHost
-    })
-  ) {
+  if (!client || !tab || !agentForksConversations(tab.agent)) {
     return []
   }
   return [
@@ -41,6 +30,13 @@ export function getMobileNativeChatCliForkActions(args: {
       id: 'resumeInNewCli',
       label: translate('session.nativeChatCliFork.resumeInNewCli', 'Resume in New CLI'),
       icon: SquareTerminal,
+      disabled: !canOfferMobileNativeChatCliFork({ agent: tab.agent, hostCapabilities }),
+      hint: canOfferMobileNativeChatCliFork({ agent: tab.agent, hostCapabilities })
+        ? undefined
+        : translate(
+            'agentHistory.actions.updateHost',
+            'Update Orca on this host to use this action'
+          ),
       onPress: () => {
         args.onDismiss()
         void handleCreateTerminal(undefined, {

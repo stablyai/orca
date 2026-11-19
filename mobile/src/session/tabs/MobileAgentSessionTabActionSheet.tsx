@@ -8,11 +8,9 @@ import type { MobileSessionController } from '../use-mobile-session-controller'
 
 /** The long-pressed chat tab's actions: continue in a CLI, Allow Auto-Close on a kept worker, close. */
 export function MobileAgentSessionTabActionSheet({
-  controller,
-  workspaceOnPairedHost
+  controller
 }: {
   controller: MobileSessionController
-  workspaceOnPairedHost: boolean
 }) {
   const t = useMobileTranslation()
   const {
@@ -37,7 +35,6 @@ export function MobileAgentSessionTabActionSheet({
         ...getMobileNativeChatCliForkActions({
           controller,
           tab,
-          workspaceOnPairedHost,
           onDismiss: dismiss
         }),
         ...workerActions,
