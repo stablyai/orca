@@ -1,7 +1,9 @@
 import type { Session } from 'electron'
 
-// Guests whose current identity changes request headers, and the session each one loads in.
-const demandingGuests = new Map<number, Session>()
+// Whether a guest's requests need a header rewrite, from its page and from site iframes in it.
+type GuestDemand = { session: Session; page: boolean; frame: boolean }
+const guests = new Map<number, GuestDemand>()
+const demandingGuestsBySession = new Map<Session, number>()
 const watchers = new Map<Session, Set<() => void>>()
 
 function notify(session: Session): void {
@@ -10,41 +12,61 @@ function notify(session: Session): void {
   }
 }
 
-/** Set at each identity change; true while the guest's requests need a header rewrite. */
-export function setBrowserGuestUserAgentDemand(
-  session: Session,
-  guestId: number,
-  needed: boolean
-): void {
-  const previous = demandingGuests.get(guestId)
-  if (needed) {
-    demandingGuests.set(guestId, session)
+function count(session: Session, delta: 1 | -1): void {
+  const next = (demandingGuestsBySession.get(session) ?? 0) + delta
+  if (next > 0) {
+    demandingGuestsBySession.set(session, next)
   } else {
-    demandingGuests.delete(guestId)
+    demandingGuestsBySession.delete(session)
   }
-  if (previous && previous !== session) {
-    notify(previous)
-  }
-  if (previous !== (needed ? session : undefined)) {
+  if (next === 0 || (delta === 1 && next === 1)) {
     notify(session)
   }
 }
 
-export function clearBrowserGuestUserAgentDemand(guestId: number): void {
-  const previous = demandingGuests.get(guestId)
-  if (previous) {
-    demandingGuests.delete(guestId)
-    notify(previous)
+function write(guestId: number, next: GuestDemand | null): void {
+  const previous = guests.get(guestId)
+  const was = previous && (previous.page || previous.frame) ? previous.session : null
+  const now = next && (next.page || next.frame) ? next.session : null
+  if (next) {
+    guests.set(guestId, next)
+  } else {
+    guests.delete(guestId)
+  }
+  if (was !== now) {
+    if (was) {
+      count(was, -1)
+    }
+    if (now) {
+      count(now, 1)
+    }
   }
 }
 
+/** The guest's page demand; `frames` false also drops iframe demand (a new document committed). */
+export function setBrowserGuestPageUserAgentDemand(
+  session: Session,
+  guestId: number,
+  page: boolean,
+  frames: 'keep' | 'clear' = 'keep'
+): void {
+  const previous = guests.get(guestId)
+  const frame = frames === 'keep' && previous?.session === session && previous.frame
+  write(guestId, { session, page, frame })
+}
+
+/** A site iframe keeps the policy on until the next document commits. */
+export function markBrowserGuestFrameUserAgentDemand(session: Session, guestId: number): void {
+  const previous = guests.get(guestId)
+  write(guestId, { session, page: previous?.session === session && previous.page, frame: true })
+}
+
+export function clearBrowserGuestUserAgentDemand(guestId: number): void {
+  write(guestId, null)
+}
+
 export function hasBrowserSessionUserAgentDemand(session: Session): boolean {
-  for (const demanding of demandingGuests.values()) {
-    if (demanding === session) {
-      return true
-    }
-  }
-  return false
+  return demandingGuestsBySession.has(session)
 }
 
 export function watchBrowserSessionUserAgentDemand(

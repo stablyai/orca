@@ -171,6 +171,7 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
       publishedUrl = guest.getURL()
       publishedHistory = readHistory()
       this.pendingNavigationByGuestId.delete(guest.id)
+      this.settleUserAgentDemand(guest, 'clear')
       // Committing makes the hidden error obsolete; a later abort must not restore it.
       this.clearedLoadErrorsByGuestId.delete(guest.id)
       this.certificateTrustController?.onMainFrameNavigationCommitted(guest.id, url)

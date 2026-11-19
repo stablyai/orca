@@ -17,8 +17,7 @@ function withoutHash(rawUrl: string): string {
  */
 export function createFormPostNavigationTracker(): {
   submitted: (actionUrl: string) => void
-  started: (url: string) => void
-  redirected: () => void
+  started: (url: string, current: { url: string; post: boolean }) => void
   isPost: () => boolean
 } {
   let submitted: { url: string; at: number } | null = null
@@ -27,16 +26,15 @@ export function createFormPostNavigationTracker(): {
     submitted: (actionUrl) => {
       submitted = { url: withoutHash(actionUrl), at: performance.now() }
     },
-    started: (url) => {
+    // Errs toward protecting: a redirected POST keeps the mark (307/308 keep the method), and
+    // so does reloading a POST result, which posts again without a new submission.
+    started: (url, current) => {
       post =
-        submitted !== null &&
-        performance.now() - submitted.at < FORM_POST_NAVIGATION_MS &&
-        withoutHash(url) === submitted.url
+        (submitted !== null &&
+          performance.now() - submitted.at < FORM_POST_NAVIGATION_MS &&
+          withoutHash(url) === submitted.url) ||
+        (current.post && withoutHash(url) === withoutHash(current.url))
       submitted = null
-    },
-    // A 301/302/303 turns the POST into a GET, and the GET result reloads safely.
-    redirected: () => {
-      post = false
     },
     isPost: () => post
   }

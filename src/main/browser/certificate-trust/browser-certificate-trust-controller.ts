@@ -203,10 +203,9 @@ export class BrowserCertificateTrustController {
     if (!granted) {
       return { ok: false, reason: 'ineligible' }
     }
+    const navigationUrl = pending.navigationUrl
     this.clearPending(webContentsId, true)
-    void this.requestGuard.settleGrant(guest.session, () =>
-      guest.isDestroyed() ? undefined : guest.loadURL(pending.navigationUrl)
-    )
+    void guest.loadURL(navigationUrl).catch(() => {})
     return { ok: true }
   }
 

@@ -222,7 +222,7 @@ export function installBrowserGuestDiscardProtection(
   ): void => {
     if (details.isMainFrame && !details.isSameDocument) {
       pendingMethod = null
-      formPost.started(details.url)
+      formPost.started(details.url, { url: guest.getURL(), post: owner.currentPost })
       owner.navigating = true
       invalidate()
     } else if (!details.isMainFrame) {
@@ -234,13 +234,6 @@ export function installBrowserGuestDiscardProtection(
     owner.currentPost = pendingMethod !== null ? pendingMethod !== 'GET' : formPost.isPost()
     owner.mediaGranted = false
     publish()
-  }
-  const redirected = (
-    details: Electron.Event<Electron.WebContentsDidRedirectNavigationEventParams>
-  ): void => {
-    if (details.isMainFrame) {
-      formPost.redirected()
-    }
   }
   const settled = (): void => {
     owner.navigating = false
@@ -279,7 +272,6 @@ export function installBrowserGuestDiscardProtection(
   guest.on('render-process-gone', unresponsive)
   guest.on('frame-created', frameCreated)
   guest.on('did-start-navigation', navigation)
-  guest.on('did-redirect-navigation', redirected)
   guest.on('did-navigate', committed)
   guest.on('did-navigate-in-page', inPageNavigation)
   return () => {
@@ -296,7 +288,6 @@ export function installBrowserGuestDiscardProtection(
     guest.off('render-process-gone', unresponsive)
     guest.off('frame-created', frameCreated)
     guest.off('did-start-navigation', navigation)
-    guest.off('did-redirect-navigation', redirected)
     guest.off('did-navigate', committed)
     guest.off('did-navigate-in-page', inPageNavigation)
   }

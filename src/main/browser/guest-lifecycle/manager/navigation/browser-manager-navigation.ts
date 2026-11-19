@@ -12,7 +12,10 @@ import type {
   CdpUserAgentOverrideState
 } from './browser-user-agent-override-state'
 import { BrowserManagerVisibility } from '../browser-manager-visibility'
-import { setBrowserGuestUserAgentDemand } from '../../../identity/requests/browser-session-ua-demand'
+import {
+  markBrowserGuestFrameUserAgentDemand,
+  setBrowserGuestPageUserAgentDemand
+} from '../../../identity/requests/browser-session-ua-demand'
 import { teamsRequestUserAgent } from '../../../identity/browser-site-user-agent'
 
 export abstract class BrowserManagerNavigation extends BrowserManagerVisibility {
@@ -88,13 +91,34 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
     return this.writeTabIdentityOverride(guest, identity, guest.getUserAgent())
   }
 
-  /** Synchronous so the session's header policy is listening before this navigation's request. */
+  /**
+   * Synchronous so the session's header policy listens before this navigation's request. Until
+   * the target commits, the current page (or a navigation that turns into a download) still needs
+   * its own rewrites.
+   */
   private noteUserAgentDemand(
     guest: Electron.WebContents,
     url: string,
     identity: BrowserTabIdentity
   ): void {
-    setBrowserGuestUserAgentDemand(guest.session, guest.id, rewritesRequestHeaders(url, identity))
+    const committed = guest.getURL()
+    setBrowserGuestPageUserAgentDemand(
+      guest.session,
+      guest.id,
+      rewritesRequestHeaders(url, identity) ||
+        rewritesRequestHeaders(committed, this.resolveGuestTabIdentity(guest, committed))
+    )
+  }
+
+  /** At commit, and after CDP detach drops a mobile identity: the committed page's own demand. */
+  protected settleUserAgentDemand(guest: Electron.WebContents, frames: 'keep' | 'clear'): void {
+    const url = guest.getURL()
+    setBrowserGuestPageUserAgentDemand(
+      guest.session,
+      guest.id,
+      rewritesRequestHeaders(url, this.resolveGuestTabIdentity(guest, url)),
+      frames
+    )
   }
 
   /** A site iframe (e.g. Teams inside another page) keeps the policy on until the next page. */
@@ -105,7 +129,7 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
       processIdentity: getBrowserProcessUserAgentIdentity()
     })
     if (rewritesRequestHeaders(url, identity)) {
-      setBrowserGuestUserAgentDemand(guest.session, guest.id, true)
+      markBrowserGuestFrameUserAgentDemand(guest.session, guest.id)
     }
   }
 

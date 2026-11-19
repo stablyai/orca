@@ -39,19 +39,18 @@ function certificateIdentitiesMatch(
 export class BrowserCertificateRequestGuard {
   private readonly grantsByGuestId = new Map<number, CertificateTrustGrant>()
   private readonly grantSessionByGuestId = new Map<number, Session>()
+  // Keyed by object so proxy readiness notices find their session without a scan.
   private readonly guardedSessions = new Map<
-    Session,
-    { release: (() => void) | null; stop: () => void }
+    object,
+    { session: Session; release: (() => void) | null; stop: () => void }
   >()
   private readonly acceptedIdentityBySession = new Map<Session, Map<string, CertificateIdentity>>()
-  private readonly unsettledFirstGrants = new Set<Session>()
 
   constructor(private readonly dependencies: RequestGuardDependencies) {
     onProxySessionReadinessChanged((proxySession) => {
-      for (const session of this.guardedSessions.keys()) {
-        if (session === proxySession) {
-          this.refresh(session)
-        }
+      const guarded = this.guardedSessions.get(proxySession)
+      if (guarded) {
+        this.refresh(guarded.session)
       }
     })
   }
@@ -64,6 +63,7 @@ export class BrowserCertificateRequestGuard {
     session.extensions?.on('extension-loaded', refresh)
     session.extensions?.on('extension-unloaded', refresh)
     this.guardedSessions.set(session, {
+      session,
       release: null,
       stop: () => {
         session.extensions?.off('extension-loaded', refresh)
@@ -79,7 +79,6 @@ export class BrowserCertificateRequestGuard {
       return
     }
     this.guardedSessions.delete(session)
-    this.unsettledFirstGrants.delete(session)
     guarded.stop()
     guarded.release?.()
     this.acceptedIdentityBySession.delete(session)
@@ -94,8 +93,8 @@ export class BrowserCertificateRequestGuard {
    * Any session listener makes every page request wait on main (Electron's per-request loader
    * gate), so the guard listens only while it can block something: until the newest proxy policy
    * applies, once a bad certificate is accepted (Chromium then trusts it for every tab), and while
-   * extensions need request decisions. Requests already in flight keep their route, redirects
-   * included.
+   * extensions need request decisions. A request already in flight when it starts listening keeps
+   * its unguarded route, redirects included.
    */
   private refresh(session: Session): void {
     const guarded = this.guardedSessions.get(session)
@@ -133,17 +132,6 @@ export class BrowserCertificateRequestGuard {
     })
   }
 
-  /**
-   * Requests that started before the guard listened keep their route through redirects, so a
-   * session's first grant ends them before the reload lets Chromium cache this trust.
-   */
-  async settleGrant(session: Session, reload: () => Promise<void> | undefined): Promise<void> {
-    if (this.unsettledFirstGrants.delete(session)) {
-      await Promise.resolve(session.closeAllConnections?.()).catch(() => {})
-    }
-    await reload()?.catch(() => {})
-  }
-
   canOfferCertificate(session: Session, identity: CertificateIdentity): boolean {
     if (!this.guardedSessions.has(session)) {
       return false
@@ -167,9 +155,6 @@ export class BrowserCertificateRequestGuard {
     if (!acceptedByEndpoint) {
       acceptedByEndpoint = new Map()
       this.acceptedIdentityBySession.set(session, acceptedByEndpoint)
-    }
-    if (acceptedByEndpoint.size === 0) {
-      this.unsettledFirstGrants.add(session)
     }
     acceptedByEndpoint.set(grant.secureEndpoint, {
       secureEndpoint: grant.secureEndpoint,
