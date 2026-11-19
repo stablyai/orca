@@ -57,7 +57,7 @@ function settleDeferredOfClosedTabs(
     const entry = getTerminalSessionNameEntry(deferred.executionHostId, deferred.sessionId)
     // Only the tab's own name, and not the stale echo of what this client's rename replaced: one
     // moved to another tab since stays with it.
-    if (entry?.tabId !== tabId || deferred.name === deferred.replacedName) {
+    if (entry?.tabId !== tabId || deferred.replacedNames.includes(deferred.name)) {
       continue
     }
     if (deferred.name) {
@@ -145,7 +145,7 @@ export function reconcileTerminalSessionNames(
         sessionId: binding.providerSession.id,
         agent: binding.agent,
         name,
-        replacedName: write.replacedName,
+        replacedNames: write.replacedNames,
         due
       })
       result.recheckAt = Math.min(result.recheckAt ?? due, due)
@@ -160,7 +160,12 @@ export function reconcileTerminalSessionNames(
     // and the tab shows that name; it never names a different session.
     const pending = pendingHostRenameByTabId.get(tab.id)
     pendingHostRenameByTabId.delete(tab.id)
-    if (pending?.sessionId === binding.providerSession.id && pending.name === name) {
+    if (
+      pending?.sessionId === binding.providerSession.id &&
+      pending.name === name &&
+      // A name another tab or window saved for this session since then is newer and stands.
+      !(entry && !owned && entry.savedAt > pending.savedAt)
+    ) {
       saveTerminalSessionName({
         executionHostId: binding.executionHostId,
         sessionId: binding.providerSession.id,

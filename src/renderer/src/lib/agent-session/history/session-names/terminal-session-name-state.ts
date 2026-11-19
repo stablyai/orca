@@ -24,19 +24,22 @@ export type DeferredObservation = {
   sessionId: string
   agent: AiVaultAgent
   name: string
-  /** The name before this client's rename: seeing it again is that rename's stale echo. */
-  replacedName: string
+  /** Names this client's renames replaced inside the window: seeing one again is a stale echo. */
+  replacedNames: readonly string[]
   due: number
 }
 
 // This client's renames still echoing back, by tab: only to hold back stale names in passes.
 export const localNameWriteByTabId = new Map<
   string,
-  { at: number; name: string; replacedName: string }
+  { at: number; name: string; replacedNames: readonly string[] }
 >()
 // A person's rename of a tab whose session was known but whose host was not: applied once, to that
 // session, when its host resolves; never moved to another session.
-export const pendingHostRenameByTabId = new Map<string, { sessionId: string; name: string }>()
+export const pendingHostRenameByTabId = new Map<
+  string,
+  { sessionId: string; name: string; savedAt: number }
+>()
 // What a tab showed while its grace window held a pass back; settled when the window ends, even if
 // the tab has closed by then.
 export const deferredByTabId = new Map<string, DeferredObservation>()

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   recordTerminalTabRename,
   resetTerminalSessionNameRecordingForTest
@@ -33,6 +33,10 @@ const pass = (tabs: FixtureTab[], now = LATER) =>
   reconcileTerminalSessionNames(makeTerminalNamesState(tabs), now)
 
 describe('terminal session name recording', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   beforeEach(() => {
     localStorage.clear()
     resetTerminalSessionNamesForTest()
@@ -448,7 +452,8 @@ describe('terminal session name recording', () => {
       )
       recordTerminalTabRename(makeTerminalNamesState(both), 'tab-b', 'Beta', { now: now + 1 })
       expect(owner('s1')).toBe('tab-b')
-      pass(both, now + 2)
+      // The pass visits tab-b first, so a replay of tab-a's earlier rename would come last.
+      pass([both[1], both[0]], now + 2)
       expect(saved('s1')).toBe('Beta')
       expect(owner('s1')).toBe('tab-b')
     })
@@ -496,6 +501,58 @@ describe('terminal session name recording', () => {
       pass([{ id: 'tab-1', sessionId: 's1', customTitle: 'Old' }], now + 10)
       pass([], now + LOCAL_TAB_NAME_WRITE_GRACE_MS)
       expect(saved('s1')).toBe('New')
+    })
+
+    it('a stale echo from before several quick renames is not applied after close', () => {
+      const now = 1_000_000
+      recordTerminalTabRename(
+        makeTerminalNamesState([{ id: 'tab-1', sessionId: 's1', customTitle: 'A' }]),
+        'tab-1',
+        'B',
+        { now }
+      )
+      recordTerminalTabRename(
+        makeTerminalNamesState([{ id: 'tab-1', sessionId: 's1', customTitle: 'B' }]),
+        'tab-1',
+        'C',
+        { now: now + 100 }
+      )
+      pass([{ id: 'tab-1', sessionId: 's1', customTitle: 'A' }], now + 200)
+      pass([], now + 200 + LOCAL_TAB_NAME_WRITE_GRACE_MS)
+      expect(saved('s1')).toBe('C')
+    })
+
+    it('a host-unknown rename does not undo a name saved for the session after it', () => {
+      const now = 1_000_000
+      // Saved names are stamped with the clock; keep the two saves in distinct milliseconds.
+      let clock = 2_000_000
+      vi.spyOn(Date, 'now').mockImplementation(() => clock++)
+      const state = makeTerminalNamesState([{ id: 'tab-a', sessionId: 's1' }])
+      recordTerminalTabRename(
+        { ...state, activeWorktreeId: null, getKnownWorktreeById: () => undefined },
+        'tab-a',
+        'Old',
+        { now }
+      )
+      // Tab B, whose host is known, names the same session afterwards.
+      recordTerminalTabRename(
+        makeTerminalNamesState([
+          { id: 'tab-a', customTitle: 'Old' },
+          { id: 'tab-b', sessionId: 's1' }
+        ]),
+        'tab-b',
+        'New',
+        { now: now + 10 }
+      )
+      pass(
+        [
+          { id: 'tab-a', sessionId: 's1', customTitle: 'Old' },
+          { id: 'tab-b', sessionId: 's1', customTitle: 'New' }
+        ],
+        now + LOCAL_TAB_NAME_WRITE_GRACE_MS * 3
+      )
+      expect(saved('s1')).toBe('New')
+      expect(owner('s1')).toBe('tab-b')
     })
 
     it('keeps the saved name when naming a resumed tab failed', () => {

@@ -12,6 +12,7 @@ import {
   bindingOf,
   deferredByTabId,
   lastSeenByTabId,
+  LOCAL_TAB_NAME_WRITE_GRACE_MS,
   localNameWriteByTabId,
   namesClearedBy,
   pendingHostRenameByTabId,
@@ -35,10 +36,15 @@ export function recordTerminalTabRename(
     state.tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)?.customTitle
   )
   const name = normalizeTerminalSessionName(title)
+  const at = options.now ?? Date.now()
+  const earlier = localNameWriteByTabId.get(tabId)
+  // Quick renames in a row: a stale echo may show the name before any of them.
+  const earlierReplaced =
+    earlier && at - earlier.at < LOCAL_TAB_NAME_WRITE_GRACE_MS ? earlier.replacedNames : []
   localNameWriteByTabId.set(tabId, {
-    at: options.now ?? Date.now(),
+    at,
     name,
-    replacedName: previousName
+    replacedNames: [...new Set([...earlierReplaced, previousName])].slice(-8)
   })
   deferredByTabId.delete(tabId)
   pendingHostRenameByTabId.delete(tabId)
@@ -60,7 +66,11 @@ export function recordTerminalTabRename(
   // Only a person's rename may later name a session whose host was not known yet; a name a tab was
   // created with, or a session bound after the rename, keeps the normal rules.
   if (resolved === 'host-unknown' && name && options.interactive !== false && conversation) {
-    pendingHostRenameByTabId.set(tabId, { sessionId: conversation.providerSession.id, name })
+    pendingHostRenameByTabId.set(tabId, {
+      sessionId: conversation.providerSession.id,
+      name,
+      savedAt: Date.now()
+    })
   }
   if (!name) {
     forgetTerminalSessionNames(namesClearedBy(state, tabId, binding, [shownFirst, previousName]))

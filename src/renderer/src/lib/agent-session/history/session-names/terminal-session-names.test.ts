@@ -135,17 +135,37 @@ describe('terminal session names', () => {
 
   it('does not bring back a cleared name when storage refused the clear', () => {
     save('s1', 'Cleared later', 'tab-1')
-    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementationOnce(() => {
+    const setItem = vi.spyOn(localStorage, 'setItem').mockImplementationOnce(() => {
       throw new Error('QuotaExceededError')
     })
     forgetTerminalSessionNames([
       { key: terminalSessionNameKey('local', 's1'), ownerTabId: 'tab-1' }
     ])
+    // The clear really was refused: storage still holds the name.
+    expect(stored()[terminalSessionNameKey('local', 's1')]).toBeDefined()
+    expect(setItem).toHaveBeenCalled()
     setItem.mockRestore()
     // The next write lands, and carries the refused clear with it.
     save('s2', 'Other', 'tab-2')
     expect(stored()[terminalSessionNameKey('local', 's1')]).toBeUndefined()
     expect(getSavedTerminalSessionName('local', 'claude', 's1')).toBeNull()
+  })
+
+  it("a refused save replayed later does not undo another window's newer save", () => {
+    let now = 1_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now++)
+    const setItem = vi.spyOn(localStorage, 'setItem').mockImplementationOnce(() => {
+      throw new Error('QuotaExceededError')
+    })
+    save('s1', 'Mine, refused', 'tab-1')
+    setItem.mockRestore()
+    // Another window saves a newer name for the same session.
+    const key = terminalSessionNameKey('local', 's1')
+    const other = stored()
+    other[key] = { title: 'Theirs', agent: 'claude', tabId: 'tab-2', savedAt: now + 1_000 }
+    localStorage.setItem(TERMINAL_SESSION_NAMES_STORAGE_KEY, JSON.stringify(other))
+    save('s2', 'Unrelated', 'tab-3')
+    expect(stored()[key]).toMatchObject({ title: 'Theirs', tabId: 'tab-2' })
   })
 
   it("refreshes and notifies on another window's storage event", () => {

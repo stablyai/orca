@@ -111,11 +111,15 @@ type Mutation =
 // so a refused clear is not undone by the next successful write; dropped once one lands.
 let unsaved: Mutation[] = []
 
-function applyMutations(current: Entries, mutations: readonly Mutation[]): boolean {
+function applyMutations(current: Entries, mutations: readonly Mutation[], replay = false): boolean {
   let changed = false
   for (const mutation of mutations) {
     if ('entry' in mutation) {
       const stored = current.get(mutation.key)
+      // A refused save replayed later must not undo a newer save another window made since.
+      if (replay && stored && stored.savedAt > mutation.entry.savedAt) {
+        continue
+      }
       if (
         stored?.title !== mutation.entry.title ||
         stored.tabId !== mutation.entry.tabId ||
@@ -136,7 +140,7 @@ function applyMutations(current: Entries, mutations: readonly Mutation[]): boole
 /** What storage holds, with this window's refused changes still applied over it. */
 function readCurrent(): Entries {
   const current = readStored()
-  applyMutations(current, unsaved)
+  applyMutations(current, unsaved, true)
   return current
 }
 
