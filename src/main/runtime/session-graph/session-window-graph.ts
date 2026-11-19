@@ -210,7 +210,7 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithSlep
           } else {
             this.invalidateLeafHandle(oldLeafKey)
           }
-        } else {
+        } else if (!this.carrySleptLeafHandle(oldLeafKey, nextLeaves)) {
           this.invalidateLeafHandle(oldLeafKey)
         }
       }

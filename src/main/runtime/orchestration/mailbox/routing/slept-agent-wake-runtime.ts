@@ -7,11 +7,13 @@ import type {
 } from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { TerminalWaiter } from '../../../terminal/wait/terminal-waiter'
 import { RuntimeSleptMailboxWakes } from './slept-mailbox-runtime'
+import { joinWithin } from './slept-agent-wake-join'
 
 // Covers a cold agent resume; a caller's own deadline overrides it.
 const SLEPT_AGENT_WAKE_TIMEOUT_MS = 120_000
 // Backstop for a bind no identity change reports; only while a wake is in flight.
 const SLEPT_AGENT_WAKE_RECHECK_MS = 500
+const SLEPT_PANE_CLOSED = 'slept_pane_closed'
 
 /** An Agent-slept pane answers orchestration as an idle agent: terminal acts wake it in place. */
 export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
@@ -21,7 +23,9 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
   private stopWatchingWokenHandles: (() => void) | null = null
   private wakeRecheck: ReturnType<typeof setInterval> | null = null
   private wakesInFlight = 0
-  /** Exit waits begun before the sleep, carried to the woken process, with the leaf they slept in. */
+  private recheckingSleptWaits = false
+  private sleptRecheckQueued = false
+  /** Exit waits begun before the sleep, carried to the woken process, with the leaf id they slept in. */
   private readonly carriedExitWaits = new Map<TerminalWaiter, string>()
 
   /** The pane an Agent-slept handle names: parked with no process, and not under the user's own Sleep. */
@@ -130,7 +134,7 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
         }),
       (error: unknown) => {
         // Closing a slept pane ends its agent, as closing an idle one does.
-        if (error instanceof Error && error.message === 'terminal_handle_stale') {
+        if (error instanceof Error && error.message === SLEPT_PANE_CLOSED) {
           return { handle, condition, satisfied: true, status: 'exited' as const, exitCode: null }
         }
         throw error
@@ -144,23 +148,41 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
     if (!record || !this.sleptAgentPaneForHandle(waiter.handle)) {
       return false
     }
-    this.carriedExitWaits.set(waiter, this.getLeafKey(record.tabId, record.leafId))
+    this.carriedExitWaits.set(waiter, record.leafId)
     this.watchWokenHandles()
     return true
   }
 
   protected override onSleptLeafGraphSynced(): void {
+    // A check can restore a parked name, which notifies identity changes again.
+    if (this.recheckingSleptWaits) {
+      return
+    }
+    this.recheckingSleptWaits = true
+    try {
+      this.recheckSleptWaits()
+    } finally {
+      this.recheckingSleptWaits = false
+    }
+  }
+
+  private recheckSleptWaits(): void {
     for (const check of this.wokenHandleChecks) {
       check()
     }
-    for (const [waiter, leafKey] of this.carriedExitWaits) {
+    for (const [waiter, leafId] of this.carriedExitWaits) {
       const ptyId = this.wokenHandlePtyId(waiter.handle)
+      const pane = ptyId ? 'open' : this.sleptPaneState(waiter.handle, leafId)
       if (!this.terminalWaiters.has(waiter)) {
         this.carriedExitWaits.delete(waiter)
       } else if (ptyId) {
         this.carriedExitWaits.delete(waiter)
         this.terminalWaiters.move(waiter, ptyId)
-      } else if (this.sleptLeafClosed(leafKey)) {
+      } else if (pane === 'lost') {
+        // The window's graph went away: the same answer an awake agent's wait gets.
+        this.carriedExitWaits.delete(waiter)
+        this.terminalWaiters.reject(waiter, 'terminal_handle_stale')
+      } else if (pane === 'closed') {
         // Closing a slept pane ends its agent, as closing an idle one does.
         this.carriedExitWaits.delete(waiter)
         this.terminalWaiters.resolve(waiter, {
@@ -191,7 +213,11 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
       SLEPT_AGENT_WAKE_RECHECK_MS
     )
     try {
-      await this.awaitWokenHandle(handle, deadline)
+      await this.awaitWokenHandle(handle, deadline, undefined, parsePaneKey(pane.paneKey)?.leafId)
+    } catch (error) {
+      throw error instanceof Error && error.message === SLEPT_PANE_CLOSED
+        ? new Error('terminal_handle_stale')
+        : error
     } finally {
       this.wakesInFlight -= 1
       if (this.wakesInFlight === 0 && this.wakeRecheck) {
@@ -235,15 +261,36 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
     return ptyId && this.ptysById.get(ptyId)?.connected === true ? ptyId : null
   }
 
-  /** A slept pane's leaf left a settled graph: the pane was closed. */
-  private sleptLeafClosed(leafKey: string | null): boolean {
-    return leafKey !== null && this.graphStatus !== 'reloading' && !this.leaves.has(leafKey)
+  /** Whether a slept handle's pane is still there: a move keeps its leaf id, a reload is not settled,
+   *  and a window graph that went away leaves nothing to answer for it. */
+  private sleptPaneState(handle: string, leafId: string | null): 'open' | 'closed' | 'lost' {
+    if (leafId === null || this.graphStatus === 'reloading') {
+      return 'open'
+    }
+    if (this.graphStatus !== 'ready') {
+      return 'lost'
+    }
+    const record = this.handles.get(handle)
+    if (record && this.leaves.has(this.getLeafKey(record.tabId, record.leafId))) {
+      return 'open'
+    }
+    for (const leaf of this.leaves.values()) {
+      if (leaf.leafId === leafId) {
+        // A reload re-mints parked names lazily; another name in the pane means this one is gone.
+        return this.sleptLeafHandle(leaf) === handle ? 'open' : 'lost'
+      }
+    }
+    return 'closed'
   }
 
   /** Resolves once the handle names a connected process again: graph sync binds it after the spawn. */
-  private awaitWokenHandle(handle: string, deadline: number, signal?: AbortSignal): Promise<void> {
-    const record = this.handles.get(handle)
-    const leafKey = record ? this.getLeafKey(record.tabId, record.leafId) : null
+  private awaitWokenHandle(
+    handle: string,
+    deadline: number,
+    signal?: AbortSignal,
+    paneLeafId?: string
+  ): Promise<void> {
+    const leafId = paneLeafId ?? this.handles.get(handle)?.leafId ?? null
     return new Promise((resolve, reject) => {
       const settle = (error?: unknown): void => {
         this.wokenHandleChecks.delete(check)
@@ -258,8 +305,11 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
       const check = (): void => {
         if (this.wokenHandlePtyId(handle)) {
           settle()
-        } else if (this.sleptLeafClosed(leafKey)) {
-          settle(new Error('terminal_handle_stale'))
+        } else {
+          const pane = this.sleptPaneState(handle, leafId)
+          if (pane !== 'open') {
+            settle(new Error(pane === 'closed' ? SLEPT_PANE_CLOSED : 'terminal_handle_stale'))
+          }
         }
       }
       const onAbort = (): void => settle(signal?.reason ?? new Error('request_aborted'))
@@ -280,40 +330,15 @@ export abstract class RuntimeSleptAgentWakes extends RuntimeSleptMailboxWakes {
 
   /** Identity changes (binds, connects) re-check pending wakes; unsubscribed once none are pending. */
   private watchWokenHandles(): void {
-    this.stopWatchingWokenHandles ??= this.crewChanges.subscribe(() =>
-      this.onSleptLeafGraphSynced()
-    )
-  }
-}
-
-function joinWithin(
-  woken: Promise<void>,
-  bounds: { signal?: AbortSignal; timeoutMs?: number }
-): Promise<void> {
-  const { signal, timeoutMs } = bounds
-  if (!signal && !(timeoutMs && timeoutMs > 0)) {
-    return woken
-  }
-  return new Promise((resolve, reject) => {
-    const settle = (error?: unknown): void => {
-      clearTimeout(timer)
-      signal?.removeEventListener('abort', onAbort)
-      if (error === undefined) {
-        resolve()
-      } else {
-        reject(error)
+    // Deferred: identity notifies mid-sync, before the graph's leaves and handles agree.
+    this.stopWatchingWokenHandles ??= this.crewChanges.subscribe(() => {
+      if (!this.sleptRecheckQueued) {
+        this.sleptRecheckQueued = true
+        queueMicrotask(() => {
+          this.sleptRecheckQueued = false
+          this.onSleptLeafGraphSynced()
+        })
       }
-    }
-    const onAbort = (): void => settle(signal?.reason ?? new Error('request_aborted'))
-    const timer =
-      timeoutMs && timeoutMs > 0
-        ? setTimeout(() => settle(new Error('timeout')), timeoutMs)
-        : undefined
-    if (signal?.aborted) {
-      onAbort()
-      return
-    }
-    signal?.addEventListener('abort', onAbort, { once: true })
-    woken.then(() => settle(), settle)
-  })
+    })
+  }
 }

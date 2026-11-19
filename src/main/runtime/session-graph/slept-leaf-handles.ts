@@ -18,6 +18,33 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
   /** Graph sync rebinds handles; waits on a woken slept pane re-check here. */
   protected onSleptLeafGraphSynced(): void {}
 
+  /** A slept pane moved to another tab keeps its name: same leaf id, still without a process. */
+  protected carrySleptLeafHandle(
+    oldLeafKey: string,
+    nextLeaves: ReadonlyMap<string, RuntimeLeafRecord>
+  ): boolean {
+    const parked = this.sleptLeafHandles.get(oldLeafKey)
+    const record = parked ? this.handles.get(parked.handle) : undefined
+    if (!parked || !record || record.ptyId !== null) {
+      return false
+    }
+    for (const [leafKey, leaf] of nextLeaves) {
+      if (leaf.leafId === record.leafId && leaf.ptyId === null && leafKey !== oldLeafKey) {
+        this.terminalIdentity.unbindLeaf(oldLeafKey)
+        this.terminalIdentity.setHandle(parked.handle, {
+          ...record,
+          tabId: leaf.tabId,
+          worktreeId: leaf.worktreeId
+        })
+        this.terminalIdentity.bindLeaf(leafKey, parked.handle)
+        this.sleptLeafHandles.delete(oldLeafKey)
+        this.sleptLeafHandles.set(leafKey, parked)
+        return true
+      }
+    }
+    return false
+  }
+
   /** Closed panes take their slept names with them; a reloading graph may be partial, so it prunes nothing. */
   protected pruneSleptLeafHandles(): void {
     for (const leafKey of this.graphStatus === 'reloading' ? [] : this.sleptLeafHandles.keys()) {
@@ -34,13 +61,17 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
   }
 
   private agentSleepStopPtyId(paneKey: string): string | null {
+    return this.agentSleepStopRow(paneKey)?.paneSleep?.ptyId ?? null
+  }
+
+  private agentSleepStopRow(paneKey: string) {
     // Only the newest row speaks for the pane: a resumed agent's own rows supersede the sleep's.
     const rows = this.getAgentStatusSnapshotForPaneFn?.(paneKey) ?? []
     const latest = rows.reduce<(typeof rows)[number] | null>(
       (newest, row) => (!newest || row.receivedAt > newest.receivedAt ? row : newest),
       null
     )
-    return latest?.paneSleep?.ptyId ?? null
+    return latest?.paneSleep ? latest : null
   }
 
   /** A pane's new process keeps the handle when it is the pane's first (mobile already subscribed
@@ -120,7 +151,7 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
   }
 
   /** A restart or renderer reload drops parked handles; main's kept sleep row still marks the pane.
-   *  Its Dispatch's handle is reused so mail and worker-list still name it. */
+   *  The agent's own exported handle is reused so mail and worker-list still name it. */
   private restoreSleptLeafHandle(
     leaf: RuntimeLeafRecord,
     leafKey: string,
@@ -136,7 +167,8 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
     if (current && current === parked) {
       return current
     }
-    const sleptPtyId = this.agentSleepStopPtyId(paneKey)
+    const sleepRow = this.agentSleepStopRow(paneKey)
+    const sleptPtyId = sleepRow?.paneSleep?.ptyId
     if (
       !sleptPtyId ||
       (leaf.ptyId !== null && leaf.ptyId !== sleptPtyId) ||
@@ -144,12 +176,10 @@ export abstract class OrcaRuntimeWithSleptLeafHandles extends OrcaRuntimeWithAdm
     ) {
       return null
     }
-    const dispatched = this._orchestrationDb?.getLatestDispatchForTerminal(
-      '',
-      paneKey
-    )?.assignee_handle
+    // The slept agent's own hook row carries the handle it answered to; a pane's older Dispatch may name another conversation.
     const handle =
-      [parked, dispatched].find((kept) => kept && !this.handles.has(kept)) ?? `term_${randomUUID()}`
+      [parked, sleepRow?.terminalHandle].find((kept) => kept && !this.handles.has(kept)) ??
+      `term_${randomUUID()}`
     this.terminalIdentity.addSynthetic(handle)
     this.terminalIdentity.setHandle(handle, {
       handle,

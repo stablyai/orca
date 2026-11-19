@@ -16,6 +16,7 @@ import {
 } from '../terminal-pointer/orchestration-mailbox-notification-test-harness'
 
 const WOKEN_PTY_ID = 'pty-woken'
+const MOVED_TAB_ID = '55555555-5555-4555-8555-555555555555'
 
 function graph(ptyId: string | null) {
   return {
@@ -79,6 +80,39 @@ describe('Agent-slept window pane wake', () => {
     await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
 
     await expect(waiting).resolves.toMatchObject({ handle, status: 'exited', satisfied: true })
+    db.close()
+  })
+
+  it('keeps a moved slept pane its handle and its exit wait pending', async () => {
+    const { db, runtime, handle } = await sleptPane()
+    const waiting = runtime.waitForTerminal(handle, { condition: 'exit', timeoutMs: 5_000 })
+    const settled = vi.fn()
+    void waiting.then(settled, settled)
+
+    await runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: MOVED_TAB_ID,
+          worktreeId: WORKTREE_ID,
+          title: 'Codex',
+          activeLeafId: LEAF_ID,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: MOVED_TAB_ID,
+          worktreeId: WORKTREE_ID,
+          leafId: LEAF_ID,
+          paneRuntimeId: 1,
+          ptyId: null
+        }
+      ]
+    })
+    await Promise.resolve()
+
+    expect(settled).not.toHaveBeenCalled()
+    expect(runtime.sleptAgentHandleForPane(`${MOVED_TAB_ID}:${LEAF_ID}`)).toBe(handle)
     db.close()
   })
 })
