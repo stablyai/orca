@@ -96,19 +96,21 @@ export class AcpTimelineTranslator {
 
   /** The lane ends unprompted work on quiet, Stop or a send. */
   endAgentTurn(at: number, stopReason = 'end_turn'): ProviderTimelineEvent[] {
-    const turn = this.agentTurns.take(this.activeTurn)
+    const turn = this.agentTurns.take(this.activeTurn, at, stopReason)
     return turn ? this.endTurn(turn, { stopReason, at }) : []
   }
 
-  agentTurnQuietMs = (): number | null => this.agentTurns.quietMs(this.activeTurn)
+  agentTurnCalls = (): 'none' | 'running' | null => this.agentTurns.calls(this.activeTurn)
 
   promptResult(
     clientMessageId: string,
     result: PromptResponse,
-    at: number
+    at: number,
+    cancelRequested = false
   ): ProviderTimelineEvent[] {
-    const hookBlock = this.dialect.hookBlock?.(result._meta)
-    return this.finishPrompt(clientMessageId, { stopReason: result.stopReason, at, hookBlock })
+    const { stopReason, _meta } = result
+    const ending = { stopReason, at, hookBlock: this.dialect.hookBlock?.(_meta), cancelRequested }
+    return this.finishPrompt(clientMessageId, ending)
   }
 
   /** Only agent-authored failures supply diagnostic text; connection loss is handled separately. */
@@ -167,11 +169,8 @@ export class AcpTimelineTranslator {
   }
 
   sessionEvent(event: AcpSessionEvent, at: number): ProviderTimelineEvent[] {
-    return this.notification(
-      'session/update',
-      event.kind === 'known' ? event.notification : event.raw,
-      at
-    )
+    const params = event.kind === 'known' ? event.notification : event.raw
+    return this.notification('session/update', params, at)
   }
 
   notification(method: string, params: unknown, at: number): ProviderTimelineEvent[] {
@@ -207,7 +206,7 @@ export class AcpTimelineTranslator {
       (update !== undefined && ACP_SUBSTANTIVE_UPDATES.includes(update.sessionUpdate)) ||
       extension?.end !== undefined ||
       extension?.started === true
-    const offeredTurn = providerTurn ?? open ?? this.agentTurns.mint(opens, update)
+    const offeredTurn = providerTurn ?? open ?? this.agentTurns.mint(opens, at, update)
     const operation = this.ownership.operation()
     const owner = update
       ? this.ownership.messages.owner(offeredTurn, update, operation.settled)

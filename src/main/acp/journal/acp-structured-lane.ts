@@ -178,7 +178,7 @@ export class AcpStructuredLane {
     this.disposed = true
     this.translator.dispose()
     this.clearRetry()
-    this.agentTurn.stop()
+    this.agentTurn.dispose()
     this.backlog.length = 0
     this.assembler.dispose()
     this.notifyTurnWatchers()

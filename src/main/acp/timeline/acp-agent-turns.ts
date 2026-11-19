@@ -5,13 +5,13 @@ import type { SessionUpdate } from '../generated/acp-protocol.generated'
 import type { AcpBackgroundTaskTimeline } from './acp-background-task-timeline'
 import type { AcpToolTimeline } from './acp-tool-timeline'
 
-const QUIET_MS = 10_000
-// Running calls may be waiting on a person or a slow command.
-const CALL_QUIET_MS = 120_000
+// Frames that trail a Stop are the stopped work's, not new work.
+const STOP_GRACE_MS = 5_000
 
 /** Work the agent resumes unprompted gets its own turn; nothing from the agent ends it. */
 export class AcpAgentTurns {
   private open?: string
+  private stoppedAt = Number.NEGATIVE_INFINITY
 
   constructor(
     private readonly dialect: AcpDialect,
@@ -21,13 +21,13 @@ export class AcpAgentTurns {
 
   /** A new turn for substantive frames arriving while none is open; a backgrounded call's
    *  own report updates its task in place. */
-  mint(opens: boolean, update?: SessionUpdate): string | undefined {
+  mint(opens: boolean, at: number, update?: SessionUpdate): string | undefined {
     if (
       !opens ||
       !this.dialect.reactiveWakeups ||
+      at < this.stoppedAt + STOP_GRACE_MS ||
       // Trailing status of a call whose turn already ended starts no work.
-      (update?.sessionUpdate === 'tool_call_update' &&
-        (this.tools.backgrounds(update.toolCallId) || this.tools.turn(update.toolCallId)))
+      (update?.sessionUpdate === 'tool_call_update' && this.tools.ended(update.toolCallId))
     ) {
       return undefined
     }
@@ -35,25 +35,32 @@ export class AcpAgentTurns {
     return this.open
   }
 
-  /** Releases the agent turn if it is the active one. */
-  take(active: string | undefined): string | undefined {
+  /** Releases the agent turn if it is the active one; a Stop holds off new ones briefly. */
+  take(active: string | undefined, at: number, stopReason: string): string | undefined {
+    if (stopReason === 'cancelled') {
+      this.stoppedAt = at
+    }
     const open = this.open
     this.open = undefined
     return open !== undefined && open === active ? open : undefined
   }
 
-  /** Null when no agent turn is active or a call in it awaits approval. */
-  quietMs(active: string | undefined): number | null {
+  /** Null when no agent turn is active. */
+  calls(active: string | undefined): 'none' | 'running' | null {
     if (this.open === undefined || this.open !== active) {
       return null
     }
-    const calls = this.tools.running(this.open)
-    return calls === 'pending' ? null : calls ? CALL_QUIET_MS : QUIET_MS
+    return this.tools.running(this.open) ? 'running' : 'none'
   }
 
-  /** A normal end with calls still running means the agent backgrounded them. */
+  /** A normal end with calls still running means the agent backgrounded them; after Orca's own
+   *  cancel they were stopped, not backgrounded. */
   background(turn: string, ending: AcpTurnEnding, thread: string): ProviderTimelineEvent[] {
-    if (!this.dialect.reactiveWakeups || ending.stopReason !== 'end_turn') {
+    if (
+      !this.dialect.reactiveWakeups ||
+      ending.stopReason !== 'end_turn' ||
+      ending.cancelRequested
+    ) {
       return []
     }
     const join = { thread, turn }

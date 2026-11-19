@@ -96,7 +96,7 @@ export class AcpStructuredTurns {
   interruptForPermissionTransition(): void {
     if (this.active) {
       this.cancelForSteer()
-    } else if (this.deps.lane.openTurnId !== null) {
+    } else if (this.deps.lane.openTurnId !== null && !this.deps.lane.agentTurn.endIfIdle()) {
       this.deps.withdrawRequests()
       void this.deps.connection.cancel().catch(() => undefined)
       this.deps.lane.agentTurn.end('cancelled')
@@ -147,7 +147,14 @@ export class AcpStructuredTurns {
       throw new Error(`${this.deps.agentName} is still working`)
     }
     const { lane } = this.deps
-    lane.agentTurn.end()
+    const agentTurn = lane.openTurnId
+    // A backed-up journal admits the agent turn's end later; adopt the command after it.
+    if (lane.agentTurn.end() && agentTurn !== null) {
+      await lane.whenTurnLeaves(agentTurn)
+      if (this.active || this.ended) {
+        throw new Error(`${this.deps.agentName} is still working`)
+      }
+    }
     const send: Send = {
       clientMessageId: command.clientMessageId,
       prompt: acpCompactPrompt(command.instructions, this.deps.compactCommand),
@@ -234,7 +241,11 @@ export class AcpStructuredTurns {
         if (this.active !== send) {
           return
         }
-        lane.apply(lane.translator.promptResult(send.clientMessageId, result, this.deps.now()))
+        const cancelled = this.stopAt !== null || this.steerCancelled === send
+        const { clientMessageId } = send
+        lane.apply(
+          lane.translator.promptResult(clientMessageId, result, this.deps.now(), cancelled)
+        )
         this.accept(send.clientMessageId)
         this.finish(send)
       },

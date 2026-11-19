@@ -125,6 +125,8 @@ export type AcpTurnEnding = {
   /** Structured error data shows the model provider failed; runtime only. */
   providerFailure?: boolean
   hookBlock?: AcpHookBlock
+  /** Orca asked the agent to stop this prompt, whatever reason it then gave. */
+  cancelRequested?: boolean
 }
 
 /** Undefined means a normally ended /compact succeeded. */

@@ -82,10 +82,15 @@ export class AcpToolTimeline {
   // Closing updates may omit fields; only their running journal copies are previews.
   private readonly whole = new Map<string, { input?: unknown; output?: string }>()
   private readonly backgrounded = new BoundedMap<string, true>({ maxEntries: 128 })
+  // Ownership remembers only the latest ended turn; late updates may name older calls.
+  private readonly endedCalls = new BoundedMap<string, true>({ maxEntries: 512 })
 
   constructor(private readonly owners: AcpItemOwnership) {}
 
-  /** Close the turn's running calls as launched; each continues as a background task. */
+  /** Close the turn's running calls as launched; each continues as a background task. The call
+   *  row reads completed because the call itself returned (agy answers it with "running as a
+   *  background task"), and a settled call row cannot be revised; the task row carries the run's
+   *  outcome. */
   background(
     turn: string,
     join: ProviderTimelineJoin
@@ -118,8 +123,13 @@ export class AcpToolTimeline {
     return { events, tasks }
   }
 
-  backgrounds(toolCallId: string): boolean {
-    return this.backgrounded.has(toolCallId)
+  /** The call belongs to a turn that already ended. */
+  ended(toolCallId: string): boolean {
+    return (
+      this.backgrounded.has(toolCallId) ||
+      this.endedCalls.has(toolCallId) ||
+      this.turn(toolCallId) !== undefined
+    )
   }
 
   /** A backgrounded call's later updates report its task instead of the closed call. */
@@ -265,18 +275,13 @@ export class AcpToolTimeline {
     return events
   }
 
-  /** Pending outranks running: a call awaiting approval must not be timed out. */
-  running(turn: string): 'pending' | 'running' | undefined {
-    let found: 'running' | undefined
+  running(turn: string): boolean {
     for (const snapshot of this.tools.values()) {
       if (snapshot.turn === turn) {
-        if (snapshot.pending) {
-          return 'pending'
-        }
-        found = 'running'
+        return true
       }
     }
-    return found
+    return false
   }
 
   turn(toolCallId: string): string | undefined {
@@ -288,6 +293,7 @@ export class AcpToolTimeline {
       if (key.startsWith('tool:')) {
         this.tools.delete(key.slice(5))
         this.whole.delete(key.slice(5))
+        this.endedCalls.set(key.slice(5), true)
       }
     }
   }
@@ -296,5 +302,6 @@ export class AcpToolTimeline {
     this.tools.clear()
     this.whole.clear()
     this.backgrounded.clear()
+    this.endedCalls.clear()
   }
 }
