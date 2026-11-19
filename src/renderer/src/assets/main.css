@@ -2223,6 +2223,48 @@ html.native-shell .app-layout {
   }
 }
 
+/* A quiet turn that just settled: its rows fade (300 ms), then their space and the gap close (280 ms). */
+@keyframes native-chat-quiet-turn-leave {
+  0% {
+    opacity: 1;
+    grid-template-rows: 1fr;
+    margin-top: 0;
+    margin-bottom: 0;
+    animation-timing-function: ease;
+  }
+  52% {
+    opacity: 0;
+    grid-template-rows: 1fr;
+    margin-top: 0;
+    margin-bottom: 0;
+    animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  }
+  100% {
+    opacity: 0;
+    grid-template-rows: 0fr;
+    margin-top: var(--native-chat-quiet-leave-top, 0);
+    margin-bottom: var(--native-chat-quiet-leave-bottom, 0);
+  }
+}
+
+.native-chat-quiet-turn-leave {
+  display: grid;
+  animation: native-chat-quiet-turn-leave 580ms linear forwards;
+}
+
+/* The gap that closes with it: a row's own (gap-5), or the transcript's between rows. */
+.native-chat-quiet-turn-leave[data-gap='above'] {
+  --native-chat-quiet-leave-top: -1.25rem;
+}
+
+.native-chat-quiet-turn-leave[data-gap='below'] {
+  --native-chat-quiet-leave-bottom: -1.25rem;
+}
+
+.native-chat-quiet-turn-leave[data-gap='row'] {
+  --native-chat-quiet-leave-top: calc(-20px * var(--chat-estimated-spacing-scale, 1));
+}
+
 /* Why: keyframes run when the content mounts already in its final state. */
 @keyframes compact-agent-expansion-reveal {
   from {

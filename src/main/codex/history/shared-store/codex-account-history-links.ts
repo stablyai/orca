@@ -1,4 +1,4 @@
-import { mkdir, readdir, realpath, rename, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, realpath, unlink, writeFile } from 'node:fs/promises'
 import { basename, join, relative } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { renameFileWithWindowsRetryAsync } from '../../../../shared/file-write/windows-retry-file-operations'
@@ -23,11 +23,11 @@ import {
 } from './codex-thread-writer-locks'
 import { writeSharedSqliteHome } from './codex-account-sqlite-home-config'
 import {
-  CODEX_DATABASE_FILE,
   PRE_SHARE_DATABASES_DIR,
   SET_ASIDE_ROLLOUTS_DIR,
   recordCodexHistoryLeftBehind
 } from './codex-account-history-cleanup-manifest'
+import { setAsideCodexDatabases } from './codex-account-databases-set-aside'
 import {
   compressedRolloutsFirst,
   holdsRolloutTwins,
@@ -323,17 +323,8 @@ export async function unshareCodexAccountHistory(args: {
     return complete
   }
   const holding = join(args.accountHome, PRE_SHARE_DATABASES_DIR, String(Date.now()))
-  for (const entry of await readDirectoryEntries(args.accountHome)) {
-    if (!entry.isFile() || !CODEX_DATABASE_FILE.test(entry.name)) {
-      continue
-    }
-    try {
-      await mkdir(holding, { recursive: true })
-      await rename(join(args.accountHome, entry.name), join(holding, entry.name))
-    } catch (error) {
-      complete = false
-      args.onWarning(error)
-    }
+  if (!(await setAsideCodexDatabases(args.accountHome, holding, args.onWarning))) {
+    complete = false
   }
   if (complete) {
     await unlink(pending)

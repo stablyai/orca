@@ -4,6 +4,7 @@ import {
   onboardingLanguageRequestedSchema
 } from './schemas/telemetry-onboarding-language-schemas'
 import { agentTokenUsageSchema } from './schemas/telemetry-agent-token-usage-schema'
+import { codexHistoryCleanupSweepSchema } from './schemas/telemetry-codex-history-cleanup-event-schemas'
 import {
   agentDashboardActiveSchema,
   agentDashboardEnabledSchema,
@@ -265,6 +266,8 @@ export const eventSchemas = {
   wsl_move_undo: wslMoveUndoSchema,
 
   wsl_usage_snapshot: wslUsageSnapshotSchema,
+
+  codex_history_cleanup_sweep: codexHistoryCleanupSweepSchema,
 
   plugin_installed: pluginInstalledSchema,
 

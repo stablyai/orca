@@ -75,6 +75,8 @@ export type NativeChatMessageSlot = {
   status: NativeChatTurnStatus | undefined
   /** Provider-opened turns have no prompt; draw their bar at the turn position. */
   statusAbove?: boolean
+  /** In a quiet turn that just settled, what fades out and then goes: the row, or only its bar. */
+  leaving?: 'row' | 'bar'
   /** Fold prose/tools behind turn status while retaining work that outlives the turn. */
   folded: boolean
   /** False when only turn chrome draws: empty/folded rows or reasoning owned by the live line. */
@@ -123,6 +125,8 @@ export function buildNativeChatTranscript(
 ): {
   slots: NativeChatTranscriptSlot[]
   forkPoint: NativeChatSideChatForkPoint | null
+  /** Settled quiet turns, drawn or still fading out. */
+  quietTurnKeys: ReadonlySet<string>
 } {
   const {
     imageSources = nativeChatMarkdownImageSources,
@@ -146,7 +150,7 @@ export function buildNativeChatTranscript(
       .filter(([, status]) => status.workedSeconds != null)
       .map(([turnKey]) => turnKey)
   )
-  const { quiet, messages } = nativeChatShownRows(input, settledTurnKeys, imageSources)
+  const { quiet, leaving, messages } = nativeChatShownRows(input, settledTurnKeys, imageSources)
   // Share row rendering facts with fold selection so answer detection agrees with visible prose.
   const foldRows = messages.map((message, index) =>
     nativeChatTurnFoldRow(message, turnKeys[index], receipts.get(message.id))
@@ -235,6 +239,9 @@ export function buildNativeChatTranscript(
         receipt,
         status: status ?? undefined,
         statusAbove: bar?.above === true && status !== undefined,
+        ...(leaving.rows.has(index)
+          ? { leaving: 'row' as const }
+          : status !== undefined && leaving.turns.has(turnKey!) && { leaving: 'bar' as const }),
         folded,
         drawsMessage: drawsRow,
         turnFolds: turnKey !== undefined && foldableTurnKeys.has(turnKey),
@@ -320,7 +327,8 @@ export function buildNativeChatTranscript(
       next.turnKey === slot.turnKey &&
       // The agent's own next step, not a notice or task row that trails its answer.
       (next.message.role === 'assistant' || next.message.role === 'reasoning') &&
-      next.drawsMessage
+      next.drawsMessage &&
+      next.leaving !== 'row'
     ) {
       slot.continuesTurn = true
     }
@@ -328,6 +336,7 @@ export function buildNativeChatTranscript(
   markNativeChatResponseActionsHang(drawn, typography)
   return {
     slots: drawn,
+    quietTurnKeys: leaving.turns.size ? new Set([...quiet.turns, ...leaving.turns]) : quiet.turns,
     forkPoint: forkOffer
       ? nativeChatSideChatForkPoint(newestOffered, isWorking || lifecycleWorking)
       : null
