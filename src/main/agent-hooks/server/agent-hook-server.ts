@@ -110,8 +110,20 @@ export class AgentHookServer extends AgentHookServerLifecycle {
   /** A sleep settles every pane's exit proofs together, so their fresh process-table reads
    *  coalesce into one; the capture's own presence reads then find them answered. */
   async settleExitProofForSleep(paneKey: string): Promise<null> {
-    await this.unprovenExits.settled(this.resolvePaneKeyAlias(paneKey), true)
+    const resolved = this.resolvePaneKeyAlias(paneKey)
+    if (!this.forgetUnprovenExitOfVerifiableOwner(resolved)) {
+      await this.unprovenExits.settled(resolved, true)
+    }
     return null
+  }
+
+  /** An agent that now reports a process its presence probe can check needs no shell proof. */
+  private forgetUnprovenExitOfVerifiableOwner(resolved: string): boolean {
+    if (!this.unprovenExits.has(resolved) || !this.hasVerifiableAgentProcess(resolved)) {
+      return false
+    }
+    this.unprovenExits.forget(resolved)
+    return true
   }
 
   async checkAgentPresenceSince(
@@ -141,7 +153,10 @@ export class AgentHookServer extends AgentHookServerLifecycle {
    *  plain shell, which lands on every prompt, skips the saved-record read. */
   protected noticeLaunchlessCommandMark(resolved: string): void {
     const row = this.state.lastStatusByPaneKey.get(resolved)
-    if (!this.unprovenExits.has(resolved) && !row) {
+    if (
+      (!this.unprovenExits.has(resolved) && !row) ||
+      this.forgetUnprovenExitOfVerifiableOwner(resolved)
+    ) {
       return
     }
     const identity = this.paneAgentIdentity(resolved)
