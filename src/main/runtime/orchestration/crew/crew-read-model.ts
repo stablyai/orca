@@ -1,5 +1,10 @@
 import { isDeepStrictEqual } from 'node:util'
-import { CrewRelevance, type CrewFacet, type CrewInvalidation } from './crew-changes'
+import {
+  CrewRelevance,
+  crewIdentityFingerprint,
+  type CrewFacet,
+  type CrewInvalidation
+} from './crew-changes'
 import { buildCrewSnapshot } from './crew-party-snapshot'
 import type { CrewReadDependencies } from './crew-read-dependencies'
 import type { OrchestrationCrewSnapshot } from '../../../../shared/orchestration/orchestration-crew'
@@ -25,6 +30,10 @@ export class CrewReadModel {
   private readonly stale = new Set<string>()
   /** Shown Dispatches whose own rows changed, patched on the next read. */
   private readonly patches = new Set<string>()
+  /** What the shown panes and handles resolved to at the last read. */
+  private identity: string | undefined
+  /** A skipped terminal record write: the next read captures the runtime's terminal records again. */
+  private identitySkipped = false
   private readonly listeners = new Set<() => void>()
   private readonly renamed = new Set<string>()
   private readonly dirty = new Set<CrewFacet>()
@@ -49,6 +58,9 @@ export class CrewReadModel {
       return true
     }
     const facetList = [...facets]
+    if (facetList.every((facet) => facet === 'identity')) {
+      return this.identityMoved()
+    }
     if (
       (facets.paneKeys || facets.sessionIds) &&
       facetList.every((facet) => facet === 'status' || facet === 'names')
@@ -97,6 +109,21 @@ export class CrewReadModel {
     return true
   }
 
+  /** A terminal record write changes a crew only if one of its panes or handles now resolves differently. */
+  private identityMoved(): boolean {
+    if (!this.host || !this.relevance || this.identity === undefined) {
+      return true
+    }
+    try {
+      const moved = crewIdentityFingerprint(this.relevance, this.host.deps) !== this.identity
+      this.identitySkipped ||= !moved
+      return moved
+    } catch {
+      // An unreadable resolution is a change: rebuild rather than keep a stale row.
+      return true
+    }
+  }
+
   private invalidate = (facets: CrewInvalidation) => {
     if (!this.admits(facets)) {
       return
@@ -114,7 +141,7 @@ export class CrewReadModel {
       }
     }
     for (const facet of facets) {
-      this.dirty.add(facet)
+      this.dirty.add(facet === 'identity' ? 'topology' : facet)
     }
     for (const listener of this.listeners) {
       listener()
@@ -136,6 +163,7 @@ export class CrewReadModel {
         this.unwatch = undefined
         this.host = undefined
         this.relevance = undefined
+        this.identity = undefined
         this.skipped = undefined
         this.stale.clear()
         this.patches.clear()
@@ -202,6 +230,7 @@ export class CrewReadModel {
       const previous = this.host
       this.host = undefined
       let deps = this.readDependencies()
+      this.identitySkipped = false
       if (previous && this.listeners.size && !dirty.has('records')) {
         previous.registry.refreshRecordNames(deps.records, renamed)
         deps = { ...deps, records: previous.deps.records }
@@ -216,7 +245,9 @@ export class CrewReadModel {
     } else if (dirty.has('status') || dirty.has('names')) {
       const previous = this.host
       this.host = undefined
-      const deps = this.readDependencies(previous.deps)
+      // After a skipped record write, rows read a fresh capture (a new peer may resolve through it).
+      const deps = this.readDependencies(this.identitySkipped ? undefined : previous.deps)
+      this.identitySkipped = false
       if (dirty.has('status')) {
         const { statuses, ...sources } = deps
         const relevance = this.relevance
@@ -267,6 +298,17 @@ export class CrewReadModel {
     }
     // Kept across status, name and stage refreshes, so the session-write scope and its worktree cache hold.
     this.relevance ??= new CrewRelevance()
-    return buildCrewSnapshot(address, { ...this.host.deps, now }, this.host, this.relevance)
+    const snapshot = buildCrewSnapshot(
+      address,
+      { ...this.host.deps, now },
+      this.host,
+      this.relevance
+    )
+    try {
+      this.identity = crewIdentityFingerprint(this.relevance, this.host.deps)
+    } catch {
+      this.identity = undefined
+    }
+    return snapshot
   }
 }

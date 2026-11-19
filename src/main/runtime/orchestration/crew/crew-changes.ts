@@ -1,7 +1,17 @@
+import type { CrewReadDependencies } from './crew-read-dependencies'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 
 /** `assignments`: scoped Dispatches' own rows changed (stage, liveness), not who a crew shows. */
-export type CrewFacet = 'topology' | 'assignments' | 'records' | 'status' | 'names' | 'traffic'
+/** `identity`: the runtime's terminal records changed somewhere; a crew rebuilds only if what its
+ *  panes and handles resolve to did. */
+export type CrewFacet =
+  | 'topology'
+  | 'assignments'
+  | 'records'
+  | 'status'
+  | 'names'
+  | 'traffic'
+  | 'identity'
 export type CrewInvalidation = ReadonlySet<CrewFacet> & {
   readonly recordIds?: readonly string[]
   readonly trafficAddresses?: ReadonlySet<string>
@@ -132,6 +142,39 @@ export class CrewRelevance {
     // answer, without parsing every fleet pane a status read checks.
     return this.leaves.size > 0 && this.leaves.has(pane.slice(pane.indexOf(':') + 1))
   }
+}
+
+/** A terminal record write: every renderer graph publish, title and layout sync makes several. */
+export const TERMINAL_IDENTITY_CHANGE: CrewInvalidation = new Set(['identity'])
+
+/** What a crew's panes and handles resolve to now; equal before and after a write that moved none. */
+export function crewIdentityFingerprint(
+  relevance: Pick<CrewRelevance, 'panes' | 'handles'>,
+  resolve: Pick<
+    CrewReadDependencies,
+    | 'liveHandle'
+    | 'handleForPane'
+    | 'paneForHandle'
+    | 'processForHandle'
+    | 'callerPaneForHandle'
+    | 'livePaneForHandle'
+  >
+): string {
+  const facts: unknown[] = []
+  for (const handle of relevance.handles) {
+    facts.push(
+      handle,
+      resolve.liveHandle(handle),
+      resolve.paneForHandle(handle),
+      resolve.callerPaneForHandle?.(handle) ?? null,
+      resolve.livePaneForHandle?.(handle) ?? null,
+      resolve.processForHandle?.(handle) ?? null
+    )
+  }
+  for (const pane of relevance.panes) {
+    facts.push(pane, resolve.handleForPane(pane))
+  }
+  return JSON.stringify(facts)
 }
 
 /** Invalidation is synchronous; the existing stream scheduler reads only after the commit. */
