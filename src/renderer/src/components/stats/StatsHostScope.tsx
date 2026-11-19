@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect } from 'react'
+import { useEffect, useLayoutEffect, useState } from 'react'
 import { useAppStore } from '../../store'
 import { useTranslate } from '@/i18n/use-translate'
 import { usageHostKey } from '../../store/slices/usage/usage-host'
@@ -28,6 +28,8 @@ export function StatsHostScope({
   const setStatsHost = useAppStore((state) => state.setStatsHost)
   const renewStatsHostView = useAppStore((state) => state.renewStatsHostView)
   const environmentId = host.target.kind === 'environment' ? host.target.environmentId : null
+  // Why: until this mount's view starts, panes would mount under the previous one and read early.
+  const [started, setStarted] = useState(false)
   // A remote host has no usage connection events; a new view reads it again when contact returns.
   useEffect(
     () =>
@@ -46,8 +48,9 @@ export function StatsHostScope({
     } else {
       setStatsHost({ kind: 'environment', environmentId })
     }
+    setStarted(true)
   }, [environmentId, key, setStatsHost, renewStatsHostView])
-  return shown ? <>{children(usageSupport, view)}</> : null
+  return shown && started ? <>{children(usageSupport, view)}</> : null
 }
 
 export function StatsHostCaption({ name }: { name: string }): React.JSX.Element {

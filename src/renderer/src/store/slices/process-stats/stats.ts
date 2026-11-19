@@ -8,9 +8,6 @@ import { runtimeEnvironmentSupportsCapability } from '../../../runtime/rpc/compa
 import { usageHostKey } from '../usage/usage-host'
 import { clearUsageProviderData } from '../usage/usage-provider-slices'
 
-// An abortable call carries no default response deadline.
-const STATS_SUMMARY_TIMEOUT_MS = 30_000
-
 /** Whether the shown host computes usage: `unknown` when it could not be asked, so its reads report the failure. */
 export type StatsHostUsageSupport = 'checking' | 'supported' | 'unsupported' | 'unknown'
 
@@ -18,10 +15,8 @@ export type StatsSlice = {
   statsSummary: StatsSummary | null
   /** The host Stats & Usage reads, picked with the Settings Host picker. */
   statsHost: RuntimeClientTarget
-  /** Bumped on every new view (host switch or regained contact); work started under an older value is dropped. */
+  /** Bumped on every new view (host switch, shown again, regained contact); work started under an older value stops and is dropped. */
   statsHostEpoch: number
-  /** Aborted when the view ends, cancelling its remote reads. */
-  statsHostSignal: AbortSignal
   statsHostUsageSupport: StatsHostUsageSupport
   setStatsHost: (host: RuntimeClientTarget) => void
   /** Shown again, or contact came back: read the host again, keeping its numbers meanwhile. */
@@ -30,16 +25,12 @@ export type StatsSlice = {
 }
 
 export const createStatsSlice: StateCreator<AppState, [], [], StatsSlice> = (set, get) => {
-  let view = new AbortController()
   const startView = (host: RuntimeClientTarget, patch: Partial<AppState>): void => {
-    view.abort()
-    view = new AbortController()
     const epoch = get().statsHostEpoch + 1
     set({
       ...patch,
       statsHost: host,
       statsHostEpoch: epoch,
-      statsHostSignal: view.signal,
       // A renewed view keeps a real answer so the panes stay up while the host is asked again.
       ...(host.kind === 'local'
         ? { statsHostUsageSupport: 'supported' }
@@ -68,7 +59,6 @@ export const createStatsSlice: StateCreator<AppState, [], [], StatsSlice> = (set
     statsSummary: null,
     statsHost: { kind: 'local' },
     statsHostEpoch: 0,
-    statsHostSignal: view.signal,
     statsHostUsageSupport: 'supported',
 
     setStatsHost: (host) => {
@@ -91,10 +81,7 @@ export const createStatsSlice: StateCreator<AppState, [], [], StatsSlice> = (set
         const summary =
           host.kind === 'local'
             ? await window.api.stats.getSummary()
-            : await callRuntimeRpc<StatsSummary>(host, 'stats.summary', undefined, {
-                timeoutMs: STATS_SUMMARY_TIMEOUT_MS,
-                signal: get().statsHostSignal
-              })
+            : await callRuntimeRpc<StatsSummary>(host, 'stats.summary')
         // An answer from an earlier view, even of the same host, is stale.
         if (get().statsHostEpoch === epoch) {
           // A host without a stats collector answers `{}`.
