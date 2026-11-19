@@ -102,14 +102,10 @@ function dshChildWorkLiveness(
   paneKey: string,
   now: number
 ): AgentChildWorkLiveness {
-  const running: { kind: 'agent' }[] = []
-  for (const [childSessionId, lastHookAt] of state.dshChildSessionsByPaneKey.get(paneKey) ?? []) {
-    if (lastHookAt !== null && now - lastHookAt >= CHILD_INACTIVITY_LIMIT_MS) {
-      settleChildSession(state, paneKey, childSessionId)
-    } else if (lastHookAt !== null) {
-      running.push({ kind: 'agent' })
-    }
-  }
+  // An inactive child stops counting but is not settled, so a fresh hook from it counts again.
+  const running = Array.from(state.dshChildSessionsByPaneKey.get(paneKey)?.values() ?? [])
+    .filter((lastHookAt) => lastHookAt !== null && now - lastHookAt < CHILD_INACTIVITY_LIMIT_MS)
+    .map(() => ({ kind: 'agent' as const }))
   return agentChildWorkLiveness(running)
 }
 
@@ -145,8 +141,11 @@ export function normalizeDshEvent(
     }
     return null
   }
-  if (eventName === 'SessionStart') {
-    // The lead's session was replaced; its children's results can no longer wake it.
+  if (
+    eventName === 'SessionStart' &&
+    sessionId !== state.lastStatusByPaneKey.get(paneKey)?.providerSession?.id
+  ) {
+    // The lead's session was replaced; its children's results can no longer wake it. A compact keeps the id.
     for (const childSessionId of state.dshChildSessionsByPaneKey.get(paneKey)?.keys() ?? []) {
       settleChildSession(state, paneKey, childSessionId)
     }

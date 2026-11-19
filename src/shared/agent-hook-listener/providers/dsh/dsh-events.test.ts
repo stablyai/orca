@@ -71,6 +71,11 @@ describe('normalizeDshEvent', () => {
     }
     expect(normalizeAndAccept(state, 'dsh', event(LEAD_ID, 'Stop'))?.payload.state).toBe('working')
 
+    // A compact restarts the lead's own session; its children keep running.
+    normalizeAndAccept(state, 'dsh', event(LEAD_ID, 'SessionStart', { source: 'compact' }))
+    normalizeAndAccept(state, 'dsh', event(LEAD_ID, 'UserPromptSubmit', { prompt: 'continue' }))
+    expect(normalizeAndAccept(state, 'dsh', event(LEAD_ID, 'Stop'))?.payload.state).toBe('working')
+
     normalizeAndAccept(state, 'dsh', event(CHILD_ID, 'SubagentStop', { agent_id: CHILD_ID }))
     normalizeAndAccept(state, 'dsh', event(LEAD_ID, 'UserPromptSubmit', { prompt: 'first result' }))
     expect(normalizeAndAccept(state, 'dsh', event(LEAD_ID, 'Stop'))?.payload.state).toBe('working')
