@@ -9,11 +9,17 @@ import { fleetFoldedAttentionClass } from './fleet-bucket-presentation'
 import { fleetTeamLayout } from './fleet-team-fold'
 import type { FleetProject } from './fleet-view-model'
 
+/** The user's open or closed choice per team, keyed by root pane; unlisted teams follow `settled`. */
+export type FleetTeamOpenOverrides = ReadonlyMap<string, boolean>
+export type FleetTeamOpenChange = (rootPaneKey: string, open: boolean) => void
+
 export function FleetProjectSection({
   project,
   repoIcon,
   open,
   onOpenChange,
+  teamOpenOverrides,
+  onTeamOpenChange,
   width,
   now,
   onOpenCard
@@ -22,6 +28,8 @@ export function FleetProjectSection({
   repoIcon: RepoIcon | null | undefined
   open: boolean
   onOpenChange: (open: boolean) => void
+  teamOpenOverrides: FleetTeamOpenOverrides
+  onTeamOpenChange: FleetTeamOpenChange
   width: number
   now: number
   onOpenCard: FleetCardOpener
@@ -42,6 +50,8 @@ export function FleetProjectSection({
               team={team}
               project={project}
               layout={fleetTeamLayout(team.root.leafCount, width)}
+              open={teamOpenOverrides.get(team.root.card.paneKey) ?? !team.settled}
+              onOpenChange={(teamOpen) => onTeamOpenChange(team.root.card.paneKey, teamOpen)}
               now={now}
               onOpenCard={onOpenCard}
             />

@@ -14,6 +14,7 @@ const WIDE = 1240
 const NARROW = 520
 const ENGLISH = { settings: { ...getDefaultSettings('/tmp'), uiLanguage: 'en' as const } }
 const { cards, repoIconsByRepoId } = buildFleetMockSnapshot(FLEET_MOCK_NOW)
+const NO_TEAM_OVERRIDES: ReadonlyMap<string, boolean> = new Map()
 
 function clearStoredDashboardChoices(): void {
   saveAgentDashboardView('board')
@@ -37,6 +38,8 @@ function fleetFixture(
         repoIconsByRepoId={repoIconsByRepoId}
         now={FLEET_MOCK_NOW}
         onOpenCard={() => {}}
+        teamOpenOverrides={NO_TEAM_OVERRIDES}
+        onTeamOpenChange={() => {}}
       />
     )
   })

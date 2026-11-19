@@ -17,7 +17,13 @@ export type FleetNode = {
   children: FleetNode[]
 }
 
-export type FleetTeam = { root: FleetNode; size: number; counts: FleetBucketCounts }
+export type FleetTeam = {
+  root: FleetNode
+  size: number
+  counts: FleetBucketCounts
+  /** No member is working or waiting on the user. */
+  settled: boolean
+}
 
 type FleetHost = Pick<DashboardCard, 'hostKind' | 'executionHostId'>
 
@@ -145,8 +151,14 @@ export function buildFleetView(cards: readonly DashboardCard[]): FleetView {
     }
     const members = collectCards(root, [])
     group.cards.push(...members)
+    const counts = countBuckets(members)
     group.teams.push({
-      team: { root, size: members.length, counts: countBuckets(members) },
+      team: {
+        root,
+        size: members.length,
+        counts,
+        settled: counts.working === 0 && counts.attention === 0
+      },
       activity: Math.max(...members.map(lastActivity))
     })
   }

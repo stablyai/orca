@@ -251,5 +251,46 @@ export const FLEET_MOCK_AGENTS: readonly MockAgent[] = [
     startedMinutesAgo: 230,
     finishedMinutesAgo: 205,
     changedMinutesAgo: 205
+  },
+  {
+    id: 16,
+    agentType: 'claude',
+    bucket: 'done',
+    dotState: 'done',
+    repo: 'notes',
+    worktree: 'notes-archive',
+    title: "Archive last quarter's meeting notes",
+    message: 'Moved 42 notes into the Q3 archive and linked them from the index.',
+    startedMinutesAgo: 320,
+    finishedMinutesAgo: 260,
+    changedMinutesAgo: 260
+  },
+  {
+    id: 17,
+    parent: 16,
+    agentType: 'codex',
+    bucket: 'done',
+    dotState: 'done',
+    repo: 'notes',
+    worktree: 'notes-archive-sort',
+    title: 'Sort the notes by project',
+    message: 'Filed every note under one of six projects.',
+    startedMinutesAgo: 315,
+    finishedMinutesAgo: 290,
+    changedMinutesAgo: 290
+  },
+  {
+    id: 18,
+    parent: 16,
+    agentType: 'gemini',
+    bucket: 'idle',
+    dotState: 'done',
+    repo: 'notes',
+    worktree: 'notes-archive-tags',
+    title: 'Tag decisions and owners',
+    message: 'Tagged 17 decisions with their owners.',
+    startedMinutesAgo: 314,
+    finishedMinutesAgo: 280,
+    changedMinutesAgo: 280
   }
 ]

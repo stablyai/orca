@@ -8,7 +8,11 @@ import type {
 } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-icon'
 import type { FleetCardOpener } from './FleetNetworkNode'
-import { FleetProjectSection } from './FleetProjectSection'
+import {
+  FleetProjectSection,
+  type FleetTeamOpenChange,
+  type FleetTeamOpenOverrides
+} from './FleetProjectSection'
 import { FleetSummaryBand } from './FleetSummaryBand'
 import {
   loadFleetCollapsedProjects,
@@ -22,11 +26,15 @@ export function AgentFleetView({
   repoIconsByRepoId,
   now,
   onOpenCard,
+  teamOpenOverrides,
+  onTeamOpenChange,
   className
 }: {
   cards: readonly DashboardCard[]
   buckets: readonly DashboardBucket[]
   repoIconsByRepoId: Record<string, RepoIcon | null> | undefined
+  teamOpenOverrides: FleetTeamOpenOverrides
+  onTeamOpenChange: FleetTeamOpenChange
   now: number
   onOpenCard: FleetCardOpener
   className?: string
@@ -63,6 +71,8 @@ export function AgentFleetView({
               repoIcon={repoIconsByRepoId?.[project.repoId]}
               open={!collapsedKeys.has(project.key)}
               onOpenChange={(open) => setProjectOpen(project.key, open)}
+              teamOpenOverrides={teamOpenOverrides}
+              onTeamOpenChange={onTeamOpenChange}
               width={width}
               now={now}
               onOpenCard={onOpenCard}

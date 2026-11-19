@@ -154,6 +154,27 @@ describe('buildFleetView', () => {
     ])
   })
 
+  it('settles a team only when no member is working or waiting on the user', () => {
+    const view = buildFleetView([
+      card('finished-lead', { bucket: 'done' }),
+      card('finished-worker', { parent: 'finished-lead', bucket: 'idle' }),
+      card('lead-with-busy-worker', { bucket: 'done' }),
+      card('busy-worker', { parent: 'lead-with-busy-worker', bucket: 'working' }),
+      card('lead-with-waiting-worker', { bucket: 'idle' }),
+      card('waiting-worker', { parent: 'lead-with-waiting-worker', bucket: 'attention' })
+    ])
+
+    expect(
+      Object.fromEntries(
+        view.projects[0].teams.map((team) => [team.root.card.paneKey, team.settled])
+      )
+    ).toEqual({
+      'finished-lead': true,
+      'lead-with-busy-worker': false,
+      'lead-with-waiting-worker': false
+    })
+  })
+
   it('orders projects by name regardless of which one was active last', () => {
     const view = buildFleetView([
       card('web-agent', { repo: 'web', changedAt: 900 }),

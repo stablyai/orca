@@ -150,6 +150,12 @@ export function AgentKanbanBoard({
   const searchInputRef = useRef<HTMLInputElement>(null)
   const [filters, setFilters] = useState<DashboardFilters>(EMPTY_DASHBOARD_FILTERS)
   const [view, setView] = useState(loadAgentDashboardView)
+  const [teamOpenOverrides, setTeamOpenOverrides] = useState<ReadonlyMap<string, boolean>>(
+    () => new Map()
+  )
+  const handleTeamOpenChange = useCallback((rootPaneKey: string, open: boolean) => {
+    setTeamOpenOverrides((previous) => new Map(previous).set(rootPaneKey, open))
+  }, [])
   const handleViewChange = useCallback((next: AgentDashboardView) => {
     setView(next)
     saveAgentDashboardView(next)
@@ -306,6 +312,8 @@ export function AgentKanbanBoard({
               repoIconsByRepoId={snapshot.repoIconsByRepoId}
               now={now}
               onOpenCard={handleOpenTerminal}
+              teamOpenOverrides={teamOpenOverrides}
+              onTeamOpenChange={handleTeamOpenChange}
               className="mx-auto w-full max-w-[1280px]"
             />
           </div>
