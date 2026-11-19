@@ -1,28 +1,55 @@
 name: Publish Codex history cleanup policy
 
 # Maintainer-only publisher: dispatch main to next, soak, then promote identical bytes to stable; emergency-off turns every kind off on both channels at once. Use GITHUB_TOKEN so release-policy accepts bot-authored prereleases.
+# Create the `codex-history-cleanup-policy` environment with required reviewers before the first dispatch, or GitHub creates it unprotected. Emergency-off waits for the same approval.
+# Pull requests touching the policy or its publisher run only the validation, so a bad edit fails before merge.
 on:
+  pull_request:
+    paths:
+      - 'config/remote-policies/codex-history-cleanup-policy.json'
+      - 'config/scripts/release/codex-history-cleanup-policy/**'
+      - 'config/scripts/release/publication/channel-release-asset.mjs'
+      - 'src/main/codex/history/cleanup-policy/codex-history-cleanup-policy.ts'
+      - '.github/workflows/codex-history-cleanup-policy-publish.yml'
   workflow_dispatch:
     inputs:
       action:
-        description: 'publish-next publishes config/remote-policies/codex-history-cleanup-policy.json to next; promote-stable copies the next file to stable; emergency-off publishes it with every kind off to next and stable'
+        description: 'publish-next publishes config/remote-policies/codex-history-cleanup-policy.json to next; promote-stable copies the next file to stable; emergency-off publishes every kind off to next and stable'
         required: true
         type: choice
         options:
           - publish-next
           - promote-stable
           - emergency-off
+      revision:
+        description: 'emergency-off only: the lowest revision to use, for when a published revision cannot be read'
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
 
 concurrency:
-  group: codex-history-cleanup-policy-publish
-  cancel-in-progress: false
+  group: ${{ github.event_name == 'pull_request' && format('codex-history-cleanup-policy-validate-{0}', github.ref) || 'codex-history-cleanup-policy-publish' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  validate:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      # The publisher validates with the app's own parser, which needs the app's dependencies.
+      - uses: ./.github/actions/install-node-dependencies
+      - name: Validate the policy
+        run: node config/scripts/release/codex-history-cleanup-policy/codex-history-cleanup-policy-publish.mjs validate
+
   publish:
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: codex-history-cleanup-policy
@@ -32,10 +59,15 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      # The publisher validates with the app's own parser, which needs the app's dependencies.
       - uses: ./.github/actions/install-node-dependencies
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
           ACTION: ${{ inputs.action }}
-        run: node config/scripts/release/codex-history-cleanup-policy/codex-history-cleanup-policy-publish.mjs "$ACTION"
+          REVISION: ${{ inputs.revision }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=("$ACTION")
+          [[ "$ACTION" == "emergency-off" && -n "$REVISION" ]] && args+=(--revision "$REVISION")
+          node config/scripts/release/codex-history-cleanup-policy/codex-history-cleanup-policy-publish.mjs "${args[@]}"
