@@ -1,6 +1,6 @@
 import { useLayoutEffect, useState } from 'react'
 import type { AppState } from '../types'
-import type { RootSelectorState } from './app-store-channels'
+import { isAppStoreChannelField, type RootSelectorState } from './app-store-channels'
 
 type Selector = (state: RootSelectorState) => unknown
 
@@ -26,15 +26,25 @@ export function useRecordedRootSelection(selector: Selector): void {
 }
 
 /**
- * After a channel-only write skipped root selectors. Only channel fields differ between the two
- * states, so a selector whose result differs between them reads a channel field.
+ * After a channel-only write skipped root selectors: runs committed selectors on a view of the state
+ * that notes any channel field read. Old and new channel handles can share live rows, so comparing
+ * results across the write cannot see those reads.
  */
-export function checkSkippedRootSelectors(state: AppState, previousState: AppState): void {
+export function checkSkippedRootSelectors(state: AppState): void {
   const now = performance.now()
   if (now < nextCheckAt) {
     return
   }
   nextCheckAt = now + CHECK_INTERVAL_MS
+  let channelRead = false
+  const watched = new Proxy(state, {
+    get(target, key, receiver) {
+      if (isAppStoreChannelField(key)) {
+        channelRead = true
+      }
+      return Reflect.get(target, key, receiver)
+    }
+  })
   for (let checked = 0; checked < CHECK_BUDGET; checked++) {
     cursor ??= committed.values()
     const next = cursor.next()
@@ -43,17 +53,15 @@ export function checkSkippedRootSelectors(state: AppState, previousState: AppSta
       return
     }
     const selector = next.value
-    let moved: boolean
+    channelRead = false
     try {
-      // Previous first, so memoizing selectors end primed with the current state.
-      const before = selector(previousState)
-      moved = !Object.is(selector(state), before)
+      selector(watched)
     } catch {
       continue
     }
-    if (moved) {
+    if (channelRead) {
       console.error(
-        'A root app-store selector changed on a channel-only write; read channel fields through useAppStoreWithChannels.',
+        'A root app-store selector read a channel field; read channel fields through useAppStoreWithChannels.',
         selector
       )
     }
