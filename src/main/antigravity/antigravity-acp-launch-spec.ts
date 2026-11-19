@@ -1,6 +1,6 @@
 // Antigravity chats run Orca's managed ACP server, or the host's own `agy acp` when compatible.
 
-import { join } from 'node:path'
+import { join, win32 } from 'node:path'
 import { homedir } from 'node:os'
 import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
 import { ORCA_ACP_CLIENT_INFO } from '../acp/launch/acp-client-info'
@@ -146,7 +146,23 @@ const ANTIGRAVITY_HOST_LAUNCH_SPEC: AcpLaunchSpec = {
     }
   },
   minimumVersions: [ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION],
-  installDirectories: ({ homePath }) => [join(homePath, '.local', 'bin')],
+  installDirectories: ({ env, homePath }) => {
+    if (process.platform !== 'win32') {
+      return [join(homePath, '.local', 'bin')]
+    }
+    const localAppData = Object.entries(env)
+      .find(([key]) => key.toUpperCase() === 'LOCALAPPDATA')?.[1]
+      ?.trim()
+    return [
+      ...new Set([
+        ...(localAppData && win32.isAbsolute(localAppData)
+          ? [join(localAppData, 'agy', 'bin')]
+          : []),
+        join(homePath, 'AppData', 'Local', 'agy', 'bin'),
+        join(homePath, '.local', 'bin')
+      ])
+    ]
+  },
   managedRuntime: undefined,
   resolveSessionMeta: undefined,
   // agy has no full-access mode, so its launch flag grants it; plan approvals still reach the chat.
