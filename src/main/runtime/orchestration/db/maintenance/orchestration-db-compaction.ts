@@ -16,7 +16,7 @@ const EXIT_GRACE_MS = 500
 const MAX_TIMEOUTS = 1
 const MARKER_WRITE_MS = 250
 // Time after the kill grace for rolling back a stopped VACUUM's WAL; launch does it if this runs out.
-const RECOVERY_MS = 200
+const RECOVERY_MS = 500
 // Our close checkpoints only if the child died after 'ready'; this (journal_size_limit) bounds that close.
 const MAX_WAL_BYTES = 8 * MIB
 const RETRY_LIVE_FRACTION = 0.75
@@ -73,13 +73,14 @@ async function walBacklogExceeds(filename: string, maxBytes: number): Promise<bo
   }
 }
 
-async function settlesWithin(work: Promise<void>, ms: number): Promise<boolean> {
+/** The work's result, or 'late' when it hasn't settled within `ms`. */
+async function settlesWithin<T>(work: Promise<T>, ms: number): Promise<T | 'late'> {
   let timer: NodeJS.Timeout | undefined
-  const late = new Promise<false>((resolve) => {
-    timer = setTimeout(() => resolve(false), ms)
+  const late = new Promise<'late'>((resolve) => {
+    timer = setTimeout(() => resolve('late'), ms)
   })
   try {
-    return await Promise.race([work.then(() => true as const), late])
+    return await Promise.race([work, late])
   } finally {
     clearTimeout(timer)
   }
@@ -180,13 +181,18 @@ async function readDeferral(filename: string): Promise<CompactionDeferral | null
   }
 }
 
-async function writeDeferral(filename: string, deferral: CompactionDeferral | null): Promise<void> {
+/** False when the note couldn't be saved. */
+async function writeDeferral(
+  filename: string,
+  deferral: CompactionDeferral | null
+): Promise<boolean> {
   try {
     await (deferral
       ? writeFile(deferralFile(filename), JSON.stringify(deferral))
       : rm(deferralFile(filename), { force: true }))
+    return true
   } catch {
-    // Only a retry hint; losing it costs one more bounded attempt.
+    return false
   }
 }
 
@@ -251,22 +257,28 @@ export async function compactOrchestrationDb(
   }
   // Recorded before the wait, so a quit cut off mid-attempt still counts as the one wait it paid; a disk
   // that can't write it promptly gets no attempt at all.
-  const recorded = await settlesWithin(
-    writeDeferral(filename, { liveBytes, timeouts: (deferral?.timeouts ?? 0) + 1 }),
-    MARKER_WRITE_MS
-  )
-  if (!recorded) {
+  const write = writeDeferral(filename, { liveBytes, timeouts: (deferral?.timeouts ?? 0) + 1 })
+  const recorded = await settlesWithin(write, MARKER_WRITE_MS)
+  if (recorded !== true) {
+    if (recorded === 'late') {
+      // No attempt ran, so a write that lands later mustn't defer the file.
+      void write.then((saved) => saved && writeDeferral(filename, deferral))
+    }
     return { kind: 'busy' }
   }
   const remainingMs = budgetMs - (performance.now() - started)
-  const result =
+  const { result, handedOff } =
     remainingMs > 0
       ? await runCompactionChild(filename, remainingMs, release, started)
-      : { kind: 'timed-out' as const, ms: Math.round(performance.now() - started) }
+      : {
+          result: { kind: 'timed-out' as const, ms: Math.round(performance.now() - started) },
+          handedOff: false
+        }
   if (!keepsDeferral(result)) {
     await writeDeferral(filename, result.kind === 'compacted' ? null : deferral)
-  } else if (await walBacklogExceeds(filename, MAX_WAL_BYTES)) {
-    // A stopped VACUUM leaves its copy in the WAL; clear it now, after the windows closed, not at launch.
+  } else if (handedOff) {
+    // A VACUUM stopped under its exclusive lock leaves its copy in the WAL; clear it now, after the
+    // windows closed, rather than on the next launch's first open.
     const leftMs = budgetMs + EXIT_GRACE_MS + RECOVERY_MS - (performance.now() - started)
     await runChild(filename, { recoverOnly: true }, Math.max(leftMs, 0))
   }
@@ -278,8 +290,10 @@ function runCompactionChild(
   budgetMs: number,
   release: () => void,
   started: number
-): Promise<OrchestrationDbCompaction> {
-  return new Promise((resolve) => {
+): Promise<{ result: OrchestrationDbCompaction; handedOff: boolean }> {
+  let handedOff = false
+  return new Promise((settle) => {
+    const resolve = (result: OrchestrationDbCompaction): void => settle({ result, handedOff })
     let child: ReturnType<typeof spawnProcess>
     try {
       child = spawnProcess({
@@ -316,6 +330,7 @@ function runCompactionChild(
         }
         try {
           release()
+          handedOff = true
           child.stdin?.end('go\n')
         } catch (error) {
           child.kill('SIGKILL')
