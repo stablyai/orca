@@ -5,6 +5,7 @@ import {
 } from '../../../../../shared/execution-host/execution-host'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { useAppStore } from '@/store/index'
+import { runtimeStatusSubscriptionsFor } from '@/store/slices/runtime-status/views/runtime-status-subscriptions'
 import type { AppState } from '@/store/types'
 import {
   loadHostStructuredAgents,
@@ -37,15 +38,25 @@ async function syncLocalHost(settings: AppState['settings']): Promise<void> {
   )
 }
 
+function loadPairedHost(
+  environmentId: string,
+  statuses: AppState['runtimeStatusByEnvironmentId']
+): void {
+  const status = lastVerifiedRuntimeStatus(statuses.get(environmentId))
+  if (status) {
+    void loadHostStructuredAgents(
+      toRuntimeExecutionHostId(environmentId),
+      status.capabilities,
+      status.runtimeId
+    )
+  }
+}
+
 function syncPairedHosts(statuses: AppState['runtimeStatusByEnvironmentId']): void {
   const hostIds = new Set<string>([LOCAL_EXECUTION_HOST_ID])
-  for (const [environmentId, entry] of statuses) {
-    const executionHostId = toRuntimeExecutionHostId(environmentId)
-    hostIds.add(executionHostId)
-    const status = lastVerifiedRuntimeStatus(entry)
-    if (status) {
-      void loadHostStructuredAgents(executionHostId, status.capabilities, status.runtimeId)
-    }
+  for (const environmentId of statuses.keys()) {
+    hostIds.add(toRuntimeExecutionHostId(environmentId))
+    loadPairedHost(environmentId, statuses)
   }
   retainHostStructuredAgents(hostIds)
 }
@@ -68,16 +79,30 @@ export function installHostStructuredAgentsSync(): () => void {
     if (turnedOn) {
       void syncLocalHost(state.settings)
     }
-    if (
-      on &&
-      (turnedOn ||
-        state.runtimeStatusByEnvironmentId !== previousState.runtimeStatusByEnvironmentId)
-    ) {
+    if (turnedOn) {
       syncPairedHosts(state.runtimeStatusByEnvironmentId)
     }
   })
+  // A status write re-reads only the hosts it touched; dropping a host retains the rest.
+  const stopStatuses = runtimeStatusSubscriptionsFor(useAppStore).subscribeStatusChanges(
+    (change) => {
+      const state = useAppStore.getState()
+      if (!launchesMayOpenChats(state)) {
+        return
+      }
+      const statuses = state.runtimeStatusByEnvironmentId
+      if (change.deleted.size > 0) {
+        syncPairedHosts(statuses)
+        return
+      }
+      for (const environmentId of change.ids) {
+        loadPairedHost(environmentId, statuses)
+      }
+    }
+  )
   return () => {
     stopLocal()
+    stopStatuses()
     stopStore()
   }
 }

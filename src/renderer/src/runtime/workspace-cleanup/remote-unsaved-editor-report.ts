@@ -10,6 +10,7 @@ import { getRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runt
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { onServerControlConnected } from '../workspace-layout/server/server-layout-view-report'
 import { subscribeRuntimeHostContactRegained } from '../hosts/connections/runtime-host-contact-regained'
+import { runtimeStatusSubscriptionsFor } from '@/store/slices/runtime-status/views/runtime-status-subscriptions'
 
 function unsavedWorktreeIdsByEnvironment(state: AppState): Map<string, string[]> {
   const byEnvironment = new Map<string, Set<string>>()
@@ -26,6 +27,28 @@ function unsavedWorktreeIdsByEnvironment(state: AppState): Map<string, string[]>
     }
   }
   return new Map([...byEnvironment].map(([environmentId, ids]) => [environmentId, [...ids].sort()]))
+}
+
+// Every field file-owner routing reads, plus the dirty-editor inputs themselves.
+const ROUTING_FIELDS = [
+  'openFiles',
+  'editorDrafts',
+  'repos',
+  'folderWorkspaces',
+  'projectGroups',
+  'detectedWorktreesByRepo',
+  'restoredRuntimeHostIdByWorkspaceSessionKey',
+  'activeWorktreeId',
+  'activeWorkspaceExecutionHostId',
+  'runtimeEnvironmentCatalogHydrated',
+  'removedRuntimeEnvironmentIds'
+] as const satisfies readonly (keyof AppState)[]
+
+function reportInputsChanged(state: AppState, previous: AppState): boolean {
+  return (
+    ROUTING_FIELDS.some((field) => state[field] !== previous[field]) ||
+    selectWorktreesByRepo(state) !== selectWorktreesByRepo(previous)
+  )
 }
 
 const UNKNOWN = '\0unknown'
@@ -54,6 +77,11 @@ export function installRemoteUnsavedEditorReport(): () => void {
   const stopWatches = new Map<string, () => void>()
   // One report in flight per host, so an older list can never land after a newer one.
   const inFlight = new Set<string>()
+  // Rebuilt on editor or routing input changes, and fresh before every one-host send.
+  let reports = unsavedWorktreeIdsByEnvironment(useAppStore.getState())
+  const refreshReports = (): void => {
+    reports = unsavedWorktreeIdsByEnvironment(useAppStore.getState())
+  }
 
   const send = (environmentId: string, worktreeIds: string[]): void => {
     sent.set(environmentId, worktreeIds.join('\n'))
@@ -78,14 +106,14 @@ export function installRemoteUnsavedEditorReport(): () => void {
       .finally(() => {
         inFlight.delete(environmentId)
         // Edits made while it was in flight go out now, as the latest list only.
-        sync(useAppStore.getState())
+        refreshReports()
+        syncHosts([environmentId])
       })
   }
 
-  const sync = (state: AppState): void => {
-    const current = unsavedWorktreeIdsByEnvironment(state)
-    for (const environmentId of new Set([...sent.keys(), ...current.keys()])) {
-      const worktreeIds = current.get(environmentId) ?? []
+  const syncHosts = (environmentIds: Iterable<string>): void => {
+    for (const environmentId of environmentIds) {
+      const worktreeIds = reports.get(environmentId) ?? []
       if (
         inFlight.has(environmentId) ||
         unsupported.has(environmentId) ||
@@ -97,6 +125,7 @@ export function installRemoteUnsavedEditorReport(): () => void {
       send(environmentId, worktreeIds)
     }
   }
+  const sync = (): void => syncHosts(new Set([...sent.keys(), ...reports.keys()]))
 
   const watch = (environmentId: string): void => {
     if (stopWatches.has(environmentId)) {
@@ -107,7 +136,8 @@ export function installRemoteUnsavedEditorReport(): () => void {
       // Unknown, not absent: an empty list must still go out to clear what the host holds.
       sent.set(environmentId, UNKNOWN)
       unsupported.delete(environmentId)
-      sync(useAppStore.getState())
+      refreshReports()
+      syncHosts([environmentId])
     }
     // Desktop sees control-socket changes; web clients only see host contact come back.
     const stopSocket = onServerControlConnected(environmentId, resend)
@@ -120,38 +150,51 @@ export function installRemoteUnsavedEditorReport(): () => void {
 
   // A reloaded window must clear what its previous renderer reported over main's still-open socket.
   const known = new Set<string>()
+  /** The hosts that just got their first report owed. */
   const noteEnvironments = (
-    state: Pick<AppState, 'runtimeStatusByEnvironmentId' | 'runtimeEnvironments'>
-  ): void => {
+    state: Pick<AppState, 'runtimeStatusByEnvironmentId' | 'runtimeEnvironments'>,
+    environmentIds: Iterable<string> = state.runtimeStatusByEnvironmentId.keys()
+  ): string[] => {
     // Statuses can outlive a removed host; only configured hosts get a report.
-    const configured = new Set(state.runtimeEnvironments.map((environment) => environment.id))
-    for (const environmentId of state.runtimeStatusByEnvironmentId.keys()) {
-      if (configured.has(environmentId) && !known.has(environmentId)) {
+    const noted: string[] = []
+    let configured: Set<string> | undefined
+    for (const environmentId of environmentIds) {
+      if (known.has(environmentId) || !state.runtimeStatusByEnvironmentId.has(environmentId)) {
+        continue
+      }
+      configured ??= new Set(state.runtimeEnvironments.map((environment) => environment.id))
+      if (configured.has(environmentId)) {
         known.add(environmentId)
         sent.set(environmentId, UNKNOWN)
+        noted.push(environmentId)
       }
     }
+    return noted
   }
   noteEnvironments(useAppStore.getState())
-  sync(useAppStore.getState())
+  sync()
+  // Routing reads no host status, so a status write only owes a first report to a newly seen host.
+  const stopStatuses = runtimeStatusSubscriptionsFor(useAppStore).subscribeStatusChanges(
+    (change) => {
+      const noted = noteEnvironments(useAppStore.getState(), change.ids)
+      if (noted.length > 0) {
+        refreshReports()
+      }
+      syncHosts(noted)
+    }
+  )
   const stopStore = useAppStore.subscribe((state, previous) => {
-    const environmentsChanged =
-      state.runtimeStatusByEnvironmentId !== previous.runtimeStatusByEnvironmentId ||
-      state.runtimeEnvironments !== previous.runtimeEnvironments
+    const environmentsChanged = state.runtimeEnvironments !== previous.runtimeEnvironments
     if (environmentsChanged) {
       noteEnvironments(state)
     }
-    if (
-      environmentsChanged ||
-      state.openFiles !== previous.openFiles ||
-      state.editorDrafts !== previous.editorDrafts ||
-      state.repos !== previous.repos ||
-      selectWorktreesByRepo(state) !== selectWorktreesByRepo(previous)
-    ) {
-      sync(state)
+    if (environmentsChanged || reportInputsChanged(state, previous)) {
+      refreshReports()
+      sync()
     }
   })
   return () => {
+    stopStatuses()
     stopStore()
     for (const stop of stopWatches.values()) {
       stop()
