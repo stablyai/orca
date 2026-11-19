@@ -4,24 +4,40 @@ import { slackTokenSegment, type SlackPeople } from './slack-message-markup'
 /** A parsed markdown node, as much of mdast as this reads. */
 type MarkdownNode = { type: string; value?: string; url?: string; children?: MarkdownNode[] }
 
-// Mentions, channels, user groups and broadcasts; other `<…>` text stays as written.
+// Mentions, channels, user groups and broadcasts; other `<…>` text stays as written. A label's
+// `&lt;…&gt;` reaches text nodes decoded, so a label may hold `<`, and `>` closing one.
 const MENTION_TOKEN =
-  /<((?:@[UW][A-Z0-9]+|#[CG][A-Z0-9]+|!subteam\^[A-Z0-9]+|!(?:here|channel|everyone))(?:\|[^<>]*)?)>/g
+  /<((?:@[UW][A-Z0-9]+|#[CG][A-Z0-9]+|!subteam\^[A-Z0-9]+|!(?:here|channel|everyone))(?:\|(?:[^<>]|<[^<>]*>|<)*)?)>/g
 // `<@U…|a@b.com>`: markdown links the email, leaving `<@U…|` and `>` around it.
 const OPEN_MENTION = /<@[UW][A-Z0-9]+\|[^<>]*$/
 const BLOCK_PARENTS = new Set(['root', 'blockquote', 'listItem', 'footnoteDefinition'])
 
-/** The Slack people a chat knows: the askers on its messages, by user id. Null when none. */
-export function slackPeopleOf(
-  messages: readonly { asker?: Pick<ConnectorMessageAsker, 'source' | 'userId' | 'name'> }[]
-): SlackPeople | null {
-  const people = new Map<string, string>()
-  for (const { asker } of messages) {
-    if (asker?.source === 'slack' && asker.name) {
-      people.set(asker.userId, asker.name)
+type AskedMessage = { asker?: Pick<ConnectorMessageAsker, 'source' | 'userId' | 'name'> }
+
+/** The Slack people a chat knows, as read from its messages so far. */
+export type SlackPeopleScan = {
+  first: AskedMessage | undefined
+  scanned: number
+  people: SlackPeople | null
+}
+
+/** The Slack people a chat knows: the askers on its messages, by user id; null when none. Given
+ *  the scan of an earlier array of the same chat, reads only messages added since (and the last,
+ *  which may still be growing), and keeps the same map while no one new appears. */
+export function scanSlackPeople(
+  messages: readonly AskedMessage[],
+  previous: SlackPeopleScan | null = null
+): SlackPeopleScan {
+  const grows =
+    previous !== null && messages[0] === previous.first && messages.length >= previous.scanned
+  let people = grows ? previous.people : null
+  for (let i = grows ? Math.max(previous.scanned - 1, 0) : 0; i < messages.length; i++) {
+    const asker = messages[i]!.asker
+    if (asker?.source === 'slack' && asker.name && people?.get(asker.userId) !== asker.name) {
+      people = new Map(people ?? []).set(asker.userId, asker.name)
     }
   }
-  return people.size > 0 ? people : null
+  return { first: messages[0], scanned: messages.length, people }
 }
 
 function tokenNodes(
@@ -47,8 +63,11 @@ function tokenNodes(
   return nodes
 }
 
+// A line markdown read as HTML is left whole if it holds other HTML or code it never split out.
 function onlyBroadcastTokens(html: string): boolean {
-  return html.startsWith('<!') && !html.replace(MENTION_TOKEN, '').includes('<')
+  return (
+    html.startsWith('<!') && !html.includes('`') && !html.replace(MENTION_TOKEN, '').includes('<')
+  )
 }
 
 function plainText(node: MarkdownNode): string {

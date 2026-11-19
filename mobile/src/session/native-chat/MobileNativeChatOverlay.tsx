@@ -1,6 +1,8 @@
 import { MobileQueuedMessageComposerContext } from './input/queued-messages/mobile-queued-message-composer-context'
-import { MobileMarkdownSlackPeopleContext } from '../../components/markdown/parsing/mobile-markdown-mentions'
-import { slackPeopleOf } from '../../../../src/shared/connectors/slack-mention-tokens'
+import {
+  MobileMarkdownSlackPeopleContext,
+  useMobileSlackPeople
+} from '../../components/markdown/parsing/mobile-markdown-mentions'
 import { Activity, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
@@ -123,7 +125,7 @@ function MobileNativeChatOverlayContent({
     session.messages,
     controller.nativeChatItemSource
   )
-  const slackPeople = useMemo(() => slackPeopleOf(session.messages), [session.messages])
+  const slackPeople = useMobileSlackPeople(session.messages)
   const folded = useMobileNativeChatProjection(
     fullContent.messages,
     agent,
