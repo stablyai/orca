@@ -22,7 +22,26 @@ type Listeners = {
 
 export type BrowserSessionWebRequestEvent = keyof Listeners
 
-type Install = (filterOrListener: unknown, listener?: unknown) => void
+type Filter = Electron.WebRequestFilter | undefined
+type Installers = {
+  [E in BrowserSessionWebRequestEvent]: (
+    webRequest: Electron.WebRequest,
+    filter: Filter,
+    listener: Listeners[E] | null
+  ) => void
+}
+
+// Electron's setters are overloaded per event, so each gets its own typed call.
+const installers: Installers = {
+  onBeforeRequest: (w, f, l) => (f ? w.onBeforeRequest(f, l) : w.onBeforeRequest(l)),
+  onBeforeSendHeaders: (w, f, l) => (f ? w.onBeforeSendHeaders(f, l) : w.onBeforeSendHeaders(l)),
+  onSendHeaders: (w, f, l) => (f ? w.onSendHeaders(f, l) : w.onSendHeaders(l)),
+  onHeadersReceived: (w, f, l) => (f ? w.onHeadersReceived(f, l) : w.onHeadersReceived(l)),
+  onResponseStarted: (w, f, l) => (f ? w.onResponseStarted(f, l) : w.onResponseStarted(l)),
+  onBeforeRedirect: (w, f, l) => (f ? w.onBeforeRedirect(f, l) : w.onBeforeRedirect(l)),
+  onCompleted: (w, f, l) => (f ? w.onCompleted(f, l) : w.onCompleted(l)),
+  onErrorOccurred: (w, f, l) => (f ? w.onErrorOccurred(f, l) : w.onErrorOccurred(l))
+}
 
 const holdersBySession = new WeakMap<Session, Map<BrowserSessionWebRequestEvent, symbol>>()
 
@@ -48,17 +67,13 @@ export function holdBrowserSessionWebRequest<E extends BrowserSessionWebRequestE
   }
   const hold = Symbol(event)
   holders.set(event, hold)
-  const install = session.webRequest[event].bind(session.webRequest) as Install
-  if (filter) {
-    install(filter, listener)
-  } else {
-    install(listener)
-  }
+  const install: Installers[E] = installers[event]
+  install(session.webRequest, filter, listener)
   return () => {
     if (holders.get(event) !== hold) {
       return
     }
     holders.delete(event)
-    install(null)
+    install(session.webRequest, undefined, null)
   }
 }
