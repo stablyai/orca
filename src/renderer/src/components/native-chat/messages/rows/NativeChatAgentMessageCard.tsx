@@ -36,7 +36,6 @@ import { useNativeChatWorkers } from '../../native-chat-workers-context'
 import { NativeChatMarkdown } from '../../markdown/NativeChatMarkdown'
 import { NativeChatTextAttachments } from '../../media/text/NativeChatTextAttachments'
 import { NativeChatCodeBlock } from '../../markdown/code/NativeChatCodeBlock'
-import { NativeChatEventCopyLink } from '../events/NativeChatEventCopyLink'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { NativeChatImageAttachments } from '../../media/images/NativeChatImageAttachments'
 import { NativeChatEventRow, type NativeChatEventBadge } from '../events/NativeChatEventRow'
@@ -133,14 +132,6 @@ export function NativeChatAgentMessageCard({
             dispatchId={dispatchId}
             chatWorktreeId={worktreeId}
             target={target}
-          />
-        ) : null
-      }
-      detailsActions={
-        canCopy ? (
-          <NativeChatEventCopyLink
-            text={text}
-            label={t('components.native-chat.copyMessage.copy', 'Copy message')}
           />
         ) : null
       }

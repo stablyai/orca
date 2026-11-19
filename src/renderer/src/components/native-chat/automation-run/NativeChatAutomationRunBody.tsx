@@ -23,11 +23,25 @@ import { NativeChatAutomationRunInstructions } from './NativeChatAutomationRunIn
 import { RUN_LINK_BUTTON } from './automation-run-link-button'
 import { ROW_HEADING, ROW_NOTE } from './NativeChatAutomationRowFrame'
 import { NativeChatMessageTimestamp } from '../messages/rows/NativeChatMessageTimestamp'
-import { NativeChatEventCopyLink } from '../messages/events/NativeChatEventCopyLink'
 import type { MergedRunFailure } from '../../../../../shared/native-chat/transcript/events/native-chat-event-plan'
 
 const HEADING = ROW_HEADING
 const NOTE = ROW_NOTE
+
+/** Copies its text and says so briefly, like the row's copy button. */
+function CopyTextButton({ text, label }: { text: string; label: string }): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      className={RUN_LINK_BUTTON}
+      onClick={() => {
+        void window.api.ui.writeClipboardText(text).catch(() => undefined)
+      }}
+    >
+      {label}
+    </button>
+  )
+}
 
 /** Sends a run that couldn't start once more; a wait is deleted once its run starts, so only a wait's
  *  run offers it. Says Sent again after. */
@@ -110,10 +124,8 @@ function RunActions({
           {say('openAutomation')}
         </button>
       ) : null}
-      {instructions ? (
-        <NativeChatEventCopyLink text={instructions} label={say('copyInstructions')} />
-      ) : null}
-      {copyEvent ? <NativeChatEventCopyLink text={copyEvent} label={say('copyEvent')} /> : null}
+      {instructions ? <CopyTextButton text={instructions} label={say('copyInstructions')} /> : null}
+      {copyEvent ? <CopyTextButton text={copyEvent} label={say('copyEvent')} /> : null}
     </div>
   )
 }

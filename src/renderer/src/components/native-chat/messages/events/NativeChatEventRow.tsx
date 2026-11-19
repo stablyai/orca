@@ -51,13 +51,10 @@ function EventDetails({
   id,
   clamp,
   findActive,
-  actions,
   children
 }: {
   id: string
   clamp: boolean
-  /** Text actions under the details, kept outside the cut. */
-  actions?: React.ReactNode
   /** Find reads drawn text, so a search shows the details whole. */
   findActive: boolean
   children: React.ReactNode
@@ -67,7 +64,6 @@ function EventDetails({
   const [cut, setCut] = useState(false)
   const [chosenFull, setFull] = useState(!clamp)
   const full = chosenFull || findActive
-  const canFold = clamp && !findActive && (cut || full)
   useLayoutEffect(() => {
     const node = body.current
     if (!node || full) {
@@ -98,22 +94,17 @@ function EventDetails({
       >
         {children}
       </div>
-      {canFold || actions ? (
-        <div className="mt-1.5 flex flex-wrap items-center gap-3.5">
-          {canFold ? (
-            <button
-              type="button"
-              aria-expanded={full}
-              className="rounded-sm text-xs font-medium text-chat-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              onClick={() => setFull(!full)}
-            >
-              {full
-                ? t('components.native-chat.eventRow.showLess', 'Show less')
-                : t('components.native-chat.eventRow.showMore', 'Show more')}
-            </button>
-          ) : null}
-          {actions}
-        </div>
+      {clamp && !findActive && (cut || full) ? (
+        <button
+          type="button"
+          aria-expanded={full}
+          className="mt-1.5 rounded-sm text-xs font-medium text-chat-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onClick={() => setFull(!full)}
+        >
+          {full
+            ? t('components.native-chat.eventRow.showLess', 'Show less')
+            : t('components.native-chat.eventRow.showMore', 'Show more')}
+        </button>
       ) : null}
     </div>
   )
@@ -133,7 +124,6 @@ export function NativeChatEventRow({
   action,
   timestamp,
   details,
-  detailsActions,
   disclosureKey,
   defaultOpen = false,
   open: openProp,
@@ -153,8 +143,6 @@ export function NativeChatEventRow({
   action?: React.ReactNode
   timestamp?: number | null
   details?: React.ReactNode
-  /** Text actions under the opened details, e.g. Copy message; a cut never hides them. */
-  detailsActions?: React.ReactNode
   /** Where the transcript remembers whether this row's details are open. */
   disclosureKey?: string
   defaultOpen?: boolean
@@ -263,12 +251,7 @@ export function NativeChatEventRow({
         ) : null}
       </div>
       {toggles && shown ? (
-        <EventDetails
-          id={detailsId}
-          clamp={clampDetails}
-          findActive={findActive}
-          actions={detailsActions}
-        >
+        <EventDetails id={detailsId} clamp={clampDetails} findActive={findActive}>
           {details}
         </EventDetails>
       ) : null}
