@@ -1,5 +1,6 @@
-import { memo, useState } from 'react'
-import { ChevronRight, ExternalLink } from 'lucide-react'
+import { memo } from 'react'
+import { ChevronRight, Copy, ExternalLink } from 'lucide-react'
+import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { openOrchestrationCrewAgent } from '@/lib/agent-session/open/open-agent-message-sender'
@@ -9,7 +10,6 @@ import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { OrchestrationCrewRow } from '../../../../shared/orchestration/orchestration-crew'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { CrewRowDetails, CrewRowTime } from './CrewRowDetails'
-import { CrewRowMenu } from './CrewRowMenu'
 import { CrewAgentIcons, type CrewRowLook } from './CrewAgentIcons'
 import { IconButton } from './CrewRowView'
 
@@ -71,59 +71,62 @@ export const CrewStripRow = memo(function CrewStripRow({
   const t = useTranslate()
   // memo() skips the parent re-render a language switch relies on.
   useUiLanguageRevision()
-  const [menuOpen, setMenuOpen] = useState(false)
   const preview = crewRowPreview(row, look, t)
   const mentionable = canMention && Boolean(row.sendAddress)
   const open = () => void openOrchestrationCrewAgent(row, target)
-  const tip = !row.sendAddress
+  // Only a row that can't take a click explains itself on hover.
+  const unavailable = !row.sendAddress
     ? t('components.orchestrationCrew.sendingUnavailable', 'Sending unavailable')
     : !canMention
       ? t(
           'components.orchestrationCrew.composerUnavailable',
           "The message box can't take a mention now"
         )
-      : t('components.orchestrationCrew.mentionTip', 'Mention {{name}}', { name: row.label })
+      : null
+  const main = (
+    <button
+      type="button"
+      aria-disabled={!mentionable || undefined}
+      aria-label={
+        mentionable
+          ? t('components.orchestrationCrew.mentionTip', 'Mention {{name}}', { name: row.label })
+          : undefined
+      }
+      className={cn(
+        '-mx-1 flex h-6 min-w-0 flex-1 items-center gap-2 rounded-md px-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        mentionable ? 'cursor-pointer hover:bg-accent' : 'cursor-default'
+      )}
+      // Keep focus in the composer the mention lands in.
+      onPointerDown={(event) => event.preventDefault()}
+      onClick={mentionable ? () => mention(row, look) : undefined}
+    >
+      <CrewAgentIcons look={look} hostLabel={row.hostLabel} />
+      <span className="min-w-0 truncate font-medium">{row.label}</span>
+      {badge ? (
+        <Badge variant="referenceLabel" className="shrink-0">
+          {badge}
+        </Badge>
+      ) : null}
+      {/* Only what waits on the user shows inline; the latest message is under the chevron. */}
+      {preview.warning && !expanded ? (
+        <span className="min-w-0 flex-1 truncate text-status-warning">{preview.text}</span>
+      ) : null}
+    </button>
+  )
   return (
     <li className="group/crew-row min-w-0">
       <div className="flex h-6 min-w-0 items-center gap-2 text-foreground">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              aria-disabled={!mentionable || undefined}
-              className={cn(
-                '-mx-1 flex h-6 min-w-0 flex-1 items-center gap-2 rounded-md px-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                mentionable ? 'cursor-pointer hover:bg-accent' : 'cursor-default'
-              )}
-              // Keep focus in the composer the mention lands in.
-              onPointerDown={(event) => event.preventDefault()}
-              onClick={mentionable ? () => mention(row, look) : undefined}
-            >
-              <CrewAgentIcons look={look} hostLabel={row.hostLabel} />
-              <span className="max-w-[45%] shrink-0 truncate font-medium">{row.label}</span>
-              {badge ? (
-                <Badge variant="referenceLabel" className="shrink-0">
-                  {badge}
-                </Badge>
-              ) : null}
-              {expanded ? null : (
-                <span
-                  className={cn(
-                    'min-w-0 flex-1 truncate',
-                    preview.warning ? 'text-status-warning' : 'text-muted-foreground'
-                  )}
-                >
-                  {preview.text}
-                </span>
-              )}
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={4}>
-            {tip}
-          </TooltipContent>
-        </Tooltip>
+        {unavailable ? (
+          <Tooltip>
+            <TooltipTrigger asChild>{main}</TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {unavailable}
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          main
+        )}
         <CrewStripRowEnd
-          shown={menuOpen}
           time={<CrewRowTime at={preview.at} className="font-mono text-3xs tabular-nums" />}
         >
           <IconButton
@@ -132,13 +135,25 @@ export const CrewStripRow = memo(function CrewStripRow({
           >
             <ExternalLink />
           </IconButton>
-          <CrewRowMenu
-            row={row}
-            open={open}
-            canMention={canMention}
-            mention={() => mention(row, look)}
-            onOpenChange={setMenuOpen}
-          />
+          {row.sendAddress ? (
+            <IconButton
+              label={t('components.orchestrationCrew.copyAddress', 'Copy address')}
+              onClick={() => {
+                const address = row.sendAddress
+                if (address) {
+                  void window.api.ui.writeTerminalClipboardText(address).then(() =>
+                    toast.success(
+                      t('components.orchestrationCrew.copiedAddress', "Copied {{name}}'s address", {
+                        name: row.label
+                      })
+                    )
+                  )
+                }
+              }}
+            >
+              <Copy />
+            </IconButton>
+          ) : null}
         </CrewStripRowEnd>
         <IconButton
           label={t(

@@ -60,13 +60,13 @@ export function StripGroupHeading({
   action?: React.ReactNode
 }): React.JSX.Element {
   const text = (
-    <span>
+    <span className="font-mono text-3xs uppercase tracking-wider">
       {label}
       {count === undefined ? null : <span className="ml-1.5">{count}</span>}
     </span>
   )
   return (
-    <div className="flex min-h-5 items-center gap-1.5 px-0.5 pb-1 font-mono text-3xs uppercase tracking-wider text-muted-foreground">
+    <div className="flex min-h-5 items-center gap-1.5 px-0.5 pb-1 text-muted-foreground">
       {hint ? (
         <Tooltip>
           <TooltipTrigger asChild>{text}</TooltipTrigger>
@@ -77,9 +77,7 @@ export function StripGroupHeading({
       ) : (
         text
       )}
-      {action ? (
-        <span className="ml-auto font-sans normal-case tracking-normal">{action}</span>
-      ) : null}
+      {action ? <span className="ml-auto">{action}</span> : null}
     </div>
   )
 }

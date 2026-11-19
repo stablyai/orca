@@ -1,4 +1,5 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
+import { nativeChatAppearanceStyle } from '../../appearance/native-chat-appearance-style'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
 import type { AgentSessionBackgroundTask } from '../../../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
 import type {
@@ -188,21 +189,24 @@ function strip(props: {
   tasks?: AgentSessionBackgroundTask[]
 }) {
   return (
-    <NativeChatBackgroundTasksStatus
-      tasks={props.tasks ?? tasks}
-      settledTasks={[]}
-      supportsTaskStop
-      offersStopAll={false}
-      stoppingTaskIds={new Set()}
-      stoppingAll={false}
-      indicatorActive
-      isVisible
-      expanded={props.expanded}
-      onExpandedChange={() => {}}
-      onStop={() => {}}
-      onShowAgent={() => {}}
-      crew={props.crew}
-    />
+    // The chat's own font rules apply inside the strip, as in a real chat pane.
+    <div className="native-chat-appearance bg-chat-canvas" style={nativeChatAppearanceStyle({})}>
+      <NativeChatBackgroundTasksStatus
+        tasks={props.tasks ?? tasks}
+        settledTasks={[]}
+        supportsTaskStop
+        offersStopAll={false}
+        stoppingTaskIds={new Set()}
+        stoppingAll={false}
+        indicatorActive
+        isVisible
+        expanded={props.expanded}
+        onExpandedChange={() => {}}
+        onStop={() => {}}
+        onShowAgent={() => {}}
+        crew={props.crew}
+      />
+    </div>
   )
 }
 
