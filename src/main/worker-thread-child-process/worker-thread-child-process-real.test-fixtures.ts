@@ -5,7 +5,7 @@ import {
   createWorkerThreadChildProcessTestHost
 } from './worker-thread-child-process-worker.test-fixtures'
 
-/** Supply the built worker entry that source-level real-Git tests do not otherwise have. */
+/** Provide the built worker entry missing from source-level real-Git tests. */
 export function installRealWorkerThreadChildProcesses(): void {
   let dispose: (() => Promise<void>) | undefined
   let host: ReturnType<typeof createWorkerThreadChildProcessTestHost> | undefined

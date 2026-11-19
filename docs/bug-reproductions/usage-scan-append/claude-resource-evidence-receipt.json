@@ -72,23 +72,23 @@
   },
   "esbuildVersion": "0.28.2",
   "toolsSha256": {
-    "config/scripts/claude-usage-append-benchmark.mjs": "d4f75710ab8c05b473b65a07e402b20588d98fab8091640a7777e575108224bc",
-    "config/scripts/claude-usage-benchmark-scanner.mjs": "cbaf8140fd02f617419548db76bc46eb8235568d61b8ee06cdef6ed104b048a0",
-    "config/scripts/claude-usage-hardening-cost-benchmark.mjs": "6beeed58fe2b4f4a34edafe22bd99364c07103cc1a33989eba4f17f527de7579",
-    "config/scripts/claude-usage-cache-representation-check.mjs": "bc0773e1fd5155bdc74430dc90ba9855b48dccee73e58cba63535b78e8c30e64",
-    "config/scripts/claude-usage-discovery-coverage-check.mjs": "6c33bc67bccf5180f19733a4832538df71549c973a475176368bfa69bfbfa9f9",
-    "config/scripts/claude-usage-benchmark-persistence.mjs": "9376c62d6ac1d7ae0697dd4584b47821c8dbe09bdeab51c6bae6f9953693f8ce",
-    "config/scripts/claude-usage-persistence-cost-benchmark.mjs": "858f4418ee5a099fb566285538b511827b4367b006a4805b16093ef42732efa5",
-    "config/scripts/claude-usage-benchmark-readiness.mjs": "4927c6ca51f43645cb2faa48804d4d80da4eab52b547f8e997b4c92451c27088",
-    "config/scripts/claude-usage-readiness-cost-benchmark.mjs": "b1d77e6bca0f0f56d5a192400675caa6993339936a744d9979ae5c416c0449bc",
-    "config/scripts/claude-usage-persisted-bytes-check.mjs": "21f2027141170c14fec6d99d2e05a3e2a8c96398d5ac0f010bf46e2189937210",
+    "config/scripts/performance/claude-usage/claude-usage-append-benchmark.mjs": "d4f75710ab8c05b473b65a07e402b20588d98fab8091640a7777e575108224bc",
+    "config/scripts/performance/claude-usage/claude-usage-benchmark-scanner.mjs": "cbaf8140fd02f617419548db76bc46eb8235568d61b8ee06cdef6ed104b048a0",
+    "config/scripts/performance/claude-usage/claude-usage-hardening-cost-benchmark.mjs": "6beeed58fe2b4f4a34edafe22bd99364c07103cc1a33989eba4f17f527de7579",
+    "config/scripts/performance/claude-usage/claude-usage-cache-representation-check.mjs": "bc0773e1fd5155bdc74430dc90ba9855b48dccee73e58cba63535b78e8c30e64",
+    "config/scripts/performance/claude-usage/claude-usage-discovery-coverage-check.mjs": "6c33bc67bccf5180f19733a4832538df71549c973a475176368bfa69bfbfa9f9",
+    "config/scripts/performance/claude-usage/claude-usage-benchmark-persistence.mjs": "9376c62d6ac1d7ae0697dd4584b47821c8dbe09bdeab51c6bae6f9953693f8ce",
+    "config/scripts/performance/claude-usage/claude-usage-persistence-cost-benchmark.mjs": "858f4418ee5a099fb566285538b511827b4367b006a4805b16093ef42732efa5",
+    "config/scripts/performance/claude-usage/claude-usage-benchmark-readiness.mjs": "4927c6ca51f43645cb2faa48804d4d80da4eab52b547f8e997b4c92451c27088",
+    "config/scripts/performance/claude-usage/claude-usage-readiness-cost-benchmark.mjs": "b1d77e6bca0f0f56d5a192400675caa6993339936a744d9979ae5c416c0449bc",
+    "config/scripts/performance/claude-usage/claude-usage-persisted-bytes-check.mjs": "21f2027141170c14fec6d99d2e05a3e2a8c96398d5ac0f010bf46e2189937210",
     "config/scripts/script-child-process.mjs": "a7441428bf7b5c9a897b6a3c057c50f46acca24c4f218a4b849de5aec53c4173",
     "config/scripts/counterbalanced-benchmark-schedule.mjs": "bc35b40e954fa7ddec0225ed375bd3b113c2e05b8554bc50734d14f89987294d"
   },
   "artifacts": {
     "docs/bug-reproductions/usage-scan-append/claude-persistence-cost-final-16k.json": {
       "sha256": "84ada1f73b452cfa50f80a6f64b038c0aeec7eb8650fb510ea298f6318890579",
-      "driver": "config/scripts/claude-usage-persistence-cost-benchmark.mjs",
+      "driver": "config/scripts/performance/claude-usage/claude-usage-persistence-cost-benchmark.mjs",
       "capturedDriverMatchesFinalFile": true,
       "sourceGraphs": {
         "published:scanner": "8467877ed92aba2ef59737aebf461e9cab52c273:scanner",
@@ -101,7 +101,7 @@
     },
     "docs/bug-reproductions/usage-scan-append/claude-persistence-cost-final-100k.json": {
       "sha256": "257e792a4e509ed2cbbeec924eb62f7f2b19ecae64e4678f92ec8db619fa6350",
-      "driver": "config/scripts/claude-usage-persistence-cost-benchmark.mjs",
+      "driver": "config/scripts/performance/claude-usage/claude-usage-persistence-cost-benchmark.mjs",
       "capturedDriverMatchesFinalFile": true,
       "sourceGraphs": {
         "published:scanner": "8467877ed92aba2ef59737aebf461e9cab52c273:scanner",
@@ -114,7 +114,7 @@
     },
     "docs/bug-reproductions/usage-scan-append/claude-readiness-cost-final.json": {
       "sha256": "2f161f8fd9f9673c35fad6e21ca510b41601b3d021ef1cf0b89093c66921b597",
-      "driver": "config/scripts/claude-usage-readiness-cost-benchmark.mjs",
+      "driver": "config/scripts/performance/claude-usage/claude-usage-readiness-cost-benchmark.mjs",
       "capturedDriverMatchesFinalFile": true,
       "sourceGraphs": {
         "published:scanner": "8467877ed92aba2ef59737aebf461e9cab52c273:scanner",
@@ -127,7 +127,7 @@
     },
     "docs/bug-reproductions/usage-scan-append/claude-persisted-bytes-final.json": {
       "sha256": "05454eb7359a337c92480b0edbacfdfc6c0baf09f7741cab89e6891899189ece",
-      "driver": "config/scripts/claude-usage-persisted-bytes-check.mjs",
+      "driver": "config/scripts/performance/claude-usage/claude-usage-persisted-bytes-check.mjs",
       "capturedDriverMatchesFinalFile": true,
       "sourceGraphs": {
         "original:scanner": "51e7181850b022bae2d41091fe1229accef4bd50:scanner",

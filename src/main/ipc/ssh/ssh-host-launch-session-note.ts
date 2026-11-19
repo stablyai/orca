@@ -1,14 +1,14 @@
-/** After a managed connect or restore: flags a macOS host whose server outlived its launching SSH session. */
-import { getAppEnvironment } from '../../../shared/app-environment'
-import { listEnvironments } from '../../../shared/runtime-environment-store'
+/** Flag macOS managed servers that outlive their launching SSH session. */
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
+import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { readManagedOrcadLaunchSshSession } from '../../managed-server/lifecycle/orcad-managed-launch-session'
-import { knownSshHostPlatform } from '../../ssh/ssh-host-platform-memo'
-import { getSshHostServerStatus } from '../../ssh/ssh-host-server-status'
+import { knownSshHostPlatform } from '../../ssh/remote-host/ssh-host-platform-memo'
+import { getSshHostServerStatus } from '../../ssh/host-server/ssh-host-server-status'
 import { connectionManager } from './ssh-ipc-context'
 import {
   clearLaunchSessionNote,
   publishHostServerStatus
-} from '../runtime-environments/runtime-environment-managed-tunnel'
+} from '../runtime-environments/managed-orcad/runtime-environment-managed-tunnel'
 
 // Restores run on every runtime call; cache only within the same environment and SSH session.
 const checked = new WeakMap<
@@ -17,13 +17,13 @@ const checked = new WeakMap<
 >()
 const RECHECK_MS = 10 * 60_000
 
-/** Never blocks or fails the caller; anything but a proven exit shows nothing. */
+/** Report only proven launch-session exits; probe failures must not fail callers. */
 export async function noteEndedLaunchSshSession(
   targetId: string,
   environmentId: string,
   now: () => number = Date.now
 ): Promise<void> {
-  // Why the memo: Linux and Windows hosts cost no extra round trip; the tunnel build fills it.
+  // Tunnel setup caches platform, avoiding extra Linux/Windows round trips.
   if (knownSshHostPlatform(targetId)?.os !== 'darwin') {
     return
   }
@@ -36,7 +36,7 @@ export async function noteEndedLaunchSshSession(
   const sameSession = prior?.generation === generation && prior.environmentId === environmentId
   if (sameSession && now() - prior.at < RECHECK_MS) {
     if (prior.ended) {
-      flag(targetId, environmentId)
+      await flag(targetId, environmentId)
     }
     return
   }
@@ -44,11 +44,11 @@ export async function noteEndedLaunchSshSession(
   checked.set(connection, pending)
   // Only a live probe disproves a proven end; unanswered or unknown keeps it.
   const provenEnded = sameSession && prior.ended
-  const markEnded = (): void => {
+  const markEnded = async (): Promise<void> => {
     checked.set(connection, { environmentId, generation, ended: true, at: now() })
-    flag(targetId, environmentId)
+    await flag(targetId, environmentId)
   }
-  // Why: a disconnect, reconnect, unlink or relaunch during the probe makes its answer stale.
+  // Disconnect, reconnect, unlink or relaunch during probing invalidates the answer.
   const stale = (): boolean =>
     connectionManager?.getConnection(targetId) !== connection ||
     connection.getConnectGeneration() !== generation ||
@@ -68,13 +68,13 @@ export async function noteEndedLaunchSshSession(
       return
     }
     if (session === 'exited' || (session !== 'live' && provenEnded)) {
-      markEnded()
+      await markEnded()
     } else if (session === 'live' && launchSessionNoted(targetId, environmentId)) {
       clearLaunchSessionNote(targetId, environmentId)
     }
   } catch (error) {
     if (provenEnded && !stale()) {
-      markEnded()
+      await markEnded()
     }
     console.warn('[ssh] Could not check which SSH session started the managed server:', error)
   }
@@ -89,10 +89,10 @@ function launchSessionNoted(targetId: string, environmentId: string): boolean {
   )
 }
 
-/** A restored host may have no status yet; any other server decision is left alone. */
-function flag(targetId: string, environmentId: string): void {
+/** Restored hosts may lack status; preserve any conflicting server decision. */
+async function flag(targetId: string, environmentId: string): Promise<void> {
   const userDataPath = getAppEnvironment().getPath('userData')
-  if (!listEnvironments(userDataPath).some((entry) => entry.id === environmentId)) {
+  if (!(await listEnvironments(userDataPath)).some((entry) => entry.id === environmentId)) {
     return
   }
   const status = getSshHostServerStatus(targetId)
@@ -110,7 +110,7 @@ function flag(targetId: string, environmentId: string): void {
   }
 }
 
-/** After a verified restart or this client's relaunch: the cached verdict no longer describes the host. */
+/** Verified restart or relaunch invalidates the cached launch-session verdict. */
 export function forgetLaunchSessionVerdict(targetId: string): void {
   const connection = connectionManager?.getConnection(targetId)
   if (connection) {

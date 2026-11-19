@@ -1,51 +1,22 @@
-// Layout-owner builds: the runtime graph carries main's own panes for every workspace main owns,
-// and main republishes them when the Store's layout changes, whether or not a window publishes.
+import { captureMainTerminalPaneLookup, findMainTerminalPane } from './pty-pane-query'
+// Publish main-owned workspace panes from Store layout changes, even without a window graph.
 
-import type { PaneStartFactOf } from '../../pane-start-statuses'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import type { MainTerminalSurfacesHost } from './main-terminal-surfaces-host'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { MainPaneBinding } from './main-pane-verdict'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { RuntimeSyncWindowGraph } from '../../../../shared/runtime-types'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-session-contracts'
-import { withMainSessionTabRows } from '../../session-tabs/main-session-tab-rows'
-import { withMainTabOrder } from '../../session-tabs/main-session-tab-order'
-import { headlessMobileSnapshotContentUnchanged } from '../../mobile-session-snapshot-equality'
-import type { RuntimeStore } from '../../runtime-store-contract'
-import type { WorkspaceLayoutReads } from '../../workspace-layout-stream'
+import type {
+  RuntimeSyncWindowGraph,
+  RuntimeMobileSessionTabsSnapshot
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { withMainSessionTabRows } from '../../session-tabs/layout/main-session-tab-rows'
+import { withMainTabOrder } from '../../session-tabs/layout/main-session-tab-order'
+import { headlessMobileSnapshotContentUnchanged } from '../../session-tabs/publication/mobile-session-snapshot-equality'
 import {
   composeMainTerminalSurfaces,
-  pairedRuntimeHostOfBinding,
-  terminalHoldsPane,
   TerminalSurfaceIndex,
-  type BoundTerminal,
   type MainTerminalSurfaces
 } from './terminal-surface-index'
-
-export type MainTerminalSurfacesHost = {
-  store: () => Pick<RuntimeStore, 'getWorkspaceSessionHostIds' | 'getSettings'> | null
-  /** Main's one layout projection. */
-  reads: () => WorkspaceLayoutReads
-  homeHostId: (key: string) => ExecutionHostId | null
-  /** The PTY registry's terminal of that id, or null. */
-  registered: (ptyId: string) => BoundTerminal | null
-  /** Whether the host certified the terminal exited (not merely disconnected or unverifiable). */
-  exited: (ptyId: string) => boolean
-  /** Whether the terminal runs now. */
-  live: (ptyId: string) => boolean
-  /** Main's start status of a pane, as the layout stream publishes it. */
-  paneStartFact: PaneStartFactOf
-  /** The graph authority now, when its graph is ready; null otherwise. */
-  readyGraphPublisher: () => number | null
-  /** Installs a graph under the publisher's authority, as the window's own publication does. */
-  publish: (windowId: number, graph: RuntimeSyncWindowGraph) => void
-  /** The session.tabs rows the runtime holds, by workspace. */
-  heldRows: () => ReadonlyMap<string, RuntimeMobileSessionTabsSnapshot>
-  /** Stores a workspace's rows and pushes them to its subscribers. */
-  replaceHeldRows: (worktreeId: string, next: RuntimeMobileSessionTabsSnapshot) => void
-  /** The rows less every terminal the window path's exit filters retire. */
-  fenceExited: (rows: RuntimeMobileSessionTabsSnapshot) => RuntimeMobileSessionTabsSnapshot
-}
 
 class MainSurfacePublisher {
   private readonly index: TerminalSurfaceIndex
@@ -62,6 +33,7 @@ class MainSurfacePublisher {
       reads: host.reads,
       hostIds: () => host.store()?.getWorkspaceSessionHostIds?.() ?? [],
       homeHostId: host.homeHostId,
+      savedSession: (hostId) => host.store()?.getWorkspaceSession?.(hostId) ?? null,
       generatedTitlesEnabled: () => host.store()?.getSettings?.().tabAutoGenerateTitle === true,
       onChanged: () => this.schedule({ merge: true })
     })
@@ -81,6 +53,10 @@ class MainSurfacePublisher {
       : composed
   }
 
+  savedSessionTabsOf(worktreeId: string): ReturnType<TerminalSurfaceIndex['sessionTabsOf']> {
+    return this.index.sessionTabsOf(worktreeId)
+  }
+
   /** A workspace main owns publishes main's terminal and editor rows; any other, the window's. */
   private withMainRows(
     published: RuntimeMobileSessionTabsSnapshot
@@ -95,10 +71,7 @@ class MainSurfacePublisher {
     return projected ? withMainTabOrder(written, projected) : written
   }
 
-  /**
-   * After a layout commit: held rows take main's new rows, names and order. A row main's layout
-   * lacks stays (drops are the close path's); an added terminal passes the window's exit filters.
-   */
+  /** Merge main's new rows/names/order into held rows; close paths own drops, and added terminals still pass exit filters. */
   private mergeIntoHeldRows(): void {
     this.index.surfaces()
     for (const [worktreeId, held] of this.host.heldRows()) {
@@ -124,23 +97,16 @@ class MainSurfacePublisher {
   findPaneForPty(ptyId: string): { worktreeId: string; tabId: string; leafId: string } | null {
     const surfaces = this.index.surfaces()
     const terminal = this.host.registered(ptyId)
-    const pane = surfaces.leaves.find(
-      (leaf) =>
-        leaf.ptyId === ptyId &&
-        (pairedRuntimeHostOfBinding(ptyId) !== null ||
-          terminalHoldsPane(
-            terminal,
-            leaf,
-            surfaces.paneFacts.get(`${leaf.tabId}::${leaf.leafId}`)
-          ))
-    )
-    return pane ? { worktreeId: pane.worktreeId, tabId: pane.tabId, leafId: pane.leafId } : null
+    return findMainTerminalPane(ptyId, surfaces.leaves, surfaces.paneFacts, terminal)
   }
 
-  /**
-   * A pane main owns: the terminal its layout binds and whether it has a status (a start in flight
-   * or failed, or a sleeping agent), which says that binding is not live; null otherwise.
-   */
+  capturePaneLookup(): (
+    ptyId: string
+  ) => { worktreeId: string; tabId: string; leafId: string } | null {
+    return captureMainTerminalPaneLookup(this.index.surfaces(), this.host.registered)
+  }
+
+  /** Return the main-owned binding; start/failure/sleep status prevents treating its stored terminal as live. */
   paneOf(tabId: string, leafId: string): MainPaneBinding | null {
     const surfaces = this.index.surfaces()
     const pane = surfaces.leaves.find((leaf) => leaf.tabId === tabId && leaf.leafId === leafId)
@@ -283,10 +249,7 @@ export function mainTerminalRegistered(runtime: SurfacesOwner, ptyId: string): v
   byRuntime.get(runtime)?.terminalRegistered(ptyId)
 }
 
-/**
- * Layout-owner builds: whether the window lists a tab. The runtime graph holds main's own tabs
- * too, so its membership no longer says the window has the tab.
- */
+/** Main graphs include headless panes; graph membership alone no longer proves the window lists a tab. */
 export function windowListsTab(
   runtime: SurfacesOwner,
   tabs: ReadonlyMap<string, unknown>,
@@ -334,11 +297,7 @@ export function mainPaneRecordFacts(
   )
 }
 
-/**
- * A terminal record arrived, or its connection, incarnation or workspace changed: main's panes
- * that bind its id re-compose, though no layout changed. Read after the update, so the record
- * the panes compare against is the one now registered; an unchanged refresh notes nothing.
- */
+/** After record updates, recompose bound panes when connection, incarnation or workspace changed; unchanged refreshes do nothing. */
 export function noteMainPaneRecordChange(
   runtime: SurfacesOwner,
   prior: MainPaneRecordFacts | undefined,
@@ -379,11 +338,7 @@ export function paneHoldsSession(
   return !ORCA_LAYOUT_OWNER_IS_MAIN || mainLayoutHoldsPane(runtime, paneKey) !== false
 }
 
-/**
- * Switch-on, whether a pane in the workspace is main's own: then the pane existing proves nothing
- * about its terminal, whose record and the host's inventory decide whether it runs. A paired
- * server's workspace (a `runtime:<env>` window graph) keeps the window's rule.
- */
+/** Main-owned pane existence cannot prove process life; inventory/records decide. Paired-runtime workspaces retain window rules. */
 export function mainDecidesLeafLiveness(runtime: SurfacesOwner, worktreeId: string): boolean {
   return ORCA_LAYOUT_OWNER_IS_MAIN && mainListsEveryPane(runtime, worktreeId)
 }
@@ -393,10 +348,7 @@ export function mainListsEveryPane(runtime: SurfacesOwner, worktreeId: string): 
   return startedMainTerminalSurfaces(runtime)?.ownsWorkspace(worktreeId) === true
 }
 
-/**
- * The runtime's panes plus every terminal main's layout binds, registered or not: a saved SSH
- * terminal not re-registered since a restart may still run, so a worktree stop still names it.
- */
+/** Include all main-bound terminals in worktree stops, even saved SSH ids not yet re-registered after restart. */
 export function withMainBoundLeaves(
   runtime: SurfacesOwner,
   leaves: Iterable<{ worktreeId: string; ptyId: string | null }>

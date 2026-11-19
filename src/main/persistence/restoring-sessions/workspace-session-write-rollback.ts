@@ -1,9 +1,8 @@
 import { isDeepStrictEqual } from 'node:util'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 
 const MISSING = Symbol('missing')
 
-/** A JSON-shaped slot of persisted session state, or the absent-key sentinel. */
 type RollbackSlot =
   | string
   | number

@@ -1,14 +1,30 @@
+import { nativeChatPreferenceFor } from '../../../shared/agent-launch/choices/structured-native-chat-launch-route'
+import {
+  readAgentLaunchModeSettings,
+  decideAgentLaunchMode
+} from '../../agent-launch/agent-launch-mode'
 import { describe, expect, it } from 'vitest'
 import {
   encodeTerminalStreamFrame,
   decodeTerminalStreamFrame,
   TerminalStreamOpcode
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 import {
   BrowserScreencastOpcode,
   encodeBrowserScreencastFrame
-} from '../../../shared/browser-screencast-protocol'
-import { RelayedPhoneReplies, rewriteRelayedPhoneRequest } from './relayed-phone-frames'
+} from '../../../shared/browser/screencast/browser-screencast-protocol'
+import { COMPRESSED_FRAMES_CLIENT_CAPABILITY } from '../../../shared/remote-runtime/e2ee/paired-e2ee-compressed-frame'
+import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../shared/browser/runtime/browser-runtime-capabilities'
+import {
+  declareRelayedPhoneCapabilities,
+  RelayedPhoneReplies,
+  relayedPhoneCapabilities,
+  rewriteRelayedPhoneRequest,
+  withRelayedLaunchChatDefault,
+  withRelayedSourceControlAiSettings
+} from './relayed-phone-frames'
+import { GitGenerateCommitMessage } from '../../../shared/rpc-contract/source-control/git-params'
+import { getDefaultSourceControlAiSettings } from '../../../shared/source-control/ai/settings/source-control-ai-settings'
 
 const DESKTOP_TOKEN = 'a'.repeat(48)
 const HOST_TOKEN = 'b'.repeat(48)
@@ -39,12 +55,25 @@ describe('rewriteRelayedPhoneRequest', () => {
       }
     })
   })
+})
 
-  it('can re-id a frame the relay sends on its own behalf', () => {
-    const frame = JSON.stringify({ id: 'phone-id', method: 'm', params: {} })
-    expect(
-      JSON.parse(rewriteRelayedPhoneRequest(frame, DESKTOP_TOKEN, HOST_TOKEN, 'relay-id'))
-    ).toEqual({ id: 'relay-id', method: 'm', params: {} })
+describe('relayed phone capabilities', () => {
+  // The relaying desktop rewrites stream ids and reply bookkeeping, which compressed frames would hide.
+  it('never offers a paired server compressed frames, at auth or on update', () => {
+    const phone = ['agent-session.turn-item.v1', COMPRESSED_FRAMES_CLIENT_CAPABILITY]
+    const update = JSON.stringify({
+      id: 'r1',
+      method: 'runtime.clientCapabilities.update',
+      params: { clientCapabilities: phone }
+    })
+
+    expect(relayedPhoneCapabilities(phone)).toEqual([
+      'agent-session.turn-item.v1',
+      BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY
+    ])
+    expect(JSON.parse(declareRelayedPhoneCapabilities(update)).params.clientCapabilities).toEqual(
+      relayedPhoneCapabilities(phone)
+    )
   })
 })
 
@@ -73,7 +102,7 @@ describe('RelayedPhoneReplies', () => {
     const relay = replies()
     relay.noteForwarded('s1')
     relay.noteForwarded('s2')
-    // Both hosts allocate from 1; the phone must see distinct ids.
+    // Independent hosts allocate overlapping ids; the phone must see distinct ones.
     expect(JSON.parse(relay.text(subscribed('s1', 1))!).result.streamId).toBe(100)
     expect(JSON.parse(relay.text(subscribed('s2', 2))!).result.streamId).toBe(101)
     const frame = decodeTerminalStreamFrame(relay.binary(output(2))!)
@@ -116,5 +145,87 @@ describe('RelayedPhoneReplies', () => {
     expect(relay.text('{"id":"mine","ok":true,"result":{},"_meta":{"runtimeId":"h"}}')).toBeNull()
     relay.noteForwarded('mine-2', { swallowReplies: true })
     expect(relay.takeOpenRequestIds()).toEqual(['open'])
+  })
+})
+
+it.each(['chat', 'terminal'] as const)(
+  'stamps resolved %s desktop defaults and exceptions independently of host settings',
+  (agentDefaultSurface) => {
+    const desktop = {
+      agentDefaultSurface,
+      nativeChatProviders: { codex: agentDefaultSurface !== 'chat' }
+    }
+    for (const agent of ['claude', 'codex']) {
+      const frame = JSON.stringify({
+        id: agent,
+        method: 'agent.launch',
+        params: { agent }
+      })
+      const stamped = JSON.parse(
+        withRelayedLaunchChatDefault(frame, 'agent.launch', (id) =>
+          nativeChatPreferenceFor(desktop, id)
+        )
+      )
+      const settings = readAgentLaunchModeSettings(
+        {
+          requireStore: () => ({
+            getSettings: () => ({
+              agentDefaultSurface: agentDefaultSurface === 'chat' ? 'terminal' : 'chat'
+            })
+          })
+        },
+        stamped.params
+      )
+      const chat = nativeChatPreferenceFor(desktop, agent)
+      expect(stamped.params.nativeChatDefault).toBe(chat)
+      expect(decideAgentLaunchMode({ placement: { agent }, settings }).mode).toBe(
+        chat ? 'structured' : 'terminal'
+      )
+      expect(
+        decideAgentLaunchMode({
+          placement: { agent },
+          settings,
+          surface: chat ? 'terminal' : 'chat'
+        }).mode
+      ).toBe(chat ? 'terminal' : 'structured')
+    }
+  }
+)
+
+it("keeps the phone's own Chat or CLI pick over the desktop default", () => {
+  const frame = JSON.stringify({
+    id: 'pi',
+    method: 'agent.launchReplay',
+    params: { agent: 'pi', nativeChatDefault: true }
+  })
+  const stamped = JSON.parse(withRelayedLaunchChatDefault(frame, 'agent.launchReplay', () => false))
+  expect(stamped.params.nativeChatDefault).toBe(true)
+})
+
+describe('withRelayedSourceControlAiSettings', () => {
+  const sourceControlAi = { ...getDefaultSourceControlAiSettings(), agentId: 'codex' as const }
+  const desktop = () => ({
+    sourceControlAi,
+    agentCmdOverrides: { codex: '/opt/codex' },
+    defaultTuiAgent: 'blank' as const
+  })
+
+  it("sends the desktop's AI settings and its key for this server with a relayed generation", () => {
+    const frame = JSON.stringify({
+      id: 'g1',
+      method: 'git.generateCommitMessage',
+      params: { worktree: 'id:w1' }
+    })
+    const params = JSON.parse(
+      withRelayedSourceControlAiSettings(frame, 'git.generateCommitMessage', 'env-1', desktop)
+    ).params
+    expect(params).toEqual({
+      worktree: 'id:w1',
+      sourceControlAi,
+      agentCmdOverrides: { codex: '/opt/codex' },
+      defaultTuiAgent: null,
+      commitMessageDiscoveryHostKey: 'runtime:env-1'
+    })
+    expect(GitGenerateCommitMessage.safeParse(params).success).toBe(true)
   })
 })

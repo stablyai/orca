@@ -1,0 +1,10 @@
+{
+  "capturedAt": "2026-11-16T18:40:00.000Z",
+  "platform": "darwin",
+  "command": ["zcode", "--mode", "yolo"],
+  "cols": 200,
+  "rows": 50,
+  "note": "zcode-app-cli 3.18.2-47 (npm redistribution of the ZCode Desktop runtime, runtime 0.17.1), installed globally; PTY probe with TERM=xterm-256color that answers DA1, kitty and OSC 10/11 queries. Renders inline: no DECSET ?1049 alt screen at all; the TUI opens a synchronized-update frame (ESC[?2026h) that erases screen and scrollback (ESC[2J ESC[H ESC[3J), then paints its round header card and the composer in that frame; the first ╭ is the header card's corner. zcode-app-cli 3.17.2-45 behaves identically.",
+  "exitCode": null,
+  "truncated": false
+}

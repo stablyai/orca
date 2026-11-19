@@ -1,4 +1,4 @@
-import { getSecretStore } from '../../shared/secret-store'
+import { getSecretStore } from '../../shared/secure-storage/secret-store'
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -6,12 +6,15 @@ import {
   hardenExistingSecureFile,
   isUnreadableError,
   writeSecureFile
-} from '../../shared/secure-file'
-import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
+} from '../../shared/secure-storage/secure-file'
+import {
+  encryptedCredentialProtection,
+  type SecretAtRestProtection
+} from '../../shared/secure-storage/secret-at-rest-protection'
 import { ApiKeyFileUnreadableError } from './api-key-file-unreadable-error'
 
 type EncryptedApiKeyFileStore = {
-  /** Where the envelope lives and how it starts, for orcad's plaintext migration. */
+  /** Envelope location and prefix used by orcad's plaintext migration. */
   envelopeFile: () => { path: string; envelopePrefix: string }
   protection: () => SecretAtRestProtection | null
   has: () => boolean
@@ -106,7 +109,10 @@ export function createEncryptedApiKeyFileStore({
       return null
     }
     try {
-      return decodeApiKeyEnvelope(readFileSync(path)).kind === 'plaintext' ? 'plaintext' : 'sealed'
+      const envelope = decodeApiKeyEnvelope(readFileSync(path))
+      return envelope.kind === 'plaintext'
+        ? 'plaintext'
+        : encryptedCredentialProtection(envelope.payload)
     } catch {
       return null
     }
@@ -145,7 +151,7 @@ export function createEncryptedApiKeyFileStore({
     if (!existsSync(keyPath)) {
       return null
     }
-    // Why: permission failures must not be reported as decryption failures.
+    // Keep permission failures distinct from decryption failures.
     try {
       hardenExistingSecureFile(keyPath)
     } catch (error) {

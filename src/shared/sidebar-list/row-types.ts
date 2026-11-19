@@ -1,9 +1,10 @@
-import type { WorktreeOccurrence } from '../worktree-occurrence-plan'
-import type { FolderWorkspace } from '../folder-workspace-types'
-import type { ProjectGroup } from '../project-group-types'
-import type { Repo } from '../repo-types'
+import type { WorktreeLineageSource } from './worktree-lineage-range'
+import type { WorktreeOccurrence } from './lineage/worktree-occurrence-plan'
+import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
+import type { ProjectGroup } from '../project/groups/project-group-types'
+import type { Repo } from '../repository/repo-types'
 import type { DetectedWorktree, WorkspaceStatus, Worktree } from '../worktree/types'
-import type { ExecutionHostId } from '../execution-host'
+import type { ExecutionHostId } from '../execution-host/execution-host'
 import type { PRGroupKey } from '../workspace-view/workspace-pr-groups'
 
 export type WorktreeGroupBy = 'none' | 'workspace-status' | 'repo' | 'pr-status'
@@ -40,6 +41,12 @@ export type GroupHeaderRow = {
   projectGroup?: ProjectGroup | { id: null; name: 'Ungrouped'; tabOrder: number }
   projectGroupDepth?: number
   hostId?: ExecutionHostId
+  /** A project checked out on several hosts: each host's own registration, one header per host section. */
+  hostRepos?: ReadonlyMap<ExecutionHostId, Repo>
+  /** On a host copy: the project's anchor registration, which project order keys on; `repo` is this host's. */
+  anchorRepo?: Repo
+  /** An earlier host section already drew this header; order and drag key on that first copy. */
+  repeated?: true
   hostWorktreeCounts?: ReadonlyMap<ExecutionHostId, number>
   hostWorktreeIds?: ReadonlyMap<ExecutionHostId, readonly string[]>
   worktreeIds?: readonly string[]
@@ -59,6 +66,8 @@ export type WorktreeRow = {
   lineageChildWorktreeIds?: readonly string[]
   lineageGroupKey?: string
   lineageCollapsed?: boolean
+  /** Every workspace nested under this one, collapsed or not; host-qualified. */
+  lineageDescendantIdentities?: WorktreeLineageSource
   hostContextLabel?: string
   showProjectName?: boolean
 }
@@ -71,13 +80,18 @@ export type ImportedWorktreesCardCandidate = {
 export type ImportedWorktreesCardRow = {
   type: 'imported-worktrees-card'
   key: string
-  repo: Repo
-  hiddenWorktrees: DetectedWorktree[]
-  placement: 'repo-group' | 'pinned-fallback'
-  /** Set only when the row's project is checked out on more than one host. */
+  /** Set only when the row's project, or this line's host, needs naming among several hosts. */
   hostContextLabel?: string
   hostContextHostId?: ExecutionHostId
-}
+} & (
+  | { placement: 'repo-group'; repo: Repo; hiddenWorktrees: DetectedWorktree[] }
+  // Outside project grouping no header owns a project, so one line covers a host's projects.
+  | {
+      placement: 'all-projects'
+      hostId: ExecutionHostId
+      projects: ImportedWorktreesCardCandidate[]
+    }
+)
 
 export type NewExternalWorktreesInboxCandidate = {
   repo: Repo
@@ -102,18 +116,22 @@ export type PendingCreationRow = {
 }
 
 export type FolderWorkspaceRow = {
+  lineageDescendantIdentities?: WorktreeLineageSource
   type: 'folder-workspace'
   key: string
   folderWorkspace: FolderWorkspace
   projectGroup: ProjectGroup
   depth: number
   groupDepth: number
+  hostContextLabel?: string
+  /** Workspaces nested under this folder; set only when it has any. */
+  lineageChildCount?: number
+  lineageChildWorktreeIds?: readonly string[]
+  lineageGroupKey?: string
+  lineageCollapsed?: boolean
 }
 
-/** Minimal shape planSidebarRows needs for an in-flight create. Deliberately not the
- *  full PendingWorktreeCreation: row identity depends only on which creates
- *  exist and their repo, so callers can subscribe on this stable shape and keep
- *  progress-field churn (phase/loaderVisible) from rebuilding the whole list. */
+/** Stable create/repo identity only: subscribing to full progress records would rebuild the list on phase/loader churn. */
 export type PendingCreationRef = { creationId: string; repoId: string }
 
 export type Row =
@@ -123,3 +141,18 @@ export type Row =
   | NewExternalWorktreesInboxRow
   | PendingCreationRow
   | FolderWorkspaceRow
+
+/** The registration a project header reorders by, or none for a repeated copy. */
+export function getHeaderDragRepo(row: GroupHeaderRow): Repo | undefined {
+  return row.repeated ? undefined : (row.anchorRepo ?? row.repo)
+}
+
+/** A project header whose rows all sit on its own repo's host; one spanning hosts still lists them in hostRepos.
+ * A header with no rows is not one: its repo is whichever registration repoMap kept, not proof of a host. */
+export function isSingleHostProjectHeader(row: GroupHeaderRow): boolean {
+  return (
+    row.repo !== undefined &&
+    row.hostRepos === undefined &&
+    (row.hostId !== undefined || row.count > 0)
+  )
+}

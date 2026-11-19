@@ -10,21 +10,21 @@ import {
   type RefObject,
   type SetStateAction
 } from 'react'
-import { createBrowserUuid } from '@/lib/browser-uuid'
-import { useAppStore } from '@/store'
-import type { BrowserGrabPayload } from '../../../../../shared/browser-grab-types'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
+import { useAppStore } from '@/store/index'
+import type { BrowserGrabPayload } from '../../../../../shared/browser/element-grab/browser-grab-types'
 import type {
   BrowserLoadError,
   BrowserViewportPresetId
-} from '../../../../../shared/browser-workspace-types'
-import { getBrowserDisplayTitle } from '../describe-page/browser-page-url-display'
+} from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   EMPTY_BROWSER_ANNOTATIONS,
   type BrowserOverlayViewport
 } from '../describe-page/browser-annotation-geometry'
-import { syncGuestAnnotationViewportBridge } from '../annotate/guest-annotation-viewport-bridge'
-import { attachBrowserPageWebview } from './attach-browser-page-webview'
-import { setBrowserPageWebviewInputLock } from './browser-page-webview'
+import { syncGuestAnnotationViewportBridge } from '../annotate/viewport/guest-annotation-viewport-bridge'
+import { attachBrowserPageWebview } from './lifecycle/attach-browser-page-webview'
+import { webviewRegistry } from './webview-registry'
+import { setBrowserPageWebviewInputLock } from './lifecycle/browser-page-webview'
 import type {
   BrowserPageRecoveryNavigationValidation,
   BrowserPageUrlSetter,
@@ -34,7 +34,6 @@ import type {
 export function useBrowserPageWebviewLifecycle({
   browserTabId,
   browserTabUrl,
-  browserTabLoading,
   browserTabLoadError,
   workspaceId,
   worktreeId,
@@ -42,6 +41,7 @@ export function useBrowserPageWebviewLifecycle({
   webviewPartition,
   isActive,
   isPaintable,
+  isMountAdmitted,
   slotViewport,
   viewportPresetId,
   addressBarInputRef,
@@ -80,6 +80,7 @@ export function useBrowserPageWebviewLifecycle({
   webviewPartition: string
   isActive: boolean
   isPaintable: boolean
+  isMountAdmitted: boolean
   slotViewport: HTMLDivElement | null
   viewportPresetId: BrowserViewportPresetId | null
   addressBarInputRef: RefObject<HTMLInputElement | null>
@@ -114,7 +115,6 @@ export function useBrowserPageWebviewLifecycle({
   const guestRecoveryPendingRef = useRef(false)
   const validateVisibleGuestRegistrationRef = useRef<() => void>(() => {})
   const wasPaintableForGuestValidationRef = useRef(isPaintable)
-  const browserTabLoadingRef = useRef(browserTabLoading)
   const inputLockedRef = useRef(inputLocked)
   const faviconUrlRef = useRef<string | null>(faviconUrl)
   const initialBrowserUrlRef = useRef(browserTabUrl)
@@ -137,7 +137,6 @@ export function useBrowserPageWebviewLifecycle({
   const invalidatePendingCaptureRef = useRef(cancelPendingBrowserCapture)
 
   useLayoutEffect(() => {
-    browserTabLoadingRef.current = browserTabLoading
     inputLockedRef.current = inputLocked
     viewportPresetIdRef.current = viewportPresetId
     isActiveRef.current = isActive
@@ -145,7 +144,6 @@ export function useBrowserPageWebviewLifecycle({
     invalidatePendingCaptureRef.current = cancelPendingBrowserCapture
     isPaintableRef.current = isPaintable
   }, [
-    browserTabLoading,
     cancelPendingBrowserCapture,
     inputLocked,
     isActive,
@@ -179,28 +177,6 @@ export function useBrowserPageWebviewLifecycle({
     addBrowserHistoryEntryRef.current = addBrowserHistoryEntry
   }, [onSetUrl, onUpdatePageState, addBrowserHistoryEntry, onSetUrlRef, onUpdatePageStateRef])
 
-  const syncNavigationState = useCallback(
-    (webview: Electron.WebviewTag): void => {
-      try {
-        // Parked panes miss guest events; only reconcile isLoading when the store already knows
-        // a navigation is active so an attach-time transient cannot flash a loading indicator.
-        const loading = browserTabLoadingRef.current ? webview.isLoading() : undefined
-        onUpdatePageStateRef.current(browserTabId, {
-          title: getBrowserDisplayTitle(
-            webview.getTitle(),
-            webview.getURL() || browserTabUrlRef.current
-          ),
-          ...(loading === undefined ? {} : { loading }),
-          canGoBack: webview.canGoBack(),
-          canGoForward: webview.canGoForward()
-        })
-      } catch {
-        // Why: these getters only exist after the guest fully attaches; ignore the transient failure during attach.
-      }
-    },
-    [browserTabId, browserTabUrlRef, onUpdatePageStateRef]
-  )
-
   const syncBrowserAnnotationViewportBridge = useCallback((): void => {
     const state = useAppStore.getState()
     syncGuestAnnotationViewportBridge({
@@ -227,7 +203,6 @@ export function useBrowserPageWebviewLifecycle({
     invalidateBrowserAnnotationDocumentRef.current = invalidateBrowserAnnotationDocument
   }, [invalidateBrowserAnnotationDocument])
 
-  // Why: browserTab.url excluded from deps (changes every navigation → would destroy/recreate the webview); URL logic reads browserTabUrlRef.
   useEffect(() => {
     return attachBrowserPageWebview({
       browserTabId,
@@ -254,7 +229,6 @@ export function useBrowserPageWebviewLifecycle({
       onUpdatePageStateRef,
       setGuestRecoveryGeneration,
       focusAddressBarNow,
-      syncNavigationState,
       syncBrowserAnnotationViewportBridge,
       faviconUrlRef,
       addressBarInputRef,
@@ -270,8 +244,7 @@ export function useBrowserPageWebviewLifecycle({
       retryGuestRecoveryRef,
       setFindOpen
     })
-    // Why: wire listeners once per tab identity. browserTab.url is excluded (re-running would detach/reattach and cancel navigations; callbacks use refs).
-    // webviewPartition IS included: Electron can't change a webview's partition after creation, so a profile switch must recreate it.
+    // Exclude URL changes to avoid cancelling navigation; callbacks read refs. Include partition changes because Electron requires a new guest.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     browserTabId,
@@ -283,17 +256,18 @@ export function useBrowserPageWebviewLifecycle({
     createBrowserTab,
     focusAddressBarNow,
     focusWebviewNow,
-    syncNavigationState,
     syncBrowserAnnotationViewportBridge
   ])
 
   useEffect(() => {
     const becamePaintable = isPaintable && !wasPaintableForGuestValidationRef.current
     wasPaintableForGuestValidationRef.current = isPaintable
-    if (becamePaintable) {
+    if ((isPaintable || isMountAdmitted) && !webviewRegistry.has(browserTabId)) {
+      setGuestRecoveryGeneration((generation) => generation + 1)
+    } else if (becamePaintable) {
       validateVisibleGuestRegistrationRef.current()
     }
-  }, [isPaintable])
+  }, [browserTabId, isPaintable, isMountAdmitted])
 
   useEffect(() => {
     syncBrowserAnnotationViewportBridge()

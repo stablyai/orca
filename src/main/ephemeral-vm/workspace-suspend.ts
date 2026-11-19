@@ -1,42 +1,39 @@
 import { app } from 'electron'
-import type { Store } from '../persistence'
-import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
+import type { Store } from '../persistence/loading-store/store'
+import { findWorkspaceEphemeralVmRuntime } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-workspace-runtime'
 import { suspendEphemeralVmRuntime } from './runtime-service'
 import { disconnectRuntimeOwnedSshTarget } from './runtime-ssh'
-import { getRuntimeRecipeContext } from '../ipc/ephemeral-vm-recipe-context'
+import { getRuntimeRecipeContext } from '../ipc/ephemeral-vm/ephemeral-vm-recipe-context'
+import {
+  EphemeralVmFailureError,
+  pickEphemeralVmFailureCode
+} from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
 
-/** Suspends the VM a workspace runs on; a workspace with no VM does nothing. */
 export async function suspendEphemeralVmWorkspace(
   store: Store,
   workspaceId: string
 ): Promise<void> {
   const userDataPath = app.getPath('userData')
-  const runtime = listEphemeralVmRuntimes(userDataPath).find(
-    (entry) =>
-      entry.workspaceId === workspaceId &&
-      entry.status !== 'cleaned' &&
-      entry.status !== 'cleanup_pending'
-  )
-  if (!runtime?.repoId) {
+  const runtime = findWorkspaceEphemeralVmRuntime(userDataPath, workspaceId)
+  if (!runtime) {
     return
   }
   const recipeContext = getRuntimeRecipeContext(store, userDataPath, runtime.id)
   const result = await suspendEphemeralVmRuntime({
     userDataPath,
-    repoPath: recipeContext.repo.repo.path,
+    repoPath: recipeContext.repoPath,
     recipe: recipeContext.recipe,
     runtimeId: runtime.id
   })
   if (!result.ok) {
-    throw new Error(result.error)
+    throw new EphemeralVmFailureError({
+      error: result.error,
+      ...pickEphemeralVmFailureCode(result)
+    })
   }
-  // Only tear down SSH for a real suspend; a skipped suspend keeps the runtime
-  // 'running', so disconnecting would break the still-active session with no resume.
+  // A skipped suspend leaves the VM running, so its SSH connection must remain live.
   if (runtime.connectionMode === 'ssh' && !result.skipped) {
-    // Why: the suspend recipe already succeeded (VM is suspended), so a failed
-    // LOCAL relay teardown must NOT flip to 'suspend_failed' — that status is not
-    // resume-eligible (see resume gate below), which would strand the runtime
-    // unrecoverable. Keep 'suspended'; resume re-establishes the relay anyway.
+    // Keep a successfully suspended VM resume-eligible even if local SSH teardown fails.
     await disconnectRuntimeOwnedSshTarget(runtime.sshTargetId).catch(() => undefined)
   }
 }

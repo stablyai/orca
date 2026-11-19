@@ -7,7 +7,7 @@ import {
   writeSshFile,
   type SshFileTransferHost,
   type SshRemoteFileOptions
-} from './ssh-connection-file-transfers'
+} from '../file-transfer/ssh-connection-file-transfers'
 import type { ChildProcess } from 'node:child_process'
 import type {
   Client as SshClient,
@@ -18,59 +18,72 @@ import type {
   SFTPWrapper,
   ShellOptions
 } from 'ssh2'
-import type { SshTarget, SshConnectionState, SshConnectionStatus } from '../../../shared/ssh-types'
+import type {
+  SshTarget,
+  SshConnectionState,
+  SshConnectionStatus
+} from '../../../shared/remote-runtime/ssh/ssh-types'
 import {
   getOrcaControlSocketPath,
   isOpenSshConfigBackedTarget,
   type SystemSshBuildArgsOptions
 } from '../system-transport/system-ssh-args'
-import { removeControlSocketPath } from '../ssh-control-socket'
+import {
+  shouldUseSystemSshLoopbackRoute,
+  startSystemSshLoopbackRoute,
+  type SystemSshLoopbackRoute
+} from '../system-transport/forwarding/system-ssh-loopback-route'
+import { removeControlSocketPath } from '../system-transport/ssh-control-socket'
 import { INITIAL_RETRY_ATTEMPTS, INITIAL_RETRY_DELAY_MS, sleep } from './ssh-connection-timing'
 import {
   isTransientError,
   isAuthError,
   isPassphraseError,
   isDefiniteSystemSshHostFailure
-} from '../ssh-reconnect-error-classification'
+} from './reconnect/ssh-reconnect-error-classification'
 import { buildConnectConfig } from './ssh-connect-config'
-import { withSkippedIdentityFileDetail, type SkippedIdentityFiles } from '../ssh-auth-resolution'
+import {
+  withSkippedIdentityFileDetail,
+  type SkippedIdentityFiles
+} from '../authentication/ssh-auth-resolution'
 import { createSshOperationAbortError, type SshExecOptions } from './ssh-exec-options'
 import type { SshConnectionCallbacks, SshCredentialKind } from './ssh-connection-callbacks'
-import { collectKeyboardInteractiveResponses } from '../ssh-keyboard-interactive'
-import { resolveEffectiveProxy, spawnProxyCommand } from '../ssh-proxy-command'
+import { collectKeyboardInteractiveResponses } from '../authentication/ssh-keyboard-interactive'
+import { resolveEffectiveProxy, spawnProxyCommand } from '../system-transport/ssh-proxy-command'
 import { resolveWithSshG, type SshResolvedConfig } from '../config/ssh-g-config-resolution'
 import {
   createCancelledConnectAttemptError,
   isCancelledConnectAttemptError
-} from '../ssh-connect-attempt-cancellation'
+} from './reconnect/ssh-connect-attempt-cancellation'
 import { mayUserSshConfigClaimAlias } from '../config/ssh-config-alias-claim'
 import {
   requiresSystemSshForSecurityKey,
   shouldUseSystemSshTransport
-} from '../ssh-transport-selection'
-import type { FileUploadSession } from '../../providers/filesystem-provider-contract'
+} from '../system-transport/ssh-transport-selection'
+import type { FileUploadSession } from '../../providers/filesystem/provider-contract'
 import {
   openSshExecChannel,
   openSshSftpChannel,
   openSshShellChannel,
   spawnTrackedSystemSshChannel,
+  type SshExecChannelOptions,
   type SshSessionChannelHost
-} from './ssh-connection-session-channels'
+} from './channels/ssh-connection-session-channels'
 import {
   SshConnectionReconnector,
   type SshConnectionReconnectHost
-} from './ssh-connection-reconnect'
+} from './reconnect/ssh-connection-reconnect'
 import { cloneResolvedConfig, waitForSystemSshProbe } from './ssh-system-ssh-probe'
 import {
   installSsh2HostKeyVerification,
   readHostKeyTrustSources,
   type HostKeyTrustSources
-} from './ssh2-host-key-verification'
-import { runSsh2Handshake } from './ssh2-handshake'
+} from '../host-keys/ssh2-host-key-verification'
+import { runSsh2Handshake } from '../authentication/ssh2-handshake'
 import {
   recoverFailedSsh2Attempt,
   type Ssh2CredentialFallbackHost
-} from './ssh2-credential-fallback'
+} from '../authentication/ssh2-credential-fallback'
 
 /** The sign-in a connection holds in memory, handed to the connection that replaces it. */
 export type SshCachedCredentials = { password: string | null; passphrase: string | null }
@@ -85,21 +98,18 @@ export class SshConnection {
   private systemSshResolvedConfig: SshResolvedConfig | null = null
   /** Set by attemptConnect so doSsh2Connect can build a verifier without threading it through. */
   private hostKeyResolvedConfig: SshResolvedConfig | null = null
-  /**
-   * The trust sources for ONE connect attempt, keyed by its generation.
-   *
-   * doSsh2Connect runs up to five times per attemptConnect as the credential ladder advances, and
-   * each run re-read every known_hosts file, re-read the store, and on the -F path re-scanned the
-   * system config. The answer cannot change between rungs of the same attempt — nothing writes these
-   * while a handshake is in flight — so it is read once. Keyed by generation rather than cleared,
-   * because a superseded attempt must never hand its sources to the live one.
-   */
+  /** Read trust sources once per connect generation, not each credential rung. Generation keys prevent superseded attempts sharing evidence with replacements. */
   private hostKeyTrustSources: {
     generation: number
     sources: Promise<HostKeyTrustSources>
   } | null = null
+  /** Generation whose ssh2 attempt found an Orca-stored key for this endpoint. */
+  private orcaStorePinnedGeneration: number | null = null
   private systemSshControlMasterDisabledForSession = false
   private systemSshGssapiOnlyForSession = false
+  private systemSshLoopbackRoute: SystemSshLoopbackRoute | null = null
+  private systemSshLoopbackRouteStartingGeneration: number | null = null
+  private systemSshLoopbackRouteAbortController: AbortController | null = null
   private useSystemSshTransport = false
   private credentialAbortController = new AbortController()
   private readonly pendingSsh2Clients = new Set<SshClient>()
@@ -179,8 +189,7 @@ export class SshConnection {
     return { ...this.target }
   }
   getHostKeyFingerprint(): string | undefined {
-    // Why: system SSH does not expose its negotiated key; a fingerprint from a
-    // failed ssh2 attempt may identify a different load-balanced execution host.
+    // System SSH exposes no negotiated key; stale ssh2 fingerprints may identify a different load-balanced host.
     return this.useSystemSshTransport ? undefined : this.hostKeyFingerprint
   }
 
@@ -188,7 +197,7 @@ export class SshConnection {
     this.callbacks = callbacks
   }
 
-  // Why: lets ssh:needsPassphrasePrompt skip redundant passphrase prompts on reconnect when the credential is already cached in-memory.
+  // Cached credentials suppress redundant reconnect prompts.
   hasCachedCredential(): boolean {
     return this.cachedPassphrase != null || this.cachedPassword != null
   }
@@ -210,8 +219,12 @@ export class SshConnection {
     return { password: this.cachedPassword, passphrase: this.cachedPassphrase }
   }
 
-  exec(cmd: string, options?: SshExecOptions): Promise<ClientChannel> {
+  exec(cmd: string, options?: SshExecChannelOptions): Promise<ClientChannel> {
     return openSshExecChannel(this.sessionChannelHost(), cmd, options)
+  }
+
+  execWithClosedStdin(cmd: string, options?: SshExecOptions): Promise<ClientChannel> {
+    return this.exec(cmd, { ...options, closeStdin: true })
   }
 
   /** Interactive login shell over a session channel with pty-req; ssh2 transport only. */
@@ -311,12 +324,12 @@ export class SshConnection {
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err))
 
-        // Why: a concurrent disconnect() already set 'disconnected'; a cancelled attempt's late error must not overwrite it with auth-failed/error.
+        // Late cancellation errors must not overwrite Disconnect's published state.
         if (this.disposed) {
           throw lastError
         }
 
-        // Why: a newer attempt owns the connection now and publishes its own outcome; retrying here would fight it.
+        // The replacement owns state; stale retries would fight it.
         if (
           !this.isCurrentConnectAttempt(connectGeneration) ||
           isCancelledConnectAttemptError(lastError)
@@ -346,16 +359,7 @@ export class SshConnection {
   }
 
   // Why: callers claim the generation so their catch can tell their own failure from a superseded one.
-  /**
-   * A credential prompt, unless this attempt has already been superseded.
-   *
-   * Gated here rather than at each ladder rung because every rung ends in this one call, and the
-   * rungs below the first are exactly where the generation check was missing: a superseded attempt
-   * is denied by the verifier WITHOUT a recorded decision (deliberate — a dead attempt must not
-   * clobber the live one's outcome), so `isHostKeyVerificationError` reads false and the fallback
-   * runs on. The user then gets a passphrase dialog for a connection nobody is waiting on, possibly
-   * racing the live attempt's own. Returning undefined drops each rung through to its throw.
-   */
+  /** Gate every credential rung by generation: stale verifier denials are deliberately unrecorded, so error shape cannot prevent orphan prompts. Undefined falls through to the original failure. */
   private async requestCredential(
     kind: SshCredentialKind,
     detail: string,
@@ -452,7 +456,7 @@ export class SshConnection {
       await this.doSystemSshProbeWithControlMasterRetry(connectGeneration, resolved)
       return
     }
-    // Why: ssh2 lacks gssapi-with-mic; GSSAPIAuthentication hosts try Kerberos SSO via system OpenSSH first, then fall through to key/credential auth.
+    // ssh2 lacks GSSAPI; config-backed Kerberos hosts try OpenSSH SSO before credential fallback.
     if (
       isOpenSshConfigBackedTarget(this.target) && resolved
         ? resolved.gssapiAuthentication === true
@@ -467,13 +471,13 @@ export class SshConnection {
         }
       }
     }
-    // Why: a synchronous spawn throw bypasses the probe's catch, so clear system-transport state here or exec/sftp keep routing through the failed transport.
+    // Clear failed system transport after synchronous spawn throws so exec/SFTP cannot keep routing through it.
     this.resetSystemTransport()
 
     const skippedIdentityFiles: SkippedIdentityFiles = new Map()
     const config = buildConnectConfig(this.target, resolved, { skippedIdentityFiles })
 
-    // Why: ssh2 doesn't support ProxyCommand/ProxyJump natively; spawn the resolved proxy and pipe its stdin/stdout as config.sock.
+    // ssh2 needs resolved ProxyCommand/ProxyJump spawned as config.sock.
     const effectiveProxy = resolveEffectiveProxy(this.target, resolved)
     if (effectiveProxy) {
       const proxy = spawnProxyCommand(effectiveProxy, config.host!, config.port!, config.username!)
@@ -520,6 +524,7 @@ export class SshConnection {
       connect: (config) => this.doSsh2Connect(config, connectGeneration),
       respawnProxy: (config, proxy) => this.respawnProxy(config, proxy, connectGeneration),
       killProxyIfCurrent: () => this.killProxyIfCurrent(connectGeneration),
+      isPinnedByOrcaHostKeyStore: () => this.orcaStorePinnedGeneration === connectGeneration,
       probeSystemSsh: (resolved, gssapiOnly) =>
         this.doSystemSshProbeWithControlMasterRetry(connectGeneration, resolved, gssapiOnly),
       resetSystemTransportIfCurrent: () => this.resetSystemTransportIfCurrent(connectGeneration),
@@ -563,12 +568,13 @@ export class SshConnection {
     this.client = null
     this.killProxy()
 
-    // Why: this probe runs before remote platform detection; a raw echo works under POSIX shells, cmd.exe, and PowerShell, but `/bin/sh` wrapping does not.
+    // Probe before platform detection: raw echo works in POSIX, cmd and PowerShell; /bin/sh wrapping does not.
     const channel = spawnTrackedSystemSshChannel(
       this.sessionChannelHost(),
       'echo ORCA-SYSTEM-SSH-OK',
       {
-        wrapCommand: false
+        wrapCommand: false,
+        closeStdin: true
       }
     )
     try {
@@ -576,11 +582,14 @@ export class SshConnection {
         target: this.target,
         resolvedConfig: () => this.systemSshResolvedConfig,
         isCurrentAttempt: () => this.isCurrentConnectAttempt(connectGeneration),
-        onConnected: () => this.setState('connected'),
+        onConnected: () => {
+          this.setState('connected')
+          this.startSystemSshLoopbackRoute(connectGeneration)
+        },
         untrackChannel: (probeChannel) => this.systemCommandChannels.delete(probeChannel)
       })
     } catch (err) {
-      // Why: a superseded probe closes late; its cleanup must not strip the replacement's transport.
+      // Stale probe cleanup must not strip its replacement's transport.
       if (this.isCurrentConnectAttempt(connectGeneration)) {
         this.useSystemSshTransport = false
         this.systemSshResolvedConfig = null
@@ -611,7 +620,7 @@ export class SshConnection {
         throw err
       }
       removeControlSocketPath(controlPath)
-      // Why: a timeout retry doubles the ladder step, but a stuck master can cause the first timeout.
+      // A stuck master can cause the first timeout; give it one retry before doubling ladder backoff.
       if (
         isDefiniteSystemSshHostFailure(err) ||
         (err instanceof Error && (isAuthError(err) || isPassphraseError(err)))
@@ -640,8 +649,7 @@ export class SshConnection {
     if (this.systemSshResolvedConfig) {
       options.resolvedConfig = this.systemSshResolvedConfig
     }
-    // Why here and not inside buildSshArgs: the verdict reads ~/.ssh/config, and an arg builder
-    // that consults the filesystem answers differently on every machine, tests included.
+    // Resolve alias claims outside the arg builder so filesystem state does not make argument construction machine-dependent.
     if (this.target.configHost && !mayUserSshConfigClaimAlias(this.target.configHost)) {
       options.aliasClaimedByConfig = false
     }
@@ -651,10 +659,60 @@ export class SshConnection {
     if (this.systemSshGssapiOnlyForSession) {
       options.gssapiOnly = true
     }
+    if (this.systemSshLoopbackRoute) {
+      options.loopbackRoute = this.systemSshLoopbackRoute.args
+    }
     return options
   }
 
-  // Why: ssh2 may destroy the proxy socket on auth failure, so credential retries need a fresh proxy process and Duplex stream.
+  /** Off the connect path: commands keep the direct proxy route until the forward is proven. */
+  private startSystemSshLoopbackRoute(connectGeneration: number): void {
+    const options = this.getSystemSshBuildArgsOptions()
+    if (
+      !this.isCurrentConnectAttempt(connectGeneration) ||
+      !this.useSystemSshTransport ||
+      this.systemSshLoopbackRoute ||
+      this.systemSshLoopbackRouteStartingGeneration === connectGeneration ||
+      !shouldUseSystemSshLoopbackRoute(this.target, this.systemSshResolvedConfig, options)
+    ) {
+      return
+    }
+    // Do not let a superseded route start block the new generation.
+    this.systemSshLoopbackRouteStartingGeneration = connectGeneration
+    const controller = new AbortController()
+    this.systemSshLoopbackRouteAbortController = controller
+    const settle = (): void => {
+      if (this.systemSshLoopbackRouteAbortController === controller) {
+        this.systemSshLoopbackRouteStartingGeneration = null
+        this.systemSshLoopbackRouteAbortController = null
+      }
+    }
+    startSystemSshLoopbackRoute(this.target, options, process.platform, controller.signal).then(
+      (route) => {
+        settle()
+        if (
+          controller.signal.aborted ||
+          !this.isCurrentConnectAttempt(connectGeneration) ||
+          !this.useSystemSshTransport
+        ) {
+          route.dispose()
+          return
+        }
+        this.systemSshLoopbackRoute = route
+        route.onExit(() => {
+          if (this.systemSshLoopbackRoute === route) {
+            this.systemSshLoopbackRoute = null
+          }
+        })
+      },
+      () => {
+        // The route is an optimization; direct per-command proxy logins still work.
+        settle()
+      }
+    )
+  }
+
+  // ssh2 may destroy proxy sockets on auth failure; retry with a new process/stream.
   private respawnProxy(
     config: ConnectConfig,
     proxy: ReturnType<typeof resolveEffectiveProxy> | null | undefined,
@@ -663,7 +721,7 @@ export class SshConnection {
     if (!proxy) {
       return
     }
-    // Why: this.proxyProcess belongs to whichever attempt is current; a superseded one must not kill it.
+    // Only the current attempt may kill its proxy process.
     if (!this.isCurrentConnectAttempt(connectGeneration)) {
       throw createCancelledConnectAttemptError()
     }
@@ -700,6 +758,9 @@ export class SshConnection {
         this.hostKeyFingerprint = fingerprint
       }
     })
+    if (verdict.pinnedByOrcaStore && isCurrentAttempt()) {
+      this.orcaStorePinnedGeneration = connectGeneration
+    }
     return runSsh2Handshake(config, {
       label: this.target.label,
       pendingClients: this.pendingSsh2Clients,
@@ -726,7 +787,7 @@ export class SshConnection {
     })
   }
 
-  // Why: guard on identity so a late event from the old client can't null out a successful reconnect.
+  // Late old-client events must not clear a successful reconnect.
   private setupDisconnectHandler(client: SshClient): void {
     const onDrop = () => {
       if (this.disposed || this.client !== client) {
@@ -794,6 +855,11 @@ export class SshConnection {
   }
 
   private resetSystemTransport(): void {
+    this.systemSshLoopbackRouteAbortController?.abort()
+    this.systemSshLoopbackRouteAbortController = null
+    this.systemSshLoopbackRouteStartingGeneration = null
+    this.systemSshLoopbackRoute?.dispose()
+    this.systemSshLoopbackRoute = null
     this.systemSshResolvedConfig = null
     this.systemSshControlMasterDisabledForSession = false
     this.systemSshGssapiOnlyForSession = false

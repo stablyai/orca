@@ -67,6 +67,32 @@ outputs:
 runs:
   using: composite
   steps:
+    # The image resets HOME during login; shell fixtures intentionally use temporary homes.
+    - name: Preserve explicit login-shell homes on Blacksmith
+      if: runner.os == 'Linux' && startsWith(runner.name, 'blacksmith-') && job.container.id == ''
+      shell: bash
+      run: |
+        sudo python3 - <<'PYTHON'
+        from pathlib import Path
+        profile = Path('/etc/profile.d/blacksmith.sh')
+        if profile.exists():
+            original = profile.read_text()
+            updated = original.replace('export HOME="$RUNNER_HOME"', 'export HOME="${HOME:-$RUNNER_HOME}"')
+            if updated != original:
+                profile.write_text(updated)
+        PYTHON
+        fixture_home="$(mktemp -d)"
+        trap 'rm -rf "$fixture_home"' EXIT
+        printf 'export ORCA_CI_PROFILE_LOADED=1\n' > "$fixture_home/.bash_profile"
+        HOME="$fixture_home" ORCA_CI_FIXTURE_HOME="$fixture_home" /bin/bash -lc '
+          test "$HOME" = "$ORCA_CI_FIXTURE_HOME" && test "$ORCA_CI_PROFILE_LOADED" = 1
+        ' || {
+          echo '::error::Runner login profile overrides fixture HOME'
+          grep -nH 'HOME' /etc/profile /etc/profile.d/*.sh || true
+          HOME="$fixture_home" /bin/bash -lc 'printf "Observed HOME=%s\n" "$HOME"'
+          exit 1
+        }
+
     - name: Resolve pnpm store mode
       id: pnpm-store-mode
       if: >-
@@ -159,9 +185,10 @@ runs:
         key: node-cache-${{ runner.os }}-${{ steps.pnpm-store.outputs.arch }}-pnpm-${{ hashFiles(inputs.cache-dependency-path) }}
 
     # Producers can refresh access and publish misses without downloading existing archives.
+    # Not on GitHub-hosted runners: nothing restores that store, and direct installs beat restoring it.
     - name: Keep pnpm download store without restoring
       id: pnpm-store-lookup
-      if: steps.pnpm-store-mode.outputs.lookup-only == 'true'
+      if: steps.pnpm-store-mode.outputs.lookup-only == 'true' && runner.environment != 'github-hosted'
       uses: actions/cache@v5
       with:
         # Twice-nested composite cleanup loses internal step outputs.
@@ -196,10 +223,7 @@ runs:
           rm -rf node_modules
         fi
 
-    # Why --frozen-lockfile: re-resolving pulls ~62 MB of registry packuments per job
-    # (measured) to recompute what the lockfile already pins, and the `git diff` guard
-    # below fails the run whenever that recomputation would have changed anything. The
-    # guard stays so a stale lockfile still fails by name rather than by resolver error.
+    # Frozen install avoids ~62MB/job of redundant resolution; retain diff guard to name stale lockfiles explicitly.
     - name: Install dependencies
       shell: bash
       run: |
@@ -250,15 +274,16 @@ runs:
         printf 'ELECTRON_CACHE=%s\n' "$cache_root" >> "$GITHUB_ENV"
         printf 'version=%s\n' "$(node -p "require('./node_modules/electron/package.json').version")" >> "$GITHUB_OUTPUT"
 
+    # Main and the warmers own every OS's archive; PR copies duplicated it per PR.
     - name: Cache Electron package archive
-      if: (github.event_name != 'pull_request' || runner.os != 'Linux') && steps.electron-package-cache.outputs.version != ''
+      if: github.event_name != 'pull_request' && steps.electron-package-cache.outputs.version != ''
       uses: actions/cache@v5
       with:
         path: ${{ steps.electron-package-cache.outputs.cache-root }}
         key: electron-package-${{ runner.os }}-${{ runner.arch }}-${{ steps.electron-package-cache.outputs.version }}
 
     - name: Restore Electron package archive without saving
-      if: github.event_name == 'pull_request' && runner.os == 'Linux' && steps.electron-package-cache.outputs.version != ''
+      if: github.event_name == 'pull_request' && steps.electron-package-cache.outputs.version != ''
       uses: actions/cache/restore@v5
       with:
         path: ${{ steps.electron-package-cache.outputs.cache-root }}

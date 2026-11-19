@@ -1,7 +1,6 @@
-// What editor tabs send main in a layout-owner build: opens, closes, promotions, moves and renames
-// go to main first (editor-tab-*-through-layout-owner, restored-editor-move-through-layout-owner).
+// Layout-owner editor opens/closes/promotions/moves/renames reach main before drawing (editor-tab-*-through-layout-owner, restored-editor-move-through-layout-owner).
 
-import type { Tab } from '../../../../../../shared/tab-types'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { LayoutEditorFile } from '../../../../../../shared/workspace-layout/workspace-layout-model'
 import type { AppState } from '../../../types'
 import type { OpenFile } from '../types/open-file'

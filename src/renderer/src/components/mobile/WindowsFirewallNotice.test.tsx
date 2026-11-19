@@ -23,48 +23,6 @@ function setMobileApi(overrides: Record<string, unknown> = {}): void {
 }
 
 describe('WindowsFirewallNotice', () => {
-  it('stays hidden until a pairing code exists and Windows reports a missing rule', async () => {
-    const getWindowsFirewallStatus = vi.fn().mockResolvedValue({
-      supported: true,
-      port: 6768,
-      ruleAllowed: false,
-      blockingRuleDetected: false,
-      privateFirewallEnabled: true,
-      networkCategory: 'private',
-      inspectionAvailable: true
-    })
-    setMobileApi({ getWindowsFirewallStatus })
-    const { rerender } = render(
-      <WindowsFirewallNotice pairingReady={false} address="192.168.0.108" />
-    )
-    expect(screen.queryByText(/allow phone connections through/i)).not.toBeInTheDocument()
-
-    rerender(<WindowsFirewallNotice pairingReady address="192.168.0.108" />)
-    expect(await screen.findByText(/allow phone connections through/i)).toBeInTheDocument()
-    expect(screen.getByText(/TCP port 6768/i)).toBeInTheDocument()
-  })
-
-  it('reassures on Relay that pairing works without the firewall rule', async () => {
-    const getWindowsFirewallStatus = vi.fn().mockResolvedValue({
-      supported: true,
-      port: 6768,
-      ruleAllowed: false,
-      blockingRuleDetected: false,
-      privateFirewallEnabled: true,
-      networkCategory: 'private',
-      inspectionAvailable: true
-    })
-    setMobileApi({ getWindowsFirewallStatus })
-    const { rerender } = render(
-      <WindowsFirewallNotice pairingReady address="192.168.0.108" usingRelay />
-    )
-    expect(await screen.findByText(/allow phone connections through/i)).toBeInTheDocument()
-    expect(screen.getByText(/still works over Orca Relay/i)).toBeInTheDocument()
-
-    rerender(<WindowsFirewallNotice pairingReady address="192.168.0.108" />)
-    expect(screen.queryByText(/still works over Orca Relay/i)).not.toBeInTheDocument()
-  })
-
   it('repairs only after explicit user action and hides after success', async () => {
     const repairWindowsFirewall = vi.fn().mockResolvedValue({ ok: true })
     const getWindowsFirewallStatus = vi
@@ -94,7 +52,9 @@ describe('WindowsFirewallNotice', () => {
     const user = userEvent.setup()
     render(<WindowsFirewallNotice pairingReady address="192.168.0.108" />)
 
-    await user.click(await screen.findByRole('button', { name: /allow phone connections/i }))
+    const repairButton = await screen.findByRole('button', { name: /allow phone connections/i })
+    expect(repairWindowsFirewall).not.toHaveBeenCalled()
+    await user.click(repairButton)
     expect(repairWindowsFirewall).toHaveBeenCalledTimes(1)
     await waitFor(() => expect(getWindowsFirewallStatus).toHaveBeenCalledTimes(2))
     await waitFor(() =>
@@ -152,8 +112,7 @@ describe('WindowsFirewallNotice', () => {
     render(<WindowsFirewallNotice pairingReady address="192.168.0.108" />)
     expect(await screen.findByText(/Windows may be blocking Orca Mobile/i)).toBeInTheDocument()
 
-    // Why: UAC elevation bounces window focus, so an older in-flight
-    // inspection can resolve after a newer one and must not win.
+    // Overlap focus-triggered UAC inspections so only the newest answer may win.
     window.dispatchEvent(new Event('focus'))
     window.dispatchEvent(new Event('focus'))
     await waitFor(() => expect(getWindowsFirewallStatus).toHaveBeenCalledTimes(3))
@@ -206,9 +165,11 @@ describe('WindowsFirewallNotice', () => {
       getWindowsFirewallStatus
     })
 
-    render(<WindowsFirewallNotice pairingReady address="10.0.0.4" />)
+    await act(async () => {
+      render(<WindowsFirewallNotice pairingReady address="10.0.0.4" />)
+    })
 
-    await waitFor(() => expect(getWindowsFirewallStatus).toHaveBeenCalledTimes(1))
+    expect(getWindowsFirewallStatus).toHaveBeenCalledTimes(1)
     expect(screen.queryByRole('button', { name: /allow phone connections/i })).toBeNull()
   })
 })

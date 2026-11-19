@@ -1,15 +1,15 @@
-import { ImeInput } from '@/lib/ime-text-field'
+import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import React, { useCallback, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Check, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
-import { MarkupToolbar } from './MarkupToolbar'
-import type { MarkupBaseImage } from './markup-base-image'
-import type { MarkupShape } from './markup-drawing-model'
-import { TEXT_FONT_FAMILY } from './markup-shape-render'
-import { useMarkupEditor } from './useMarkupEditor'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
+import { MarkupToolbar } from './markup-tools/MarkupToolbar'
+import type { MarkupBaseImage } from './capture/markup-base-image'
+import type { MarkupShape } from './drawing/markup-drawing-model'
+import { TEXT_FONT_FAMILY } from './drawing/markup-shape-render'
+import { useMarkupEditor } from './drawing/useMarkupEditor'
 
 export type MarkupOverlayProps = {
   baseImage: MarkupBaseImage
@@ -27,6 +27,7 @@ export function MarkupOverlay({
   onCancel,
   controlsContainer
 }: MarkupOverlayProps): React.JSX.Element {
+  const t = useTranslate()
   const baseImgRef = useRef<HTMLImageElement | null>(null)
   const [baseLoaded, setBaseLoaded] = useState(false)
   const editor = useMarkupEditor(busy, onCancel)
@@ -69,18 +70,18 @@ export function MarkupOverlay({
       </div>
       <div className="pointer-events-auto flex items-center gap-2 rounded-md border border-border bg-card/95 p-1.5 shadow-md backdrop-blur">
         <span className="px-1 text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.browser-pane.markup.hint',
             'Draw on the page, then copy the markup to paste into your agent.'
           )}
         </span>
         <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={busy}>
           <X className="size-4" />
-          {translate('auto.components.browser-pane.markup.cancel', 'Cancel')}
+          {t('auto.components.browser-pane.markup.cancel', 'Cancel')}
         </Button>
         <Button type="button" size="sm" onClick={handleDone} disabled={busy || !baseLoaded}>
           <Check className="size-4" />
-          {translate('auto.components.browser-pane.markup.copy', 'Copy Markup')}
+          {t('auto.components.browser-pane.markup.copy', 'Copy Markup')}
         </Button>
       </div>
     </div>
@@ -99,8 +100,7 @@ export function MarkupOverlay({
         draggable={false}
         onLoad={() => setBaseLoaded(true)}
         onError={() => {
-          // Why: the backdrop is a self-generated data URL, so a decode failure is
-          // unexpected — but never trap the user with a permanently-disabled Done.
+          // Cancel on unexpected backdrop decode failure so Done cannot stay disabled forever.
           console.error('markup: base screenshot failed to load')
           onCancel()
         }}
@@ -127,15 +127,13 @@ export function MarkupOverlay({
           // Why: key by position so each placement re-mounts a fresh input.
           key={`${pendingText.x},${pendingText.y}`}
           defaultValue={pendingText.initial}
-          aria-label={translate('auto.components.browser-pane.markup.textInput', 'Annotation text')}
+          aria-label={t('auto.components.browser-pane.markup.textInput', 'Annotation text')}
           onPointerDown={(event) => event.stopPropagation()}
           onBlur={(event) => editor.commitPendingText(event.target.value)}
           onKeyDown={(event) => {
-            // Why: keep keystrokes local — without this the browser pane's global
-            // key handlers can swallow typing before it reaches the input.
+            // Keep typing local; browser-pane global handlers otherwise swallow it.
             event.stopPropagation()
-            // Why: during IME composition (e.g. Japanese conversion), Enter
-            // confirms the candidate — it must NOT also commit the annotation.
+            // IME Enter confirms its candidate and must not also commit the annotation.
             if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
               event.preventDefault()
               editor.commitPendingText(event.currentTarget.value)
@@ -144,11 +142,7 @@ export function MarkupOverlay({
               editor.cancelPendingText()
             }
           }}
-          // Why: the input renders ONLY the editable glyphs (no box of its own) —
-          // the selection frame is drawn on the canvas so it's identical whether
-          // selecting or editing. No padding/border + the same font as the canvas
-          // so the text sits exactly where it commits. field-sizing hugs the text
-          // so clicks outside it still reach the canvas.
+          // Match canvas typography with no input chrome; the canvas owns the selection frame and outside clicks remain reachable.
           className="absolute z-30 min-w-0 border-0 bg-transparent p-0 leading-none outline-none [field-sizing:content]"
           style={{
             left: pendingText.x,
@@ -157,9 +151,7 @@ export function MarkupOverlay({
             fontSize: editor.fontSize,
             fontWeight: 600,
             fontFamily: TEXT_FONT_FAMILY,
-            // Why: force line-height to 1 (the UA default ~1.2 pushes the glyph
-            // down) and zero the height so the text top aligns with the canvas's
-            // textBaseline:'top' render — otherwise editing text sits slightly low.
+            // Match canvas textBaseline:top; the UA line height would shift editable glyphs down.
             lineHeight: 1,
             height: '1em',
             boxSizing: 'content-box',

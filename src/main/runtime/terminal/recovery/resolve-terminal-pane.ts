@@ -1,32 +1,30 @@
+import { terminalLaunchFacts } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { OrcaRuntimeWithCreateTerminal } from '../launch/terminal-create'
 import { OrcaRuntimeWithRestoredHandlePaneStart } from '../surface/restored-handle-pane-start'
 import type {
   RuntimeTerminalRead,
   RuntimeTerminalResolvePane,
-  RuntimeTerminalShow
-} from '../../../../shared/runtime-types'
-import type {
-  RuntimeTerminalCreate,
+  RuntimeTerminalShow,
   RuntimeTerminalSummary
-} from '../../../../shared/runtime-terminal-contracts'
-import type {
-  RuntimeProviderSnapshotReadOptions,
-  TerminalHandleRecord
-} from '../../runtime-terminal-contracts'
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
+import type { RuntimeProviderSnapshotReadOptions } from '../output/provider-snapshot-read-options'
+import type { TerminalHandleRecord } from '../identity/terminal-handle-records'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
-} from '../../runtime-terminal-state-records'
-import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+} from '../records/runtime-terminal-state-records'
+import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   buildVisibleSnapshotReadFallback,
   labelTerminalReadSource,
   readTerminalTail
-} from '../../terminal-tail-read'
-import { getTerminalState } from '../../terminal-wait-results'
-import { readStructuredWorkerTerminal } from '../../structured-worker-terminal-read'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+} from '../output/tail/terminal-tail-read'
+import { getTerminalState } from '../wait/terminal-wait-results'
+import { readStructuredWorkerTerminal } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-terminal-read'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
+import { workspaceSessionListsTerminalTab } from '../../../../shared/workspace-session/workspace-session-terminal-tab-close'
 
 export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithRestoredHandlePaneStart {
   protected abstract assertLiveTerminalHandleTargetsPty(handle: string, expectedPtyId: string): void
@@ -82,6 +80,17 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
       // Why: pane coordinates restored by a paired client must not cross workspace ownership.
       throw new Error('terminal_not_found')
     }
+    if (parsed && !leaf && pty && !pty.connected && worktreeId) {
+      // An exited PTY outlives its tab; once the host closed that tab the pane is gone, and a client
+      // must not read the leftover record as a pane the host still owns (#9194).
+      const session = this.getWorkspaceSessionForWorktree(worktreeId)
+      if (
+        session?.tabsByWorktree[worktreeId] &&
+        !workspaceSessionListsTerminalTab(session, worktreeId, parsed.tabId)
+      ) {
+        throw new Error('terminal_not_found')
+      }
+    }
     return {
       handle,
       tabId: parsed?.tabId ?? record?.tabId ?? '',
@@ -107,8 +116,7 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
     if (!ORCA_LAYOUT_OWNER_IS_MAIN || handlePaneKey !== null) {
       return false
     }
-    // Switch point: main's layout names no pane for a terminal its replacement unbound, so a handle
-    // resolved for this pane, whose terminal ended, learns the connected replacement (never spawns).
+    // A pane-resolved handle may learn its connected replacement only after its own terminal ended; never spawn here.
     const staleRecord = this.handles.get(handle)
     const stale = staleRecord?.ptyId ? this.ptysById.get(staleRecord.ptyId) : undefined
     return (
@@ -154,29 +162,11 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
       pty.ptyId
     )
     if (!expiredLease) {
-      // Why: an explicit close leaves a terminated lease; only relay expiry authorizes shell
-      // recreation. `getRecentExpiredSshLease` also refuses a superseded or relay-id-recycled
-      // lease, which is `expired` for a reason that already names the successor — the pane's id no
-      // longer routes to the shell it describes, so recovering through it would adopt a stranger's
-      // process or re-race a pane that already moved on.
+      // Only an unsuperseded expired relay lease permits recreation; terminated/recycled/superseded ids must not adopt another process.
       throw new Error('terminal_not_recoverable')
     }
-    // Why an `expired` lease is not on its own authority to spawn a replacement: every writer of
-    // that state records that the CLIENT lost its route — a superseded sibling, a recycled relay
-    // id, a persistPtyBinding refusal, a failed reattach, a relay reset — and each says in-place
-    // that it is not evidence the shell died (`terminated` is the attested-death state, refused
-    // above). `!pty.connected` is the same inference: one dropped relay clears it for every PTY it
-    // owned. So the pair can hold over a remote shell that is still running, and createTerminal
-    // would rebind the pane away from it, leaving the original orphaned and its agent duplicated.
-    // The runtime grades that: `live` is the host proving the shell survived, `unverifiable` is the
-    // client losing contact, and both refuse. What this gate must NOT require is a positive
-    // `exited`: the only answer that ever reaches it is a reachable relay reporting it has no such
-    // id, and that is a union — pty.attach throws not-found for an unknown id with no liveness
-    // check, and a relay restart makes every previously minted id unknown. No writer of
-    // `exited` co-occurs with a reattachable `expired` lease either, since a host-delivered exit
-    // frame tombstones the lease `terminated`. Demanding one would close this gate permanently, and
-    // an unrecoverable pane is its own failure (docs/reference/ssh-execution-boundary.md,
-    // shared/pty-liveness-verdict.ts).
+    // Expired leases and disconnected records prove only lost routing; live/unverifiable verdicts refuse duplicate spawns.
+    // Do not require exited: host-certified exits terminate leases, while reachable not-found can follow relay restart (docs/reference/ssh-execution-boundary.md).
     const liveness = this.getPtyLivenessVerdict(pty.ptyId)
     if (liveness?.status === 'unverifiable' || liveness?.status === 'live') {
       throw new Error('terminal_not_recoverable')
@@ -185,8 +175,11 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
     const recovery = this.createTerminal(`id:${expectedWorktreeId}`, {
       tabId: parsed.tabId,
       leafId: parsed.leafId,
-      focus: false
+      focus: false,
+      // Replacing a pane its relay lost is no new work in the workspace.
+      reopensPane: true
     }).then((terminal) => ({
+      ...terminalLaunchFacts(terminal),
       handle: terminal.handle,
       tabId: parsed.tabId,
       leafId: parsed.leafId,
@@ -252,8 +245,7 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
     opts: { cursor?: number; limit?: number; screen?: boolean } = {},
     providerSnapshot: RuntimeProviderSnapshotReadOptions = {}
   ): Promise<RuntimeTerminalRead> {
-    // Before the PTY lookup, because a structured worker has no PTY and no leaf: without this the
-    // only peer read verb answers `terminal_handle_stale` for a perfectly live worker.
+    // Structured workers have no PTY/leaf; read their journal before PTY lookup can falsely call the handle stale.
     const structured = await readStructuredWorkerTerminal({
       handle,
       db: this.getOrchestrationDbIfAvailable?.() ?? null,

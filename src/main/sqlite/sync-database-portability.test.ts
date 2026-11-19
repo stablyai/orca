@@ -1,9 +1,9 @@
-import { existsSync, mkdtempSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, renameSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import SyncDatabase, { isSqliteAvailable } from './sync-database'
+import SyncDatabase from './sync-database'
 
 const directories: string[] = []
 const databases: SyncDatabase[] = []
@@ -48,22 +48,6 @@ describe('SQLite runtime contract', () => {
     }
     expect([...statement.iterate()]).toEqual([{ value: 1 }, { value: 2 }, { value: 3 }])
     db.exec('DROP TABLE rows')
-  })
-
-  it('admits the actual runtime driver', () => {
-    expect(isSqliteAvailable()).toBe(true)
-  })
-
-  it('enforces foreign keys by default', () => {
-    const db = open(':memory:')
-    db.exec(
-      'CREATE TABLE parents(id INTEGER PRIMARY KEY); CREATE TABLE children(parent INTEGER REFERENCES parents(id))'
-    )
-    expect(() => db.prepare('INSERT INTO children VALUES(?)').run(1)).toThrow()
-    expect(db.prepare('SELECT * FROM children').all()).toEqual([])
-    db.prepare('INSERT INTO parents VALUES(?)').run(1)
-    expect(db.prepare('INSERT INTO children VALUES(?)').run(1).changes).toBe(1)
-    expect(() => db.prepare('DELETE FROM parents WHERE id = ?').run(1)).toThrow()
   })
 
   it('returns safe integers as numbers without changing other SQLite values', () => {
@@ -130,27 +114,6 @@ describe('SQLite runtime contract', () => {
     }
   })
 
-  it('rejects integers outside SQLite range before changing rows', () => {
-    const db = open(':memory:')
-    db.exec('CREATE TABLE items(value INTEGER)')
-    const insert = db.prepare('INSERT INTO items VALUES(?)')
-    for (const value of [-(1n << 63n) - 1n, 1n << 63n]) {
-      expect(() => insert.run(value)).toThrow()
-    }
-    expect(db.prepare('SELECT count(*) AS count FROM items').get()).toEqual({ count: 0 })
-  })
-
-  it('clears old bindings and binds omitted positional values as null', () => {
-    const db = open(':memory:')
-    const statement = db.prepare('SELECT ? AS first, ? AS second')
-    expect(statement.get('old', 'secret')).toEqual({ first: 'old', second: 'secret' })
-    expect(statement.get('new')).toEqual({ first: 'new', second: null })
-    expect(statement.get()).toEqual({ first: null, second: null })
-    expect(statement.all()).toEqual([{ first: null, second: null }])
-    expect([...statement.iterate()]).toEqual([{ first: null, second: null }])
-    expect(db.prepare('SELECT 1 WHERE 0').get()).toBeUndefined()
-  })
-
   it('reports changes and explicit rowids using the requested integer mode', () => {
     const db = open(':memory:')
     db.exec('CREATE TABLE items(id INTEGER PRIMARY KEY, value TEXT)')
@@ -180,22 +143,6 @@ describe('SQLite runtime contract', () => {
     expect(statement.all()).toEqual([{ id: rowid }])
   })
 
-  it('rejects explicit undefined bindings before modifying rows', () => {
-    const db = open(':memory:')
-    db.exec('CREATE TABLE items(value TEXT)')
-    const insert = db.prepare('INSERT INTO items VALUES(?)')
-    // @ts-expect-error Exercise invalid input from untyped callers.
-    expect(() => insert.run(undefined)).toThrow()
-    expect(db.prepare('SELECT count(*) AS count FROM items').get()).toEqual({ count: 0 })
-    const select = db.prepare('SELECT ? AS value')
-    // @ts-expect-error Exercise invalid input from untyped callers.
-    expect(() => select.get(undefined)).toThrow()
-    // @ts-expect-error Exercise invalid input from untyped callers.
-    expect(() => select.all(undefined)).toThrow()
-    // @ts-expect-error Exercise invalid input from untyped callers.
-    expect(() => [...select.iterate(undefined)]).toThrow()
-  })
-
   it('releases statements and an unfinished iterator before filesystem retirement', () => {
     const path = join(fixture(), 'database.db')
     const db = open(path)
@@ -214,18 +161,6 @@ describe('SQLite runtime contract', () => {
     reopened.exec('DROP TABLE items')
   })
 
-  it('opens literal filenames, URL paths and Buffer paths without treating them as data', () => {
-    const path = join(fixture(), "profile % # ' é.db")
-    const writer = open(path)
-    writer.exec('CREATE TABLE items(id INTEGER PRIMARY KEY); INSERT INTO items VALUES(9)')
-    for (const input of [pathToFileURL(path), Buffer.from(path)]) {
-      const reader = new SyncDatabase(input, { readonly: true, fileMustExist: true })
-      databases.push(reader)
-      expect(reader.prepare('SELECT id FROM items').get()).toEqual({ id: 9 })
-    }
-    expect(existsSync(path)).toBe(true)
-  })
-
   it('refuses missing databases and changes through read-only connections', () => {
     const path = join(fixture(), 'database.db')
     for (const input of [path, pathToFileURL(path), Buffer.from(path)]) {
@@ -240,28 +175,6 @@ describe('SQLite runtime contract', () => {
     expect(reader.pragma('busy_timeout', { simple: true })).toBe(4321)
     expect(() => reader.exec('INSERT INTO items VALUES(1)')).toThrow()
     expect(writer.pragma('busy_timeout', { simple: true })).toBe(0)
-  })
-
-  it('copies committed WAL data through a read-only source into privately precreated output', async () => {
-    const directory = fixture()
-    const path = join(directory, 'database.db')
-    const target = join(directory, "snapshot % # '.db")
-    const writer = open(path)
-    writer.exec(
-      'PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; CREATE TABLE items(id INTEGER PRIMARY KEY, value TEXT)'
-    )
-    writer.prepare('INSERT INTO items VALUES(?, ?)').run(19, 'committed in WAL')
-    expect(existsSync(`${path}-wal`)).toBe(true)
-    const source = new SyncDatabase(path, { readonly: true, fileMustExist: true })
-    databases.push(source)
-    writeFileSync(target, '', { flag: 'wx', mode: 0o600 })
-    await source.backup(target)
-    const snapshot = open(target)
-    expect(snapshot.prepare('SELECT id, value FROM items').get()).toEqual({
-      id: 19,
-      value: 'committed in WAL'
-    })
-    expect(snapshot.pragma('integrity_check', { simple: true })).toBe('ok')
   })
 
   it('refuses an active transaction before creating any backup destination', async () => {

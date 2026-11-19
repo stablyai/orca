@@ -1,16 +1,14 @@
 type PaneTimer = { timer: ReturnType<typeof setTimeout>; paneKey: string }
 
-/** One pending, unref'd timer per pane; `run` gets the pane's current key, which a remint may move. */
+/** One unref'd timer per pane; remints move the callback to its current key. */
 export class PaneTimers {
   private readonly byPaneKey = new Map<string, PaneTimer>()
 
-  /** Replaces the pane's pending timer. */
   defer(paneKey: string, delayMs: number, run: (paneKey: string) => void): void {
     this.cancel(paneKey)
     this.start(paneKey, delayMs, run)
   }
 
-  /** Keeps a pending timer, whose `run` reads current state when it fires. */
   deferUnlessPending(paneKey: string, delayMs: number, run: (paneKey: string) => void): void {
     if (!this.byPaneKey.has(paneKey)) {
       this.start(paneKey, delayMs, run)

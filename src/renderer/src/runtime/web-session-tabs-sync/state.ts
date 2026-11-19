@@ -1,23 +1,26 @@
-import type { AppState } from '../../store'
+import type { PresentationRecordDrafts } from './snapshots/presentation-record-drafts'
+import type { BrowserInitializationPresentation } from './tab-projection/browser-initialization-presentation'
+import type { AppState } from '../../store/types'
+import type { RetiredTerminalTabSweepState } from '../../store/terminals/retirement/retired-terminal-tab-state-sweep'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
-  RuntimeMobileSessionAgentTab,
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionFileTab,
   RuntimeMobileSessionMarkdownTab,
-  RuntimeMobileSessionTabGroup,
-  RuntimeMobileSessionTabsRemovedResult,
-  RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTerminalClientTab
-} from '../../../../shared/runtime-types'
+} from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
   BrowserCertificateFailure,
   BrowserPage,
   BrowserWorkspace
-} from '../../../../shared/browser-workspace-types'
-import type { Tab } from '../../../../shared/tab-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { OpenFile } from '../../store/slices/editor'
-import type { RuntimeBrowserPlacement } from '../../../../shared/runtime-browser-placement'
+} from '../../../../shared/browser/workspaces/browser-workspace-types'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { OpenFile } from '../../store/slices/editor/types/open-file'
+import type { RuntimeBrowserPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 
 export const WEB_SESSION_GROUP_PREFIX = 'web-session-tabs:'
 export const WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS = 100
@@ -41,6 +44,7 @@ export type SessionTabsListAllResult = {
 export type SnapshotFreshness = {
   publicationEpoch: string
   snapshotVersion: number
+  followApplied?: true
 }
 
 export type ReceivedSessionTabsSnapshot = SnapshotFreshness & {
@@ -48,11 +52,7 @@ export type ReceivedSessionTabsSnapshot = SnapshotFreshness & {
   runtimeId?: string
 }
 
-/**
- * Runtime ids identify a host process, unlike publication epochs which may be
- * minted by several publishers. Retain a bounded predecessor set so a frame
- * queued by a restarted host cannot be mistaken for a fresh publication.
- */
+/** Runtime IDs name host processes; retain bounded retired predecessors so queued old-process frames cannot look like fresh publishers. */
 export type RetiredValueHistory = {
   current: string | null
   retired: string[]
@@ -60,18 +60,17 @@ export type RetiredValueHistory = {
 
 export type SessionTabsRuntimeHistory = RetiredValueHistory
 
-/**
- * A host restart changes the publication epoch, but frames from the previous
- * epoch can still be queued on a sibling subscription. Keep a small history
- * of epochs that have already been superseded so those delayed frames cannot
- * roll the mirror back after the replacement epoch is accepted.
- */
+/** Bounded retired-epoch history prevents sibling streams’ delayed frames rolling back accepted replacements after restart. */
 export type SessionTabsPublicationEpochHistory = RetiredValueHistory
 
 export type WebSessionTabsSnapshotApplyOptions = {
   contentScope?: 'all' | 'agent-session'
   preserveLocalLayout?: boolean
   terminalPtyMode?: 'local' | 'remote'
+  reconcileBrowserPage?: {
+    page: BrowserPage
+    handle: WebSessionTabsSyncState['remoteBrowserPageHandlesByPageId'][string]
+  }
 }
 
 export type TrackedWebSessionTabsWorktree = {
@@ -94,8 +93,7 @@ export function sessionTabsFreshnessKey(environmentId: string, worktreeId: strin
   return `${environmentId}:${worktreeId}`
 }
 
-// Why: a replay may repeat the current epoch/version; permit only that exact
-// identity once so an older concurrent frame cannot bypass monotonic ordering.
+// Allow replay of current epoch/version exactly once; older concurrent frames must retain ordering checks.
 export function acceptReplayedWebSessionTabsSnapshot(
   environmentId: string,
   worktreeId: string
@@ -113,12 +111,7 @@ export const latestReceivedSessionTabsSnapshotByWorktree = new Map<
 /** Receipt ledgers outlive the worktrees they order, so their keys need a bound of their own. */
 export const MAX_TRACKED_SESSION_TABS_RECEIPTS = 512
 
-/**
- * Bounds a receipt ledger by frame age, never by entry count. One inventory records a receipt per
- * worktree under a single reserved frame, and evicting by insertion order would drop that batch's
- * own earlier entries — which the recovery gate reads as "no evidence for this worktree" and uses
- * to reject it. Only a receipt no in-flight frame can still be ranked against is droppable.
- */
+/** Bound receipts by frame age, not insertion count: one inventory shares a frame across worktrees and must not evict its own evidence. Drop only entries no in-flight frame can rank against. */
 export function setBoundedSessionTabsReceipt<T>(
   map: Map<string, T>,
   key: string,
@@ -144,16 +137,7 @@ export const sessionTabsPublicationEpochHistoryByWorktree = new Map<
 >()
 export const latestReceivedSessionTabsFrameByEnvironment = new Map<string, number>()
 export const latestReceivedSessionTabsInventoryFrameByEnvironment = new Map<string, number>()
-/**
- * Highest `receivedFrame` at which this worktree was retracted. Raise-only: a frame reserved before
- * the retraction is stale evidence no matter what arrived since, so the boundary cannot be a slot a
- * later frame overwrites, nor conditional on a recovery happening to be in flight when it landed.
- *
- * Deliberately not size-bounded, unlike the receipt ledger beside it. Evicting a boundary readmits
- * every pre-close frame it was fencing, which is the defect this map exists to prevent; one number
- * per worktree ever retracted on an environment is a cheaper price, and the environment teardown
- * below drains it.
- */
+/** Raise-only retraction watermark fences all pre-close reserved frames even after later publications overwrite receipts. Never size-evict boundaries or stale lists reenter; one number per retracted worktree persists until environment teardown. */
 export const sessionTabsRemovalWatermarkByWorktree = new Map<string, number>()
 export const trackedSessionTabsWorktreeIdsByEnvironment = new Map<string, Set<string>>()
 export const sessionTabsEnvironmentsByWorktree = new Map<string, Set<string>>()
@@ -174,6 +158,31 @@ export const hostSessionTabMappingKeysByEnvironmentAndWorktree = new Map<
   string,
   Map<string, Set<string>>
 >()
+const MAX_TRACKED_MAPPING_REVISIONS = 4096
+let hostSessionTabMappingChangeSequence = 0
+let hostSessionTabMappingsResetAt = 0
+const hostSessionTabMappingChangedAtByWorktree = new Map<string, number>()
+/** Records which workspace's host tab mappings changed; no workspace means all of them. */
+export function markHostSessionTabMappingsChanged(worktreeId?: string): void {
+  hostSessionTabMappingChangeSequence += 1
+  // Entries outlive removed workspaces; a reset bounds them and hands every workspace a new revision.
+  if (
+    worktreeId === undefined ||
+    hostSessionTabMappingChangedAtByWorktree.size >= MAX_TRACKED_MAPPING_REVISIONS
+  ) {
+    hostSessionTabMappingsResetAt = hostSessionTabMappingChangeSequence
+    hostSessionTabMappingChangedAtByWorktree.clear()
+  } else {
+    hostSessionTabMappingChangedAtByWorktree.set(worktreeId, hostSessionTabMappingChangeSequence)
+  }
+}
+/** Differs from an earlier read exactly when this workspace's host tab mappings may have changed. */
+export function hostSessionTabMappingRevision(worktreeId: string): number {
+  return Math.max(
+    hostSessionTabMappingsResetAt,
+    hostSessionTabMappingChangedAtByWorktree.get(worktreeId) ?? 0
+  )
+}
 export const hostWorkingClientBoundaryByPaneKey = new Map<
   string,
   {
@@ -193,7 +202,6 @@ export function resetReceivedSessionTabsFrameSequence(): void {
   receivedSessionTabsFrameSequence = 0
 }
 
-export type TerminalSurface = RuntimeMobileSessionTerminalClientTab
 export type ReadyTerminalSurface = RuntimeMobileSessionTerminalClientTab & { status: 'ready' }
 export type ReadyBrowserSurface = RuntimeMobileSessionBrowserTab & { browserPageId: string }
 export type ReadyEditorSurface = RuntimeMobileSessionMarkdownTab | RuntimeMobileSessionFileTab
@@ -204,14 +212,18 @@ export type MirroredTerminalTab = {
   hostTabId: string
   ptyIds: string[]
   layout: TerminalLayoutSnapshot
-  retainedSurfaceByPrunedLeafId?: ReadonlyMap<string, TerminalSurface>
+  retainedSurfaceByPrunedLeafId?: ReadonlyMap<string, RuntimeMobileSessionTerminalClientTab>
 }
 export type MirroredBrowserTab = {
   workspace: BrowserWorkspace
   page: BrowserPage
+  previousPage?: BrowserPage
+  preservesLoading: boolean
   certificateFailure: BrowserCertificateFailure | null
   remotePageId: string
+  browserProfileId?: string
   placement?: RuntimeBrowserPlacement
+  initializationPresentation?: BrowserInitializationPresentation
   unifiedTab: Tab
   hostTabId: string
   clientGroupId?: string
@@ -248,27 +260,21 @@ export type WebSessionTabsSyncState = Pick<
   | 'unreadTerminalTabs'
   | 'sortEpoch'
 > &
+  Partial<Pick<AppState, 'splitLandingGroupIds'>> &
+  Partial<RetiredTerminalTabSweepState> &
   Partial<
     Pick<
       AppState,
-      | 'acknowledgedAgentsByPaneKey'
-      | 'activityClearedAtByPaneKey'
-      | 'agentLaunchConfigByPaneKey'
+      | 'agentSenderPublicationsByHost'
       | 'automaticAgentResumeClaimsByTabId'
-      // Why: a client draft is the evidence that a mirrored file's dirty flag is the client's
-      // own and must survive a host republish (#21392); absent here, the host flag wins.
+      // Client draft proves dirty-flag ownership (#21392); without one, follow host save state.
       | 'editorDrafts'
       // Why: the live index carries sticky detachments; absent here, views resolve by identity.
       | 'editorBufferIdOf'
       | 'localOnlyScrollbackByTabId'
-      | 'migrationUnsupportedByPtyId'
-      | 'manuallyUnreadTurnsByPaneKey'
-      | 'paneForegroundAgentByPaneKey'
       | 'pendingStartupByTabId'
-      | 'recentlyClosedAgentStatusTabIds'
-      | 'recentlyRetiredAgentStatusPaneKeys'
-      | 'retainedAgentsByPaneKey'
-      | 'retentionSuppressedPaneKeys'
+      | 'runtimePaneTitlesByTabId'
+      | 'sleepingAgentSessionsByPaneKey'
     >
   >
 
@@ -289,6 +295,7 @@ export type WebSessionTabsBatchRecordKey =
   | 'pendingStartupByTabId'
   | 'ptyIdsByTabId'
   | 'remoteBrowserPageHandlesByPageId'
+  | 'runtimePaneTitlesByTabId'
   | 'tabBarOrderByWorktree'
   | 'tabsByWorktree'
   | 'terminalLayoutsByTabId'
@@ -300,12 +307,9 @@ export type WebSessionOpenFilesIndex = {
   byWorktree: Map<string, OpenFile[]>
 }
 export type WebSessionTabsBatchContext = {
+  changedAgentPaneKeys?: Set<string>
   retractionPaneKeysByRecord?: WeakMap<object, Map<string, Set<string>>>
-  agentPaneKeysByTabId: Map<string, Set<string>> | null
   changedRecords: Set<WebSessionTabsBatchRecordKey>
+  presentationDrafts?: PresentationRecordDrafts
   openFilesIndex: WebSessionOpenFilesIndex | null
 }
-
-export type AgentTab = RuntimeMobileSessionAgentTab
-export type TabGroupSnapshot = RuntimeMobileSessionTabGroup
-export type RemovedTabsResult = RuntimeMobileSessionTabsRemovedResult

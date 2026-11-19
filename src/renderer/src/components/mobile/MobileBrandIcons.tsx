@@ -1,4 +1,3 @@
-// Why: these are exact filled brand paths, not generic line approximations.
 type MobileBrandIconProps = {
   className?: string
 }

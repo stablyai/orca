@@ -3,34 +3,16 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
 
-/**
- * A real TLS origin for the artifact's images, because interception could not measure them.
- *
- * The rig used to answer `https://…invalid` through Playwright's route interception. On Chrome 152
- * the sandboxed `srcdoc` frame is isolated into its own target, and the parser-inserted `<img>` is
- * the first fetch the document makes -- earlier than interception is attached to that target. The
- * request escaped to the real network, `.invalid` did not resolve, and the rig recorded nothing
- * while the document's own resource timing showed the fetch. A listener that is already accepting
- * before the page is created cannot be raced that way: the request either arrives or it does not,
- * and either answer is the measurement.
- *
- * `img-src 'self' data: https:` matches on scheme, so `https://127.0.0.1:<port>` exercises the same
- * directive any other https host would.
- */
+// Real TLS listener starts before page: Chrome sandboxed-srcdoc target’s first parser image can race route interception and escape measurement.
+// Loopback HTTPS exercises img-src scheme gate like remote HTTPS without DNS dependency.
 
-/** A 1x1 PNG, the smallest body that lets an admitted image request finish rather than error. */
+// 1×1 PNG lets admitted image load finish successfully.
 const PNG_1X1 = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==',
   'base64'
 )
 
-/**
- * A throwaway certificate, generated per run into the suite's own scratch directory.
- *
- * Never committed and never reused: the key exists for the lifetime of one temp directory, and the
- * context that talks to it is created with `ignoreHTTPSErrors`, so nothing here is trusted by
- * anything. `-subj` and `-days 1` keep it obviously disposable.
- */
+// Generate disposable one-day certificate in suite scratch; context ignores its errors and key disappears with temp directory.
 async function generateCertificate(scratch) {
   const keyPath = join(scratch, 'artifact-assets-key.pem')
   const certPath = join(scratch, 'artifact-assets-cert.pem')
@@ -64,14 +46,7 @@ async function generateCertificate(scratch) {
   }
 }
 
-/**
- * Starts the listener and hands back what it saw.
- *
- * Recorded server-side, the way the cleartext origin in this rig already is: a hit is a request that
- * arrived, and a referrer is the header that came with it, neither of them mediated by anything the
- * browser might attach late. Requests carry each arm's nonce, so one list serves every arm and an
- * arm reads only its own.
- */
+// Record requests/referrers server-side, immune to late browser interception; per-arm URL nonce attributes shared listener hits.
 export async function startArtifactAssetServer(scratch) {
   const credentials = await generateCertificate(scratch)
   const hits = []
@@ -82,8 +57,7 @@ export async function startArtifactAssetServer(scratch) {
       query: url.search,
       referer: request.headers.referer ?? null
     })
-    // Without this every cross-origin resource-timing field reads zero, so a healthy request and a
-    // failed one are indistinguishable from inside the frame -- measured, not assumed.
+    // Timing-Allow-Origin exposes nonzero cross-origin resource timing needed to distinguish healthy and failed requests.
     const timingVisible = { 'timing-allow-origin': '*' }
     if (url.pathname.endsWith('.png')) {
       response.writeHead(200, { 'content-type': 'image/png', ...timingVisible })
@@ -102,12 +76,10 @@ export async function startArtifactAssetServer(scratch) {
   return {
     server,
     origin: `https://127.0.0.1:${String(server.address().port)}`,
-    /** This arm's requests only, by nonce, as paths. */
     hitsFor: (nonce) =>
       hits.filter((one) => one.query.includes(`n=${nonce}`)).map((one) => one.path),
     referersFor: (nonce) =>
       hits.filter((one) => one.query.includes(`n=${nonce}`)).map((one) => one.referer),
-    /** Whether one exact path arrived, for the probe that issues a URL nothing can have cached. */
     saw: (path) => hits.some((one) => one.path === path)
   }
 }

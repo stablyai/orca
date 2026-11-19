@@ -2,23 +2,24 @@ import type {
   ClaudeAccountSignIn,
   ClaudeRateLimitAccountsState,
   ClaudeSignInRequest
-} from '../../shared/managed-account-types'
-import { ClaudeAccountRegistration } from './claude-account-registration'
+} from '../../shared/agent-accounts/managed-account-types'
+import { ClaudeAccountRegistration } from './sign-in/claude-account-registration'
 import {
   ClaudeAccountSelection,
   type ClaudeAccountRuntime,
   type ClaudeAccountStore,
   type ClaudeAccountUsage
-} from './claude-account-selection'
-import { runClaudeCommandProcess } from './claude-command-process'
-import { runClaudeLoginSession } from './claude-login-session'
-import { runClaudePastedCodeLogin } from './claude-pasted-code-login'
-import type { HostAccountSignInChannel } from '../../shared/host-account-sign-in-types'
+} from './selection/claude-account-selection'
+import { runClaudeCommandProcess } from './sign-in/claude-command-process'
+import { runClaudeLoginSession } from './sign-in/claude-login-session'
+import { runClaudePastedCodeLogin } from './sign-in/claude-pasted-code-login'
+import type { HostAccountSignInChannel } from '../../shared/agent-accounts/host-account-sign-in-types'
 import type { ClaudeRuntimeAuthService } from './runtime-auth-service'
-import type { ClaudeAccountSelectionTarget } from './runtime-selection'
+import type { ClaudeAccountSelectionTarget } from './selection/runtime-selection'
 
 export class ClaudeAccountService {
   private mutationQueue: Promise<unknown> = Promise.resolve()
+  private readonly renameListeners = new Set<() => void>()
   private cancelPendingClaudeLogin: (() => boolean) | null = null
   private pendingSignInLink: Promise<string | null> | null = null
   private openWslSignInLink: ((signInLink: string) => void) | null = null
@@ -26,7 +27,7 @@ export class ClaudeAccountService {
   private readonly registration: ClaudeAccountRegistration
 
   constructor(
-    store: ClaudeAccountStore,
+    private readonly store: ClaudeAccountStore,
     rateLimits: ClaudeAccountUsage,
     private readonly runtimeAuth: ClaudeAccountRuntime &
       Pick<ClaudeRuntimeAuthService, 'getRuntimeConfigDir'>,
@@ -45,7 +46,6 @@ export class ClaudeAccountService {
     return this.selection.list()
   }
 
-  /** A hidden `claude auth login` opens the browser and writes into the new account's folder. */
   addAccount(
     target: ClaudeAccountSelectionTarget = {},
     copyLink = false
@@ -60,13 +60,14 @@ export class ClaudeAccountService {
     return this.signInHidden({ accountId }, copyLink)
   }
 
-  /** A new host account signed in from another device: Claude's link and code travel via `channel`. */
-  addAccountWithPastedCode(
-    channel: HostAccountSignInChannel
+  /** Adds a host account, or re-authenticates `accountId`, through a code pasted on another device. */
+  signInWithPastedCode(
+    channel: HostAccountSignInChannel,
+    accountId?: string
   ): Promise<ClaudeRateLimitAccountsState> {
     this.supersedePendingLogin()
     return this.serializeMutation(() =>
-      this.registration.signIn({ runtime: 'host' }, (folder) =>
+      this.registration.signIn(accountId ? { accountId } : { runtime: 'host' }, (folder) =>
         runClaudePastedCodeLogin(folder, this.runLoginCommand, channel, (cancel) => {
           this.cancelPendingClaudeLogin = cancel
         })
@@ -74,7 +75,6 @@ export class ClaudeAccountService {
     )
   }
 
-  /** The latest hidden sign-in's link once Claude hands it over; null if it ends without one. */
   waitForSignInLink(): Promise<string | null> {
     return this.pendingSignInLink ?? Promise.resolve(null)
   }
@@ -83,7 +83,7 @@ export class ClaudeAccountService {
     return this.cancelPendingClaudeLogin?.() ?? false
   }
 
-  /** Lets the desktop open a WSL sign-in's link; orcad never sets one. */
+  /** The desktop supplies an opener; orcad leaves this unset. */
   setWslSignInLinkOpener(opener: ((signInLink: string) => void) | null): void {
     this.openWslSignInLink = opener
   }
@@ -98,7 +98,7 @@ export class ClaudeAccountService {
     return this.serializeMutation(() => this.registration.finish(signIn))
   }
 
-  /** Deletes the folder of a sign-in that never became an account; a saved account's is kept. */
+  /** Preserve saved accounts when cancelling sign-in. */
   cancelSignIn(signIn: Omit<ClaudeAccountSignIn, 'configDir'>): Promise<void> {
     return this.serializeMutation(() => this.registration.cancel(signIn))
   }
@@ -106,6 +106,28 @@ export class ClaudeAccountService {
   removeAccount(accountId: string): Promise<ClaudeRateLimitAccountsState> {
     this.supersedePendingLogin()
     return this.serializeMutation(() => this.selection.remove(accountId))
+  }
+
+  // Outside the mutation queue: a pending sign-in can hold it for minutes, and this
+  // synchronous write touches no state a queued account change reads.
+  renameAccount(accountId: string, displayName: string | null): ClaudeRateLimitAccountsState {
+    const before = this.store.getSettings().managedAccountDisplayNames
+    const state = this.selection.rename(accountId, displayName)
+    // Account streams otherwise republish only on usage changes; an unchanged name writes nothing.
+    if (this.store.getSettings().managedAccountDisplayNames !== before) {
+      for (const listener of this.renameListeners) {
+        listener()
+      }
+    }
+    return state
+  }
+
+  /** Listeners live as long as their account stream subscription. */
+  onAccountRenamed(listener: () => void): () => void {
+    this.renameListeners.add(listener)
+    return () => {
+      this.renameListeners.delete(listener)
+    }
   }
 
   selectAccount(accountId: string | null): Promise<ClaudeRateLimitAccountsState> {
@@ -130,7 +152,7 @@ export class ClaudeAccountService {
     copyLink: boolean
   ): Promise<ClaudeRateLimitAccountsState> {
     this.supersedePendingLogin()
-    // Why set before queueing: the renderer asks for the link right after starting the sign-in.
+    // Expose the link promise before queueing so the renderer can request it immediately.
     const signInLink = copyLink ? Promise.withResolvers<string | null>() : null
     this.pendingSignInLink = signInLink?.promise ?? null
     return this.serializeMutation(async () => {
@@ -157,8 +179,7 @@ export class ClaudeAccountService {
     })
   }
 
-  // Why before the queue, not inside it: the abandoned login owns the queue slot every later
-  // account action waits for. Only user-driven actions supersede it.
+  // User actions cancel before queueing because the pending login holds the queue slot.
   private supersedePendingLogin(): void {
     if (this.cancelPendingLogin()) {
       console.info(

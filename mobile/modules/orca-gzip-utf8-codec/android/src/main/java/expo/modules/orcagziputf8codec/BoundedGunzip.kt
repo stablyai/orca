@@ -13,13 +13,8 @@ private const val FLAG_COMMENT = 0x10
 private const val FLAG_RESERVED = 0xe0
 private const val TRAILER_LENGTH = 8
 
-/**
- * Inflates exactly one gzip member, as zlib's gzip mode does on iOS: the header, CRC32 and ISIZE
- * are checked, and any byte after the member (trailing data or a second member) is refused.
- *
- * Never produces more than [outputLimit] bytes. A body that reaches the limit comes back at the
- * limit with the rest of the stream unread: the caller sets the limit one past anything it accepts.
- */
+/** Validate exactly one gzip member (header, CRC32, ISIZE), rejecting trailing bytes/extra members.
+ * Stops at outputLimit with the stream unread; callers pass one byte beyond their accepted limit. */
 fun gunzipBounded(input: ByteArray, outputLimit: Int): ByteArray {
   if (outputLimit < 0) {
     throw BoundedGunzipException("negative output limit")

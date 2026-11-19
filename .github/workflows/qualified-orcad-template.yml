@@ -7,9 +7,9 @@ on:
         required: true
         type: string
       fast_runners:
-        description: Opt into faster adhoc runners; production stays on free GitHub runners
+        description: Qualify on Blacksmith; disable inside the SignPath signing workflow.
         type: boolean
-        default: false
+        default: true
 
 permissions:
   contents: read
@@ -19,7 +19,7 @@ env:
 
 jobs:
   cache:
-    runs-on: ${{ inputs.fast_runners && 'blacksmith-2vcpu-ubuntu-2404' || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     outputs:
       key: ${{ steps.identity.outputs.key }}
@@ -60,7 +60,7 @@ jobs:
         if: steps.restore.outputs.cache-hit == 'true' && steps.restore.outcome == 'success'
         shell: bash
         run: |
-          if node -e "require('./config/dark-build-switches.cjs').assertNotDarkBuild(['out/orcad-template']); require('./config/scripts/verify-packaged-orcad-template.cjs').verifyPackagedOrcadTemplate('out')"; then
+          if node -e "require('./config/dark-build-switches.cjs').assertNotDarkBuild(['out/orcad-template']); require(require('node:fs').existsSync('./config/scripts/orcad-distribution/template/verify-packaged-orcad-template.cjs') ? './config/scripts/orcad-distribution/template/verify-packaged-orcad-template.cjs' : './config/scripts/verify-packaged-orcad-template.cjs').verifyPackagedOrcadTemplate('out')"; then
             echo 'valid=true' >> "$GITHUB_OUTPUT"
           else
             rm -rf out/orcad-template
@@ -91,7 +91,7 @@ jobs:
   save:
     needs: [cache, qualify]
     if: needs.qualify.result == 'success'
-    runs-on: ${{ inputs.fast_runners && 'blacksmith-2vcpu-ubuntu-2404' || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/download-artifact@v8

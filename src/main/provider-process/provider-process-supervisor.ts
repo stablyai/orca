@@ -1,3 +1,5 @@
+import { join } from 'node:path'
+import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { resolveProviderChildEnv, type ProviderProcessLaunch } from './provider-process-launch'
 import { PROVIDER_SPAWN_FAILURE_MARKER } from './provider-spawn-failure-report'
 
@@ -5,20 +7,21 @@ import { PROVIDER_SPAWN_FAILURE_MARKER } from './provider-spawn-failure-report'
 export const PROVIDER_STDIN_END_GRACE_MS = 1_000
 /** Time the provider group gets to flush and exit after SIGTERM, before SIGKILL. */
 export const PROVIDER_SIGTERM_GRACE_MS = 3_000
-/**
- * How long the supervisor waits for a SIGKILLed group to disappear. A killed process never runs
- * again, so this only covers the kernel finishing the kill; waiting forever could hang close or
- * recovery on a process stuck in the kernel, such as one blocked on a hung network drive.
- */
+/** A stop the user waits on (context clear) asks the supervisor to reap its group after this;
+ * Claude itself usually exits within it, so only a straggler in its group gets killed. */
+export const PROVIDER_BRIEF_SIGTERM_GRACE_MS = 1_000
+/** Asks a stopping supervisor to reap its group now; a repeated SIGTERM stays a plain stop. */
+export const PROVIDER_SUPERVISOR_REAP_NOW_SIGNAL = 'SIGUSR2'
+/** Bound kernel kill completion; a process stuck on a hung drive must not hang close/recovery forever. */
 export const PROVIDER_GROUP_REAP_TIMEOUT_MS = 1_500
 /** Longest a supervisor waits, after its provider exits, to relay output still in the pipes. */
 export const PROVIDER_OUTPUT_DRAIN_TIMEOUT_MS = 1_000
-/**
- * Longest a supervisor can take to stop once asked (stdin end, grace, SIGTERM, grace, SIGKILL,
- * reap); a SIGKILL sooner can orphan its group. The graces are also the largest a spec may carry.
- */
+/** Wrapper stop budget; killing it before both graces and reap finish can orphan the group. */
 export const PROVIDER_SUPERVISOR_MAX_STOP_MS =
-  PROVIDER_STDIN_END_GRACE_MS + PROVIDER_SIGTERM_GRACE_MS + PROVIDER_GROUP_REAP_TIMEOUT_MS
+  PROVIDER_STDIN_END_GRACE_MS +
+  PROVIDER_SIGTERM_GRACE_MS +
+  PROVIDER_GROUP_REAP_TIMEOUT_MS +
+  PROVIDER_OUTPUT_DRAIN_TIMEOUT_MS
 
 /** Inline supervisor source kept dependency-free for the spawned Node child. */
 export const POSIX_PROVIDER_SUPERVISOR_SCRIPT = `
@@ -31,6 +34,10 @@ const [providerCommand, ...providerArgs] = process.argv.slice(1)
 const ownerGone = () => process.ppid !== spec.ownerPid
 // Registered before the spawn, so a stop that lands while the provider starts still reaps it.
 for (const signal of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.on(signal, () => stopProviderGroup(signal))
+process.on(${JSON.stringify(PROVIDER_SUPERVISOR_REAP_NOW_SIGNAL)}, () => {
+  sigtermGraceCut = true
+  stopProviderGroup('SIGTERM')
+})
 // Orca can die before this runs; spawning then would start a provider nothing watches.
 if (ownerGone()) process.exit(1)
 const childEnv = { ...process.env, ...spec.nodeEnv }
@@ -70,6 +77,7 @@ if (reports) {
 let timer
 let ownerShutdownTimer
 let settling = false
+let sigtermGraceCut = false
 let providerExited = false
 const providerGroupExists = () => {
   if (!child.pid) return false
@@ -80,10 +88,10 @@ const providerGroupExists = () => {
     return Boolean(error && error.code !== 'ESRCH')
   }
 }
-const waitForProviderGroupExit = async (timeoutMs, untilProviderExits = false) => {
+const waitForProviderGroupExit = async (timeoutMs, stopWaiting = () => false) => {
   const deadline = Date.now() + timeoutMs
   while (providerGroupExists()) {
-    if (Date.now() >= deadline || (untilProviderExits && providerExited)) return false
+    if (Date.now() >= deadline || stopWaiting()) return false
     await new Promise((resolve) => setTimeout(resolve, 25))
   }
   return true
@@ -101,8 +109,8 @@ const finishWithProviderOutcome = (code, signal) => {
   process.removeAllListeners(signal)
   process.kill(process.pid, signal)
 }
-// Every stop is the same: SIGTERM the group, SIGKILL it after its grace, and exit only once it is
-// gone. Whoever stops this pid judges the provider by it, so a dead supervisor means a dead group.
+// Every stop is the same: SIGTERM the group, SIGKILL it after its grace (or once asked to reap now), and exit
+// only once it is gone. Whoever stops this pid judges the provider by it, so a dead supervisor means a dead group.
 const stopProviderGroup = (receivedSignal) => {
   if (settling) return
   settling = true
@@ -110,7 +118,8 @@ const stopProviderGroup = (receivedSignal) => {
   if (ownerShutdownTimer) clearTimeout(ownerShutdownTimer)
   try { process.kill(-child.pid, 'SIGTERM') } catch {}
   // A one-shot's helpers die with it once it has exited; a session's keep the grace to clean up.
-  void waitForProviderGroupExit(spec.sigtermGraceMs, spec.lifetime === 'one-shot')
+  const graceOver = () => sigtermGraceCut || (spec.lifetime === 'one-shot' && providerExited)
+  void waitForProviderGroupExit(spec.sigtermGraceMs, graceOver)
     .then((exited) => exited || reapOwnedProviderGroup())
     .then((reaped) => {
       if (!reaped) return process.exit(1)
@@ -180,17 +189,10 @@ child.once('exit', (code, signal) => {
 })
 `
 
-/**
- * `session`: the owner ending stdin is a close, so the provider is stopped after a grace.
- * `one-shot`: stdin end only completes the request; the provider runs until it exits or is stopped.
- */
+/** Session stdin-end requests close; one-shot stdin-end only completes the request. */
 export type ProviderSupervisorLifetime = 'session' | 'one-shot'
 
-/**
- * How a provider's owner closes it: by ending its stdin, after which a session gets its grace (a
- * drain), or by ending stdin and sending SIGTERM at once (`signalSupervisorOnClose` in its close
- * policy). A gone owner gets the same request.
- */
+/** Owner death repeats this close request, including optional immediate SIGTERM. */
 export type ProviderCloseRequest = 'stdin-end' | 'stdin-end-and-sigterm'
 
 export type ProviderSupervisorOptions = {
@@ -204,12 +206,12 @@ export type ProviderSupervisorOptions = {
   sigtermGraceMs?: number
 }
 
-// The user's Node startup options, as the CLI launchers stash them away from Electron's bootstrap.
+// Keep user Node startup options on the provider, outside the Electron supervisor bootstrap.
 const PROVIDER_ONLY_NODE_ENV_KEYS = ['NODE_OPTIONS', 'NODE_REPL_EXTERNAL_MODULE'] as const
 
 // A longer grace than the max stop allows would let recovery or close SIGKILL mid-stop.
 function assertGraceWithin(name: string, graceMs: number, maxMs: number): void {
-  if (!(graceMs >= 0 && graceMs <= maxMs)) {
+  if (!Number.isInteger(graceMs) || graceMs < 0 || graceMs > maxMs) {
     throw new RangeError(`Provider supervisor ${name} grace ${graceMs} ms is outside 0-${maxMs} ms`)
   }
 }
@@ -234,8 +236,7 @@ export function supervisedPosixLaunch(
 ): { command: string; args: string[]; env: NodeJS.ProcessEnv } {
   assertGraceWithin('stdin-end', stdinEndGraceMs, PROVIDER_STDIN_END_GRACE_MS)
   assertGraceWithin('SIGTERM', sigtermGraceMs, PROVIDER_SIGTERM_GRACE_MS)
-  // Only small fields ride in the env: Linux caps one env string at 128 KiB, and argv prompts near it.
-  // Electron's Node bootstrap honours these too; held in the spec, they reach only the provider.
+  // Keep prompts in argv: Linux caps individual env strings at 128 KiB; Node startup options belong only in the spec.
   const supervisorEnv = { ...childEnv }
   const nodeEnv: Record<string, string> = {}
   for (const key of PROVIDER_ONLY_NODE_ENV_KEYS) {
@@ -259,8 +260,7 @@ export function supervisedPosixLaunch(
   return {
     command: process.execPath,
     args: ['-e', POSIX_PROVIDER_SUPERVISOR_SCRIPT, '--', launch.command, ...launch.args],
-    // Electron's executable needs Node mode for the inline supervisor. The
-    // marker is removed above so providers never inherit Electron semantics.
+    // Only the supervisor needs Electron Node mode; the provider env above strips this marker.
     env: {
       ...supervisorEnv,
       ELECTRON_RUN_AS_NODE: '1',
@@ -269,38 +269,62 @@ export function supervisedPosixLaunch(
   }
 }
 
+export function resolveProviderExecPath(platform: NodeJS.Platform = process.platform): string {
+  const app = getAppEnvironment()
+  if (!app.isPackaged()) {
+    return join(
+      app.getAppPath(),
+      'native/provider-exec/.build',
+      `${platform}-${process.arch}`,
+      'orca-provider-exec'
+    )
+  }
+  if (process.resourcesPath) {
+    return platform === 'darwin'
+      ? join(process.resourcesPath, '..', 'MacOS', 'orca-provider-exec')
+      : join(process.resourcesPath, 'bin', 'orca-provider-exec')
+  }
+  return join(app.getAppPath(), 'bin', 'orca-provider-exec')
+}
+
 export function createProviderSpawnSpec(
   launch: ProviderProcessLaunch,
   baseEnv: NodeJS.ProcessEnv,
   platform: NodeJS.Platform,
-  { lifetime, closeRequest }: Pick<ProviderSupervisorOptions, 'lifetime' | 'closeRequest'> = {}
-): {
-  program: string
-  args: string[]
-  env: NodeJS.ProcessEnv
-  cwd: string
-  detached: boolean
-  /** The child is the supervisor, whose SIGTERM stops the provider and then itself. */
-  supervised: boolean
-  /** Appended after the three standard slots: the channel the supervisor reports its group on. */
-  groupReportStdio: [] | ['ipc']
-} {
-  const childEnv = resolveProviderChildEnv(launch, baseEnv)
-  const supervisor =
-    platform === 'win32'
-      ? null
-      : supervisedPosixLaunch(
-          { command: launch.command, args: launch.args, cwd: launch.cwd },
-          childEnv,
-          { lifetime, closeRequest }
-        )
+  {
+    lifetime = 'session',
+    closeRequest = 'stdin-end-and-sigterm',
+    stdinEndGraceMs = PROVIDER_STDIN_END_GRACE_MS,
+    sigtermGraceMs = PROVIDER_SIGTERM_GRACE_MS
+  }: ProviderSupervisorOptions = {}
+) {
+  assertGraceWithin('stdin-end', stdinEndGraceMs, PROVIDER_STDIN_END_GRACE_MS)
+  assertGraceWithin('SIGTERM', sigtermGraceMs, PROVIDER_SIGTERM_GRACE_MS)
+  const supervised = platform !== 'win32'
   return {
-    program: supervisor?.command ?? launch.command,
-    args: supervisor?.args ?? launch.args,
-    env: supervisor?.env ?? childEnv,
+    program: supervised ? resolveProviderExecPath(platform) : launch.command,
+    args: supervised
+      ? [
+          '--cli-input-fd7',
+          String(stdinEndGraceMs),
+          String(sigtermGraceMs),
+          lifetime,
+          closeRequest,
+          '--',
+          launch.command,
+          ...launch.args
+        ]
+      : launch.args,
+    command: launch.command,
+    env: resolveProviderChildEnv(launch, baseEnv),
     cwd: launch.cwd ?? process.cwd(),
-    detached: platform !== 'win32',
-    supervised: supervisor !== null,
-    groupReportStdio: supervisor ? ['ipc'] : []
+    detached: supervised,
+    supervised,
+    lifetime,
+    closeRequest,
+    stdinEndGraceMs,
+    sigtermGraceMs
   }
 }
+
+export type ProviderSpawnSpec = ReturnType<typeof createProviderSpawnSpec>

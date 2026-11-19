@@ -1,5 +1,5 @@
 import { requireStrictJiraSite } from './jira-read-failure'
-import type { JiraComment } from '../../shared/jira-types'
+import type { JiraComment } from '../../shared/jira/jira-types'
 import {
   JIRA_IMAGE_MAX_BYTES,
   JIRA_IMAGE_MAX_REFERENCES,
@@ -36,11 +36,7 @@ function mapComment(raw: JiraRecord, adfOptions?: AdfToMarkdownOptions): JiraCom
   }
 }
 
-/**
- * Pooled comment media collect: attachment metadata JSON stays under the semaphore.
- * Residual: Server/DC comment bodies are wiki markup, not ADF — this only fixes
- * the lookup path; wiki `!filename!` is not rendered as media.
- */
+/** Keep metadata JSON under the semaphore; Server/DC wiki !filename! media remains unsupported. */
 async function collectCommentMediaRequest(
   client: JiraClientForSite,
   key: string,
@@ -63,14 +59,12 @@ async function collectCommentMediaRequest(
   const needingCount = mediaAttrs.filter(
     (attrs) => !(attrs.url && /^https?:\/\//i.test(attrs.url))
   ).length
-  // Why: selectPreferredAttachmentIds yields nothing without attachment-needing media, so
-  // HTML ids alone can never produce a download — skip the extra metadata request entirely.
+  // HTML IDs alone cannot produce downloads; skip metadata without attachment-needing media.
   if (needingCount === 0) {
     return undefined
   }
 
-  // Why: comment media usually references issue-level attachments; pull them once
-  // for the whole thread. Use apiBasePath so Server/DC does not 404 on /rest/api/3.
+  // Comment media shares issue attachments; use the site's API version for Server/DC.
   let attachmentField: unknown
   try {
     const issue = await jiraRequest<JiraRecord>(

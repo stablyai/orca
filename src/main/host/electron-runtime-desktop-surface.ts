@@ -1,13 +1,12 @@
-import { isResourceWindowVisible } from '../window/resource-view-admission'
+import { isResourceWindowVisible } from '../window/visibility/resource-view-admission'
 import { BrowserWindow, ipcMain, Notification, powerMonitor } from 'electron'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
-import type { RuntimeDesktopSurface } from '../runtime/runtime-desktop-surface'
+import type { RuntimeDesktopSurface } from '../runtime/construction/runtime-desktop-surface'
 import { translateMain } from '../i18n/main-i18n'
 import { encodeRepoIconPng } from './electron-repo-icon-png'
-import { fetchRepoIconWithManualRedirects } from './electron-repo-icon-fetch'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
+import { fetchWithElectronManualRedirects } from './electron-manual-redirect-fetch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-list/feed/sidebar-inputs-switch'
 
-/** The desktop implementation of the runtime's optional desktop facilities. */
 export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
   translateNotification: translateMain,
   isAwayForMobileNotifications: () => readDesktopAwayState(powerMonitor),
@@ -18,6 +17,18 @@ export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
     new Notification({ title, body }).show()
     return true
   },
+  sendToRenderers: (channel, payload) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (window.isDestroyed()) {
+        continue
+      }
+      try {
+        window.webContents.send(channel, payload)
+      } catch {
+        // A renderer can disappear between isDestroyed() and send().
+      }
+    }
+  },
   findWindowById: (id) => BrowserWindow.fromId(id),
   isResourceViewVisible: (sender) => isResourceWindowVisible(BrowserWindow.fromWebContents(sender)),
   onIpc: (channel, listener) => {
@@ -26,8 +37,8 @@ export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
   removeIpcListener: (channel, listener) => {
     ipcMain.removeListener(channel, listener as Parameters<typeof ipcMain.removeListener>[1])
   },
-  // Switch point: only the phone's icon source encodes and fetches through these.
+  // Only the phone icon source needs these codecs and fetcher.
   ...(ORCA_SIDEBAR_INPUTS_IS_MAIN
-    ? { encodeRepoIconPng, fetchRepoIcon: fetchRepoIconWithManualRedirects }
+    ? { encodeRepoIconPng, fetchRepoIcon: fetchWithElectronManualRedirects }
     : {})
 }

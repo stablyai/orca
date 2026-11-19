@@ -9,7 +9,6 @@ function normalizeSiteId(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
 }
 
-/** Registers the `jira:*` user-search IPC handlers (assignable and site-wide). */
 export function registerJiraUserSearchHandlers(): void {
   ipcMain.handle(
     'jira:listAssignableUsers',

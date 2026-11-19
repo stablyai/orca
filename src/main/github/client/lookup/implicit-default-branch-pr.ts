@@ -1,15 +1,16 @@
-import type { OwnerRepo } from '../../gh-utils'
-import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
+import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
+import { githubRepoIdentityKey } from '../../../../shared/github/repositories/repository-identity-key'
 import {
   getRemoteHeadBranchName,
   getRepoDefaultBranchName
 } from '../../../source-control/repo-default-branch'
 import {
-  ownerRepoFromPullRequestUrl,
   type GhExecOptions,
-  type HostedReviewLocalGitOptions
+  type HostedReviewLocalGitOptions,
+  ownerRepoFromPullRequestUrl
 } from './../github-exec-scope'
-import type { TrackedUpstreamBranch } from './tracked-upstream-cache'
+
+import type { BranchHead } from './branch-review-heads'
 import {
   pullRequestHeadRepository,
   pullRequestMatchesHeadRepository,
@@ -20,7 +21,8 @@ import { getRestPRByNumber } from './pr-number-lookup'
 
 export type ImplicitDefaultBranchPRContext = {
   originHeadRepo: OwnerRepo | null
-  trackedUpstream: { branch: TrackedUpstreamBranch; headRepo: OwnerRepo } | null
+  /** Heads beyond origin's same-named branch: the tracked upstream, then the configured push head. */
+  secondaryHeads: BranchHead[]
   branchName: string
   linkedPRNumber?: number | null
   repoPath: string
@@ -32,24 +34,37 @@ export type ImplicitDefaultBranchPRContext = {
 export function createImplicitDefaultBranchPRPolicy(
   context: ImplicitDefaultBranchPRContext
 ): PullRequestLookupPolicy {
-  const rejected = new Set<string>()
-  const rejectedPRUrls = new Set<string>()
+  const rejected = new Map<string, { data: PullRequestLookupData; prRepo: OwnerRepo }>()
+  // Tracking can identify a fork after branch discovery rejected it without head evidence.
+  const remainsRejected = (data: PullRequestLookupData, prRepo: OwnerRepo): boolean =>
+    data.headRefName !== context.branchName || isForeignSameNamedHead(context, data, prRepo)
   return {
-    rejectedPRUrls,
+    get rejectedPRUrls() {
+      return new Set(
+        [...rejected.values()]
+          .filter(({ data, prRepo }) => remainsRejected(data, prRepo))
+          .map(({ data }) => data.url)
+          .filter(Boolean)
+      )
+    },
     async accepts(data, prRepo) {
       const hidden =
         isForeignSameNamedHead(context, data, prRepo) ||
         (await shouldHideImplicitDefaultBranchPR({ ...context, data, prRepo }))
-      if (hidden && prRepo) {
-        rejected.add(`${githubRepoIdentityKey(prRepo)}#${data.number}`)
-        if (data.url) {
-          rejectedPRUrls.add(data.url)
+      if (hidden) {
+        const rejectedRepo = prRepo ?? ownerRepoFromPullRequestUrl(data.url)
+        if (rejectedRepo) {
+          rejected.set(`${githubRepoIdentityKey(rejectedRepo)}#${data.number}`, {
+            data,
+            prRepo: rejectedRepo
+          })
         }
       }
       return !hidden
     },
     isRejected(prRepo, number) {
-      return rejected.has(`${githubRepoIdentityKey(prRepo)}#${number}`)
+      const entry = rejected.get(`${githubRepoIdentityKey(prRepo)}#${number}`)
+      return Boolean(entry && remainsRejected(entry.data, entry.prRepo))
     }
   }
 }
@@ -60,19 +75,18 @@ function isForeignSameNamedHead(
   data: PullRequestLookupData,
   prRepo: OwnerRepo | null
 ): boolean {
-  const expectedHeads = [context.originHeadRepo, context.trackedUpstream?.headRepo].filter(
-    (head) => head != null
+  const expectedHeads = [
+    context.originHeadRepo,
+    ...context.secondaryHeads
+      .filter((head) => !head.configuredPush || head.branch.branchName === data.headRefName)
+      .map((head) => head.headRepo)
+  ].filter((head) => head != null)
+  if (data.headRefName !== context.branchName) {
+    return false
+  }
+  return (expectedHeads.length > 0 ? expectedHeads : [null]).every(
+    (head) => !pullRequestMatchesHeadRepository(data, prRepo, head)
   )
-  if (data.headRefName !== context.branchName || expectedHeads.length === 0) {
-    return false
-  }
-  const headRepo = pullRequestHeadRepository(data, prRepo)
-  const baseRepo = data.url ? ownerRepoFromPullRequestUrl(data.url) : null
-  // Why: a same-repo PR lives in a checkout remote; its canonical URL survives stale renamed-remote URLs.
-  if (headRepo && baseRepo && githubRepoIdentityKey(headRepo) === githubRepoIdentityKey(baseRepo)) {
-    return false
-  }
-  return expectedHeads.every((head) => !pullRequestMatchesHeadRepository(data, prRepo, head))
 }
 
 async function shouldHideImplicitDefaultBranchPR(
@@ -97,11 +111,12 @@ async function shouldHideImplicitDefaultBranchPR(
   }
   const headRepoKey = githubRepoIdentityKey(headRepo)
   const remoteName =
-    input.trackedUpstream && githubRepoIdentityKey(input.trackedUpstream.headRepo) === headRepoKey
-      ? input.trackedUpstream.branch.remoteName
-      : input.originHeadRepo && githubRepoIdentityKey(input.originHeadRepo) === headRepoKey
-        ? 'origin'
-        : null
+    input.secondaryHeads.find(
+      (head) => !head.configuredPush && githubRepoIdentityKey(head.headRepo) === headRepoKey
+    )?.branch.remoteName ??
+    (input.originHeadRepo && githubRepoIdentityKey(input.originHeadRepo) === headRepoKey
+      ? 'origin'
+      : null)
   if (!remoteName) {
     try {
       // Removed tracking can leave a cached integration PR without a matching remote.

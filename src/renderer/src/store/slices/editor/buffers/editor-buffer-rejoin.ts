@@ -13,10 +13,7 @@ function sideOf(
   return record && firstView !== undefined ? { record, draft: state.editorDrafts[firstView] } : null
 }
 
-/**
- * A detached record stays apart only while both it and its partner hold edits. The partner is the
- * identity's open record, else a kept record left there by a no-prompt removal.
- */
+/** Detached partners join only after either becomes clean; partner is current identity record or kept record from no-prompt removal. */
 export function staysDetached(
   state: EditorBufferReconcileState,
   entry: EditorBufferDetachments[string],
@@ -38,10 +35,7 @@ export function isEditorBufferRejoinDue(state: EditorBufferReconcileState): bool
   )
 }
 
-/**
- * Cheap per-keystroke gate: a drafts-only write can rejoin only by clearing the draft of a
- * detached record or of its partner. Typing (a draft set) never does.
- */
+/** Draft-only writes can rejoin by clearing, never typing; keep this per-keystroke gate cheap. */
 export function mayRejoinAfterDraftWrite(
   index: EditorBufferViewIndex,
   detachments: EditorBufferDetachments | undefined,

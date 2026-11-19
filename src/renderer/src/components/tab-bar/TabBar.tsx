@@ -1,17 +1,21 @@
-import React, { useCallback } from 'react'
-import { useTabStripOverflowNavigation } from './tab-strip-overflow-navigation'
-import { useTabStripDragScrollHandlers } from './tab-strip-drag-scroll'
+import React, { useCallback, useMemo } from 'react'
+import { useTabStripOverflowNavigation } from './strip/tab-strip-overflow-navigation'
+import { useTabStripDragScrollHandlers } from './strip/tab-strip-drag-scroll'
 import type { TabBarProps } from './tab-bar-props'
-import type { TabBarItem } from './tab-bar-item-model'
-import { useTabBarRuntimeModel } from './use-tab-bar-runtime-model'
-import { useTabBarCreateMenuController } from './use-tab-bar-create-menu-controller'
-import { useTabBarItemProjection } from './use-tab-bar-item-projection'
-import { renderTabBarSurface } from './tab-bar-surface'
-import { useTabBarItemActions } from './use-tab-bar-item-actions'
-import { useActiveClientHostedBrowserRowId } from '@/lib/pane-manager/client-hosted-browser-row-state'
-import { useEditorGroupFileDropOwner } from '../editor/use-editor-group-file-drop-owner'
+import type { TabBarItem } from './model/tab-bar-item-model'
+import { useTabBarRuntimeModel } from './model/use-tab-bar-runtime-model'
+import { useTabBarCreateMenuController } from './create-menu/use-tab-bar-create-menu-controller'
+import { usePluginNewFileMenuOptions } from './create-menu/use-plugin-new-file-menu-options'
+import { useTabBarItemProjection } from './model/use-tab-bar-item-projection'
+import { renderTabBarSurface } from './strip/tab-bar-surface'
+import { useTabBarItemActions } from './model/use-tab-bar-item-actions'
+import { useActiveClientHostedBrowserRowId } from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
+import { useEditorGroupFileDropOwner } from '../editor/file-drop/use-editor-group-file-drop-owner'
+import { useBotForWorkspace, useBotGroupForWorkspace } from '../bots/bot-workspace'
+import { useTranslate } from '@/i18n/use-translate'
 
 function TabBarInner(props: TabBarProps): React.JSX.Element {
+  const t = useTranslate()
   const {
     worktreeId,
     groupId,
@@ -25,7 +29,9 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     onPinFile
   } = props
   const runtime = useTabBarRuntimeModel({ worktreeId, groupId })
-  const createMenu = useTabBarCreateMenuController({
+  const bot = useBotForWorkspace(worktreeId)
+  const botGroup = useBotGroupForWorkspace(worktreeId)
+  const baseCreateMenu = useTabBarCreateMenuController({
     worktreeId,
     resolvedGroupId: runtime.resolvedGroupId,
     showAgentLaunchItems: props.showAgentLaunchItems,
@@ -47,6 +53,16 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     onNewFileTab,
     onOpenFileTab
   })
+  const pluginCreateMenu = usePluginNewFileMenuOptions(
+    baseCreateMenu.createMenuOptions,
+    baseCreateMenu.handleSelectCreateMenuOption,
+    runtime.resolvedGroupId
+  )
+  const createMenu = {
+    ...baseCreateMenu,
+    createMenuOptions: pluginCreateMenu.menuOptions,
+    handleSelectCreateMenuOption: pluginCreateMenu.onSelectMenuOption
+  }
   const itemProjection = useTabBarItemProjection({
     props,
     resolvedGroupId: runtime.resolvedGroupId,
@@ -78,13 +94,28 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     groupId: runtime.resolvedGroupId,
     groupActiveTabId: props.groupActiveTabId ?? null
   })
+  const clientHostedBrowserRows = props.clientHostedBrowserRows
+  const slotIds = useMemo(
+    () => [
+      ...itemProjection.sortableIds,
+      ...(clientHostedBrowserRows ?? []).map((row) => row.browserPageId)
+    ],
+    [clientHostedBrowserRows, itemProjection.sortableIds]
+  )
+  // Why memoized: the key spans every tab, and a windowed strip re-renders as it scrolls.
+  const stripLayoutKey = useMemo(
+    () =>
+      [
+        itemProjection.tabStripLayoutKey,
+        ...(clientHostedBrowserRows ?? []).map((row) => row.browserPageId)
+      ].join('|'),
+    [clientHostedBrowserRows, itemProjection.tabStripLayoutKey]
+  )
   const tabStripNavigation = useTabStripOverflowNavigation({
     activeVisibleTabId: itemProjection.activeVisibleTabId,
     activeDockSlotId: activeClientHostedBrowserRowId ?? itemProjection.activeVisibleTabId,
-    layoutKey: [
-      itemProjection.tabStripLayoutKey,
-      ...(props.clientHostedBrowserRows ?? []).map((row) => row.browserPageId)
-    ].join('|'),
+    layoutKey: stripLayoutKey,
+    slotIds,
     worktreeId
   })
   const attachFileDropOwner = useEditorGroupFileDropOwner({ worktreeId, groupId })
@@ -101,17 +132,22 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     end: tabStripNavigation.tabStripOverflowState.canScrollEnd
   })
 
-  return renderTabBarSurface({
-    props,
-    runtime,
-    createMenu,
-    itemProjection,
-    tabStripNavigation,
-    tabStripDragScroll,
-    activeClientHostedBrowserRowId,
-    itemActions,
-    surfaceRef
-  })
+  return renderTabBarSurface(
+    {
+      props,
+      runtime,
+      createMenu,
+      itemProjection,
+      tabStripNavigation,
+      tabStripDragScroll,
+      activeClientHostedBrowserRowId,
+      itemActions,
+      surfaceRef,
+      bot,
+      botGroup
+    },
+    t
+  )
 }
 
 export default React.memo(TabBarInner)

@@ -1,13 +1,6 @@
 name: Publish agent state rules
 
-# The only publisher of agent state rules releases. Merging never publishes: a maintainer runs
-# this from main, first to `next` (RC and dev builds), then promotes the identical file to
-# `stable` after a soak. Every job runs on the dispatched commit, so the publish job runs exactly
-# the script and rules the gate tested.
-#
-# Why GITHUB_TOKEN: release-policy.yml deletes an agent-state-rules-* release any other author
-# publishes. Its releases start no workflow, so release-policy.yml sees them only when someone
-# edits one by hand, and then accepts them as bot-authored prereleases.
+# Maintainer-only publisher: dispatch main to next, soak, then promote identical bytes to stable. All jobs use the dispatched commit. Use GITHUB_TOKEN so release-policy accepts bot-authored prereleases; token-created releases do not trigger workflows until manual edits.
 on:
   workflow_dispatch:
     inputs:
@@ -52,7 +45,7 @@ jobs:
             ':(glob)src/main/runtime/readiness-census*.test.ts' \
             ':(glob)src/main/runtime/*transcript.test.ts' \
             ':(glob)src/main/runtime/*transcripts.test.ts' \
-            config/scripts/agent-state-rules-bundle.test.mjs)
+            config/scripts/release/agent-state-rules/agent-state-rules-bundle.test.mjs)
           pnpm exec vitest run --config config/vitest.config.ts "${gate_files[@]}"
 
   publish-next:
@@ -75,7 +68,7 @@ jobs:
           set -euo pipefail
           flags=()
           [[ "$BUNDLED_ONLY" == "true" ]] && flags+=(--bundled-only)
-          node config/scripts/agent-state-rules-bundle.mjs publish-next "${flags[@]}"
+          node config/scripts/release/agent-state-rules/agent-state-rules-bundle.mjs publish-next "${flags[@]}"
 
   promote-stable:
     if: github.ref == 'refs/heads/main' && inputs.action == 'promote-stable'
@@ -91,4 +84,4 @@ jobs:
       - name: Copy the next file to stable
         env:
           GH_TOKEN: ${{ github.token }}
-        run: node config/scripts/agent-state-rules-bundle.mjs promote-stable
+        run: node config/scripts/release/agent-state-rules/agent-state-rules-bundle.mjs promote-stable

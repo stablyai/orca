@@ -1,0 +1,63 @@
+import { parseGitRemoteVerboseOutput } from '../../../shared/git/remotes/git-remote-identity'
+import { isDefaultGitHubHost } from '../../../shared/github/repositories/repository-identity-key'
+import { isGitHubHostAuthenticated } from '../../github/repositories/github-enterprise-repository'
+import { parseGitHubRemoteIdentity } from '../../github/repositories/github-remote-identity-parsing'
+import {
+  getGlabKnownHosts,
+  getGlabPartialHosts
+} from '../../gitlab/projects/gitlab-known-host-probe'
+import { parseGitLabProjectRef } from '../../gitlab/projects/project-ref-parser'
+import { REMOTE_URL_PROBE_TIMEOUT_MS } from './remote-url-probe'
+import { gitExecFileAsync } from '../command-runner/git-exec-file'
+import type { RemoteRefLocalGitOptions } from './remote-ref-probe-cache'
+
+/** Call only after the requested provider found no usable source; unknown is never exclusion evidence. */
+export async function isTaskRepositoryIneligible(
+  repoPath: string,
+  provider: 'github' | 'gitlab',
+  connectionId?: string | null,
+  localGitOptions: RemoteRefLocalGitOptions = {}
+): Promise<boolean> {
+  if (connectionId) {
+    return false
+  }
+  try {
+    // Read the complete current set: a cached primary remote cannot rule out a matching upstream or extra remote.
+    const { stdout } = await gitExecFileAsync(['remote', '-v'], {
+      cwd: repoPath,
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS,
+      ...localGitOptions
+    })
+    const remotes = parseGitRemoteVerboseOutput(stdout)
+    if (remotes.length === 0) {
+      return false
+    }
+    // A glab partial-auth failure (e.g. tokenless gitlab.com) still proves the hosts that did log in.
+    const gitLabHosts =
+      provider === 'github'
+        ? [
+            ...(await getGlabKnownHosts(connectionId, localGitOptions)),
+            ...getGlabPartialHosts(connectionId, localGitOptions)
+          ]
+        : []
+    for (const remote of remotes) {
+      if (provider === 'github') {
+        if (!parseGitLabProjectRef(remote.url, gitLabHosts)) {
+          return false
+        }
+      } else {
+        const identity = parseGitHubRemoteIdentity(remote.url)
+        if (
+          !identity ||
+          (!isDefaultGitHubHost(identity.host) &&
+            !(await isGitHubHostAuthenticated(identity.host, repoPath, null, localGitOptions)))
+        ) {
+          return false
+        }
+      }
+    }
+    return true
+  } catch {
+    return false
+  }
+}

@@ -1,15 +1,20 @@
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
-import { removeManagedOrcadEnvironment } from '../../shared/runtime-environment-managed-orcad-store'
-import { listEnvironments, removeEnvironment } from '../../shared/runtime-environment-store'
-import { getOrcadSshDeployment } from '../../shared/runtime-environments'
+import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
+import { removeManagedOrcadEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
+import {
+  listEnvironments,
+  removeEnvironment
+} from '../../shared/remote-runtime/host-store/runtime-environment-store'
+import { getOrcadSshDeployment } from '../../shared/remote-runtime/host-catalog/runtime-environments'
 
-/** Forgets the servers a destroyed VM ran; a managed one's tunnel would otherwise keep redialing. */
+/** Remove destroyed VM servers so managed tunnels stop reconnecting. */
 export async function releaseEphemeralVmRuntimeEnvironments(
   userDataPath: string,
-  runtime: Pick<EphemeralVmRuntimeRecord, 'runtimeEnvironmentId' | 'sshTargetId'>
+  runtime: Pick<EphemeralVmRuntimeRecord, 'runtimeEnvironmentId' | 'sshTargetId'>,
+  // Same retirement as a Settings removal, so the host's session partition and transport go too.
+  retireRemovedEnvironment: (environmentId: string) => void
 ): Promise<void> {
-  // Why the target too: a relay-era VM converted on connect never recorded its server's id.
-  const environments = listEnvironments(userDataPath).filter(
+  // Relay-era conversions may have recorded only the SSH target, not the server ID.
+  const environments = (await listEnvironments(userDataPath)).filter(
     (entry) =>
       entry.id === runtime.runtimeEnvironmentId ||
       (runtime.sshTargetId !== undefined &&
@@ -17,12 +22,14 @@ export async function releaseEphemeralVmRuntimeEnvironments(
   )
   for (const environment of environments) {
     if (!environment.orcadDeployment) {
-      removeEnvironment(userDataPath, environment.id)
+      await removeEnvironment(userDataPath, environment.id)
+      retireRemovedEnvironment(environment.id)
       continue
     }
     const { closeOrcadManagedTunnel } =
       await import('../managed-server/lifecycle/orcad-managed-tunnel')
     await closeOrcadManagedTunnel(environment.id).catch(() => undefined)
-    removeManagedOrcadEnvironment(userDataPath, environment.id)
+    await removeManagedOrcadEnvironment(userDataPath, environment.id)
+    retireRemovedEnvironment(environment.id)
   }
 }

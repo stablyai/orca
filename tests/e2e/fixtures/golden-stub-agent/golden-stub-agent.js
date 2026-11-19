@@ -12,9 +12,7 @@ if (process.argv[2] === 'app-server') {
 const ESC = '\x1b'
 const keyboardProtocolMode = process.argv.includes('--keyboard-protocol')
 const keyboardProtocolAgent = process.argv.includes('--grok') ? 'Grok' : 'Codex'
-// Both match the bytes after ESC, so the control character stays out of the
-// pattern: a CSI/SS3 introducer still missing its final byte, and a complete
-// CSI/SS3 sequence. Shift+Enter is matched before either is consulted.
+// Match CSI/SS3 tails after ESC; handle Shift+Enter first.
 const INCOMPLETE_ESCAPE_TAIL_RE = /^(?:\[[0-9;?]*|O)?$/
 const ESCAPE_TAIL_RE = /^(?:\[[0-9;?]*[ -/]*[@-~]|O[@-~])/
 
@@ -84,9 +82,7 @@ function consumeInput() {
       if (INCOMPLETE_ESCAPE_TAIL_RE.test(tail)) {
         return
       }
-      // Why: without this, an unhandled sequence loses its ESC to the sub-space
-      // filter below and types its tail ("[A") into the composer, so a stray key
-      // report surfaces as a baffling render diff instead of being ignored.
+      // Consume unsupported sequences whole or the control filter types their tails into the composer.
       const escape = ESCAPE_TAIL_RE.exec(tail)
       if (escape) {
         pendingInput = pendingInput.slice(ESC.length + escape[0].length)

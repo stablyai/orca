@@ -1,11 +1,35 @@
 import { Buffer } from 'node:buffer'
 import type { IncomingHttpHeaders } from 'node:http'
 
-import type { AgentHookSource } from '../agent-hook-relay'
-import { parsePaneKey } from '../stable-pane-id'
+import type { AgentHookSource } from './transport/agent-hook-relay'
+import { parsePaneKey } from '../workspace-layout/stable-pane-id'
 import { MAX_PANE_KEY_LEN, warnOnHookEnvOrVersionMismatch } from './listener-limits'
 import type { HookListenerState } from './listener-state'
 import { parseAgentHookJson } from './request-body'
+import { readFirstString } from './interactive-tool'
+import { readString } from './tool-input-preview'
+
+// Only known process-exit reasons prove session death; /clear, /resume and unknown reasons do not.
+const CLAUDE_EXIT_SESSION_END_REASONS = new Set([
+  'prompt_input_exit',
+  'logout',
+  'other',
+  'bypass_permissions_disabled'
+])
+
+/** A main agent's SessionEnd that ends its process, not a subagent's or a session switch. */
+export function isProcessExitSessionEnd(
+  eventName: unknown,
+  hookPayload: Record<string, unknown>
+): boolean {
+  const reason = readString(hookPayload, 'reason')
+  return (
+    eventName === 'SessionEnd' &&
+    !readString(hookPayload, 'agent_id') &&
+    reason !== undefined &&
+    CLAUDE_EXIT_SESSION_END_REASONS.has(reason)
+  )
+}
 
 function readHookHeader(headers: IncomingHttpHeaders, name: string): string | undefined {
   const value = headers[name]
@@ -84,6 +108,7 @@ export function mergeAgentHookRequestHeaders(body: unknown, headers: IncomingHtt
   return {
     ...metadata,
     agentProcess: readHookHeader(headers, 'x-orca-agent-process'),
+    tmuxPane: readHookHeader(headers, 'x-orca-tmux-pane'),
     payload: body
   }
 }
@@ -100,9 +125,34 @@ export type ParsedHookEnvelope = {
   record: Record<string, unknown>
   paneKey: string
   hookPayloadRecord: Record<string, unknown>
+  eventName: unknown
   tabId?: string
   worktreeId?: string
   launchToken?: string
+}
+
+// Why: a Codex hook's payload is parsed before its async rollout prefetch; its normalization takes that parse instead of repeating it.
+const prefetchedPayloads = new WeakMap<Record<string, unknown>, { raw: string; payload: unknown }>()
+
+function parseHookPayloadText(raw: string): unknown {
+  try {
+    return parseAgentHookJson(raw)
+  } catch {
+    return null
+  }
+}
+
+/** Parses a hook body's string payload and keeps it for that body's next envelope parse. */
+export function parseHookPayloadForPrefetch(body: Record<string, unknown>, raw: string): unknown {
+  const payload = parseHookPayloadText(raw)
+  prefetchedPayloads.set(body, { raw, payload })
+  return payload
+}
+
+function takeHookPayload(body: Record<string, unknown>, raw: string): unknown {
+  const prefetched = prefetchedPayloads.get(body)
+  prefetchedPayloads.delete(body)
+  return prefetched?.raw === raw ? prefetched.payload : parseHookPayloadText(raw)
 }
 
 /** Validates the transport envelope while preserving warning-before-tab-rejection order. */
@@ -126,13 +176,7 @@ export function parseHookEnvelope(
   const hookPayload = antigravityPayloadAbsent
     ? {}
     : typeof rawPayload === 'string'
-      ? (() => {
-          try {
-            return parseAgentHookJson(rawPayload)
-          } catch {
-            return null
-          }
-        })()
+      ? takeHookPayload(record, rawPayload)
       : rawPayload
   if (
     !paneKey ||
@@ -152,9 +196,16 @@ export function parseHookEnvelope(
   if (tabId && tabId !== parsedPaneKey.tabId) {
     return null
   }
+  const eventName =
+    readFirstString(record, ['hook_event_name', 'hookEventName', 'hook_type', 'hookType']) ??
+    ('hook_event_name' in hookPayload ? hookPayload.hook_event_name : undefined) ??
+    ('hookEventName' in hookPayload ? hookPayload.hookEventName : undefined) ??
+    // Only jcode uses event for lifecycle; other providers may use it for unrelated data.
+    (source === 'jcode' && 'event' in hookPayload ? hookPayload.event : undefined)
   return {
     record,
     paneKey,
+    eventName,
     hookPayloadRecord: hookPayload as Record<string, unknown>,
     tabId,
     worktreeId: readEnvelopeString(record, 'worktreeId'),

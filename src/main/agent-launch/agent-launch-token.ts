@@ -1,4 +1,4 @@
-/** An agent launch with a launch config proves itself by this token, in its env and on its PTY. */
+/** Bind configured launches to their environment and PTY with the same token. */
 export function agentLaunchTokenFor(
   launch: { launchConfig?: unknown; launchToken?: string },
   mint: () => string
@@ -6,7 +6,6 @@ export function agentLaunchTokenFor(
   return launch.launchConfig ? (launch.launchToken ?? mint()) : undefined
 }
 
-/** The launch token travels with the same environment the provider will execute. */
 export function withAgentLaunchToken(
   env: Record<string, string> | undefined,
   launchToken: string | undefined

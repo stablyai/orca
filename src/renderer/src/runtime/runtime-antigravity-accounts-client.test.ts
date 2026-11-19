@@ -1,80 +1,67 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { callAntigravityAccounts } from './runtime-antigravity-accounts-client'
-import { assertRuntimeEnvironmentCapability, callRuntimeRpc } from './runtime-rpc-client'
+import { afterEach, expect, it, vi } from 'vitest'
+import {
+  ANTIGRAVITY_CHAT_SIGN_IN_INTENT_RUNTIME_CAPABILITY,
+  ANTIGRAVITY_CHAT_SIGN_IN_RUNTIME_CAPABILITY
+} from '../../../shared/remote-runtime/protocol/account-runtime-capabilities'
+import {
+  MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+  RUNTIME_PROTOCOL_VERSION
+} from '../../../shared/remote-runtime/protocol/protocol-version'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from './rpc/compatibility/runtime-compatibility-cache'
+import { callAntigravityChatSignIn } from './provider-accounts/sign-in/runtime-antigravity-accounts-client'
 
-vi.mock('./runtime-rpc-client', () => ({
-  assertRuntimeEnvironmentCapability: vi.fn(),
-  callRuntimeRpc: vi.fn()
-}))
-beforeEach(() => {
-  vi.mocked(assertRuntimeEnvironmentCapability).mockReset().mockResolvedValue()
-  vi.mocked(callRuntimeRpc).mockReset().mockResolvedValue({ accounts: [] })
+afterEach(() => {
+  clearRuntimeCompatibilityCacheForTests()
+  vi.unstubAllGlobals()
 })
 
-describe('Antigravity account execution-host routing', () => {
-  it('refuses an old remote host before any account operation reaches a local or remote store', async () => {
-    vi.mocked(assertRuntimeEnvironmentCapability).mockRejectedValue(
-      new Error('old host unsupported')
-    )
+it('sends explicit actions only to advertising hosts and keeps the legacy host path usable', async () => {
+  for (const modern of [true, false]) {
+    clearRuntimeCompatibilityCacheForTests()
+    const call = vi.fn(async ({ method }: { method: string }) => ({
+      id: method,
+      ok: true,
+      result:
+        method === 'status.get'
+          ? {
+              runtimeId: 'remote-runtime',
+              graphStatus: 'ready',
+              runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+              minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+              capabilities: [
+                ANTIGRAVITY_CHAT_SIGN_IN_RUNTIME_CAPABILITY,
+                ...(modern ? [ANTIGRAVITY_CHAT_SIGN_IN_INTENT_RUNTIME_CAPABILITY] : [])
+              ]
+            }
+          : { flowId: 'accepted' },
+      _meta: { runtimeId: 'remote-runtime' }
+    }))
+    const local = vi.fn(async () => ({
+      id: 'local',
+      ok: true,
+      result: { flowId: 'local' },
+      _meta: { runtimeId: 'local' }
+    }))
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call }, runtime: { call: local } } })
     await expect(
-      callAntigravityAccounts(
-        { kind: 'environment', environmentId: 'host-a' },
-        { runtime: 'host' },
-        'Select',
-        'account-a'
-      )
-    ).rejects.toThrow('old host unsupported')
-    expect(callRuntimeRpc).not.toHaveBeenCalled()
-  })
-
-  it('sends selection only to the specified owning host and includes the exact distro', async () => {
-    await callAntigravityAccounts(
-      { kind: 'environment', environmentId: 'host-b' },
-      { runtime: 'wsl', wslDistro: 'Ubuntu' },
-      'Select',
-      'account-b'
+      callAntigravityChatSignIn({ kind: 'environment', environmentId: 'host' }, 'Start', {
+        intent: 'changeAccount'
+      })
+    ).resolves.toMatchObject({
+      result: { flowId: 'accepted' },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    expect(call).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        method: 'accounts.antigravityChatSignInStart',
+        params: modern ? { intent: 'changeAccount' } : undefined,
+        ...(modern ? { expectedEnvironmentRuntimeId: 'remote-runtime' } : {})
+      })
     )
-    expect(callRuntimeRpc).toHaveBeenCalledWith(
-      { kind: 'environment', environmentId: 'host-b' },
-      'accounts.antigravitySelect',
-      { target: { runtime: 'wsl', wslDistro: 'Ubuntu' }, accountId: 'account-b' },
-      { timeoutMs: 20_000 }
-    )
-  })
-
-  it('does not silently switch to the client store when the owning host rejects selection', async () => {
-    vi.mocked(callRuntimeRpc).mockRejectedValue(new Error('host unavailable'))
-    await expect(
-      callAntigravityAccounts(
-        { kind: 'environment', environmentId: 'host-a' },
-        { runtime: 'host' },
-        'Select',
-        'account-a'
-      )
-    ).rejects.toThrow('host unavailable')
-    expect(callRuntimeRpc).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps host and distro lists separate and never drops the target', async () => {
-    await callAntigravityAccounts({ kind: 'local' }, { runtime: 'host' }, 'List')
-    await callAntigravityAccounts(
-      { kind: 'local' },
-      { runtime: 'wsl', wslDistro: 'Debian' },
-      'AddCurrent'
-    )
-    expect(callRuntimeRpc).toHaveBeenNthCalledWith(
-      1,
-      { kind: 'local' },
-      'accounts.antigravityList',
-      { runtime: 'host' },
-      { timeoutMs: 20_000 }
-    )
-    expect(callRuntimeRpc).toHaveBeenNthCalledWith(
-      2,
-      { kind: 'local' },
-      'accounts.antigravityAddCurrent',
-      { runtime: 'wsl', wslDistro: 'Debian' },
-      { timeoutMs: 20_000 }
-    )
-  })
+    await callAntigravityChatSignIn({ kind: 'local' }, 'Start', { intent: 'signIn' })
+    expect(local).toHaveBeenCalledWith({
+      method: 'accounts.antigravityChatSignInStart',
+      params: { intent: 'signIn' }
+    })
+  }
 })

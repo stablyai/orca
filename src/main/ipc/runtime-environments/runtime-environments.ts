@@ -1,52 +1,61 @@
-import {
-  registerRuntimeEnvironmentSubscriptionHandlers,
-  type RetainedRemoteRuntimeSubscription,
-  type PendingRuntimeSubscription
-} from './runtime-environment-subscription-handlers'
-import { app, ipcMain } from 'electron'
-import { listEnvironments } from '../../../shared/runtime-environment-store'
-import type { Store } from '../../persistence'
+import { holdLaunchReconnectOptOuts } from '../ssh/ssh-host-user-disconnect'
+import { createAiVaultAssociationObserver } from '../ai-vault/ai-vault-projection-dependency'
+import { invalidateAiVaultHostLegCache } from '../ai-vault/ai-vault-host-leg-cache'
+import { registerRuntimeEnvironmentSubscriptionHandlers } from './subscriptions/runtime-environment-subscription-handlers'
+import type {
+  RetainedRemoteRuntimeSubscription,
+  PendingRuntimeSubscription
+} from './subscriptions/runtime-environment-subscription-setup'
+import { ipcMain } from 'electron'
+import { getRuntimeEnvironmentRegistryRoot } from './catalog/runtime-environment-registry-root'
+import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import type { Store } from '../../persistence/loading-store/store'
 import { recordRemoteLayoutFrame } from '../../remote-layout-snapshot/remote-layout-snapshot-recorder'
+import { recordHostRepoCatalogAnswer } from '../../host-repo-catalog-snapshot/host-repo-catalog-snapshot-recorder'
 import {
-  isRuntimeEnvironmentManuallyDisconnected,
   registerRuntimeEnvironmentConnectivityHandlers,
   registerRuntimeEnvironmentPassiveHandlers
-} from './runtime-environment-connectivity-handlers'
+} from './connectivity/runtime-environment-connectivity-handlers'
+import { isRuntimeEnvironmentManuallyDisconnected } from './connectivity/runtime-environment-manual-disconnect'
 import {
   closeRemoteRuntimeRequestConnection,
   getRuntimeEnvironmentStatusOwner
-} from './runtime-environment-request-connections'
-import { setRefusedPairingHandlers } from './runtime-environment-pairing-refusal-registry'
+} from './connections/runtime-environment-request-connections'
+import { setRefusedPairingHandlers } from './pairing/runtime-environment-pairing-refusal-registry'
 import {
   handleManagedSharedControlRefusal,
   recoverRefusedManagedPairing
-} from './runtime-environment-managed-pairing-refusal'
+} from './pairing/runtime-environment-managed-pairing-refusal'
 import { setManagedOrcadPairingRepairedListener } from '../../managed-server/lifecycle/orcad-managed-pairing-repaired-listener'
-import { forgetFailedManagedOrcadPairingRepair } from '../../managed-server/lifecycle/orcad-managed-tunnel'
-import { registerRuntimeEnvironmentRecoveryHandler } from './runtime-environment-recovery-handler'
-import { registerRuntimeEnvironmentRepairHandler } from './runtime-environment-repair-handler'
-import { advanceRuntimeEnvironmentTransportGeneration } from './runtime-environment-transport-generation'
-import { resetSharedControlSupport } from './runtime-environment-shared-control-support'
+import { forgetManagedOrcadAutomaticFailures } from '../../managed-server/lifecycle/orcad-managed-tunnel'
+import { registerRuntimeEnvironmentRecoveryHandler } from './connectivity/runtime-environment-recovery-handler'
+import { registerRuntimeEnvironmentRepairHandler } from './pairing/runtime-environment-repair-handler'
+import {
+  advanceRuntimeEnvironmentTransportGeneration,
+  onRuntimeEnvironmentTransportGenerationRetired
+} from './connections/runtime-environment-transport-generation'
+import { resetSharedControlSupport } from './connections/runtime-environment-shared-control-support'
 import { RUNTIME_ENVIRONMENT_HANDLER_CHANNELS } from './runtime-environment-handler-channels'
-import { registerOrcadRuntimeLifecycleHandlers } from './orcad-runtime-lifecycle-handlers'
-import { registerOrcadRuntimeConversionHandlers } from './orcad-runtime-conversion-handlers'
-import { registerOrcadDeltaMoveHandlers } from './orcad-delta-move-handlers'
-import { registerOrcadLeaveBehindHandlers } from './orcad-leave-behind-handlers'
-import { registerOrcadRuntimeMaintenanceHandlers } from './orcad-runtime-maintenance-handlers'
+import { registerOrcadRuntimeLifecycleHandlers } from './managed-orcad/orcad-runtime-lifecycle-handlers'
+import { registerOrcadRuntimeConversionHandlers } from './managed-orcad/orcad-runtime-conversion-handlers'
+import { registerOrcadDeltaMoveHandlers } from './managed-orcad/orcad-delta-move-handlers'
+import { registerOrcadLeaveBehindHandlers } from './managed-orcad/orcad-leave-behind-handlers'
+import { registerOrcadRuntimeMaintenanceHandlers } from './managed-orcad/orcad-runtime-maintenance-handlers'
 import { clearPublishedManagedServer } from '../ssh/ssh-renderer-broadcast'
-import { clearManagedServerNotes } from './runtime-environment-managed-tunnel'
-import { reconcileOrphanedRuntimeSessions } from './runtime-environment-session-reconcile'
-import { registerRuntimeSshAccessHandlers } from '../runtime-ssh-access-handlers'
-import { retirePairedRuntimeBrowserClientHostEnvironment } from '../../browser/paired-runtime-browser-client-host-runtime'
-import { registerRuntimeEnvironmentBrowserClientHostHandler } from './runtime-environment-browser-client-host-handler'
-import { advanceRuntimeEnvironmentCapabilityIncarnation } from './runtime-environment-capability-evidence'
-import { retireMobileDesktopRelayEnvironment } from './runtime-environment-mobile-relay-hosts'
-import { watchRuntimeEnvironmentPreference } from './runtime-environment-preference'
-import { isGatedOffWslHost } from '../../wsl/wsl-host-gate'
-import { resetDesktopBrowserBridgeEnvironment } from '../desktop-browser-bridge-reconcile'
+import { clearManagedServerNotes } from './managed-orcad/runtime-environment-managed-tunnel'
+import { reconcileOrphanedRuntimeSessions } from './catalog/runtime-environment-session-reconcile'
+import { registerRuntimeSshAccessHandlers } from './connectivity/runtime-ssh-access-handlers'
+import { retirePairedRuntimeBrowserClientHostEnvironment } from '../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
+import { registerRuntimeEnvironmentBrowserClientHostHandler } from './browser-hosting/runtime-environment-browser-client-host-handler'
+import { advanceRuntimeEnvironmentCapabilityIncarnation } from './connections/runtime-environment-capability-evidence'
+import { retireMobileDesktopRelayEnvironment } from './mobile-relay/runtime-environment-mobile-relay-hosts'
+import { watchRuntimeEnvironmentPreference } from './catalog/runtime-environment-preference'
+import { publishRuntimeEnvironmentCatalogChanged } from './catalog/runtime-environment-catalog-broadcast'
+import { isGatedOffWslHost } from '../../wsl/host-lifecycle/wsl-host-gate'
+import { resetDesktopBrowserBridgeEnvironment } from '../browser/desktop-browser-bridge-reconcile'
 
 const remoteRuntimeSubscriptions = new Map<string, RetainedRemoteRuntimeSubscription>()
-const getUserDataPath = (): string => app.getPath('userData')
+const getUserDataPath = getRuntimeEnvironmentRegistryRoot
 
 function closeSubscriptionsForEnvironment(environmentId: string): void {
   for (const pending of pendingSubscriptions.values()) {
@@ -54,40 +63,55 @@ function closeSubscriptionsForEnvironment(environmentId: string): void {
       pending.close()
     }
   }
-  // Why: removed runtimes must not retain terminal/browser WebSockets until renderer teardown.
+  closeEstablishedSubscriptionsForEnvironment(environmentId)
+}
+
+function closeEstablishedSubscriptionsForEnvironment(environmentId: string): number {
+  let closed = 0
+  // Removed runtimes must release terminal/browser sockets before renderer teardown.
   for (const [subscriptionId, subscription] of remoteRuntimeSubscriptions) {
     if (subscription.environmentId !== environmentId) {
       continue
     }
+    closed += 1
     remoteRuntimeSubscriptions.delete(subscriptionId)
-    // Why: one failing teardown must not abandon this environment's other
-    // sockets -- that strands exactly the dead handles this sweep exists to
-    // retire. Guard the two steps independently so neither can skip the other,
-    // and so the isolation stays structural rather than resting on a claim that
-    // nothing inside notifyClosed will ever throw.
+    // Isolate close and notification failures so neither strands this environment's sibling subscriptions.
     try {
       subscription.close()
     } catch (error) {
       console.warn('[runtime-environments] subscription close failed during retirement:', error)
     }
     try {
-      // Why: a shared-control logical close never calls back, so notify directly.
+      // Shared-control logical close does not call back.
       subscription.notifyClosed()
     } catch (error) {
       console.warn('[runtime-environments] subscription close notice failed:', error)
     }
   }
+  return closed
 }
+// A retired generation's frames are discarded (runtime-environment-subscription-handlers.ts), so its
+// streams must close and tell their renderers, which resubscribe from where they left off. Streams
+// still being set up fail their own generation check instead.
+onRuntimeEnvironmentTransportGenerationRetired((environmentId) => {
+  const closed = closeEstablishedSubscriptionsForEnvironment(environmentId)
+  if (closed > 0) {
+    console.warn(`[runtime-environments] transport retired; reopening ${closed} stream(s)`, {
+      environmentId
+    })
+  }
+})
+
 /** Returns once the environment's client-hosted browser pages have been released. */
-export function invalidateRuntimeEnvironmentTransport(environmentId: string): Promise<void> {
-  // Why: a same-id re-pair must retire every transport that still authenticates as the old peer.
+export async function invalidateRuntimeEnvironmentTransport(environmentId: string): Promise<void> {
+  // Same-ID re-pairing must retire every transport authenticated as the former peer.
   advanceRuntimeEnvironmentCapabilityIncarnation(environmentId)
   advanceRuntimeEnvironmentTransportGeneration(environmentId)
   closeRemoteRuntimeRequestConnection(environmentId)
   closeSubscriptionsForEnvironment(environmentId)
   retireMobileDesktopRelayEnvironment(environmentId)
   resetDesktopBrowserBridgeEnvironment(environmentId)
-  reactivateRuntimeEnvironmentStatus(environmentId)
+  await reactivateRuntimeEnvironmentStatus(environmentId)
   return retirePairedRuntimeBrowserClientHostEnvironment(
     environmentId,
     new Error('Runtime environment transport was invalidated')
@@ -99,42 +123,47 @@ export function invalidateRuntimeEnvironmentTransport(environmentId: string): Pr
   )
 }
 
-/**
- * A re-pair main ran (an update or rollback from the CLI) reaches renderers only through status
- * published under the new revision; without an owner nothing publishes it (P1-C).
- */
-function reactivateRuntimeEnvironmentStatus(environmentId: string): void {
+/** CLI update/rollback re-pairing needs a new status owner to publish the saved revision to renderers. */
+async function reactivateRuntimeEnvironmentStatus(environmentId: string): Promise<void> {
   const userDataPath = getUserDataPath()
   if (
     isRuntimeEnvironmentManuallyDisconnected(environmentId) ||
-    !listEnvironments(userDataPath).some(
+    !(await listEnvironments(userDataPath)).some(
       (environment) => environment.id === environmentId && !isGatedOffWslHost(environment)
     )
   ) {
     return
   }
-  getRuntimeEnvironmentStatusOwner(userDataPath, environmentId).activate()
+  ;(await getRuntimeEnvironmentStatusOwner(userDataPath, environmentId)).activate()
 }
 
 const pendingSubscriptions = new Map<string, PendingRuntimeSubscription>()
 let stopPreferenceWatch: (() => void) | undefined
 
-export function registerRuntimeEnvironmentHandlers(store: Store): void {
+export async function registerRuntimeEnvironmentHandlers(
+  store: Store,
+  hostInitialization?: Promise<void>
+): Promise<void> {
   stopPreferenceWatch?.()
-  stopPreferenceWatch = watchRuntimeEnvironmentPreference(store, getUserDataPath())
+  stopPreferenceWatch = watchRuntimeEnvironmentPreference(store, getUserDataPath(), async () => {
+    // CLI and recipe removals skip the Settings path; drop their session partitions here too.
+    try {
+      await reconcileOrphanedRuntimeSessions(store, getUserDataPath())
+    } catch (error) {
+      console.warn('[runtime-environments] orphaned session reconcile failed:', error)
+    }
+    publishRuntimeEnvironmentCatalogChanged()
+  })
   for (const pending of pendingSubscriptions.values()) {
     pending.close()
   }
   pendingSubscriptions.clear()
-  // Why: keep direct re-registration safe even though register-core-handlers
-  // normally guards this path; otherwise the binary send listener can stack.
+  // Direct re-registration must not accumulate binary-send listeners.
   resetSharedControlSupport()
   for (const channel of RUNTIME_ENVIRONMENT_HANDLER_CHANNELS) {
     ipcMain.removeHandler(channel)
   }
   ipcMain.removeAllListeners('runtimeEnvironments:subscriptionBinary')
-  reconcileOrphanedRuntimeSessions(store, getUserDataPath())
-
   registerRuntimeEnvironmentConnectivityHandlers({
     store,
     getUserDataPath,
@@ -149,23 +178,18 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
     getUserDataPath,
     invalidateTransport: invalidateRuntimeEnvironmentTransport
   })
-  registerRuntimeEnvironmentPassiveHandlers(getUserDataPath)
+  registerRuntimeEnvironmentPassiveHandlers(getUserDataPath, (environment, method, response) =>
+    recordHostRepoCatalogAnswer(store, environment, method, response)
+  )
   setManagedOrcadPairingRepairedListener(invalidateRuntimeEnvironmentTransport)
   setRefusedPairingHandlers({
-    recover: (environmentId) => recoverRefusedManagedPairing(getUserDataPath(), environmentId),
-    sharedControl: (environmentId) =>
-      handleManagedSharedControlRefusal(getUserDataPath(), environmentId),
+    recover: async (environmentId) =>
+      await recoverRefusedManagedPairing(getUserDataPath(), environmentId),
+    sharedControl: async (environmentId) =>
+      await handleManagedSharedControlRefusal(getUserDataPath(), environmentId),
     connectRequested: (environmentId) =>
-      forgetFailedManagedOrcadPairingRepair(getUserDataPath(), environmentId)
+      forgetManagedOrcadAutomaticFailures(getUserDataPath(), environmentId)
   })
-  for (const environment of listEnvironments(getUserDataPath())) {
-    if (
-      !isRuntimeEnvironmentManuallyDisconnected(environment.id) &&
-      !isGatedOffWslHost(environment)
-    ) {
-      getRuntimeEnvironmentStatusOwner(getUserDataPath(), environment.id).activate()
-    }
-  }
   registerRuntimeSshAccessHandlers({
     getUserDataPath,
     invalidateTransport: invalidateRuntimeEnvironmentTransport
@@ -183,10 +207,28 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
     store
   })
   registerRuntimeEnvironmentSubscriptionHandlers({
+    createAssociationObserver: (environmentId, identity) =>
+      createAiVaultAssociationObserver(environmentId, identity, invalidateAiVaultHostLegCache),
     getUserDataPath,
     remoteRuntimeSubscriptions,
     pendingSubscriptions,
     recordLayoutFrame: (environmentId, method, response) =>
       recordRemoteLayoutFrame(store, environmentId, method, response)
   })
+  await hostInitialization
+  await holdLaunchReconnectOptOuts(store.getSshTargets?.() ?? [])
+  await reconcileOrphanedRuntimeSessions(store, getUserDataPath())
+  await Promise.all(
+    (await listEnvironments(getUserDataPath())).map(async (environment) => {
+      if (
+        !isRuntimeEnvironmentManuallyDisconnected(environment.id) &&
+        !isGatedOffWslHost(environment)
+      ) {
+        const owner = await getRuntimeEnvironmentStatusOwner(getUserDataPath(), environment.id)
+        if (!isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
+          owner.activate()
+        }
+      }
+    })
+  )
 }

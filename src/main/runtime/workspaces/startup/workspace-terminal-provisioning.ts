@@ -1,20 +1,20 @@
-import type { RuntimeRemoteFetchController } from '../../runtime-remote-fetch-controller'
+import type { RuntimeRemoteFetchController } from '../../repositories/runtime-remote-fetch-controller'
 import type { TerminalSplitOptions } from '../../terminal/launch/terminal-split-surface'
-import type { RuntimeTerminalSplit } from '../../../../shared/runtime-terminal-contracts'
-import { OrcaRuntimeWithActivateManagedWorktree } from '../workspace-activation'
-import type { WorktreeTerminalProvisioningHost } from '../../runtime-worktree-terminal-provisioning'
-import type { WorktreeStartupReadinessHost } from '../../runtime-worktree-startup-readiness'
-import { prefetchWorktreeCreateBase } from '../../../worktree-create-base-prefetch'
-import { prepareWorktreeCreateForRepo } from '../../../worktree-create-preparation'
-import { getWorktreeCreatePrefetchGitOptions } from '../../../project-runtime-git-options'
+import type { RuntimeTerminalSplit } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import { OrcaRuntimeWithActivateManagedWorktree } from './workspace-activation'
+import type { WorktreeTerminalProvisioningHost } from './runtime-worktree-terminal-provisioning'
+import type { WorktreeStartupReadinessHost } from './runtime-worktree-startup-readiness'
+import { prefetchWorktreeCreateBase } from '../../../workspaces/creation/worktree-create-base-prefetch'
+import { prepareWorktreeCreateForRepo } from '../../../workspaces/creation/preparation/worktree-create-preparation'
+import { getWorktreeCreatePrefetchGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { LayoutApplyReply } from '../../../../shared/workspace-layout/workspace-layout-command-types'
-import type { WindowLayoutCommand } from '../../runtime-layout-apply'
+import type { WindowLayoutCommand } from '../../terminal/layout/runtime-layout-apply'
 import {
   navigationTargetsHost,
   type RuntimeNavigationTarget
-} from '../../../../shared/runtime-navigation'
+} from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 
 export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends OrcaRuntimeWithActivateManagedWorktree {
   abstract applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply>
@@ -57,8 +57,7 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
         this.createTerminal(selector, options, createdWorktree),
       setTabTitle: async (handle, title) => {
         const { worktreeId, tabId } = this.getProvisionedTerminalTab(handle)
-        // Why not renameTerminal: it writes the pane's title, stamped to outrank every later
-        // agent title, which would hide the agent's own titles and status for the pane's life.
+        // renameTerminal stamps a persistent pane title that would mask all later agent titles/status.
         this.notifier?.renameTerminal(tabId, title, { recordInteraction: false })
         if (!this.getAvailableAuthoritativeWindow()) {
           this.persistHeadlessTerminalTitle(worktreeId, tabId, title)
@@ -72,6 +71,7 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
         const { worktreeId, tabId } = this.getProvisionedTerminalTab(handle)
         await this.setMobileSessionTabProps(`id:${worktreeId}`, { tabId, color })
       },
+      getSetupTerminalTitle: () => this.getSetupTerminalTitle(),
       getPtyId: (handle) => this.getLivePtyForHandle(handle)?.pty.ptyId,
       recordSetupCompletionToken: (ptyId, token) =>
         this.setupCompletionTokenByPtyId.set(ptyId, token)
@@ -124,6 +124,7 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
           this.applyHeadlessSessionTabPropsToSnapshot(worktreeId, tabId, { color })
         }
       },
+      getSetupTerminalTitle: () => this.getSetupTerminalTitle(),
       applyDefaultTabs: async (worktreeId, tabs) => {
         const reply = await this.applyLayoutCommand({
           type: 'applyDefaultTabs',
@@ -144,8 +145,7 @@ export abstract class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends
     if (pty && recordedTabId) {
       return { worktreeId: pty.worktreeId, tabId: recordedTabId }
     }
-    // Why: once the window's graph sync adopts the handle it names the window's leaf, not the
-    // runtime's pty, as renameTerminal also resolves it.
+    // After graph adoption the handle names the window leaf, not the original runtime PTY.
     const { leaf } = this.getLiveLeafForHandle(handle)
     return { worktreeId: leaf.worktreeId, tabId: leaf.tabId }
   }

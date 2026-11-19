@@ -1,6 +1,6 @@
-import type { PersistedState } from '../../../shared/persisted-state-types'
-import { getDefaultUIState } from '../../../shared/constants'
-import { isPluginPanelTabKey } from '../../../shared/plugins/plugin-manifest'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+import { getDefaultUIState } from '../../../shared/orca-profiles/constants'
+import { isPluginPanelTabKey } from '../../../shared/plugins/manifest/plugin-manifest'
 
 export function normalizeGroupBy(groupBy: unknown): PersistedState['ui']['groupBy'] {
   if (
@@ -17,24 +17,35 @@ export function normalizeGroupBy(groupBy: unknown): PersistedState['ui']['groupB
   return getDefaultUIState().groupBy
 }
 
-export function normalizeShowDotfilesByWorktree(value: unknown): Record<string, boolean> {
+/** Drops non-boolean values and unsafe record keys from a persisted per-worktree flag map. */
+function normalizeBooleanByWorktree(value: unknown): Record<string, boolean> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     return {}
   }
   const out: Record<string, boolean> = {}
-  for (const [worktreeId, showDotfiles] of Object.entries(value as Record<string, unknown>)) {
+  for (const [worktreeId, flag] of Object.entries(value as Record<string, unknown>)) {
     if (
       !worktreeId ||
       worktreeId === '__proto__' ||
       worktreeId === 'constructor' ||
       worktreeId === 'prototype' ||
-      typeof showDotfiles !== 'boolean'
+      typeof flag !== 'boolean'
     ) {
       continue
     }
-    out[worktreeId] = showDotfiles
+    out[worktreeId] = flag
   }
   return out
+}
+
+/** Normalizes the persisted per-worktree Explorer dotfile visibility map. */
+export function normalizeShowDotfilesByWorktree(value: unknown): Record<string, boolean> {
+  return normalizeBooleanByWorktree(value)
+}
+
+/** Normalizes the persisted per-worktree notification mute map. */
+export function normalizeNotificationsMutedByWorktree(value: unknown): Record<string, boolean> {
+  return normalizeBooleanByWorktree(value)
 }
 
 export function normalizeSortBy(sortBy: unknown): PersistedState['ui']['sortBy'] {
@@ -68,12 +79,15 @@ export function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['ri
     tab === 'pr-checks' ||
     tab === 'source-control' ||
     tab === 'checks' ||
-    tab === 'ports'
+    tab === 'ports' ||
+    tab === 'bot-activity' ||
+    tab === 'bot-automations' ||
+    tab === 'bot-connectors' ||
+    tab === 'bot-chats'
   ) {
     return tab
   }
-  // Why: plugin tabs are open-ended `plugin:<publisher>.<id>/<panel>` keys; validate the
-  // shape so a persisted plugin tab doesn't reset to Explorer on restart.
+  // Accept valid plugin panel keys so restored tabs do not fall back to Explorer.
   if (typeof tab === 'string' && isPluginPanelTabKey(tab)) {
     return tab
   }
@@ -87,8 +101,7 @@ export function normalizeRightSidebarExplorerView(
   if (view === 'files' || view === 'search') {
     return view
   }
-  // Why: older builds persisted Search as a standalone activity tab with no explorer view; 'search'
-  // is still a live tab, so this fallback must not outrank an explicit view.
+  // Legacy Search tabs lack explorer view; explicit views still take precedence.
   if (tab === 'search') {
     return 'search'
   }

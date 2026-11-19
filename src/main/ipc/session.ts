@@ -1,39 +1,45 @@
 import { ipcMain } from 'electron'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { parseTerminalSurfaceCloseTarget } from '../../shared/terminal-surface-close-target'
-import { isFrozenOrcadSourceSessionPartition } from '../ssh/orcad-retained-source'
+import { parseTerminalSurfaceCloseTarget } from '../../shared/workspace-layout/terminal-surfaces/terminal-surface-close-target'
+import { isFrozenOrcadSourceSessionPartition } from '../persistence/migrating-orcad-catalog/source/catalog/orcad-source-visibility'
+import { isWslMoveWindowWriteHeld } from '../persistence/moving-wsl-projects/quiescence/wsl-move-window-write-hold'
+import { visibleSessionHostIds } from '../persistence/migrating-orcad-catalog/retained-source/orcad-retained-source-session'
 import { markAgentLaunchesClosedByUser } from '../agent-launch/agent-launch-pane-attachment'
 import { windowViewPatchForMain, windowViewSaveForMain } from '../persistence/window-save-view'
 import { reportWindowSaveDrift } from '../persistence/window-save-divergence'
 import { windowSaveKeepingMainSleepRecords } from '../persistence/window-save-sleep-records'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { isNoopWindowSessionPatch } from '../persistence/window-session-patch-noop'
+import { noteWindowSessionSaveUnchanged } from '../browser/extensions/tabs-and-windows/browser-extension-discarded-tabs'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-owner-switch'
 import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
-} from '../../shared/workspace-session-state-types'
+} from '../../shared/workspace-session/workspace-session-state-types'
+import {
+  applyWorkspaceSessionEntriesPatch,
+  fieldsStoredDifferently,
+  type WorkspaceSessionEntriesPatch,
+  type WorkspaceSessionEntriesPatchResult
+} from '../../shared/workspace-session/workspace-session-entries-patch'
 
 export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeService): void {
-  // Why: renderer saves would change a fenced host's frozen source partition.
+  // Why: renderer saves would change a fenced host's frozen source partition, or write back what a
+  // WSL move rewrote under this window before main reloads it.
   const isFenced = (hostId?: string | null): boolean =>
-    isFrozenOrcadSourceSessionPartition(store, hostId)
+    isFrozenOrcadSourceSessionPartition(store, hostId) || isWslMoveWindowWriteHeld()
 
-  // Why: hostId is an optional second arg so an older renderer that invokes
-  // these channels without it keeps reading/writing the 'local' partition
-  // exactly as before. Channel names stay stable.
+  // Optional hostId preserves local-partition behavior for older renderers.
   ipcMain.handle('session:get', (_event, hostId?: string | null) => {
     return store.getWorkspaceSession(hostId)
   })
 
-  // Why a census channel: boot used to infer which partitions exist from the repo catalog, which
-  // cannot name an SSH target whose only workspace is a folder — the runtime wrote that partition
-  // and no reader ever enumerated it (#12723).
+  // Repo catalogs omit folder-only SSH hosts; enumerate session partitions directly (#12723).
   ipcMain.handle('session:list-host-ids', () => {
-    return store.getWorkspaceSessionHostIds()
+    return visibleSessionHostIds(store, store.getWorkspaceSessionHostIds())
   })
 
-  // Switch point: main keeps its own layout over the window's and takes the window's view and
-  // facts; the drift check reports where the save's layout still differs from main's.
+  // Main owns layout membership; merge the window's view and facts, then report layout drift.
   const sessionForMain = (args: WorkspaceSessionState, hostId: string | null | undefined) => {
     const stored = store.getWorkspaceSession(hostId)
     reportWindowSaveDrift(stored, args, hostId, 'session:set')
@@ -60,18 +66,52 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
     }
   })
 
-  ipcMain.handle('session:patch', (_event, args: WorkspaceSessionPatch, hostId?: string | null) => {
-    if (!isFenced(hostId)) {
-      store.patchWorkspaceSession(
-        ORCA_LAYOUT_OWNER_IS_MAIN
-          ? patchForMain(args, hostId)
-          : windowSaveKeepingMainSleepRecords(store.getWorkspaceSession(hostId), args, 'patch'),
-        hostId
-      )
+  const patchWindowSession = (
+    toPatch: (stored: WorkspaceSessionState) => WorkspaceSessionPatch,
+    hostId: string | null | undefined
+  ): WorkspaceSessionEntriesPatchResult['status'] => {
+    if (isFenced(hostId)) {
+      return 'skipped'
     }
+    const stored = store.getWorkspaceSession(hostId)
+    const args = toPatch(stored)
+    const save = ORCA_LAYOUT_OWNER_IS_MAIN
+      ? patchForMain(args, hostId)
+      : windowSaveKeepingMainSleepRecords(stored, args, 'patch')
+    if (!ORCA_LAYOUT_OWNER_IS_MAIN && isNoopWindowSessionPatch(stored, save)) {
+      noteWindowSessionSaveUnchanged(hostId)
+      return 'unchanged'
+    }
+    store.patchWorkspaceSession(save, hostId)
+    return 'applied'
+  }
+
+  ipcMain.handle('session:patch', (_event, args: WorkspaceSessionPatch, hostId?: string | null) => {
+    patchWindowSession(() => args, hostId)
   })
 
-  // Why: a renderer save cannot shrink membership main owns, so each close commits it explicitly.
+  // Changed keys only: rebuilt into whole fields from the stored partition, then saved as a patch.
+  ipcMain.handle(
+    'session:patch-entries',
+    (
+      _event,
+      args: WorkspaceSessionEntriesPatch,
+      hostId?: string | null
+    ): WorkspaceSessionEntriesPatchResult => {
+      const status = patchWindowSession(
+        (stored) => applyWorkspaceSessionEntriesPatch(stored, args),
+        hostId
+      )
+      if (status === 'skipped') {
+        return { status }
+      }
+      // Normalization, fences and main's sleep records can store something else, saved or not.
+      const normalizedFields = fieldsStoredDifferently(store.getWorkspaceSession(hostId), args)
+      return normalizedFields.length > 0 ? { status, normalizedFields } : { status }
+    }
+  )
+
+  // Window saves cannot shrink main-owned membership; closes must commit explicitly.
   ipcMain.handle(
     'session:close-terminal-surface',
     (_event, args: { worktreeId?: unknown; target?: unknown; reason?: unknown } | undefined) => {
@@ -79,10 +119,9 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
       if (typeof args?.worktreeId !== 'string' || !target) {
         throw new Error('invalid_terminal_surface')
       }
-      // Why only these two: main alone closes a tab for its process exit.
+      // Only main may close tabs for process exit.
       const reason = args.reason === 'cleanup' ? 'cleanup' : 'user'
       if (reason === 'user') {
-        // A launch still starting or delivering in what the user closed stops, and says so.
         markAgentLaunchesClosedByUser(args.worktreeId, target)
       }
       return runtime.closeTerminalSurfaceFromRenderer({
@@ -94,16 +133,13 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
   )
 
   ipcMain.handle('session:flush', () => {
-    // Why: durable lifecycle RPCs must propagate disk failures instead of
-    // returning success through Store.flush(), which intentionally only logs.
+    // Lifecycle success requires durable writes; Store.flush only logs failures.
     return store.flushPendingOrThrowAsync()
   })
 
-  ipcMain.on(
-    'session:read-terminal-scrollback-sync',
-    (event, args: { ref?: unknown } | undefined) => {
-      event.returnValue =
-        typeof args?.ref === 'string' ? store.readTerminalScrollbackSnapshot(args.ref) : null
-    }
+  ipcMain.handle(
+    'session:read-terminal-scrollback',
+    (_event, args: { ref?: unknown } | undefined) =>
+      typeof args?.ref === 'string' ? store.readTerminalScrollbackSnapshotAsync(args.ref) : null
   )
 }

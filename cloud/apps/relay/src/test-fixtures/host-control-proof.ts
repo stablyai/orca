@@ -1,23 +1,19 @@
 import { createHash, createHmac } from 'node:crypto'
 import { EventEmitter } from 'node:events'
-import {
-  buildHostProofMacInput,
-  HostChallengeSchema,
-  HOST_CHALLENGE_PLAINTEXT_DOMAIN
-} from '@orca-cloud/relay-contract'
+import { buildHostProofMacInput, HOST_CHALLENGE_PLAINTEXT_DOMAIN } from '@orca-cloud/relay-contract/host-proof-transcript'
+import { HostChallengeSchema } from '@orca-cloud/relay-contract/control-messages'
 import nacl from 'tweetnacl'
 import { expect, vi, type Mock, type MockInstance } from 'vitest'
 import type WebSocket from 'ws'
-import { RelayAssignmentStore } from '../assignment-store.js'
+import { RelayAssignmentStore } from '../assignment/assignment-store.js'
 import { loadRelayConfig } from '../config.js'
-import { RelayCredentialStore } from '../credential-store.js'
-import type { RelayDatabase } from '../database.js'
-import { HostSessionRegistry } from '../host-session-registry.js'
-import type { RelayTokenClaims } from '../relay-token-verifier.js'
-import { ProcessQueuedByteBudget } from '../splice-forwarder.js'
+import { RelayCredentialStore } from '../credentials/credential-store.js'
+import type { RelayDatabase } from '../database/database.js'
+import { HostSessionRegistry } from '../connections/host-session-registry.js'
+import type { RelayTokenClaims } from '../authentication/relay-token-verifier.js'
+import { ProcessQueuedByteBudget } from '../connections/splice-forwarder.js'
 
-// A cell's host session registry over a stubbed database, driven through the real host hello
-// and proof with fake sockets.
+// Drive real hello/proof against stubbed database and fake sockets.
 
 export class ProofSocket extends EventEmitter {
   readonly OPEN = 1

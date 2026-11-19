@@ -1,10 +1,7 @@
 import type { Mock } from 'vitest'
 
-// Declared shapes for the SSH IPC mock registry. The suites assert on recorded calls rather
-// than argument types, so every spy stays `Mock` (vi.fn()'s untyped default) — naming the
-// shapes here is what keeps declaration emit from reaching into @vitest/spy internals.
+// Explicit mock shapes prevent declaration emit from naming @vitest/spy internals.
 
-/** Callbacks production code hands a manager mock at construction / setCallbacks time. */
 export type MockCallbacksRef = { current: unknown }
 
 export type SshStoreMock = {
@@ -15,6 +12,8 @@ export type SshStoreMock = {
   updateTarget: Mock
   removeTarget: Mock
   importFromSshConfig: Mock
+  currentSshRouteSnapshot: Mock
+  refreshSshRouteSnapshot: Mock
   lastRepoReadoptions: { oldTargetId: string; newTargetId: string; repoIds: string[] }[]
 }
 
@@ -50,6 +49,7 @@ export type SshPortForwardManagerMock = {
   removeForwardAndWait: Mock
   listForwards: Mock
   removeAllForwards: Mock
+  closeStaleForwards: Mock
   closeAll: Mock
   dispose: Mock
   setCallbacks: Mock
@@ -71,7 +71,6 @@ export type SshIpcMockState = {
   mockNextPortForwardManagers: unknown[]
 }
 
-/** A module namespace object handed straight back from a `vi.mock` factory. */
 export type SshIpcMockModule = Record<string, unknown>
 
 export type SshIpcMockModules = {

@@ -5,10 +5,6 @@ import type {
   StdioOptions
 } from 'node:child_process'
 
-export type ChildProcessHandle = ChildProcess
-
-export type SpawnedProcess = ChildProcess
-
 export type ProcessSpec = {
   /** Prefer an absolute Windows path; stripped Electron PATHs may not resolve bare names. */
   program: string
@@ -17,11 +13,13 @@ export type ProcessSpec = {
   env?: NodeJS.ProcessEnv
   timeoutMs?: number | null
   /** Written to stdin then closed. Omit to leave stdin empty and closed. */
-  input?: string
+  input?: string | Uint8Array
   /** Cap on captured stdout/stderr; output past it is discarded. */
   maxOutputBytes?: number
   /** Capture stdout as bytes without decoding; stdout stays empty in this mode. */
   captureStdoutAsBytes?: boolean
+  /** Capture stderr as bytes without decoding; stderr stays empty in this mode. */
+  captureStderrAsBytes?: boolean
   killOnOutputLimit?: boolean
   /** Aborting still resolves with the process exit result. */
   signal?: AbortSignal
@@ -32,21 +30,19 @@ export type ProcessSpec = {
   stdio?: NodeSpawnOptions['stdio']
   /** Bun and Node require JSON for an IPC channel shared between the two runtimes. */
   serialization?: NodeSpawnOptions['serialization']
-  /** Await tree termination or observed root exit, then settle at the final deadline if unverified. */
+  /** Native POSIX stops require group proof; the final caller deadline never releases physical ownership. */
   terminationBarrier?: boolean | ProcessTerminationBarrier
-  /** Called once when the child exits or tree termination is verified. */
+  /** Normal close or verified termination; native POSIX close after stop alone is insufficient. */
   onChildTerminated?: () => void
   /** Every raw stderr chunk as it arrives, including any past the capture cap. */
   onStderr?: (chunk: Buffer | string) => void
 }
 
-export type PipedChildProcess = ChildProcessWithoutNullStreams
-
 export type PipedProcessSpec = Omit<ProcessSpec, 'stdio'> & {
   stdio?: 'pipe' | ['pipe', 'pipe', 'pipe', ...Exclude<StdioOptions, string>]
 }
 
-export type PipedProcessSpawner = (spec: PipedProcessSpec) => PipedChildProcess
+export type PipedProcessSpawner = (spec: PipedProcessSpec) => ChildProcessWithoutNullStreams
 
 export type ProcessTerminationBarrier = {
   observeStderr?: (chunk: Buffer | string) => void
@@ -60,6 +56,7 @@ export type ProcessResult = {
   stdout: string
   stdoutBytes?: Buffer
   stderr: string
+  stderrBytes?: Buffer
   timedOut: boolean
   outputTruncated?: boolean
 }

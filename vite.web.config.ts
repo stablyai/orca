@@ -5,16 +5,20 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { createPdfjsViewerAssetsPlugin } from './config/build-plugins/pdfjs-viewer-assets'
 import { createViteCacheRetentionPlugin } from './config/build-plugins/vite-cache-retention'
-import { resolveBuildSourceCommit } from './config/scripts/build-source-commit.mjs'
+import {
+  ignoreIneffectiveDynamicImport,
+  RENDERER_CHUNK_SIZE_WARNING_LIMIT_KB
+} from './config/build-plugins/rollup-warning-filter'
+import { reactPluginOptions } from './config/build-plugins/react-compiler'
+import { resolveBuildSourceCommit } from './config/scripts/build-identity/build-source-commit.mjs'
 
 export default defineConfig({
   root: resolve('src/renderer'),
   cacheDir: resolve('.cache/vite/web'),
-  // Why: pairing URLs may live under a reverse-proxy path prefix like
-  // /orca/web-index.html, so built assets must resolve relative to the page.
+  // Resolve assets relatively for reverse-proxy pairing prefixes such as /orca/web-index.html.
   base: './',
   plugins: [
-    react(),
+    react(reactPluginOptions()),
     tailwindcss(),
     createPdfjsViewerAssetsPlugin(),
     createViteCacheRetentionPlugin()
@@ -26,6 +30,10 @@ export default defineConfig({
   resolve: {
     alias: {
       ...markdownParserAliases,
+      // Pin the browser-safe UMD entry so an unpatched package.json cannot bundle lib/addon-ligatures.mjs (which imports node:diagnostics_channel).
+      '@xterm/addon-ligatures': resolve(
+        'node_modules/@xterm/addon-ligatures/lib/addon-ligatures.js'
+      ),
       '@renderer': resolve('src/renderer/src'),
       '@': resolve('src/renderer/src')
     }
@@ -34,8 +42,10 @@ export default defineConfig({
     outDir: resolve('out/web'),
     emptyOutDir: true,
     reportCompressedSize: false,
+    chunkSizeWarningLimit: RENDERER_CHUNK_SIZE_WARNING_LIMIT_KB,
     rollupOptions: {
-      input: resolve('src/renderer/web-index.html')
+      input: resolve('src/renderer/web-index.html'),
+      onwarn: ignoreIneffectiveDynamicImport
     }
   },
   worker: {

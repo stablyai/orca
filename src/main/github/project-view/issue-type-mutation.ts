@@ -1,12 +1,8 @@
-import {
-  assertPositiveInt,
-  projectGhExecOptions,
-  runGraphql,
-  validateSlugArgs,
-  type GraphqlVars
-} from './internals'
-import type { GitHubProjectMutationResult } from '../../../shared/github/project-result-types'
-import type { UpdateIssueTypeBySlugArgs } from '../../../shared/github/project-request-types'
+import { assertPositiveInt, validateSlugArgs } from './project-argument-validation'
+import { projectGhExecOptions } from './project-host-execution'
+import { runGraphql, type GraphqlVars } from './project-graphql'
+import type { GitHubProjectMutationResult } from '../../../shared/github/projects/project-result-types'
+import type { UpdateIssueTypeBySlugArgs } from '../../../shared/github/projects/project-request-types'
 
 export async function updateIssueTypeBySlug(
   args: UpdateIssueTypeBySlugArgs
@@ -33,7 +29,10 @@ export async function updateIssueTypeBySlug(
   }
   const issueId = lookup.data.repository?.issue?.id
   if (!issueId) {
-    return { ok: false, error: { type: 'not_found', message: 'Issue not found.' } }
+    return {
+      ok: false,
+      error: { type: 'not_found', message: 'Issue not found.', reason: 'issue_not_found' }
+    }
   }
   const query = args.issueTypeId
     ? `mutation($issueId:ID!, $issueTypeId:ID!) {

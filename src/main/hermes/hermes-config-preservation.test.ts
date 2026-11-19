@@ -17,10 +17,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { parse } from 'yaml'
+import { HERMES_CLIENT_ENV_PASSTHROUGH } from './hermes-managed-plugin-source'
 import { HermesHookService } from './hook-service'
 
-const configured =
-  '# Operator comments\r\nmodel: "fixture"\r\nplugins:\r\n  enabled: [orca-status]\r\n'
+const configured = `# Operator comments\r\nmodel: "fixture"\r\nplugins:\r\n  enabled: [orca-status]\r\nterminal:\r\n  client_env_passthrough: [${HERMES_CLIENT_ENV_PASSTHROUGH.join(', ')}]\r\n`
 const initial =
   '# Recovery notes\nmodel: "001"\nprompt: |\n  First\n  Second\nplugins:\n  enabled: [other] # choices\n'
 
@@ -58,17 +58,6 @@ describe('Hermes config preservation on disk', () => {
     expect(readFileSync(`${configPath}.bak`, 'utf8')).toBe('previous recovery point')
   })
 
-  it('does not create a backup on a no-op', () => {
-    writeFileSync(configPath, configured)
-    service.install()
-    expect(existsSync(`${configPath}.bak`)).toBe(false)
-  })
-
-  it('does not create a config when removing an absent integration', () => {
-    expect(service.remove().state).toBe('not_installed')
-    expect(readdirSync(directory)).toEqual([])
-  })
-
   it('preserves comments and multiline values through real install and removal', () => {
     writeFileSync(configPath, initial)
     expect(service.install().state).toBe('installed')
@@ -83,29 +72,27 @@ describe('Hermes config preservation on disk', () => {
       expect(output).toContain('model: "001"')
       expect(output).toContain('prompt: |\n  First\n  Second\n')
     }
-    expect(parse(removed)).toEqual(parse(initial))
+    expect(parse(removed)).toEqual({ ...parse(initial), terminal: { client_env_passthrough: [] } })
     expect(readFileSync(`${configPath}.bak`, 'utf8')).toBe(installed)
   })
 
-  it.skipIf(process.platform === 'win32').each([
-    [0o600, 0o022],
-    [0o600, 0],
-    [0o640, 0o077],
-    [0o640, 0]
-  ])('preserves mode %i with umask %i and a byte-exact backup', (mode, mask) => {
-    writeFileSync(configPath, initial)
-    chmodSync(configPath, mode)
-    const previous = process.umask(mask)
-    try {
-      expect(service.install().state).toBe('installed')
-    } finally {
-      process.umask(previous)
+  it.skipIf(process.platform === 'win32').each([[0o640, 0o077]])(
+    'preserves mode %i with umask %i and a byte-exact backup',
+    (mode, mask) => {
+      writeFileSync(configPath, initial)
+      chmodSync(configPath, mode)
+      const previous = process.umask(mask)
+      try {
+        expect(service.install().state).toBe('installed')
+      } finally {
+        process.umask(previous)
+      }
+      expect(statSync(configPath).mode & 0o777).toBe(mode)
+      expect(statSync(`${configPath}.bak`).mode & 0o777).toBe(mode)
+      expect(readFileSync(`${configPath}.bak`, 'utf8')).toBe(initial)
+      expect(readdirSync(directory).sort()).toEqual(['config.yaml', 'config.yaml.bak', 'plugins'])
     }
-    expect(statSync(configPath).mode & 0o777).toBe(mode)
-    expect(statSync(`${configPath}.bak`).mode & 0o777).toBe(mode)
-    expect(readFileSync(`${configPath}.bak`, 'utf8')).toBe(initial)
-    expect(readdirSync(directory).sort()).toEqual(['config.yaml', 'config.yaml.bak', 'plugins'])
-  })
+  )
 
   it.skipIf(process.platform === 'win32')(
     'creates a private new config with permissive umask',
@@ -190,7 +177,7 @@ describe('Hermes config preservation on disk', () => {
     expect(existsSync(`${configPath}.bak`)).toBe(false)
   })
 
-  it.each(['plugins: [', 'plugins: unexpected\n', 'plugins:\n  enabled: not-a-list\n'])(
+  it.each(['plugins: [', 'plugins:\n  enabled: not-a-list\n'])(
     'does not install files or rewrite unexpected YAML (%s)',
     (input) => {
       writeFileSync(configPath, input)

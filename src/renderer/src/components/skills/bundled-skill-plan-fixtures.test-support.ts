@@ -3,7 +3,7 @@ import type {
   BundledSkillOp,
   BundledSkillPlan,
   BundledSkillPlanEntry
-} from '../../../../shared/bundled-skill-plan'
+} from '../../../../shared/skills/bundled/bundled-skill-plan'
 
 const DIGEST = 'a'.repeat(64)
 
@@ -43,7 +43,6 @@ export function sharedEntry(
   return planEntry(name, [planOp(kind, `/home/u/.agents/skills/${name}`, extra)])
 }
 
-/** Every op of the plan ran as planned. */
 export function doneResult(plan: BundledSkillPlan): BundledSkillInstallResult {
   return {
     scope: plan.scope,

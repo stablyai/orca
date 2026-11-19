@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { HostedReviewInfo } from '../../shared/hosted-review'
+import type { HostedReviewInfo } from '../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   __resetHostedReviewBranchCacheForTests,
   invalidateHostedReviewBranchCache,
@@ -115,37 +115,12 @@ describe('hosted review in-flight invalidation', () => {
     const oldResponse = Promise.withResolvers<HostedReviewInfo | null>()
     const admitted = withHostedReviewBranchCache(identity, options, () => oldResponse.promise)
     invalidateHostedReviewBranchCache(identity.repoPath, identity.executionHostId)
-    // Nothing replaced it, so only the scope generation stands between this
-    // pre-invalidation "no review" and the key it no longer owns. Adopting it
-    // would read as fresh and short-circuit the lookup for the review Orca just
-    // opened.
+    // Scope generation must fence this pre-invalidation null even without a replacement owner.
     oldResponse.resolve(null)
     expect(await admitted).toBeNull()
     const freshLookup = vi.fn(async () => review)
     expect(await withHostedReviewBranchCache(identity, options, freshLookup)).toEqual(review)
     expect(freshLookup).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps other hosts, paths and their pending promises isolated', async () => {
-    const others = [
-      { ...identity, executionHostId: 'local' as const },
-      { ...identity, executionHostId: 'ssh:host-b' as const },
-      { ...identity, repoPath: '/repo-other' }
-    ].map((key) => {
-      const response = Promise.withResolvers<HostedReviewInfo | null>()
-      const lookup = vi.fn(() => response.promise)
-      return { key, response, lookup, admitted: withHostedReviewBranchCache(key, options, lookup) }
-    })
-    invalidateHostedReviewBranchCache(identity.repoPath, identity.executionHostId)
-    const readers = others.map(({ key, lookup }) =>
-      withHostedReviewBranchCache(key, options, lookup)
-    )
-    for (const other of others) {
-      expect(other.lookup).toHaveBeenCalledTimes(1)
-      other.response.resolve(review)
-    }
-    expect(await Promise.all(readers)).toEqual([review, review, review])
-    await Promise.all(others.map((other) => other.admitted))
   })
 
   it('sweeps invalidated readers after sleep without expiring their replacement', async () => {
@@ -267,5 +242,128 @@ describe('hosted review in-flight invalidation', () => {
     }
     expect(await withHostedReviewBranchCache(identity, options, freshLookup)).toEqual(review)
     expect(freshLookup).toHaveBeenCalledTimes(1)
+  })
+})
+
+const START = 1_000_000
+const openReview = review
+const mergedReview: HostedReviewInfo = { ...review, state: 'merged' }
+function stuckLookup() {
+  const response = Promise.withResolvers<HostedReviewInfo | null>()
+  return {
+    lookup: vi.fn(() => response.promise),
+    resolve: response.resolve,
+    reject: response.reject
+  }
+}
+describe('hosted review manual refresh invalidation', () => {
+  // The branch cache never branches on the forge, so one stands for all of them.
+  it('starts a post-click read and fences the pre-click answer at the same clock time', async () => {
+    const old = stuckLookup()
+    const before = withHostedReviewBranchCache(identity, { headOid: null, force: true }, old.lookup)
+    const lookup = vi.fn(async () => mergedReview)
+    const options = { headOid: null, force: true, userRefresh: true }
+    const click = withHostedReviewBranchCache(identity, options, lookup)
+    old.resolve(openReview)
+    await expect(before).resolves.toMatchObject({ state: 'open' })
+    await expect(click).resolves.toEqual(mergedReview)
+    expect(lookup).toHaveBeenCalledOnce()
+    await expect(withHostedReviewBranchCache(identity, { headOid: null }, lookup)).resolves.toEqual(
+      mergedReview
+    )
+  })
+
+  it('fences a pre-click answer that completes after the manual answer', async () => {
+    const old = stuckLookup()
+    const before = withHostedReviewBranchCache(identity, { headOid: null }, old.lookup)
+    await expect(
+      withHostedReviewBranchCache(
+        identity,
+        { headOid: null, force: true, userRefresh: true },
+        async () => mergedReview
+      )
+    ).resolves.toEqual(mergedReview)
+    old.resolve(openReview)
+    await before
+    await expect(
+      withHostedReviewBranchCache(identity, { headOid: null }, async () => openReview)
+    ).resolves.toEqual(mergedReview)
+  })
+
+  it('reads during failure backoff only for an explicit click, then recovers', async () => {
+    await withHostedReviewBranchCache(identity, { headOid: null }, async () => openReview)
+    const failed = vi.fn(async () => {
+      throw new Error('offline')
+    })
+    await withHostedReviewBranchCache(identity, { headOid: null, force: true }, failed)
+    const lookup = vi.fn(async () => mergedReview)
+    await expect(
+      withHostedReviewBranchCache(identity, { headOid: null, force: true }, lookup)
+    ).resolves.toEqual(openReview)
+    expect(lookup).not.toHaveBeenCalled()
+    const options = { headOid: null, force: true, userRefresh: true }
+    await expect(withHostedReviewBranchCache(identity, options, failed)).rejects.toThrow('offline')
+    await expect(withHostedReviewBranchCache(identity, options, lookup)).resolves.toEqual(
+      mergedReview
+    )
+    expect(lookup).toHaveBeenCalledOnce()
+  })
+
+  it.each(['failure', 'deadline'] as const)(
+    'settles a shared manual flight per caller on %s',
+    async (outcome) => {
+      await withHostedReviewBranchCache(identity, { headOid: null }, async () => openReview)
+      const held = stuckLookup()
+      const options = { headOid: null, force: true, userRefresh: true }
+      const click = withHostedReviewBranchCache(identity, options, held.lookup)
+      const rejection = expect(click).rejects.toThrow(
+        outcome === 'failure' ? 'offline' : 'timed out'
+      )
+      const ordinary = withHostedReviewBranchCache(
+        identity,
+        { headOid: null, force: true },
+        held.lookup
+      )
+      if (outcome === 'failure') {
+        held.reject(new Error('offline'))
+      } else {
+        await vi.advanceTimersByTimeAsync(HOSTED_REVIEW_LOOKUP_DEADLINE_MS)
+      }
+      await rejection
+      await expect(ordinary).resolves.toEqual(openReview)
+      expect(held.lookup).toHaveBeenCalledOnce()
+      // Failed refreshes cannot renew the old answer's TTL or reset failure escalation.
+      vi.setSystemTime(START + HOSTED_REVIEW_LOOKUP_DEADLINE_MS + 60_001)
+      const next = vi.fn(async () => mergedReview)
+      await withHostedReviewBranchCache(identity, { headOid: null }, next)
+      expect(next).toHaveBeenCalledOnce()
+      if (outcome === 'deadline') {
+        held.resolve(openReview)
+      }
+    }
+  )
+
+  it('refuses a third live click without retiring the admitted successor', async () => {
+    const first = stuckLookup()
+    const second = stuckLookup()
+    const options = { headOid: null, force: true, userRefresh: true }
+    const before = withHostedReviewBranchCache(
+      identity,
+      { headOid: null, force: true },
+      first.lookup
+    )
+    const admitted = withHostedReviewBranchCache(identity, options, second.lookup)
+    const third = vi.fn(async () => openReview)
+    const refused = withHostedReviewBranchCache(identity, options, third)
+    const rejection = expect(refused).rejects.toThrow('still running')
+    second.resolve(mergedReview)
+    first.resolve(openReview)
+    await rejection
+    await expect(admitted).resolves.toEqual(mergedReview)
+    await before
+    expect(third).not.toHaveBeenCalled()
+    await expect(withHostedReviewBranchCache(identity, { headOid: null }, third)).resolves.toEqual(
+      mergedReview
+    )
   })
 })

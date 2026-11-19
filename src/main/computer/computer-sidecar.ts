@@ -1,6 +1,9 @@
 import { computerProviderUnavailableMessage } from './computer-provider-unavailable-message'
 import { currentComputerProvider, shutdownComputerProviders } from './computer-provider-lifecycle'
 import { RuntimeClientError } from './runtime-client-error'
+import { ComputerTreeBaselines } from './computer-snapshot-tree-diff'
+import type { ComputerProviderCapabilities } from '../../shared/computer/computer-use-runtime-types'
+import { computerTypeTextTargetUnsupportedMessage } from '../../shared/computer/computer-use-type-text-target'
 
 type SidecarRequest = {
   id: number
@@ -8,11 +11,7 @@ type SidecarRequest = {
   params?: Record<string, unknown>
 }
 
-// Why disconnect carries the weight on Windows: the parent stops the sidecar
-// with kill('SIGTERM'), which is TerminateProcess there, so the SIGTERM handler
-// below never runs and teardown rides on the IPC channel closing instead. A
-// helper wedged inside a UI Automation call can still outlive that and deliver
-// input after teardown; only a real signal would preempt it.
+// Handle IPC disconnect too: Windows SIGTERM does not run JavaScript signal handlers.
 process.once('disconnect', shutdownProviders)
 process.once('SIGTERM', () => {
   shutdownProviders()
@@ -23,6 +22,8 @@ process.once('SIGINT', () => {
   process.exit(130)
 })
 process.once('beforeExit', shutdownProviders)
+
+const treeBaselines = new ComputerTreeBaselines()
 
 process.on('message', (message: unknown) => {
   void handleMessage(message)
@@ -53,49 +54,68 @@ async function dispatch(method: string, params: Record<string, unknown>): Promis
 
   switch (method) {
     case 'capabilities': {
-      return await provider.capabilities()
+      return withTreeDiffCapability(await provider.capabilities())
     }
     case 'listApps': {
       return await provider.listApps()
+    }
+    case 'launchApp': {
+      return await provider.launchApp(params)
     }
     case 'listWindows': {
       return await provider.listWindows(params)
     }
     case 'getAppState': {
-      return await provider.snapshot(params)
+      return treeBaselines.apply(params, await provider.snapshot(params))
     }
     case 'click': {
-      return await provider.action('click', params)
+      return treeBaselines.apply(params, await provider.action('click', params))
     }
     case 'performSecondaryAction': {
-      return await provider.action('performSecondaryAction', params)
+      return treeBaselines.apply(params, await provider.action('performSecondaryAction', params))
     }
     case 'scroll': {
-      return await provider.action('scroll', params)
+      return treeBaselines.apply(params, await provider.action('scroll', params))
     }
     case 'drag': {
-      return await provider.action('drag', params)
+      return treeBaselines.apply(params, await provider.action('drag', params))
     }
     case 'typeText': {
-      return await provider.action('typeText', params)
+      if (params.elementIndex !== undefined) {
+        const unsupported = computerTypeTextTargetUnsupportedMessage(await provider.capabilities())
+        if (unsupported) {
+          throw new RuntimeClientError('unsupported_capability', unsupported)
+        }
+      }
+      return treeBaselines.apply(params, await provider.action('typeText', params))
     }
     case 'pressKey': {
-      return await provider.action('pressKey', params)
+      return treeBaselines.apply(params, await provider.action('pressKey', params))
     }
     case 'hotkey': {
-      return await provider.action('hotkey', params)
+      return treeBaselines.apply(params, await provider.action('hotkey', params))
     }
     case 'pasteText': {
-      return await provider.action('pasteText', params)
+      return treeBaselines.apply(params, await provider.action('pasteText', params))
     }
     case 'setValue': {
-      return await provider.action('setValue', params)
+      return treeBaselines.apply(params, await provider.action('setValue', params))
     }
     default:
       throw new RuntimeClientError(
         'invalid_argument',
         `unknown computer sidecar method '${method}'`
       )
+  }
+}
+
+function withTreeDiffCapability(
+  capabilities: ComputerProviderCapabilities
+): ComputerProviderCapabilities {
+  const { supports } = capabilities
+  return {
+    ...capabilities,
+    supports: { ...supports, observation: { ...supports.observation, treeDiff: true } }
   }
 }
 

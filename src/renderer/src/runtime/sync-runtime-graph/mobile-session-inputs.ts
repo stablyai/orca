@@ -1,7 +1,15 @@
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import {
+  pendingTabRevision,
+  pendingEntityWorkspaceIds
+} from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
+import { editorPlacementIndex } from '@/store/slices/editor/tabs/workspace-editor-files'
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
+import { hostSessionTabIdsByLocalTabForWorktree } from '../web-session-tabs-sync/identity/tracking-mappings'
 import type { AppState } from '@/store/types'
-import { parsePaneKey, makePaneKey } from '../../../../shared/stable-pane-id'
-import { nativeChatLaunchAgentForLeaf } from '../../components/native-chat/native-chat-leaf-routing'
-import { getIndexedWorktreesById } from '@/store/worktree-repo-index'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { nativeChatLaunchAgentForLeaf } from '../../components/native-chat/pane/routing/native-chat-leaf-routing'
+import { getIndexedWorktreesById } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import {
   EMPTY_NARROWED_BY_KEY,
   EMPTY_WORKTREE_BROWSER_WORKSPACES,
@@ -13,7 +21,6 @@ import {
   graphState
 } from './graph-state'
 import type {
-  MobileSessionAgentStatusByWorktree,
   MobileSessionPublicationInputs,
   MobileSessionWorktreeInputs,
   OpenFileIndexes
@@ -23,7 +30,7 @@ import {
   getRuntimeLeafIdsForTerminal,
   resolveMobileTabWideAgentHintLeafId
 } from './mobile-session-surfaces'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function getOpenFileIndexes(openFiles: AppState['openFiles']): OpenFileIndexes {
   if (graphState.cachedOpenFileIndexesSource === openFiles && graphState.cachedOpenFileIndexes) {
@@ -52,40 +59,60 @@ export function getOpenFileIndexes(openFiles: AppState['openFiles']): OpenFileIn
   return graphState.cachedOpenFileIndexes
 }
 
-export function buildMobileSessionAgentStatusByWorktree(
-  agentStatusByPaneKey: AppState['agentStatusByPaneKey'],
-  tabsByWorktree: AppState['tabsByWorktree']
-): MobileSessionAgentStatusByWorktree {
-  const byWorktreeId = new Map<string, Map<string, AppState['agentStatusByPaneKey'][string]>>()
-  const paneKeys = Object.keys(agentStatusByPaneKey)
-  if (paneKeys.length === 0) {
-    return byWorktreeId
+type PlacementOpenFileIndexes = OpenFileIndexes & { crossPlacedWorkspaces: ReadonlySet<string> }
+const placementFileIndexes = new WeakMap<
+  AppState['unifiedTabsByWorktree'],
+  WeakMap<OpenFileIndexes, { revision: number; projection: PlacementOpenFileIndexes }>
+>()
+
+/** Preserve legacy tabless publication, excluding only content placed exclusively elsewhere. */
+export function excludeCrossPlacedEditorFiles(
+  indexes: OpenFileIndexes,
+  tabs: AppState['unifiedTabsByWorktree']
+): PlacementOpenFileIndexes {
+  let byFiles = placementFileIndexes.get(tabs)
+  const cached = byFiles?.get(indexes)
+  const revision = pendingTabRevision()
+  if (cached?.revision === revision) {
+    return cached.projection
   }
-  const worktreeIdByTabId = new Map<string, string>()
-  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
-    for (const tab of tabs) {
-      worktreeIdByTabId.set(tab.id, worktreeId)
-    }
-  }
-  for (const paneKey of paneKeys) {
-    const tabId = parsePaneKey(paneKey)?.tabId
-    const worktreeId = tabId === undefined ? undefined : worktreeIdByTabId.get(tabId)
-    if (worktreeId === undefined) {
+  byFiles ??= new WeakMap()
+  placementFileIndexes.set(tabs, byFiles)
+  const placements = editorPlacementIndex(tabs).workspacesByEntityId
+  const crossPlacedWorkspaces = new Set<string>()
+  let result: PlacementOpenFileIndexes = { ...indexes, crossPlacedWorkspaces }
+  for (const [owner, files] of indexes.byWorktreeAndId) {
+    const excluded = [...files.keys()].filter((id) => {
+      const workspaces = new Set([...(placements.get(id) ?? []), ...pendingEntityWorkspaceIds(id)])
+      for (const workspaceId of workspaces) {
+        if (workspaceId !== owner && !indexes.byWorktreeAndId.get(workspaceId)?.has(id)) {
+          crossPlacedWorkspaces.add(workspaceId)
+        }
+      }
+      return workspaces.size > 0 && !workspaces.has(owner)
+    })
+    if (!excluded.length) {
       continue
     }
-    let bucket = byWorktreeId.get(worktreeId)
-    if (!bucket) {
-      bucket = new Map()
-      byWorktreeId.set(worktreeId, bucket)
+    if (result.byWorktreeAndId === indexes.byWorktreeAndId) {
+      result = {
+        byWorktreeAndId: new Map(indexes.byWorktreeAndId),
+        idsByWorktree: new Map(indexes.idsByWorktree),
+        crossPlacedWorkspaces
+      }
     }
-    bucket.set(paneKey, agentStatusByPaneKey[paneKey])
+    const remaining = new Map(files)
+    for (const id of excluded) {
+      remaining.delete(id)
+    }
+    result.byWorktreeAndId.set(owner, remaining)
+    result.idsByWorktree.set(owner, [...remaining.keys()])
   }
-  return byWorktreeId
+  byFiles.set(indexes, { revision, projection: result })
+  return result
 }
 
-// Why: a bare id can name one workspace per host (STA-4343); with two owners no
-// single identity is correct, so publish without one and let main fall back to
-// its generation fence rather than blank the mobile session.
+// Bare IDs collide across hosts (STA-4343); ambiguous ownership omits identity so main uses generation fences rather than blanks mobile.
 function resolveWorktreeInstanceId(state: AppState, worktreeId: string): string | undefined {
   const rows = getIndexedWorktreesById(selectWorktreesByRepo(state) ?? {}, worktreeId)
   return rows.length === 1 ? rows[0]?.instanceId : undefined
@@ -97,11 +124,9 @@ export function buildMobileSessionWorktreeInputs(
   publication: MobileSessionPublicationInputs,
   ambiguousTerminalTabIds: ReadonlySet<string>
 ): MobileSessionWorktreeInputs {
-  // Legacy layout/title maps are keyed only by tab id. Omit ambiguous ids until
-  // hydration repairs ownership instead of publishing one worktree's metadata for another.
+  // Legacy tab-ID maps cannot distinguish twins; omit ambiguous entries until hydration repairs ownership.
   const sourceTerminalTabs = state.tabsByWorktree[worktreeId] ?? EMPTY_WORKTREE_TERMINAL_TABS
-  // Preserve the source reference when there is nothing to filter; the mobile
-  // snapshot cache uses this identity to avoid rebuilding on title ticks.
+  // Keep unfiltered source identity so title ticks reuse mobile snapshot cache.
   const terminalTabs = sourceTerminalTabs.some((tab) => ambiguousTerminalTabIds.has(tab.id))
     ? sourceTerminalTabs.filter((tab) => !ambiguousTerminalTabIds.has(tab.id))
     : sourceTerminalTabs
@@ -131,11 +156,20 @@ export function buildMobileSessionWorktreeInputs(
   const activeEditorFileId =
     resolvedActiveFileId && openFilesById?.has(resolvedActiveFileId) ? resolvedActiveFileId : null
   const activeTabId = state.activeTabId
+  const owner = runtimeEnvironmentIdForWorkspaceOwner(state, { workspaceId: worktreeId })
   return {
     worktreeId,
+    hostTabIds:
+      owner.kind === 'resolved'
+        ? hostSessionTabIdsByLocalTabForWorktree(owner.environmentId ?? 'local', worktreeId)
+        : EMPTY_NARROWED_BY_KEY,
     worktreeInstanceId: resolveWorktreeInstanceId(state, worktreeId),
     terminalTabs,
     browserWorkspaces,
+    browserRuntimeEnvironmentId:
+      browserWorkspaces.length > 0
+        ? runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
+        : null,
     unifiedTabs: state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_WORKTREE_UNIFIED_TABS,
     groups: state.groupsByWorktree[worktreeId] ?? EMPTY_WORKTREE_TAB_GROUPS,
     tabBarOrder: state.tabBarOrderByWorktree[worktreeId],
@@ -151,8 +185,6 @@ export function buildMobileSessionWorktreeInputs(
       mountedSurfaceCaptureByTabId,
       launchDraftByTabId: narrowRecordByKeys(state.nativeChatLaunchDraftByTabId, terminalTabIds)
     }),
-    agentStatusByPaneKey:
-      publication.agentStatusByWorktreeId.get(worktreeId) ?? EMPTY_NARROWED_BY_KEY,
     editorDraftVersionByFileId: narrowMapByKeys(
       publication.editorDraftVersionByFileId,
       openFileIds

@@ -1,4 +1,5 @@
-import { createRemoteRefProbeCache } from '../git/remote-ref-probe-cache'
+import { createRemoteRefProbeCache } from '../git/remotes/remote-ref-probe-cache'
+import { isAzureDevOpsOrganizationName } from '../../shared/git/remotes/azure-devops-organization-name'
 
 export type AzureDevOpsRepoRef = {
   host: string
@@ -136,7 +137,8 @@ function parseVisualStudioUrl(url: URL): AzureDevOpsRepoRef | null {
 }
 
 function parseCloudSshPath(host: string, rawPath: string): AzureDevOpsRepoRef | null {
-  if (host.toLowerCase() !== 'ssh.dev.azure.com') {
+  const sshHost = host.toLowerCase()
+  if (!isCloudSshHost(sshHost)) {
     return null
   }
   const parts = splitPath(rawPath)
@@ -147,7 +149,27 @@ function parseCloudSshPath(host: string, rawPath: string): AzureDevOpsRepoRef | 
   if (!organization || !project || !repository) {
     return null
   }
-  return makeCloudRef('dev.azure.com', organization, project, repository)
+  if (sshHost === 'ssh.dev.azure.com') {
+    return makeCloudRef('dev.azure.com', organization, project, repository)
+  }
+  // Older orgs' SSH host; match what their https://<org>.visualstudio.com remotes resolve to.
+  if (!isAzureDevOpsOrganizationName(organization)) {
+    return null
+  }
+  const webHost = `${organization.toLowerCase()}.visualstudio.com`
+  const origin = `https://${webHost}`
+  return {
+    host: webHost,
+    organization,
+    project,
+    repository,
+    apiBaseUrl: joinUrl(origin, [project]),
+    webBaseUrl: joinUrl(origin, [project, '_git', repository])
+  }
+}
+
+function isCloudSshHost(host: string): boolean {
+  return host === 'ssh.dev.azure.com' || host === 'vs-ssh.visualstudio.com'
 }
 
 function parseScpLike(remoteUrl: string): AzureDevOpsRepoRef | null {
@@ -167,7 +189,7 @@ export function parseAzureDevOpsRepoRef(remoteUrl: string): AzureDevOpsRepoRef |
   try {
     const url = new URL(trimmed)
     const host = url.hostname.toLowerCase()
-    if (host === 'ssh.dev.azure.com') {
+    if (isCloudSshHost(host)) {
       return parseCloudSshPath(host, url.pathname)
     }
     if (!['http:', 'https:', 'ssh:', 'git+ssh:'].includes(url.protocol.toLowerCase())) {
@@ -184,8 +206,7 @@ export function parseAzureDevOpsRepoRef(remoteUrl: string): AzureDevOpsRepoRef |
     if (!parsed || !['http:', 'https:'].includes(url.protocol.toLowerCase())) {
       return null
     }
-    // Why: Azure DevOps Server remotes are self-hosted and only reliably
-    // identifiable by the `_git` path convention.
+    // Self-hosted Azure remotes are identified by the _git path, not the hostname.
     return makeServerRef(host, url.origin, parsed.prefix, parsed.project, parsed.repository)
   } catch {
     return null

@@ -1,6 +1,9 @@
-import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { Repo } from '../../../shared/repo-types'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+import type { Repo } from '../../../shared/repository/repo-types'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 
 export type RepoOrderMutationOperations = {
   state: PersistedState
@@ -29,7 +32,7 @@ export class RepoOrderPersistenceOperations {
     this.scheduleSave()
   }
 
-  // Why: return false on a stale permutation (concurrent add/remove) so the caller resyncs instead of persisting an order that drops/duplicates ids.
+  // Refuse stale permutations after concurrent catalog changes so callers resync without losing IDs.
   reorderRepos(orderedIds: string[]): boolean {
     const current = this.state.repos
     if (orderedIds.length !== current.length) {
@@ -60,7 +63,7 @@ export class RepoOrderPersistenceOperations {
     return true
   }
 
-  // Why: repo ids are unique only within an execution host; drags persist one permutation per host when local and SSH repos coexist.
+  // Same repo IDs can repeat across hosts, so drag order is host-scoped.
   reorderReposForHost(orderedIds: string[], hostId: ExecutionHostId): boolean {
     const current = this.state.repos
     const hostRepos = current.filter((repo) => getRepoExecutionHostId(repo) === hostId)

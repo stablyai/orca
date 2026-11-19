@@ -5,11 +5,7 @@ import java.nio.charset.CharacterCodingException
 import java.nio.charset.CodingErrorAction
 import java.nio.charset.StandardCharsets
 
-/**
- * Well-formed UTF-8 with no leading BOM, decoded; null otherwise. Those are the only inputs where
- * every decoder agrees, so the caller hands anything else to the JS TextDecoder for its
- * replacement and BOM rules.
- */
+/** Decode only well-formed UTF-8 without a leading BOM; JS TextDecoder owns replacement/BOM behavior. */
 fun decodeStrictUtf8(input: ByteArray): String? {
   if (input.size >= 3 &&
     input[0] == 0xef.toByte() &&

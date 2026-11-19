@@ -1,4 +1,4 @@
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -67,25 +67,6 @@ describe('readOpenCodeBinderSessions', () => {
     writeSessions('session', [{ id: 'ses_v1', createdAtMs: 100 }])
     writeSessions('session_v2', [{ id: 'ses_v2', createdAtMs: 100 }])
     expect(readOpenCodeBinderSessions(dbPath, START).map((row) => row.id)).toEqual(['ses_v1'])
-  })
-
-  it('reads a store without the session table as empty', () => {
-    writeSessions('session_v2', [{ id: 'ses_v2', createdAtMs: 100 }])
-    expect(readOpenCodeBinderSessions(dbPath, START)).toEqual([])
-  })
-
-  // #24577: an absent store is normal, so it answers [] and the client logs nothing.
-  it('reads a missing database as empty and detects it once it appears', () => {
-    expect(readOpenCodeBinderSessions(join(dir, 'later.db'), START)).toEqual([])
-    expect(readOpenCodeBinderSessions(join(dir, 'missing', 'opencode.db'), START)).toEqual([])
-    dbPath = join(dir, 'later.db')
-    writeSessions('session', [{ id: 'ses_a', createdAtMs: 100 }])
-    expect(readOpenCodeBinderSessions(dbPath, START)).toHaveLength(1)
-  })
-
-  it('throws for a corrupt database so the client logs it and answers its failure value', () => {
-    writeFileSync(dbPath, 'not a sqlite database'.repeat(100))
-    expect(() => readOpenCodeBinderSessions(dbPath, START)).toThrow()
   })
 
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(

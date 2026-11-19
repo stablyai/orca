@@ -3,8 +3,7 @@ package expo.modules.orcagziputf8codec
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
-// Synchronous on purpose: each call is a few ms per window, and only a sync call reads its
-// Uint8Array argument without a thread hop.
+// Sync avoids a thread hop when reading Uint8Array; each window takes only a few ms.
 class OrcaGzipUtf8CodecModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("OrcaGzipUtf8Codec")
@@ -15,6 +14,11 @@ class OrcaGzipUtf8CodecModule : Module() {
 
     Function("decodeUtf8") { input: ByteArray ->
       decodeStrictUtf8(input)
+    }
+
+    // Async: a whole bundle asset can take tens of ms, too long to hold the JS thread.
+    AsyncFunction("brotliDecompress") { input: ByteArray, outputLimit: Int ->
+      brotliDecompressBounded(input, outputLimit)
     }
   }
 }

@@ -1,9 +1,13 @@
 import { realpathSync } from 'node:fs'
 import { join } from 'node:path'
-import { isPlainObject, readHooksJson, writeHooksJson } from '../agent-hooks/installer-utils'
+import {
+  isPlainObject,
+  readHooksJson
+} from '../agent-hooks/installation/configuration/hooks-json-read'
+import { writeHooksJson } from '../agent-hooks/installation/configuration/hooks-json-write'
 
-// Qoder 1.1.64 writes this exact shape after accepting its folder-trust prompt.
-export function withQoderTrustedWorkspace(
+// permissions.trustDirectories shape shared by Qoder 1.1.64 (written on folder-trust accept) and Qwen Code 1.0.
+export function withTrustDirectory(
   config: Record<string, unknown>,
   workspacePath: string
 ): Record<string, unknown> | null {
@@ -33,14 +37,14 @@ export function markQoderWorkspaceTrusted(
   try {
     canonicalPath = realpathSync.native(workspacePath)
   } catch {
-    /* Keep the supplied path when absent. */
+    // Missing paths retain their supplied spelling.
   }
   const configPath = join(home, configDirName, 'settings.json')
   const config = readHooksJson(configPath)
   if (!config) {
     return
   }
-  const updated = withQoderTrustedWorkspace(config, canonicalPath)
+  const updated = withTrustDirectory(config, canonicalPath)
   if (updated && updated !== config) {
     writeHooksJson(configPath, updated)
   }

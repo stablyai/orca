@@ -1,14 +1,10 @@
 import type { ScrcpyVideoMeta } from './android/scrcpy-video-frame-parser'
+import type { ScrcpyControlTarget } from './android/scrcpy-stream-session'
 
-// In-memory pub/sub bridging a live scrcpy session (fed by AndroidEmulatorBackend)
-// to renderer subscribers (the video pane, via the emulator-video-stream IPC).
-// Caches the codec meta, the config (SPS/PPS) frame, and the current GOP
-// (keyframe + following deltas) so a late subscriber can initialize its WebCodecs
-// decoder and decode from the keyframe immediately, not after the next GOP.
+// Cache metadata, decoder config, and the current GOP for late subscribers. The entry also
+// holds the session's control channel so input reaches the server that produces the video.
 
-// scrcpy keyframes ~every 10s; high-motion content can otherwise buffer
-// hundreds of deltas. Cap the replayed GOP so memory stays bounded and a
-// late subscriber isn't flooded — always keep the keyframe at index 0.
+// Bound high-motion replay caches while retaining their leading keyframe.
 const MAX_GOP_FRAMES = 120
 
 export type ScrcpyVideoFrameMessage = {
@@ -21,6 +17,8 @@ export type ScrcpyVideoFrameMessage = {
 export type ScrcpyVideoEvent =
   | { type: 'meta'; meta: ScrcpyVideoMeta }
   | { type: 'frame'; frame: ScrcpyVideoFrameMessage }
+  // The scrcpy session is gone; subscribers must restart it rather than wait for frames.
+  | { type: 'end' }
 
 export type ScrcpyVideoSubscriber = (event: ScrcpyVideoEvent) => void
 
@@ -30,6 +28,7 @@ type RegistryEntry = {
   gop: ScrcpyVideoFrameMessage[]
   subscribers: Set<ScrcpyVideoSubscriber>
   close: () => void
+  control?: ScrcpyControlTarget
 }
 
 class ScrcpyVideoRegistry {
@@ -37,6 +36,17 @@ class ScrcpyVideoRegistry {
 
   register(deviceId: string, close: () => void): void {
     this.entries.set(deviceId, { subscribers: new Set(), gop: [], close })
+  }
+
+  attachControl(deviceId: string, control: ScrcpyControlTarget): void {
+    const entry = this.entries.get(deviceId)
+    if (entry) {
+      entry.control = control
+    }
+  }
+
+  control(deviceId: string): ScrcpyControlTarget | null {
+    return this.entries.get(deviceId)?.control ?? null
   }
 
   pushMeta(deviceId: string, meta: ScrcpyVideoMeta): void {
@@ -58,14 +68,11 @@ class ScrcpyVideoRegistry {
     if (frame.config) {
       entry.config = frame
     } else if (frame.keyFrame) {
-      // A keyframe starts a fresh decodeable GOP; buffer it + the following
-      // deltas so a late subscriber can decode immediately on replay.
       entry.gop = [frame]
     } else if (entry.gop.length > 0) {
-      // Only buffer deltas once a keyframe anchors the GOP (a delta alone is
-      // undecodable); deltas before the first keyframe are still sent live below.
+      // Cache deltas only after a keyframe; pre-keyframe deltas are still delivered live.
       entry.gop.push(frame)
-      // Drop the oldest delta (never index 0, the keyframe) so replay stays decodable.
+      // Preserve the leading keyframe when bounding the cache.
       if (entry.gop.length > MAX_GOP_FRAMES) {
         entry.gop.splice(1, 1)
       }
@@ -75,11 +82,10 @@ class ScrcpyVideoRegistry {
     }
   }
 
-  // Subscribe a renderer; replays the cached meta + config so the decoder can
-  // start without waiting for the next keyframe. Returns an unsubscribe fn.
   subscribe(deviceId: string, subscriber: ScrcpyVideoSubscriber): () => void {
     const entry = this.entries.get(deviceId)
     if (!entry) {
+      subscriber({ type: 'end' })
       return () => {}
     }
     if (entry.meta) {
@@ -88,7 +94,6 @@ class ScrcpyVideoRegistry {
     if (entry.config) {
       subscriber({ type: 'frame', frame: entry.config })
     }
-    // Replay the current GOP (keyframe + deltas) so the decoder starts now.
     for (const frame of entry.gop) {
       subscriber({ type: 'frame', frame })
     }
@@ -101,9 +106,12 @@ class ScrcpyVideoRegistry {
     if (!entry) {
       return
     }
-    entry.close()
-    entry.subscribers.clear()
     this.entries.delete(deviceId)
+    entry.close()
+    for (const subscriber of entry.subscribers) {
+      subscriber({ type: 'end' })
+    }
+    entry.subscribers.clear()
   }
 
   has(deviceId: string): boolean {

@@ -7,11 +7,7 @@ import {
 } from './editor-buffer-views'
 import type { EditorBufferKeepRequest, EditorBufferKeptRecords } from './editor-buffer-kept'
 
-/**
- * Source of truth for a file's buffer state, keyed by record id (the file identity, or the tab id
- * for views that never share). The same fields on every view's `OpenFile` are a mirror written in
- * the same store update so existing readers keep working.
- */
+/** Record owns buffer state under file identity (or private tab ID); OpenFile mirrors update atomically for existing readers. */
 export type EditorBufferRecord = Pick<
   OpenFile,
   'isDirty' | 'lastKnownDiskSignature' | 'externalMutation' | 'pendingOwnerMigration'
@@ -19,7 +15,6 @@ export type EditorBufferRecord = Pick<
 
 export type EditorBufferRecords = Record<string, EditorBufferRecord>
 
-/** What a buffer write replaces. */
 export type EditorBufferWrite = { openFiles: OpenFile[]; editorBuffers: EditorBufferRecords }
 
 export type EditorBufferState = EditorBufferWrite &
@@ -109,12 +104,7 @@ export function updateEditorBuffer<TState extends EditorBufferState>(
   return changes ? writeEditorBuffer(state, fileId, patch) : state
 }
 
-/**
- * A host-mirrored tab carries the host's buffer state, so its record adopts it in the same write,
- * and every view mirrors the record's dirty flag. Dirty is the OR of the record's
- * mirrored views: an older host publishes it per tab. `views` is `openFiles` with that flag
- * mirrored; the caller's session-sync patch writes it.
- */
+/** Adopt host-mirror buffer state atomically. Older hosts send dirty per tab, so OR across record views and mirror flag to openFiles for caller’s session-sync patch. */
 export function adoptMirroredEditorBuffers(
   records: EditorBufferRecords,
   openFiles: OpenFile[],
@@ -167,12 +157,7 @@ export function isMovedEditorBufferId(recordId: string): boolean {
   return recordId.startsWith(MOVED_EDITOR_BUFFER_PREFIX)
 }
 
-/**
- * Carries each migrated tab's record to its new tab id in the same update that re-keys the tab.
- * The record waits under a transient id; the record middleware then joins it to the record its new
- * identity names. `rename` marks the file's content as moved there, which wins over a clean
- * record already at the new path.
- */
+/** Rekey migrated records to transient IDs in same tab update; middleware then joins new file identity. rename marks moved disk content, outranking clean destination records. */
 export function rekeyEditorBuffers(
   state: Pick<EditorBufferState, 'editorBuffers' | 'editorBufferIdOf' | 'editorBufferViews'>,
   openFiles: readonly OpenFile[],

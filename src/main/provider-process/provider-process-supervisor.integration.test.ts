@@ -1,670 +1,475 @@
-import { spawn, type ChildProcess } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { spawnProcess } from '@orca/process-host'
+import { once } from 'node:events'
+import { mkdtemp, rm, writeFile, readdir, readFile } from 'node:fs/promises'
+import type * as FsPromises from 'node:fs/promises'
+import { setTimeout as delay } from 'node:timers/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { createServer, type Socket } from 'node:net'
+import type { Readable } from 'node:stream'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { spawnProviderProcess, type ProviderProcessSpawner } from './provider-process-spawn'
 import {
-  PROVIDER_SIGTERM_GRACE_MS,
-  PROVIDER_STDIN_END_GRACE_MS,
-  PROVIDER_SUPERVISOR_MAX_STOP_MS,
-  supervisedPosixLaunch,
+  createProviderSpawnSpec,
   type ProviderSupervisorOptions
 } from './provider-process-supervisor'
-import { supervisedProviderSpawnFailure } from './provider-spawn-failure-report'
+import type { ProviderChild } from './provider-child'
+import * as orphanGuard from './provider-group-orphan-guard'
 
-// The provider leads its own group; its grandchild shares that group and ignores SIGTERM.
-const PROVIDER = String.raw`
-  const { spawn } = require('node:child_process')
-  if (process.env.ORCA_TEST_PROVIDER_IGNORES_SIGTERM) process.on('SIGTERM', () => {})
-  if (process.env.ORCA_TEST_PROVIDER_SIGNAL_FILE) {
-    process.on('SIGTERM', () => {
-      require('node:fs').writeFileSync(process.env.ORCA_TEST_PROVIDER_SIGNAL_FILE, 'SIGTERM')
-      process.exit(0)
-    })
-  }
-  process.stdout.on('error', () => {})
-  const grandchild = spawn(
-    process.execPath,
-    ['-e', "process.on('SIGTERM', () => {}); process.stdout.write('armed'); setInterval(() => {}, 60000)"],
-    { stdio: ['ignore', 'pipe', 'ignore'] }
-  )
-  grandchild.stdout.once('data', () => {
-    process.stdout.write(JSON.stringify({ provider: process.pid, grandchild: grandchild.pid }) + '\n')
-    if (process.env.ORCA_TEST_PROVIDER_STREAMS_OUTPUT) setInterval(() => process.stdout.write('.'), 2)
-  })
-  setInterval(() => {}, 60000)
-`
-
-// Dies on SIGTERM at once; its grandchild, like an MCP server or a tool's child, needs 300 ms to clean up.
-const CLEANS_UP_AFTER_SIGTERM_PROVIDER = String.raw`
-  const { spawn } = require('node:child_process')
-  const grandchild = spawn(
-    process.execPath,
-    ['-e', "process.on('SIGTERM', () => setTimeout(() => { require('node:fs').writeFileSync(process.env.ORCA_TEST_CLEANUP_FILE, 'done'); process.exit(0) }, 300)); process.stdout.write('armed'); setInterval(() => {}, 60000)"],
-    { stdio: ['ignore', 'pipe', 'ignore'] }
-  )
-  grandchild.stdout.once('data', () =>
-    process.stdout.write(JSON.stringify({ provider: process.pid, grandchild: grandchild.pid }) + '\n')
-  )
-  setInterval(() => {}, 60000)
-`
-
-// Exits the moment its stdin ends, as Codex does on a normal close.
-const EXITS_ON_STDIN_END_PROVIDER = String.raw`
-  process.stdin.on('end', () => process.exit(0)).resume()
-  process.stdout.write(JSON.stringify({ provider: process.pid }) + '\n')
-`
-
-// Flushes for a moment once its stdin ends, then exits; records a SIGTERM if one arrives first.
-const FLUSHES_ON_STDIN_END_PROVIDER = String.raw`
-  const { writeFileSync } = require('node:fs')
-  process.on('SIGTERM', () => {
-    writeFileSync(process.env.ORCA_TEST_PROVIDER_SIGNAL_FILE, 'SIGTERM')
-    process.exit(143)
-  })
-  process.stdin.on('end', () => setTimeout(() => {
-    writeFileSync(process.env.ORCA_TEST_PROVIDER_FLUSH_FILE, 'flushed')
-    process.exit(0)
-  }, 200)).resume()
-  process.stdout.write(JSON.stringify({ provider: process.pid }) + '\n')
-`
-
-// Ignores stdin end and SIGTERM, recording when SIGTERM arrived, so only SIGKILL ends it.
-const RECORDS_SIGTERM_PROVIDER = String.raw`
-  process.on('SIGTERM', () => {
-    require('node:fs').writeFileSync(process.env.ORCA_TEST_PROVIDER_SIGNAL_FILE, String(Date.now()))
-  })
-  process.stdout.write(JSON.stringify({ provider: process.pid }) + '\n')
-  setInterval(() => {}, 60000)
-`
-
-// Answers a one-shot request only after the session stdin-end grace, then exits with its own code.
-const ONE_SHOT_PROVIDER = String.raw`
-  process.on('SIGTERM', () => {
-    require('node:fs').writeFileSync(process.env.ORCA_TEST_PROVIDER_SIGNAL_FILE, 'SIGTERM')
-  })
-  process.stdin.resume().on('end', () => {
-    setTimeout(() => {
-      process.stdout.write('ok')
-      process.exitCode = 3
-    }, Number(process.env.ORCA_TEST_PROVIDER_ANSWER_DELAY_MS))
-  })
-`
-
-// Stands in for Orca: launches the supervisor as its own child, then can be killed outright. A
-// second child holds the supervisor's stdin open, so only the parent-death watch can notice.
-// A clean-quit owner has no holder and exits normally on SIGUSR2, the way Orca quits. A one-shot
-// owner ends the supervisor's stdin at once, as Orca does after writing a one-shot's request.
-const OWNER = String.raw`
-  const { spawn } = require('node:child_process')
-  const quitsCleanly = Boolean(process.env.ORCA_TEST_OWNER_QUITS_CLEANLY)
-  const endsStdin = Boolean(process.env.ORCA_TEST_OWNER_ENDS_STDIN)
-  if (quitsCleanly) process.on('SIGUSR2', () => process.exit(0))
-  const spec = JSON.parse(Buffer.from(process.env.ORCA_PROVIDER_SUPERVISOR_SPEC, 'base64').toString())
-  spec.ownerPid = process.pid
-  const supervisor = spawn(process.execPath, JSON.parse(process.env.ORCA_TEST_SUPERVISOR_ARGS), {
-    env: { ...process.env, ORCA_PROVIDER_SUPERVISOR_SPEC: Buffer.from(JSON.stringify(spec)).toString('base64') },
-    stdio: ['pipe', 'pipe', 'ignore'],
-    detached: true
-  })
-  if (endsStdin) supervisor.stdin.end()
-  const holder = quitsCleanly || endsStdin
-    ? null
-    : spawn(process.execPath, ['-e', 'setInterval(() => {}, 60000)'], {
-        stdio: ['ignore', supervisor.stdin, 'ignore']
-      })
-  process.stdout.write(JSON.stringify({ supervisor: supervisor.pid, ...(holder && { holder: holder.pid }) }) + '\n')
-  supervisor.stdout.pipe(process.stdout)
-  setInterval(() => {}, 60000)
-`
-
-// Preloaded into the supervisor: signals it the instant its provider exists, the spawn window.
-const SIGNAL_AFTER_SPAWN_PRELOAD = String.raw`
-  const childProcess = require('node:child_process')
-  const spawn = childProcess.spawn
-  childProcess.spawn = (...args) => {
-    const child = spawn(...args)
-    require('node:fs').writeFileSync(process.env.ORCA_TEST_PROVIDER_PID_FILE, String(child.pid))
-    process.kill(process.pid, 'SIGTERM')
-    return child
-  }
-`
-
-// Preloaded into the supervisor: its spawn fails the way EMFILE does, with no pid and no pipes.
-const SPAWN_WITHOUT_PID_PRELOAD = String.raw`
-  const childProcess = require('node:child_process')
-  const { EventEmitter } = require('node:events')
-  childProcess.spawn = (command) => {
-    const child = Object.assign(new EventEmitter(), { pid: undefined, stdin: null, stdout: null, stderr: null })
-    process.nextTick(() =>
-      child.emit('error', Object.assign(new Error('spawn ' + command + ' EMFILE'), { code: 'EMFILE' }))
-    )
-    return child
-  }
-`
-
-const recordedPids = new Set<number>()
-const tempDirs: string[] = []
-
-function tempDir(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'orca-supervisor-'))
-  tempDirs.push(dir)
-  return dir
-}
-
-function alive(pid: number): boolean {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch (error) {
-    return !(error instanceof Error && 'code' in error && error.code === 'ESRCH')
-  }
-}
-
-async function waitFor(predicate: () => boolean, timeoutMs: number): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs
-  while (!predicate()) {
-    if (Date.now() >= deadline) {
-      return false
+const state = vi.hoisted<{
+  root: string
+  holdPublication: Promise<void> | undefined
+  publicationStarted: (() => void) | undefined
+}>(() => ({
+  root: '',
+  holdPublication: undefined,
+  publicationStarted: undefined
+}))
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const fs = await importOriginal<typeof FsPromises>()
+  return {
+    ...fs,
+    rename: async (...args: Parameters<typeof fs.rename>) => {
+      await fs.rename(...args)
+      state.publicationStarted?.()
+      await state.holdPublication
     }
-    await new Promise((resolve) => setTimeout(resolve, 25))
-  }
-  return true
-}
-
-function readPids(child: ChildProcess, keys: readonly string[]): Promise<Record<string, number>> {
-  return new Promise((resolve, reject) => {
-    const pids: Record<string, number> = {}
-    let buffered = ''
-    const timeout = setTimeout(() => reject(new Error(`no ${keys.join('/')} pids`)), 10_000)
-    const onData = (chunk: Buffer): void => {
-      buffered += chunk.toString()
-      const lines = buffered.split('\n')
-      buffered = lines.pop() ?? ''
-      for (const line of lines) {
-        const parsed: unknown = JSON.parse(line)
-        for (const [key, pid] of Object.entries(parsed ?? {})) {
-          if (typeof pid === 'number') {
-            pids[key] = pid
-            recordedPids.add(pid)
-          }
-        }
-      }
-      if (keys.every((key) => key in pids)) {
-        clearTimeout(timeout)
-        // Later output is not pids; the stream keeps flowing without a listener.
-        child.stdout!.off('data', onData)
-        resolve(pids)
-      }
-    }
-    child.stdout!.on('data', onData)
-  })
-}
-
-function launchSupervisor(
-  options: ProviderSupervisorOptions,
-  env: Record<string, string> = {},
-  provider: { command: string; args: string[] } = {
-    command: process.execPath,
-    args: ['-e', PROVIDER]
-  },
-  nodeArgs: string[] = [],
-  stderr: 'pipe' | 'ignore' = 'ignore'
-): { supervisor: ChildProcess; exit: Promise<{ code: number | null; signal: string | null }> } {
-  const launch = supervisedPosixLaunch(provider, { ...process.env, ...env }, options)
-  const supervisor = spawn(launch.command, [...nodeArgs, ...launch.args], {
-    env: launch.env,
-    stdio: ['pipe', 'pipe', stderr],
-    detached: true
-  })
-  recordedPids.add(supervisor.pid!)
-  const exit = new Promise<{ code: number | null; signal: string | null }>((resolve) =>
-    supervisor.once('exit', (code, signal) => resolve({ code, signal }))
-  )
-  return { supervisor, exit }
-}
-
-async function launchUnderOwner(
-  options: ProviderSupervisorOptions,
-  env: Record<string, string> = {},
-  provider: { script: string; pids: readonly string[] } = {
-    script: PROVIDER,
-    pids: ['provider', 'grandchild']
-  }
-): Promise<{ owner: ChildProcess; pids: Record<string, number> }> {
-  const launch = supervisedPosixLaunch(
-    { command: process.execPath, args: ['-e', provider.script] },
-    { ...process.env, ...env },
-    options
-  )
-  const owner = spawn(process.execPath, ['-e', OWNER], {
-    env: { ...launch.env, ORCA_TEST_SUPERVISOR_ARGS: JSON.stringify(launch.args) },
-    stdio: ['ignore', 'pipe', 'ignore']
-  })
-  recordedPids.add(owner.pid!)
-  const pids = await readPids(owner, ['supervisor', ...provider.pids])
-  return { owner, pids }
-}
-
-afterEach(() => {
-  for (const pid of recordedPids) {
-    if (alive(pid)) {
-      process.kill(pid, 'SIGKILL')
-    }
-  }
-  recordedPids.clear()
-  for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { recursive: true, force: true })
   }
 })
+vi.mock('../../shared/app-lifecycle/app-environment', () => ({
+  getAppEnvironment: () => ({
+    getPath: () => state.root,
+    getAppPath: () => process.cwd(),
+    isPackaged: () => false
+  })
+}))
 
-describe.runIf(process.platform !== 'win32')('POSIX provider supervisor processes', () => {
-  it('reaps the provider group on SIGTERM and exits only after the group is gone', async () => {
-    const { supervisor, exit } = launchSupervisor({ sigtermGraceMs: 300 })
-    const { provider, grandchild } = await readPids(supervisor, ['provider', 'grandchild'])
+const children: { child: ProviderChild; closed: Promise<void> }[] = []
+beforeEach(async () => {
+  state.root = await mkdtemp(join(tmpdir(), 'orca-provider-launch-'))
+})
+afterEach(async () => {
+  for (const { child } of children) {
+    child.kill('SIGKILL')
+  }
+  await Promise.all(children.splice(0).map(({ closed }) => closed))
+  await rm(state.root, { recursive: true, force: true })
+})
 
-    let groupAliveAtExit: boolean | null = null
-    void exit.then(() => {
-      groupAliveAtExit = alive(-provider)
+type LaunchOptions = {
+  args?: string[]
+  command?: string
+  cwd?: string
+  env?: NodeJS.ProcessEnv
+  captureOutput?: boolean
+  spawn?: ProviderProcessSpawner
+}
+
+function launch(
+  script: string,
+  options: ProviderSupervisorOptions = {},
+  {
+    args = [],
+    command = process.execPath,
+    cwd = state.root,
+    env = process.env,
+    captureOutput = true,
+    spawn
+  }: LaunchOptions = {}
+) {
+  const spec = createProviderSpawnSpec(
+    { command, args: ['-e', script, '--', ...args], cwd },
+    env,
+    process.platform,
+    options
+  )
+  const child = spawnProviderProcess(spec, spawn)
+  let output = ''
+  let stderr = ''
+  const errors: Error[] = []
+  const readers = new Set<() => void>()
+  child.on('error', (error) => errors.push(error))
+  if (captureOutput) {
+    child.stdout.setEncoding('utf8').on('data', (chunk: string) => {
+      output += chunk
+      for (const reader of readers) {
+        reader()
+      }
     })
-    supervisor.kill('SIGTERM')
-
-    await expect(exit).resolves.toEqual({ code: null, signal: 'SIGTERM' })
-    expect(groupAliveAtExit).toBe(false)
-    expect(alive(provider)).toBe(false)
-    expect(alive(grandchild)).toBe(false)
+  }
+  if (captureOutput) {
+    child.stderr.setEncoding('utf8').on('data', (chunk: string) => {
+      stderr += chunk
+    })
+  }
+  const exit = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) => {
+    child.once('exit', (code, signal) => resolve({ code, signal }))
   })
+  const closed = new Promise<void>((resolve) => child.once('close', () => resolve()))
+  children.push({ child, closed })
+  const untilOutput = (text: string): Promise<void> =>
+    new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        readers.delete(check)
+        reject(new Error(`Missing output: ${text}; ${output}; ${stderr}`))
+      }, 15_000)
+      const check = (): void => {
+        if (output.includes(text)) {
+          clearTimeout(timer)
+          readers.delete(check)
+          resolve()
+        }
+      }
+      readers.add(check)
+      check()
+    })
+  return { child, exit, closed, errors, output: () => output, stderr: () => stderr, untilOutput }
+}
 
-  it('kills the rest of a one-shot group at once when the provider exits on a stop', async () => {
-    const { supervisor, exit } = launchSupervisor({ lifetime: 'one-shot' })
-    const { provider, grandchild } = await readPids(supervisor, ['provider', 'grandchild'])
+async function readText(stream: Readable): Promise<string> {
+  const chunks: Buffer[] = []
+  for await (const chunk of stream) {
+    chunks.push(Buffer.from(chunk))
+  }
+  return Buffer.concat(chunks).toString('utf8')
+}
 
-    const signalledAt = Date.now()
-    supervisor.kill('SIGTERM')
-
-    await expect(exit).resolves.toEqual({ code: null, signal: 'SIGTERM' })
-    // The grandchild ignores SIGTERM; waiting out the 3 s grace for it would be the old cost.
-    expect(Date.now() - signalledAt).toBeLessThan(PROVIDER_SIGTERM_GRACE_MS / 3)
-    expect(alive(provider)).toBe(false)
-    expect(alive(grandchild)).toBe(false)
-  })
-
-  it('lets a session provider group finish its SIGTERM cleanup after the provider exits', async () => {
-    const cleanupFile = join(tempDir(), 'grandchild-cleaned-up')
-    const { supervisor, exit } = launchSupervisor(
-      {},
-      { ORCA_TEST_CLEANUP_FILE: cleanupFile },
-      { command: process.execPath, args: ['-e', CLEANS_UP_AFTER_SIGTERM_PROVIDER] }
-    )
-    await readPids(supervisor, ['provider', 'grandchild'])
-
-    supervisor.kill('SIGTERM')
-
-    await expect(exit).resolves.toEqual({ code: null, signal: 'SIGTERM' })
-    expect(existsSync(cleanupFile)).toBe(true)
-  })
-
-  it('escalates a SIGTERM-ignoring provider to SIGKILL after the grace from the spec', async () => {
-    const graceMs = 200
-    const { supervisor, exit } = launchSupervisor(
-      { sigtermGraceMs: graceMs },
-      { ORCA_TEST_PROVIDER_IGNORES_SIGTERM: '1' }
-    )
-    const { provider, grandchild } = await readPids(supervisor, ['provider', 'grandchild'])
-
-    const signalledAt = Date.now()
-    supervisor.kill('SIGTERM')
-    let exitTimeout: ReturnType<typeof setTimeout> | undefined
-    const exited = await Promise.race([
-      exit,
-      new Promise((resolve) => {
-        exitTimeout = setTimeout(resolve, 5_000)
+describe.runIf(process.platform !== 'win32')('direct provider ownership', () => {
+  it.each(['old-protocol', 'missing-input'])(
+    'refuses a %s helper contract before CLI execution',
+    async (fault) => {
+      const spec = createProviderSpawnSpec(
+        { command: process.execPath, args: ['-e', "process.stdout.write('MUST NOT EXECUTE')"] },
+        process.env,
+        process.platform
+      )
+      const raw = spawnProcess({
+        program: spec.program,
+        args: fault === 'old-protocol' ? spec.args.slice(1) : spec.args,
+        cwd: state.root,
+        env: spec.env,
+        stdio:
+          fault === 'missing-input'
+            ? ['ignore', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe']
+            : ['ignore', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe']
       })
-    ]).finally(() => clearTimeout(exitTimeout))
+      const output = raw.stdout ? readText(raw.stdout) : Promise.resolve('')
+      raw.stderr?.resume()
+      const [code] = await once(raw, 'close')
+      expect(code).toBe(64)
+      expect(await output).toBe('')
+    }
+  )
 
-    expect(exited).toEqual({ code: null, signal: 'SIGTERM' })
-    expect(Date.now() - signalledAt).toBeGreaterThanOrEqual(graceMs)
-    expect(Date.now() - signalledAt).toBeLessThan(PROVIDER_SIGTERM_GRACE_MS)
-    expect(alive(provider)).toBe(false)
-    expect(alive(grandchild)).toBe(false)
-  })
-
-  it('reaps a provider spawned in the instant before a stop arrives', async () => {
-    const dir = tempDir()
-    const preload = join(dir, 'signal-after-spawn.js')
-    const pidFile = join(dir, 'provider-pid')
-    writeFileSync(preload, SIGNAL_AFTER_SPAWN_PRELOAD)
-    const { exit } = launchSupervisor(
-      { sigtermGraceMs: 300 },
-      { ORCA_TEST_PROVIDER_PID_FILE: pidFile },
-      { command: process.execPath, args: ['-e', 'setInterval(() => {}, 60000)'] },
-      ['--require', preload]
-    )
-
-    await expect(exit).resolves.toEqual({ code: null, signal: 'SIGTERM' })
-    const provider = Number(readFileSync(pidFile, 'utf8'))
-    recordedPids.add(provider)
-    expect(await waitFor(() => !alive(provider), 3_000)).toBe(true)
-  })
-
-  it('never spawns the provider when its owner is not its parent at start', async () => {
-    const dir = tempDir()
-    const marker = join(dir, 'provider-spawned')
-    const preload = join(dir, 'record-spawn.js')
-    writeFileSync(
-      preload,
+  it('publishes ownership before execution, preserves argv/environment, and drains the real final output', async () => {
+    const run = launch(
       String.raw`
-        const childProcess = require('node:child_process')
-        const spawn = childProcess.spawn
-        childProcess.spawn = (...args) => {
-          require('node:fs').writeFileSync(process.env.ORCA_TEST_PROVIDER_PID_FILE, 'spawned')
-          return spawn(...args)
-        }
-      `
-    )
-    const { exit } = launchSupervisor(
-      { ownerPid: process.pid === 1 ? 2 : 1 },
-      { ORCA_TEST_PROVIDER_PID_FILE: marker },
-      { command: 'touch', args: [join(dir, 'provider-started')] },
-      ['--require', preload]
-    )
-
-    await expect(exit).resolves.toEqual({ code: 1, signal: null })
-    expect(existsSync(marker)).toBe(false)
-  })
-
-  it.each([
-    ['', {}],
-    // Output after the owner's death meets a closed pipe, which must not end the supervisor first.
-    [' while the provider is writing output', { ORCA_TEST_PROVIDER_STREAMS_OUTPUT: '1' }]
-  ])('reaps the provider group when its owner dies%s', async (_, env) => {
-    const graceMs = 300
-    const { owner, pids } = await launchUnderOwner({ sigtermGraceMs: graceMs }, env)
-
-    const killedAt = Date.now()
-    owner.kill('SIGKILL')
-
-    expect(await waitFor(() => !alive(-pids.provider), 3_000)).toBe(true)
-    // The grandchild ignores SIGTERM, so the group lasts until the grace ends in SIGKILL.
-    expect(Date.now() - killedAt).toBeGreaterThanOrEqual(graceMs)
-    expect(await waitFor(() => !alive(pids.supervisor), 3_000)).toBe(true)
-    expect(alive(pids.grandchild)).toBe(false)
-  })
-
-  it('closes a provider that exits on stdin end without waiting out any grace', async () => {
-    const { supervisor, exit } = launchSupervisor(
-      {},
-      {},
+      const fs = require('node:fs')
+      const path = require('node:path')
+      const records = fs.readdirSync(process.env.ORCA_TEST_JOURNAL).filter(f => f.endsWith('.json'))
+      const record = JSON.parse(fs.readFileSync(path.join(process.env.ORCA_TEST_JOURNAL, records[0]), 'utf8'))
+      process.stdout.write(JSON.stringify({ pid: process.pid, leader: record.leader.pid, owner: record.owner.pid,
+        argv: process.argv.slice(1), env: {
+          ORCA_TEST_JOURNAL: process.env.ORCA_TEST_JOURNAL,
+          ORCA_TEST_LITERAL: process.env.ORCA_TEST_LITERAL,
+          NODE_OPTIONS: process.env.NODE_OPTIONS, PWD: process.env.PWD,
+          SHLVL: process.env.SHLVL, _: process.env._,
+          ELECTRON_RUN_AS_NODE: process.env.ELECTRON_RUN_AS_NODE,
+          ORCA_PROVIDER_SUPERVISOR_SPEC: process.env.ORCA_PROVIDER_SUPERVISOR_SPEC
+        } }) + '\n')
+      process.stderr.write('final stderr\n')
+      process.stdout.write('final stdout\n')
+    `,
+      { lifetime: 'one-shot' },
       {
-        command: process.execPath,
-        args: ['-e', EXITS_ON_STDIN_END_PROVIDER]
+        args: ['', 'a b&c', '--literal=$HOME', 'line\nbreak'],
+        env: {
+          ORCA_TEST_JOURNAL: join(state.root, 'provider-processes'),
+          ORCA_TEST_LITERAL: 'a b&c\n$HOME',
+          NODE_OPTIONS: '--no-warnings',
+          PWD: '/literal/pwd',
+          SHLVL: '7',
+          _: 'literal_underscore'
+        }
       }
     )
-    const { provider } = await readPids(supervisor, ['provider'])
-
-    const endedAt = Date.now()
-    supervisor.stdin!.end()
-
-    await expect(exit).resolves.toEqual({ code: 0, signal: null })
-    expect(Date.now() - endedAt).toBeLessThan(PROVIDER_STDIN_END_GRACE_MS)
-    expect(alive(provider)).toBe(false)
-  })
-
-  it('gives a provider its stdin-end grace, then its SIGTERM grace before SIGKILL', async () => {
-    const signalFile = join(tempDir(), 'provider-sigterm-at')
-    const stdinEndGraceMs = 200
-    const sigtermGraceMs = 300
-    const { supervisor, exit } = launchSupervisor(
-      { stdinEndGraceMs, sigtermGraceMs },
-      { ORCA_TEST_PROVIDER_SIGNAL_FILE: signalFile },
-      { command: process.execPath, args: ['-e', RECORDS_SIGTERM_PROVIDER] }
-    )
-    const { provider } = await readPids(supervisor, ['provider'])
-
-    const endedAt = Date.now()
-    supervisor.stdin!.end()
-    const exited = await exit
-    const exitedAt = Date.now()
-    const signalledAt = Number(readFileSync(signalFile, 'utf8'))
-
-    expect(exited).toEqual({ code: 137, signal: null })
-    // Timers may fire a tick early against another process's clock.
-    expect(signalledAt - endedAt).toBeGreaterThanOrEqual(stdinEndGraceMs - 20)
-    expect(exitedAt - signalledAt).toBeGreaterThanOrEqual(sigtermGraceMs - 20)
-    expect(exitedAt - endedAt).toBeLessThan(stdinEndGraceMs + sigtermGraceMs + 1_000)
-    expect(alive(provider)).toBe(false)
-  })
-
-  it('reaps the provider group and exits when its owner quits cleanly', async () => {
-    const { owner, pids } = await launchUnderOwner(
-      { sigtermGraceMs: 300 },
-      { ORCA_TEST_OWNER_QUITS_CLEANLY: '1' }
-    )
-    const ownerExit = new Promise((resolve) =>
-      owner.once('exit', (code, signal) => resolve({ code, signal }))
-    )
-
-    owner.kill('SIGUSR2')
-
-    await expect(ownerExit).resolves.toEqual({ code: 0, signal: null })
-    expect(await waitFor(() => !alive(-pids.provider), 3_000)).toBe(true)
-    expect(await waitFor(() => !alive(pids.supervisor), 3_000)).toBe(true)
-    expect(alive(pids.grandchild)).toBe(false)
-  })
-
-  it('asks the provider to stop with SIGTERM when its owner dies', async () => {
-    const signalFile = join(tempDir(), 'provider-signal')
-    const { owner, pids } = await launchUnderOwner(
-      { sigtermGraceMs: 300 },
-      { ORCA_TEST_PROVIDER_SIGNAL_FILE: signalFile }
-    )
-
-    owner.kill('SIGKILL')
-
-    expect(await waitFor(() => !alive(-pids.provider), 3_000)).toBe(true)
-    expect(existsSync(signalFile) && readFileSync(signalFile, 'utf8')).toBe('SIGTERM')
-  })
-
-  it('stops a session closed with SIGTERM at once when its owner dies', async () => {
-    const signalFile = join(tempDir(), 'provider-sigterm-at')
-    const { owner, pids } = await launchUnderOwner(
-      { sigtermGraceMs: 200 },
-      { ORCA_TEST_PROVIDER_SIGNAL_FILE: signalFile },
-      { script: RECORDS_SIGTERM_PROVIDER, pids: ['provider'] }
-    )
-
-    const killedAt = Date.now()
-    owner.kill('SIGKILL')
-
-    // Non-empty, not just present: a read between create and write would pass any bound.
-    const signalledAt = (): number =>
-      existsSync(signalFile) ? Number(readFileSync(signalFile, 'utf8')) : 0
-    expect(await waitFor(() => signalledAt() > 0, 3_000)).toBe(true)
-    // No unwatched stdin-end grace: the owner-death watch's 100 ms poll is the whole delay.
-    expect(signalledAt() - killedAt).toBeGreaterThanOrEqual(0)
-    expect(signalledAt() - killedAt).toBeLessThan(PROVIDER_STDIN_END_GRACE_MS / 2)
-    expect(await waitFor(() => !alive(-pids.provider), 3_000)).toBe(true)
-  })
-
-  it('gives a session closed by its stdin end that EOF and grace when its owner dies', async () => {
-    const dir = tempDir()
-    const signalFile = join(dir, 'provider-signal')
-    const flushFile = join(dir, 'provider-flushed')
-    const { owner, pids } = await launchUnderOwner(
-      { closeRequest: 'stdin-end' },
-      { ORCA_TEST_PROVIDER_SIGNAL_FILE: signalFile, ORCA_TEST_PROVIDER_FLUSH_FILE: flushFile },
-      { script: FLUSHES_ON_STDIN_END_PROVIDER, pids: ['provider'] }
-    )
-
-    owner.kill('SIGKILL')
-
-    expect(await waitFor(() => !alive(pids.provider), PROVIDER_STDIN_END_GRACE_MS)).toBe(true)
-    expect(await waitFor(() => !alive(pids.supervisor), 3_000)).toBe(true)
-    expect(existsSync(flushFile)).toBe(true)
-    expect(existsSync(signalFile)).toBe(false)
-  })
-
-  it('stops a stdin-end session that ignores its EOF once the grace after owner death ends', async () => {
-    const signalFile = join(tempDir(), 'provider-sigterm-at')
-    const stdinEndGraceMs = 400
-    const { owner, pids } = await launchUnderOwner(
-      { closeRequest: 'stdin-end', stdinEndGraceMs, sigtermGraceMs: 200 },
-      { ORCA_TEST_PROVIDER_SIGNAL_FILE: signalFile },
-      { script: RECORDS_SIGTERM_PROVIDER, pids: ['provider'] }
-    )
-
-    const killedAt = Date.now()
-    owner.kill('SIGKILL')
-
-    expect(await waitFor(() => !alive(-pids.provider), 3_000)).toBe(true)
-    // Timers may fire a tick early against another process's clock.
-    expect(Number(readFileSync(signalFile, 'utf8')) - killedAt).toBeGreaterThanOrEqual(
-      stdinEndGraceMs - 20
-    )
-    expect(await waitFor(() => !alive(pids.supervisor), 3_000)).toBe(true)
-  })
-
-  describe('one-shot lifetime', () => {
-    it('lets a one-shot answer after its stdin ends and relays its exit code', async () => {
-      const signalFile = join(tempDir(), 'provider-signal')
-      const { supervisor, exit } = launchSupervisor(
-        { lifetime: 'one-shot', stdinEndGraceMs: 100 },
-        {
-          ORCA_TEST_PROVIDER_SIGNAL_FILE: signalFile,
-          ORCA_TEST_PROVIDER_ANSWER_DELAY_MS: '250'
-        },
-        { command: process.execPath, args: ['-e', ONE_SHOT_PROVIDER] }
-      )
-      let stdout = ''
-      supervisor.stdout!.on('data', (chunk: Buffer) => (stdout += chunk.toString()))
-
-      supervisor.stdin!.end('request')
-
-      await expect(exit).resolves.toEqual({ code: 3, signal: null })
-      expect(stdout).toBe('ok')
-      expect(existsSync(signalFile)).toBe(false)
-    })
-
-    it.each([
-      ['dies', 'SIGKILL', {}],
-      ['quits cleanly', 'SIGUSR2', { ORCA_TEST_OWNER_QUITS_CLEANLY: '1' }]
-    ] as const)(
-      'reaps a one-shot that ignores its stdin end when its owner %s',
-      async (_, signal, env) => {
-        const stdinEndGraceMs = 100
-        const { owner, pids } = await launchUnderOwner(
-          { lifetime: 'one-shot', stdinEndGraceMs, sigtermGraceMs: 300 },
-          { ORCA_TEST_OWNER_ENDS_STDIN: '1', ...env }
-        )
-        // Past the session grace: a stdin end alone must not have stopped it.
-        await new Promise((resolve) => setTimeout(resolve, stdinEndGraceMs + 150))
-        expect(alive(-pids.provider)).toBe(true)
-
-        owner.kill(signal)
-
-        expect(await waitFor(() => !alive(-pids.provider), PROVIDER_SUPERVISOR_MAX_STOP_MS)).toBe(
-          true
-        )
-        expect(await waitFor(() => !alive(pids.supervisor), 3_000)).toBe(true)
-        expect(alive(pids.grandchild)).toBe(false)
+    await expect(run.exit).resolves.toEqual({ code: 0, signal: null })
+    const first = JSON.parse(run.output().split('\n')[0])
+    expect(first).toEqual({
+      pid: run.child.pid,
+      leader: run.child.pid,
+      owner: process.pid,
+      argv: ['', 'a b&c', '--literal=$HOME', 'line\nbreak'],
+      env: {
+        ORCA_TEST_JOURNAL: join(state.root, 'provider-processes'),
+        ORCA_TEST_LITERAL: 'a b&c\n$HOME',
+        NODE_OPTIONS: '--no-warnings',
+        PWD: '/literal/pwd',
+        SHLVL: '7',
+        _: 'literal_underscore'
       }
+    })
+    expect(run.output().split('\n').slice(1).join('\n')).toBe('final stdout\n')
+    expect(run.stderr()).toBe('final stderr\n')
+    expect(run.errors).toEqual([])
+    expect(run.child.groupVerdict).toBe('exited')
+    expect(await readdir(join(state.root, 'provider-processes'))).toEqual([])
+  })
+
+  it('retains final bytes for readers attached after lifecycle exit', async () => {
+    const run = launch(
+      String.raw`
+      process.stdout.end('final answer 🐳\n')
+      process.stderr.end('final error\n')
+    `,
+      { lifetime: 'one-shot' },
+      { captureOutput: false }
     )
+    await expect(run.exit).resolves.toEqual({ code: 0, signal: null })
+    await expect(
+      Promise.all([readText(run.child.stdout), readText(run.child.stderr)])
+    ).resolves.toEqual(['final answer 🐳\n', 'final error\n'])
+  })
 
-    it('escalates a SIGTERM-ignoring one-shot to SIGKILL after the grace from the spec', async () => {
-      const graceMs = 200
-      const { supervisor, exit } = launchSupervisor(
-        { lifetime: 'one-shot', sigtermGraceMs: graceMs },
-        { ORCA_TEST_PROVIDER_IGNORES_SIGTERM: '1' }
-      )
-      const { provider, grandchild } = await readPids(supervisor, ['provider', 'grandchild'])
-      supervisor.stdin!.end()
+  it('does not treat one-shot stdin EOF as a stop', async () => {
+    const run = launch(
+      String.raw`
+      let input = ''
+      process.stdin.on('data', chunk => input += chunk)
+      process.stdin.on('end', () => setTimeout(() => process.stdout.write('answer:' + input), 1_200))
+    `,
+      { lifetime: 'one-shot', stdinEndGraceMs: 20, sigtermGraceMs: 20 }
+    )
+    run.child.stdin.end('request')
+    await expect(run.exit).resolves.toEqual({ code: 0, signal: null })
+    expect(run.output()).toBe('answer:request')
+  })
 
-      const signalledAt = Date.now()
-      supervisor.kill('SIGTERM')
+  it('reaps descendants immediately when the leader voluntarily exits on stdin EOF', async () => {
+    const run = launch(String.raw`
+      require('node:child_process').spawn(process.execPath, ['-e',
+        "process.on('SIGTERM', () => { process.stdout.write('unexpected TERM\\n'); process.exit(42) }); process.stdout.write('descendant ready\\n'); setInterval(() => {}, 60000)"
+      ], { stdio: ['ignore', 'inherit', 'inherit'] })
+      process.stdin.resume().once('end', () => process.exit(17))
+    `)
+    await run.untilOutput('descendant ready')
+    run.child.stdin.end()
+    await expect(run.exit).resolves.toEqual({ code: 17, signal: null })
+    expect(run.output()).toBe('descendant ready\n')
+    expect(run.child.groupVerdict).toBe('exited')
+  })
 
-      await expect(exit).resolves.toEqual({ code: null, signal: 'SIGTERM' })
-      expect(Date.now() - signalledAt).toBeGreaterThanOrEqual(graceMs)
-      expect(Date.now() - signalledAt).toBeLessThan(PROVIDER_SIGTERM_GRACE_MS)
-      expect(alive(provider)).toBe(false)
-      expect(alive(grandchild)).toBe(false)
-    })
+  it('keeps descendants in their remaining session grace after the leader exits', async () => {
+    const run = launch(
+      String.raw`
+      const child = require('node:child_process').spawn(process.execPath, ['-e',
+        "process.on('SIGTERM', () => setTimeout(() => { process.stdout.write('descendant flushed\\n'); process.exit(0) }, 80)); process.stdout.write('descendant ready\\n'); setInterval(() => {}, 60000)"
+      ], { stdio: ['ignore', 'inherit', 'inherit'] })
+      process.on('SIGTERM', () => process.exit(23))
+      setInterval(() => {}, 60000)
+    `,
+      { sigtermGraceMs: 400 }
+    )
+    await run.untilOutput('descendant ready')
+    run.child.kill('SIGTERM')
+    run.child.kill('SIGTERM')
+    await expect(run.exit).resolves.toEqual({ code: 23, signal: null })
+    expect(run.output()).toContain('descendant flushed')
+    expect(run.child.groupVerdict).toBe('exited')
+  })
 
-    it('keeps the user Node options from the supervisor and hands them to the provider', async () => {
-      const nodeOptions = `--require ${join(tempDir(), 'missing-preload.js')}`
-      const { supervisor, exit } = launchSupervisor(
-        { lifetime: 'one-shot' },
-        { NODE_OPTIONS: nodeOptions },
-        { command: '/bin/sh', args: ['-c', 'printf %s "$NODE_OPTIONS"'] }
-      )
-      let stdout = ''
-      supervisor.stdout!.on('data', (chunk: Buffer) => (stdout += chunk.toString()))
-      supervisor.stdin!.end()
-
-      await expect(exit).resolves.toEqual({ code: 0, signal: null })
-      expect(stdout).toBe(nodeOptions)
-    })
-
-    it('reports a spawn that failed without a pid through the marked line', async () => {
-      const preload = join(tempDir(), 'spawn-without-pid.js')
-      writeFileSync(preload, SPAWN_WITHOUT_PID_PRELOAD)
-      const { supervisor, exit } = launchSupervisor(
-        { lifetime: 'one-shot' },
-        {},
-        { command: '/opt/agent', args: [] },
-        ['--require', preload],
-        'pipe'
-      )
-      let stderr = ''
-      supervisor.stderr!.on('data', (chunk: Buffer) => (stderr += chunk.toString()))
-      supervisor.stdin!.end()
-
-      await expect(exit).resolves.toEqual({ code: 127, signal: null })
-      expect(supervisedProviderSpawnFailure(127, stderr)).toMatchObject({
-        thrown: false,
-        error: { code: 'EMFILE', message: 'spawn /opt/agent EMFILE' }
-      })
-    })
-
-    it('hands the provider a near-cap argv prompt intact', async () => {
-      const prompt = 'x'.repeat(110 * 1024)
-      const { supervisor, exit } = launchSupervisor(
-        { lifetime: 'one-shot' },
-        {},
-        {
-          command: process.execPath,
-          args: ['-e', 'process.stdout.write(String(process.argv[1].length))', prompt]
+  it.runIf(process.platform === 'linux')(
+    'exits the native parent after the provider ends and leaves its detached daemon running',
+    async () => {
+      const path = join(state.root, 'daemon.sock')
+      const server = createServer()
+      const connected = new Promise<Socket>((resolve) => server.once('connection', resolve))
+      await new Promise<void>((resolve) => server.listen(path, resolve))
+      let parentExit: Promise<number | null> | undefined
+      let daemonPid = 0
+      try {
+        const run = launch(
+          String.raw`
+          require('node:child_process').spawn(process.execPath, ['-e',
+            "require('node:net').connect(process.argv[1]).on('data', function () { this.write('alive') }).write(String(process.pid)); setInterval(() => {}, 60000)", ${JSON.stringify(path)}
+          ], { detached: true, stdio: 'ignore' }).unref()
+          process.stdin.resume().once('end', () => process.exit(0))
+        `,
+          { lifetime: 'one-shot' },
+          {
+            spawn: (spec) => {
+              const parent = spawnProcess(spec)
+              parentExit = new Promise((resolve) => parent.once('exit', (code) => resolve(code)))
+              return parent
+            }
+          }
+        )
+        const daemon = await connected
+        daemonPid = Number(String((await once(daemon, 'data'))[0]))
+        run.child.stdin.end()
+        await expect(run.exit).resolves.toEqual({ code: 0, signal: null })
+        await expect(parentExit).resolves.toBe(0)
+        daemon.write('?')
+        expect(String((await once(daemon, 'data'))[0])).toBe('alive')
+      } finally {
+        if (daemonPid > 0) {
+          process.kill(daemonPid, 'SIGKILL')
         }
-      )
-      let stdout = ''
-      supervisor.stdout!.on('data', (chunk: Buffer) => (stdout += chunk.toString()))
-      supervisor.stdin!.end()
+        server.close()
+      }
+    }
+  )
 
-      await expect(exit).resolves.toEqual({ code: 0, signal: null })
-      expect(stdout).toBe(String(prompt.length))
+  it('routes SIGUSR2 to immediate cleanup and retains the actual CLI signal', async () => {
+    const run = launch(String.raw`
+      process.on('SIGTERM', () => process.stdout.write('term received\n'))
+      process.on('SIGUSR2', () => process.stdout.write('usr2 reached CLI\n'))
+      process.stdout.write('ready\n')
+      setInterval(() => {}, 60000)
+    `)
+    await run.untilOutput('ready')
+    run.child.kill('SIGTERM')
+    await run.untilOutput('term received')
+    run.child.kill('SIGUSR2')
+    await expect(run.exit).resolves.toEqual({ code: null, signal: 'SIGKILL' })
+    expect(run.output()).not.toContain('usr2 reached CLI')
+  })
+
+  it('allows the full native TERM grace after a delayed watcher receives the request', async () => {
+    const run = launch(
+      String.raw`
+      process.on('SIGTERM', () => setTimeout(() => {
+        process.stdout.write('final result\n'); process.exit(0)
+      }, 800))
+      process.stdout.write('ready\n')
+      setInterval(() => {}, 60000)
+    `,
+      { sigtermGraceMs: 1_000 }
+    )
+    await run.untilOutput('ready')
+    const directory = join(state.root, 'provider-processes')
+    const [name] = await readdir(directory)
+    const { watcher } = JSON.parse(await readFile(join(directory, name), 'utf8'))
+    process.kill(watcher.pid, 'SIGSTOP')
+    try {
+      run.child.kill('SIGTERM')
+      await delay(500)
+    } finally {
+      process.kill(watcher.pid, 'SIGCONT')
+    }
+    await expect(run.exit).resolves.toEqual({ code: 0, signal: null })
+    expect(run.output()).toBe('ready\nfinal result\n')
+  })
+
+  it('distinguishes native exec ENOENT from a CLI exit 127', async () => {
+    const missing = launch(
+      '',
+      { lifetime: 'one-shot' },
+      { command: join(state.root, 'absent-cli') }
+    )
+    await missing.closed
+    expect(missing.errors[0]).toMatchObject({ code: 'ENOENT', providerExecutableMissing: true })
+    const real = launch('process.exit(127)', { lifetime: 'one-shot' })
+    await expect(real.exit).resolves.toEqual({ code: 127, signal: null })
+    expect(real.errors).toEqual([])
+  })
+
+  it('classifies a missing working folder without blaming the provider executable', async () => {
+    const run = launch('', { lifetime: 'one-shot' }, { cwd: join(state.root, 'missing-cwd') })
+    await run.closed
+    expect(run.errors[0]).toMatchObject({ code: 'ENOENT', providerLaunchFolderMissing: true })
+    expect(run.errors[0]).not.toHaveProperty('providerExecutableMissing')
+  })
+
+  it('cancels a pending launch without releasing its execution gate', async () => {
+    const run = launch("process.stdout.write('MUST NOT EXECUTE')", { lifetime: 'one-shot' })
+    expect(run.child.pid).toBeUndefined()
+    run.child.kill('SIGTERM')
+    await expect(run.child.ready).rejects.toThrow()
+    await run.closed
+    expect(run.output()).toBe('')
+    expect(run.child.pid).toBeUndefined()
+  })
+
+  it('retires a stopped launch canceled while its ownership publication is in flight', async () => {
+    let release = (): void => {}
+    let publicationStarted = (): void => {}
+    const published = new Promise<void>((resolve) => {
+      publicationStarted = resolve
     })
+    state.holdPublication = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    state.publicationStarted = publicationStarted
+    const marker = join(state.root, 'executed')
+    const run = launch(`require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'ran')`, {
+      lifetime: 'one-shot'
+    })
+    try {
+      await published
+      run.child.kill('SIGSTOP')
+      run.child.kill('SIGKILL')
+    } finally {
+      release()
+      state.holdPublication = undefined
+      state.publicationStarted = undefined
+    }
+    await run.closed
+    await expect(readFile(marker)).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(await readdir(join(state.root, 'provider-processes'))).toEqual([])
+  })
 
-    it('relays all of the provider output to a slow owner before exiting', async () => {
-      const bytes = 4 * 1024 * 1024
-      const { supervisor, exit } = launchSupervisor(
-        { lifetime: 'one-shot' },
-        {},
-        {
-          command: process.execPath,
-          args: ['-e', `process.stdout.write('x'.repeat(${bytes})); process.exitCode = 3`]
+  it('distinguishes a missing CLI from a real exit 127 on the compatibility path', async () => {
+    await writeFile(join(state.root, 'provider-processes'), 'blocked')
+    const missing = launch(
+      '',
+      { lifetime: 'one-shot' },
+      { command: join(state.root, 'absent-cli') }
+    )
+    await missing.closed
+    expect(missing.errors[0]).toMatchObject({ code: 'ENOENT', providerExecutableMissing: true })
+    const real = launch('process.exit(127)', { lifetime: 'one-shot' })
+    await expect(real.exit).resolves.toEqual({ code: 127, signal: null })
+    expect(real.errors).toEqual([])
+  })
+
+  it('cleans the CLI group when a compatibility supervisor is killed', async () => {
+    await writeFile(join(state.root, 'provider-processes'), 'blocked')
+    // The compatibility guard has always required a proof captured before wrapper death.
+    // A second-resolution host may need to cross the leader's start second first.
+    const prove = orphanGuard.proveProviderProcessIdentity
+    let armed: () => void = () => {}
+    const proven = new Promise<void>((resolve) => {
+      armed = resolve
+    })
+    const proof = vi
+      .spyOn(orphanGuard, 'proveProviderProcessIdentity')
+      .mockImplementation(async (...args) => {
+        const identity = await prove(...args)
+        if (identity) {
+          armed()
         }
-      )
-      let received = 0
-      supervisor.stdout!.on('data', (chunk: Buffer) => {
-        received += chunk.byteLength
-        supervisor.stdout!.pause()
-        setTimeout(() => supervisor.stdout!.resume(), 5)
+        return identity
       })
-      const closed = new Promise((resolve) => supervisor.once('close', resolve))
-      supervisor.stdin!.end()
+    try {
+      const run = launch("process.stdout.write('ready\\n'); setInterval(() => {}, 60000)")
+      await run.untilOutput('ready')
+      await proven
+      run.child.kill('SIGKILL')
+      await run.closed
+      expect(run.child.groupVerdict).toBe('exited')
+    } finally {
+      proof.mockRestore()
+    }
+  })
 
-      await expect(exit).resolves.toEqual({ code: 3, signal: null })
-      await closed
-      expect(received).toBe(bytes)
+  it('keeps provider launches working through the legacy supervisor when recovery storage is unavailable', async () => {
+    await writeFile(join(state.root, 'provider-processes'), 'blocked')
+    const run = launch("process.stdout.end('answer from compatibility path')", {
+      lifetime: 'one-shot'
     })
+    await expect(run.exit).resolves.toEqual({ code: 0, signal: null })
+    expect(run.output()).toBe('answer from compatibility path')
+    expect(run.errors).toEqual([])
   })
 })

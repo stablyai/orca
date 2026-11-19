@@ -1,10 +1,10 @@
-// A real assembled lane for tests: grammar events → assembler → deferred sink queue → on-disk
-// journal. Assertions read the journal back, so they check what a client sees.
+import { readTestJournalItems } from '../agent-session-journal/journal-observation.test-support'
+// Exercise grammar events through the real deferred sink and on-disk journal.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalApprovalItem,
   AgentJournalItemBody,
@@ -12,35 +12,37 @@ import type {
   AgentJournalRenderItem,
   AgentJournalToolCallItem,
   AgentJournalTurnLifecycle
-} from '../../../shared/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
-import { backgroundTaskFallbackText } from '../../../shared/native-chat-background-task-row'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
+import { backgroundTaskFallbackText } from '../../../shared/native-chat/input/task-lists/native-chat-background-task-row'
 import {
   isBackgroundTaskBlock,
   type NativeChatBackgroundTaskBlock
-} from '../../../shared/native-chat-types'
+} from '../../../shared/native-chat/native-chat-types'
 import {
   closeTestJournalHostDatabase,
   createTrackedJournalOpener,
   type TestJournalOptions
-} from '../agent-session-journal/journal-host-database-test-support'
+} from '../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
   createDeferredStructuredAgentSessionEventSink,
   type StructuredAgentSessionEventSink
-} from '../agent-session-wire/structured-agent-session-event-sink'
-import { testEventSinkLogging } from '../agent-session-wire/structured-agent-session-logger-test-support'
+} from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import { testEventSinkLogging } from '../agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import {
   createProviderTimelineAssembler,
   type ProviderTimelineAssembler,
   type ProviderTimelineAssemblerDeps
 } from './provider-timeline-assembler'
-import { settleStaleStructuredAgentSessionState } from '../agent-session-wire/structured-agent-session-dead-generation-settlement'
+import '../agent-session-wire/termination/structured-agent-session-dead-generation-settlement'
+import { settleStaleStructuredAgentSessionState } from '../agent-session-wire/termination/structured-agent-session-stale-state-settlement'
 import {
   createLegacyProviderTimelineIdentityScheme,
   type ProviderTimelineItemFamily
 } from './provider-timeline-identity'
 import { providerTimelineSink, type ProviderTimelineSink } from './provider-timeline-plan'
+import { boundTarget } from './provider-timeline-bound-target-test-support'
 
 export const SESSION = 'session-timeline'
 export const AGENT = 'grok'
@@ -49,7 +51,6 @@ export const NAMESPACE = 'provider-session-1'
 
 const scheme = createLegacyProviderTimelineIdentityScheme({ agent: AGENT, sessionId: SESSION })
 
-/** The journal key the assembler gives a provider-keyed item, or a request of `generation`. */
 export function providerItemId(
   family: ProviderTimelineItemFamily | 'request',
   key: string,
@@ -71,14 +72,12 @@ export function providerItemId(
   )
 }
 
-/** The journal key of a provider-keyed turn's row. */
 export function providerTurnItemId(turnKey: string, namespace = NAMESPACE): string {
   return agentJournalItemKey(
     scheme.turn({ namespace, key: { source: 'provider', value: turnKey } })
   )
 }
 
-/** The turn id a provider-keyed turn's row carries. */
 export function providerTurnId(turnKey: string, namespace = NAMESPACE): string {
   return scheme.turnId({ namespace, key: { source: 'provider', value: turnKey } })
 }
@@ -87,7 +86,7 @@ export function runningTool(name: string): AgentJournalToolCallItem {
   return { kind: 'tool-call', name, input: { name }, state: 'running' }
 }
 
-/** A background task's row as every lane writes it: its plain-text twin, then its block. */
+/** Include the plain-text twin before the structured background-task block. */
 export function backgroundTask(
   taskId: string,
   state: NativeChatBackgroundTaskBlock['state']
@@ -106,7 +105,6 @@ export function backgroundTask(
   }
 }
 
-/** The run state of the background task in the row of provider item `item`. */
 export async function backgroundTaskState(
   rig: ProviderTimelineRig,
   item: string
@@ -138,7 +136,6 @@ const journals = createTrackedJournalOpener()
 const cleanups: (() => Promise<void>)[] = []
 const roots: string[] = []
 
-/** Call from `afterEach`. */
 export async function closeProviderTimelineRigs(): Promise<void> {
   for (const cleanup of cleanups.splice(0)) {
     await cleanup()
@@ -149,8 +146,7 @@ export async function closeProviderTimelineRigs(): Promise<void> {
   }
 }
 
-/** An assembler whose sink binds to the rig's journal only when `bind` is called, as a lane that
- *  starts before its journal opens (a resume): it admits events without the journal's view. */
+/** Admit before journal binding to simulate resume events without a journal view. */
 export type UnboundProviderTimelineAssembler = {
   assembler: ProviderTimelineAssembler
   bind(): Promise<void>
@@ -172,7 +168,7 @@ export function openUnboundProviderTimelineAssembler(
     agent: AGENT,
     generation: 'gen-unbound',
     namespace: NAMESPACE,
-    // The window never fires on its own; `flush` writes what it holds.
+    // Tests explicitly flush this window.
     schedule: () => () => {},
     ...overrides
   })
@@ -183,7 +179,7 @@ export function openUnboundProviderTimelineAssembler(
   return {
     assembler,
     bind: async () => {
-      deferred.bind({ journal, fence: 1, publish: () => {} })
+      deferred.bind(boundTarget(journal))
       await deferred.drained()
     },
     drained: async () => {
@@ -194,28 +190,20 @@ export function openUnboundProviderTimelineAssembler(
 
 export type ProviderTimelineRig = {
   journal: AgentSessionJournal
-  /** The current child's assembler; `restart` replaces it. */
   assembler: ProviderTimelineAssembler
   sink: ProviderTimelineSink
-  /** The same journal's event sink, for a lane that writes it directly. */
   eventSink: StructuredAgentSessionEventSink
-  /** What a restarted host does: the old child's assembler is gone (text still in its window is
-   *  lost, as `dispose` drops it), the dead-generation sweep settles what it left, then a new
-   *  child gets a new assembler in a new generation, which becomes `assembler`. */
+  /** Drop buffered text, sweep the dead generation, then create the next child’s assembler. */
   restart(overrides?: Partial<ProviderTimelineAssemblerDeps>): Promise<ProviderTimelineAssembler>
-  /** Another assembler of the same generation on the same journal, for a test that needs its own
-   *  sink; the rig's own assembler must then stay unused. */
+  /** Alternate same-generation assembler; leave the original unused. */
   assemble(overrides?: Partial<ProviderTimelineAssemblerDeps>): ProviderTimelineAssembler
   rows(): Promise<AgentJournalRenderItem[]>
-  /** Closes the original journal and database, then reads the persisted chat through a new store. */
   reopenJournal(): Promise<AgentSessionJournal>
   row(itemId: string): Promise<AgentJournalRenderItem | undefined>
-  /** The turn row of provider turn `turnKey`, or the row whose turn id is `turnKey`. */
   turn(turnKey: string, namespace?: string): Promise<AgentJournalTurnLifecycle | undefined>
   turns(): Promise<AgentJournalTurnLifecycle[]>
 }
 
-/** The rig's sink with its transitions refused while `refusing()` holds. */
 export function refusingSink(
   sink: ProviderTimelineSink,
   refusing: () => boolean,
@@ -228,7 +216,7 @@ export function refusingSink(
   }
 }
 
-/** `journalIdentity` writes the chat as another agent's, for a lane that writes `eventSink` itself. */
+/** Override journalIdentity when the lane writes another agent’s journal directly. */
 export async function openProviderTimelineRig(
   overrides: Partial<ProviderTimelineAssemblerDeps> = {},
   journalIdentity: Partial<Pick<TestJournalOptions['identity'], 'agent' | 'providerHandle'>> = {}
@@ -247,9 +235,9 @@ export async function openProviderTimelineRig(
     stateDirectory: root,
     now: () => 1_000
   }
-  const journal = await journals.open(journalOptions)
+  let journal = await journals.open(journalOptions)
   const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
-  deferred.bind({ journal, fence: 1, publish: () => {} })
+  deferred.bind(boundTarget(journal))
   cleanups.push(async () => {
     deferred.close()
   })
@@ -257,11 +245,10 @@ export async function openProviderTimelineRig(
   if (!sink) {
     throw new Error('the deferred sink offers transitions')
   }
-  // The coalescing window elapses before every read, so all text streamed so far is written,
-  // unless a test overrides `schedule` to drive the window itself.
+  // Flush windows before reads unless the test supplies its own scheduling.
   const windows = new Set<() => void>()
   const elapse = () => {
-    // Only the windows open now: a flush the sink refused schedules another for the next read.
+    // Retries scheduled by refused flushes wait for the next read.
     const due = Array.from(windows)
     windows.clear()
     due.forEach((run) => run())
@@ -283,7 +270,7 @@ export async function openProviderTimelineRig(
   const rows = async () => {
     elapse()
     await deferred.drained()
-    return journal.snapshot().items
+    return await readTestJournalItems(journal)
   }
   const turns = async () =>
     (await rows()).flatMap((item) => {
@@ -299,13 +286,15 @@ export async function openProviderTimelineRig(
     reopenJournal: async () => {
       await rows()
       await journal.close()
-      closeTestJournalHostDatabase(root)
-      return journals.open(journalOptions)
+      await closeTestJournalHostDatabase(root)
+      journal = await journals.open(journalOptions)
+      rig.journal = journal
+      return journal
     },
     restart: async (more = {}) => {
       generations += 1
       const generation = more.generation ?? `gen-${generations}`
-      // The dead child's window never elapses: as in production, dispose drops its text.
+      // Dispose drops the dead child’s buffered text, matching production.
       await deferred.drained()
       rig.assembler.dispose()
       await settleStaleStructuredAgentSessionState({
