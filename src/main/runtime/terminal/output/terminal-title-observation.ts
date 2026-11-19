@@ -269,6 +269,8 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
     this.openCodeRunLifetime.forgetPty(ptyId)
     this.mobileSessionTabsAgentStatusHeartbeat.removePty(ptyId)
     this.clientEvents.clearPtyTitleGate(ptyId)
+    // Its tracker may have held the pane's only shown title; the flush reads it after teardown.
+    this.markPaneLiveTitlesDirty(ptyId)
   }
 
   protected resetTrackedTerminalStateForProviderGeneration(ptyId: string): void {
