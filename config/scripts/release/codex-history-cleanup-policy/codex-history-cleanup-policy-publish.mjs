@@ -37,11 +37,19 @@ function isUsableRevision(revision, max = MAX_REVISION) {
   return Number.isSafeInteger(revision) && revision > 0 && revision <= max
 }
 
+// Deletion stays off until real-install report numbers, an enforce QA on a heavy real profile and
+// the open cleanup tickets clear it; lifting this is a reviewed change, never a policy edit.
+const ENFORCE_GATE_CLEARED = false
+
 /** The checked-in file, validated, with room left above its revision for emergency-off. */
 function validatedCheckedInPolicy(bytes) {
   const policy = validatedCodexHistoryCleanupPolicy(bytes)
   if (!isUsableRevision(policy.revision, MAX_CHOSEN_REVISION)) {
     throw new Error(`revision ${policy.revision} is above ${MAX_CHOSEN_REVISION}`)
+  }
+  const enforced = KINDS.filter((kind) => policy.kinds[kind]?.mode === 'enforce')
+  if (!ENFORCE_GATE_CLEARED && enforced.length > 0) {
+    throw new Error(`${enforced.join(', ')} can't be enforced until the enforce gate is cleared`)
   }
   return policy
 }
