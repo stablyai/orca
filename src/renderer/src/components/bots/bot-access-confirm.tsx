@@ -23,6 +23,7 @@ import {
   type BotAccessConnector
 } from '../../../../shared/bots/bot-access-reach'
 import { useBotAccessSignals } from './BotAccessReach'
+import { useBotAccessPlace } from './use-bot-access-place'
 
 /** The grant, and the bot and connector whose reach the confirm lists. */
 export type BotAccessConfirm = BotAccessGrant & {
@@ -165,6 +166,7 @@ function rowWords(
 /** One warning line, which describes the dialog, then what they reach, one line each. */
 function AccessFacts({ grant }: { grant: BotAccessConfirm }): React.JSX.Element {
   const t = useTranslate()
+  const place = useBotAccessPlace(grant.details.bot.hostId)
   const { tone, rows } = useAccessConfirm(grant)
   return (
     <div className="mt-0.5 min-w-0">
@@ -173,7 +175,7 @@ function AccessFacts({ grant }: { grant: BotAccessConfirm }): React.JSX.Element 
         <p className="flex items-center gap-2">
           <ShieldAlert className={cn('size-4 shrink-0', TONE[tone].icon)} aria-hidden />
           <span className={cn('min-w-0 text-sm leading-5 font-medium', TONE[tone].ink)}>
-            {t('bots.access.confirmWarning', BOT_ACCESS_COPY.confirmWarning)}
+            {t('bots.access.confirmWarning', BOT_ACCESS_COPY.confirmWarning, place)}
           </span>
         </p>
       </DialogDescription>
