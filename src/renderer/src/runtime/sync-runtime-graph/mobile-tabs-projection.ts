@@ -1,5 +1,6 @@
 import type { AppState } from '@/store/types'
 import { readRecordChanges } from '@/store/record-transitions/keyed-record-change-reads'
+import { isIndexKey } from '@/store/record-transitions/keyed-record-index-keys'
 import { graphState } from './graph-state'
 import type { TabsProjectionCacheEntry } from './types'
 
@@ -34,7 +35,8 @@ export function buildRuntimeMobileTabsProjection(
     return cached.revision
   }
   const changes = cached ? readRecordChanges(tabsByWorktree, cached.source) : null
-  if (cached && changes?.kind === 'addressed') {
+  // Records list integer-like keys first, which an appended Map entry can't mirror; rebuild then.
+  if (cached && changes?.kind === 'addressed' && !changes.added.some(isIndexKey)) {
     // Annotated writes name the buckets they replaced; reproject only those.
     let changed = changes.added.length > 0 || changes.deleted.size > 0
     // Surviving keys stay in place; added ones follow in source order, as the record holds them.

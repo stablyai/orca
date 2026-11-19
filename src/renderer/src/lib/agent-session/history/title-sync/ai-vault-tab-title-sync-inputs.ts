@@ -119,7 +119,8 @@ function terminalTabsEqual(
       left.id === right.id &&
       left.worktreeId === right.worktreeId &&
       left.sessionTitleFromHost === right.sessionTitleFromHost &&
-      (!includeStoredTitles || sameAiVaultSessionTitle(left.aiVaultTitle, right.aiVaultTitle))
+      (!includeStoredTitles || sameAiVaultSessionTitle(left.aiVaultTitle, right.aiVaultTitle)),
+    'any'
   )
 }
 

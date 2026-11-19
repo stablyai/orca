@@ -22,13 +22,16 @@ function bucketsMatch<T>(
 }
 
 /**
- * Whether two tab-bucket maps hold the same workspace keys in the same order and every bucket's
- * rows match index by index. Annotated writes compare only the buckets they replaced.
+ * Whether two tab-bucket maps hold the same workspace keys (in the same order unless `keyOrder` is
+ * 'any') and every bucket's rows match index by index. Annotated writes compare only the buckets
+ * they replaced; they never reorder surviving keys.
  */
 export function tabBucketsMatch<T>(
   current: Buckets<T> | undefined,
   previous: Buckets<T> | undefined,
-  rowsMatch: (current: T, previous: T) => boolean
+  rowsMatch: (current: T, previous: T) => boolean,
+  /** 'any' matches by key, as a reader that never depends on workspace order would. */
+  keyOrder: 'ordered' | 'any' = 'ordered'
 ): boolean {
   if (current === previous) {
     return true
@@ -59,7 +62,9 @@ export function tabBucketsMatch<T>(
   for (let index = 0; index < currentIds.length; index += 1) {
     const workspaceId = currentIds[index]
     if (
-      previousIds[index] !== workspaceId ||
+      (keyOrder === 'ordered'
+        ? previousIds[index] !== workspaceId
+        : !Object.hasOwn(previous, workspaceId)) ||
       !bucketsMatch(current[workspaceId], previous[workspaceId], rowsMatch)
     ) {
       return false
