@@ -56,7 +56,20 @@ export function applyCodexDaemonSocketGuard(
   homePath: string,
   platform = process.platform
 ): string {
-  if (!codexDaemonSocketPathExceedsLimit(homePath, platform)) {
+  return applyCodexDaemonOverride(
+    config,
+    homePath,
+    codexDaemonSocketPathExceedsLimit(homePath, platform)
+  )
+}
+
+/** `applyCodexDaemonSocketGuard` for a caller that already measured the home's socket path. */
+export function applyCodexDaemonOverride(
+  config: string,
+  homePath: string,
+  socketPathExceedsLimit: boolean
+): string {
+  if (!socketPathExceedsLimit) {
     return stripCodexDaemonOverride(config)
   }
   const guarded = upsertTableSettingsInContent(
