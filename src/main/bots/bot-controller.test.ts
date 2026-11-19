@@ -760,23 +760,19 @@ Keeps a list of questions nobody has answered.
   it('keeps a sidebar order a drag gave across a restart, for every client to list by', async () => {
     const first = await bots.create({ name: 'Reviewer' })
     const second = await bots.create({ name: 'Scout' })
-    await bots.update(second.id, { sidebarOrder: 0 })
-    await bots.update(first.id, { sidebarOrder: 1 })
+    const movedSecond = await bots.update(second.id, { sidebarOrder: 0 })
+    const movedFirst = await bots.update(first.id, { sidebarOrder: 1 })
     store.flush()
     await closeTestStores()
 
-    expect(
-      new Map(
-        createStore()
-          .getBots()
-          .map((bot) => [bot.name, bot.sidebarOrder])
-      )
-    ).toEqual(
+    const reloaded = createStore()
+    expect(new Map(reloaded.getBots().map((bot) => [bot.name, bot]))).toEqual(
       new Map([
-        ['Reviewer', 1],
-        ['Scout', 0]
+        ['Reviewer', movedFirst],
+        ['Scout', movedSecond]
       ])
     )
+    expect(runtimeVisibleProjectGroups(reloaded)).toEqual([])
   })
 
   it('saves a create and a delete before answering, so a quit right after cannot undo them', async () => {
@@ -786,16 +782,6 @@ Keeps a list of questions nobody has answered.
 
     await bots.delete({ botId: bot.id, deleteFolder: true })
     expect(readPersistedState().bots).toEqual([])
-  })
-
-  it('persists bots across a restart', async () => {
-    const bot = await bots.create({ name: 'Reviewer' })
-    store.flush()
-    await closeTestStores()
-
-    const reloaded = createStore()
-    expect(reloaded.getBots()).toEqual([bot])
-    expect(runtimeVisibleProjectGroups(reloaded)).toEqual([])
   })
 
   it('keeps the model and options picked at create, and drops them with the agent they belong to', async () => {
@@ -834,15 +820,6 @@ Keeps a list of questions nobody has answered.
     await closeTestStores()
 
     expect(createStore().getBots()[0]).not.toHaveProperty('permissionMode')
-  })
-
-  it("keeps an owner's Ask across a restart", async () => {
-    const bot = await bots.create({ name: 'Reviewer' })
-    await bots.update(bot.id, { permissionMode: 'ask' })
-    store.flush()
-    await closeTestStores()
-
-    expect(createStore().getBots()[0]).toMatchObject({ permissionMode: 'ask' })
   })
 
   it('persists the legacy Ask migration once and keeps subsequent owner overrides', async () => {
@@ -888,16 +865,18 @@ Keeps a list of questions nobody has answered.
     ])
   })
 
-  it('loads a bot saved before bots had a Chat', async () => {
-    const { chatSessionId: _unset, ...saved } = await bots.create({ name: 'Reviewer' })
+  it('loads legacy bots with no Chat or Linear link', async () => {
+    const {
+      chatSessionId: _chat,
+      linear: _linear,
+      ...saved
+    } = await bots.create({
+      name: 'Reviewer'
+    })
 
-    expect(normalizePersistedBots([saved])).toEqual([{ ...saved, chatSessionId: null }])
-  })
-
-  it('loads a bot saved before Linear as a bot not on Linear', async () => {
-    const { linear: _unset, ...saved } = await bots.create({ name: 'Reviewer' })
-
-    expect(normalizePersistedBots([saved])).toEqual([{ ...saved, linear: null }])
+    expect(normalizePersistedBots([saved])).toEqual([
+      { ...saved, chatSessionId: null, linear: null }
+    ])
   })
 
   it('saves a profile without bots exactly as before', () => {
