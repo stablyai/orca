@@ -145,7 +145,7 @@ export async function deliverBotRunResult(
     )
     const error = COPY.failed(ended.outcome)
     await resultNote.leave(deps, result, 'couldNotFinish', ended.message.trim() || error)
-    return { status: 'dispatch_failed', error }
+    return { status: 'dispatch_failed', error: ended.error ?? error }
   }
   const message = ended.message.trim()
   const completed: BotRunCompletion = {
