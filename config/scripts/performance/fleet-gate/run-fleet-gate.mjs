@@ -40,6 +40,7 @@ import {
 import {
   closeStartupDialogs,
   pinClassicWorktreeCards,
+  SCENARIO_SETUP,
   SCENARIOS,
   seedAgentStatuses
 } from './fleet-gate-scenarios.mjs'
@@ -383,6 +384,7 @@ async function measureOnce({ arm, sha, buildDir, seedDir, options, runDir, outDi
     await page.screenshot({ path: path.join(outDir, `${label}-${Date.now()}.png`) }).catch(() => {})
     for (const name of options.scenarios) {
       const windowMs = name === 'idle' ? options.idleWindowMs : options.windowMs
+      await SCENARIO_SETUP[name]?.(page)
       await resetMainProbe(app)
       await renderer.reset()
       const started = Date.now()

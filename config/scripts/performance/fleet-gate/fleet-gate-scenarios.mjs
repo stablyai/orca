@@ -223,7 +223,6 @@ async function showTerminalWorkspace(page) {
 }
 
 async function typeIntoComposer({ page, windowMs }) {
-  await showTerminalWorkspace(page)
   const target = await page.evaluate(() => {
     const visible =
       [...document.querySelectorAll('.xterm-helper-textarea')].find(
@@ -485,6 +484,9 @@ async function switchWorkspaces({ page, windowMs }) {
         : null
   }
 }
+
+// Run by the runner before it resets the probes, so a window never counts its own setup.
+export const SCENARIO_SETUP = { typing: showTerminalWorkspace }
 
 export const SCENARIOS = {
   idle: async ({ windowMs }) => {
