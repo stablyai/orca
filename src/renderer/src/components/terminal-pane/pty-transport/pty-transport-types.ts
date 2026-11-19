@@ -208,6 +208,10 @@ export type PtyTransport = {
     isAccountRestartCurrent?: () => boolean
     onAccountRestartDispatch?: () => boolean
     onAccountRestartFailure?: (error: unknown) => void
+    verifyAccountRestartResult?: (result: {
+      id: string
+      incarnationId?: string | null
+    }) => Promise<boolean>
     shouldContinue?: (result?: { id: string; incarnationId?: string | null }) => boolean
     callbacks: PtyCallbacks
   }) => void | Promise<void | string | PtyConnectResult>

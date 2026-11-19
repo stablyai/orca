@@ -69,6 +69,9 @@ async function settleForeignResume(
           tabCreatedAt: tab.createdAt
         })
         const latest = useAppStore.getState()
+        if (currentCodexAccountRestart(latest, token)?.phase !== 'preparing') {
+          return true
+        }
         const remote = parseRemoteRuntimePtyId(ptyId)
         if (
           resolved?.snapshot.owner?.incarnationId === incarnation &&

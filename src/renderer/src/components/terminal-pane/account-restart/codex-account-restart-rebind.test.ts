@@ -158,3 +158,58 @@ it('allows normal handle recovery after successful restart but refuses its obsol
   expect(connection.continue({ id: 'remote:env@@late-old', incarnationId: 'inc-late' })).toBe(false)
   expect(options.isAccountRestartCurrent).toBeUndefined()
 })
+
+it.each(['matching', 'different owner', 'same ID successor', 'disconnected'] as const)(
+  'checks current host result authority before accepting a late account reply: %s',
+  async (authority) => {
+    useAppStore.setState(useAppStore.getInitialState(), true)
+    const call = vi.fn().mockResolvedValue(snapshot({ ptyId: 'old', incarnationId: 'inc-old' }))
+    vi.stubGlobal('window', { api: { runtime: { call } } })
+    seed()
+    useAppStore.getState().queuePaneAccountRestarts(['old'], 'codex')
+    const request = useAppStore.getState().claimCodexAccountRestart(key)
+    if (!request) {
+      throw new Error('restart was not accepted')
+    }
+    await prepareCodexAccountRestart(request)
+    const saved = new Map([[leaf, 'saved output']])
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture provides the captured connection's startup, token and settlement ports.
+    const session = mountedSpawnSession(
+      request,
+      saved,
+      async () => undefined
+    ) as unknown as ConnectPanePtySession
+    const connection = captureCodexAccountRestartConnection(session)
+    if (!connection) {
+      throw new Error('restart connection was not captured')
+    }
+    const options = { url: '', callbacks: {}, ...connection.options(() => true) }
+    options.onAccountRestartDispatch?.()
+    const result = { id: 'created', incarnationId: 'inc-created' }
+    expect(connection.continue(result)).toBe(true)
+    const owner = {
+      ptyId: authority === 'different owner' ? 'winner' : 'created',
+      incarnationId: authority === 'same ID successor' ? 'inc-successor' : 'inc-created'
+    }
+    const resolved = snapshot(owner, 1)
+    call.mockResolvedValue({
+      ...resolved,
+      result: {
+        terminal: {
+          ...resolved.result.terminal,
+          ...owner,
+          connected: authority !== 'disconnected',
+          agentResumeRefused: 'chat-home'
+        }
+      }
+    })
+    expect(await options.verifyAccountRestartResult?.(result)).toBe(authority === 'matching')
+    expect(saved.get(leaf)).toBe('saved output')
+    if (authority === 'different owner' || authority === 'same ID successor') {
+      connection.settle(null, 1, options, () => true)
+      expect(session.deps.accountRestartToken).toBeUndefined()
+      expect(connection.continue(result)).toBe(false)
+      expect(options.isAccountRestartCurrent).toBeUndefined()
+    }
+  }
+)

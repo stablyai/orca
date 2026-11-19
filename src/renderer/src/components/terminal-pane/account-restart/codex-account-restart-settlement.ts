@@ -23,8 +23,16 @@ export function settleCodexAccountRestart(
   }
 ): void {
   const state = useAppStore.getState()
+  const retireOptions = (): void => {
+    if (session.deps.accountRestartToken === token) {
+      session.deps.accountRestartToken = undefined
+      session.deps.accountRestart = undefined
+    }
+    outcome.retireOptions()
+  }
   const request = currentCodexAccountRestart(state, token)
   if (!request) {
+    retireOptions()
     return
   }
   if (outcome.deferred && request.phase === 'deferred') {
@@ -51,11 +59,7 @@ export function settleCodexAccountRestart(
     session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport
   ) {
     session.deps.invalidateRetainedInlineScrollback(session.pane.leafId)
-    if (session.deps.accountRestartToken === token) {
-      session.deps.accountRestartToken = undefined
-      session.deps.accountRestart = undefined
-    }
-    outcome.retireOptions()
+    retireOptions()
     state.updateCodexAccountRestart(token, null)
     return
   }

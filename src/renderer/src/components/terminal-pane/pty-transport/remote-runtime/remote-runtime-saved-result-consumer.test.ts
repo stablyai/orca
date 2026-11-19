@@ -195,3 +195,46 @@ it('preserves exact host launch refusal facts through attach-only account recove
     transport.disconnect()
   }
 })
+
+it.each(['fresh', 'attach-only'] as const)(
+  'leaves an account endpoint unbound when current host authority refuses its %s result',
+  async (operation) => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const hostCall = runtimeCall.getMockImplementation()
+    runtimeCall.mockImplementation((request: { method: string }) =>
+      request.method === 'terminal.create'
+        ? Promise.resolve({
+            ok: true,
+            result: { terminal: { handle: 'created', incarnationId: 'inc-created' } }
+          })
+        : request.method === 'terminal.resolvePane'
+          ? Promise.resolve({
+              ok: true,
+              result: {
+                terminal: { handle: 'terminal-1', incarnationId: 'inc-1', connected: true }
+              }
+            })
+          : hostCall?.(request)
+    )
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'host-tab-1',
+      leafId: 'pane:1'
+    })
+    try {
+      const result = await transport.connect({
+        url: '',
+        ...(operation === 'attach-only'
+          ? { sessionId: 'remote:env-1@@terminal-1', attachOnlyView: true }
+          : {}),
+        isAccountRestartCurrent: () => true,
+        verifyAccountRestartResult: async () => false,
+        callbacks: {}
+      })
+      expect(result).toBeUndefined()
+      expect(transport.getPtyId()).toBeNull()
+    } finally {
+      transport.disconnect()
+    }
+  }
+)

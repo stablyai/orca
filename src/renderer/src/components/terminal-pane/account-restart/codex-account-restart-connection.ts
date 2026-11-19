@@ -11,6 +11,7 @@ import {
   failCodexAccountRestart
 } from './codex-account-restart-execution'
 import { settleCodexAccountRestart } from './codex-account-restart-settlement'
+import { verifyCodexAccountRestartResult } from './codex-account-restart-result-authority'
 import type { ConnectPanePtySession } from '../pty-connection/connect-pane-pty-session'
 import type { PtyTransport } from '../pty-transport/pty-transport-types'
 
@@ -74,6 +75,7 @@ export function captureCodexAccountRestartConnection(session: ConnectPanePtySess
         isCurrent() && Boolean(currentCodexAccountRestart(useAppStore.getState(), token)),
       onAccountRestartDispatch: () =>
         Boolean(condition && isCurrent() && dispatchCodexAccountRestart(token, condition)),
+      verifyAccountRestartResult: (result) => verifyCodexAccountRestartResult(token, result),
       onAccountRestartFailure: captureFailure
     }),
     defer: (): boolean => {
@@ -97,6 +99,7 @@ export function captureCodexAccountRestartConnection(session: ConnectPanePtySess
           delete options.isAccountRestartCurrent
           delete options.onAccountRestartDispatch
           delete options.onAccountRestartFailure
+          delete options.verifyAccountRestartResult
           options.shouldContinue = isCurrent
         }
       })
