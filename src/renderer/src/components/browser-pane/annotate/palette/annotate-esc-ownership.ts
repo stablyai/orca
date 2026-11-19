@@ -7,12 +7,20 @@ export function keyEventBelongsToOtherAnnotatePage(
   pageId: string
 ): boolean {
   if (!(target instanceof Element)) {
-    return false
+    return document.querySelectorAll('[data-browser-annotate-page]').length > 1
   }
   const palette = target.closest('[data-browser-annotate-page]')
   if (palette) {
     return palette.getAttribute('data-browser-annotate-page') !== pageId
   }
   const pane = target.closest('[data-browser-page-pane-id]')
-  return pane !== null && pane.getAttribute('data-browser-page-pane-id') !== pageId
+  if (pane) {
+    return pane.getAttribute('data-browser-page-pane-id') !== pageId
+  }
+  // Body, portals and other unmarked targets: only the one page with an open palette owns them; with several
+  // open (splits), none does, so a stray Esc never closes the wrong page's mode.
+  const openPalettes = Array.from(document.querySelectorAll('[data-browser-annotate-page]'))
+  return openPalettes.some(
+    (element) => element.getAttribute('data-browser-annotate-page') !== pageId
+  )
 }

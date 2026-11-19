@@ -12,6 +12,19 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
   host.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:2147483647;pointer-events:all;cursor:crosshair;';
   document.documentElement.appendChild(host);
 
+  // Picking leaves any text field: tool letters (A/G/D, C/S) then never type into the page while the picker is on.
+  var focusedField = document.activeElement;
+  if (
+    focusedField &&
+    (focusedField.isContentEditable ||
+      focusedField.tagName === 'INPUT' ||
+      focusedField.tagName === 'TEXTAREA' ||
+      focusedField.tagName === 'SELECT') &&
+    typeof focusedField.blur === 'function'
+  ) {
+    focusedField.blur();
+  }
+
   var shadow = host.attachShadow({ mode: 'closed' });
 
   // The top layer paints the outline above modal dialogs, popovers and fullscreen elements.

@@ -13,26 +13,13 @@ import {
   type GrabIntent
 } from '../../../../../../shared/browser/element-grab/browser-grab-types'
 import { isEditableKeyboardTarget } from './browser-keyboard'
+import { keyEventBelongsToOtherAnnotatePage } from '../../annotate/palette/annotate-esc-ownership'
 import { useBrowserPageWebviewShortcuts } from './use-browser-page-webview-shortcuts'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
-/**
- * Bare tool letters belong to this page only when focus is in its pane or its palette (or nowhere in particular);
- * a button in the sidebar or another pane must not switch tools, start a capture or copy.
- */
+/** Bare tool letters belong to this page unless they come from another page's pane or palette (see helper). */
 function annotateKeysOwnTarget(target: EventTarget | null, browserTabId: string): boolean {
-  if (target === null || target === document.body || target === document.documentElement) {
-    return true
-  }
-  if (!(target instanceof Element)) {
-    return false
-  }
-  const pane = target.closest('[data-browser-page-pane-id]')
-  if (pane) {
-    return pane.getAttribute('data-browser-page-pane-id') === browserTabId
-  }
-  const palette = target.closest('[data-browser-annotate-page]')
-  return palette?.getAttribute('data-browser-annotate-page') === browserTabId
+  return !keyEventBelongsToOtherAnnotatePage(target, browserTabId)
 }
 
 export function useBrowserPageKeyboardShortcuts({
@@ -143,7 +130,7 @@ export function useBrowserPageKeyboardShortcuts({
       ) {
         return
       }
-      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || e.getModifierState?.('AltGraph')) {
         return
       }
       const key = browserGuestToolKeyFromEvent(e)

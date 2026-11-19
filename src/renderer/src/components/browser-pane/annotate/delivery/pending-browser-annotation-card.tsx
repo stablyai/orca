@@ -32,7 +32,8 @@ export function PendingBrowserAnnotationCard({
   onAdd,
   onCancel,
   initialDraft,
-  onDraftChange
+  onDraftChange,
+  onEscape
 }: {
   payload: BrowserGrabPayload
   worktreeId: string
@@ -44,6 +45,8 @@ export function PendingBrowserAnnotationCard({
   /** A comment typed earlier for this element and closed without adding. */
   initialDraft?: BrowserAnnotationDraft
   onDraftChange?: (draft: BrowserAnnotationDraft) => void
+  /** Asked first on Esc; true means an open surface above the card (the notes list) took it. */
+  onEscape?: () => boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const [card, setCard] = useState<HTMLDivElement | null>(null)
@@ -101,7 +104,7 @@ export function PendingBrowserAnnotationCard({
         onEscapeKeyDown={(event) => {
           event.preventDefault()
           // Esc during IME composition only ends the composition.
-          if (event.isComposing || event.keyCode === 229) {
+          if (event.isComposing || event.keyCode === 229 || onEscape?.()) {
             return
           }
           onCancel()
@@ -138,6 +141,9 @@ export function PendingBrowserAnnotationCard({
             if (event.key === 'Escape' && !event.nativeEvent.isComposing && event.keyCode !== 229) {
               event.preventDefault()
               event.stopPropagation()
+              if (onEscape?.()) {
+                return
+              }
               onCancel()
               return
             }

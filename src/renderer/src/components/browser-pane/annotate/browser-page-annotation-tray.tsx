@@ -107,7 +107,12 @@ export function BrowserPageAnnotationTray({
         data-slot="browser-annotation-tray"
         onKeyDown={(event) => {
           // Opened from the palette's note count: Esc closes the list before it leaves the mode.
-          if (event.key === 'Escape' && onDismiss && !event.nativeEvent.isComposing) {
+          if (
+            event.key === 'Escape' &&
+            onDismiss &&
+            !event.nativeEvent.isComposing &&
+            event.keyCode !== 229
+          ) {
             event.preventDefault()
             event.stopPropagation()
             onDismiss()

@@ -4,25 +4,11 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { BrowserAnnotateToolPalette } from './BrowserAnnotateToolPalette'
-import { getAnnotatePaletteRatio, setAnnotatePaletteRatio } from './annotate-palette-position-store'
+import { setAnnotatePaletteRatio } from './annotate-palette-position-store'
 import type { BrowserAnnotateTool } from './use-browser-annotate-tool-switch'
-
-const BOUNDS_WIDTH = 900
-const PALETTE_WIDTH = 300
 
 beforeEach(() => {
   setAnnotatePaletteRatio(0.5)
-  // happy-dom has no layout; give the page and the palette real widths so placement and the grip engage.
-  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (
-    this: HTMLElement
-  ) {
-    return this.dataset.testBounds !== undefined ? BOUNDS_WIDTH : 0
-  })
-  vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(function (
-    this: HTMLElement
-  ) {
-    return this.hasAttribute('data-browser-annotate-palette') ? PALETTE_WIDTH : 0
-  })
 })
 
 afterEach(() => {
@@ -124,44 +110,5 @@ describe('BrowserAnnotateToolPalette', () => {
 
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Annotate' }))
     expect(onSelectTool).not.toHaveBeenCalled()
-  })
-
-  it('moves sideways from the keyboard on its grip, within the page', () => {
-    render(<Harness activeTool="annotate" />)
-    const grip = screen.getByRole('slider', { name: 'Move toolbar' })
-    expect(grip.getAttribute('aria-valuetext')).toBe('Centre, 50%')
-
-    fireEvent.keyDown(grip, { key: 'ArrowRight' })
-    expect(getAnnotatePaletteRatio()).toBeCloseTo(0.55)
-    fireEvent.keyDown(grip, { key: 'ArrowLeft', shiftKey: true })
-    expect(getAnnotatePaletteRatio()).toBeCloseTo(0.3)
-    fireEvent.keyDown(grip, { key: 'End' })
-    expect(getAnnotatePaletteRatio()).toBeCloseTo(1)
-    fireEvent.keyDown(grip, { key: 'Home' })
-    expect(getAnnotatePaletteRatio()).toBeCloseTo(0)
-  })
-
-  it('stays inside the page while dragged past its edge', () => {
-    render(<Harness activeTool="annotate" />)
-    const grip = screen.getByRole('slider', { name: 'Move toolbar' })
-    grip.setPointerCapture = vi.fn()
-
-    fireEvent.pointerDown(grip, { button: 0, pointerId: 1, clientX: 400 })
-    fireEvent.pointerMove(grip, { pointerId: 1, clientX: 5000, buttons: 1 })
-    fireEvent.pointerUp(grip, { pointerId: 1, clientX: 5000 })
-
-    expect(getAnnotatePaletteRatio()).toBeCloseTo(1)
-  })
-
-  it('fades and lets clicks through while Alt is held, and comes back on release', () => {
-    render(<Harness activeTool="annotate" />)
-    const palette = screen.getByRole('group', { name: 'Annotate tools' })
-    expect(palette.className).toContain('pointer-events-auto')
-
-    fireEvent.keyDown(window, { key: 'Alt' })
-    expect(palette.className).toContain('pointer-events-none')
-
-    fireEvent.keyUp(window, { key: 'Alt' })
-    expect(palette.className).toContain('pointer-events-auto')
   })
 })

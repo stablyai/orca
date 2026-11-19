@@ -34,4 +34,12 @@ describe('annotate Esc ownership', () => {
     expect(keyEventBelongsToOtherAnnotatePage(ownPalette, 'page-1')).toBe(false)
     expect(keyEventBelongsToOtherAnnotatePage(document.body, 'page-1')).toBe(false)
   })
+
+  it('gives Esc from the body to no page when two pages have their palette open', () => {
+    document.body.innerHTML =
+      '<div data-browser-annotate-page="page-1"></div><div data-browser-annotate-page="page-2"></div>'
+
+    expect(keyEventBelongsToOtherAnnotatePage(document.body, 'page-1')).toBe(true)
+    expect(keyEventBelongsToOtherAnnotatePage(document.body, 'page-2')).toBe(true)
+  })
 })

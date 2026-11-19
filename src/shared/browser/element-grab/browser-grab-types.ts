@@ -118,17 +118,21 @@ export function isBrowserGuestToolKey(key: string): key is BrowserGuestToolKey {
 }
 
 /**
- * The tool letter a key press means. Latin layouts (QWERTY, AZERTY, Dvorak, Colemak…) use the typed letter, so the
- * key labelled "C" copies wherever it sits; only a non-Latin character falls back to the physical key, so the keys
- * still work on Cyrillic, Greek and similar layouts.
+ * The tool letter a key press means. A Latin-script letter (QWERTY, AZERTY, Dvorak, Colemak, and accented letters
+ * like ü or ą) is taken as typed, so the key labelled "C" copies wherever it sits and ü never means anything. Only a
+ * letter from another script (Cyrillic, Greek…) falls back to the physical key so the keys still work there.
+ * Dead keys and other non-letters return "", which matches no tool.
  */
 export function browserGuestToolKeyFromEvent(event: { code?: string; key: string }): string {
-  const typed = event.key.toLowerCase()
-  if (/^[a-z]$/.test(typed)) {
-    return typed
+  const typed = event.key
+  if ([...typed].length !== 1 || !/\p{L}/u.test(typed)) {
+    return ''
+  }
+  if (/\p{Script=Latin}/u.test(typed)) {
+    return typed.toLowerCase()
   }
   const code = event.code ?? ''
-  return code.startsWith('Key') && code.length === 4 ? code.slice(3).toLowerCase() : typed
+  return code.startsWith('Key') && code.length === 4 ? code.slice(3).toLowerCase() : ''
 }
 
 export function isBrowserGrabActionKey(key: BrowserGuestToolKey): key is BrowserGrabActionKey {

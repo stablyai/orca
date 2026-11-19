@@ -132,6 +132,9 @@ export function useBrowserAnnotateToolSwitch({
 
   const reopenDrawing = useCallback(
     (saved: MarkupResumeSnapshot, shapes: readonly MarkupShape[]): void => {
+      // Recovery is single-use: whichever entry restores it (toast Undo or re-entering Draw) consumes it, so a later
+      // Draw after Clear or Copy never brings an outdated drawing back.
+      discardedRef.current = null
       undoToastRef.current = null
       // A drawing that is open now is never replaced (starting it dismissed this Undo; this is a backstop).
       // Read live: this runs from a toast created several renders ago.

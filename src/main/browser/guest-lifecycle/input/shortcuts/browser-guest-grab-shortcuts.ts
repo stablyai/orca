@@ -50,6 +50,8 @@ export function setupGrabShortcutForwarding(args: {
       !input.control &&
       !input.alt &&
       !input.shift &&
+      // An IME composition owns its keys.
+      !input.isComposing &&
       isBrowserGuestToolKey(bareKey) &&
       hasActiveGrabOp(browserTabId)
     ) {

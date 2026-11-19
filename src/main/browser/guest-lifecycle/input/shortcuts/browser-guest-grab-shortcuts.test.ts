@@ -159,4 +159,14 @@ describe('grab shortcut forwarding from a focused page', () => {
     }
     expect(send).not.toHaveBeenCalled()
   })
+
+  it('never maps accented letters, dead keys or IME composition onto a tool', () => {
+    const { press, send } = setup(true)
+    // German ü sits where QWERTY has [, Polish ą is AltGr+A, a dead key waits for the next key.
+    expect(press({ key: 'ü', code: 'BracketLeft' })).toBe(false)
+    expect(press({ key: 'ą', code: 'KeyA' })).toBe(false)
+    expect(press({ key: 'Dead', code: 'KeyC' })).toBe(false)
+    expect(press({ key: 'a', code: 'KeyA', isComposing: true })).toBe(false)
+    expect(send).not.toHaveBeenCalled()
+  })
 })

@@ -345,7 +345,7 @@ describe('switching annotate tools', () => {
     expect(markup.resume).not.toHaveBeenCalled()
   })
 
-  it('going back to Draw while Undo is on offer brings back that drawing without a new capture', async () => {
+  it('restores a discarded drawing once only: after Undo, a later Draw starts fresh', async () => {
     const saved: MarkupResumeSnapshot = {
       baseImage: { dataUrl: 'data:image/png;base64,AA', width: 800, height: 600 },
       context: {
@@ -365,24 +365,50 @@ describe('switching annotate tools', () => {
       markup.isActive = false
       markup.state = 'idle'
     })
+    markup.resume = vi.fn(() => {
+      markup.isActive = true
+      markup.state = 'drawing'
+    })
     const { result, rerender } = renderBrowserTools(markup)
-    const stroke: MarkupShape = {
-      id: 's',
-      color: '#ef4444',
-      kind: 'rect',
-      from: { x: 1, y: 1 },
-      to: { x: 9, y: 9 },
-      width: 4
-    }
-    act(() => result.current.tools.reportShapes([stroke]))
+    act(() =>
+      result.current.tools.reportShapes([
+        {
+          id: 's',
+          color: '#ef4444',
+          kind: 'rect',
+          from: { x: 1, y: 1 },
+          to: { x: 9, y: 9 },
+          width: 4
+        }
+      ])
+    )
+    act(() => result.current.tools.exit())
+    rerender()
+    const options: unknown = toastMock.mock.calls.at(-1)?.[1]
+    const undo =
+      typeof options === 'object' && options !== null && 'action' in options ? options.action : null
+    act(() => {
+      if (
+        typeof undo === 'object' &&
+        undo !== null &&
+        'onClick' in undo &&
+        typeof undo.onClick === 'function'
+      ) {
+        undo.onClick()
+      }
+    })
+    rerender()
+    expect(markup.resume).toHaveBeenCalledTimes(1)
+
+    // The user clears the restored strokes and leaves; nothing is left to undo.
+    act(() => result.current.tools.reportShapes([]))
     act(() => result.current.tools.exit())
     rerender()
 
+    // Draw again: a fresh capture, never the old drawing a second time.
     await act(async () => result.current.tools.selectTool('draw'))
-
-    expect(markup.start).not.toHaveBeenCalled()
-    expect(markup.resume).toHaveBeenCalledWith(saved)
-    expect(result.current.tools.restoredShapes).toEqual([stroke])
+    await waitFor(() => expect(markup.start).toHaveBeenCalledTimes(1))
+    expect(markup.resume).toHaveBeenCalledTimes(1)
   })
 
   it('leaves Draw without an Undo offer when nothing was drawn', () => {

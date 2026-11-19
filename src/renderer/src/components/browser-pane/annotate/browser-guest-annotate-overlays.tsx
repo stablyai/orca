@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
-import { registerAnnotateEscapeInterceptor } from './palette/annotate-escape-interceptor'
+import {
+  interceptAnnotateEscape,
+  registerAnnotateEscapeInterceptor
+} from './palette/annotate-escape-interceptor'
 import { createPortal } from 'react-dom'
 import type { MutableRefObject, RefObject } from 'react'
 import { Copy, Image } from 'lucide-react'
@@ -276,6 +279,8 @@ export function BrowserGuestAnnotateOverlays({
           key={pendingDraftKey ?? undefined}
           initialDraft={drafts.get(pendingDraftKey)}
           onDraftChange={onPendingDraftChange}
+          // An open notes list closes before the card (A8 order).
+          onEscape={() => interceptAnnotateEscape(toolSwitch.toolTargetId)}
           payload={pendingAnnotationPayload}
           worktreeId={worktreeId}
           resolveAnchor={(cardHeight) =>
