@@ -24,6 +24,7 @@ import { createTerminalStartupQueueActions } from './tabs/creation/terminal-star
 import { createWorkspaceTerminalHydrationActions } from './hydration/workspace-terminal-hydration'
 import { createWorkspaceTerminalReconnectActions } from './hydration/workspace-terminal-reconnect'
 import { createPairedTerminalTabCloseIntentSlice } from './retirement/paired-terminal-tab-close-intent-actions'
+import { recordTerminalTabRename } from '@/lib/agent-session/history/session-names/terminal-session-name-recording'
 
 export const createTerminalSlice: (
   ...args: [
@@ -84,11 +85,14 @@ export const createTerminalSlice: (
   ...createActiveWorkspaceTerminalActions(set, get),
   ...createTerminalTabCloseActions(set, get),
   ...createTerminalTabNavigationActions(set, get),
-  ...withLayoutOwnerTerminalTabChanges(
-    {
-      ...createTerminalTabPresentationActions(set, get),
-      ...createTerminalTabAppearanceActions(set, get)
-    },
+  ...withTerminalSessionNameRecording(
+    withLayoutOwnerTerminalTabChanges(
+      {
+        ...createTerminalTabPresentationActions(set, get),
+        ...createTerminalTabAppearanceActions(set, get)
+      },
+      get
+    ),
     get
   ),
   ...createTerminalPtyBindingActions(set, get),
@@ -112,4 +116,19 @@ function withLayoutOwnerTerminalTabChanges<
   return ORCA_LAYOUT_OWNER_IS_MAIN
     ? { ...actions, ...routeTerminalTabChangesThroughLayoutOwner(actions, get) }
     : actions
+}
+
+/** Every rename, routed or not, names the tab's agent session before it lands, so a close right
+ *  after keeps the name in Session History. */
+function withTerminalSessionNameRecording<T extends Pick<TerminalSlice, 'setTabCustomTitle'>>(
+  actions: T,
+  get: TerminalStoreGet
+): T {
+  return {
+    ...actions,
+    setTabCustomTitle: (tabId, title, opts) => {
+      recordTerminalTabRename(get(), tabId, title)
+      actions.setTabCustomTitle(tabId, title, opts)
+    }
+  }
 }
