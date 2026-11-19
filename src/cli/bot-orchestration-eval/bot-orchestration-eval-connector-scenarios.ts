@@ -124,7 +124,7 @@ export const CONNECTOR_SCENARIOS: OrchestrationScenario[] = [
     heldOut: true,
     turns: [{ message: inExports('can you ask Bob if the export fix is safe to ship today?') }],
     state: EXPORTS_THREAD_WORLD,
-    checks: [[noStart, asks(BOB_SLACK_ID, /ship/i), tagsNoAsker]]
+    checks: [[noStart, asks({ userId: BOB_SLACK_ID, name: 'Bob' }, /ship/i), tagsNoAsker]]
   },
   {
     // Only a search as the asker reaches it: Bob wrote it in #platform-eng, not this thread.

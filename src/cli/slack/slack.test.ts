@@ -578,7 +578,8 @@ describe('orca slack', () => {
     await handle('slack find', [['query', 'release-2024']], call)
     const printed = log.mock.calls.flat().join('\n')
     expect(printed).toContain('slack:T1:C1  #eng')
-    expect(printed).toMatch(/^slack:T1:user:U0BOB .*<@U0BOB>/m)
+    expect(printed).toMatch(/^slack:T1:user:U0BOB .* · post to it to DM them$/m)
+    expect(printed).not.toContain('<@U0BOB>')
     expect(printed).not.toContain('linear:o:team:t1')
   })
 

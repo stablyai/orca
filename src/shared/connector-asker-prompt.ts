@@ -82,13 +82,8 @@ function personText(
   person: { userId: string; name?: string | undefined }
 ): string {
   const name = shownPersonName(person.name)
-  if (source === 'slack') {
-    const id = sourceId(person.userId)
-    const mention = id === null ? null : `<@${id}>`
-    return [name, mention].filter((part) => part !== null).join(' ') || 'someone'
-  }
-  // A GitHub name is the login.
-  return name === null ? 'someone' : source === 'github' ? `@${name}` : name
+  // A Slack name is how a post mentions them (Slack's boundary turns it into a ping); a GitHub name is the login.
+  return name === null ? 'someone' : source === 'slack' || source === 'github' ? `@${name}` : name
 }
 
 /** One line, built only from the cloud's facts; the role comes from the id, whatever the name says. */

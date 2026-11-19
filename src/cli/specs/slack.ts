@@ -13,7 +13,7 @@ export const TEXT_FILE =
 const POSTED_REF =
   'Prints a ref for this post at once, before or after Slack sends it: `orca slack edit` or `delete` it, or post to it to answer in its thread, and each goes in order. Once sent, the ref acts on the message itself.'
 export const SLACK_MENTION =
-  "Mention a person with <@USERID> (`orca slack find @name` shows it); ping a channel with <!here>, <!channel> or <!everyone>, a user group with <!subteam^GROUPID>. Only that exact form pings: a read's `@Name (user:USERID)`, `@here` or `@team (group:GROUPID)` pings no one."
+  "Mention a person with @Name, their Slack name as a read or `orca slack find @name` shows it: a name that is one person pings them, any other stays text (<@USERID> also pings). Ping a channel with <!here>, <!channel> or <!everyone>, a user group with <!subteam^GROUPID>; a read's `@here` or `@team (group:GROUPID)` pings no one."
 export const SLACK_MARKDOWN =
   "Text is Markdown: bold is **text** (Slack's *text* comes out italic), and a mention inside `code` stays plain text."
 

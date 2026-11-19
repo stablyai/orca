@@ -127,10 +127,13 @@ function sent(turn: EvalTurnOutcome): string[] {
   return [...said(turn), ...rest]
 }
 
-/** What the bot asked reaches the person, by a mention of their Slack id, and carries each fact. */
-export function asks(userId: string, ...facts: RegExp[]): TurnCheck {
+/** What the bot asked reaches the person, by a mention of their Slack name or id, and carries each fact. */
+export function asks(person: { userId: string; name: string }, ...facts: RegExp[]): TurnCheck {
+  const userId = person.userId
   return (turn) => {
-    const reaching = said(turn).filter((text) => text.includes(`<@${userId}>`))
+    const reaching = said(turn).filter(
+      (text) => text.includes(`<@${userId}>`) || text.includes(`@${person.name}`)
+    )
     if (!reaching.length) {
       return [`did not reach ${userId}`]
     }

@@ -40,12 +40,10 @@ export type ActionResult = {
   }
 }
 const line = (view: RefView) => `${view.ref}  ${view.label}`
-// A person find lists also shows how a post mentions them and that posting to the ref DMs them.
-const PERSON_REF = /^slack:[^:]+:user:([UW][A-Z0-9]+)$/
-const findLine = (view: RefView) => {
-  const id = PERSON_REF.exec(view.ref)?.[1]
-  return id ? `${line(view)} · mention with <@${id}>, post to it to DM them` : line(view)
-}
+// A person find lists also says that posting to the ref DMs them.
+const PERSON_REF = /^slack:[^:]+:user:[UW][A-Z0-9]+$/
+const findLine = (view: RefView) =>
+  PERSON_REF.test(view.ref) ? `${line(view)} · post to it to DM them` : line(view)
 
 const authorName = (name: string) => inlineUntrusted(name, 64) || 'someone'
 

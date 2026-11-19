@@ -302,13 +302,14 @@ describe('outcome checks', () => {
     fails(check, turn({ reply: `1. PLAT-39 crash on resume\n2. PLAT-41 drops` }))
   })
 
-  it('asks: the question reaches the person by a mention of their id; never just their name', () => {
-    const check = asks('U0BOB', /ship/i)
+  it('asks: the question reaches the person by a mention of their name or id; never a bare name', () => {
+    const check = asks({ userId: 'U0BOB', name: 'Bob' }, /ship/i)
     const posted = (text: string): EvalRecordedWrite => ({
       method: 'connector.post',
       params: { ref: 'slack:T0EVAL:C0EXPORTS', args: { text } }
     })
     passes(check, turn({ reply: '<@U0BOB> is the export fix safe to ship today?' }))
+    passes(check, turn({ reply: '@Bob is the export fix safe to ship today?' }))
     passes(check, turn({ writes: [posted('<@U0BOB> safe to ship today?')] }))
     fails(check, turn({ reply: 'Bob, is the export fix safe to ship today?' }))
     fails(check, turn({ reply: "I'll ask <@U0BLAKE> about shipping." }))
