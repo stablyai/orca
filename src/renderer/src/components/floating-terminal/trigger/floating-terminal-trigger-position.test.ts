@@ -48,3 +48,13 @@ it('puts the button above a box when the room below is past the bottom of the wi
     top: 356
   })
 })
+
+it('skips a spot past the window, which clamping would push back onto a box', () => {
+  // The window is 800px tall here; the small box sits below it.
+  const covered = { left: 300, top: 600, right: 700, bottom: 770, paneBottom: 800 }
+  const offscreen = { left: 0, top: 840, right: 100, bottom: 860, paneBottom: 900 }
+  const higher = { left: 300, top: 500, right: 700, bottom: 590, paneBottom: 768 }
+  expect(
+    keepFloatingTerminalTriggerClear({ left: 640, top: 680 }, [covered, offscreen, higher])
+  ).toEqual({ left: 640, top: 456 })
+})

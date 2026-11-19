@@ -122,8 +122,11 @@ export function keepFloatingTerminalTriggerClear(
       return below + TRIGGER_SIZE <= floor ? [below, above] : [above]
     }
   )
+  const lowest = getViewport().height - TRIGGER_SIZE - DRAG_MARGIN
+  // A spot the window clamp would move could land back on a box, so only spots it keeps count.
   const clear = spots.find(
-    (top) => top >= TITLEBAR_SAFE_TOP && !keepClear.some((rect) => covers(top, rect))
+    (top) =>
+      top >= TITLEBAR_SAFE_TOP && top <= lowest && !keepClear.some((rect) => covers(top, rect))
   )
   return clampFloatingTerminalTriggerPosition({ left: position.left, top: clear ?? spots[0] })
 }
