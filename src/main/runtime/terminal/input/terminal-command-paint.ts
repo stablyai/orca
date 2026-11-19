@@ -242,6 +242,13 @@ export class TerminalCommandPaint {
     )
   }
 
+  /** A ledger saved at quit proved the retained frame is this reattached command's own paint. */
+  vouchRetainedPaint(): void {
+    if (this.awaitsReattachedCommand()) {
+      this.awaitingPaint = this.repaintRequestable = false
+    }
+  }
+
   /** True once per reattach while nothing has painted: the one repaint request it allows. */
   takeReattachedRepaintRequest(): boolean {
     const take = this.repaintRequestable
