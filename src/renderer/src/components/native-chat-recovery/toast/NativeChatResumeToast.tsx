@@ -250,11 +250,11 @@ export function NativeChatResumeToast({
             {offering
               ? t(
                   'auto.components.NativeChatResumeToast.willAsk',
-                  'Orca will ask each chat to continue. Messages you queued may be sent.'
+                  'Orca asks chats to continue. Queued messages may be sent.'
                 )
               : t(
                   'auto.components.NativeChatResumeToast.asked',
-                  'Orca asked each chat to continue. Messages you queued may be sent.'
+                  'Orca asked chats to continue. Queued messages may be sent.'
                 )}
           </p>
           {(showDismissAll || view.startedBy === 'launch') && (

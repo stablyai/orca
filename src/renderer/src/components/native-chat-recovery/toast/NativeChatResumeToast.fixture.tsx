@@ -163,9 +163,9 @@ export const remoteServer = defineFixture({
 /** The toaster's narrowest width, min(26rem, 100vw - 2rem) in a 360 px window, in a long locale. */
 const NARROWEST = 328
 
-function twelveOneNeedsYouIn(language: 'de' | 'ru') {
+function twelveOneNeedsYouIn(language: 'en' | 'de' | 'ru', width = NARROWEST) {
   return defineFixture({
-    width: NARROWEST,
+    width,
     render: () => (
       <NativeChatResumeToast
         view={resumeToastView(
@@ -187,3 +187,44 @@ function twelveOneNeedsYouIn(language: 'de' | 'ru') {
 
 export const twelveOneNeedsYouGerman = twelveOneNeedsYouIn('de')
 export const twelveOneNeedsYouRussian = twelveOneNeedsYouIn('ru')
+
+/** The toaster's usual width, 26rem, as the real app showed it. */
+const TOAST_WIDTH = 416
+export const twelveOneNeedsYouEnglish416 = twelveOneNeedsYouIn('en', TOAST_WIDTH)
+export const twelveOneNeedsYouGerman416 = twelveOneNeedsYouIn('de', TOAST_WIDTH)
+export const twelveOneNeedsYouRussian416 = twelveOneNeedsYouIn('ru', TOAST_WIDTH)
+
+export const offerManualDetails416 = defineFixture({
+  width: TOAST_WIDTH,
+  render: () => (
+    <NativeChatResumeToast
+      view={resumeToastView(null, twelve.slice(0, 3), new Map())}
+      listedAt={NOW}
+      onDismissAll={noop}
+      defaultExpanded
+      {...actions}
+    />
+  )
+})
+
+function offerManualDetailsIn(language: 'de' | 'ru') {
+  return defineFixture({
+    width: TOAST_WIDTH,
+    render: () => (
+      <NativeChatResumeToast
+        view={resumeToastView(null, twelve.slice(0, 3), new Map())}
+        listedAt={NOW}
+        onDismissAll={noop}
+        defaultExpanded
+        {...actions}
+      />
+    ),
+    interact: async () => {
+      await setRendererUiLanguage(language)
+      await new Promise((resolve) => setTimeout(resolve, 300))
+    }
+  })
+}
+
+export const offerManualDetailsGerman416 = offerManualDetailsIn('de')
+export const offerManualDetailsRussian416 = offerManualDetailsIn('ru')
