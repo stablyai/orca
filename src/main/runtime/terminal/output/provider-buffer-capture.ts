@@ -46,16 +46,15 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     const liveModeTracker = new TerminalKittyKeyboardModeTracker()
     let liveModeTrackers = this.providerModeSnapshotScansByPtyId.get(ptyId)
     if (!liveModeTrackers) {
-      liveModeTrackers = new Map()
+      liveModeTrackers = new Set()
       this.providerModeSnapshotScansByPtyId.set(ptyId, liveModeTrackers)
     }
-    liveModeTrackers.set(liveModeTracker, opts.recovery ? 'recovery' : 'reader')
+    liveModeTrackers.add(liveModeTracker)
     try {
       // Why: daemon PTYs survive an app relaunch before any renderer mounts.
       // Mobile still needs their retained history without navigating desktop.
       const snapshot = await this.ptyController?.serializeProviderBuffer?.(ptyId, opts)
-      const retired = opts.signal?.aborted || !liveModeTrackers.has(liveModeTracker)
-      if (!snapshot || retired || this.ptyLifecycleGenerationById.get(ptyId) !== generation) {
+      if (!snapshot || this.ptyLifecycleGenerationById.get(ptyId) !== generation) {
         return null
       }
       const snapshotModeTracker = new TerminalKittyKeyboardModeTracker()
@@ -81,9 +80,10 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
         this.providerModeTrackersByPtyId.set(ptyId, modeTracker)
         effectiveAlternateScreen = modeTracker.isAlternateScreen
       }
+      const providerOffset = this.providerSequenceOffsetByPtyId.get(ptyId) ?? 0
       const reconciledSnapshot = this.preferTrackedLastTitle(ptyId, {
         ...snapshot,
-        seq: (this.providerSequenceOffsetByPtyId.get(ptyId) ?? 0) + snapshot.seq,
+        seq: providerOffset + snapshot.seq,
         ...(effectiveAlternateScreen !== undefined
           ? { alternateScreen: effectiveAlternateScreen }
           : {})
@@ -114,9 +114,6 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     if (typeof opts.cursor === 'number') {
       return read
     }
-    if (this.providerHistoryNeedsLiveWindow(ptyId) && !this.isTerminalAlternateScreen(ptyId)) {
-      return this.withRenderedTerminalTail(ptyId, read, opts.limit, providerSnapshot)
-    }
     const blankFallback = shouldFallbackToVisibleTerminalSnapshot(read, opts)
     const recoveredWorkerFallback =
       read.tail.length === 0 && this.legacyWorkerRecovery.hasRecoveredPty(ptyId)
@@ -134,9 +131,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
       )
       if (providerProjection.lines.length > 0) {
         return buildVisibleSnapshotReadFallback(
-          providerProjection.historyCut !== undefined
-            ? { ...read, limited: providerProjection.historyCut }
-            : read,
+          read,
           providerProjection.lines,
           opts.limit,
           providerProjection.draft,
@@ -166,7 +161,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
       !visibleState?.isAlternateScreen
     ) {
       return conpty
-        ? await this.withRenderedTerminalTail(ptyId, read, opts.limit, providerSnapshot)
+        ? await this.withConptyRenderedTail(ptyId, read, opts.limit, providerSnapshot)
         : read
     }
     let projection: RuntimeTerminalProjection = visibleState ?? { lines: [] }
@@ -174,9 +169,7 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
       projection = await this.readRendererVisibleSnapshotLines(ptyId)
     }
     if (projection.lines.length === 0) {
-      return this.providerHistoryNeedsLiveWindow(ptyId)
-        ? this.withRenderedTerminalTail(ptyId, read, opts.limit, providerSnapshot)
-        : read
+      return read
     }
     return buildVisibleSnapshotReadFallback(
       read,
@@ -187,27 +180,29 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     )
   }
 
-  // Rendered cells replace raw tails after gaps and ConPTY cursor repaints.
-  private async withRenderedTerminalTail(
+  // ConPTY absolute cursor paints overwrite text that raw tails retain, including ghost PSReadLine predictions; read rendered cells.
+  private async withConptyRenderedTail(
     ptyId: string,
     read: RuntimeTerminalRead,
     limit: number | undefined,
     providerSnapshot: RuntimeProviderSnapshotReadOptions
   ): Promise<RuntimeTerminalRead> {
+    const state = this.readWholeScreenModel(ptyId)
     const projection = await this.readRenderedTerminalTailLines(ptyId, limit, providerSnapshot)
     const lineLimit = terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT)
-    const { historyCut, tailRows } = projection
-    const lines = historyCut !== undefined ? projection.lines.slice(-lineLimit) : projection.lines
-    const rows = historyCut !== undefined ? tailRows?.slice(-lineLimit) : tailRows
-    return lines.length > 0 || historyCut !== undefined
+    const limited =
+      read.limited || Boolean(state?.recoveredHistoryCut && projection.lines.length < lineLimit)
+    return projection.lines.length > 0
       ? buildVisibleSnapshotReadFallback(
-          historyCut !== undefined ? { ...read, limited: historyCut } : read,
-          lines,
+          { ...read, limited },
+          projection.lines,
           limit,
           projection.draft,
-          rows
+          projection.tailRows
         )
-      : read
+      : this.headlessTerminals.get(ptyId)?.gapReseed
+        ? buildVisibleSnapshotReadFallback({ ...read, limited: true }, [], limit)
+        : read
   }
 
   private async readRenderedTerminalTailLines(
@@ -215,102 +210,71 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     limit: number | undefined,
     providerSnapshot: RuntimeProviderSnapshotReadOptions
   ): Promise<RuntimeTerminalProjection> {
-    const state = this.readWholeScreenModel(ptyId)
-    const generation = this.getPtyLifecycleGeneration(ptyId)
-    if (!state) {
-      return this.readProviderTerminalTailLines(
-        ptyId,
-        limit,
-        { timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS, ...providerSnapshot },
-        this.getTerminalSize(ptyId)?.rows ?? 0
-      )
-    }
-    const lineLimit = terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT)
     // Over-fetch a screen so blank rows below the prompt cannot consume the requested nonblank line count.
-    const rowLimit = lineLimit + (this.getTerminalSize(ptyId)?.rows ?? 0)
+    const rowLimit =
+      terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT) +
+      (this.getTerminalSize(ptyId)?.rows ?? 0)
+    const state = this.readWholeScreenModel(ptyId)
+    if (!state) {
+      return this.readProviderTerminalTailLines(ptyId, rowLimit, {
+        timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
+        ...providerSnapshot
+      })
+    }
+    const generation = this.getPtyLifecycleGeneration(ptyId)
     await state.writeChain
+    // The same model can turn untrusted while the read waited: a gap keeps it rather than replacing it.
     if (
       this.readWholeScreenModel(ptyId) !== state ||
       this.getPtyLifecycleGeneration(ptyId) !== generation
     ) {
-      return {
-        lines: [],
-        ...(this.providerHistoryNeedsLiveWindow(ptyId) ? { historyCut: true } : {})
-      }
+      return { lines: [] }
     }
-    if (providerSnapshot.visibleScreenOnly) {
-      const projection = projectTerminalVisibleLines(state.emulator)
-      return this.providerHistoryNeedsLiveWindow(ptyId)
-        ? { ...projection, historyCut: true }
-        : projection
-    }
-    const projection = projectTerminalTailLines(state.emulator, rowLimit)
-    const bufferFull =
-      state.emulator.getVisibleBufferRange().totalLength >=
-      state.emulator.getAppliedSize().rows + this.headlessTerminalScrollbackRows
-    return {
-      ...projection,
-      ...(state.recoveredHistoryCut || (bufferFull && this.providerHistoryNeedsLiveWindow(ptyId))
-        ? { historyCut: projection.lines.length < lineLimit }
-        : this.providerHistoryNeedsLiveWindow(ptyId)
-          ? { historyCut: projection.lines.length > lineLimit }
-          : {})
-    }
+    return providerSnapshot.visibleScreenOnly
+      ? projectTerminalVisibleLines(state.emulator)
+      : projectTerminalTailLines(state.emulator, rowLimit)
   }
 
   protected async readProviderTerminalTailLines(
     ptyId: string,
     limit: number | undefined,
-    snapshotOptions: RuntimeProviderSnapshotReadOptions = {},
-    screenRows = 0
+    snapshotOptions: RuntimeProviderSnapshotReadOptions = {}
   ): Promise<RuntimeTerminalProjection> {
     const generation = this.getPtyLifecycleGeneration(ptyId)
-    const mutationEpoch = this.getPtyBufferMutationEpoch(ptyId)
     const lineLimit = terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT)
-    const rowLimit = lineLimit + screenRows
-    const capped = this.providerHistoryNeedsLiveWindow(ptyId)
-    const unavailable = { lines: [], ...(capped ? { historyCut: true } : {}) }
     const snapshot = await this.serializeProviderTerminalBuffer(
       ptyId,
-      { scrollbackRows: snapshotOptions.visibleScreenOnly ? 0 : rowLimit },
+      { scrollbackRows: snapshotOptions.visibleScreenOnly ? 0 : lineLimit },
       snapshotOptions
     )
     if (!snapshot) {
-      return unavailable
+      return { lines: [] }
     }
     // Cached acquisitions can include unrequested scrollback; visible-only reads must parse the grid.
     if (snapshotOptions.visibleScreenOnly) {
       const projection = await this.parseVisibleSnapshot(snapshot)
       // Live bytes ordered after the provider frame make that frame stale.
       return this.ptyLifecycleGenerationById.get(ptyId) === generation &&
-        this.getPtyBufferMutationEpoch(ptyId) === mutationEpoch &&
         this.getPtyOutputSequence(ptyId) <= snapshot.seq
-        ? { ...projection, ...(capped ? { historyCut: true } : {}) }
-        : unavailable
+        ? projection
+        : { lines: [] }
     }
     const data = `${snapshot.scrollbackAnsi ?? ''}${snapshot.data}`
     if (data.length === 0) {
-      return unavailable
+      return { lines: [] }
     }
     const emulator = new HeadlessEmulator({
       cols: snapshot.cols,
       rows: snapshot.rows,
-      scrollback: rowLimit
+      scrollback: lineLimit
     })
     try {
       await emulator.write(data)
-      const projection = {
-        ...projectTerminalTailLines(emulator, rowLimit),
-        ...(capped ? { historyCut: lineLimit > (snapshot.scrollbackRows ?? 0) } : {})
-      }
-      if (projection.lines.length === 0 && capped) {
-        projection.historyCut = true
-      }
+      const projection = projectTerminalTailLines(emulator, lineLimit)
       return this.ptyLifecycleGenerationById.get(ptyId) === generation &&
-        this.getPtyBufferMutationEpoch(ptyId) === mutationEpoch &&
         this.getPtyOutputSequence(ptyId) <= snapshot.seq
         ? projection
-        : unavailable
+        : { lines: [] }
     } finally {
       emulator.dispose()
     }

@@ -132,7 +132,6 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     this.providerModeTrackersByPtyId.delete(ptyId)
     this.providerModeSnapshotScansByPtyId.delete(ptyId)
     this.providerBufferAcquisitionsByPtyId.delete(ptyId)
-    this.forgetPtyBufferMutationEpoch(ptyId)
     this.forgetProviderVisibleState(ptyId)
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
     this.liveProgramStatusFacetPtyIds.delete(ptyId)

@@ -282,7 +282,6 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
   // Public: desktop-initiated clears (ipc/pty.ts) must also drop this mobile
   // mirror or a resubscribing mobile client resurrects the cleared scrollback.
   async clearHeadlessTerminalBuffer(ptyId: string): Promise<void> {
-    this.advancePtyBufferMutationEpoch(ptyId)
     const state = this.headlessTerminals.get(ptyId)
     if (!state) {
       return
@@ -301,7 +300,6 @@ export abstract class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends Orca
 
   // Public: Reset Terminal must ground this model too; park/reveal and mobile restore from it.
   async resetHeadlessTerminalInputModes(ptyId: string): Promise<void> {
-    this.advancePtyBufferMutationEpoch(ptyId)
     // Why now, not on the chain: onPtyData scans live bytes into these on arrival.
     // Focus is outside their model, so the plain ground is exact.
     this.scanProviderModeTrackers(ptyId, PROCESS_BOUNDARY_GROUND)

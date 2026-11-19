@@ -8,7 +8,7 @@ import { AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from './provider-snapshot-
 export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState extends OrcaRuntimeWithHeadlessGapReseed {
   protected abstract captureProviderTerminalBuffer(
     ptyId: string,
-    opts: { scrollbackRows?: number; signal?: AbortSignal },
+    opts: { scrollbackRows?: number },
     generation: number
   ): Promise<PtyProviderBufferSnapshot | null>
 
@@ -17,7 +17,6 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
     opts: { scrollbackRows?: number } = {}
   ): Promise<{
     data: string
-    scrollbackRows?: number
     frameRestoreAnsi?: string
     cols: number
     rows: number
@@ -137,13 +136,8 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
     ptyId: string,
     opts: { scrollbackRows?: number } = {},
     wait: { timeoutMs?: number; retireOnTimeout?: boolean } = {}
-  ): Promise<(PtyProviderBufferSnapshot & { scrollbackRows?: number }) | null> {
-    const { snapshot } = await this.awaitProviderTerminalBuffer(ptyId, opts, wait)
-    return snapshot
-  }
-
-  protected providerHistoryNeedsLiveWindow(ptyId: string): boolean {
-    return this.ptyGapCounts.has(ptyId) || Boolean(this.headlessTerminals.get(ptyId)?.gapReseed)
+  ): Promise<PtyProviderBufferSnapshot | null> {
+    return (await this.awaitProviderTerminalBuffer(ptyId, opts, wait)).snapshot
   }
 
   /** `late` is the capture still running when the bounded wait gave up, so a caller can act once it lands. */
@@ -153,44 +147,18 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
     wait: { timeoutMs?: number; retireOnTimeout?: boolean } = {}
   ): Promise<ProviderTerminalBufferWait> {
     const generation = this.getPtyLifecycleGeneration(ptyId)
-    const mutationEpoch = this.getPtyBufferMutationEpoch(ptyId)
-    const isCurrent = () =>
-      this.ptyLifecycleGenerationById.get(ptyId) === generation &&
-      this.getPtyBufferMutationEpoch(ptyId) === mutationEpoch
-    const capped = this.providerHistoryNeedsLiveWindow(ptyId)
-    const liveWindow = this.providerHistoryLiveWindowRows()
-    const requested = opts.scrollbackRows ?? (capped ? liveWindow : Infinity)
-    const scrollbackRows = Math.max(
-      0,
-      Math.floor(capped ? Math.min(requested, liveWindow) : requested)
-    )
-    const captureOptions = capped ? { ...opts, scrollbackRows } : opts
+    const scrollbackRows = Math.max(0, Math.floor(opts.scrollbackRows ?? 0))
     let acquisition = this.providerBufferAcquisitionsByPtyId.get(ptyId)
-    if (
-      acquisition &&
-      (acquisition.generation !== generation ||
-        acquisition.mutationEpoch !== mutationEpoch ||
-        acquisition.scrollbackRows < scrollbackRows ||
-        (capped && acquisition.scrollbackRows > liveWindow))
-    ) {
-      // Keep ownership until settlement, including providers that delay acknowledging abort.
-      return { snapshot: null, late: null }
+    if (acquisition?.generation === generation && acquisition.timedOut) {
+      return { snapshot: null, late: acquisition.promise }
     }
-    if (!acquisition) {
-      const abortController = new AbortController()
-      const promise = this.captureProviderTerminalBuffer(
-        ptyId,
-        { ...captureOptions, signal: abortController.signal },
-        generation
-      ).then((snapshot) => (isCurrent() ? snapshot : null))
-      acquisition = {
-        abortController,
-        generation,
-        mutationEpoch,
-        scrollbackRows,
-        promise,
-        timedOut: false
-      }
+    if (
+      !acquisition ||
+      acquisition.generation !== generation ||
+      acquisition.scrollbackRows < scrollbackRows
+    ) {
+      const promise = this.captureProviderTerminalBuffer(ptyId, opts, generation)
+      acquisition = { generation, scrollbackRows, promise, timedOut: false }
       this.providerBufferAcquisitionsByPtyId.set(ptyId, acquisition)
       void promise.finally(() => {
         if (this.providerBufferAcquisitionsByPtyId.get(ptyId) === acquisition) {
@@ -209,24 +177,12 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
       wait.timeoutMs ?? AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
       { settled: false as const }
     )
-    if (
-      !isCurrent() ||
-      (this.providerHistoryNeedsLiveWindow(ptyId) && acquisition.scrollbackRows > liveWindow)
-    ) {
-      return { snapshot: null, late: null }
-    }
     if (!result.settled) {
       if (wait.retireOnTimeout) {
         acquisition.timedOut = true
       }
       return { snapshot: null, late: acquisition.promise }
     }
-    return {
-      snapshot:
-        result.value && capped
-          ? { ...result.value, scrollbackRows: acquisition.scrollbackRows }
-          : result.value,
-      late: null
-    }
+    return { snapshot: result.value, late: null }
   }
 }

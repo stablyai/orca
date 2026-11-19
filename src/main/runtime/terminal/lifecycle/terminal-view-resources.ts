@@ -115,34 +115,10 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
 
   protected providerModeSnapshotScansByPtyId = new Map<
     string,
-    Map<TerminalKittyKeyboardModeTracker, 'reader' | 'recovery'>
+    Set<TerminalKittyKeyboardModeTracker>
   >()
 
   protected providerBufferAcquisitionsByPtyId = new Map<string, ProviderBufferAcquisition>()
-
-  private readonly ptyBufferMutationEpochById = new Map<string, number>()
-
-  protected getPtyBufferMutationEpoch(ptyId: string): number {
-    return this.ptyBufferMutationEpochById.get(ptyId) ?? 0
-  }
-
-  protected advancePtyBufferMutationEpoch(ptyId: string): void {
-    this.ptyBufferMutationEpochById.set(ptyId, this.getPtyBufferMutationEpoch(ptyId) + 1)
-    this.providerBufferAcquisitionsByPtyId.get(ptyId)?.abortController.abort()
-    const scans = this.providerModeSnapshotScansByPtyId.get(ptyId)
-    for (const [tracker, kind] of scans ?? []) {
-      if (kind === 'reader') {
-        scans?.delete(tracker)
-      }
-    }
-    if (scans?.size === 0) {
-      this.providerModeSnapshotScansByPtyId.delete(ptyId)
-    }
-  }
-
-  protected forgetPtyBufferMutationEpoch(ptyId: string): void {
-    this.ptyBufferMutationEpochById.delete(ptyId)
-  }
 
   protected providerVisibleStateByPtyId = new Map<string, RuntimeVisibleTerminalState>()
 

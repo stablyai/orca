@@ -204,14 +204,12 @@ export type RuntimeVisibleTerminalState = {
 }
 
 export type ProviderTerminalBufferWait = {
-  snapshot: (PtyProviderBufferSnapshot & { scrollbackRows?: number }) | null
+  snapshot: PtyProviderBufferSnapshot | null
   late: Promise<PtyProviderBufferSnapshot | null> | null
 }
 
 export type ProviderBufferAcquisition = {
-  abortController: AbortController
   generation: number
-  mutationEpoch: number
   scrollbackRows: number
   promise: Promise<PtyProviderBufferSnapshot | null>
   timedOut: boolean
@@ -219,8 +217,6 @@ export type ProviderBufferAcquisition = {
 
 export type RuntimeTerminalBufferSnapshot = {
   data: string
-  /** Acquisition window when provider history was capped during gap recovery. */
-  scrollbackRows?: number
   frameRestoreAnsi?: string
   cols: number
   rows: number
