@@ -104,6 +104,9 @@ export class ReleaseAssetPolicyLiveUpdater<P extends { revision: number }> {
   private channel: ReleaseAssetPolicyChannel | null = null
   private timer: ReturnType<typeof setInterval> | null = null
   private fetched: { policy: P; downloaded: P; at: number } | null = null
+  // The newest policy this process has known, so a cache write that failed can't let an older
+  // download win later.
+  private newest: P | null = null
 
   constructor(
     private readonly spec: ReleaseAssetPolicySpec<P>,
@@ -162,8 +165,11 @@ export class ReleaseAssetPolicyLiveUpdater<P extends { revision: number }> {
       this.deps.userDataPath,
       this.deps.appVersion
     )
-    const stale = cached !== null && parsed.policy.revision <= cached.revision
-    const policy = stale ? cached : parsed.policy
+    const known =
+      cached && (!this.newest || cached.revision >= this.newest.revision) ? cached : this.newest
+    const stale = known !== null && parsed.policy.revision <= known.revision
+    const policy = stale ? known : parsed.policy
+    this.newest = policy
     this.fetched = { policy, downloaded: parsed.policy, at: Date.now() }
     // Before the write, so the policy applies this run even if caching it fails.
     this.deps.onFetched?.(policy)
