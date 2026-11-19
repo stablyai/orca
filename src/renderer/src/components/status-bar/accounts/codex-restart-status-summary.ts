@@ -73,7 +73,7 @@ function projectCodexRestartStatus(
   }
   const queuedPaneKeys = new Set<string>()
   const requests: CodexAccountRestart[] = []
-  for (const [key, request] of Object.entries(state.pendingPaneAccountRestarts)) {
+  for (const [key, request] of Object.entries(state.pendingPaneAccountRestarts ?? {})) {
     if (isCodexAccountRestart(request)) {
       queuedPaneKeys.add(key)
       requests.push(request)
