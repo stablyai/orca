@@ -128,14 +128,16 @@ export function NativeChatResumeToastRow({
             {actions.map((action) => (
               <Button
                 key={action}
-                variant={action === actions[0] ? 'outline' : 'ghost'}
-                size="xs"
                 // Dismiss deletes the offer, so it sits apart and quieter than the ways to continue.
-                className={
+                variant={
                   action === 'dismiss'
-                    ? 'ml-auto text-muted-foreground hover:text-foreground'
-                    : undefined
+                    ? 'muted-field-icon'
+                    : action === actions[0]
+                      ? 'outline'
+                      : 'ghost'
                 }
+                size="xs"
+                className={action === 'dismiss' ? 'ml-auto' : undefined}
                 // Open is read-only, so it stays available while a resume runs.
                 disabled={busy && action !== 'open'}
                 aria-label={`${actionLabel(action, row, t)}: ${name}`}
