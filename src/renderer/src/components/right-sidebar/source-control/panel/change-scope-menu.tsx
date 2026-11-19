@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 import { ChevronsUpDown, GitGraph } from 'lucide-react'
 import {
   DropdownMenuContent,
@@ -39,6 +39,46 @@ function ScopeItemText({ title, detail }: { title: string; detail?: string }): R
   )
 }
 
+function moveThroughCommitFilter(
+  event: React.KeyboardEvent<HTMLDivElement>,
+  input: HTMLInputElement | null
+): void {
+  if (!input || event.nativeEvent.isComposing || !(event.target instanceof HTMLElement)) {
+    return
+  }
+  const down = event.key === 'ArrowDown'
+  if (!down && event.key !== 'ArrowUp') {
+    return
+  }
+  let above: HTMLElement | undefined
+  let below: HTMLElement | undefined
+  for (const item of event.currentTarget.querySelectorAll<HTMLElement>(MENU_ITEM_SELECTOR)) {
+    if (item.hasAttribute('data-disabled')) {
+      continue
+    }
+    if (item.compareDocumentPosition(input) & Node.DOCUMENT_POSITION_FOLLOWING) {
+      above = item
+    } else {
+      below = item
+      break
+    }
+  }
+  const row = event.target.closest(MENU_ITEM_SELECTOR)
+  const destination =
+    event.target === input
+      ? down
+        ? below
+        : above
+      : (down && row === above) || (!down && row === below)
+        ? input
+        : null
+  if (destination) {
+    event.preventDefault()
+    event.stopPropagation()
+    destination.focus()
+  }
+}
+
 export function SourceControlChangeScopeMenuContent({
   scope,
   onScopeChange,
@@ -65,6 +105,7 @@ export function SourceControlChangeScopeMenuContent({
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const [query, setQuery] = useState('')
+  const filterRef = useRef<HTMLInputElement>(null)
   const result = historyState.result
   const commits = useMemo(() => result?.items ?? [], [result])
   const normalizedQuery = query.trim().toLowerCase()
@@ -92,6 +133,7 @@ export function SourceControlChangeScopeMenuContent({
       density="compact"
       className="w-[min(340px,calc(100vw-16px))]"
       data-testid="source-control-change-scope-menu"
+      onKeyDownCapture={(event) => moveThroughCommitFilter(event, filterRef.current)}
       onOpenAutoFocus={(event) => {
         // Start on the checked scope, like a native select.
         const content = event.currentTarget
@@ -154,22 +196,11 @@ export function SourceControlChangeScopeMenuContent({
         {commits.length > COMMIT_FILTER_THRESHOLD || query.length > 0 ? (
           <div className="px-1.5 pb-1">
             <input
+              ref={filterRef}
               type="text"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === 'ArrowDown') {
-                  event.preventDefault()
-                  const menu = event.currentTarget.closest('[role="menu"]')
-                  const items = [...(menu?.querySelectorAll<HTMLElement>(MENU_ITEM_SELECTOR) ?? [])]
-                  const below = items.find(
-                    (item) =>
-                      event.currentTarget.compareDocumentPosition(item) &
-                      Node.DOCUMENT_POSITION_FOLLOWING
-                  )
-                  below?.focus()
-                  return
-                }
                 // Keep menu typeahead from moving focus off the field while typing.
                 if (event.key !== 'Escape' && event.key !== 'Tab') {
                   event.stopPropagation()
