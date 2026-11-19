@@ -194,9 +194,10 @@ export function evaluateWorkspaceCleanup(
 }
 
 export type WorkspaceCleanupFolderVerdict = {
-  worktreeId: string
-  /** The other worktrees attached to the same folder workspace. */
-  folderSiblingIds: readonly string[]
+  /** Host identity: a same-id worktree on another host is a different sibling. */
+  identity: string
+  /** The other worktrees listed under the same folder workspace, by host identity. */
+  folderSiblings: readonly string[]
   evaluation: WorkspaceCleanupEvaluation
 }
 
@@ -208,10 +209,10 @@ export function keepFolderWorkspaceSiblings(
   const going = new Set(
     verdicts
       .filter(({ evaluation }) => evaluation.action !== 'keep' || evaluation.cause === 'removing')
-      .map((verdict) => verdict.worktreeId)
+      .map((verdict) => verdict.identity)
   )
-  return verdicts.map(({ folderSiblingIds, evaluation }) =>
-    evaluation.action !== 'keep' && folderSiblingIds.some((id) => !going.has(id))
+  return verdicts.map(({ folderSiblings, evaluation }) =>
+    evaluation.action !== 'keep' && folderSiblings.some((id) => !going.has(id))
       ? { action: 'keep', cause: 'folder-workspace-sibling', reason: evaluation.reason }
       : evaluation
   )

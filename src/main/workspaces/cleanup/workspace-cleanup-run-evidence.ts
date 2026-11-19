@@ -11,7 +11,8 @@ import type { Repo } from '../../../shared/repository/repo-types'
 import {
   isRepoOnCatalogHost,
   LOCAL_EXECUTION_HOST_ID,
-  normalizeExecutionHostId
+  normalizeExecutionHostId,
+  type ExecutionHostId
 } from '../../../shared/execution-host/execution-host'
 import type { RuntimeWorktreePsSummary } from '../../../shared/worktree/catalog/runtime-worktree-contracts'
 import {
@@ -41,8 +42,10 @@ export type WorkspaceCleanupWorkspace = {
   input: WorkspaceCleanupEvaluationInput
   paneAgentStates: WorkspaceCleanupPaneAgentStates
   removing: boolean
-  /** The other worktrees its folder workspace lists, on any host; a re-check of one id lists none. */
-  folderSiblingIds: string[]
+  /** Its host identity; every workspace here is this host's. */
+  identity: string
+  /** The host identities of the other worktrees its folder workspace lists, on any host; a re-check of one id lists none. */
+  folderSiblings: string[]
 }
 
 /** Repos whose checkouts this process owns; a host served by its own orcad is that server's to clean. */
@@ -56,26 +59,29 @@ export function listWorkspaceCleanupOwnedRepos(store: RuntimeStore): Map<string,
   return repos
 }
 
+function summaryHostId(summary: RuntimeWorktreePsSummary): ExecutionHostId | null {
+  return summary.hostId ? normalizeExecutionHostId(summary.hostId) : LOCAL_EXECUTION_HOST_ID
+}
+
+/** A same-id row on another host is a different checkout. */
+function summaryIdentity(summary: RuntimeWorktreePsSummary): string {
+  return composeWorktreeHostIdentity(summaryHostId(summary) ?? undefined, summary.worktreeId)
+}
+
 function isOwnedSummary(summary: RuntimeWorktreePsSummary, repos: Map<string, Repo>): boolean {
-  const hostId = summary.hostId ? normalizeExecutionHostId(summary.hostId) : LOCAL_EXECUTION_HOST_ID
   return (
     repos.has(summary.repoId) &&
-    hostId === LOCAL_EXECUTION_HOST_ID &&
+    summaryHostId(summary) === LOCAL_EXECUTION_HOST_ID &&
     summary.workspaceKind !== 'folder-workspace'
   )
 }
 
-/** Each listed worktree's folder siblings: the others its folder workspace's Source Control lists,
- * attached worktrees and their lineage children alike, as getFolderWorkspaceChildWorktrees nests them. */
-function folderSiblingIdsByWorktree(
+/** Each listed worktree's folder siblings by host identity: the others its folder workspace's Source
+ * Control lists, attached worktrees and their lineage children alike, on any host. */
+function folderSiblingsByWorktree(
   summaries: readonly RuntimeWorktreePsSummary[]
 ): (summary: RuntimeWorktreePsSummary) => string[] {
-  const byIdentity = new Map(
-    summaries.map((summary) => [
-      composeWorktreeHostIdentity(summary.hostId, summary.worktreeId),
-      summary
-    ])
-  )
+  const byIdentity = new Map(summaries.map((summary) => [summaryIdentity(summary), summary]))
   // An archived ancestor hides its subtree from the folder; a retired one passes its children up.
   const folderOf = (summary: RuntimeWorktreePsSummary): string | null => {
     const visited = new Set<RuntimeWorktreePsSummary>()
@@ -86,7 +92,9 @@ function folderSiblingIdsByWorktree(
       }
       visited.add(row)
       row = row.parentWorktreeId
-        ? byIdentity.get(composeWorktreeHostIdentity(row.hostId, row.parentWorktreeId))
+        ? byIdentity.get(
+            composeWorktreeHostIdentity(summaryHostId(row) ?? undefined, row.parentWorktreeId)
+          )
         : undefined
     }
     return null
@@ -100,17 +108,15 @@ function folderSiblingIdsByWorktree(
         : folderOf(summary)
     if (folderKey) {
       folderByMember.set(summary, folderKey)
-      membersByFolder.set(folderKey, [
-        ...(membersByFolder.get(folderKey) ?? []),
-        summary.worktreeId
-      ])
+      const members = membersByFolder.get(folderKey) ?? []
+      members.push(summaryIdentity(summary))
+      membersByFolder.set(folderKey, members)
     }
   }
   return (summary) => {
     const folderKey = folderByMember.get(summary)
-    return folderKey
-      ? membersByFolder.get(folderKey)!.filter((id) => id !== summary.worktreeId)
-      : []
+    const self = summaryIdentity(summary)
+    return folderKey ? membersByFolder.get(folderKey)!.filter((id) => id !== self) : []
   }
 }
 
@@ -240,7 +246,7 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
     throw new Error('Could not list every workspace on this host.')
   }
   const summaries = ps.worktrees.filter((summary) => isOwnedSummary(summary, repos))
-  const folderSiblingIdsOf = folderSiblingIdsByWorktree(ps.worktrees)
+  const folderSiblingsOf = folderSiblingsByWorktree(ps.worktrees)
   const policies = new Map<string, ResolvedWorkspaceCleanupPolicy>()
   for (const summary of summaries) {
     if (!policies.has(summary.repoId)) {
@@ -293,7 +299,8 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
       ),
       paneAgentStates,
       removing: summary.removing === true,
-      folderSiblingIds: folderSiblingIdsOf(summary)
+      identity: summaryIdentity(summary),
+      folderSiblings: folderSiblingsOf(summary)
     }
   })
 }

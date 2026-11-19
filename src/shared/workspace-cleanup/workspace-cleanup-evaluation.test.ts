@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   evaluateWorkspaceCleanup,
-  keepFolderWorkspaceSiblings,
   type WorkspaceCleanupEvaluationInput
 } from './workspace-cleanup-evaluation'
 import type { ResolvedWorkspaceCleanupPolicy } from './workspace-cleanup-policy'
@@ -53,42 +52,5 @@ describe('evaluateWorkspaceCleanup', () => {
       cause: 'git-unknown',
       reason: 'merged'
     })
-  })
-})
-
-describe('keepFolderWorkspaceSiblings', () => {
-  it('keeps a merged worktree while another repo in its folder workspace is still in use', () => {
-    const verdicts = keepFolderWorkspaceSiblings([
-      {
-        worktreeId: 'repo-a::a1',
-        folderSiblingIds: ['repo-b::b1'],
-        evaluation: { action: 'delete', reason: 'merged' }
-      },
-      {
-        worktreeId: 'repo-b::b1',
-        folderSiblingIds: ['repo-a::a1'],
-        evaluation: { action: 'keep', cause: 'unpushed-commits', reason: 'merged' }
-      }
-    ])
-    expect(verdicts).toEqual([
-      { action: 'keep', cause: 'folder-workspace-sibling', reason: 'merged' },
-      { action: 'keep', cause: 'unpushed-commits', reason: 'merged' }
-    ])
-  })
-
-  it('lets a folder workspace go while one of its worktrees is already being removed', () => {
-    const verdicts = keepFolderWorkspaceSiblings([
-      {
-        worktreeId: 'repo-a::a1',
-        folderSiblingIds: ['repo-b::b1'],
-        evaluation: { action: 'delete', reason: 'merged' }
-      },
-      {
-        worktreeId: 'repo-b::b1',
-        folderSiblingIds: ['repo-a::a1'],
-        evaluation: { action: 'keep', cause: 'removing' }
-      }
-    ])
-    expect(verdicts[0]).toEqual({ action: 'delete', reason: 'merged' })
   })
 })

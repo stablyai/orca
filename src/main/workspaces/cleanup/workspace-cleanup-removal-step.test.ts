@@ -29,7 +29,7 @@ const host = {} as { runtime: OrcaRuntimeService; store: RuntimeStore }
 
 function merged(
   worktreeId: string,
-  folderSiblingIds: string[],
+  folderSiblings: string[],
   blockers: WorkspaceCleanupBlocker[] = []
 ): WorkspaceCleanupWorkspace {
   const repoId = worktreeId.split('::')[0]
@@ -56,7 +56,8 @@ function merged(
     },
     paneAgentStates: new Map(),
     removing: false,
-    folderSiblingIds
+    identity: `local|${worktreeId}`,
+    folderSiblings
   }
 }
 
@@ -78,7 +79,7 @@ describe('removeWorkspaceForCleanup', () => {
     const outcome = await removeWorkspaceForCleanup({
       ...host,
       globalRules: () => merged('repo-a::a1', []).policy.rules,
-      workspace: merged('repo-a::a1', ['repo-b::b1']),
+      workspace: merged('repo-a::a1', ['local|repo-b::b1']),
       now: () => NOW
     })
 
