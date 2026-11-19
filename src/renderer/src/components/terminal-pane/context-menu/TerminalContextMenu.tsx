@@ -8,6 +8,7 @@ import {
   MessageSquare,
   Minimize2,
   PanelBottomClose,
+  PanelTopOpen,
   PanelsTopLeft,
   Quote,
   PanelRightClose,
@@ -42,6 +43,7 @@ import { TerminalQuickCommandsSubmenu } from '../quick-commands/TerminalQuickCom
 import { AddToChatSubmenu } from '../../native-chat/selection-quotes/AddToChatMenu'
 import type { TerminalPaneAgentIdCopy } from './terminal-pane-context-menu-types'
 import { CopyOrcaIdMenuItem } from '../../native-chat/pane/actions/NativeChatCopyOrcaSessionIdMenuItem'
+import type { PaneMoveReadiness } from '../layout/detach/terminal-pane-move-readiness'
 
 type TerminalContextMenuProps = {
   open: boolean
@@ -52,6 +54,9 @@ type TerminalContextMenuProps = {
   closePaneLabel: string
   canExpandPane: boolean
   menuPaneIsExpanded: boolean
+  /** Hidden for a lone pane; disabled while the pane is still starting. */
+  paneMoveReadiness: PaneMoveReadiness
+  onMovePaneToNewTab: () => void
   onCopy: () => void
   /** The selection to add and the workspace whose chats can take it; null with no selection. */
   addToChat: { worktreeId: string; quote: string } | null
@@ -157,6 +162,8 @@ function TerminalContextMenuItems({
   closePaneLabel,
   canExpandPane,
   menuPaneIsExpanded,
+  paneMoveReadiness,
+  onMovePaneToNewTab,
   onCopy,
   addToChat,
   onSelectAll,
@@ -207,7 +214,8 @@ function TerminalContextMenuItems({
       clearPaneTitle: formatPrimaryShortcutLabel('terminal.clearPaneTitle', keybindings),
       copySessionId: formatOptionalPrimaryShortcutLabel('terminal.copySessionId', keybindings),
       close: formatPrimaryShortcutLabel('terminal.closePane', keybindings),
-      nativeChat: formatOptionalPrimaryShortcutLabel('terminal.toggleNativeChat', keybindings)
+      nativeChat: formatOptionalPrimaryShortcutLabel('terminal.toggleNativeChat', keybindings),
+      movePaneToNewTab: formatOptionalPrimaryShortcutLabel('terminal.movePaneToNewTab', keybindings)
     }),
     [keybindings]
   )
@@ -299,6 +307,15 @@ function TerminalContextMenuItems({
           <DropdownMenuShortcut>{shortcuts.expand}</DropdownMenuShortcut>
         </DropdownMenuItem>
       )}
+      {paneMoveReadiness !== 'single-pane' ? (
+        <DropdownMenuItem disabled={paneMoveReadiness !== 'ready'} onSelect={onMovePaneToNewTab}>
+          <PanelTopOpen />
+          {t('components.terminalPane.TerminalContextMenu.movePaneToNewTab', 'Move to New Tab')}
+          {shortcuts.movePaneToNewTab ? (
+            <DropdownMenuShortcut>{shortcuts.movePaneToNewTab}</DropdownMenuShortcut>
+          ) : null}
+        </DropdownMenuItem>
+      ) : null}
       <DropdownMenuSeparator />
       <DropdownMenuItem
         onSelect={() => {

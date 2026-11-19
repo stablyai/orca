@@ -141,6 +141,8 @@ const STATIC_TITLE_COPY = {
     translate('keybindings.title.terminalEqualizePaneSizes', 'Equalize pane sizes'),
   'terminal.expandPane': () =>
     translate('keybindings.title.terminalExpandPane', 'Expand / collapse pane'),
+  'terminal.movePaneToNewTab': () =>
+    translate('keybindings.title.terminalMovePaneToNewTab', 'Move pane to new tab'),
   'terminal.setTitle': () => translate('keybindings.title.128cce6e6d', 'Set title…'),
   'chat.find': () => translate('keybindings.title.chatFind', 'Find in chat'),
   'botItem.back': () => translate('keybindings.title.botItemBack', 'Back to items'),

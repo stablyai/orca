@@ -1,3 +1,4 @@
+import { armKeyLifecycleGuard } from '@/lib/keyboard/key-lifecycle-guard'
 import {
   useCallback,
   useRef,
@@ -133,6 +134,10 @@ export function useNativeChatSurface({
       if (shortcut && onSplit?.(shortcut)) {
         event.preventDefault()
         event.stopPropagation()
+        if (shortcut === 'moveToNewTab') {
+          // Focus lands in the new tab before this chord's release.
+          armKeyLifecycleGuard(event.nativeEvent)
+        }
       }
     },
     [keybindings, onSplit]

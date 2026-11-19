@@ -55,6 +55,7 @@ export type TerminalShortcutAction =
   | { type: 'focusPane'; direction: 'next' | 'previous' }
   | { type: 'equalizePaneSizes' }
   | { type: 'toggleExpandActivePane' }
+  | { type: 'movePaneToNewTab' }
   | { type: 'setTitle' }
   | { type: 'clearPaneTitle' }
   | { type: 'copySessionId' }
@@ -143,6 +144,10 @@ export function resolveTerminalShortcutAction(
 
     if (matches('terminal.expandPane')) {
       return { type: 'toggleExpandActivePane' }
+    }
+
+    if (matches('terminal.movePaneToNewTab')) {
+      return { type: 'movePaneToNewTab' }
     }
 
     if (matches('terminal.setTitle')) {

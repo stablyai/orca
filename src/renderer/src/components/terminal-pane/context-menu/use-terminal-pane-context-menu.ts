@@ -15,6 +15,7 @@ import { useTerminalPaneSplitActions } from '../layout/split/use-terminal-pane-s
 import { useTerminalContextMenuTrigger } from './use-terminal-context-menu-trigger'
 import { resetTerminalInputModes } from '../input/terminal-input-mode-reset'
 import { focusPaneIfFocusUnclaimed } from '@/lib/pane-manager/pane-focus/pane-overlay-focus'
+import type { PaneMoveReadiness } from '../layout/detach/terminal-pane-move-readiness'
 
 type TerminalMenuState = {
   open: boolean
@@ -46,6 +47,8 @@ type TerminalMenuState = {
   onCopyAgentSessionContext: () => Promise<void>
   onQuickCommand: (command: TerminalQuickCommand, historyId: string) => void
   onToggleExpand: () => void
+  menuPaneMoveReadiness: PaneMoveReadiness
+  onMovePaneToNewTab: () => void
   onSetTitle: () => void
   onClearPaneTitle: () => void
   runForPane: <Result>(paneId: number, action: () => Result) => Result
@@ -61,6 +64,8 @@ export function useTerminalPaneContextMenu({
   groupId,
   fallbackCwd,
   toggleExpandPane,
+  onMovePaneToNewTab: movePaneToNewTab,
+  getPaneMoveReadiness,
   onRequestClosePane,
   onClearPaneScrollback,
   onSetTitle,
@@ -178,6 +183,13 @@ export function useTerminalPaneContextMenu({
     }
   }
 
+  const onMovePaneToNewTab = (): void => {
+    const pane = resolveMenuPane()
+    if (pane) {
+      movePaneToNewTab(pane.id)
+    }
+  }
+
   const { handleSetTitle, handleClearPaneTitle } = createTerminalPaneMenuTitleActions({
     onSetTitle,
     onClearPaneTitle,
@@ -198,6 +210,9 @@ export function useTerminalPaneContextMenu({
   const paneCount = open ? (managerRef.current?.getPanes().length ?? 1) : 1
   const menuPane = open ? resolveMenuPane() : null
   const menuPaneId = menuPane?.id ?? null
+  const menuPaneMoveReadiness: PaneMoveReadiness = menuPane
+    ? getPaneMoveReadiness(menuPane.id)
+    : 'single-pane'
 
   return {
     open,
@@ -230,6 +245,8 @@ export function useTerminalPaneContextMenu({
     onCopyAgentSessionContext,
     onQuickCommand,
     onToggleExpand,
+    menuPaneMoveReadiness,
+    onMovePaneToNewTab,
     onSetTitle: handleSetTitle,
     onClearPaneTitle: handleClearPaneTitle,
     runForPane

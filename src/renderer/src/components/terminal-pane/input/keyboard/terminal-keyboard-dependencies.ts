@@ -34,6 +34,7 @@ export type KeyboardHandlersDeps = {
   onClearPaneScrollback: (pane: ManagedPane) => void
   onSetTitle: (paneId: number) => void
   onClearPaneTitle: (paneId: number) => void
+  onMovePaneToNewTab?: (paneId: number) => void
   searchOpenRef: React.RefObject<boolean>
   searchStateRef: React.RefObject<SearchState>
   macOptionAsAltRef: React.RefObject<MacOptionAsAlt>

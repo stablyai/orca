@@ -121,6 +121,7 @@ export type KeybindingActionId =
   | 'terminal.focusPreviousPane'
   | 'terminal.equalizePaneSizes'
   | 'terminal.expandPane'
+  | 'terminal.movePaneToNewTab'
   | 'terminal.setTitle'
   | 'terminal.clearPaneTitle'
   | 'terminal.copySessionId'

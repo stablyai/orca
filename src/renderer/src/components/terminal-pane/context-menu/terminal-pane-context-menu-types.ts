@@ -4,6 +4,7 @@ import type { PtyTransport } from '../pty-transport/pty-transport-types'
 import type { PaneCwdMap } from '../layout/split/resolve-split-cwd'
 import type { PreparedAgentSessionFork } from '../session-fork/terminal-agent-session-fork'
 import type { AgentSessionContinuationRequest } from '../../../../../shared/agent-session/conversation-context/agent-session-continuation'
+import type { PaneMoveReadiness } from '../layout/detach/terminal-pane-move-readiness'
 
 export type UseTerminalPaneContextMenuDeps = {
   managerRef: React.RefObject<PaneManager | null>
@@ -15,6 +16,8 @@ export type UseTerminalPaneContextMenuDeps = {
   groupId: string | null
   fallbackCwd: string
   toggleExpandPane: (paneId: number) => void
+  onMovePaneToNewTab: (paneId: number) => void
+  getPaneMoveReadiness: (paneId: number) => PaneMoveReadiness
   onRequestClosePane: (paneId: number) => void
   onClearPaneScrollback: (pane: ManagedPane) => void
   onSetTitle: (paneId: number) => void

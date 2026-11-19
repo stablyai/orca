@@ -7,6 +7,8 @@ import {
   resolveTerminalTabStripDropTarget
 } from './terminal-tab-strip-drop-target'
 import type { TerminalPaneBindingController } from '../ownership/use-terminal-pane-layout-bindings'
+import { paneMoveReadiness, type PaneMoveReadiness } from './terminal-pane-move-readiness'
+import { focusMovedPane, newTabTargetBesideSource } from './terminal-pane-move-placement'
 
 /** Moving a pane out to a new tab: by dragging it onto a tab strip, or for another client. */
 export function useTerminalPaneTabDetachActions(controller: TerminalPaneBindingController) {
@@ -65,11 +67,50 @@ export function useTerminalPaneTabDetachActions(controller: TerminalPaneBindingC
       void detachPaneToNewTab(sourcePaneId, {
         groupId: target.groupId,
         index: target.insertionIndex
-      }).catch((error) => console.warn('[terminal-pane-detach] move failed', error))
+      })
+        .then((moved) => moved && focusMovedPane(tabId, moved))
+        .catch((error) => console.warn('[terminal-pane-detach] move failed', error))
       return true
     },
-    [detachPaneToNewTab]
+    [detachPaneToNewTab, tabId]
+  )
+  /** Whether a pane can move now; menus read it only while open, and the move checks it again. */
+  const getPaneMoveReadiness = useCallback(
+    (paneId: number): PaneMoveReadiness => {
+      const manager = managerRef.current
+      const leafId = manager?.getLeafId(paneId)
+      const transport = paneTransportsRef.current.get(paneId)
+      return paneMoveReadiness({
+        paneCount: manager?.getPanes().length ?? 0,
+        livePtyId: transport?.getPtyId() ?? null,
+        persistedPtyId: leafId
+          ? useAppStore.getState().terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[leafId]
+          : null,
+        sourcePaneCwd: paneCwdRef.current.get(paneId),
+        connectPending: transport?.isConnectPending?.() ?? false
+      })
+    },
+    [managerRef, paneCwdRef, paneTransportsRef, tabId]
+  )
+  /** Moves a pane to a new tab right after this one: the menu, shortcut and palette path. */
+  const movePaneToNewTab = useCallback(
+    (sourcePaneId: number): void => {
+      const target = newTabTargetBesideSource(useAppStore.getState(), worktreeId, tabId)
+      if (!target) {
+        return
+      }
+      void detachPaneToNewTab(sourcePaneId, target)
+        .then((moved) => moved && focusMovedPane(tabId, moved))
+        .catch((error) => console.warn('[terminal-pane-detach] move failed', error))
+    },
+    [detachPaneToNewTab, tabId, worktreeId]
   )
 
-  return { resolveExternalPaneDropTarget, handleExternalPaneDrop, detachPaneToNewTab }
+  return {
+    resolveExternalPaneDropTarget,
+    handleExternalPaneDrop,
+    detachPaneToNewTab,
+    getPaneMoveReadiness,
+    movePaneToNewTab
+  }
 }

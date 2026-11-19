@@ -13,6 +13,15 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Mod+Shift+Enter'])
   },
   {
+    // No default chord: every free one would be taken from a TUI or agent running in the pane.
+    id: 'terminal.movePaneToNewTab',
+    title: 'Move pane to new tab',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'pane', 'split', 'move', 'detach', 'new tab', 'tab'],
+    defaultBindings: platformBindings([])
+  },
+  {
     id: 'terminal.setTitle',
     title: 'Set Title…',
     group: 'Terminal Panes',

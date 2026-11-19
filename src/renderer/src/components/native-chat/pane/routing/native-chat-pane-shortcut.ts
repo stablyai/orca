@@ -8,11 +8,16 @@ import type {
 import type { NativeChatContextMenuActions } from '../actions/use-native-chat-context-menu'
 
 export type NativeChatSplitDirection = 'right' | 'down'
-export type NativeChatPaneShortcut = NativeChatSplitDirection | 'equalize'
+export type NativeChatPaneShortcut = NativeChatSplitDirection | 'equalize' | 'moveToNewTab'
 
 type NativeChatTerminalPaneShortcutActions = Pick<
   NativeChatContextMenuActions,
-  'onSplitRight' | 'onSplitDown' | 'canEqualizePaneSizes' | 'onEqualizePaneSizes'
+  | 'onSplitRight'
+  | 'onSplitDown'
+  | 'canEqualizePaneSizes'
+  | 'onEqualizePaneSizes'
+  | 'canMovePaneToNewTab'
+  | 'onMovePaneToNewTab'
 >
 type NativeChatPaneShortcutEvent = KeybindingInput &
   Pick<KeyboardEvent, 'repeat' | 'preventDefault' | 'stopPropagation'>
@@ -31,6 +36,9 @@ export function matchNativeChatPaneShortcut(
   if (keybindingMatchesAction('terminal.equalizePaneSizes', input, platform, keybindings)) {
     return 'equalize'
   }
+  if (keybindingMatchesAction('terminal.movePaneToNewTab', input, platform, keybindings)) {
+    return 'moveToNewTab'
+  }
   return null
 }
 
@@ -42,6 +50,11 @@ export function runNativeChatTerminalPaneShortcut(
     actions.onSplitRight()
   } else if (shortcut === 'down') {
     actions.onSplitDown()
+  } else if (shortcut === 'moveToNewTab') {
+    if (!actions.onMovePaneToNewTab || !actions.canMovePaneToNewTab?.()) {
+      return false
+    }
+    actions.onMovePaneToNewTab()
   } else if (actions.canEqualizePaneSizes) {
     actions.onEqualizePaneSizes()
   } else {

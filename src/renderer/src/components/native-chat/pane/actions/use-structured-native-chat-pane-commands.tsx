@@ -43,8 +43,8 @@ export function useStructuredNativeChatPaneCommands({
       if (terminalPaneActions) {
         return runNativeChatTerminalPaneShortcut(shortcut, terminalPaneActions)
       }
-      // Tab groups have no equalize command; only terminal panes do.
-      return groupId && shortcut !== 'equalize'
+      // Tab groups have no equalize or move command; only terminal panes do.
+      return groupId && shortcut !== 'equalize' && shortcut !== 'moveToNewTab'
         ? runNativeChatSplitTarget(
             { kind: 'workspace-tab', unifiedTabId: tabId, groupId },
             shortcut

@@ -271,6 +271,8 @@ export function TerminalPaneSurface({
         menuPaneIsExpanded={
           contextMenu.menuPaneId !== null && contextMenu.menuPaneId === expandedPaneId
         }
+        paneMoveReadiness={contextMenu.menuPaneMoveReadiness}
+        onMovePaneToNewTab={contextMenu.onMovePaneToNewTab}
         onCopy={() => void contextMenu.onCopy()}
         addToChat={
           contextMenu.open

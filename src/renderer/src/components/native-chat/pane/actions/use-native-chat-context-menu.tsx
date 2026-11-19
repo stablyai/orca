@@ -100,6 +100,9 @@ export type NativeChatContextMenuActions = {
   canExpandPane: boolean
   isPaneExpanded: boolean
   onToggleExpand: () => void
+  /** Absent for a lone pane; read when the menu opens, false while the pane is still starting. */
+  canMovePaneToNewTab?: () => boolean
+  onMovePaneToNewTab?: () => void
   canContinueAgentSessionInNewSession: boolean
   onContinueAgentSessionInNewSession: () => void
   onCopyAgentSessionContext: () => void

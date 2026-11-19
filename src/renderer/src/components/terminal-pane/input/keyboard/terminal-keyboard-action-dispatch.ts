@@ -12,6 +12,7 @@ import {
 } from '@/lib/pane-manager/terminal-scroll/terminal-scroll-intent'
 import type { resolveTerminalShortcutAction as resolveTerminalKeyboardShortcutAction } from './terminal-shortcut-policy'
 import { equalizeTerminalPanes } from '../../layout/ownership/terminal-pane-layout-owner-commands'
+import { armKeyLifecycleGuard } from '@/lib/keyboard/key-lifecycle-guard'
 
 type TerminalShortcutAction = NonNullable<ReturnType<typeof resolveTerminalKeyboardShortcutAction>>
 
@@ -32,6 +33,7 @@ type ActionDispatchContext = {
   onClearPaneScrollback: (pane: ManagedPane) => void
   onSetTitle: (paneId: number) => void
   onClearPaneTitle: (paneId: number) => void
+  onMovePaneToNewTab?: (paneId: number) => void
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
   paneCwdRef: React.RefObject<PaneCwdMap>
   managerRef: React.RefObject<PaneManager | null>
@@ -62,6 +64,7 @@ export function dispatchTerminalShortcutAction(
     onClearPaneScrollback,
     onSetTitle,
     onClearPaneTitle,
+    onMovePaneToNewTab,
     paneTransportsRef,
     paneCwdRef,
     managerRef,
@@ -208,6 +211,19 @@ export function dispatchTerminalShortcutAction(
     if (pane) {
       onClearPaneTitle(pane.id)
     }
+    return
+  }
+  if (action.type === 'movePaneToNewTab') {
+    const pane = manager.getActivePane() ?? manager.getPanes()[0]
+    if (!pane || !onMovePaneToNewTab || manager.getPanes().length < 2) {
+      return
+    }
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    // Focus reaches the new tab before this chord's release (which Kitty mode reports), so the claim
+    // must outlive this tab's own native-only tracker.
+    armKeyLifecycleGuard(event)
+    onMovePaneToNewTab(pane.id)
     return
   }
   if (action.type === 'closeActivePane') {

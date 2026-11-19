@@ -3,6 +3,7 @@ import {
   Maximize2,
   Minimize2,
   PanelBottomClose,
+  PanelTopOpen,
   PanelsTopLeft,
   PanelRightClose,
   Pencil,
@@ -54,6 +55,15 @@ export function NativeChatPaneMenuItems({
           {actions.isPaneExpanded
             ? t('auto.components.terminal.pane.TerminalContextMenu.df766809e0', 'Collapse Pane')
             : t('auto.components.terminal.pane.TerminalContextMenu.925f49f210', 'Expand Pane')}
+        </DropdownMenuItem>
+      ) : null}
+      {actions.onMovePaneToNewTab ? (
+        <DropdownMenuItem
+          disabled={!actions.canMovePaneToNewTab?.()}
+          onSelect={actions.onMovePaneToNewTab}
+        >
+          <PanelTopOpen />
+          {t('components.terminalPane.TerminalContextMenu.movePaneToNewTab', 'Move to New Tab')}
         </DropdownMenuItem>
       ) : null}
       <DropdownMenuSeparator />
