@@ -291,3 +291,10 @@ it('renders once per relevant store update', () => {
   act(() => useAppStore.setState({ sidebarBody: 'agents' }))
   expect(railRenders).toBe(1)
 })
+
+it('names the landmark and its toolbar differently', () => {
+  renderRail()
+  expect(screen.getByRole('navigation', { name: 'App navigation' })).toBeInTheDocument()
+  expect(screen.getByRole('toolbar', { name: 'App tools' })).toBeInTheDocument()
+  expect(screen.getAllByRole('navigation', { name: 'App navigation' })).toHaveLength(1)
+})

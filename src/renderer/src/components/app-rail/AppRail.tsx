@@ -143,6 +143,8 @@ export function AppRail({
   }, [])
 
   const navigationLabel = t('appRail.navigationLabel', 'App navigation')
+  // The toolbar inside the landmark gets its own name so screen readers don't hear "App navigation" twice.
+  const toolsLabel = t('appRail.toolsLabel', 'App tools')
   const workspacesLabel = t('appRail.workspaces', 'Workspaces')
   const settingsLabel = t('auto.components.sidebar.SidebarSettingsHelpMenu.a428c25998', 'Settings')
   const helpLabel = t('auto.components.sidebar.SidebarSettingsHelpMenu.2991a0106c', 'Help')
@@ -187,7 +189,7 @@ export function AppRail({
         ref={attachToolbar}
         role="toolbar"
         aria-orientation="vertical"
-        aria-label={navigationLabel}
+        aria-label={toolsLabel}
         className="flex min-h-0 flex-1 flex-col items-center justify-between overflow-hidden pt-2 pb-1"
         onKeyDownCapture={handleKeyDown}
         onFocus={handleFocus}

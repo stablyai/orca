@@ -23,22 +23,37 @@ function StubList(): React.JSX.Element {
   )
 }
 
-function layout(appRailVisible: boolean, sidebarOpen = true) {
+let railMounts = 0
+
+// Stands in for the rail button: a mount counter.
+function StubRail(): React.JSX.Element {
+  useEffect(() => {
+    railMounts += 1
+  }, [])
+  return <button type="button">Workspaces</button>
+}
+
+// shouldMount=false is a page such as Tasks with the list collapsed: the list is hidden but still hosts its dialogs.
+function layout(appRailVisible: boolean, sidebarOpen = true, shouldMount = true) {
   return {
     appRailVisible,
     showSidebar: true,
     sidebarOpen,
-    leftTitlebarChromeLayout: { shouldMount: true, isFloating: !sidebarOpen },
+    leftTitlebarChromeLayout: { shouldMount, isFloating: shouldMount && !sidebarOpen },
     leftSidebarStyle: {}
   }
 }
 
-function column(appRailVisible: boolean, sidebarOpen = true): React.JSX.Element {
+function column(
+  appRailVisible: boolean,
+  sidebarOpen = true,
+  shouldMount = true
+): React.JSX.Element {
   return (
     <AppShellLeftColumn
-      layout={layout(appRailVisible, sidebarOpen)}
+      layout={layout(appRailVisible, sidebarOpen, shouldMount)}
       titlebarLeftControls={<button type="button">Toggle sidebar</button>}
-      rail={<button type="button">Workspaces</button>}
+      rail={<StubRail />}
       list={<StubList />}
     />
   )
@@ -47,6 +62,7 @@ function column(appRailVisible: boolean, sidebarOpen = true): React.JSX.Element 
 afterEach(() => {
   cleanup()
   listMounts = 0
+  railMounts = 0
 })
 
 it('keeps the focused list, its node and its local state when the rail flag flips either way', () => {
@@ -96,4 +112,31 @@ it('renders the plain sidebar column with the rail off', () => {
   expect(header.style.width).toBe('100%')
   expect(viewport?.className).toBe('flex min-h-0 flex-1')
   expect(screen.queryByRole('button', { name: 'Workspaces' })).toBeNull()
+})
+
+it('keeps an unsaved draft in the hidden list on a collapsed page when the rail flag flips either way', () => {
+  // Rail on, Tasks with the list collapsed: a Workspace details draft lives in the list's subtree.
+  const { rerender } = render(column(true, false, false))
+  const input = screen.getByLabelText('Filter workspaces')
+  fireEvent.change(input, { target: { value: 'unsaved draft' } })
+
+  rerender(column(false, false, false))
+  rerender(column(true, false, false))
+
+  expect(screen.getByLabelText('Filter workspaces')).toBe(input)
+  expect(input).toHaveValue('unsaved draft')
+  expect(listMounts).toBe(1)
+})
+
+it('keeps the rail mounted when a page switch moves the list in or out of the column', () => {
+  const { rerender } = render(column(true, true, true))
+  rerender(column(true, false, false))
+  rerender(column(true, true, true))
+  expect(railMounts).toBe(1)
+})
+
+it('renders the plain hidden list with the rail off on a collapsed page', () => {
+  const { container } = render(column(false, false, false))
+  expect(container.children).toHaveLength(1)
+  expect(container.firstElementChild).toBe(screen.getByLabelText('Filter workspaces'))
 })
