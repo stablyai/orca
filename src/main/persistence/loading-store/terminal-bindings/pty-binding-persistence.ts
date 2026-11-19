@@ -132,20 +132,20 @@ export class PtyBindingPersistenceOperations {
       const currentId =
         session.terminalLayoutsByTabId[binding.tabId]?.ptyIdsByLeafId?.[binding.leafId]
       if (!currentId) {
-        return { value: true, persist: 'if-dirty' }
+        return { value: true, persist: 'if-dirty', writtenHostIds: [] }
       }
       if (currentId !== binding.ptyId) {
-        return { value: false, persist: false }
+        return { value: false, persist: false, writtenHostIds: [] }
       }
       if (
         fence &&
         session.terminalPtyIncarnationsByPaneKey?.[makePaneKey(binding.tabId, binding.leafId)] !==
           fence.incarnationId
       ) {
-        return { value: false, persist: false }
+        return { value: false, persist: false, writtenHostIds: [] }
       }
       if (!session.tabsByWorktree[binding.worktreeId]?.some((tab) => tab.id === binding.tabId)) {
-        return { value: false, persist: false }
+        return { value: false, persist: false, writtenHostIds: [] }
       }
       const before = cloneWorkspaceSessionState(session)
       const retired = clearReplacedPaneBinding(session, { ...binding, parentTabId: binding.tabId })
@@ -200,7 +200,7 @@ export class PtyBindingPersistenceOperations {
           .map((hostId) => ({ hostId, session: sessions.getWorkspaceSession(hostId) }))
         if (ptyBindingIsRefused(args, session, bindingWorktreeId, paneKey, partitions)) {
           outcome = 'refused'
-          return { value: false, persist: false }
+          return { value: false, persist: false, writtenHostIds: [] }
         }
         reportPtyBindingPlacement(span, args, session, bindingWorktreeId)
         const verdict = evaluatePtyBindingFastLane(
@@ -213,7 +213,7 @@ export class PtyBindingPersistenceOperations {
         if (verdict.eligible) {
           outcome = 'fast_lane'
           span.setPath('durable_match')
-          return { value: true, persist: false }
+          return { value: true, persist: false, writtenHostIds: [] }
         }
         if (isDurabilityOnlyMatch(verdict)) {
           span.setPath('durability_only')
