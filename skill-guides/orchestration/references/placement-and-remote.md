@@ -49,8 +49,9 @@ ORCA orchestration send --on <server> --to <term_…|orca_session_id:…|bot:<na
 and `heartbeat` belong to a Dispatch: send them without `--on`, from that
 Dispatch, as you would on one computer.
 
-A bot there takes `--chat <id|new>` and `--item <n>` as it does on its own
-computer, and treats the request as its owner's.
+A bot there takes only `status`, `handoff` or `question`, plus
+`--chat <id|new>` and `--item <n>` as it does on its own computer, and treats
+the request as its owner's.
 
 Your own Orca carries the mail and keeps the conversation. Replies come back to
 your own mailbox and wake you like local mail. The other agent answers
