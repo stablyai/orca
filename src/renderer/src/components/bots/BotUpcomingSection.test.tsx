@@ -285,7 +285,7 @@ describe('BotUpcomingSection', () => {
     expect(mocks.openAutomationsPage).toHaveBeenCalledOnce()
   })
 
-  it('shows a failed automation even when an older Orca saved the card folded', () => {
+  it('says a hidden automation failed while the card is folded', () => {
     window.localStorage.setItem(
       'orca.bots.panelFolds',
       JSON.stringify({ 'bot-1': ['automations'] })
@@ -297,8 +297,9 @@ describe('BotUpcomingSection', () => {
     ]
     render(<Section />)
 
-    expect(screen.getByText('Digest')).toBeTruthy()
+    expect(screen.queryByText('Digest')).toBeNull()
     expect(screen.getByText('Failed')).toBeTruthy()
-    expect(screen.queryByRole('button', { expanded: false })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { expanded: false }))
+    expect(screen.getByText('Digest')).toBeTruthy()
   })
 })
