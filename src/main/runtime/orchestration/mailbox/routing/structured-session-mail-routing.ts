@@ -77,7 +77,7 @@ export abstract class OrcaRuntimeWithStructuredSessionMail extends OrcaRuntimeWi
    *  longer owes. Visible cleanup only: it never holds up the action that called it. `mailboxes`:
    *  only those the action touched; without it, every mailbox (a reset, a store becoming readable). */
   withdrawStaleChatMail(mailboxes?: Iterable<string>): void {
-    this.publishSleepingMail()
+    this.publishSleepingMail(mailboxes ? { mailboxes } : undefined)
     this.orchestrationStructuredMailboxPointerDelivery.withdrawStale(mailboxes)
   }
 
@@ -85,7 +85,7 @@ export abstract class OrcaRuntimeWithStructuredSessionMail extends OrcaRuntimeWi
     mailboxes: readonly string[],
     reservationPtys: readonly string[] = []
   ): void {
-    this.publishSleepingMail()
+    this.publishSleepingMail({ mailboxes })
     try {
       const ptys = new Set(reservationPtys)
       for (const mailbox of mailboxes) {

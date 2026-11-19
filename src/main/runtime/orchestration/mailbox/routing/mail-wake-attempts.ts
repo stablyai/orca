@@ -12,6 +12,8 @@ type Deps = {
 export class MailWakeAttempts {
   private readonly byPane = new Map<string, SleptMailRecord>()
   private loadedFrom: OrchestrationDb | null = null
+  /** Bumped on every change to the mirrored attempts. */
+  generation = 0
 
   constructor(private readonly deps: Deps) {}
 
@@ -47,6 +49,7 @@ export class MailWakeAttempts {
     }
     this.loadedFrom = db
     this.byPane.clear()
+    this.generation++
     for (const attempt of db.listMailWakeAttempts()) {
       if (attempt.mailWake && !attempt.mailWake.attempt) {
         db.settleMailWake(attempt.paneKey, attempt.mailWake.id)
@@ -67,6 +70,7 @@ export class MailWakeAttempts {
     }
     const claimed = { ...record, mailWake: { id, startedAt } }
     this.byPane.set(record.paneKey, claimed)
+    this.generation++
     return claimed
   }
 
@@ -98,6 +102,7 @@ export class MailWakeAttempts {
     }
     const launched = { ...record, mailWake: { ...marker, attempt } }
     this.byPane.set(record.paneKey, launched)
+    this.generation++
     return launched
   }
 
@@ -108,6 +113,7 @@ export class MailWakeAttempts {
       return false
     }
     this.byPane.delete(record.paneKey)
+    this.generation++
     this.deps.db()?.settleMailWake(record.paneKey, marker.id)
     return true
   }

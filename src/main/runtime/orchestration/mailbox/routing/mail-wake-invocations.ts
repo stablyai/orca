@@ -49,17 +49,22 @@ export class MailWakeInvocations {
     rows: readonly AgentStatusIpcPayload[],
     ptyId: string | null | undefined
   ): boolean {
-    const invocation = this.invocations.get(record.mailWake?.attempt?.launchToken ?? '')
     if (!rows.some((row) => confirmsMailWake(record, row, ptyId))) {
       return false
     }
+    this.confirm(record)
+    return true
+  }
+
+  /** The wake's own process is running its agent: settle waiters and stop watching it. */
+  confirm(record: SleptMailRecord): void {
+    const invocation = this.invocations.get(record.mailWake?.attempt?.launchToken ?? '')
     for (const waiter of this.waiters) {
       if (this.sameObligation(waiter.record, record)) {
         waiter.finish(true)
       }
     }
     invocation?.stop.abort()
-    return true
   }
 
   ended(record: SleptMailRecord): boolean {

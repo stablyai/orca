@@ -65,8 +65,9 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
         if (!accepted) {
           return false
         }
-        this.watchMailWakeInvocations()
+        this.watchMailWakeInvocations(record.paneKey)
         timeout = setTimeout(() => stop.abort(), 30_000)
+        void this.probeMailWakeForeground(record.paneKey, stop.signal)
         return await confirmed
       } finally {
         clearTimeout(timeout)
@@ -78,15 +79,24 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
   private watchingSleepingMail = false
   private readonly sleepingRecordIndex = new SleepingMailRecordIndex()
   private readonly sleepingRecords = this.sleepingRecordIndex.records
-  private readonly mailWakeAttempts = new MailWakeAttempts({
+  protected readonly mailWakeAttempts = new MailWakeAttempts({
     db: () => this._orchestrationDb,
     pty: (paneKey) => this.getPtyRecordForPaneKey(paneKey)
   })
 
   protected settleMailWakeAttempt(record: SleptMailRecord): void {
     if (this.mailWakeAttempts.settle(record)) {
-      this.mailWakeInvocations.retain(this.mailWakeAttempts.launchTokens())
       this.publishSleepingMail({ panes: [record.paneKey] })
+    }
+  }
+
+  private retainedAttemptGeneration = -1
+
+  /** Invocation watches follow the attempt set, and only when it changed. */
+  private retainMailWakeInvocations(): void {
+    if (this.retainedAttemptGeneration !== this.mailWakeAttempts.generation) {
+      this.retainedAttemptGeneration = this.mailWakeAttempts.generation
+      this.mailWakeInvocations.retain(this.mailWakeAttempts.launchTokens())
     }
   }
 
@@ -115,11 +125,9 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
       { consumesTerminalSideEffects: false }
     )
     this.subscribeAgentStatusRowChanges((paneKey) => this.watchMailWakeInvocations(paneKey))
-    // Ownership changes can move any sleeping pane's mail; traffic names the mailboxes it touched.
+    // A change that names its mailboxes refreshes only those; an unnamed one re-derives every sleeper.
     const changed = (facets: CrewInvalidation) => {
-      if (facets.has('topology') || facets.has('records')) {
-        this.publishSleepingMail()
-      } else if (facets.has('traffic')) {
+      if (facets.has('traffic') || facets.has('topology') || facets.has('records')) {
         this.publishSleepingMail(
           facets.trafficAddresses ? { mailboxes: facets.trafficAddresses } : undefined
         )
@@ -170,7 +178,8 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
           pty.ptyId
         )
       ) {
-        this.sleptMailboxWake.confirmed(current)
+        this.confirmMailWake(current)
+      } else if (this.mailWakeLost(current)) {
         this.settleMailWakeAttempt(current)
       }
     }
@@ -195,14 +204,15 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
     this.watchSleepingMail()
     this.sleptMailboxWake.retryFailed()
     if (paneKey === undefined) {
-      this.sleepingMailPublication = ''
+      this.publishedHeldVersion = -1
+      this.publishedHeld = ''
     }
     this.getExistingOrchestrationDb()
     this.publishSleepingMail(paneKey === undefined ? undefined : { panes: [paneKey] })
   }
 
   private sleepingMailPublicationQueued = false
-  private sleepingMailPublication = ''
+  private publishedHeldVersion = -1
   private readonly sleepingMailScope = {
     full: true,
     mailboxes: new Set<string>(),
@@ -253,9 +263,8 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
           return
         }
         this.mailWakeAttempts.load()
-        this.mailWakeInvocations.retain(this.mailWakeAttempts.launchTokens())
         if (!this.owesAnySleepingMail()) {
-          return this.publishHeldWorktrees()
+          return
         }
         let affected: Iterable<string>
         if (full) {
@@ -266,17 +275,18 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
         }
         for (const pane of affected) {
           const attempt = this.mailWakeAttempts.get(pane)
-          if (attempt && !this.sleptMailboxWake.owesPane(pane)) {
+          if (attempt && (!this.sleptMailboxWake.owesPane(pane) || this.mailWakeLost(attempt))) {
             this.settleMailWakeAttempt(attempt)
           }
           for (const mailbox of this.sleptMailboxWake.mailboxesForPane(pane)) {
             this.sleptMailboxWake.request(mailbox)
           }
         }
-        this.publishHeldWorktrees()
       } catch {
         /* The runtime can close its database before a queued publication. */
       } finally {
+        this.retainMailWakeInvocations()
+        this.publishHeldWorktrees()
         this.sleepingMailPublicationQueued = false
         if (pending.full || pending.mailboxes.size || pending.panes.size) {
           this.publishSleepingMail({})
@@ -285,11 +295,17 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
     })
   }
 
+  private publishedHeld = ''
+
   private publishHeldWorktrees(): void {
+    if (this.publishedHeldVersion === this.sleptMailboxWake.heldVersion) {
+      return
+    }
+    this.publishedHeldVersion = this.sleptMailboxWake.heldVersion
     const ids = this.sleptMailboxWake.heldWorktrees()
     const key = JSON.stringify(ids)
-    if (key !== this.sleepingMailPublication) {
-      this.sleepingMailPublication = key
+    if (key !== this.publishedHeld) {
+      this.publishedHeld = key
       this.notifier?.sleepingMailChanged?.(ids)
     }
   }

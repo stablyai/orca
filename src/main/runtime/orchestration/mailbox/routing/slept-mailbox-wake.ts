@@ -51,6 +51,8 @@ export class SleptMailboxWake {
   private readonly held = new Map<string, string>()
   private readonly workspaceCounts = new Map<string, number>()
   private active = 0
+  /** Bumped whenever the set of held worktrees may have changed. */
+  heldVersion = 0
 
   constructor(private readonly deps: WakeDeps) {}
 
@@ -179,6 +181,7 @@ export class SleptMailboxWake {
       }
     }
     this.held.delete(paneKey)
+    this.heldVersion++
     if (next) {
       this.held.set(paneKey, next)
       this.workspaceCounts.set(next, (this.workspaceCounts.get(next) ?? 0) + 1)
@@ -277,7 +280,13 @@ export class SleptMailboxWake {
       return
     }
     this.failed.delete(before.record.paneKey)
-    await this.deps.prepare(before.record)
+    try {
+      await this.deps.prepare(before.record)
+    } catch (error) {
+      // A refused or unanswered prepare waits for an availability edge like a failed wake.
+      this.failed.set(before.record.paneKey, before.record.capturedAt)
+      throw error
+    }
     const current = this.batch(mailbox, reservedTypes)
     if (
       !current ||
