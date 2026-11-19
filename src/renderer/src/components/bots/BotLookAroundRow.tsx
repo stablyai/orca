@@ -11,9 +11,6 @@ import { openBotSettings } from './bot-settings-open'
 import { everyText, ranText, upcomingAt } from './bot-upcoming-copy'
 import {
   BotPanelRow,
-  BotRowCardFact,
-  BotRowCardState,
-  BotRowCardStateLine,
   BotRowIconButton,
   BotRowMoreMenu,
   BotRowStateIcon,
@@ -97,33 +94,25 @@ export function LookAroundRow({
       title={name}
       state={rowState?.label}
       dimmed={!setting.on}
-      card={
-        <div className="flex flex-col gap-1">
-          {dueNow ? (
-            <BotRowCardState label={t('bots.upcoming.dueNow', 'Due now')} />
-          ) : (
-            <BotRowCardStateLine state={rowState} />
-          )}
-          <BotRowCardFact
-            label={
-              setting.on && !dueNow && row.nextAt !== null
-                ? t('bots.automations.next', 'Next')
-                : undefined
-            }
-          >
-            {setting.on && !dueNow && row.nextAt !== null
-              ? `${upcomingAt(row.nextAt, now)} · ${every}`
-              : state?.lastLookedAt || !setting.on
-                ? t('bots.upcoming.runsEvery', 'Runs {{every}}', { every })
-                : t('bots.upcoming.lookFirst', 'After your first chat · then {{every}}', {
-                    every
-                  })}
-          </BotRowCardFact>
-          {state?.lastLookedAt ? (
-            <BotRowCardFact>{ranText(state.lastLookedAt, now)}</BotRowCardFact>
-          ) : null}
-        </div>
-      }
+      card={{
+        state: dueNow ? { kind: 'note', label: t('bots.upcoming.dueNow', 'Due now') } : rowState,
+        facts: [
+          setting.on && !dueNow && row.nextAt !== null
+            ? {
+                label: t('bots.automations.next', 'Next'),
+                text: `${upcomingAt(row.nextAt, now)} · ${every}`
+              }
+            : {
+                text:
+                  state?.lastLookedAt || !setting.on
+                    ? t('bots.upcoming.runsEvery', 'Runs {{every}}', { every })
+                    : t('bots.upcoming.lookFirst', 'After your first chat · then {{every}}', {
+                        every
+                      })
+              },
+          ...(state?.lastLookedAt ? [{ text: ranText(state.lastLookedAt, now) }] : [])
+        ]
+      }}
       onOpen={() => openBotSettings(bot.id, 'look-around')}
       actionsShown={looking}
       actions={

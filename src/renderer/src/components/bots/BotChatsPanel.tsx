@@ -22,7 +22,6 @@ import {
   type BotChatSearchAsk
 } from '../../../../shared/bots/use-bot-chat-search'
 import type { BotChatSearchResult } from '../../../../shared/bots/bot-chat-search'
-import { hasRuntimeRpcErrorCode } from '../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import { BotChatTreeGroup } from './BotChatTreeGroup'
 import {
   BotUsageLimitStopsContext,
@@ -118,9 +117,6 @@ function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
         botId,
         query: text
       }).catch((error: unknown) => {
-        if (hasRuntimeRpcErrorCode(error, 'method_not_found')) {
-          return 'unsupported' as const
-        }
         console.error('Failed to search bot chats:', error)
         throw error
       }),

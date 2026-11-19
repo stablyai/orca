@@ -172,9 +172,6 @@ export function usePhoneBotChatTree({
       if (answer.kind === 'answered') {
         return answer.value
       }
-      if (answer.kind === 'unavailable') {
-        return 'unsupported'
-      }
       throw new Error('search_failed')
     },
     [client, botId]

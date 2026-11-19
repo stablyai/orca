@@ -44,41 +44,53 @@ export function BotRowHoverCard({
   )
 }
 
-/** A card's first line: the colored state glyph, the state, then why in neutral text. */
-export function BotRowCardState({
-  icon,
-  label,
-  reason
-}: {
-  icon?: React.ReactNode
-  label: string
-  reason?: string | null
-}): React.JSX.Element {
+/** A card's fact: a muted lead word ("Next"), then its value. */
+export type BotRowFact = { label?: string; text: string }
+
+/** What a row's hover card says: its state, then its facts. A note is a state line without a glyph. */
+export type BotRowCard = {
+  state: BotRowState | { kind: 'note'; label: string } | null
+  facts: readonly BotRowFact[]
+}
+
+function BotRowCardBody({ card }: { card: BotRowCard }): React.JSX.Element {
+  const { state } = card
   return (
-    <p className="flex items-start gap-1.5 text-foreground">
-      {icon ? <span className="flex h-4 shrink-0 items-center">{icon}</span> : null}
-      <span className="min-w-0">
-        <span className="font-medium">{label}</span>
-        {reason ? ` · ${reason}` : null}
-      </span>
-    </p>
+    <div className="flex flex-col gap-1">
+      {state ? (
+        <p className="flex items-start gap-1.5 text-foreground">
+          {state.kind === 'note' ? null : (
+            <span className="flex h-4 shrink-0 items-center">
+              <BotRowStateIcon state={state} />
+            </span>
+          )}
+          <span className="min-w-0">
+            <span className="font-medium">{state.label}</span>
+            {'reason' in state && state.reason ? ` · ${state.reason}` : null}
+          </span>
+        </p>
+      ) : null}
+      {card.facts.map((fact) => (
+        <p key={`${fact.label ?? ''}${fact.text}`} className="text-foreground">
+          {fact.label ? <span className="text-muted-foreground">{fact.label} </span> : null}
+          {fact.text}
+        </p>
+      ))}
+    </div>
   )
 }
 
-/** A card's fact: a muted lead word ("Next"), then its value. */
-export function BotRowCardFact({
-  label,
-  children
-}: {
-  label?: string
-  children: React.ReactNode
-}): React.JSX.Element {
-  return (
-    <p className="text-foreground">
-      {label ? <span className="text-muted-foreground">{label} </span> : null}
-      {children}
-    </p>
-  )
+/** The card as one plain sentence list, for the row's accessible description. */
+function botRowCardText({ state, facts }: BotRowCard): string {
+  const lines = [
+    state
+      ? 'reason' in state && state.reason
+        ? `${state.label} · ${state.reason}`
+        : state.label
+      : null,
+    ...facts.map((fact) => (fact.label ? `${fact.label} ${fact.text}` : fact.text))
+  ]
+  return lines.filter(Boolean).join('. ')
 }
 
 export function BotPanelRow({
@@ -98,7 +110,7 @@ export function BotPanelRow({
   /** Paused: icon and name quieter. */
   dimmed?: boolean
   /** Its details: the hover card and the row's description. */
-  card?: React.ReactNode
+  card?: BotRowCard | null
   /** Opens where its details are; without it the row stays focusable for its card and actions. */
   onOpen?: () => void
   /** Controls over the row's end on hover or keyboard focus. */
@@ -114,7 +126,7 @@ export function BotPanelRow({
       >
         {icon}
       </span>
-      <BotRowHoverCard card={card}>
+      <BotRowHoverCard card={card ? <BotRowCardBody card={card} /> : null}>
         <button
           type="button"
           aria-label={state ? `${title}, ${state}` : undefined}
@@ -132,7 +144,7 @@ export function BotPanelRow({
       </BotRowHoverCard>
       {card ? (
         <span id={descriptionId} hidden>
-          {card}
+          {botRowCardText(card)}
         </span>
       ) : null}
       {actions ? (
@@ -185,24 +197,6 @@ export function BotRowStateIcon({
     case 'paused':
       return <Pause aria-hidden className={cn(GLYPH, 'text-muted-foreground')} />
   }
-}
-
-/** A card's state line for `state`, its glyph colored and its words neutral. */
-export function BotRowCardStateLine({
-  state
-}: {
-  state: BotRowState | null
-}): React.JSX.Element | null {
-  if (!state) {
-    return null
-  }
-  return (
-    <BotRowCardState
-      icon={<BotRowStateIcon state={state} />}
-      label={state.label}
-      reason={'reason' in state ? state.reason : null}
-    />
-  )
 }
 
 /** An icon-only row action, named by its tooltip. */

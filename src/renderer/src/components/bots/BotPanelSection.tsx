@@ -23,12 +23,15 @@ export function BotPanelSectionHeader({
   /** Controls at the end that always show, such as a live spinner. */
   live?: React.ReactNode
 }): React.JSX.Element {
+  const titleId = useId()
+  const summaryId = useId()
   return (
     <div className="group/section relative flex h-7 min-w-0 items-center gap-1 pr-1 pl-1">
       {fold ? (
         <button
           type="button"
-          aria-label={title}
+          // Its name is the header as shown, so a folded count is read with it ("Planned 3, collapsed").
+          aria-labelledby={summary ? `${titleId} ${summaryId}` : titleId}
           aria-expanded={fold.open}
           aria-controls={bodyId}
           className="peer absolute inset-0 rounded-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
@@ -43,6 +46,7 @@ export function BotPanelSectionHeader({
       ) : null}
       {fold ? <SidebarSectionFoldChevron collapsed={!fold.open} /> : null}
       <h3
+        id={titleId}
         className={cn(
           'pointer-events-none min-w-0 truncate text-xs font-semibold text-muted-foreground/80 select-none',
           !fold && 'pl-[22px]'
@@ -51,7 +55,10 @@ export function BotPanelSectionHeader({
         {title}
       </h3>
       {summary ? (
-        <span className="pointer-events-none shrink-0 text-xs text-muted-foreground tabular-nums">
+        <span
+          id={summaryId}
+          className="pointer-events-none shrink-0 text-xs text-muted-foreground tabular-nums"
+        >
           {summary}
         </span>
       ) : null}

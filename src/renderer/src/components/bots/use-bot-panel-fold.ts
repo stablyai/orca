@@ -5,7 +5,6 @@ import { useCallback, useSyncExternalStore } from 'react'
 export type BotPanelFoldId =
   | 'automations'
   | 'suggestions'
-  | 'automations'
   | 'items-needs_you'
   | 'items-working'
   | 'items-planned'

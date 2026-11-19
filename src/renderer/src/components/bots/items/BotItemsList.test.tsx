@@ -79,12 +79,14 @@ const closedRows = (): (string | null)[] =>
 
 it('folds Closed by default, and keeps it open with five rows once the owner opens it', () => {
   renderClosed()
-  expect(screen.getByRole('button', { name: 'Closed' }).getAttribute('aria-expanded')).toBe('false')
+  expect(
+    screen.getByRole('button', { name: 'Closed 12 · 8 new' }).getAttribute('aria-expanded')
+  ).toBe('false')
   expect(closedRows()).toEqual([])
-  fireEvent.click(screen.getByRole('button', { name: 'Closed' }))
+  fireEvent.click(screen.getByRole('button', { name: /^Closed/ }))
   cleanup()
   renderClosed()
-  expect(screen.getByRole('button', { name: 'Closed' }).getAttribute('aria-expanded')).toBe('true')
+  expect(screen.getByRole('button', { name: /^Closed/ }).getAttribute('aria-expanded')).toBe('true')
   expect(closedRows()).toEqual(['1', '2', '3', '4', '5'])
   expect(screen.getByRole('button', { name: 'Show 7 more' })).toBeTruthy()
 })

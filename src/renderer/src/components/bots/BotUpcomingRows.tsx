@@ -37,8 +37,6 @@ import { ranText, upcomingAt } from './bot-upcoming-copy'
 import { waitRowDetail } from './bot-wait-copy'
 import {
   BotPanelRow,
-  BotRowCardFact,
-  BotRowCardStateLine,
   BotRowMoreMenu,
   BotRowStateIcon,
   isBotRowTrouble,
@@ -76,24 +74,25 @@ function TidyUpRow({ bot, folded }: { bot: Bot; folded: boolean }): React.JSX.El
       title={t('bots.upcoming.tidyUp', 'Tidy memory')}
       state={rowState?.label}
       dimmed={!setting.on}
-      card={
-        <div className="flex flex-col gap-1">
-          <BotRowCardStateLine state={rowState} />
-          <BotRowCardFact>
-            {setting.every === 'night'
-              ? t(
-                  'bots.upcoming.tidyNightAfter',
-                  'Each night after {{from}}, or once this computer is awake',
-                  hours
-                )
-              : t(
-                  'bots.upcoming.tidyWeekAfter',
-                  'Once a week after {{from}}, or once this computer is awake',
-                  hours
-                )}
-          </BotRowCardFact>
-        </div>
-      }
+      card={{
+        state: rowState,
+        facts: [
+          {
+            text:
+              setting.every === 'night'
+                ? t(
+                    'bots.upcoming.tidyNightAfter',
+                    'Each night after {{from}}, or once this computer is awake',
+                    hours
+                  )
+                : t(
+                    'bots.upcoming.tidyWeekAfter',
+                    'Once a week after {{from}}, or once this computer is awake',
+                    hours
+                  )
+          }
+        ]
+      }}
       onOpen={() => openBotSettings(bot.id, 'tidy-up')}
       actions={
         <>
@@ -198,19 +197,18 @@ function AutomationRow({
       title={automation.name}
       state={rowState?.label}
       dimmed={rowState?.kind === 'paused'}
-      card={
-        <div className="flex flex-col gap-1">
-          <BotRowCardStateLine state={rowState} />
-          <BotRowCardFact
-            label={enabled && card.nextAt !== null ? t('bots.automations.next', 'Next') : undefined}
-          >
-            {enabled && card.nextAt !== null ? `${upcomingAt(card.nextAt, now)} · ${when}` : when}
-          </BotRowCardFact>
-          {card.mark?.kind === 'ran' ? (
-            <BotRowCardFact>{ranText(card.mark.at, now)}</BotRowCardFact>
-          ) : null}
-        </div>
-      }
+      card={{
+        state: rowState,
+        facts: [
+          enabled && card.nextAt !== null
+            ? {
+                label: t('bots.automations.next', 'Next'),
+                text: `${upcomingAt(card.nextAt, now)} · ${when}`
+              }
+            : { text: when },
+          ...(card.mark?.kind === 'ran' ? [{ text: ranText(card.mark.at, now) }] : [])
+        ]
+      }}
       onOpen={open}
       actions={
         <>
@@ -268,7 +266,7 @@ function WaitRow({
       icon={<Hourglass className={ICON} />}
       title={automation.name}
       card={
-        automation.once ? <BotRowCardFact>{waitRowDetail(automation.once)}</BotRowCardFact> : null
+        automation.once ? { state: null, facts: [{ text: waitRowDetail(automation.once) }] } : null
       }
       actionsShown={cancelling}
       actions={
