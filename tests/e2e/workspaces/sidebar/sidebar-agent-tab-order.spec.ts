@@ -81,24 +81,35 @@ function tabOrder(page: Page) {
 for (const mode of ['full', 'compact'] as const) {
   test(`sidebar agents follow a tab drag (${mode})`, async ({ orcaPage }) => {
     const agents = await seedTwoTabAgents(orcaPage, mode)
-    await expect.poll(agentOrder(agents)).toEqual(['Alpha tab', 'Bravo tab'])
+    await expect
+      .poll(agentOrder(agents), { message: 'Sidebar agents did not start in tab order' })
+      .toEqual(['Alpha tab', 'Bravo tab'])
 
     const from = await orcaPage.locator(SORTABLE_TAB).filter({ hasText: 'Alpha tab' }).boundingBox()
     const to = await orcaPage.locator(SORTABLE_TAB).filter({ hasText: 'Bravo tab' }).boundingBox()
-    await orcaPage.mouse.move(from!.x + from!.width / 2, from!.y + from!.height / 2)
+    if (!from || !to) {
+      throw new Error('Missing tab bounds')
+    }
+    await orcaPage.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
     await orcaPage.mouse.down()
     // Drag far enough for dnd-kit to reorder before release.
-    await orcaPage.mouse.move(to!.x + to!.width * 0.8, to!.y + to!.height / 2, { steps: 8 })
+    await orcaPage.mouse.move(to.x + to.width * 0.8, to.y + to.height / 2, { steps: 8 })
     await orcaPage.mouse.up()
 
-    await expect.poll(tabOrder(orcaPage)).toEqual(['Bravo tab', 'Alpha tab'])
-    await expect.poll(agentOrder(agents)).toEqual(['Bravo tab', 'Alpha tab'])
+    await expect
+      .poll(tabOrder(orcaPage), { message: 'Tab drag did not reorder the tab strip' })
+      .toEqual(['Bravo tab', 'Alpha tab'])
+    await expect
+      .poll(agentOrder(agents), { message: 'Sidebar agents did not follow the dragged tab' })
+      .toEqual(['Bravo tab', 'Alpha tab'])
   })
 }
 
 test('sidebar agents follow a pinned tab', async ({ orcaPage }) => {
   const agents = await seedTwoTabAgents(orcaPage, 'full')
-  await expect.poll(agentOrder(agents)).toEqual(['Alpha tab', 'Bravo tab'])
+  await expect
+    .poll(agentOrder(agents), { message: 'Sidebar agents did not start in tab order' })
+    .toEqual(['Alpha tab', 'Bravo tab'])
 
   await orcaPage
     .locator(SORTABLE_TAB)
@@ -106,6 +117,10 @@ test('sidebar agents follow a pinned tab', async ({ orcaPage }) => {
     .click({ button: 'right', force: true })
   await orcaPage.getByRole('menuitem', { name: 'Pin Tab' }).click({ force: true })
 
-  await expect.poll(tabOrder(orcaPage)).toEqual(['Bravo tab', 'Alpha tab'])
-  await expect.poll(agentOrder(agents)).toEqual(['Bravo tab', 'Alpha tab'])
+  await expect
+    .poll(tabOrder(orcaPage), { message: 'Pinning did not move the tab first' })
+    .toEqual(['Bravo tab', 'Alpha tab'])
+  await expect
+    .poll(agentOrder(agents), { message: 'Sidebar agents did not follow the pinned tab' })
+    .toEqual(['Bravo tab', 'Alpha tab'])
 })
