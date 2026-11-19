@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { readdir, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { runKeyedSerializedOperation } from '../../../shared/concurrency/keyed-serialized-operations'
@@ -59,6 +59,9 @@ export async function writeAgentSessionContextSnapshot(
     if (!published || !isCurrent()) {
       throw new Error('Chat context snapshot publication was replaced')
     }
+    // Rename keeps the last write's time, which a paused capture can leave old; the sweep ages by this.
+    const publishedAt = new Date()
+    await utimes(path, publishedAt, publishedAt).catch(() => undefined)
     void sweepAgentSessionContextSnapshots(root)
     return path
   } finally {
@@ -107,9 +110,7 @@ async function sweepSnapshotFolder(root: string, now: number): Promise<void> {
       if (age > SNAPSHOT_MIN_AGE_MS && !staging.has(path)) {
         await rm(path, { force: true }).catch(() => undefined)
       }
-    } else if (age > SNAPSHOT_MAX_AGE_MS) {
-      await removeSnapshot(path, now)
-    } else {
+    } else if (age <= SNAPSHOT_MAX_AGE_MS || !(await removeSnapshot(path, now))) {
       files.push({ path, size: info.size, modified: info.mtimeMs })
     }
   }
