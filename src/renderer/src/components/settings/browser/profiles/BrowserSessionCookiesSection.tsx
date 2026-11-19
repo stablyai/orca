@@ -85,6 +85,7 @@ export function BrowserSessionCookiesSection({
           undefined,
           t
         ),
+        ...translateSearchKeyword('browser.siteList.label', 'Site list', undefined, t),
         'cookies',
         'session',
         'import',
