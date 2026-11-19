@@ -196,6 +196,9 @@ export function reconcileTerminalSessionNames(
     }
   }
   if (!hasTerminalSessionNames() && !tabsNamed(state)) {
+    // Nothing is named, so nothing seen before still matters; a stale view would make a name
+    // that arrives later look settled to the close-time check.
+    lastSeenByTabId = new Map()
     return result
   }
   const tabsById = new Map<string, AppState['tabsByWorktree'][string][number]>()

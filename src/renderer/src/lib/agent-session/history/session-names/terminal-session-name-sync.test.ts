@@ -190,6 +190,23 @@ describe('terminal session name sync', () => {
     expect(unsettledTerminalTabsClosed(none, switched)).toBe(true)
   })
 
+  it('keeps a name re-applied from another client after a local clear when the tab closes mid-wait', () => {
+    const timers: (() => void)[] = []
+    const clock = { now: 1_000_000, timers }
+    const named = makeTerminalNamesState([{ id: 'tab-1', sessionId: 's1', customTitle: 'A' }])
+    const sync = harness(named, clock)
+    sync.flush()
+    expect(getSavedTerminalSessionName('local', 'claude', 's1')).toBe('A')
+    recordTerminalTabRename(named, 'tab-1', null, { now: clock.now })
+    sync.set(makeTerminalNamesState([{ id: 'tab-1', sessionId: 's1' }]))
+    sync.flush()
+    clock.now += LOCAL_TAB_NAME_WRITE_GRACE_MS * 4
+    sync.set(makeTerminalNamesState([{ id: 'tab-1', sessionId: 's1', customTitle: 'A' }]))
+    sync.set(makeTerminalNamesState([]))
+    expect(getSavedTerminalSessionName('local', 'claude', 's1')).toBe('A')
+    sync.stop()
+  })
+
   it('retries tabs skipped for an unknown host when owner facts change', () => {
     const known = makeTerminalNamesState([{ id: 'tab-1', sessionId: 's1', customTitle: 'N' }])
     const unknown = {
