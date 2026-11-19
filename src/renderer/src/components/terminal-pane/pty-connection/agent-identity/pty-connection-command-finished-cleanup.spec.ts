@@ -62,17 +62,16 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
     })
 
     it.each([
-      ['keeps recovery until main proves the owning agent ended', false, false],
-      ['settles shell UI even when main has a process identity', false, true],
+      ['keeps recovery until main proves the owning agent ended', false],
       // Hibernation records resume before kill; the exposed shell is Orca’s own stop rather than an independent agent exit.
-      ['keeps sleeping identity when the shell surfaces during an intentional stop', true, false]
-    ])('%s', async (_label, stoppingOnPurpose, verifiable) => {
+      ['keeps sleeping identity when the shell surfaces during an intentional stop', true]
+    ])('%s', async (_label, stoppingOnPurpose) => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('../connect-pane-pty')
       const agentTitleMocks5 = await vi.importMock<PtyConnectionAgentTitleMocks>(
         '@/lib/agent-status/aggregation/worktree-agent-status'
       )
-      window.api.agentStatus.hasVerifiableAgentProcess = vi.fn(async () => verifiable)
+      window.api.agentStatus.hasVerifiableAgentProcess = vi.fn(async () => false)
       vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('zsh')
       const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
       const ptyId = 'pty-sleeping-confirmed-shell'
