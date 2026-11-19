@@ -34,6 +34,7 @@ export type RuntimeStatusStoreState = RuntimeStatusSlice &
     Pick<
       AppState,
       | 'settings'
+      | 'updateSettings'
       | 'remoteBrowserPageHandlesByPageId'
       | 'retainRuntimeDetectedAgents'
       | 'retainRuntimeTerminalQuickCommands'

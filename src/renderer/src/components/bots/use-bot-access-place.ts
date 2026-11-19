@@ -3,6 +3,7 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { useAppStore } from '@/store'
 import { botHostMachineName } from '@/lib/bot-host-status'
+import { hasPendingRuntimeEnvironmentContinuation } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import type { AppState } from '@/store/types'
 import { BOT_ACCESS_COPY, botAccessPlace } from '../../../../shared/bots/bot-access-copy'
 import { getHostSettingOverride } from '../../../../shared/execution-host/host-setting-overrides'
@@ -10,6 +11,7 @@ import {
   getExecutionHostLabel,
   toRuntimeExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
+  parseRoutableExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
 
@@ -24,12 +26,15 @@ function serverName(state: AppState, hostId: ExecutionHostId): string | null {
     }
     hostId = toRuntimeExecutionHostId(state.runtimeEnvironments[0].id)
   }
+  const parsed = parseRoutableExecutionHostId(hostId)
+  const pending =
+    parsed?.kind === 'runtime' && hasPendingRuntimeEnvironmentContinuation(parsed.environmentId)
   const override = getHostSettingOverride(state.settings, hostId, 'displayLabel')
-  if (override) {
+  if (override && !pending) {
     return override
   }
   const published = botHostMachineName(hostId, state)
-  if (published || web) {
+  if (published || web || pending) {
     return published
   }
   const label = selectExecutionHostDisplayLabel(state, hostId)
