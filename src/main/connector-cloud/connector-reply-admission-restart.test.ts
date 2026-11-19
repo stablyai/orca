@@ -242,6 +242,7 @@ describe('a committed head and its carried send, across a crash before their fir
       chat: () => chat,
       hasSession: () => true,
       isBot: () => false,
+      agentOf: () => 'claude',
       fillTurn: conversationReplyFill(
         () => journal,
         () => void events.drainReplies()

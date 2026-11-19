@@ -1,5 +1,5 @@
 // Item changes in a bot chat: the same quiet one-line row for every change, item names as chips that
-// open the item in the Items tab (a one-item line opens it from anywhere on the line); the owner's comment is their own message under the item's chip. A run
+// open the item in the Items tab (a one-item line opens it from anywhere on the line); the owner's comment is their own message, headed by the item's chip. A run
 // of the owner's quick changes to one item folds into one line that opens into each change; a long line
 // clamps to two lines, and a bulk line shows a few chips then "+N more".
 import { useLayoutEffect, useRef, useState } from 'react'
@@ -210,11 +210,12 @@ function CommentRow({ line }: { line: BotItemNoteLine & { kind: 'comment' } }) {
   const text = stripSentImagePromptMarkers(line.text, line.images?.length ?? 0)
   return (
     <div className="flex flex-col items-end gap-1">
-      <ItemChip item={line.item} />
       {line.images ? <BotItemCommentImages images={line.images} /> : null}
-      {text.trim() ? (
-        <NativeChatUserBubble className="whitespace-pre-wrap">{text}</NativeChatUserBubble>
-      ) : null}
+      {/* The item heads the bubble, as on the phone. */}
+      <NativeChatUserBubble className="flex flex-col items-start gap-1.5">
+        <ItemChip item={line.item} />
+        {text.trim() ? <div className="whitespace-pre-wrap">{text}</div> : null}
+      </NativeChatUserBubble>
     </div>
   )
 }

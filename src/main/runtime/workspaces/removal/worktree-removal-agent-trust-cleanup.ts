@@ -2,7 +2,7 @@ import {
   FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
   splitWorktreeId
 } from '../../../../shared/worktree/id'
-import { removeOrcaCreatedProjectTrustEntries } from '../../../codex/trust/toml/config-toml-trust'
+import { removeOrcaCreatedProjectTrustEntries } from '../../../codex/trust/project-trust/codex-project-trust-worker-client'
 import { removeOrcaCreatedAntigravityTrust } from '../../../agent-launch/trust/antigravity-workspace-trust-ownership'
 
 /**

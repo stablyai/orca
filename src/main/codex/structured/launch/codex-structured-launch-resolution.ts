@@ -231,6 +231,7 @@ export function codexStructuredLaunchPart(
         ),
         visuals
       ),
+      commandEnv: tools.commandEnv,
       // Clear inherited scratch paths that may belong to another chat.
       inheritedEnvToDelete: [
         ...(visuals ? [] : [NATIVE_CHAT_SCRATCH_DIR_ENV]),

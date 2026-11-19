@@ -15,6 +15,7 @@ import type { RpcContext } from '../../../core'
 import { parseBotAddress } from '../../../../../../shared/bot-roster'
 import { recordReceiptBeforeNudge } from './mutation-replay-nudge'
 import type { SendParams } from './send-params'
+import { PeerMailMessageType } from '../../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 
 const NOTHING_SENT = { effectsApplied: false } as const
 
@@ -67,14 +68,15 @@ export async function sendPeerMail(args: {
       NOTHING_SENT
     )
   }
-  const type = params.type ?? 'status'
-  if (type !== 'status' && type !== 'handoff' && type !== 'question') {
+  const ordinaryType = PeerMailMessageType.safeParse(params.type ?? 'status')
+  if (!ordinaryType.success) {
     throw new OrchestrationError(
       'invalid_argument',
-      `--on carries --type status, handoff or question, not ${type}. Nothing was sent.`,
+      `--type ${params.type} requires Dispatch authority on its Run home. Send it through that Dispatch without --on. Nothing was sent.`,
       NOTHING_SENT
     )
   }
+  const type = ordinaryType.data
   if (params.payload !== undefined) {
     throw new OrchestrationError(
       'invalid_argument',
@@ -84,11 +86,8 @@ export async function sendPeerMail(args: {
   }
   const caller = peerMailLocalCaller({ ...args, from: params.from })
   const toBot =
-    parseBotAddress(to) !== null ||
-    type === 'question' ||
-    params.chat !== undefined ||
-    params.item !== undefined
-  const server = await requirePeerMailServer(runtime, params.on, toBot)
+    parseBotAddress(to) !== null || params.chat !== undefined || params.item !== undefined
+  const server = await requirePeerMailServer(runtime, params.on, toBot, type)
   const conversation = runtime.getOrchestrationDb().openHomePeerMailConversation({
     environmentId: server.environmentId,
     peerFingerprint: peerMailPairing(server),
@@ -112,8 +111,8 @@ export async function sendPeerMail(args: {
   return recordReceiptBeforeNudge(
     args.recordMutationReceipt,
     { message: { id, to }, server: server.name },
-    () => runtime.ensureOrchestrationFederationRelay(),
-    { kind: 'federation' }
+    () => runtime.ensureOrchestrationPeerMailRelay(server.environmentId),
+    { kind: 'federation', environmentId: server.environmentId }
   )
 }
 

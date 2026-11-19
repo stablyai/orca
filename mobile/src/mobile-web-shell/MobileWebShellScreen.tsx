@@ -27,7 +27,6 @@ import { useNativeImageActions } from '../platform/image-actions/native-image-ac
 import { processDeviceStore } from '../device-store/device-store'
 import { serveDeviceStoreVerb } from './native-capabilities/device-store-verb-server'
 import { BRIDGE_STORE_VERB } from './bridge/native-capabilities/bridge-store-verb'
-import { useAppLeavesForeground } from './session/use-app-leaves-foreground'
 import { useShellPageBack } from './routing/use-shell-page-back'
 import { useShellStackPop } from './routing/use-shell-stack-pop'
 import { usePageLocationOnFold } from './page-geometry/page-location-on-fold'
@@ -119,6 +118,7 @@ export function MobileWebShellScreen({
     reportPageReady,
     reportPagePainted,
     reportPageBackClaim,
+    reportSwapSafe,
     pageReady,
     pageFrame,
     backClaimed,
@@ -286,6 +286,8 @@ export function MobileWebShellScreen({
         ? holdPageLocation(href, ownsHostArea)
         : onPageLocation(href)
     },
+    // A newer build swaps in only on a resume where the page has nothing to lose (no draft, upload or open sheet).
+    onPageSwapSafe: reportSwapSafe,
     onTerminalKeyRailClaim: keyRail.reportClaim,
     onRouteParamClear: openTarget.onRouteParamClear,
     onRouteRefused: (issue) => {
@@ -313,7 +315,6 @@ export function MobileWebShellScreen({
     // The stream survives dropped frames; keep a count because diagnostics print only once per host.
     onBinaryFramesDropped: reportDroppedBinaryFrames
   })
-  useAppLeavesForeground(bridge.sendAppInactive)
 
   // paneKey changes keep the session mounted; the host deduplicates routes and preserves in-flight frames.
   useShellPageStorageRefresh(refreshStorage, bridge.publishStorage)

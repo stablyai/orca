@@ -90,7 +90,7 @@ export function structuredAgentSessionStatusSummary({
     ...(session.restartResume ? { restartResume: { phase: session.restartResume.phase } } : {}),
     ...projected,
     ...(structuredAgentSessionAwaitsAnswer(openAsyncQuestion, skippedThrough)
-      ? { awaitsAnswer: true as const }
+      ? { awaitsAnswer: true as const, awaitsQuestion: openAsyncQuestion }
       : {}),
     ...(skippedThrough ? { asyncQuestionsSkippedThrough: skippedThrough } : {}),
     runtimePermission: structuredAgentSessionRuntimePermission(session.child ?? undefined),

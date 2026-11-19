@@ -1,5 +1,6 @@
 import type { ProfileStateDomainReplacement } from '../../loading-store/profile-writing/profile-state-authority'
 import { isRecord } from '../documents/profile-state-document-validation'
+import type { ProfileStateDomainPatch } from '../documents/profile-state-domain-patches'
 
 export type ProfileStateWriterInitialization = {
   databasePath: string
@@ -9,9 +10,12 @@ export type ProfileStateWriterInitialization = {
 
 export type ProfileStateWriterCommand =
   | { command: 'write-state'; payload: Uint8Array }
+  | { command: 'write-complete'; replacements: readonly ProfileStateDomainReplacement[] }
   | {
-      command: 'write-complete' | 'write-domains'
+      command: 'write-domains'
       replacements: readonly ProfileStateDomainReplacement[]
+      /** Validated by the writer when it applies them. */
+      patches?: readonly ProfileStateDomainPatch[]
     }
   | {
       command: 'write-automation'
@@ -83,8 +87,13 @@ export function isProfileStateWriterRequest(value: unknown): value is ProfileSta
     case 'export-latest':
       return typeof value.targetPath === 'string' && value.targetPath.length > 0
     case 'write-complete':
-    case 'write-domains':
       return Array.isArray(value.replacements) && value.replacements.every(isReplacement)
+    case 'write-domains':
+      return (
+        Array.isArray(value.replacements) &&
+        value.replacements.every(isReplacement) &&
+        (value.patches === undefined || Array.isArray(value.patches))
+      )
     case 'write-automation':
       return (
         Array.isArray(value.replacements) &&
