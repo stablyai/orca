@@ -1371,7 +1371,11 @@ export function createRemoteRuntimePtyTransport(
     }
 
     return {
-      ...(matchesHostHandle(resolvedPane) ? terminalLaunchFacts(resolvedPane) : {}),
+      ...(matchesHostHandle(resolvedPane) &&
+      handle === resolvedPane.handle &&
+      (resolvedPane.incarnationId ?? null) === authoritativePtyIncarnationId
+        ? terminalLaunchFacts(resolvedPane)
+        : {}),
       id: remotePtyId,
       replay: '',
       isReattach: true,
@@ -1692,7 +1696,10 @@ export function createRemoteRuntimePtyTransport(
       return undefined
     }
     return {
-      ...terminalLaunchFacts(terminal),
+      ...(handle === terminal.handle &&
+      (terminal.incarnationId ?? null) === authoritativePtyIncarnationId
+        ? terminalLaunchFacts(terminal)
+        : {}),
       id: remotePtyId,
       replay: '',
       isReattach: true,
@@ -3675,7 +3682,12 @@ export function createRemoteRuntimePtyTransport(
           })) ||
             destroyed ||
             lifecycleEpoch !== connectLifecycleEpoch ||
-            (isAccountRestartCurrent && !isAccountRestartCurrent()))
+            (isAccountRestartCurrent && !isAccountRestartCurrent()) ||
+            (shouldContinue &&
+              !shouldContinue({
+                id: toRemoteRuntimePtyId(terminal.handle, createEnvironmentId),
+                incarnationId: terminal.incarnationId
+              })))
         ) {
           return undefined
         }

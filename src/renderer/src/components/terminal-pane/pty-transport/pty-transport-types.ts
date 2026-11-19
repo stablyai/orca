@@ -182,6 +182,7 @@ export type PtyTransport = {
     cols?: number
     rows?: number
     sessionId?: string
+    expectedIncarnationId?: string
     /** Declare hidden before spawn bytes so main’s gate/model responder owns queries from byte zero; remote runtimes ignore this local-only field. */
     initiallyHidden?: boolean
     /** Layout-owner build: attach to `sessionId` or start nothing; main starts the pane. */

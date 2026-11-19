@@ -89,7 +89,7 @@ export function captureCodexAccountRestartConnection(session: ConnectPanePtySess
       options: ConnectOptions,
       isCurrent: () => boolean
     ): void => {
-      settleCodexAccountRestart(session, token, {
+      const settled = settleCodexAccountRestart(session, token, {
         ptyId,
         generation,
         error,
@@ -103,7 +103,7 @@ export function captureCodexAccountRestartConnection(session: ConnectPanePtySess
           options.shouldContinue = isCurrent
         }
       })
-      if (ptyId && isCurrent()) {
+      if (settled && isCurrent()) {
         session.settlePaneAttachAttempt?.('success')
       }
     }

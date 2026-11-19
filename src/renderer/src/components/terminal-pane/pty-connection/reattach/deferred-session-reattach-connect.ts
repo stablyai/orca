@@ -32,6 +32,7 @@ type ReattachOptions = {
   afterMainStart?: true
   userAct?: true
   attachOnlyView?: true
+  expectedIncarnationId?: string
   shouldContinue?: Parameters<PtyTransport['connect']>[0]['shouldContinue']
 }
 
@@ -120,6 +121,7 @@ function connectDeferredSessionReattach(
     cols: session.cols,
     rows: session.rows,
     sessionId: deferredReattachSessionId,
+    expectedIncarnationId: options.expectedIncarnationId,
     ...(coldRestoreStartup?.command ? { command: coldRestoreStartup.command } : {}),
     ...(coldRestoreStartup?.env
       ? { env: session.mergeStartupEnvWithPaneIdentity(coldRestoreStartup.env) }

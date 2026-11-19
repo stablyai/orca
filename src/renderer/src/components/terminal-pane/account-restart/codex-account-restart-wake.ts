@@ -89,7 +89,9 @@ async function settleForeignResume(
           getResourceExecutionHostIdForWorktree(latest, tab.worktreeId) === request.hostId &&
           getTerminalNoticeLifetime(ptyId)?.incarnationId === incarnation
         ) {
-          latest.updateCodexAccountRestart(token, null)
+          failCodexAccountRestart(token, 'terminal_pane_resume_owned_elsewhere', 'failed', {
+            notDispatched: true
+          })
           return true
         }
       } catch {
@@ -151,6 +153,7 @@ export function routeCodexAccountRestartWake(
       if (isCurrent()) {
         return startDeferredSessionReattach(session, retained.oldPtyId, {
           attachOnlyView: true,
+          expectedIncarnationId: retained.oldIncarnationId,
           shouldContinue: isCurrent
         }).then(() => null)
       }
