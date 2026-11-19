@@ -1,6 +1,6 @@
 import type { ComponentProps } from 'react'
 import { NativeChatMarkdown } from './NativeChatMarkdown'
-import { useNativeChatPacedText } from './use-native-chat-paced-text'
+import { useNativeChatFadeWindow, useNativeChatPacedText } from './use-native-chat-paced-text'
 
 /** Isolate paced text updates so animation frames do not rerender the rest of the row. */
 export function NativeChatPacedMarkdown({
@@ -8,18 +8,19 @@ export function NativeChatPacedMarkdown({
   content,
   streaming,
   ...props
-}: Omit<ComponentProps<typeof NativeChatMarkdown>, 'growing' | 'fadeWords'> & {
+}: Omit<ComponentProps<typeof NativeChatMarkdown>, 'growing' | 'fadeFrom'> & {
   rowKey: string
   streaming: boolean
 }): React.JSX.Element {
   const paced = useNativeChatPacedText(rowKey, content, streaming)
+  const fadeFrom = useNativeChatFadeWindow(paced.text, paced.fading)
   return (
     <NativeChatMarkdown
       {...props}
       rowKey={rowKey}
       content={paced.text}
       streaming={streaming || paced.revealing}
-      fadeWords={paced.fading}
+      fadeFrom={fadeFrom}
     />
   )
 }

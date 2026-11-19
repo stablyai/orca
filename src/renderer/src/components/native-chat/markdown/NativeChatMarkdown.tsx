@@ -28,17 +28,17 @@ import { useNativeChatLinkClick } from '../links/actions/native-chat-link-click-
 import './native-chat-markdown.css'
 
 /** Existing words stay opaque when a reply first starts growing. */
-function useWordFadeArmed(fadeWords: boolean): boolean {
+function useWordFadeArmed(fading: boolean): boolean {
   const [armed, setArmed] = useState(false)
   useEffect(() => {
-    if (!fadeWords) {
+    if (!fading) {
       setArmed(false)
       return
     }
     const frame = requestAnimationFrame(() => setArmed(true))
     return () => cancelAnimationFrame(frame)
-  }, [fadeWords])
-  return armed && fadeWords
+  }, [fading])
+  return armed && fading
 }
 
 type NativeChatMarkdownProps = Omit<
@@ -137,7 +137,7 @@ function createNativeChatImageExtension(
 export function NativeChatMarkdown({
   className,
   linkifyFilePaths = false,
-  fadeWords = false,
+  fadeFrom,
   visualMessageId,
   streaming = false,
   growing = false,
@@ -147,7 +147,7 @@ export function NativeChatMarkdown({
   ...props
 }: NativeChatMarkdownProps): React.JSX.Element {
   const onLinkClick = useNativeChatLinkClick()
-  const wordFadeArmed = useWordFadeArmed(fadeWords)
+  const wordFadeArmed = useWordFadeArmed(fadeFrom !== undefined)
   const visualExtension = useNativeChatVisualMarkdownExtension(visualMessageId)
   const extension = useMemo(
     () =>
@@ -179,7 +179,7 @@ export function NativeChatMarkdown({
         math
         extension={extension}
         fileLinkExists={fileLinkExists}
-        fadeWords={fadeWords}
+        fadeFrom={fadeFrom}
         renderMermaid={!streaming}
         keepMermaidSourceWhilePending
         unknownHtmlAsText

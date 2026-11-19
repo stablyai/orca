@@ -1,4 +1,4 @@
-// Keep existing word elements stable while streams append so only newly mounted words fade.
+// Only words in the fade window become elements; newly mounted ones fade in by CSS.
 
 import type { Element, Root } from 'hast'
 import { SPACELESS_SCRIPT_RANGES } from '../../../../shared/native-chat/transcript/row-content/native-chat-text-reveal'
@@ -19,14 +19,24 @@ export function markdownWordTokens(value: string): { value: string; offset: numb
   }))
 }
 
-function splitWords(node: Root | Element): void {
+/** Every text node becomes a word group, so the groups keep their places while the window moves;
+ *  each records where in its text the window starts. */
+function splitWords(node: Root | Element, from: number): void {
   for (let index = node.children.length - 1; index >= 0; index -= 1) {
     const child = node.children[index]
     if (child.type === 'text') {
+      const start = child.position?.start.offset
+      if (start === undefined) {
+        continue
+      }
       node.children[index] = {
         type: 'element',
         tagName: 'span',
-        properties: { dataWordGroup: '' },
+        properties: {
+          dataWordGroup: '',
+          dataFadeFrom: Math.min(child.value.length, Math.max(0, from - start)),
+          dataFadeOffset: start
+        },
         children: [{ type: 'text', value: child.value }]
       }
     } else if (
@@ -34,11 +44,12 @@ function splitWords(node: Root | Element): void {
       !UNSPLIT_TAGS.has(child.tagName) &&
       !(Array.isArray(child.properties.className) && child.properties.className.includes('katex'))
     ) {
-      splitWords(child)
+      splitWords(child, from)
     }
   }
 }
 
-export function rehypeWordFade(): (tree: Root) => void {
-  return splitWords
+/** Words from source offset `from` on fade in; text before it renders plain. */
+export function rehypeWordFade({ from }: { from: number }): (tree: Root) => void {
+  return (tree) => splitWords(tree, from)
 }

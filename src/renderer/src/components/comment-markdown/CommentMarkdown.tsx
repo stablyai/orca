@@ -110,8 +110,9 @@ type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
    *  append re-renders only the last block, and close markup its end leaves open.
    *  The block-by-block render stays on once seen. */
   growing?: boolean
-  /** Give each word its own `data-word` element, for a stylesheet to animate as words arrive. */
-  fadeWords?: boolean
+  /** Content offset where arriving words start; words from it on get their own `data-word`
+   *  element, for a stylesheet to fade in. */
+  fadeFrom?: number
   extension?: CommentMarkdownExtension
   /** Show raw HTML that sanitize would strip as literal text instead of dropping its tags. */
   unknownHtmlAsText?: boolean
@@ -137,7 +138,7 @@ const CommentMarkdown = React.memo(
       renderMermaid = true,
       keepMermaidSourceWhilePending = false,
       growing = false,
-      fadeWords = false,
+      fadeFrom,
       extension,
       onCopy,
       unknownHtmlAsText = false,
@@ -184,11 +185,6 @@ const CommentMarkdown = React.memo(
       extension,
       unknownHtmlAsText ? unknownHtmlRendersAsText : undefined
     )
-    const [hadWordFade, setHadWordFade] = React.useState(fadeWords)
-    if (fadeWords && !hadWordFade) {
-      setHadWordFade(true)
-    }
-    const wrapsWords = fadeWords || hadWordFade
 
     return (
       <GitHubBodyImageUrlsContext.Provider value={bodyImageUrls}>
@@ -210,15 +206,21 @@ const CommentMarkdown = React.memo(
               }}
               {...rest}
             >
-              {blocks.map((block, index) => (
+              {blocks.map((block, index) => {
+                // Only blocks reaching into the fade window fade; earlier ones stay memoized and plain.
+                const blockFadeFrom =
+                  fadeFrom !== undefined && fadeFrom < block.start + block.text.length
+                    ? Math.max(0, fadeFrom - block.start)
+                    : undefined
+                return (
                 <CommentMarkdownBlockLineContext.Provider key={block.start} value={block.line}>
                   <MemoizedMarkdown
                     block={block.tree ? block : undefined}
                     remarkPlugins={activeRemarkPlugins}
                     rehypePlugins={activeRehypePlugins}
                     math={math}
-                    fadeWords={wrapsWords}
-                    components={wrapsWords ? fadingComponents : components}
+                    fadeFrom={blockFadeFrom}
+                    components={blockFadeFrom === undefined ? components : fadingComponents}
                     urlTransform={
                       allowFileUriLinks
                         ? commentMarkdownFileUriUrlTransform
@@ -233,7 +235,8 @@ const CommentMarkdown = React.memo(
                       : markdownBlockContent(block)}
                   </MemoizedMarkdown>
                 </CommentMarkdownBlockLineContext.Provider>
-              ))}
+                )
+              })}
             </div>
           </CommentMarkdownMermaidSourceContext.Provider>
         </CommentMarkdownMermaidContext.Provider>
