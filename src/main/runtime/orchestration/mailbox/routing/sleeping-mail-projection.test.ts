@@ -103,8 +103,10 @@ it('moves a sleeping hold with a real owner transfer and drops it on removal', a
     })
     await settled()
     db.bindRun({ runId: run.id, coordinatorHandle: 'term_new', coordinatorPaneKey: otherPane })
-    await settled()
-    expect(bell).toHaveBeenLastCalledWith(['folder:new'])
+    // An unnamed ownership change re-derives every sleeper within the shared one-second pass.
+    await vi.waitFor(() => expect(bell).toHaveBeenLastCalledWith(['folder:new']), {
+      timeout: 2_000
+    })
     write({})
     await settled()
     expect(bell).toHaveBeenLastCalledWith([])

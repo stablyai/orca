@@ -12,8 +12,6 @@ type Deps = {
 export class MailWakeAttempts {
   private readonly byPane = new Map<string, SleptMailRecord>()
   private loadedFrom: OrchestrationDb | null = null
-  /** Bumped on every change to the mirrored attempts. */
-  generation = 0
 
   constructor(private readonly deps: Deps) {}
 
@@ -33,14 +31,6 @@ export class MailWakeAttempts {
     return [...this.byPane.values()]
   }
 
-  launchTokens(): ReadonlySet<string> {
-    return new Set(
-      this.records().flatMap((record) =>
-        record.mailWake?.attempt ? [record.mailWake.attempt.launchToken] : []
-      )
-    )
-  }
-
   /** Reads the rows once per database; a claim that never got a process cannot still be launching. */
   load(): void {
     const db = this.deps.db()
@@ -49,7 +39,6 @@ export class MailWakeAttempts {
     }
     this.loadedFrom = db
     this.byPane.clear()
-    this.generation++
     for (const attempt of db.listMailWakeAttempts()) {
       if (attempt.mailWake && !attempt.mailWake.attempt) {
         db.settleMailWake(attempt.paneKey, attempt.mailWake.id)
@@ -70,11 +59,10 @@ export class MailWakeAttempts {
     }
     const claimed = { ...record, mailWake: { id, startedAt } }
     this.byPane.set(record.paneKey, claimed)
-    this.generation++
     return claimed
   }
 
-  /** The first process in the pane after its claim is the one the wake launched. */
+  /** The pane's process that launched under this attempt's id is the one the wake started. */
   stampLaunch(record: SleptMailRecord): SleptMailRecord {
     const marker = record.mailWake
     const pty = this.deps.pty(record.paneKey)
@@ -87,14 +75,14 @@ export class MailWakeAttempts {
       pty.worktreeId !== record.worktreeId ||
       pty.connectionId !== (record.connectionId ?? null) ||
       !pty.incarnationId ||
-      !pty.launchToken
+      pty.launchToken !== marker.id
     ) {
       return record
     }
     const attempt = {
       ptyId: pty.ptyId,
       incarnationId: pty.incarnationId,
-      launchToken: pty.launchToken,
+      launchToken: marker.id,
       startedAt: marker.startedAt
     }
     if (!db.recordMailWakeLaunch(record.paneKey, marker.id, attempt)) {
@@ -102,7 +90,6 @@ export class MailWakeAttempts {
     }
     const launched = { ...record, mailWake: { ...marker, attempt } }
     this.byPane.set(record.paneKey, launched)
-    this.generation++
     return launched
   }
 
@@ -113,7 +100,6 @@ export class MailWakeAttempts {
       return false
     }
     this.byPane.delete(record.paneKey)
-    this.generation++
     this.deps.db()?.settleMailWake(record.paneKey, marker.id)
     return true
   }

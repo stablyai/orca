@@ -21,11 +21,13 @@ export function requestSleepingPaneWake(
 export function resumeSleepingAgentsInWindow(
   window: BrowserWindow,
   send: (channel: string, payload: unknown) => void,
-  request: { worktreeId: string; paneKey?: string; prepareOnly?: boolean }
+  worktreeId: string,
+  paneKey?: string,
+  prepareOnly?: boolean,
+  launchToken?: string
 ): Promise<boolean> | void {
-  const { worktreeId, paneKey, prepareOnly } = request
   return paneKey
-    ? requestSleepingPaneWake(window, { worktreeId, paneKey, prepareOnly })
+    ? requestSleepingPaneWake(window, { worktreeId, paneKey, prepareOnly, launchToken })
     : send('ui:resumeSleepingAgents', { worktreeId })
 }
 

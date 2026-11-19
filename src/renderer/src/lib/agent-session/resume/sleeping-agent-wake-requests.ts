@@ -40,6 +40,26 @@ export function requestSleepingAgentWakeOnMount(
   }
 }
 
+const mailWakeLaunchTokens = new Map<string, string>()
+
+/** A mail wake's resume launches under main's attempt id, so main can tell which process it started. */
+export function rememberMailWakeLaunchToken(
+  paneKey: string,
+  launchToken: string | undefined
+): void {
+  if (launchToken) {
+    mailWakeLaunchTokens.set(paneKey, launchToken)
+  } else {
+    mailWakeLaunchTokens.delete(paneKey)
+  }
+}
+
+export function takeMailWakeLaunchToken(paneKey: string): string | undefined {
+  const launchToken = mailWakeLaunchTokens.get(paneKey)
+  mailWakeLaunchTokens.delete(paneKey)
+  return launchToken
+}
+
 export function takeSleepingAgentWakeRequest(record: SleepingAgentSessionRecord): boolean {
   return requestedRecords.delete(record)
 }

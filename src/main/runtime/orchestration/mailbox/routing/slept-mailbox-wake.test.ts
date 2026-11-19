@@ -284,7 +284,7 @@ it('suppresses a definitively confirmed late wake only for its obligation and re
   }
 })
 
-it('holds a launched wake across a restart but wakes again for a claim that never launched', async () => {
+it('releases a restart-orphaned launch or an unlaunched claim and wakes the pane for its mail', async () => {
   for (const launched of [true, false]) {
     const db = new OrchestrationDb(':memory:')
     const slept = { ...record, worktreeId: 'repo::/workspace' }
@@ -323,13 +323,12 @@ it('holds a launched wake across a restart but wakes again for a claim that neve
       runtime.retrySleptMailboxWakes()
       await settled()
       await settled()
-      expect(resume.mock.calls.filter((call) => call[2] !== true)).toEqual(
-        launched ? [] : [['repo::/workspace', paneKey]]
-      )
+      // Neither the never-launched claim nor a launch whose process is gone holds the mail.
+      expect(
+        resume.mock.calls.filter((call) => call[2] !== true).map((call) => call.slice(0, 2))
+      ).toEqual([['repo::/workspace', paneKey]])
       // The refused relaunch leaves no claim behind, so a later edge can try again.
-      expect(db.listMailWakeAttempts().map((attempt) => attempt.mailWake?.id)).toEqual(
-        launched ? ['claim'] : []
-      )
+      expect(db.listMailWakeAttempts()).toEqual([])
     } finally {
       runtime.setNotifier(null)
       db.close()

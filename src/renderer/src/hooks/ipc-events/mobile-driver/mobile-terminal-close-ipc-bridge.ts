@@ -1,3 +1,4 @@
+import { rememberMailWakeLaunchToken } from '@/lib/agent-session/resume/sleeping-agent-wake-requests'
 import { createRuntimeFilePositionQueue } from './runtime-file-position'
 import { applyClosedTerminalLeafNotice } from '@/components/terminal-pane/layout/close/closed-terminal-leaf-notice'
 import { closeTerminalTab } from '@/components/terminal/tab-lifecycle/terminal-tab-actions'
@@ -224,15 +225,20 @@ export function registerMobileAndTerminalCloseIpcBridge(
   }
 
   unsubs.push(
-    window.api.ui.onResumeSleepingAgents(({ worktreeId, paneKey, prepareOnly, requestId }) => {
-      // Phone opens wake sleeping agents without changing the desktop’s workspace, tab or view.
-      const result = requestSleepingAgentWake(worktreeId, paneKey, prepareOnly)
-      if (requestId) {
-        void Promise.resolve(result).then(
-          (woke) => window.api.ui.replySleepingAgentWake({ requestId, woke: woke === true }),
-          () => window.api.ui.replySleepingAgentWake({ requestId, woke: false })
-        )
+    window.api.ui.onResumeSleepingAgents(
+      ({ worktreeId, paneKey, prepareOnly, requestId, launchToken }) => {
+        if (paneKey && !prepareOnly) {
+          rememberMailWakeLaunchToken(paneKey, launchToken)
+        }
+        // Phone opens wake sleeping agents without changing the desktop’s workspace, tab or view.
+        const result = requestSleepingAgentWake(worktreeId, paneKey, prepareOnly)
+        if (requestId) {
+          void Promise.resolve(result).then(
+            (woke) => window.api.ui.replySleepingAgentWake({ requestId, woke: woke === true }),
+            () => window.api.ui.replySleepingAgentWake({ requestId, woke: false })
+          )
+        }
       }
-    })
+    )
   )
 }
