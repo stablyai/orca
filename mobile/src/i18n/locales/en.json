@@ -5262,6 +5262,7 @@
       "blankLine": "Tell it what it’s for in its first chat.",
       "byOrca": "{{category}} · by Orca",
       "useTemplate": "Use template…",
+      "backToTemplates": "Back to templates",
       "firstChat": "What it does first",
       "needsSetup": "Needs setup",
       "comesWith": "Comes with",
@@ -5515,7 +5516,8 @@
       "retry": "Retry",
       "loading": "Loading items…",
       "view": {
-        "sub": "Item {{number}} · {{chat}} · {{when}}",
+        "title": "Item",
+        "chatAndWhen": "{{chat}} · {{when}}",
         "canceledNote": "Canceled:",
         "doneNote": "Done:",
         "links": "Links",
