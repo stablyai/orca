@@ -76,13 +76,14 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
 
   protected async recheckHookAgentPresenceForPty(
     ptyId: string,
-    exitedSince?: number
+    exitedSince?: number,
+    paneKeys: Iterable<string> = this.collectAgentStatusPaneKeysForPty(ptyId)
   ): Promise<'live' | 'unverifiable' | 'exited' | null> {
     if (!this.checkHookAgentPresenceFn) {
       return null
     }
     const verdicts = await Promise.all(
-      Array.from(this.collectAgentStatusPaneKeysForPty(ptyId), (paneKey) =>
+      Array.from(paneKeys, (paneKey) =>
         // SAFETY: Keep the original TypeError if collecting pane keys invalidates this callback.
         exitedSince === undefined
           ? this.checkHookAgentPresenceFn!(paneKey)
@@ -101,14 +102,14 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
   protected confirmPtyAgentExit(ptyId: string, recoverCompletedHook = false): void {
     const current = this.ptysById.get(ptyId)
     const incarnation = current?.incarnationId
-    void this.recheckHookAgentPresenceForPty(ptyId).then((verdict) => {
+    const paneKeys = [...this.collectAgentStatusPaneKeysForPty(ptyId)]
+    void this.recheckHookAgentPresenceForPty(ptyId, undefined, paneKeys).then((verdict) => {
       if (this.ptysById.get(ptyId) !== current || current?.incarnationId !== incarnation) {
         return
       }
-      const suspended = Array.from(this.collectAgentStatusPaneKeysForPty(ptyId)).some(
-        (paneKey) => this.readPaneAgentIdentity(paneKey)?.suspended === true
-      )
-      if (verdict === 'unverifiable' && suspended) {
+      const suspended = () =>
+        paneKeys.some((paneKey) => this.readPaneAgentIdentity(paneKey)?.suspended === true)
+      if (verdict === 'unverifiable' && suspended()) {
         this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.restoreLastAgentExit()
       } else if (verdict === null || verdict === 'unverifiable') {
         this.confirmLegacyPtyAgentExit(ptyId, recoverCompletedHook, verdict === 'unverifiable')
