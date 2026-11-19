@@ -106,6 +106,7 @@ export function DeleteWorktreeTargetPreview({
                     ) : null}
                     <DeleteWorktreeDirtyChangeHint
                       key={getWorktreeHostIdentity(item)}
+                      owner={item}
                       checkState={changeCheckStatesByWorktreeId?.get(
                         item.hostId ? getWorktreeHostIdentity(item) : item.id
                       )}
@@ -165,6 +166,7 @@ export function DeleteWorktreeTargetPreview({
       ) : null}
       <DeleteWorktreeDirtyChangeHint
         key={getWorktreeHostIdentity(worktree)}
+        owner={worktree}
         checkState={changeCheckStatesByWorktreeId?.get(
           worktree.hostId ? getWorktreeHostIdentity(worktree) : worktree.id
         )}
