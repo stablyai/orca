@@ -369,6 +369,8 @@ async function dismissOverlays(page) {
       return
     }
     if (blocked || notice) {
+      // A focused terminal swallows Escape, so it would never reach a notice's window listener.
+      await page.evaluate(() => document.activeElement?.blur?.())
       await page.keyboard.press('Escape')
     }
     await sleep(200)
