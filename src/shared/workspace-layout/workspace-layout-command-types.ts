@@ -40,7 +40,7 @@ export type LayoutCommand =
       index?: number
       title?: string
       color?: string
-      viewMode?: 'terminal' | 'chat'
+      viewMode?: 'terminal' | 'chat' | 'map'
       /** When the window drew the tab, so a later save of it matches main's copy. */
       createdAt?: number
       /** A quick command tab's label, so a later save of it matches main's copy. */
@@ -124,7 +124,7 @@ export type LayoutCommand =
       tabId: string
       color?: string | null
       isPinned?: boolean
-      viewMode?: 'terminal' | 'chat'
+      viewMode?: 'terminal' | 'chat' | 'map'
       /** The tab's agent launched and ended: a restore must not launch it again. */
       clearLaunchAgent?: true
     })

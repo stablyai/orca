@@ -11,6 +11,7 @@ import type { TerminalExitCause } from '../pty/lifecycle/terminal-exit-cause'
 import type { TerminalPaneLayoutNode } from '../../workspace-layout/terminal-tab-types'
 import type { TerminalAgent } from '../../agent-status/identity/terminal-agent'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
+import type { TerminalViewMode } from '../../terminal-view-mode.ts'
 
 export type RuntimeTerminalSummary = {
   handle: string
@@ -258,7 +259,7 @@ type RuntimeTerminalCreateBaseRequestPayload = {
   launchToken?: string
   launchAgent?: TuiAgent
   trustWorktreeId?: string
-  viewMode?: 'terminal' | 'chat'
+  viewMode?: TerminalViewMode
   startupCommandDelivery?: StartupCommandDelivery
   title?: string
   activate?: boolean

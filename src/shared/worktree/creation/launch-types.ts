@@ -8,6 +8,7 @@ import type { SleepingAgentLaunchConfig } from '../../agent-session/lifecycle/ag
 import type { SetupRunnerShell } from '../../agent-launch/startup/setup-runner-command'
 import type { OrcaDefaultTabTemplate } from '../../workspace-setup/orca-yaml-hook-types'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
+import type { TerminalViewMode } from '../../terminal-view-mode.ts'
 
 export type WorktreeSetupLaunch = {
   cwd?: string
@@ -24,7 +25,7 @@ export type WorktreeStartupLaunch = {
   launchConfig?: SleepingAgentLaunchConfig
   launchToken?: string
   launchAgent?: TuiAgent
-  viewMode?: 'terminal' | 'chat'
+  viewMode?: TerminalViewMode
   startupCommandDelivery?: StartupCommandDelivery
   telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
 }

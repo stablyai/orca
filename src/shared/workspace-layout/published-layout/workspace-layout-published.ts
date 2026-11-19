@@ -17,6 +17,7 @@ import {
 } from '../workspace-layout-model'
 import { tabExecutionHostId } from '../editor-tabs/workspace-layout-tab-host'
 import type { LayoutEditorView } from '../editor-tabs/layout-editor-view'
+import type { TerminalViewMode } from '../../terminal-view-mode.ts'
 
 export type PublishedPane = {
   leafId: string
@@ -67,7 +68,7 @@ export type PublishedTab = {
   quickCommandLabel?: string | null
   color: string | null
   isPinned?: boolean
-  viewMode?: 'terminal' | 'chat'
+  viewMode?: TerminalViewMode
   isPreview?: boolean
   agentSessionAgent?: AgentType
   terminal?: PublishedTerminal
