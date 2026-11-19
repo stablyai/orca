@@ -7797,9 +7797,9 @@
           "8fbe1f37c1": "Ortam",
           "2d133152fa": "Varsayılan ortam yok",
           "3f1bdf3cb4": "Ortam metni güvenli bir şekilde ayrıştırılamayacak kadar büyük.",
-          "codexSessionSource": "İçe aktarılacak Codex ana dizini",
-          "codexSessionSourceInfo": "Codex geçmişini içe aktarma hakkında",
-          "codexSessionSourceTooltip": "Orca, Codex'i izole bir ana dizinde çalıştırır. Bu oturum geçmişini içe aktarmak için bunu mevcut Codex ana dizininize yönlendirin. Boş bırakılırsa ~/.codex kullanılır.",
+          "codexSessionSource": "Codex konuşmalarını şuradan içe aktar",
+          "codexSessionSourceInfo": "Codex konuşmalarını içe aktarma hakkında",
+          "codexSessionSourceTooltip": "Geçmiş hesaplar arasında paylaşıldığı sürece Orca, bu Codex ana dizinindeki konuşmaları /resume listelesin diye ~/.codex'e kopyalar. Bir konuşma kopyalandıktan sonra bu klasörde eklenen turlar kopyaya ulaşmaz.",
           "noAgentsDetected": "Ajan algılanmadı. Bir tanesi yüklüyse, yoklama zaman aşımına uğramış olabilir.",
           "9f30095d49": "Ajan İzinleri"
         },
@@ -20154,9 +20154,6 @@
         "failed": "Bu sohbete devam edilemedi. Yeniden deneyin veya bir mesaj gönderin.",
         "explanation": "Devam ettiğinizde ajan önce son adımının tamamlanıp tamamlanmadığını kontrol eder."
       },
-      "antigravitySignIn": {
-        "sentence": "Antigravity'de oturum açılmamış. <settings>Ayarlar → Hesaplar → Antigravity</settings> bölümünden oturum açın. Ardından mesajınızı yeniden gönderin."
-      },
       "claudeSignIn": {
         "signingIn": "Oturum açılıyor…"
       },
@@ -22824,7 +22821,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "Worktree değiştir",
+      "worktreePalette": "Her şeyde ara",
       "worktreeNavigateUp": "Önceki worktree",
       "worktreeNavigateDown": "Sonraki worktree",
       "workspaceCreate": "Worktree oluştur",
@@ -22936,6 +22933,9 @@
       "45347db2a3": "Sekmeler arası gezinme",
       "aab2837fa5": "Hızlı komutlar",
       "3492a954c8": "Terminal bölmeleri"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "Worktree değiştir"
     }
   },
   "gpuFallback": {

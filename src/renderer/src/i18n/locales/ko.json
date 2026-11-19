@@ -6977,9 +6977,9 @@
           "8fbe1f37c1": "환경",
           "2d133152fa": "기본 환경 없음",
           "3f1bdf3cb4": "환경 텍스트가 너무 커서 안전하게 파싱할 수 없습니다.",
-          "codexSessionSource": "가져올 Codex 홈",
-          "codexSessionSourceInfo": "Codex 기록 가져오기 정보",
-          "codexSessionSourceTooltip": "Orca는 격리된 홈에서 Codex를 실행합니다. 기존 Codex 홈을 지정하여 세션 기록을 가져옵니다. 비워두면 ~/.codex를 사용합니다.",
+          "codexSessionSource": "Codex 대화를 가져올 위치",
+          "codexSessionSourceInfo": "Codex 대화 가져오기 정보",
+          "codexSessionSourceTooltip": "계정 간에 기록을 공유하는 동안 Orca는 이 Codex 홈의 대화를 ~/.codex에 복사하여 /resume에 표시되게 합니다. 대화가 복사된 후 이 폴더에서 추가된 내용은 복사본에 반영되지 않습니다.",
           "03e1a5081a": "{{value0}}에서",
           "25a41a9aad": "이 서버에 설치된 에이전트 다시 감지",
           "remoteDetectionFailed": "설치된 에이전트를 감지하지 못했습니다. 호스트 연결을 확인한 뒤 다시 시도하세요.",
@@ -19258,9 +19258,6 @@
         "replaceDescription": "여기서 “{{title}}”을(를) 재개하면 이 채팅에서 {{agent}}이(가) 하고 있는 작업이 중지됩니다.",
         "replaceTitle": "이 채팅을 바꿀까요?"
       },
-      "antigravitySignIn": {
-        "sentence": "Antigravity에 로그인되어 있지 않습니다. <settings>설정 → 계정 → Antigravity</settings>에서 로그인한 후 메시지를 다시 보내세요."
-      },
       "claudeSignIn": {
         "signingIn": "로그인 중…"
       },
@@ -22375,7 +22372,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "워크트리 전환",
+      "worktreePalette": "전체 검색",
       "worktreeNavigateUp": "이전 워크트리",
       "worktreeNavigateDown": "다음 워크트리",
       "workspaceCreate": "워크트리 만들기",
@@ -22487,6 +22484,9 @@
       "45347db2a3": "탭 탐색",
       "aab2837fa5": "빠른 명령어",
       "3492a954c8": "터미널 창"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "워크트리 전환"
     }
   },
   "gpuFallback": {

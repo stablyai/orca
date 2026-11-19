@@ -52,7 +52,7 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
       darwin: ['Mod+Shift+J'],
       // Why: Ctrl+Alt chords skip the physical-key fallback (AltGr guard), so a
       // letter primary would fail on non-Latin layouts and IMEs. Mod+Shift+J stays
-      // as the alias wherever Switch worktree is remapped or terminal-first.
+      // as the alias wherever Search everything is remapped or terminal-first.
       linux: WINDOWS_LINUX_TOGGLE_BINDINGS,
       win32: WINDOWS_LINUX_TOGGLE_BINDINGS
     }

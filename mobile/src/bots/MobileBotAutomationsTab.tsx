@@ -20,7 +20,7 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 function AutomationRow(props: {
   row: BotAutomationRow<BotAutomationView>
   bot: SheetBot
-  saving: boolean
+  disabled: boolean
   onSetEnabled: (next: boolean) => void
   onRunNow: () => void
 }) {
@@ -47,13 +47,13 @@ function AutomationRow(props: {
             <MobileBotTextButton
               label={t('bots.automations.runNow', 'Run now')}
               onPress={props.onRunNow}
-              disabled={props.saving}
+              disabled={props.disabled}
             />
           ) : null}
           <MobileSwitch
             value={automation.enabled}
             onValueChange={props.onSetEnabled}
-            disabled={props.saving}
+            disabled={props.disabled}
             accessibilityLabel={
               automation.enabled
                 ? t('bots.automations.pause', 'Pause {{name}}', { name: automation.name })
@@ -73,6 +73,8 @@ export function MobileBotAutomationsTab(props: {
   rows: readonly BotAutomationRow<BotAutomationView>[] | null
   showToast: (message: string, durationMs?: number) => void
   onNewAutomation: (() => void) | null
+  /** The host answers: off, the switches and Run now are too. */
+  online: boolean
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -94,7 +96,7 @@ export function MobileBotAutomationsTab(props: {
               key={row.key}
               row={row}
               bot={props.bot}
-              saving={saving.has(row.automation.id)}
+              disabled={!props.online || saving.has(row.automation.id)}
               onSetEnabled={(next) => void setAutomationEnabled(row.automation.id, next)}
               onRunNow={() => void runNow(row.automation.id)}
             />

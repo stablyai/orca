@@ -7589,9 +7589,9 @@
           "8fbe1f37c1": "環境",
           "2d133152fa": "デフォルト環境なし",
           "3f1bdf3cb4": "環境テキストが大きすぎるため安全に解析できません。",
-          "codexSessionSource": "インポートする Codex ホーム",
-          "codexSessionSourceInfo": "Codex 履歴のインポートについて",
-          "codexSessionSourceTooltip": "Orca は分離されたホームで Codex を実行します。既存の Codex ホームを指定してセッション履歴をインポートします。空の場合、~/.codexを使用します。",
+          "codexSessionSource": "Codex の会話のインポート元",
+          "codexSessionSourceInfo": "Codex の会話のインポートについて",
+          "codexSessionSourceTooltip": "アカウント間で履歴を共有している間、Orca はこの Codex ホームの会話を ~/.codex にコピーし、/resume に表示されるようにします。コピー後にこのフォルダーで追加されたやり取りはコピーに反映されません。",
           "03e1a5081a": "{{value0}} 上",
           "25a41a9aad": "このサーバーにインストールされている Agent を再検出",
           "remoteDetectionFailed": "インストールされている Agent を検出できませんでした。ホストへの接続を確認して、もう一度お試しください。",
@@ -20354,9 +20354,6 @@
         "replaceDescription": "ここで「{{title}}」を再開すると、このチャットで {{agent}} が行っている処理が停止します。",
         "replace": "置き換える"
       },
-      "antigravitySignIn": {
-        "sentence": "Antigravity にサインインしていません。<settings>設定 → アカウント → Antigravity</settings>でサインインしてから、メッセージをもう一度送信してください。"
-      },
       "signIn": {
         "title": "チャットを始めるには {{agent}} にサインインしてください"
       },
@@ -23897,7 +23894,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "ワークツリーを切り替え",
+      "worktreePalette": "すべてを検索",
       "worktreeNavigateUp": "前のワークツリー",
       "worktreeNavigateDown": "次のワークツリー",
       "workspaceCreate": "ワークツリーを作成",
@@ -24011,6 +24008,9 @@
       "45347db2a3": "タブナビゲーション",
       "aab2837fa5": "クイックコマンド",
       "3492a954c8": "ターミナルペイン"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "ワークツリーを切り替え"
     }
   },
   "gpuFallback": {

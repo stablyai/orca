@@ -432,6 +432,9 @@ describe('BotSidebarEntry', () => {
 
       fireEvent.click(front, { detail: 1 })
       expect(front.getAttribute('aria-expanded')).toBe('true')
+      fireEvent.click(front, { detail: 2 })
+      fireEvent.keyDown(front, { key: 'Enter', repeat: true })
+      expect(front.getAttribute('aria-expanded')).toBe('true')
       fireEvent.click(front, { detail: 1 })
       expect(front.getAttribute('aria-expanded')).toBe('false')
       expect(openBotSession).not.toHaveBeenCalled()

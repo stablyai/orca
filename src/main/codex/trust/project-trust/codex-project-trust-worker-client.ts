@@ -5,6 +5,12 @@ import { runExclusivelyForCodexTrustConfig } from '../toml/codex-trust-config-mu
 import { spawnCodexProjectTrustWorker } from './codex-project-trust-worker-spawn'
 import { getAntigravityTrustLedgerPath } from '../../../agent-launch/trust/antigravity-workspace-trust-ownership'
 import type {
+  CodexHookPassWorkerRequest,
+  CodexHookPassWorkerResult
+} from '../../hooks/installation/codex-hook-pass-worker'
+import type { CodexHookPassEffects } from '../../hooks/installation/codex-hook-install-effects'
+import type { ObservedFileContent } from '../../../filesystem/file-content-observation'
+import type {
   CodexProjectTrustWorkerFailure,
   CodexProjectTrustWorkerRequest,
   CodexProjectTrustWorkerResponse
@@ -65,6 +71,34 @@ async function request(
     throw toError(response.error)
   }
   return response
+}
+
+export type CodexHookPassOutcome = {
+  config?: { value: boolean } | { error: Error }
+  effects?: CodexHookPassEffects
+  effectsError?: Error
+  observation?: { matches: boolean; files: ObservedFileContent[] }
+}
+
+/**
+ * Runs a hook pass's file effects on the same queue as trust grants, so they never overlap.
+ * Call with the runtime-before-system lanes held; rejects only after a failed worker has exited.
+ */
+export async function runCodexHookPassOnTrustWorker(
+  pass: CodexHookPassWorkerRequest
+): Promise<CodexHookPassOutcome> {
+  const response = await request((id) => ({ id, kind: 'hookPass', ...pass }))
+  const result: CodexHookPassWorkerResult = response.hookPass ?? {}
+  return {
+    effects: result.effects,
+    observation: result.observation,
+    ...(result.effectsError ? { effectsError: toError(result.effectsError) } : {}),
+    ...(result.config
+      ? {
+          config: 'error' in result.config ? { error: toError(result.config.error) } : result.config
+        }
+      : {})
+  }
 }
 
 /** Call with every config's mutation lock held, in hook-installer order. */

@@ -7622,9 +7622,9 @@
           "8fbe1f37c1": "环境",
           "2d133152fa": "无默认环境",
           "3f1bdf3cb4": "环境文本过长，无法安全解析",
-          "codexSessionSource": "要导入的 Codex 主目录",
-          "codexSessionSourceInfo": "关于导入 Codex 历史记录",
-          "codexSessionSourceTooltip": "Orca 在隔离的主目录中运行 Codex，将此项指向您现有的 Codex 主目录以导入会话历史记录，留空则使用 ~/.codex",
+          "codexSessionSource": "从此处导入 Codex 对话",
+          "codexSessionSourceInfo": "关于导入 Codex 对话",
+          "codexSessionSourceTooltip": "在账号之间共享历史记录时，Orca 会将此 Codex 主目录中的对话复制到 ~/.codex，让 /resume 列出它们。对话复制后在此文件夹中新增的内容不会出现在副本中。",
           "03e1a5081a": "在 {{value0}} 上",
           "25a41a9aad": "重新检测此服务器上安装的代理",
           "remoteDetectionFailed": "无法检测已安装的代理，请检查主机连接后重试",
@@ -20360,9 +20360,6 @@
         "replaceDescription": "在此恢复“{{title}}”将停止 {{agent}} 在此聊天中正在进行的工作",
         "replace": "替换"
       },
-      "antigravitySignIn": {
-        "sentence": "尚未登录 Antigravity，请在<settings>设置 → 账户 → Antigravity</settings>中登录，然后重新发送消息"
-      },
       "claudeSignIn": {
         "signingIn": "正在登录…"
       },
@@ -24383,7 +24380,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "切换工作树",
+      "worktreePalette": "全局搜索",
       "worktreeNavigateUp": "上一个工作树",
       "worktreeNavigateDown": "下一个工作树",
       "workspaceCreate": "创建工作树",
@@ -24497,6 +24494,9 @@
       "45347db2a3": "标签页导航",
       "aab2837fa5": "快捷命令",
       "3492a954c8": "终端窗格"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "切换工作树"
     }
   },
   "gpuFallback": {

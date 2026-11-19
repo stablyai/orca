@@ -19,7 +19,9 @@
   },
   "agentCliUpdate": {
     "heading_one": "{{count}} CLI update available",
-    "heading_other": "{{count}} CLI updates available"
+    "heading_other": "{{count}} CLI updates available",
+    "statusCount_one": "{{count}} CLI update",
+    "statusCount_other": "{{count}} CLI updates"
   },
   "agentLaunch": {
     "opencode": {
@@ -1615,9 +1617,6 @@
       "unavailableBot": "Unavailable bot"
     },
     "items": {
-      "activity": {
-        "you": "You"
-      },
       "pill": {
         "moveCount_one": "Move {{count}} item to",
         "moveCount_other": "Move {{count}} items to"

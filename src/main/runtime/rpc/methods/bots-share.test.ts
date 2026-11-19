@@ -5,6 +5,7 @@ import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { DESKTOP_RPC_CALLER, LOCAL_CLI_RPC_CALLER } from '../callers/rpc-caller-identity'
 import { makeTestBot } from '../../../bots/bot.test-fixture'
+import { CLI_AGENT_CALLER_CLIENT_CAPABILITY } from '../../../../shared/remote-runtime/cli-agent-caller-capability'
 import { BOT_SHARE_METHODS } from './bots-share'
 import { BOT_SHARE_RECEIVE_METHODS } from './bots-share-receive'
 
@@ -70,6 +71,10 @@ const CALLS: [string, Record<string, unknown>][] = [
 describe('who may share a bot', () => {
   it.each([
     ['an agent CLI', { caller: LOCAL_CLI_RPC_CALLER }],
+    [
+      "an agent CLI over a paired device's pairing",
+      { pairedDeviceId: 'device-1', clientCapabilities: [CLI_AGENT_CALLER_CLIENT_CAPABILITY] }
+    ],
     ['a client with no proven identity', { clientKind: 'runtime' as const }]
   ])('refuses every share call from %s before it reaches the service', async (_who, options) => {
     const { dispatcher, reached } = shareRuntime()
@@ -83,13 +88,15 @@ describe('who may share a bot', () => {
     expect(reached).toEqual([])
   })
 
-  it('lets the owner in Orca share', async () => {
+  it.each([
+    ['in an Orca window', { caller: DESKTOP_RPC_CALLER }],
+    ['on a paired device', { pairedDeviceId: 'device-1' }]
+  ])('lets the owner share %s', async (_where, options) => {
     const { dispatcher, reached } = shareRuntime()
     for (const [method, params] of CALLS) {
-      expect(
-        await dispatcher.dispatch(request(method, params), { caller: DESKTOP_RPC_CALLER }),
-        method
-      ).toMatchObject({ ok: true })
+      expect(await dispatcher.dispatch(request(method, params), options), method).toMatchObject({
+        ok: true
+      })
     }
     expect(reached).toEqual(['prepare', 'publish', 'update', 'view', 'stop', 'list', 'review'])
   })
