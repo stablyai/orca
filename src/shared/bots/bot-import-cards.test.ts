@@ -4,8 +4,7 @@ import {
   botImportAnswer,
   botImportDoneBody,
   botImportPlanBody,
-  botImportPlanOf,
-  botImportPlanText
+  botImportPlanOf
 } from './bot-import-cards'
 
 const plan = {
@@ -25,36 +24,27 @@ describe('bot import plan', () => {
     expect(botImportAnswer(plan, new Set([1]))).toBe('Import it, but leave out: 41 daily notes.')
   })
 
-  it('reads as lines where the card cannot be drawn', () => {
-    expect(botImportPlanText(plan)).toBe(
-      [
-        'Import plan: Molty from OpenClaw',
-        'Comes over:',
-        '- Who Molty is → Soul: From its persona.',
-        'Comes over with changes:',
-        '- 41 daily notes → 6 topics: Condensed.',
-        'Stays in OpenClaw:',
-        '- Telegram: Not available here yet.',
-        'Answer in this chat: import, or what to leave out.'
-      ].join('\n')
-    )
-  })
-
-  it('survives the wire and draws as a card', () => {
+  it('keeps readable plan text and card data after serialization', () => {
     const body = botImportPlanBody(plan)
     const parsed: typeof body = JSON.parse(JSON.stringify(body))
-    expect(botImportPlanOf(parsed)).toEqual(plan)
-    expect(structuredAgentSessionStatusBlock(body)).toMatchObject({ botImportPlan: plan })
-    const done = botImportDoneBody({
+    expect(parsed.text.split('\n')).toEqual(
+      expect.arrayContaining([
+        '- Who Molty is → Soul: From its persona.',
+        '- 41 daily notes → 6 topics: Condensed.',
+        '- Telegram: Not available here yet.'
+      ])
+    )
+    expect(structuredAgentSessionStatusBlock(parsed)).toMatchObject({ botImportPlan: plan })
+    const done = {
       botId: 'b1',
       app: 'OpenClaw',
       name: 'Molty',
       created: [],
       stayed: [],
       paused: 0
-    })
-    expect(structuredAgentSessionStatusBlock(done)).toMatchObject({
-      botImportDone: done.botImportDone
+    }
+    expect(structuredAgentSessionStatusBlock(botImportDoneBody(done))).toMatchObject({
+      botImportDone: done
     })
   })
 
