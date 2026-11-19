@@ -87,6 +87,16 @@ describe('real branch-only history', () => {
 
     const options = { baseRef: 'first', branchOnly: true, limit: 2 }
     const page = await loadGitHistoryFromExecutor(git, repo, options)
+    // The scope menu's list-only page: same rows and range, no per-row pushed/stat work.
+    const listOnly = await loadGitHistoryFromExecutor(git, repo, {
+      ...options,
+      branchListOnly: true
+    })
+    expect(listOnly.items.map((item) => [item.subject, item.pushed, item.statistics])).toEqual([
+      ['F3', undefined, undefined],
+      ['F2', undefined, undefined]
+    ])
+    expect(listOnly.branch).toMatchObject({ ahead: 3, behind: 1, unpushed: 2 })
     expect(page.items.map((item) => [item.subject, item.pushed])).toEqual([
       ['F3', false],
       ['F2', false]

@@ -49,6 +49,7 @@ export const GIT_METHODS = [
         limit: params.limit,
         baseRef: params.baseRef,
         branchOnly: params.branchOnly,
+        branchListOnly: params.branchListOnly,
         refs: params.refs,
         historyToken: params.historyToken,
         skip: params.skip

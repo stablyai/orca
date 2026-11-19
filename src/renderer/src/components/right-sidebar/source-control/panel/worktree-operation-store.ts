@@ -1,5 +1,6 @@
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { useAppStore } from '@/store'
+import { clearRememberedChangeScope } from './change-scope'
 import type { AppState } from '@/store/types'
 import { getIndexedWorktreesById } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
@@ -129,6 +130,12 @@ function subscribeRetirement(): void {
   retiringSubscribed = true
   subscribeWorktreeCommitDraftRetirement(retireRemovedWorktreeOperationStores)
   useAppStore.subscribe((state, previous) => {
+    if (
+      state.activeWorktreeId !== previous.activeWorktreeId ||
+      state.activeWorkspaceExecutionHostId !== previous.activeWorkspaceExecutionHostId
+    ) {
+      clearRememberedChangeScope()
+    }
     const worktreesByRepo = selectWorktreesByRepo(state)
     if (worktreesByRepo === selectWorktreesByRepo(previous)) {
       return
