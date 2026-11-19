@@ -20,6 +20,7 @@ import {
   removeRunDir
 } from './fleet-gate-run-dirs.mjs'
 import { startVirtualDisplay } from './fleet-gate-display.mjs'
+import { readFanoutStats, resetFanoutStats } from './fleet-gate-fanout-stats.mjs'
 import { waitForAppWindow } from './fleet-gate-app-ready.mjs'
 import { parseArgs } from './fleet-gate-args.mjs'
 import { hotPathChanges, isHotPath } from './fleet-gate-hot-paths.mjs'
