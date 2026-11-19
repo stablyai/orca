@@ -6,8 +6,8 @@ import type {
   AgentChildRowModel
 } from '../../../../../../shared/agent-status/presentation/agent-child-row-model'
 import type { AgentChildWorkView } from '../../../../../../shared/agent-status/child-work/agent-status-child-work-view'
-import { AgentChildRowContent } from '@/components/AgentChildRowContent'
-import { agentChildRowName } from '@/components/agent-child-row-text'
+import { AgentChildRowContent } from '@/components/agent/status/AgentChildRowContent'
+import { agentChildRowName } from '@/components/agent/status/agent-child-row-text'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'

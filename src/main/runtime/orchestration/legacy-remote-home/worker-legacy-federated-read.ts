@@ -1,5 +1,6 @@
 import type { ORCHESTRATION_WORKER_READ_SOURCES } from '../../../../shared/orchestration/workers/orchestration-worker-output'
 import type { RuntimeTerminalRead } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { WorkerTerminalReleaseRuntime } from '../terminal-authority/release/worker-terminal-release-runtime'
 import { OrchestrationError } from '../orchestration-error'
 import {
   createWorkerOutputSourceIdentity,
@@ -10,7 +11,7 @@ import type { resolvePinnedFederatedServer } from './pinned-federated-server'
 
 // Old peers expose only terminal reads; retain fences and cursor scope instead of silently degrading transcript cursors.
 export async function readLegacyFederatedTerminal(args: {
-  runtime: Parameters<typeof resolvePinnedFederatedServer>[0]
+  runtime: Pick<WorkerTerminalReleaseRuntime, 'callOrchestrationWorkerServer'>
   server: Awaited<ReturnType<typeof resolvePinnedFederatedServer>>
   federated: Parameters<typeof resolvePinnedFederatedServer>[1]
   workerState: string

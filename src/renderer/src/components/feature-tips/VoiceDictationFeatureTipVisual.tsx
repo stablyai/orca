@@ -1,6 +1,6 @@
 import { useEffect, useState, type JSX } from 'react'
 import { Mic, Square } from 'lucide-react'
-import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
 import { usePrefersReducedMotion } from '@/hooks/theme/usePrefersReducedMotion'
 import { useShortcutKeyDetails } from '@/lib/keyboard/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'

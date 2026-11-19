@@ -10,7 +10,7 @@ import {
   isClaudeIdentityFrameSegment,
   isClaudeManagementTitle,
   isCursorNativeAgentTitle,
-  isGrokRotatingWorkingTitle
+  grokFrameTitleStatus
 } from './agent-title-core'
 import {
   isOpenCodeNativeTitle,
@@ -179,6 +179,9 @@ function collectAnchoredNames(
     if (synthetic) {
       anchored.add(synthetic)
     }
+    if (grokFrameTitleStatus(segment)) {
+      anchored.add('grok')
+    }
     if (isClaudeIdentityFrameSegment(segment)) {
       anchored.add('claude')
     }
@@ -260,7 +263,7 @@ function collectObserverAnchors(title: string): TerminalAgent[] {
     agent = agentForNativeFrame(segment) === 'claude' ? 'claude' : null
   } else {
     agent =
-      (isGrokRotatingWorkingTitle(segment) ? 'grok' : null) ??
+      (grokFrameTitleStatus(segment) ? 'grok' : null) ??
       (isDeepSeekBuildWorkingTitle(segment) ||
       (!segment.includes('|') && isDeepSeekBuildTerminalTitle(segment))
         ? 'dsb'

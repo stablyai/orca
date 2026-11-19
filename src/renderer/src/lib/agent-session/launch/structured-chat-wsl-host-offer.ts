@@ -7,14 +7,14 @@ import type { Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
-import { readWslHostOfferGate } from '@/components/sidebar/wsl-host-offer'
+import { readWslHostOfferGate } from '@/components/sidebar/project-admission/host-selection/wsl-host-offer'
 import {
   runningWslDistroAsHost,
   runWslDistroAsHost,
   subscribeWslDistroHostRuns
-} from '@/components/sidebar/wsl-host-offer-actions'
+} from '@/components/sidebar/project-admission/host-selection/wsl-host-offer-actions'
 import { addWslHostDistro } from '@/components/sidebar/host-admission/wsl/add-wsl-host-distro'
-import { wslHostAddRefusalMessage } from '@/components/sidebar/wsl-host-failure-text'
+import { wslHostAddRefusalMessage } from '@/components/sidebar/host-admission/wsl/wsl-host-failure-text'
 import { openWslMoveDialogFor } from '@/components/wsl-move/wsl-move-entry'
 import {
   findWslHostForDistro,

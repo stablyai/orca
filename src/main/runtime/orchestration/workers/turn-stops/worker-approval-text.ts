@@ -57,10 +57,10 @@ export function describeApprovalClosed(approval: WorkerApprovalPayload): string 
     ...(outcome?.reason
       ? [
           `Reason: ${outcome.reason}`,
-          ...(outcome.reasonDelivered || outcome.decision !== 'deny'
+          ...(outcome.reasonDelivered
             ? []
             : [
-                "This agent's prompt takes no message, so the reason was sent to the worker as mail."
+                "The agent's answer could not carry the reason, so it was sent to the worker as mail."
               ])
         ]
       : []),

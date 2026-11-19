@@ -65,7 +65,7 @@ export function isolatedScanRoots(root: string) {
     zcodeDbPath: join(root, 'zcode', 'db.sqlite'),
     grokSessionsDir: join(root, 'grok-sessions'),
     devinTranscriptsDir: join(root, 'devin-transcripts'),
-    hermesSessionsDir: join(root, 'hermes-sessions'),
+    hermesHome: join(root, 'hermes-home'),
     rovoSessionsDir: join(root, 'rovo-sessions'),
     openclawStateDir: join(root, 'openclaw-state'),
     openclawLegacyStateDir: join(root, 'openclaw-legacy-state'),

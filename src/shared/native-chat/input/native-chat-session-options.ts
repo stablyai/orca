@@ -1,4 +1,5 @@
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
+import type { AgentCliUpdateAgent } from '../../agent-launch/installation/agent-cli-update'
 
 export type SessionOptionValue = string | boolean
 
@@ -111,11 +112,24 @@ export type NativeChatSessionOptionSettingsMutation =
         value: SessionOptionValue
         adoptModelAsLaunchDefault?: boolean
       }[]
+      /** The chat the picks were made in; picks in a bot's conversation are kept on that bot. */
+      sessionId?: string
     }
   | { type: 'clear-model-if-missing'; agent: AgentType; availableModelIds: readonly string[] }
 
+/** The chat host's own CLI is behind its latest release, which may list models this one lacks. */
+export type SessionOptionsCliUpdate = {
+  agent: AgentCliUpdateAgent
+  phase: 'idle' | 'running' | 'failed'
+  start: () => void
+  /** Opens the failed run's output; its Try again runs `start`. */
+  openFailure: () => void
+}
+
 export type SessionOptionsSurface = {
   demandModelCatalog?: () => void
+  /** Absent while the user's own CLI is current, and for Orca's own copy. */
+  cliUpdate?: SessionOptionsCliUpdate
   /** Live local admission for a structured action, before consuming its composer trigger. */
   admits?: (id: string, value: SessionOptionValue) => boolean
   getSnapshot(): SessionOptionDescriptor[]

@@ -1,6 +1,6 @@
 import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 
-import type { AgentDotState } from '@/components/AgentStateDot'
+import type { AgentDotState } from '@/components/agent/status/AgentStateDot'
 import type { KeyedDeadlines } from '../../../../../../shared/collections/keyed-deadlines'
 
 export const EMPTY_KEYS: readonly string[] = Object.freeze([])

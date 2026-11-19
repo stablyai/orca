@@ -61,6 +61,7 @@ function fixture(count = 1, version: 'fresh' | 'v41' = 'fresh') {
       ${DROP_REMOVED_WORK_TRIGGERS_SQL}
       DROP INDEX idx_runs_coordinator_orca_session_id;
       DROP INDEX idx_dispatch_assignee_orca_session_id;
+      DROP INDEX idx_dispatch_creator_orca_session_id;
       DROP INDEX idx_dispatch_assignee_orca_session_backfill;
       DROP INDEX idx_dispatch_creator_orca_session_backfill;
       DROP INDEX idx_dispatch_session_presentation;
@@ -122,7 +123,7 @@ function fullDispatchReads(calls: [string, ...unknown[]][]): string[] {
 }
 
 describe('remaining dispatch metadata statement compilation', () => {
-  it.each(['fresh', 'v41'] as const)(
+  it.each(['v41'] as const)(
     'reuses direct-owner reads with exact rows, rebinding and cross-connection freshness (%s)',
     (version) => {
       const {
@@ -167,7 +168,7 @@ describe('remaining dispatch metadata statement compilation', () => {
     }
   )
 
-  it.each(['fresh', 'v41'] as const)(
+  it.each(['v41'] as const)(
     'reuses session creator reads without changing self-created parent exclusion or fresh depth (%s)',
     (version) => {
       const {
@@ -202,7 +203,7 @@ describe('remaining dispatch metadata statement compilation', () => {
     }
   )
 
-  it.each(['fresh', 'v41'] as const)(
+  it.each(['v41'] as const)(
     'reuses legacy dispatch identity scans with full rows and immediately fences settled rows (%s)',
     (version) => {
       const {

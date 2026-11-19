@@ -88,6 +88,9 @@ export function useStructuredAgentSessionTransportState(
     turnId,
     isWorking,
     turnActivity,
+    // A queued message is the next prompt already; a guess beside it would mislead.
+    promptSuggestion:
+      enabled && !state.queuedMessages?.length ? (state.promptSuggestion ?? null) : null,
     turnTiming,
     // null = no drafts or no claim; the projection treats both as an empty list.
     queuedMessages: (enabled ? state.queuedMessages : null) ?? null,

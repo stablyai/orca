@@ -9,7 +9,8 @@ import {
   journalPragmaNumber,
   type OpenJournalDatabase
 } from './journal-database'
-import { journalDatabasePath } from './journal-host-database'
+import { journalDatabasePath, journalDomainDatabasePath } from './journal-host-database'
+import { tryFoldJournalTextTails } from '../journal-text-tail'
 import {
   JOURNAL_DOMAIN_SCHEMA_VERSION,
   migrateJournalDomainSchema
@@ -24,10 +25,6 @@ import {
   captureJournalLegacySourceReceipt,
   JOURNAL_LEGACY_SOURCE_RECEIPT
 } from './journal-legacy-source-receipt'
-
-export function journalDomainDatabasePath(stateDirectory: string): string {
-  return join(stateDirectory, 'agent-session-domain.db')
-}
 
 /** Run once on the writer worker, before opening its steady-state writable connection. */
 export async function initializeJournalDomainDatabase(stateDirectory: string): Promise<string> {
@@ -140,6 +137,8 @@ export function openJournalDomainDatabase(filename: string): OpenJournalDatabase
     db.pragma('checkpoint_fullfsync = ON')
     db.pragma(`journal_size_limit = ${JOURNAL_SIZE_LIMIT_BYTES}`)
     migrateJournalDomainSchema(db)
+    // Before any chat opens or reader starts, so recovery settles the whole saved text.
+    tryFoldJournalTextTails(db)
     ensurePRWatchTables(db)
     hardenSqliteDatabaseFiles(filename)
     transferred = true

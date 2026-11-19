@@ -8,7 +8,9 @@ export type ProjectionMutationTrigger = {
 export function projectionMutationTriggers(
   name: string,
   triggers: readonly ProjectionMutationTrigger[],
-  changed = ''
+  changed = '',
+  /** Skips the trigger body unless it holds, such as while anything is tracked. */
+  when?: string
 ): string {
   return triggers
     .flatMap((trigger) =>
@@ -22,7 +24,7 @@ export function projectionMutationTriggers(
         }
       ].map(
         (event) => `CREATE TEMP TRIGGER IF NOT EXISTS ${name}_${trigger.table}_${event.name}
-${event.event} ON main.${trigger.table}
+${event.event} ON main.${trigger.table}${when ? ` WHEN ${when}` : ''}
 BEGIN ${changed} ${event.rows.map(trigger.mark).join(' ')} END;`
       )
     )

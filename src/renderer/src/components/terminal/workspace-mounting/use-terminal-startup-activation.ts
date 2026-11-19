@@ -6,10 +6,11 @@ import { isTerminalWorkspaceEmptiedOnPurpose } from '../../../../../shared/works
 import { gateWorktreeAgentActivation } from '@/lib/workspace/activation/worktree-agent-activation-gate'
 import { createWorkspaceTerminalHostAuthoritySelector } from '@/lib/workspace/ownership/workspace-terminal-host-authority'
 import { hasStructuredAgentLaunchInWorktree } from '@/lib/agent-session/launch/structured-agent-session-launch-status'
+import { isBotPage } from '../../bots/bot-workspace'
 import { isEmptyWorkspaceDefaultSurfacePending } from '@/lib/workspace/activation/initial-surface/empty-workspace-default-surface-claims'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import { createInitialTerminalThroughLayoutOwner } from '@/store/terminals/tabs/creation/terminal-tab-create-through-layout-owner'
-import type { TerminalColdActivationController } from '../../terminal-cold-activation'
+import type { TerminalColdActivationController } from './terminal-cold-activation'
 
 type TerminalStartupController = Pick<
   TerminalColdActivationController,
@@ -76,8 +77,8 @@ export function useTerminalStartupActivation(controller: TerminalStartupControll
       if (outcome !== 'empty') {
         return
       }
-      // A pending or unanswered chat create owns the surface even before its tab is published.
-      if (hasStructuredAgentLaunchInWorktree(activeWorktreeId)) {
+      // A pending or unanswered chat create, or a bot's Chat, owns the surface before its tab is published.
+      if (hasStructuredAgentLaunchInWorktree(activeWorktreeId) || isBotPage(activeWorktreeId)) {
         return
       }
       // Why: the activation gate reconciles durable/live agent state first; only an actually empty, never-visited workspace receives a default shell.

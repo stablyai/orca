@@ -8,7 +8,7 @@ import type {
 import {
   useConfirmationDialog,
   type ConfirmationDialogContextValue
-} from '@/components/confirmation-dialog-context'
+} from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { externalAppPrompt } from './browser-external-app-prompt'
 import { httpAuthPrompt } from './browser-http-auth-prompt'
 import { javaScriptDialogPrompt } from './browser-javascript-dialog-prompt'

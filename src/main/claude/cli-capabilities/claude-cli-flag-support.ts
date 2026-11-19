@@ -24,6 +24,12 @@ export const CLAUDE_APPLY_FLAG_SETTINGS_CONTROL: ClaudeCliFlag = {
   firstVersion: '2.1.50'
 }
 
+/** Suggestions are enabled only where they can be paused; each one costs a model request. */
+export const CLAUDE_PROMPT_SUGGESTIONS_PAUSE_CONTROL: ClaudeCliFlag = {
+  option: 'set_prompt_suggestions_paused',
+  firstVersion: '2.1.280'
+}
+
 // Allow cold CLI startup without blocking for the full probe kill timeout.
 export const CLAUDE_CLI_FLAG_PROBE_BUDGET_MS = 1_500
 
