@@ -31,7 +31,8 @@ import { RuntimeOrchestrationSenderNames } from './runtime-orchestration-sender-
 
 import { structuredMailSource } from '../structured-mail/structured-mail-source'
 
-import '../../../../../shared/agent-session/view/structured-agent-session-projection'
+import { structuredAgentSessionTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
+import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import '../../../rpc/methods/orchestration/worker/follow-up/worker-earlier-work'
 
 const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
@@ -52,6 +53,7 @@ type Session = NonNullable<
 >
 type SenderNamingDeps = ConstructorParameters<typeof RuntimeOrchestrationSenderNames>[0]
 type HookRow = NonNullable<ReturnType<SenderNamingDeps['getAgentStatusSnapshotForPane']>>[number]
+type BotName = { name: string; folderWorkspaceId: string }
 
 let db: OrchestrationDb
 let session: Session
@@ -61,7 +63,8 @@ let hookRows: HookRow[]
 let pty: NonNullable<ReturnType<SenderNamingDeps['getPtyAgents']>>
 let trackedTitle: string | null
 
-function names() {
+function names(bot?: BotName) {
+  const worktree = bot ? folderWorkspaceKey(bot.folderWorkspaceId) : WORKTREE
   return new RuntimeOrchestrationSenderNames({
     getDb: () => db,
     getHandleRecord: (handle) => {
@@ -71,10 +74,10 @@ function names() {
     },
     getPtyAgents: () => pty,
     getTerminalPaneKey: (handle) => `tab_${handle}:leaf`,
-    getWorkspaceSession: (worktreeId) => (worktreeId === WORKTREE ? session : undefined),
+    getWorkspaceSession: (worktreeId) => (worktreeId === worktree ? session : undefined),
     getStore: () => ({
       getSettings: () => ({ tabAutoGenerateTitle: generatedTitles, botsEnabled: true }),
-      getBots: () => []
+      getBots: () => (bot ? [bot] : [])
     }),
     getAgentStatusSnapshotForPane: (paneKey) => hookRows.filter((row) => row.paneKey === paneKey),
     getTrackedTitle: () => trackedTitle
@@ -238,12 +241,13 @@ it("names a run's mail by its coordinator chat only under the binding it was sen
     coordinatorOrcaSessionId: CHAT
   })
   db.db.prepare('UPDATE runs SET updated_at = ? WHERE id = ?').run('2026-11-16 18:00:00', run.id)
+  let naming = names()
   const deliver = (...sentAt: string[]) =>
     structuredMailSource({
       db,
       mailboxHandle: 'run:run_other',
       dispatchId: null,
-      senderSnapshot: (party) => names().snapshotOf(party),
+      senderSnapshot: (party) => naming.snapshotOf(party),
       batch: sentAt.map((created_at, index) => ({
         id: `note_${index}`,
         from_handle: `run:${run.id}`,
@@ -259,6 +263,23 @@ it("names a run's mail by its coordinator chat only under the binding it was sen
     agent: 'claude',
     party: { address: `run:${run.id}`, orcaSessionId: CHAT, terminalHandle: null }
   })
+  const bot = { name: 'Triage bot', folderWorkspaceId: 'triage-home' }
+  const home = folderWorkspaceKey(bot.folderWorkspaceId)
+  const chat = records.get(CHAT)!
+  records.set(CHAT, {
+    ...chat,
+    conversationName: 'Home',
+    location: { ...chat.location, workspaceId: home }
+  })
+  naming = names(bot)
+  expect(deliver('2026-11-16 18:21:01')).toMatchObject({
+    name: 'Triage bot',
+    bot: true
+  })
+  const tabId = structuredAgentSessionTabId(CHAT)
+  expect(
+    naming.agentRowNamer()({ paneKey: `${tabId}:x`, tabId, worktreeId: home, agentType: 'claude' })
+  ).toBe('Triage bot')
   expect(deliver('2026-11-16 18:21:01', '2026-11-16 17:59:59')).toMatchObject({
     name: null,
     party: { orcaSessionId: null, terminalHandle: null }

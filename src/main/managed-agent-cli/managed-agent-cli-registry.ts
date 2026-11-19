@@ -1,7 +1,7 @@
 // Orca's own copies of agent CLIs, for hosts without the user's own; the user's install always wins.
 
 import { delimiter, dirname } from 'node:path'
-import type { ManagedRuntime } from '../node-runtime/managed-runtime-release'
+import type { ManagedAgentCli } from '../node-runtime/managed-runtime-release'
 import {
   CLAUDE_MANAGED_RUNTIME,
   claudeManagedExecutable,
@@ -13,6 +13,10 @@ import {
   codexManagedTarget
 } from '../codex/managed-runtime/codex-managed-runtime'
 import { acpRegistryManagedRuntime } from '../acp/registry/acp-registry-managed-runtime'
+import { COPILOT_MANAGED_CLI } from '../copilot/copilot-managed-runtime'
+import { GROK_MANAGED_CLI } from '../grok/grok-managed-runtime'
+import { KIMI_MANAGED_CLI } from '../kimi/kimi-managed-runtime'
+import { OMP_MANAGED_CLI } from '../omp/omp-managed-runtime'
 import {
   CURSOR_MINIMUM_VERSIONS,
   OPENCODE2_MINIMUM_VERSIONS,
@@ -21,16 +25,19 @@ import {
 import { readInheritedPath } from '../ipc/pty/host-env/path'
 import { resolvePathEnvKey } from '../pty/environment/windows-path-segment-merge'
 
-// npm/uvx-only and unlisted agents would join here once a runtime installs their distribution.
-export const MANAGED_AGENT_CLI_IDS = ['claude', 'codex', 'opencode', 'opencode2', 'cursor'] as const
+// Hermes ships only as a git checkout its installer builds with uv, so it stays the user's own install.
+export const MANAGED_AGENT_CLI_IDS = [
+  'claude',
+  'codex',
+  'opencode',
+  'opencode2',
+  'cursor',
+  'copilot',
+  'grok',
+  'kimi',
+  'omp'
+] as const
 export type ManagedAgentCliId = (typeof MANAGED_AGENT_CLI_IDS)[number]
-
-type ManagedAgentCli = {
-  runtime: ManagedRuntime
-  /** Whether this host has a build to download. */
-  available: () => boolean
-  executable: (folder: string) => string
-}
 
 const openCodeBinary = (platform: NodeJS.Platform): string =>
   platform === 'win32' ? 'opencode.exe' : 'opencode'
@@ -69,7 +76,11 @@ const MANAGED_AGENT_CLIS: Record<ManagedAgentCliId, ManagedAgentCli> = {
     command: (platform) =>
       platform === 'win32' ? 'dist-package/cursor-agent.cmd' : 'dist-package/cursor-agent',
     minimumVersions: CURSOR_MINIMUM_VERSIONS
-  })
+  }),
+  copilot: COPILOT_MANAGED_CLI,
+  grok: GROK_MANAGED_CLI,
+  kimi: KIMI_MANAGED_CLI,
+  omp: OMP_MANAGED_CLI
 }
 
 export function isManagedAgentCli(agent: string): agent is ManagedAgentCliId {
