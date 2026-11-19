@@ -12,7 +12,7 @@ import {
 } from '../creation/structured-agent-session-gate'
 import { readsQueuedImageCards } from '../attachments/structured-agent-session-queued-image-capability'
 import { recordMobileChatSend } from '../../../../../telemetry/mobile-client-telemetry'
-import { typedByOf } from '../../../callers/rpc-caller-typed-by'
+import { journalTypedByOf } from '../../../callers/rpc-caller-typed-by'
 
 /** Older clients wait past acceptance until handoff/rejection because they cannot show later failure.
  * Command-queued replies avoid request timeout; clients predating pending replies still wait for provider response. */
@@ -25,7 +25,7 @@ export async function sendStructuredAgentSessionForClient(
   }
   const host = requireStructuredSessionHost(context, params.envelope.sessionId)
   // Person provenance lets undelivered text recover as an ordinary queued card.
-  const typedBy = typedByOf(context)
+  const typedBy = journalTypedByOf(context)
   const result = await host.send(structuredCallerFor(context), {
     ...params,
     body: { ...params.body, ...(typedBy ? { typedBy } : {}) },
