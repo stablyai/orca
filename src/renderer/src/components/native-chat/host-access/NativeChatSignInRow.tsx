@@ -6,7 +6,10 @@ import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import type { AgentSessionAccountKind } from '../../../../../shared/agent-session/failures/agent-session-availability'
 import { sayAgentSessionFailureTranslated } from '../messages/notices/agent-session-failure-words-text'
-import { isNativeChatFailureRowResolved, useNativeChatHostSetupView } from './native-chat-host-setup'
+import {
+  isNativeChatFailureRowResolved,
+  useNativeChatHostSetupView
+} from './native-chat-host-setup'
 import {
   nativeChatNotSignedInSentence,
   nativeChatSignInNoticeView,
@@ -62,12 +65,10 @@ function SignInButton({ button }: { button: NativeChatSignInButton }): React.JSX
         <Button
           type="button"
           size="xs"
-          variant="outline"
+          variant="outline-strong"
           disabled={button.busy}
           aria-description={button.description}
           onClick={button.onClick}
-          // Why: the outline must reach 3:1 against the notice in both themes; the default border is fainter.
-          className="border-muted-foreground/75 hover:border-muted-foreground dark:border-muted-foreground/60 dark:hover:border-muted-foreground"
         >
           {button.busy ? <LoadingSpinner className="size-3" /> : null}
           {button.label}

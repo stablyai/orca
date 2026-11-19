@@ -49,6 +49,8 @@ const AGENTS: Record<
   }
 }
 
+const AGENT_IDS: readonly FixtureAgent[] = ['antigravity', 'claude', 'codex', 'opencode']
+
 function setupFor(agent: FixtureAgent, state: FixtureState): NativeChatHostSetup {
   const { loginCommand } = AGENTS[agent]
   return {
@@ -68,10 +70,18 @@ function setupFor(agent: FixtureAgent, state: FixtureState): NativeChatHostSetup
 
 // Built once: a context value made during render would be a new object every time.
 const SETUPS = new Map(
-  (Object.keys(AGENTS) as FixtureAgent[]).flatMap((agent) =>
+  AGENT_IDS.flatMap((agent) =>
     (['signedOut', 'signingIn', 'signedIn'] as const).map((state) => {
       const setup = setupFor(agent, state)
-      return [`${agent}:${state}`, { alone: setup, both: { ...setup, signInInComposer: true } }]
+      return [
+        `${agent}:${state}`,
+        {
+          alone: setup,
+          both: { ...setup, signInInComposer: true },
+          // No failure row is unresolved: a later successful turn resolved them all.
+          resolved: { ...setup, unresolvedFailureRows: new Set<string>() }
+        }
+      ]
     })
   )
 )
@@ -129,11 +139,11 @@ function FailedMessage({ agent }: { agent: FixtureAgent }) {
 const SURFACES = ['Above composer', 'Failed message', 'Both'] as const
 
 function Scene({ agent, fontSize }: { agent: FixtureAgent; fontSize?: number }) {
-  const style = fontSize
-    ? ({
+  const style: (CSSProperties & Record<`--${string}`, string>) | undefined = fontSize
+    ? {
         '--chat-font-size': `${fontSize}px`,
         '--chat-ui-font-size': `${fontSize}px`
-      } as CSSProperties)
+      }
     : undefined
   return (
     <div className="native-chat-appearance space-y-5 p-3" style={style}>
@@ -205,13 +215,42 @@ export const transcriptRowOldHost = defineFixture({
   width: 520,
   render: () => (
     <div className="native-chat-appearance space-y-4 p-3">
-      {(Object.keys(AGENTS) as FixtureAgent[]).map((agent) => (
+      {AGENT_IDS.map((agent) => (
         <NativeChatHostSetupContext.Provider
           key={agent}
           value={setupsFor(agent, 'signedOut').alone}
         >
           <NativeChatNoticeRow
             agentName={AGENTS[agent].label}
+            block={{
+              type: 'text',
+              tone: 'error',
+              text: AGENTS[agent].oldSentence,
+              failure: {
+                kind: 'notSignedIn',
+                ...(AGENTS[agent].account ? { account: AGENTS[agent].account } : {})
+              }
+            }}
+          />
+        </NativeChatHostSetupContext.Provider>
+      ))}
+    </div>
+  )
+})
+
+/** A failure a later successful turn resolved: history, so a plain muted line with no button. */
+export const transcriptRowResolved = defineFixture({
+  width: 520,
+  render: () => (
+    <div className="native-chat-appearance space-y-4 p-3">
+      {AGENT_IDS.map((agent) => (
+        <NativeChatHostSetupContext.Provider
+          key={agent}
+          value={setupsFor(agent, 'signedOut').resolved}
+        >
+          <NativeChatNoticeRow
+            agentName={AGENTS[agent].label}
+            messageId={`failure-${agent}`}
             block={{
               type: 'text',
               tone: 'error',
