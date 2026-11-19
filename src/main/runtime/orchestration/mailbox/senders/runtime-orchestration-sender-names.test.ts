@@ -380,6 +380,22 @@ it("names a worker's mail by its task and agent once its terminal tab is gone", 
   }).senders[0]
   expect(sender).toMatchObject({ name: 'Fix the login page · Codex', agent: 'codex' })
   expect(sender).not.toHaveProperty('host')
+  const next = db.createStartingWorkerDispatch({
+    creator: { kind: 'system' },
+    maxDepth: 8,
+    taskId: db.createTask({ runId: run.id, spec: 'Add a logout button' }).id,
+    startOptions: { agent: 'claude' }
+  })
+  db.prepareStartingWorkerAuthority({
+    dispatchId: next.dispatch.id,
+    handle: 'term_worker',
+    paneKey: 'tab_term_worker:leaf',
+    processIncarnation: 'p:2',
+    worktreeId: WORKTREE,
+    effects: [],
+    setupState: 'not_applicable'
+  })
+  db.markWorkerDispatchReady(next.dispatch.id)
   const crewName = names().captureCrewInputs()(
     { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null },
     started.dispatch.id,

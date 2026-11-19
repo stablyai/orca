@@ -24,7 +24,7 @@ import {
   type TerminalSenderNaming
 } from './orchestration-sender-name'
 import { agentMessageSender, observeSenderSnapshot } from './agent-message-sender'
-import type { WorkerIdentity } from '../../workers/identity/worker-identity'
+import { workerIdentity, type WorkerIdentity } from '../../workers/identity/worker-identity'
 import {
   type AgentSessionRecordReader,
   readAgentSessionRecordStore
@@ -215,7 +215,8 @@ export class RuntimeOrchestrationSenderNames {
             return terminals.get(handle) ?? null
           }
         },
-        dispatchId
+        undefined,
+        db && dispatchId ? workerIdentity(db, dispatchId) : null
       ).name
   }
 
