@@ -40,6 +40,7 @@ describe('the orchestration checkpoint thread', () => {
       write.run(i, 'x'.repeat(100))
     }
     // Several busy ticks pass; checkpointing a few frames would make main restart the WAL on its next commit.
+    // ast-grep-ignore: test-no-real-time-wait -- asserts the worker leaves the WAL alone across real ticks
     await new Promise((resolve) => setTimeout(resolve, 800))
     expect(frames(db).checkpointed).toBe(0)
 

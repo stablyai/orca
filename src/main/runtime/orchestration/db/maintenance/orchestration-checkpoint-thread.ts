@@ -82,7 +82,8 @@ setTimeout(tick, interval);
  * a busy disk and turned single-row status writes into half-second stalls. Main keeps only a far
  * backstop. Returns the undo; a worker that fails or exits hands checkpoints back to main at once.
  */
-export function checkpointOffMainThread({ db }: OrchestrationDb): () => void {
+export function checkpointOffMainThread(orchestrationDb: OrchestrationDb): () => void {
+  const { db } = orchestrationDb
   const main = db
     .prepare('PRAGMA database_list')
     .all()
@@ -123,8 +124,16 @@ export function checkpointOffMainThread({ db }: OrchestrationDb): () => void {
   worker.on('exit', restore)
   worker.unref()
   db.pragma(`wal_autocheckpoint = ${MAIN_CHECKPOINT_BACKSTOP_PAGES}`)
-  return () => {
-    worker.terminate().catch(() => {})
-    restore()
+  let stopped = false
+  const stop = (): void => {
+    if (!stopped) {
+      stopped = true
+      forget()
+      worker.terminate().catch(() => {})
+      restore()
+    }
   }
+  // The thread's connection must not outlive this one, which a reopen would then contend with.
+  const forget = orchestrationDb.onClose(stop)
+  return stop
 }
