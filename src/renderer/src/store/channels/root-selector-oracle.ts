@@ -43,6 +43,12 @@ export function checkSkippedRootSelectors(state: AppState): void {
         channelRead = true
       }
       return Reflect.get(target, key, receiver)
+    },
+    has(target, key) {
+      if (isAppStoreChannelField(key)) {
+        channelRead = true
+      }
+      return Reflect.has(target, key)
     }
   })
   for (let checked = 0; checked < CHECK_BUDGET; checked++) {
@@ -57,7 +63,7 @@ export function checkSkippedRootSelectors(state: AppState): void {
     try {
       selector(watched)
     } catch {
-      continue
+      // A selector may read a channel field before it throws; that read still counts.
     }
     if (channelRead) {
       console.error(
