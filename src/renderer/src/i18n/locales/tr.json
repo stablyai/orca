@@ -6522,7 +6522,6 @@
         },
         "SidebarWorkspaceOptionsMenu": {
           "hosts": "Host'lar",
-          "showSection": "Göster",
           "allHostsDetail": "Tüm host'ları göster",
           "configuredSshHost": "Yapılandırılmış SSH",
           "projectSshHost": "Proje SSH",
@@ -6572,7 +6571,6 @@
           "219ebf1961": "Branch adı",
           "folderPathIdentity": "Branch / klasör yolu",
           "cli": "Orca CLI",
-          "workspaceOptions": "Çalışma alanı seçenekleri",
           "optionsActiveFilters_one": "Çalışma alanı seçenekleri ({{count}} etkin filtre)",
           "optionsActiveFilters_other": "Çalışma alanı seçenekleri ({{count}} etkin filtre)",
           "optionsFilterCount_one": "Çalışma alanı seçenekleri ({{count}} filtre)",
@@ -23813,8 +23811,7 @@
     },
     "upcoming": {
       "tidyNightAfter": "Her gece {{from}} sonrasında veya bu bilgisayar uyandığında",
-      "tidyWeekAfter": "Haftada bir, {{from}} sonrasında veya bu bilgisayar uyandığında",
-      "lookDueNow": "Şimdi zamanı · {{every}}"
+      "tidyWeekAfter": "Haftada bir, {{from}} sonrasında veya bu bilgisayar uyandığında"
     },
     "palette": {
       "placeholder": "Botlarda, sohbetlerde, terminallerde, çalışma alanlarında, görevlerde, ayarlarda ve işlemlerde ara...",

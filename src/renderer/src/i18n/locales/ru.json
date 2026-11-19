@@ -6702,7 +6702,6 @@
         },
         "SidebarWorkspaceOptionsMenu": {
           "hosts": "Серверы",
-          "showSection": "Показать",
           "allHostsDetail": "Показывать все компьютеры",
           "configuredSshHost": "Настроенный SSH",
           "projectSshHost": "SSH проекта",
@@ -6752,7 +6751,6 @@
           "219ebf1961": "Название ветки",
           "folderPathIdentity": "Ветка / путь папки",
           "cli": "Orca CLI",
-          "workspaceOptions": "Параметры рабочих пространств",
           "optionsActiveFilters_one": "Параметры рабочих пространств ({{count}} активный фильтр)",
           "optionsActiveFilters_other": "Параметры рабочих пространств ({{count}} активного фильтра)",
           "optionsFilterCount_one": "Параметры рабочих пространств ({{count}} фильтр)",
@@ -24424,8 +24422,7 @@
     },
     "upcoming": {
       "tidyNightAfter": "Каждую ночь после {{from}} или как только компьютер выйдет из сна",
-      "tidyWeekAfter": "Раз в неделю после {{from}} или как только компьютер выйдет из сна",
-      "lookDueNow": "Ожидает запуска · {{every}}"
+      "tidyWeekAfter": "Раз в неделю после {{from}} или как только компьютер выйдет из сна"
     },
     "palette": {
       "placeholder": "Поиск ботов, чатов, терминалов, рабочих пространств, задач, настроек и действий…",

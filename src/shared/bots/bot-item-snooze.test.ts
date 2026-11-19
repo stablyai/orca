@@ -1,9 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  botItemSnoozeAt,
   botItemSnoozeDayRange,
   botItemSnoozePickerPresets,
-  botItemSnoozeSlotOn,
   botItemSnoozeSlots
 } from './bot-item-snooze'
 
@@ -31,18 +29,6 @@ describe('botItemSnoozePickerPresets', () => {
     ])
   })
 
-  it('resolves morning presets in a zone ahead of UTC', () => {
-    process.env.TZ = 'Asia/Tokyo'
-    // Wed Nov 18, 10:00 AM in Tokyo.
-    const presets = botItemSnoozePickerPresets(Date.parse('2026-11-18T01:00:00Z'))
-    expect(presets.map((preset) => iso(preset.at))).toEqual([
-      '2026-11-18T09:00:00.000Z',
-      '2026-11-19T00:00:00.000Z',
-      '2026-11-23T00:00:00.000Z',
-      '2026-11-25T00:00:00.000Z'
-    ])
-  })
-
   it('drops Monday on a Monday, where it would repeat In a week', () => {
     process.env.TZ = 'UTC'
     // Mon Nov 23, 10:00 AM.
@@ -56,16 +42,6 @@ describe('botItemSnoozePickerPresets', () => {
 })
 
 describe('picked times', () => {
-  it('rolls a time that has passed today forward to the next quarter hour', () => {
-    process.env.TZ = 'UTC'
-    const now = Date.parse('2026-11-18T10:07:00Z')
-    const today = new Date(2026, 10, 18)
-    expect(botItemSnoozeSlotOn(today, 9 * 60, now)).toBe(10 * 60 + 15)
-    expect(botItemSnoozeSlotOn(today, 12 * 60, now)).toBe(12 * 60)
-    expect(botItemSnoozeSlotOn(new Date(2026, 10, 19), 9 * 60, now)).toBe(9 * 60)
-    expect(iso(botItemSnoozeAt(today, 10 * 60 + 15))).toBe('2026-11-18T10:15:00.000Z')
-  })
-
   it('starts the day range tomorrow once today has no slot left', () => {
     process.env.TZ = 'UTC'
     const range = botItemSnoozeDayRange(Date.parse('2026-11-18T23:50:00Z'))

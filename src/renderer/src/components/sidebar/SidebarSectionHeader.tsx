@@ -1,7 +1,7 @@
 import React from 'react'
 import { cn } from '@/lib/class-names'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { SidebarSectionFoldChevron } from './sidebar-section-fold'
+import { animateSidebarSectionFold, SidebarSectionFoldChevron } from './sidebar-section-fold'
 
 export type SidebarSectionFold = {
   collapsed: boolean
@@ -41,7 +41,10 @@ export function SidebarSectionHeader({
 }: SidebarSectionHeaderProps): React.JSX.Element {
   const showChevron = fold !== undefined && !fold.disabled
   return (
-    <div className="group/sidebar-header mt-2 flex h-8 min-w-0 shrink-0 items-center justify-between gap-1.5 px-2">
+    <div
+      data-sidebar-section-header={fold ? sectionId : undefined}
+      className="group/sidebar-header mt-2 flex h-8 min-w-0 shrink-0 items-center justify-between gap-1.5 px-2"
+    >
       <div
         className={cn(
           'flex min-w-0 items-center gap-1',
@@ -62,7 +65,7 @@ export function SidebarSectionHeader({
                 disabled={fold.disabled}
                 data-sidebar-section-fold={sectionId}
                 onClick={(event) => {
-                  fold.onToggle()
+                  animateSidebarSectionFold(event.currentTarget, fold.onToggle)
                   // A clicked header must not keep focus once the pointer leaves.
                   if (event.detail > 0) {
                     event.currentTarget.blur()

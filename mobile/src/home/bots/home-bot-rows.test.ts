@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { structuredAgentSessionStatusPaneKey } from '../../../../src/shared/agent-session/view/structured-agent-session-tab'
 import { normalizeBotSidebarView } from '../../../../src/shared/bots/bot-sidebar-view'
 import type { BotComputerAnswer } from '../../bots/bot-link-host-reads'
 import type { KeptComputerAnswer } from '../../bots/kept-computer-bots'
@@ -97,6 +98,8 @@ function input(overrides: Partial<HomeBotRowsInput>): HomeBotRowsInput {
 
 describe('Home bots', () => {
   it('lists every computer’s bots needs-you first, then the most recent, and counts Needs you', () => {
+    const ux = bot('ux', 'ux-designer', { chatSessionId: 'ux-chat' })
+    const uxHome = agentOn(botHomeWorktreeId(ux), 'done', NOW - 120_000)
     const result = homeBotRows(
       input({
         botsByHost: {
@@ -104,14 +107,39 @@ describe('Home bots', () => {
             computer(
               'studio',
               'local',
-              listed('studio', [bot('builder', 'Bot builder'), bot('ux', 'ux-designer')], {
-                needsYou: { builder: 2 }
+              listed('studio', [bot('builder', 'Bot builder'), ux], {
+                needsYou: { builder: 2 },
+                waits: { builder: [{ label: 'Design review' }] }
               })
             )
           ),
-          air: on(computer('air', 'local', listed('air', [bot('atlas', 'Atlas')])))
+          air: on(
+            computer(
+              'air',
+              'local',
+              listed('air', [bot('atlas', 'Atlas')], {
+                waits: { atlas: [{ label: 'Nightly release' }] }
+              })
+            )
+          )
         },
         worktreeInfo: {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this row only needs its pane, state, times, and assistant message.
+          studio: {
+            hostId: 'studio',
+            totalWorktrees: 1,
+            activeCount: 0,
+            agents: [
+              {
+                ...uxHome,
+                agent: {
+                  ...uxHome.agent,
+                  paneKey: structuredAgentSessionStatusPaneKey('ux-chat'),
+                  lastAssistantMessage: 'Shared the plan'
+                }
+              }
+            ]
+          } as unknown as HostWorktreeInfo,
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the rows read only an agent's paneKey, state and times.
           air: {
             hostId: 'air',
@@ -128,6 +156,11 @@ describe('Home bots', () => {
       ['ux-designer', 'Studio Mac', 0, 'inactive']
     ])
     expect(result.needsYou).toBe(2)
+    expect(result.rows.map((row) => row.preview)).toEqual([
+      'Waiting for Design review',
+      '1 working',
+      'Shared the plan'
+    ])
   })
 
   it('lists a server two computers relay once, under its own name', () => {

@@ -40,7 +40,7 @@ const mocks = vi.hoisted(
     reviewById: {},
     smartOrder: null,
     offline: false,
-    chatTree: { state: 'unsupported', chats: [], workspaceChats: {} },
+    chatTree: { state: 'failed', chats: [], workspaceChats: {} },
     chatTreeReads: []
   })
 )
@@ -224,7 +224,7 @@ beforeEach(() => {
   mocks.smartOrder = null
   mocks.offline = false
   mocks.reviewById = {}
-  mocks.chatTree = { state: 'unsupported', chats: [], workspaceChats: {} }
+  mocks.chatTree = { state: 'failed', chats: [], workspaceChats: {} }
   mocks.chatTreeReads = []
 })
 

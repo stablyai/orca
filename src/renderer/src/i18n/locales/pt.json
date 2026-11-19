@@ -11748,7 +11748,6 @@
         },
         "SidebarWorkspaceOptionsMenu": {
           "hosts": "Hosts",
-          "showSection": "Mostrar",
           "allHostsDetail": "Mostrar todos os hosts",
           "configuredSshHost": "SSH configurado",
           "projectSshHost": "SSH do projeto",
@@ -11797,7 +11796,6 @@
           "219ebf1961": "Nome da branch",
           "folderPathIdentity": "Branch / caminho da pasta",
           "cli": "CLI do Orca",
-          "workspaceOptions": "Opções do espaço de trabalho",
           "host": "Host",
           "optionsActiveFilters_one": "Opções do espaço de trabalho ({{count}} filtro ativo)",
           "optionsActiveFilters_other": "Opções do espaço de trabalho ({{count}} filtros ativos)",
@@ -24795,8 +24793,7 @@
     },
     "upcoming": {
       "tidyNightAfter": "Todas as noites após {{from}}, ou assim que este computador estiver ativo",
-      "tidyWeekAfter": "Uma vez por semana após {{from}}, ou assim que este computador estiver ativo",
-      "lookDueNow": "Previsto agora · {{every}}"
+      "tidyWeekAfter": "Uma vez por semana após {{from}}, ou assim que este computador estiver ativo"
     },
     "palette": {
       "placeholder": "Buscar bots, chats, terminais, worktrees, configurações e ações...",

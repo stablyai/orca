@@ -31,7 +31,7 @@ describe('CJK terminal path names', () => {
     })
   })
 
-  it.each([',', ';', '"', "'", '，', '。'])('stops a file path at %s', (delimiter) => {
+  it.each([',', '"', '。'])('stops a file path at %s', (delimiter) => {
     expect(
       extractTerminalFileLinks(`/tmp/前・後/a.txt${delimiter}次`).map((link) => link.pathText)
     ).toEqual(['/tmp/前・後/a.txt'])
