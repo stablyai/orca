@@ -1,3 +1,5 @@
+import { prepareLegacyTranscriptImport } from '../../native-chat/agent-session-journal/history-import/journal-legacy-import'
+import { journalLifecycleItemMutation } from '../../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
 import {
   nativeCopyIds,
   usableJournalHistoryOrigin,
@@ -5,9 +7,16 @@ import {
 } from '../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
 import { recoverClaudeTranscript } from './claude-transcript-recovery'
 import { join } from 'node:path'
+import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import {
+  HistoryCatchUpCapacityError,
+  continuedOutsideNotice,
+  continuedOutsideRecordId,
+  createHistoryCatchUpBatch,
+  type HistoryCatchUpPlan,
+  type HistoryCatchUpReplacementPlan,
   captureHistoryCatchUpView,
   runHistoryCatchUp
 } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
@@ -101,63 +110,161 @@ export async function catchUpClaudeTranscript(input: {
         return null
       }
       const planned = await view()
-      let leafAbsent = input.leafUuid === '' && !!planned.covered
-      const tail = leafAbsent
+      const recent = async (): Promise<HistoryCatchUpPlan | HistoryCatchUpReplacementPlan> => {
+        complete = false
+        const noticeIdentity = {
+          provider: 'legacy' as const,
+          agent: 'claude' as const,
+          sessionId: input.sessionId,
+          recordId: continuedOutsideRecordId(
+            `capacity:${input.providerSessionId}:${input.leafUuid}`
+          )
+        }
+        const prepared = await prepareLegacyTranscriptImport({
+          agent: 'claude',
+          sessionId: input.providerSessionId,
+          options: { filePath, signal }
+        })
+        check()
+        if (!prepared.ok || !prepared.items.length) {
+          warn('replacement-unreadable', prepared.ok ? undefined : prepared.error)
+          const batch = createHistoryCatchUpBatch()
+          const noticeKey = agentJournalItemKey(noticeIdentity)
+          const notices = await history.reads.historyItems([noticeKey])
+          const notice = notices.find(({ key }) => key === noticeKey)
+          if (
+            notice?.item?.body.kind !== 'status' ||
+            notice.item.body.presentation !== 'continued-outside-unloaded'
+          ) {
+            const mutation = journalLifecycleItemMutation(
+              { turnScope: { kind: 'thread' } },
+              noticeIdentity,
+              continuedOutsideNotice(false, 'unloaded')
+            )
+            if (notice?.item) {
+              batch.revise(mutation, {
+                canonicalItemId: notice.canonicalItemId,
+                revision: notice.item.revision
+              })
+            } else {
+              batch.push(mutation)
+            }
+          }
+          return batch.finish('claude-history-unloaded', planned.physicalCursor)
+        }
+        const ids = prepared.items.flatMap((item) =>
+          item.identity.provider === 'claude' ? [item.identity.uuid] : []
+        )
+        const providerHandle = {
+          kind: 'claude' as const,
+          sessionId: input.providerSessionId,
+          leafUuid: ids.at(-1) ?? null
+        }
+        complete = true
+        return {
+          kind: 'replace',
+          operation: {
+            kind: 'epoch-replace',
+            reason: 'legacy_import',
+            providerHandle,
+            historyOrigin: {
+              version: 1,
+              kind: 'native_copy',
+              agent: 'claude',
+              unit: 'claude-entry',
+              providerHandle,
+              ids
+            },
+            items: [
+              {
+                identity: noticeIdentity,
+                body: continuedOutsideNotice(false, 'recent'),
+                ownerFence: 0,
+                turnScope: { kind: 'thread' }
+              },
+              ...prepared.items
+            ]
+          }
+        }
+      }
+      const copy = usableJournalHistoryOrigin(planned.origin)
+      const copiedLeaf =
+        planned.covered && copy?.kind === 'native_copy'
+          ? (copy.ids.at(-1) ?? input.leafUuid)
+          : input.leafUuid
+      const leafUuid = input.leafUuid
+      let leafAbsent = leafUuid === '' && !!planned.covered
+      let tail = leafAbsent
         ? null
         : await readClaudeTranscriptTail({
             filePath,
-            leafUuid: input.leafUuid,
+            leafUuid,
             check,
             onLeafAbsent: () => {
               leafAbsent = true
             }
           })
       check()
+      // Covered history can outgrow the tail budget even while its saved leaf remains in the copy.
+      if (!tail && !leafAbsent && copiedLeaf !== leafUuid) {
+        tail = await readClaudeTranscriptTail({ filePath, leafUuid: copiedLeaf, check })
+        check()
+      }
       if (!tail && !(leafAbsent && planned.covered)) {
         warn('leaf-not-in-tail')
-        return null
+        return leafAbsent ? null : recent()
       }
-      const items = await createClaudeTranscriptItemReader(
-        history.reads,
-        input.sessionId,
-        (tail?.rows ?? []).flatMap((row) => {
-          const attachment = row.attachment
-          const source =
-            attachment && typeof attachment === 'object' && 'source_uuid' in attachment
-              ? attachment.source_uuid
-              : undefined
-          return [row.uuid, source].filter((uuid): uuid is string => typeof uuid === 'string')
-        }),
-        (tail?.rows ?? []).flatMap((row) => claudeTranscriptItemKeys(row, input.providerSessionId))
-      )
-      const staging = createClaudeTranscriptImportPlan({
-        sessionId: input.sessionId,
-        providerSessionId: input.providerSessionId,
-        epoch: history.cursor().epoch,
-        items,
-        rewound: planned.hasRows ? (tail?.rewound ?? true) : null,
-        check
-      })
       try {
-        const restore = async (row: Record<string, unknown>) => {
-          check()
-          if (!planned.covered?.has(String(row.uuid))) {
-            await items.loadRow(row, input.providerSessionId)
-            await staging.restore(row)
+        const items = await createClaudeTranscriptItemReader(
+          history.reads,
+          input.sessionId,
+          (tail?.rows ?? []).flatMap((row) => {
+            const attachment = row.attachment
+            const source =
+              attachment && typeof attachment === 'object' && 'source_uuid' in attachment
+                ? attachment.source_uuid
+                : undefined
+            return [row.uuid, source].filter((uuid): uuid is string => typeof uuid === 'string')
+          }),
+          (tail?.rows ?? []).flatMap((row) =>
+            claudeTranscriptItemKeys(row, input.providerSessionId)
+          )
+        )
+        const staging = createClaudeTranscriptImportPlan({
+          sessionId: input.sessionId,
+          providerSessionId: input.providerSessionId,
+          epoch: history.cursor().epoch,
+          items,
+          rewound: planned.hasRows ? (tail?.rewound ?? true) : null,
+          check
+        })
+        try {
+          const restore = async (row: Record<string, unknown>) => {
+            check()
+            if (!planned.covered?.has(String(row.uuid))) {
+              await items.loadRow(row, input.providerSessionId)
+              await staging.restore(row)
+            }
           }
-        }
-        if (tail) {
-          for (const row of tail.rows) {
-            await restore(row)
-            await yieldTurn()
+          if (tail) {
+            for (const row of tail.rows) {
+              await restore(row)
+              await yieldTurn()
+            }
+          } else {
+            await recoverClaudeTranscript({ filePath, signal, restore, yieldTurn })
           }
-        } else {
-          await recoverClaudeTranscript({ filePath, signal, restore, yieldTurn })
+          complete = true
+          return await staging.finish()
+        } finally {
+          staging.dispose()
         }
-        complete = true
-        return await staging.finish()
-      } finally {
-        staging.dispose()
+      } catch (error) {
+        if (!(error instanceof HistoryCatchUpCapacityError)) {
+          throw error
+        }
+        check()
+        return recent()
       }
     }
   })

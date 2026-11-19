@@ -232,7 +232,8 @@ async function decodeReplacementItems(input: {
       {
         filePath: input.filePath,
         codex: input.transcriptAgent === 'codex',
-        roots: input.codexSessionsDirs
+        roots: input.codexSessionsDirs,
+        signal: input.signal
       },
       (line, fallbackId, recordId, selected = true) => {
         if (selected) {

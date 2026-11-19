@@ -9,6 +9,9 @@ export const AGENT_SESSION_HOST_STATUS_COPY = {
   'history-item-too-large': 'This part of the chat was too large to show.',
   /** Before turns the agent's own history has that were made outside this chat. */
   'continued-outside': 'Continued outside this chat.',
+  'continued-outside-recent':
+    'Continued outside this chat. Only recent history is shown; older turns remain in the session file.',
+  'continued-outside-unloaded': 'Continued outside this chat. Newer turns could not be loaded.',
   /** The same, when replies above were dropped from the agent's history elsewhere. */
   'continued-outside-rewound':
     "Continued outside this chat. Earlier replies above are no longer in this conversation's history."

@@ -2282,6 +2282,8 @@
         "compaction": "Context compacted",
         "contextCleared": "Context cleared",
         "continuedOutside": "Continued outside this chat.",
+        "continuedOutsideRecent": "Continued outside this chat. Only recent history is shown; older turns remain in the session file.",
+        "continuedOutsideUnloaded": "Continued outside this chat. Newer turns could not be loaded.",
         "continuedOutsideRewound": "Continued outside this chat. Earlier replies above are no longer in this conversation's history.",
         "forkedFrom": "Forked from",
         "forkedFromUnknown": "Forked from another chat",

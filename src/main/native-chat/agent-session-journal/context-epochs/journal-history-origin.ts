@@ -52,14 +52,16 @@ export function sameJournalConversation(a: unknown, b: unknown): boolean {
 
 export function journalHistoryOrigin(row: JournalEpochRow): JournalHistoryOrigin | null {
   const raw =
-    row.reason === 'legacy_import'
-      ? {
-          version: 1,
-          kind: 'legacy_import',
-          providerHandle: row.providerHandle,
-          importedAt: row.ts
-        }
-      : row.historyOrigin
+    row.historyOrigin !== undefined
+      ? row.historyOrigin
+      : row.reason === 'legacy_import'
+        ? {
+            version: 1,
+            kind: 'legacy_import',
+            providerHandle: row.providerHandle,
+            importedAt: row.ts
+          }
+        : row.historyOrigin
   return raw === undefined ? null : { providerHandle: row.providerHandle, raw }
 }
 

@@ -1,3 +1,4 @@
+import { agentSessionHostStatusText } from './agent-session-host-status-text'
 import { BotTidyUpLine } from '@/components/bots/BotTidyUpLine'
 import { nativeChatBotCard } from '../../native-chat-bot-cards'
 import {
@@ -19,10 +20,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
-import {
-  AGENT_SESSION_HOST_STATUS_COPY as HOST_STATUS_COPY,
-  type AgentSessionHostStatusPresentation
-} from '../../../../../../shared/agent-session/view/agent-session-host-status-rows'
 import type { NativeChatTextBlock } from '../../../../../../shared/native-chat/native-chat-types'
 import {
   NATIVE_CHAT_NOTICE_COPY,
@@ -61,29 +58,6 @@ import { structuredAgentSessionHostPlace } from '../../pane/ownership/use-struct
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import { NativeChatTranscriptSignInNotice } from '../../host-access/NativeChatSignInRow'
 import { nativeChatSignInHostWords } from '../../host-access/native-chat-sign-in-notice'
-
-const HOST_STATUS_WORDS: Record<AgentSessionHostStatusPresentation, () => string> = {
-  'history-repaired': () =>
-    translate(
-      'components.native-chat.notices.historyRepaired',
-      HOST_STATUS_COPY['history-repaired']
-    ),
-  'history-item-too-large': () =>
-    translate(
-      'components.native-chat.notices.historyItemTooLarge',
-      HOST_STATUS_COPY['history-item-too-large']
-    ),
-  'continued-outside': () =>
-    translate(
-      'components.native-chat.notices.continuedOutside',
-      HOST_STATUS_COPY['continued-outside']
-    ),
-  'continued-outside-rewound': () =>
-    translate(
-      'components.native-chat.notices.continuedOutsideRewound',
-      HOST_STATUS_COPY['continued-outside-rewound']
-    )
-}
 
 const BOT_CONTEXT_WORDS: Record<BotContextChange, () => string> = {
   soul: () => translate('components.native-chat.botContext.soul', BOT_CONTEXT_NOTE_COPY.soul),
@@ -166,7 +140,7 @@ export function NativeChatNoticeRow({
     // The look of any other host status line; only the words are the reader's.
     return (
       <p className="min-w-0 max-w-full select-text text-sm text-chat-foreground-faint [overflow-wrap:anywhere]">
-        {HOST_STATUS_WORDS[look.presentation]()}
+        {agentSessionHostStatusText(look.presentation)}
       </p>
     )
   }

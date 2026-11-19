@@ -34,6 +34,17 @@ export function applyJournalSqlContextCommand(
     savedAt,
     command.facts?.stopSettle
   )
+  if (result.dropped) {
+    return {
+      dropped: true as const,
+      cursor: result.cursor,
+      inputChanged: false,
+      keys: [],
+      inputKeys: [],
+      items: [],
+      effects: []
+    }
+  }
   return finishJournalSqlCommand(
     db,
     stateDirectory,
