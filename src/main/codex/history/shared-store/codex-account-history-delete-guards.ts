@@ -6,6 +6,9 @@ import { readCodexSharedSqliteHome } from '../../configuration/toml/config-toml-
 import { isCodexAccountHistoryLinked } from './codex-account-history-links'
 
 export const DAY_MS = 24 * 60 * 60 * 1000
+/** The home's databases go only after it has worked shared this long, over this many runs. */
+export const CLEANUP_MIN_SHARED_DAYS = 14
+export const CLEANUP_MIN_SHARED_PASSES = 5
 // A streak not extended lately (the home unused, or a newer build gone) proves nothing current.
 const CLEANUP_MAX_SINCE_LAST_SHARED_DAYS = 30
 

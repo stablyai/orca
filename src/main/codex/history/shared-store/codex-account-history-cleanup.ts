@@ -33,9 +33,6 @@ import {
 // Bounds one run's hashing and open-file check; the rest go on later runs.
 const MAX_ROLLOUTS_PER_RUN = 500
 const ROLLOUT_BATCH = 100
-/** The home's databases go only after it has worked shared this long, over this many runs. */
-export const CLEANUP_MIN_SHARED_DAYS = 14
-export const CLEANUP_MIN_SHARED_PASSES = 5
 export type CodexHistoryCleanupResult = { deletedFiles: number; freedBytes: number }
 
 /**
