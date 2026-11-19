@@ -42,6 +42,8 @@ export type SessionOptionDescriptor = {
         choices: SessionOptionSelectChoice[]
         /** Presentation when no value is known; never an input selection. */
         placeholder?: string
+        /** Display-only when the latest response supplies the effort missing from live options. */
+        lastResponseEffort?: string
       }
     /** Switches require values or unset renders false against the catalog default; confirmation remains valueSource’s responsibility. */
     | {

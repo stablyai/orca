@@ -1,3 +1,4 @@
+import { readAgentEffortLevel } from '../../../shared/agent-launch/choices/agent-effort-level'
 import {
   NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
   type NativeChatBlock,
@@ -128,9 +129,16 @@ export function decodeClaudeTranscriptLine(
   if (blocks.length === 0) {
     return null
   }
+  const model =
+    role === 'assistant' && record.isSidechain !== true && record.parent_tool_use_id == null
+      ? extractString(message?.model)
+      : null
+  const effort = model && model !== '<synthetic>' ? readAgentEffortLevel(record.effort) : undefined
   const messageId = extractString(record.uuid) ?? extractString(message?.id)
   return {
     id: messageId ?? fallbackId,
+    ...(model && model !== '<synthetic>' ? { model } : {}),
+    ...(effort ? { effort } : {}),
     role: claudeMessageRole(role, blocks, message?.content),
     // Decode ! command echoes so harness filtering cannot hide them and strand the local echo.
     blocks:

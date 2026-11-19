@@ -1,6 +1,11 @@
 import { getAgentSessionOptionCatalog } from '../../../../../../../shared/agent-session/options/agent-session-option-catalog'
 import type { CatalogModel } from '../../../../../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-types'
-import type { SessionOptionValue } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
+import { labelFromModelId } from '../../../../../../../shared/agent-session/options/model-catalog/model-id-label'
+import type { NativeChatMessage } from '../../../../../../../shared/native-chat/native-chat-types'
+import type {
+  SessionOptionDescriptor,
+  SessionOptionValue
+} from '../../../../../../../shared/native-chat/input/native-chat-session-options'
 import { stripScrollbackAnsi } from '../../terminal/assembly/native-chat-scrape-fallback'
 
 const EFFORT_ID_BY_LABEL: Record<string, string> = {
@@ -206,4 +211,43 @@ export function readClaudeSessionOptionsFromTerminalScreen(
     result.effort = effort
   }
   return result
+}
+
+/** A previous response can name the pill without confirming the next send's model. */
+export function withClaudeTranscriptModelLabel(
+  snapshot: SessionOptionDescriptor[],
+  messages: readonly NativeChatMessage[] | undefined
+): SessionOptionDescriptor[] {
+  const model = snapshot.find((row) => row.id === 'model')
+  if (
+    model?.kind.type !== 'select' ||
+    (model.valueSource !== 'unknown' && model.valueSource !== 'reported')
+  ) {
+    return snapshot
+  }
+  const previous = messages?.findLast(
+    (message) =>
+      message.source === 'transcript' &&
+      (message.role === 'assistant' || message.role === 'reasoning') &&
+      message.model
+  )
+  if (!previous?.model) {
+    return snapshot
+  }
+  const unknown = model.valueSource === 'unknown'
+  if (!unknown && model.kind.currentValue !== previous.model) {
+    return snapshot
+  }
+  const effort = snapshot.find((row) => row.id === 'effort')
+  const lastResponseEffort =
+    !effort || effort.valueSource === 'unknown' ? previous.effort : undefined
+  if (!unknown && !lastResponseEffort) {
+    return snapshot
+  }
+  const kind = {
+    ...model.kind,
+    ...(unknown ? { placeholder: labelFromModelId(previous.model) } : {}),
+    ...(lastResponseEffort ? { lastResponseEffort } : {})
+  }
+  return snapshot.map((row) => (row === model ? { ...model, kind } : row))
 }
