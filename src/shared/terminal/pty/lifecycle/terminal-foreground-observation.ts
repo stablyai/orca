@@ -17,6 +17,9 @@ export type TerminalForegroundSample =
       foregroundPgid?: number
       /** The recognized agent's own process, which a wrapper leading the job does not stand in for. */
       agentPid?: number
+      /** A job-control-stopped agent on this terminal, so another program in front is its stand-in, not a relay to it. */
+      stoppedAgent?: string
+      stoppedAgentPid?: number
     }
   | {
       verdict: 'unverifiable'
@@ -69,6 +72,8 @@ export function isTerminalForegroundObservation(
     (value.processName === null || text(value.processName)) &&
     (!('tty' in value) || text(value.tty)) &&
     (!('foregroundPgid' in value) || (integer(value.foregroundPgid) && value.foregroundPgid > 0)) &&
-    (!('agentPid' in value) || (integer(value.agentPid) && value.agentPid > 0))
+    (!('agentPid' in value) || (integer(value.agentPid) && value.agentPid > 0)) &&
+    (!('stoppedAgent' in value) || text(value.stoppedAgent)) &&
+    (!('stoppedAgentPid' in value) || (integer(value.stoppedAgentPid) && value.stoppedAgentPid > 0))
   )
 }

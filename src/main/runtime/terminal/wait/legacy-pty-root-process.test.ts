@@ -6,7 +6,9 @@ vi.mock('../../agent-session/ownership/agent-session-process-identity-probe', ()
   readProcessStartTimeMs: async () => startTime.value
 }))
 
+/** An older daemon: every listing returns all of its sessions, whatever was asked. */
 const daemon = (
+  prefix: string,
   sessions: number,
   incarnationId: string | undefined = 'incarnation-1',
   rootProcessId = process.pid
@@ -14,12 +16,11 @@ const daemon = (
   const counts = { requests: 0, rows: 0 }
   return {
     counts,
-    listProcesses: async (_host?: string, opts?: { ptyIds?: readonly string[] }) => {
-      // Why count every session: an older daemon returns them all before the PTY filter.
+    listProcesses: async () => {
       counts.requests += 1
       counts.rows += sessions
-      return (opts?.ptyIds ?? []).map((id) => ({
-        id,
+      return Array.from({ length: sessions }, (_, index) => ({
+        id: `${prefix}-${index}`,
         ...(incarnationId ? { incarnationId } : {}),
         rootProcessId,
         cwd: '',
@@ -37,38 +38,40 @@ it.each([
   [300, 'incarnation-1', null],
   [3_000, 'incarnation-1', null]
 ])(
-  'an older daemon lists its sessions once per held terminal, not once per retry (%i held, incarnation %s, start time %s)',
+  'held terminals on an older daemon share one session listing across every retry (%i held, incarnation %s, start time %s)',
   async (held, incarnationId, startedAtMs) => {
     startTime.value = startedAtMs
-    const controller = daemon(held, incarnationId)
+    const prefix = `pty-${held}-${incarnationId}-${startedAtMs}`
+    const controller = daemon(prefix, held, incarnationId)
     for (let wave = 0; wave < 12; wave++) {
-      for (let index = 0; index < held; index++) {
-        await expect(
-          readLegacyPtyRootProcessId(
-            controller,
-            `pty-${held}-${incarnationId}-${startedAtMs}-${index}`,
-            incarnationId
-          )
-        ).resolves.toBe(process.pid)
-      }
+      await Promise.all(
+        Array.from({ length: held }, (_, index) =>
+          expect(
+            readLegacyPtyRootProcessId(controller, `${prefix}-${index}`, incarnationId)
+          ).resolves.toBe(process.pid)
+        )
+      )
     }
-    expect(controller.counts).toEqual({ requests: held, rows: held * held })
+    expect(controller.counts).toEqual({ requests: 1, rows: held })
   }
 )
 
 it('a terminal that exits is listed again on its next probe', async () => {
-  const controller = daemon(1)
-  await readLegacyPtyRootProcessId(controller, 'pty-exited', 'incarnation-1')
-  forgetLegacyPtyRoot('pty-exited')
-  await readLegacyPtyRootProcessId(controller, 'pty-exited', 'incarnation-1')
+  startTime.value = 1_000
+  const controller = daemon('pty-exited', 1)
+  await readLegacyPtyRootProcessId(controller, 'pty-exited-0', 'incarnation-1')
+  forgetLegacyPtyRoot('pty-exited-0')
+  await readLegacyPtyRootProcessId(controller, 'pty-exited-0', 'incarnation-1')
   expect(controller.counts.requests).toBe(2)
 })
 
-it('a root that exited with an unreadable start time is listed again', async () => {
+it('a root that exited with an unreadable start time is not trusted', async () => {
   startTime.value = null
-  // Why this PID: the kernel never hands out PID 0x7ffffffe to a live process here.
-  const controller = daemon(1, 'incarnation-1', 0x7ffffffe)
-  await readLegacyPtyRootProcessId(controller, 'pty-dead-root', 'incarnation-1')
-  await readLegacyPtyRootProcessId(controller, 'pty-dead-root', 'incarnation-1')
+  // Why this PID: no live process holds PID 0x7ffffffe here.
+  const controller = daemon('pty-dead-root', 1, 'incarnation-1', 0x7ffffffe)
+  await expect(
+    readLegacyPtyRootProcessId(controller, 'pty-dead-root-0', 'incarnation-1')
+  ).resolves.toBeNull()
+  await readLegacyPtyRootProcessId(controller, 'pty-dead-root-0', 'incarnation-1')
   expect(controller.counts.requests).toBe(2)
 })
