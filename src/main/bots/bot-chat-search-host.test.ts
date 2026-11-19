@@ -33,7 +33,7 @@ it('never asks the session index (which starts its process) while the owner has 
   expect(service.search).toHaveBeenCalledTimes(1)
 })
 
-it("counts only a worker match's own workers, so Show more is never one it can't fill", async () => {
+it('matches group rooms only through their workers and counts only the workers shown', async () => {
   const worker = (key: string, title: string) => ({
     key,
     title,
@@ -54,14 +54,23 @@ it("counts only a worker match's own workers, so Show more is never one it can't
     finishedTotal: 3,
     failedTotal: 1
   }
+  const side: BotChatTreeChat = {
+    ...room,
+    chatId: 'side',
+    title: 'Release room draft',
+    running: [],
+    runningTotal: 0,
+    finishedTotal: 0,
+    failedTotal: 0
+  }
   const host: Parameters<typeof searchBotChats>[0] = {
     bots: () => [makeTestBot({ id: 'bot-1' })],
     treeParts: async () => ({
-      tree: { chats: [room], workspaceChats: {} },
+      tree: { chats: [room, side], workspaceChats: {} },
       placed: [],
       rootOf: (id: string) => id
     }),
-    contentMatches: async () => [],
+    contentMatches: async () => [room.chatId],
     dispatchWorkers: async () => []
   }
 
@@ -70,7 +79,16 @@ it("counts only a worker match's own workers, so Show more is never one it can't
     query: 'release'
   })
 
-  expect(answer.chats).toMatchObject([
-    { running: [{ key: 'w1' }], runningTotal: 1, finished: [], finishedTotal: 0, failedTotal: 0 }
+  expect(answer.matches).toEqual([
+    { chatId: room.chatId, workerKeys: ['w1'] },
+    { chatId: side.chatId, workerKeys: null }
   ])
+  expect(answer.chats).toMatchObject([
+    { running: [{ key: 'w1' }], runningTotal: 1, finished: [], finishedTotal: 0, failedTotal: 0 },
+    { chatId: side.chatId }
+  ])
+
+  const titleOnly = await searchBotChats(host, { botId: 'bot-1', query: 'room', limit: 1 })
+  expect(titleOnly.matches).toEqual([{ chatId: side.chatId, workerKeys: null }])
+  expect(titleOnly.more).toBe(0)
 })
