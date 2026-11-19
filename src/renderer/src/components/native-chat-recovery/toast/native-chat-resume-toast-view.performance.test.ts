@@ -20,28 +20,29 @@ function chat(sessionId: string): ResumeCandidate {
   }
 }
 
-/** Counts every element read of the run's entries, however the derivation walks them. */
-function countingEntries(entries: ResumeRun['entries']) {
+/** Counts every read of an entry's chat, however the derivation walks the run. */
+function countingEntries(ids: readonly string[]) {
   let reads = 0
-  const proxy = new Proxy([...entries], {
-    get(target, key, receiver) {
-      if (typeof key === 'string' && /^\d+$/.test(key)) {
+  const entries: ResumeRun['entries'] = ids.map((id) => {
+    const candidate = chat(id)
+    return {
+      get candidate() {
         reads += 1
+        return candidate
       }
-      return Reflect.get(target, key, receiver)
     }
   })
-  return { proxy, reads: () => reads }
+  return { entries, reads: () => reads }
 }
 
 describe('resume toast view work', () => {
   it('reads a settled run of refusals without a record a linear number of times', () => {
     const ids = Array.from({ length: N }, (_, index) => `chat-${index}`)
-    const counted = countingEntries(ids.map((id) => ({ candidate: chat(id) })))
+    const counted = countingEntries(ids)
     const run: ResumeRun = {
       startedAt: 1,
       startedBy: 'launch',
-      entries: counted.proxy,
+      entries: counted.entries,
       inFlight: false,
       continued: ids.map((sessionId) => ({ sessionId, outcome: 'refused' as const }))
     }
@@ -49,7 +50,7 @@ describe('resume toast view work', () => {
     const view = resumeToastView(run, [], resumeRunFailures(run, []))
 
     expect(view.counts.needsYou).toBe(N)
-    // Three linear passes at most (failures, run view, refusal join); the quadratic join read ~2.1M.
-    expect(counted.reads()).toBeLessThanOrEqual(3 * N)
+    // A few reads per entry across linear passes; the per-refusal scan it replaced read ~2.1M.
+    expect(counted.reads()).toBeLessThanOrEqual(4 * N)
   })
 })
