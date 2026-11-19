@@ -152,6 +152,7 @@ export function FileExplorerRow({
           ref={setRowDragNode}
           // The OS-drop owner reads the target folder here at drop time.
           data-file-explorer-drop-dir={rowDropDir}
+          data-file-explorer-drop-directory={node.isDirectory ? '' : undefined}
           // Let wheel capture rescue scrolling Chromium swallows over draggable rows (file-explorer-drag-scroll-marker).
           data-explorer-draggable="true"
           draggable

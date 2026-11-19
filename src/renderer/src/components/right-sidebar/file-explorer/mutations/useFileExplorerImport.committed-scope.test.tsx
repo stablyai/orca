@@ -29,6 +29,12 @@ function dropOn(target: Element): { dropEffect: string } {
   return transfer
 }
 
+function pasteOn(target: Element): Event {
+  const event = new Event('paste', { bubbles: true, cancelable: true })
+  target.dispatchEvent(event)
+  return event
+}
+
 it('keeps native drops on committed scope when a new scope render suspends', async () => {
   vi.stubGlobal('api', {
     fs: {
@@ -104,4 +110,84 @@ it('keeps native drops on committed scope when a new scope render suspends', asy
   expect(mocks.importPaths).toHaveBeenCalledTimes(1)
   expect(refresh).toHaveBeenCalledTimes(1)
   expect(mocks.prepare).toHaveBeenCalledTimes(1)
+})
+
+it('pastes copied files and clipboard images into the target folder without intercepting text fields', async () => {
+  const ui = {
+    readClipboardText: vi.fn(async () => 'file.ts'),
+    readClipboardFilePaths: vi.fn(async () => ['/source/file.ts']),
+    clipboardHasImage: vi.fn(async () => false),
+    saveClipboardImageAsTempFile: vi.fn(async () => '/tmp/pasted-image.png')
+  }
+  vi.stubGlobal('api', {
+    fs: {
+      getPathForFile: () => '/source/file.ts',
+      prepareDroppedPaths: mocks.prepare.mockImplementation(async ({ paths }) => ({
+        paths,
+        failures: []
+      }))
+    },
+    ui
+  })
+  const selected = vi.fn()
+  const refresh = vi.fn().mockResolvedValue(undefined)
+  mocks.importPaths
+    .mockResolvedValueOnce({ results: [{ status: 'imported', destPath: '/repo/app/file.ts' }] })
+    .mockResolvedValueOnce({ results: [{ status: 'imported', destPath: '/repo/file.ts' }] })
+    .mockResolvedValueOnce({
+      results: [{ status: 'imported', destPath: '/repo/app/pasted-image.png' }]
+    })
+
+  function Probe() {
+    const ownerRef = useFileExplorerImport({
+      worktreeId: 'wt',
+      worktreePath: '/repo',
+      displayRootPath: '/repo',
+      refreshDir: refresh,
+      clearNativeDragState: vi.fn(),
+      setSelectedPath: selected
+    })
+    return (
+      <div ref={ownerRef}>
+        <button
+          data-testid="folder"
+          data-file-explorer-drop-dir="/repo/app"
+          data-file-explorer-drop-directory=""
+        >
+          app
+        </button>
+        <button data-testid="file" data-file-explorer-drop-dir="/repo/app">
+          file
+        </button>
+        <input data-testid="text-input" />
+      </div>
+    )
+  }
+
+  const view = render(<Probe />)
+  await act(async () => {
+    pasteOn(view.getByTestId('folder'))
+  })
+  await waitFor(() => expect(selected).toHaveBeenCalledWith('/repo/app/file.ts'))
+  expect(refresh).toHaveBeenCalledWith('/repo/app')
+
+  await act(async () => {
+    pasteOn(view.getByTestId('file'))
+  })
+  await waitFor(() => expect(selected).toHaveBeenCalledWith('/repo/file.ts'))
+  expect(refresh).toHaveBeenCalledWith('/repo')
+
+  ui.readClipboardText.mockResolvedValueOnce('')
+  ui.readClipboardFilePaths.mockResolvedValueOnce([])
+  ui.clipboardHasImage.mockResolvedValueOnce(true)
+  await act(async () => {
+    pasteOn(view.getByTestId('folder'))
+  })
+  await waitFor(() => expect(selected).toHaveBeenCalledWith('/repo/app/pasted-image.png'))
+  expect(ui.saveClipboardImageAsTempFile).toHaveBeenCalledOnce()
+  expect(refresh).toHaveBeenCalledTimes(3)
+
+  const textPaste = pasteOn(view.getByTestId('text-input'))
+  expect(textPaste.defaultPrevented).toBe(false)
+  expect(ui.readClipboardText).toHaveBeenCalledTimes(3)
 })
