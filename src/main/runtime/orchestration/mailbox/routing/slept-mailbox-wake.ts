@@ -51,7 +51,7 @@ export class SleptMailboxWake {
   private readonly held = new Map<string, string>()
   private readonly workspaceCounts = new Map<string, number>()
   private active = 0
-  /** Bumped whenever the set of held worktrees may have changed. */
+  /** Bumped only when a worktree joins or leaves the held set. */
   heldVersion = 0
 
   constructor(private readonly deps: WakeDeps) {}
@@ -178,13 +178,17 @@ export class SleptMailboxWake {
         this.workspaceCounts.set(previous, count)
       } else {
         this.workspaceCounts.delete(previous)
+        this.heldVersion++
       }
     }
     this.held.delete(paneKey)
-    this.heldVersion++
     if (next) {
       this.held.set(paneKey, next)
-      this.workspaceCounts.set(next, (this.workspaceCounts.get(next) ?? 0) + 1)
+      const count = (this.workspaceCounts.get(next) ?? 0) + 1
+      this.workspaceCounts.set(next, count)
+      if (count === 1) {
+        this.heldVersion++
+      }
     }
     if (!record) {
       this.failed.delete(paneKey)
