@@ -68,6 +68,8 @@ export function useRemoteBrowserPageStream({
   setFrameMetadata: (metadata: BrowserScreencastFrameMetadata | null) => void
 }): {
   reconnectRemoteStream: () => void
+  /** Re-reads the page's CSS viewport, which this pane's own zoom just changed. */
+  resyncRemoteViewport: () => void
 } {
   const [reopenNonce, setReopenNonce] = useState(0)
   const lastFrameDeviceSizeRef = useRef<string | null>(null)
@@ -299,5 +301,14 @@ export function useRemoteBrowserPageStream({
     stagedPage
   })
 
-  return { reconnectRemoteStream }
+  const resyncRemoteViewport = useCallback((): void => {
+    const pageId = lifecycle.tokens.remotePage
+    if (pageId) {
+      // The frame after a zoom re-reads too, in case this read beat the guest's relayout.
+      lastFrameDeviceSizeRef.current = ''
+      void syncRemoteViewport(pageId).catch(() => {})
+    }
+  }, [lifecycle, syncRemoteViewport])
+
+  return { reconnectRemoteStream, resyncRemoteViewport }
 }

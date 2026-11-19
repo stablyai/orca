@@ -211,7 +211,7 @@ export function RemoteBrowserPagePane({
     imageRef.current?.focus()
   }, [hasStreamFrame])
 
-  const { reconnectRemoteStream } = useRemoteBrowserPageStream({
+  const { reconnectRemoteStream, resyncRemoteViewport } = useRemoteBrowserPageStream({
     activeRuntimeEnvironmentId: runtimeEnvironmentId,
     browserPageId: browserTab.id,
     isActive,
@@ -265,6 +265,7 @@ export function RemoteBrowserPagePane({
   const zoom = useRemoteBrowserPageZoom({
     browserPageId: browserTab.id,
     runtimeEnvironmentId,
+    onZoomed: resyncRemoteViewport,
     lifecycle,
     runtimeTarget,
     runtimeWorktree,

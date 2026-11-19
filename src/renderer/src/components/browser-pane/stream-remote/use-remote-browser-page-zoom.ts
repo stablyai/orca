@@ -32,6 +32,7 @@ export function remoteBrowserWheelZoomDirection(
 export function useRemoteBrowserPageZoom({
   browserPageId,
   runtimeEnvironmentId,
+  onZoomed,
   lifecycle,
   runtimeTarget,
   runtimeWorktree,
@@ -41,6 +42,8 @@ export function useRemoteBrowserPageZoom({
 }: {
   browserPageId: string
   runtimeEnvironmentId: string
+  /** Frames carry the new zoom too, but a static page may not repaint before the next click. */
+  onZoomed: () => void
   lifecycle: RemoteBrowserStreamLifecycle
   runtimeTarget: () => RemoteBrowserRuntimeTarget | null
   runtimeWorktree: string
@@ -87,6 +90,7 @@ export function useRemoteBrowserPageZoom({
         .then((display) => {
           if (isCurrentRemoteOperationToken(token) && display?.site) {
             showBrowserZoomFeedback(display.zoomLevel)
+            onZoomed()
           }
         })
         .catch((error: unknown) => {
@@ -114,6 +118,7 @@ export function useRemoteBrowserPageZoom({
       createRemoteOperationToken,
       isCurrentRemoteOperationToken,
       lifecycle,
+      onZoomed,
       runtimeTarget,
       runtimeWorktree,
       setPaneNotice,
