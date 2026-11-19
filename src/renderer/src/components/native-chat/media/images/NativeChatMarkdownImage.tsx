@@ -39,6 +39,7 @@ import { useNativeChatFileLinkClick } from '../../links/actions/use-native-chat-
 import { observeTranscriptVisibility } from './native-chat-image-visibility'
 import { useNativeChatMediaHref } from './use-native-chat-media-href'
 import { useNativeChatLinkClick } from '../../links/actions/native-chat-link-click-context'
+import type { NativeChatDocumentImageOrigin } from '../../markdown/native-chat-markdown-image-origins'
 
 export const NativeChatMarkdownImageLinkContext = createContext<string | undefined>(undefined)
 const IMAGE_ACCESS = chatImageAccess()
@@ -46,6 +47,7 @@ const IMAGE_ACCESS = chatImageAccess()
 type MarkdownImageProps = {
   src?: string
   alt?: string
+  origin?: NativeChatDocumentImageOrigin
 }
 
 export function NativeChatMarkdownImage(props: MarkdownImageProps): React.JSX.Element | null {

@@ -28,6 +28,12 @@ export type MarkdownBlockSplit = {
   whole: boolean
 }
 
+export function markdownBlockContent(block: MarkdownBlock): string {
+  return block.literalMath && block.end !== undefined
+    ? block.text.slice(0, block.end - block.start)
+    : block.text
+}
+
 /** The last block, which is still growing, and the one it may yet join. */
 const UNSETTLED_BLOCKS = 2
 

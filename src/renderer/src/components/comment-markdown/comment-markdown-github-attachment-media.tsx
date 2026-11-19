@@ -1,21 +1,7 @@
 import { GitHubBodyImageUrlsContext } from './comment-markdown-github-image-urls'
 import React from 'react'
-
-export function isGitHubUserAttachmentUrl(href: string | undefined): href is string {
-  if (!href) {
-    return false
-  }
-  try {
-    const url = new URL(href)
-    return (
-      url.protocol === 'https:' &&
-      url.hostname === 'github.com' &&
-      url.pathname.startsWith('/user-attachments/assets/')
-    )
-  } catch {
-    return false
-  }
-}
+import { isGitHubUserAttachmentUrl } from './github-user-attachment-url'
+export { isGitHubUserAttachmentUrl } from './github-user-attachment-url'
 
 function isBareAutolink(children: React.ReactNode, href: string): boolean {
   const text = React.Children.toArray(children).join('').trim()

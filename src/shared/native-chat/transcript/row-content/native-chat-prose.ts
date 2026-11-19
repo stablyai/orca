@@ -1,6 +1,10 @@
 import { isTextBlock, type NativeChatBlock } from '../../native-chat-types'
 
 export function nativeChatProseToMarkdown(blocks: NativeChatBlock[], maxLength = Infinity): string {
+  const only = blocks[0]
+  if (blocks.length === 1 && only?.type === 'text' && maxLength >= only.text.length) {
+    return only.text
+  }
   const parts: string[] = []
   let length = 0
   for (const block of blocks) {

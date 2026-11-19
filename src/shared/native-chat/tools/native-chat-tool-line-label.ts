@@ -1,3 +1,4 @@
+import { nativeChatToolCallPhase } from './native-chat-tool-call-phase'
 import { nativeChatCommandLanguage } from './native-chat-command-language'
 import { isNativeChatFileCountPath } from './native-chat-edit-patch-files'
 import { nativeChatToolCategory } from './native-chat-tool-icon'
@@ -74,13 +75,8 @@ export function nativeChatToolLineLabel(
   const display = createToolInputDisplay(call.input)
   const category = nativeChatToolCategory(call.name, call.mcpIdentity)
   const command = category === 'unknown'
-  const running = call.state === 'running'
-  const completed =
-    call.state !== 'failed' &&
-    !result?.isError &&
-    (call.state === 'completed' || result !== undefined)
-  const failed = call.state === 'failed' || result?.isError === true
-  const phase = { running, completed, failed }
+  const phase = nativeChatToolCallPhase(call, result)
+  const { running, completed, failed } = phase
   let fullCommand: string | null = null
   let commandDetail: string | null = null
   let commandLanguage: string | null = null

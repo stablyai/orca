@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { basename } from '@/lib/path'
 import { routeNativeChatHref } from '../../../../../../shared/native-chat/file-access/native-chat-href-routing'
 import { NativeChatMarkdownImage } from './NativeChatMarkdownImage'
+import type { NativeChatDocumentImageOrigin } from '../../markdown/native-chat-markdown-image-origins'
 import { observeTranscriptVisibility } from './native-chat-image-visibility'
 
 /**
@@ -12,6 +13,7 @@ import { observeTranscriptVisibility } from './native-chat-image-visibility'
 export function NativeChatDeferredMarkdownImage(props: {
   src?: string
   alt?: string
+  origin?: NativeChatDocumentImageOrigin
 }): React.JSX.Element {
   const placeholderRef = useRef<HTMLSpanElement>(null)
   const [near, setNear] = useState(false)

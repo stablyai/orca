@@ -8,7 +8,7 @@ import {
 } from '../native-chat-types'
 import { nativeChatToolCategory } from './native-chat-tool-icon'
 import { nativeChatFullCommand } from './native-chat-tool-input-text'
-import { nativeChatToolLineLabel } from './native-chat-tool-line-label'
+import { nativeChatToolCallPhase } from './native-chat-tool-call-phase'
 import { pairToolBlocks } from './native-chat-tool-pairs'
 import { toolFilePath } from './native-chat-tool-summary'
 
@@ -31,17 +31,30 @@ function imageReadPath(call: NativeChatToolCallBlock): string | null {
 export function nativeChatToolRunViewedImages(
   blocks: readonly NativeChatBlock[]
 ): NativeChatImageRefBlock[] {
+  const entries = nativeChatToolRunViewedImageEntries(blocks)
+  return entries.length ? entries.map(({ path }) => ({ type: 'image-ref', path })) : NO_IMAGES
+}
+
+export function nativeChatToolRunViewedImageEntries(
+  blocks: readonly NativeChatBlock[]
+): { path: string; call: NativeChatToolCallBlock }[] {
   // Most runs read no images, so they skip pairing.
   if (!blocks.some((block) => isToolCallBlock(block) && imageReadPath(block) !== null)) {
-    return NO_IMAGES
+    return []
   }
-  const paths = new Set<string>()
+  const paths = new Map<string, NativeChatToolCallBlock>()
   for (const { call, result } of pairToolBlocks(blocks)) {
     const path = call ? imageReadPath(call) : null
     // Only a read that finished without error showed the agent its image.
-    if (call && path !== null && nativeChatToolLineLabel(call, result).verb === 'read') {
-      paths.add(path)
+    if (call && path !== null) {
+      const phase = nativeChatToolCallPhase(call, result)
+      if (phase.running || !phase.completed) {
+        continue
+      }
+      if (!paths.has(path)) {
+        paths.set(path, call)
+      }
     }
   }
-  return Array.from(paths, (path) => ({ type: 'image-ref', path }))
+  return Array.from(paths, ([path, call]) => ({ path, call }))
 }

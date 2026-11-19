@@ -1,33 +1,11 @@
-import { nativeChatVisualRemarkPlugins } from '../media/visuals/native-chat-visual-markdown-syntax'
-import { unified } from 'unified'
-import remarkParse from 'remark-parse'
-import remarkRehype from 'remark-rehype'
-import rehypeRaw from 'rehype-raw'
-import rehypeSanitize from 'rehype-sanitize'
 import type { Root, RootContent } from 'hast'
-import {
-  commentMarkdownSanitizeSchema,
-  commentMarkdownAllowedTagNames,
-  commentMarkdownUrlTransform
-} from '../../comment-markdown/comment-markdown-sanitize'
-import { remarkUnknownHtmlAsText } from '../../comment-markdown/comment-markdown-unknown-html-as-text'
+import { commentMarkdownUrlTransform } from '../../comment-markdown/comment-markdown-sanitize'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import { deriveNativeChatRowContent } from '../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
-import { commentMarkdownRemarkPlugins } from '../../comment-markdown/comment-markdown-remark-plugins'
-import { remarkChatMath } from '../../comment-markdown/chat-markdown-math'
-import { remarkNativeChatFileDestinations } from './native-chat-markdown-file-destinations'
+import { nativeChatMarkdownImageParser } from './native-chat-markdown-image-parser'
 
 function sourceReader(visuals: boolean) {
-  const parser = unified()
-    .use(remarkParse)
-    .use(remarkUnknownHtmlAsText(commentMarkdownAllowedTagNames))
-    .use(commentMarkdownRemarkPlugins)
-    .use(remarkChatMath)
-    .use(visuals ? nativeChatVisualRemarkPlugins('image-source-discovery') : [])
-    .use(remarkNativeChatFileDestinations)
-    .use(remarkRehype, { allowDangerousHtml: true })
-    .use(rehypeRaw)
-    .use(rehypeSanitize, commentMarkdownSanitizeSchema)
+  const parser = nativeChatMarkdownImageParser(visuals)
   const sources = new WeakMap<NativeChatMessage['blocks'], readonly string[]>()
 
   return function imageSources(message: NativeChatMessage): readonly string[] {

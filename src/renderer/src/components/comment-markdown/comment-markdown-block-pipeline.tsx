@@ -2,15 +2,17 @@ import React from 'react'
 import Markdown from 'react-markdown'
 import { unified, type Processor } from 'unified'
 import remarkParse from 'remark-parse'
-import type { CommentMarkdownExtension } from './CommentMarkdown'
+import type { CommentMarkdownExtension, CommentMarkdownBlockPreparer } from './CommentMarkdown'
 import { useChatMathRendering } from './chat-markdown-math-rendering'
 import { rehypeWordFade } from './comment-markdown-word-fade'
 import {
   splitMarkdownTopLevelBlocks,
+  markdownBlockContent,
   type HtmlRendersAsText,
   type MarkdownBlock,
   type MarkdownBlockSplit
 } from './markdown-top-level-blocks'
+export { markdownBlockContent } from './markdown-top-level-blocks'
 
 type RemarkPlugins = NonNullable<React.ComponentProps<typeof Markdown>['remarkPlugins']>
 
@@ -19,24 +21,52 @@ export const MemoizedMarkdown = React.memo(function DeferredMarkdown({
   math,
   fadeWords,
   block,
+  sourceStart = 0,
+  growingTail = false,
+  prepareBlock,
   ...props
 }: React.ComponentProps<typeof Markdown> & {
   math: boolean
   fadeWords: boolean
   block?: MarkdownBlock
+  sourceStart?: number
+  growingTail?: boolean
+  prepareBlock?: CommentMarkdownBlockPreparer
 }) {
+  const prepared = React.useMemo(
+    () =>
+      prepareBlock?.({
+        content: props.children ?? '',
+        start: sourceStart,
+        growing: growingTail,
+        remarkPlugins: props.remarkPlugins ?? [],
+        rehypePlugins: props.rehypePlugins ?? [],
+        remarkRehypeOptions: props.remarkRehypeOptions
+      }),
+    [
+      prepareBlock,
+      props.children,
+      sourceStart,
+      growingTail,
+      props.remarkPlugins,
+      props.rehypePlugins,
+      props.remarkRehypeOptions
+    ]
+  )
+  const markdownProps = { ...props, ...prepared?.props }
   const renderMath = useChatMathRendering(math)
   const plugins = React.useMemo(
     () => [
-      ...(props.rehypePlugins ?? []),
+      ...(markdownProps.rehypePlugins ?? []),
       ...(math ? [renderMath] : []),
-      ...(fadeWords ? [rehypeWordFade] : [])
+      ...(fadeWords ? [rehypeWordFade] : []),
+      ...(prepared?.afterRehypePlugins ?? [])
     ],
-    [props.rehypePlugins, math, renderMath, fadeWords]
+    [markdownProps.rehypePlugins, math, renderMath, fadeWords, prepared?.afterRehypePlugins]
   )
   const parsedPlugins = React.useMemo<RemarkPlugins>(() => {
     if (!block?.tree) {
-      return props.remarkPlugins ?? []
+      return markdownProps.remarkPlugins ?? []
     }
     const tree = block.tree
     const source = markdownBlockContent(block)
@@ -48,9 +78,12 @@ export const MemoizedMarkdown = React.memo(function DeferredMarkdown({
       }
       this.parser = (value, file) => (value === source ? structuredClone(tree) : parse(value, file))
     }
-    return [...(props.remarkPlugins ?? []), reuseParsedBlock]
-  }, [block, props.remarkPlugins])
-  return <Markdown {...props} remarkPlugins={parsedPlugins} rehypePlugins={plugins} />
+    return [...(markdownProps.remarkPlugins ?? []), reuseParsedBlock]
+  }, [block, markdownProps.remarkPlugins])
+  const element = (
+    <Markdown {...markdownProps} remarkPlugins={parsedPlugins} rehypePlugins={plugins} />
+  )
+  return prepared?.wrap ? prepared.wrap(element) : element
 })
 
 /** The content as the blocks to render. Cut into blocks from the first time it is growing, and
@@ -98,10 +131,4 @@ export function useMarkdownBlocks(
   )
   setState({ parser, rendersAsText, split: next })
   return next.blocks
-}
-
-export function markdownBlockContent(block: MarkdownBlock): string {
-  return block.literalMath && block.end !== undefined
-    ? block.text.slice(0, block.end - block.start)
-    : block.text
 }

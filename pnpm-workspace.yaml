@@ -129,6 +129,8 @@ patchedDependencies:
   picomatch@4.0.4: config/patches/picomatch@4.0.4.patch
   picomatch@4.0.7: config/patches/picomatch@4.0.7.patch
   '@radix-ui/react-menu@2.1.24': config/patches/@radix-ui__react-menu@2.1.24.patch
+  remend@1.4.0: config/patches/remend@1.4.0.patch
+  hast-util-raw@9.1.0: config/patches/hast-util-raw@9.1.0.patch
 permissions:
   agent-browser:
     skills: false

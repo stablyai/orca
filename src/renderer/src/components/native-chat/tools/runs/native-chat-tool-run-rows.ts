@@ -12,6 +12,7 @@ import {
   type NativeChatTaskListRow
 } from '../../../../../../shared/native-chat/input/task-lists/native-chat-task-list-history'
 import type { NativeChatToolRunAsides } from './NativeChatToolRun'
+import { nativeChatToolRunAsidePositions } from '../../../../../../shared/native-chat/tools/native-chat-tool-run-aside-positions'
 
 /** One drawn row of an opened run. `focusable`: it renders a control, so keyboard order can land on it. */
 export type NativeChatToolRunRow =
@@ -67,6 +68,11 @@ export function buildNativeChatToolRunRows({
   const { resultByCall, pairedResults } = pairNativeChatToolResults(headerBlocks)
   const seen = new Map<string, number>()
   const rows: NativeChatToolRunRow[] = []
+  const asidePositions = nativeChatToolRunAsidePositions(
+    headerBlocks,
+    asides?.before,
+    asides?.after
+  )
   const pushAsides = (elements: readonly React.JSX.Element[] | undefined): void => {
     for (const element of elements ?? []) {
       rows.push({
@@ -78,7 +84,7 @@ export function buildNativeChatToolRunRows({
     }
   }
   for (const [blockIndex, block] of headerBlocks.entries()) {
-    pushAsides(asides?.before.get(block))
+    pushAsides(asidePositions.get(blockIndex))
     const taskList = taskLists.rows.get(block)
     if (taskList) {
       // Only an update shows its "Full task list" trigger; a first list has no control.
@@ -118,6 +124,6 @@ export function buildNativeChatToolRunRows({
       lineIdentity
     })
   }
-  pushAsides(asides?.after)
+  pushAsides(asidePositions.get(headerBlocks.length))
   return rows
 }

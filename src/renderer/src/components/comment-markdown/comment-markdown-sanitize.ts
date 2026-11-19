@@ -24,6 +24,13 @@ export const commentMarkdownUrlTransform: UrlTransform = (value, key, node) => {
   return defaultUrlTransform(value)
 }
 
+export const commentMarkdownFileUriUrlTransform: UrlTransform = (value, key, node) => {
+  if (key === 'href' && node?.tagName === 'a' && value.trim().toLowerCase().startsWith('file:')) {
+    return value
+  }
+  return commentMarkdownUrlTransform(value, key, node)
+}
+
 export const commentMarkdownSanitizeSchema: SanitizeSchema = {
   ...defaultSchema,
   tagNames: [...(defaultSchema.tagNames ?? []), 'details', 'summary', 'sub', 'sup', 'ins', 'kbd'],

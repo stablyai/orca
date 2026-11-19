@@ -1,0 +1,621 @@
+diff --git a/dist/index.d.ts b/dist/index.d.ts
+index 4ed30715a4c63a350be86c27e1f63e808f47757a..73fa39ba321571e37aaa7841ec57e77a97411a83 100644
+--- a/dist/index.d.ts
++++ b/dist/index.d.ts
+@@ -64,3 +64,6 @@ interface RemendOptions {
+ declare const remend: (text: string, options?: RemendOptions) => string;
+ 
+ export { INCOMPLETE_IMAGE_PLACEHOLDER, type LinkMode, type RemendHandler, type RemendOptions, remend as default, isWithinCodeBlock, isWithinLinkOrImageUrl, isWithinMathBlock, isWordChar };
++
++export type RemendCopyPiece = readonly [start: number, end: number] | string;
++export declare function remendWithEdits(text: string, options: RemendOptions, onEdit: (input: string, pieces: readonly RemendCopyPiece[]) => void): string;
+diff --git a/dist/index.js b/dist/index.js
+index 388db7e02654079a8af671332624a422e8b260e0..db78e3a015f8d4da4729132880a1ef92d3fdacf3 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -1,24 +1,580 @@
+-var En=Object.defineProperty,Sn=Object.defineProperties;var On=Object.getOwnPropertyDescriptors;var w=Object.getOwnPropertySymbols;var Tn=Object.prototype.hasOwnProperty,Mn=Object.prototype.propertyIsEnumerable;var F=(n,e,r)=>e in n?En(n,e,{enumerable:true,configurable:true,writable:true,value:r}):n[e]=r,L=(n,e)=>{for(var r in e||(e={}))Tn.call(e,r)&&F(n,r,e[r]);if(w)for(var r of w(e))Mn.call(e,r)&&F(n,r,e[r]);return n},P=(n,e)=>Sn(n,On(e));var c={PROSE:0,FENCE_MARKER:1,FENCE_INFO:2,FENCE_BODY:3,CODE_SPAN:4,CODE_SPAN_OPEN:5},Cn=/^(`{3,}|~{3,})(.*)$/,Ln=n=>n!==void 0&&n>="0"&&n<="9",Pn=(n,e)=>{let r=e;if(n[r]==="-"||n[r]==="*"||n[r]==="+")r+=1;else {for(;Ln(n[r])&&r-e<9;)r+=1;if(r===e||n[r]!=="."&&n[r]!==")")return  -1;r+=1;}return n[r]===" "?r+1:-1},_n=(n,e,r)=>{let t=0,i=e,o=false,s=e;for(;;){for(;s<r&&n[s]===" ";)s+=1;if(n[s]===">"){t+=1,s+=n[s+1]===" "?2:1,i=s,o=false;continue}let l=s<r?Pn(n,s):-1;if(l===-1)return {contentStart:s,listIndent:o?s-i:0,quoteDepth:t};s=l,o=true;}},Rn=(n,e,r,t)=>{let i=e;for(let o=0;o<t;o+=1){for(;i<r&&n[i]===" ";)i+=1;if(n[i]!==">")return  -1;i+=1,n[i]===" "&&(i+=1);}return i},Nn=(n,e,r,t,i)=>{let o=e+t;n.fill(c.FENCE_MARKER,o,o+i),n.fill(c.FENCE_INFO,o+i,Math.min(r+1,n.length));},yn=(n,e,r,t)=>{let i=e;for(;i<r&&n[i]===" ";)i+=1;let o=0;for(;i<r&&n[i]===t.char;)i+=1,o+=1;if(o<t.length)return  false;for(;i<r;){if(n[i]!==" "&&n[i]!=="	"&&n[i]!=="\r")return  false;i+=1;}return  true},$n=(n,e,r,t)=>{let i=t>r&&n[t-1]==="\r"?t-1:t,o=_n(n,r,i),s=n.slice(o.contentStart,i).match(Cn);if(!s)return null;let[,l,a]=s,u=l[0];return u==="`"&&a.includes("`")?null:(Nn(e,r,t,o.contentStart-r,l.length),{char:u,length:l.length,listIndent:o.listIndent,quoteDepth:o.quoteDepth})},Un=(n,e,r,t)=>{let i=Rn(n,e,r,t.quoteDepth);if(i===-1||t.listIndent===0)return i;let o=i;for(;o<r&&n[o]===" ";)o+=1;return o===r||n[o]==="\r"&&o+1===r||o-i>=t.listIndent?i:-1},Dn=(n,e)=>{let r=n.length,t=null,i=0;for(;i<r;){let o=n.indexOf(`
+-`,i);o===-1&&(o=r);let s=t?Un(n,i,o,t):-1;t&&s===-1&&(t=null),t?yn(n,s,o,t)?(e.fill(c.FENCE_MARKER,i,o),t=null):e.fill(c.FENCE_BODY,i,Math.min(o+1,r)):t=$n(n,e,i,o),i=o+1;}return t},W=(n,e)=>{let r=e+1;for(;r<n.length&&n[r]==="`";)r+=1;return r},Bn=(n,e)=>{let r=e+1;for(;r<n.length&&(n[r]===" "||n[r]==="	"||n[r]==="\r");)r+=1;return r<n.length&&n[r]===`
+-`},wn=(n,e,r)=>{let t=r;for(;;){let i=n.indexOf("`",t);if(i===-1)return  -1;let o=i>t&&n[i-1]==="\\"&&e[i-1]===c.PROSE;if(e[i]===c.PROSE&&!o)return i;t=i+1;}},Fn=(n,e)=>{let r=n.length,t=-1,i=0,o=0;for(;o<r;){if(t<0){if(o=wn(n,e,o),o===-1)break;let l=W(n,o);t=o,i=l-o,o=l;continue}if(e[o]!==c.PROSE){e.fill(c.CODE_SPAN_OPEN,t,o),t=-1,o+=1;continue}if(n[o]===`
+-`&&Bn(n,o)){t=-1,o+=1;continue}if(n[o]!=="`"){o+=1;continue}let s=W(n,o);s-o===i&&(e.fill(c.CODE_SPAN,t,s),t=-1),o=s;}return t>=0?(e.fill(c.CODE_SPAN_OPEN,t,r),{start:t,runLength:i}):null},Wn=n=>{let e=new Uint8Array(n.length),r=Dn(n,e),t=Fn(n,e);return {text:n,regions:e,openFence:r,openSpan:t,mathMask:null,linkUrlMask:null,htmlTagMask:null}},_=null,T=null,g=n=>{if(T!==null&&n===_)return T;let e=Wn(n);return _=n,T=e,e},K=()=>{_=null,T=null;},H=(n,e)=>e>=n.regions.length?n.openFence!==null||n.openSpan!==null:e<0?false:n.regions[e]!==c.PROSE,G=(n,e)=>{if(e>=n.regions.length)return n.openFence!==null;if(e<0)return  false;let r=n.regions[e];return r===c.FENCE_MARKER||r===c.FENCE_INFO||r===c.FENCE_BODY},X=(n,e)=>n.regions[e]===c.CODE_SPAN,I=(n,e)=>{let r=g(n),t=e+e,i=0;for(let o=n.indexOf(t);o!==-1;o=n.indexOf(t,o))r.regions[o]===c.PROSE?(i+=1,o+=2):o+=1;return i},R=new Uint8Array(0),Kn=n=>n==="inlineLatex"||n==="blockLatex",Hn=(n,e)=>e==="["&&n==="none"?"blockLatex":e==="]"&&n==="blockLatex"?"none":e==="("&&n==="none"?"inlineLatex":e===")"&&n==="inlineLatex"?"none":null,Gn=(n,e)=>e?n==="blockDollar"?"none":"blockDollar":n==="blockDollar"?n:n==="inlineDollar"?"none":"inlineDollar",Xn=n=>n.includes("$")||n.includes("\\(")||n.includes("\\["),Yn=(n,e,r)=>{let t=n[e+1];if(n[e]==="\\"){if(t==="$")return {context:r,length:2};let i=Hn(r,t);return i===null?null:{context:i,length:2}}if(n[e]==="$"&&!Kn(r)){let i=t==="$";return {context:Gn(r,i),length:i?2:1}}return null},qn=n=>{let{text:e,regions:r}=n,t=e.length,i=new Uint8Array(t),o="none",s=0;for(;s<t;){i[s]=o==="none"?0:1;let l=r[s]===c.PROSE?Yn(e,s,o):null;if(l===null){s+=1;continue}o=l.context,l.length===2&&(i[s+1]=o==="none"?0:1),s+=l.length;}return i},k=(n,e)=>e<0||e>=n.text.length?false:(n.mathMask===null&&(n.mathMask=Xn(n.text)?qn(n):R),n.mathMask[e]===1),vn=(n,e,r,t)=>{let{text:i,regions:o}=n,s=new Uint8Array(r-e),l=0;for(let u=r-1;u>=e;u-=1)i[u]===")"&&o[u]===c.PROSE&&(l=1),s[u-e]=l;let a=false;for(let u=e;u<r;u+=1)a&&s[u-e]===1&&(t[u]=1),o[u]===c.PROSE&&(i[u]===")"?a=false:i[u]==="("&&(a=u>0&&i[u-1]==="]"));},zn=n=>{let{text:e}=n,r=e.length,t=new Uint8Array(r),i=0;for(;i<r;){let o=e.indexOf(`
+-`,i);o===-1&&(o=r),vn(n,i,o,t),i=o+1;}return t},A=(n,e)=>e<0||e>=n.text.length?false:(n.linkUrlMask===null&&(n.linkUrlMask=n.text.includes("](")?zn(n):R),n.linkUrlMask[e]===1),Qn=n=>{let{text:e,regions:r}=n,t=e.length,i=new Uint8Array(t),o=false;for(let s=0;s<t;s+=1){if(e[s]===`
+-`){o=false;continue}if(i[s]=o?1:0,r[s]===c.PROSE){if(e[s]===">")o=false;else if(e[s]==="<"){let l=e[s+1];o=l!==void 0&&(l>="a"&&l<="z"||l>="A"&&l<="Z"||l==="/");}}}return i},M=(n,e)=>e<0||e>=n.text.length?false:(n.htmlTagMask===null&&(n.htmlTagMask=n.text.includes("<")?Qn(n):R),n.htmlTagMask[e]===1);var f=(n,e)=>H(g(n),e),h=(n,e)=>X(g(n),e);var Zn=/^(\s*(?:[-*+]|\d+[.)]) +)>(=?\s*[$]?\d)/gm,Y=n=>!n||typeof n!="string"||!n.includes(">")?n:n.replace(Zn,(e,r,t,i)=>f(n,i)?e:`${r}\\>${t}`);var p=(n,{delimiter:e,markerLength:r,regex:t})=>{let i=n.lastIndexOf(e,n.length-2),o=i===-1?n.length-1:i;return n.slice(Math.max(0,o-r+1)).match(t)},q={delimiter:"*",markerLength:2,regex:/(\*\*)([^*]*\*?)$/},v={delimiter:"_",markerLength:2,regex:/(__)([^_]*?)$/},z={delimiter:"*",markerLength:3,regex:/(\*\*\*)([^*]*?)$/},Q={delimiter:"*",markerLength:1,regex:/(\*)([^*]*?)$/},Z={delimiter:"_",markerLength:1,regex:/(_)([^_]*?)$/},j={delimiter:"~",markerLength:2,regex:/(~~)([^~]*?)$/},J={delimiter:"_",markerLength:2,regex:/(__)([^_]+)_$/},V={delimiter:"~",markerLength:2,regex:/(~~)([^~]+)~$/},b=/^[\s_~*`]*$/,N=/^[\s]*[-*+][\s]+$/,x=/[\p{L}\p{N}_]/u,nn=/^\*{4,}$/;var m=n=>{if(!n)return  false;let e=n.charCodeAt(0);return e>=48&&e<=57||e>=65&&e<=90||e>=97&&e<=122||e===95?true:x.test(n)},jn=(n,e)=>G(g(n),e),en=(n,e)=>{let r=1;for(let t=e-1;t>=0;t-=1)if(n[t]==="]")r+=1;else if(n[t]==="["&&(r-=1,r===0))return t;return  -1},y=(n,e)=>{let r=1;for(let t=e+1;t<n.length;t+=1)if(n[t]==="[")r+=1;else if(n[t]==="]"&&(r-=1,r===0))return t;return  -1},$=(n,e)=>k(g(n),e),Jn=(n,e)=>A(g(n),e);var O=(n,e,r)=>{let t=0;for(let a=e-1;a>=0;a-=1)if(n[a]===`
+-`){t=a+1;break}let i=n.length;for(let a=e;a<n.length;a+=1)if(n[a]===`
+-`){i=a;break}let o=n.substring(t,i),s=0,l=false;for(let a of o)if(a===r)s+=1;else if(a!==" "&&a!=="	"){l=true;break}return s>=3&&!l};var Vn=(n,e,r,t)=>r==="\\"||k(n,e)?true:r!=="*"&&t==="*"?(e<n.text.length-2?n.text[e+2]:"")!=="*":r==="*"||(!r||r===" "||r==="	"||r===`
+-`)&&(!t||t===" "||t==="	"||t===`
+-`),C=n=>n===" "||n==="	"||n===`
+-`,xn=(n,e)=>!!(n&&e&&m(n)&&m(e)),ne=(n,e,r,t)=>{let i=xn(n,e),o=!!e&&!C(e),s=!!n&&!C(n);return i&&r%2===0&&!t?{count:false}:s&&r%2===1||o?{count:true,inWordAsteriskChain:i}:{count:false}},on=n=>{let e=g(n),r=0,t=false,i=n.length;for(let o=0;o<i;o+=1){if(n[o]!=="*"||e.regions[o]!==c.PROSE){m(n[o])||(t=false);continue}let s=o>0?n[o-1]:"",l=o<i-1?n[o+1]:"";if(Vn(e,o,s,l))continue;let a=ne(s,l,r,t);a.count&&(r+=1,t=a.inWordAsteriskChain);}return r},ee=(n,e,r,t)=>!!(r==="\\"||k(n,e)||A(n,e)||M(n,e)||r==="_"||t==="_"||r&&t&&m(r)&&m(t)),re=n=>{let e=g(n),r=0,t=n.length;for(let i=0;i<t;i+=1){if(n[i]!=="_"||e.regions[i]!==c.PROSE)continue;let o=i>0?n[i-1]:"",s=i<t-1?n[i+1]:"";ee(e,i,o,s)||(r+=1);}return r},te=n=>{let e=g(n),r=0,t=0;for(let i=0;i<n.length;i+=1)n[i]==="*"&&e.regions[i]===c.PROSE?t+=1:(t>=3&&(r+=Math.floor(t/3)),t=0);return t>=3&&(r+=Math.floor(t/3)),r},U=n=>I(n,"*"),rn=n=>n===""||n===" "||n==="	"||n===`
+-`,ie=(n,e,r,t,i)=>{if(!(rn(r)&&rn(t)))return  false;if(e>i.lineEnd){let o=n.indexOf(`
+-`,e);i.lineEnd=o===-1?n.length:o,i.result=O(n,e,"_");}return i.result},oe=(n,e,r,t)=>{let i=n.text,o=e,s=false;o>0&&i[o-1]==="\\"&&(o+=1,s=true);let l=r-o;if(l<2)return  false;let a=o>0?i[o-1]:"",u=s?"\\":a,S=r<i.length?i[r]:"";return m(u)&&m(S)||ie(i,o,u,S,t)||k(n,o)||A(n,o)||M(n,o)?false:Math.floor(l/2)%2===1},tn=n=>{let e=g(n),r=n.length,t={lineEnd:-1,result:false},i=false,o=0;for(;o<r;){if(n[o]!=="_"||e.regions[o]!==c.PROSE){o+=1;continue}let s=o,l=o+1;for(;l<r&&n[l]==="_"&&e.regions[l]===c.PROSE;)l+=1;o=l,oe(e,s,l,t)&&(i=!i);}return i},se=(n,e,r)=>{if(!e||b.test(e))return  true;let i=n.substring(0,r).lastIndexOf(`
+-`),o=i===-1?0:i+1,s=n.substring(o,r);return N.test(s)&&e.includes(`
+-`)?true:O(n,r,"*")},sn=n=>{let e=p(n,q);if(!e)return n;let r=e[2],t=n.lastIndexOf(e[1]);return f(n,t)||h(n,t)||se(n,r,t)?n:U(n)%2===1?r.endsWith("*")?`${n}*`:`${n}**`:n},le=(n,e,r)=>{if(!e||b.test(e))return  true;let i=n.substring(0,r).lastIndexOf(`
+-`),o=i===-1?0:i+1,s=n.substring(o,r);return N.test(s)&&e.includes(`
+-`)?true:O(n,r,"_")},ln=n=>{let e=p(n,v);if(!e){let i=p(n,J);if(i){let o=n.lastIndexOf(i[1]);if(!(f(n,o)||h(n,o))&&tn(n))return `${n}_`}return n}let r=e[2],t=n.lastIndexOf(e[1]);return f(n,t)||h(n,t)||le(n,r,t)?n:tn(n)?`${n}__`:n},ae=(n,e)=>{let{text:r}=n;return r[e]==="*"&&n.regions[e]===c.PROSE&&r[e-1]!=="*"&&r[e+1]!=="*"&&r[e-1]!=="\\"&&!k(n,e)},ce=n=>{let e=g(n);for(let r=n.indexOf("*");r!==-1;r=n.indexOf("*",r+1)){if(!ae(e,r))continue;let t=r>0?n[r-1]:"",i=r<n.length-1?n[r+1]:"",o=!t||C(t),s=!i||C(i);if(!(o&&s)&&!(t&&i&&m(t)&&m(i))&&!s)return r}return  -1},an=n=>{if(!p(n,Q))return n;let r=ce(n);if(r===-1||f(n,r)||h(n,r))return n;let t=n.substring(r+1);return !t||b.test(t)?n:on(n)%2===1?`${n}*`:n},cn=n=>{let e=g(n);for(let r=n.indexOf("_");r!==-1;r=n.indexOf("_",r+1))if(e.regions[r]===c.PROSE&&n[r-1]!=="_"&&n[r+1]!=="_"&&n[r-1]!=="\\"&&!k(e,r)&&!A(e,r)){let t=r>0?n[r-1]:"",i=r<n.length-1?n[r+1]:"";if(t&&i&&m(t)&&m(i))continue;return r}return  -1},ue=n=>{let e=n.length;for(;e>0&&n[e-1]===`
+-`;)e-=1;if(e<n.length){let r=n.slice(0,e),t=n.slice(e);return `${r}_${t}`}return `${n}_`},fe=n=>{if(!n.endsWith("**"))return null;let e=n.slice(0,-2);if(U(e)%2!==1)return null;let t=e.indexOf("**"),i=cn(e);return t!==-1&&i!==-1&&t<i?`${e}_**`:null},un=n=>{if(!p(n,Z))return n;let r=cn(n);if(r===-1)return n;let t=n.substring(r+1);if(!t||b.test(t)||f(n,r)||h(n,r))return n;if(re(n)%2===1){let o=fe(n);return o!==null?o:ue(n)}return n},ge=n=>{let e=U(n),r=on(n);return e%2===0&&r%2===0},de=(n,e,r)=>!e||b.test(e)||f(n,r)||h(n,r)?true:O(n,r,"*"),fn=n=>{if(nn.test(n))return n;let e=p(n,z);if(!e)return n;let r=e[2],t=n.lastIndexOf(e[1]);return de(n,r,t)?n:te(n)%2===1?ge(n)?n:`${n}***`:n};var me=/<[a-zA-Z/][^>]*$/,he=/[a-zA-Z/]/,pe=n=>n.includes("$")||n.includes("\\(")||n.includes("\\["),be=(n,e)=>{let r=n[e+1];return r!==void 0&&he.test(r)},gn=n=>{let e=n.match(me);if(!e||e.index===void 0)return n;let r=pe(n);for(let t=e.index;t<n.length;t+=1)if(!(n[t]!=="<"||!be(n,t))&&!f(n,t)&&!(r&&$(n,t)))return n.substring(0,t).trimEnd();return n};var dn=n=>{let e=g(n);if(e.openFence)return n;let r=e.openSpan;if(!r)return n;let t=n.slice(r.start+r.runLength);if(!t||b.test(t))return n;let i=0,o=n.length-1;for(;o>=0&&n[o]==="`";)i+=1,o-=1;return i>=r.runLength?n:n+"`".repeat(r.runLength-i)};var ke=n=>I(n,"$"),Ie=n=>{let e=g(n),r=0;for(let t=0;t<n.length;t+=1){if(n[t]==="\\"){t+=1;continue}e.regions[t]===c.PROSE&&n[t]==="$"&&(t+1<n.length&&n[t+1]==="$"?t+=1:r+=1);}return r},Ae=n=>{if(n.endsWith("$")&&!n.endsWith("$$"))return `${n}$`;let e=n.indexOf("$$");return e!==-1&&n.indexOf(`
+-`,e)!==-1&&!n.endsWith(`
+-`)?`${n}
+-$$`:`${n}$$`},mn=n=>ke(n)%2===0?n:Ae(n),hn=n=>Ie(n)%2===1?`${n}$`:n;var E="streamdown:incomplete-image",Ee=(n,e,r)=>{if(n.substring(e+2).includes(")"))return null;let i=en(n,e);if(i===-1||f(n,i))return null;let o=i>0&&n[i-1]==="!",s=o?i-1:i,l=n.substring(0,s),a=n.substring(i+1,e);return o?`${l}![${a}](${E})`:r==="text-only"?`${l}${a}`:`${l}[${a}](streamdown:incomplete-link)`},pn=(n,e)=>{for(let r=0;r<e;r++)if(n[r]==="["&&!f(n,r)){if(r>0&&n[r-1]==="!")continue;let t=y(n,r);if(t===-1)return r;if(t+1<n.length&&n[t+1]==="("){let i=n.indexOf(")",t+2);i!==-1&&(r=i);}}return e},Se=(n,e,r)=>{let t=e>0&&n[e-1]==="!",i=t?e-1:e;if(!n.substring(e+1).includes("]")){let l=n.substring(0,i);if(t){let a=n.substring(e+1);return `${l}![${a}](${E})`}if(r==="text-only"){let a=pn(n,e);return n.substring(0,a)+n.substring(a+1)}return `${n}](streamdown:incomplete-link)`}if(y(n,e)===-1){let l=n.substring(0,i);if(t){let a=n.substring(e+1);return `${l}![${a}](${E})`}if(r==="text-only"){let a=pn(n,e);return n.substring(0,a)+n.substring(a+1)}return `${n}](streamdown:incomplete-link)`}return null},Oe=(n,e)=>{let r=n.lastIndexOf("](");if(r!==-1&&!f(n,r)){let t=Ee(n,r,e);if(t!==null)return t}for(let t=n.lastIndexOf("[");t!==-1;t=t===0?-1:n.lastIndexOf("[",t-1))if(!f(n,t)){let i=Se(n,t,e);if(i!==null)return i}return n},Te=32,D=(n,e="protocol")=>{let r=n;for(let t=0;t<Te;t+=1){let i=Oe(r,e);if(i.length>=r.length)return i;r=i;}return r};var Me=/^-{1,2}$/,Ce=/^[\s]*-{1,2}[\s]+$/,Le=/^={1,2}$/,Pe=/^[\s]*={1,2}[\s]+$/,bn=n=>{if(!n||typeof n!="string")return n;let e=n.lastIndexOf(`
+-`);if(e===-1)return n;let r=n.substring(e+1),t=n.substring(0,e),i=r.trim();if(Me.test(i)&&!r.match(Ce)){let s=t.split(`
+-`).at(-1);if(s&&s.trim().length>0)return `${n}\u200B`}if(Le.test(i)&&!r.match(Pe)){let s=t.split(`
+-`).at(-1);if(s&&s.trim().length>0)return `${n}\u200B`}return n};var _e=/([\p{L}\p{N}_])~(?!~)(?=[\p{L}\p{N}_])/gu,kn=n=>!n||typeof n!="string"||!n.includes("~")?n:n.replace(_e,(e,r,t)=>{let i=t+r.length;return f(n,i)?e:`${r}\\~`});var In=n=>I(n,"~"),An=n=>{let e=p(n,j);if(e){let r=e[2];if(!r||b.test(r))return n;let t=n.lastIndexOf(e[1]);if(f(n,t)||h(n,t))return n;if(In(n)%2===1)return `${n}~~`}else {let r=p(n,V);if(r){let t=n.lastIndexOf(r[0].slice(0,2));if(f(n,t)||h(n,t))return n;if(In(n)%2===1)return `${n}~`}}return n};var B=n=>n!==false,Re=n=>n===true,d={SINGLE_TILDE:0,COMPARISON_OPERATORS:5,HTML_TAGS:10,SETEXT_HEADINGS:15,LINKS:20,BOLD_ITALIC:30,BOLD:35,ITALIC_DOUBLE_UNDERSCORE:40,ITALIC_SINGLE_ASTERISK:41,ITALIC_SINGLE_UNDERSCORE:42,INLINE_CODE:50,STRIKETHROUGH:60,KATEX:70,INLINE_KATEX:75,DEFAULT:100},Ne=[{handler:{name:"singleTilde",handle:kn,priority:d.SINGLE_TILDE},optionKey:"singleTilde"},{handler:{name:"comparisonOperators",handle:Y,priority:d.COMPARISON_OPERATORS},optionKey:"comparisonOperators"},{handler:{name:"htmlTags",handle:gn,priority:d.HTML_TAGS},optionKey:"htmlTags"},{handler:{name:"setextHeadings",handle:bn,priority:d.SETEXT_HEADINGS},optionKey:"setextHeadings"},{handler:{name:"links",handle:D,priority:d.LINKS},optionKey:"links",earlyReturn:n=>n.endsWith("](streamdown:incomplete-link)")||n.endsWith(`](${E})`)},{handler:{name:"boldItalic",handle:fn,priority:d.BOLD_ITALIC},optionKey:"boldItalic"},{handler:{name:"bold",handle:sn,priority:d.BOLD},optionKey:"bold"},{handler:{name:"italicDoubleUnderscore",handle:ln,priority:d.ITALIC_DOUBLE_UNDERSCORE},optionKey:"italic"},{handler:{name:"italicSingleAsterisk",handle:an,priority:d.ITALIC_SINGLE_ASTERISK},optionKey:"italic"},{handler:{name:"italicSingleUnderscore",handle:un,priority:d.ITALIC_SINGLE_UNDERSCORE},optionKey:"italic"},{handler:{name:"inlineCode",handle:dn,priority:d.INLINE_CODE},optionKey:"inlineCode"},{handler:{name:"strikethrough",handle:An,priority:d.STRIKETHROUGH},optionKey:"strikethrough"},{handler:{name:"katex",handle:mn,priority:d.KATEX},optionKey:"katex"},{handler:{name:"inlineKatex",handle:hn,priority:d.INLINE_KATEX},optionKey:"inlineKatex"}],ye=n=>{var r;let e=(r=n==null?void 0:n.linkMode)!=null?r:"protocol";return Ne.filter(({handler:t,optionKey:i})=>t.name==="links"?B(n==null?void 0:n.links)||B(n==null?void 0:n.images):t.name==="inlineKatex"?Re(n==null?void 0:n.inlineKatex):B(n==null?void 0:n[i])).map(({handler:t,earlyReturn:i})=>t.name==="links"?{handler:P(L({},t),{handle:o=>D(o,e)}),earlyReturn:e==="protocol"?i:void 0}:{handler:t,earlyReturn:i})},$e=(n,e)=>{var s;if(!n||typeof n!="string")return n;let r=n.endsWith(" ")&&!n.endsWith("  ")?n.slice(0,-1):n,t=ye(e),i=((s=e==null?void 0:e.handlers)!=null?s:[]).map(l=>{var a;return {handler:P(L({},l),{priority:(a=l.priority)!=null?a:d.DEFAULT}),earlyReturn:void 0}}),o=[...t,...i].sort((l,a)=>{var u,S;return ((u=l.handler.priority)!=null?u:0)-((S=a.handler.priority)!=null?S:0)});try{for(let{handler:l,earlyReturn:a}of o)if(r=l.handle(r),a!=null&&a(r))return r;return r.endsWith(" ")&&!r.endsWith("  ")?r.slice(0,-1):r}finally{K();}},Or=$e;export{E as INCOMPLETE_IMAGE_PLACEHOLDER,Or as default,jn as isWithinCodeBlock,Jn as isWithinLinkOrImageUrl,$ as isWithinMathBlock,m as isWordChar};
+\ No newline at end of file
++var En = Object.defineProperty, Sn = Object.defineProperties;
++var On = Object.getOwnPropertyDescriptors;
++var w = Object.getOwnPropertySymbols;
++var Tn = Object.prototype.hasOwnProperty, Mn = Object.prototype.propertyIsEnumerable;
++var F = (n, e, r) => e in n ? En(n, e, { enumerable: true, configurable: true, writable: true, value: r }) : n[e] = r, L = (n, e) => {
++  for (var r in e || (e = {})) Tn.call(e, r) && F(n, r, e[r]);
++  if (w) for (var r of w(e)) Mn.call(e, r) && F(n, r, e[r]);
++  return n;
++}, P = (n, e) => Sn(n, On(e));
++var c = { PROSE: 0, FENCE_MARKER: 1, FENCE_INFO: 2, FENCE_BODY: 3, CODE_SPAN: 4, CODE_SPAN_OPEN: 5 }, Cn = /^(`{3,}|~{3,})(.*)$/, Ln = (n) => n !== void 0 && n >= "0" && n <= "9", Pn = (n, e) => {
++  let r = e;
++  if (n[r] === "-" || n[r] === "*" || n[r] === "+") r += 1;
++  else {
++    for (; Ln(n[r]) && r - e < 9; ) r += 1;
++    if (r === e || n[r] !== "." && n[r] !== ")") return -1;
++    r += 1;
++  }
++  return n[r] === " " ? r + 1 : -1;
++}, _n = (n, e, r) => {
++  let t = 0, i = e, o = false, s = e;
++  for (; ; ) {
++    for (; s < r && n[s] === " "; ) s += 1;
++    if (n[s] === ">") {
++      t += 1, s += n[s + 1] === " " ? 2 : 1, i = s, o = false;
++      continue;
++    }
++    let l = s < r ? Pn(n, s) : -1;
++    if (l === -1) return { contentStart: s, listIndent: o ? s - i : 0, quoteDepth: t };
++    s = l, o = true;
++  }
++}, Rn = (n, e, r, t) => {
++  let i = e;
++  for (let o = 0; o < t; o += 1) {
++    for (; i < r && n[i] === " "; ) i += 1;
++    if (n[i] !== ">") return -1;
++    i += 1, n[i] === " " && (i += 1);
++  }
++  return i;
++}, Nn = (n, e, r, t, i) => {
++  let o = e + t;
++  n.fill(c.FENCE_MARKER, o, o + i), n.fill(c.FENCE_INFO, o + i, Math.min(r + 1, n.length));
++}, yn = (n, e, r, t) => {
++  let i = e;
++  for (; i < r && n[i] === " "; ) i += 1;
++  let o = 0;
++  for (; i < r && n[i] === t.char; ) i += 1, o += 1;
++  if (o < t.length) return false;
++  for (; i < r; ) {
++    if (n[i] !== " " && n[i] !== "	" && n[i] !== "\r") return false;
++    i += 1;
++  }
++  return true;
++}, $n = (n, e, r, t) => {
++  let i = t > r && n[t - 1] === "\r" ? t - 1 : t, o = _n(n, r, i), s = n.slice(o.contentStart, i).match(Cn);
++  if (!s) return null;
++  let [, l, a] = s, u = l[0];
++  return u === "`" && a.includes("`") ? null : (Nn(e, r, t, o.contentStart - r, l.length), { char: u, length: l.length, listIndent: o.listIndent, quoteDepth: o.quoteDepth });
++}, Un = (n, e, r, t) => {
++  let i = Rn(n, e, r, t.quoteDepth);
++  if (i === -1 || t.listIndent === 0) return i;
++  let o = i;
++  for (; o < r && n[o] === " "; ) o += 1;
++  return o === r || n[o] === "\r" && o + 1 === r || o - i >= t.listIndent ? i : -1;
++}, Dn = (n, e) => {
++  let r = n.length, t = null, i = 0;
++  for (; i < r; ) {
++    let o = n.indexOf(`
++`, i);
++    o === -1 && (o = r);
++    let s = t ? Un(n, i, o, t) : -1;
++    t && s === -1 && (t = null), t ? yn(n, s, o, t) ? (e.fill(c.FENCE_MARKER, i, o), t = null) : e.fill(c.FENCE_BODY, i, Math.min(o + 1, r)) : t = $n(n, e, i, o), i = o + 1;
++  }
++  return t;
++}, W = (n, e) => {
++  let r = e + 1;
++  for (; r < n.length && n[r] === "`"; ) r += 1;
++  return r;
++}, Bn = (n, e) => {
++  let r = e + 1;
++  for (; r < n.length && (n[r] === " " || n[r] === "	" || n[r] === "\r"); ) r += 1;
++  return r < n.length && n[r] === `
++`;
++}, wn = (n, e, r) => {
++  let t = r;
++  for (; ; ) {
++    let i = n.indexOf("`", t);
++    if (i === -1) return -1;
++    let o = i > t && n[i - 1] === "\\" && e[i - 1] === c.PROSE;
++    if (e[i] === c.PROSE && !o) return i;
++    t = i + 1;
++  }
++}, Fn = (n, e) => {
++  let r = n.length, t = -1, i = 0, o = 0;
++  for (; o < r; ) {
++    if (t < 0) {
++      if (o = wn(n, e, o), o === -1) break;
++      let l = W(n, o);
++      t = o, i = l - o, o = l;
++      continue;
++    }
++    if (e[o] !== c.PROSE) {
++      e.fill(c.CODE_SPAN_OPEN, t, o), t = -1, o += 1;
++      continue;
++    }
++    if (n[o] === `
++` && Bn(n, o)) {
++      t = -1, o += 1;
++      continue;
++    }
++    if (n[o] !== "`") {
++      o += 1;
++      continue;
++    }
++    let s = W(n, o);
++    s - o === i && (e.fill(c.CODE_SPAN, t, s), t = -1), o = s;
++  }
++  return t >= 0 ? (e.fill(c.CODE_SPAN_OPEN, t, r), { start: t, runLength: i }) : null;
++}, Wn = (n) => {
++  let e = new Uint8Array(n.length), r = Dn(n, e), t = Fn(n, e);
++  return { text: n, regions: e, openFence: r, openSpan: t, mathMask: null, linkUrlMask: null, htmlTagMask: null };
++}, _ = null, T = null, g = (n) => {
++  if (T !== null && n === _) return T;
++  let e = Wn(n);
++  return _ = n, T = e, e;
++}, K = () => {
++  _ = null, T = null;
++}, H = (n, e) => e >= n.regions.length ? n.openFence !== null || n.openSpan !== null : e < 0 ? false : n.regions[e] !== c.PROSE, G = (n, e) => {
++  if (e >= n.regions.length) return n.openFence !== null;
++  if (e < 0) return false;
++  let r = n.regions[e];
++  return r === c.FENCE_MARKER || r === c.FENCE_INFO || r === c.FENCE_BODY;
++}, X = (n, e) => n.regions[e] === c.CODE_SPAN, I = (n, e) => {
++  let r = g(n), t = e + e, i = 0;
++  for (let o = n.indexOf(t); o !== -1; o = n.indexOf(t, o)) r.regions[o] === c.PROSE ? (i += 1, o += 2) : o += 1;
++  return i;
++}, R = new Uint8Array(0), Kn = (n) => n === "inlineLatex" || n === "blockLatex", Hn = (n, e) => e === "[" && n === "none" ? "blockLatex" : e === "]" && n === "blockLatex" ? "none" : e === "(" && n === "none" ? "inlineLatex" : e === ")" && n === "inlineLatex" ? "none" : null, Gn = (n, e) => e ? n === "blockDollar" ? "none" : "blockDollar" : n === "blockDollar" ? n : n === "inlineDollar" ? "none" : "inlineDollar", Xn = (n) => n.includes("$") || n.includes("\\(") || n.includes("\\["), Yn = (n, e, r) => {
++  let t = n[e + 1];
++  if (n[e] === "\\") {
++    if (t === "$") return { context: r, length: 2 };
++    let i = Hn(r, t);
++    return i === null ? null : { context: i, length: 2 };
++  }
++  if (n[e] === "$" && !Kn(r)) {
++    let i = t === "$";
++    return { context: Gn(r, i), length: i ? 2 : 1 };
++  }
++  return null;
++}, qn = (n) => {
++  let { text: e, regions: r } = n, t = e.length, i = new Uint8Array(t), o = "none", s = 0;
++  for (; s < t; ) {
++    i[s] = o === "none" ? 0 : 1;
++    let l = r[s] === c.PROSE ? Yn(e, s, o) : null;
++    if (l === null) {
++      s += 1;
++      continue;
++    }
++    o = l.context, l.length === 2 && (i[s + 1] = o === "none" ? 0 : 1), s += l.length;
++  }
++  return i;
++}, k = (n, e) => e < 0 || e >= n.text.length ? false : (n.mathMask === null && (n.mathMask = Xn(n.text) ? qn(n) : R), n.mathMask[e] === 1), vn = (n, e, r, t) => {
++  let { text: i, regions: o } = n, s = new Uint8Array(r - e), l = 0;
++  for (let u = r - 1; u >= e; u -= 1) i[u] === ")" && o[u] === c.PROSE && (l = 1), s[u - e] = l;
++  let a = false;
++  for (let u = e; u < r; u += 1) a && s[u - e] === 1 && (t[u] = 1), o[u] === c.PROSE && (i[u] === ")" ? a = false : i[u] === "(" && (a = u > 0 && i[u - 1] === "]"));
++}, zn = (n) => {
++  let { text: e } = n, r = e.length, t = new Uint8Array(r), i = 0;
++  for (; i < r; ) {
++    let o = e.indexOf(`
++`, i);
++    o === -1 && (o = r), vn(n, i, o, t), i = o + 1;
++  }
++  return t;
++}, A = (n, e) => e < 0 || e >= n.text.length ? false : (n.linkUrlMask === null && (n.linkUrlMask = n.text.includes("](") ? zn(n) : R), n.linkUrlMask[e] === 1), Qn = (n) => {
++  let { text: e, regions: r } = n, t = e.length, i = new Uint8Array(t), o = false;
++  for (let s = 0; s < t; s += 1) {
++    if (e[s] === `
++`) {
++      o = false;
++      continue;
++    }
++    if (i[s] = o ? 1 : 0, r[s] === c.PROSE) {
++      if (e[s] === ">") o = false;
++      else if (e[s] === "<") {
++        let l = e[s + 1];
++        o = l !== void 0 && (l >= "a" && l <= "z" || l >= "A" && l <= "Z" || l === "/");
++      }
++    }
++  }
++  return i;
++}, M = (n, e) => e < 0 || e >= n.text.length ? false : (n.htmlTagMask === null && (n.htmlTagMask = n.text.includes("<") ? Qn(n) : R), n.htmlTagMask[e] === 1);
++var f = (n, e) => H(g(n), e), h = (n, e) => X(g(n), e);
++var Zn = /^(\s*(?:[-*+]|\d+[.)]) +)>(=?\s*[$]?\d)/gm, Y = (n) => !n || typeof n != "string" || !n.includes(">") ? n : originReplace(n, Zn, (e, r, t, i) => f(n, i) ? [[i, i + e.length]] : [[i, i + r.length], "\\", [i + r.length, i + e.length]]);
++var p = (n, { delimiter: e, markerLength: r, regex: t }) => {
++  let i = n.lastIndexOf(e, n.length - 2), o = i === -1 ? n.length - 1 : i;
++  return n.slice(Math.max(0, o - r + 1)).match(t);
++}, q = { delimiter: "*", markerLength: 2, regex: /(\*\*)([^*]*\*?)$/ }, v = { delimiter: "_", markerLength: 2, regex: /(__)([^_]*?)$/ }, z = { delimiter: "*", markerLength: 3, regex: /(\*\*\*)([^*]*?)$/ }, Q = { delimiter: "*", markerLength: 1, regex: /(\*)([^*]*?)$/ }, Z = { delimiter: "_", markerLength: 1, regex: /(_)([^_]*?)$/ }, j = { delimiter: "~", markerLength: 2, regex: /(~~)([^~]*?)$/ }, J = { delimiter: "_", markerLength: 2, regex: /(__)([^_]+)_$/ }, V = { delimiter: "~", markerLength: 2, regex: /(~~)([^~]+)~$/ }, b = /^[\s_~*`]*$/, N = /^[\s]*[-*+][\s]+$/, x = /[\p{L}\p{N}_]/u, nn = /^\*{4,}$/;
++var m = (n) => {
++  if (!n) return false;
++  let e = n.charCodeAt(0);
++  return e >= 48 && e <= 57 || e >= 65 && e <= 90 || e >= 97 && e <= 122 || e === 95 ? true : x.test(n);
++}, jn = (n, e) => G(g(n), e), en = (n, e) => {
++  let r = 1;
++  for (let t = e - 1; t >= 0; t -= 1) if (n[t] === "]") r += 1;
++  else if (n[t] === "[" && (r -= 1, r === 0)) return t;
++  return -1;
++}, y = (n, e) => {
++  let r = 1;
++  for (let t = e + 1; t < n.length; t += 1) if (n[t] === "[") r += 1;
++  else if (n[t] === "]" && (r -= 1, r === 0)) return t;
++  return -1;
++}, $ = (n, e) => k(g(n), e), Jn = (n, e) => A(g(n), e);
++var O = (n, e, r) => {
++  let t = 0;
++  for (let a = e - 1; a >= 0; a -= 1) if (n[a] === `
++`) {
++    t = a + 1;
++    break;
++  }
++  let i = n.length;
++  for (let a = e; a < n.length; a += 1) if (n[a] === `
++`) {
++    i = a;
++    break;
++  }
++  let o = n.substring(t, i), s = 0, l = false;
++  for (let a of o) if (a === r) s += 1;
++  else if (a !== " " && a !== "	") {
++    l = true;
++    break;
++  }
++  return s >= 3 && !l;
++};
++var Vn = (n, e, r, t) => r === "\\" || k(n, e) ? true : r !== "*" && t === "*" ? (e < n.text.length - 2 ? n.text[e + 2] : "") !== "*" : r === "*" || (!r || r === " " || r === "	" || r === `
++`) && (!t || t === " " || t === "	" || t === `
++`), C = (n) => n === " " || n === "	" || n === `
++`, xn = (n, e) => !!(n && e && m(n) && m(e)), ne = (n, e, r, t) => {
++  let i = xn(n, e), o = !!e && !C(e), s = !!n && !C(n);
++  return i && r % 2 === 0 && !t ? { count: false } : s && r % 2 === 1 || o ? { count: true, inWordAsteriskChain: i } : { count: false };
++}, on = (n) => {
++  let e = g(n), r = 0, t = false, i = n.length;
++  for (let o = 0; o < i; o += 1) {
++    if (n[o] !== "*" || e.regions[o] !== c.PROSE) {
++      m(n[o]) || (t = false);
++      continue;
++    }
++    let s = o > 0 ? n[o - 1] : "", l = o < i - 1 ? n[o + 1] : "";
++    if (Vn(e, o, s, l)) continue;
++    let a = ne(s, l, r, t);
++    a.count && (r += 1, t = a.inWordAsteriskChain);
++  }
++  return r;
++}, ee = (n, e, r, t) => !!(r === "\\" || k(n, e) || A(n, e) || M(n, e) || r === "_" || t === "_" || r && t && m(r) && m(t)), re = (n) => {
++  let e = g(n), r = 0, t = n.length;
++  for (let i = 0; i < t; i += 1) {
++    if (n[i] !== "_" || e.regions[i] !== c.PROSE) continue;
++    let o = i > 0 ? n[i - 1] : "", s = i < t - 1 ? n[i + 1] : "";
++    ee(e, i, o, s) || (r += 1);
++  }
++  return r;
++}, te = (n) => {
++  let e = g(n), r = 0, t = 0;
++  for (let i = 0; i < n.length; i += 1) n[i] === "*" && e.regions[i] === c.PROSE ? t += 1 : (t >= 3 && (r += Math.floor(t / 3)), t = 0);
++  return t >= 3 && (r += Math.floor(t / 3)), r;
++}, U = (n) => I(n, "*"), rn = (n) => n === "" || n === " " || n === "	" || n === `
++`, ie = (n, e, r, t, i) => {
++  if (!(rn(r) && rn(t))) return false;
++  if (e > i.lineEnd) {
++    let o = n.indexOf(`
++`, e);
++    i.lineEnd = o === -1 ? n.length : o, i.result = O(n, e, "_");
++  }
++  return i.result;
++}, oe = (n, e, r, t) => {
++  let i = n.text, o = e, s = false;
++  o > 0 && i[o - 1] === "\\" && (o += 1, s = true);
++  let l = r - o;
++  if (l < 2) return false;
++  let a = o > 0 ? i[o - 1] : "", u = s ? "\\" : a, S = r < i.length ? i[r] : "";
++  return m(u) && m(S) || ie(i, o, u, S, t) || k(n, o) || A(n, o) || M(n, o) ? false : Math.floor(l / 2) % 2 === 1;
++}, tn = (n) => {
++  let e = g(n), r = n.length, t = { lineEnd: -1, result: false }, i = false, o = 0;
++  for (; o < r; ) {
++    if (n[o] !== "_" || e.regions[o] !== c.PROSE) {
++      o += 1;
++      continue;
++    }
++    let s = o, l = o + 1;
++    for (; l < r && n[l] === "_" && e.regions[l] === c.PROSE; ) l += 1;
++    o = l, oe(e, s, l, t) && (i = !i);
++  }
++  return i;
++}, se = (n, e, r) => {
++  if (!e || b.test(e)) return true;
++  let i = n.substring(0, r).lastIndexOf(`
++`), o = i === -1 ? 0 : i + 1, s = n.substring(o, r);
++  return N.test(s) && e.includes(`
++`) ? true : O(n, r, "*");
++}, sn = (n) => {
++  let e = p(n, q);
++  if (!e) return n;
++  let r = e[2], t = n.lastIndexOf(e[1]);
++  return f(n, t) || h(n, t) || se(n, r, t) ? n : U(n) % 2 === 1 ? r.endsWith("*") ? originParts(n, [[0, n.length], "*"]) : originParts(n, [[0, n.length], "**"]) : n;
++}, le = (n, e, r) => {
++  if (!e || b.test(e)) return true;
++  let i = n.substring(0, r).lastIndexOf(`
++`), o = i === -1 ? 0 : i + 1, s = n.substring(o, r);
++  return N.test(s) && e.includes(`
++`) ? true : O(n, r, "_");
++}, ln = (n) => {
++  let e = p(n, v);
++  if (!e) {
++    let i = p(n, J);
++    if (i) {
++      let o = n.lastIndexOf(i[1]);
++      if (!(f(n, o) || h(n, o)) && tn(n)) return originParts(n, [[0, n.length], "_"]);
++    }
++    return n;
++  }
++  let r = e[2], t = n.lastIndexOf(e[1]);
++  return f(n, t) || h(n, t) || le(n, r, t) ? n : tn(n) ? originParts(n, [[0, n.length], "__"]) : n;
++}, ae = (n, e) => {
++  let { text: r } = n;
++  return r[e] === "*" && n.regions[e] === c.PROSE && r[e - 1] !== "*" && r[e + 1] !== "*" && r[e - 1] !== "\\" && !k(n, e);
++}, ce = (n) => {
++  let e = g(n);
++  for (let r = n.indexOf("*"); r !== -1; r = n.indexOf("*", r + 1)) {
++    if (!ae(e, r)) continue;
++    let t = r > 0 ? n[r - 1] : "", i = r < n.length - 1 ? n[r + 1] : "", o = !t || C(t), s = !i || C(i);
++    if (!(o && s) && !(t && i && m(t) && m(i)) && !s) return r;
++  }
++  return -1;
++}, an = (n) => {
++  if (!p(n, Q)) return n;
++  let r = ce(n);
++  if (r === -1 || f(n, r) || h(n, r)) return n;
++  let t = n.substring(r + 1);
++  return !t || b.test(t) ? n : on(n) % 2 === 1 ? originParts(n, [[0, n.length], "*"]) : n;
++}, cn = (n) => {
++  let e = g(n);
++  for (let r = n.indexOf("_"); r !== -1; r = n.indexOf("_", r + 1)) if (e.regions[r] === c.PROSE && n[r - 1] !== "_" && n[r + 1] !== "_" && n[r - 1] !== "\\" && !k(e, r) && !A(e, r)) {
++    let t = r > 0 ? n[r - 1] : "", i = r < n.length - 1 ? n[r + 1] : "";
++    if (t && i && m(t) && m(i)) continue;
++    return r;
++  }
++  return -1;
++}, ue = (n) => {
++  let e = n.length;
++  for (; e > 0 && n[e - 1] === `
++`; ) e -= 1;
++  if (e < n.length) {
++    let r = n.slice(0, e), t = n.slice(e);
++    return originParts(n, [[0, e], "_", [e, n.length]]);
++  }
++  return originParts(n, [[0, n.length], "_"]);
++}, fe = (n) => {
++  if (!n.endsWith("**")) return null;
++  let e = n.slice(0, -2);
++  if (U(e) % 2 !== 1) return null;
++  let t = e.indexOf("**"), i = cn(e);
++  return t !== -1 && i !== -1 && t < i ? originParts(n, [[0, n.length - 2], "_", [n.length - 2, n.length]]) : null;
++}, un = (n) => {
++  if (!p(n, Z)) return n;
++  let r = cn(n);
++  if (r === -1) return n;
++  let t = n.substring(r + 1);
++  if (!t || b.test(t) || f(n, r) || h(n, r)) return n;
++  if (re(n) % 2 === 1) {
++    let o = fe(n);
++    return o !== null ? o : ue(n);
++  }
++  return n;
++}, ge = (n) => {
++  let e = U(n), r = on(n);
++  return e % 2 === 0 && r % 2 === 0;
++}, de = (n, e, r) => !e || b.test(e) || f(n, r) || h(n, r) ? true : O(n, r, "*"), fn = (n) => {
++  if (nn.test(n)) return n;
++  let e = p(n, z);
++  if (!e) return n;
++  let r = e[2], t = n.lastIndexOf(e[1]);
++  return de(n, r, t) ? n : te(n) % 2 === 1 ? ge(n) ? n : originParts(n, [[0, n.length], "***"]) : n;
++};
++var me = /<[a-zA-Z/][^>]*$/, he = /[a-zA-Z/]/, pe = (n) => n.includes("$") || n.includes("\\(") || n.includes("\\["), be = (n, e) => {
++  let r = n[e + 1];
++  return r !== void 0 && he.test(r);
++}, gn = (n) => {
++  let e = n.match(me);
++  if (!e || e.index === void 0) return n;
++  let r = pe(n);
++  for (let t = e.index; t < n.length; t += 1) if (!(n[t] !== "<" || !be(n, t)) && !f(n, t) && !(r && $(n, t))) return originParts(n, [[0, n.substring(0, t).trimEnd().length]]);
++  return n;
++};
++var dn = (n) => {
++  let e = g(n);
++  if (e.openFence) return n;
++  let r = e.openSpan;
++  if (!r) return n;
++  let t = n.slice(r.start + r.runLength);
++  if (!t || b.test(t)) return n;
++  let i = 0, o = n.length - 1;
++  for (; o >= 0 && n[o] === "`"; ) i += 1, o -= 1;
++  return i >= r.runLength ? n : originParts(n, [[0, n.length], "`".repeat(r.runLength - i)]);
++};
++var ke = (n) => I(n, "$"), Ie = (n) => {
++  let e = g(n), r = 0;
++  for (let t = 0; t < n.length; t += 1) {
++    if (n[t] === "\\") {
++      t += 1;
++      continue;
++    }
++    e.regions[t] === c.PROSE && n[t] === "$" && (t + 1 < n.length && n[t + 1] === "$" ? t += 1 : r += 1);
++  }
++  return r;
++}, Ae = (n) => {
++  if (n.endsWith("$") && !n.endsWith("$$")) return `${n}$`;
++  let e = n.indexOf("$$");
++  return e !== -1 && n.indexOf(`
++`, e) !== -1 && !n.endsWith(`
++`) ? `${n}
++$$` : `${n}$$`;
++}, mn = (n) => ke(n) % 2 === 0 ? n : Ae(n), hn = (n) => Ie(n) % 2 === 1 ? `${n}$` : n;
++var E = "streamdown:incomplete-image", Ee = (n, e, r) => {
++  if (n.substring(e + 2).includes(")")) return null;
++  let i = en(n, e);
++  if (i === -1 || f(n, i)) return null;
++  let o = i > 0 && n[i - 1] === "!", s = o ? i - 1 : i, l = n.substring(0, s), a = n.substring(i + 1, e);
++  return o ? originParts(n, [[0, s], "![", [i + 1, e], `](${E})`]) : r === "text-only" ? originParts(n, [[0, s], [i + 1, e]]) : originParts(n, [[0, s], "[", [i + 1, e], "](streamdown:incomplete-link)"]);
++}, pn = (n, e) => {
++  for (let r = 0; r < e; r++) if (n[r] === "[" && !f(n, r)) {
++    if (r > 0 && n[r - 1] === "!") continue;
++    let t = y(n, r);
++    if (t === -1) return r;
++    if (t + 1 < n.length && n[t + 1] === "(") {
++      let i = n.indexOf(")", t + 2);
++      i !== -1 && (r = i);
++    }
++  }
++  return e;
++}, Se = (n, e, r) => {
++  let t = e > 0 && n[e - 1] === "!", i = t ? e - 1 : e;
++  if (!n.substring(e + 1).includes("]")) {
++    let l = n.substring(0, i);
++    if (t) {
++      let a = n.substring(e + 1);
++      return originParts(n, [[0, i], "![", [e + 1, n.length], `](${E})`]);
++    }
++    if (r === "text-only") {
++      let a = pn(n, e);
++      return originParts(n, [[0, a], [a + 1, n.length]]);
++    }
++    return originParts(n, [[0, n.length], "](streamdown:incomplete-link)"]);
++  }
++  if (y(n, e) === -1) {
++    let l = n.substring(0, i);
++    if (t) {
++      let a = n.substring(e + 1);
++      return originParts(n, [[0, i], "![", [e + 1, n.length], `](${E})`]);
++    }
++    if (r === "text-only") {
++      let a = pn(n, e);
++      return originParts(n, [[0, a], [a + 1, n.length]]);
++    }
++    return originParts(n, [[0, n.length], "](streamdown:incomplete-link)"]);
++  }
++  return null;
++}, Oe = (n, e) => {
++  let r = n.lastIndexOf("](");
++  if (r !== -1 && !f(n, r)) {
++    let t = Ee(n, r, e);
++    if (t !== null) return t;
++  }
++  for (let t = n.lastIndexOf("["); t !== -1; t = t === 0 ? -1 : n.lastIndexOf("[", t - 1)) if (!f(n, t)) {
++    let i = Se(n, t, e);
++    if (i !== null) return i;
++  }
++  return n;
++}, Te = 32, D = (n, e = "protocol") => {
++  let r = n;
++  for (let t = 0; t < Te; t += 1) {
++    let i = Oe(r, e);
++    if (i.length >= r.length) return i;
++    r = i;
++  }
++  return r;
++};
++var Me = /^-{1,2}$/, Ce = /^[\s]*-{1,2}[\s]+$/, Le = /^={1,2}$/, Pe = /^[\s]*={1,2}[\s]+$/, bn = (n) => {
++  if (!n || typeof n != "string") return n;
++  let e = n.lastIndexOf(`
++`);
++  if (e === -1) return n;
++  let r = n.substring(e + 1), t = n.substring(0, e), i = r.trim();
++  if (Me.test(i) && !r.match(Ce)) {
++    let s = t.split(`
++`).at(-1);
++    if (s && s.trim().length > 0) return originParts(n, [[0, n.length], "\u200B"]);
++  }
++  if (Le.test(i) && !r.match(Pe)) {
++    let s = t.split(`
++`).at(-1);
++    if (s && s.trim().length > 0) return originParts(n, [[0, n.length], "\u200B"]);
++  }
++  return n;
++};
++var _e = /([\p{L}\p{N}_])~(?!~)(?=[\p{L}\p{N}_])/gu, kn = (n) => !n || typeof n != "string" || !n.includes("~") ? n : originReplace(n, _e, (e, r, t) => {
++  let i = t + r.length;
++  return f(n, i) ? [[t, t + e.length]] : [[t, i], "\\", [i, t + e.length]];
++});
++var In = (n) => I(n, "~"), An = (n) => {
++  let e = p(n, j);
++  if (e) {
++    let r = e[2];
++    if (!r || b.test(r)) return n;
++    let t = n.lastIndexOf(e[1]);
++    if (f(n, t) || h(n, t)) return n;
++    if (In(n) % 2 === 1) return originParts(n, [[0, n.length], "~~"]);
++  } else {
++    let r = p(n, V);
++    if (r) {
++      let t = n.lastIndexOf(r[0].slice(0, 2));
++      if (f(n, t) || h(n, t)) return n;
++      if (In(n) % 2 === 1) return originParts(n, [[0, n.length], "~"]);
++    }
++  }
++  return n;
++};
++var B = (n) => n !== false, Re = (n) => n === true, d = { SINGLE_TILDE: 0, COMPARISON_OPERATORS: 5, HTML_TAGS: 10, SETEXT_HEADINGS: 15, LINKS: 20, BOLD_ITALIC: 30, BOLD: 35, ITALIC_DOUBLE_UNDERSCORE: 40, ITALIC_SINGLE_ASTERISK: 41, ITALIC_SINGLE_UNDERSCORE: 42, INLINE_CODE: 50, STRIKETHROUGH: 60, KATEX: 70, INLINE_KATEX: 75, DEFAULT: 100 }, Ne = [{ handler: { name: "singleTilde", handle: kn, priority: d.SINGLE_TILDE }, optionKey: "singleTilde" }, { handler: { name: "comparisonOperators", handle: Y, priority: d.COMPARISON_OPERATORS }, optionKey: "comparisonOperators" }, { handler: { name: "htmlTags", handle: gn, priority: d.HTML_TAGS }, optionKey: "htmlTags" }, { handler: { name: "setextHeadings", handle: bn, priority: d.SETEXT_HEADINGS }, optionKey: "setextHeadings" }, { handler: { name: "links", handle: D, priority: d.LINKS }, optionKey: "links", earlyReturn: (n) => n.endsWith("](streamdown:incomplete-link)") || n.endsWith(`](${E})`) }, { handler: { name: "boldItalic", handle: fn, priority: d.BOLD_ITALIC }, optionKey: "boldItalic" }, { handler: { name: "bold", handle: sn, priority: d.BOLD }, optionKey: "bold" }, { handler: { name: "italicDoubleUnderscore", handle: ln, priority: d.ITALIC_DOUBLE_UNDERSCORE }, optionKey: "italic" }, { handler: { name: "italicSingleAsterisk", handle: an, priority: d.ITALIC_SINGLE_ASTERISK }, optionKey: "italic" }, { handler: { name: "italicSingleUnderscore", handle: un, priority: d.ITALIC_SINGLE_UNDERSCORE }, optionKey: "italic" }, { handler: { name: "inlineCode", handle: dn, priority: d.INLINE_CODE }, optionKey: "inlineCode" }, { handler: { name: "strikethrough", handle: An, priority: d.STRIKETHROUGH }, optionKey: "strikethrough" }, { handler: { name: "katex", handle: mn, priority: d.KATEX }, optionKey: "katex" }, { handler: { name: "inlineKatex", handle: hn, priority: d.INLINE_KATEX }, optionKey: "inlineKatex" }], ye = (n) => {
++  var r;
++  let e = (r = n == null ? void 0 : n.linkMode) != null ? r : "protocol";
++  return Ne.filter(({ handler: t, optionKey: i }) => t.name === "links" ? B(n == null ? void 0 : n.links) || B(n == null ? void 0 : n.images) : t.name === "inlineKatex" ? Re(n == null ? void 0 : n.inlineKatex) : B(n == null ? void 0 : n[i])).map(({ handler: t, earlyReturn: i }) => t.name === "links" ? { handler: P(L({}, t), { handle: (o) => D(o, e) }), earlyReturn: e === "protocol" ? i : void 0 } : { handler: t, earlyReturn: i });
++}, $e = (n, e) => {
++  var s;
++  if (!n || typeof n != "string") return n;
++  let r = n.endsWith(" ") && !n.endsWith("  ") ? originParts(n, [[0, n.length - 1]]) : n, t = ye(e), i = ((s = e == null ? void 0 : e.handlers) != null ? s : []).map((l) => {
++    var a;
++    return { handler: P(L({}, l), { priority: (a = l.priority) != null ? a : d.DEFAULT }), earlyReturn: void 0 };
++  }), o = [...t, ...i].sort((l, a) => {
++    var u, S;
++    return ((u = l.handler.priority) != null ? u : 0) - ((S = a.handler.priority) != null ? S : 0);
++  });
++  try {
++    for (let { handler: l, earlyReturn: a } of o) if (r = l.handle(r), a != null && a(r)) return r;
++    return r.endsWith(" ") && !r.endsWith("  ") ? originParts(r, [[0, r.length - 1]]) : r;
++  } finally {
++    K();
++  }
++}, Or = $e;
++export {
++  E as INCOMPLETE_IMAGE_PLACEHOLDER,
++  Or as default,
++  jn as isWithinCodeBlock,
++  Jn as isWithinLinkOrImageUrl,
++  $ as isWithinMathBlock,
++  m as isWordChar
++};
++
++let originObserver = null;
++function originParts(input, parts) {
++  const result = parts.map(part => typeof part === 'string' ? part : input.slice(part[0], part[1])).join('');
++  if (originObserver && result !== input) originObserver(input, parts);
++  return result;
++}
++function originReplace(input, pattern, replacement) {
++  const parts = [];
++  let end = 0;
++  input.replace(pattern, (...args) => {
++    const start = args[args.length - 2];
++    parts.push([end, start], ...replacement(...args));
++    end = start + args[0].length;
++    return args[0];
++  });
++  parts.push([end, input.length]);
++  return originParts(input, parts);
++}
++export function remendWithEdits(text, options, onEdit) {
++  if (options?.handlers?.length || options?.katex !== false || options?.inlineKatex === true || originObserver) {
++    throw new Error('Unsupported native-chat provenance repair configuration');
++  }
++  originObserver = onEdit;
++  try { return Or(text, options); }
++  finally { originObserver = null; }
++}
