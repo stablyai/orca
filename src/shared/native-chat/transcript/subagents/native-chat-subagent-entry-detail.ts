@@ -31,15 +31,22 @@ export function subagentEntryDetail(entry: NativeChatSubagentEntry): string | nu
 
 /** What the subagent said, without the markdown marks a plain row or preview can't render. */
 export function subagentMessageText(markdown: string): string {
-  return (
-    markdown
-      .replace(/^\s*```.*$/gm, '')
-      .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
-      .replace(/^\s{0,3}(?:#{1,6}\s+|>\s?|[-*+]\s+)/gm, '')
-      // Code spans are literal: keep the `~`, `*` and `__` in paths and globs, drop only the backticks.
-      .replace(/(`+)([^`]+?)\1|[`*~]|__/g, (_mark, _ticks, code: string | undefined) => code ?? '')
-      .trim()
-  )
+  const text = markdown
+    .replace(/^\s*```.*$/gm, '')
+    .replace(/^\s{0,3}(?:#{1,6}\s+|>\s?|[-*+]\s+)/gm, '')
+  // Code spans are literal: equal backtick runs, kept verbatim without the backticks; only the rest is cleaned.
+  const codeSpan = /(?<!`)(`+)(?!`)([\s\S]*?[^`])\1(?!`)/g
+  let result = ''
+  let last = 0
+  for (let span = codeSpan.exec(text); span; span = codeSpan.exec(text)) {
+    result += plainMarkdownText(text.slice(last, span.index)) + span[2]
+    last = span.index + span[0].length
+  }
+  return (result + plainMarkdownText(text.slice(last))).trim()
+}
+
+function plainMarkdownText(text: string): string {
+  return text.replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[`*~]|__/g, '')
 }
 
 /** `claude-opus-5-5` reads as `Opus 5.5`, `gpt-5.5` as `GPT-5.5`: the chat already names the provider. */
