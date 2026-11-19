@@ -13,7 +13,7 @@ describe('prepareAntigravityAcpProxyEnvironment', () => {
     readSystemProxyMock.mockResolvedValue({
       kind: 'environment',
       proxies: { socks: 'http://127.0.0.1:7890' },
-      bypass: ['.local', '.example.test'],
+      bypass: ['.local', 'intranet.example.test'],
       lossy: true
     })
     const env: Record<string, string> = { PATH: '/usr/bin' }
@@ -22,8 +22,8 @@ describe('prepareAntigravityAcpProxyEnvironment', () => {
       PATH: '/usr/bin',
       socks_proxy: 'http://127.0.0.1:7890',
       SOCKS_PROXY: 'http://127.0.0.1:7890',
-      NO_PROXY: '.local,.example.test,localhost,127.0.0.1,::1,[::1]',
-      no_proxy: '.local,.example.test,localhost,127.0.0.1,::1,[::1]'
+      NO_PROXY: '.local,intranet.example.test,localhost,127.0.0.1,::1,[::1]',
+      no_proxy: '.local,intranet.example.test,localhost,127.0.0.1,::1,[::1]'
     })
   })
 

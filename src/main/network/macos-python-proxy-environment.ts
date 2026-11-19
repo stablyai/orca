@@ -136,17 +136,17 @@ export function parseSystemProxy(output: string): PythonSystemProxyRead | null {
       bypass.push('.local')
     } else if (isPrivateIpv4Prefix(entry)) {
       // Private/link-local ranges and exclude-simple have no exact NO_PROXY equivalent; omit as before.
+    } else if (/^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*$/.test(entry)) {
+      // An exact hostname keeps its direct route; NO_PROXY may also match its subdomains, so the
+      // mapping is lossy but never routes a system-excluded host through the proxy.
+      bypass.push(entry)
+      lossy = true
     } else {
       // Still import static proxies instead of emitting loopback-only NO_PROXY, which would make
       // Python's urllib skip macOS sysconf completely and send external traffic direct (#44498).
-      // Lossy mapping: widen leading domain wildcards `*.x` to `.x` (which also matches the apex
-      // `x` in NO_PROXY), and drop other non-exact forms (exact hostnames, mid-string wildcards,
-      // non-private CIDRs) rather than widening them to arbitrary domain suffixes.
+      // Whole-subdomain wildcards `*.x` are dropped: NO_PROXY `.x` also bypasses the apex `x`
+      // (CPython's matcher), which would let apex traffic escape the proxy — the unsafe direction.
       lossy = true
-      const wildcard = /^\*\.([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*)$/.exec(entry)
-      if (wildcard) {
-        bypass.push(`.${wildcard[1]}`)
-      }
     }
   }
   return { kind: 'environment', proxies, bypass, ...(lossy ? { lossy: true as const } : {}) }

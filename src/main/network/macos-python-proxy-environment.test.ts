@@ -40,7 +40,7 @@ describe('parseSystemProxy', () => {
     })
   })
 
-  it('keeps explicit proxies and widens domain wildcards lossily instead of dropping the proxy', () => {
+  it('keeps explicit proxies and exact hostnames, dropping wildcards lossily', () => {
     const parsed = parseSystemProxy(
       scutil(
         ['SOCKSEnable : 1', 'SOCKSProxy : 127.0.0.1', 'SOCKSPort : 7890'],
@@ -50,7 +50,9 @@ describe('parseSystemProxy', () => {
     expect(parsed).toEqual({
       kind: 'environment',
       proxies: { socks: 'http://127.0.0.1:7890' },
-      bypass: ['.local', '.example.test'],
+      // *.local maps exactly; exact hostnames stay direct; bare/mid-string wildcards and
+      // non-private ranges are dropped (NO_PROXY would over-bypass their apexes).
+      bypass: ['.local', 'timestamp.apple.com'],
       lossy: true
     })
   })
