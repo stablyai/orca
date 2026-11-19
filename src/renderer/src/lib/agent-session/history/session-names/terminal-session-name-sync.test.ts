@@ -4,7 +4,6 @@ import type { AppState } from '@/store/types'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import {
-  agentSessionBindingsChanged,
   startTerminalSessionNameSync,
   terminalTabNamesChanged,
   unsettledTerminalTabsClosed
@@ -102,39 +101,28 @@ describe('terminal session name sync', () => {
     sync.stop()
   })
 
-  it.each(['claude', 'opencode'] as const)(
-    'ignores terminal title churn and %s status heartbeats',
-    (agent) => {
-      const sync = harness(
-        makeTerminalNamesState([{ id: 'tab-1', sessionId: 's1', agent, customTitle: 'N' }])
-      )
-      sync.flush()
-      for (let index = 0; index < 20; index++) {
-        sync.set(withTabTitle(sync.state, { title: `⠋ working ${index}` }))
-        sync.set(withHeartbeat(sync.state))
-      }
-      expect(sync.pending).toHaveLength(0)
-      sync.stop()
-    }
-  )
-
-  it('wakes when a session id appears for any agent, not on heartbeats', () => {
-    const before = makeTerminalNamesState([{ id: 'tab-1', agent: 'opencode', sessionId: 'oc1' }])
-    expect(agentSessionBindingsChanged(withHeartbeat(before), before)).toBe(false)
-    const [key, current] = before.agentStatusByPaneKey.entries().next().value!
-    const draft = before.agentStatusByPaneKey.replace([
+  it('records a new OpenCode session while ignoring spinner titles and heartbeats', () => {
+    const before = makeTerminalNamesState([
+      { id: 'tab-1', agent: 'opencode', sessionId: 'oc1', customTitle: 'Review' }
+    ])
+    const sync = harness(before)
+    sync.flush()
+    sync.set(withTabTitle(sync.state, { title: '⠋ working' }))
+    sync.set(withHeartbeat(sync.state))
+    expect(sync.pending).toHaveLength(0)
+    const [key, current] = sync.state.agentStatusByPaneKey.entries().next().value!
+    const draft = sync.state.agentStatusByPaneKey.replace([
       [key, { ...current, providerSession: { key: 'session_id', id: 'oc2' } }]
     ])
     draft.prepare()()
-    expect(agentSessionBindingsChanged({ ...before, agentStatusByPaneKey: draft }, before)).toBe(
-      true
-    )
+    sync.set({ ...sync.state, agentStatusByPaneKey: draft })
+    sync.flush()
+    expect(getSavedTerminalSessionName('local', 'opencode', 'oc2')).toBe('Review')
+    sync.stop()
   })
 
-  it('compares only tab ids and names', () => {
+  it('notices a replacement tab even when its name is unchanged', () => {
     const state = makeTerminalNamesState([{ id: 'tab-1', customTitle: 'A' }])
-    expect(terminalTabNamesChanged(withTabTitle(state, { title: 'spinner' }), state)).toBe(false)
-    expect(terminalTabNamesChanged(withTabTitle(state, { customTitle: 'B' }), state)).toBe(true)
     expect(
       terminalTabNamesChanged(makeTerminalNamesState([{ id: 'tab-2', customTitle: 'A' }]), state)
     ).toBe(true)

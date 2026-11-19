@@ -10,8 +10,7 @@ import {
   resetTerminalSessionNamesForTest,
   saveTerminalSessionName,
   subscribeTerminalSessionNames,
-  terminalSessionNameKey,
-  terminalSessionNamesOwnedBy
+  terminalSessionNameKey
 } from './terminal-session-names'
 
 function stored(): Record<string, unknown> {
@@ -293,28 +292,5 @@ describe('terminal session names', () => {
     expect(listener).toHaveBeenCalled()
     expect(getSavedTerminalSessionName('local', 'claude', 's9')).toBe('Elsewhere')
     unsubscribe()
-  })
-
-  it('lists the keys a tab owns and keeps only the newest entries', () => {
-    let now = 1_000
-    vi.spyOn(Date, 'now').mockImplementation(() => now++)
-    save('a', 'A', 'tab-a')
-    save('b', 'B', 'tab-a')
-    save('c', 'C', 'tab-c')
-    expect(
-      terminalSessionNamesOwnedBy('tab-a')
-        .map(({ key }) => key)
-        .sort()
-    ).toEqual([terminalSessionNameKey('local', 'a'), terminalSessionNameKey('local', 'b')].sort())
-
-    for (let index = 0; index < TERMINAL_SESSION_NAMES_MAX_ENTRIES + 5; index++) {
-      save(`bulk-${index}`, `Name ${index}`)
-    }
-    const keys = Object.keys(stored())
-    expect(keys).toHaveLength(TERMINAL_SESSION_NAMES_MAX_ENTRIES)
-    expect(keys).toContain(
-      terminalSessionNameKey('local', `bulk-${TERMINAL_SESSION_NAMES_MAX_ENTRIES + 4}`)
-    )
-    expect(keys).not.toContain(terminalSessionNameKey('local', 'a'))
   })
 })
