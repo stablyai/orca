@@ -1,3 +1,4 @@
+import { GitFork } from 'lucide-react'
 import { ContextMenuItem } from '@/components/ui/context-menu'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
@@ -33,6 +34,7 @@ export function CurrentSideChatMenu({ worktreeId, tabId }: { worktreeId: string;
   }
   return (
     <ContextMenuItem onSelect={() => void openCurrentSideChat(worktreeId, tabId)}>
+      <GitFork className="size-3.5 shrink-0" />
       {t('components.native-chat.currentSideChat.open', 'New side chat')}
     </ContextMenuItem>
   )
