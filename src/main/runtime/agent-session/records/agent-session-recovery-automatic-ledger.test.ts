@@ -1,7 +1,6 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { writeFile } from 'node:fs/promises'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import {

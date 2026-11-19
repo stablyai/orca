@@ -95,18 +95,9 @@ it('reads the newest turn, and the rows a restart settled in it, not the transcr
 
 it("counts a person's message sent during the cut turn, though settlement moved the turn after it", () => {
   const { seed, rewrite, read } = chat()
-  const turn = row('turn:2', 3, { kind: 'turn', turnId: '2', state: 'running' })
-  seed(turn)
+  seed(row('turn:2', 3, { kind: 'turn', turnId: '2', state: 'running' }))
   seed(row('user:steer', 4, user('use the other branch')))
-  rewrite(
-    {
-      ...turn,
-      sequence: 10,
-      body: { ...turn.body, state: 'interrupted' } as AgentJournalItemBody,
-      ...settled
-    },
-    3
-  )
+  rewrite(row('turn:2', 10, { kind: 'turn', turnId: '2', state: 'interrupted' }, settled), 3)
   expect(read().movedOn).toBe(true)
 })
 
