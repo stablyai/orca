@@ -17,19 +17,13 @@ function store() {
 }
 
 describe("a look's turns", () => {
-  it('are no news when they succeed, whatever the model ended with', () => {
-    expect(store().lookTurnIsQuiet('now', 'success')).toBe(true)
-  })
-
-  it('follow the failure rule when they fail', () => {
-    // The streak before `now` already notified, so this failure is quiet; the first one was news.
-    expect(store().lookTurnIsQuiet('now', 'failure')).toBe(true)
-    expect(store().lookTurnIsQuiet('told', 'failure')).toBe(false)
-  })
-
-  it('leave every other session alone', () => {
-    expect(store().lookTurnIsQuiet('a-chat', 'success')).toBe(false)
-    expect(store().lookTurnIsQuiet('a-chat', 'failure')).toBe(false)
+  it('keeps successful and already reported looks quiet while ordinary chats stay visible', () => {
+    const looks = store()
+    expect(looks.lookTurnIsQuiet('now', 'success')).toBe(true)
+    expect(looks.lookTurnIsQuiet('now', 'failure')).toBe(true)
+    expect(looks.lookTurnIsQuiet('told', 'failure')).toBe(false)
+    expect(looks.lookTurnIsQuiet('a-chat', 'success')).toBe(false)
+    expect(looks.lookTurnIsQuiet('a-chat', 'failure')).toBe(false)
   })
 })
 

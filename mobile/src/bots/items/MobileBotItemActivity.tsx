@@ -37,6 +37,7 @@ import type { Translate } from '../../i18n/mobile-i18n'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { MobileBotItemReplyQuote } from './MobileBotItemReplyQuote'
 import { MobileBotItemStatusIcon } from './MobileBotItemStatusIcon'
 
 const ICON = 13
@@ -252,11 +253,14 @@ function CommentCard({
   item,
   event,
   question,
+  replyTo,
   onReply
 }: {
   item: BotItem
   event: BotItemEvent
   question: BotItemQuestionState | null
+  /** A recorded answer's question, by its first line. */
+  replyTo?: { text: string }
   onReply: () => void
 }) {
   const t = useMobileTranslation()
@@ -295,6 +299,7 @@ function CommentCard({
         ) : null}
         <Text style={styles.meta}>{timeOf(event.at)}</Text>
       </View>
+      {replyTo ? <MobileBotItemReplyQuote text={replyTo.text} /> : null}
       <MobileMarkdown content={text} />
     </View>
   )
@@ -321,6 +326,7 @@ export function MobileBotItemActivity({
             item={item}
             event={entry.event}
             question={entry.question}
+            replyTo={entry.replyTo}
             onReply={onReply}
           />
         ) : (

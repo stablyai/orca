@@ -26,4 +26,9 @@ function button(run: AgentCliUpdateRun | null) {
 
 export const idle = button(null)
 export const updating = button({ phase: 'running' })
-export const failed = button({ phase: 'failed', output: 'error' })
+export const failed = button({
+  phase: 'failed',
+  output: 'error',
+  command: 'claude update',
+  finishedAt: Date.UTC(2026, 10, 18, 18, 42)
+})

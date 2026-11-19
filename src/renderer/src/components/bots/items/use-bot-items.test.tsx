@@ -55,7 +55,7 @@ describe('useBotNeedsYouCount', () => {
 
 describe('useBotChatItems', () => {
   it('keeps one read out: notices during it share one more, and the newest list shows', async () => {
-    const view = renderHook(() => useBotChatItems(BOT, 'chat-1'))
+    const view = renderHook(() => useBotChatItems(BOT, ['chat-1']))
     expect(listReads()).toHaveLength(1)
     notice(['items'])
     notice(['items'])

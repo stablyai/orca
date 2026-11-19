@@ -261,7 +261,7 @@ export function WorkspaceOptionsMenuItems({
 
   return (
     <>
-      <DropdownMenuLabel className="pb-0 text-sm text-foreground">
+      <DropdownMenuLabel variant="title">
         {t(
           'auto.components.sidebar.SidebarWorkspaceOptionsMenu.workspaceOptions',
           'Workspace options'

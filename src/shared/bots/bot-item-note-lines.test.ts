@@ -154,10 +154,13 @@ describe('a bot write that only links', () => {
     links: BotItemLinkView[] = home
   ): BotItemNoteEntry => botItemNoteEntry({ kind: 'linked', data: { links: refs } }, item, links)!
 
-  it('names the one link it added', () => {
+  it('names a single link with or without saved metadata', () => {
     expect(said([linked(a, ['pr:acme/app#786'])])).toEqual(['Linked #786 to <Share links working>'])
     expect(said([linked(a, ['pr:other/lib#5'])])).toEqual([
       'Linked other/lib#5 to <Share links working>'
+    ])
+    expect(said([{ ...a, event: 'linked', refs: ['pr:other/lib#5'] }])).toEqual([
+      'Linked #5 to <Share links working>'
     ])
     expect(said([linked(a, ['url:https://github.com/acme/app/issues/12'])])).toEqual([
       'Linked #12 to <Share links working>'
@@ -185,12 +188,6 @@ describe('a bot write that only links', () => {
     ).toEqual(['Linked 3 links to <Share links working>'])
     expect(said([linked(a, ['pr:acme/app#786']), linked(b, ['pr:acme/app#786'])])).toEqual([
       'Linked #786 to <Share links working> <Share dialog working>'
-    ])
-  })
-
-  it('names links in a note written before names were kept', () => {
-    expect(said([{ ...a, event: 'linked', refs: ['pr:other/lib#5'] }])).toEqual([
-      'Linked #5 to <Share links working>'
     ])
   })
 

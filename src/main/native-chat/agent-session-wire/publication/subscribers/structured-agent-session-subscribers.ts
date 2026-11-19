@@ -247,7 +247,7 @@ export class AgentSessionSubscribers {
     this.forkMarkers.refreshSources(readJournal, sourceIds)
   }
 
-  /** Live text an opening or snapshot sends itself counts against its subscriber's share. */
+  /** Live text an opening or snapshot sends itself counts against its subscriber's cap. */
   private sentLiveText(subscriber: Subscriber, sessionId: string, journal: AgentSessionJournal) {
     const items = this.hooks.readLiveText?.(sessionId) ?? []
     // Sending nothing leaves any waiting live text for after the subscriber catches up.

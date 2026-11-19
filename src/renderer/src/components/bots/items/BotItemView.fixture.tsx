@@ -39,6 +39,7 @@ function Reader(): React.JSX.Element {
         view={{
           item,
           events,
+          eventsRead: true,
           hasEarlier: false,
           failed: false,
           deleted: false,
@@ -92,6 +93,7 @@ export const header = defineFixture({
         view={{
           item: numbered,
           events: start.slice(0, 1),
+          eventsRead: true,
           hasEarlier: false,
           failed: false,
           deleted: false,
@@ -120,6 +122,7 @@ const snoozedView = {
       at: Date.now() - 5 * 60_000
     }
   ],
+  eventsRead: true,
   hasEarlier: false,
   failed: false,
   deleted: false,

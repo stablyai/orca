@@ -23,11 +23,7 @@ import {
   readJournalReaderRequests,
   type JournalReaderRunningRequest
 } from '../native-chat/agent-session-journal/journal-sql-reader-requests'
-import { readRetainedBytes, type RetainedBytesReading } from '../memory/retained-bytes-budget'
-import {
-  chatPathRetainedBytes,
-  chatRetainedBytesRefusals
-} from '../native-chat/retention/chat-path-retained-bytes'
+import { liveTextCapReachedCount } from '../native-chat/retention/subscriber-live-text-cap'
 import { observeWorkerThreads } from './worker-thread-spawn'
 import { noteMainCageHeap } from '../crash-reporting/memory/main-heap-allocation-profile'
 import {
@@ -192,29 +188,14 @@ function annotateCrashReport(
 type Retention = {
   reads: ReturnType<typeof readJournalReaderRetention>
   lanes: ReturnType<typeof readSubscriberRetention>
-  held: Record<string, RetainedBytesReading>
 }
 
 function readRetention(): Retention {
-  return {
-    reads: readJournalReaderRetention(),
-    lanes: readSubscriberRetention(),
-    held: readRetainedBytes()
-  }
+  return { reads: readJournalReaderRetention(), lanes: readSubscriberRetention() }
 }
 
-/** One line for every holder in the retained-bytes ledger, chat budget first. */
-function retainedBytesAnnotation(held: Record<string, RetainedBytesReading>): string {
-  const sources = Object.entries(held)
-    .map(([source, { bytes, items }]) => `${source}=${Math.round(bytes / MB)}MB/${items}`)
-    .join(' ')
-  const chat = Math.round(chatPathRetainedBytes.reading().bytes / MB)
-  return `chat=${chat}MB refused=${chatRetainedBytesRefusals()} ${sources}`
-}
-
-function retentionAnnotations({ reads, lanes, held }: Retention): [string, string][] {
+function retentionAnnotations({ reads, lanes }: Retention): [string, string][] {
   return [
-    ['orca-retained-bytes', retainedBytesAnnotation(held)],
     [
       'orca-reader-pool',
       `flight=${reads.inFlight} unconsumed=${reads.unconsumed} wait=${reads.waiting} ` +
@@ -224,19 +205,13 @@ function retentionAnnotations({ reads, lanes, held }: Retention): [string, strin
     [
       'orca-chat-subscribers',
       `busy=${lanes.busy} pending=${lanes.pending} oldest=${lanes.oldestMs}ms ` +
-        `liveText=${Math.round(lanes.liveTextBytes / MB)}MB`
+        `liveText=${Math.round(lanes.liveTextBytes / MB)}MB capped=${liveTextCapReachedCount()}`
     ]
   ]
 }
 
-function retentionData({ reads, lanes, held }: Retention): CrashReportBreadcrumbData {
-  const sources = Object.fromEntries(
-    Object.entries(held).map(([source, { bytes }]) => [`held_${source}_MB`, Math.round(bytes / MB)])
-  )
+function retentionData({ reads, lanes }: Retention): CrashReportBreadcrumbData {
   return {
-    ...sources,
-    chatHeldMB: Math.round(chatPathRetainedBytes.reading().bytes / MB),
-    chatRefused: chatRetainedBytesRefusals(),
     readsInFlight: reads.inFlight,
     readsUnconsumed: reads.unconsumed,
     readsWaiting: reads.waiting,
@@ -246,7 +221,8 @@ function retentionData({ reads, lanes, held }: Retention): CrashReportBreadcrumb
     subscribersBusy: lanes.busy,
     subscriberPending: lanes.pending,
     subscriberOldestMs: lanes.oldestMs,
-    subscriberLiveTextMB: Math.round(lanes.liveTextBytes / MB)
+    subscriberLiveTextMB: Math.round(lanes.liveTextBytes / MB),
+    subscriberStreamsCapped: liveTextCapReachedCount()
   }
 }
 

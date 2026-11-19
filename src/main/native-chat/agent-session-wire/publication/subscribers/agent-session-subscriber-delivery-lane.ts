@@ -3,12 +3,11 @@ import type { AgentSessionTurnActivity } from '../../../../../shared/agent-sessi
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
 import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up'
 import {
-  ChatRetainedBytesRefused,
+  SubscriberLiveTextCapReached,
   CHAT_LIVE_TEXT_SUBSCRIBER_BYTES,
-  claimSharedLiveText,
   heldBytesOf,
-  noteChatRetainedBytesRefused
-} from '../../../retention/chat-path-retained-bytes'
+  noteLiveTextCapReached
+} from '../../../retention/subscriber-live-text-cap'
 
 /** Reads every row after the subscriber's cursor when it runs, so a later one covers an earlier one. */
 export type SubscriberCatchUp = {
@@ -32,8 +31,7 @@ type LaneEntry =
   | { kind: 'ordered'; since: number; run: () => Promise<unknown> }
   | { kind: 'catch-up'; since: number; catchUp: SubscriberCatchUp }
   | { kind: 'background-tasks'; since: number; fence: number }
-  /** Charged from queueing behind other work until delivered; one that starts at once never is. */
-  | { kind: 'live-text'; since: number; liveText: SubscriberLiveText; release: () => void }
+  | { kind: 'live-text'; since: number; liveText: SubscriberLiveText }
 
 export type SubscriberDeliveryLaneRunners = {
   catchUp: (catchUp: SubscriberCatchUp) => Promise<unknown>
@@ -112,26 +110,16 @@ export class SubscriberDeliveryLane {
       return
     }
     const since = this.dropWaitingLiveText() ?? this.runners.now()
-    // A stream holding more than its share ends itself; the shared budget only refuses a newcomer.
+    // A stream holding more than its cap ends itself and its client resumes; no other is evicted.
     const delivering = this.delivering ? heldBytesOf(this.delivering) : 0
     if (heldBytesOf(liveText.items) + delivering > CHAT_LIVE_TEXT_SUBSCRIBER_BYTES) {
       this.refuse()
       return
     }
-    if (this.idle) {
-      this.add({ kind: 'live-text', since, liveText, release: () => {} })
-      return
-    }
-    const release = claimSharedLiveText(liveText.items)
-    if (!release) {
-      // The client resumes from its cursor and reads the text again.
-      this.refuse()
-      return
-    }
-    this.add({ kind: 'live-text', since, liveText, release })
+    this.add({ kind: 'live-text', since, liveText })
   }
 
-  /** Ordered work (an opening or snapshot) sending live text itself; false past the stream's share. */
+  /** Ordered work (an opening or snapshot) sending live text itself; false past the stream's cap. */
   sendsLiveText(items: readonly AgentJournalRenderItem[]): boolean {
     if (this.stopped.aborted) {
       return false
@@ -157,26 +145,17 @@ export class SubscriberDeliveryLane {
   private dropWaitingLiveText(): number | undefined {
     const index = this.pending.findIndex((entry) => entry.kind === 'live-text')
     const dropped = index === -1 ? undefined : this.pending.splice(index, 1)[0]
-    if (dropped?.kind !== 'live-text') {
-      return undefined
-    }
-    dropped.release()
-    return dropped.since
+    return dropped?.kind === 'live-text' ? dropped.since : undefined
   }
 
   private refuse(): void {
-    noteChatRetainedBytesRefused()
-    this.runners.failed(new ChatRetainedBytesRefused('subscriber live text'))
+    noteLiveTextCapReached()
+    this.runners.failed(new SubscriberLiveTextCapReached())
     this.clear()
   }
 
   /** Releases waiting work and withdraws queued reads; the active delivery gets no more frames. */
   clear(): void {
-    for (const entry of this.pending) {
-      if (entry.kind === 'live-text') {
-        entry.release()
-      }
-    }
     this.pending.length = 0
     this.stop.abort()
   }
@@ -184,11 +163,18 @@ export class SubscriberDeliveryLane {
   /** `counted` spans one sample: subscribers of one chat share each snapshot, counted once. */
   retention(now: number, counted: Set<object>): SubscriberDeliveryRetention {
     const entries = this.active ? [this.active, ...this.pending] : this.pending
+    // `delivering` covers an active live-text entry and live text an opening or snapshot sends.
+    const held = this.pending.flatMap((entry) =>
+      entry.kind === 'live-text' ? [entry.liveText.items] : []
+    )
+    if (this.delivering) {
+      held.push(this.delivering)
+    }
     let liveTextBytes = 0
-    for (const entry of entries) {
-      if (entry.kind === 'live-text' && !counted.has(entry.liveText.items)) {
-        counted.add(entry.liveText.items)
-        liveTextBytes += heldBytesOf(entry.liveText.items)
+    for (const items of held) {
+      if (!counted.has(items)) {
+        counted.add(items)
+        liveTextBytes += heldBytesOf(items)
       }
     }
     const oldest = entries.reduce((since, entry) => Math.min(since, entry.since), now)
@@ -234,9 +220,6 @@ export class SubscriberDeliveryLane {
       } finally {
         this.active = undefined
         this.delivering = undefined
-        if (entry.kind === 'live-text') {
-          entry.release()
-        }
       }
     }
   }

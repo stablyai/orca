@@ -2,7 +2,7 @@ import React from 'react'
 import { ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 
-/** The bots UI's fold arrow, as the sidebar's sections draw it: right while folded, down while open. */
+/** The bots UI's fold arrow, before the title as the sidebar's sections draw it: right while folded, down while open. */
 export function BotFoldChevron({
   open,
   className

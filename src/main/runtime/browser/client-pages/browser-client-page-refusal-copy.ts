@@ -37,3 +37,8 @@ export function readableBrowserClientPageRefusal(error: unknown): unknown {
   }
   return error
 }
+
+export function unresponsiveHostMessage(deviceName: string | null | undefined): string {
+  const desktop = deviceName ? `The Orca desktop "${deviceName}"` : 'The paired Orca desktop'
+  return `${desktop} didn't respond when this server asked it to host browser pages; it may be asleep or disconnected. Wake it and retry, or open a browser tab in one of this server's workspaces on the desktop you want to use.`
+}

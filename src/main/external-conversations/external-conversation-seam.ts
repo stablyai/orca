@@ -23,7 +23,7 @@ import { ConversationChain } from './external-conversation-chain'
 import { GoneChats } from './external-conversation-gone-chats'
 import { ConversationEvents, type ConversationWatchListener } from './external-conversation-events'
 import { conversationOwnsTurn } from './external-conversation-chat-turns'
-import { conversationWorkerActivity } from './external-conversation-workers'
+import { conversationWorkerActivities } from './external-conversation-workers'
 import { chatPromptReads } from './external-conversation-prompt-standing'
 import type { DeliveryReceipts } from './external-conversation-delivery-receipts'
 import {
@@ -173,7 +173,7 @@ export class ExternalConversationSeam {
       chatTurnDelivery: (sessionId, turnAt) => this.chatDeliveries.started(sessionId, turnAt),
       chatTurnWaiting: (sessionId) => this.chatDeliveries.waiting(sessionId),
       workLinks: async (link) => (await host.bots?.workLinks(link)) ?? [],
-      workerActivity: (link) => conversationWorkerActivity(host, link),
+      workerActivities: (links) => conversationWorkerActivities(host, links),
       promptsAudience: () => this.deps.promptsAudience?.() === true,
       mirrorTurn: (sessionId) => this.deps.slackMirror?.()?.turnEnded(sessionId) ?? null,
       replyFill: () => this.deps.replyFill?.() ?? null,
