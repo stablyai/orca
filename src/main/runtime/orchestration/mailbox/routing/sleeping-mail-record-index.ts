@@ -44,15 +44,24 @@ function invocation(record: SleepingAgentSessionRecord | undefined): string | nu
   ])
 }
 
+/** A sleeping record's wake identity; non-obligated records have none and are skipped cheaply. */
+function fingerprint(record: SleepingAgentSessionRecord): string | null {
+  const owner = ownership(record)
+  return owner === null ? null : `${owner}${invocation(record)}`
+}
+
 export class SleepingMailRecordIndex {
   readonly records = new Map<string, SleepingAgentSessionRecord>()
-  private readonly hosts = new Map<string, Map<string, SleepingAgentSessionRecord>>()
+  /** Obligated panes per host, with the fingerprint each was indexed under. */
+  private readonly hosts = new Map<string, Map<string, string>>()
   private readonly inputs = new Map<string, Readonly<Record<string, SleepingAgentSessionRecord>>>()
 
   affectedHosts(host: string | null, current: readonly string[]): Iterable<string> {
     return host === null ? new Set([...current, ...this.hosts.keys()]) : [host]
   }
 
+  /** Re-indexes one host's records; returns the panes whose wake identity changed. A session write
+   *  already copies every record, so this pass is one cheap field check per non-sleeping record. */
   refresh(
     host: string,
     records: Readonly<Record<string, SleepingAgentSessionRecord>>,
@@ -63,32 +72,33 @@ export class SleepingMailRecordIndex {
       return new Set()
     }
     this.inputs.set(host, records)
-    const previous = this.hosts.get(host) ?? new Map<string, SleepingAgentSessionRecord>()
-    const next = new Map(Object.values(records).map((record) => [record.paneKey, record]))
+    const previous = this.hosts.get(host) ?? new Map<string, string>()
+    const next = new Map<string, string>()
     const maintained = new Set<string>()
-    for (const [pane, before] of previous) {
-      if (!next.has(pane)) {
-        this.records.delete(pane)
-        if (mailWakeObligation(before)) {
-          maintained.add(pane)
-          changed(pane)
-        }
-      }
-    }
-    for (const [pane, record] of next) {
-      const before = previous.get(pane)
-      if (mailWakeObligation(record)) {
-        this.records.set(pane, record)
-      } else {
-        this.records.delete(pane)
-      }
-      if (before === record) {
+    for (const key in records) {
+      const record = records[key]
+      if (!record || !mailWakeObligation(record)) {
         continue
       }
-      if (ownership(before) !== ownership(record) || invocation(before) !== invocation(record)) {
-        maintained.add(pane)
-        changed(pane)
+      const pane = record.paneKey
+      const print = fingerprint(record)
+      if (print === null) {
+        continue
       }
+      next.set(pane, print)
+      this.records.set(pane, record)
+      if (previous.get(pane) !== print) {
+        maintained.add(pane)
+      }
+    }
+    for (const pane of previous.keys()) {
+      if (!next.has(pane)) {
+        this.records.delete(pane)
+        maintained.add(pane)
+      }
+    }
+    for (const pane of maintained) {
+      changed(pane)
     }
     if (next.size) {
       this.hosts.set(host, next)
