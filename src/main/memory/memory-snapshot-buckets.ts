@@ -66,9 +66,22 @@ export type WorktreeMemoryBucket = {
   sessions: SessionMemory[]
 }
 
+/** Project-group names read once per snapshot, not once per folder bucket. */
+export type ProjectGroupNameLookup = (projectGroupId: string) => string | undefined
+
+export function createProjectGroupNameLookup(store: MemorySnapshotStore): ProjectGroupNameLookup {
+  let names: Map<string, string | undefined> | null = null
+  return (projectGroupId) => {
+    // SAFETY: Missing optional capabilities keep the original direct-call failure.
+    names ??= new Map(store.getProjectGroups!().map((group) => [group.id, group.name]))
+    return names.get(projectGroupId)
+  }
+}
+
 export function resolveWorktreeMemoryNames(
   worktreeId: string,
-  store: MemorySnapshotStore
+  store: MemorySnapshotStore,
+  projectGroupName: ProjectGroupNameLookup = createProjectGroupNameLookup(store)
 ): {
   worktreeName: string
   repoId: string
@@ -80,12 +93,10 @@ export function resolveWorktreeMemoryNames(
     scope?.type === 'folder' ? store.getFolderWorkspace!(scope.folderWorkspaceId) : null
   if (folder) {
     // Why: names only; building the full worktree record would normalize every attachment per sample.
-    // SAFETY: Missing optional capabilities keep the original direct-call failure.
-    const group = store.getProjectGroups!().find((item) => item.id === folder.projectGroupId)
     return {
       worktreeName: folder.name,
       repoId: folderWorkspaceRepoId(folder.projectGroupId),
-      repoName: group?.name?.trim() || folder.name
+      repoName: projectGroupName(folder.projectGroupId)?.trim() || folder.name
     }
   }
   const parsed = splitWorktreeIdForFilesystem(worktreeId)

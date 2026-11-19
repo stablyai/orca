@@ -145,10 +145,11 @@ async function idleAgentsNotice(
   if (local.terminals.length === 0) {
     return { id: 'idle-agents', idle: countIdleAgents(before, local, NO_LIVE_TERMINALS) }
   }
-  const live = liveLocalTerminals(await readSnapshot(tick, activeUntil))
+  const snapshot = await readSnapshot(tick, activeUntil)
   if (blocked()) {
     return null
   }
+  const live = liveLocalTerminals(snapshot)
   // Why: agents may have started working during the snapshot; only rows still idle count.
   const state = useAppStore.getState()
   const idle = countIdleAgents(

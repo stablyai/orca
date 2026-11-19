@@ -19,6 +19,7 @@ import {
   pushMemoryHistorySample,
   readAppMemoryHistory,
   readMemoryHistory,
+  createProjectGroupNameLookup,
   resolveWorktreeMemoryNames,
   sweepStaleMemoryHistory,
   type MemorySnapshotStore,
@@ -142,6 +143,7 @@ function bucketElectronMetrics(processIndex: ProcIndex): AppBucketsRaw {
 }
 
 async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> {
+  const projectGroupName = createProjectGroupNameLookup(store)
   const [processIndex, host] = await Promise.all([
     enumerateHostProcesses({ stillWanted: isInflightWanted }),
     collectHostMemory()
@@ -182,7 +184,7 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
       if (existing) {
         bucket = existing
       } else {
-        const names = resolveWorktreeMemoryNames(pty.worktreeId, store)
+        const names = resolveWorktreeMemoryNames(pty.worktreeId, store, projectGroupName)
         bucket = createEmptyWorktreeMemoryBucket(
           pty.worktreeId,
           names.worktreeName,
