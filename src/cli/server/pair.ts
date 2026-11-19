@@ -1,12 +1,29 @@
 import type { CommandHandler } from '../dispatch/dispatch'
 import { getOptionalStringFlag } from '../arguments/flags'
 import { printResult } from '../output/command-result-output'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
+import type { RuntimeClient } from '../runtime/client'
+import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { PAIRING_OFFER_CREATOR_RUNTIME_CAPABILITY } from '../../shared/remote-runtime/pairing/pairing-offer-creator-capability'
 import {
   PAIRING_CREATE_OFFER_METHOD,
   type PairingCreateOfferParams,
   type PairingCreateOfferResult
 } from '../../shared/remote-runtime/pairing/pairing-create-offer-contract'
+
+/** The terminal this runs in, so a link minted from a paired client's terminal goes when that client is revoked. */
+async function callerTerminal(
+  client: RuntimeClient
+): Promise<Pick<PairingCreateOfferParams, 'callerTerminalHandle'>> {
+  const handle = process.env.ORCA_TERMINAL_HANDLE
+  if (!handle) {
+    return {}
+  }
+  const status = await client.call<RuntimeStatus>('status.get')
+  return status.result.capabilities?.includes(PAIRING_OFFER_CREATOR_RUNTIME_CAPABILITY)
+    ? { callerTerminalHandle: handle }
+    : {}
+}
 
 export function formatPairingOffer(offer: PairingCreateOfferResult): string {
   if (!offer.available) {
@@ -51,7 +68,8 @@ export const PAIR_HANDLERS: Record<string, CommandHandler> = {
       address: getOptionalStringFlag(flags, 'address'),
       relay: flags.get('relay') === true,
       grantDesktopControl: flags.get('grant-desktop-control') === true,
-      rotate: flags.get('rotate') === true
+      rotate: flags.get('rotate') === true,
+      ...(await callerTerminal(client))
     }
     const response = await client.call<PairingCreateOfferResult>(
       PAIRING_CREATE_OFFER_METHOD,

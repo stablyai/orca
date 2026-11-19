@@ -5,7 +5,7 @@ import type {
   JiraTransition
 } from '../../../../../../shared/jira/jira-types'
 import type { TaskPageJiraBoardSection } from './task-page-jira-board-sections'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   findJiraBoardSectionTransitions,
   loadTaskPageJiraIssueTransitions

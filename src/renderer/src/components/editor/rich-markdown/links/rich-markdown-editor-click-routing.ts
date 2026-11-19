@@ -13,7 +13,7 @@ import {
 import { openMarkdownFileLinkWithSystemDefault } from '../../markdown/link-routing/markdown-file-link-system-open'
 import { scrollToAnchorInEditor } from '../../markdown/navigation/markdown-anchor-scroll'
 import { getRichMarkdownCommentAtPos } from '../review/rich-markdown-review-annotations'
-import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { translate } from '@/i18n/i18n'
 import { classifyHtmlSuperscriptLinkAction } from '../citations/rich-markdown-html-superscript-link-context'
 import type { RichMarkdownHtmlSuperscriptLinkContext } from '../citations/rich-markdown-html-superscript-link-context'
@@ -23,7 +23,7 @@ import type { Editor } from '@tiptap/react'
 import type { EditorView } from '@tiptap/pm/view'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
-import type { DiffComment } from '../../../../../../shared/diff-comment-types'
+import type { DiffComment } from '../../../../../../shared/file-review/diff-comment-types'
 
 export type ActivateMarkdownLink = (
   href: string,

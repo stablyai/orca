@@ -1,11 +1,11 @@
-import { abortSignalReason } from '../../../../../shared/abort-signal-reason'
+import { abortSignalReason } from '../../../../../shared/concurrency/abort-signal-reason'
 import {
   CLIPBOARD_IMAGE_MAX_PIXELS,
   assertClipboardImageByteLengthWithinLimit,
   assertClipboardImageDimensionsWithinLimit,
   encodeClipboardImageWithinLimit,
   type ClipboardImageDimensions
-} from '../../../../../shared/clipboard-image'
+} from '../../../../../shared/clipboard/clipboard-image'
 
 export function blobToBase64(blob: Blob, signal?: AbortSignal): Promise<string> {
   return new Promise((resolve, reject) => {

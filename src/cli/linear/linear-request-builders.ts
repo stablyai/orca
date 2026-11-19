@@ -11,6 +11,7 @@ import {
   LINEAR_WRITE_BODY_CAP,
   clampLinearIssueDepth
 } from '../../shared/linear/agent-access'
+import { LINEAR_PRIORITY_LABELS } from '../../shared/linear/priority-label'
 import { isLinearUuid } from '../../shared/linear/uuid'
 import {
   getOptionalNonNegativeIntegerFlag,
@@ -18,15 +19,11 @@ import {
   getRepeatedStringFlag,
   getRequiredStringFlag
 } from '../arguments/flags'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 
-const LINEAR_PRIORITY_VALUES = new Map([
-  ['none', 0],
-  ['urgent', 1],
-  ['high', 2],
-  ['medium', 3],
-  ['low', 4]
-])
+const LINEAR_PRIORITY_VALUES = new Map<string, number>(
+  Object.entries(LINEAR_PRIORITY_LABELS).map(([priority, label]) => [label, Number(priority)])
+)
 
 export function buildAssigneeSetRequest(
   flags: Map<string, string | boolean>,

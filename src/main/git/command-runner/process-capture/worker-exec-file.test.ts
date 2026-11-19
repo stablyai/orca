@@ -1,3 +1,16 @@
+import { once } from 'node:events'
+import { runProcess } from '@orca/process-host'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { removeWorktree } from '../../worktrees/removal/worktree-removal'
+import { prepareWorktreeRemovalsForStore } from '../../../workspaces/removal/worktree-removal-records-load'
+import {
+  startBackgroundWorktreeRemoval,
+  _resetPendingWorktreeRemovalsForTests
+} from '../../../workspaces/removal/worktree-background-removal'
+import { worktreeRemovalLifetime } from '../../../workspaces/removal/worktree-removal-lifetime'
+import { readWorktreeRemovalRecords } from '../../../workspaces/removal/worktree-removal-records'
 import { setImmediate as nextTurn } from 'node:timers/promises'
 import { Worker } from 'node:worker_threads'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -72,24 +85,6 @@ function capture(script: string, maxBuffer = 1024 * 1024) {
 }
 
 describe('worker-owned Git capture', () => {
-  it('keeps the caller responsive while process creation is blocked on the worker', async () => {
-    const gate = new SharedArrayBuffer(4)
-    await createHost(gate)
-    const pending = capture('process.stdout.write("ready")')
-    let completed = false
-    void pending.result.then(() => {
-      completed = true
-    })
-    try {
-      await nextTurn()
-      expect(completed).toBe(false)
-    } finally {
-      Atomics.store(new Int32Array(gate), 0, 1)
-      Atomics.notify(new Int32Array(gate), 0)
-    }
-    await expect(pending.result).resolves.toMatchObject({ error: null, stdout: 'ready' })
-  })
-
   it('preserves UTF-8, stdin, stderr and nonzero exit status', async () => {
     await createHost()
     const pending = capture(
@@ -118,11 +113,93 @@ describe('worker-owned Git capture', () => {
     const result = new Promise<Error | null>((resolve) =>
       workerExecFile('/orca/nonexistent-git', [], { maxBuffer: 32 }, (error) => resolve(error))
     )
-    await expect(result).resolves.toMatchObject({ code: 'ENOENT' })
+    // Callers classify a missing binary by its spawn syscall (isMissingCommandBinaryError).
+    await expect(result).resolves.toMatchObject({
+      code: 'ENOENT',
+      syscall: 'spawn /orca/nonexistent-git'
+    })
   })
 })
 
 describe.skipIf(process.platform !== 'darwin')('macOS worker capture cancellation', () => {
+  it('retires the worker-owned group after its root exited with inherited pipes still open', async () => {
+    await createHost()
+    const proxy = vi.spyOn(state.host!, 'spawn')
+    const controller = new AbortController()
+    const ready = Promise.withResolvers<number>()
+    const physical = Promise.withResolvers<void>()
+    let diagnostic = ''
+    const pending = execFileCapture(
+      process.execPath,
+      [
+        '-e',
+        `
+      const child=require('node:child_process').spawn(process.execPath,['-e',
+        "process.on('SIGTERM',()=>{});setInterval(()=>{},1000);process.send('ready')"
+      ],{stdio:['ignore','inherit','inherit','ipc']});
+      child.on('message',()=>process.stderr.write(String(child.pid)+'\\n',()=>process.exit(0)));
+      setInterval(()=>{},1000);
+    `
+      ],
+      {
+        spawnOnWorkerThread: true,
+        ownedPosixGroup: true,
+        signal: controller.signal,
+        timeout: 10_000,
+        onChildTerminated: physical.resolve,
+        onStderr: (chunk) => {
+          diagnostic += chunk
+          if (diagnostic.includes('\n')) {
+            ready.resolve(Number(diagnostic.trim()))
+          }
+        }
+      }
+    ).catch((error: unknown) => error)
+    let verified = false
+    let descendant: number | undefined
+    try {
+      descendant = await ready.promise
+      const child = proxy.mock.results[0]?.value
+      if (!child) {
+        throw new Error('worker did not return its child')
+      }
+      if (child.exitCode === null) {
+        await once(child, 'exit')
+      }
+      controller.abort()
+      await expect(pending).resolves.toMatchObject({ name: 'AbortError' })
+      let timer: ReturnType<typeof setTimeout> | undefined
+      try {
+        await Promise.race([
+          physical.promise,
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new Error('worker group did not retire')), 12_000)
+          })
+        ])
+      } finally {
+        clearTimeout(timer)
+      }
+      const state = await runProcess({
+        program: 'ps',
+        args: ['-o', 'stat=', '-p', String(descendant)]
+      })
+      expect(state.stdout.trim() === '' || state.stdout.trim().startsWith('Z')).toBe(true)
+      verified = true
+    } finally {
+      controller.abort()
+      // Regression cleanup owns this exact descendant even if the old root-only stop leaked it.
+      if (!verified && descendant) {
+        try {
+          process.kill(descendant, 'SIGKILL')
+        } catch {
+          /* gone */
+        }
+      }
+      proxy.mockRestore()
+      await pending
+    }
+  })
+
   it('does not report a queued child terminated until the worker processes its kill', async () => {
     const gate = new SharedArrayBuffer(4)
     await createHost(gate)
@@ -130,6 +207,7 @@ describe.skipIf(process.platform !== 'darwin')('macOS worker capture cancellatio
     const terminated = vi.fn()
     const pending = execFileCapture(process.execPath, ['-e', 'setInterval(()=>{},1000)'], {
       spawnOnWorkerThread: true,
+      ownedPosixGroup: true,
       signal: controller.signal,
       onChildTerminated: terminated
     })
@@ -142,17 +220,71 @@ describe.skipIf(process.platform !== 'darwin')('macOS worker capture cancellatio
     await vi.waitFor(() => expect(terminated).toHaveBeenCalledOnce())
   })
 
-  it('does not infer child termination from worker loss before a spawn acknowledgement', async () => {
+  it('keeps removal ownership and durable intent until an aborted worker child is actually terminated', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'orca-removal-worker-close-'))
+    const gate = new SharedArrayBuffer(4)
+    await createHost(gate)
+    await prepareWorktreeRemovalsForStore({
+      getProfileStorageDirectory: () => directory,
+      getRepos: () => [{ id: 'repo' }]
+    })
+    const childStarted = Promise.withResolvers<void>()
+    let closing: Promise<void> | undefined
+    try {
+      const result = startBackgroundWorktreeRemoval({
+        removal: {
+          worktreeId: 'repo::feature',
+          repoId: 'repo',
+          repoPath: directory,
+          worktree: { path: join(directory, 'missing-checkout'), branch: 'feature', head: 'abc' },
+          force: false,
+          deleteBranch: false
+        },
+        publish: () => {},
+        run: (signal) =>
+          removeWorktree(directory, join(directory, 'missing-checkout'), false, {
+            knownRemovedWorktree: { branch: 'feature', head: 'abc' },
+            deleteBranch: false,
+            checkoutDeleteSignal: signal,
+            observeChildTermination: () => {
+              childStarted.resolve()
+            }
+          })
+      })
+      void result.catch(() => {})
+      await childStarted.promise
+      let closed = false
+      closing = worktreeRemovalLifetime.close().then(() => {
+        closed = true
+      })
+      await nextTurn()
+      expect(closed).toBe(false)
+      expect(await readWorktreeRemovalRecords(directory)).toHaveLength(1)
+      Atomics.store(new Int32Array(gate), 0, 1)
+      Atomics.notify(new Int32Array(gate), 0)
+      await closing
+      expect(await readWorktreeRemovalRecords(directory)).toHaveLength(1)
+    } finally {
+      Atomics.store(new Int32Array(gate), 0, 1)
+      Atomics.notify(new Int32Array(gate), 0)
+      await closing
+      _resetPendingWorktreeRemovalsForTests()
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('reports a launch as never started when its worker is lost before it could run anything', async () => {
     const gate = new SharedArrayBuffer(4)
     await createHost(gate)
     const terminated = vi.fn()
     const pending = execFileCapture(process.execPath, ['-e', ''], {
       spawnOnWorkerThread: true,
+      ownedPosixGroup: true,
       onChildTerminated: terminated
     })
     const outcome = pending.catch((error: unknown) => error)
     await workers.at(-1)?.terminate()
     await expect(outcome).resolves.toBeInstanceOf(Error)
-    expect(terminated).not.toHaveBeenCalled()
+    expect(terminated).toHaveBeenCalledOnce()
   })
 })

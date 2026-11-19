@@ -1,6 +1,6 @@
 import { preservePreviousRendererHangs, reportPreviousRendererHangs } from './renderer-hang-records'
 import { rmSync } from 'node:fs'
-import type { CrashReportBreadcrumbData } from '../../shared/crash-reporting'
+import type { CrashReportBreadcrumbData } from '../../shared/crash-reporting/crash-reporting'
 import { resolveObservabilityConsent } from '../observability'
 import { hasActiveTraceSink } from '../observability/tracer'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
@@ -19,6 +19,7 @@ import {
   mergeHangObservations,
   type HangObservation
 } from './hang-observations'
+import { hangObservationUnresponsiveMs, isHangTierObservation } from './hang-observation-schema'
 
 function previousMarkerPath(userDataPath: string): string {
   return `${hangDetectionMarkerPath(userDataPath)}.previous`
@@ -73,11 +74,13 @@ function observationDetails(record: HangObservation, omitted: number): CrashRepo
     Object.assign(details, hangCaptureDetails('native', record.native))
   }
   if (record.kind === 'heartbeat-stall') {
-    details.unresponsiveMs =
-      latestHangMarker({ version: 1, observations: [record], omitted: 0 })?.unresponsiveMs ??
-      record.durationMs
+    details.unresponsiveMs = hangObservationUnresponsiveMs(record)
     details.detectedUnresponsiveMs = record.durationMs
     details.selfRecovered = record.selfRecovered
+    details.tier = isHangTierObservation(record) ? 'hang' : 'stall'
+    if (record.escalatedAt !== undefined) {
+      details.escalatedAfterDetectionMs = Math.max(0, record.escalatedAt - record.detectedAt)
+    }
   } else {
     details.watchdogGapMs = record.durationMs
     details.preGapCpuDeltaUs = null
@@ -114,6 +117,15 @@ function observationDetails(record: HangObservation, omitted: number): CrashRepo
       details[`machine_${key}`] = value
     }
   }
+  for (const [index, send] of (record.workerSends ?? []).entries()) {
+    details[`workerSend${index}_role`] = send.role
+    details[`workerSend${index}_kind`] = send.kind
+    details[`workerSend${index}_items`] = send.items
+    details[`workerSend${index}_bytes`] = send.bytes
+    details[`workerSend${index}_depth`] = send.depth
+    details[`workerSend${index}_agoMs`] = send.agoMs
+    details[`workerSend${index}_heapUsedMB`] = send.heapUsedMB
+  }
   if (record.watchdogGap) {
     details.overlappingWatchdogGapMs = record.watchdogGap.durationMs
     details.overlappingWatchdogGapAt = record.watchdogGap.observedAt
@@ -145,7 +157,11 @@ export function reportPreviousHangDetection(userDataPath: string): HangDetection
   }
   for (const record of collection.observations) {
     recordDurableCrashBreadcrumb(
-      record.kind === 'heartbeat-stall' ? 'main_thread_hang_detected' : 'main_thread_watchdog_gap',
+      record.kind === 'watchdog-gap'
+        ? 'main_thread_watchdog_gap'
+        : isHangTierObservation(record)
+          ? 'main_thread_hang_detected'
+          : 'main_thread_stall_detected',
       observationDetails(record, collection.omitted)
     )
   }

@@ -8,10 +8,10 @@ import {
   AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS,
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS,
   parseAgentSessionOperationTimestamp
-} from '../../../../shared/agent-session/agent-session-host-authority'
+} from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import { createHash } from 'node:crypto'
 import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
-import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
+import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import type {
   AgentSessionCreateOperation,
   AgentSessionCreateReclaimIdentity

@@ -1,120 +1,87 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createWriteStream, openSync, type WriteStream } from 'node:fs'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { Console } from 'node:console'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-afterEach(() => {
-  vi.restoreAllMocks()
-})
+const { recordDurableCrashBreadcrumbMock } = vi.hoisted(() => ({
+  recordDurableCrashBreadcrumbMock: vi.fn()
+}))
 
-describe('main-process fatal error guards (issue #9441)', () => {
-  it('never throws when the breadcrumb sink fails', async () => {
-    vi.resetModules()
-    vi.doMock('../../crash-reporting/breadcrumbs/durable-crash-breadcrumb', () => ({
-      recordDurableCrashBreadcrumb: vi.fn(() => {
-        throw new Error('sink offline')
-      })
-    }))
-    const { recordFatalMainProcessError } = await import('./main-process-error-guards')
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    try {
-      expect(() =>
-        recordFatalMainProcessError('main_uncaught_exception', 'not-an-error')
-      ).not.toThrow()
-    } finally {
-      consoleError.mockRestore()
-    }
+vi.mock('../../crash-reporting/breadcrumbs/durable-crash-breadcrumb', () => ({
+  recordDurableCrashBreadcrumb: recordDurableCrashBreadcrumbMock
+}))
+
+import { installStdioWriteErrorSink } from './main-process-error-guards'
+
+describe('installStdioWriteErrorSink', () => {
+  let root: string
+  let file: string
+
+  function closed(stream: WriteStream): Promise<void> {
+    return new Promise((resolve) => stream.once('close', () => resolve()))
+  }
+
+  function deadLogStream(): WriteStream {
+    // Writes to a read-only descriptor fail like a full or dead log target.
+    return createWriteStream(file, { fd: openSync(file, 'r') })
+  }
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'orca-stdio-sink-'))
+    file = join(root, 'log')
+    await writeFile(file, '')
   })
 
-  it('bounds and isolates console formatting for hostile rejection values', async () => {
-    vi.resetModules()
-    const record = vi.fn()
-    vi.doMock('../../crash-reporting/breadcrumbs/durable-crash-breadcrumb', () => ({
-      recordDurableCrashBreadcrumb: record
-    }))
-    const { recordFatalMainProcessError } = await import('./main-process-error-guards')
-    const hostileReason = {
-      toString(): never {
-        throw new Error('toString failed')
-      },
-      [Symbol.for('nodejs.util.inspect.custom')](): never {
-        throw new Error('inspect failed')
-      }
-    }
-    const consoleError = vi.spyOn(console, 'error').mockImplementation((...values: unknown[]) => {
-      if (values.some((value) => typeof value !== 'string')) {
-        throw new Error('unsafe console formatting')
-      }
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true })
+    recordDurableCrashBreadcrumbMock.mockReset()
+  })
+
+  it('absorbs a real console write failure on a dead stdout', async () => {
+    const stdout = deadLogStream()
+    installStdioWriteErrorSink([['stdout', stdout]])
+    const logger = new Console({ stdout, stderr: stdout })
+
+    logger.info('[runtime-rpc] client connected', { deviceId: 'a' })
+    await closed(stdout)
+
+    expect(recordDurableCrashBreadcrumbMock).toHaveBeenCalledWith(
+      'main_stdio_write_failed',
+      expect.objectContaining({ stream: 'stdout', errorCode: expect.stringMatching(/^E/) })
+    )
+  })
+
+  it('records the raw errno when libuv cannot name the failure, and survives the next one', () => {
+    const stdout = deadLogStream()
+    installStdioWriteErrorSink([['stdout', stdout]])
+    const quotaExceeded = Object.assign(new Error('UNKNOWN: unknown error, write'), {
+      code: 'UNKNOWN',
+      errno: -122
     })
 
-    expect(() =>
-      recordFatalMainProcessError('main_unhandled_rejection', hostileReason)
-    ).not.toThrow()
-    expect(record).toHaveBeenCalledWith(
-      'main_unhandled_rejection',
-      expect.objectContaining({ errorName: 'object', errorMessage: '[unprintable value]' }),
-      'main_unhandled_rejection'
-    )
-    expect(consoleError).toHaveBeenCalledWith(
-      expect.stringMatching(/^\[main_unhandled_rejection\]/)
-    )
-    expect(String(consoleError.mock.calls[0]?.[0]).length).toBeLessThan(5_000)
+    stdout.emit('error', quotaExceeded)
+    // Stdio stays writable after a failure, so the next console write can fail again.
+    expect(() => stdout.emit('error', quotaExceeded)).not.toThrow()
+
+    expect(recordDurableCrashBreadcrumbMock).toHaveBeenCalledWith('main_stdio_write_failed', {
+      stream: 'stdout',
+      errorCode: 'UNKNOWN',
+      errno: '-122'
+    })
   })
 
-  it('caps oversized rejection diagnostics before recording or logging', async () => {
-    vi.resetModules()
-    const record = vi.fn()
-    vi.doMock('../../crash-reporting/breadcrumbs/durable-crash-breadcrumb', () => ({
-      recordDurableCrashBreadcrumb: record
-    }))
-    const { recordFatalMainProcessError } = await import('./main-process-error-guards')
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const error = Object.assign(new Error('m'.repeat(100_000)), { code: 'c'.repeat(100_000) })
-    error.name = 'n'.repeat(100_000)
-    error.stack = Array.from({ length: 100 }, () => 's'.repeat(1_000)).join('\n')
+  it('stays silent when recording the breadcrumb also fails', async () => {
+    const stderr = deadLogStream()
+    installStdioWriteErrorSink([['stderr', stderr]])
+    recordDurableCrashBreadcrumbMock.mockImplementation(() => {
+      throw new Error('ENOSPC: no space left on device, write')
+    })
 
-    recordFatalMainProcessError('main_unhandled_rejection', error)
+    stderr.write('diagnostic line\n')
+    await closed(stderr)
 
-    const details = record.mock.calls[0]?.[1] as Record<string, string>
-    expect(details.errorName).toHaveLength(100)
-    expect(details.errorMessage).toHaveLength(500)
-    expect(details.errorStack.length).toBeLessThanOrEqual(4_000)
-    expect(details.errorCode).toHaveLength(100)
-    expect(String(consoleError.mock.calls[0]?.[0]).length).toBeLessThan(5_000)
-  })
-
-  it('rethrows non-pipe errors outside the uncaughtException handler', async () => {
-    vi.resetModules()
-    vi.doMock('../../crash-reporting/breadcrumbs/durable-crash-breadcrumb', () => ({
-      recordDurableCrashBreadcrumb: vi.fn()
-    }))
-    const { installUncaughtPipeErrorGuard } = await import('./main-process-error-guards')
-    const originalOn = process.on.bind(process)
-    const originalOff = process.off.bind(process)
-    let handler: ((error: unknown) => void) | null = null
-    let scheduled: (() => void) | null = null
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    vi.spyOn(process, 'on').mockImplementation(((event, listener) => {
-      if (event === 'uncaughtException') {
-        handler = listener as (error: unknown) => void
-        return process
-      }
-      return originalOn(event, listener)
-    }) as typeof process.on)
-    const offSpy = vi.spyOn(process, 'off').mockImplementation(((event, listener) => {
-      if (event === 'uncaughtException') {
-        return process
-      }
-      return originalOff(event, listener)
-    }) as typeof process.off)
-    vi.spyOn(globalThis, 'setImmediate').mockImplementation(((callback) => {
-      scheduled = callback as () => void
-      return {} as NodeJS.Immediate
-    }) as typeof setImmediate)
-
-    installUncaughtPipeErrorGuard()
-
-    const error = new Error('boom')
-    expect(() => handler?.(error)).not.toThrow()
-    expect(offSpy).toHaveBeenCalledWith('uncaughtException', handler)
-    expect(scheduled).not.toBeNull()
-    expect(() => scheduled?.()).toThrow(error)
+    expect(stderr.errored).toMatchObject({ code: expect.stringMatching(/^E/) })
   })
 })

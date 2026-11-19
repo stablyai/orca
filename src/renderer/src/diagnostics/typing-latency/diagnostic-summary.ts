@@ -2,8 +2,8 @@
 import {
   isWindowsAbsolutePathLike,
   normalizeRuntimePathForComparison
-} from '../../../../shared/cross-platform-path'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+} from '../../../../shared/file-access/cross-platform-path'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { getRendererAppPlatform } from '../../app-shell/platform/renderer-app-platform'
 
 export type LatencyPercentiles = {
@@ -115,14 +115,11 @@ export type FocusedPaneCensus = {
   statusAgentType: string | null
 }
 
-type CountableRecord = Record<string, unknown> | null | undefined
-
 export type TypingCensusStoreView = {
   worktreesByRepo?: Record<string, WorktreeLike[]> | null
   tabsByWorktree?: Record<string, unknown[]> | null
   unifiedTabsByWorktree?: Record<string, unknown[]> | null
-  agentStatusByPaneKey?: CountableRecord
-  retainedAgentsByPaneKey?: CountableRecord
+  agentStatusByPaneKey?: ReadonlyMap<string, unknown> | null
   activeTabId?: string | null
   activeTabType?: string | null
   settings?: Record<string, unknown> | null
@@ -146,7 +143,6 @@ export type TypingScaleCensus = {
   panes: { live: number | null; instrumented: number }
   agentRows: {
     storeLive: number
-    storeRetained: number
     storeTotal: number
     /** Mounted rows only; compact mode collapses most agents behind CompactAgentExpansion. */
     mountedDom: number | null
@@ -155,10 +151,6 @@ export type TypingScaleCensus = {
   settings: TypingSettingsCensus
   activeTab: { id: string | null; type: string | null }
   focusedPane: FocusedPaneCensus | null
-}
-
-function countRecord(record: CountableRecord): number {
-  return record ? Object.keys(record).length : 0
 }
 
 function sumArrayLengths(byKey: Record<string, unknown[]> | null | undefined): number {
@@ -229,8 +221,7 @@ export function summarizeTypingScaleCensus(input: {
   const state = input.state
   const settings = state?.settings ?? null
   const worktrees = collectWorktrees(state?.worktreesByRepo)
-  const storeLive = countRecord(state?.agentStatusByPaneKey)
-  const storeRetained = countRecord(state?.retainedAgentsByPaneKey)
+  const storeLive = state?.agentStatusByPaneKey?.size ?? 0
   return {
     appVersion: input.appVersion,
     repos: state?.worktreesByRepo ? Object.keys(state.worktreesByRepo).length : 0,
@@ -243,8 +234,7 @@ export function summarizeTypingScaleCensus(input: {
     panes: { live: input.livePaneCount, instrumented: input.instrumentedPaneCount },
     agentRows: {
       storeLive,
-      storeRetained,
-      storeTotal: storeLive + storeRetained,
+      storeTotal: storeLive,
       mountedDom: input.mountedAgentRowCount
     },
     storeListeners: input.storeListenerCount,

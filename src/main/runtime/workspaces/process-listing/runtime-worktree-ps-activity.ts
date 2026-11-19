@@ -1,8 +1,11 @@
-import type { RuntimeSyncedTab } from '../../../../shared/runtime-session-contracts'
-import type { RuntimeWorktreePsSummary } from '../../../../shared/runtime-worktree-contracts'
-import type { Repo } from '../../../../shared/repo-types'
+import type { RuntimeSyncedTab } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeWorktreePsSummary } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { getWorkspaceSessionTabActivityIds } from '../../../../shared/workspace-session/workspace-session-tab-activity'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
@@ -212,6 +215,7 @@ export function applyRuntimeWorktreePsSessionActivity(args: {
     tabIds: Set<string>
     paneKeys: Set<string>
     ptyIdByTerminalHandle: Map<string, string>
+    terminalHandleByPaneKey: Map<string, string>
   }
 } {
   const mirroredWorktreeIdByTabId = new Map<string, string>()
@@ -261,8 +265,17 @@ export function applyRuntimeWorktreePsSessionActivity(args: {
   const connectedPtyEvidence = {
     tabIds: new Set<string>(),
     paneKeys: new Set<string>(),
-    ptyIdByTerminalHandle: new Map<string, string>()
+    ptyIdByTerminalHandle: new Map<string, string>(),
+    terminalHandleByPaneKey: new Map<string, string>()
   }
+  // Every live terminal claims both the pane its env exported and the pane it shows in.
+  const claimants = new Map<string, Set<string>>()
+  const claim = (paneKey: string | null | undefined, ptyId: string) => {
+    if (paneKey) {
+      claimants.set(paneKey, (claimants.get(paneKey) ?? new Set()).add(ptyId))
+    }
+  }
+  const settled: { ptyId: string; paneKey: string }[] = []
   for (const pty of args.ptysById.values()) {
     if (!pty.connected) {
       continue
@@ -274,8 +287,22 @@ export function applyRuntimeWorktreePsSessionActivity(args: {
     if (paneKey) {
       connectedPtyEvidence.paneKeys.add(paneKey)
     }
+    claim(pty.spawnPaneKey, pty.ptyId)
+    claim(paneKey, pty.ptyId)
+    // Its hook rows are filed under the exported key, so only a terminal still in that pane names them.
+    if (paneKey && pty.spawnPaneKey === paneKey) {
+      settled.push({ ptyId: pty.ptyId, paneKey })
+    }
     for (const terminalHandle of args.getTerminalHandlesForPty(pty.ptyId)) {
       connectedPtyEvidence.ptyIdByTerminalHandle.set(terminalHandle, pty.ptyId)
+    }
+  }
+  // A pane no other live terminal exported or shows; every handle of its one PTY drives the same process.
+  for (const { ptyId, paneKey } of settled) {
+    const handle =
+      claimants.get(paneKey)?.size === 1 ? args.getTerminalHandlesForPty(ptyId)[0] : undefined
+    if (handle) {
+      connectedPtyEvidence.terminalHandleByPaneKey.set(paneKey, handle)
     }
   }
   return { mirroredWorktreeIdByTabId, connectedPtyEvidence }

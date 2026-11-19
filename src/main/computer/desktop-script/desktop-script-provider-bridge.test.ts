@@ -8,5 +8,10 @@ describe('mapBridgeError', () => {
         'element_not_enabled: element 4 is disabled, so no input was sent; run get-app-state and use a fresh element index'
       ).code
     ).toBe('element_not_enabled')
+    expect(
+      mapBridgeError(
+        "unsupported_capability: Linux computer use can't reach the AT-SPI accessibility bus, so nothing was sent."
+      ).code
+    ).toBe('unsupported_capability')
   })
 })

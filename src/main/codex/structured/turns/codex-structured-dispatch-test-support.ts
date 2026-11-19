@@ -16,7 +16,7 @@ import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent
 import { CodexStructuredSessionAdapter } from '../session-lifecycle/codex-structured-session-adapter'
 import { codexTurnLifecycleFake } from '../journal/codex-turn-lifecycle-fake'
 import type { CodexStructuredSessionAdapterDeps } from '../session-lifecycle/codex-structured-session-state'
-import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 export const CODEX_TEST_THREAD_ID = 'thread-abc'
 

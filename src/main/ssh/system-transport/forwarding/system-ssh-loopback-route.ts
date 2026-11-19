@@ -5,7 +5,7 @@ import {
   signalProcessTree
 } from '@orca/process-host/process-tree-termination'
 import { createSshOperationAbortError } from '../../connection/ssh-exec-options'
-import type { SshTarget } from '../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { SshResolvedConfig } from '../../config/ssh-g-config-resolution'
 import { admitSystemSshLoopbackRoute } from './system-ssh-loopback-route-admission'
 import {
@@ -154,7 +154,8 @@ function probeLoopbackRoute(
   const channel = spawnSystemSshCommand(target, `echo ${LOOPBACK_ROUTE_PROBE_MARKER}`, {
     ...options,
     nonInteractive: true,
-    wrapCommand: false
+    wrapCommand: false,
+    closeStdin: true
   })
   return new Promise((resolve, reject) => {
     let stdout = ''

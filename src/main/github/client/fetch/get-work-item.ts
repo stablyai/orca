@@ -2,7 +2,7 @@ import {
   withGitHubRepoExecution,
   type LocalGitExecOptions
 } from '../../repositories/github-repository-identity'
-import type { IssueSourcePreference } from '../../../../shared/repo-types'
+import type { IssueSourcePreference } from '../../../../shared/repository/repo-types'
 import { acquire, release } from '../../execution/github-operation-slots'
 import { classifyGhError } from '../../api/gh-error-classification'
 import { extractExecError } from '../../../git/command-runner/process-capture/exec-error'

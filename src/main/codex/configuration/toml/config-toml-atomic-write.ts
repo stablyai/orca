@@ -1,19 +1,25 @@
 import { randomUUID } from 'node:crypto'
-import {
-  existsSync,
-  lstatSync,
-  mkdirSync,
-  realpathSync,
-  statSync,
-  unlinkSync,
-  writeFileSync
-} from 'node:fs'
+import { lstatSync, mkdirSync, realpathSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import '../../../filesystem/atomic-file-publication'
-import { renameFileWithWindowsRetry } from '../../../../shared/windows-retry-file-operations'
+import { renameFileWithWindowsRetry } from '../../../../shared/file-write/windows-retry-file-operations'
 import { writeRollingFileBackup } from '../../../filesystem/rolling-file-backup'
+import {
+  observeFilePublication,
+  observedExistsSync as existsSync,
+  observeFileReadError,
+  observeResolvedFilePath
+} from '../../../filesystem/file-content-observation'
 
-export function writeTomlConfigAtomically(configPath: string, contents: string): void {
+/**
+ * Returns false without publishing when `stillCurrent` says the file changed since the caller read
+ * it, so a writer on another thread can redo its edit instead of clobbering a newer one.
+ */
+export function writeTomlConfigAtomically(
+  configPath: string,
+  contents: string,
+  options?: { stillCurrent: (writePath: string) => boolean }
+): boolean {
   const writePath = resolveTomlWritePath(configPath)
   const directory = dirname(writePath)
   mkdirSync(directory, { recursive: true })
@@ -27,8 +33,14 @@ export function writeTomlConfigAtomically(configPath: string, contents: string):
     if (existsSync(writePath)) {
       writeRollingFileBackup(writePath, `${writePath}.bak`)
     }
-    renameFileWithWindowsRetry(temporaryPath, writePath)
+    // Checked before every rename attempt, so only the re-read is left between check and rename.
+    const stillCurrent = options ? () => options.stillCurrent(writePath) : undefined
+    if (!renameFileWithWindowsRetry(temporaryPath, writePath, stillCurrent)) {
+      return false
+    }
+    observeFilePublication(writePath, contents)
     renamed = true
+    return true
   } finally {
     if (!renamed && existsSync(temporaryPath)) {
       try {
@@ -44,20 +56,26 @@ export function writeTomlConfigAtomically(configPath: string, contents: string):
 export function resolveCodexConfigTomlFileMode(configPath: string): number {
   try {
     return statSync(configPath).mode & 0o777
-  } catch {
+  } catch (error) {
+    observeFileReadError(configPath, error)
     return 0o600
   }
 }
 
-function resolveTomlWritePath(configPath: string): string {
+export function resolveTomlWritePath(configPath: string): string {
   let isSymlink = false
   try {
     isSymlink = lstatSync(configPath).isSymbolicLink()
   } catch (error) {
+    observeFileReadError(configPath, error)
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
       throw error
     }
   }
   // Preserve dotfile symlinks; refuse writes through unresolved dangling links.
-  return isSymlink ? realpathSync.native(configPath) : configPath
+  return observeResolvedFilePath(
+    'toml-write',
+    configPath,
+    isSymlink ? realpathSync.native(configPath) : configPath
+  )
 }

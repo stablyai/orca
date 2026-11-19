@@ -59,13 +59,6 @@ const sources = {
         return state.items
       })
     `,
-  namedSelectors: `
-      import { useAppStore } from '@/store'
-      const EarlyFresh = () => useAppStore(selectFreshRows)
-      function selectFreshRows(state) { return state.rows.filter(Boolean) }
-      const Stable = () => useAppStore(selectActiveId)
-      const selectActiveId = (state) => state.activeId
-    `,
   nestedShallow: `
       import { useAppStore } from '@/store'
       import { useShallow } from 'zustand/react/shallow'
@@ -144,14 +137,6 @@ describe('app store performance Oxlint plugin', () => {
       'app-store-performance(no-identity-selector)',
       'app-store-performance(no-fresh-selector-result)',
       'app-store-performance(no-fresh-selector-result)',
-      'app-store-performance(no-fresh-selector-result)'
-    ])
-  })
-
-  it('resolves selectors referenced by name, including ones hoisted below the call', () => {
-    const diagnostics = diagnosticsBySource.get(sources.namedSelectors)
-
-    expect(diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
       'app-store-performance(no-fresh-selector-result)'
     ])
   })

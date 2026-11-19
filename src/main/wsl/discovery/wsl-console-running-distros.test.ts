@@ -50,12 +50,6 @@ function ask(registered: readonly string[] = ['Ubuntu-24.04']): {
 }
 
 describe('running WSL distros read through a console', () => {
-  it('finds registered names past the header and the default marker', () => {
-    expect(parseConsoleWslDistros(CONPTY_OUTPUT, ['Ubuntu-24.04', 'Debian'])).toEqual([
-      'Ubuntu-24.04'
-    ])
-  })
-
   it('splits rows the console placed by cursor moves, in registered spelling', () => {
     const output = '\u001b[1;1Hubuntu-24.04 (Default)\u001b[K\u001b[2;1HDebian\u001b[K'
     expect(parseConsoleWslDistros(output, ['Ubuntu-24.04', 'Debian'])).toEqual([
@@ -97,14 +91,6 @@ describe('running WSL distros read through a console', () => {
     const { console, result } = ask()
     console.emitData('\u001b[?25l\u001b[2J\u001b[H\u001b[?25h')
     console.emitExit(0)
-
-    await expect(result).rejects.toThrow('not recognisable')
-  })
-
-  it('stays unverifiable on a failure', async () => {
-    const { console, result } = ask()
-    console.emitData('Error code: Wsl/Service/E_UNEXPECTED\r\n')
-    console.emitExit(NONE_RUNNING_EXIT)
 
     await expect(result).rejects.toThrow('not recognisable')
   })

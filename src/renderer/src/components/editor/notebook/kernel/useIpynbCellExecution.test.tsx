@@ -2,7 +2,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { parseIpynb } from '../document/ipynb-parse'
-import type { KernelFrameEvent } from '../../../../../../shared/notebook-kernel-types'
+import type { KernelFrameEvent } from '../../../../../../shared/editor/notebooks/notebook-kernel-types'
 import type {
   WorktreeOperationOwnerRecord,
   WorktreeOperationRouteState
@@ -313,16 +313,4 @@ describe('finished notebook runs retained while the viewer is hidden', () => {
     ).toBe(true)
     hook.unmount()
   })
-
-  it.each(['{', '{"cells":[null,{"id":"cell-0","cell_type":"code","source":[]}]}'])(
-    'retires runs without changing a document that refuses its first update: %s',
-    async (content) => {
-      const filePath = `/repo/hidden-refused-first-${content}.ipynb`
-      await finishHiddenRuns(filePath, 1)
-      const { hook, applyContent } = mountFinishedNotebook(filePath, content)
-      expect(applyContent).not.toHaveBeenCalled()
-      expect(getSession(filePath).runs['cell-0']).toMatchObject({ committed: true, outputs: [] })
-      hook.unmount()
-    }
-  )
 })

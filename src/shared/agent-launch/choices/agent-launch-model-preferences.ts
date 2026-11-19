@@ -1,13 +1,13 @@
 /** Use the launch catalog for every caller's model/effort validation so CLI and orchestration refusals agree. */
 
-import type { AgentLaunchPreferences } from '../../agent-session/agent-session-host-authority'
+import type { AgentLaunchPreferences } from '../../agent-session/lifecycle/operations/agent-session-host-authority'
 import {
   findCatalogModel,
   findCatalogOption,
   getAgentSessionOptionLaunchCatalog
 } from '../../agent-session/options/agent-session-option-catalog'
-import { isPiModelOptionId } from '../../agent-session/options/agent-session-option-catalog-pi'
-import { resolveAgentSessionOptionLaunch } from '../../agent-session/options/agent-session-option-launch'
+import { isPiModelOptionId } from '../../agent-session/options/catalog-providers/agent-session-option-catalog-pi'
+import { resolveAgentSessionOptionLaunch } from '../../agent-session/options/launch/agent-session-option-launch'
 import type { TuiAgent } from '../catalog/tui-agent'
 
 export const OPENCODE_MODEL_VERSION_REFUSAL =

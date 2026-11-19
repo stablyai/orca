@@ -11,17 +11,17 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
 import { MarkupOverlay } from './MarkupOverlay'
-import type { MarkupModeController } from './useMarkupMode'
-import type { GrabModeHook } from './useGrabMode'
+import type { MarkupModeController } from './capture/useMarkupMode'
+import type { GrabModeHook } from './grab/useGrabMode'
 import {
   getBrowserOverlayAnchor,
   type BrowserOverlayViewport
 } from '../describe-page/browser-annotation-geometry'
 import { BrowserPageAnnotationTray } from './browser-page-annotation-tray'
-import { BrowserPageGrabToast } from './browser-page-grab-toast'
-import { PendingBrowserAnnotationCard } from './pending-browser-annotation-card'
-import type { useBrowserPageAnnotationSend } from './use-browser-page-annotation-send'
-import type { useBrowserPageGrabAnnotations } from './use-browser-page-grab-annotations'
+import { BrowserPageGrabToast } from './grab/browser-page-grab-toast'
+import { PendingBrowserAnnotationCard } from './delivery/pending-browser-annotation-card'
+import type { useBrowserPageAnnotationSend } from './delivery/use-browser-page-annotation-send'
+import type { useBrowserPageGrabAnnotations } from './grab/use-browser-page-grab-annotations'
 
 /** Pair guest tools with all their result overlays so every surface that arms a picker can display its result. */
 export function BrowserGuestAnnotateOverlays({

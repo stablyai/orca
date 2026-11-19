@@ -8,15 +8,20 @@ import type {
 } from '@/attention/agent-attention-contract'
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
-import { isTabOnScreen, isWorkspaceOnScreen } from '@/hooks/agent-auto-ack-targets'
+import { isTabOnScreen, isWorkspaceOnScreen } from '@/attention/agent-auto-ack-targets'
 import { isWorkspaceNotificationMutedBySidebarFilters } from '@/attention/hidden-workspace-notification-mute'
 import type { StructuredTab } from '../status/structured-agent-session-tabs'
 import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
+import { readBotBackgroundSessionTabs } from '../../../bots/bot-background-sessions'
 
 type StoreSnapshot = ReturnType<typeof useAppStore.getState>
 
 function structuredTabsIn(state: StoreSnapshot, workspaceId: string): StructuredTab[] {
-  return (state.unifiedTabsByWorktree[workspaceId] ?? []).filter(isStructuredTab)
+  return [
+    ...(state.unifiedTabsByWorktree[workspaceId] ?? []).filter(isStructuredTab),
+    // A bot's tabless sessions still notify; only a group member's open room shows one.
+    ...readBotBackgroundSessionTabs().filter((tab) => tab.worktreeId === workspaceId)
+  ]
 }
 
 /** Resolve a subject only while its tab still owns that session; rebound tabs reject old keys. */
@@ -83,9 +88,11 @@ export function createStructuredAttentionSurface(state: StoreSnapshot): AgentAtt
     isWorkspaceMuted: (workspaceId) =>
       isWorkspaceNotificationMutedBySidebarFilters(state, workspaceId),
     resolveViewedSubjectKey: (groupId) => {
-      const tab = Object.values(state.unifiedTabsByWorktree)
-        .flat()
-        .find((candidate) => candidate.id === groupId)
+      // A stand-in is viewed through the room that shows its session.
+      const tab = [
+        ...Object.values(state.unifiedTabsByWorktree).flat(),
+        ...readBotBackgroundSessionTabs()
+      ].find((candidate) => candidate.id === groupId)
       return tab && isStructuredTab(tab)
         ? structuredAgentSessionPaneKey(tab.id, tab.entityId)
         : null

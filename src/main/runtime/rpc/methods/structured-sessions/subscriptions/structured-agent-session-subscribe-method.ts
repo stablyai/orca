@@ -1,5 +1,5 @@
 import { defineStreamingMethod } from '../../../core'
-import { sendingTextAppends } from '../../../../../../shared/agent-session/agent-session-text-append'
+import { sendingTextAppends } from '../../../../../../shared/agent-session/view/live-read/agent-session-text-append'
 import { recordMobileViewOpened } from '../../../../../telemetry/mobile-client-telemetry'
 import { clientRequestsCommands } from '../structured-agent-session-policy'
 import { clientReadsCurrentRequests } from '../conversation/structured-agent-session-current-requests'
@@ -29,7 +29,7 @@ export const STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD = defineStreamingMethod({
     if (stream.isClosed()) {
       return
     }
-    // Resolve after opening snapshot/missed batch; a racing close disposes the bound stream.
+    // Resolve once registered; the opening snapshot follows on the stream. A racing close disposes it.
     dispose = await host.subscribe({
       commandsOnRequest: clientRequestsCommands(ctx),
       readsCurrentRequests: clientReadsCurrentRequests(ctx),
@@ -63,6 +63,7 @@ export const STRUCTURED_AGENT_SESSION_SUBSCRIBE_METHOD = defineStreamingMethod({
       },
       ...(params.cursor ? { cursor: params.cursor } : {}),
       snapshotCatchUp: clientSupportsSnapshotCatchUp(ctx),
+      ...(capabilities?.promptSuggestions === 1 ? { showsPromptSuggestions: true } : {}),
       // Every phone's app, whatever its version, ends a stream over a frame its bridge cannot carry.
       ...(ctx.clientKind === 'mobile' ? { boundedFrames: true } : {})
     })

@@ -2,19 +2,19 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
-import { partialRuntimeStore } from '../../orca-runtime-tests/runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../../construction/test-context/runtime-store-partial-fixture'
 
 // Preserve side-effect order: mocks, lifecycle, fixtures.
-await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
+await import('../../construction/test-context/runtime-test-module-registration.spec')
 const { OrcaRuntimeService } = await import('../../orca-runtime')
-await import('../../orca-runtime-tests/orca-runtime-test-lifecycle.spec')
+await import('../../construction/test-context/orca-runtime-test-lifecycle.spec')
 const {
   HEADLESS_LEAF_ID,
   TEST_WORKTREE_ID,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} = await import('../../orca-runtime-tests/orca-runtime-test-fixtures.spec')
-const { committingSpawn } = await import('../../orca-runtime-tests/bind-first-pane.test-fixture')
+} = await import('../../construction/test-context/orca-runtime-test-fixtures.spec')
+const { committingSpawn } = await import('../layout/bind-first-pane.test-fixture')
 
 const PANE_KEY = `host-tab:${HEADLESS_LEAF_ID}`
 const SESSION_ID = '0bc9e9f8-192c-4bd4-beb8-8b745c59c8b0'
@@ -34,7 +34,7 @@ function codexRow(fields: Partial<AgentStatusIpcPayload> = {}): AgentStatusIpcPa
   }
 }
 
-function makeRuntime(
+async function makeRuntime(
   rows: AgentStatusIpcPayload[],
   launchAgent?: 'codex',
   {
@@ -69,7 +69,7 @@ function makeRuntime(
     kill: () => true,
     getForegroundProcess: async () => null
   })
-  runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
   return { runtime, spawn }
 }
 
@@ -89,7 +89,7 @@ async function restore(runtime: InstanceType<typeof OrcaRuntimeService>): Promis
 
 describe('restoring a pane its host recorded an agent in', () => {
   it('ignores a row from another worktree, and launches the tab’s agent fresh', async () => {
-    const { runtime, spawn } = makeRuntime(
+    const { runtime, spawn } = await makeRuntime(
       [codexRow({ worktreeId: 'other-repo::/other' })],
       'codex'
     )
@@ -100,7 +100,7 @@ describe('restoring a pane its host recorded an agent in', () => {
   })
 
   it('launches the tab’s agent fresh when the pane’s own rows name two conversations', async () => {
-    const { runtime, spawn } = makeRuntime(
+    const { runtime, spawn } = await makeRuntime(
       [
         codexRow({ receivedAt: 2 }),
         codexRow({ providerSession: { key: 'session_id', id: 'another-session' }, receivedAt: 1 })
@@ -113,7 +113,7 @@ describe('restoring a pane its host recorded an agent in', () => {
 
   it('launches the tab’s agent fresh when another pane’s stored record holds the conversation', async () => {
     const otherPaneKey = 'other-tab:44444444-4444-4444-8444-444444444444'
-    const { runtime, spawn } = makeRuntime([codexRow()], 'codex', {
+    const { runtime, spawn } = await makeRuntime([codexRow()], 'codex', {
       session: {
         sleepingAgentSessionsByPaneKey: {
           [otherPaneKey]: {
@@ -136,7 +136,7 @@ describe('restoring a pane its host recorded an agent in', () => {
   })
 
   it('falls back to the tab’s agent launch when the newest row is a structured host’s', async () => {
-    const { runtime, spawn } = makeRuntime([codexRow({ structuredHost: 'owned' })], 'codex')
+    const { runtime, spawn } = await makeRuntime([codexRow({ structuredHost: 'owned' })], 'codex')
     await restore(runtime)
     const { command } = spawn.mock.calls[0]![0]
     expect(command ?? '').not.toMatch(RESUMES)
@@ -144,7 +144,7 @@ describe('restoring a pane its host recorded an agent in', () => {
   })
 
   it('resumes a pane whose only other row is a relayed SSH row naming another session', async () => {
-    const { runtime, spawn } = makeRuntime(
+    const { runtime, spawn } = await makeRuntime(
       [
         codexRow(),
         codexRow({

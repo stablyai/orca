@@ -1,10 +1,10 @@
 // Send force/replay close params only to advertising hosts.
-import type { RuntimeSessionTabCloseReason } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeSessionTabCloseReason } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { runtimeEnvironmentSupportsCapability } from '../../rpc/compatibility/runtime-capability-proof'
 import {
   SESSION_TAB_CLOSE_FORCE_RUNTIME_CAPABILITY,
   SESSION_TAB_CLOSE_REPLAY_REASON_RUNTIME_CAPABILITY
-} from '../../../../../shared/session-tabs-runtime-capabilities'
+} from '../../../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 
 export async function userTabCloseParams(
   environmentId: string,

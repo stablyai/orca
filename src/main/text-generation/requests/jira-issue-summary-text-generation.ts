@@ -8,7 +8,7 @@ import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/so
 import {
   textGenerationFailure,
   textGenerationFailureCodeFields
-} from '../../../shared/text-generation-failure-copy'
+} from '../../../shared/text-generation/text-generation-failure-copy'
 import { spawnSourceControlAgent } from '../execution/source-control-agent-launch'
 import { cancelLocalGeneration } from '../execution/source-control-generation-lanes'
 import { runGenerationRequest } from '../agent-generation-request'

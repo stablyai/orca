@@ -18,14 +18,14 @@ export async function prepareRuntimeEnvironmentBrowserPlacement(
     requireStatus?: boolean
   }
 ) {
-  const initialEnvironment = resolveEnvironment(userDataPath, args.selector)
+  const initialEnvironment = await resolveEnvironment(userDataPath, args.selector)
   requireConnected(initialEnvironment.id)
   const placement = await prepareBrowserClientHostPlacement({
     selector: initialEnvironment.id,
     expectedPairingRevision: args.expectedPairingRevision,
     preference: args.preference,
     enabled: args.enabled,
-    resolveEnvironment: (selector) => resolveEnvironment(userDataPath, selector),
+    resolveEnvironment: async (selector) => await resolveEnvironment(userDataPath, selector),
     getStatus: async (environmentId) => {
       requireConnected(environmentId)
       const status = await getRuntimeEnvironmentStatus(userDataPath, environmentId, undefined, {

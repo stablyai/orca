@@ -1,6 +1,6 @@
 /** Resolve /clear successors from committed durable pointers on each read; clearing rewrites no callers. */
 
-import type { AgentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   structuredAgentSessionPaneKey,
@@ -14,6 +14,8 @@ export type AgentSessionRecordReader = {
   isSessionUnreadable?: (sessionId: string) => boolean
   /** Absent on a store that predates tab visibility; every session then counts as open. */
   getVisibleSessionTabIndex?: () => { present: boolean; sessionIds: string[] }
+  /** An open chat with no tab: started in the background or kept running past its tab's close. */
+  isSessionInBackground?: (sessionId: string) => boolean
   /** Chats with an open tab, from the tab table or, before one is recorded, the saved workspace tabs. */
   listVisibleSessionIds?: () => string[]
   /** Moves when a commit changes which chats exist, where, their /clear successor or open tabs. */
@@ -25,6 +27,15 @@ export type AgentSessionRecordReader = {
   /** Changes identity only when records join or leave or a /clear links them, so lookups derived from
    *  every record's lineage can be reused across other writes. */
   lineageRevision?: () => object
+  /** Each commit's written or removed record ids, and whether it changed which chats have tabs;
+   *  absent on a reader that can't say them. */
+  onRecordsChanged?: (
+    listener: (sessionIds: readonly string[], tabsChanged: boolean) => void
+  ) => () => void
+  /** How many records `listRecords` lists, without listing them. */
+  conversationCount?: () => number
+  /** The record's row as stored; a new row each time a commit writes it. */
+  recordStamp?: (sessionId: string) => object | undefined
   /** The chat whose provider handle chain names a native session id, from an index the store's
    *  commits keep; readers without it scan the records. */
   providerAliasOwner?: (nativeId: string) => string | null
@@ -41,11 +52,15 @@ export function conversationRecordReader(store: {
   listConversations: AgentSessionRecordReader['listRecords']
   isSessionUnreadable?: AgentSessionRecordReader['isSessionUnreadable']
   getVisibleSessionTabIndex: NonNullable<AgentSessionRecordReader['getVisibleSessionTabIndex']>
+  isSessionInBackground?: AgentSessionRecordReader['isSessionInBackground']
   senderIdentityRevision?: () => number
   listVisibleSessionIds?: () => string[]
   listClearedFrom?: (sessionId: string) => readonly string[]
   isSessionTabRetired?: AgentSessionRecordReader['isSessionTabRetired']
   lineageRevision?: AgentSessionRecordReader['lineageRevision']
+  onRecordsChanged?: AgentSessionRecordReader['onRecordsChanged']
+  conversationCount?: AgentSessionRecordReader['conversationCount']
+  recordStamp?: AgentSessionRecordReader['recordStamp']
   providerAliasOwner?: AgentSessionRecordReader['providerAliasOwner']
 }): AgentSessionRecordReader {
   return {
@@ -53,6 +68,7 @@ export function conversationRecordReader(store: {
     isSessionUnreadable: store.isSessionUnreadable,
     listRecords: store.listConversations,
     getVisibleSessionTabIndex: store.getVisibleSessionTabIndex,
+    isSessionInBackground: store.isSessionInBackground,
     ...(store.listVisibleSessionIds ? { listVisibleSessionIds: store.listVisibleSessionIds } : {}),
     ...(store.senderIdentityRevision
       ? { senderIdentityRevision: store.senderIdentityRevision }
@@ -60,6 +76,9 @@ export function conversationRecordReader(store: {
     ...(store.listClearedFrom ? { listClearedFrom: store.listClearedFrom } : {}),
     isSessionTabRetired: store.isSessionTabRetired,
     lineageRevision: store.lineageRevision,
+    ...(store.onRecordsChanged ? { onRecordsChanged: store.onRecordsChanged } : {}),
+    ...(store.conversationCount ? { conversationCount: store.conversationCount } : {}),
+    ...(store.recordStamp ? { recordStamp: store.recordStamp } : {}),
     ...(store.providerAliasOwner ? { providerAliasOwner: store.providerAliasOwner } : {})
   }
 }

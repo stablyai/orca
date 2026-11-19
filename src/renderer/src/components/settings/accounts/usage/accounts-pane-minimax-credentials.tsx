@@ -1,5 +1,5 @@
 import { HelpCircle, Loader2, Lock, LockOpen } from 'lucide-react'
-import { useNow } from '../../../../hooks/use-now'
+import { useNow } from '../../../../lib/window-activity/use-now'
 import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
@@ -10,7 +10,7 @@ import { Label } from '../../../ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '../../../ui/popover'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { UnsealedCredentialNotice } from '../../../provider-accounts/UnsealedCredentialNotice'
-import type { ProviderRateLimits } from '../../../../../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { MiniMaxCredentialsModel } from './use-minimax-credentials'
 import {
   usageCredentialSealedElsewhere,

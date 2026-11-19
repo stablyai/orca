@@ -1,4 +1,4 @@
-import type { AutomationUsageClient } from '../../../shared/backend-service-contract'
+import type { AutomationUsageClient } from '../../../shared/backend/backend-service-contract'
 import type { Automation } from '../../../shared/automations/automation-definition'
 import type {
   AutomationRun,

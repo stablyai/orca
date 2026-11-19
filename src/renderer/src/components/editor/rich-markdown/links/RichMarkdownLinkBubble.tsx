@@ -6,7 +6,7 @@ import { Copy, Pencil, Unlink } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { addViewportSizeChangeListener } from '@/hooks/viewport-size-change-listener'
+import { addViewportSizeChangeListener } from '@/lib/window-activity/viewport-size-change-listener'
 import { isEditorAnchorVisible, observeAnchorAncestorVisibility } from './editor-anchor-visibility'
 
 export type LinkBubbleState = {

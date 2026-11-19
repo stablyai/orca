@@ -1,14 +1,14 @@
 import { toast } from 'sonner'
 import type { AppState } from '@/store/types'
 import { translate } from '@/i18n/i18n'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import type { TerminalLeafMoveRequest } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-leaf-move'
 import { commitTerminalSurfaceClose } from '@/store/terminals/retirement/terminal-surface-close-intent'
 import type { PaneCwdEntry } from '../split/resolve-split-cwd'
 import { detachTerminalLayoutLeaf } from './terminal-layout-leaf-detach'
 import { moveLeafThroughLayoutOwner } from './terminal-pane-detach-layout-owner'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 import {
   isWebTerminalSurfaceTabId,
   toWebTerminalSurfaceTabId

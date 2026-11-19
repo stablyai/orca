@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import { TERMINAL_COLOR_OVERRIDES_SETTING } from '../../../shared/terminal-themes/terminal-color-overrides'
 import { isQualifiedPluginKey } from '../../../shared/plugins/manifest/plugin-manifest'
 import {

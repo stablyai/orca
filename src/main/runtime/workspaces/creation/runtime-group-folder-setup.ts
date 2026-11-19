@@ -5,10 +5,10 @@ import type {
 } from '../../../../shared/folder-workspaces/folder-workspace-create'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
-import { projectGroupHookOwner } from '../../../../shared/workspace-hook-owner'
-import { isRepoOnCatalogHost } from '../../../../shared/execution-host'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
+import { projectGroupHookOwner } from '../../../../shared/workspace-setup/hooks/workspace-hook-owner'
+import { isRepoOnCatalogHost } from '../../../../shared/execution-host/execution-host'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import {
   prepareRuntimeLocalWorktreeSetup,
   buildRuntimeSetupReceipt,

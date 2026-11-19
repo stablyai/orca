@@ -1,4 +1,5 @@
 import { app, session } from 'electron'
+import { configureMacMenuDeadKeyGuard } from '../menu/macos-menu-dead-key'
 import { applyBackgroundActivationPolicy } from '../window/activation/foreground-activation-policy'
 import { applyElectronProxySettings } from '../network/proxy-settings'
 import { installElectronProxyRequestGuard } from '../network/electron-proxy-request-guard'
@@ -14,7 +15,8 @@ import {
 import { browserSiteDisplayController } from '../browser/site-settings/display/browser-site-display-controller'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
-import { getAppEnvironment } from '../../shared/app-environment'
+import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
+import { loadWslMappedDriveAnswers } from '../wsl/filesystem/wsl-mapped-drive-answers-file'
 import { loadWslMoveFence } from '../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { startWslMoveStartup } from '../persistence/moving-wsl-projects/startup/wsl-move-startup'
 import { startWslHostsPolicyLiveUpdates } from '../wsl/host-lifecycle/wsl-hosts-policy-live-update'
@@ -36,21 +38,17 @@ import {
   shouldSuppressDevEducation,
   suppressDevEducationForStore
 } from './profile-startup/dev-education-suppression'
-import {
-  awaitBrowserSessionProxies,
-  setBrowserNetworkProxySettingsResolver
-} from '../browser/sessions/proxy/browser-session-proxy'
-import { installDocPreviewProtocolHandler } from '../browser/document-preview/doc-preview-protocol'
-import { installMediaPreviewProtocolHandler } from '../media/media-preview-protocol'
-import { installJiraImageProtocolHandler } from '../jira/attachments/image-protocol'
+import { setBrowserNetworkProxySettingsResolver } from '../browser/sessions/proxy/browser-session-proxy'
+import { installPreviewProtocolHandlers } from './preview-protocol-handlers'
 import { registerDocPreviewGrantHandlers } from '../ipc/doc-preview-grant-ipc'
-import { initializeBrowserSessionsForApp } from '../browser/sessions/browser-session-startup'
+import {
+  initializeBrowserSessionsForApp,
+  whenBrowserSessionsReadyForRestoredTabs
+} from '../browser/sessions/browser-session-startup'
 import {
   initializeBrowserExtensionSupport,
   switchBrowserExtensionSupport
 } from '../browser/extensions/browser-extension-startup'
-import { whenBrowserExtensionSessionsLoaded } from '../browser/extensions/profile-sessions/browser-extension-session-loader'
-import { browserSessionRegistry } from '../browser/sessions/profiles/browser-session-registry'
 import { logStartupMilestone } from './diagnostics/startup-diagnostics'
 import { writeHttp1CompatibilityMarker } from './network-compatibility/http1-compatibility-marker'
 import { mainProcessState as state } from './main-process-state'
@@ -69,6 +67,7 @@ import { preloadSsh2 } from '../ssh/authentication/ssh2-module-load'
 
 export async function initializeReadyFoundation(): Promise<void> {
   logStartupMilestone('app-ready')
+  configureMacMenuDeadKeyGuard()
   // Background automation and a windowless serve must not claim the macOS Dock/menu bar.
   applyBackgroundActivationPolicy({
     serveWithoutDesktopWindow: state.isServeMode,
@@ -147,13 +146,15 @@ export async function initializeReadyFoundation(): Promise<void> {
   initializeBrowserClientHostId(profile.profileDirectory)
   // Before the profile store and the fence: a conversion that rewrites the profile here leaves
   // nothing to fence.
-  runPendingWslDriveUncConversions({
+  await runPendingWslDriveUncConversions({
     userDataPath: getAppEnvironment().getPath('userData'),
     profileUserDataPath: getProfileUserDataPath(),
     profileId: profile.profile.id
   })
   // Why before the store loads: its pane normalization tells a moved project's retained rows from
   // a rival host's, and no handler or runtime may give a moving project a new terminal.
+  // Saved drive answers first: the fence and the move prune read them and never a drive.
+  await loadWslMappedDriveAnswers(getAppEnvironment().getPath('userData'))
   loadWslMoveFence(getAppEnvironment().getPath('userData'))
   const profileState = await createProfileStateStoreForStartup({
     userDataPath: getProfileUserDataPath(),
@@ -292,10 +293,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   }
   // Install the proxy resolver before partitions materialize.
   setBrowserNetworkProxySettingsResolver(() => state.store!.getSettings())
-  // Protocol-scoped preview handlers must exist before webview attachment.
-  installMediaPreviewProtocolHandler()
-  installJiraImageProtocolHandler()
-  installDocPreviewProtocolHandler()
+  installPreviewProtocolHandlers()
   registerDocPreviewGrantHandlers()
   // Session setup needs the extension support decision before loading profiles.
   initializeBrowserExtensionSupport({
@@ -318,12 +316,5 @@ export async function initializeReadyFoundation(): Promise<void> {
   })
   browserSiteDisplayController.followZoomSettings(store)
   browserManager.setSiteDisplayController(browserSiteDisplayController)
-  try {
-    // Await proxy writes so first guest navigation cannot race them.
-    await awaitBrowserSessionProxies(browserSessionRegistry.listProfiles())
-  } catch {
-    console.warn('[proxy] Failed to apply network proxy settings to browser sessions')
-  }
-  // Why bounded: restored tabs should get content scripts, but a slow extension never blocks launch.
-  await whenBrowserExtensionSessionsLoaded(3_000)
+  await whenBrowserSessionsReadyForRestoredTabs()
 }

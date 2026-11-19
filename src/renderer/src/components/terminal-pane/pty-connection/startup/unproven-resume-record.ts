@@ -37,6 +37,6 @@ export function isUnprovenResumeRecord(
     return false
   }
   // A live report can leave an equivalent record in place, so its own arrival is the proof.
-  const live = state.agentStatusByPaneKey[session.cacheKey]
+  const live = state.agentStatusByPaneKey.get(session.cacheKey)
   return !live || live.updatedAt < pending.spawnedAt
 }

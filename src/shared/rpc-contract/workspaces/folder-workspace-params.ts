@@ -5,7 +5,7 @@ import { TaskSourceContextSchema } from '../../work-items/task-source-context-sc
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../workspace-attachments/workspace-linked-item-source-context'
 import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../rpc-param-primitives'
-import { DiffCommentSchema } from '../../diff-comment-schema'
+import { DiffCommentSchema } from '../../file-review/diff-comment-schema'
 import { sleepingAgentLaunchConfigSchema } from '../../workspace-session/workspace-session-sleeping-agents'
 import { AgentArgs, LaunchPreferences } from '../terminal/agent-session-params'
 import { LaunchSourceParam } from '../agent-launch/launch-source-param'
@@ -112,7 +112,9 @@ export const FolderWorkspaceSelector = z.object({
 })
 
 export const FolderWorkspaceDelete = FolderWorkspaceSelector.extend({
-  requireUniqueId: RequireUniqueId
+  requireUniqueId: RequireUniqueId,
+  runHooks: z.boolean().optional(),
+  allowFailedArchiveHook: z.boolean().optional()
 })
 
 export const FolderWorkspacePathStatus = z.discriminatedUnion('scope', [

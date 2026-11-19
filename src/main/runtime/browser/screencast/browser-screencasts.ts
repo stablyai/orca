@@ -65,7 +65,9 @@ export class RuntimeBrowserScreencasts {
         'Client-hosted browser pages do not support server screencast.'
       )
     }
-    const target = await this.targets.resolveBrowserCommandTarget(params)
+    const target = await this.targets.resolveBrowserCommandTarget(params, {
+      waitForFirstLoad: false
+    })
     const { browserPageId, webContents: guest } = this.targets.resolveBrowserPageWebContents(
       target.worktreeId,
       target.browserPageId

@@ -1,17 +1,20 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { useHostProtocolGates } from '../../components/host-protocol-gates-context'
-import { presentPrMerge } from '../../components/pr-sidebar/pr-actions-state'
-import { useMobilePrActions } from '../review/use-mobile-pr-actions'
-import '../review/pr-actions-engine'
-import type { PrActionBusyKey } from '../review/pr-actions-engine'
-import { prActionSlices, type PrSlice } from '../review/mobile-pr-queries'
-import { useMobilePrAiTriage, type PrAiTriageKey } from '../review/use-mobile-pr-ai-triage'
+import { useHostProtocolGates } from '../../components/host-connection/host-protocol-gates-context'
+import { presentPrMerge } from '../review/pull-request/actions/pr-actions-state'
+import { useMobilePrActions } from '../review/pull-request/actions/use-mobile-pr-actions'
+import '../review/pull-request/actions/pr-actions-engine'
+import type { PrActionBusyKey } from '../review/pull-request/actions/pr-actions-engine'
+import { prActionSlices, type PrSlice } from '../review/pull-request/mobile-pr-queries'
+import {
+  useMobilePrAiTriage,
+  type PrAiTriageKey
+} from '../review/agent-launch/use-mobile-pr-ai-triage'
 import {
   buildPrFixChecksPrompt,
   buildResolveConflictsPrompt as buildReviewConflictsPrompt
-} from '../review/pr-ai-triage-prompt'
-import type { PrSidebarState } from '../review/mobile-pr-sidebar-state'
+} from '../review/agent-launch/pr-ai-triage-prompt'
+import type { PrSidebarState } from '../review/pull-request/mobile-pr-sidebar-state'
 import { buildResolveConflictsPrompt } from '../../../../src/shared/source-control/recovery/source-control-conflict-prompts'
 import { resolveGitHubPRMergeMethods } from '../../../../src/shared/github/pull-requests/merge/pull-request-merge-methods'
 import type { GitHubPRMergeMethod } from '../../../../src/shared/github/pull-requests/pull-request-types'
@@ -98,7 +101,11 @@ export function useMobileSourceControlNextStep({
     hostStatusPending: statusPending,
     hostStatusReadable: statusReadable
   })
-  const [mergeMethod, setMergeMethod] = useState<GitHubPRMergeMethod | null>(null)
+  // The confirm keeps the head it opened on, so a push read while it is up is not merged unseen.
+  const [mergeIntent, setMergeIntent] = useState<{
+    method: GitHubPRMergeMethod
+    headSha: string | null
+  } | null>(null)
 
   // Merge and auto-merge apply optimistically, so read the PR through the actions engine.
   const pr = useMemo(
@@ -223,7 +230,9 @@ export function useMobileSourceControlNextStep({
               )
             }
           },
-          merge: onMerge ? () => onMerge() : setMergeMethod,
+          merge: onMerge
+            ? () => onMerge()
+            : (method) => setMergeIntent({ method, headSha: readyPr?.pr.headSha ?? null }),
           setAutoMerge: (enabled) =>
             actions.setAutoMerge(
               enabled,
@@ -270,16 +279,16 @@ export function useMobileSourceControlNextStep({
   const notice = actions.blocked ?? actions.error ?? workflowError
 
   const mergeConfirm: MobileMergeConfirm | null =
-    mergeMethod && pr
+    mergeIntent && pr
       ? {
           title: t('pullRequest.prActionsSection.mergeConfirmTitle', 'Merge pull request?'),
-          message: presentPrMerge(pr, mergeMethod).confirmMessage,
+          message: presentPrMerge(pr, mergeIntent.method).confirmMessage,
           confirmLabel: t('pullRequest.prActionsSection.mergeButton', 'Merge'),
           onConfirm: () => {
-            setMergeMethod(null)
-            actions.merge(mergeMethod)
+            setMergeIntent(null)
+            actions.merge(mergeIntent.method, mergeIntent.headSha)
           },
-          onCancel: () => setMergeMethod(null)
+          onCancel: () => setMergeIntent(null)
         }
       : null
 

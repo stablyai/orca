@@ -1,18 +1,19 @@
+import { useNativeChatPaneLifetimeEffect } from '../../../pane/ownership/native-chat-pane-lifetime'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import type { StructuredAgentSessionOptionsArgs } from './structured-agent-session-options-contract'
 import { toast } from 'sonner'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
-import { structuredAgentSessionSeedCatalog } from '../../../../../../../shared/agent-session/options/structured-agent-session-seed-catalog'
+import { structuredAgentSessionSeedCatalog } from '../../../../../../../shared/agent-session/options/model-catalog/structured-agent-session-seed-catalog'
 import type { SessionOptionsSurface } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
 import {
   lockedStructuredAgentSessionOptionSnapshot,
   structuredAgentSessionOptionSnapshot
-} from '../../../../../../../shared/agent-session/options/structured-agent-session-option-snapshot'
+} from '../../../../../../../shared/agent-session/options/view/structured-agent-session-option-snapshot'
 import {
   createStructuredAgentSessionOptionsWriteOwner,
   structuredAgentSessionOptionAvailability
-} from '../../../../../../../shared/agent-session/options/structured-agent-session-options-write-owner'
-import { structuredAgentSessionShownSnapshot } from '../../../../../../../shared/agent-session/options/structured-agent-session-option-view'
+} from '../../../../../../../shared/agent-session/options/reconciliation/structured-agent-session-options-write-owner'
+import { structuredAgentSessionShownSnapshot } from '../../../../../../../shared/agent-session/options/view/structured-agent-session-option-view'
 import { useHostModelCatalogUpgrade } from '../catalog/use-host-model-catalog-upgrade'
 import { useStructuredAgentSessionOptionState } from './use-structured-agent-session-option-state'
 import { agentSessionWriteFailureText } from '../../../messages/notices/agent-session-write-notice-text'
@@ -143,7 +144,7 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     () => createStructuredAgentSessionOptionsWriteOwner(() => writeContextRef.current()),
     []
   )
-  useLayoutEffect(() => () => writer.detach(), [writer])
+  useNativeChatPaneLifetimeEffect(useCallback(() => () => writer.detach(), [writer]))
   const setStructuredOption = writer.setOption
   const setOption = useCallback(
     async (id: string, value: string | boolean) => {
@@ -158,16 +159,17 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     },
     [launch?.explicitOptions, launchSeedOptions, optionStateRef, optionView, setStructuredOption]
   )
+  const { demandModelCatalog } = hostCatalog
   const optionSurface = useMemo<SessionOptionsSurface>(
     () => ({
       getSnapshot: () => optionSnapshot,
-      demandModelCatalog: hostCatalog.demandModelCatalog,
+      demandModelCatalog,
       admits: writer.admits,
       setOption,
       invokeAction: async () => ({ snapshot: optionSnapshot }),
       subscribe: () => () => {}
     }),
-    [setOption, optionSnapshot, hostCatalog.demandModelCatalog, writer]
+    [setOption, optionSnapshot, demandModelCatalog, writer]
   )
 
   return {
