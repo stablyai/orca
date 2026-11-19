@@ -67,11 +67,10 @@ export class UnprovenAgentExits {
       })
   }
 
-  /** Resolves once no proof for the pane is running, a queued re-proof included, so a sleep
-   *  capture reads the quit it is still proving. */
+  /** Resolves once the pane's running proof answers, so a sleep capture reads the quit it is
+   *  still proving. A queued re-proof isn't awaited: marks arriving faster than proofs can't hold
+   *  a sleep back. */
   async settled(paneKey: string): Promise<void> {
-    for (let entry = this.panes.get(paneKey); entry?.proving; entry = this.panes.get(paneKey)) {
-      await entry.proof
-    }
+    await this.panes.get(paneKey)?.proof
   }
 }

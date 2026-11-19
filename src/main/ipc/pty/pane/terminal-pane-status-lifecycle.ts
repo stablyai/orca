@@ -115,6 +115,19 @@ export function bindTerminalPaneStatusLifecycle(
 
 /** A local pane's shell alone holds its PTY, and the pane still runs that PTY afterwards; null on
  *  a remote host, which reports no process tree to main. */
+/** The pane's PTY from the spawn-time index, else the runtime's pane search. */
+function resolvePanePty(
+  runtime: OrcaRuntimeService,
+  paneKey: string
+): { ptyId: string | null; incarnationId: string | null } {
+  const ptyId = paneKeyPtyId.get(paneKey)
+  if (ptyId) {
+    return { ptyId, incarnationId: ptyIncarnationById.get(ptyId) ?? null }
+  }
+  const pane = runtime.resolveTerminalPane(paneKey)
+  return { ptyId: pane.ptyId ?? null, incarnationId: pane.incarnationId ?? null }
+}
+
 async function paneShellAlone(
   runtime: OrcaRuntimeService | undefined,
   paneKey: string,
@@ -125,20 +138,23 @@ async function paneShellAlone(
     return false
   }
   try {
-    const pane = runtime.resolveTerminalPane(paneKey)
+    const pane = resolvePanePty(runtime, paneKey)
     if (!pane.ptyId) {
       return false
     }
     if (isRemoteExecutionHostPtyId(pane.ptyId)) {
       return null
     }
-    // Input during the proof may start the next agent (`codex resume`) after the table was read.
-    const inputBefore = lastInputAtByPty.get(pane.ptyId)
+    // Input during the proof (desktop, CLI or mobile) may start the next agent (`codex resume`)
+    // after the table was read.
+    const inputStamp = (ptyId: string): string =>
+      `${lastInputAtByPty.get(ptyId)}|${runtime.terminalRunFacts.readLastInputAt(ptyId)}`
+    const inputBefore = inputStamp(pane.ptyId)
     const shellAlone = await confirmShellAlone(pane.ptyId, pane.incarnationId ?? undefined, agent)
-    const current = runtime.resolveTerminalPane(paneKey)
+    const current = resolvePanePty(runtime, paneKey)
     return (
       shellAlone &&
-      lastInputAtByPty.get(pane.ptyId) === inputBefore &&
+      inputStamp(pane.ptyId) === inputBefore &&
       current.ptyId === pane.ptyId &&
       current.incarnationId === pane.incarnationId &&
       stillCurrent()
