@@ -687,7 +687,11 @@
       "unsupported": "このホストでは古いバージョンの Orca が実行されています。ホストの Orca を更新して再試行してください。",
       "mark": "分岐 ·",
       "markedName": "{{mark}} {{name}}",
-      "accessibleName": "分岐: {{name}}"
+      "accessibleName": "分岐: {{name}}",
+      "sheet": {
+        "name": "チャット名",
+        "nameDefault": "{{name}}（分岐）"
+      }
     },
     "selectionQuote": {
       "action": "引用",

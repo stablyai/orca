@@ -14,6 +14,7 @@ import { isWslUncPath } from '../../../shared/file-access/wsl-paths'
 import { assertLegacyAiVaultResumeAllowed } from '../../ai-vault/structured-sessions/structured-session-ownership'
 import { tryEnsureStructuredAgentSessionHostForResume } from '../../runtime/agent-session/installation/structured-agent-session-host-refusal'
 import { copyStructuredChatConversation } from '../../ai-vault/structured-sessions/structured-chat-conversation-copy'
+import { copyTerminalChatForkCut } from '../../ai-vault/terminal-chat-fork-cut'
 import { wakeNativeChatTranscriptDistro } from '../../native-chat/transcript-discovery/native-chat-open-wake'
 import { wslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 import { prepareAiVaultSessionHandoff } from './ai-vault-handoff'
@@ -69,6 +70,10 @@ export async function prepareAiVaultSessionResume(
   }
   // Resuming a session is a user act: start its stopped distro before the gated transcript reads.
   await wakeNativeChatTranscriptDistro(wslDistroForPath(args.filePath))
+  const cut = await copyTerminalChatForkCut(args)
+  if (cut) {
+    return cut
+  }
   if (!isWslUncPath(args.filePath)) {
     if (options.ensureStructuredSessionOwnership) {
       await (args.codexHome === null && !args.fork

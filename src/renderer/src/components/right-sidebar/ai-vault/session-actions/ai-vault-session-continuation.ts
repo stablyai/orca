@@ -1,7 +1,7 @@
 import {
   buildAgentSessionContinuationPrompt,
   type AgentSessionContinuationRequest
-} from '@/lib/agent-session/context/agent-session-continuation'
+} from '../../../../../../shared/agent-session/context/agent-session-continuation'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   AI_VAULT_SESSION_HANDOFF_TIMEOUT_MS,

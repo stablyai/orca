@@ -726,7 +726,11 @@
       "unsupported": "Este host ejecuta una versión anterior de Orca. Actualiza Orca en el host y vuelve a intentarlo.",
       "mark": "Rama ·",
       "markedName": "{{mark}} {{name}}",
-      "accessibleName": "Rama: {{name}}"
+      "accessibleName": "Rama: {{name}}",
+      "sheet": {
+        "name": "Nombre del chat",
+        "nameDefault": "{{name}} (Rama)"
+      }
     },
     "selectionQuote": {
       "action": "Citar",

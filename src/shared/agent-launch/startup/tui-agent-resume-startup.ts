@@ -1,4 +1,4 @@
-import { getAgentForkArgv, getAgentResumeArgv } from './agent-resume-argv'
+import { getAgentForkArgv, getAgentResumeArgv, getAgentSessionNameArgv } from './agent-resume-argv'
 import type {
   AgentProviderSessionMetadata,
   ResumableTuiAgent
@@ -37,6 +37,8 @@ export function buildAgentResumeStartupPlan(args: {
   fork?: boolean
   /** OS that runs the agent when `platform` only picks quoting; null when unreported. */
   agentHostPlatform?: NodeJS.Platform | null
+  /** The session's display name, for agents whose CLI takes one. */
+  displayName?: string | null
 }): AgentStartupPlan | null {
   const resumeArgv = args.fork
     ? getAgentForkArgv(args.agent, args.providerSession)
@@ -45,10 +47,12 @@ export function buildAgentResumeStartupPlan(args: {
     return null
   }
   // Codex otherwise asks for its old folder, even if deleted (#17745). Keep before resume so argv removal preserves the folder choice.
-  const argv =
-    args.agent === 'codex' && args.resumeInLaunchCwd
+  const argv = [
+    ...(args.agent === 'codex' && args.resumeInLaunchCwd
       ? [resumeArgv[0], '-c', 'tui.resume_cwd=current', ...resumeArgv.slice(1)]
-      : resumeArgv
+      : resumeArgv),
+    ...getAgentSessionNameArgv(args.agent, args.displayName)
+  ]
   const shell = resolveStartupShell(args.platform, args.shell)
   // Why: Codex restores a resumed thread's saved permissions unless the launch passes one, so
   // replaying Orca's launch-time flag would undo a change made inside the session (#10886).

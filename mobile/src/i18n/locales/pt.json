@@ -751,7 +751,11 @@
       "unsupported": "Este host executa uma versão antiga do Orca. Atualize o Orca no host e tente novamente.",
       "mark": "Fork ·",
       "markedName": "{{mark}} {{name}}",
-      "accessibleName": "Fork: {{name}}"
+      "accessibleName": "Fork: {{name}}",
+      "sheet": {
+        "name": "Nome do chat",
+        "nameDefault": "{{name}} (Fork)"
+      }
     },
     "selectionQuote": {
       "action": "Citar",

@@ -25,6 +25,7 @@ import {
   type ExecutionHostId
 } from '../../../../../../shared/execution-host/execution-host'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { nameForkedStructuredChat } from '@/runtime/native-chat/naming/structured-chat-fork-name'
 
 export type NativeChatForkRequest = {
   agent: TuiAgent
@@ -34,6 +35,10 @@ export type NativeChatForkRequest = {
   /** Client-only admission requirement; reacquired from the child after reload. */
   forkRequiresInheritedOriginal?: boolean
   surfaceAddress: StructuredLaunchSurfaceAddress
+  /** Text left unsent in the fork's composer, as when forking from one of your own messages. */
+  draft?: string
+  /** Saved as the fork's own name once it exists. */
+  name?: string
 }
 
 /** Right after the source chat's tab, in that tab's group; read at the click, before the tab can move. */
@@ -88,7 +93,11 @@ export async function launchNativeChatFork(
       // A side chat is selected once it sits beside its source.
       activate: request.side === undefined,
       surfaceAddress: request.surfaceAddress,
-      ...(question ? { prompt: question, promptKeptByCaller: true as const } : {})
+      ...(question
+        ? { prompt: question, promptKeptByCaller: true as const }
+        : request.draft
+          ? { prompt: request.draft, promptDelivery: 'draft' as const }
+          : {})
     })
   } catch (error) {
     reportNativeChatForkFailure(request.agent, error, false)
@@ -103,6 +112,9 @@ export async function launchNativeChatFork(
     ? await sideQuestionDelivery(launch.promptDeliveryResult)
     : undefined
   const chat = forkChat(launch)
+  if (!failure && request.name) {
+    void nameForkedStructuredChat(chat.executionHostId, chat.sessionId, request.name)
+  }
   if (delivery === 'unconfirmed') {
     reportSideQuestion(request.agent, delivery)
     return { chat, question: delivery }

@@ -14,6 +14,7 @@ import {
   withoutUnansweredLaunch
 } from './tabs/pending-session-selection'
 import { releaseTerminalCreateLock } from '../terminal/session/creation/terminal-create-lock'
+import { nameMobileForkedChat } from './chat-fork/chat-fork-name'
 import type { MobileSessionAttachmentsModel } from '../files/attachments/use-mobile-session-attachments'
 
 type ForkScope = Pick<
@@ -49,7 +50,10 @@ export function mobileChatForkTabPlacement(
 export async function forkMobileStructuredChat(
   scope: ForkScope,
   agent: TuiAgent,
-  forkFrom: StructuredAgentSessionForkSource
+  forkFrom: StructuredAgentSessionForkSource,
+  /** Another agent's fork: a fresh chat whose first message recaps this one. */
+  recap?: string,
+  name?: string
 ): Promise<void> {
   const agentName = TUI_AGENT_DISPLAY_NAMES[agent]
   const report = (message: string): void => {
@@ -72,9 +76,11 @@ export async function forkMobileStructuredChat(
       client,
       scope.worktreeId,
       agent,
-      forkFrom,
-      tabPlacement
+      recap ? undefined : forkFrom,
+      tabPlacement,
+      recap
     )
+    nameMobileForkedChat(client, result, name)
     if (result.kind === 'created') {
       scope.pendingSelectionRef.current = withLaunchReply(scope.pendingSelectionRef.current, lock, {
         sessionId: result.sessionId

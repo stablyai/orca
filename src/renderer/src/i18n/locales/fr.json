@@ -20245,7 +20245,11 @@
         "markedName": "{{mark}} {{name}}",
         "accessibleName": "Branche : {{name}}",
         "sourceTooltip": "Branche de {{name}}",
-        "unknownSourceTooltip": "Branche d’une autre conversation"
+        "unknownSourceTooltip": "Branche d’une autre conversation",
+        "window": {
+          "chatNameLabel": "Nom de la discussion",
+          "chatNameDefault": "{{name}} (Branche)"
+        }
       },
       "cardKindHidden": {
         "description": "Vous pouvez modifier cela à tout moment dans",

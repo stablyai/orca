@@ -4,7 +4,7 @@ import {
   buildAgentSessionContinuationPrompt,
   resolveAgentSessionContinuationTranscriptPath,
   type AgentSessionContinuationRequest
-} from '@/lib/agent-session/context/agent-session-continuation'
+} from '../../../../../shared/agent-session/context/agent-session-continuation'
 import { readTerminalContextText } from '@/lib/agent-session/context/terminal-context-text'
 import { useAppStore } from '@/store/index'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'

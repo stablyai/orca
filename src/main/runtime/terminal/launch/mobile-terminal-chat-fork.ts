@@ -24,6 +24,8 @@ export function buildMobileTerminalChatFork(args: {
   prepared: AiVaultPrepareSessionResumeResult
   settings: AiVaultResumeLaunchSettings
   runtime: AgentLaunchRuntime
+  /** The fork's session name, for CLIs that take one. */
+  displayName?: string
 }): MobileTerminalCommand & {
   command: string
   cwd?: string
@@ -54,7 +56,8 @@ export function buildMobileTerminalChatFork(args: {
     },
     settings: isTuiAgent(source.agent)
       ? withWslHostAgentCommand(settings, source.agent, runtime.platform, liveShell)
-      : settings
+      : settings,
+    displayName: args.displayName
   }
   if (prepared.forkedSession) {
     assertAiVaultCopiedSessionStoreAllowed(startupArgs)

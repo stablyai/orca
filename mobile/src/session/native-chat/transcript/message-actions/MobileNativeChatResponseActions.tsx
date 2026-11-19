@@ -1,8 +1,9 @@
 import { useContext, useSyncExternalStore } from 'react'
 import { Pressable, View } from 'react-native'
-import { ArrowUp, GitFork } from 'lucide-react-native'
+import { ArrowUp } from 'lucide-react-native'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { MobileSourceCopyButton } from '../../../../components/code-presentation/MobileSourceCopyButton'
+import { MobileForkIcon } from '../../../../components/icons/MobileForkIcon'
 import { colors, radii } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
@@ -47,7 +48,7 @@ export function MobileNativeChatResponseActions({
         />
       ) : null}
       {fork && offer !== 'hidden' ? (
-        <ForkButton offer={offer} onFork={() => fork.fork(message)} />
+        <ForkButton offer={offer} onFork={() => fork.openSheet(message)} />
       ) : null}
       {scrollRowToTop && message.role === 'assistant' && copyText.length > 0 ? (
         <Pressable
@@ -64,6 +65,7 @@ export function MobileNativeChatResponseActions({
   )
 }
 
+/** One fork action under a response: beside this chat, or into a new worktree. */
 function ForkButton({
   offer,
   onFork
@@ -92,7 +94,11 @@ function ForkButton({
       disabled={disabled}
       onPress={onFork}
     >
-      <GitFork size={14} color={colors.textMuted} style={disabled ? styles.disabled : null} />
+      <MobileForkIcon
+        size={14}
+        color={colors.textMuted}
+        style={disabled ? styles.disabled : null}
+      />
     </Pressable>
   )
 }

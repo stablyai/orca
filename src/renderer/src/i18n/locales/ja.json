@@ -20579,7 +20579,11 @@
         "markedName": "{{mark}} {{name}}",
         "accessibleName": "分岐: {{name}}",
         "sourceTooltip": "{{name}} から分岐",
-        "unknownSourceTooltip": "別のチャットから分岐"
+        "unknownSourceTooltip": "別のチャットから分岐",
+        "window": {
+          "chatNameLabel": "チャット名",
+          "chatNameDefault": "{{name}}（分岐）"
+        }
       },
       "usage": {
         "description": "このチャットの Codex アカウントの使用量を表示",
