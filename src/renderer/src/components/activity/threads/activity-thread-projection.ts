@@ -131,9 +131,13 @@ function attach(): () => void {
 function releaseMode(mode: ActivityThreadMode): void {
   threadProjections[mode] = createThreadProjection()
   snapshots[mode] = null
-  // The shared events build stays only while an observed mode needs it.
   if (listenerCount() === 0) {
     releaseAll()
+    return
+  }
+  // The shared events build stays only while an observed mode needs it; an idle badge builds nothing.
+  if (listeners.all.size === 0 && threadProjections.live.build === null) {
+    releaseEventsProjection()
   }
 }
 
