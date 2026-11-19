@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RuntimeClientConnectionLog } from './runtime-rpc-client-connection-log'
 
 function socket(connectionId: string, deviceId = 'device-a') {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the logger reads only these fields.
   return {
     connectionId,
     device: { deviceId, scope: 'runtime' },

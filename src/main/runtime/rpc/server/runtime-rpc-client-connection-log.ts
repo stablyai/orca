@@ -41,7 +41,6 @@ export class RuntimeClientConnectionLog {
       activity = { label, connected: 0, disconnected: 0, open: 0 }
       this.devices.set(label, activity)
       this.write(`[runtime-rpc] client connected ${label} connection=${socket.connectionId}`)
-      this.ensureTimer()
     }
     if (event === 'connected') {
       activity.connected += 1
@@ -50,27 +49,27 @@ export class RuntimeClientConnectionLog {
       activity.disconnected += 1
       activity.open = Math.max(0, activity.open - 1)
     }
+    this.armWindow()
   }
 
-  /** Closes the current window: one summary per device that changed, forgetting idle ones. */
+  /** Closes the current window: one summary per device that changed; forgets devices with nothing open. */
   flushWindow(includeOpen = false): void {
+    if (this.timer) {
+      clearTimeout(this.timer)
+      this.timer = null
+    }
     for (const [label, activity] of this.devices) {
       const quiet = activity.connected === 0 && activity.disconnected === 0
-      if (quiet && !(includeOpen && activity.open > 0)) {
-        if (activity.open === 0) {
-          this.devices.delete(label)
-        }
-        continue
+      if (!quiet || (includeOpen && activity.open > 0)) {
+        this.write(
+          `[runtime-rpc] client activity ${label} connected=${activity.connected} disconnected=${activity.disconnected} open=${activity.open}`
+        )
+        activity.connected = 0
+        activity.disconnected = 0
       }
-      this.write(
-        `[runtime-rpc] client activity ${label} connected=${activity.connected} disconnected=${activity.disconnected} open=${activity.open}`
-      )
-      activity.connected = 0
-      activity.disconnected = 0
-    }
-    if (this.devices.size === 0 && this.timer) {
-      clearInterval(this.timer)
-      this.timer = null
+      if (activity.open === 0) {
+        this.devices.delete(label)
+      }
     }
   }
 
@@ -85,17 +84,14 @@ export class RuntimeClientConnectionLog {
     this.closed = true
     this.flushWindow(true)
     this.devices.clear()
-    if (this.timer) {
-      clearInterval(this.timer)
-      this.timer = null
-    }
   }
 
-  private ensureTimer(): void {
+  // Armed by connection events only, so a quiet host (or a long-lived phone) schedules nothing.
+  private armWindow(): void {
     if (this.timer) {
       return
     }
-    this.timer = setInterval(() => this.flushWindow(), CLIENT_ACTIVITY_WINDOW_MS)
+    this.timer = setTimeout(() => this.flushWindow(), CLIENT_ACTIVITY_WINDOW_MS)
     // Logging alone must never keep the process alive.
     this.timer.unref()
   }
