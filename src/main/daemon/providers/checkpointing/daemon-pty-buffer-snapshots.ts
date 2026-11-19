@@ -13,17 +13,22 @@ const DURABLE_HISTORY_OVERLAY_DEADLINE_MS = 5_000
 export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
   async getBufferSnapshot(
     id: string,
-    opts: { scrollbackRows?: number } = {}
+    opts: { scrollbackRows?: number; signal?: AbortSignal } = {}
   ): Promise<PtyProviderBufferSnapshot | null> {
     if (!this.supportsAuthoritativeBufferSnapshots) {
       return null
     }
     try {
       const scrollbackRows = normalizeDesktopTerminalSnapshotRows(opts.scrollbackRows)
-      const result = await this.client.request<GetSnapshotResult>('getSnapshot', {
-        sessionId: id,
-        ...(scrollbackRows !== undefined ? { scrollbackRows } : {})
-      })
+      const result = await this.client.request<GetSnapshotResult>(
+        'getSnapshot',
+        {
+          sessionId: id,
+          ...(scrollbackRows !== undefined ? { scrollbackRows } : {})
+        },
+        undefined,
+        opts.signal
+      )
       const snapshot = result.snapshot
       // Older v19 snapshots lack the absolute sequence needed to reconcile data queued on the other socket.
       if (!snapshot || typeof snapshot.outputSequence !== 'number') {

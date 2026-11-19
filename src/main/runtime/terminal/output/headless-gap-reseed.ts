@@ -23,10 +23,8 @@ import {
 const GAP_RESEED_MIN_INTERVAL_MS = 1_000
 const GAP_RESEED_BACKOFF_MAX_MS = 30_000
 const GAP_RESEED_WARN_AFTER_ATTEMPTS = 5
-// One attempt's wait; a capture still running past it keeps its slot until it settles.
+// One attempt's wait; a capture still running past it is cancelled before its slot frees.
 const GAP_RESEED_CAPTURE_TIMEOUT_MS = 35_000
-// Past the daemon client's own 30 s request deadline, so only a hung request outlives it.
-const GAP_RESEED_LATE_HOLD_MS = 35_000
 // Why: a storm gaps every hidden PTY at once; the daemon serializing them is the one already behind.
 const GAP_RESEED_MAX_CONCURRENT_CAPTURES = 8
 const GAP_RESEED_CATCH_UP_POLL_MS = 50
@@ -158,10 +156,6 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
       if (Math.max(backoff, paced) > 0) {
         await delay(Math.max(backoff, paced))
       }
-      if (recovery.lateCapture) {
-        await recovery.lateCapture
-        recovery.lateCapture = undefined
-      }
       if (!this.isGapRecovering(ptyId, state, recovery)) {
         return
       }
@@ -195,24 +189,17 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     // The snapshot's seq is mapped through the offset as it lands; one that moves before the repaint cannot place it.
     const revision = this.providerSequenceAnchorRevisions.get(ptyId)
     // Screen only: a storm repeats this, and history readers go to the provider instead.
+    const capture = new AbortController()
     const { snapshot, late } = await this.awaitProviderTerminalBuffer(
       ptyId,
-      { scrollbackRows: 0 },
+      { scrollbackRows: 0, signal: capture.signal },
       { timeoutMs: GAP_RESEED_CAPTURE_TIMEOUT_MS, fresh: true }
     )
     if (!snapshot) {
-      // The slot bounds live captures, not attempts: hold it while a timed-out capture may still settle.
+      // The slot bounds live captures, not attempts: cancel a timed-out one before giving the slot back.
       stopGapJournal(recovery)
-      if (late) {
-        const settled = late.then(
-          () => true,
-          () => true
-        )
-        if (!(await Promise.race([settled, delay(GAP_RESEED_LATE_HOLD_MS).then(() => false)]))) {
-          // Past any healthy request deadline: free the slot for other terminals; this one waits.
-          recovery.lateCapture = settled
-        }
-      }
+      capture.abort()
+      await late?.catch(() => {})
       return false
     }
     const deadline = Date.now() + GAP_RESEED_CAPTURE_TIMEOUT_MS

@@ -157,7 +157,7 @@ export type IPtyProvider = {
   /** Authoritative provider model snapshot after monitoring-stream gaps; optional for other providers. */
   getBufferSnapshot?: (
     id: string,
-    opts?: { scrollbackRows?: number }
+    opts?: { scrollbackRows?: number; signal?: AbortSignal }
   ) => Promise<PtyProviderBufferSnapshot | null>
   /** Whether this exact PTY can return a sequence-safe provider snapshot. */
   canProvideAuthoritativeBufferSnapshot?: (id: string) => boolean

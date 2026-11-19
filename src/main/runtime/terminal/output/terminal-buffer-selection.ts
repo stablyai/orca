@@ -150,7 +150,7 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
   /** `late` is the capture still running when the bounded wait gave up, so a caller can act once it lands. */
   protected async awaitProviderTerminalBuffer(
     ptyId: string,
-    opts: { scrollbackRows?: number } = {},
+    opts: { scrollbackRows?: number; signal?: AbortSignal } = {},
     wait: { timeoutMs?: number; retireOnTimeout?: boolean; fresh?: boolean } = {}
   ): Promise<ProviderTerminalBufferWait> {
     const generation = this.getPtyLifecycleGeneration(ptyId)

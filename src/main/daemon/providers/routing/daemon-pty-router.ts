@@ -208,7 +208,7 @@ export class DaemonPtyRouter implements IPtyProvider {
 
   async getBufferSnapshot(
     id: string,
-    opts?: { scrollbackRows?: number }
+    opts?: { scrollbackRows?: number; signal?: AbortSignal }
   ): Promise<PtyProviderBufferSnapshot | null> {
     return await this.adapterFor(id).getBufferSnapshot(id, opts)
   }

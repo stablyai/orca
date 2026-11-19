@@ -262,6 +262,34 @@ it('restarts the screen at a gap until the stream is stamped, then rebuilds from
   }
 })
 
+it('cancels a recovery capture the provider never answers before freeing its slot', async () => {
+  const signals: AbortSignal[] = []
+  const runtime = createRuntime()
+  runtime.setPtyController({
+    write: () => true,
+    kill: () => true,
+    getForegroundProcess: async () => null,
+    getSize: () => grid,
+    serializeProviderBuffer: (_ptyId, opts) =>
+      new Promise<PtyProviderBufferSnapshot | null>((resolve) => {
+        assert(opts?.signal)
+        signals.push(opts.signal)
+        opts.signal.addEventListener('abort', () => resolve(null))
+      })
+  })
+  vi.useFakeTimers({ toFake: ['setTimeout'] })
+  try {
+    anchorStream(runtime, 'pty-hung')
+    runtime.onPtyData('pty-hung', 'live\r\n', 1)
+    runtime.notePtyDataGap('pty-hung', 9)
+    await vi.advanceTimersByTimeAsync(36_000)
+    expect(signals[0]?.aborted).toBe(true)
+  } finally {
+    vi.useRealTimers()
+    await runtime.onPtyExit('pty-hung', 0)
+  }
+})
+
 describe('the hidden renderer after dropped output', () => {
   function createRendererRuntime() {
     const pending: ((value: { data: string; cols: number; rows: number }) => void)[] = []
