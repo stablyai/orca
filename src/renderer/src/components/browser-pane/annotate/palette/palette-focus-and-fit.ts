@@ -19,6 +19,20 @@ export function isEditableFocus(element: HTMLElement): boolean {
   )
 }
 
+/**
+ * After Esc closes the notes list: focus returns to the "N notes" chip, unless the user was typing (the comment card's
+ * field), which keeps its focus so typing can go on.
+ */
+export function returnFocusAfterNotesClose(container: HTMLElement | null): void {
+  const focused = document.activeElement
+  if (focused instanceof HTMLElement && isEditableFocus(focused)) {
+    return
+  }
+  container
+    ?.querySelector<HTMLElement>('[data-browser-annotate-notes-chip]')
+    ?.focus({ preventScroll: true })
+}
+
 export function focusAnnotateButtonNear(start: Element | null): void {
   for (let node = start?.parentElement ?? null; node; node = node.parentElement) {
     const button = node.querySelector<HTMLElement>(`[${BROWSER_ANNOTATE_BUTTON_ATTRIBUTE}]`)

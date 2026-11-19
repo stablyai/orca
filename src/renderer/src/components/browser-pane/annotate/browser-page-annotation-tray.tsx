@@ -222,16 +222,13 @@ export function BrowserPageAnnotationTray({
                 variant="ghost"
                 className="text-muted-foreground hover:text-foreground"
                 onClick={handleClearBrowserAnnotations}
-                aria-label={t(
-                  'auto.components.browser.pane.BrowserPane.734e4343ec',
-                  'Clear browser annotations'
-                )}
+                aria-label={t('browser.annotatePalette.clearNotes', 'Clear notes')}
               >
                 <Trash2 className="size-3" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              {t('auto.components.browser.pane.BrowserPane.11c5084aa2', 'Clear annotations')}
+              {t('browser.annotatePalette.clearNotes', 'Clear notes')}
             </TooltipContent>
           </Tooltip>
         </div>

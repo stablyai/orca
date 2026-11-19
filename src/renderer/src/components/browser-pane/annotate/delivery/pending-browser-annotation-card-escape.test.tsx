@@ -7,6 +7,7 @@ import {
   interceptAnnotateEscape,
   registerAnnotateEscapeInterceptor
 } from '../palette/annotate-escape-interceptor'
+import { returnFocusAfterNotesClose } from '../palette/palette-focus-and-fit'
 import { PendingBrowserAnnotationCard } from './pending-browser-annotation-card'
 
 const PAGE_ID = 'page-1'
@@ -31,12 +32,16 @@ function Harness(): React.JSX.Element {
     const unregister = registerAnnotateEscapeInterceptor(PAGE_ID, () => {
       unregister()
       setNotesOpen(false)
+      returnFocusAfterNotesClose(document.body)
       return true
     })
     return unregister
   }, [notesOpen])
   return (
     <div>
+      <button type="button" data-browser-annotate-notes-chip="">
+        3 notes
+      </button>
       {notesOpen ? <div data-testid="notes">3 notes</div> : null}
       {cardOpen ? (
         <PendingBrowserAnnotationCard
@@ -54,6 +59,22 @@ function Harness(): React.JSX.Element {
 }
 
 describe('Esc in the comment card with the notes list open', () => {
+  it('returns focus to the note count when the list closes from anywhere else', () => {
+    render(
+      <div>
+        <button type="button" data-browser-annotate-notes-chip="">
+          3 notes
+        </button>
+        <button type="button">Copy</button>
+      </div>
+    )
+    screen.getByRole('button', { name: 'Copy' }).focus()
+
+    returnFocusAfterNotesClose(document.body)
+
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: '3 notes' }))
+  })
+
   it('closes only the notes list on the first Esc, and the card on the next', async () => {
     render(<Harness />)
     const textarea = await screen.findByRole('textbox')
@@ -63,6 +84,8 @@ describe('Esc in the comment card with the notes list open', () => {
     })
     expect(screen.queryByTestId('notes')).toBeNull()
     expect(screen.queryByRole('textbox')).not.toBeNull()
+    // The comment being written keeps focus; it doesn't jump to the note count.
+    expect(document.activeElement).toBe(screen.getByRole('textbox'))
 
     await act(async () => {
       fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape', code: 'Escape' })

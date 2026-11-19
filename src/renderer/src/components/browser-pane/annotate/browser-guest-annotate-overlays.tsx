@@ -5,6 +5,7 @@ import {
 } from './palette/annotate-escape-interceptor'
 import { useAnnotateKeyPage } from './palette/use-annotate-key-page'
 import { useNotesTrayPlacement } from './palette/use-notes-tray-placement'
+import { returnFocusAfterNotesClose } from './palette/palette-focus-and-fit'
 import { createPortal } from 'react-dom'
 import type { MutableRefObject, RefObject } from 'react'
 import { Copy, Image } from 'lucide-react'
@@ -138,9 +139,7 @@ export function BrowserGuestAnnotateOverlays({
     }
     return registerAnnotateEscapeInterceptor(notesPageId, () => {
       setNotesOpen(false)
-      containerRef.current
-        ?.querySelector<HTMLElement>('[data-browser-annotate-notes-chip]')
-        ?.focus({ preventScroll: true })
+      returnFocusAfterNotesClose(containerRef.current)
       return true
     })
   }, [containerRef, notesOpen, notesPageId])

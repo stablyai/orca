@@ -633,7 +633,8 @@
       "drawingDiscarded": "Drawing discarded",
       "undo": "Undo",
       "collapseNotes": "Collapse notes",
-      "expandNotes": "Expand notes"
+      "expandNotes": "Expand notes",
+      "clearNotes": "Clear notes"
     }
   },
   "editor": {
@@ -18812,8 +18813,6 @@
             "fa6ea61de3": "Cancel",
             "c2ef0359b9": "Copy Contents",
             "f2d0c22d67": "Delete annotation {{value0}}",
-            "11c5084aa2": "Clear annotations",
-            "734e4343ec": "Clear browser annotations",
             "95af781091": "Send feedback to an agent",
             "ac39b9366b": "Send",
             "366bf5d62c": "New Tab",
