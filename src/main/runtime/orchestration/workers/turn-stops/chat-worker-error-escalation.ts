@@ -12,6 +12,7 @@ import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { DispatchContextRow } from '../../db/orchestration-records'
 import { observeWorker } from './worker-presence-report'
 import { readWorkerPresence } from '../../db/worker-presence/worker-presence-store'
+import { redactFailure } from './worker-turn-stop-wording'
 import type { WorkerTurnStopReportDeps } from './worker-turn-stop-report'
 
 type ChatWorkerDispatch = { dispatch: DispatchContextRow; from: string }
@@ -71,7 +72,9 @@ export async function escalateChatWorkerError(
     if (!error || isSenderOwnRejection(error)) {
       return
     }
-    const { text, detail, kind } = error
+    const { kind } = error
+    const text = redactFailure(error.text)
+    const detail = error.detail && redactFailure(error.detail)
     for (const { dispatch, from } of targets) {
       // The journal read awaited: the Dispatch may have settled, or the worker moved on.
       const current = db.getDispatchContextById(dispatch.id)

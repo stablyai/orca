@@ -31,6 +31,11 @@ export type StopContext = {
   coordinatorApprovals?: boolean
 }
 
+/** Failure text (a remote selector, a URL, a provider's echo) can carry a capability or credential. */
+export function redactFailure(text: string): string {
+  return redactString(replaceDispatchCapabilities(text).value)
+}
+
 export function describeStop(stop: WorkerTurnStop, context: StopContext): string {
   if (stop.requestError) {
     const { text, detail } = stop.requestError
@@ -44,16 +49,13 @@ export function describeStop(stop: WorkerTurnStop, context: StopContext): string
   const { task, dispatchId } = context
   // Agent prose and failure text can echo its injected capability; mail must never carry it.
   const redact = (text: string | undefined) => text && replaceDispatchCapabilities(text).value
-  // Failure text (a remote selector, a URL) can also carry credentials.
-  const redactFailure = (text: string | undefined) =>
-    text && redactString(replaceDispatchCapabilities(text).value)
-  const fullCause = redactFailure(stop.cause)
+  const fullCause = stop.cause && redactFailure(stop.cause)
   // A provider's stderr can be long; its end names the failure.
   const cause =
     fullCause && fullCause.length > LAST_OUTPUT_MAX_CHARS
       ? `…${fullCause.slice(-LAST_OUTPUT_MAX_CHARS)}`
       : fullCause
-  const leftover = redactFailure(stop.leftover)
+  const leftover = stop.leftover && redactFailure(stop.leftover)
   const what =
     stop.reason === 'needs-input'
       ? stop.approval

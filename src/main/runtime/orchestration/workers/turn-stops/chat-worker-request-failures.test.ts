@@ -493,3 +493,19 @@ it('does not report a failed request as a stop once the worker has started its r
   await tick()
   expect(r.mail()).toEqual([])
 })
+
+it('never mails a capability or credential a failed request echoed', async () => {
+  const r = await rig()
+  const capability = 'dcap_0123456789abcdefghijKLMN'
+  await batch(r.journal, 'A', [
+    turn('A', 'failure'),
+    words('A', `refused ${capability} at https://user:hunter2@git.example.com/repo`)
+  ])
+  await tick()
+  const [mail] = r.mail()
+  expect(mail?.body).toContain('refused [dispatch capability redacted]')
+  for (const text of [mail?.body, mail?.payload]) {
+    expect(text).not.toContain(capability)
+    expect(text).not.toContain('hunter2')
+  }
+})

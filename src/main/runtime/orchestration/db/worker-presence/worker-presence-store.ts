@@ -101,12 +101,12 @@ export function writeWorkerPresence(
     )
 }
 
-/** Dispatches whose worker rests with a report still undecided. */
+/** Dispatches whose worker rests, or went away, with a report still undecided. */
 export function listUndecidedWorkerRests(db: OrchestrationDb): string[] {
   return db.db
     .prepare(
       `SELECT dispatch_id FROM worker_presence
-        WHERE report IS NOT NULL AND presence IN ('resting', 'prompt')`
+        WHERE report IS NOT NULL AND presence != 'working'`
     )
     .all()
     .flatMap((row) => (typeof row.dispatch_id === 'string' ? [row.dispatch_id] : []))

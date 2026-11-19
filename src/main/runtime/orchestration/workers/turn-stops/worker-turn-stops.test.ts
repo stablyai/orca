@@ -15,7 +15,7 @@ import '../../db/attempt-outcome-projection'
 import { createRootDispatch } from '../../db/root-dispatch-test-fixture'
 import { TerminalWorkerTurnStops } from './terminal-worker-turn-stops'
 import { stopReportId } from './worker-turn-stop-report'
-import { observeWorker } from './worker-presence-report'
+import { observeWorker, reconsiderWorkerRest } from './worker-presence-report'
 import type { WorkerApprovalPayload } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 
 const PANE = makePaneKey('tab-worker', '11111111-1111-4111-8111-111111111111')
@@ -297,6 +297,26 @@ describe('terminal worker turn stops', () => {
     expect(ctx.mail()).toHaveLength(1)
   })
 
+  it("drops a stop whose agent was relaunched while its screen was read, since the new one's turn is its own", async () => {
+    const ctx = setup()
+    const current = { row: hookRow({ stateStartedAt: 300 }) }
+    const incarnations = ['proc-1', 'proc-2']
+    const stops = terminal(ctx, current, {
+      getProcessIncarnation: () => incarnations.shift() ?? 'proc-2'
+    })
+    await stops.reportRestingPane(PANE)
+    expect(ctx.mail()).toHaveLength(0)
+  })
+
+  it('keeps the words before trailing blank output in the report', async () => {
+    const ctx = setup()
+    const current = {
+      row: hookRow({ stateStartedAt: 300, lastAssistantMessage: `Tests pass.${' '.repeat(2_500)}` })
+    }
+    await terminal(ctx, current).reportRestingPane(PANE)
+    expect(ctx.mail()[0]?.body).toContain('Tests pass.')
+  })
+
   it('reports an approval seen on a prompt already reported without one', async () => {
     const ctx = setup()
     const current = { row: hookRow({ state: 'waiting', stateStartedAt: 300 }) }
@@ -496,6 +516,48 @@ describe('chat worker turn stops', () => {
     }
     expect(ctx.mail()).toMatchObject([{ subject: 'Worker stopped without reporting' }])
     live.stop()
+  })
+})
+
+describe('worker exits', () => {
+  const exit = (ctx: ReturnType<typeof setup>) => ({
+    presence: 'gone' as const,
+    fence: 'proc-1',
+    legacyStopKey: 'gone',
+    gone: { from: HANDLE, reason: 'exited' as const, lastOutput: undefined },
+    settle: () => {
+      const status = ctx.db.failDispatch(ctx.dispatch.id, 'process exited')?.status
+      return status === 'failed' || status === 'circuit_broken' ? status : undefined
+    }
+  })
+  const target = (ctx: ReturnType<typeof setup>) => ({
+    kind: 'local' as const,
+    dispatch: ctx.dispatch
+  })
+
+  it('keeps an exit report and its settlement when waking the coordinator fails', () => {
+    const ctx = setup()
+    ctx.notify.mockImplementation(() => {
+      throw new Error('wake failed')
+    })
+    expect(() => observeWorker(ctx.db, target(ctx), exit(ctx), ctx.deps)).toThrow('wake failed')
+    expect(ctx.mail()).toHaveLength(1)
+    expect(ctx.db.getDispatchContextById(ctx.dispatch.id)?.status).toBe('failed')
+  })
+
+  it('sends an exit report whose mail failed when it is looked at again', () => {
+    const ctx = setup()
+    vi.spyOn(ctx.db, 'insertMessage').mockImplementationOnce(() => {
+      throw new Error('disk full')
+    })
+    observeWorker(ctx.db, target(ctx), exit(ctx), ctx.deps)
+    expect(ctx.mail()).toHaveLength(0)
+    expect(ctx.db.getDispatchContextById(ctx.dispatch.id)?.status).toBe('failed')
+    expect(reconsiderWorkerRest(ctx.db, ctx.dispatch.id, ctx.deps)).toBe(true)
+    expect(reconsiderWorkerRest(ctx.db, ctx.dispatch.id, ctx.deps)).toBe(false)
+    expect(ctx.mail().map((message) => message.subject)).toEqual([
+      'Worker exited without reporting'
+    ])
   })
 })
 

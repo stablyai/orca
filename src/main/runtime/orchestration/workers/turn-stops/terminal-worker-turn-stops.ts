@@ -102,6 +102,8 @@ export class TerminalWorkerTurnStops {
     if (!stopped) {
       return
     }
+    // A relaunched agent in the same pane is a new process, whatever its hook clock says.
+    const incarnation = this.deps.getProcessIncarnation(stopped.handle) ?? stopped.handle
     const reason: WorkerRest['reason'] =
       hookRowAgentPhase(stop.row) === 'needs-you'
         ? 'needs-input'
@@ -123,7 +125,10 @@ export class TerminalWorkerTurnStops {
         : null
     // Both reads awaited: the worker may have resumed, reported, or been handed a new Dispatch since.
     const resolved = this.stillStopped(stop)
-    if (!resolved) {
+    if (
+      !resolved ||
+      (this.deps.getProcessIncarnation(resolved.handle) ?? resolved.handle) !== incarnation
+    ) {
       return
     }
     const sent = observeWorker(
@@ -131,9 +136,8 @@ export class TerminalWorkerTurnStops {
       resolved.target,
       {
         presence: 'at-rest',
-        // A relaunched agent in the same pane is a new process, whatever its hook clock says; an
-        // approval seen on a prompt already reported is news of its own.
-        fence: `${this.deps.getProcessIncarnation(resolved.handle) ?? resolved.handle}:${stop.row.stateStartedAt}${approval ? `:approval:${approval.approvalId}` : ''}`,
+        // An approval seen on a prompt already reported is news of its own.
+        fence: `${incarnation}:${stop.row.stateStartedAt}${approval ? `:approval:${approval.approvalId}` : ''}`,
         legacyStopKey: `${stop.paneKey}:${stop.row.stateStartedAt}`,
         rest: {
           from: resolved.handle,

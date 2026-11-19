@@ -98,7 +98,9 @@ export function observeWorker(
       current?.presence === 'gone' && !isDispatchOpen(db, target)
         ? current.fence
         : observation.fence
-    return runLifecycleWriteTransaction(db.db, 'observe_worker_gone', () => {
+    // The coordinator is woken once the settlement and its report have committed.
+    const woken: [string, string][] = []
+    const sent = runLifecycleWriteTransaction(db.db, 'observe_worker_gone', () => {
       const settled = observation.settle?.()
       return reconcileWorkerReport(
         db,
@@ -111,9 +113,13 @@ export function observeWorker(
             observation
           )
         }),
-        deps
+        { ...deps, notify: (handle, type) => woken.push([handle, type]) }
       )
     })
+    for (const [handle, type] of woken) {
+      deps.notify(handle, type)
+    }
+    return sent
   }
   const { rest } = observation
   // Seen again, an undecided rest is decided again: what held it back may have cleared.
@@ -137,14 +143,16 @@ export function observeWorker(
 }
 
 /** What held a rest back may have cleared without the worker moving (a wait for mail that ended, or
- *  a restart that dropped every wait): its stored rest is decided again. True when it went out now. */
+ *  a restart that dropped every wait), or its report's mail failed: its stored rest is decided
+ *  again. True when it went out now. */
 export function reconsiderWorkerRest(
   db: OrchestrationDb,
   dispatchId: string,
   deps: WorkerTurnStopReportDeps
 ): boolean {
   const row = readWorkerPresence(db, dispatchId)
-  const target = row?.report ? currentWorkerTarget(db, dispatchId) : null
+  // A gone report names how its Dispatch settled, so it is still owed once the Dispatch closed.
+  const target = row?.report ? currentWorkerTarget(db, dispatchId, row.presence === 'gone') : null
   return row && target ? reconcileWorkerReport(db, target, { ...row, changed: false }, deps) : false
 }
 
@@ -164,11 +172,12 @@ export function reconsiderRestAfterWait(mailbox: string, deps: WorkerTurnStopRep
 /** The open Dispatch, or the active attachment of a paired server's worker, whose worker this is. */
 function currentWorkerTarget(
   db: OrchestrationDb,
-  dispatchId: string
+  dispatchId: string,
+  settledToo: boolean
 ): WorkerTurnStopDispatch | null {
   const dispatch = db.getDispatchContextById(dispatchId)
   if (dispatch) {
-    return dispatch.status === 'pending' || dispatch.status === 'dispatched'
+    return settledToo || dispatch.status === 'pending' || dispatch.status === 'dispatched'
       ? { kind: 'local', dispatch }
       : null
   }
@@ -191,12 +200,11 @@ function storedReport(
   report: Omit<StoredRest, 'legacyStopKey' | 'legacyReportId'>,
   legacy: { legacyStopKey: string; legacyReportId?: string }
 ): string {
-  const { lastOutput } = report
+  // Trailing blank lines must not take the place of the words before them.
+  const lastOutput = report.lastOutput?.trimEnd()
   return JSON.stringify({
     ...report,
-    ...(lastOutput && lastOutput.length > STORED_OUTPUT_MAX_CHARS
-      ? { lastOutput: lastOutput.slice(-STORED_OUTPUT_MAX_CHARS) }
-      : {}),
+    ...(lastOutput !== undefined ? { lastOutput: lastOutput.slice(-STORED_OUTPUT_MAX_CHARS) } : {}),
     legacyStopKey: legacy.legacyStopKey,
     ...(legacy.legacyReportId ? { legacyReportId: legacy.legacyReportId } : {})
   })
