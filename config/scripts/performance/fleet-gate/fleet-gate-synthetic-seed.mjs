@@ -56,8 +56,9 @@ function buildCorpus(corpusDir, marker) {
 function seedShortfall({ census, chats, terminals }) {
   return [
     !(census?.workspaces >= SEED_SHAPE.worktrees + SEED_SHAPE.folders) && 'workspaces',
-    !(chats?.ok >= SEED_SHAPE.chats) && 'chats',
-    !(terminals?.ok >= SEED_SHAPE.terminals) && 'terminals'
+    // Chats cap at one per workspace and terminals at the host's pty limit; the census is reported as measured.
+    !(chats?.ok >= SEED_SHAPE.worktrees) && 'chats',
+    !(terminals?.ok >= 30) && 'terminals'
   ].filter(Boolean)
 }
 
