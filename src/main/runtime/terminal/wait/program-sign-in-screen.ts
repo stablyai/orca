@@ -1,7 +1,4 @@
-// agy reports the same OSC 7501 blocked:auth while it silently signs in behind a
-// "Signing in..." spinner as at its login menu (#44603), and a keyring or ADC sign-in
-// over a slow network can spin well past the persistence window. Only the screens a
-// signed-out agy rests on prove a human must sign in.
+// agy's "Signing in..." spinner reports the same blocked:auth as its login menu (#44603); only the menu needs a human.
 const SIGN_IN_WAIT_SCREEN_MARKERS = [
   // agy 1.5.x with no saved credential.
   'select login method',

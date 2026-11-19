@@ -222,8 +222,7 @@ function rankTuiIdleEvidence(input: TuiIdleEvaluationInput): TuiIdleVerdict {
     if (Date.now() < blockedAt) {
       return { kind: 'pending', quietForeground: 'closed', recheckAt: blockedAt }
     }
-    // Why the screen too: agy reports the same blocked:auth behind its "Signing in..." spinner
-    // while a slow saved-credential sign-in runs (#44603); that ends in idle, so hold until then.
+    // Why the screen: a slow saved-credential sign-in spins under the same blocked:auth (#44603).
     return input.readProgramSignInWaitScreen()
       ? { kind: 'blocked', reason: 'agent-sign-in-prompt' }
       : { kind: 'pending', quietForeground: 'closed' }
