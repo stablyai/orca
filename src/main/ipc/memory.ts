@@ -15,7 +15,13 @@ export function registerMemoryHandlers(store: Store): void {
     'memory:getSnapshot',
     (event, admission?: ResourceViewAdmission): Promise<MemorySnapshot> => {
       assertResourceViewVisible(event, admission)
-      return collectMemorySnapshot(store)
+      if (admission?.whileFocused !== true) {
+        return collectMemorySnapshot(store)
+      }
+      const window = BrowserWindow.fromWebContents(event.sender)
+      return collectMemorySnapshot(store, {
+        stillWanted: () => !!window && !window.isDestroyed() && window.isFocused()
+      })
     }
   )
   ipcMain.handle('memory:readPerfNoticeSignals', () =>

@@ -2,6 +2,7 @@ import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts
 import type { PerfNoticeSignals } from '../../../../shared/diagnostics/perf-notice-signals'
 import type { PtyListedSession } from '../../../../shared/terminal/pty/lifecycle/pty-listed-session'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
+import { isProgramStatusRow } from '../../../../shared/program-status/program-status-row'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId
@@ -48,7 +49,13 @@ export function idleAgentCandidates(
 ): AgentStatusEntry[] {
   const candidates: AgentStatusEntry[] = []
   for (const entry of state.agentStatusByPaneKey.values()) {
-    if (entry.state === 'done' && !entry.paneSleep && now - entry.stateStartedAt >= idleMs) {
+    // Why: a finished program's kept result row is not an agent holding memory.
+    if (
+      entry.state === 'done' &&
+      !entry.paneSleep &&
+      !isProgramStatusRow(entry) &&
+      now - entry.stateStartedAt >= idleMs
+    ) {
       candidates.push(entry)
     }
   }

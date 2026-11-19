@@ -35,12 +35,29 @@ export type { MemorySnapshotStore } from './memory-snapshot-buckets'
 export { collectSubtree, parsePsOutput } from './process-index'
 
 let inflight: Promise<MemorySnapshot> | null = null
+// Why: a sweep shared with an unconditional caller (null) must finish; otherwise it runs while any caller still wants it.
+let inflightInterest: (() => boolean)[] | null = null
 
-export async function collectMemorySnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> {
+const isInflightWanted = (): boolean =>
+  inflightInterest === null || inflightInterest.some((stillWanted) => stillWanted())
+
+export async function collectMemorySnapshot(
+  store: MemorySnapshotStore,
+  options: { stillWanted?: () => boolean } = {}
+): Promise<MemorySnapshot> {
+  const { stillWanted } = options
   // Runtime callers share one process-wide store, so coalesced sweeps use the same data source.
   if (inflight) {
+    if (inflightInterest) {
+      if (stillWanted) {
+        inflightInterest.push(stillWanted)
+      } else {
+        inflightInterest = null
+      }
+    }
     return inflight
   }
+  inflightInterest = stillWanted ? [stillWanted] : null
   inflight = runSnapshot(store)
     .catch((err) => {
       console.warn('[memory] snapshot failed; returning empty', err)
@@ -48,6 +65,7 @@ export async function collectMemorySnapshot(store: MemorySnapshotStore): Promise
     })
     .finally(() => {
       inflight = null
+      inflightInterest = null
     })
   return inflight
 }
@@ -120,7 +138,10 @@ function bucketElectronMetrics(processIndex: ProcIndex): AppBucketsRaw {
 }
 
 async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> {
-  const [processIndex, host] = await Promise.all([enumerateHostProcesses(), collectHostMemory()])
+  const [processIndex, host] = await Promise.all([
+    enumerateHostProcesses({ stillWanted: isInflightWanted }),
+    collectHostMemory()
+  ])
   const appBuckets = bucketElectronMetrics(processIndex)
   const ptyTrees = claimPtyProcessTrees(processIndex, listRegisteredPtys())
 

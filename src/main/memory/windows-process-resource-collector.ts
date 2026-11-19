@@ -29,12 +29,17 @@ let retryCimAtMs = 0
 /** `trackCpu: false` leaves the resource view's CPU baseline untouched and reports no CPU. */
 export async function enumerateWindowsProcessResources({
   trackCpu = true,
-  withNames = false
-}: { trackCpu?: boolean; withNames?: boolean } = {}): Promise<WindowsProcessResourceRow[]> {
+  withNames = false,
+  stillWanted = () => true
+}: {
+  trackCpu?: boolean
+  withNames?: boolean
+  stillWanted?: () => boolean
+} = {}): Promise<WindowsProcessResourceRow[]> {
   // Reuse one CIM sweep for resources and identity instead of spawning PowerShell twice per poll.
   if (processBackend === 'typeperf') {
     if (performance.now() < retryCimAtMs) {
-      return enumerateWindowsWithTypeperf(withNames)
+      return stillWanted() ? enumerateWindowsWithTypeperf(withNames) : []
     }
     processBackend = 'cim'
   }
@@ -49,7 +54,8 @@ export async function enumerateWindowsProcessResources({
   if (trackCpu) {
     previousCpuSample = null
   }
-  return enumerateWindowsWithTypeperf(withNames)
+  // Why: a caller that stopped wanting this sweep while CIM ran must not start a second whole-host query.
+  return stillWanted() ? enumerateWindowsWithTypeperf(withNames) : []
 }
 
 function applyWindowsCpuSample(sample: WindowsProcessSample): WindowsProcessResourceRow[] {

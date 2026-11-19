@@ -3,7 +3,10 @@ import { useAppStore } from '@/store/index'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import type { PerfNoticeSignals } from '../../../../shared/diagnostics/perf-notice-signals'
 import { formatMemory } from '../status-bar/resources/popover/resource-usage-metrics'
-import { splitSnapshotByOwner } from '../status-bar/resources/popover/resource-owner-split'
+import {
+  readAgentPaneKeys,
+  splitSnapshotByOwner
+} from '../status-bar/resources/popover/resource-owner-split'
 import {
   hasResourceManager,
   isResourceManagerOpen
@@ -67,12 +70,15 @@ async function memoryLowNotice(now: number, blocked: Gate): Promise<PerfNotice |
   if (!hasResourceManager()) {
     return null
   }
-  const [snapshot, sessions] = await Promise.all([window.api.memory.getSnapshot(), localSessions()])
+  const [snapshot, sessions] = await Promise.all([
+    window.api.memory.getSnapshot({ whileFocused: true }),
+    localSessions()
+  ])
   if (blocked()) {
     return null
   }
   const state = useAppStore.getState()
-  const split = splitSnapshotByOwner(snapshot, sessions, state.agentStatusByPaneKey)
+  const split = splitSnapshotByOwner(snapshot, sessions, readAgentPaneKeys())
   const used = snapshot.host.usedMemory
   const terminals = split.agents.memory + split.yourProcesses.memory
   if (used <= 0 || terminals / used < TERMINAL_SHARE_MIN) {
