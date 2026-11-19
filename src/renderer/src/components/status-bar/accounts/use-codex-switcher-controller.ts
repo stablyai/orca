@@ -86,7 +86,6 @@ export function useCodexSwitcherController(
   )
   const {
     roster,
-    rosterKnown,
     inactiveAccounts: inactiveCodexAccounts,
     usageTarget: codexTarget
   } = getOwnerAccountRows('codex', ownerUsage, accounts, EMPTY_CODEX_ACCOUNTS)
@@ -244,7 +243,6 @@ export function useCodexSwitcherController(
     openSettingsTarget,
     providerAccountHostLabel,
     reauthenticatingAccountId,
-    rosterKnown,
     ...reset,
     selectedGroup,
     selectedRuntimeKey,
