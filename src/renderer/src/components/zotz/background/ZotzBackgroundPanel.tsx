@@ -11,8 +11,12 @@ export default function ZotzBackgroundPanel(): React.JSX.Element {
       <div className="flex h-9 shrink-0 items-center px-3 text-xs font-medium text-muted-foreground">
         {t('zotz.background.title', 'Background')}
       </div>
-      {/* The active chat portals its tasks here; :empty shows the placeholder below. */}
-      <div ref={setZotzBackgroundPanelTarget} className="peer flex flex-col" />
+      {/* The active chat portals its tasks here; :empty shows the placeholder below. The strip caps
+          its list for the space above the chat; the panel has room, so it shows every row. */}
+      <div
+        ref={setZotzBackgroundPanelTarget}
+        className="peer flex flex-col [&_.max-h-40]:max-h-none"
+      />
       <div className="hidden flex-col items-center gap-2 px-6 py-10 text-center text-xs text-muted-foreground peer-empty:flex">
         <Activity className="size-4" />
         <span>
