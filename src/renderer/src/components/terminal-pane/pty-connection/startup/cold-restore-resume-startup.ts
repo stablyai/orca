@@ -124,7 +124,7 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
     if (!startupPlan) {
       return null
     }
-    const coldRestoreLaunchToken = takeMailWakeLaunchToken(session.cacheKey) ?? createBrowserUuid()
+    const coldRestoreLaunchToken = takeMailWakeLaunchToken(sleepingRecord) ?? createBrowserUuid()
     return {
       agent,
       command: startupPlan.launchCommand,

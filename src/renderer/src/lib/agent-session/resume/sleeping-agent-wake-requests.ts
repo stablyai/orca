@@ -24,6 +24,15 @@ export function requestSleepingAgentWakeOnMount(
   paneKey?: string
 ): void {
   const wanted = new Set(tabIds)
+  if (paneKey) {
+    // A targeted wake authorizes its one record, not the workspace's.
+    const record = useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]
+    const tabId = record ? getSleepingRecordTabId(record) : null
+    if (record?.worktreeId === worktreeId && tabId !== null && wanted.has(tabId)) {
+      requestedRecords.add(record)
+    }
+    return
+  }
   for (const [, record] of sleepingAgentRecordIndex.entries(
     useAppStore.getState().sleepingAgentSessionsByPaneKey,
     worktreeId
@@ -40,29 +49,36 @@ export function requestSleepingAgentWakeOnMount(
   }
 }
 
-const mailWakeLaunchTokens = new Map<string, string>()
+// Why record identity: a removed or replaced record drops its token, so an abandoned wake retains nothing.
+const mailWakeLaunchTokens = new WeakMap<SleepingAgentSessionRecord, string>()
 
 /** A mail wake's resume launches under main's attempt id, so main can tell which process it started. */
 export function rememberMailWakeLaunchToken(
   paneKey: string,
   launchToken: string | undefined
 ): void {
-  if (launchToken) {
-    mailWakeLaunchTokens.set(paneKey, launchToken)
-  } else {
-    mailWakeLaunchTokens.delete(paneKey)
+  const record = useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]
+  if (record && launchToken) {
+    mailWakeLaunchTokens.set(record, launchToken)
+  } else if (record) {
+    mailWakeLaunchTokens.delete(record)
   }
 }
 
 export function forgetMailWakeLaunchToken(paneKey: string, launchToken: string): void {
-  if (mailWakeLaunchTokens.get(paneKey) === launchToken) {
-    mailWakeLaunchTokens.delete(paneKey)
+  const record = useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]
+  if (record && mailWakeLaunchTokens.get(record) === launchToken) {
+    mailWakeLaunchTokens.delete(record)
   }
 }
 
-export function takeMailWakeLaunchToken(paneKey: string): string | undefined {
-  const launchToken = mailWakeLaunchTokens.get(paneKey)
-  mailWakeLaunchTokens.delete(paneKey)
+export function takeMailWakeLaunchToken(
+  record: SleepingAgentSessionRecord | undefined
+): string | undefined {
+  const launchToken = record ? mailWakeLaunchTokens.get(record) : undefined
+  if (record) {
+    mailWakeLaunchTokens.delete(record)
+  }
   return launchToken
 }
 

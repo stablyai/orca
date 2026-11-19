@@ -170,10 +170,14 @@ export function wakeSleepingAgentsForWorktreeInBackground(
   worktreeId: string,
   paneKey?: string
 ): void {
-  const sleptRecords = sleepingAgentRecordIndex
-    .entries(useAppStore.getState().sleepingAgentSessionsByPaneKey, worktreeId)
-    .map(([, record]) => record)
-    .filter((record) => !paneKey || record.paneKey === paneKey)
+  const records = useAppStore.getState().sleepingAgentSessionsByPaneKey
+  const target = paneKey ? records[paneKey] : undefined
+  // A targeted wake reads its one record rather than the workspace's.
+  const sleptRecords = paneKey
+    ? target?.worktreeId === worktreeId
+      ? [target]
+      : []
+    : sleepingAgentRecordIndex.entries(records, worktreeId).map(([, record]) => record)
   // No sleepers means no mounting: phone browsing must not accumulate desktop workspaces/PTYS.
   if (sleptRecords.length === 0) {
     return

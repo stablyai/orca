@@ -8,7 +8,11 @@ const state = vi.hoisted(
 )
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => state } }))
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/workspace-mounting/background-terminal-worktree-mount'
-import { takeSleepingAgentWakeRequest } from './sleeping-agent-wake-requests'
+import {
+  rememberMailWakeLaunchToken,
+  takeMailWakeLaunchToken,
+  takeSleepingAgentWakeRequest
+} from './sleeping-agent-wake-requests'
 
 it('background mail wake authorizes only its pane when a tab contains several sleeping agents', () => {
   const first: SleepingAgentSessionRecord = {
@@ -36,4 +40,26 @@ it('background mail wake authorizes only its pane when a tab contains several sl
   })
   expect(takeSleepingAgentWakeRequest(first)).toBe(true)
   expect(takeSleepingAgentWakeRequest(second)).toBe(false)
+})
+
+it("a mail wake's launch token belongs to the record it was given for", () => {
+  const slept: SleepingAgentSessionRecord = {
+    paneKey: 'tab:33333333-3333-4333-8333-333333333333',
+    tabId: 'tab',
+    worktreeId: 'workspace',
+    agent: 'claude',
+    providerSession: { key: 'session_id', id: 'slept' },
+    state: 'done',
+    origin: 'worktree-sleep',
+    capturedAt: 1,
+    updatedAt: 1,
+    prompt: ''
+  }
+  state.sleepingAgentSessionsByPaneKey = { [slept.paneKey]: slept }
+  rememberMailWakeLaunchToken(slept.paneKey, 'attempt-1')
+  const replaced = { ...slept, capturedAt: 2 }
+  state.sleepingAgentSessionsByPaneKey = { [slept.paneKey]: replaced }
+  expect(takeMailWakeLaunchToken(replaced)).toBeUndefined()
+  expect(takeMailWakeLaunchToken(slept)).toBe('attempt-1')
+  expect(takeMailWakeLaunchToken(slept)).toBeUndefined()
 })
