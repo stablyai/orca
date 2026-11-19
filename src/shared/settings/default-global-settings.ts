@@ -130,6 +130,8 @@ export function buildDefaultSettings(args: {
     terminalFocusFollowsMouse: false,
     // Why: xterm's default; turning it off keeps a scrolled-up reading position while typing.
     terminalScrollOnUserInput: true,
+    terminalScrollbarWidth: 7,
+    terminalScrollbarAlwaysVisible: false,
     windowBackgroundBlur: false,
     reduceVisualEffects: false,
     minimizeToTrayOnClose: false,

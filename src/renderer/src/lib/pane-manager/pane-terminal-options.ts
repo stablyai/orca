@@ -20,6 +20,18 @@ export function normalizeTerminalFastScrollSensitivity(value: number | undefined
     : DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY
 }
 
+export const DEFAULT_TERMINAL_SCROLLBAR_WIDTH = 7
+export const MAX_TERMINAL_SCROLLBAR_WIDTH = 20
+
+export function normalizeTerminalScrollbarWidth(value: number | undefined): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.min(
+        MAX_TERMINAL_SCROLLBAR_WIDTH,
+        Math.max(DEFAULT_TERMINAL_SCROLLBAR_WIDTH, Math.round(value))
+      )
+    : DEFAULT_TERMINAL_SCROLLBAR_WIDTH
+}
+
 export function resolveTerminalScrollOnUserInput(value: boolean | undefined): boolean {
   return value !== false
 }
@@ -64,7 +76,7 @@ export function buildDefaultTerminalOptions(): ITerminalOptions & ITerminalInitO
     drawBoldTextInBrightColors: true,
     scrollbar: {
       // Accept the slim scrollbar’s ~one-column gutter cost and enable overview ruler. The old v1.4.51 table corruption was the ZWJ width bug, now fixed by terminal-unicode-provider; composeActiveTerminalTheme hides the ruler border.
-      width: 7
+      width: DEFAULT_TERMINAL_SCROLLBAR_WIDTH
     },
     // Advertise KKP so handshake-gated CLIs accept Orca’s enhanced CSI-u chords (including Shift+Enter off Windows), matching VS Code.
     vtExtensions: {

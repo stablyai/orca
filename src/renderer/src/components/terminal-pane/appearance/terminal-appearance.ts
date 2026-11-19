@@ -20,6 +20,7 @@ import {
 import {
   normalizeTerminalFastScrollSensitivity,
   normalizeTerminalScrollSensitivity,
+  normalizeTerminalScrollbarWidth,
   resolveTerminalCursorInactiveStyle,
   resolveTerminalScrollOnUserInput
 } from '@/lib/pane-manager/pane-terminal-options'
@@ -224,6 +225,18 @@ export function applyTerminalAppearance(
     )
     pane.terminal.options.scrollOnUserInput = resolveTerminalScrollOnUserInput(
       settings.terminalScrollOnUserInput
+    )
+    const scrollbarWidth = normalizeTerminalScrollbarWidth(settings.terminalScrollbarWidth)
+    if (pane.terminal.options.scrollbar?.width !== scrollbarWidth) {
+      pane.terminal.options.scrollbar = {
+        ...pane.terminal.options.scrollbar,
+        width: scrollbarWidth
+      }
+    }
+    // xterm has no always-visible option, so terminal.css overrides its fade-out under this attribute.
+    pane.container.toggleAttribute(
+      'data-terminal-scrollbar-always-visible',
+      settings.terminalScrollbarAlwaysVisible === true
     )
     // Why only 'true': 'left'/'right' are handled in the keydown policy, which needs Option composable at the xterm level.
     pane.terminal.options.macOptionIsMeta = effectiveMacOptionAsAlt === 'true'

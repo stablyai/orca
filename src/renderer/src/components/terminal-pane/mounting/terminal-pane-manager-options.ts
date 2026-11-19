@@ -10,6 +10,7 @@ import { normalizeTerminalTuiMouseWheelMultiplier } from '@/lib/pane-manager/ter
 import {
   normalizeTerminalFastScrollSensitivity,
   normalizeTerminalScrollSensitivity,
+  normalizeTerminalScrollbarWidth,
   resolveTerminalCursorInactiveStyle,
   resolveTerminalScrollOnUserInput
 } from '@/lib/pane-manager/pane-terminal-options'
@@ -172,6 +173,9 @@ export function createTerminalPaneManagerOptions(
         scrollOnUserInput: resolveTerminalScrollOnUserInput(
           currentSettings?.terminalScrollOnUserInput
         ),
+        scrollbar: {
+          width: normalizeTerminalScrollbarWidth(currentSettings?.terminalScrollbarWidth)
+        },
         macOptionIsMeta: context.deps.effectiveMacOptionAsAltRef.current === 'true',
         lineHeight: normalizeTerminalLineHeight(currentSettings?.terminalLineHeight),
         wordSeparator: currentSettings?.terminalWordSeparator

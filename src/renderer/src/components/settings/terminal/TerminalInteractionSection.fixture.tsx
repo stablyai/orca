@@ -21,3 +21,14 @@ export const scrollOnInputOff = defineFixture({
     />
   )
 })
+
+export const scrollbarAlwaysVisibleWide = defineFixture({
+  width: 720,
+  render: () => (
+    <TerminalInteractionSection
+      settings={{ ...settings, terminalScrollbarAlwaysVisible: true, terminalScrollbarWidth: 12 }}
+      updateSettings={() => {}}
+      searchQuery=""
+    />
+  )
+})
