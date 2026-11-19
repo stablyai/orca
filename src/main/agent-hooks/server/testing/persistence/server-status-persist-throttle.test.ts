@@ -138,6 +138,23 @@ describe('saved agent status cadence', () => {
     expect(readPrompt()).toBe('follow-up request')
   })
 
+  it('commits a Claude prompt that lands after its turn opened', async () => {
+    const claude = (payload: Record<string, unknown>): Promise<Response> =>
+      postHookEvent(
+        server,
+        buildBody({
+          session_id: 'session-a',
+          prompt_id: '0b6f1a52-2f43-4f0e-9d55-0c9f6a1e2b31',
+          ...payload
+        })
+      )
+    await claude({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: 't1' })
+    await vi.advanceTimersByTimeAsync(1)
+    await claude({ hook_event_name: 'UserPromptSubmit', prompt: 'inspect the workspace' })
+    await vi.advanceTimersByTimeAsync(1)
+    expect(readPrompt()).toBe('inspect the workspace')
+  })
+
   it('commits a turn completion carried by a working row without a main-agent fact', async () => {
     const identity = {
       paneKey: PANE,

@@ -1,4 +1,5 @@
 import type { EnrichedAgentHookEventPayload } from './server-types'
+import { CLAUDE_LATE_PROMPT_SUBMIT_EVENT } from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-prompt-turn-order'
 
 /** Prompt, turn-opening and completion facts must not wait for the routine stream checkpoint. */
 export function turnFactsNeedUrgentPersist(
@@ -6,8 +7,10 @@ export function turnFactsNeedUrgentPersist(
   next: EnrichedAgentHookEventPayload
 ): boolean {
   return (
-    // Only a submitted prompt opens a turn; terminal-derived prompt streams stay on the checkpoint.
-    ((next.hookEventName === 'UserPromptSubmit' || next.hasExplicitPrompt === true) &&
+    // Submitted prompts, even Claude's late ones, skip the checkpoint; terminal-derived prompt streams do not.
+    ((next.hookEventName === 'UserPromptSubmit' ||
+      next.hookEventName === CLAUDE_LATE_PROMPT_SUBMIT_EVENT ||
+      next.hasExplicitPrompt === true) &&
       next.payload.prompt !== previous?.payload.prompt) ||
     // A new turn may repeat its prompt; opening it is the fact a crash must not lose.
     (next.payload.state === 'working' && previous?.payload.state !== 'working') ||
