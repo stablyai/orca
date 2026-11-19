@@ -20,6 +20,7 @@ const FolderWorkspacePrChecksPanel = lazy(
   () => import('./hosted-review/folder-checks/FolderWorkspacePrChecksPanel')
 )
 const PluginPanel = lazy(() => import('./plugin-panels/PluginPanel'))
+const ZotzBackgroundPanel = lazy(() => import('../zotz/background/ZotzBackgroundPanel'))
 
 type RightSidebarPanelContentProps = {
   effectiveTab: ActiveRightSidebarTab
@@ -62,6 +63,7 @@ export function RightSidebarPanelContent({
             onFocusSearchHandled={onVaultSearchFocusHandled}
           />
         )}
+        {effectiveTab === 'zotz-background' && <ZotzBackgroundPanel />}
         {effectiveTab === 'workspaces' && <FolderWorkspaceWorktreesPanel />}
         {effectiveTab === 'pr-checks' && (
           <FolderWorkspacePrChecksPanel

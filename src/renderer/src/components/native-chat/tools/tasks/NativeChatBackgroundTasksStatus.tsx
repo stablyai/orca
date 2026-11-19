@@ -28,6 +28,7 @@ import {
   structuredSessionBackgroundTaskGroups
 } from './background-task-roster'
 import { sayBackgroundTaskTranslated as say } from './background-task-words-text'
+import { useZotzBackgroundTaskOutputToggle } from '@/components/zotz/background/ZotzBackgroundTaskOutput'
 
 /** Use strip width in rem so narrow splits behave like narrow windows even on wide monitors. */
 const NARROW_STRIP_REM = NARROW_BACKGROUND_TASKS_STRIP_REM
@@ -87,6 +88,8 @@ function BackgroundTaskRow(props: {
   const stopId = backgroundTaskRowStopId(row, props.supportsTaskStop)
   // Only an agent's activity streams into the conversation, filed under the provider's id.
   const shownId = row.kind === 'agent' && props.onShowAgent ? row.providerId : undefined
+  // Zotz: in the Background panel a shell row expands to its output.
+  const output = useZotzBackgroundTaskOutputToggle(row)
   const content = (
     <>
       <Icon aria-hidden="true" className={`size-3.5 shrink-0 ${kindIconTone(row.kind, false)}`} />
@@ -125,6 +128,16 @@ function BackgroundTaskRow(props: {
           >
             {content}
           </button>
+        ) : output ? (
+          <button
+            type="button"
+            aria-expanded={output.open}
+            className="-mx-1 flex h-6 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-1 text-left outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={output.toggle}
+          >
+            {output.chevron}
+            {content}
+          </button>
         ) : (
           content
         )}
@@ -141,6 +154,7 @@ function BackgroundTaskRow(props: {
           </Button>
         ) : null}
       </li>
+      {output?.panel}
       {row.owned.length > 0 ? (
         // Work a child owns (its shell, a nested agent) reads beneath it, not in its kind's group.
         <li>

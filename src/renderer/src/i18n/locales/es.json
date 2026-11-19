@@ -24376,6 +24376,14 @@
       "settingLabel": "Descargar el catálogo de plugins de Orca",
       "settingDescription": "Muestra los plugins oficiales y de la comunidad de Orca y revisa su lista de bloqueo. Viene apagado porque Zotz es un fork; tus propias fuentes de plugins funcionan igual."
     },
+    "background": {
+      "title": "Segundo plano",
+      "empty": "No hay nada corriendo en segundo plano en esta conversación. Aquí aparecen las pruebas, scripts y subagentes que inicie el agente.",
+      "outputLoading": "Leyendo la salida…",
+      "outputUnavailable": "No se pudo leer la salida.",
+      "outputEmpty": "Todavía no hay salida",
+      "outputNotShared": "Este agente no comparte la salida de sus shells."
+    },
     "deleteReview": {
       "loading": "Cargando cambios…",
       "failed": "No se pudieron cargar los cambios",

@@ -26002,6 +26002,14 @@
       "settingLabel": "Download Orca's plugin catalog",
       "settingDescription": "Shows the official and community plugins from Orca and checks their safety list. Off by default because Zotz is a fork; your own plugin sources work either way."
     },
+    "background": {
+      "title": "Background",
+      "empty": "Nothing is running in the background for this chat. Tests, scripts and subagents the agent starts show up here.",
+      "outputLoading": "Reading output…",
+      "outputUnavailable": "The output could not be read.",
+      "outputEmpty": "No output yet",
+      "outputNotShared": "This agent does not share the output of its shells."
+    },
     "deleteReview": {
       "loading": "Loading changes…",
       "failed": "Could not load the changes",

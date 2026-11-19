@@ -25,7 +25,8 @@ export const UNIT_SETUP_FILES = [
   'config/scripts/test-runtime/environment/zotz-vitest-upstream-network-policy.ts',
   'config/scripts/test-runtime/environment/zotz-vitest-upstream-visible-agents.ts',
   'config/scripts/test-runtime/environment/zotz-vitest-upstream-mac-self-update.ts',
-  'config/scripts/test-runtime/environment/zotz-vitest-upstream-brand-copy.ts'
+  'config/scripts/test-runtime/environment/zotz-vitest-upstream-brand-copy.ts',
+  'config/scripts/test-runtime/environment/zotz-vitest-upstream-background-panel.ts'
 ]
 
 export const UNIT_EXCLUDE = [
