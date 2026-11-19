@@ -36,7 +36,7 @@ import { useNativeChatWorkers } from '../../native-chat-workers-context'
 import { NativeChatMarkdown } from '../../markdown/NativeChatMarkdown'
 import { NativeChatTextAttachments } from '../../media/text/NativeChatTextAttachments'
 import { NativeChatCodeBlock } from '../../markdown/code/NativeChatCodeBlock'
-import { NativeChatCopyButton } from '../actions/NativeChatCopyButton'
+import { NativeChatEventCopyLink } from '../events/NativeChatEventCopyLink'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { NativeChatImageAttachments } from '../../media/images/NativeChatImageAttachments'
 import { NativeChatEventRow, type NativeChatEventBadge } from '../events/NativeChatEventRow'
@@ -126,19 +126,22 @@ export function NativeChatAgentMessageCard({
         }
       }}
       action={
-        sender || canCopy ? (
-          <span className="flex items-center gap-0.5">
-            {sender && !several ? (
-              <NativeChatAgentMessageSenderOpen
-                from={from}
-                sender={sender}
-                dispatchId={dispatchId}
-                chatWorktreeId={worktreeId}
-                target={target}
-              />
-            ) : null}
-            {canCopy ? <NativeChatCopyButton text={text} /> : null}
-          </span>
+        sender && !several ? (
+          <NativeChatAgentMessageSenderOpen
+            from={from}
+            sender={sender}
+            dispatchId={dispatchId}
+            chatWorktreeId={worktreeId}
+            target={target}
+          />
+        ) : null
+      }
+      detailsActions={
+        canCopy ? (
+          <NativeChatEventCopyLink
+            text={text}
+            label={t('components.native-chat.copyMessage.copy', 'Copy message')}
+          />
         ) : null
       }
       details={
