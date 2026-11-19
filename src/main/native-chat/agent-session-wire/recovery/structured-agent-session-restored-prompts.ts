@@ -257,11 +257,12 @@ export class StructuredAgentSessionRestoredPrompts {
     params: PromptParams,
     revision: number | undefined
   ): Promise<void> {
-    const { sessionId } = params.envelope
-    this.holds.drop(sessionId)
+    // Only the attempt that recorded the answer owns its hold; another attempt may have armed it.
     if (revision === undefined) {
       return
     }
+    const { sessionId } = params.envelope
+    this.holds.drop(sessionId)
     await journal
       .mutatePrompt({
         itemId: params.itemId,

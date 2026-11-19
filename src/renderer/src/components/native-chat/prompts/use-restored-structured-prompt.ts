@@ -23,9 +23,9 @@ export function useRestoredStructuredPrompt(
     prompt,
     failed: key !== null && failed === key,
     dismiss: () => setDismissed(prompt?.itemId ?? null),
-    /** A refused answer leaves the card readable but says it can't be resumed. */
+    /** A refused answer keeps the card answerable and says it couldn't be resumed. */
     response: (inner: PromptResponse): PromptResponse => ({
-      holds: (item) => inner.holds(item) || failed === `${item.itemId}:${item.revision}`,
+      holds: inner.holds,
       respond: async (item, choice) => {
         const result = await inner.respond(item, choice)
         if (result === null) {

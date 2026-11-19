@@ -1,6 +1,7 @@
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   isAgentExitPromptBody,
+  isUnansweredAtAgentExit,
   SAME_TURN_PROMPTS_CHECKED
 } from '../../../shared/agent-session/requests/prompts/agent-session-restored-prompt'
 import type { JournalSqlStatusContext } from './journal-sql-status-context'
@@ -30,7 +31,7 @@ function newestLonePrompt(items: Iterable<JournalStatusItem>): JournalStatusItem
     if (turnOf(entry.item) !== turnOf(newest.item)) {
       return newest
     }
-    if (isAgentExitPromptBody(entry.item.body) || ++checked >= SAME_TURN_PROMPTS_CHECKED) {
+    if (isUnansweredAtAgentExit(entry.item.body) || ++checked >= SAME_TURN_PROMPTS_CHECKED) {
       return null
     }
   }

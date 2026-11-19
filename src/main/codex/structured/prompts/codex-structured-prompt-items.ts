@@ -161,10 +161,12 @@ export function codexApprovalItem(input: {
         codexFileChangeApprovalDetail(params.changes) ?? input.detail
       ),
       options: codexApprovalOptions(input.params),
-      ...codexRequestDigest(
-        input.method,
-        present(params.changes) ? params : { ...params, changes: input.announcedChanges }
-      ),
+      // The diff the person reviewed: a request's own changes may name paths without content.
+      ...codexRequestDigest(input.method, {
+        ...params,
+        changes: present(params.changes) ? params.changes : input.announcedChanges,
+        announcedChanges: input.announcedChanges
+      }),
       resolution: { ...PENDING }
     }
   }

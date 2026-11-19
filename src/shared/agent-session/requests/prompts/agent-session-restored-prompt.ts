@@ -18,14 +18,18 @@ export const SAME_TURN_PROMPTS_CHECKED = 32
 type PromptBody = AgentJournalApprovalItem | AgentJournalQuestionItem
 export type RestoredAgentJournalPrompt = AgentJournalRenderItem & { body: PromptBody }
 
-/** Cancelled only because its agent exited, and written by a build that can match it again. */
-export function isAgentExitPromptBody(body: AgentJournalRenderItem['body']): body is PromptBody {
+/** Left unanswered because its agent exited, whether or not it can be matched again. */
+export function isUnansweredAtAgentExit(body: AgentJournalRenderItem['body']): body is PromptBody {
   return (
     (body.kind === 'approval' || body.kind === 'question') &&
     body.resolution.state === 'cancelled' &&
-    body.resolution.endedBy === AGENT_EXIT_PROMPT_ENDING &&
-    typeof body.requestDigest === 'string'
+    body.resolution.endedBy === AGENT_EXIT_PROMPT_ENDING
   )
+}
+
+/** Cancelled only because its agent exited, and written by a build that can match it again. */
+export function isAgentExitPromptBody(body: AgentJournalRenderItem['body']): body is PromptBody {
+  return isUnansweredAtAgentExit(body) && typeof body.requestDigest === 'string'
 }
 
 const isPrompt = (item: AgentJournalRenderItem): boolean =>
@@ -70,7 +74,7 @@ export function restoredAgentJournalPrompt(
     if (turnOf(previous) !== turnItemId) {
       break
     }
-    if (isAgentExitPromptBody(previous.body) || ++checked >= SAME_TURN_PROMPTS_CHECKED) {
+    if (isUnansweredAtAgentExit(previous.body) || ++checked >= SAME_TURN_PROMPTS_CHECKED) {
       return null
     }
   }

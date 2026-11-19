@@ -133,6 +133,19 @@ it('finds the prompt an exited agent waited on until the chat moves on', () => {
       approval('third', 'cancelled', 't1')
     ]).found
   ).toBeNull()
+  // An earlier one with no digest (older build, live-only request) still makes the pair ambiguous.
+  const undigested = approval('older', 'cancelled', 't1')
+  if (undigested.kind === 'item' && undigested.body.kind === 'approval') {
+    undigested.body = { ...undigested.body, requestDigest: undefined }
+  }
+  expect(
+    restored([
+      item('ask', message('Fix the tests')),
+      turn('t1'),
+      undigested,
+      approval('card', 'cancelled', 't1')
+    ]).found
+  ).toBeNull()
 })
 
 it('seeks the newest prompt without walking or sorting earlier ones', () => {
