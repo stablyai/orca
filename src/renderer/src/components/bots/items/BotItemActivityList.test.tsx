@@ -106,3 +106,52 @@ it('renders linked references without their stored prefixes', () => {
   )
   expect(row.textContent).not.toMatch(/url:|file:/)
 })
+
+it("replies to an open question the page can't answer in its own card, from the card itself", () => {
+  const reply = vi.fn()
+  const item = makeTestBotItem(6, {
+    status: 'needs_you',
+    question: { eventId: 'e2', text: 'Retry it here?\n\nOr write it by hand.' }
+  })
+  render(
+    <BotItemActivityList
+      bot={BOT}
+      item={item}
+      events={ASKED}
+      askShown={false}
+      onReplyToQuestion={reply}
+    />
+  )
+
+  fireEvent.click(screen.getByRole('button', { name: 'Reply' }))
+  const box = screen.getByRole('textbox', { name: 'Reply' })
+  expect(document.activeElement).toBe(box)
+  fireEvent.keyDown(box, { key: 'Enter' })
+  expect(reply).not.toHaveBeenCalled()
+
+  fireEvent.change(box, { target: { value: '  b, by hand  ' } })
+  fireEvent.keyDown(box, { key: 'Enter' })
+
+  expect(reply).toHaveBeenCalledExactlyOnceWith('b, by hand')
+  expect(screen.queryByRole('textbox', { name: 'Reply' })).toBeNull()
+})
+
+it('offers no Reply where the card below takes the answer, or where the item takes no comment', () => {
+  const item = makeTestBotItem(6, {
+    status: 'needs_you',
+    question: { eventId: 'e2', text: 'Retry it here?', answerable: true }
+  })
+  const view = render(
+    <BotItemActivityList
+      bot={BOT}
+      item={item}
+      events={ASKED}
+      askShown
+      onReplyToQuestion={vi.fn()}
+    />
+  )
+  expect(screen.queryByRole('button', { name: 'Reply' })).toBeNull()
+
+  view.rerender(<BotItemActivityList bot={BOT} item={item} events={ASKED} askShown={false} />)
+  expect(screen.queryByRole('button', { name: 'Reply' })).toBeNull()
+})

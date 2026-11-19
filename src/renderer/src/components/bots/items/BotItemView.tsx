@@ -148,6 +148,11 @@ export function BotItemBody({
     isWorking: false,
     isVisible: true
   })
+  // From the comment box or an open question's Reply: shown at once, then sent to the host.
+  const sendComment = (text: string, paths: readonly string[] = []): void => {
+    pending.send(text, paths, view.events.at(-1)?.id ?? item.lastEventId)
+    jumpToLatest()
+  }
   // Comment and description links open as in chat, from the bot's folder; the panel has no tab of
   // its own, so opens place beside the bot workspace's focused tab, as a click in that chat would.
   const sourceTabId = useAppStore(
@@ -268,6 +273,7 @@ export function BotItemBody({
                             events={view.events}
                             pending={pending}
                             askShown={ask.question !== null}
+                            onReplyToQuestion={deleted ? undefined : sendComment}
                           />
                         ) : null}
                       </section>
@@ -299,10 +305,7 @@ export function BotItemBody({
                   item={item}
                   attachTo={attachTo}
                   hidden={ask.shown}
-                  onSend={(text, paths) => {
-                    pending.send(text, paths, view.events.at(-1)?.id ?? item.lastEventId)
-                    jumpToLatest()
-                  }}
+                  onSend={sendComment}
                 />
               </div>
             )}

@@ -29119,7 +29119,11 @@
         "dismiss": "Dismiss",
         "commentNotAnswer": "A comment, with any files, goes to the bot and moves this item to In progress, but isn’t recorded as your answer. Expand the question to answer it.",
         "uncertain": "This question closed while your answer was being sent, and no reply came, so it may not have gone. Check Activity; your answer is kept here.",
-        "oursEditedAfter": "Your answer was recorded. Words of yours it didn’t include are kept here."
+        "oursEditedAfter": "Your answer was recorded. Words of yours it didn’t include are kept here.",
+        "reply": "Reply",
+        "replyPlaceholder": "Reply to {{name}}…",
+        "cancelReply": "Cancel",
+        "sendReply": "Send"
       }
     },
     "search": {
