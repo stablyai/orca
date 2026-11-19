@@ -3,11 +3,9 @@
 import type { AgentSessionRecoveryCapsule } from '../../../runtime/agent-session/records/agent-session-recovery-capsule'
 import {
   NO_RECOVERY_DISMISSAL,
+  type AgentSessionResumeFailureInput,
+  type AgentSessionResumeFailureRecord,
   type RecoveryDismissal
-} from '../../../runtime/agent-session/records/agent-session-recovery-capsule-entries'
-import type {
-  AgentSessionResumeFailureInput,
-  AgentSessionResumeFailureRecord
 } from '../../../runtime/agent-session/records/agent-session-recovery-capsule-entries'
 import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type {
