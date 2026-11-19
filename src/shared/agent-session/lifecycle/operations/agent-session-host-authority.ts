@@ -11,6 +11,7 @@ import { isValidTerminalTabId } from '../../../workspace-layout/terminal-surface
 import type { TuiAgent } from '../../../agent-launch/catalog/tui-agent'
 import type { SpawnIntent } from '../../../terminal/pty/admission/spawn-admission-contract'
 import type { TerminalOscColorQueryReplyColors } from '../../../terminal/protocol/queries/terminal-osc-color-reply'
+import type { TerminalViewMode } from '../../../terminal-view-mode.ts'
 
 export const AGENT_SESSION_RPC_ERROR_CODES = [
   'agent_session_identity_required',
@@ -148,7 +149,7 @@ export type RuntimeCreateAgentSessionRequest = {
   trustWorktreeId?: string
   presentation?: RuntimeTerminalPresentation
   placement?: { tabId?: string; leafId?: string }
-  viewMode?: 'terminal' | 'chat'
+  viewMode?: TerminalViewMode
   /** Account routing env a desktop prepared for a host with no account services (WSL orcad). */
   accountEnv?: Record<string, string>
   /** The launching client's terminal theme, pinned to this PTY's OSC 10/11 answers. */

@@ -12,6 +12,7 @@ import type { TerminalGrid, TerminalPaneLayoutNode, TerminalTab } from './termin
 import type { PersistedOpenFile } from '../workspace-session/workspace-session-state-types'
 import type { BrowserWorkspace } from '../browser/workspaces/browser-workspace-types'
 import type { LayoutEditorView } from './editor-tabs/layout-editor-view'
+import type { TerminalViewMode } from '../terminal-view-mode.ts'
 
 export type LayoutTerminalPanes = {
   root: TerminalPaneLayoutNode | null
@@ -29,7 +30,7 @@ type LayoutTabFields = {
   quickCommandLabel?: string | null
   color: string | null
   isPinned?: boolean
-  viewMode?: 'terminal' | 'chat'
+  viewMode?: TerminalViewMode
   isPreview?: boolean
   agentSessionAgent?: AgentType
 }

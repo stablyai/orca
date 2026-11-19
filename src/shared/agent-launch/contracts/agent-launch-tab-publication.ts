@@ -2,6 +2,7 @@
 
 import type { AgentLaunchPlacement, AgentLaunchPlacementReceipt } from './agent-launch-intent'
 import type { TuiAgent } from '../catalog/tui-agent'
+import type { TerminalViewMode } from '../../terminal-view-mode.ts'
 
 /**
  * Whose screen moves, decided on the host from who called. Mirrors the browser-tab split between
@@ -25,7 +26,7 @@ export type AgentLaunchTabPublishRequest = {
   tabId: string
   leafId: string
   launchAgent: TuiAgent
-  viewMode: 'terminal' | 'chat'
+  viewMode: TerminalViewMode
   placement?: AgentLaunchPlacement
   viewer: AgentLaunchTabViewerRule
   /** The launch's prompt, so a pane whose agent did not start can offer to copy it. */

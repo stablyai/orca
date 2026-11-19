@@ -1,6 +1,7 @@
 import type { AiVaultSessionTitle } from '../ai-vault/contracts/ai-vault-session-title'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import type { AgentLaunchPaneOutcome } from '../agent-launch/contracts/agent-launch-pane-verdict'
+import type { TerminalViewMode } from '../terminal-view-mode.ts'
 
 /** The tab row owns the recovery ledger, including the last reason it acted on. */
 export type TerminalPaneRecoveryReason =
@@ -60,7 +61,7 @@ export type TerminalTab = {
   /** Pinned tabs survive "close others"; host-persisted for remote servers. */
   isPinned?: boolean
   /** Host-persisted view preference converges paired clients; older saved tabs default to terminal. */
-  viewMode?: 'terminal' | 'chat'
+  viewMode?: TerminalViewMode
   sortOrder: number
   createdAt: number
   /** Bumped on shutdown so TerminalPane remounts with a fresh PTY. */
