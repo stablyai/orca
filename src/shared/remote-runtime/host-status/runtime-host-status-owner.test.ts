@@ -190,3 +190,17 @@ it('lengthens the backoff for a verified host whose transport is down while a ca
   // Probes at 0, 5, 15 and 30 s (backoff 3, 6, 12, 30 s) after the first verification.
   expect(request).toHaveBeenCalledTimes(5)
 })
+
+it('keeps an owner retry behind the backoff that observe-only failures built', async () => {
+  const { owner, request } = createOwner()
+  request.mockResolvedValue(runtimeHostStatusFailure('runtime_unavailable', 'host down'))
+  await owner.refresh({ observeOnly: true })
+  await vi.advanceTimersByTimeAsync(3_000)
+  await owner.refresh({ observeOnly: true })
+  await vi.advanceTimersByTimeAsync(1_000)
+  await owner.refresh()
+  await vi.advanceTimersByTimeAsync(4_000)
+  expect(request).toHaveBeenCalledTimes(2)
+  await vi.advanceTimersByTimeAsync(1_000)
+  expect(request).toHaveBeenCalledTimes(3)
+})
