@@ -373,6 +373,7 @@
       "blockedDescription": "An extension blocked this page. To open it, allow this site in the extension, then retry.",
       "siteListBlockedTitle": "{{host}} is not on this profile's site list",
       "siteListBlockedDescription": "To open it, add it in Settings > Browser > Site list.",
+      "siteListBlockedProtocolDescription": "ftp: pages can't open while this profile has a site list.",
       "certificateNameMismatch": "The certificate doesn't match {{value0}}.",
       "certificateDateInvalid": "The certificate for {{value0}} isn't valid at the current date and time.",
       "certificateAuthorityInvalid": "Orca doesn't trust the authority that issued the certificate for {{value0}}.",

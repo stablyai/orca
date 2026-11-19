@@ -1042,6 +1042,7 @@
     "browser.loadFailure.routeDownDescription",
     "browser.loadFailure.routeDownTitle",
     "browser.loadFailure.siteListBlockedDescription",
+    "browser.loadFailure.siteListBlockedProtocolDescription",
     "browser.loadFailure.siteListBlockedTitle",
     "browser.loadFailure.sshRoutedHint",
     "browser.loadFailure.timeoutTitle",

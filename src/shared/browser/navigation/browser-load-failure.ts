@@ -51,6 +51,7 @@ export const BROWSER_LOAD_FAILURE_COPY = {
     'An extension blocked this page. To open it, allow this site in the extension, then retry.',
   siteListBlockedTitle: "{{host}} is not on this profile's site list",
   siteListBlockedDescription: 'To open it, add it in Settings > Browser > Site list.',
+  siteListBlockedProtocolDescription: "ftp: pages can't open while this profile has a site list.",
   otherTitle: "Can't reach {{host}}",
   otherTitleWithoutHost: "Can't load this page",
   waiting: 'Reloads when the server responds',
@@ -105,7 +106,9 @@ export function formatBrowserLoadFailureText(
     description:
       loadError.code === 0
         ? loadError.description
-        : copy.description && render(copy.description, { host })
+        : failure.kind === 'site-list-blocked' && loadError.validatedUrl.startsWith('ftp:')
+          ? render('siteListBlockedProtocolDescription', { host })
+          : copy.description && render(copy.description, { host })
   }
 }
 
