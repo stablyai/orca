@@ -63,8 +63,9 @@ export async function resolveProtectedRoots(
   const dated = dirname(stem).split('/')
   const resolved: ProtectedRoot[] = []
   for (const root of protectedRoots) {
-    // Reading a stopped distro's folder boots it; the chat waits for a sweep where it runs.
-    await assertWslUncPathRunning(root)
+    // Reading a stopped distro's folder boots it; the chat waits for a sweep where it runs. Asked
+    // afresh: a stop nothing reported leaves an earlier "running" standing.
+    await assertWslUncPathRunning(root, null, { leaseMs: 0 })
     const realPath = await realpathUnlessAbsent(root)
     if (!realPath) {
       continue
