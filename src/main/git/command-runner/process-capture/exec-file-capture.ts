@@ -141,7 +141,13 @@ export function execFileCapture(
         finish(error, output?.stdout, output?.stderr)
         return
       }
-      void killSpawnedCommandTree(child).then(() => {
+      const killed = killSpawnedCommandTree(child)
+      if (useWorker && process.platform === 'win32') {
+        // A busy spawn worker must not hold the caller's deadline; close still owns termination proof.
+        finish(error)
+        return
+      }
+      void killed.then(() => {
         terminating = false
         finish(error)
       })
