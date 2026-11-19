@@ -174,7 +174,6 @@ export function StatusBarSurface({
                       <ClippedRowProviderSegment
                         key={p.provider}
                         p={p}
-                        compact={false}
                         display={usagePercentageDisplay}
                         mode={statusBarUsageMode}
                       />
@@ -216,8 +215,6 @@ export function StatusBarSurface({
                           <ClaudeSwitcherMenu
                             claude={p}
                             ownerUsage={ownerUsage}
-                            compact={false}
-                            iconOnly={false}
                             asSubmenu
                             triggerContent={rowNode}
                           />
@@ -228,7 +225,6 @@ export function StatusBarSurface({
                           <AntigravityUsageMenu
                             antigravity={p}
                             accounts={antigravityAccounts}
-                            compact={false}
                             triggerContent={rowNode}
                             onManageAccounts={() => handleOpenProviderAccounts('antigravity')}
                           />
@@ -240,8 +236,6 @@ export function StatusBarSurface({
                             key={getAccountOwnerKey(ownerUsage.owner)}
                             codex={p}
                             ownerUsage={ownerUsage}
-                            compact={false}
-                            iconOnly={false}
                             asSubmenu
                             triggerContent={rowNode}
                           />
@@ -250,8 +244,6 @@ export function StatusBarSurface({
                       return (
                         <ProviderDetailsMenu
                           provider={p}
-                          compact={false}
-                          iconOnly={false}
                           asSubmenu
                           triggerContent={rowNode}
                           ariaLabel={t(
@@ -302,23 +294,21 @@ export function StatusBarSurface({
           {!isPairedWebClientWindow() ? (
             <>
               <PluginsStatusSegment />
-              <PluginStatusBarItems iconOnly={false} />
-              <CaffeinateStatusSegment iconOnly={false} />
+              <PluginStatusBarItems />
+              <CaffeinateStatusSegment />
             </>
           ) : null}
-          <RemoteServerUpdateStatusSegment iconOnly={false} />
-          <SkillUpdateStatusSegment iconOnly={false} />
-          <AgentCliUpdateStatusSegment iconOnly={false} />
-          <NativeChatResumeStatusSegment iconOnly={false} />
-          <UpdateStatusSegment compact={false} iconOnly={false} />
-          {showGitBlame ? <GitBlameStatusSegment iconOnly={false} /> : null}
+          <RemoteServerUpdateStatusSegment />
+          <SkillUpdateStatusSegment />
+          <AgentCliUpdateStatusSegment />
+          <NativeChatResumeStatusSegment />
+          <UpdateStatusSegment />
+          {showGitBlame ? <GitBlameStatusSegment /> : null}
           <React.Suspense fallback={null}>
             {petEnabled ? <PetStatusSegment /> : null}
-            {showResourceUsage ? (
-              <ResourceUsageStatusSegment compact={false} iconOnly={false} />
-            ) : null}
-            {showPorts ? <PortsStatusSegment compact={false} iconOnly={false} /> : null}
-            {showSsh ? <SshStatusSegment compact={false} iconOnly={false} /> : null}
+            {showResourceUsage ? <ResourceUsageStatusSegment /> : null}
+            {showPorts ? <PortsStatusSegment /> : null}
+            {showSsh ? <SshStatusSegment /> : null}
           </React.Suspense>
           {showFloatingTerminalToggle && (
             <FloatingTerminalIconContextMenu currentLocation="status-bar" className="relative">

@@ -51,7 +51,6 @@ const EMPTY_CLAUDE_ACCOUNTS = emptyClaudeAccountsState()
 // Retain account switch/reset drill-in even though the footer now opens UsageRosterPanel.
 export function ClaudeSwitcherForOwner({
   claude,
-  compact,
   iconOnly,
   asSubmenu = false,
   triggerContent,
@@ -347,7 +346,6 @@ export function ClaudeSwitcherForOwner({
   return (
     <ProviderDetailsMenu
       provider={claude}
-      compact={compact}
       iconOnly={iconOnly}
       asSubmenu={asSubmenu}
       triggerContent={triggerContent}

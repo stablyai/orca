@@ -65,7 +65,7 @@ it('keeps no countdown wakes for status bar chips clipped out of view', () => {
   const view = render(
     <>
       {Array.from({ length: 10 }, (_, i) => (
-        <ClippedRowProviderSegment key={i} p={pool} compact={false} display="used" mode="compact" />
+        <ClippedRowProviderSegment key={i} p={pool} display="used" mode="compact" />
       ))}
     </>
   )

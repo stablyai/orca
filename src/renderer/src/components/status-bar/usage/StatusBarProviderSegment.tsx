@@ -53,21 +53,19 @@ function WindowLabel({
   w,
   label,
   display,
-  showLabel = true,
   labelFirst = false
 }: {
   w: RateLimitWindow
   label: string
   display: UsagePercentageDisplay
-  showLabel?: boolean
   labelFirst?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   return (
     <span className="tabular-nums">
-      {showLabel && labelFirst ? `${label} ` : ''}
+      {labelFirst ? `${label} ` : ''}
       {formatBareUsagePercentage(w.usedPercent, display, t)}
-      {showLabel && !labelFirst ? ` ${label}` : ''}
+      {labelFirst ? '' : ` ${label}`}
     </span>
   )
 }
@@ -195,7 +193,6 @@ function CustomUsageText({
 
 type ProviderSegmentProps = {
   p: ProviderRateLimits | null
-  compact: boolean
   display: UsagePercentageDisplay
   mode?: StatusBarUsageMode
   countdownActive?: boolean
@@ -213,7 +210,6 @@ export function ClippedRowProviderSegment(props: ProviderSegmentProps): React.JS
 
 export function ProviderSegment({
   p,
-  compact,
   display,
   mode = 'verbose',
   countdownActive = true
@@ -233,18 +229,15 @@ export function ProviderSegment({
     : null
   const sections = getStatusBarUsageSections(p, mode, t)
   const groupedBuckets = sections.map((section) => section.window).filter(isGroupedUsagePool)
-  const showLabels = mode === 'verbose' || !compact
   // Why: gate only the clock, never the label, so visibility can't change width and re-trigger itself.
   const now = useResetCountdownClock(
     !countdownActive
       ? []
       : template && p
         ? [p.session?.resetsAt, p.weekly?.resetsAt, p.fableWeekly?.resetsAt, p.monthly?.resetsAt]
-        : showLabels
-          ? groupedBuckets
-              .filter((bucket) => clampUsedPercent(bucket.usedPercent) >= USAGE_WARNING_PERCENT)
-              .map((bucket) => bucket.resetsAt)
-          : []
+        : groupedBuckets
+            .filter((bucket) => clampUsedPercent(bucket.usedPercent) >= USAGE_WARNING_PERCENT)
+            .map((bucket) => bucket.resetsAt)
   )
 
   // Why static: unfocused windows never poll, so a pending chip's pulse would redraw the compositor indefinitely.
@@ -272,8 +265,7 @@ export function ProviderSegment({
         title={getProviderUsageErrorMessage(p, t)}
       >
         <ProviderIcon provider={provider} />
-        {/* Why "--" when compact: an icon alone would read as a healthy chip. */}
-        {compact ? '--' : <OwnerNotSetUpLabel placeholder={p.usageMetadata.ownerNotSetUp} />}
+        <OwnerNotSetUpLabel placeholder={p.usageMetadata.ownerNotSetUp} />
       </span>
     )
   }
@@ -283,7 +275,7 @@ export function ProviderSegment({
       <span className="inline-flex items-center gap-1 text-muted-foreground">
         <ProviderIcon provider={provider} />
         {!calm && <AlertTriangle size={11} className="text-muted-foreground/80" />}
-        {!compact && <span className="text-[11px] font-medium">{statusLabel}</span>}
+        <span className="text-[11px] font-medium">{statusLabel}</span>
       </span>
     )
   }
@@ -298,7 +290,7 @@ export function ProviderSegment({
   return (
     <span className="inline-flex items-center gap-1.5">
       <ProviderIcon provider={provider} />
-      {!template && mode === 'verbose' && tightest && !compact ? (
+      {!template && mode === 'verbose' && tightest ? (
         <MiniBar usedPct={clampUsedPercent(tightest.window.usedPercent)} display={display} />
       ) : null}
       {template ? (
@@ -318,7 +310,6 @@ export function ProviderSegment({
               w={section.window}
               label={formatStatusBarSectionLabel(p, section, now, t)}
               display={display}
-              showLabel={showLabels}
               labelFirst={section.labelFirst}
             />
           </React.Fragment>
