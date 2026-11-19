@@ -3,6 +3,7 @@
 
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { withTimeoutResult } from '../../../../shared/concurrency/promise-timeout-fallback'
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
@@ -28,6 +29,8 @@ export type ReattachedPaintEntry = {
 const LEDGER_VERSION = 1
 /** A quit never waits on this write longer than this; a ledger missed only keeps today's hold. */
 const SAVE_BUDGET_MS = 500
+/** One terminal's foreground read at quit; a slower one is left out, so the rest still save. */
+const IDENTIFY_BUDGET_MS = 250
 /** A restore never waits on the read longer than this; a ledger missed only keeps today's hold. */
 const READ_BUDGET_MS = 500
 /** An entry for a terminal no run attached since is kept this long. */
@@ -164,8 +167,9 @@ export async function reattachedPaintEntry(
     return null
   }
   const { incarnationId } = pty
-  const agent =
-    pty.foregroundAgent ?? pty.launchAgent ?? pty.launchCommandAgent ?? (await identify())
+  const stored = pty.foregroundAgent ?? pty.launchAgent ?? pty.launchCommandAgent
+  const identified = stored ? null : await withTimeoutResult(identify(), IDENTIFY_BUDGET_MS)
+  const agent = stored ?? (identified?.ok ? identified.value : null)
   return isTuiAgent(agent) && readsTrustedScreen(agent) ? { incarnationId, sequence, agent } : null
 }
 

@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import {
   awaitReattachedTerminalPaint,
   hasTerminalCommandPainted,
@@ -113,4 +113,18 @@ it('identifies a typed agent at quit when nothing recorded who is in front', asy
     agent: 'hermes'
   })
   expect(await reattachedPaintEntry(typed, 12, noIdentity)).toBeNull()
+})
+
+// #44696 review: one hung foreground read must not keep the other terminals' proofs from saving.
+it('leaves out a terminal whose foreground read hangs', async () => {
+  const typed = Object.assign(hermesPane(), { foregroundAgent: null })
+  paint(typed, '\x1b]133;C\x07❯ Ask me anything…')
+  vi.useFakeTimers()
+  try {
+    const entry = reattachedPaintEntry(typed, 12, () => new Promise(() => {}))
+    await vi.advanceTimersByTimeAsync(250)
+    expect(await entry).toBeNull()
+  } finally {
+    vi.useRealTimers()
+  }
 })
