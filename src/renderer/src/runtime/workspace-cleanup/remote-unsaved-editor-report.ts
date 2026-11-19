@@ -100,15 +100,7 @@ export function installRemoteUnsavedEditorReport(): () => void {
     callRuntimeRpc(
       { kind: 'environment', environmentId },
       'workspaceCleanup.reportUnsavedEditors',
-      { worktreeIds, reporterId },
-      {
-        // Edits made during the compatibility wait ride along; sent records what actually went out.
-        paramsForStatus: () => {
-          const latest = currentReports().get(environmentId) ?? []
-          sent.set(environmentId, latest.join('\n'))
-          return { worktreeIds: latest, reporterId }
-        }
-      }
+      { worktreeIds, reporterId }
     )
       .catch((error: unknown) => {
         if (hasRuntimeRpcErrorCode(error, 'method_not_found')) {
