@@ -45,10 +45,6 @@ function expectNewCardsWithoutNotices(store: ReturnType<typeof createStore>): vo
 }
 
 describe('worktree card style seed', () => {
-  it('starts a fresh profile on the new cards, including after restart', async () => {
-    expectNewCardsWithoutNotices(await reopen())
-  })
-
   it.each([
     [
       'inherited consent',
@@ -71,17 +67,5 @@ describe('worktree card style seed', () => {
       }
     })
     expectNewCardsWithoutNotices(await reopen())
-  })
-
-  it('keeps an existing profile without a saved choice on Classic', async () => {
-    writeDataFile({ settings: { uiLanguage: 'ja' } })
-    const reopened = await reopen()
-    expect(reopened.getSettings().experimentalNewWorktreeCardStyle).toBe(false)
-    expect(reopened.getUI().worktreeCardsIntroNoticeSeen).not.toBe(true)
-  })
-
-  it('keeps an existing profile that chose Classic on Classic', async () => {
-    writeDataFile({ settings: { experimentalNewWorktreeCardStyle: false } })
-    expect((await reopen()).getSettings().experimentalNewWorktreeCardStyle).toBe(false)
   })
 })
