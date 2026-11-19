@@ -42,3 +42,10 @@ it('once the agent is known, a probe that cannot name it keeps the hold', () => 
   expect(evidence.applyForeground('pty-1', probe(), 'agent', true)).toBe(false)
   expect(evidence.foregroundHold('pty-1')).toBe('incarnation-1')
 })
+
+it('another known program in front holds mail like a shell does', () => {
+  const evidence = new MailboxForegroundEvidence()
+  const probe = () => evidence.captureForegroundObservation('pty-1', 'incarnation-1')
+  expect(evidence.applyForeground('pty-1', probe(), 'non-shell')).toBe(true)
+  expect(evidence.foregroundHold('pty-1')).toBe('incarnation-1')
+})

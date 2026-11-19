@@ -4,7 +4,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execu
 
 const rootByPtyId = new Map<
   string,
-  { incarnationId: string; pid: number; startedAtMs: number | null }
+  { incarnationId: string | undefined; pid: number; startedAtMs: number }
 >()
 
 /** A local terminal's root process, or 'replaced' when the PTY is no longer the expected incarnation.
@@ -12,7 +12,8 @@ const rootByPtyId = new Map<
 export async function readLegacyPtyRootProcessId(
   controller: Pick<RuntimePtyController, 'listProcesses'>,
   ptyId: string,
-  expectedIncarnationId?: string
+  expectedIncarnationId?: string,
+  remember = true
 ): Promise<number | 'replaced' | null> {
   const remembered = rootByPtyId.get(ptyId)
   if (remembered && remembered.incarnationId === expectedIncarnationId) {
@@ -39,11 +40,10 @@ export async function readLegacyPtyRootProcessId(
   if (!pid) {
     return null
   }
-  if (expectedIncarnationId && target.incarnationId === expectedIncarnationId) {
-    const startedAtMs = await readProcessStartTimeMs(pid)
-    if (startedAtMs !== null) {
-      rootByPtyId.set(ptyId, { incarnationId: expectedIncarnationId, pid, startedAtMs })
-    }
+  // Why not only with an incarnation: older daemons report none, and the root's start time already fences a replacement.
+  const startedAtMs = remember ? await readProcessStartTimeMs(pid) : null
+  if (startedAtMs !== null) {
+    rootByPtyId.set(ptyId, { incarnationId: expectedIncarnationId, pid, startedAtMs })
   }
   return pid
 }

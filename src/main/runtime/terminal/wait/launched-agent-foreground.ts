@@ -181,7 +181,13 @@ async function inspectLaunchedAgentForeground(
       }
     }
     if (!host.remote) {
-      const root = await readLegacyPtyRootProcessId(controller, ptyId, expectedIncarnationId)
+      const root = await readLegacyPtyRootProcessId(
+        controller,
+        ptyId,
+        expectedIncarnationId,
+        // Why mail only: its retries repeat the read; a launch check asks once.
+        mailboxEvidence
+      )
       if (root === 'replaced') {
         return 'unknown'
       }

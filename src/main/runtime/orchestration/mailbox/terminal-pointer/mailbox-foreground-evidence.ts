@@ -97,14 +97,16 @@ export class MailboxForegroundEvidence {
       !proof ||
       !observation ||
       observation !== proof.observation ||
-      (foreground === 'shell'
+      (foreground === 'shell' || foreground === 'non-shell'
         ? observation.generation !== proof.generation
         : observation.contradiction !== proof.contradiction)
     ) {
       return false
     }
     const wasHeld = observation.held
-    if (foreground === 'shell') {
+    // Why non-shell too: a known other program in front would read the pointer as its own input.
+    if (foreground === 'shell' || foreground === 'non-shell') {
+      // TODO(STA-16313): record the suspended agent's process here when no earlier probe named it.
       observation.held = true
       observation.screenRequired = true
       observation.contradiction++
