@@ -281,6 +281,14 @@ export function codexRestartTabIndex(
   )
 }
 
+export function coveredCodexRestartPtyIds(requests: readonly CodexAccountRestart[]): Set<string> {
+  return new Set(
+    requests.flatMap((request) =>
+      request.resultPtyId ? [request.oldPtyId, request.resultPtyId] : [request.oldPtyId]
+    )
+  )
+}
+
 export function eligibleCodexRestartPtyIds(
   state: CodexRestartPopulationState,
   panes = currentCodexRestartPanes(state),
@@ -293,11 +301,7 @@ export function eligibleCodexRestartPtyIds(
       isCurrentCodexAccountRestart(state, request, tabs)
     )
   }
-  const coveredPtys = new Set(
-    currentRequests.flatMap((request) =>
-      request.resultPtyId ? [request.oldPtyId, request.resultPtyId] : [request.oldPtyId]
-    )
-  )
+  const coveredPtys = coveredCodexRestartPtyIds(currentRequests)
   return [...panes].flatMap(([ptyId, pane]) =>
     !coveredPtys.has(ptyId) &&
     !isCodexAccountRestart(state.pendingPaneAccountRestarts[pane.key]) &&
