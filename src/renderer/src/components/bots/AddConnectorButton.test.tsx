@@ -144,7 +144,7 @@ describe('AddConnectorButton', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Add Slack' }))
     expect(screen.queryByText('Add to Reviewer')).toBeNull()
-    expect(screen.getByText('Add Reviewer to Slack')).toBeTruthy()
+    expect(screen.getByText('Connect Slack')).toBeTruthy()
     await waitFor(() => expect(state).toHaveBeenCalledWith({ botId: 'bot-1' }))
   })
 
@@ -218,7 +218,7 @@ describe('AddConnectorButton', () => {
     expect(onBot()).toEqual(['Slack'])
     fireEvent.click(screen.getByRole('button', { name: 'Add another workspace' }))
     expect(screen.queryByText('Add to Reviewer')).toBeNull()
-    expect(screen.getByText('Add Reviewer to another Slack workspace')).toBeTruthy()
+    expect(screen.getByText('Connect another Slack workspace')).toBeTruthy()
     // No other workspace on this computer: a new one starts from its token.
     expect(await screen.findByRole('button', { name: 'Create Slack app' })).toBeTruthy()
   })

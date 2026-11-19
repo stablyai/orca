@@ -26927,11 +26927,8 @@
         "uncertainChecked": "I checked Slack: there is no such app, or I deleted it",
         "again": "Set up again",
         "done": "Done",
-        "title": "Add {{name}} to Slack",
         "pick": "Choose a Slack workspace.",
         "another": "Connect another Slack workspace",
-        "titleAnother": "Add {{name}} to another Slack workspace",
-        "titleOn": "Set up {{name}} in Slack",
         "isIn": "{{name}} is in Slack",
         "ready": "Your Slack app is ready. Approve it in Slack to finish.",
         "approve": "Approve in Slack",
@@ -26944,7 +26941,10 @@
         "linkCopied": "Link copied",
         "copyLink": "Copy link",
         "linkUntil": "(works once, until {{time}}).",
-        "linkOnce": "(works once)."
+        "linkOnce": "(works once).",
+        "tryIt": "Try it in any channel or direct message",
+        "connectAnother": "Connect another Slack workspace",
+        "connect": "Connect Slack"
       },
       "connection": {
         "appSettings": "Slack app settings",
@@ -26995,8 +26995,6 @@
         "handOffExpired": "That hand-off expired or was already used. Try again."
       },
       "howToAsk": "Mention <code>@{{name}}</code> in a channel, or send it a direct message.",
-      "setupIntro": "Mention <code>@{{name}}</code> in a channel, or send it a direct message, and {{name}} starts working on this computer.",
-      "setupIntroOnHost": "Mention <code>@{{name}}</code> in a channel, or send it a direct message, and {{name}} starts working on {{host}}.",
       "handOff": {
         "confirmMac": "Orca on this Mac creates the Slack app with {{email}}’s token. {{host}} gets only this bot’s app.",
         "confirm": "Orca on this computer creates the Slack app with {{email}}’s token. {{host}} gets only this bot’s app.",

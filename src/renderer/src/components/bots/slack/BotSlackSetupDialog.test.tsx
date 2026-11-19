@@ -222,9 +222,7 @@ describe('BotSlackSetupDialog', () => {
     openDialog(bot({ slack: { appId: 'C', teamId: 'T-mine' } }))
 
     await screen.findByLabelText('Configuration refresh token')
-    expect(
-      screen.getByRole('heading', { name: 'Add Scout to another Slack workspace' })
-    ).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Connect another Slack workspace' })).toBeTruthy()
   })
 
   it('keeps the token form with the cloud’s reason, and an empty field, when the grant fails', async () => {
@@ -355,8 +353,8 @@ describe('BotSlackSetupDialog', () => {
     })
     await act(() => vi.advanceTimersByTimeAsync(7_000))
     expect(screen.getByText('Scout is in Slack')).toBeDefined()
-    // The owner then picks who there may ask, as on every Who can ask surface.
-    expect(screen.getByRole('button', { name: 'Add people' })).toBeDefined()
+    // How to ask shows once it's in; who can ask is edited from the Slack connector's settings.
+    expect(screen.getByText('@Scout')).toBeDefined()
     vi.useRealTimers()
   })
 
