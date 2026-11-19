@@ -154,7 +154,7 @@ export function createAcpModelCatalogProbe(
             {
               command,
               args: [...prefixArgs, ...listing.args],
-              cwd: workspace ?? cwd,
+              cwd: workspace || cwd,
               env,
               envToDelete
             },

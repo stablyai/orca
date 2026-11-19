@@ -309,3 +309,24 @@ it('keeps a slow OpenCode 1.x version response and selects its command listing',
   expect(session).not.toHaveBeenCalled()
   expect(command.mock.calls[0]?.[1]).toMatchObject({ timeoutMs: null })
 })
+
+it('falls back to homePath when workspacePath is empty for command listings', async () => {
+  const base = acpLaunchSpecFor('antigravity')!.hostBackend!.spec
+  const command = vi.fn<typeof runAgentModelCatalogListing>(
+    async () => 'gemini-4-carbon-high\tGemini 4 Carbon (High)\n'
+  )
+  const probe = createAcpModelCatalogProbe(
+    { ...base, account: { ...base.account, environment: (_home, env) => env } },
+    {
+      resolveEnvironment: async () => ({}),
+      resolveCommand: () => process.execPath,
+      probeVersion: async () => ({ version: '1.5.9' }),
+      dataDirectory: '/unused',
+      homePath: '/account',
+      runListing: command,
+      connectSession: vi.fn()
+    }
+  )
+  await probe({ variable: 'HOME', path: '/account' }, { workspacePath: '' })
+  expect(command.mock.calls[0]?.[0].cwd).toBe('/account')
+})

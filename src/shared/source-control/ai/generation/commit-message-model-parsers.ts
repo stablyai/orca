@@ -1,5 +1,12 @@
+import {
+  antigravityFamilyEfforts,
+  antigravityModelChoices,
+  parseAntigravityModelRows,
+  type AntigravityEffortLevel
+} from '../../../agent-session/options/model-catalog/antigravity-model-families'
 import { parseClaudeModelList } from '../../../agent-session/options/model-catalog/claude-model-list-probe'
 import { labelFromModelId } from '../../../agent-session/options/model-catalog/model-id-label'
+import { stripAnsiEscapeSequences } from '../../../terminal/protocol/escape/ansi-escape-sequences'
 import type { CommitMessageModel, ThinkingLevel } from './commit-message-agent-spec'
 
 export const BASIC_THINKING_LEVELS: ThinkingLevel[] = [
@@ -200,26 +207,54 @@ export function parseCursorModels(stdout: string): CommitMessageModel[] {
   return uniqueModels(models)
 }
 
+const ANTIGRAVITY_THINKING_LABELS: Record<AntigravityEffortLevel, string> = {
+  none: 'None',
+  minimal: 'Minimal',
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  xhigh: 'Extra High',
+  max: 'Max'
+}
+
+const LEGACY_ANTIGRAVITY_DISPLAY_NAME =
+  /^.+ \((?:none|minimal|low|medium|high|xhigh|extra\s+high|max|thinking)\)$/i
+
 export function parseAntigravityModels(stdout: string): CommitMessageModel[] {
-  const models: CommitMessageModel[] = []
+  const rows = parseAntigravityModelRows(stdout)
+  const rowIds = new Set(rows.map((row) => row.modelId))
+  const models: CommitMessageModel[] = antigravityModelChoices(rows).map(({ id, label }) => {
+    const family = rowIds.has(id) ? undefined : antigravityFamilyEfforts(id, rows)
+    const thinkingLevels: ThinkingLevel[] =
+      family?.efforts.map((effort) => ({
+        id: effort.value,
+        label: ANTIGRAVITY_THINKING_LABELS[effort.value] ?? effort.label
+      })) ?? []
+    return {
+      id,
+      label,
+      ...(thinkingLevels.length > 0
+        ? {
+            thinkingLevels,
+            defaultThinkingLevel: thinkingLevels.some((level) => level.id === 'low')
+              ? 'low'
+              : thinkingLevels[0].id
+          }
+        : {})
+    }
+  })
+  // Older agy versions list bare display names without an id column.
   for (const rawLine of iterateModelOutputLines(stdout)) {
-    const line = rawLine.trim()
-    const separator = line.indexOf('\t')
-    const id = (separator === -1 ? line : line.slice(0, separator)).trim()
-    const label = separator === -1 ? id : line.slice(separator + 1).trim()
-    // Older agy versions list display names; current versions emit id<TAB>label.
+    const line = stripAnsiEscapeSequences(rawLine).trim()
     if (
-      !id ||
-      !label ||
-      (separator === -1 && !/^.+ \((?:low|medium|high|thinking)\)$/i.test(id)) ||
-      (separator !== -1 && (/\s/.test(id) || /^(?:id|model)$/i.test(id)))
+      !line ||
+      line.includes('\t') ||
+      /\s{2,}/.test(line) ||
+      !LEGACY_ANTIGRAVITY_DISPLAY_NAME.test(line)
     ) {
       continue
     }
-    models.push({
-      id,
-      label
-    })
+    models.push({ id: line, label: line })
   }
   return uniqueModels(models)
 }
