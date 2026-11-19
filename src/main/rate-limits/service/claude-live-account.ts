@@ -13,7 +13,11 @@ export function resolveClaudeLiveAccount(
   }
   for (const account of accounts) {
     const wsl = account.managedAuthRuntime === 'wsl'
-    const home = wsl ? account.wslLinuxAuthPath : getClaudeProfileRouter()?.accountHome(account.id)
+    const home = wsl
+      ? account.wslLinuxAuthPath
+      : account.id.startsWith('system-default:host:')
+        ? getClaudeProfileRouter()?.systemDefaultHome()
+        : getClaudeProfileRouter()?.accountHome(account.id)
     const paths = home
       ? [home, ...(wsl && account.wslDistro ? [toWindowsWslPath(home, account.wslDistro)] : [])]
       : []

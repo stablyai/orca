@@ -71,3 +71,19 @@ it('does not attribute a cached system-default reading to the workspace account'
   })
   expect(workspaceAccountUsage(state, 'claude', 'work')?.session).toBeNull()
 })
+
+it('shows the system-default preview for a system-default workspace while the host uses another account', () => {
+  const state = createEmptyRateLimitState({
+    claude: reading('work', 91),
+    inactiveClaudeAccounts: [
+      {
+        accountId: 'system-default:host:["personal@example.com","personal-org"]',
+        rateLimits: { ...reading('unused', 38), usageMetadata: { authProvenance: 'system' } },
+        updatedAt: 1,
+        isFetching: false
+      }
+    ]
+  })
+  expect(workspaceAccountUsage(state, 'claude', 'system-default')?.session?.usedPercent).toBe(38)
+  expect(workspaceAccountUsage(state, 'claude', 'work')?.session?.usedPercent).toBe(91)
+})
