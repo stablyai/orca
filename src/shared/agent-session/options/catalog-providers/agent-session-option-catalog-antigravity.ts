@@ -16,8 +16,7 @@ export const ANTIGRAVITY_LEVEL_SUFFIX = new RegExp(
   `^(.+)-(${ANTIGRAVITY_EFFORT_LEVELS.join('|')})$`
 )
 
-/** Why: agy rejects a leveled id whose level conflicts with --effort, and its TUI then silently
- *  runs the default model (#39556). The family with --effort picks that level, as ACP does. */
+/** agy's TUI runs its default model for a leveled id that conflicts with --effort (#39556). */
 export function composeAntigravityLaunchModel(modelId: string, effort: unknown): string {
   const match = ANTIGRAVITY_LEVEL_SUFFIX.exec(modelId)
   return typeof effort === 'string' && match && match[2] !== effort ? match[1] : modelId

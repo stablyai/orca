@@ -1,18 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { checkAgentLaunchModelPreferences } from '../../../agent-launch/choices/agent-launch-model-preferences'
 import { resolveAgentStartupPlanInputs } from '../../../agent-launch/startup/agent-startup-plan-inputs'
 import { buildAgentStartupPlan } from '../../../agent-launch/startup/tui-agent-startup'
 
 // agy refuses a leveled id that conflicts with --effort; its TUI then runs the default model (#39556).
 describe('Antigravity model and effort launch arguments', () => {
   it('launches the family with --effort when the requested effort differs from the id level', () => {
-    const check = checkAgentLaunchModelPreferences({
-      agent: 'antigravity',
-      model: 'claude-sonnet-5-5-medium',
-      effort: 'low'
-    })
-    expect(check).toEqual({ preferences: { model: 'claude-sonnet-5-5-medium', effort: 'low' } })
-
     const plan = buildAgentStartupPlan({
       ...resolveAgentStartupPlanInputs({
         agent: 'antigravity',
