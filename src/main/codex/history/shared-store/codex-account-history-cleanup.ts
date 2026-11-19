@@ -16,7 +16,11 @@ import {
   storeFileFacts,
   updateManifest
 } from './codex-account-history-cleanup-manifest'
-import { contentSha256, type UnsavedContentCheck } from './codex-account-history-content-check'
+import {
+  contentSha256,
+  reportModeRollouts,
+  type ReportModeMemory
+} from './codex-account-history-content-check'
 import {
   MAX_TRANSIENT_DELETE_FAILURES,
   hasProvenShared,
@@ -60,8 +64,8 @@ export async function cleanUpCodexHistoryLeftBehind(args: {
   policy: CodexHistoryCleanupSweepPolicy
   /** The sweep's, already partly spent by its content check. */
   budget?: CleanupBudget
-  /** Report mode's content checks, never saved. */
-  unsaved?: Map<string, UnsavedContentCheck>
+  /** Report mode's own inventory and checks, never saved. */
+  report?: ReportModeMemory
 }): Promise<CodexHistoryCleanupResult> {
   const result = emptyCleanupResult()
   const budget = args.budget ?? new CleanupBudget()
@@ -130,7 +134,7 @@ export async function cleanUpCodexHistoryLeftBehind(args: {
       result.rollouts.skipped.open += 1
       continue
     }
-    if (budget.skipOversized(rollout.facts.bytes)) {
+    if (budget.skipOversized(rollout.path, rollout.facts.bytes)) {
       continue
     }
     if (!budget.fits(rollout.facts.bytes) || !(await settleRollout(rollout))) {
@@ -193,14 +197,7 @@ export async function cleanUpCodexHistoryLeftBehind(args: {
   // Each proof is the file itself and its store copy, so no pass can void it meanwhile. A random
   // start keeps copies left open from holding back the rest run after run.
   async function readyRollouts(leftBehind: CodexHistoryCleanupManifest): Promise<ReadyRollout[]> {
-    // Report mode's own checks count only for this sweep, and only for the file they saw.
-    const withCheck = leftBehind.rollouts.map((rollout) => {
-      const unsaved = args.unsaved?.get(rollout.path)
-      return !rollout.check && unsaved && sameFacts(rollout, unsaved.facts)
-        ? { ...rollout, check: unsaved.check }
-        : rollout
-    })
-    const proven = withCheck.flatMap((rollout) =>
+    const proven = reportModeRollouts(leftBehind.rollouts, args.report).flatMap((rollout) =>
       rollout.check?.sameContent &&
       rollout.storePath === rollout.check.store.path &&
       isLeftBehindPath(rollout.path, 'rollout')

@@ -58,14 +58,14 @@ export class CleanupBudget {
   private files = 0
   private bytes = 0
   private readonly deadline = Date.now() + BUDGET_MS
-  /** Copies one read of which exceeds the whole byte budget: never checked, so never deleted. */
-  oversized = 0
+  // Copies one read of which exceeds the whole byte budget: never checked, so never deleted.
+  private readonly oversizedPaths = new Set<string>()
   /** Whether the budget ended the sweep's work early. */
   ranOut = false
 
   /** Before examining `count` more files; false once any limit is reached. */
   startFiles(count = 1): boolean {
-    if (this.files >= BUDGET_FILES || this.pastDeadline()) {
+    if (this.files + count > BUDGET_FILES || this.pastDeadline()) {
       this.ranOut = true
       return false
     }
@@ -73,11 +73,17 @@ export class CleanupBudget {
     return true
   }
 
-  /** True, and counted, when one read of `bytes` alone exceeds the whole budget. */
-  skipOversized(bytes: number): boolean {
+  /** True, and counted once per copy, when one read of `bytes` alone exceeds the whole budget. */
+  skipOversized(path: string, bytes: number): boolean {
     const oversized = bytes > BUDGET_READ_BYTES
-    this.oversized += oversized ? 1 : 0
+    if (oversized) {
+      this.oversizedPaths.add(path)
+    }
     return oversized
+  }
+
+  get oversized(): number {
+    return this.oversizedPaths.size
   }
 
   /** Whether reading `bytes` more fits what is left. */

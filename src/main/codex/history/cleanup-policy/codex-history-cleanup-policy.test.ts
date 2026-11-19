@@ -35,7 +35,7 @@ describe('effectiveCodexHistoryCleanupMode', () => {
     effectiveCodexHistoryCleanupMode({
       kind: 'rollouts',
       fetched: { policy, downloaded: policy, at: NOW - HOUR_MS },
-      cached: null,
+      newestKnown: null,
       now: NOW,
       platform: 'darwin',
       installId: 'install-c',
@@ -52,10 +52,10 @@ describe('effectiveCodexHistoryCleanupMode', () => {
     // An older download the cache outranked renews nothing.
     const older = parsed('{"version":1,"revision":2,"kinds":{"rollouts":{"mode":"report"}}}')
     expect(mode({ fetched: { policy, downloaded: older, at: NOW } })).toBe('report')
-    expect(mode({ fetched: null, cached: policy })).toBe('report')
+    expect(mode({ fetched: null, newestKnown: policy })).toBe('report')
     // A failed download keeps a cached kill switch.
     const killed = parsed('{"version":1,"revision":9,"kinds":{"rollouts":{"mode":"off"}}}')
-    expect(mode({ fetched: null, cached: killed })).toBe('off')
+    expect(mode({ fetched: null, newestKnown: killed })).toBe('off')
     // An equal-revision download speaks for itself: its own rule decides, never the cached one.
     for (const rule of ['{"mode":"off"}', '{"mode":"report"}', '{"mode":"enforce"}', '{}']) {
       const same = parsed(`{"version":1,"revision":3,"kinds":{"rollouts":${rule}}}`)

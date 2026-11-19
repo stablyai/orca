@@ -1,13 +1,26 @@
 import { join } from 'node:path'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { reportCodexHistoryCleanupOnce } from '../../../telemetry/codex-history-cleanup-telemetry'
 import { getOrcaUserDataPath } from '../../configuration/homes/codex-home-paths'
 import { codexHistoryCleanupSweepPolicy } from '../cleanup-policy/codex-history-cleanup-policy-live-update'
 import { cleanUpCodexHistoryLeftBehind } from './codex-account-history-cleanup'
 import {
   checkCodexHistoryLeftBehind,
-  type UnsavedContentCheck
+  type ReportModeMemory
 } from './codex-account-history-content-check'
 import { CleanupBudget, describeCleanupSweep } from './codex-history-cleanup-sweep-tally'
+
+const reportModeMemory = new Map<string, ReportModeMemory>()
+
+function reportModeMemoryFor(accountHome: string): ReportModeMemory {
+  const key = normalizeRuntimePathForComparison(accountHome)
+  let memory = reportModeMemory.get(key)
+  if (!memory) {
+    memory = { rollouts: null, checks: new Map() }
+    reportModeMemory.set(key, memory)
+  }
+  return memory
+}
 
 /** Checks what the home left behind, then deletes (or reports) what the finished check proved. */
 export async function checkThenCleanUpCodexHistory(args: {
@@ -31,12 +44,13 @@ export async function checkThenCleanUpCodexHistory(args: {
   const shouldStop = (): boolean => (stopped ||= args.shouldStop())
   // One budget for the whole sweep: what it leaves undone waits for the next run's sweep.
   const budget = new CleanupBudget()
-  // Report mode keeps its checks to itself, so it never changes what a later enforce deletes.
-  const unsaved = modes.rollouts === 'enforce' ? undefined : new Map<string, UnsavedContentCheck>()
+  // Report mode keeps its inventory and checks to itself, so it never changes what a later enforce
+  // deletes; kept for the process, so a large home's sweeps still add up to a full tally.
+  const report = modes.rollouts === 'enforce' ? undefined : reportModeMemoryFor(args.accountHome)
   // The content check proves only rollouts.
   if (
     modes.rollouts !== 'off' &&
-    !(await checkCodexHistoryLeftBehind({ ...args, shouldStop, budget, unsaved }))
+    !(await checkCodexHistoryLeftBehind({ ...args, shouldStop, budget, report }))
   ) {
     return false
   }
@@ -53,7 +67,7 @@ export async function checkThenCleanUpCodexHistory(args: {
     now: Date.now(),
     policy,
     budget,
-    unsaved
+    report
   })
   if (result.rollouts.candidates + result.databases.candidates > 0) {
     console.info(

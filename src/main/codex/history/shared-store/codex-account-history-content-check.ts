@@ -86,24 +86,50 @@ const SAVE_INTERVAL_MS = 30_000
 export type UnsavedContentCheck = { facts: FileFacts; check: ContentCheck }
 
 /**
+ * Report mode's view of a home, kept in memory for the life of the process so successive sweeps
+ * add up, and never written: the inventory as last walked, and the checks made since.
+ */
+export type ReportModeMemory = {
+  rollouts: LeftBehindRollout[] | null
+  checks: Map<string, UnsavedContentCheck>
+}
+
+/** The rollouts as report mode sees them: its own inventory, with its own checks where they hold. */
+export function reportModeRollouts(
+  saved: LeftBehindRollout[],
+  memory: ReportModeMemory | undefined
+): LeftBehindRollout[] {
+  return (memory?.rollouts ?? saved).map((rollout) => {
+    const unsaved = memory?.checks.get(rollout.path)
+    return !rollout.check &&
+      unsaved &&
+      sameFacts(rollout, unsaved.facts) &&
+      rollout.storePath === unsaved.check.store.path
+      ? { ...rollout, check: unsaved.check }
+      : rollout
+  })
+}
+
+/**
  * Rebuilds the home's left-behind inventory, then compares each unchecked rollout with its store
  * copy, saving progress as it goes. False when `shouldStop` cut it short; a `budget` that runs out
- * ends it too, with the rest left for a later run. With `unsaved`, checks go there instead of the
- * manifest.
+ * ends it too, with the rest left for a later run. With `report`, nothing is written: the
+ * inventory and the checks stay in that memory instead.
  */
 export async function checkCodexHistoryLeftBehind(args: {
   accountHome: string
   storeHome: string
   shouldStop: () => boolean
   budget?: CleanupBudget
-  unsaved?: Map<string, UnsavedContentCheck>
+  report?: ReportModeMemory
 }): Promise<boolean> {
   if (!(await readManifest(args.accountHome))) {
     return true
   }
   const walked = await inventoryCodexHistoryLeftBehind({
     ...args,
-    shouldStop: () => args.shouldStop() || (args.budget?.pastDeadline() ?? false)
+    shouldStop: () => args.shouldStop() || (args.budget?.pastDeadline() ?? false),
+    persist: !args.report
   })
   if (!walked) {
     return !args.shouldStop()
@@ -111,6 +137,15 @@ export async function checkCodexHistoryLeftBehind(args: {
   const manifest = await readManifest(args.accountHome)
   if (!manifest || manifest === 'newer') {
     return true
+  }
+  if (args.report) {
+    args.report.rollouts = walked
+    const current = new Set(walked.map((rollout) => rollout.path))
+    for (const path of args.report.checks.keys()) {
+      if (!current.has(path)) {
+        args.report.checks.delete(path)
+      }
+    }
   }
   const checks = new Map<string, { rollout: LeftBehindRollout; check: ContentCheck }>()
   const save = async (): Promise<void> => {
@@ -136,7 +171,9 @@ export async function checkCodexHistoryLeftBehind(args: {
   let finished = true
   let savedAt = Date.now()
   // A random start keeps any one stretch of copies from taking every run's budget.
-  const unchecked = manifest.rollouts.filter((rollout) => !rollout.check)
+  const unchecked = reportModeRollouts(manifest.rollouts, args.report).filter(
+    (rollout) => !rollout.check
+  )
   const offset = Math.floor(Math.random() * unchecked.length)
   for (const rollout of [...unchecked.slice(offset), ...unchecked.slice(0, offset)]) {
     if (args.shouldStop()) {
@@ -146,7 +183,7 @@ export async function checkCodexHistoryLeftBehind(args: {
     // Only a copy that can be checked takes any budget.
     const store = rollout.storePath ? await storeFileFacts(args.storeHome, rollout.storePath) : null
     const bytes = rollout.bytes + (store?.bytes ?? 0)
-    if (!store || args.budget?.skipOversized(bytes)) {
+    if (!store || args.budget?.skipOversized(rollout.path, bytes)) {
       continue
     }
     if (args.budget && (!args.budget.startFiles() || !args.budget.fits(bytes))) {
@@ -161,8 +198,8 @@ export async function checkCodexHistoryLeftBehind(args: {
       }
       throw error
     }
-    if (check && args.unsaved) {
-      args.unsaved.set(rollout.path, { facts: rollout, check })
+    if (check && args.report) {
+      args.report.checks.set(rollout.path, { facts: rollout, check })
     } else if (check) {
       checks.set(rollout.path, { rollout, check })
     }

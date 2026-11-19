@@ -110,8 +110,8 @@ export function codexHistoryCleanupBucket(installId: string): number {
 }
 
 /**
- * This install's mode for `kind`. `off` holds from the newest policy known, the cache included, so
- * a failed download never undoes a kill switch. `enforce` comes only from a download that is itself
+ * This install's mode for `kind`. `off` holds from the newest policy known, so a failed download
+ * or cache write never undoes a kill switch. `enforce` comes only from a download that is itself
  * the policy in force (not one the cache outranked), fetched within the day, and its own rule.
  */
 export function effectiveCodexHistoryCleanupMode(args: {
@@ -121,12 +121,17 @@ export function effectiveCodexHistoryCleanupMode(args: {
     downloaded: CodexHistoryCleanupPolicy
     at: number
   } | null
-  cached: CodexHistoryCleanupPolicy | null
+  /** The newest policy known, downloaded or cached, even after a failed download. */
+  newestKnown: CodexHistoryCleanupPolicy | null
   now: number
   platform: NodeJS.Platform
   installId: string | undefined
 }): CodexHistoryCleanupMode {
-  const known = args.fetched?.policy ?? args.cached
+  const fetchedPolicy = args.fetched?.policy ?? null
+  const known =
+    fetchedPolicy && (!args.newestKnown || fetchedPolicy.revision >= args.newestKnown.revision)
+      ? fetchedPolicy
+      : args.newestKnown
   const authority = authoritativeDownload(args.fetched)
   const rule = authority?.kinds[args.kind]
   if (known?.kinds[args.kind]?.mode === 'off' || rule?.mode === 'off') {

@@ -275,10 +275,10 @@ async function databasesLeftBehind(
 }
 
 /** Plain-form paths of store rollouts present in both forms; names only, no file reads. */
-async function storeTwinPairs(storeHome: string): Promise<string[]> {
+async function storeTwinPairs(storeHome: string, shouldStop: () => boolean): Promise<string[]> {
   const pairs: string[] = []
   for (const folder of HISTORY_FOLDERS) {
-    pairs.push(...(await listRolloutTwinPairs(join(storeHome, folder))))
+    pairs.push(...(await listRolloutTwinPairs(join(storeHome, folder), Infinity, shouldStop)))
   }
   return pairs.map((path) => toManifestPath(storeHome, path)).sort()
 }
@@ -317,31 +317,35 @@ export async function recordCodexHistoryLeftBehind(args: {
 }
 
 /**
- * Rebuilds the left-behind rollouts and store twin pairs from disk, keeping still-valid checks.
- * False, with nothing written, when `shouldStop` cut the walk short.
+ * Rebuilds the left-behind rollouts and store twin pairs from disk, keeping still-valid checks,
+ * and returns the rollouts; null, with nothing written, when `shouldStop` cut the walk short. With
+ * `persist` false (report mode) nothing is written at all.
  */
 export async function inventoryCodexHistoryLeftBehind(args: {
   accountHome: string
   storeHome: string
   shouldStop?: () => boolean
-}): Promise<boolean> {
+  persist?: boolean
+}): Promise<LeftBehindRollout[] | null> {
   const before = await readManifest(args.accountHome)
   if (!before || before === 'newer') {
-    return true
+    return []
   }
+  const shouldStop = args.shouldStop ?? (() => false)
   // Walked outside the write, which then touches only these fields: a pass (or, in WSL, another
   // process) may rewrite the streak meanwhile, and a launch never waits behind the walk.
   const previous = new Map(before.rollouts.map((rollout) => [rollout.path, rollout]))
-  const rollouts = await leftBehindRollouts(
-    args.accountHome,
-    args.storeHome,
-    previous,
-    args.shouldStop ?? (() => false)
-  )
+  const rollouts = await leftBehindRollouts(args.accountHome, args.storeHome, previous, shouldStop)
   if (!rollouts) {
-    return false
+    return null
   }
-  const pairs = await storeTwinPairs(args.storeHome)
+  const pairs = await storeTwinPairs(args.storeHome, shouldStop)
+  if (shouldStop()) {
+    return null
+  }
+  if (args.persist === false) {
+    return rollouts
+  }
   if (pairs.length > 0) {
     console.warn(
       `[codex-account-history] ${pairs.length} rollouts are in ${args.storeHome} as both .jsonl and .jsonl.zst; both kept`
@@ -353,5 +357,5 @@ export async function inventoryCodexHistoryLeftBehind(args: {
     storeTwinPairs: pairs,
     updatedAt: new Date().toISOString()
   }))
-  return true
+  return rollouts
 }
