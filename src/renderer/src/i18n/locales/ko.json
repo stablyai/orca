@@ -5734,7 +5734,6 @@
           "e029a2d775": "상태",
           "c2c7a45cda": "없음",
           "hosts": "호스트",
-          "showSection": "표시",
           "allHostsDetail": "모든 호스트 표시",
           "configuredSshHost": "구성된 SSH",
           "projectSshHost": "프로젝트 SSH",
@@ -5747,7 +5746,6 @@
           "automation": "자동화",
           "folderPathIdentity": "브랜치 / 폴더 경로",
           "cli": "Orca CLI",
-          "workspaceOptions": "워크스페이스 옵션",
           "optionsActiveFilters_other": "워크스페이스 옵션(필터 {{count}}개 활성)",
           "optionsFilterCount_other": "워크스페이스 옵션(필터 {{count}}개)"
         },

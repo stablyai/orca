@@ -207,11 +207,14 @@ describe('SidebarBotsSection', () => {
       'ResizeObserver',
       class {
         constructor(
-          private readonly callback: (entries: { contentRect: { width: number } }[]) => void
+          private readonly callback: (
+            entries: { target: Element; contentRect: { width: number } }[]
+          ) => void
         ) {}
-        observe(): void {
-          this.callback([{ contentRect: { width: 68 } }])
+        observe(target: Element): void {
+          this.callback([{ target, contentRect: { width: 68 } }])
         }
+        unobserve(): void {}
         disconnect(): void {}
       }
     )

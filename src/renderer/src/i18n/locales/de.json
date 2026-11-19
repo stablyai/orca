@@ -6415,7 +6415,6 @@
         },
         "SidebarWorkspaceOptionsMenu": {
           "hosts": "Hosts",
-          "showSection": "Anzeigen",
           "allHostsDetail": "Alle Hosts anzeigen",
           "configuredSshHost": "Konfigurierter SSH-Host",
           "projectSshHost": "Projekt-SSH-Host",
@@ -6465,7 +6464,6 @@
           "219ebf1961": "Branch-Name",
           "folderPathIdentity": "Branch / Ordnerpfad",
           "cli": "Orca CLI",
-          "workspaceOptions": "Arbeitsbereichsoptionen",
           "optionsActiveFilters_one": "Arbeitsbereichsoptionen ({{count}} Filter aktiv)",
           "optionsActiveFilters_other": "Arbeitsbereichsoptionen ({{count}} Filter aktiv)",
           "optionsFilterCount_one": "Arbeitsbereichsoptionen ({{count}} Filter)",
