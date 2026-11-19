@@ -20,6 +20,7 @@ import {
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
 import {
   getWorktreeParentPickerLabel,
@@ -28,21 +29,99 @@ import {
 
 export function WorktreeCopySubMenu({ model }: { model: WorktreeContextMenuModel }) {
   const t = useTranslate()
+  const { agentSessionTabs, isDeleting } = model
+  const [singleAgentTab] = agentSessionTabs
   return (
     <DropdownMenuSub>
-      <DropdownMenuSubTrigger disabled={model.isDeleting}>
+      <DropdownMenuSubTrigger disabled={isDeleting}>
         <Copy className="size-3.5" />
         {t('auto.components.sidebar.WorktreeContextMenu.copySubmenu', 'Copy')}
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent>
-        <DropdownMenuItem onSelect={model.handleCopyPath} disabled={model.isDeleting}>
+        <DropdownMenuItem onSelect={model.handleCopyPath} disabled={isDeleting}>
           <Copy className="size-3.5" />
           {t('auto.components.sidebar.WorktreeContextMenu.copyPathOption', 'Path')}
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={model.handleCopyName} disabled={model.isDeleting}>
+        <DropdownMenuItem onSelect={model.handleCopyName} disabled={isDeleting}>
           <Copy className="size-3.5" />
-          {t('auto.components.sidebar.WorktreeContextMenu.copyNameOption', 'Worktree Name')}
+          {t('auto.components.sidebar.WorktreeContextMenu.copyNameOption', 'Copy workspace title')}
         </DropdownMenuItem>
+        {singleAgentTab ? (
+          <>
+            <DropdownMenuItem
+              onSelect={() => model.handleCopyAgentTabId(singleAgentTab)}
+              disabled={isDeleting}
+            >
+              <Copy className="size-3.5" />
+              {t('auto.components.sidebar.WorktreeContextMenu.copyTabIdOption', 'Copy Tab ID')}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() => model.handleCopyAgentSessionId(singleAgentTab)}
+              disabled={isDeleting}
+            >
+              <Copy className="size-3.5" />
+              {t(
+                'auto.components.sidebar.WorktreeContextMenu.copySessionIdOption',
+                'Copy Orca Session ID'
+              )}
+            </DropdownMenuItem>
+          </>
+        ) : null}
+        {agentSessionTabs.length > 1 ? (
+          <>
+            <CopyAgentTabsSubMenu
+              label={t(
+                'auto.components.sidebar.WorktreeContextMenu.copyTabIdOption',
+                'Copy Tab ID'
+              )}
+              agentSessionTabs={agentSessionTabs}
+              isDeleting={isDeleting}
+              onCopy={model.handleCopyAgentTabId}
+            />
+            <CopyAgentTabsSubMenu
+              label={t(
+                'auto.components.sidebar.WorktreeContextMenu.copySessionIdOption',
+                'Copy Orca Session ID'
+              )}
+              agentSessionTabs={agentSessionTabs}
+              isDeleting={isDeleting}
+              onCopy={model.handleCopyAgentSessionId}
+            />
+          </>
+        ) : null}
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
+  )
+}
+
+function agentTabMenuLabel(tab: Tab): string {
+  return tab.customLabel || tab.label || tab.entityId
+}
+
+function CopyAgentTabsSubMenu({
+  label,
+  agentSessionTabs,
+  isDeleting,
+  onCopy
+}: {
+  label: string
+  agentSessionTabs: readonly Tab[]
+  isDeleting: boolean
+  onCopy: (tab: Tab) => void
+}): React.JSX.Element {
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger disabled={isDeleting}>
+        <Copy className="size-3.5" />
+        {label}
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent>
+        {agentSessionTabs.map((tab) => (
+          <DropdownMenuItem key={tab.id} onSelect={() => onCopy(tab)} disabled={isDeleting}>
+            <Copy className="size-3.5" />
+            <span className="max-w-48 truncate">{agentTabMenuLabel(tab)}</span>
+          </DropdownMenuItem>
+        ))}
       </DropdownMenuSubContent>
     </DropdownMenuSub>
   )

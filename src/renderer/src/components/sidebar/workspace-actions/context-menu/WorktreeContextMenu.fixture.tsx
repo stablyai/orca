@@ -1,6 +1,8 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { ConfirmationDialogProvider } from '../../../dismiss/confirmation/confirmation-dialog'
+import { makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import WorktreeContextMenu from './WorktreeContextMenu'
@@ -170,3 +172,55 @@ export const vmRunning = vmMenuFixture('running')
 export const vmSuspended = vmMenuFixture('suspended')
 export const vmResumeFailed = vmMenuFixture('resume_failed')
 export const vmWaking = vmMenuFixture('suspended', true)
+
+// The agent chats a hand-off needs ids for, plus a browser tab the id items must ignore.
+const agentSessionTabs: Tab[] = [
+  makeUnifiedTab({
+    id: 'structured-agent-session-session-release',
+    worktreeId: worktree.id,
+    groupId: 'g-release',
+    contentType: 'agent-session',
+    entityId: 'session-release',
+    label: 'Release checks'
+  }),
+  makeUnifiedTab({
+    id: 'structured-agent-session-session-docs',
+    worktreeId: worktree.id,
+    groupId: 'g-docs',
+    contentType: 'agent-session',
+    entityId: 'session-docs',
+    customLabel: 'Docs pass'
+  }),
+  makeUnifiedTab({
+    id: 'browser-tab',
+    worktreeId: worktree.id,
+    groupId: 'g-browser',
+    contentType: 'browser',
+    entityId: 'browser-1'
+  })
+]
+
+function copyAgentTabsMenu(tabs: Tab[]) {
+  const fixture = menuFixture(repo)
+  return defineFixture({
+    ...fixture,
+    store: {
+      ...fixture.store,
+      unifiedTabsByWorktree: { [worktree.id]: tabs }
+    },
+    interact: async (frame) => {
+      await fixture.interact?.(frame)
+      await new Promise(requestAnimationFrame)
+      const trigger = Array.from(
+        frame.ownerDocument.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu-sub-trigger"]')
+      ).find((item) => item.textContent === 'Copy')
+      trigger?.focus()
+      trigger?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+    }
+  })
+}
+
+/** One agent chat: Copy lists the Tab ID and Session ID items directly. */
+export const agentSessionId = copyAgentTabsMenu(agentSessionTabs.slice(0, 1))
+/** Two agent chats: Copy nests the Tab ID and Session ID submenus with one row per chat. */
+export const agentSessionIds = copyAgentTabsMenu(agentSessionTabs)

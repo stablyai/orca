@@ -139,6 +139,16 @@ export function useWorktreeContextMenuModel({
   const { workspaceStatuses, statusesForWorktree } =
     useContextWorkspaceStatuses(activeContextWorktrees)
   const isMultiContext = activeContextWorktrees.length > 1
+  // Hand-offs copy ids without opening or focusing the workspace's tabs, so multi-select gets none.
+  const agentSessionTabs = useMemo(
+    () =>
+      isMultiContext
+        ? []
+        : (unifiedTabsByWorktree[worktree.id] ?? []).filter(
+            (tab) => tab.contentType === 'agent-session' && tab.entityId.trim() !== ''
+          ),
+    [isMultiContext, unifiedTabsByWorktree, worktree.id]
+  )
   const workspaceScope = parseWorkspaceKey(worktree.id)
   const folderWorkspaceId =
     workspaceScope?.type === 'folder' ? workspaceScope.folderWorkspaceId : null
@@ -364,6 +374,7 @@ export function useWorktreeContextMenuModel({
     ...commands,
     showsUnread,
     activeContextWorktrees,
+    agentSessionTabs,
     batchDeleteWorktrees,
     browserTabsByWorktree,
     children,
