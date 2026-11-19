@@ -96,4 +96,56 @@ describe('mapKimiUsageResponse', () => {
     })
     expect(result.monthly).toBeUndefined()
   })
+
+  it('does not spill a duplicate monthly top-level usage into weekly', () => {
+    const result = mapKimiUsageResponse({
+      usage: {
+        limit: '2000',
+        used: '600',
+        resetTime: '2026-12-01T00:00:00.000Z',
+        window: { duration: 1, timeUnit: 'TIME_UNIT_MONTH' }
+      },
+      limits: [
+        {
+          window: { duration: 300, timeUnit: 'TIME_UNIT_MINUTE' },
+          detail: { limit: '100', used: '10', resetTime: '2026-11-19T18:00:00.000Z' }
+        },
+        {
+          window: { duration: 1, timeUnit: 'TIME_UNIT_MONTH' },
+          detail: { limit: '2000', used: '500', resetTime: '2026-12-01T00:00:00.000Z' }
+        }
+      ]
+    })
+
+    expect(result.weekly).toBeNull()
+    expect(result.monthly?.usedPercent).toBe(25)
+    expect(result.session?.usedPercent).toBe(10)
+  })
+
+  it('does not spill a duplicate weekly top-level usage into session or block limit_5h fallback', () => {
+    const result = mapKimiUsageResponse({
+      usage: {
+        limit: '100',
+        used: '50',
+        resetTime: '2026-11-26T00:00:00.000Z',
+        window: { duration: 1, timeUnit: 'TIME_UNIT_WEEK' }
+      },
+      limits: [
+        {
+          window: { duration: 7, timeUnit: 'TIME_UNIT_DAY' },
+          detail: { limit: '100', used: '40', resetTime: '2026-11-26T00:00:00.000Z' }
+        }
+      ],
+      usages: {
+        limit_5h: { used_ratio: 0.15, reset_time: '2026-11-19T18:00:00Z' }
+      }
+    })
+
+    expect(result.weekly?.usedPercent).toBe(40)
+    expect(result.session).toMatchObject({
+      usedPercent: 15,
+      windowMinutes: 300,
+      resetsAt: 1795111200000
+    })
+  })
 })

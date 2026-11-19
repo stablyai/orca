@@ -185,12 +185,12 @@ export function mapKimiUsageResponse(data: KimiUsageResponse): ProviderRateLimit
     if (usageMinutes !== null) {
       const mapped = mapWindow(data.usage, usageMinutes)
       if (mapped) {
-        if (usageMinutes >= MIN_MONTHLY_WINDOW_MINUTES && !monthly) {
-          monthly = mapped
-        } else if (usageMinutes >= WEEKLY_WINDOW_MINUTES && !weekly) {
-          weekly = mapped
-        } else if (!session) {
-          session = mapped
+        if (usageMinutes >= MIN_MONTHLY_WINDOW_MINUTES) {
+          monthly ??= mapped
+        } else if (usageMinutes >= WEEKLY_WINDOW_MINUTES) {
+          weekly ??= mapped
+        } else {
+          session ??= mapped
         }
       }
     } else if (!weekly) {
