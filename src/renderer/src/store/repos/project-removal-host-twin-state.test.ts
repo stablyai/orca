@@ -211,7 +211,7 @@ describe('removing a remote project keeps its local twin', () => {
       'tab-local'
     ])
   })
-  it.each([LOCAL_HOST, REMOTE_HOST])(
+  it.each([LOCAL_HOST, REMOTE_HOST] as const)(
     'retires only the removed %s restart in a surviving mixed tab',
     async (hostId) => {
       const store = seedTwins()

@@ -130,7 +130,8 @@ describe('Codex restart attention population', () => {
       ...state,
       terminalLayoutsByTabId: {
         tab: { ...state.terminalLayoutsByTabId.tab, ptyIdsByLeafId: { [leaf]: 'successor' } }
-      }
+      },
+      ptyIdsByTabId: { tab: [] }
     }
     expect(selectCodexRestartStatus(state).attentionCount).toBe(0)
     state = {
