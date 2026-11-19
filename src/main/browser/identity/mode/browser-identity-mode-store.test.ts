@@ -30,15 +30,15 @@ import {
   setBrowserIdentityMode
 } from './browser-identity-mode-store'
 
-function makeUserData(mode: 'clean' | 'native' = 'clean'): string {
+function makeUserData(mode: 'clean' | 'native' = 'clean', explicitSelection = false): string {
   const userDataPath = mkdtempSync(join(tmpdir(), 'orca-browser-identity-store-'))
   writeFileSync(
     join(userDataPath, BROWSER_IDENTITY_MODE_FILE),
     JSON.stringify({
       version: BROWSER_IDENTITY_MODE_VERSION,
       mode,
-      explicitSelection: false,
-      migrationNoticePending: true
+      explicitSelection,
+      migrationNoticePending: !explicitSelection
     }),
     'utf8'
   )
@@ -51,16 +51,38 @@ describe('browser identity mode store', () => {
     resetBrowserIdentityModeStoreForTests()
   })
 
+  it.each([
+    {
+      label: 'no record',
+      userDataPath: () => mkdtempSync(join(tmpdir(), 'orca-browser-identity-store-'))
+    },
+    { label: 'a Cleaned record nobody chose', userDataPath: () => makeUserData('clean') }
+  ])('applies Native when there is $label', ({ userDataPath }) => {
+    expect(initializeBrowserIdentityModeStore(userDataPath())).toMatchObject({
+      appliedMode: 'native',
+      configuredMode: 'native',
+      explicitSelection: false
+    })
+  })
+
+  it('keeps an explicit Cleaned choice', () => {
+    expect(initializeBrowserIdentityModeStore(makeUserData('clean', true))).toMatchObject({
+      appliedMode: 'clean',
+      configuredMode: 'clean',
+      explicitSelection: true
+    })
+  })
+
   it('durably commits an explicit selection before reporting restart state', async () => {
     const userDataPath = makeUserData()
     initializeBrowserIdentityModeStore(userDataPath)
 
-    await expect(setBrowserIdentityMode('native')).resolves.toEqual({
+    await expect(setBrowserIdentityMode('clean')).resolves.toEqual({
       ok: true,
       identity: {
         state: 'valid',
-        appliedMode: 'clean',
-        configuredMode: 'native',
+        appliedMode: 'native',
+        configuredMode: 'clean',
         explicitSelection: true,
         migrationNoticePending: false,
         restartRequired: true
@@ -70,7 +92,7 @@ describe('browser identity mode store', () => {
       JSON.parse(readFileSync(join(userDataPath, BROWSER_IDENTITY_MODE_FILE), 'utf8'))
     ).toEqual({
       version: BROWSER_IDENTITY_MODE_VERSION,
-      mode: 'native',
+      mode: 'clean',
       explicitSelection: true,
       migrationNoticePending: false
     })
@@ -80,7 +102,7 @@ describe('browser identity mode store', () => {
     initializeBrowserIdentityModeStore(makeUserData())
     mocks.failWrite = true
 
-    await expect(setBrowserIdentityMode('native')).resolves.toEqual({
+    await expect(setBrowserIdentityMode('clean')).resolves.toEqual({
       ok: false,
       error: {
         code: 'browser_identity_write_failed',
@@ -88,16 +110,16 @@ describe('browser identity mode store', () => {
       },
       identity: {
         state: 'valid',
-        appliedMode: 'clean',
-        configuredMode: 'clean',
+        appliedMode: 'native',
+        configuredMode: 'native',
         explicitSelection: false,
         migrationNoticePending: true,
         restartRequired: false
       }
     })
     expect(getBrowserIdentityModeSnapshot()).toMatchObject({
-      appliedMode: 'clean',
-      configuredMode: 'clean'
+      appliedMode: 'native',
+      configuredMode: 'native'
     })
   })
 
@@ -109,7 +131,7 @@ describe('browser identity mode store', () => {
     await expect(setBrowserIdentityMode('native')).resolves.toMatchObject({
       ok: false,
       error: { code: 'browser_identity_reset_required' },
-      identity: { state: 'corrupt', configuredMode: null, appliedMode: 'clean' }
+      identity: { state: 'corrupt', configuredMode: null, appliedMode: 'native' }
     })
     expect(readFileSync(join(userDataPath, BROWSER_IDENTITY_MODE_FILE), 'utf8')).toBe('{bad json')
   })

@@ -67,6 +67,7 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
         args.method,
         getGitHubRepoConnectionId(repo),
         args.prRepo ?? null,
+        null,
         ...getGitHubLocalGitOptionArgs(store, repo)
       )
       broadcastSuccessfulPRMutation(result.ok, repo.path, repo.id, args.prNumber, event.sender.id)

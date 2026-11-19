@@ -11,6 +11,8 @@ import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { promptEditor } from './native-chat-prompt-editor.test-support'
 import { updateNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
 import { serializeNativeChatAgentReferences } from '../pickers/native-chat-agent-reference-send'
+import { useAppStore } from '@/store'
+import { getDefaultSettings } from '../../../../../../shared/orca-profiles/constants'
 
 afterEach(cleanup)
 
@@ -72,7 +74,12 @@ describe('native chat skill editor', () => {
       input.insertFileReferences!(['/Users/abc/Downloads/test (1).csv', 'C:\\docs\\letter.pdf'])
     )
     const pills = [...container.querySelectorAll('[data-native-chat-file-reference]')]
-    expect(pills.map((pill) => pill.textContent)).toEqual(['test (1).csv', 'letter.pdf'])
+    // What each shows; a screen reader hears "File: …" from hidden text.
+    expect(pills.map((pill) => pill.querySelector('.truncate')?.textContent)).toEqual([
+      'test (1).csv',
+      'letter.pdf'
+    ])
+    expect(pills[0].querySelector('.sr-only')?.textContent).toBe('File: test (1).csv')
     expect(pills[0].getAttribute('title')).toBe('/Users/abc/Downloads/test (1).csv')
     const references = '@"/Users/abc/Downloads/test (1).csv" @C:\\docs\\letter.pdf '
     expect(input.value).toBe(`See ${references} please`)
@@ -366,4 +373,22 @@ it('sends an agent mentioned at the end of a non-final line without a space befo
   expect(serializeNativeChatAgentReferences(input.value, editor.getJSON())).toMatch(
     /^abc@Agent\ndef/
   )
+})
+
+it('turns spellcheck and autocorrect off and back on as the setting changes', () => {
+  const settings = useAppStore.getState().settings
+  onTestFinished(() => useAppStore.setState({ settings }))
+  useAppStore.setState({
+    settings: { ...getDefaultSettings('/tmp'), nativeChatComposerSpellcheck: false }
+  })
+  const root = setup().editor.view.dom
+  expect(root.getAttribute('spellcheck')).toBe('false')
+  expect(root.getAttribute('autocorrect')).toBe('off')
+  act(() =>
+    useAppStore.setState({
+      settings: { ...getDefaultSettings('/tmp'), nativeChatComposerSpellcheck: true }
+    })
+  )
+  expect(root.getAttribute('spellcheck')).toBe('true')
+  expect(root.getAttribute('autocorrect')).toBeNull()
 })

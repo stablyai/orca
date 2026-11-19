@@ -1,12 +1,15 @@
+import { legacyDestinationFileIdentity } from './journal-legacy-retirement-files'
 import { JournalForkStages } from './journal-fork-stages'
 import { JOURNAL_ASYNC_QUESTION_INDEXES } from './database/journal-async-question-index'
-import { mkdirSync } from 'node:fs'
+import { JOURNAL_ENDED_TURN_COUNTS_SCHEMA } from './database/journal-ended-turn-counts'
+import { runJournalTransaction } from './database/journal-database'
+import { mkdirSync, lstatSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { parentPort, workerData } from 'node:worker_threads'
 import type Database from '../../sqlite/sync-database'
+import { journalDomainDatabasePath } from './database/journal-host-database'
 import {
   initializeJournalDomainDatabase,
-  journalDomainDatabasePath,
   openJournalDomainDatabase
 } from './database/journal-domain-database'
 import { JournalCheckpointOwner } from './database/journal-checkpoint-owner'
@@ -18,9 +21,18 @@ import { journalSqlFailure } from './journal-sql-failure'
 import type { JournalSqlRequest, JournalSqlResponse } from './journal-sql-protocol'
 import { assertJournalWritable } from './writing/journal-write-guards'
 import { applyJournalSqlMaintenance } from './journal-sql-maintenance'
+import { tryFoldJournalTextTails } from './journal-text-tail'
 import { installWorkerSendLedger } from '../../worker-threads/worker-send-ledger'
 
 installWorkerSendLedger('orca-journal-sql-writer')
+
+function legacyDestinationMain(filename: string): string {
+  return legacyDestinationFileIdentity(lstatSync(filename, { bigint: true }))
+}
+
+function legacyDestinationIdentity(filename: string) {
+  return { main: legacyDestinationMain(filename), wal: legacyDestinationMain(`${filename}-wal`) }
+}
 
 if (
   !parentPort ||
@@ -38,6 +50,7 @@ let commands: JournalSqlCommand | undefined
 let forks: JournalForkStages | undefined
 let checkpoint: JournalCheckpointOwner | undefined
 let checkpointClosing: Promise<void> | undefined
+let destinationMain: string | undefined
 let readOnly = true
 let fault: unknown
 let closing = false
@@ -52,9 +65,15 @@ async function open(): Promise<void> {
     }
     const opened = openJournalDomainDatabase(workerData.filename)
     db = opened.db
+    try {
+      destinationMain = legacyDestinationMain(workerData.filename)
+    } catch {
+      /* Cleanup eligibility never gates opening a chat. */
+    }
     readOnly = opened.readOnly
     if (!readOnly) {
       db.exec(JOURNAL_ASYNC_QUESTION_INDEXES)
+      runJournalTransaction(db, (writer) => writer.exec(JOURNAL_ENDED_TURN_COUNTS_SCHEMA))
     }
     forks = new JournalForkStages(db, stateDirectory)
     commands = new JournalSqlCommand(db, stateDirectory, forks)
@@ -133,6 +152,16 @@ async function drain(): Promise<void> {
           const checkpoint = forks!.checkpoint()
           try {
             if (command.type === 'maintenance') {
+              if (command.operation.kind === 'legacy-retirement-save') {
+                if (
+                  destinationMain !== legacyDestinationMain(workerData.filename) ||
+                  (command.operation.destination &&
+                    JSON.stringify(command.operation.destination) !==
+                      JSON.stringify(legacyDestinationIdentity(workerData.filename)))
+                ) {
+                  throw new Error('journal destination generation changed')
+                }
+              }
               return {
                 type: 'maintenance',
                 id,
@@ -161,10 +190,17 @@ async function drain(): Promise<void> {
           }
         },
         writes.some(
-          (request) => request.command.type === 'write' && request.command.command.forkInstall
+          (request) =>
+            request.command.type === 'maintenance' &&
+            request.command.operation.kind === 'legacy-retirement-save' &&
+            request.command.operation.durable
         )
-          ? 'full'
-          : 'normal'
+          ? 'retirement'
+          : writes.some(
+                (request) => request.command.type === 'write' && request.command.command.forkInstall
+              )
+            ? 'full'
+            : 'normal'
       )
       forks!.acknowledge()
       // All acknowledged commits precede a fault notice; it never retracts a successful COMMIT.
@@ -197,6 +233,9 @@ async function drain(): Promise<void> {
   }
   if (close) {
     try {
+      if (!readOnly && db) {
+        tryFoldJournalTextTails(db)
+      }
       await (checkpointClosing ?? checkpoint?.close())
       db?.close()
       db = undefined

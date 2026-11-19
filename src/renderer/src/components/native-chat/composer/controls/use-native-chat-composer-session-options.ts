@@ -24,13 +24,17 @@ type ComposerSessionOptionsArgs = Pick<
   | 'structuredTransport'
   | 'contextMessages'
 > &
-  Pick<Parameters<typeof useNativeChatSessionOptionCommand>[0], 'disabled' | 'resolveTarget'>
+  Pick<
+    Parameters<typeof useNativeChatSessionOptionCommand>[0],
+    'disabled' | 'resolveTarget' | 'readTerminalDraft'
+  >
 
 export function useNativeChatComposerSessionOptions({
   agent,
   disabled,
   onSlashCommand,
   onSubmitted,
+  readTerminalDraft,
   resolveTarget,
   terminalTabId,
   targetPtyId,
@@ -56,6 +60,7 @@ export function useNativeChatComposerSessionOptions({
     disabled,
     onSlashCommand,
     onSubmitted,
+    readTerminalDraft,
     resolveTarget
   })
   const pty = useNativeChatSessionOptions({

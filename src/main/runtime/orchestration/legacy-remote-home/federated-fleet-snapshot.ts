@@ -15,8 +15,10 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import { resolvePinnedFederatedServer } from './pinned-federated-server'
 import { applyConfirmedFederatedReleaseHomeProjection } from './federated-worker-release'
 
-const FLEET_HOST_CONCURRENCY = 4
-const FLEET_HOST_TIMEOUT_MS = 3_000
+/** How many paired servers are asked at once. */
+export const FLEET_HOST_CONCURRENCY = 4
+/** How long one server's answer is waited for. */
+export const FLEET_HOST_TIMEOUT_MS = 3_000
 const FLEET_TOTAL_TIMEOUT_MS = 5_000
 
 export type FederatedFleetObservation = {
@@ -35,8 +37,14 @@ export type FederatedFleetHostError = {
   dispatchIds: string[]
 }
 
+/** What a snapshot read needs of the runtime: the paired servers and a call to one. */
+export type FederatedFleetRuntime = Pick<
+  OrcaRuntimeService,
+  'resolveOrchestrationWorkerServer' | 'callOrchestrationWorkerServer'
+>
+
 export async function readFederatedFleetSnapshots(args: {
-  runtime: OrcaRuntimeService
+  runtime: FederatedFleetRuntime
   db: OrchestrationDb
   dispatchIds: readonly string[]
 }): Promise<{

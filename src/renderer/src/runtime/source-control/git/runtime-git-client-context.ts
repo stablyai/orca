@@ -7,6 +7,10 @@ import {
   getRepoCommitMessageModelDiscoveryHostKey
 } from '../../../../../shared/source-control/ai/generation/commit-message-host-key'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import {
+  pickCommitMessageGenerationSettings,
+  type CommitMessageGenerationSettings
+} from '../../../../../shared/source-control/ai/generation/commit-message-generation-settings'
 import type { HostedReviewProvider } from '../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import { splitWorktreeIdForFilesystem } from '../../../../../shared/worktree/id'
@@ -40,12 +44,7 @@ export type RuntimePullRequestGenerationInput = {
 }
 
 /** Generation preferences only; routing comes from the context's `target`. */
-export type RuntimeGitPrefs = Partial<
-  Pick<
-    GlobalSettings,
-    'commitMessageAi' | 'sourceControlAi' | 'agentCmdOverrides' | 'defaultTuiAgent'
-  >
->
+export type RuntimeGitPrefs = CommitMessageGenerationSettings
 
 export type RuntimeDiscoverCommitMessageModelsResult =
   | {
@@ -104,12 +103,7 @@ export function getRuntimeCommitMessageSettings(
   target: RuntimeClientTarget,
   settings: RuntimeGitPrefs | null | undefined,
   connectionId?: string
-): Partial<
-  Pick<
-    GlobalSettings,
-    'commitMessageAi' | 'sourceControlAi' | 'agentCmdOverrides' | 'defaultTuiAgent'
-  >
-> & {
+): CommitMessageGenerationSettings & {
   commitMessageDiscoveryHostKey?: string
 } {
   const scope = getRuntimeGitScope(target, connectionId)
@@ -118,18 +112,7 @@ export function getRuntimeCommitMessageSettings(
     return { commitMessageDiscoveryHostKey: getCommitMessageModelDiscoveryHostKeyForScope(scope) }
   }
   return {
-    ...(settings.commitMessageAi !== undefined
-      ? { commitMessageAi: settings.commitMessageAi }
-      : {}),
-    ...(settings.sourceControlAi !== undefined
-      ? { sourceControlAi: settings.sourceControlAi }
-      : {}),
-    ...(settings.agentCmdOverrides !== undefined
-      ? { agentCmdOverrides: settings.agentCmdOverrides }
-      : {}),
-    ...(settings.defaultTuiAgent !== undefined
-      ? { defaultTuiAgent: settings.defaultTuiAgent }
-      : {}),
+    ...pickCommitMessageGenerationSettings(settings),
     commitMessageDiscoveryHostKey: getCommitMessageModelDiscoveryHostKeyForScope(scope)
   }
 }

@@ -1,22 +1,15 @@
-import React, { useCallback, useState } from 'react'
-import { SlidersHorizontal } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
-import { Popover, PopoverAnchor } from '@/components/ui/popover'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import React from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { useAppStore } from '@/store/index'
-import { WorktreeCardsKeptHintContent } from '../../WorktreeCardsIntroNotice'
-import { OptionsFilterCountBadge } from './options-filter-count-badge'
+import { WorktreeCardsKeptHintContent } from '../../workspace-card/template/WorktreeCardsIntroNotice'
+import { SidebarOptionsPopover } from './SidebarOptionsPopover'
 import {
   useWorkspaceOptionsFilterBadge,
   WorkspaceOptionsMenuItems
 } from './workspace-options-menu-items'
+
+const dismissKeptHint = (): void => useAppStore.getState().setWorktreeCardsIntroKeptHintOpen(false)
 
 type SidebarWorkspaceOptionsMenuProps = {
   preserveWorkspaceBoardOpen?: boolean
@@ -29,91 +22,46 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
 }: SidebarWorkspaceOptionsMenuProps) {
   const t = useTranslate()
   useUiLanguageRevision()
-  const [open, setOpen] = useState(false)
   const { hasAnyFilter, activeFilterCount } = useWorkspaceOptionsFilterBadge()
   const keptHintOpen = useAppStore((s) => s.worktreeCardsIntroKeptHintOpen)
 
-  const handleOpenChange = useCallback(
-    (next: boolean) => {
-      if (next) {
-        useAppStore.getState().setWorktreeCardsIntroKeptHintOpen(false)
-      }
-      setOpen(next)
-      onMenuOpenChange?.(next)
-    },
-    [onMenuOpenChange]
-  )
-
   return (
-    <Popover
-      open={keptHintOpen}
-      onOpenChange={(next) => {
-        if (!next) {
-          useAppStore.getState().setWorktreeCardsIntroKeptHintOpen(false)
-        }
+    <SidebarOptionsPopover
+      ariaLabel={
+        hasAnyFilter
+          ? t(
+              'auto.components.sidebar.SidebarWorkspaceOptionsMenu.optionsActiveFilters',
+              'Workspace options ({{count}} filters active)',
+              {
+                count: activeFilterCount,
+                defaultValue_one: 'Workspace options ({{count}} filter active)'
+              }
+            )
+          : t('auto.components.sidebar.SidebarWorkspaceOptionsMenu.9919ae1082', 'Workspace options')
+      }
+      tooltip={
+        hasAnyFilter
+          ? t(
+              'auto.components.sidebar.SidebarWorkspaceOptionsMenu.optionsFilterCount',
+              'Workspace options ({{count}} filters)',
+              {
+                count: activeFilterCount,
+                defaultValue_one: 'Workspace options ({{count}} filter)'
+              }
+            )
+          : t('auto.components.sidebar.SidebarWorkspaceOptionsMenu.9919ae1082', 'Workspace options')
+      }
+      activeFilterCount={activeFilterCount}
+      preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}
+      onMenuOpenChange={onMenuOpenChange}
+      hint={{
+        open: keptHintOpen,
+        onDismiss: dismissKeptHint,
+        content: <WorktreeCardsKeptHintContent />
       }}
     >
-      <DropdownMenu modal={false} open={open} onOpenChange={handleOpenChange}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <DropdownMenuTrigger asChild>
-              <PopoverAnchor asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  type="button"
-                  className="relative text-muted-foreground"
-                  aria-label={
-                    hasAnyFilter
-                      ? t(
-                          'auto.components.sidebar.SidebarWorkspaceOptionsMenu.optionsActiveFilters',
-                          'Workspace options ({{count}} filters active)',
-                          {
-                            count: activeFilterCount,
-                            defaultValue_one: 'Workspace options ({{count}} filter active)'
-                          }
-                        )
-                      : t(
-                          'auto.components.sidebar.SidebarWorkspaceOptionsMenu.9919ae1082',
-                          'Workspace options'
-                        )
-                  }
-                  data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
-                >
-                  <SlidersHorizontal className="size-3.5" strokeWidth={2.25} />
-                  <OptionsFilterCountBadge count={activeFilterCount} />
-                </Button>
-              </PopoverAnchor>
-            </DropdownMenuTrigger>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={6}>
-            {hasAnyFilter
-              ? t(
-                  'auto.components.sidebar.SidebarWorkspaceOptionsMenu.optionsFilterCount',
-                  'Workspace options ({{count}} filters)',
-                  {
-                    count: activeFilterCount,
-                    defaultValue_one: 'Workspace options ({{count}} filter)'
-                  }
-                )
-              : t(
-                  'auto.components.sidebar.SidebarWorkspaceOptionsMenu.9919ae1082',
-                  'Workspace options'
-                )}
-          </TooltipContent>
-        </Tooltip>
-        <DropdownMenuContent
-          side="right"
-          align="start"
-          sideOffset={8}
-          className="w-72 pb-2"
-          data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
-        >
-          <WorkspaceOptionsMenuItems preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen} />
-        </DropdownMenuContent>
-      </DropdownMenu>
-      {keptHintOpen ? <WorktreeCardsKeptHintContent /> : null}
-    </Popover>
+      <WorkspaceOptionsMenuItems preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen} />
+    </SidebarOptionsPopover>
   )
 })
 

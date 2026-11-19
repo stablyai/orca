@@ -1,7 +1,7 @@
 import { decodePersistedAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/records/agent-session-record-stored-form'
 import { isDeepStrictEqual } from 'node:util'
 import { sessionCrewChanges } from '../../orchestration/crew/crew-changes'
-import { AgentSessionTabTable } from './agent-session-tab-table'
+import { agentSessionTabTableFromStored } from './agent-session-tab-table'
 import type { AgentSessionStoreRowWrites } from '../../../native-chat/agent-session-journal/journal-writer-store-row-changes'
 import type { AgentSessionStoreState } from './agent-session-store-state'
 import { agentSessionStoreRowChanges } from '../../../native-chat/agent-session-journal/journal-writer-store-row-changes'
@@ -40,9 +40,15 @@ export function applyAgentSessionStoreCacheRows(
     draft.retiredClaimKeys = writes.retiredClaimKeys
   }
   if (writes.sessionTabs !== null) {
+    const prior = draft.sessionTabs
     draft.sessionTabs = writes.sessionTabs.recorded
-      ? new AgentSessionTabTable(
-          writes.sessionTabs.tabs.map(({ tabId, sessionId }) => [tabId, sessionId])
+      ? agentSessionTabTableFromStored(
+          writes.sessionTabs.tabs.map(({ tabId, sessionId }) => [tabId, sessionId]),
+          {
+            ids: writes.sessionTabs.background ?? prior?.backgroundSessionIds() ?? [],
+            backfilled:
+              writes.sessionTabs.backgroundBackfilled || (prior?.backgroundBackfilled ?? false)
+          }
         )
       : null
   }

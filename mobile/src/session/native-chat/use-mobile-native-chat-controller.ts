@@ -20,6 +20,7 @@ import { mobileNativeChatScopeKey } from './conversation/mobile-native-chat-scop
 import { useMobileNativeChatCiResultLines } from './preferences/use-mobile-native-chat-ci-result-lines'
 
 export function useMobileNativeChatController(args: {
+  itemLink?: Parameters<typeof useMobileNativeChatSessionLane>[0]['itemLink']
   client: RpcClient | null
   /** The route's paired host; differs from `client` only when a server executes the workspace. */
   pairedHostClient: RpcClient | null
@@ -49,7 +50,6 @@ export function useMobileNativeChatController(args: {
     deviceTokenRef,
     nativeChatInputLeaseReady,
     connState,
-    agentSessionHostSupport = null,
     onSendError,
     onSendResolved
   } = args
@@ -80,7 +80,7 @@ export function useMobileNativeChatController(args: {
     resolution: activeChatResolution,
     sourceIdentity,
     enabled: showNativeChat,
-    hostSupport: agentSessionHostSupport,
+    hostSupport: args.agentSessionHostSupport ?? null,
     appendComposerTextRef,
     onActionResolved: onSendResolved
   })
@@ -184,7 +184,6 @@ export function useMobileNativeChatController(args: {
 
   const workspaceCatalog = useMobileNativeChatWorkspaceCatalog(args, activeChatAgent)
 
-  // Break the send/options cycle through a ref so snapshot changes cannot recreate send callbacks.
   const recordSessionOptionCommandRef = useRef<(command: string) => void>(() => {})
 
   const {
@@ -207,7 +206,7 @@ export function useMobileNativeChatController(args: {
     onSendError
   })
 
-  const structuredNativeChatSend = useMobileStructuredNativeChatSendBridge({
+  const structuredSend = useMobileStructuredNativeChatSendBridge({
     agent: activeChatResolution?.agent,
     sessionCommands: nativeChatLane.sessionCommands.commands,
     sendStructured: structuredNativeChat.sendWithOutcome,
@@ -274,7 +273,7 @@ export function useMobileNativeChatController(args: {
     nativeChatStructured: activeChatStructured,
     nativeChatVisualSource: activeChatStructured ? structuredNativeChat.visualSource : null,
     nativeChatItemSource:
-      activeChatStructured && agentSessionHostSupport?.itemDetail === true
+      activeChatStructured && args.agentSessionHostSupport?.itemDetail === true
         ? structuredNativeChat.visualSource
         : null,
     nativeChatShowsCiResultLines: showsCiResultLines,
@@ -289,7 +288,7 @@ export function useMobileNativeChatController(args: {
     nativeChatReceipts: activeChatStructured ? structuredNativeChat.receipts : null,
     nativeChatActionablePromptIds: structuredNativeChat.actionablePromptIds,
     nativeChatCommandRefusalCauses: structuredNativeChat.commandRefusalCauses,
-    nativeChatCanStop: activeChatStructured ? structuredNativeChat.canStop : activeTurn.isWorking,
+    nativeChatCanStop: activeChatStructured ? structuredNativeChat.canStop : terminalTurn.isWorking,
     nativeChatSendFollowUp: activeChatStructured ? structuredNativeChat.sendFollowUp : null,
     nativeChatStreamingText: terminalTurn.streamingText,
     ...prompts,
@@ -302,19 +301,19 @@ export function useMobileNativeChatController(args: {
       : null,
     nativeChatThreadGoal: activeChatStructured ? structuredNativeChat.threadGoal : null,
     nativeChatMcpPanel: activeChatStructured ? structuredNativeChat.mcpPanel : null,
+    nativeChatAccountUsage: activeChatStructured ? structuredNativeChat.accountUsage : null,
     nativeChatRewind: activeChatStructured ? structuredNativeChat.rewind : undefined,
     ...workspaceCatalog,
-    handleNativeChatSend: activeChatStructured
-      ? structuredNativeChatSend.send
-      : handleNativeChatSend,
+    handleNativeChatSend: activeChatStructured ? structuredSend.send : handleNativeChatSend,
     handleNativeChatSendWithOutcome: activeChatStructured
-      ? structuredNativeChatSend.sendWithOutcome
+      ? structuredSend.sendWithOutcome
       : handleNativeChatSendWithOutcome,
     readSeededLaunchDraft,
     nativeChatSessionOptions,
     nativeChatSessionCommands: nativeChatLane.sessionCommands,
     nativeChatAcceptsImages: !activeChatStructured || structuredNativeChat.acceptsImages,
     nativeChatForkSupport: activeChatStructured ? structuredNativeChat.forkSupport : undefined,
-    nativeChatUsageLimit: activeChatStructured ? structuredNativeChat.usageLimit : null
+    nativeChatUsageLimit: activeChatStructured ? structuredNativeChat.usageLimit : null,
+    nativeChatUnresolvedFailureRows: structuredNativeChat.unresolvedFailureRows
   }
 }

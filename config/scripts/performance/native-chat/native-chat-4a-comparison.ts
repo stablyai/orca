@@ -68,7 +68,8 @@ async function main(): Promise<void> {
   )
   const { resolveArm, writeProviderStub } = await import('./native-chat-4a-arm')
   const { seedProfile, seedDirFor } = await import('./native-chat-4a-fixture')
-  const { createSeededTestRepo } = await import('../../../../tests/e2e/helpers/seeded-test-repo')
+  const { createSeededTestRepo } =
+    await import('../../../../tests/e2e/workspaces/repository-fixtures/seeded-test-repo')
   const scratch = path.join(out, 'scratch')
   mkdirSync(scratch, { recursive: true })
   const arms: Arm[] = []

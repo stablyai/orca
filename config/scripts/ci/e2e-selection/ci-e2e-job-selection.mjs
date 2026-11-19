@@ -1,25 +1,38 @@
 import { pathToFileURL } from 'node:url'
 
 export const NODE_NETWORK_E2E_SPEC =
-  'tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts'
-export const NATIVE_IME_E2E_SPEC = 'tests/e2e/terminal-ibus-hangul-native.spec.ts'
+  'tests/e2e/remote/ssh-hosts/ssh-browser-network-execution-route.docker.unit.test.ts'
+export const NATIVE_IME_E2E_SPEC = 'tests/e2e/terminal/ime/terminal-ibus-hangul-native.spec.ts'
 // Needs the packaged orcad slot, which only its own job builds.
-export const ORCAD_SERVE_MODE_SWITCH_E2E_SPEC = 'tests/e2e/orcad-serve-mode-switch.spec.ts'
+export const ORCAD_SERVE_MODE_SWITCH_E2E_SPEC =
+  'tests/e2e/remote/managed-ssh/host-lifecycle/orcad-serve-mode-switch.spec.ts'
 // Windows-only; its own job runs it on a Windows runner.
-export const WINDOWS_MISSING_APPDATA_E2E_SPEC = 'tests/e2e/windows-missing-appdata-startup.spec.ts'
+export const WINDOWS_MISSING_APPDATA_E2E_SPEC =
+  'tests/e2e/desktop/startup-recovery/windows-missing-appdata-startup.spec.ts'
 // Windows-only; the same Windows job runs it.
-export const WINDOWS_COPY_FILE_E2E_SPEC = 'tests/e2e/file-explorer-copy-file-windows.spec.ts'
+export const WINDOWS_COPY_FILE_E2E_SPEC =
+  'tests/e2e/editor/file-explorer/file-explorer-copy-file-windows.spec.ts'
 // Needs out/orcad, which only the mode-switch job builds; it runs there beside that spec.
-export const LAYOUT_ORACLE_HEADLESS_E2E_SPEC = 'tests/e2e/workspace-layout-oracle-headless.spec.ts'
+export const ORCAD_CONNECTOR_SERVER_BOT_E2E_SPEC =
+  'tests/e2e/integrations/connectors/orcad-connector-server-bot.spec.ts'
 // Managed-SSH specs need the orcad template built by their Docker lane.
-export const MANAGED_SSH_E2E_SPEC_PREFIX = 'tests/e2e/ssh-orcad-'
+export const MANAGED_SSH_E2E_SPECS = [
+  'tests/e2e/remote/managed-ssh/file-lifecycle/ssh-orcad-editor-watch-recovery.spec.ts',
+  'tests/e2e/remote/managed-ssh/file-lifecycle/ssh-orcad-explorer-watch-recovery.spec.ts',
+  'tests/e2e/remote/managed-ssh/host-lifecycle/ssh-orcad-idle-exit.spec.ts',
+  'tests/e2e/remote/managed-ssh/host-lifecycle/ssh-orcad-pairing-repair.spec.ts',
+  'tests/e2e/remote/managed-ssh/host-lifecycle/ssh-orcad-shared-home-machines.spec.ts',
+  'tests/e2e/remote/managed-ssh/host-lifecycle/ssh-orcad-unbindable-tunnel-port.spec.ts',
+  'tests/e2e/remote/managed-ssh/host-lifecycle/ssh-orcad-update-anyway.spec.ts'
+]
+const managedSshSpecs = new Set(MANAGED_SSH_E2E_SPECS)
 export const DEDICATED_E2E_SPECS = [
   NODE_NETWORK_E2E_SPEC,
   NATIVE_IME_E2E_SPEC,
   ORCAD_SERVE_MODE_SWITCH_E2E_SPEC,
-  LAYOUT_ORACLE_HEADLESS_E2E_SPEC,
   WINDOWS_MISSING_APPDATA_E2E_SPEC,
-  WINDOWS_COPY_FILE_E2E_SPEC
+  WINDOWS_COPY_FILE_E2E_SPEC,
+  ORCAD_CONNECTOR_SERVER_BOT_E2E_SPEC
 ]
 const dedicatedSpecs = new Set(DEDICATED_E2E_SPECS)
 // Their jobs build their own app or none, so they never need the shared e2e build.
@@ -31,7 +44,7 @@ const OWN_BUILD_E2E_SPECS = new Set([
 ])
 
 export function isDedicatedE2eSpec(spec) {
-  return dedicatedSpecs.has(spec) || spec.startsWith(MANAGED_SSH_E2E_SPEC_PREFIX)
+  return dedicatedSpecs.has(spec) || managedSshSpecs.has(spec)
 }
 
 export function selectGeneralE2eSpecs(specs) {
@@ -58,28 +71,18 @@ export function generalE2eShards(input) {
 
 export function selectManagedSshE2eSpecs(input) {
   if (input === '') {
-    return [MANAGED_SSH_E2E_SPEC_PREFIX]
+    return MANAGED_SSH_E2E_SPECS
   }
-  const specs = [...new Set(parseSpecs(input))].filter((spec) =>
-    spec.startsWith(MANAGED_SSH_E2E_SPEC_PREFIX)
-  )
-  if (
-    specs.length === 0 ||
-    specs.some(
-      (spec) =>
-        spec !== MANAGED_SSH_E2E_SPEC_PREFIX &&
-        !/^tests\/e2e\/ssh-orcad-[\w-]+\.spec\.ts$/.test(spec)
-    )
-  ) {
+  const specs = [...new Set(parseSpecs(input))].filter((spec) => managedSshSpecs.has(spec))
+  if (specs.length === 0) {
     throw new Error('Expected at least one managed SSH spec')
   }
-  return specs.includes(MANAGED_SSH_E2E_SPEC_PREFIX) ? [MANAGED_SSH_E2E_SPEC_PREFIX] : specs
+  return specs
 }
 
 export function managedSshShards(input) {
   try {
-    const specs = selectManagedSshE2eSpecs(input)
-    if (!specs.includes(MANAGED_SSH_E2E_SPEC_PREFIX) && specs.length <= 2) {
+    if (selectManagedSshE2eSpecs(input).length <= 2) {
       return ['1/1']
     }
   } catch {

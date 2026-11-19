@@ -1,7 +1,8 @@
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
-import { Button } from '@/components/ui/button'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
+import type { RuntimeFileReadArgs } from '@/runtime/files/runtime-file-client-types'
+import { BinaryFileDefaultAppButton } from './BinaryFileDefaultAppButton'
 import {
   mediaPlaybackStateCache,
   mediaVolumePreference,
@@ -12,19 +13,19 @@ export default function MediaViewer({
   src,
   mimeType,
   filePath,
-  canOpenLocally,
+  source,
   playbackCacheKey = null
 }: {
   src: string
   mimeType: string
   filePath: string
-  canOpenLocally: boolean
+  /** Where the bytes were read from; a remote file is downloaded before the default app opens it. */
+  source?: RuntimeFileReadArgs
   playbackCacheKey?: string | null
 }): React.JSX.Element {
   const t = useTranslate()
   const mediaRef = useRef<HTMLMediaElement>(null)
   const [failed, setFailed] = useState(false)
-  const [openFailed, setOpenFailed] = useState(false)
   useEffect(() => {
     const media = mediaRef.current
     if (!media) {
@@ -99,28 +100,9 @@ export default function MediaViewer({
           <video {...playerProps} className="max-h-full max-w-full" />
         )}
       </div>
-      {canOpenLocally && (
-        <div className="flex items-center justify-end gap-2 border-t px-3 py-2">
-          {openFailed && (
-            <p className="text-xs text-muted-foreground" role="alert">
-              {t('mediaPreview.openFailed', 'Could not open this file in the default app.')}
-            </p>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={async () => {
-              try {
-                setOpenFailed(
-                  !(await window.api.shell.openFilePath(filePath, LOCAL_EXECUTION_HOST_ID))
-                )
-              } catch {
-                setOpenFailed(true)
-              }
-            }}
-          >
-            {t('mediaPreview.openDefault', 'Open in Default App')}
-          </Button>
+      {source && !isPairedWebClientWindow() && (
+        <div className="flex items-center justify-end border-t px-3 py-2">
+          <BinaryFileDefaultAppButton source={source} />
         </div>
       )}
     </div>

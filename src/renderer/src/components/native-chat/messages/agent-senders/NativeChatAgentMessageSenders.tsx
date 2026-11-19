@@ -1,6 +1,7 @@
 import { Fragment } from 'react'
 import { ArrowUpRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { WorktreeHostContextBadge } from '@/components/sidebar/workspace-card/host/WorktreeHostContextBadge'
 import { useTranslate } from '@/i18n/use-translate'
 import { openAgentMessageSender } from '@/lib/agent-session/open/open-agent-message-sender'
 import { useNativeChatVisualOwner } from '../../media/visuals/native-chat-visual-owner'
@@ -57,6 +58,10 @@ export function NativeChatAgentMessageSenders({
             queued={queued}
             compact={compact}
           />
+          {sender.host ? (
+            // The paired computer it came from, as the sidebar marks a remote bot.
+            <WorktreeHostContextBadge label={sender.host} className="shrink-0" />
+          ) : null}
           {/* Outside compact, pulled back over the name's padding so it reads "A, B". */}
           {index < shown.length - 1 ? (
             <span aria-hidden className={compact ? undefined : queued ? '-ml-2' : '-ml-2.5'}>

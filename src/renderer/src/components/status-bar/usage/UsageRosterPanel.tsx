@@ -3,7 +3,7 @@ import { ChevronRight, RefreshCw } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/class-names'
 import { SettingsSegmentedControl } from '@/components/settings/form-controls/SettingsFormControls'
-import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
+import { useResetCountdownClock } from '@/components/status-bar/usage/useResetCountdownClock'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
@@ -243,20 +243,18 @@ export function UsageRow({
       ) : null}
       {showDetails ? (
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 pl-[30px]">
-          {sections.map((section) => (
-            <DetailMetric
-              key={section.label}
-              section={section}
-              label={shortUsageLabel(p, section)}
-              display={display}
-              title={scopedUsageTitle(
-                p,
-                { ...section, label: shortUsageLabel(p, section) },
-                display,
-                t
-              )}
-            />
-          ))}
+          {sections.map((section) => {
+            const label = shortUsageLabel(p, section, false, t)
+            return (
+              <DetailMetric
+                key={section.label}
+                section={section}
+                label={label}
+                display={display}
+                title={scopedUsageTitle(p, { ...section, label }, display, t)}
+              />
+            )
+          })}
         </div>
       ) : null}
     </div>

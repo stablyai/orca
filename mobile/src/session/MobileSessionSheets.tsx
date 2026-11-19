@@ -19,7 +19,14 @@ import { isTerminalPhoneDisplayMode } from '../terminal/session/pane-layout/term
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useMobileAllowAutoCloseActions } from './tabs/mobile-worker-auto-close'
 import { MobileAgentSessionTabActionSheet } from './tabs/MobileAgentSessionTabActionSheet'
+import { MobileSessionBotSheet } from './MobileSessionBotSheet'
 import { MobileNewTabSheet } from './tabs/MobileNewTabSheet'
+import {
+  MobileBrowserProfilePicker,
+  useMobileNewBrowserProfile
+} from './tabs/MobileBrowserProfilePicker'
+import { MobileSessionTextSizeSheet } from './MobileSessionTextSizeSheet'
+import { useMobileWindowsShellChoices } from '../terminal/session/creation/mobile-windows-shell-choices'
 
 export function MobileSessionSheets({ controller }: { controller: MobileSessionController }) {
   const t = useMobileTranslation()
@@ -93,17 +100,31 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     closeWithBulkActions,
     createTabAgentStatusRow,
     createTabAgentOptions,
+    createTabAgentSurfaceChoice,
     sendDiffNotesAgentActions
   } = controller
   const clipboard = useClipboardWriter()
   const onPairedHost = useWorkspaceOnPairedHost()
+  // The host owns which shells it would start here, as desktop's menu does for its own projects.
+  const terminalShells = useMobileWindowsShellChoices({
+    client,
+    sheetOpen: showCreateTabDrawer,
+    worktreeId
+  })
+  const browserProfile = useMobileNewBrowserProfile(
+    client,
+    (showCreateTabDrawer && !isFloatingWorkspaceRoute && browserScreencastSupported === true) ||
+      browserActionTarget != null
+  )
   return (
     <>
+      <MobileSessionBotSheet controller={controller} />
       <MobileSessionTerminalLayoutSheet
         controller={controller}
         visible={showTerminalLayout}
         onClose={() => setShowTerminalLayout(false)}
       />
+      <MobileSessionTextSizeSheet controller={controller} />
       <QuickCommandsSheet
         visible={showQuickCommands && quickCommandsSupported === true}
         onClose={() => setShowQuickCommands(false)}
@@ -121,21 +142,30 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         visible={showCreateTabDrawer}
         workspaceName={worktreeName}
         agentOptions={createTabAgentOptions}
+        surfaceChoice={createTabAgentSurfaceChoice}
         agentStatusRow={createTabAgentStatusRow}
+        leadingAgentActions={controller.createTabLeadingAgentActions}
         // Why: browser/markdown creation resolve a real worktree on the host
         // (browser.tabCreate, files.createFile); the floating sentinel is
         // terminal-only over RPC, so those options hide there.
         canCreateBrowser={!isFloatingWorkspaceRoute}
+        browserProfileLabel={browserProfile.newTabLabel}
+        onChooseBrowserProfile={() => browserProfile.setPickerOpen(true)}
         canCreateMarkdownNote={!isFloatingWorkspaceRoute && onPairedHost}
         onClose={() => setShowCreateTabDrawer(false)}
-        onCreateAgent={(agent) => void handleCreateTerminal(agent)}
-        onCreateTerminal={() => void handleCreateTerminal()}
+        onCreateAgent={(agent, nativeChatDefault) =>
+          void handleCreateTerminal(agent, undefined, nativeChatDefault)
+        }
+        terminalShells={terminalShells}
+        onCreateTerminal={(shell) =>
+          void handleCreateTerminal(undefined, shell ? { shell } : undefined)
+        }
         onCreateBrowser={() => {
           if (browserScreencastSupported !== true) {
             showToast(
               t(
-                'session.sheets.browserUpdateRequired',
-                'Desktop update required for mobile browser streaming'
+                'session.sheets.browserStreamingUnavailable',
+                "This host can't stream browser tabs"
               ),
               1600
             )
@@ -256,7 +286,13 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         onClose={() => setBrowserActionTarget(null)}
         onNavigate={handleBrowserNavigationCommand}
         onCloseTab={handleCloseSessionTab}
+        profileLabel={browserProfile.tabLabel(browserActionTarget?.browserProfileId)}
         bulkCloseActions={bulkCloseActions}
+      />
+      <MobileBrowserProfilePicker
+        choice={browserProfile}
+        // Back to the new-tab sheet, where the chosen profile now shows.
+        onAfterClose={() => setShowCreateTabDrawer(true)}
       />
       <MobileAgentSessionTabActionSheet
         controller={controller}
@@ -326,7 +362,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
         // The session page reports 'web', where RN Web maps 'url' to the URL keyboard.
         keyboardType={Platform.OS === 'android' ? 'default' : 'url'}
         onSubmit={(value) => {
-          void handleCreateBrowser(value).then((created) => {
+          void handleCreateBrowser(value, browserProfile.profileId ?? undefined).then((created) => {
             if (created) {
               setShowCreateBrowserModal(false)
             }
