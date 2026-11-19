@@ -39,8 +39,8 @@ listed files fail configuration loading. Tests run serially, without retries, an
 full suite's setup and forced-GC support.
 
 `.github/workflows/performance-contracts.yml` runs daily and manually on Linux,
-macOS and Windows, and on every PR that changes production source (`src/**`, patches, dependencies) or
-this tooling: the unit suite selects tests by dependency, which can skip a contract.
+macOS and Windows, and on every PR that changes a contract or this tooling. Ready PRs already run
+every contract on Linux in the full unit suite; dependency selection applies only to drafts.
 It uploads per-OS JSON test results, plus the source inventory once from Linux
 because that scan is OS-independent. Its schedule starts after merge. The rendered typing/frame benchmark was retired ([historical guide](../docs/readme/terminal-perf.md)). Unit tests do not
 measure SSH RTT, WSL scheduling or a packaged Electron renderer.
