@@ -106,3 +106,20 @@ describe("Slack mention tokens in an agent's reply on the phone", () => {
     expect(all).toContain('see <@U05BRPQSABY>; ask @user')
   })
 })
+
+describe('ordered list numbers on the phone', () => {
+  const markers = (chatMath: boolean): string[] => {
+    let tree: ReactTestRenderer | undefined
+    act(() => {
+      tree = create(createElement(MobileMarkdown, { content: '1. a\n2. b\n4. c', chatMath }))
+    })
+    return tree!.root
+      .findAll((node) => isHostText(node.type) && hasStyle(node, styles.listMarker))
+      .map(textOf)
+  }
+
+  it('keeps typed numbers in chat and renumbers like GitHub elsewhere', () => {
+    expect(markers(true)).toEqual(['1.', '2.', '4.'])
+    expect(markers(false)).toEqual(['1.', '2.', '3.'])
+  })
+})
