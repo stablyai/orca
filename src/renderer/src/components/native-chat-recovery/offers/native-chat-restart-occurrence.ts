@@ -9,7 +9,6 @@ import {
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import { markNativeChatLaunchResumeDecided } from './native-chat-launch-resume-decision'
-import { announceRestartResults } from '../runs/native-chat-restart-action-notifications'
 import {
   beginResumeRun,
   resumeRunInFlight,
@@ -133,7 +132,7 @@ export function createNativeChatRestartOccurrence(
   /**
    * Re-reads the host's answer.
    *
-   * Called before the dialog is reopened, so a count can never name a chat the host would now refuse.
+   * Called before the toast is reopened, so a count can never name a chat the host would now refuse.
    */
   async function readNativeChatRestartOffer(
     allowed = () => true,
@@ -170,8 +169,8 @@ export function createNativeChatRestartOccurrence(
     await readNativeChatRestartOffer()
   }
 
-  /** The status bar entry and the toast's action: re-read, then open only over rows, since the dialog
-   *  draws nothing without them. Opening a chat from it is read-only and keeps the offer. */
+  /** The status bar entry: re-read, then open only over rows, since the toast draws nothing without
+   *  them. Opening a chat from it is read-only and keeps the offer. */
   async function reopenNativeChatRestartOffer(): Promise<void> {
     if (!current()) {
       return
@@ -259,13 +258,9 @@ export function createNativeChatRestartOccurrence(
         }
       }
     }
+    // The toast reports the settled result, even after it was closed mid-run.
     if (actionCurrent()) {
-      announceRestartResults(
-        outcomes.attempted.filter((id) => !outcomes.skipped.has(id)),
-        outcomes.continued,
-        outcomes.failed,
-        reopenNativeChatRestartOffer
-      )
+      requestNativeChatResumeOnRestartDialog()
     }
   }
 

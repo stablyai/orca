@@ -11,7 +11,7 @@ import {
 import {
   restartContinuationHistory,
   type RestartContinuationOutcome
-} from './native-chat-restart-action-notifications'
+} from './native-chat-restart-continuation-outcomes'
 
 export type RestartContinuationBatchResult = {
   attempted: string[]

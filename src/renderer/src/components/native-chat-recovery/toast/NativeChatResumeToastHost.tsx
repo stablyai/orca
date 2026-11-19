@@ -1,0 +1,195 @@
+import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
+import { toast } from 'sonner'
+import { useAppStore } from '../../../store/index'
+import { activateAiVaultStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
+import { useLocalStructuredChatsInUse } from '../../../runtime/native-chat/local-sessions/local-structured-chats'
+import { getStructuredAgentSessionStatusFeed } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
+import { structuredChatShownName } from '@/runtime/native-chat/naming/structured-chat-shown-name'
+import { NATIVE_CHAT_RESUME_SETTING_SECTION_ID } from '../../settings/chat/native-chat-resume-setting-target'
+import {
+  localNativeChatRestartStore,
+  useNativeChatRestartOffer,
+  useNativeChatRestartRun
+} from '../offers/native-chat-resume-on-restart-store'
+import type { NativeChatRestartStore } from '../offers/native-chat-restart-runtime-store'
+import { useNativeChatRestartRuntimes } from '../offers/native-chat-restart-runtimes'
+import type { ResumeFailureAction } from '../failures/native-chat-resume-failure-guidance'
+import { resumeRunFailures } from '../runs/native-chat-resume-run-view'
+import { resumeToastView } from './native-chat-resume-toast-view'
+import { NativeChatResumeToast } from './NativeChatResumeToast'
+
+/** How long an all-resumed report stays; anything needing the person stays until closed. */
+const RESUMED_TOAST_MS = 8000
+
+export function NativeChatResumeToasts(): React.JSX.Element {
+  const enabled = useLocalStructuredChatsInUse()
+  const runtimes = useNativeChatRestartRuntimes()
+  return (
+    <>
+      <NativeChatResumeToastHost store={localNativeChatRestartStore} offerEnabled={enabled} />
+      {runtimes.map(({ environment, store }) => (
+        <NativeChatResumeToastHost
+          key={environment.id}
+          store={store}
+          machineName={environment.name}
+          offerEnabled
+        />
+      ))}
+    </>
+  )
+}
+
+/** Shows the store's report while it has an open request and something to say. */
+function NativeChatResumeToastHost({
+  store,
+  machineName,
+  offerEnabled
+}: {
+  store: NativeChatRestartStore
+  machineName?: string
+  offerEnabled: boolean
+}): null {
+  const { candidates, failed } = useNativeChatRestartOffer(offerEnabled, store)
+  const run = useNativeChatRestartRun(store)
+  // Read one-shot open requests directly; a local mirror could go stale between launch and status-bar requests.
+  const open = useSyncExternalStore(
+    store.subscribeNativeChatResumeOnRestartDialog,
+    store.getNativeChatResumeOnRestartDialogRequest,
+    store.getNativeChatResumeOnRestartDialogRequest
+  )
+  const visible =
+    offerEnabled &&
+    open &&
+    ((run?.entries.length ?? 0) > 0 || candidates.length + failed.length > 0)
+  const id = `native-chat-resume:${store.target.kind === 'local' ? 'local' : store.target.environmentId}`
+  useEffect(() => {
+    if (!visible) {
+      return
+    }
+    toast.custom(() => <ConnectedResumeToast store={store} machineName={machineName} />, {
+      id,
+      duration: Infinity,
+      closeButton: false,
+      unstyled: true,
+      // Swiping it away is the same snooze as its close button.
+      onDismiss: () => snoozeResumeToast(store)
+    })
+    return () => {
+      toast.dismiss(id)
+    }
+  }, [visible, id, store, machineName])
+  return null
+}
+
+/** Closing is a snooze: the host keeps the offer and the status bar keeps the way back to it. */
+function snoozeResumeToast(store: NativeChatRestartStore): void {
+  store.consumeNativeChatResumeOnRestartDialogRequest()
+  store.releaseFinishedNativeChatRestartRun()
+}
+
+function ConnectedResumeToast({
+  store,
+  machineName
+}: {
+  store: NativeChatRestartStore
+  machineName?: string
+}): React.JSX.Element | null {
+  const { candidates, failed, listedAt } = useNativeChatRestartOffer(true, store)
+  const run = useNativeChatRestartRun(store)
+  const failureBySession = useMemo(() => resumeRunFailures(run, failed), [run, failed])
+  const view = useMemo(
+    () => resumeToastView(run, candidates, failureBySession),
+    [run, candidates, failureBySession]
+  )
+  const openSettingsPage = useAppStore((state) => state.openSettingsPage)
+  const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
+  const remote = store.target.kind === 'environment'
+  const close = useCallback(() => snoozeResumeToast(store), [store])
+
+  const finishedRun = view.phase === 'finished' ? run : null
+  useEffect(() => {
+    if (finishedRun) {
+      store.markFinishedNativeChatRestartRunShown(finishedRun)
+    }
+  }, [finishedRun, store])
+
+  // A clean report leaves on its own unless the person reached for it.
+  const touched = useRef(false)
+  const transient = view.phase === 'finished' && view.counts.needsYou === 0
+  useEffect(() => {
+    if (!transient) {
+      return
+    }
+    const timer = window.setTimeout(() => {
+      if (!touched.current) {
+        close()
+      }
+    }, RESUMED_TOAST_MS)
+    return () => window.clearTimeout(timer)
+  }, [transient, close])
+
+  const feed = getStructuredAgentSessionStatusFeed(store.target)
+  const nameFor = (sessionId: string, fallback: string) =>
+    structuredChatShownName(feed, sessionId)?.trim() || fallback
+
+  const onRowAction = (action: ResumeFailureAction, sessionId: string): void => {
+    if (action === 'dismiss') {
+      void store.dismissNativeChatRestartOffer([sessionId])
+      return
+    }
+    if (action === 'retry') {
+      void store.continueNativeChatRestartOffer([sessionId])
+      return
+    }
+    const row = view.rows.find((entry) => entry.candidate.sessionId === sessionId)
+    if (!row) {
+      return
+    }
+    // Opening is read-only; the person's own send settles the record.
+    close()
+    const session = {
+      agent: row.candidate.agent,
+      structuredSession: { workspaceId: row.candidate.workspaceId, sessionId }
+    }
+    void (remote
+      ? activateAiVaultStructuredSession(session, undefined, store.target)
+      : activateAiVaultStructuredSession(session))
+  }
+
+  if (view.rows.length === 0) {
+    return null
+  }
+  return (
+    <div
+      onPointerEnter={() => (touched.current = true)}
+      onFocusCapture={() => (touched.current = true)}
+    >
+      <NativeChatResumeToast
+        view={view}
+        machineName={remote ? machineName : undefined}
+        listedAt={listedAt}
+        nameFor={nameFor}
+        onResume={(ids) => void store.continueNativeChatRestartOffer(ids)}
+        onRowAction={onRowAction}
+        onDismissAll={
+          remote
+            ? undefined
+            : () => {
+                close()
+                void store.dismissNativeChatRestartOffer()
+              }
+        }
+        onOpenSettings={() => {
+          close()
+          openSettingsPage()
+          openSettingsTarget({
+            pane: 'chat',
+            repoId: null,
+            sectionId: NATIVE_CHAT_RESUME_SETTING_SECTION_ID
+          })
+        }}
+        onClose={close}
+      />
+    </div>
+  )
+}

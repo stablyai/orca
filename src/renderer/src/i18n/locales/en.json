@@ -1553,7 +1553,6 @@
       "connectorRequests_one": "{{count}} request",
       "connectorRequests_other": "{{count}} requests",
       "connectorOnlyYou": "Only you",
-      "connectorStatus": {},
       "memorySource": "From {{source}}",
       "memorySourceLink": "link",
       "lookAround": {
@@ -1816,7 +1815,6 @@
         "recipeDescription": "Clean up dictated text before it lands."
       }
     },
-    "experimental": {},
     "groupHooks": {
       "title": "Project Settings > {{name}}",
       "example": "Example: create a worktree in each repo (this machine only)",
@@ -3894,52 +3892,15 @@
         "9b40d7b018": "Copy"
       },
       "NativeChatResumeOnRestartModal": {
-        "serverTitle": "{{machine}} restarted",
-        "serverBody": "These chats were working when Orca on {{machine}} restarted. Resuming restores each one where it stopped and asks the agent to carry on. Your own prompt is not re-sent.",
-        "serverDismiss": "Dismiss",
-        "serverResumeAll": "Resume all {{count}} on {{machine}}",
-        "title": "Resume interrupted chats?",
-        "body": "These chats were working when Orca closed. Resuming restores each one where it stopped, with its full context, and asks the agent to check what it was doing before carrying on. Your own prompt is not re-sent.",
-        "updateBody": "These chats were working when Orca installed an update. Resuming restores each one where it stopped, with its full context, and asks the agent to check what it was doing before carrying on. Your own prompt is not re-sent.",
-        "resuming": "Resuming…",
-        "untitled": "Untitled chat",
-        "listLabel": "Chats that would be resumed",
-        "dontAskAgain": "Don't ask again (resume automatically)",
-        "dontAskAgainHint": "You can turn this off in Settings → Chat → Behavior.",
-        "selectAgent": "Resume {{value0}} chat \"{{value1}}\" in {{value2}}",
-        "dismissAll": "Dismiss all",
-        "viewChats": "View chats",
-        "review": "Review",
         "activityUnnamed": "unnamed",
         "activityApproval": "Waiting for your approval: {{value0}}",
         "activityQuestion": "Waiting for your answer: {{value0}}",
         "activityMidReply": "Was mid-reply",
         "activitySubagentOne": "Subagent running: {{value0}}",
         "activityMonitorOne": "Monitoring: {{value0}}",
-        "selectWorkspace": "Select all chats in {{value0}}",
         "workspaceSelectedCount": "{{value0}} of {{value1}}",
-        "selectAll": "Select all chats",
-        "selectAllLabel": "Select all",
-        "selectedCount": "{{value0}} of {{value1}} selected",
-        "selectProject": "Select all chats in {{value0}}",
         "collapseNode": "Collapse {{value0}}",
         "expandNode": "Expand {{value0}}",
-        "selectMachine": "Select all chats on {{value0}}",
-        "sshHost": "SSH",
-        "done": "Done",
-        "resultListLabel": "Chats in this resume",
-        "resumeChats_one": "Resume {{count}} chat",
-        "resumeChats_other": "Resume {{count}} chats",
-        "serverResumeHereCount_one": "Resume {{count}} chat started here",
-        "serverResumeHereCount_other": "Resume {{count}} chats started here",
-        "continuedCount_one": "Resumed {{count}} chat",
-        "continuedCount_other": "Resumed {{count}} chats",
-        "notContinuedCount_one": "{{count}} chat couldn’t be resumed",
-        "notContinuedCount_other": "{{count}} chats couldn’t be resumed",
-        "notConfirmedCount_one": "Couldn’t confirm {{count}} chat was resumed",
-        "notConfirmedCount_other": "Couldn’t confirm {{count}} chats were resumed",
-        "notConfirmedOtherCount_one": "Couldn’t confirm {{count}} other chat was resumed",
-        "notConfirmedOtherCount_other": "Couldn’t confirm {{count}} other chats were resumed",
         "activitySubagentCount_other": "{{count}} subagents running",
         "activityMonitorCount_other": "Monitoring {{count}} background tasks",
         "activityMonitorCount_one": "Monitoring {{count}} background task",
@@ -20315,16 +20276,6 @@
         "3d8e5f1b9c": "Share skills behind an unlisted link and install them on any machine you use.",
         "c5b3e8a17d": "Sign in to Orca"
       },
-      "NativeChatResumeOutcomeRow": {
-        "openChat": "Open chat",
-        "retry": "Retry",
-        "dismiss": "Dismiss",
-        "unconfirmed": "Couldn’t confirm the chat was resumed",
-        "failed": "Couldn’t resume",
-        "statusFor": "{{value0}}: {{value1}}",
-        "dismissChat": "Dismiss \"{{value0}}\" in {{value1}}",
-        "toResume": "To resume:"
-      },
       "NativeChatResumeFailureGuidance": {
         "unconfirmed": "Orca couldn’t confirm the “continue” message was delivered. Open the chat and check before sending another.",
         "superseded": "Open the chat and reply. New work arrived in it right after the restart, so Orca didn’t send its “continue” message.",
@@ -20345,41 +20296,6 @@
             "claudeWslDefaultUnavailable": "Switching a WSL lane back to the system default is only available in the desktop app."
           }
         }
-      },
-      "NativeChatResumeRunPanel": {
-        "description": "Each chat is restored with its full context and asked to check where it stopped. You can close this; the status bar keeps track.",
-        "finished": "These chats were working when Orca closed. Orca restored each one where it stopped, with its full context, and asked the agent to check what it was doing before carrying on. Your own prompts weren’t re-sent.",
-        "finishedUpdate": "These chats were working when Orca installed an update. Orca restored each one where it stopped, with its full context, and asked the agent to check what it was doing before carrying on. Your own prompts weren’t re-sent.",
-        "finishedPartial": "These chats were working when Orca closed. The ones Orca resumed were restored where they stopped, with their full context, and asked to check what they were doing before carrying on. Your own prompts weren’t re-sent. Check the list for chats that still need attention or can be resumed.",
-        "finishedPartialUpdate": "These chats were working when Orca installed an update. The ones Orca resumed were restored where they stopped, with their full context, and asked to check what they were doing before carrying on. Your own prompts weren’t re-sent. Check the list for chats that still need attention or can be resumed.",
-        "resumedOfTotal_one": "Resumed {{resumed}} of {{count}} chat",
-        "resumedOfTotal_other": "Resumed {{resumed}} of {{count}} chats",
-        "resumingCount_one": "Resuming {{count}} chat",
-        "resumingCount_other": "Resuming {{count}} chats"
-      },
-      "NativeChatResumeRunStatusIcon": {
-        "waitingForReply": "Waiting for a reply",
-        "starting": "Starting",
-        "waitingToStart": "Waiting to start",
-        "inFlight": "{{value0}} · {{value1}}",
-        "resumed": "Resumed"
-      },
-      "NativeChatResumeRunSummary": {
-        "done": "{{value0}} of {{value1}} done",
-        "starting": "{{value0}} starting",
-        "waitingForReply": "{{value0}} waiting for a reply",
-        "waitingToStart": "{{value0}} waiting to start",
-        "all": "All",
-        "inProgress": "In progress",
-        "resumed": "Resumed",
-        "attention": "Need you",
-        "running": "Running {{value0}}",
-        "filter": "Show chats"
-      },
-      "NativeChatResumeAutoNote": {
-        "resuming": "Resuming automatically after the restart.",
-        "resumed": "Resumed automatically after the restart.",
-        "changeInSettings": "Change in Settings"
       },
       "TaskPageJiraSavedFilters": {
         "6c381858a1": "Saved filters",
@@ -20571,6 +20487,45 @@
       },
       "NewWorkspaceComposerFooter": {
         "create": "Create"
+      },
+      "NativeChatResumeToast": {
+        "resumingOn_one": "Resuming {{count}} chat on {{machine}}…",
+        "resumingOn_other": "Resuming {{count}} chats on {{machine}}…",
+        "resuming_one": "Resuming {{count}} chat…",
+        "resuming_other": "Resuming {{count}} chats…",
+        "resumedOn_one": "Resumed {{count}} chat on {{machine}}.",
+        "resumedOn_other": "Resumed {{count}} chats on {{machine}}.",
+        "resumedUpdate_one": "Resumed {{count}} chat after the update.",
+        "resumedUpdate_other": "Resumed {{count}} chats after the update.",
+        "resumedRestart_one": "Resumed {{count}} chat after the restart.",
+        "resumedRestart_other": "Resumed {{count}} chats after the restart.",
+        "partial_one": "Resumed {{resumed}} of {{total}} chats. {{count}} needs you.",
+        "partial_other": "Resumed {{resumed}} of {{total}} chats. {{count}} need you.",
+        "stoppedOn_one": "{{count}} chat stopped on {{machine}}.",
+        "stoppedOn_other": "{{count}} chats stopped on {{machine}}.",
+        "stoppedUpdate_one": "{{count}} chat stopped when Orca updated.",
+        "stoppedUpdate_other": "{{count}} chats stopped when Orca updated.",
+        "stoppedRestart_one": "{{count}} chat stopped when Orca closed.",
+        "stoppedRestart_other": "{{count}} chats stopped when Orca closed.",
+        "promptsNotResent": "Resuming won’t send your prompts again.",
+        "promptsNotSent": "Your prompts weren’t sent again.",
+        "resume": "Resume",
+        "details": "Details",
+        "close": "Close",
+        "listLabel": "Chats",
+        "untitled": "Untitled chat",
+        "willAsk": "Orca will ask each chat to continue. Messages you queued may be sent.",
+        "asked": "Orca asked each chat to continue. Messages you queued may be sent.",
+        "resumedAutomatically": "Resumed automatically.",
+        "changeInSettings": "Change in Settings",
+        "dismissAll": "Dismiss all",
+        "open": "Open",
+        "dismiss": "Dismiss",
+        "retry": "Retry",
+        "stateResumed": "Resumed",
+        "stateNeedsYou": "Needs you",
+        "stateResuming": "Resuming",
+        "stateStopped": "Stopped"
       }
     },
     "i18n": {

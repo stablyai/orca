@@ -1,5 +1,5 @@
 import type { ResumeCandidate } from '../tree/native-chat-resume-on-restart-grouping'
-import type { RestartContinuationOutcome } from './native-chat-restart-action-notifications'
+import type { RestartContinuationOutcome } from './native-chat-restart-continuation-outcomes'
 import type { AgentSessionStatusSummary } from '../../../../../shared/agent-session/agent-session-wire'
 
 export type ResumeRunHostStatus = Pick<

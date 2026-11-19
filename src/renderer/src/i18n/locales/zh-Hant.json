@@ -2831,47 +2831,15 @@
         "9b40d7b018": "複製"
       },
       "NativeChatResumeOnRestartModal": {
-        "serverTitle": "{{machine}} 已重新啟動",
-        "serverBody": "當 {{machine}} 上的 Orca 重新啟動時，這些聊天仍在進行中。恢復後會將每個聊天還原到中斷處，並請代理程式繼續執行。原先輸入的提示詞不會重新傳送。",
-        "serverDismiss": "關閉",
-        "serverResumeAll": "恢復 {{machine}} 上全部 {{count}} 個聊天",
-        "title": "恢復中斷的聊天？",
-        "body": "Orca 關閉時，這些聊天仍在進行中。恢復後會將每個聊天連同完整上下文還原到中斷處，並請代理程式先確認中斷前正在處理的工作，再繼續執行。您原先輸入的提示詞不會重新傳送。",
-        "updateBody": "Orca 安裝更新時，這些聊天仍在進行中。恢復後會將每個聊天連同完整上下文還原到中斷處，並請代理程式先確認中斷前正在處理的工作，再繼續執行。您原先輸入的提示詞不會重新傳送。",
-        "resuming": "正在恢復…",
-        "untitled": "無標題聊天",
-        "listLabel": "將恢復的聊天",
-        "dontAskAgain": "不再詢問（自動恢復）",
-        "dontAskAgainHint": "您可以在「設定」→「聊天」→「行為」中關閉此功能。",
-        "selectAgent": "在 {{value2}} 中恢復 {{value0}} 聊天「{{value1}}」",
-        "dismissAll": "全部關閉",
-        "viewChats": "檢視聊天",
-        "review": "檢查",
         "activityUnnamed": "未命名",
         "activityApproval": "等待您的核准：{{value0}}",
         "activityQuestion": "等待您的回答：{{value0}}",
         "activityMidReply": "中斷前正在回覆",
         "activitySubagentOne": "子代理程式執行中：{{value0}}",
         "activityMonitorOne": "正在監控：{{value0}}",
-        "selectWorkspace": "選擇 {{value0}} 中的全部聊天",
         "workspaceSelectedCount": "{{value0}}/{{value1}}",
-        "selectAll": "選擇全部聊天",
-        "selectAllLabel": "選擇全部",
-        "selectedCount": "已選擇 {{value0}}/{{value1}}",
-        "selectProject": "選擇 {{value0}} 中的全部聊天",
         "collapseNode": "摺疊 {{value0}}",
         "expandNode": "展開 {{value0}}",
-        "selectMachine": "選擇 {{value0}} 上的全部聊天",
-        "sshHost": "SSH",
-        "done": "完成",
-        "resultListLabel": "本次恢復的聊天",
-        "resumeChats_one": "恢復 {{count}} 個聊天",
-        "resumeChats_other": "恢復 {{count}} 個聊天",
-        "serverResumeHereCount_other": "恢復在此啟動的 {{count}} 個聊天",
-        "continuedCount_other": "已恢復 {{count}} 個聊天",
-        "notContinuedCount_other": "{{count}} 個聊天無法恢復",
-        "notConfirmedCount_other": "無法確認 {{count}} 個聊天是否已恢復",
-        "notConfirmedOtherCount_other": "無法確認其他 {{count}} 個聊天是否已恢復",
         "activitySubagentCount_other": "{{count}} 個子代理程式正在執行",
         "activityMonitorCount_other": "正在監控 {{count}} 個背景工作"
       },
@@ -18526,16 +18494,6 @@
         "3d8e5f1b9c": "透過不公開列出的連結分享技能，並在你使用的任何電腦安裝。",
         "c5b3e8a17d": "登入 Orca"
       },
-      "NativeChatResumeOutcomeRow": {
-        "openChat": "開啟聊天",
-        "retry": "重試",
-        "dismiss": "關閉",
-        "unconfirmed": "無法確認聊天已恢復",
-        "failed": "無法恢復",
-        "statusFor": "{{value0}}：{{value1}}",
-        "dismissChat": "關閉 {{value1}} 中的「{{value0}}」",
-        "toResume": "若要恢復："
-      },
       "NativeChatResumeFailureGuidance": {
         "unconfirmed": "Orca 無法確認「繼續」訊息已送達。請開啟聊天進行檢查，確認後再傳送其他訊息。",
         "superseded": "請開啟聊天並回覆。重新啟動後隨即有新的工作傳入此聊天，因此 Orca 未傳送「繼續」訊息。",
@@ -18556,39 +18514,6 @@
             "claudeWslDefaultUnavailable": "將 WSL 帳戶切換回系統預設的功能僅可在桌面應用程式中使用。"
           }
         }
-      },
-      "NativeChatResumeRunPanel": {
-        "description": "每個聊天都會帶著完整上下文恢復，並被要求檢查它停在了哪裡。你可以關閉此視窗，狀態列會繼續顯示進度。",
-        "finished": "Orca 關閉時這些聊天正在工作。Orca 已將每個聊天恢復到停止的位置並保留完整上下文，並讓代理程式在繼續之前先檢查它之前在做什麼。你自己的提示詞沒有被重新傳送。",
-        "finishedUpdate": "Orca 安裝更新時這些聊天正在工作。Orca 已將每個聊天恢復到停止的位置並保留完整上下文，並讓代理程式在繼續之前先檢查它之前在做什麼。你自己的提示詞沒有被重新傳送。",
-        "finishedPartial": "Orca 關閉時這些聊天正在工作。Orca 恢復的聊天已回到停止的位置並保留完整上下文，並被要求在繼續之前先檢查之前在做什麼。你自己的提示詞沒有被重新傳送。請在清單中檢視仍需處理或可以恢復的聊天。",
-        "finishedPartialUpdate": "Orca 安裝更新時這些聊天正在工作。Orca 恢復的聊天已回到停止的位置並保留完整上下文，並被要求在繼續之前先檢查之前在做什麼。你自己的提示詞沒有被重新傳送。請在清單中檢視仍需處理或可以恢復的聊天。",
-        "resumedOfTotal_other": "已恢復 {{resumed}}/{{count}} 個聊天",
-        "resumingCount_other": "正在恢復 {{count}} 個聊天"
-      },
-      "NativeChatResumeRunStatusIcon": {
-        "waitingForReply": "等待回覆",
-        "starting": "正在啟動",
-        "waitingToStart": "等待啟動",
-        "inFlight": "{{value0}} · {{value1}}",
-        "resumed": "已恢復"
-      },
-      "NativeChatResumeRunSummary": {
-        "done": "已完成 {{value0}}/{{value1}}",
-        "starting": "{{value0}} 個正在啟動",
-        "waitingForReply": "{{value0}} 個等待回覆",
-        "waitingToStart": "{{value0}} 個等待啟動",
-        "all": "全部",
-        "inProgress": "進行中",
-        "resumed": "已恢復",
-        "attention": "需要處理",
-        "running": "正在執行 {{value0}}",
-        "filter": "顯示聊天"
-      },
-      "NativeChatResumeAutoNote": {
-        "resuming": "重新啟動後正在自動恢復。",
-        "resumed": "重新啟動後已自動恢復。",
-        "changeInSettings": "在設定中更改"
       },
       "TaskPageJiraSavedFilters": {
         "6c381858a1": "已儲存的篩選器",

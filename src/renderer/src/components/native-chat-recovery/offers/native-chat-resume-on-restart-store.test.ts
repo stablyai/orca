@@ -40,7 +40,7 @@ afterEach(() => {
 })
 
 describe('launch auto-resume', () => {
-  it('resumes working chats and asks the person about chats waiting on them', async () => {
+  it('resumes only working chats and opens the report toast', async () => {
     const { store, continued } = launchWith([
       candidate('working', { state: 'working', prompts: [], tasks: [] }),
       candidate('approval', {
@@ -62,14 +62,17 @@ describe('launch auto-resume', () => {
     expect(getNativeChatResumeOnRestartDialogRequest()).toBe(true)
   })
 
-  it('opens nothing when every offered chat was working', async () => {
+  it('offers a Resume without sending anything when the preference is off', async () => {
     const { store, continued } = launchWith([
       candidate('working', { state: 'working', prompts: [], tasks: [] })
     ])
+    useAppStore.setState({
+      settings: { ...getDefaultSettings(''), nativeChatResumeWorkOnRestart: false }
+    })
 
     await loadNativeChatLaunchOffer(store)
 
-    expect(continued).toHaveBeenCalledWith(['working'], 'launch')
-    expect(getNativeChatResumeOnRestartDialogRequest()).toBe(false)
+    expect(continued).not.toHaveBeenCalled()
+    expect(getNativeChatResumeOnRestartDialogRequest()).toBe(true)
   })
 })
