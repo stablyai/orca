@@ -39,7 +39,7 @@ export type AgentStatusLiveEntryBuild = {
 
 export type AgentStatusLiveEntryRejection = {
   entry: null
-  reason: 'stale' | 'suppressed-inherited-terminal'
+  reason: 'stale' | 'suppressed-inherited-terminal' | 'slept-pane'
 }
 
 export type AgentStatusLiveEntryArgs = {

@@ -250,7 +250,8 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
       status,
       session: this.store.getWorkspaceSession(hostId),
       worktreeId,
-      launchConfigOf: this.getLaunchStatementForPaneKey
+      launchConfigOf: this.getLaunchStatementForPaneKey,
+      paneIsLive: this.hasLiveTerminalForPaneKey(status.paneKey)
     })
     if (command) {
       // Not this.applyLayoutCommand: this runs inside the resume-record queue, which that would await.

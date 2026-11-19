@@ -107,6 +107,7 @@ export function hookStatusResumeCommand(args: {
   session: WorkspaceSessionState
   worktreeId: string
   launchConfigOf: PaneLaunchConfigOf
+  paneIsLive: boolean
 }): ((CommandOf<'sleep'> | CommandOf<'wake'>) & { tabId: string }) | null {
   const { status, session, worktreeId } = args
   const tab = tabOf(session, status.paneKey)(worktreeId)
@@ -116,7 +117,11 @@ export function hookStatusResumeCommand(args: {
   const existing = session.sleepingAgentSessionsByPaneKey?.[status.paneKey]
   const retainsResumableIdentity = statusRetainsResumableIdentity(status, status.providerSession)
   const statement = args.launchConfigOf(status.paneKey, status.agentType)
-  if (keepsSleepSnapshot(statement, existing, status)) {
+  // A slept pane's record waits for its wake; its agent can still report after the PTY stopped.
+  if (
+    keepsSleepSnapshot(statement, existing, status) ||
+    (!args.paneIsLive && existing !== undefined && isPaneSleepRecord(existing))
+  ) {
     return null
   }
   const live = liveResumeRecord({

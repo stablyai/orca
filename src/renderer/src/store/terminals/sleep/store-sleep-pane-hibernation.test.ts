@@ -184,7 +184,8 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
           { state: 'working', prompt: '', agentType: 'codex' },
           'Codex',
           { updatedAt: 3000, stateStartedAt: 3000 },
-          routing
+          routing,
+          { providerSession: { key: 'session_id', id: 'target-session' } }
         )
     })
 
@@ -198,11 +199,13 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
       .getState()
       .setAgentStatus(
         paneKey,
-        { state: 'done', prompt: '', agentType: 'codex' },
+        { state: 'working', prompt: '', agentType: 'codex' },
         'Codex',
         { updatedAt: 4000, stateStartedAt: 4000 },
-        routing
+        routing,
+        { providerSession: { key: 'session_id', id: 'target-session' } }
       )
+    store.getState().captureAllSleepingAgentSessions('periodic')
 
     expect(store.getState().sleepingAgentSessionsByPaneKey[paneKey]).toMatchObject({
       origin: 'worktree-sleep',
