@@ -89,7 +89,8 @@ const hoverCardContentVariants = cva('', {
       'workspace-details':
         'w-[360px] max-w-[calc(100vw-2rem)] max-h-[28rem] overflow-y-auto p-3 text-xs scrollbar-sleek',
       // A list row's details beside its panel: compact, one short fact per line.
-      'row-details': 'w-64 p-2.5 text-xs leading-4 [overflow-wrap:anywhere]'
+      'row-details':
+        'max-h-(--radix-hover-card-content-available-height) w-64 overflow-y-auto p-2.5 text-xs leading-4 [overflow-wrap:anywhere]'
     }
   },
   defaultVariants: { variant: 'default' }

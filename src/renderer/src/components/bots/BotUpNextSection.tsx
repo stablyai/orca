@@ -290,8 +290,19 @@ export function BotUpNextSection({
   const lookButton = (
     <UpNextLookButton
       looking={looking}
-      stepsOpen={stepsOpen}
-      onToggleSteps={runSessionId ? () => setStepsOpen((open) => !open) : null}
+      stepsOpen={stepsOpen && open}
+      onToggleSteps={
+        runSessionId
+          ? () => {
+              // The steps show under the header, so opening them opens a folded section.
+              const next = !(stepsOpen && open)
+              setStepsOpen(next)
+              if (next && !open) {
+                fold.onOpenChange(true)
+              }
+            }
+          : null
+      }
       lastLookedAt={state.lastLookedAt}
       onLookNow={lookNowClicked}
     />
