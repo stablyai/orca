@@ -1,11 +1,10 @@
 import type { Dirent } from 'node:fs'
-import { mkdir, readdir, realpath, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, sep } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import {
-  COMPRESSED_ROLLOUT_SUFFIX,
   compressedRolloutsFirst,
   isRolloutTwinKeptFromStore,
   rolloutTwinPath
@@ -16,25 +15,18 @@ import { linkCodexSessionFileAsync } from '../rollouts/codex-session-link'
 import {
   readImportLedger,
   writeImportLedger,
-  type ImportedFolder,
   type ImportedSource
 } from './codex-history-import-ledger'
 
 const ARCHIVED = 'archived_sessions'
 const SESSIONS = 'sessions'
-// A later launch in the same run reads only the newest day folders, where new conversations land.
-const RECENT_DAY_FOLDERS = 2
 const LEDGER_SAVE_EVERY = 50
-
-/** `full` reads every day folder that changed; `recent` only the newest ones and the archive. */
-export type CodexHistoryImportSweep = 'full' | 'recent'
 
 export type CodexHistoryImportArgs = {
   importHome: string
   storeHome: string
   ledgerPath: string
   indexPendingDir: string
-  sweep: CodexHistoryImportSweep
   shouldStop: () => boolean
 }
 
@@ -65,12 +57,6 @@ function isWithin(parent: string, child: string): boolean {
   return path === '' || (!path.startsWith(`..${sep}`) && path !== '..' && !isAbsolute(path))
 }
 
-function rolloutKey(name: string): string {
-  return name.endsWith(COMPRESSED_ROLLOUT_SUFFIX)
-    ? name.slice(0, -COMPRESSED_ROLLOUT_SUFFIX.length)
-    : name
-}
-
 // Codex files a rollout under its start date: `rollout-YYYY-MM-DDT...`.
 function datedFolderOf(name: string): string | null {
   const stamp = parseCodexRolloutThreadId(name)?.rolloutStamp
@@ -86,15 +72,12 @@ async function childFolders(folder: string): Promise<string[]> {
 }
 
 /** Day folders under `sessions/`, newest first, relative to the home. */
-async function listDayFolders(home: string, limit: number): Promise<string[]> {
+async function listDayFolders(home: string): Promise<string[]> {
   const days: string[] = []
   for (const year of await childFolders(join(home, SESSIONS))) {
     for (const month of await childFolders(join(home, SESSIONS, year))) {
       for (const day of await childFolders(join(home, SESSIONS, year, month))) {
         days.push(join(SESSIONS, year, month, day))
-        if (days.length >= limit) {
-          return days
-        }
       }
     }
   }
@@ -147,19 +130,17 @@ class StoreNames {
     const names = await this.names(folder)
     return names.has(name) || names.has(rolloutTwinPath(name))
   }
-
-  async add(folder: string, name: string): Promise<void> {
-    ;(await this.names(folder)).add(name)
-  }
 }
 
-type FolderResult = { folder: ImportedFolder; linked: number }
+type FolderResult = { mtimeNs?: string; linked: number; stopped: boolean }
 
 async function importFolder(
   args: CodexHistoryImportArgs,
   folder: string,
-  previous: ImportedFolder | undefined,
-  store: StoreNames
+  source: ImportedSource,
+  handled: Set<string>,
+  store: StoreNames,
+  seedOnly: boolean
 ): Promise<FolderResult | null> {
   const path = join(args.importHome, folder)
   let before: bigint
@@ -171,62 +152,73 @@ async function importFolder(
     }
     throw error
   }
-  if (previous?.mtimeNs === String(before)) {
+  if (source.folders[folder]?.mtimeNs === String(before)) {
     return null
   }
-  const handled = new Set(previous?.handled)
   const archived = folder === ARCHIVED
+  const target = archived ? ARCHIVED : folder
   let linked = 0
   let failed = false
+  let targetReady = false
   const names = (await readEntries(path))
     .filter((entry) => entry.isFile() && isCodexSessionRolloutFileName(entry.name))
     .map((entry) => entry.name)
     .sort(compressedRolloutsFirst)
   for (const name of names) {
-    const key = rolloutKey(name)
-    if (handled.has(key)) {
+    if (args.shouldStop()) {
+      return { linked, stopped: true }
+    }
+    if (handled.has(name)) {
       continue
     }
-    const target = archived ? ARCHIVED : folder
-    const other = archived ? datedFolderOf(name) : ARCHIVED
+    if (seedOnly) {
+      handled.add(name)
+      continue
+    }
     const from = join(path, name)
     const to = join(args.storeHome, target, name)
+    const targetNames = await store.names(target)
     // The store's own copy wins: the same name, either form filed in the other place, or a twin
-    // holding everything this form has.
+    // holding everything this form has (a newer plain form still joins its compressed one).
     if (
-      (await store.names(target)).has(name) ||
-      (await store.holds(other, name)) ||
-      (await isRolloutTwinKeptFromStore(from, to))
+      targetNames.has(name) ||
+      (await store.holds(archived ? datedFolderOf(name) : ARCHIVED, name)) ||
+      (targetNames.has(rolloutTwinPath(name)) && (await isRolloutTwinKeptFromStore(from, to)))
     ) {
-      handled.add(key)
+      handled.add(name)
       continue
     }
-    await mkdir(join(args.storeHome, target), { recursive: true })
+    if (!targetReady) {
+      await mkdir(join(args.storeHome, target), { recursive: true })
+      await mkdir(args.indexPendingDir, { recursive: true })
+      targetReady = true
+    }
     // Recorded before the link, so the store's index learns every rollout that joins it.
-    await mkdir(args.indexPendingDir, { recursive: true })
     await writeFile(join(args.indexPendingDir, name), '')
     const outcome = await linkCodexSessionFileAsync(from, to, { hardlinkOnly: true })
     if (outcome === 'linked' || outcome === 'existing') {
       linked += outcome === 'linked' ? 1 : 0
-      handled.add(key)
-      await store.add(target, name)
+      handled.add(name)
+      targetNames.add(name)
     } else {
+      // No heal runs while this pass is active, so the marker can't settle the thread as missing.
+      await rm(join(args.indexPendingDir, name), { force: true })
       failed = true
     }
   }
   const after = (await stat(path, { bigint: true })).mtimeNs
   // A folder that changed while read, or a link that failed, is read again next time.
-  const settled = !failed && after === before
   return {
-    folder: { handled: [...handled], ...(settled ? { mtimeNs: String(before) } : {}) },
-    linked
+    linked,
+    stopped: false,
+    ...(!failed && after === before ? { mtimeNs: String(before) } : {})
   }
 }
 
 /**
  * Hard-links the import folder's rollouts that `~/.codex` lacks into it, never replacing one, so
  * /resume lists them; the ledger keeps each name handled, so one the user deleted stays deleted.
- * Returns how many were linked, or null when it stopped early.
+ * Returns how many were linked, or null when it stopped early (progress so far is kept).
  */
 export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<number | null> {
   const reason = await unusableReason(args.importHome, args.storeHome)
@@ -241,37 +233,59 @@ export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<
   const sourceKey = normalizeRuntimePathForComparison(await realpath(args.importHome))
   const ledger = await readImportLedger(args.ledgerPath)
   const known = ledger.sources[sourceKey]
-  const source: ImportedSource = known?.identity === identity ? known : { identity, folders: {} }
+  // After a damaged ledger, this folder's first pass only records what it holds.
+  const seedOnly = ledger.recovered === true && !known
+  const source: ImportedSource =
+    known?.identity === identity ? known : { identity, handled: [], folders: {} }
   ledger.sources[sourceKey] = source
-  const folders = [
-    ARCHIVED,
-    ...(await listDayFolders(
-      args.importHome,
-      args.sweep === 'full' ? Infinity : RECENT_DAY_FOLDERS
-    ))
-  ]
+  const handled = new Set(source.handled)
+  const folders = [ARCHIVED, ...(await listDayFolders(args.importHome))]
   const store = new StoreNames(args.storeHome)
   let linked = 0
   let unsaved = 0
   let stopped = false
-  for (const folder of folders) {
-    if (args.shouldStop()) {
-      stopped = true
-      break
-    }
-    const result = await importFolder(args, folder, source.folders[folder], store)
-    if (result) {
-      source.folders[folder] = result.folder
-      linked += result.linked
-      unsaved += 1
-      if (unsaved >= LEDGER_SAVE_EVERY) {
-        await writeImportLedger(args.ledgerPath, ledger)
-        unsaved = 0
+  const save = async (): Promise<void> => {
+    source.handled = [...handled]
+    await writeImportLedger(args.ledgerPath, ledger)
+    unsaved = 0
+  }
+  try {
+    for (const folder of folders) {
+      if (args.shouldStop()) {
+        stopped = true
+        break
+      }
+      let result: FolderResult | null
+      try {
+        result = await importFolder(args, folder, source, handled, store, seedOnly)
+      } catch (error) {
+        // One unreadable folder must not hold back the rest; the next pass reads it again.
+        console.warn(
+          `[codex-history-import] Could not read ${join(args.importHome, folder)}:`,
+          error
+        )
+        continue
+      }
+      if (result) {
+        source.folders[folder] = result.mtimeNs ? { mtimeNs: result.mtimeNs } : {}
+        linked += result.linked
+        unsaved += 1
+        if (result.stopped) {
+          stopped = true
+          break
+        }
+        if (unsaved >= LEDGER_SAVE_EVERY) {
+          await save()
+        }
       }
     }
+  } finally {
+    if (unsaved > 0 || !known) {
+      await save()
+    }
   }
-  if (unsaved > 0 || !known) {
-    await writeImportLedger(args.ledgerPath, ledger)
+  if (seedOnly && !stopped) {
+    delete ledger.recovered
   }
   if (linked > 0) {
     console.info(`[codex-history-import] Linked ${linked} conversations from ${args.importHome}`)

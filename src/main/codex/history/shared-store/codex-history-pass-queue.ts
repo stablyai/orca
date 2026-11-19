@@ -8,6 +8,11 @@ export class CodexHistoryPassQueue {
   private readonly background: (() => Promise<void>)[] = []
   private running = false
 
+  /** Whether a launch's pass waits behind the running job. */
+  hasLaunchWaiting(): boolean {
+    return this.launches.length > 0
+  }
+
   add<T>(work: () => Promise<T>, options: { forLaunch: boolean }): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       const job = (): Promise<void> => work().then(resolve, reject)
@@ -52,6 +57,11 @@ export class CodexHistoryPassRequests {
   /** Whether a pass for the home is queued or running. */
   has(home: string): boolean {
     return this.latest.has(home)
+  }
+
+  /** Whether a launch waits in `queue`; long background work yields to it. */
+  hasLaunchWaiting(queue: string): boolean {
+    return this.queues.get(queue)?.hasLaunchWaiting() === true
   }
 
   request(

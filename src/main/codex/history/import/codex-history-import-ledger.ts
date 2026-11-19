@@ -7,17 +7,25 @@ import { renameFileWithWindowsRetryAsync } from '../../../../shared/file-write/w
 export type ImportedFolder = {
   /** Its mtime when read; absent while it still needs another read. */
   mtimeNs?: string
-  /** Rollout names (without `.zst`) already linked or found in the store; never linked again. */
-  handled: string[]
 }
 
 export type ImportedSource = {
   /** `dev:ino` of the import folder; a replaced folder starts over. */
   identity: string
+  /**
+   * Rollout names already linked or found in the store, wherever they sit in the import folder
+   * now (Codex archives by moving): never linked again, so one the user deleted stays deleted.
+   */
+  handled: string[]
   folders: Record<string, ImportedFolder>
 }
 
-type ImportLedger = { version: 1; sources: Record<string, ImportedSource> }
+type ImportLedger = {
+  version: 1
+  sources: Record<string, ImportedSource>
+  /** Read from a damaged file: its record of handled names is lost, so a full pass only seeds it. */
+  recovered?: true
+}
 
 function emptyLedger(): ImportLedger {
   return { version: 1, sources: {} }
@@ -30,19 +38,34 @@ function isImportedSource(value: unknown): value is ImportedSource {
   const source = value as Partial<ImportedSource>
   return (
     typeof source.identity === 'string' &&
+    Array.isArray(source.handled) &&
+    source.handled.every((name) => typeof name === 'string') &&
     typeof source.folders === 'object' &&
     source.folders !== null &&
     Object.values(source.folders).every(
-      (folder) =>
-        Array.isArray(folder?.handled) &&
-        folder.handled.every((name) => typeof name === 'string') &&
-        (folder.mtimeNs === undefined || typeof folder.mtimeNs === 'string')
+      (folder) => folder?.mtimeNs === undefined || typeof folder.mtimeNs === 'string'
     )
   )
 }
 
-/** An unreadable or unknown ledger starts over: a full pass re-checks every name against the store. */
-export async function readImportLedger(path: string): Promise<ImportLedger> {
+// Parsed once per run: only this process writes the ledger, and every import keeps it current.
+const loaded = new Map<string, Promise<ImportLedger>>()
+
+/**
+ * A missing ledger starts empty. A damaged one starts empty and `recovered`: which conversations
+ * the user deleted is lost with it, so nothing already in an import folder is linked again.
+ */
+export function readImportLedger(path: string): Promise<ImportLedger> {
+  let ledger = loaded.get(path)
+  if (!ledger) {
+    ledger = loadImportLedger(path)
+    loaded.set(path, ledger)
+    ledger.catch(() => loaded.delete(path))
+  }
+  return ledger
+}
+
+async function loadImportLedger(path: string): Promise<ImportLedger> {
   let text: string
   try {
     text = await readFile(path, 'utf8')
@@ -55,7 +78,7 @@ export async function readImportLedger(path: string): Promise<ImportLedger> {
   try {
     const parsed = JSON.parse(text) as Partial<ImportLedger>
     if (parsed.version !== 1 || typeof parsed.sources !== 'object' || parsed.sources === null) {
-      return emptyLedger()
+      return { ...emptyLedger(), recovered: true }
     }
     const sources: Record<string, ImportedSource> = {}
     for (const [key, source] of Object.entries(parsed.sources)) {
@@ -65,7 +88,8 @@ export async function readImportLedger(path: string): Promise<ImportLedger> {
     }
     return { version: 1, sources }
   } catch {
-    return emptyLedger()
+    console.warn(`[codex-history-import] Damaged ledger ${path}; importing only new conversations`)
+    return { ...emptyLedger(), recovered: true }
   }
 }
 
@@ -73,7 +97,8 @@ export async function writeImportLedger(path: string, ledger: ImportLedger): Pro
   await mkdir(dirname(path), { recursive: true })
   const temporary = `${path}.${process.pid}.tmp`
   try {
-    await writeFile(temporary, JSON.stringify(ledger))
+    const { recovered: _recovered, ...saved } = ledger
+    await writeFile(temporary, JSON.stringify(saved))
     await renameFileWithWindowsRetryAsync(temporary, path)
   } catch (error) {
     await rm(temporary, { force: true })

@@ -32,8 +32,14 @@ export function initializeMainProcessAccountServices(): void {
   })
   state.rateLimits = services.rateLimits
   state.codexRuntimeHome = services.codexRuntimeHome
-  store.onSettingsChanged((updates) => {
-    if ('codexSessionSourceHome' in updates || 'codexShareHistoryAcrossAccounts' in updates) {
+  // Saving the field rewrites it even unchanged; only a new host folder or sharing switch counts.
+  const importSetting = (): string =>
+    `${store.getSettings().codexSessionSourceHome?.host ?? ''}\0${store.getSettings().codexShareHistoryAcrossAccounts}`
+  let lastImportSetting = importSetting()
+  store.onSettingsChanged(() => {
+    const next = importSetting()
+    if (next !== lastImportSetting) {
+      lastImportSetting = next
       services.codexRuntimeHome.importCodexHistoryInBackground({ settingChanged: true })
     }
   })

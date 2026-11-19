@@ -13,7 +13,7 @@ import {
   requestHostCodexIndexHeal
 } from './codex-account-history-index'
 import { shareCodexAccountHistory, unshareCodexAccountHistory } from './codex-account-history-links'
-import { importCodexHistory, type CodexHistoryImportSweep } from '../import/codex-history-import'
+import { importCodexHistory } from '../import/codex-history-import'
 import { resolveHostCodexSessionSourceHome } from '../rollouts/codex-session-source-home'
 import { isCodexHistorySharedAcrossAccounts } from '../../../codex-accounts/runtime-home/routing/codex-history-sharing'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
@@ -24,7 +24,7 @@ import { isLinkedDirectory } from '../../../filesystem/merged-directory-link'
 
 const BUSY_RETRY_MS = 5 * 60_000
 // Launches and selections within this of the last import don't read the folder again.
-const IMPORT_RECENT_SWEEP_MS = 10 * 60_000
+const IMPORT_INTERVAL_MS = 10 * 60_000
 // Retries start outside any pass's trace, so each is its own trace instead of nesting forever.
 const inRootContext = AsyncLocalStorage.snapshot()
 
@@ -32,6 +32,17 @@ const INDEX_PENDING_DIR = (): string =>
   join(getOrcaUserDataPath(), 'codex-account-history', 'index-pending')
 const IMPORT_LEDGER_PATH = (): string =>
   join(getOrcaUserDataPath(), 'codex-account-history', 'import-ledger.json')
+
+type CodexHistoryImportSettings = Pick<
+  GlobalSettings,
+  'codexSessionSourceHome' | 'codexShareHistoryAcrossAccounts'
+>
+
+// The folder to import from, or null while there is none or history isn't shared.
+function resolveImportHome(settings: CodexHistoryImportSettings): string | null {
+  const importHome = resolveHostCodexSessionSourceHome(settings)
+  return importHome && isCodexHistorySharedAcrossAccounts(settings) ? importHome : null
+}
 
 /**
  * Host account history passes, one at a time (homes merging into one store at once would race on
@@ -55,8 +66,7 @@ export class CodexAccountHistoryPasses {
   // Homes whose left-behind rollouts still await a content check, checked once no pass runs.
   private readonly owedChecks = new Map<string, { accountHome: string }>()
   private checking = false
-  // Import folders read in full this run, and when one was last read at all.
-  private readonly importedInFull = new Set<string>()
+  // When each import folder last finished a pass this run.
   private readonly importedAt = new Map<string, number>()
   private startedPasses = 0
   private readonly passProgress = {
@@ -114,27 +124,27 @@ export class CodexAccountHistoryPasses {
 
   /**
    * Links the import folder's conversations that ~/.codex lacks into it, in the queue with the
-   * history passes. A run's first import, and one after the setting changed, reads every day folder.
+   * history passes and yielding to a waiting launch: at most once per interval, unless the
+   * setting changed. The settings are read again when it starts and while it runs.
    */
   importHistory(
-    settings: Pick<GlobalSettings, 'codexSessionSourceHome' | 'codexShareHistoryAcrossAccounts'>,
+    getSettings: () => CodexHistoryImportSettings,
     options: { settingChanged?: boolean } = {}
   ): Promise<void> {
-    const importHome = resolveHostCodexSessionSourceHome(settings)
-    if (!importHome || !isCodexHistorySharedAcrossAccounts(settings)) {
+    const importHome = resolveImportHome(getSettings())
+    if (!importHome) {
       return Promise.resolve()
     }
     const key = normalizeRuntimePathForComparison(importHome)
     if (options.settingChanged) {
-      this.importedInFull.delete(key)
+      this.importedAt.delete(key)
     }
     return this.requests.request(
       { queue: 'host', home: `import\0${key}`, shared: true, forLaunch: false },
       async () => {
-        const sweep: CodexHistoryImportSweep = this.importedInFull.has(key) ? 'recent' : 'full'
         if (
-          sweep === 'recent' &&
-          Date.now() - (this.importedAt.get(key) ?? 0) < IMPORT_RECENT_SWEEP_MS
+          resolveImportHome(getSettings()) !== importHome ||
+          Date.now() - (this.importedAt.get(key) ?? -Infinity) < IMPORT_INTERVAL_MS
         ) {
           return
         }
@@ -146,14 +156,13 @@ export class CodexAccountHistoryPasses {
             storeHome: getSystemCodexHomePath(),
             ledgerPath: IMPORT_LEDGER_PATH(),
             indexPendingDir: INDEX_PENDING_DIR(),
-            sweep,
-            shouldStop: isCodexAccountHistoryWorkStopping
+            shouldStop: () =>
+              isCodexAccountHistoryWorkStopping() ||
+              this.requests.hasLaunchWaiting('host') ||
+              resolveImportHome(getSettings()) !== importHome
           })
           if (linked !== null) {
             this.importedAt.set(key, Date.now())
-            if (sweep === 'full') {
-              this.importedInFull.add(key)
-            }
           }
         } catch (error) {
           console.warn('[codex-history-import] Importing Codex conversations failed:', error)
@@ -161,6 +170,7 @@ export class CodexAccountHistoryPasses {
           this.activePasses -= 1
         }
         requestHostCodexIndexHeal(INDEX_PENDING_DIR(), getSystemCodexHomePath(), this.passProgress)
+        this.checkOwed()
       }
     )
   }
