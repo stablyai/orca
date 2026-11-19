@@ -97,9 +97,13 @@ export const EXECUTION_HOST_METHODS = [
   'files.stat',
   'files.statTerminalArtifact',
   'files.writeTerminalArtifact',
+  // A folder row's Delete removes the Orca workspace on its host, as desktop's Remove Workspace does.
+  'folderWorkspace.delete',
   'folderWorkspace.list',
   'git.abortMerge',
   'git.abortRebase',
+  // Read-only: the delete confirm names ignored files (.env) that removing the worktree would lose.
+  'git.atRiskLocalFiles',
   'git.branchCompare',
   'git.branchDiff',
   'git.bulkStage',
