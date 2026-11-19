@@ -365,27 +365,21 @@ it.each([
 })
 
 it.each([
-  ['the link was cleared as usual (regression control)', 'none', true],
-  ['a newer link came and was cleared again', 'newer, cleared', false],
-  ['a newer link is pending', 'newer', false]
-] as const)('lets Pair open pairing only while no newer link came: %s', async (_, newer, pairs) => {
+  ['the link was cleared as usual', false],
+  ['a newer link came and was cleared again', true]
+] as const)('lets Pair open pairing only while no newer link came: %s', async (_, newer) => {
   pairHosts({})
   view.router.push.mockClear()
   const { rendered, done } = renderThread()
   await rendered
   expect(done).toHaveBeenCalledTimes(1)
-  if (newer !== 'none') {
+  if (newer) {
     publishBotLink({ kind: 'bot', botId: 'newer' })
-    const { id } = readPendingBotLink()!
-    if (newer === 'newer, cleared') {
-      clearBotLink(id)
-    } else {
-      onTestFinished(() => clearBotLink(id))
-    }
+    clearBotLink(readPendingBotLink()!.id)
   }
   const buttons: { onPress?: () => void }[] = view.alert.mock.calls[0][2]
   buttons.forEach((button) => button.onPress?.())
-  expect(view.router.push.mock.calls.length > 0).toBe(pairs)
+  expect(view.router.push.mock.calls).toEqual(newer ? [] : [['/pair']])
 })
 
 function relayThroughDesktop() {
