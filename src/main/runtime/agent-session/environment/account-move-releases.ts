@@ -48,7 +48,7 @@ export function accountMoveReleases(
             wake({ kind: 'account' })
           }
         }) ?? (() => {})
-      // OpenCode and Devin keep their selection in the data-account service; it changes rarely.
+      // Other agent types keep their selection in the data-account service; it changes rarely.
       const stopDataAccounts = hasAppEnvironment()
         ? getManagedDataAccountService().onChanged(() => wake({ kind: 'account' }))
         : () => {}
