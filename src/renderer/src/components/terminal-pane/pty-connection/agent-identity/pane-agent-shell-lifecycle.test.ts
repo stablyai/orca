@@ -3,8 +3,9 @@ import type { SleepingAgentSessionRecord } from '../../../../../../shared/agent-
 import { toAppSshPtyId } from '../../../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
+const suppressedPtyExitIds: Record<string, true> = {}
 const state = {
-  suppressedPtyExitIds: {} as Record<string, true>,
+  suppressedPtyExitIds,
   agentStatusByPaneKey: new Map(),
   clearAgentLaunchConfig: vi.fn()
 }
@@ -25,7 +26,7 @@ const record: SleepingAgentSessionRecord = {
 }
 
 function paneOn(ptyId: string, wake?: { record: SleepingAgentSessionRecord; ptyId: string }) {
-  return {
+  const pane = {
     transport: { getPtyId: () => ptyId },
     getSleepingRecordForPane: () => ({ paneKey: record.paneKey, record }),
     hibernatedWakeTarget: wake,
@@ -38,6 +39,8 @@ function paneOn(ptyId: string, wake?: { record: SleepingAgentSessionRecord; ptyI
     reconcileEndedProcessIfPaneQuiet: vi.fn(),
     settleDeferredCommandFinishedStatusDrop: vi.fn()
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: settlePaneShellForeground reads only these session members.
+  return { pane, session: pane as unknown as ConnectPanePtySession }
 }
 
 beforeEach(() => {
@@ -47,14 +50,14 @@ beforeEach(() => {
 it('retires a woken SSH agent when its shell comes back, as no host proof reaches main', () => {
   const ssh = toAppSshPtyId('conn-1', 'pty-7')
   const quit = paneOn(ssh)
-  settlePaneShellForeground(quit as unknown as ConnectPanePtySession, 'command-finished')
-  expect(quit.clearSleepingRecordProviderDuplicates).toHaveBeenCalledOnce()
+  settlePaneShellForeground(quit.session, 'command-finished')
+  expect(quit.pane.clearSleepingRecordProviderDuplicates).toHaveBeenCalledOnce()
   // The sleep's own kill keeps the wake record it is about to resume.
   const sleeping = paneOn(ssh, { record, ptyId: ssh })
-  settlePaneShellForeground(sleeping as unknown as ConnectPanePtySession, 'command-finished')
-  expect(sleeping.clearSleepingRecordProviderDuplicates).not.toHaveBeenCalled()
+  settlePaneShellForeground(sleeping.session, 'command-finished')
+  expect(sleeping.pane.clearSleepingRecordProviderDuplicates).not.toHaveBeenCalled()
   // A local pane waits for main's shell-alone proof instead.
   const local = paneOn('pty-local')
-  settlePaneShellForeground(local as unknown as ConnectPanePtySession, 'command-finished')
-  expect(local.clearSleepingRecordProviderDuplicates).not.toHaveBeenCalled()
+  settlePaneShellForeground(local.session, 'command-finished')
+  expect(local.pane.clearSleepingRecordProviderDuplicates).not.toHaveBeenCalled()
 })
