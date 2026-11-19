@@ -276,14 +276,19 @@ export function useMobileHomeData() {
   const stats = useMemo(() => totalHomeStats(statsByHost, hostIds), [statsByHost, hostIds])
   const hostConnections = useMemo(() => projectHomeHostConnections(allClients), [allClients])
   const { autoConnectHostIds, hostAttempts } = connections
-  const unreachableHosts = useMemo(
+  // Keyed by its members, so a retry that moves no desktop in or out keeps Home's rows as they are.
+  const unreachableKey = useMemo(
     () =>
       homeUnreachableHostIds(
         hosts,
         { autoConnectHostIds, hostAttempts, hostConnections, hostLastConnected, hostStates },
         now
-      ),
+      ).join('\n'),
     [hosts, autoConnectHostIds, hostAttempts, hostConnections, hostLastConnected, hostStates, now]
+  )
+  const unreachableHosts = useMemo(
+    () => new Set(unreachableKey ? unreachableKey.split('\n') : []),
+    [unreachableKey]
   )
   const { bots, botsByHost } = useHomeBots({
     homeHosts,

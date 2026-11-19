@@ -70,13 +70,9 @@ export function homeUnreachableHostIds(
   hosts: readonly { id: string; name: string; endpoint: string }[],
   inputs: HomeHostConnectionInputs,
   nowMs: number
-): ReadonlySet<string> {
-  const ids = new Set<string>()
-  for (const host of hosts) {
+): string[] {
+  return hosts.flatMap((host) => {
     const { state, verdict } = classifyHomeHostConnection(host, inputs, nowMs)
-    if (state !== 'connected' && !isConnectionDialing(verdict)) {
-      ids.add(host.id)
-    }
-  }
-  return ids
+    return state !== 'connected' && !isConnectionDialing(verdict) ? [host.id] : []
+  })
 }

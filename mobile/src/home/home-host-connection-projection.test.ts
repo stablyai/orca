@@ -22,6 +22,6 @@ describe('homeUnreachableHostIds', () => {
       },
       10_000
     )
-    expect([...unreachable].sort()).toEqual(['gave-up', 'not-dialed', 'refused'])
+    expect(unreachable).toEqual(['gave-up', 'not-dialed', 'refused'])
   })
 })
