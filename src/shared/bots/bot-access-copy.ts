@@ -38,7 +38,8 @@ export const BOT_ACCESS_COPY = {
   summaryOne: 'You and {{person}} can ask {{name}}.',
   summarySome: 'You, {{people}} and {{last}} can ask {{name}}.',
   summaryMany: 'You and {{count}} other people can ask {{name}}.',
-  controlNone: 'Anyone you add can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.',
+  controlNone:
+    'Anyone you add can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.',
   controlOne:
     '{{person}} can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.',
   controlMany:

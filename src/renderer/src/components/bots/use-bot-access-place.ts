@@ -4,6 +4,7 @@ import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/executi
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { BOT_ACCESS_COPY, botAccessPlace } from '../../../../shared/bots/bot-access-copy'
+import { getHostSettingOverride } from '../../../../shared/execution-host/host-setting-overrides'
 import {
   getExecutionHostLabel,
   LOCAL_EXECUTION_HOST_ID,
@@ -12,10 +13,12 @@ import {
 
 type BotAccessPlaceWords = { computer: string; there: string }
 
-/** The server's name from Settings; null for this computer, or a server with only a generic label. */
+/** The configured server name; null for a local desktop or a generic server label. */
 function serverName(state: AppState, hostId: ExecutionHostId): string | null {
   if (hostId === LOCAL_EXECUTION_HOST_ID) {
-    return null
+    return isPairedWebClientWindow()
+      ? (getHostSettingOverride(state.settings, hostId, 'displayLabel') ?? null)
+      : null
   }
   const label = selectExecutionHostDisplayLabel(state, hostId)
   return label === getExecutionHostLabel(hostId) ? null : label

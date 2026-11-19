@@ -3,7 +3,7 @@ import { defineFixture } from '../../component-fixtures/component-fixture'
 import { ConfirmationDialogProvider } from '../dismiss/confirmation/confirmation-dialog'
 import { Button } from '../ui/button'
 import { useAppStore } from '@/store'
-import { stampBotHost } from '@/lib/bot-catalog-snapshot'
+import { publishBots, setBotHostListing, stampBotHost } from '@/lib/bot-catalog-snapshot'
 import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
 import { RUNTIME_PROTOCOL_VERSION } from '../../../../shared/remote-runtime/protocol/protocol-version'
 import { BotWhoCanAskInsetList } from './BotWhoCanAskInsetList'
@@ -49,6 +49,8 @@ const service: BotWhoCanAskService = {
   accessRequests: null
 }
 function setup(): void {
+  setBotHostListing({ hosts: [{ hostId: HOST, state: 'live' }], updateNeeded: [] })
+  publishBots([remote], undefined, HOST)
   useAppStore.setState((state) => ({
     settings: {
       ...(state.settings ?? getDefaultSettings('/home/fixture')),
@@ -71,7 +73,9 @@ function setup(): void {
             }
           : method === 'google.status'
             ? { client: null, accounts: [], bots: [] }
-            : {}
+            : method === 'bots.list'
+              ? { bots: [{ ...remote, hostId: 'local' }] }
+              : {}
   })
 }
 function OpenConfirm(): React.JSX.Element {

@@ -28,17 +28,15 @@ vi.mock('@/lib/bot-catalog', () => ({
         })
 }))
 
-vi.mock('../NewBotDialog', () => ({ NewBotDialog: () => null }))
-vi.mock('../google/use-turn-on-bot-google', () => ({ useTurnOnBotGoogle: () => vi.fn() }))
-vi.mock('../google/google-connect-client', () => ({
-  useBotGoogleReaches: () => [],
-  setBotGoogle: vi.fn()
-}))
-
 vi.mock('@/store', () => {
   const state = {
     setContextualToursBlockingSurfaceVisible: vi.fn(),
-    settings: { hostSettingOverrides: { 'runtime:server-1': { displayLabel: 'Atlas Server' } } }
+    settings: {
+      hostSettingOverrides: {
+        'runtime:server-1': { displayLabel: 'Atlas Server' },
+        local: { displayLabel: 'Atlas Server' }
+      }
+    }
   }
   return {
     useAppStore: Object.assign(
@@ -128,6 +126,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  vi.unstubAllGlobals()
   Reflect.deleteProperty(window, 'api')
 })
 
@@ -466,6 +465,12 @@ describe('BotWhoCanAskInsetList', () => {
     }
     renderList(<Inset />)
   }
+
+  it('keeps the configured server name for a directly paired web client', () => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+    renderInset('local')
+    expect(screen.getByText(/Atlas Server/, { selector: 'p' })).toBeVisible()
+  })
 
   it('names the paired server exposed by giving access', () => {
     renderInset('runtime:server-1')
