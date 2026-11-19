@@ -328,9 +328,7 @@ export function NativeChatNoticeRow({
         failure !== undefined ||
         (look.kind === 'line' && (look.tone === 'error' || look.tone === 'warning'))
       }
-      text={[block.text, failureDetail, block.providerFrame?.payload?.head]
-        .filter(Boolean)
-        .join('\n')}
+      text={[block.text, failureDetail].filter(Boolean).join('\n')}
     />
   )
   if (block.orcaStop === undefined && failure?.kind === 'usageLimitReached') {

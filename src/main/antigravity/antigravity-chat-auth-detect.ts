@@ -35,20 +35,19 @@ export async function detectAntigravityChatAuth(
     config = null
   }
   const method = config?.method ?? null
-  // A key or ADC chat still answers whether a Google sign-in is there to switch back to.
-  const googleMethod = method === 'oauth-business' ? 'oauth-business' : 'oauth-personal'
   const readGoogle = sources.googleSignIn ?? hasSavedAntigravityGoogleSignIn
-  const [env, key, googleSignIn] = await Promise.all([
+  const [env, key, personal, business] = await Promise.all([
     sources.launchEnv(),
     sources.apiKeyStatus(),
-    readGoogle(googleMethod)
+    readGoogle('oauth-personal'),
+    readGoogle('oauth-business')
   ])
   const adcAvailable = await isFile(agentPlatformCredentialsFile(env))
   const saved = config?.method === 'agent-platform' ? config : {}
   const project = adcAvailable ? (await resolveAgentPlatformProject(saved, env)).project : null
   return {
     method,
-    googleSignIn,
+    googleSignIn: { personal, business },
     apiKey: {
       available: key.saved || key.inEnvironment,
       source: key.saved ? 'saved' : key.inEnvironment ? 'environment' : null

@@ -1,4 +1,13 @@
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore
+} from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
@@ -16,9 +25,14 @@ import {
   refreshAntigravityChatAuthDetection,
   useAntigravityChatAuthDetection
 } from '@/runtime/provider-accounts/sign-in/antigravity-chat-auth-detection'
-import { startAntigravityChatSignIn } from '@/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
+import {
+  readAntigravityChatSignInSnapshot,
+  startAntigravityChatSignIn,
+  subscribeAntigravityChatSignIns
+} from '@/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import { openAntigravitySignInSettings } from '@/components/provider-accounts/open-antigravity-sign-in-settings'
+import { useAntigravityChatSignIn } from '@/components/provider-accounts/use-antigravity-chat-sign-in'
 import { antigravityChatAuthMethodLabel } from '@/components/provider-accounts/AntigravityChatAuthMethodItems'
 import type { AntigravityChatAuthConfig } from '../../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import type { AntigravityChatAuthDetection } from '../../../../../shared/rpc-contract/accounts/antigravity-accounts-params'
@@ -71,9 +85,18 @@ async function applyAntigravityChatAuthMethod(
   t: Translate
 ): Promise<void> {
   try {
-    await callAntigravityChatAuthConfig(target, { method })
-    // A Google method with no saved sign-in has nothing to use until Google signs it in.
-    if (isGoogle(method) && !readAntigravityChatAuthDetection(target)?.googleSignIn) {
+    // Keep a saved project and location: switching away and back must not drop them.
+    const saved = await callAntigravityChatAuthConfig(target)
+    await callAntigravityChatAuthConfig(target, {
+      method,
+      ...(saved?.gcpProject ? { gcpProject: saved.gcpProject } : {}),
+      ...(saved?.gcpLocation ? { gcpLocation: saved.gcpLocation } : {})
+    })
+    // Google sign-in with no saved token has nothing to use until Google signs it in.
+    if (
+      method === 'oauth-personal' &&
+      !readAntigravityChatAuthDetection(target)?.googleSignIn.personal
+    ) {
       await startAntigravityChatSignIn(target)
     } else {
       toast.success(
@@ -143,6 +166,39 @@ export function NativeChatAntigravityAuthProvider({
     [t]
   )
 
+  // Applying stops the host's running chats, so re-read first: a chat may have started since.
+  const decide = useCallback(
+    async (target: RuntimeClientTarget, method: AntigravitySwitchableMethod): Promise<void> => {
+      if (busy.current) {
+        return
+      }
+      await refreshAntigravityChatAuthDetection(target, { force: true })
+      const current = readAntigravityChatAuthDetection(target)
+      if (current?.method === method) {
+        return
+      }
+      if (current && current.liveChats > 0) {
+        setConfirming(method)
+        return
+      }
+      await apply(target, method)
+    },
+    [apply]
+  )
+
+  // A sign-in or a method saved elsewhere (Settings, another client) changes what's detected.
+  // Every apply and every sign-in answer bumps the host's sign-in revision.
+  useAntigravityChatSignIn(host)
+  const signInRevision = useSyncExternalStore(subscribeAntigravityChatSignIns, () => {
+    const snapshot = host ? readAntigravityChatSignInSnapshot(host) : null
+    return snapshot?.kind === 'known' ? snapshot.state.revision : -1
+  })
+  useEffect(() => {
+    if (host && signInRevision >= 0) {
+      void refreshAntigravityChatAuthDetection(host, { force: true })
+    }
+  }, [host, signInRevision])
+
   const value = useMemo((): NativeChatAntigravityAuth | null => {
     if (!host) {
       return null
@@ -153,19 +209,16 @@ export function NativeChatAntigravityAuthProvider({
       detection,
       keyAndAdc,
       switching,
-      // Applying stops the host's running Antigravity chats, so ask first when any would stop.
-      switchTo: (method) =>
-        detection && detection.liveChats > 0 && method !== detection.method
-          ? setConfirming(method)
-          : void apply(host, method),
+      switchTo: (method) => void decide(host, method),
+      // Without a detection (older host, first read out) the saved method is unknown: only sign in.
       signInWithGoogle: () =>
-        isGoogle(detection?.method)
+        !detection?.method || isGoogle(detection.method)
           ? void startAntigravityChatSignIn(host)
-          : void apply(host, 'oauth-personal'),
+          : void decide(host, 'oauth-personal'),
       openSettings: () => openAntigravitySignInSettings(host),
       refresh: () => void refreshAntigravityChatAuthDetection(host, { force: true })
     }
-  }, [host, backend, detection, keyAndAdc, switching, apply])
+  }, [host, backend, detection, keyAndAdc, switching, decide])
 
   const confirmLabel = confirming ? (antigravityChatAuthMethodLabel(confirming, t) ?? '') : ''
   return (

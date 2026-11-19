@@ -13,7 +13,7 @@ import { NativeChatAntigravityAuthChip } from './NativeChatAntigravityAuthChip'
 
 const FOUND: AntigravityChatAuthDetection = {
   method: 'oauth-personal',
-  googleSignIn: false,
+  googleSignIn: { personal: false, business: false },
   apiKey: { available: true, source: 'environment' },
   adc: { available: true, project: 'acme-dev' },
   liveChats: 0
@@ -99,7 +99,15 @@ async function openChip(frame: HTMLElement): Promise<void> {
 export const chipMenu = defineFixture({
   width: 720,
   interact: openChip,
-  render: () => <ChipMenu auth={auth({ ...FOUND, method: 'gemini-api-key', googleSignIn: true })} />
+  render: () => (
+    <ChipMenu
+      auth={auth({
+        ...FOUND,
+        method: 'gemini-api-key',
+        googleSignIn: { personal: true, business: false }
+      })}
+    />
+  )
 })
 
 export const chipMenuOnAgy = defineFixture({

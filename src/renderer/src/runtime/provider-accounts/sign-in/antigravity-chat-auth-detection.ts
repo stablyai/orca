@@ -13,6 +13,8 @@ type Entry = {
   detection: AntigravityChatAuthDetection | null
   fetchedAt: number
   inFlight: Promise<void> | null
+  /** The one read queued behind `inFlight` for every forced caller. */
+  forced: Promise<void> | null
   observers: number
 }
 
@@ -30,7 +32,7 @@ const hostKey = (owner: RuntimeClientTarget): string =>
 function entryFor(owner: RuntimeClientTarget): Entry {
   let entry = entries.get(hostKey(owner))
   if (!entry) {
-    entry = { owner, detection: null, fetchedAt: 0, inFlight: null, observers: 0 }
+    entry = { owner, detection: null, fetchedAt: 0, inFlight: null, forced: null, observers: 0 }
     entries.set(hostKey(owner), entry)
   }
   return entry
@@ -50,9 +52,15 @@ export function refreshAntigravityChatAuthDetection(
   const now = options.now ?? Date.now
   if (entry.inFlight) {
     // A read already out may predate the change a forced read is meant to see.
-    return options.force
-      ? entry.inFlight.then(() => refreshAntigravityChatAuthDetection(owner, options))
-      : entry.inFlight
+    if (!options.force) {
+      return entry.inFlight
+    }
+    const queued = entry
+    queued.forced ??= entry.inFlight.then(() => {
+      queued.forced = null
+      return refreshAntigravityChatAuthDetection(owner, options)
+    })
+    return queued.forced
   }
   if (!options.force && entry.fetchedAt > 0 && now() - entry.fetchedAt < FRESH_MS) {
     return Promise.resolve()

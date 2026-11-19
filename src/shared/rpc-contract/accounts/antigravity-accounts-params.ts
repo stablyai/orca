@@ -39,8 +39,8 @@ export type AntigravityChatApiKeyStatus = { saved: boolean; inEnvironment: boole
 export type AntigravityChatAuthDetection = {
   /** The saved sign-in method; null while it is malformed or being saved. */
   method: AntigravityChatAuthConfig['method'] | null
-  /** Orca's managed server holds a saved Google sign-in for the Google method in use. */
-  googleSignIn: boolean
+  /** Saved Google sign-ins of Orca's managed server, one per Google method. */
+  googleSignIn: { personal: boolean; business: boolean }
   /** A pasted key wins over GEMINI_API_KEY, as the chat's launch does. */
   apiKey: { available: boolean; source: 'saved' | 'environment' | null }
   /** Application Default Credentials, with the project the chat would use. */

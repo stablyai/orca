@@ -31,7 +31,7 @@ export function antigravityChatAuthAlternatives(
     alternatives.push({ method: 'agent-platform', project: detection.adc.project })
   }
   const onGoogle = current === 'oauth-personal' || current === 'oauth-business'
-  if (!onGoogle && detection.googleSignIn) {
+  if (!onGoogle && detection.googleSignIn.personal) {
     alternatives.push({ method: 'oauth-personal' })
   }
   return alternatives
@@ -61,9 +61,8 @@ export function antigravityChatAuthMenuItems(
   const current = detection?.method ?? null
   const adcReady = Boolean(detection?.adc.available && detection.adc.project)
   const detected: Record<Method, boolean> = {
-    // The host reports the Google sign-in of the Google method in use, personal otherwise.
-    'oauth-personal': current !== 'oauth-business' && Boolean(detection?.googleSignIn),
-    'oauth-business': current === 'oauth-business' && Boolean(detection?.googleSignIn),
+    'oauth-personal': Boolean(detection?.googleSignIn.personal),
+    'oauth-business': Boolean(detection?.googleSignIn.business),
     'gemini-api-key': Boolean(detection?.apiKey.available),
     'agent-platform': adcReady
   }
@@ -91,8 +90,10 @@ export type AntigravityAuthFailureReason =
 
 const SUBSCRIPTION = /SUBSCRIPTION_REQUIRED|eligible Antigravity subscription/i
 const INELIGIBLE = /ineligible|can't use Antigravity|can’t use Antigravity/i
-const USAGE_LIMIT = /usage limit reached|RESOURCE_EXHAUSTED|\b429\b/i
-const REFUSED = /\b40[13]\b|PERMISSION_DENIED|UNAUTHENTICATED|API key not valid/i
+const USAGE_LIMIT = /usage limit reached|RESOURCE_EXHAUSTED|quota exceeded/i
+// A bare status code could be a tool's request; only Google's auth words name the chat's credentials.
+const REFUSED =
+  /PERMISSION_DENIED|UNAUTHENTICATED|API key not valid|\b40[13]\b[^\n]{0,40}\b(?:unauthori[sz]ed|forbidden)\b/i
 
 /** Classifies a sign-in error or a failed turn; null when switching methods wouldn't help. */
 export function antigravityAuthFailureReason(input: {

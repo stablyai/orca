@@ -14,7 +14,7 @@ const detection = (
   patch: Partial<AntigravityChatAuthDetection> = {}
 ): AntigravityChatAuthDetection => ({
   method: 'oauth-personal',
-  googleSignIn: false,
+  googleSignIn: { personal: false, business: false },
   apiKey: { available: true, source: 'environment' },
   adc: { available: true, project: 'my-project' },
   liveChats: 0,
@@ -28,7 +28,9 @@ describe('antigravityChatAuthAlternatives', () => {
       { method: 'agent-platform', project: 'my-project' }
     ])
     expect(
-      antigravityChatAuthAlternatives(detection({ method: 'gemini-api-key', googleSignIn: true }))
+      antigravityChatAuthAlternatives(
+        detection({ method: 'gemini-api-key', googleSignIn: { personal: true, business: false } })
+      )
     ).toEqual([{ method: 'agent-platform', project: 'my-project' }, { method: 'oauth-personal' }])
   })
 
@@ -48,7 +50,7 @@ describe('antigravityChatAuthAlternatives', () => {
 describe('antigravityChatAuthMenuItems', () => {
   it('keeps a fixed order, marks the active method and tags detected ones', () => {
     const items = antigravityChatAuthMenuItems(
-      detection({ method: 'gemini-api-key', googleSignIn: true }),
+      detection({ method: 'gemini-api-key', googleSignIn: { personal: true, business: false } }),
       true
     )
     expect(items).toEqual([
@@ -85,7 +87,10 @@ describe('antigravityAuthFailureReason', () => {
     [{ failureKind: 'usageLimitReached', text: '' }, 'usageLimit'],
     [{ failureKind: 'notSignedIn', text: '' }, 'signedOut'],
     [{ text: '403 PERMISSION_DENIED: caller does not have permission' }, 'refused'],
-    [{ text: 'Request failed with status 401' }, 'refused'],
+    [{ text: 'Request failed with status 401 Unauthorized' }, 'refused'],
+    // A tool's own request failing says nothing about the chat's sign-in.
+    [{ text: 'fetch https://example.com returned 403' }, null],
+    [{ text: 'HTTP 429 from the docs site' }, null],
     [{ text: 'The model is overloaded' }, null],
     // The host's own agy keeps agy's login.
     [{ failureKind: 'notSignedIn', account: 'system', text: '403' }, null]

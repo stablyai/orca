@@ -41,7 +41,7 @@ describe('detectAntigravityChatAuth', () => {
     )
     expect(detection).toEqual({
       method: 'oauth-personal',
-      googleSignIn: false,
+      googleSignIn: { personal: false, business: false },
       apiKey: { available: true, source: 'environment' },
       adc: { available: true, project: 'adc-project' },
       liveChats: 0
@@ -67,34 +67,20 @@ describe('detectAntigravityChatAuth', () => {
     expect(detection.adc).toEqual({ available: false, project: null })
   })
 
-  it("asks about the Google sign-in of the Google method in use, and survives a config that's being saved", async () => {
-    const asked: string[] = []
-    const googleSignIn = async (method: string) => {
-      asked.push(method)
-      return true
-    }
-    await detectAntigravityChatAuth(
+  it("reports each Google method's saved sign-in, and survives a config being saved", async () => {
+    const detection = await detectAntigravityChatAuth(
       sources(
         { CLOUDSDK_CONFIG: folder() },
         {
-          googleSignIn,
-          config: () => ({ method: 'oauth-business', gcpProject: 'p', gcpLocation: 'l' })
-        }
-      )
-    )
-    const saving = await detectAntigravityChatAuth(
-      sources(
-        { CLOUDSDK_CONFIG: folder() },
-        {
-          googleSignIn,
+          googleSignIn: async (method) => method === 'oauth-business',
           config: () => {
             throw new Error('being saved')
           }
         }
       )
     )
-    expect(asked).toEqual(['oauth-business', 'oauth-personal'])
-    expect(saving.method).toBeNull()
+    expect(detection.googleSignIn).toEqual({ personal: false, business: true })
+    expect(detection.method).toBeNull()
   })
 })
 
