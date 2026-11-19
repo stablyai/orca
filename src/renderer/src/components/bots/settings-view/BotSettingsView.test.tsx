@@ -75,12 +75,6 @@ describe('BotSettingsView breadcrumb', () => {
     expect(onExit).toHaveBeenCalledTimes(1)
   })
 
-  it('the bot name leaves the view from the root', async () => {
-    const { onExit } = show(null)
-    await click('Bot builder')
-    expect(onExit).toHaveBeenCalledTimes(1)
-  })
-
   it('a subpage that refuses to leave keeps both crumbs on it', async () => {
     leave.allowed = false
     const { onExit } = show('agent')

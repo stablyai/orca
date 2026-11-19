@@ -106,3 +106,14 @@ export async function streamUpstreamResponse(
   }
   res.end()
 }
+
+/** Why the tool's server refused, for the Tools row. */
+export function refusalProblem(upstream: Response, answer: ReadyAnswer): string {
+  if (answer.bearer === undefined) {
+    return 'The tool’s server refused its saved values.'
+  }
+  // A 403 is about permission, not an expired token, so it's never refreshed.
+  return /error="?insufficient_scope/.test(upstream.headers.get('www-authenticate') ?? '')
+    ? 'The app needs more access than this sign-in allows.'
+    : 'The app refused this with the current sign-in.'
+}

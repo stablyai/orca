@@ -4,7 +4,7 @@
 // Select there starts multi-select, where taps check rows and a floating bar moves them all at once.
 import { useMemo, useState, type ReactNode } from 'react'
 import { Text, View } from 'react-native'
-import { X } from 'lucide-react-native'
+import { Inbox, X } from 'lucide-react-native'
 import {
   BOT_ITEM_GROUP_IDS,
   BOT_ITEM_GROUP_ROWS,
@@ -18,6 +18,12 @@ import {
 import { mergeBotItemsByUid } from '../../../../src/shared/bots/bot-item-merge'
 import type { BotItem } from '../../../../src/shared/bots/bot-items'
 import { botItemGroupName } from '../../../../src/shared/bots/bot-item-status-name'
+import {
+  MobileLoadErrorState,
+  MobileNoMatchState,
+  MobileOfflineState,
+  MobileStateView
+} from '../../components/feedback/MobileStateView'
 import { FilterChip } from '../../components/nav-bar/FilterChip'
 import {
   ListGroup,
@@ -30,9 +36,9 @@ import { colors, feedback, radii, spacing, typography } from '../../theme/mobile
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { MobileBotTextButton } from '../MobileBotTextButton'
-import { sheetStyles } from '../mobile-bot-sheet-styles'
 import { MobileBotItemRow } from './MobileBotItemRow'
 import { MobileBotNeedsYouGroup } from './MobileBotNeedsYouGroup'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { openPhoneAsk, type PhoneAsk, type PhoneAskOpeners } from './phone-needs-you-asks'
 import type { BotItemSheet } from './MobileBotItemSheets'
 import type { PhoneBotItems } from './use-phone-bot-items'
@@ -47,13 +53,16 @@ export function MobileBotItemsTab({
   seenEventId,
   now,
   online,
+  hostName,
   selected,
   onSelected,
   onOpen,
   setSheet,
   after,
   asks,
-  askOpeners
+  askOpeners,
+  client,
+  showToast
 }: {
   botName: string
   items: PhoneBotItems
@@ -66,6 +75,7 @@ export function MobileBotItemsTab({
   seenEventId: string
   now: number
   online: boolean
+  hostName: string
   /** Checked rows; empty when not selecting. */
   selected: ReadonlySet<string>
   onSelected: (next: ReadonlySet<string>) => void
@@ -76,10 +86,13 @@ export function MobileBotItemsTab({
   /** Orca's asks the phone reads, as the filter keeps them; they lead Needs you whatever the items say. */
   asks: readonly PhoneAsk[]
   askOpeners: PhoneAskOpeners
+  client: RpcClient | null
+  showToast: (message: string) => void
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const { read } = items
+  const failed = items.error !== null
   const all = useMemo(() => mergeBotItemsByUid(read?.items ?? [], items.items), [read, items.items])
   const shown = useMemo(() => filterBotItems(all, filter), [all, filter])
   const groups = useMemo(
@@ -106,6 +119,8 @@ export function MobileBotItemsTab({
       disabled={!online}
       renderItem={() => null}
       onOpenAsk={(ask) => openPhoneAsk(ask, askOpeners)}
+      client={client}
+      onSkipFailed={showToast}
     />
   )
   if (!read) {
@@ -113,10 +128,16 @@ export function MobileBotItemsTab({
       <>
         {chip}
         {asksOnly}
-        {items.failed ? (
-          <ReadFailed stale={false} onRetry={items.retry} />
+        {!online ? (
+          <MobileOfflineState hostName={hostName} />
+        ) : failed ? (
+          <MobileLoadErrorState
+            error={items.error}
+            title={t('bots.items.readFailedTitle', 'Couldn’t load items')}
+            onRetry={items.retry}
+          />
         ) : (
-          <Text style={sheetStyles.empty}>{t('bots.items.loading', 'Loading items…')}</Text>
+          <MobileStateView loading title={t('bots.items.loading', 'Loading items…')} />
         )}
         {after}
       </>
@@ -141,44 +162,37 @@ export function MobileBotItemsTab({
       ? ''
       : t('bots.items.stale.reason', 'No activity for {{count}} days.', { count: staleDays })
   let body: ReactNode
-  if (all.length === 0 && !filtered && asks.length > 0) {
+  if (all.length === 0 && !filtered) {
     body = (
       <>
-        {asksOnly}
-        <Text style={sheetStyles.empty}>
-          {t(
-            'bots.items.empty.short',
-            'No items yet. When {{bot}} takes something on, it shows up here.',
-            { bot: botName }
-          )}
-        </Text>
-      </>
-    )
-  } else if (all.length === 0 && !filtered) {
-    body = (
-      <View style={styles.empty}>
-        <Text style={styles.emptyTitle}>{t('bots.items.empty.title', 'No items yet')}</Text>
-        <Text style={styles.emptyBody}>
-          {t(
+        {asks.length > 0 ? asksOnly : null}
+        <MobileStateView
+          icon={Inbox}
+          title={t('bots.items.empty.title', 'No items yet')}
+          message={t(
             'bots.items.empty.body',
             'When {{bot}} takes on something for you, it shows up here with what it is doing and what it needs from you.',
             { bot: botName }
           )}
-        </Text>
-      </View>
+        />
+      </>
     )
   } else if (shown.length === 0 && asks.length > 0) {
     body = asksOnly
   } else if (shown.length === 0) {
     body = (
-      <Text style={sheetStyles.empty}>
-        {filter.needsYou
-          ? t('bots.items.empty.needsYou', 'Nothing needs you.')
-          : t('bots.items.empty.filtered', 'No items match.')}
-      </Text>
+      <MobileNoMatchState
+        message={
+          filter.needsYou
+            ? t('bots.items.empty.needsYou', 'Nothing needs you.')
+            : t('bots.items.empty.filtered', 'No items match.')
+        }
+        onClear={onClearFilter}
+        clearLabel={t('bots.items.filter.clear', 'Clear filter')}
+      />
     )
   } else {
-    const disabled = items.failed || !online
+    const disabled = failed || !online
     const row = (item: BotItem, id: BotItemGroupId) => (
       <MobileBotItemRow
         key={item.uid}
@@ -202,6 +216,8 @@ export function MobileBotItemsTab({
           disabled={disabled}
           renderItem={(item) => row(item, id)}
           onOpenAsk={(ask) => openPhoneAsk(ask, askOpeners)}
+          client={client}
+          onSkipFailed={showToast}
         />
       ) : (
         <ItemGroup
@@ -213,7 +229,7 @@ export function MobileBotItemsTab({
           seenEventId={seenEventId}
           renderItem={(item) => row(item, id)}
           onCancelAll={
-            id === 'stale' && groups.stale.length > 0 && !items.failed && online
+            id === 'stale' && groups.stale.length > 0 && !failed && online
               ? () => setSheet({ kind: 'stale', items: groups.stale, reason: staleReason })
               : null
           }
@@ -224,20 +240,20 @@ export function MobileBotItemsTab({
   return (
     <>
       {chip}
-      {items.failed ? <ReadFailed stale onRetry={items.retry} /> : null}
-      <View style={items.failed ? styles.dimmed : undefined}>{body}</View>
+      {failed ? <ReadFailed onRetry={items.retry} /> : null}
+      <View style={failed ? styles.dimmed : undefined}>{body}</View>
       {after}
     </>
   )
 }
 
-function ReadFailed({ stale, onRetry }: { stale: boolean; onRetry: () => void }) {
+function ReadFailed({ onRetry }: { onRetry: () => void }) {
   const t = useMobileTranslation()
   return (
     <ListGroup style={styles.failed}>
       <ListRow
         title={t('bots.items.readFailedShort', 'Couldn’t load items.')}
-        subtitle={stale ? t('bots.items.lastRead', 'Showing the last items read.') : undefined}
+        subtitle={t('bots.items.lastRead', 'Showing the last items read.')}
         accessory={<MobileBotTextButton label={t('bots.items.retry', 'Retry')} onPress={onRetry} />}
       />
     </ListGroup>
@@ -333,13 +349,5 @@ const styles = themedStyleSheet(() => ({
   fresh: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   freshText: { fontSize: typography.metaSize, color: colors.textPrimary },
   dimmed: { opacity: feedback.disabledOpacity },
-  failed: { marginBottom: spacing.sm },
-  empty: {
-    alignItems: 'center',
-    paddingVertical: spacing.xl,
-    paddingHorizontal: spacing.lg,
-    gap: spacing.sm
-  },
-  emptyTitle: { fontSize: typography.bodySize, fontWeight: '600', color: colors.textPrimary },
-  emptyBody: { fontSize: 13, color: colors.textMuted, textAlign: 'center', lineHeight: 18 }
+  failed: { marginBottom: spacing.sm }
 }))

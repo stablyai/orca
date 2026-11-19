@@ -1,7 +1,7 @@
 // One item, in the list's place: a frozen header (title, status, links), then the description
 // (clamped), chat, done means and activity scrolling under it, and a comment box that wakes its chat.
 // BotItemPane holds it under the back row and sends typing from anywhere in it to the comment box.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { ExternalLink, House, MessageSquare } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -11,7 +11,7 @@ import { selectFocusedTab } from '@/lib/focused-chat-workers'
 import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { Bot } from '../../../../../shared/bot-types'
-import type { BotItem, BotItemEvent, BotItemStatus } from '../../../../../shared/bots/bot-items'
+import type { BotItem, BotItemStatus } from '../../../../../shared/bots/bot-items'
 import { NativeChatJumpToLatest } from '../../native-chat/viewport/scroll/NativeChatJumpToLatest'
 import { NativeChatPaneFileDropSurface } from '../../native-chat/attachments/intake/NativeChatPaneFileDropSurface'
 import {
@@ -35,6 +35,7 @@ import { BotItemHeader } from './BotItemHeader'
 import { setBotItemsStatus } from './use-bot-items'
 import { useBotItemSnoozing } from './BotItemSnooze'
 import { useBotItemView, type BotItemViewRead } from './use-bot-item-view'
+import { useBotItemPendingComments } from './use-bot-item-pending-comments'
 import { BotItemsReadFailed } from './BotItemsReadFailed'
 
 const NO_FOLDERS: never[] = []
@@ -42,18 +43,20 @@ const NO_FOLDERS: never[] = []
 export function BotItemView({
   bot,
   uid,
+  listed,
   takeFocus,
   commentRef,
   onGone
 }: {
   bot: Bot
   uid: string
+  listed?: BotItem
   commentRef?: React.RefObject<BotItemCommentBoxHandle | null>
   /** Whether the item should take focus as it shows (nothing else in the pane holds it). */
   takeFocus?: () => boolean
   onGone?: (uid: string) => void
 }): React.JSX.Element {
-  const view = useBotItemView(bot, uid)
+  const view = useBotItemView(bot, uid, listed)
   const { deleted } = view
   useEffect(() => {
     if (deleted) {
@@ -132,12 +135,14 @@ export function BotItemBody({
       toast.error(botErrorMessage(error))
     )
   const ChatIcon = item.chat.kind === 'home' ? House : MessageSquare
+  const pending = useBotItemPendingComments(bot, item.uid, view.events)
+  // The header and comment box paint first; the Activity, the costly part, renders right after.
+  const activityMounted = useDeferredValue(true, false)
   const { scrollRef, contentRef, scrollerProps, showJump, jumpToLatest } = useBotTranscriptFollow({
-    itemCount: view.events.length,
+    itemCount: view.events.length + pending.shown.length,
     isWorking: false,
     isVisible: true
   })
-  const unseen = useUnseenEventCount(view.events, showJump)
   // Comment and description links open as in chat, from the bot's folder; the panel has no tab of
   // its own, so opens place beside the bot workspace's focused tab, as a click in that chat would.
   const sourceTabId = useAppStore(
@@ -237,22 +242,24 @@ export function BotItemBody({
                             {t('bots.items.view.showEarlier', 'Show earlier')}
                           </Button>
                         ) : null}
-                        <BotItemActivityList
-                          bot={bot}
-                          item={item}
-                          events={view.events}
-                          onReply={() => comment.current?.focus()}
-                        />
+                        {/* From the list's row, the Activity shows once read: never a false "No comments". */}
+                        {view.eventsRead && activityMounted ? (
+                          <BotItemActivityList
+                            bot={bot}
+                            item={item}
+                            events={view.events}
+                            pending={pending}
+                          />
+                        ) : null}
                       </section>
                     </div>
                   </div>
-                  <NativeChatJumpToLatest
-                    visible={unseen > 0}
-                    onJump={jumpToLatest}
-                    label={t('bots.items.view.newEvents', '{{count}} new', {
-                      count: unseen
-                    })}
+                  {/* A soft edge over the comment box: activity scrolling under it reads as more below. */}
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-linear-to-b from-transparent to-sidebar"
                   />
+                  <NativeChatJumpToLatest visible={showJump} onJump={jumpToLatest} />
                 </div>
               </NativeChatLinkClickContext>
             </NativeChatFileLinkExistenceContext>
@@ -263,7 +270,10 @@ export function BotItemBody({
                 bot={bot}
                 item={item}
                 attachTo={attachTo}
-                onSent={jumpToLatest}
+                onSend={(text, paths) => {
+                  pending.send(text, paths, view.events.at(-1)?.id ?? item.lastEventId)
+                  jumpToLatest()
+                }}
               />
             )}
           </NativeChatPaneFileDropSurface>
@@ -280,16 +290,6 @@ export function BotItemBody({
       {snoozing.dialog}
     </div>
   )
-}
-
-/** Events added after the newest one seen at the bottom; zero while the list follows its end. */
-function useUnseenEventCount(events: readonly BotItemEvent[], detached: boolean): number {
-  const newest = events.at(-1)?.id ?? null
-  const [seen, setSeen] = useState(newest)
-  if (!detached && seen !== newest) {
-    setSeen(newest)
-  }
-  return detached ? events.length - 1 - events.findIndex((event) => event.id === seen) : 0
 }
 
 function CloseNote({ item }: { item: BotItem }): React.JSX.Element | null {

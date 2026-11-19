@@ -11,7 +11,7 @@ import {
   deriveInteractivePrompt,
   extractToolResponseText
 } from '../../interactive-tool'
-import { readLastAssistantFromTranscript } from '../../transcript-lines'
+import { readLastAssistantFromTranscriptInline } from '../../transcript-lines'
 import { readLastAssistantFromGrokChatHistory } from '../../grok-result-discovery'
 import { isGrokEvent } from '../../provider-event-names'
 
@@ -75,7 +75,8 @@ export function extractGrokToolFields(
     if (direct) {
       return { lastAssistantMessage: direct }
     }
-    const fromTranscript = readLastAssistantFromTranscript(
+    // Grok's chat-history fallback below must keep losing to its transcript.
+    const fromTranscript = readLastAssistantFromTranscriptInline(
       hookPayload.transcriptPath ?? hookPayload.transcript_path
     )
     if (fromTranscript) {

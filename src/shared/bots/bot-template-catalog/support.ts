@@ -17,7 +17,6 @@ export const BOT_TEMPLATES_SUPPORT: readonly BotTemplate[] = [
       {
         id: 'unanswered',
         when: 'Weekdays, every 2 hours from 9 AM to 5 PM',
-        short: 'Every 2 hours',
         what: 'Unanswered questions',
         rrule: '0 9-17/2 * * 1-5',
         prompt:
@@ -47,7 +46,6 @@ export const BOT_TEMPLATES_SUPPORT: readonly BotTemplate[] = [
       {
         id: 'weekly-themes',
         when: 'Mondays at 9 AM',
-        short: 'Mon 9 AM',
         what: 'Themes of the week',
         rrule: '0 9 * * 1',
         prompt:

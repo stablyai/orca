@@ -91,6 +91,16 @@ export function restoreMobileNativeChatPickedSkills(
   saveMobileNativeChatDraft(draftKey, 'deferred')
 }
 
+/** A later pick of Orca's same-named command row decides the send, as on desktop. */
+export function forgetMobileNativeChatSkillOrigin(draftKey: string, token: string): void {
+  const current = drafts.get(draftKey)
+  if (current?.skillOrigin !== token) {
+    return
+  }
+  drafts.set(draftKey, { ...current, skillOrigin: undefined })
+  saveMobileNativeChatDraft(draftKey, 'deferred')
+}
+
 export function readMobileNativeChatSkillOrigin(draftKey: string): string | null {
   return drafts.get(draftKey)?.skillOrigin ?? null
 }

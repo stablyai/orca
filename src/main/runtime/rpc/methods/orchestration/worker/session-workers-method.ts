@@ -217,6 +217,7 @@ function sessionWorker(
     host: worker.host.kind,
     ...(worker.host.kind === 'remote' ? { hostEnvironmentId: worker.host.id } : {}),
     worktreeId: durable.worktreeId ?? structured?.worktreeId ?? null,
+    address: durable.agentTerminalHandle ?? null,
     paneKey: structured ? null : durable.paneKey,
     chatSessionId,
     summary: task?.result ? workerResultSummary(task.result) : null,

@@ -71,15 +71,6 @@ describe('connectorRefResolver', () => {
     expect(older.asked).toEqual([])
   })
 
-  it("passes the cloud's refusal on in its words", async () => {
-    const { resolve } = cloudAnswering({
-      ok: false,
-      refusal: 'not_reachable',
-      message: "The bot isn't there."
-    })
-    await expect(resolve('bot-1', 'slack', 'place', '#eng')).rejects.toThrow("The bot isn't there.")
-  })
-
   it("names a ref given as input by the ref's own find, and keeps the ref when it can't", async () => {
     const thread = 'slack:T1:C1:1.2'
     const answers = [

@@ -36,6 +36,7 @@ import { useMobileFileExplorerRows } from './mobile-file-explorer-rows'
 import { MobileFileExplorerRow } from './mobile-file-explorer-row'
 import { useMobileFileExplorerRowActions } from './mobile-file-explorer-row-actions-sheet'
 import { useMobileFileExplorerPaging } from './use-mobile-file-explorer-paging'
+import { useMobileFileExplorerDecorations } from './use-mobile-file-explorer-decorations'
 import { useRefreshHint } from '../../query/refresh-hint'
 import { navigateToMobileFilePreview } from '../preview/mobile-file-preview-navigation'
 import {
@@ -234,6 +235,13 @@ export function MobileFileExplorerPanel(props: {
       setExpanded,
       loadDirectory: refreshDirectory
     })
+  const decorate = useMobileFileExplorerDecorations({
+    host,
+    target,
+    enabled: rootRead?.kind === 'directory',
+    directoryCache,
+    rows
+  })
 
   const retryDirectory = useCallback(
     (relativePath: string) => {
@@ -270,6 +278,7 @@ export function MobileFileExplorerPanel(props: {
         item={item}
         maximumIndentation={Math.max(0, panelWidth / 3 - spacing.lg)}
         expanded={shownExpanded}
+        decorate={decorate}
         onPreviewFile={previewFile}
         onRetryDirectory={retryDirectory}
         onToggleDirectory={onToggleDirectory}
@@ -359,7 +368,7 @@ export function MobileFileExplorerPanel(props: {
         data={rows}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
-        extraData={folderPaging}
+        extraData={[folderPaging, decorate]}
         contentContainerStyle={[
           styles.listContent,
           treeReady && { paddingBottom: spacing.sm + filterBarHeight }

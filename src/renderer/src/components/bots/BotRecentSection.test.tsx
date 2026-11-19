@@ -72,10 +72,10 @@ function worker(overrides: Partial<Extract<BotSessionActivityRow, { kind: 'worke
   }
 }
 
-function recent(row: BotSessionActivityRow): void {
+function recent(...rows: BotSessionActivityRow[]): void {
   render(
     <TooltipProvider>
-      <BotRecentSection bot={BOT} completed={[row]} />
+      <BotRecentSection bot={BOT} completed={rows} />
     </TooltipProvider>
   )
 }
@@ -92,21 +92,21 @@ afterEach(() => {
 })
 
 describe('BotRecentSection rows open what they name', () => {
-  it('a finished worker its chat started opens through its Dispatch', () => {
+  it('opens finished workers by Dispatch with or without a host record', () => {
     recent(
       worker({
         dispatchId: 'ctx_done',
         title: RECORDED.title,
         workspaceId: RECORDED.worktreeId,
         worker: RECORDED
-      })
+      }),
+      worker({ dispatchId: 'ctx_old', title: 'Older worker', workspaceId: 'wt-1' })
     )
+
     click(/PR 38365/)
     expect(mocks.openWorker).toHaveBeenCalledExactlyOnceWith(RECORDED, { kind: 'local' })
-  })
 
-  it('a worker the host never recorded still opens by its Dispatch', () => {
-    recent(worker({ dispatchId: 'ctx_old', title: 'Older worker', workspaceId: 'wt-1' }))
+    mocks.openWorker.mockClear()
     click(/Older worker/)
     expect(mocks.openWorker).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ dispatchId: 'ctx_old', worktreeId: 'wt-1', chatSessionId: null }),
@@ -131,20 +131,36 @@ describe('BotRecentSection rows open what they name', () => {
     )
   })
 
-  it('a run with its own chat opens that chat', () => {
-    recent({
-      kind: 'run',
-      key: 'run:r1',
-      automationId: 'a1',
-      automationName: 'Tidy memory',
-      runId: 'r1',
-      status: 'completed',
-      sessionId: 'run-chat',
-      dot: 'done',
-      at: 1
-    })
+  it('opens each automation or connector chat from its own row', () => {
+    recent(
+      {
+        kind: 'run',
+        key: 'run:r1',
+        automationId: 'a1',
+        automationName: 'Tidy memory',
+        runId: 'r1',
+        status: 'completed',
+        sessionId: 'run-chat',
+        dot: 'done',
+        at: 1
+      },
+      {
+        kind: 'thread',
+        key: 'thread:t1',
+        title: 'Deploy question',
+        source: 'slack',
+        dot: 'done',
+        sessionId: 'thread-chat',
+        at: 1
+      }
+    )
+
     click(/Tidy memory/)
     expect(mocks.openSession).toHaveBeenCalledExactlyOnceWith(BOT, 'run-chat')
+
+    mocks.openSession.mockClear()
+    click(/Deploy question/)
+    expect(mocks.openSession).toHaveBeenCalledExactlyOnceWith(BOT, 'thread-chat')
   })
 
   it('a run in a terminal opens the run on the Automations page', () => {
@@ -161,19 +177,5 @@ describe('BotRecentSection rows open what they name', () => {
     })
     click(/Look around/)
     expect(mocks.openAutomation).toHaveBeenCalledExactlyOnceWith('a2', 'r2')
-  })
-
-  it('a connector thread opens its chat', () => {
-    recent({
-      kind: 'thread',
-      key: 'thread:t1',
-      title: 'Deploy question',
-      source: 'slack',
-      dot: 'done',
-      sessionId: 'thread-chat',
-      at: 1
-    })
-    click(/Deploy question/)
-    expect(mocks.openSession).toHaveBeenCalledExactlyOnceWith(BOT, 'thread-chat')
   })
 })

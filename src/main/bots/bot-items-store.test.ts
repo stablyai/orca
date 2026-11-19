@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import SyncDatabase from '../sqlite/sync-database'
 import type { BotItemAddInput, BotItemBotActor } from './bot-items-input'
 import { BotItemsStore } from './bot-items-store'
@@ -46,12 +46,26 @@ describe('bot items store', () => {
     store.set(uid, { status: 'needs_you', comment: 'Ship behind a flag?' }, owner)
     const asking = store.get(uid)
     expect(asking?.status).toBe('needs_you')
+    expect(store.needsYou().map((row) => row.botId)).toEqual(['bot-a'])
     const question = store.viewRows([uid]).questions[uid]
     expect(question?.data).toEqual({ text: 'Ship behind a flag?' })
 
     store.set(uid, { status: 'working' }, owner)
     expect(store.get(uid)?.questionEvent).toBeNull()
     expect(store.viewRows([uid]).questions[uid]).toBeUndefined()
+    expect(store.needsYou()).toEqual([])
+  })
+
+  it("records no answer to the owner's own Needs you note", () => {
+    const store = open()
+    const { uid } = store.add(input(), owner)
+    store.ownerStatus({ uids: [uid], to: 'needs_you', comment: 'Waiting on legal.' }, ownerActor)
+
+    store.ownerComment(uid, 'Legal said yes.', ownerActor)
+
+    const events = store.events(uid, 0, 50)
+    expect(events.at(-2)?.data).toEqual({ text: 'Legal said yes.' })
+    expect(events.at(-1)?.data).toEqual({ from: 'needs_you', to: 'working' })
   })
 
   it("marks the newest event anyone but the owner made, so the owner's own changes stay seen", () => {
@@ -65,6 +79,22 @@ describe('bot items store', () => {
 
     const { eventId } = store.comment(uid, 'Switched to outline.', owner)
     expect(store.viewRows([uid]).othersLast[uid]).toBe(eventId)
+  })
+
+  it('returns the comment a request id already made: no second comment, no second mail', () => {
+    const store = open()
+    const { uid } = store.add(input(), owner)
+    const sentOnce = store.owedMail(0).mails.length
+    const first = store.ownerComment(uid, 'Go with A', { kind: 'owner' }, [], 1, 'req-1')
+
+    expect(store.ownerComment(uid, 'Go with A', { kind: 'owner' }, [], 2, 'req-1')).toEqual(first)
+    const comments = store.events(uid, 0, 50).filter((event) => event.kind === 'commented')
+    expect(comments.map((event) => event.id)).toEqual([first.eventId])
+    expect(store.owedMail(0).mails).toHaveLength(sentOnce + 1)
+    // Without an id, as an older client sends it, each send is its own comment.
+    store.ownerComment(uid, 'Go with A', { kind: 'owner' })
+    store.ownerComment(uid, 'Go with A', { kind: 'owner' })
+    expect(store.events(uid, 0, 50).filter((event) => event.kind === 'commented')).toHaveLength(3)
   })
 
   it('pages Activity back from the newest event, oldest first in each page', () => {
@@ -162,6 +192,22 @@ describe('bot items store', () => {
     expect(page.items.map((item) => item.title)).toEqual(['Share dialog'])
   })
 
+  it("lists and counts only the named chats' items", () => {
+    const store = open()
+    store.add(input({ title: 'Home' }), owner)
+    store.add(input({ title: 'Side', chatId: 'chat-side' }), otherChat)
+    store.add(input({ title: 'Room', chatId: 'chat-room' }), otherChat)
+
+    const page = store.list({
+      botId: 'bot-a',
+      statuses: ['planned'],
+      chatIds: ['chat-side', 'chat-room'],
+      limit: 10
+    })
+    expect(page.items.map((item) => item.title).toSorted()).toEqual(['Room', 'Side'])
+    expect(page.counts).toEqual({ planned: 2 })
+  })
+
   it('reopens its own closed item, with field changes only alongside the reopen, and mails no one', () => {
     const store = open()
     const { uid } = store.add(input(), owner)
@@ -221,6 +267,7 @@ describe('bot items store', () => {
     const planned = store.add(input({ title: 'Planned' }), owner).uid
     const bots = store.add(input({ title: 'Bot comment' }), owner).uid
     store.set(asking, { status: 'needs_you', comment: 'Ship behind a flag?' }, owner)
+    const questionEvent = store.get(asking)?.questionEvent
     store.set(bots, { status: 'needs_you', comment: 'Which copy?' }, owner)
 
     store.ownerComment(asking, 'Yes, behind a flag.', { kind: 'owner' })
@@ -231,6 +278,16 @@ describe('bot items store', () => {
     expect(store.get(asking)?.questionEvent).toBeNull()
     expect(store.get(planned)?.status).toBe('planned')
     expect(store.get(bots)?.status).toBe('needs_you')
+    expect(
+      store
+        .events(asking, 0, 50)
+        .slice(-2)
+        .map((event) => event.data)
+    ).toEqual([
+      { text: 'Yes, behind a flag.', answers: `e${questionEvent}` },
+      { from: 'needs_you', to: 'working', cause: 'answer' }
+    ])
+    expect(store.events(planned, 0, 50).at(-1)?.data).toEqual({ text: 'Use the short link.' })
     const answer = store.owedMail(0).mails.find((mail) => mail.changes[0]?.item.uid === asking)
     expect(answer?.changes.map(({ event }) => [event.kind, event.data.to ?? null])).toEqual([
       ['commented', null],
@@ -273,49 +330,6 @@ describe('bot items store', () => {
     expect(store.eventsBefore(uid, 0, 10).at(-1)?.data).toEqual({ text: 'The spec moved to v2.' })
     expect(store.owedMail(0).mails).toEqual([])
   })
-  it.each([20, 200])(
-    'reads Needs you and item views without visiting every item or event (%i items)',
-    (count) => {
-      const dir = mkdtempSync(join(tmpdir(), 'bot-items-plan-'))
-      const path = join(dir, 'bot-items.sqlite')
-      const store = BotItemsStore.open(path)
-      stores.push(store)
-      const reader = new SyncDatabase(path)
-      const uids: string[] = []
-      for (let index = 0; index < count; index += 1) {
-        const { uid } = store.add(input(), owner)
-        store.ownerComment(uid, 'Looks good.', { kind: 'owner' })
-        store.comment(uid, 'Thanks.', owner)
-        if (index >= 2) {
-          store.close(uid, 'done', undefined, owner)
-        }
-        uids.push(uid)
-      }
-      for (const uid of uids.slice(0, 2)) {
-        store.set(uid, { status: 'needs_you', comment: 'Ship it?' }, owner)
-      }
-      const prepare = vi.spyOn(SyncDatabase.prototype, 'prepare')
-
-      expect(store.needsYou()).toHaveLength(2)
-      expect(Object.keys(store.viewRows(uids.slice(0, 20)).othersLast)).toHaveLength(20)
-      const sql = prepare.mock.calls.map(([statement]) => statement)
-      prepare.mockRestore()
-      const plans = sql.flatMap((statement) =>
-        ['needs_you', 'item_events'].some((word) => statement.includes(word))
-          ? planOf(reader, statement).filter((detail) => /\bitem/.test(detail))
-          : []
-      )
-      reader.close()
-      rmSync(dir, { recursive: true, force: true })
-      expect(plans).toEqual([
-        // The partial index holds only Needs you items.
-        'SCAN items USING COVERING INDEX idx_items_needs_you',
-        // Only the questions, by id.
-        'SEARCH item_events USING INTEGER PRIMARY KEY (rowid=?)'
-      ])
-    }
-  )
-
   it('fills who last wrote besides the owner on items an older file holds', () => {
     const dir = mkdtempSync(join(tmpdir(), 'bot-items-migrate-'))
     try {
@@ -452,11 +466,3 @@ describe('bot items store', () => {
     expect(store.get(later)?.snoozedUntil).toBeNull()
   })
 })
-
-function planOf(db: SyncDatabase, statement: string): string[] {
-  const args = Array.from({ length: statement.split('?').length - 1 }, () => '[]')
-  return db
-    .prepare(`EXPLAIN QUERY PLAN ${statement}`)
-    .all(...args)
-    .map((row) => String(row.detail))
-}

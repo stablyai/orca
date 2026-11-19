@@ -68,6 +68,8 @@ export type AgentHookEventPayload = {
   stopHookActive?: true
   /** Provider turn identity folded into hostTurn; never stored or sent directly. */
   nativeTurnKey?: string
+  /** A live main-agent event that opens a provider turn by its new native id, ahead of the turn's prompt event. */
+  opensTurn?: true
   /** Saved host-private turn record; snapshot/IPC/relay allow-lists exclude it. */
   hostTurn?: HostTurnRecord
   /** Claude live work the child list does not show (a shell, a cron, an owed task notification); rejects false input-based interrupts. */

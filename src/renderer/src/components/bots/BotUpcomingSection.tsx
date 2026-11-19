@@ -16,6 +16,7 @@ import {
   type BotAutomationCardRow
 } from './bot-automation-card'
 import { UpcomingItem } from './BotUpcomingRows'
+import { useBotPanelFold } from './use-bot-panel-fold'
 
 export function BotUpcomingSection({
   bot,
@@ -38,33 +39,44 @@ export function BotUpcomingSection({
   const t = useTranslate()
   const { shown, listed, listedPaused } = botAutomationCardView(useAutomationCardOrder(rows))
   const newLabel = t('bots.automations.new', 'New automation')
+  const fold = useBotPanelFold(bot.id, 'automations')
+  // A failure shows only on its row, so the folded heading says so.
+  const foldedFailure = !fold.open && rows.some((row) => row.failed)
   return (
     <BotPanelCard
       title={t('bots.automations.title', 'Automations')}
       // Only beside "All N automations", which it repeats: above every row it would count built-ins
       // the page doesn't list.
       count={listed > AUTOMATION_CARD_CAP ? listed : undefined}
+      fold={fold}
       action={
-        // Icon-only, like the Bots header's "+": the tooltip and accessible name carry the label.
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              aria-label={newLabel}
-              onClick={() =>
-                void openBotHomeTab(bot, {
-                  draft: t('bots.automations.newDraft', 'Set up an automation that ')
-                })
-              }
-            >
-              <Plus />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={6}>
-            {newLabel}
-          </TooltipContent>
-        </Tooltip>
+        <>
+          {foldedFailure ? (
+            <span className="text-2xs font-medium text-destructive">
+              {t('bots.automations.failed', 'Failed')}
+            </span>
+          ) : null}
+          {/* Icon-only, like the Bots header's "+": the tooltip and accessible name carry the label. */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={newLabel}
+                onClick={() =>
+                  void openBotHomeTab(bot, {
+                    draft: t('bots.automations.newDraft', 'Set up an automation that ')
+                  })
+                }
+              >
+                <Plus />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}>
+              {newLabel}
+            </TooltipContent>
+          </Tooltip>
+        </>
       }
     >
       {shown.map((row) => (

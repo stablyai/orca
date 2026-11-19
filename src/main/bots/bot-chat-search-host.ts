@@ -115,7 +115,7 @@ function searchIndexOf(parts: BotChatTreeParts): BotChatSearchIndex {
 }
 
 export async function searchBotChats(
-  host: BotChatSearchHost,
+  host: Pick<BotChatSearchHost, 'bots' | 'treeParts' | 'contentMatches' | 'dispatchWorkers'>,
   params: BotChatSearchParams
 ): Promise<BotChatSearchResult> {
   const bot = host.bots().find((entry) => entry.id === params.botId)
@@ -155,7 +155,19 @@ export async function searchBotChats(
       }
       const rows = match.workerKeys.flatMap((key) => rowOf(key) ?? [])
       const live = (row: BotChatTreeWorker) => row.state !== 'done' && row.state !== 'failed'
-      return [{ ...chat, running: rows.filter(live), finished: rows.filter((row) => !live(row)) }]
+      const running = rows.filter(live)
+      const finished = rows.filter((row) => !live(row))
+      // A worker match lists only those workers, and counts only them: no Show more it can't fill.
+      return [
+        {
+          ...chat,
+          running,
+          runningTotal: running.length,
+          finished,
+          finishedTotal: finished.length,
+          failedTotal: finished.filter((row) => row.state === 'failed').length
+        }
+      ]
     }),
     matches,
     more

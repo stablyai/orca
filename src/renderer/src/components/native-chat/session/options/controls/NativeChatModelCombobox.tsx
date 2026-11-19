@@ -10,7 +10,10 @@ import {
 } from '@/components/ui/command'
 import { nativeChatModelDescription } from './native-chat-model-description'
 import { useTranslate } from '@/i18n/use-translate'
-import type { SessionOptionSelectChoice } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
+import type {
+  SessionOptionsCliUpdate,
+  SessionOptionSelectChoice
+} from '../../../../../../../shared/native-chat/input/native-chat-session-options'
 import { nativeChatSessionChoiceLabel } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-labels'
 import { sayNativeChatSessionOptionTranslated as say } from './native-chat-session-option-labels-text'
 import { NativeChatSessionOptionChoiceBody } from './NativeChatSessionOptionChoiceBody'
@@ -18,6 +21,7 @@ import { NativeChatSessionOptionWriteGroup } from './NativeChatSessionOptionWrit
 import { nativeChatModelSearchScore } from '../../../../../../../shared/native-chat/input/native-chat-model-search'
 import { AgentPickerLegacyModelsToggle } from '../../../../agent/AgentPickerLegacyModelsToggle'
 import { useLegacyModelsExpanded } from '../../../../agent/use-legacy-models-expanded'
+import { NativeChatModelCliUpdateRow } from './NativeChatModelCliUpdateRow'
 
 type NativeChatModelComboboxProps = {
   choices: readonly SessionOptionSelectChoice[]
@@ -29,6 +33,8 @@ type NativeChatModelComboboxProps = {
   busy: boolean
   /** Called for a model other than the current one; the list stays as it is. */
   onSelect: (value: string) => void
+  /** The chat host's own CLI update, which brings models this list lacks. */
+  cliUpdate?: SessionOptionsCliUpdate
 }
 
 export function NativeChatModelCombobox({
@@ -37,7 +43,8 @@ export function NativeChatModelCombobox({
   readOnly,
   readOnlyReason,
   busy,
-  onSelect
+  onSelect,
+  cliUpdate
 }: NativeChatModelComboboxProps): React.JSX.Element {
   const t = useTranslate()
   const searchLabel = t('components.native-chat.composer.searchModels', 'Search models…')
@@ -124,6 +131,7 @@ export function NativeChatModelCombobox({
             ]}
           </CommandGroup>
         </NativeChatSessionOptionWriteGroup>
+        <NativeChatModelCliUpdateRow update={cliUpdate} />
       </CommandList>
     </Command>
   )

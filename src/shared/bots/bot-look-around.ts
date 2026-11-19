@@ -136,6 +136,8 @@ export type UpNextState = {
   running: boolean
   /** The running look's session, whose steps clients can show; absent while no look runs. */
   runSessionId?: string
+  /** The last finished look's session, so clients can read whether its usage limit stopped it. */
+  lastSessionId?: string
   /** When the owner last saw Up next, 0 if never; suggestions made after it are new. */
   seenAt: number
   /** Why the last look failed; its older suggestions stay listed. */

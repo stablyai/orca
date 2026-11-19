@@ -2,6 +2,8 @@ import { useMobileNativeChatGeneratedImageAnswers } from '../message-content/use
 import { useMobileNativeChatTurnDiffs } from './use-mobile-native-chat-turn-diffs'
 import type { MobileNativeChatTurnRow } from '../projection/use-mobile-native-chat-row-props'
 import { useCallback, useMemo } from 'react'
+import { nativeChatAutomationTurnKeys } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-automation-turns'
+import { nativeChatActingTurnKeys } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-acting-turns'
 import { useMobileNativeChatScopedOpenKeys } from './use-mobile-native-chat-scoped-open-keys'
 import { foldBotItemNotes } from '../../../../../../src/shared/bots/bot-item-note-runs'
 import {
@@ -32,6 +34,7 @@ import {
   nativeChatTurnBarRows
 } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-grouping'
 import { useMobileNativeChatTurnStatus } from './use-mobile-native-chat-turn-status'
+import { mobileNativeChatQuietTurns } from './mobile-native-chat-quiet-turns'
 import { structuredAgentTurnOpeningSendPending } from '../../../../../../src/shared/agent-session/view/structured-agent-session-turn-timing'
 
 const NO_TURN_KEYS: readonly undefined[] = []
@@ -121,6 +124,10 @@ export function useMobileNativeChatTurnDisclosure({
     completedByTurn
   )
   const summaries = useMobileNativeChatTurnDiffs(rows, enabled, turnKeys, partialTurnKey)
+  const quiet = useMemo(
+    () => (enabled ? mobileNativeChatQuietTurns(rows, turnKeys, completedByTurn, summaries) : null),
+    [completedByTurn, enabled, rows, summaries, turnKeys]
+  )
   const waiting = useMemo(() => {
     const ids = enabled
       ? nativeChatMessagesWaitingBehindLiveTurn(
@@ -131,20 +138,25 @@ export function useMobileNativeChatTurnDisclosure({
           turnJournal ?? {}
         )
       : null
-    if (!ids?.size) {
+    if (!ids?.size && !quiet?.ids.size) {
       return { listMessages: rows, waitingRows: [], indexById: null }
     }
     return {
-      listMessages: rows.filter((message) => !ids.has(message.id)),
-      waitingRows: rows.flatMap((item, index) => (ids.has(item.id) ? [{ item, index }] : [])),
+      listMessages: rows.filter((message) => !ids?.has(message.id) && !quiet?.ids.has(message.id)),
+      waitingRows: rows.flatMap((item, index) => (ids?.has(item.id) ? [{ item, index }] : [])),
       indexById: new Map(rows.map((message, index) => [message.id, index]))
     }
-  }, [enabled, rows, stopping, turnJournal])
+  }, [enabled, quiet, rows, stopping, turnJournal])
   const [expandedTurnIds, toggleExpandedTurn] = useMobileNativeChatScopedOpenKeys(scopeKey)
   const [expandedReasoning, toggleReasoning] = useMobileNativeChatScopedOpenKeys(scopeKey)
   const [openSubagentGroups, toggleSubagentGroup] = useMobileNativeChatScopedOpenKeys(scopeKey)
   const [openUserMessages, toggleUserMessage] = useMobileNativeChatScopedOpenKeys(scopeKey)
   const bars = useMemo(() => nativeChatTurnBarRows(rows, turnKeys), [rows, turnKeys])
+  const automationTurns = useMemo(
+    () => nativeChatAutomationTurnKeys(rows, turnKeys),
+    [rows, turnKeys]
+  )
+  const actingTurns = useMemo(() => nativeChatActingTurnKeys(rows, turnKeys), [rows, turnKeys])
 
   const inLiveWorkingTurn = useCallback(
     (index: number) =>
@@ -204,7 +216,7 @@ export function useMobileNativeChatTurnDisclosure({
       const turnKey = turnKeys[index]
       const bar = turnKey === undefined ? undefined : bars.get(turnKey)
       const turnStatus =
-        enabled && turnKey !== undefined && bar?.index === index
+        enabled && turnKey !== undefined && bar?.index === index && !quiet?.turns.has(turnKey)
           ? turnKey === activeTurnKey
             ? active
             : (completedByTurn[turnKey] ?? null)
@@ -217,6 +229,12 @@ export function useMobileNativeChatTurnDisclosure({
         // Pass row keys to one stable handler; per-row closures defeat memoization and render-time ref caches can leak discarded state.
         turnKey: turnKey && fold.foldableTurnKeys.has(turnKey) ? turnKey : undefined,
         ...(turnKey === message.id ? { opensTurn: true as const } : {}),
+        ...(turnKey !== undefined && automationTurns.has(turnKey)
+          ? { inAutomationTurn: true as const }
+          : {}),
+        ...(turnKey !== undefined && actingTurns.has(turnKey)
+          ? { inActingTurn: true as const }
+          : {}),
         ...(fold.foldedRows.has(index) ? { foldedAway: true } : {}),
         // Without a user boundary, session working state remains authoritative; bridge chat knows only its synthetic stream row is live.
         activeTurnIsWorking: enabled
@@ -246,8 +264,11 @@ export function useMobileNativeChatTurnDisclosure({
     },
     [
       turnKeys,
+      automationTurns,
+      actingTurns,
       summaries,
       waiting,
+      quiet,
       bars,
       enabled,
       activeTurnKey,

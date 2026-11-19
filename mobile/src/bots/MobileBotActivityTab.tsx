@@ -1,12 +1,16 @@
-import { ActivityIndicator, Text, View } from 'react-native'
+import { ActivityIndicator, View } from 'react-native'
+import { Activity } from 'lucide-react-native'
 import { AgentStateDot } from '../agents/presentation/AgentStateDot'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
 import type { SheetActivity, SheetActivityRow } from './bot-sheet-operations'
 import { activityRowView, workersHeading } from './mobile-bot-sheet-copy'
 import { workingWorkerRowCount } from '../../../src/shared/bots/bot-activity-recorded-workers'
-import { MobileBotTextButton } from './MobileBotTextButton'
-import { sheetStyles } from './mobile-bot-sheet-styles'
+import {
+  MobileLoadErrorState,
+  MobileOfflineState,
+  MobileStateView
+} from '../components/feedback/MobileStateView'
 import { colors, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { MobileBotUpNext, type UpNextActions } from './MobileBotUpNext'
@@ -50,8 +54,10 @@ export function MobileBotActivityTab({
   treeActions,
   upNextActions,
   loading = false,
-  error = false,
+  error,
   onRetry,
+  online,
+  hostName,
   withoutUpNext = false
 }: {
   bot: { id: string; name: string }
@@ -61,27 +67,33 @@ export function MobileBotActivityTab({
   treeActions: BotChatTreeActions
   upNextActions: UpNextActions
   loading?: boolean
-  error?: boolean
+  /** Null while the last read landed; why it failed otherwise. */
+  error: string | null
   onRetry?: () => void
+  online: boolean
+  hostName: string
   /** The bot panel shows Up next at the end of Items instead, as the desktop does. */
   withoutUpNext?: boolean
 }) {
   const botName = bot.name
   const t = useMobileTranslation()
   if (!activity) {
-    return (
-      <View>
-        <Text style={sheetStyles.empty}>
-          {error
-            ? t('bots.activity.readFailed', 'Couldn’t load activity.')
-            : loading
-              ? t('bots.activity.loading', 'Loading activity…')
-              : t('bots.activity.unavailable', 'Activity is unavailable on this host.')}
-        </Text>
-        {error && onRetry ? (
-          <MobileBotTextButton label={t('bots.activity.retry', 'Retry')} onPress={onRetry} />
-        ) : null}
-      </View>
+    return !online ? (
+      <MobileOfflineState hostName={hostName} />
+    ) : error !== null ? (
+      <MobileLoadErrorState
+        error={error}
+        title={t('bots.activity.readFailedTitle', 'Couldn’t load activity')}
+        onRetry={onRetry}
+      />
+    ) : loading ? (
+      <MobileStateView loading title={t('bots.activity.loading', 'Loading activity…')} />
+    ) : (
+      <MobileStateView
+        icon={Activity}
+        title={t('bots.activity.unavailableTitle', 'Activity unavailable')}
+        message={t('bots.activity.unavailable', 'Activity is unavailable on this host.')}
+      />
     )
   }
   const { workers, inProgress, completed, upNext } = activity
@@ -116,11 +128,13 @@ export function MobileBotActivityTab({
     return (
       <>
         {upNextSection}
-        <Text style={sheetStyles.empty}>
-          {t('bots.activity.empty', '{{name}}’s workers, threads and runs show up here.', {
+        <MobileStateView
+          icon={Activity}
+          title={t('bots.activity.emptyTitle', 'No activity yet')}
+          message={t('bots.activity.empty', '{{name}}’s workers, threads and runs show up here.', {
             name: botName
           })}
-        </Text>
+        />
       </>
     )
   }
