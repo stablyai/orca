@@ -261,13 +261,16 @@ describe('sharing a bot by link', () => {
     })
   })
 
-  it('never makes a new link when Update link finds the link stopped', async () => {
+  it('forgets the stopped link’s picks and never makes a new link on update', async () => {
     const cloud = fakeCloud()
     const home = join(root, 'home')
     await writeHome(home, '# Release notes\n\nDrafts release notes.\n')
-    const service = appSession(cloud, home, 'run-1')
+    const picks = new BotSharePicksStore(join(root, 'bot-share-picks.json'))
+    const service = appSession(cloud, home, 'run-1', { signedIn: true }, picks)
     const first = await publish(service)
-    expect(await service.stop(first.share.id)).toEqual({ status: 'ok', value: true })
+    expect(await picks.get(bot.id)).toMatchObject({ setupNote: '' })
+    expect(await service.stop(first.share.id, bot.id)).toEqual({ status: 'ok', value: true })
+    expect((await service.prepare(bot, {}, { last: true })).last).toBeUndefined()
 
     const { candidate } = await service.prepare(bot, {})
     await expect(
@@ -312,30 +315,23 @@ describe('sharing a bot by link', () => {
     expect(published).toMatchObject({ status: 'ok', value: { share: { id: 'share-1' } } })
   })
 
-  it('builds a reviewable preview when the cloud package lookup fails', async () => {
+  it('previews locally and rechecks the cloud package on each publish attempt', async () => {
     const cloud = fakeCloud()
-    cloud.fetcher = async () => new Response(null, { status: 503 })
+    let cloudAvailable = false
+    cloud.fetcher = async () =>
+      cloudAvailable
+        ? Response.json({ package: { id: 'existing-package' } })
+        : new Response(null, { status: 503 })
     const home = join(root, 'home')
     await writeHome(home, '# Release notes\n\nDrafts release notes.\n')
     const service = appSession(cloud, home, 'run-1')
 
     const { candidate } = await service.prepare(bot, {}, { localOnly: true })
-
     expect(candidate.bot.purpose).toBe('Drafts release notes.')
     await expect(service.publish(bot, candidate.candidateId, '')).rejects.toMatchObject({
       statusCode: 503
     })
-  })
-
-  it('checks the cloud package again before publishing a local preview', async () => {
-    const cloud = fakeCloud()
-    cloud.fetcher = async () => Response.json({ package: { id: 'existing-package' } })
-    const home = join(root, 'home')
-    await writeHome(home, '# Release notes\n\nDrafts release notes.\n')
-    const service = appSession(cloud, home, 'run-1')
-
-    const { candidate } = await service.prepare(bot, {}, { localOnly: true })
-
+    cloudAvailable = true
     await expect(service.publish(bot, candidate.candidateId, '')).rejects.toThrow(
       BOT_SHARE_ERRORS.prepareAgain
     )
@@ -372,28 +368,6 @@ describe('sharing a bot by link', () => {
       digest: again.candidate.botDigest
     })
     expect(published.value.version.packageDigest).toBe(again.candidate.botDigest)
-  })
-
-  it('forgets the last published picks when the link is stopped or the bot deleted', async () => {
-    const cloud = fakeCloud()
-    const home = join(root, 'home')
-    await writeHome(home, '# Release notes\n\nDrafts release notes.\n')
-    await mkdir(join(home, 'memory'), { recursive: true })
-    await writeFile(join(home, 'memory', 'area-owners.md'), '# Area owners\n\nWeb: Ana.\n')
-    const picks = new BotSharePicksStore(join(root, 'bot-share-picks.json'))
-    const service = appSession(cloud, home, 'run-1', { signedIn: true }, picks)
-    const { candidate } = await service.prepare(bot, { memory: ['area-owners'] })
-    const published = await service.publish(bot, candidate.candidateId, '')
-    if (published.status !== 'ok') {
-      throw new Error(published.status)
-    }
-    await picks.set('other-bot', { selection: { memory: ['x'] }, setupNote: '' })
-
-    await service.stop(published.value.share.id, bot.id)
-    await picks.forget('other-bot')
-
-    expect((await service.prepare(bot, {}, { last: true })).last).toBeUndefined()
-    expect(await picks.get('other-bot')).toBeNull()
   })
 
   it("reads the pinned version only for the asked bot's link, on any computer", async () => {

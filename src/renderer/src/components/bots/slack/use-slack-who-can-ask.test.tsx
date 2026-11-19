@@ -251,14 +251,6 @@ describe('useSlackWhoCanAsk', () => {
     expect(screen.queryByRole('button', { name: 'Show 2 more' })).toBeNull()
   })
 
-  it('removes someone who could ask', () => {
-    renderList(<BotWhoCanAsk bot={bot()} />)
-    fireEvent.click(screen.getByRole('button', { name: /^Remove / }))
-    expect(mocks.updateBot).toHaveBeenCalledWith(expect.objectContaining({ id: 'bot-1' }), {
-      members: []
-    })
-  })
-
   it('lists and removes only Slack people, leaving another service’s alone', () => {
     const discord = { id: 'U-sam', name: 'Sam on Discord', source: 'discord' }
     const linear = {
