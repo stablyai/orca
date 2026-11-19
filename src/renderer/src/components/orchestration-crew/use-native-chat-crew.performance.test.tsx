@@ -52,11 +52,14 @@ function Chat(props: { sessionId: string; isVisible: boolean }) {
 }
 
 // Ten split panes showing three chats; panes of one chat share its subscription.
-const PANES = [0, 0, 0, 1, 1, 1, 2, 2, 2, 2].map((chat) => SESSIONS[chat])
+const PANES = [0, 0, 0, 1, 1, 1, 2, 2, 2, 2].map((chat, pane) => ({
+  pane: `pane-${pane}`,
+  sessionId: SESSIONS[chat]
+}))
 
 function Panes(props: { windowVisible: boolean }) {
-  return PANES.map((sessionId, index) => (
-    <Chat key={index} sessionId={sessionId} isVisible={props.windowVisible} />
+  return PANES.map(({ pane, sessionId }) => (
+    <Chat key={pane} sessionId={sessionId} isVisible={props.windowVisible} />
   ))
 }
 
