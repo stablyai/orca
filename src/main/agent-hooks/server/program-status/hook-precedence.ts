@@ -6,8 +6,48 @@ import type { EnrichedAgentHookEventPayload } from '../server-types'
 // Long tool calls can be hook-silent; allow sustained disagreement before yielding to OSC 7501.
 export const HOOK_SILENCE_BEFORE_PROGRAM_STATUS_FALLBACK_MS = 2 * 60 * 1000
 
-// agy wakes a parent with its subagent's result within milliseconds of the subagent's Stop.
+// Captured agy 1.5 runs woke the parent about 100 ms after its subagent's Stop; this leaves slack.
 export const ANTIGRAVITY_PARENT_WAKE_GRACE_MS = 2000
+
+/** Re-offered agy done reports, so one that arrived before its subagent's Stop is retried only once. */
+type TerminalStatusEventIdentity = { paneKey: string }
+const retriedAntigravityDones = new WeakSet<TerminalStatusEventIdentity>()
+
+function isAntigravityHelperHeldDone(
+  previous: EnrichedAgentHookEventPayload,
+  payload: ParsedAgentStatusPayload
+): boolean {
+  return (
+    payload.state === 'done' &&
+    payload.sessionBoundary !== true &&
+    previous.payload.agentType === 'antigravity' &&
+    previous.payload.workingMode !== 'monitoring' &&
+    isAgentStatusHeldOpenByChildWork(previous.payload)
+  )
+}
+
+/** agy's done can beat its subagent's Stop hook (PTY vs HTTP), so a refused one is retried after the grace. */
+export function antigravityRefusedDoneRetryMs(
+  previous: EnrichedAgentHookEventPayload | undefined,
+  payload: ParsedAgentStatusPayload,
+  yieldEndsAt: number | undefined,
+  event: TerminalStatusEventIdentity
+): number | undefined {
+  if (
+    yieldEndsAt !== Infinity ||
+    previous?.observation?.origin !== 'hook' ||
+    !isAntigravityHelperHeldDone(previous, payload) ||
+    retriedAntigravityDones.has(event)
+  ) {
+    return undefined
+  }
+  return ANTIGRAVITY_PARENT_WAKE_GRACE_MS
+}
+
+export function markAntigravityDoneRetried<T extends TerminalStatusEventIdentity>(event: T): T {
+  retriedAntigravityDones.add(event)
+  return event
+}
 
 function isOpenCodeAgent(agentType: string | undefined): boolean {
   return agentType === 'opencode' || agentType === 'opencode2'
@@ -55,14 +95,7 @@ export function programStatusHookYieldEndsAt(
     return previous.receivedAt + AGENT_STATUS_STALE_AFTER_MS
   }
   // When the last subagent ends after its parent's turn, agy's done is its only end signal.
-  if (
-    payload.state === 'done' &&
-    payload.sessionBoundary !== true &&
-    previous.payload.agentType === 'antigravity' &&
-    isAgentStatusHeldOpenByChildWork(previous.payload) &&
-    antigravityHelpersIdleAt !== undefined &&
-    antigravityHelpersIdleAt >= previous.receivedAt
-  ) {
+  if (antigravityHelpersIdleAt !== undefined && isAntigravityHelperHeldDone(previous, payload)) {
     return antigravityHelpersIdleAt + ANTIGRAVITY_PARENT_WAKE_GRACE_MS
   }
   // Hook and program child rosters cannot settle or reopen each other's turns.
