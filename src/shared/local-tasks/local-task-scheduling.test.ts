@@ -61,6 +61,16 @@ describe('local task readiness', () => {
     expect(state([claimed], 'a', at + 60 * 60 * 1000)?.state).toBe('ready')
   })
 
+  it('reclaims a working task whose lease expired, but not an unclaimed or fresh one', () => {
+    const working = (over: Partial<LocalTask>) =>
+      task('a', { status: 'working', statusCategory: 'in-progress', ...over })
+    const claim = { claimedBy: 'agent-1', claimedAt: '2026-01-01T00:00:00Z' }
+    const at = Date.parse('2026-01-01T00:10:00Z')
+    expect(state([working(claim)], 'a', at)).toEqual({ id: 'a', state: 'inactive' })
+    expect(state([working(claim)], 'a', at + 60 * 60 * 1000)?.state).toBe('ready')
+    expect(state([working({})], 'a', at + 60 * 60 * 1000)?.state).toBe('inactive')
+  })
+
   it('picks by priority then age, within the slot cap', () => {
     const t = [
       task('low', { priority: 4 }),

@@ -22,12 +22,15 @@ export function computeLocalTaskReadiness(
   const leaseMs = options.leaseMs ?? DEFAULT_LEASE_MS
   const byId = new Map(tasks.map((task) => [task.id, task]))
   return tasks.map((task): LocalTaskReadiness => {
-    if (task.statusCategory !== 'todo') {
-      return { id: task.id, state: 'inactive' }
-    }
     // A claim past its lease is treated as abandoned (the agent died).
     const claimedAt = task.claimedAt ? Date.parse(task.claimedAt) : Number.NaN
-    if (task.claimedBy && !(Number.isFinite(claimedAt) && now - claimedAt > leaseMs)) {
+    const leaseExpired = Number.isFinite(claimedAt) && now - claimedAt > leaseMs
+    // A crashed agent leaves its task 'working'; with an expired lease it is claimable again.
+    const abandoned = task.statusCategory === 'in-progress' && !!task.claimedBy && leaseExpired
+    if (task.statusCategory !== 'todo' && !abandoned) {
+      return { id: task.id, state: 'inactive' }
+    }
+    if (task.claimedBy && !leaseExpired) {
       return { id: task.id, state: 'claimed', by: task.claimedBy }
     }
     const waitingOn: string[] = []
