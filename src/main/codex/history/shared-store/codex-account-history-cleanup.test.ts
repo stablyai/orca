@@ -21,8 +21,15 @@ import { shareCodexAccountHistory } from './codex-account-history-links'
 
 // The platform's open-file check is its own concern (Linux always answers unknown); here nothing
 // is open, so the proofs alone decide.
+const openCheck = vi.hoisted(() => {
+  const state: { onCheck: (() => void) | null } = { onCheck: null }
+  return state
+})
 vi.mock('../../../filesystem/open-file-check', () => ({
-  findOpenFiles: async () => new Set<string>()
+  findOpenFiles: async () => {
+    openCheck.onCheck?.()
+    return new Set<string>()
+  }
 }))
 
 vi.mock('../cleanup-policy/codex-history-cleanup-policy-live-update', () => ({
@@ -86,6 +93,7 @@ afterEach(() => {
   vi.restoreAllMocks()
   busyPath.value = null
   busyPath.attempts = 0
+  openCheck.onCheck = null
   Object.defineProperty(process, 'platform', { value: platform })
   for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
@@ -193,8 +201,10 @@ describe('cleanUpCodexHistoryLeftBehind', () => {
     expect(existsSync(join(account, 'thread_history_1.sqlite-wal'))).toBe(true)
   })
 
-  it('reports a home once per policy revision', async () => {
+  it('reports a home once per policy revision, even when the budget cut its report short', async () => {
     const { root, account, store } = await sharedHome()
+    // The open-file check outlasts the sweep's 10 s budget.
+    openCheck.onCheck = () => vi.setSystemTime(NOW + 60_000)
     Object.defineProperty(process, 'platform', { value: 'darwin' })
     vi.stubEnv('ORCA_USER_DATA_PATH', join(root, 'user-data'))
     const info = vi.spyOn(console, 'info').mockImplementation(() => {})
@@ -207,6 +217,7 @@ describe('cleanUpCodexHistoryLeftBehind', () => {
 
     expect(await sweep()).toBe(true)
     expect(info).toHaveBeenCalledTimes(1)
+    expect(info.mock.calls[0][0]).toContain('budget reached')
     expect(await sweep()).toBe(true)
     expect(info).toHaveBeenCalledTimes(1)
   })

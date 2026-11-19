@@ -4,7 +4,6 @@ import { normalizeRuntimePathForComparison } from '../../../../shared/file-acces
 import { writePluginFileAtomically } from '../../../plugins/installation/plugin-atomic-file-write'
 
 const KEPT_REVISIONS = 4
-const KEPT_HOMES_PER_REVISION = 256
 
 /** A home whose report-mode sweep finished under one policy revision, in a marker file. */
 export type ReportSweep = { markerPath: string; revision: number; accountHome: string }
@@ -37,13 +36,15 @@ export async function wasReportSwept(sweep: ReportSweep): Promise<boolean> {
 
 /** Remembers a finished report sweep, keeping only the newest revisions. */
 export async function recordReportSweep(sweep: ReportSweep): Promise<void> {
-  const swept = await readSwept(sweep.markerPath)
-  const home = normalizeRuntimePathForComparison(sweep.accountHome)
-  const homes = (swept.get(sweep.revision) ?? []).filter((known) => known !== home)
-  swept.set(sweep.revision, [...homes, home].slice(-KEPT_HOMES_PER_REVISION))
-  const kept = [...swept.entries()].sort(([a], [b]) => b - a).slice(0, KEPT_REVISIONS)
   try {
     await mkdir(dirname(sweep.markerPath), { recursive: true })
+    // Read right before the write, so another instance's homes survive; one written in between
+    // only costs that home one more sweep.
+    const swept = await readSwept(sweep.markerPath)
+    const home = normalizeRuntimePathForComparison(sweep.accountHome)
+    const homes = swept.get(sweep.revision) ?? []
+    swept.set(sweep.revision, homes.includes(home) ? homes : [...homes, home])
+    const kept = [...swept.entries()].sort(([a], [b]) => b - a).slice(0, KEPT_REVISIONS)
     await writePluginFileAtomically(
       sweep.markerPath,
       `${JSON.stringify(Object.fromEntries(kept))}\n`

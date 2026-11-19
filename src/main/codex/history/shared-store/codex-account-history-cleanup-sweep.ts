@@ -80,10 +80,8 @@ export async function checkThenCleanUpCodexHistory(args: {
   if (result.policyChanged) {
     return true
   }
-  // A sweep the budget cut short, or that couldn't tell what was open, continues next launch.
-  const openUnknown =
-    result.rollouts.skipped.open_unknown + result.databases.skipped.open_unknown > 0
-  if (reportOnly && !result.budgetHit && !openUnknown) {
+  // Report mode saves no checks, so a retry of a cut-short sweep would only redo the same batch.
+  if (reportOnly) {
     await recordReportSweep(reportSweep)
   }
   await reportCodexHistoryCleanupOnce({
