@@ -328,9 +328,10 @@ export function BotItemCommentBox({
       ) : null}
       <NativeChatComposerNotices notices={notices} className="mb-2" />
       {images.length > 0 ? (
-        // Two rows of chips, then they scroll, so the text and send button stay reachable.
-        // The top and right room is for each chip's remove button.
-        <div className="scrollbar-sleek mb-2 flex max-h-[128px] flex-wrap gap-2 overflow-y-auto pr-1.5 pt-1.5">
+        // Two rows of chips (fewer in a short pane), then they scroll, so the text and send button stay
+        // reachable. The scroller clips, so it leaves room for each chip's focus ring and, top and right,
+        // its remove button; the negative margin keeps the chips on the text's left edge.
+        <div className="scrollbar-sleek -ml-0.5 mb-1.5 flex max-h-[min(128px,14cqh)] flex-wrap gap-2 overflow-y-auto pb-0.5 pl-0.5 pr-2 pt-2">
           {images.map((attachment, index) => (
             <NativeChatImageAttachmentPreview
               key={attachment.id}
@@ -361,9 +362,10 @@ export function BotItemCommentBox({
         onCompositionStart={editorCompositionStart}
         onCompositionEnd={editorCompositionEnd}
         onBlur={editorBlur}
-        // Room for a multi-part answer: 4 lines of 19 px at rest, growing to 12 lines (or 40% of the
-        // window on a short one, so the activity above stays in view), then it scrolls.
-        className="scrollbar-sleek block max-h-[min(228px,40vh)] min-h-[76px] w-full overflow-y-auto bg-transparent text-[13px] leading-[19px] text-foreground outline-none"
+        // Room for a multi-part answer: 4 lines of 19 px at rest, growing to 12 lines, then it scrolls.
+        // In a short pane both give way (`cqh` is the item pane's height), so the activity above stays
+        // in view and the send stays on screen.
+        className="scrollbar-sleek block max-h-[min(228px,25cqh)] min-h-[min(76px,12cqh)] w-full overflow-y-auto bg-transparent text-[13px] leading-[19px] text-foreground outline-none"
       />
       {/* The send circle sets the row's height; the ghost buttons overhang it, so their glyphs sit on
           the text's left edge and level with the send. */}
