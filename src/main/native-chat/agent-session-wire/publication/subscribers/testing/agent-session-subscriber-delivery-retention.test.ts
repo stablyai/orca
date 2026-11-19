@@ -5,10 +5,6 @@ import type { AgentSessionSubscribeEvent } from '../../../../../../shared/agent-
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { AgentSessionSubscribers } from '../structured-agent-session-subscribers'
 import {
-  CHAT_LIVE_TEXT_RETAINED_BYTES,
-  chatLiveTextRetainedBytes
-} from '../../../../retention/chat-path-retained-bytes'
-import {
   fixture,
   journals,
   SESSION
@@ -121,24 +117,7 @@ it('releases waiting live text when the subscriber closes during a stalled deliv
   pane.release()
 })
 
-it('ends the stream instead of holding live text past the chat budget', async () => {
-  const pane = await blockedSubscriber()
-  pane.publish(0)
-  await Promise.resolve()
-  const others = chatLiveTextRetainedBytes.claim(CHAT_LIVE_TEXT_RETAINED_BYTES)
-  try {
-    // Waits behind the stalled delivery, so it needs budget the chat no longer has.
-    pane.publish(1)
-    expect(pane.ends).toHaveLength(1)
-    // Only the stalled delivery's own snapshot is left.
-    expect(await pane.alive()).toBeLessThanOrEqual(1)
-  } finally {
-    others?.()
-    pane.release()
-  }
-})
-
-it('ends only the stream whose own live text outgrows its share', async () => {
+it('ends only the stream whose own live text outgrows its cap', async () => {
   const large = await blockedSubscriber('large-session')
   const small = await blockedSubscriber('small-session')
   try {
@@ -156,7 +135,7 @@ it('ends only the stream whose own live text outgrows its share', async () => {
   }
 })
 
-it('ends a stream whose one live text alone outgrows its share', async () => {
+it('ends a stream whose one live text alone outgrows its cap', async () => {
   const pane = await blockedSubscriber()
   try {
     // 5M characters at two bytes each, with nothing else in flight.
@@ -167,7 +146,7 @@ it('ends a stream whose one live text alone outgrows its share', async () => {
   }
 })
 
-it('ends a stream whose opening would send live text past its share', async () => {
+it('ends a stream whose opening would send live text past its cap', async () => {
   const text = textItem('x'.repeat(5_000_000))
   const pane = await blockedSubscriber('opening-session', () => [text])
   try {

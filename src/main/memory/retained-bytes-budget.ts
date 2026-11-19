@@ -6,7 +6,7 @@
 export type RetainedBytesReading = { bytes: number; items: number }
 
 export type RetainedBytesBudget = {
-  /** Null when this budget or its parent is full; the release is idempotent. */
+  /** Null when this budget is full; the release is idempotent. */
   claim: (bytes: number) => (() => void) | null
   reading: () => RetainedBytesReading
 }
@@ -14,10 +14,8 @@ export type RetainedBytesBudget = {
 export function createRetainedBytesBudget(options: {
   maxBytes: number
   maxItems?: number
-  /** Bounds this holder together with its siblings, such as every chat-path holder. */
-  parent?: RetainedBytesBudget
 }): RetainedBytesBudget {
-  const { maxBytes, maxItems = Infinity, parent } = options
+  const { maxBytes, maxItems = Infinity } = options
   let bytes = 0
   let items = 0
   return {
@@ -30,16 +28,11 @@ export function createRetainedBytesBudget(options: {
       ) {
         return null
       }
-      const releaseParent = parent ? parent.claim(claimed) : () => {}
-      if (!releaseParent) {
-        return null
-      }
       bytes += claimed
       items += 1
       return once(() => {
         bytes -= claimed
         items -= 1
-        releaseParent()
       })
     },
     reading: () => ({ bytes, items })

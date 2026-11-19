@@ -24,10 +24,7 @@ import {
   type JournalReaderRunningRequest
 } from '../native-chat/agent-session-journal/journal-sql-reader-requests'
 import { readRetainedBytes, type RetainedBytesReading } from '../memory/retained-bytes-budget'
-import {
-  chatPathRetainedBytes,
-  chatRetainedBytesRefusals
-} from '../native-chat/retention/chat-path-retained-bytes'
+import { chatRetainedBytesRefusals } from '../native-chat/retention/chat-path-retained-bytes'
 import { observeWorkerThreads } from './worker-thread-spawn'
 import { noteMainCageHeap } from '../crash-reporting/memory/main-heap-allocation-profile'
 import {
@@ -203,13 +200,12 @@ function readRetention(): Retention {
   }
 }
 
-/** One line for every holder in the retained-bytes ledger, chat budget first. */
+/** One line for every holder in the retained-bytes ledger, streams ended at their cap first. */
 function retainedBytesAnnotation(held: Record<string, RetainedBytesReading>): string {
   const sources = Object.entries(held)
     .map(([source, { bytes, items }]) => `${source}=${Math.round(bytes / MB)}MB/${items}`)
     .join(' ')
-  const chat = Math.round(chatPathRetainedBytes.reading().bytes / MB)
-  return `chat=${chat}MB refused=${chatRetainedBytesRefusals()} ${sources}`
+  return `refused=${chatRetainedBytesRefusals()} ${sources}`
 }
 
 function retentionAnnotations({ reads, lanes, held }: Retention): [string, string][] {
@@ -235,7 +231,6 @@ function retentionData({ reads, lanes, held }: Retention): CrashReportBreadcrumb
   )
   return {
     ...sources,
-    chatHeldMB: Math.round(chatPathRetainedBytes.reading().bytes / MB),
     chatRefused: chatRetainedBytesRefusals(),
     readsInFlight: reads.inFlight,
     readsUnconsumed: reads.unconsumed,

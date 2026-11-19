@@ -43,7 +43,7 @@ export class JournalSqlReaderPool {
   private readonly replyCredit = new JournalReaderReplyCredit()
   /** Lifetime totals of readers already replaced, so the pool's totals never go backwards. */
   private readonly replaced = { receivedBytes: 0, consumedBytes: 0, creditWaitsExpired: 0 }
-  // Bounded by the readers' own credit; reported beside the chat budget it shares main with.
+  // Bounded by the readers' own credit; reported beside the other holders in crash diagnostics.
   private readonly stopObserving = observeRetainedBytes('reads', () => {
     const { inFlight, unconsumed, outstandingBytes } = this.retention()
     return { bytes: outstandingBytes, items: inFlight + unconsumed }
