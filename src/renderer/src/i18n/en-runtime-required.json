@@ -2800,12 +2800,6 @@
     "unhide": "Show All",
     "zoom": "Zoom"
   },
-  "perfNotices": {
-    "hiddenTabs": {
-      "description_one": "Memory Saver frees tabs you haven't viewed in {{count}} hour.",
-      "description_other": "Memory Saver frees tabs you haven't viewed in {{count}} hours."
-    }
-  },
   "pet": {
     "defaultLabels": {
       "bundle": "Pet bundle",

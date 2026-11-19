@@ -60,9 +60,8 @@ async function nextNotice(
     return null
   }
   tracking.hiddenTabsCheckedAt = now
-  const hours = memorySaverHours()
-  const count = await window.api.memory.countHiddenBrowserPages(hours * HOUR)
-  return blocked() || count < HIDDEN_TAB_MIN ? null : { id: 'hidden-browser-tabs', count, hours }
+  const count = await window.api.memory.countHiddenBrowserPages(memorySaverHours() * HOUR)
+  return blocked() || count < HIDDEN_TAB_MIN ? null : { id: 'hidden-browser-tabs', count }
 }
 
 /** One read at a time, only while this window is focused and the user is present (shared presence
