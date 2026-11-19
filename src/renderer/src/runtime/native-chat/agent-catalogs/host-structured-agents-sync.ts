@@ -8,6 +8,7 @@ import { useAppStore } from '@/store/index'
 import { runtimeStatusSubscriptionsFor } from '@/store/slices/runtime-status/views/runtime-status-subscriptions'
 import type { AppState } from '@/store/types'
 import {
+  forgetHostStructuredAgents,
   loadHostStructuredAgents,
   readHostStructuredAgentsForRuntime,
   retainHostStructuredAgents
@@ -74,29 +75,27 @@ export function installHostStructuredAgentsSync(): () => void {
     }
   })
   const stopStore = useAppStore.subscribe((state, previousState) => {
-    const on = launchesMayOpenChats(state)
-    const turnedOn = on && !launchesMayOpenChats(previousState)
-    if (turnedOn) {
-      void syncLocalHost(state.settings)
+    if (state.settings === previousState.settings) {
+      return
     }
-    if (turnedOn) {
+    if (launchesMayOpenChats(state) && !launchesMayOpenChats(previousState)) {
+      void syncLocalHost(state.settings)
       syncPairedHosts(state.runtimeStatusByEnvironmentId)
     }
   })
-  // A status write re-reads only the hosts it touched; dropping a host retains the rest.
+  // A status write re-reads only the hosts it touched; an unpaired host is forgotten without loading the rest.
   const stopStatuses = runtimeStatusSubscriptionsFor(useAppStore).subscribeStatusChanges(
     (change) => {
+      if (change.deleted.size > 0) {
+        forgetHostStructuredAgents([...change.deleted].map(toRuntimeExecutionHostId))
+      }
       const state = useAppStore.getState()
       if (!launchesMayOpenChats(state)) {
         return
       }
-      const statuses = state.runtimeStatusByEnvironmentId
-      if (change.deleted.size > 0) {
-        syncPairedHosts(statuses)
-        return
-      }
+      // Deleted ids have no status left, so loading them is a no-op.
       for (const environmentId of change.ids) {
-        loadPairedHost(environmentId, statuses)
+        loadPairedHost(environmentId, state.runtimeStatusByEnvironmentId)
       }
     }
   )

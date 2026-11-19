@@ -7,12 +7,14 @@ import type { AppState } from '@/store/types'
 import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
 import { createNonSecureContextUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 import { getRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
-import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import type { WorktreeOperationRouteState } from '@/lib/workspace/ownership/worktree-operation-route'
 import { onServerControlConnected } from '../workspace-layout/server/server-layout-view-report'
 import { subscribeRuntimeHostContactRegained } from '../hosts/connections/runtime-host-contact-regained'
 import { runtimeStatusSubscriptionsFor } from '@/store/slices/runtime-status/views/runtime-status-subscriptions'
 
-function unsavedWorktreeIdsByEnvironment(state: AppState): Map<string, string[]> {
+type UnsavedReportState = WorktreeOperationRouteState & Pick<AppState, 'openFiles' | 'editorDrafts'>
+
+function unsavedWorktreeIdsByEnvironment(state: UnsavedReportState): Map<string, string[]> {
   const byEnvironment = new Map<string, Set<string>>()
   for (const file of state.openFiles) {
     if (!file.isDirty && state.editorDrafts[file.id] === undefined) {
@@ -29,27 +31,29 @@ function unsavedWorktreeIdsByEnvironment(state: AppState): Map<string, string[]>
   return new Map([...byEnvironment].map(([environmentId, ids]) => [environmentId, [...ids].sort()]))
 }
 
-// Every field file-owner routing reads, plus the dirty-editor inputs themselves.
-const ROUTING_FIELDS = [
-  'openFiles',
-  'editorDrafts',
-  'repos',
-  'folderWorkspaces',
-  'projectGroups',
-  'detectedWorktreesByRepo',
-  'restoredRuntimeHostIdByWorkspaceSessionKey',
-  'activeWorktreeId',
+/** Every field the report and file-owner routing read; a report built from equal inputs is current. */
+const REPORT_INPUT_KEYS = [
   'activeWorkspaceExecutionHostId',
+  'activeWorktreeId',
+  'detectedWorktreesByRepo',
+  'editorDrafts',
+  'folderWorkspaces',
+  'openFiles',
+  'projectGroups',
+  'removedRuntimeEnvironmentIds',
+  'repos',
+  'restoredRuntimeHostIdByWorkspaceSessionKey',
   'runtimeEnvironmentCatalogHydrated',
-  'removedRuntimeEnvironmentIds'
-] as const satisfies readonly (keyof AppState)[]
+  'runtimeEnvironments',
+  'settings',
+  'worktreesByRepo'
+] as const satisfies readonly (keyof UnsavedReportState)[]
 
-function reportInputsChanged(state: AppState, previous: AppState): boolean {
-  return (
-    ROUTING_FIELDS.some((field) => state[field] !== previous[field]) ||
-    selectWorktreesByRepo(state) !== selectWorktreesByRepo(previous)
-  )
-}
+/** Check key-list completeness too: satisfies validates membership only, silently missing new inputs and sending stale reports. */
+type MissingReportInputKey = Exclude<keyof UnsavedReportState, (typeof REPORT_INPUT_KEYS)[number]>
+/** Require an empty missing-key union; an empty array typed MissingKey[] accepts every union and proves nothing. */
+type AssertNoMissingReportInputKey<T extends never> = T
+export type ReportInputKeysAreComplete = AssertNoMissingReportInputKey<MissingReportInputKey>
 
 const UNKNOWN = '\0unknown'
 const REPORTER_ID_KEY = 'orca.workspaceCleanup.unsavedEditorReporterId'
@@ -77,10 +81,17 @@ export function installRemoteUnsavedEditorReport(): () => void {
   const stopWatches = new Map<string, () => void>()
   // One report in flight per host, so an older list can never land after a newer one.
   const inFlight = new Set<string>()
-  // Rebuilt on editor or routing input changes, and fresh before every one-host send.
-  let reports = unsavedWorktreeIdsByEnvironment(useAppStore.getState())
-  const refreshReports = (): void => {
-    reports = unsavedWorktreeIdsByEnvironment(useAppStore.getState())
+  // Checked against the store at every read, so no send depends on store-listener order.
+  let reportInputs: readonly unknown[] | null = null
+  let reports = new Map<string, string[]>()
+  const currentReports = (): ReadonlyMap<string, string[]> => {
+    const state = useAppStore.getState()
+    const inputs = REPORT_INPUT_KEYS.map((key) => state[key])
+    if (reportInputs?.every((value, index) => value === inputs[index]) !== true) {
+      reports = unsavedWorktreeIdsByEnvironment(state)
+      reportInputs = inputs
+    }
+    return reports
   }
 
   const send = (environmentId: string, worktreeIds: string[]): void => {
@@ -89,7 +100,15 @@ export function installRemoteUnsavedEditorReport(): () => void {
     callRuntimeRpc(
       { kind: 'environment', environmentId },
       'workspaceCleanup.reportUnsavedEditors',
-      { worktreeIds, reporterId }
+      { worktreeIds, reporterId },
+      {
+        // Edits made during the compatibility wait ride along; sent records what actually went out.
+        paramsForStatus: () => {
+          const latest = currentReports().get(environmentId) ?? []
+          sent.set(environmentId, latest.join('\n'))
+          return { worktreeIds: latest, reporterId }
+        }
+      }
     )
       .catch((error: unknown) => {
         if (hasRuntimeRpcErrorCode(error, 'method_not_found')) {
@@ -106,14 +125,14 @@ export function installRemoteUnsavedEditorReport(): () => void {
       .finally(() => {
         inFlight.delete(environmentId)
         // Edits made while it was in flight go out now, as the latest list only.
-        refreshReports()
         syncHosts([environmentId])
       })
   }
 
   const syncHosts = (environmentIds: Iterable<string>): void => {
+    const current = currentReports()
     for (const environmentId of environmentIds) {
-      const worktreeIds = reports.get(environmentId) ?? []
+      const worktreeIds = current.get(environmentId) ?? []
       if (
         inFlight.has(environmentId) ||
         unsupported.has(environmentId) ||
@@ -125,7 +144,7 @@ export function installRemoteUnsavedEditorReport(): () => void {
       send(environmentId, worktreeIds)
     }
   }
-  const sync = (): void => syncHosts(new Set([...sent.keys(), ...reports.keys()]))
+  const sync = (): void => syncHosts(new Set([...sent.keys(), ...currentReports().keys()]))
 
   const watch = (environmentId: string): void => {
     if (stopWatches.has(environmentId)) {
@@ -136,7 +155,6 @@ export function installRemoteUnsavedEditorReport(): () => void {
       // Unknown, not absent: an empty list must still go out to clear what the host holds.
       sent.set(environmentId, UNKNOWN)
       unsupported.delete(environmentId)
-      refreshReports()
       syncHosts([environmentId])
     }
     // Desktop sees control-socket changes; web clients only see host contact come back.
@@ -174,22 +192,14 @@ export function installRemoteUnsavedEditorReport(): () => void {
   noteEnvironments(useAppStore.getState())
   sync()
   // Routing reads no host status, so a status write only owes a first report to a newly seen host.
-  const stopStatuses = runtimeStatusSubscriptionsFor(useAppStore).subscribeStatusChanges(
-    (change) => {
-      const noted = noteEnvironments(useAppStore.getState(), change.ids)
-      if (noted.length > 0) {
-        refreshReports()
-      }
-      syncHosts(noted)
-    }
+  const stopStatuses = runtimeStatusSubscriptionsFor(useAppStore).subscribeStatusChanges((change) =>
+    syncHosts(noteEnvironments(useAppStore.getState(), change.ids))
   )
   const stopStore = useAppStore.subscribe((state, previous) => {
-    const environmentsChanged = state.runtimeEnvironments !== previous.runtimeEnvironments
-    if (environmentsChanged) {
+    if (state.runtimeEnvironments !== previous.runtimeEnvironments) {
       noteEnvironments(state)
     }
-    if (environmentsChanged || reportInputsChanged(state, previous)) {
-      refreshReports()
+    if (REPORT_INPUT_KEYS.some((key) => state[key] !== previous[key])) {
       sync()
     }
   })
