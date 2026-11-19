@@ -340,9 +340,9 @@ describe('Bots search', () => {
     expect(document.querySelector('[data-project-group-header-drag-handle]')).toBeNull()
   })
 
-  it('opens the first result on Enter, closes the search and focuses the opened row', async () => {
+  it('opens the first result on Enter and focuses its row under StrictMode', async () => {
     threeBots()
-    renderSection()
+    renderStrictSection()
     const field = openSearch()
     type(field, 'disk')
     fireEvent.keyDown(field, { key: 'Enter' })
@@ -350,23 +350,6 @@ describe('Bots search', () => {
     expect(mocks.onOpenBot).toHaveBeenCalledOnce()
     expect(screen.queryByRole('searchbox')).toBeNull()
     await vi.waitFor(() => expect(document.activeElement).toBe(rowTitle('bot-3')))
-  })
-
-  it('opens a search result under the app StrictMode root', async () => {
-    threeBots()
-    render(
-      <StrictMode>
-        <TooltipProvider>
-          <SidebarBotsSection onOpenBot={mocks.onOpenBot} />
-        </TooltipProvider>
-      </StrictMode>
-    )
-    const field = openSearch()
-    type(field, 'scout')
-    fireEvent.keyDown(field, { key: 'Enter' })
-    expect(mocks.activate).toHaveBeenCalledWith(expect.objectContaining({ id: 'bot-2' }))
-    expect(screen.queryByRole('searchbox')).toBeNull()
-    await vi.waitFor(() => expect(document.activeElement).toBe(rowTitle('bot-2')))
   })
 
   it('keeps newer focus in a reopened search after a selection', () => {
@@ -497,19 +480,6 @@ describe('Bots search', () => {
     ).toBe('local/bot-2')
   })
 
-  it('focuses the group row when a group finishes opening', async () => {
-    withCrew()
-    const finish = deferGroupOpen()
-    renderSection()
-    const field = openSearch()
-    type(field, 'crew')
-    fireEvent.keyDown(field, { key: 'Enter' })
-    await act(async () => finish())
-    expect(screen.queryByRole('searchbox')).toBeNull()
-    expect(document.activeElement).toBe(rowTitle('group-1'))
-    expect(mocks.onOpenBot).toHaveBeenCalledOnce()
-  })
-
   it('focuses the group row when a group finishes opening under StrictMode', async () => {
     withCrew()
     const finish = deferGroupOpen()
@@ -518,7 +488,9 @@ describe('Bots search', () => {
     type(field, 'crew')
     fireEvent.keyDown(field, { key: 'Enter' })
     await act(async () => finish())
+    expect(screen.queryByRole('searchbox')).toBeNull()
     expect(document.activeElement).toBe(rowTitle('group-1'))
+    expect(mocks.onOpenBot).toHaveBeenCalledOnce()
   })
 
   it('leaves the search alone when focus moves away while a group opens', async () => {

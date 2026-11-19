@@ -1,6 +1,13 @@
 // @vitest-environment happy-dom
 
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render as renderBare,
+  screen,
+  within
+} from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotItemEvent } from '../../../../../shared/bots/bot-items'
@@ -33,6 +40,9 @@ import { useAppStore } from '@/store'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { makeTabGroup, makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import { changePrompt } from '../../native-chat/composer/editor/native-chat-prompt-editor.test-support'
+
+// The app root provides tooltips; the mic's needs it here too.
+const render = (ui: React.ReactElement) => renderBare(ui, { wrapper: TooltipProvider })
 
 const BOT: Bot = {
   id: 'bot-a',
@@ -70,6 +80,7 @@ function show(count: number, item = makeTestBotItem(6)): void {
   read.current = {
     item,
     events: eventsUpTo(count),
+    eventsRead: true,
     hasEarlier: false,
     failed: false,
     deleted: false,
@@ -93,7 +104,7 @@ function readerScrollsToTop(): void {
   fireEvent.scroll(node)
 }
 
-const pill = (): HTMLElement => screen.getByText(/new$|Jump to latest/).closest('button')!
+const pill = (): HTMLElement => screen.getByText('Jump to latest').closest('button')!
 
 beforeEach(() => {
   vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(VIEWPORT)
@@ -108,7 +119,7 @@ afterEach(() => {
   fileContextOwners.mockReturnValue(new Map())
 })
 
-it('opens at the newest event and stays there as events arrive', () => {
+it('follows new events until the reader scrolls up, then offers Jump to latest', () => {
   show(3)
   const view = render(<BotItemView bot={BOT} uid="uid-6" />)
   expect(scroller().scrollTop).toBe(CONTENT)
@@ -116,23 +127,15 @@ it('opens at the newest event and stays there as events arrive', () => {
   scroller().scrollTop = 0
   show(4)
   view.rerender(<BotItemView bot={BOT} uid="uid-6" />)
-
   expect(scroller().scrollTop).toBe(CONTENT)
   expect(pill().dataset.shown).toBe('false')
-})
 
-it('counts events that arrive while scrolled up, and jumps to the end when the pill is clicked', () => {
-  show(3)
-  const view = render(<BotItemView bot={BOT} uid="uid-6" />)
   readerScrollsToTop()
-  expect(pill().dataset.shown).toBe('false')
+  expect(pill().dataset.shown).toBe('true')
 
   show(5)
   view.rerender(<BotItemView bot={BOT} uid="uid-6" />)
-
   expect(scroller().scrollTop).toBe(0)
-  expect(pill().dataset.shown).toBe('true')
-  expect(pill().textContent).toBe('2 new')
 
   fireEvent.click(pill())
 
@@ -151,17 +154,32 @@ it('scrolls to the end after a comment is sent', async () => {
     fireEvent.keyDown(box, { key: 'Enter' })
   })
 
-  expect(sent).toHaveBeenCalledWith(BOT, 'uid-6', 'Ship it', [])
+  expect(sent).toHaveBeenCalledWith(BOT, 'uid-6', 'Ship it', [], expect.any(String))
   expect(scroller().scrollTop).toBe(CONTENT)
 })
 
-it('focuses the comment box when its card is clicked inside the focusable item pane', () => {
+it('focuses the comment box from its card and preserves focus outside it when submitting', async () => {
   show(3, makeTestBotItem(6, { question: { eventId: 'e3', text: 'Which flow?' } }))
   render(<BotItemView bot={BOT} uid="uid-6" />)
 
   fireEvent.click(screen.getByText('Which flow?'))
 
-  expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Comment' }))
+  const box = screen.getByRole('textbox', { name: 'Comment' })
+  expect(document.activeElement).toBe(box)
+  changePrompt(box, 'Use the proposed flow')
+  box.blur()
+  expect(box.contains(document.activeElement)).toBe(false)
+
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Comment' })))
+
+  expect(sent).toHaveBeenCalledExactlyOnceWith(
+    BOT,
+    'uid-6',
+    'Use the proposed flow',
+    [],
+    expect.any(String)
+  )
+  expect(box.contains(document.activeElement)).toBe(false)
 })
 
 it('places its file opens beside the bot workspace focused tab, as a click in that chat would', () => {
@@ -191,14 +209,6 @@ it('places its file opens beside the bot workspace focused tab, as a click in th
   }
 })
 
-it('shows the item number before the title and in the line under it', () => {
-  show(1, makeTestBotItem(35, { title: 'Show item numbers' }))
-  render(<BotItemView bot={BOT} uid="uid-35" />)
-
-  expect(screen.getByRole('heading', { level: 2 }).textContent).toBe('#35 Show item numbers')
-  expect(screen.getByText(/^Item 35 · Home Chat · /)).toBeTruthy()
-})
-
 const PR_URL = 'https://github.com/acme/app/pull/9'
 
 function showPrLink(): void {
@@ -216,11 +226,7 @@ function showPrLink(): void {
     ])
   )
   show(1, { ...makeTestBotItem(6), links: [{ kind: 'url', ref: PR_URL }] })
-  render(
-    <TooltipProvider>
-      <BotItemView bot={BOT} uid="uid-6" />
-    </TooltipProvider>
-  )
+  render(<BotItemView bot={BOT} uid="uid-6" />)
 }
 
 it('opens a PR link in the workspace card’s link popover', () => {

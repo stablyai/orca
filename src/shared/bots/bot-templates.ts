@@ -13,13 +13,7 @@ import { BOT_TEMPLATES_RELEASES } from './bot-template-catalog/releases'
 import { BOT_TEMPLATES_SUPPORT } from './bot-template-catalog/support'
 
 /** Ids from before templates carried packages; an older host knows only these. */
-export const LEGACY_BOT_TEMPLATE_IDS = [
-  'support',
-  'release',
-  'followup',
-  'feedback',
-  'briefing'
-] as const
+const LEGACY_BOT_TEMPLATE_IDS = ['support', 'release', 'followup', 'feedback', 'briefing'] as const
 
 export const BOT_TEMPLATE_CATEGORIES = [
   'coding',
@@ -54,8 +48,6 @@ export type BotTemplateSchedule = {
   id: string
   /** When it runs, as the template page says it ("Mondays at 9 AM"). */
   when: string
-  /** The same, short, for a template's row ("Mon 9 AM"). */
-  short: string
   /** What it posts ("New advisories and major versions"). */
   what: string
   rrule: string

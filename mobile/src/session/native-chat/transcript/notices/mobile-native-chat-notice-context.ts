@@ -16,6 +16,8 @@ export type MobileNativeChatNoticeView = {
   usageLimit?: MobileNativeChatUsageLimit | null
   /** Opens the accounts of the host that runs this chat; absent when the phone can't reach them. */
   openAccounts?: () => void
+  /** Rows whose failure no later successful turn resolved; absent when the transcript is unknown. */
+  unresolvedFailureRows?: ReadonlySet<string>
 }
 
 export const MobileNativeChatNoticeContext = createContext<MobileNativeChatNoticeView>({

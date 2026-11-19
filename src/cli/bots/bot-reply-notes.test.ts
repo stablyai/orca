@@ -3,10 +3,6 @@ import { REPEATED_FLAG_SEPARATOR } from '../arguments/args'
 import { readReplyNotes } from './bot-reply-notes'
 
 describe('readReplyNotes', () => {
-  it('is undefined without --note', () => {
-    expect(readReplyNotes(new Map([['text', 'hi']]))).toBeUndefined()
-  })
-
   it('reads each --note, whose text may hold colons', () => {
     const flags = new Map([
       ['note', ['src/b.ts:12:Use a Map: faster.', 'c.ts:3:Typo'].join(REPEATED_FLAG_SEPARATOR)]

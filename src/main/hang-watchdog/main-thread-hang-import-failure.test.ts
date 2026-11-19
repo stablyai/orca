@@ -68,7 +68,9 @@ it('preserves later JS capture and waits for its drain when the native module ca
         closed = true
       },
       postMessage: (message) => {
-        token = message.token
+        if (message.type === 'capture-drain') {
+          token = message.token
+        }
       }
     }
   )

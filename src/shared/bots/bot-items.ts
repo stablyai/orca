@@ -112,6 +112,23 @@ export type BotItemLinkView =
   | { kind: 'url'; ref: string; issue?: BotItemIssue }
   | { kind: 'file'; ref: string }
 
+/** One link per worker: a bot can link several steps of one follow-up chain, and each step reads as the
+ *  chain's newest Dispatch, so all but the first are the same worker again. */
+export function botItemLinksOnePerChain(links: readonly BotItemLinkView[]): BotItemLinkView[] {
+  const chains = new Set<string>()
+  return links.filter((link) => {
+    if (link.kind !== 'dispatch') {
+      return true
+    }
+    const chain = link.latest ?? link.ref
+    if (chains.has(chain)) {
+      return false
+    }
+    chains.add(chain)
+    return true
+  })
+}
+
 export type BotItemActor =
   | { kind: 'bot'; botId: string; chatId: string }
   | { kind: 'owner'; device?: string }

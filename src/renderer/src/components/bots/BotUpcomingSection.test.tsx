@@ -25,7 +25,6 @@ import { botAutomationRows } from '../../../../shared/bots/bot-automation-rows'
 import type { Bot } from '../../../../shared/bot-types'
 import { BotUpcomingSection } from './BotUpcomingSection'
 import { botAutomationCardRows } from './bot-automation-card'
-import { LOOK_NOW_SHOWN_HIDES } from './BotUpcomingRows'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the section reads only these fields.
 const BOT = {
@@ -286,7 +285,7 @@ describe('BotUpcomingSection', () => {
     expect(mocks.openAutomationsPage).toHaveBeenCalledOnce()
   })
 
-  it('shows a failed automation even when an older Orca saved the card folded', () => {
+  it('says a hidden automation failed while the card is folded', () => {
     window.localStorage.setItem(
       'orca.bots.panelFolds',
       JSON.stringify({ 'bot-1': ['automations'] })
@@ -298,38 +297,9 @@ describe('BotUpcomingSection', () => {
     ]
     render(<Section />)
 
-    expect(screen.getByText('Digest')).toBeTruthy()
+    expect(screen.queryByText('Digest')).toBeNull()
     expect(screen.getByText('Failed')).toBeTruthy()
-    expect(screen.queryByRole('button', { expanded: false })).toBeNull()
-  })
-
-  it("hides Look around's run mark while Look now shows over it, and keeps Look now in the tab order", () => {
-    const lookAround = { on: true, every: 'every-4h', weekdaysOnly: true, focus: '' } as const
-    const bot: Bot = { ...BOT, lookAround }
-    const upNext = { running: false, seenAt: 0, lastLookedAt: NOW - 60_000 }
-    render(
-      <TooltipProvider>
-        <BotUpcomingSection
-          bot={bot}
-          rows={botAutomationCardRows(
-            bot,
-            { automations: [], waits: [], inProgress: [], upNext: { state: upNext, items: [] } },
-            NOW
-          )}
-          upNext={upNext}
-          hasAutomations={false}
-          signInStops={new Set()}
-          now={NOW}
-        />
-      </TooltipProvider>
-    )
-
-    const mark = screen.getByText(/^Ran /)
-    for (const hides of LOOK_NOW_SHOWN_HIDES.split(' ')) {
-      expect(mark.classList).toContain(hides)
-    }
-    const lookNow = screen.getByRole('button', { name: 'Look now' })
-    expect(lookNow.getAttribute('tabindex')).not.toBe('-1')
-    expect(lookNow.closest('[data-look-now]')).not.toBeNull()
+    fireEvent.click(screen.getByRole('button', { expanded: false }))
+    expect(screen.getByText('Digest')).toBeTruthy()
   })
 })

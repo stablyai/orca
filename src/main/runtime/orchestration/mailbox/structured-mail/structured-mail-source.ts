@@ -17,6 +17,7 @@ import {
 } from '../senders/agent-message-relation'
 import { agentMessageSender, type SenderSnapshotResolver } from '../senders/agent-message-sender'
 import { answersConversationAsk } from '../senders/conversation-ask-answer'
+import { importedRemoteDispatchId } from '../senders/sender-reported-dispatch'
 import type { OrchestrationCliCommand } from '../../workers/launch/orchestration-cli-command'
 import type { ReportFollowUpAction } from '../../../../../shared/orchestration/mailbox/orchestration-report-follow-up'
 import {
@@ -41,15 +42,24 @@ export function structuredMailSource(input: {
   /** The chat reading it, so an answer to a thread ask it passed on goes back to that thread. */
   sessionId?: string
 }): AgentMessageSource & { orchestration: OrchestrationMailNotice } {
-  const groups = new Map<string, { message: MailSourceMessage; report: ReportFact }[]>()
+  const groups = new Map<
+    string,
+    { message: MailSourceMessage; report: ReportFact; imported: string | undefined }[]
+  >()
   for (const message of input.batch) {
-    const key = JSON.stringify([message.from_handle, message.answer_sender_snapshot ?? null])
+    // A server's reused terminal can send for several Dispatches; each is its own sender.
+    const imported = importedDispatch(input.db, message)
+    const key = JSON.stringify([
+      message.from_handle,
+      message.answer_sender_snapshot ?? null,
+      imported ?? null
+    ])
     let group = groups.get(key)
     if (!group) {
       group = []
       groups.set(key, group)
     }
-    group.push({ message, report: reportFact(message) })
+    group.push({ message, report: reportFact(message), imported })
   }
   const senders: AgentMessageSender[] = []
   for (const group of groups.values()) {
@@ -67,7 +77,7 @@ export function structuredMailSource(input: {
         address,
         input.db,
         input.senderSnapshot,
-        reported?.kind === 'valid' ? reported.dispatchId : undefined,
+        group[0]!.imported ?? (reported?.kind === 'valid' ? reported.dispatchId : undefined),
         // The oldest message decides, so mail sent before a rebind never takes the new coordinator.
         group.map(({ message }) => message.created_at).toSorted()[0]
       )
@@ -213,6 +223,19 @@ function withConversationNote(
       ? `[Orca: your final message and \`${cliCommand} bot reply\` (with any files) go to ${bound.place}.]`
       : `[Orca: this mail did not come from ${bound.place}, so your final message stays in Orca.]`
   return [{ type: 'text', text: note ? `${text}\n\n${note}` : text }]
+}
+
+/** The paired server's Dispatch the import recorded for this mail. */
+function importedDispatch(
+  db: OrchestrationDb | null,
+  message: MailSourceMessage
+): string | undefined {
+  try {
+    return db ? importedRemoteDispatchId(db, message.id) : undefined
+  } catch {
+    // Failure to resolve a label must not block delivery.
+    return undefined
+  }
 }
 
 type ReportFact = { kind: 'mail' } | { kind: 'invalid' } | { kind: 'valid'; dispatchId: string }
