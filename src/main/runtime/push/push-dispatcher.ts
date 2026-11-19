@@ -154,13 +154,15 @@ export class PushDispatcher {
             0
           )
           for (const target of batch) {
-            const delivered = queued.then((ids) => ids.has(target.registration.registrationId))
-            if (target.slot) {
-              this.slots.recordDelivery(target.slot, delivered)
-            }
-            pushedDigests.push(
-              delivered.then((ok) => (ok ? target.registration.tokenDigest : undefined))
+            const pushed = queued.then((ids) =>
+              ids.has(target.registration.registrationId)
+                ? target.registration.tokenDigest
+                : undefined
             )
+            if (target.slot) {
+              this.slots.recordDelivery(target.slot, pushed)
+            }
+            pushedDigests.push(pushed)
           }
         }
       }

@@ -44,8 +44,8 @@ function askedDevices(
 /** One push per phone and subject per cooldown, whichever host's push the gateway took first. */
 export class PushBurstSlots {
   private readonly reservedAt = new Map<string, number>()
-  // Per held slot: whether the gateway took the push that holds it.
-  private readonly deliveries = new Map<string, Promise<boolean>>()
+  // Per held slot: the token digest of the phone registration the gateway took its push for.
+  private readonly deliveries = new Map<string, Promise<string | undefined>>()
 
   /** The slot this push holds, or null while an earlier push holds it. */
   reserve(deviceId: string, subject: string, at: number): string | null {
@@ -63,8 +63,8 @@ export class PushBurstSlots {
     return slot
   }
 
-  recordDelivery(slot: string, delivered: Promise<boolean>): void {
-    this.deliveries.set(slot, delivered)
+  recordDelivery(slot: string, deliveredDigest: Promise<string | undefined>): void {
+    this.deliveries.set(slot, deliveredDigest)
   }
 
   /** Of the asked phones, those a push the gateway took holds the subject's slot for. */
@@ -77,22 +77,22 @@ export class PushBurstSlots {
       const slot = slotKey(deviceId, request.subject)
       const at = this.reservedAt.get(slot)
       const held = at !== undefined && now - at < NOTIFICATION_COOLDOWN_MS
-      return held && (await this.deliveries.get(slot)) ? [digest] : []
+      return held && (await this.deliveries.get(slot)) === digest ? [digest] : []
     })
     return (await Promise.all(answers)).flat()
   }
 
-  /** Another host's push the gateway took holds these phones' free slots, so this host's copy stays back. */
+  /** Another host's push the gateway took holds these phones' slots, so this host's copy stays back. */
   recordPushedElsewhere(
     devices: readonly SlotDevice[],
     request: NotificationPushCoverageRequest,
     now: number
   ): void {
-    for (const { deviceId } of askedDevices(devices, request)) {
-      const slot = this.reserve(deviceId, request.subject, now)
-      if (slot) {
-        this.recordDelivery(slot, Promise.resolve(true))
-      }
+    for (const { deviceId, digest } of askedDevices(devices, request)) {
+      // A held slot keeps its burst start; its own push may have failed, but the phone got this one.
+      const slot =
+        this.reserve(deviceId, request.subject, now) ?? slotKey(deviceId, request.subject)
+      this.recordDelivery(slot, Promise.resolve(digest))
     }
   }
 }
