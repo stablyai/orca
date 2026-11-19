@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { Pipette } from 'lucide-react'
 import { HexColorPicker } from 'react-colorful'
 
 import {
@@ -21,6 +22,8 @@ type ColorPickerProps = {
   selected?: boolean
   triggerLabel?: string
   showHexInTrigger?: boolean
+  /** Render the trigger as a 24px swatch tile that fits a swatch grid. */
+  tile?: boolean
 }
 
 const FULL_HEX_COLOR_PATTERN = /^#?[0-9a-fA-F]{6}$/
@@ -33,7 +36,8 @@ export function ColorPicker({
   defaultOpen,
   selected,
   triggerLabel,
-  showHexInTrigger
+  showHexInTrigger,
+  tile = false
 }: ColorPickerProps): React.JSX.Element {
   const t = useTranslate()
   const inputId = React.useId()
@@ -69,28 +73,48 @@ export function ColorPicker({
   return (
     <Popover defaultOpen={defaultOpen}>
       <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className={cn(
-            'h-8 gap-2 px-2.5',
-            selected ? 'ring-2 ring-foreground ring-offset-2 ring-offset-background' : null,
-            className
-          )}
-          aria-label={label}
-          aria-pressed={selected}
-        >
-          <span
-            aria-hidden="true"
-            className="size-4 rounded-[4px] border border-border/70"
-            style={{ backgroundColor: currentColor }}
-          />
-          {triggerLabel ? <span className="text-xs">{triggerLabel}</span> : null}
-          {shouldShowTriggerHex ? (
-            <span className="font-mono text-xs uppercase">{currentColor}</span>
-          ) : null}
-        </Button>
+        {tile ? (
+          // Grid-sized trigger for swatch rows: the custom color when chosen, else an eyedropper.
+          <button
+            type="button"
+            aria-label={label}
+            aria-pressed={selected}
+            title={label}
+            className={cn(
+              'inline-flex size-6 items-center justify-center rounded-md outline-none transition-all focus-visible:ring-[3px] focus-visible:ring-ring/50',
+              selected
+                ? 'ring-2 ring-foreground/80 ring-offset-1 ring-offset-transparent'
+                : 'border border-dashed border-muted-foreground/60 text-muted-foreground hover:border-foreground/60 hover:text-foreground',
+              className
+            )}
+            style={selected ? { backgroundColor: currentColor } : undefined}
+          >
+            {selected ? null : <Pipette className="size-3" />}
+          </button>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className={cn(
+              'h-8 gap-2 px-2.5',
+              selected ? 'ring-2 ring-foreground ring-offset-2 ring-offset-background' : null,
+              className
+            )}
+            aria-label={label}
+            aria-pressed={selected}
+          >
+            <span
+              aria-hidden="true"
+              className="size-4 rounded-[4px] border border-border/70"
+              style={{ backgroundColor: currentColor }}
+            />
+            {triggerLabel ? <span className="text-xs">{triggerLabel}</span> : null}
+            {shouldShowTriggerHex ? (
+              <span className="font-mono text-xs uppercase">{currentColor}</span>
+            ) : null}
+          </Button>
+        )}
       </PopoverTrigger>
       <PopoverContent align="start" className="w-64 p-3">
         <div className="space-y-3">

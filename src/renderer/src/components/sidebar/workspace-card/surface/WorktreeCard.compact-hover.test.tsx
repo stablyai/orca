@@ -50,6 +50,7 @@ vi.mock('@/store', () => {
     ptyIdsByTabId: {},
     recordFeatureInteraction,
     remoteBranchConflictByWorktreeId: {},
+    repos: [],
     setRemoteBrowserPageHandle: vi.fn(),
     replaceWorkspacePortScans,
     setWorkspacePortScanRefreshing,

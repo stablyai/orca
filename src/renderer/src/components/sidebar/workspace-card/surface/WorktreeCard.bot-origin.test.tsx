@@ -6,6 +6,7 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 
 vi.mock('@/store', () => {
   const getState = () => ({
+    repos: [],
     deleteStateByWorktreeId: {},
     fetchHostedReviewForBranch: vi.fn(),
     fetchIssue: vi.fn(),

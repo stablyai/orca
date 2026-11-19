@@ -25,6 +25,7 @@ import {
 } from 'lucide-react'
 import type { RepoIcon } from '../../../../shared/repository/appearance/repo-icon'
 import { cn } from '@/lib/class-names'
+import { DEFAULT_REPO_BADGE_COLOR } from '../../../../shared/repository/appearance/repo-badge-color'
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
@@ -157,6 +158,25 @@ export function RepoIconGlyph({
           draggable={false}
           onError={() => setFailedImageSrc(imageSrc)}
         />
+      </span>
+    )
+  }
+
+  if (repoIcon?.type === 'letters') {
+    return (
+      <span
+        className={cn(
+          'inline-flex items-center justify-center overflow-hidden rounded-[22%] font-semibold leading-none text-white [container-type:size]',
+          className,
+          iconClassName
+        )}
+        style={{ backgroundColor: color ?? DEFAULT_REPO_BADGE_COLOR }}
+        aria-hidden="true"
+      >
+        {/* Why: container units scale the letters to the mark, from 16px sidebar chips to 40px tiles. */}
+        <span style={{ fontSize: repoIcon.text.length > 1 ? 'min(52cqh, 44cqw)' : '62cqh' }}>
+          {repoIcon.text}
+        </span>
       </span>
     )
   }

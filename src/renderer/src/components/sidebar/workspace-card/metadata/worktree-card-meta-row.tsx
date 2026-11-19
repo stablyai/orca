@@ -6,11 +6,8 @@ import { WorktreeHostContextBadge } from '../host/WorktreeHostContextBadge'
 import { useWslHostDistro, WslHostMark } from '@/components/wsl-host-mark/WslHostMark'
 import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { TruncatedSidebarLabel } from '../../../ui/truncated-sidebar-label'
-import {
-  WorktreeCardConflictBadge,
-  WorktreeCardFolderPath,
-  WorktreeCardMetaRepoBadge
-} from './worktree-card-meta-items'
+import { WorktreeCardConflictBadge, WorktreeCardFolderPath } from './worktree-card-meta-items'
+import { WorktreeCardRepoChip } from '../identity/worktree-card-header-items'
 import type { WorktreeCardPresentation } from '../surface/worktree-card-presentation'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 
@@ -52,7 +49,9 @@ export function WorktreeCardMetaRow({
   return (
     <div className="flex items-center gap-1.5 min-w-0" data-worktree-card-meta-row="">
       <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
-        {showRepoBadgeInMetaRow && repo && <WorktreeCardMetaRepoBadge repo={repo} />}
+        {showRepoBadgeInMetaRow && repo && (
+          <WorktreeCardRepoChip repo={repo} card={card} hasHoverDetails={hasHoverDetails} />
+        )}
 
         {showHostContextBadge &&
           (wslDistro ? (

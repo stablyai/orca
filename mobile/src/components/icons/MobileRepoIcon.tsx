@@ -75,6 +75,26 @@ export function MobileRepoIcon({ repoIcon, size = 14, color = colors.textSeconda
       />
     )
   }
+  if (repoIcon?.type === 'letters') {
+    return (
+      <View
+        style={[
+          styles.letters,
+          { width: size, height: size, borderRadius: radii.mark, backgroundColor: color }
+        ]}
+      >
+        <Text
+          style={[
+            styles.lettersText,
+            { fontSize: size * (repoIcon.text.length > 1 ? 0.46 : 0.62) }
+          ]}
+          numberOfLines={1}
+        >
+          {repoIcon.text}
+        </Text>
+      </View>
+    )
+  }
   if (repoIcon?.type === 'emoji') {
     return <Text style={[styles.emoji, { fontSize: size }]}>{repoIcon.emoji}</Text>
   }
@@ -87,6 +107,14 @@ export function MobileRepoIcon({ repoIcon, size = 14, color = colors.textSeconda
 }
 
 const styles = StyleSheet.create({
+  letters: {
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  lettersText: {
+    color: '#ffffff',
+    fontWeight: '600'
+  },
   emoji: {
     textAlign: 'center'
   },
