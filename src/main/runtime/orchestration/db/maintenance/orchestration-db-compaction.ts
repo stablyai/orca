@@ -135,11 +135,9 @@ async function readDeferral(filename: string): Promise<CompactionDeferral | null
 
 async function writeDeferral(filename: string, deferral: CompactionDeferral | null): Promise<void> {
   try {
-    if (deferral) {
-      await writeFile(deferralFile(filename), JSON.stringify(deferral))
-    } else {
-      await rm(deferralFile(filename), { force: true })
-    }
+    await (deferral
+      ? writeFile(deferralFile(filename), JSON.stringify(deferral))
+      : rm(deferralFile(filename), { force: true }))
   } catch {
     // Only a retry hint; losing it costs one more bounded attempt.
   }
