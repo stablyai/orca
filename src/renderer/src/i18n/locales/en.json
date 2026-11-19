@@ -23976,6 +23976,7 @@
       "description": "Find any past conversation by what was said in it, then pick up where the agent left off.",
       "cta": "Turn on session search"
     },
+    "eyebrowNew": "New",
     "eyebrowTip": "Tip",
     "orcaCli": {
       "title": "Let agents drive Orca with the Orca CLI",

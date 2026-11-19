@@ -21334,6 +21334,7 @@
       "description": "Geçmiş konuşmaları içlerinde söylenenlere göre bulun ve ajanın kaldığı yerden devam edin.",
       "cta": "Oturum aramasını aç"
     },
+    "eyebrowNew": "Yeni",
     "eyebrowTip": "İpucu",
     "orcaCli": {
       "title": "Ajanların Orca CLI ile Orca'yı yönetmesini sağlayın",

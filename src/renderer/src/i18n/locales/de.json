@@ -21192,6 +21192,7 @@
       "description": "Frühere Unterhaltungen anhand ihres Inhalts finden und dort weitermachen, wo der Agent aufgehört hat.",
       "cta": "Sitzungssuche aktivieren"
     },
+    "eyebrowNew": "Neu",
     "eyebrowTip": "Tipp",
     "orcaCli": {
       "title": "Agenten Orca mit der Orca CLI steuern lassen",

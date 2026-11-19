@@ -762,6 +762,7 @@
       "description": "Encontre qualquer conversa anterior pelo que foi dito nela e continue de onde o agente parou.",
       "cta": "Ativar busca de sessões"
     },
+    "eyebrowNew": "Novo",
     "eyebrowTip": "Dica",
     "orcaCli": {
       "title": "Deixe os agentes controlarem o Orca com o Orca CLI",
