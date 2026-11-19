@@ -1197,6 +1197,13 @@
       "claudeRemoveProfile": "Orca deletes this account's own Claude folder and the sign-in saved in it on {{host}}. Your System default login and chat history shared with it stay. If it is selected, the next Claude you start uses System default."
     },
     "sourceControl": {
+      "workspaceTitleLanguage": {
+        "keywords": "workspace title language Chinese",
+        "title": "Workspace title language",
+        "description": "Choose the language for new automatic workspace titles. Git branch names stay in English. Existing and manually edited titles are kept.",
+        "branch": "Same as branch name",
+        "ui": "Follow interface language"
+      },
       "gitOperationInAnotherWorkspace": "Git operation running elsewhere",
       "remoteOperationInAnotherWorkspace": "Another workspace is running a Git operation, such as push, pull, or force push. Wait for it to finish before using this action, so the two operations don't overlap.",
       "actionModel": {

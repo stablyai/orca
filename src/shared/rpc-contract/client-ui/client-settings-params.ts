@@ -13,6 +13,7 @@ import { normalizeNewTabMenuLayout } from '../../new-tab-menu/new-tab-menu-layou
 import { WorktreeVisibilityDefaultsUpdate } from '../workspaces/worktree-visibility-defaults-params'
 import { WorkspaceCleanupRulesParam } from '../workspace-cleanup/workspace-cleanup-policy-params'
 import { AGENT_CHAT_PERMISSION_MODES } from '../../agent-launch/permissions/agent-chat-permission-mode'
+import { SUPPORTED_UI_LOCALES } from '../../i18n/ui-locale'
 import { PR_AUTO_REFRESH_CADENCES } from '../../source-control/hosted-review/review-refresh-policy'
 
 export const TaskProviderParam = z.custom<TaskProvider>(isTaskProvider, {
@@ -91,6 +92,7 @@ export const GitHubProjectSettings = z
 
 export const SettingsUpdate = z
   .object({
+    workspaceTitleLanguage: z.enum(['branch', 'ui', ...SUPPORTED_UI_LOCALES]).optional(),
     machineName: z.string().trim().max(MACHINE_NAME_MAX_LENGTH).optional(),
     worktreeVisibilityDefaults: WorktreeVisibilityDefaultsUpdate.optional(),
     defaultTuiAgent: z

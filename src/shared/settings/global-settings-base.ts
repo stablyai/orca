@@ -26,13 +26,15 @@ import type { SshRemoteControlSettings } from '../remote-runtime/ssh/ssh-remote-
 import type { AgentWorkspaceTrustSettings } from '../agent-launch/permissions/agent-workspace-trust-decision'
 import type { KeybindingGlobalSettings } from '../keybindings/global-settings'
 import type { WorkspaceCleanupPolicySettings } from '../workspace-cleanup/workspace-cleanup-policy'
+import type { WorkspaceTitleLanguageSettings } from './workspace-title-language'
 import type { PRAutoRefreshSettings } from '../source-control/hosted-review/review-refresh-policy'
 import type { ManagedAccountNameSettings } from '../agent-accounts/managed-account-display-names'
 import type { NewTabMenuSettings } from '../new-tab-menu/new-tab-menu-layout'
 import type { UiLanguageSettings } from '../i18n/ui-language-settings'
 
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
-export type GlobalSettingsBase = AntigravityChatAuthSettings &
+export type GlobalSettingsBase = WorkspaceTitleLanguageSettings &
+  AntigravityChatAuthSettings &
   EmulatorOpeningSettings &
   SshRemoteControlSettings &
   ClaudeAgentViewSettings &

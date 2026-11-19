@@ -12,6 +12,7 @@ import {
 import { haveSameDisabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { normalizeSourceControlAiSettings } from '../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import { normalizeSourceControlGroupOrder } from '../../../../shared/source-control/listing/source-control-group-order'
+import { normalizeWorkspaceTitleLanguage } from '../../../../shared/settings/workspace-title-language'
 import { SOURCE_CONTROL_LAUNCH_ACTION_IDS } from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { applyNativeChatSessionOptionSettingsMutation } from '../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
@@ -42,16 +43,11 @@ import type {
   RuntimeClientSettings,
   RuntimeClientSettingsUpdate,
   RuntimeClientSourceControlAi,
-  RuntimeHostDisplayLabelOverrides
+  RuntimeHostDisplayLabelOverrides,
+  RuntimeSharingServicePresence
 } from './runtime-client-settings-shape'
 import { normalizeNewTabMenuLayout } from '../../../../shared/new-tab-menu/new-tab-menu-layout'
 import { hostNativeChatDefaults } from '../../../../shared/native-chat/settings/native-chat-providers'
-
-/** Which Orca cloud services this host registered; headless hosts register none. */
-export type RuntimeSharingServicePresence = {
-  artifacts(): boolean
-  skills(): boolean
-}
 
 export class RuntimeClientSettingsController {
   private reconciliationGeneration = 0
@@ -75,6 +71,7 @@ export class RuntimeClientSettingsController {
     // Older clients read permission from composed argument text, before a stored choice existed.
     const launchProfile = composeAgentLaunchProfile(settings, process.platform)
     return {
+      workspaceTitleLanguage: normalizeWorkspaceTitleLanguage(settings.workspaceTitleLanguage),
       defaultTuiAgent: settings.defaultTuiAgent ?? null,
       newWorkspaceSetupOnly: false,
       disabledTuiAgents: settings.disabledTuiAgents ?? [],

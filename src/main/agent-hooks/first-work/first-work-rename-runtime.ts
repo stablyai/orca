@@ -65,7 +65,7 @@ export function firstWorkRenameDeps(
       const scope = parseWorkspaceKey(worktreeId)
       return scope?.type === 'folder'
         ? store.getFolderWorkspace!(scope.folderWorkspaceId)?.name
-        : store.getWorktreeMeta(worktreeId)?.displayName
+        : localMeta(worktreeId)?.displayName
     },
     getFolderWorkspacePath: (worktreeId) => {
       const scope = parseWorkspaceKey(worktreeId)
@@ -84,7 +84,7 @@ export function firstWorkRenameDeps(
       return scope?.type === 'folder'
         ? store.getFolderWorkspace!(scope.folderWorkspaceId)?.pendingFirstAgentMessageRename ===
             true
-        : store.getWorktreeMeta(worktreeId)?.pendingFirstAgentMessageRename === true
+        : localMeta(worktreeId)?.pendingFirstAgentMessageRename === true
     },
     canRenameOrcaCreatedBranch: (worktreeId) => {
       const meta = localMeta(worktreeId)
