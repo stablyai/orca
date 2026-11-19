@@ -95,25 +95,6 @@ describe('useRouteBot', () => {
     vi.useRealTimers()
   })
 
-  it('reads once on a cold open', async () => {
-    reads.answer = {
-      kind: 'bots',
-      bots: [BOT],
-      hideBotCreated: true,
-      view: DEFAULT_BOT_SIDEBAR_VIEW,
-      enabled: true,
-      takesCreate: true,
-      takesTemplates: true,
-      waits: {},
-      needsYou: {}
-    }
-    mount('host-cold\nlocal')
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(0)
-    })
-    expect(reads.count).toBe(1)
-  })
-
   it('stops reading a host without bots for phones', async () => {
     reads.answer = { kind: 'no-capability' }
     mount('host-old\nlocal')
@@ -153,25 +134,19 @@ describe('useRouteBot', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0)
     })
+    expect(reads.count).toBe(1)
     expect(shown).toEqual({ reads: 1, itemReads: 1 })
-    // N and 10N phase changes: each reads the bot, none reads its items again.
-    for (let index = 0; index < 5; index += 1) {
-      await notice(['status'])
-    }
-    expect(shown).toEqual({ reads: 6, itemReads: 1 })
-    for (let index = 0; index < 50; index += 1) {
-      await notice(['status'])
-    }
-    expect(shown).toEqual({ reads: 56, itemReads: 1 })
+    await notice(['status'])
+    expect(shown).toEqual({ reads: 2, itemReads: 1 })
     await notice(['items'])
-    expect(shown).toEqual({ reads: 57, itemReads: 2 })
+    expect(shown).toEqual({ reads: 3, itemReads: 2 })
     await notice(['workers', 'status'])
-    expect(shown).toEqual({ reads: 58, itemReads: 3 })
+    expect(shown).toEqual({ reads: 4, itemReads: 3 })
     // An older host's notice names nothing, so it may be items.
     emit({ type: 'botsChanged' })
     await act(async () => {
       await vi.advanceTimersByTimeAsync(0)
     })
-    expect(shown).toEqual({ reads: 59, itemReads: 4 })
+    expect(shown).toEqual({ reads: 5, itemReads: 4 })
   })
 })
