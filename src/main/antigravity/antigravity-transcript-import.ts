@@ -65,7 +65,8 @@ export const ANTIGRAVITY_TRANSCRIPT_IMPORT: StructuredAgentTranscriptImport = {
       return admitted
     }
     const full = join(dirname(admitted), FULL_TRANSCRIPT)
-    return (await isFile(full))
+    // An unreadable full transcript leaves the admitted compact one.
+    return (await isFile(full).catch(() => false))
       ? ((await directories.admitTranscriptPath({ store: input.store, transcriptPath: full })) ??
           admitted)
       : admitted
