@@ -16,6 +16,8 @@ type SettingsRowProps = {
   control: React.ReactNode
   className?: string
   labelId?: string
+  htmlFor?: string
+  labelAccessory?: React.ReactNode
   alignTop?: boolean
   id?: string
 }
@@ -26,9 +28,16 @@ export function SettingsRow({
   control,
   className,
   labelId,
+  htmlFor,
+  labelAccessory,
   alignTop,
   id
 }: SettingsRowProps): React.JSX.Element {
+  const labelElement = (
+    <Label id={labelId} htmlFor={htmlFor} className="select-text">
+      {label}
+    </Label>
+  )
   return (
     <div
       id={id}
@@ -42,9 +51,14 @@ export function SettingsRow({
       )}
     >
       <div className={cn('min-w-0 grow basis-32', description ? 'space-y-1' : 'space-y-0.5')}>
-        <Label id={labelId} className="select-text">
-          {label}
-        </Label>
+        {labelAccessory ? (
+          <div className="flex items-center gap-1.5">
+            {labelElement}
+            {labelAccessory}
+          </div>
+        ) : (
+          labelElement
+        )}
         {description ? (
           <p className="select-text text-xs text-muted-foreground">{description}</p>
         ) : null}

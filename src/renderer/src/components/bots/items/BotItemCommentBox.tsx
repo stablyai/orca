@@ -13,12 +13,13 @@ import {
   type Ref
 } from 'react'
 import { ArrowUp, CornerDownRight } from 'lucide-react'
-import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import { useImeEnterGestureOwnership } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { NativeChatComposerPrimaryButton } from '../../native-chat/composer/controls/NativeChatComposerPrimaryButton'
 import { NativeChatAttachButton } from '../../native-chat/composer/controls/NativeChatAttachButton'
+import { NativeChatDictationButton } from '../../native-chat/composer/controls/NativeChatDictationButton'
+import { useNativeChatDictation } from '../../native-chat/composer/editor/use-native-chat-dictation'
 import { NativeChatComposerNotices } from '../../native-chat/composer/controls/NativeChatComposerNotices'
 import { useNativeChatComposerNotice } from '../../native-chat/composer/controls/use-native-chat-composer-notice'
 import { NativeChatPromptEditor } from '../../native-chat/composer/editor/NativeChatPromptEditor'
@@ -49,9 +50,7 @@ import { imageReferencesToPromptMarkers } from '../../../../../shared/native-cha
 import type { Bot } from '../../../../../shared/bot-types'
 import { BOT_ITEM_LIMITS, type BotItem } from '../../../../../shared/bots/bot-items'
 import { botRefKey } from '@/lib/bot-hosts'
-import { botErrorMessage } from '../bot-presentation'
 import { useClearOfFloatingTrigger } from './use-clear-of-floating-trigger'
-import { commentOnBotItem } from './use-bot-items'
 import {
   useBotItemCommentAttachments,
   type BotItemCommentAttachTarget
@@ -72,14 +71,15 @@ export function BotItemCommentBox({
   bot,
   item,
   attachTo,
-  onSent,
+  onSend,
   ref
 }: {
   bot: Bot
   item: BotItem
   /** The bot's folder workspace and host, which file drops and uploads resolve against. */
   attachTo: BotItemCommentAttachTarget | null
-  onSent?: () => void
+  /** Takes the comment as the box empties: it shows and goes to the host from there. */
+  onSend: (text: string, paths: readonly string[]) => void
   ref?: Ref<BotItemCommentBoxHandle>
 }): React.JSX.Element {
   const t = useTranslate()
@@ -87,12 +87,12 @@ export function BotItemCommentBox({
   const ime = useImeEnterGestureOwnership()
   const { draft, setDraft, flushDraftAppends } = useNativeChatDraft(scopeKey, ime.isComposing)
   const [caret, setCaret] = useState(draft.length)
-  const [sending, setSending] = useState(false)
   const { notices, setNotice } = useNativeChatComposerNotice()
   const box = useRef<HTMLDivElement | null>(null)
   const input = useRef<NativeChatComposerInput | null>(null)
   const composer = useRef<NativeChatComposerHandle | null>(null)
   const lift = useClearOfFloatingTrigger(box)
+  const dictation = useNativeChatDictation(input, false)
   const access = useBotItemCommentAttachments(bot, item, attachTo)
   const [activeSuggestion, setActiveSuggestion] = useState(0)
   // Chat's picker and `@` list: workspace files from the bot's folder. A comment runs no commands,
@@ -213,7 +213,7 @@ export function BotItemCommentBox({
   const pending = images.some((image) => image.pending) || attachments.pastedTextSaving
   const empty = !draft.trim() && images.length === 0
   const send = (): void => {
-    if (empty || pending || sending) {
+    if (empty || pending) {
       return
     }
     if (!admitNativeChatPastedText(scopeKey, draft, setNotice)) {
@@ -227,17 +227,11 @@ export function BotItemCommentBox({
       sent.map((image) => image.id)
     ).trim()
     const paths = sent.map((image) => image.path)
-    setSending(true)
-    void commentOnBotItem(bot, item.uid, text, paths)
-      .then(() => {
-        if (clearNativeChatComposerDraftIfUnchanged(scopeKey, submitted)) {
-          attachments.clearImageAttachments()
-        }
-        setNotice(null)
-        onSent?.()
-      })
-      .catch((error: unknown) => toast.error(botErrorMessage(error)))
-      .finally(() => setSending(false))
+    if (clearNativeChatComposerDraftIfUnchanged(scopeKey, submitted)) {
+      attachments.clearImageAttachments()
+    }
+    setNotice(null)
+    onSend(text, paths)
   }
   // Stable identities let the memoized editor skip the per-keystroke render, as in chat.
   const editorChange = useLatestHandler((node: NativeChatComposerInput) => {
@@ -355,7 +349,7 @@ export function BotItemCommentBox({
       ) : null}
       <div className="flex items-end gap-1">
         {access.session ? (
-          <NativeChatAttachButton disabled={sending} onAttach={fileDrops.pickAttachments} />
+          <NativeChatAttachButton onAttach={fileDrops.pickAttachments} />
         ) : (
           <span className="w-1" />
         )}
@@ -385,11 +379,19 @@ export function BotItemCommentBox({
           />
         </div>
         {/* Centred in the + button's row height, so it sits level with the + and the last line. */}
-        <div className="flex h-8 shrink-0 items-center pointer-coarse:h-11">
+        <div className="flex h-8 shrink-0 items-center gap-1 pointer-coarse:h-11">
+          <NativeChatDictationButton
+            disabled={dictation.dictationDisabled}
+            isDictating={dictation.isDictating}
+            isHoldMode={dictation.isDictationHoldMode}
+            onToggle={dictation.toggleDictation}
+            onHoldStart={dictation.startHoldDictation}
+            onHoldEnd={dictation.stopHoldDictation}
+          />
           <NativeChatComposerPrimaryButton
             size="compact"
             aria-label={t('bots.items.comment.submit', 'Comment')}
-            disabled={empty || pending || sending}
+            disabled={empty || pending}
             onClick={send}
           >
             <ArrowUp className="size-3.5" />

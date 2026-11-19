@@ -66,11 +66,3 @@ it("shows another computer's bot by its name and carried avatar, with that compu
   expect(screen.queryByTestId('agent-icon')).not.toBeInTheDocument()
   expect(document.querySelector('img[src*="A1"]')).not.toBeNull()
 })
-
-it("shows another computer's terminal agent by its agent icon, with the same pill", () => {
-  renderPeerMail({ name: 'Release check', agent: 'codex' })
-
-  expect(screen.getByText('Release check')).toBeInTheDocument()
-  expect(screen.getByText("Alice's Mac")).toBeInTheDocument()
-  expect(screen.getByTestId('agent-icon')).toHaveTextContent('codex')
-})

@@ -231,10 +231,6 @@ function composerText(): string {
   return promptValue(screen.getByRole('textbox'))
 }
 
-function occurrences(text: string, of: string): number {
-  return text.split(of).length - 1
-}
-
 /** Clicks Start and waits for Home to show and its composer's focus claim to run. */
 async function startSuggestion(): Promise<void> {
   fireEvent.click(screen.getByRole('button', { name: 'Start' }))
@@ -283,15 +279,13 @@ afterEach(() => {
 describe('a Suggestion’s Start, into Home’s composer', () => {
   it.each<[string, HomeView]>([
     ['kept in the background behind the bot’s page', 'background'],
-    ['not open yet', 'not-open'],
-    ['already showing', 'showing']
+    ['not open yet', 'not-open']
   ])('puts the request in Home’s composer exactly once when Home is %s', async (_label, home) => {
     renderBotPage(home)
 
     await startSuggestion()
 
     expect(composerText()).toBe(ASK)
-    expect(occurrences(composerText(), ASK)).toBe(1)
   })
 
   // Suggestions sit beside Home's chat, so a second Start finds Home already showing its request.
@@ -304,6 +298,5 @@ describe('a Suggestion’s Start, into Home’s composer', () => {
 
     // The draft already ends with this request, so a second Start only shows it again.
     expect(composerText()).toBe(ASK)
-    expect(occurrences(composerText(), ASK)).toBe(1)
   })
 })

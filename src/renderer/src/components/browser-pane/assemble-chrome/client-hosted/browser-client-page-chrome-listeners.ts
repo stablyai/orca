@@ -15,11 +15,14 @@ export function bindBrowserClientPageChromeListeners(
   {
     browserPageId,
     updatePageState,
+    publishFavicon,
     dismissAddressBarSuggestions,
     applyViewportPreset
   }: {
     browserPageId: string
     updatePageState: (tabId: string, updates: BrowserTabPageState) => void
+    /** Other clients show the icon only once the runtime has it. */
+    publishFavicon: (faviconUrl: string | null) => void
     dismissAddressBarSuggestions: () => void
     /** CDP overrides don't survive a cross-origin load, and the guest may have loaded while no pane showed it. */
     applyViewportPreset: (trigger: 'attach' | 'load') => void
@@ -29,6 +32,7 @@ export function bindBrowserClientPageChromeListeners(
   const clearFavicon = (): void => {
     faviconDocumentUrlByGuest.delete(webview)
     updatePageState(browserPageId, { faviconUrl: null })
+    publishFavicon(null)
   }
   // Icon events fired while no pane listened are lost; drop an icon a background navigation left behind.
   const iconDocumentUrl = faviconDocumentUrlByGuest.get(webview)
@@ -43,6 +47,7 @@ export function bindBrowserClientPageChromeListeners(
       faviconDocumentUrlByGuest.set(webview, documentUrl)
     }
     updatePageState(browserPageId, { faviconUrl })
+    publishFavicon(faviconUrl)
   }
   // Chromium sends no icon update for an icon-less page, so a cross-origin leave clears the old one.
   const onLeaveDocument = (

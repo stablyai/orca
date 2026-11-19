@@ -90,7 +90,10 @@ export const ConnectorAskerSchema = z.object({
       userId: z.string().min(1).max(128),
       name: z.string().min(1).max(CONNECTOR_LIMITS.maxDisplayTextLength)
     })
-    .optional()
+    .optional(),
+  // Orca's own lines for the agent on where it was asked (GitHub: the branch, how to post there),
+  // which the chat doesn't show. Only to a machine that lists askerNote; any other reads it in text.
+  note: z.string().min(1).max(CONNECTOR_LIMITS.maxAskerNoteLength).optional()
 })
 
 // A hook's call comes only in a webhook conversation, from the hook its rule names; no other event

@@ -1,13 +1,14 @@
 // One chat in the Chats tab: one folded row; its chevron shows the workers it started, capped and stepped.
 import { useState } from 'react'
-import { AppWindow, ChevronRight } from 'lucide-react'
-import { StateIndicatorTooltip } from '@/components/agent/status/StateIndicatorTooltip'
+import { ChevronRight } from 'lucide-react'
 import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
 import { useTranslate } from '@/i18n/use-translate'
 import { openBotHomeTab } from '@/lib/bot-catalog'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
 import { cn } from '@/lib/class-names'
+import { useBotUsageLimitStopIndex } from './use-bot-usage-limit-stops'
+import { UsageLimitStopMark, usageLimitStopText } from './BotUsageLimitMark'
 import type { Bot } from '../../../../shared/bot-types'
 import {
   CHAT_TREE_CAPS,
@@ -69,10 +70,14 @@ export function BotChatLine({
   folded: boolean
 }): React.JSX.Element {
   const t = useTranslate()
+  const stop = useBotUsageLimitStopIndex().bySession.get(chat.chatId)
   if (chat.live === 'replying') {
     return <>{t('bots.chats.replying', 'Replying…')}</>
   }
   const place = botChatPlace(chat)
+  if (stop && chat.live === 'idle') {
+    return <>{[place, usageLimitStopText(t, stop)].filter(Boolean).join(' · ')}</>
+  }
   if (chat.live === 'needs-you') {
     return (
       <>
@@ -105,12 +110,32 @@ const META = 'flex shrink-0 items-center gap-1.5 text-2xs text-muted-foreground 
 function ChatRowMeta({ chat }: { chat: BotChatTreeChat }): React.JSX.Element | null {
   const t = useTranslate()
   const waiting = chatWaitingCount(chat)
-  const running = chatRunningCount(chat)
-  if (waiting + running > 0) {
+  const { byWorkspace } = useBotUsageLimitStopIndex()
+  // A worker stopped on its limit counts as stopped, not running; one asking the owner still waits.
+  const stoppedWorkers = [...chat.running, ...chat.finished].filter(
+    (worker) =>
+      worker.state !== 'needs-you' && worker.worktreeId && byWorkspace.has(worker.worktreeId)
+  )
+  const stopped = stoppedWorkers.map((worker) => byWorkspace.get(worker.worktreeId!)!)
+  const running =
+    chatRunningCount(chat) -
+    stoppedWorkers.filter(
+      (worker) => chat.running.includes(worker) && worker.state !== 'unreachable'
+    ).length
+  if (waiting + running + stopped.length > 0) {
     const waitingLabel = t('bots.chats.waitingCount', '{{count}} waiting', { count: waiting })
     const runningLabel = t('bots.chats.runningCount', '{{count}} running', { count: running })
     return (
       <span className="flex shrink-0 items-center gap-2">
+        {stopped.length > 0 ? (
+          <span className={cn(META, 'text-status-warning-text')}>
+            <UsageLimitStopMark stop={stopped[0]!} />
+            <span aria-hidden>{stopped.length}</span>
+            <span className="sr-only">
+              {t('bots.usageLimit.stoppedCount', '{{count}} stopped', { count: stopped.length })}
+            </span>
+          </span>
+        ) : null}
         {waiting > 0 ? (
           <span className={META}>
             <span
@@ -157,6 +182,7 @@ export function BotChatTreeGroup({
   loadMore: (chatId: string) => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const stopIndex = useBotUsageLimitStopIndex()
   const [limit, setLimit] = useState(CHATS_TAB_FIRST_WORKERS)
   const foldable = unfolded !== null && chat.runningTotal + chat.finishedTotal > 0
   const open = foldable && unfolded === true
@@ -169,7 +195,6 @@ export function BotChatTreeGroup({
   const title = chat.title || t('bots.chats.untitled', 'New chat')
   const chatName = [source, title].filter(Boolean).join(' · ')
   const label = useBotChatLabel(chat, title)
-  const openTabLabel = t('bots.chats.openTab', 'Open in a tab')
   const toggleFold = (): void => {
     if (!open && read) {
       loadMore(chat.chatId)
@@ -225,6 +250,7 @@ export function BotChatTreeGroup({
         </span>
         <BotChatStatusSlot
           chat={chat}
+          stop={stopIndex.bySession.get(chat.chatId) ?? null}
           className="h-5 w-4"
           iconClassName="size-3.5"
           onClick={pressRow}
@@ -243,13 +269,6 @@ export function BotChatTreeGroup({
               <span className="shrink-0 rounded border border-input px-1 text-[10px] leading-[14px] font-semibold text-foreground">
                 {t('bots.chats.newTag', 'New')}
               </span>
-            ) : null}
-            {chat.tab ? (
-              <StateIndicatorTooltip label={openTabLabel}>
-                <span role="img" aria-label={openTabLabel} className="relative flex shrink-0">
-                  <AppWindow className="size-3 text-muted-foreground/70" />
-                </span>
-              </StateIndicatorTooltip>
             ) : null}
             <span className="flex-1" />
             <ChatRowMeta chat={chat} />

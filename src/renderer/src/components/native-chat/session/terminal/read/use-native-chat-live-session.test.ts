@@ -336,6 +336,93 @@ describe('useNativeChatLiveSession — transport routing', () => {
 
     expect(latest?.status).toBe('ready')
   })
+
+  it('pages older history by cursor and prepends it to the held window', async () => {
+    const transport = Object.assign(getMockTransport('env-1'), { pagesByCursor: true })
+    const at = (id: string, offset: number) => ({ ...assistant(id, 't'), transcriptOrder: offset })
+    const held = Array.from({ length: 300 }, (_unused, n) => at(`held-${n}`, 1000 + n))
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    await act(async () => transport.emit({ type: 'snapshot', messages: held, hasMore: true }))
+    transport.readSession.mockResolvedValueOnce({
+      messages: [at('older-0', 10), at('older-1', 20)],
+      hasMore: false,
+      beforeOffset: 10
+    })
+
+    let result: unknown
+    await act(async () => {
+      result = await latest?.loadEarlier()
+    })
+
+    expect(transport.readSession).toHaveBeenLastCalledWith(AGENT, SESSION, 200, undefined, {
+      wakeWslDistro: true,
+      beforeOffset: 1000
+    })
+    expect(result).toBe('applied')
+    expect(latest?.messages.slice(0, 3).map((m) => m.id)).toEqual(['older-0', 'older-1', 'held-0'])
+    expect(latest?.hasMore).toBe(false)
+  })
+
+  it('rereads when appends evict the live overlap while a cursor page is in flight', async () => {
+    const transport = Object.assign(getMockTransport('env-1'), { pagesByCursor: true })
+    const at = (id: string, offset: number) => ({ ...assistant(id, 't'), transcriptOrder: offset })
+    const held = Array.from({ length: 300 }, (_unused, n) => at(`held-${n}`, 1000 + n))
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    await act(async () => transport.emit({ type: 'snapshot', messages: held, hasMore: true }))
+    let resolvePage: (result: unknown) => void = () => {}
+    transport.readSession.mockImplementationOnce(
+      () => new Promise((resolve) => (resolvePage = resolve))
+    )
+    let pending: Promise<unknown> | undefined
+    await act(async () => {
+      pending = latest?.loadEarlier()
+    })
+    const live = Array.from({ length: 301 }, (_unused, n) => at(`live-${n}`, 5000 + n))
+    await act(async () => transport.emit({ type: 'appended', messages: live }))
+
+    await act(async () => {
+      resolvePage({ messages: [at('older-0', 10)], hasMore: false })
+      await pending
+    })
+
+    expect(transport.readSession).toHaveBeenLastCalledWith(AGENT, SESSION, 500, undefined, {
+      wakeWslDistro: true
+    })
+    expect(latest?.messages.map((m) => m.id)).not.toContain('older-0')
+  })
+
+  it('repairs a live-tail gap with a full reread, then resumes cursor paging', async () => {
+    const transport = Object.assign(getMockTransport('env-1'), { pagesByCursor: true })
+    const at = (id: string, offset: number) => ({ ...assistant(id, 't'), transcriptOrder: offset })
+    const held = Array.from({ length: 300 }, (_unused, n) => at(`held-${n}`, 1000 + n))
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    await act(async () => transport.emit({ type: 'snapshot', messages: held, hasMore: true }))
+    // 301 appends push the bounded live tail past live-0, leaving a gap after held-299.
+    const live = Array.from({ length: 301 }, (_unused, n) => at(`live-${n}`, 5000 + n))
+    await act(async () => transport.emit({ type: 'appended', messages: live }))
+    expect(latest?.messages.map((m) => m.id)).not.toContain('live-0')
+    const bridge = Array.from({ length: 199 }, (_unused, n) => at(`bridge-${n}`, 4700 + n))
+    transport.readSession.mockResolvedValueOnce({ messages: [...bridge, ...live] })
+
+    await act(async () => {
+      await latest?.loadEarlier()
+    })
+
+    expect(transport.readSession).toHaveBeenLastCalledWith(AGENT, SESSION, 500, undefined, {
+      wakeWslDistro: true
+    })
+    expect(latest?.messages.map((m) => m.id)).toContain('live-0')
+
+    transport.readSession.mockResolvedValueOnce({ messages: [], hasMore: false })
+    await act(async () => {
+      await latest?.loadEarlier()
+    })
+
+    expect(transport.readSession).toHaveBeenLastCalledWith(AGENT, SESSION, 200, undefined, {
+      wakeWslDistro: true,
+      beforeOffset: 4700
+    })
+  })
 })
 
 // New sessions can take minutes to flush; a first-read miss must remain recoverable (#8401).

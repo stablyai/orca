@@ -10,13 +10,17 @@ import {
 } from '@/components/ui/command'
 import { nativeChatModelDescription } from './native-chat-model-description'
 import { useTranslate } from '@/i18n/use-translate'
-import type { SessionOptionSelectChoice } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
+import type {
+  SessionOptionsCliUpdate,
+  SessionOptionSelectChoice
+} from '../../../../../../../shared/native-chat/input/native-chat-session-options'
 import { nativeChatSessionChoiceLabel } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-labels'
 import { sayNativeChatSessionOptionTranslated as say } from './native-chat-session-option-labels-text'
 import { NativeChatSessionOptionChoiceBody } from './NativeChatSessionOptionChoiceBody'
 import { NativeChatSessionOptionWriteGroup } from './NativeChatSessionOptionWriteGroup'
 import { AgentPickerLegacyModelsToggle } from '../../../../agent/AgentPickerLegacyModelsToggle'
 import { useLegacyModelsExpanded } from '../../../../agent/use-legacy-models-expanded'
+import { NativeChatModelNeedsCliUpdateRow } from './NativeChatModelNeedsCliUpdateRow'
 
 type NativeChatModelComboboxProps = {
   choices: readonly SessionOptionSelectChoice[]
@@ -30,6 +34,8 @@ type NativeChatModelComboboxProps = {
   onSelect: (value: string) => void
   /** Offered where the host can return the chat to the agent's own model. */
   defaultChoice?: { selected: boolean; modelLabel: string | undefined; onSelect: () => void }
+  /** The chat host's own CLI, too old for models on Orca's list. */
+  cliUpdate?: SessionOptionsCliUpdate
 }
 
 // Outside any model id's namespace, so it can never select a listed model.
@@ -49,7 +55,8 @@ export function NativeChatModelCombobox({
   readOnlyReason,
   busy,
   onSelect,
-  defaultChoice
+  defaultChoice,
+  cliUpdate
 }: NativeChatModelComboboxProps): React.JSX.Element {
   const t = useTranslate()
   const searchLabel = t('components.native-chat.composer.searchModels', 'Search models…')
@@ -70,6 +77,10 @@ export function NativeChatModelCombobox({
   const defaultDescription =
     defaultChoice?.modelLabel ??
     t('components.native-chat.composer.defaultModelDescription', "Use the agent's configured model")
+  // A model the CLI already lists is pickable, whatever the list says it needs.
+  const needsUpdate = cliUpdate
+    ? cliUpdate.models.filter((model) => !choices.some((choice) => choice.value === model.id))
+    : []
   const renderChoice = (choice: SessionOptionSelectChoice) => {
     const label = nativeChatSessionChoiceLabel(choice, say)
     const current = !defaultChoice?.selected && choice.value === currentValue
@@ -152,6 +163,15 @@ export function NativeChatModelCombobox({
             ) : null}
             {/* One keyed array, so a row moving between sections keeps its highlight. */}
             {[
+              ...(cliUpdate
+                ? needsUpdate.map((model) => (
+                    <NativeChatModelNeedsCliUpdateRow
+                      key={`cli-update:${model.id}`}
+                      model={model}
+                      update={cliUpdate}
+                    />
+                  ))
+                : []),
               ...listed.filter((choice) => !folded(choice)).map(renderChoice),
               ...(legacyExpanded ? legacyChoices.map(renderChoice) : []),
               <AgentPickerLegacyModelsToggle

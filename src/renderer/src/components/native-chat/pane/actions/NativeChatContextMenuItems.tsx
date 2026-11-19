@@ -108,11 +108,12 @@ function NativeChatRewindMenuItem({
       onSelect={() => void rewind.request(itemId, confirm)}
     >
       <Undo2 />
-      <span className="grid min-w-0">
+      <span className="grid min-w-0 flex-1">
         {t('components.native-chat.rewind.action', 'Rewind to here')}
-        {/* A disabled row cannot show the button's tooltip, so its reason sits under the label. */}
+        {/* A disabled row cannot show the button's tooltip, so its reason sits under the label,
+            wrapping to the other rows' width (contain-inline-size) instead of widening the menu. */}
         {rewind.disabledReason ? (
-          <span className="text-xs whitespace-normal text-muted-foreground">
+          <span className="text-xs whitespace-normal text-muted-foreground contain-inline-size">
             {rewind.disabledReason}
           </span>
         ) : null}

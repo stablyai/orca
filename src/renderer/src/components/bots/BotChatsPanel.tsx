@@ -17,23 +17,28 @@ import {
   botChatTreeStepIsPartial,
   orderChatsTab
 } from '../../../../shared/bots/bot-chat-tree-view'
-import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import {
   createBotChatSearchHook,
   type BotChatSearchAsk
 } from '../../../../shared/bots/use-bot-chat-search'
 import type { BotChatSearchResult } from '../../../../shared/bots/bot-chat-search'
-import { hasRuntimeRpcErrorCode } from '../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import { BotChatTreeGroup } from './BotChatTreeGroup'
+import {
+  BotUsageLimitStopsContext,
+  indexUsageLimitStops,
+  useBotUsageLimitStops
+} from './use-bot-usage-limit-stops'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { BotChatTreeWorkerRow } from './BotChatTreeWorkerRow'
 import { BotChatPaging } from './BotChatRowControls'
 import { botErrorMessage } from './bot-presentation'
-import { useBotChatTree } from './use-bot-chat-tree'
+import { useBotOwnChatTree } from './use-bot-chat-tree'
 import { useBotForWorkspace } from './bot-workspace'
 import { BotPanelHeader } from './BotPanelHeader'
 import { useBotNeedsYouCount, useBotNow } from './use-bot-now'
 import { updateBotReporting } from './bot-update-reporting'
 import { useBotPictureSetting } from '../settings/bots/use-bot-picture-setting'
+import { BotChatsSkeleton } from './BotChatsSkeleton'
 
 const useBotChatSearch = createBotChatSearchHook({ useCallback, useEffect, useMemo, useState })
 
@@ -50,34 +55,14 @@ function OfflineHeader({ bot }: { bot: Bot }): React.JSX.Element {
   )
 }
 
-/** Why no chats show yet: still reading, the read failed, or the bot's host can't list them here. */
-function ChatsReadNote({
-  state,
-  retry
-}: {
-  state: 'loading' | 'failed' | 'unsupported'
-  retry: () => void
-}): React.JSX.Element {
+/** Why this bot's chats couldn't be listed. */
+function ChatsReadNote({ retry }: { retry: () => void }): React.JSX.Element {
   const t = useTranslate()
-  const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
-  if (state === 'loading') {
-    return <p className={NOTE}>{t('bots.chats.loading', 'Loading chats…')}</p>
-  }
-  if (state === 'failed') {
-    return (
-      <p className={NOTE}>
-        {t('bots.chats.readFailed', "Couldn't read this bot's chats.")}{' '}
-        <Button variant="link" size="inlineText" onClick={retry}>
-          {t('bots.chats.searchRetry', 'Try again')}
-        </Button>
-      </p>
-    )
-  }
   return (
     <p className={NOTE}>
-      {t('bots.chats.unsupported', "This bot's computer runs an older Orca that can't list chats.")}{' '}
-      <Button variant="link" size="inlineText" onClick={() => setRightSidebarTab('bot-activity')}>
-        {t('bots.chats.seeItems', 'See its work in Items')}
+      {t('bots.chats.readFailed', "Couldn't read this bot's chats.")}{' '}
+      <Button variant="link" size="inlineText" onClick={retry}>
+        {t('bots.chats.searchRetry', 'Try again')}
       </Button>
     </p>
   )
@@ -91,10 +76,26 @@ export default function BotChatsPanel(): React.JSX.Element | null {
 
 function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
   const t = useTranslate()
-  const tree = useBotChatTree(bot)
+  const tree = useBotOwnChatTree(bot)
   // Its server is down: the last read shows with its actions off until it's back.
   const offline = useBotHostOffline(bot.hostId)
   const chats = useMemo(() => orderChatsTab(tree.chats), [tree.chats])
+  // Its home's chats and runs, and each listed worker's own workspace.
+  const stopWorkspaces = useMemo(
+    () => [
+      folderWorkspaceKey(bot.folderWorkspaceId),
+      ...new Set(
+        chats.flatMap((chat) =>
+          [...chat.running, ...chat.finished].flatMap((worker) =>
+            worker.worktreeId ? [worker.worktreeId] : []
+          )
+        )
+      )
+    ],
+    [bot.folderWorkspaceId, chats]
+  )
+  const stops = useBotUsageLimitStops(bot, stopWorkspaces)
+  const stopIndex = useMemo(() => indexUsageLimitStops(stops), [stops])
   const [steps, setSteps] = useState(0)
   const [query, setQuery] = useState('')
   // The panel's own folds, apart from the sidebar's: every chat starts folded here.
@@ -116,9 +117,6 @@ function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
         botId,
         query: text
       }).catch((error: unknown) => {
-        if (hasRuntimeRpcErrorCode(error, 'method_not_found')) {
-          return 'unsupported' as const
-        }
         console.error('Failed to search bot chats:', error)
         throw error
       }),
@@ -151,105 +149,113 @@ function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
   }
   const newChatLabel = t('bots.chats.new', 'New chat')
   return (
-    <div
-      tabIndex={-1}
-      className="@container scrollbar-sleek flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pt-2.5 pb-3 outline-none"
-    >
-      {/* Outside the fieldset, so its settings open offline too and say what's unavailable. */}
-      {offline ? <OfflineHeader bot={bot} /> : null}
-      <fieldset disabled={offline} className="contents">
-        <div className="flex items-center gap-1.5 px-0.5 pb-2">
-          <div className="relative min-w-0 flex-1">
-            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={t('bots.chats.search', 'Search chats and workers')}
-              aria-label={t('bots.chats.search', 'Search chats and workers')}
-              density="compact"
-              inset="leadingIcon"
-            />
-          </div>
-          <Button
-            variant="outline"
-            size="xs"
-            className="h-7"
-            aria-label={newChatLabel}
-            onClick={newChat}
-          >
-            <Plus />
-            <span className="@max-[240px]:hidden">{newChatLabel}</span>
-          </Button>
-        </div>
-        {chats.length === 0 && tree.state !== 'ready' ? (
-          <ChatsReadNote state={tree.state} retry={tree.retry} />
-        ) : null}
-        {searching && chatHits.length > 0 ? (
-          <div className={HEADING}>{t('bots.chats.title', 'Chats')}</div>
-        ) : null}
-        {chatHits.map(({ chat }) => (
-          <BotChatTreeGroup
-            key={chat.chatId}
-            bot={bot}
-            chat={chat}
-            unfolded={searching ? null : unfolded.has(chat.chatId)}
-            onFold={(open) => fold(chat.chatId, open)}
-            loadMore={tree.loadMore}
-          />
-        ))}
-        {workerHits.length > 0 ? (
-          <>
-            <div className={HEADING}>{t('bots.chats.workers', 'Workers')}</div>
-            {workerHits.map(({ chat, worker }) => (
-              <BotChatTreeWorkerRow
-                key={`${chat.chatId}:${worker.key}`}
-                bot={bot}
-                worker={worker}
-                chat={chat.title || t('bots.chats.untitled', 'New chat')}
-                showChat
+    <BotUsageLimitStopsContext.Provider value={stopIndex}>
+      <div
+        tabIndex={-1}
+        className="@container scrollbar-sleek flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pt-2.5 pb-3 outline-none"
+      >
+        {/* Outside the fieldset, so its settings open offline too and say what's unavailable. */}
+        {offline ? <OfflineHeader bot={bot} /> : null}
+        <fieldset disabled={offline} className="contents">
+          <div className="flex items-center gap-1.5 px-0.5 pb-2">
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={t('bots.chats.search', 'Search chats and workers')}
+                aria-label={t('bots.chats.search', 'Search chats and workers')}
+                density="compact"
+                inset="leadingIcon"
               />
-            ))}
-          </>
-        ) : null}
-        {noMatch ? (
-          <p className={NOTE}>{t('bots.chats.noMatch', 'No chats or workers match.')}</p>
-        ) : null}
-        {searchFailed ? (
-          <p className={NOTE}>
-            {t('bots.chats.searchFailed', "Couldn't search this bot's chats.")}{' '}
-            <Button variant="link" size="inlineText" onClick={search?.retry}>
-              {t('bots.chats.searchRetry', 'Try again')}
+            </div>
+            <Button
+              variant="outline"
+              size="xs"
+              className="h-7"
+              aria-label={newChatLabel}
+              onClick={newChat}
+            >
+              <Plus />
+              <span className="@max-[240px]:hidden">{newChatLabel}</span>
             </Button>
-          </p>
-        ) : null}
-        {moreMatches > 0 ? <p className={NOTE}>{botChatMoreMatchesNote(t, moreMatches)}</p> : null}
-        {onlyHome ? (
-          <p className={NOTE}>
-            {t(
-              'bots.chats.empty',
-              'Side chats, Slack and Linear threads and automation runs show up here, each with the workers it starts.'
-            )}
-          </p>
-        ) : null}
-        <BotChatPaging
-          more={
-            older > 0
-              ? [
-                  {
-                    label: botChatTreeStepIsPartial(older)
-                      ? t('bots.chats.olderStep', 'Show 8 more · {{count}} older', {
-                          count: older
-                        })
-                      : t('bots.chats.older', 'Show {{count}} older', { count: older }),
-                    onClick: () => setSteps(steps + 1)
-                  }
-                ]
-              : []
-          }
-          onFewer={steps > 0 ? () => setSteps(0) : null}
-          className="px-2 py-1 text-xs"
-        />
-      </fieldset>
-    </div>
+          </div>
+          {chats.length === 0 && tree.state !== 'ready' ? (
+            tree.state === 'loading' ? (
+              <BotChatsSkeleton />
+            ) : (
+              <ChatsReadNote retry={tree.retry} />
+            )
+          ) : null}
+          {searching && chatHits.length > 0 ? (
+            <div className={HEADING}>{t('bots.chats.title', 'Chats')}</div>
+          ) : null}
+          {chatHits.map(({ chat }) => (
+            <BotChatTreeGroup
+              key={chat.chatId}
+              bot={bot}
+              chat={chat}
+              unfolded={searching ? null : unfolded.has(chat.chatId)}
+              onFold={(open) => fold(chat.chatId, open)}
+              loadMore={tree.loadMore}
+            />
+          ))}
+          {workerHits.length > 0 ? (
+            <>
+              <div className={HEADING}>{t('bots.chats.workers', 'Workers')}</div>
+              {workerHits.map(({ chat, worker }) => (
+                <BotChatTreeWorkerRow
+                  key={`${chat.chatId}:${worker.key}`}
+                  bot={bot}
+                  worker={worker}
+                  chat={chat.title || t('bots.chats.untitled', 'New chat')}
+                  showChat
+                />
+              ))}
+            </>
+          ) : null}
+          {noMatch ? (
+            <p className={NOTE}>{t('bots.chats.noMatch', 'No chats or workers match.')}</p>
+          ) : null}
+          {searchFailed ? (
+            <p className={NOTE}>
+              {t('bots.chats.searchFailed', "Couldn't search this bot's chats.")}{' '}
+              <Button variant="link" size="inlineText" onClick={search?.retry}>
+                {t('bots.chats.searchRetry', 'Try again')}
+              </Button>
+            </p>
+          ) : null}
+          {moreMatches > 0 ? (
+            <p className={NOTE}>{botChatMoreMatchesNote(t, moreMatches)}</p>
+          ) : null}
+          {onlyHome ? (
+            <p className={NOTE}>
+              {t(
+                'bots.chats.empty',
+                'Side chats, Slack and Linear threads and automation runs show up here, each with the workers it starts.'
+              )}
+            </p>
+          ) : null}
+          <BotChatPaging
+            more={
+              older > 0
+                ? [
+                    {
+                      label: botChatTreeStepIsPartial(older)
+                        ? t('bots.chats.olderStep', 'Show 8 more · {{count}} older', {
+                            count: older
+                          })
+                        : t('bots.chats.older', 'Show {{count}} older', { count: older }),
+                      onClick: () => setSteps(steps + 1)
+                    }
+                  ]
+                : []
+            }
+            onFewer={steps > 0 ? () => setSteps(0) : null}
+            className="px-2 py-1 text-xs"
+          />
+        </fieldset>
+      </div>
+    </BotUsageLimitStopsContext.Provider>
   )
 }

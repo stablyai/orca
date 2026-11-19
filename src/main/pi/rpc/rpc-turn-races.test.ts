@@ -83,6 +83,40 @@ describe('Pi turn settlement races', () => {
     })
   })
 
+  it.each([
+    ['with no retry', false],
+    ['after its retries ran out', true]
+  ])(
+    "reports a failed streamed response %s as a failed response quoting Pi's error",
+    async (_case, retried) => {
+      const h = await setup()
+      await h.start()
+      const error = 'stream timed out (try again)'
+      h.turns.receive({
+        type: 'message_end',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Here is the answer.' }],
+          stopReason: 'error',
+          errorMessage: error
+        }
+      })
+      if (retried) {
+        h.turns.receive({ type: 'auto_retry_end', success: false, attempt: 3, finalError: error })
+      }
+      h.turns.receive({ type: 'agent_settled' })
+      await h.flush()
+      expect((await h.rig.rows()).map((row) => row.body)).toContainEqual(
+        expect.objectContaining({
+          kind: 'status',
+          text: expect.stringContaining(error),
+          failure: { kind: 'providerResponseFailed', detail: { text: error, audience: 'person' } }
+        })
+      )
+      expect((await h.rig.turns())[0]?.outcome).toBe('failure')
+    }
+  )
+
   it('keeps an exhausted retry a failure when its records exceed the line limit', async () => {
     const h = await setup()
     await h.start()

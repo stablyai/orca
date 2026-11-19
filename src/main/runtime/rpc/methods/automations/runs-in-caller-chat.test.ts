@@ -14,6 +14,8 @@ const other = makeTestBot({ id: 'other-bot' })
 const sessions = new Map<string, typeof bot>()
 let rows: BotChatRow[] = []
 const askers = new Map<string, BotRequestAsker[]>()
+// Chats whose running turn their linked thread owns.
+const threadTurns = new Set<string>()
 
 vi.mock('../../../../bots/bot-session-tabs', () => ({
   botOfSession: (_bots: unknown, sessionId: string) => sessions.get(sessionId) ?? null
@@ -43,9 +45,12 @@ function row(id: string, home = false): BotChatRow {
 }
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the helper's lookups are mocked above.
-const runtime = { getOrchestrationDb: () => null } as unknown as Parameters<
-  typeof targetInCallerChat
->[0]
+const runtime = {
+  getOrchestrationDb: () => null,
+  getExternalConversationSeam: () => ({
+    conversationTurn: (_chats: unknown, sessionId: string) => threadTurns.has(sessionId)
+  })
+} as unknown as Parameters<typeof targetInCallerChat>[0]
 const wait: AutomationBotTarget = { botId: bot.id, runsIn: 'chat', resultsTo: 'chat' }
 
 beforeEach(() => {
@@ -55,6 +60,7 @@ beforeEach(() => {
   sessions.set('other-chat', other)
   rows = [row('side-chat'), row('home-chat', true)]
   askers.clear()
+  threadTurns.clear()
 })
 
 describe('a wait made from a bot chat', () => {
@@ -62,6 +68,14 @@ describe('a wait made from a bot chat', () => {
     expect(await targetInCallerChat(runtime, 'side-chat', wait, true)).toEqual({
       ...wait,
       chat: { sessionId: 'side-chat', homeIfGone: true }
+    })
+  })
+
+  it('answers in the thread whose turn made it', async () => {
+    threadTurns.add('side-chat')
+    expect(await targetInCallerChat(runtime, 'side-chat', wait, true)).toEqual({
+      ...wait,
+      chat: { sessionId: 'side-chat', homeIfGone: true, toConversation: true }
     })
   })
 

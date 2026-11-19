@@ -65,8 +65,14 @@ export const BotGroupTurn = memo(function BotGroupTurn({
   useUiLanguageRevision()
   const [expanded, setExpanded] = useState(false)
   const bot = useMemo(
-    () => ({ hostId, id: turn.botId, name: turn.botName, avatar: turn.avatar }),
-    [hostId, turn.botId, turn.botName, turn.avatar]
+    () => ({
+      hostId,
+      id: turn.botId,
+      name: turn.botName,
+      avatar: turn.avatar,
+      avatarColor: turn.avatarColor
+    }),
+    [hostId, turn.botId, turn.botName, turn.avatar, turn.avatarColor]
   )
   const src = useBotAvatarSrc(bot)
   const submissions = session?.submissions ?? noItems
@@ -198,6 +204,7 @@ export const BotGroupTurn = memo(function BotGroupTurn({
     onToggleExpandedTurn: () => setExpanded(!expanded),
     onOpenSubagent: scope.open,
     onScrollMessageToTop: scrollMessageToTop,
+    readerAtEnd: () => true,
     onRevealDiff: () => {},
     actionablePromptIds: session?.hostWork?.actionablePromptIds
   }

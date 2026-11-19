@@ -1,4 +1,5 @@
 import { ConnectorAnswerFields } from '../connector-prompt-contract'
+import type { ConnectorTurnActivity } from './connector-turn-activity-contract'
 // Mirror of cloud/packages/connector-contract/src for the machine side of the Orca Cloud connector.
 // Copies, not imports: the CLI compiles src/shared with rootDir src, so it can't reach cloud files.
 import * as z from 'zod'
@@ -35,7 +36,8 @@ export const CONNECTOR_FEATURES = [
   'prEvents',
   'threadCatchUp',
   'batchedSends',
-  'ownDmChats'
+  'ownDmChats',
+  'askerNote'
 ] as const
 
 export const CONNECTOR_CLIENT_LIMITS = {
@@ -388,6 +390,8 @@ export type ConnectorEvent =
     }
   /** Whether workers its agent started still run; only to a cloud that lists `workers`. */
   | (PaneEvent & { kind: 'workers'; running: boolean })
+  /** Only to a cloud that lists `turn.activity`. */
+  | (PaneEvent & ConnectorTurnActivity)
   | {
       kind: 'snapshot'
       conversations: (PaneEvent & {

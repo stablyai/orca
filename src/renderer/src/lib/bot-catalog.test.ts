@@ -34,9 +34,15 @@ import {
   openBotHomeTabById,
   refreshBots,
   updateBot,
-  useBots
+  useBots,
+  useHostBots
 } from './bot-catalog'
-import { readBotItemsNeedingOwner, readBotWebhooks } from './bot-catalog-snapshot'
+import {
+  publishBots,
+  readBotItemsNeedingOwner,
+  readBotWebhooks,
+  setBotHostListing
+} from './bot-catalog-snapshot'
 import { emitBotsChangedWindowEvent } from './bots-changed-window-event'
 import { useAppStore } from '@/store'
 
@@ -103,6 +109,28 @@ describe('useBots', () => {
     answerOlder({ bots: [bot('Original')] })
     await act(() => Promise.all([older, newer]))
     expect(view.result.current.map((b) => b.name)).toEqual(['Renamed'])
+  })
+})
+
+describe('useHostBots', () => {
+  it('lists none once the host itself is no longer listed', () => {
+    const server = 'runtime:env-gone' as const
+    mocks.callRuntimeRpc.mockReturnValue(new Promise(() => {}))
+    setBotHostListing({
+      hosts: [
+        { hostId: 'local', state: 'live' },
+        { hostId: server, state: 'live' }
+      ],
+      updateNeeded: []
+    })
+    publishBots([bot('Reviewer')], undefined, server)
+    const view = renderHook(() => useHostBots(server))
+    expect(view.result.current.map((b) => b.name)).toEqual(['Reviewer'])
+
+    act(() => {
+      setBotHostListing({ hosts: [{ hostId: 'local', state: 'live' }], updateNeeded: [] })
+    })
+    expect(view.result.current).toEqual([])
   })
 })
 
