@@ -103,7 +103,7 @@ export function BotRow({
 
   return (
     <BotSidebarRow
-      avatar={<BotAvatar bot={bot} className="size-7 rounded-md text-sm" />}
+      avatar={<BotAvatar bot={bot} className="size-9 rounded-md text-sm" />}
       name={bot.name}
       workspaceId={workspaceId}
       hostId={bot.hostId}
@@ -230,7 +230,7 @@ function BotRowFoldToggle({
         FOLD_TOGGLE_CLASS,
         // Negative margins cancel the row's padding so the strip spans its full height and right
         // edge; the row's rounded overflow clips its corners.
-        '-mt-1.25 -mr-1.5 -mb-1.5 min-w-10 gap-0.5 self-stretch rounded-none px-1.5 text-xs tabular-nums',
+        '-mt-1.25 -mr-1.5 -mb-1.25 min-w-10 gap-0.5 self-stretch rounded-none px-1.5 text-xs tabular-nums',
         // Over the toggle reads just darker than the row's own hover wash.
         'group-hover/bot-row:bg-foreground/5 hover:bg-foreground/7 focus-visible:bg-foreground/7 focus-visible:ring-2 focus-visible:ring-inset dark:hover:bg-foreground/10 dark:focus-visible:bg-foreground/10',
         // A narrow row keeps its width for the name and time where a pointer can hover: at rest the
