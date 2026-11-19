@@ -11,6 +11,7 @@ import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-ses
 import type { RuntimeNotifier } from '../../../client/events/runtime-notifier-contract'
 import { SleepingMailRecordIndex } from './sleeping-mail-record-index'
 import { SleptMailboxWake } from './slept-mailbox-wake'
+import { reconcileSleepingMail } from './sleeping-mail-owner-mailboxes'
 
 const pane = 'tab:11111111-1111-4111-8111-111111111111'
 const otherPane = 'other:22222222-2222-4222-8222-222222222222'
@@ -127,7 +128,7 @@ it('keeps same-sequence success through record replacement/removal and releases 
   })
   const observe = (records: Record<string, SleepingAgentSessionRecord>) => {
     index.refresh('local', records, (pane) => delivery.refreshPane(pane))
-    delivery.reconcile(index.records.keys())
+    reconcileSleepingMail(delivery, db, index.records.keys())
     for (const key of index.records.keys()) {
       for (const mailbox of delivery.mailboxesForPane(key)) {
         delivery.request(mailbox)
@@ -162,7 +163,7 @@ it('keeps same-sequence success through record replacement/removal and releases 
     await settled()
     expect(wake).toHaveBeenCalledTimes(1)
     db.markAsRead([message.id])
-    delivery.reconcile(index.records.keys())
+    reconcileSleepingMail(delivery, db, index.records.keys())
     expect(delivery.heldWorktrees()).toEqual([])
     expect(delivery.hasTrackedMail).toBe(false)
     observe({})
@@ -178,7 +179,7 @@ it('keeps same-sequence success through record replacement/removal and releases 
     await settled()
     expect(wake).toHaveBeenCalledTimes(2)
     db.markAsRead([next.id])
-    delivery.reconcile(index.records.keys())
+    reconcileSleepingMail(delivery, db, index.records.keys())
     observe({})
     expect(delivery.heldWorktrees()).toEqual([])
     expect(delivery.hasTrackedMail).toBe(false)

@@ -1,4 +1,3 @@
-import { sleepingMailOwnerMailboxes } from './sleeping-mail-owner-mailboxes'
 import { POTENTIALLY_LIVE_REMOTE_ATTACHMENT_STATES } from '../../db/federation/remote-attachment-liveness'
 import { agentProviderSessionsEqual } from '../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import { mailWakeObligation, type SleptMailRecord } from './mail-wake-obligation'
@@ -136,21 +135,13 @@ export class SleptMailboxWake {
     return this.owed.size > 0 || this.attempted.size > 0 || this.succeeded.size > 0
   }
 
-  /** Re-derive tracked mailboxes and every sleeping pane's owned inboxes from current rows. */
-  reconcile(panes: Iterable<string>): void {
-    const db = this.deps.db()
-    const mailboxes = new Set([...this.owed.keys(), ...this.succeeded.keys()])
-    const visited = new Set(mailboxes)
-    for (const pane of panes) {
-      const owned =
-        db && this.hasObligation(pane) ? sleepingMailOwnerMailboxes(db, pane, visited) : []
-      for (const mailbox of owned) {
-        mailboxes.add(mailbox)
-      }
-    }
-    for (const mailbox of mailboxes) {
-      this.refresh(mailbox)
-    }
+  trackedMailboxes(): string[] {
+    return [...this.owed.keys(), ...this.succeeded.keys()]
+  }
+
+  /** An availability edge: panes whose wake failed may be tried again. */
+  retryFailed(): void {
+    this.failed.clear()
   }
 
   hasObligation(paneKey: string): boolean {
@@ -231,9 +222,11 @@ export class SleptMailboxWake {
   request(mailbox: string, reservedTypes?: ReadonlySet<string>): void {
     this.refresh(mailbox)
     const batch = this.batch(mailbox, reservedTypes)
+    // Only an untried automatic obligation starts a wake; a retained attempt or failure waits for an edge.
     if (
       !batch ||
-      mailWakeObligation(batch.record) === 'manual' ||
+      mailWakeObligation(batch.record) !== 'automatic' ||
+      this.failedToWake(batch.record) ||
       (this.succeeded.get(mailbox)?.paneKey === batch.record.paneKey &&
         this.succeeded.get(mailbox)?.sequence === batch.sequence)
     ) {
@@ -249,7 +242,13 @@ export class SleptMailboxWake {
 
   private drain(): void {
     while (this.active < 2 && this.pending.size) {
-      const next = [...this.pending].find(([paneKey]) => !this.inFlight.has(paneKey))
+      let next: [string, { mailbox: string; reservedTypes?: ReadonlySet<string> }] | undefined
+      for (const entry of this.pending) {
+        if (!this.inFlight.has(entry[0])) {
+          next = entry
+          break
+        }
+      }
       if (!next) {
         return
       }
@@ -271,7 +270,7 @@ export class SleptMailboxWake {
     const before = this.batch(mailbox, reservedTypes)
     if (
       !before ||
-      mailWakeObligation(before.record) === 'manual' ||
+      mailWakeObligation(before.record) !== 'automatic' ||
       (this.succeeded.get(mailbox)?.paneKey === before.record.paneKey &&
         this.succeeded.get(mailbox)?.sequence === before.sequence)
     ) {
@@ -283,7 +282,7 @@ export class SleptMailboxWake {
     if (
       !current ||
       current.record.paneKey !== before.record.paneKey ||
-      mailWakeObligation(current.record) === 'manual'
+      mailWakeObligation(current.record) !== 'automatic'
     ) {
       return
     }

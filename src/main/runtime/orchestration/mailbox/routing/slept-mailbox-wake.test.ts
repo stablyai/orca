@@ -130,6 +130,11 @@ it('wakes only the automatic sleeper owed deliverable mail, coalesces it, and re
     wakeSucceeded = true
     delivery.request(mailbox)
     await settled()
+    // A failed wake waits for an availability edge rather than retrying on every notice.
+    expect(wake).toHaveBeenCalledTimes(4)
+    delivery.retryFailed()
+    delivery.request(mailbox)
+    await settled()
     expect(wake).toHaveBeenCalledTimes(5)
 
     db.markAsRead([second.id])
