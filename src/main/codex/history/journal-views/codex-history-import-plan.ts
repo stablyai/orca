@@ -1,5 +1,6 @@
 import { projectCodexHistoryItem } from './codex-history-projection'
-import { sameSavedJournalItemBody } from '../../../native-chat/agent-session-journal/journal-saved-body-equality'
+import { isDeepStrictEqual } from 'node:util'
+import { isSettledCutJournalItem } from '../../../native-chat/agent-session-journal/journal-cut-output'
 import { CodexSubagentExecutions } from '../../structured/background-work/codex-subagent-executions'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -96,7 +97,9 @@ export function createCodexHistoryImportPlan(input: {
         journal.presentationRemoved(key) ||
         (saved &&
           ((body.kind === 'message' && body.role === 'user') ||
-            sameSavedJournalItemBody(saved, body)))
+            // A cut finished output is settled; only its bounded head was read.
+            isSettledCutJournalItem(saved) ||
+            isDeepStrictEqual(saved.body, body)))
       ) {
         return false
       }

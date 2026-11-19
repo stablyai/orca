@@ -9,7 +9,6 @@ import type {
 import { migrateJournalDomainSchema } from './journal-domain-schema'
 import { writeJournalDomainCurrentItem } from './journal-domain-current-item'
 import { readJournalDomainItems, type JournalDomainItemRead } from './journal-sql-item-reads'
-import { sameSavedJournalItemBody } from './journal-saved-body-equality'
 
 import { runJournalTransaction } from './database/journal-database'
 import {
@@ -445,7 +444,7 @@ it('visits every item after a grouped import, placement revisions and command re
   ])
 })
 
-it('observes a huge saved tool output cut in history, still equal to the whole output', () => {
+it('reads a saved tool output over 64 KiB cut in history, and never writes the cut back', () => {
   const { db, seed, read } = chat()
   const whole = {
     kind: 'tool-call' as const,
@@ -473,24 +472,12 @@ it('observes a huge saved tool output cut in history, still equal to the whole o
       }
     }
   })
-  expect(sameSavedJournalItemBody(entry.item!, whole)).toBe(true)
-  expect(
-    sameSavedJournalItemBody(entry.item!, {
-      ...whole,
-      output: { ...whole.output, digest: 'changed' }
-    })
-  ).toBe(false)
 
-  // A later revision built from the cut keeps the whole output its row holds.
-  const cut = entry.item!.body
-  if (cut.kind !== 'tool-call') {
-    throw new Error('expected the tool call')
-  }
-  seed(row('tool', 1, { ...cut, durationMs: 2 }, { revision: 2 }))
+  expect(() => seed({ ...entry.item!, revision: 2 })).toThrow('shortened read')
   const stored = db
     .prepare(
-      "SELECT length(json_extract(payload_json,'$.body.output.head')) AS head, json_extract(payload_json,'$.body.output.truncated') AS truncated, json_extract(payload_json,'$.body.durationMs') AS duration, json_extract(payload_json,'$.shortened') AS shortened FROM journal_items"
+      "SELECT length(json_extract(payload_json,'$.body.output.head')) AS head, json_extract(payload_json,'$.body.output.truncated') AS truncated FROM journal_items"
     )
     .get()
-  expect(stored).toEqual({ head: 20 * 1024 * 1024, truncated: 0, duration: 2, shortened: null })
+  expect(stored).toEqual({ head: 20 * 1024 * 1024, truncated: 0 })
 })

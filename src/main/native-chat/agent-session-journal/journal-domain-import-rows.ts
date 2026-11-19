@@ -14,7 +14,6 @@ import {
   settleJournalLegacyCopy
 } from './database/journal-legacy-source'
 import { hydrateJournalStoredItem, journalStoredItemRow } from './journal-stored-output-rows'
-import { restoreCutJournalOutput } from './journal-cut-output-restore'
 
 export type JournalDomainImportState =
   | { state: 'converting'; epoch: null }
@@ -252,9 +251,12 @@ export function insertJournalDomainItemRows(
     queueFailureWitnessedThrough,
     queueFailureReportTurnItemId
   } of rows) {
-    const item = hydrateJournalStoredItem(db, prefix, restoreCutJournalOutput(db, prefix, given))
-    const displayed =
-      shown && hydrateJournalStoredItem(db, prefix, restoreCutJournalOutput(db, prefix, shown))
+    // A read cut its output to a head; writing it would replace the whole output the row holds.
+    if (given.shortened || shown?.shortened) {
+      throw new Error('journal import was handed a shortened read')
+    }
+    const item = hydrateJournalStoredItem(db, prefix, given)
+    const displayed = shown && hydrateJournalStoredItem(db, prefix, shown)
     const encoded =
       (item === given && displayed === shown ? prepared : undefined) ??
       prepareJournalDomainItemRow(item, displayed)

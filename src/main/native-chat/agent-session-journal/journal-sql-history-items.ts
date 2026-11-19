@@ -37,10 +37,10 @@ export function journalDomainHistoryOpeners(
   return rows.map((row) => String(row.item_id))
 }
 
-// A history observation compares outputs by size and digest, so a large one comes back cut.
-const HISTORY_ITEM_SHORTEN_BYTES = 1024 * 1024
+// Catch-up needs only a bounded preview of a finished output: the cut item is settled.
+const HISTORY_ITEM_SHORTEN_BYTES = 64 * 1024
 
-/** A visible item, with a tool output or patch over 1 MiB cut and the item marked shortened. */
+/** A visible item; one over 64 KiB has its tool output or patch cut and is marked shortened. */
 export function journalDomainHistoryItem(
   db: Database.Database,
   prefix: readonly [string, string],

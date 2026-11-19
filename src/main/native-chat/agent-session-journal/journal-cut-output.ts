@@ -1,33 +1,17 @@
-import type {
-  AgentJournalBoundedPayload,
-  AgentJournalItemBody,
-  AgentJournalRenderItem
-} from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { digestPayload } from './item-lifecycle/journal-payload-bounds'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
-/** A saved item read shortened: its tool output or patch, cut to a head but still naming its whole text. */
-export function cutJournalOutput(
-  saved: AgentJournalRenderItem | null | undefined
-): AgentJournalBoundedPayload | undefined {
+/**
+ * A finished saved item whose tool output or patch a history read cut to a bounded head. Its row
+ * already holds the finished output, so catch-up treats it as settled: the source can't add to a
+ * finished output, and the cut must never be written back over the row.
+ */
+export function isSettledCutJournalItem(saved: AgentJournalRenderItem | null | undefined): boolean {
   if (!saved?.shortened) {
-    return undefined
+    return false
   }
-  const payload = savedJournalPayload(saved.body)
-  return payload?.truncated ? payload : undefined
-}
-
-/** Whether `text` is the whole text a cut payload was taken from. */
-export function isCutJournalOutputOf(cut: AgentJournalBoundedPayload, text: unknown): boolean {
-  return (
-    typeof text === 'string' &&
-    text.length * 3 >= cut.byteLength &&
-    Buffer.byteLength(text, 'utf8') === cut.byteLength &&
-    digestPayload(text) === cut.digest
-  )
-}
-
-export function savedJournalPayload(
-  body: AgentJournalItemBody
-): AgentJournalBoundedPayload | undefined {
-  return body.kind === 'tool-call' ? body.output : body.kind === 'diff' ? body.patch : undefined
+  const { body } = saved
+  if (body.kind === 'diff') {
+    return body.patch.truncated
+  }
+  return body.kind === 'tool-call' && body.state !== 'running' && body.output?.truncated === true
 }

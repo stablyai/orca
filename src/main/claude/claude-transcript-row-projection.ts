@@ -1,4 +1,5 @@
-import { sameSavedJournalItemBody } from '../native-chat/agent-session-journal/journal-saved-body-equality'
+import { isDeepStrictEqual } from 'node:util'
+import { isSettledCutJournalItem } from '../native-chat/agent-session-journal/journal-cut-output'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
@@ -50,7 +51,8 @@ export function createClaudeTranscriptRowProjection(input: {
       }
       turnScope = scopeOf(existing)
       body = claudeRestoredItemBody(body, existing.body)
-      if (sameSavedJournalItemBody(existing, body)) {
+      // A cut finished output is settled; only its bounded head was read.
+      if (isSettledCutJournalItem(existing) || isDeepStrictEqual(existing.body, body)) {
         return { accepted: true } as const
       }
     }

@@ -106,17 +106,8 @@ function fileChangeToolCall(item: CodexThreadItem, output?: string): CodexJourna
   }
 }
 
-/** The patch a completed file change saves: its diffs, one per changed path, joined. */
-export function codexFileChangePatch(item: CodexThreadItem): string | null {
-  return joinedPatch(fileChanges(item))
-}
-
-function joinedPatch(changes: readonly { diff: string }[]): string | null {
-  return changes.length === 0 ? null : changes.map((change) => change.diff).join('\n')
-}
-
-function fileChanges(item: CodexThreadItem): { path: string; diff: string }[] {
-  return Array.isArray(item.changes)
+function fileChangeItem(item: CodexThreadItem): CodexJournalItem {
+  const changes = Array.isArray(item.changes)
     ? item.changes.flatMap((change) => {
         const record = typeof change === 'object' && change !== null ? readRecord(change) : {}
         const path = readString(record, 'path')
@@ -124,17 +115,10 @@ function fileChanges(item: CodexThreadItem): { path: string; diff: string }[] {
         return path && diff ? [{ path, diff }] : []
       })
     : []
-}
-
-function fileChangeItem(item: CodexThreadItem): CodexJournalItem {
-  if (codexItemRunState(item) !== 'completed') {
+  if (changes.length === 0 || codexItemRunState(item) !== 'completed') {
     return fileChangeToolCall(item)
   }
-  const changes = fileChanges(item)
-  const patch = joinedPatch(changes)
-  if (patch === null) {
-    return fileChangeToolCall(item)
-  }
+  const patch = changes.map((change) => change.diff).join('\n')
   return {
     body: {
       kind: 'diff',

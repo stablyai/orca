@@ -1,19 +1,13 @@
 import { isDeepStrictEqual } from 'node:util'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
-  codexFileChangePatch,
   codexItemBody,
   codexMessageBlocks
 } from '../../structured/items/codex-structured-item-translation'
 import { codexCommandOutput, mcpToolOutput } from '../../structured/items/codex-item-result-readers'
 import type { CodexThreadItem } from '../../structured/items/codex-thread-item-identity'
 import { readRecord } from '../../app-server/codex-item-field-readers'
-import { codexItemRunState } from '../../structured/items/codex-item-run-state'
 import { historyInvocationFields } from './codex-history-source-facts'
-import {
-  cutJournalOutput,
-  isCutJournalOutputOf
-} from '../../../native-chat/agent-session-journal/journal-cut-output'
 
 /** Saved presentation supplies only the constraints and sparse payload it actually retains. */
 export function constrainSavedHistoryItem(
@@ -176,30 +170,6 @@ export function constrainSavedHistoryItem(
           : item.type === 'mcpToolCall'
             ? mcpToolOutput(item)
             : null
-      const cut = cutJournalOutput(saved)
-      if (cut && body.state !== 'running' && output !== null) {
-        if (!isCutJournalOutputOf(cut, output)) {
-          return null
-        }
-        // The row holds this text whole: drop the source copy so the saved cut is borrowed.
-        if (item.type === 'commandExecution') {
-          // Rollout items keep the raw key, which the output reader falls back to.
-          delete item.aggregatedOutput
-          delete item.aggregated_output
-        }
-        if (item.type === 'mcpToolCall' && item.error == null) {
-          delete item.result
-        } else if (item.type === 'mcpToolCall') {
-          // Still an error, without the text the row holds; a result would stand in for it.
-          const { message: _, ...error } = readRecord(item.error)
-          item.error = error
-          delete item.result
-          // The message is what made it failed; keep that once it is gone.
-          if (item.status === 'completed') {
-            item.status = 'failed'
-          }
-        }
-      }
       if (body.output && !body.output.truncated) {
         if (body.state !== 'running' && output !== null && output !== body.output.head) {
           return null
@@ -214,18 +184,6 @@ export function constrainSavedHistoryItem(
         }
       }
     }
-  }
-  const cut = cutJournalOutput(saved)
-  if (
-    item.type === 'fileChange' &&
-    cut &&
-    // Only a completed change is projected as the saved diff, which keeps its paths.
-    body.kind === 'diff' &&
-    codexItemRunState(item) === 'completed' &&
-    isCutJournalOutputOf(cut, codexFileChangePatch(item))
-  ) {
-    // The row holds this patch whole: drop the source copy so the saved cut is borrowed.
-    delete item.changes
   }
   return item
 }
