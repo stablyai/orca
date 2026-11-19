@@ -1,6 +1,7 @@
 import type { AgentMainAgentStatus } from '../agent-status/lifecycle/main-agent-status'
 import type { AgentChildWorkKind } from '../agent-status/child-work/agent-status-child-work'
 import type { ClaudeLeadTurnState, CodexLeadTurnState } from './main-agent-turn-state'
+import type { GrokActiveTurn } from './main-agent-turn-state'
 
 import {
   createAgentStatusLegacyAdapter,
@@ -15,8 +16,9 @@ import type { ClaudeToolRequest } from './claude-tool-request-identity'
 import type { CodexSubagentRoster } from './providers/codex/codex-subagent-roster'
 import type { CodexSubagentTranscriptState } from './providers/codex/codex-subagent-transcript'
 import type { CodexAsyncQuestions } from './providers/codex/codex-async-questions'
+import type { AntigravityPaneChildState } from './providers/antigravity/antigravity-subagent-roster'
 import type { MusePaneState } from './providers/muse/muse-pane-state'
-import type { AgentHookEventPayload, AntigravityChildWork, ToolSnapshot } from './listener-event'
+import type { AgentHookEventPayload, ToolSnapshot } from './listener-event'
 import {
   deletePaneScopedCacheEntry,
   deletePaneScopedSetEntry,
@@ -45,9 +47,8 @@ export type HookListenerState = {
   /** Read-only compatibility view. All writes pass through the isolated legacy adapter. */
   lastStatusByPaneKey: ReadonlyMap<string, AgentHookEventPayload>
   antigravityCompletedTranscriptByPaneKey: Map<string, string>
-  /** Work outliving the turn, kept until agy's fully idle Stop: the conversation that spawned in-process subagents,
-   *  and run_command steps agy backgrounded (PreToolUse seen, the PostToolUse it sends when the command ends not yet). */
-  antigravityChildWorkByPaneKey: Map<string, AntigravityChildWork>
+  /** Child work and background commands retained until the root's fully idle Stop. */
+  antigravityChildWorkByPaneKey: Map<string, AntigravityPaneChildState>
   /** Journal-backed prompt for each jcode pane's current turn; see readJcodeTurnPrompt. */
   jcodeTurnPromptByPaneKey: Map<string, JcodeUserPromptEvidence | null>
   /** Open swarm-helper permission requests per jcode pane; see routeJcodeHelperHook. */
@@ -103,11 +104,6 @@ export type HookListenerState = {
   hermesTurnByPaneKey: Map<string, HermesPaneTurn>
   /** DSH child sessions named by SubagentStart; the bridge stamps their hooks with their own session_id. */
   dshChildSessionIdsByPaneKey: Map<string, Set<string>>
-}
-
-export type GrokActiveTurn = {
-  promptId?: string
-  sessionId?: string
 }
 
 const legacyStatusAdapterByState = new WeakMap<HookListenerState, AgentStatusLegacyAdapter>()

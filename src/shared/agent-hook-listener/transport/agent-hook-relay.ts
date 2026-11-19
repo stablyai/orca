@@ -132,14 +132,19 @@ export const AGENT_HOOK_SHED_FIELDS_KEY = 'shedFields' as const
 const AGENT_HOOK_SHED_SUBAGENTS_DIGEST_PREFIX = 'subagents:sha256:'
 
 function subagentRosterDigest(subagents: readonly AgentSubagentSnapshot[]): string {
-  const stableRoster = subagents.map(({ id, state, startedAt, agentType, model, description }) => [
-    id,
-    state,
-    startedAt,
-    agentType ?? null,
-    model ?? null,
-    description ?? null
-  ])
+  const stableRoster = subagents.map(
+    ({ id, state, startedAt, agentType, model, description, toolName, toolInput }) => [
+      id,
+      state,
+      startedAt,
+      agentType ?? null,
+      model ?? null,
+      description ?? null,
+      ...(toolName !== undefined || toolInput !== undefined
+        ? [toolName ?? null, toolInput ?? null]
+        : [])
+    ]
+  )
   return createHash('sha256').update(JSON.stringify(stableRoster)).digest('base64url')
 }
 

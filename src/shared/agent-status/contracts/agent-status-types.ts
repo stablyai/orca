@@ -12,6 +12,7 @@ import type { TerminalAgent } from '../identity/terminal-agent'
 import {
   AGENT_MODEL_MAX_LENGTH,
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
+  AGENT_STATUS_TOOL_NAME_MAX_LENGTH,
   AGENT_TYPE_MAX_LENGTH,
   normalizeInteractivePromptField,
   normalizeOptionalField,
@@ -214,8 +215,7 @@ export function pickParsedAgentStatusPayload(
 }
 
 /** Hook set/snapshot IPC shares one shape so renderers use one setAgentStatus path. */
-/** Maximum character length for the toolName field. */
-export const AGENT_STATUS_TOOL_NAME_MAX_LENGTH = 60
+export { AGENT_STATUS_TOOL_NAME_MAX_LENGTH }
 /** 8KB preserves paragraph summaries while bounding per-pane cache growth. */
 export const AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH = 8000
 /** Keep full question JSON/options, with a cap to bound cache; preview cuts would corrupt it. */

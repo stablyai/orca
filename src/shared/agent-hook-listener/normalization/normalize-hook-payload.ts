@@ -1,8 +1,8 @@
+import type { HookNormalizationOptions } from './hook-normalization-options'
 import { readHookAgentProcess } from '../../agent-status/process/agent-process-presence'
 import { isInheritedHookStatus } from '../presence/agent-hook-presence-transition'
 import { readHookProcessAdmission } from '../presence/agent-hook-owner-presence'
 import { normalizeAgentStatusPayload } from '../../agent-status/contracts/agent-status-types'
-import type { AgentMainAgentStatus } from '../../agent-status/lifecycle/main-agent-status'
 import type { AgentHookSource } from '../transport/agent-hook-relay'
 import {
   canAcceptClaudeCompactCompletion,
@@ -30,26 +30,13 @@ import { readClaudeBatchSettledRequests } from '../claude-settled-permission-req
 import { hasSeparateHookSessionAdmission, readPaneSessionContext } from '../pane-provider-session'
 import { routeJcodeHelperHook } from '../providers/jcode/jcode-helper-permission-wait'
 import { orderClaudeHook } from '../providers/claude/lifecycle/claude-prompt-turn-order'
-/** Canonical transport-agnostic normalization entry shared by main and relay listeners. */
 
 export function normalizeHookPayload(
   state: HookListenerState,
   source: AgentHookSource,
   body: unknown,
   expectedEnv: string,
-  options: {
-    deferCompactOwnershipToClient?: boolean
-    previousOpenCodeMainAgent?: AgentMainAgentStatus
-    bindingStatusByPaneKey?: ReadonlyMap<string, AgentHookEventPayload>
-    /** Spool replay restates recorded evidence; it never advances turn identity. */
-    isReplay?: boolean
-    admitOpenCodeTui?: (
-      identity: Pick<
-        AgentHookEventPayload,
-        'paneKey' | 'launchToken' | 'hookEventName' | 'hasExplicitPrompt'
-      >
-    ) => boolean | 'preserve-poster'
-  } = {}
+  options: HookNormalizationOptions = {}
 ): AgentHookEventPayload | null {
   const envelope = parseHookEnvelope(state, source, body, expectedEnv)
   if (!envelope) {
@@ -67,8 +54,12 @@ export function normalizeHookPayload(
   if (source === 'claude') {
     state.claudeUnconfirmedRestoredStatusPaneKeys.delete(stampedPaneKey)
   }
-  const sessions = readPaneSessionContext(state, source, envelope, eventName)
-  const { providerSession, statusAdmissionSession } = sessions
+  const { providerSession, statusAdmissionSession, antigravityOrigin } = readPaneSessionContext(
+    state,
+    source,
+    envelope,
+    eventName
+  )
   // Before prompt and tool caches: a helper's turn must not reset the root turn's caches either.
   const helper = routeJcodeHelperHook(state, source, envelope, options.bindingStatusByPaneKey)
   if (helper !== undefined) {
@@ -234,6 +225,7 @@ export function normalizeHookPayload(
   }
   const promptText = extractedPrompt.text
   const dispatched = normalizeProviderEvent({
+    antigravityOrigin,
     state,
     source,
     eventName: turnOrder.eventName,

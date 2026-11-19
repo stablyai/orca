@@ -1,3 +1,8 @@
+import {
+  classifyAntigravityTranscriptOrigin,
+  isAntigravityInSessionChildHook,
+  type AntigravityTranscriptOrigin
+} from './providers/antigravity/antigravity-hook-identity'
 import type { AgentHookSource } from './transport/agent-hook-relay'
 import { readAgentEffortLevel } from '../agent-launch/choices/agent-effort-level'
 import { readClaudePermissionMode } from '../agent-session/lifecycle/resume/provider-session-live-settings'
@@ -27,15 +32,42 @@ export function readPaneSessionContext(
   eventName: unknown
 ) {
   const { paneKey, hookPayloadRecord } = envelope
+  const antigravityOrigin =
+    source === 'antigravity'
+      ? classifyAntigravityTranscriptOrigin(
+          readPathFromKeys(hookPayloadRecord, ['transcriptPath', 'transcript_path'])
+        )
+      : undefined
+  const providerSession = readPaneProviderSession(
+    state,
+    source,
+    paneKey,
+    hookPayloadRecord,
+    eventName,
+    antigravityOrigin
+  )
+  const activeAntigravityRoot =
+    source === 'antigravity' &&
+    providerSession === null &&
+    isAntigravityInSessionChildHook(
+      state,
+      paneKey,
+      hookPayloadRecord,
+      antigravityOrigin ?? 'unknown'
+    )
+      ? state.antigravityChildWorkByPaneKey.get(paneKey)?.rootConversationId
+      : undefined
   return {
-    providerSession: readPaneProviderSession(state, source, paneKey, hookPayloadRecord, eventName),
+    antigravityOrigin,
+    providerSession,
     statusAdmissionSession: hasSeparateHookSessionAdmission(source)
-      ? extractAgentProviderSession(
+      ? (activeAntigravityRoot ??
+        extractAgentProviderSession(
           source,
           source === 'hermes'
             ? withHermesPaneSessionId(state, paneKey, hookPayloadRecord)
             : hookPayloadRecord
-        )?.id
+        )?.id)
       : undefined
   }
 }
@@ -46,7 +78,8 @@ function readPaneProviderSession(
   source: AgentHookSource,
   paneKey: string,
   hookPayload: Record<string, unknown>,
-  eventName: unknown
+  eventName: unknown,
+  antigravityOrigin?: AntigravityTranscriptOrigin
 ): AgentProviderSessionMetadata | null {
   if (
     source === 'copilot' &&
@@ -82,19 +115,8 @@ function readPaneProviderSession(
       return owner ?? null
     }
   }
-  if (source === 'antigravity') {
-    const transcriptPath = readPathFromKeys(hookPayload, ['transcriptPath', 'transcript_path'])
-    const origin = transcriptPath ? readFirstTranscriptRecord(transcriptPath) : undefined
-    if (
-      typeof origin !== 'object' ||
-      origin === null ||
-      !('source' in origin) ||
-      origin.source !== 'USER_EXPLICIT' ||
-      !('type' in origin) ||
-      origin.type !== 'USER_INPUT'
-    ) {
-      return null
-    }
+  if (source === 'antigravity' && antigravityOrigin !== 'root') {
+    return null
   }
   const continued = continuedProviderSession(
     state,
@@ -274,9 +296,9 @@ export function retainHookRootContext(
   const modelSource =
     incoming.payload.agentType === 'codex'
       ? previousRoot
-      : incoming.payload.agentType === 'claude' &&
+      : (incoming.payload.agentType === 'claude' || incoming.payload.agentType === 'antigravity') &&
           sameTerminalOwner &&
-          previous?.payload.agentType === 'claude'
+          previous?.payload.agentType === incoming.payload.agentType
         ? previous
         : undefined
   const model = incoming.payload.model ? undefined : modelSource?.payload.model

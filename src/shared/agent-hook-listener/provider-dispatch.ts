@@ -1,3 +1,7 @@
+import {
+  isAntigravityInSessionChildHook,
+  type AntigravityTranscriptOrigin
+} from './providers/antigravity/antigravity-hook-identity'
 import { normalizeCompatibleLifecycleEvent } from './providers/compatible-lifecycle-events'
 
 import type { AgentMainAgentStatus } from '../agent-status/lifecycle/main-agent-status'
@@ -58,6 +62,7 @@ export function normalizeProviderEvent(input: {
   hookPayload: Record<string, unknown>
   envelope: Record<string, unknown>
   extractedPrompt: ExtractedPromptText
+  antigravityOrigin?: AntigravityTranscriptOrigin
   previousOpenCodeMainAgent?: AgentMainAgentStatus
   /** A new Claude prompt_id opened the turn on this event. */
   opensTurn?: boolean
@@ -74,6 +79,7 @@ export function normalizeProviderEvent(input: {
       : codexEventName === undefined
         ? undefined
         : codexHookEventForEndedTurn(state, paneKey, codexEventName, hookPayload)
+  let resolvedEventName = eventName
   let resolvedPromptText = promptText
   let promptInteractionKey: string | undefined
   let hasTranscriptPromptEvidence = false
@@ -114,8 +120,14 @@ export function normalizeProviderEvent(input: {
     case 'gemini':
       payload = normalizeGeminiEvent(state, eventName, promptText, paneKey, hookPayload)
       break
-    case 'antigravity':
-      if (isNewTurnEvent('antigravity', eventName)) {
+    case 'antigravity': {
+      const childHook = isAntigravityInSessionChildHook(
+        state,
+        paneKey,
+        hookPayload,
+        input.antigravityOrigin ?? 'unknown'
+      )
+      if (!childHook && isNewTurnEvent('antigravity', eventName)) {
         resolvedPromptText =
           promptText ||
           readLastUserPromptFromTranscript(
@@ -123,8 +135,20 @@ export function normalizeProviderEvent(input: {
           ) ||
           ''
       }
-      payload = normalizeAntigravityEvent(state, eventName, promptText, paneKey, hookPayload)
+      payload = normalizeAntigravityEvent(
+        state,
+        eventName,
+        promptText,
+        paneKey,
+        hookPayload,
+        input.antigravityOrigin ?? 'unknown'
+      )
+      if (childHook) {
+        resolvedEventName =
+          payload?.state === 'done' && payload.mainAgent?.state === 'done' ? 'Stop' : undefined
+      }
       break
+    }
     case 'amp':
       payload = normalizeAmpEvent(state, eventName, promptText, paneKey, hookPayload)
       break
@@ -264,7 +288,7 @@ export function normalizeProviderEvent(input: {
     resolvedPromptText,
     promptInteractionKey,
     hasTranscriptPromptEvidence,
-    eventName,
+    eventName: resolvedEventName,
     hostTurnSignals: readHostTurnSignals(source, hookPayload, promptInteractionKey),
     replyCandidate
   }

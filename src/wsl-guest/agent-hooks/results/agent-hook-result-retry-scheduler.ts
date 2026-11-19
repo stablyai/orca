@@ -1,9 +1,9 @@
-import { ClaudeHelperKillPoller } from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-helper-kill-poller'
 import {
-  pollCodexTranscriptStatus,
-  readCodexTranscriptPoll,
-  type CodexTranscriptPollReads
-} from '../../../shared/agent-hook-listener/providers/codex/codex-transcript-poll'
+  withHookTranscriptPoll,
+  normalizeHookTranscriptPoll,
+  type HookTranscriptPollReads
+} from '../../../shared/agent-hook-listener/transcripts/hook-transcript-poll-reads'
+import { ClaudeHelperKillPoller } from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-helper-kill-poller'
 // Retry late transcript results against the same cached event; one owner cancels both timer families before cache teardown.
 import {
   hasPendingAgentResultText,
@@ -135,15 +135,15 @@ export class AgentHookResultRetryScheduler {
       return
     }
     // Why: a nested CLI of another kind inherits ORCA_PANE_KEY, so clearing here would silently end a live poll.
-    if (source !== 'codex' && source !== 'muse') {
+    if (source !== 'codex' && source !== 'muse' && source !== 'antigravity') {
       return
     }
     if (!shouldPollHookTranscript(this.host.state, source, original)) {
       this.transcriptPollScheduler.clear(original.paneKey)
       return
     }
-    // Codex keeps the scheduler's cadence; a Muse poll without a delay is a fresh hook's 1s poll.
-    const museDelayMs = source === 'muse' ? (delayMs ?? nextMusePollDelay()) : undefined
+    const museDelayMs =
+      source === 'muse' || source === 'antigravity' ? (delayMs ?? nextMusePollDelay()) : undefined
     this.transcriptPollScheduler.schedule(
       original.paneKey,
       {
@@ -177,25 +177,21 @@ export class AgentHookResultRetryScheduler {
     if (!this.ownsTranscriptPoll(paneKey, poll)) {
       return
     }
-    if (poll.source !== 'codex') {
+    if (poll.source !== 'codex' && poll.source !== 'antigravity') {
       this.applyTranscriptPoll(paneKey, poll, undefined)
       return
     }
     // Why: rollout reads stay off the event loop; the next tick waits for this one.
-    return readCodexTranscriptPoll(this.host.state, paneKey).then((reads) => {
+    return withHookTranscriptPoll(this.host.state, paneKey, poll.source, (reads) => {
       // A hook that replaced the row mid-read owns the pane's poll now; its reads still apply.
       const current = this.transcriptPollScheduler.peek(paneKey)
       const owner = this.ownsTranscriptPoll(paneKey, poll)
         ? poll
-        : current?.source === 'codex' && this.ownsTranscriptPoll(paneKey, current)
+        : current?.source === poll.source && this.ownsTranscriptPoll(paneKey, current)
           ? current
           : undefined
-      try {
-        if (owner) {
-          this.applyTranscriptPoll(paneKey, owner, reads)
-        }
-      } finally {
-        reads.batch.release()
+      if (owner) {
+        this.applyTranscriptPoll(paneKey, owner, reads)
       }
     })
   }
@@ -213,13 +209,11 @@ export class AgentHookResultRetryScheduler {
   private applyTranscriptPoll(
     paneKey: string,
     poll: TranscriptPoll,
-    codexReads: CodexTranscriptPollReads | undefined
+    reads: HookTranscriptPollReads | undefined
   ): void {
     const { source, body, original, env, version } = poll
     const logOffset = source === 'muse' ? museLogOffset(this.host.state, paneKey) : undefined
-    const event = codexReads
-      ? pollCodexTranscriptStatus(this.host.state, original, body, this.host.env, codexReads)
-      : normalizeHookPayload(this.host.state, source, body, this.host.env)
+    const event = normalizeHookTranscriptPoll(this.host.state, poll, this.host.env, reads)
     if (!event) {
       return
     }
@@ -228,7 +222,10 @@ export class AgentHookResultRetryScheduler {
     const next = update ? this.host.applyEvent(update, source, env, version) : original
     if (next) {
       const quiet = !update && museLogOffset(this.host.state, paneKey) === logOffset
-      const delayMs = source === 'muse' ? nextMusePollDelay(poll.delayMs, quiet) : undefined
+      const delayMs =
+        source === 'muse' || source === 'antigravity'
+          ? nextMusePollDelay(poll.delayMs, quiet)
+          : undefined
       this.scheduleTranscriptPoll(source, body, next, env, version, delayMs)
     }
   }
