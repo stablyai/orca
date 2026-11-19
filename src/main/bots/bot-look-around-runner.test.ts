@@ -12,7 +12,6 @@ import {
 import type { BotTurnEnd } from './bot-run-turn-watch'
 import { runtimeBotAutomationSessions } from './bot-automation-sessions'
 import * as BotChatSession from './bot-chat-session'
-import { botStartOptions } from './bot-start-options'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { testRunPower, WITH_CLOCKS } from './bot-background-run.test-fixture'
 
@@ -458,57 +457,38 @@ describe('a look at its run limit', () => {
   })
 })
 
-describe("Look around's model", () => {
-  // The owner last picked Opus in some chat; Settings > Agents says Haiku.
-  const settings = {
-    agentLaunchChoices: { claude: { model: 'claude-haiku-5-5' } },
-    nativeChatSessionOptions: { claude: { model: 'claude-opus-5-5' } }
-  }
-  const runtime = {
-    bots: { list: () => [] },
-    requireStore: () => ({ getSettings: () => settings })
-  }
-
-  async function lookOnce(bot: Partial<Bot>): Promise<Record<string, string>> {
-    vi.mocked(startBotSession).mockClear()
-    const base = harness({ bot, turn: success })
-    // The runtime's own sessions, so the look starts the way it does in Orca.
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub covers what a look's start reaches.
-    const sessions = runtimeBotAutomationSessions(runtime as unknown as OrcaRuntimeService)
-    const runner = new BotLookAroundRunner({
-      bots: () => [makeTestBot({ id: 'b1', agent: 'claude', ...bot })],
-      store: base.store,
-      hadConversation: async () => true,
-      sessions,
-      turnOff: async () => {},
-      stopTurn: async () => {},
-      turnRunning: () => false,
-      usageLimitOf: async () => null,
-      usageLimitContinues: async () => false,
-      watchTurns: async () => ({
-        next: () => Promise.resolve(success),
-        dispose: () => {}
-      }),
-      power: base.host.power,
-      now: () => MONDAY_NOON
-    })
-    expect(runner.lookNow('b1')).toEqual({ started: true })
-    await vi.waitFor(() => expect(base.store.get('b1').runs[0]?.endedAt).toBeDefined())
-    const [, started, input] = vi.mocked(startBotSession).mock.calls[0] ?? []
-    expect(input).toMatchObject({ background: true })
-    return botStartOptions(() => settings, started!, input?.background === true)
-  }
-
-  it("runs on the bot's own model when it has one", async () => {
-    const options = await lookOnce({ launch: { model: 'claude-sonnet-5-5' } })
-    expect(options).toEqual({ model: 'claude-sonnet-5-5' })
+it('starts a Look around conversation in the background with the bot’s launch settings', async () => {
+  const runtime = { bots: { list: () => [] } }
+  const bot = { launch: { model: 'claude-sonnet-5-5' } }
+  vi.mocked(startBotSession).mockClear()
+  const base = harness({ bot, turn: success })
+  // The runtime's own sessions, so the look starts the way it does in Orca.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stub covers what a look's start reaches.
+  const sessions = runtimeBotAutomationSessions(runtime as unknown as OrcaRuntimeService)
+  const runner = new BotLookAroundRunner({
+    bots: () => [makeTestBot({ id: 'b1', agent: 'claude', ...bot })],
+    store: base.store,
+    hadConversation: async () => true,
+    sessions,
+    turnOff: async () => {},
+    stopTurn: async () => {},
+    turnRunning: () => false,
+    usageLimitOf: async () => null,
+    usageLimitContinues: async () => false,
+    watchTurns: async () => ({
+      next: () => Promise.resolve(success),
+      dispose: () => {}
+    }),
+    power: base.host.power,
+    now: () => MONDAY_NOON
   })
-
-  it("otherwise runs on the owner's Agents default, never their last chat pick", async () => {
-    const options = await lookOnce({})
-    expect(options).toEqual({ model: 'claude-haiku-5-5' })
-    expect(options.model).not.toBe('claude-opus-5-5')
-  })
+  expect(runner.lookNow('b1')).toEqual({ started: true })
+  await vi.waitFor(() => expect(base.store.get('b1').runs[0]?.endedAt).toBeDefined())
+  expect(startBotSession).toHaveBeenCalledWith(
+    runtime,
+    expect.objectContaining(bot),
+    expect.objectContaining({ background: true })
+  )
 })
 
 describe('a look on a sleeping host', () => {
