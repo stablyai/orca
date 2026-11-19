@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { PtyStopBatchOptions } from '../lifecycle/runtime-pty-controller-contract'
 
 // Preserve side-effect order: mocks, lifecycle, fixtures.
 await import('../../construction/test-context/runtime-test-module-registration.spec')
@@ -75,11 +76,14 @@ describe('quit stops idle agents', () => {
         processTopology: scenario === 'an agent inside tmux' ? 'shared' : 'pane-owned'
       })
     })
-    const stopAndWait = vi.fn(async () => true)
+    const stopAndWaitMany = vi.fn(
+      async (ptyIds: readonly string[], opts: PtyStopBatchOptions) =>
+        new Map(ptyIds.filter((ptyId) => opts.admit?.(ptyId) ?? true).map((ptyId) => [ptyId, true]))
+    )
     runtime.setPtyController({
       write: () => true,
       kill: () => false,
-      stopAndWait,
+      stopAndWaitMany,
       getForegroundProcess: async () => null,
       listProcesses: async () => [{ id: 'persisted-pty', cwd: TEST_WORKTREE_PATH, title: 'claude' }]
     })
@@ -124,49 +128,9 @@ describe('quit stops idle agents', () => {
     const stopped = await runtime.stopIdleAgentTerminalsForQuit(targets, Date.now() + 4_000)
 
     expect(stopped).toEqual(expectedStopped)
-    expect(stopAndWait.mock.calls).toEqual(
-      expectedStopped.map((ptyId) => [ptyId, { keepHistory: true, deadlineMs: expect.any(Number) }])
+    // History is kept so the next launch resumes the conversation.
+    expect(stopAndWaitMany.mock.calls.map(([ptyIds, opts]) => [ptyIds, opts.keepHistory])).toEqual(
+      targets.length > 0 ? [[['persisted-pty'], true]] : []
     )
   })
-})
-
-describe('quit admits idle-agent stops within its deadline', () => {
-  it.each([100, 1_000])(
-    'starts no more stops after the deadline with %i targets',
-    async (count) => {
-      vi.useFakeTimers({ toFake: ['Date'] })
-      vi.setSystemTime(1_000)
-      try {
-        const fixture = makeRuntimeStoreWithWorkspaceSession(
-          makeWorkspaceSessionWithHeadlessTerminal()
-        )
-        const runtime = new OrcaRuntimeService(fixture.runtimeStore, undefined, {})
-        // Every stop's history checkpoint outlasts the shared deadline.
-        const stopAndWait = vi.fn(async () => {
-          await Promise.resolve()
-          vi.setSystemTime(10_000)
-          return false
-        })
-        runtime.setPtyController({
-          write: () => true,
-          kill: () => false,
-          stopAndWait,
-          getForegroundProcess: async () => null,
-          listProcesses: async () => []
-        })
-        const targets = Array.from({ length: count }, (_, index) => ({
-          ptyId: `pty-${index}`,
-          incarnationId: null,
-          inputAt: null
-        }))
-
-        const stopped = await runtime.stopIdleAgentTerminalsForQuit(targets, 5_000)
-
-        expect(stopped).toEqual([])
-        expect(stopAndWait).toHaveBeenCalledTimes(8)
-      } finally {
-        vi.useRealTimers()
-      }
-    }
-  )
 })

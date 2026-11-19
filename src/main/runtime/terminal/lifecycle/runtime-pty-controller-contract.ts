@@ -39,6 +39,19 @@ export type PtyInventoryRefreshOptions = {
   refreshForegroundAgents?: boolean
 }
 
+export type PtyStopBatchOptions = {
+  keepHistory?: boolean
+  /** Absolute deadline for the whole batch, its exit proof included. */
+  deadlineMs?: number
+  /** When set, no stop starts at or after it and started shutdowns share it, leaving the rest of
+   *  the batch's time for one exit proof. */
+  shutdownDeadlineMs?: number
+  /** Most stops shutting down at once; all at once when unset. */
+  concurrency?: number
+  /** Runs as each stop is about to start; false skips that PTY. */
+  admit?: (ptyId: string) => boolean
+}
+
 export type RuntimePtyController = {
   claimStablePaneCreate?(args: {
     worktreeId: string
@@ -160,6 +173,9 @@ export type RuntimePtyController = {
     ptyId: string,
     opts?: { keepHistory?: boolean; deadlineMs?: number }
   ): Promise<boolean>
+  /** `stopAndWait` for each admitted PTY, proving the batch's exits with one provider inventory per
+   *  round; resolves each admitted PTY's verdict. */
+  stopAndWaitMany?(ptyIds: readonly string[], opts: PtyStopBatchOptions): Promise<Map<string, boolean>>
   getCwd?(ptyId: string): Promise<string | null>
   getForegroundProcess(ptyId: string): Promise<string | null>
   inspectProcess?(

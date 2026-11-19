@@ -43,15 +43,16 @@ export function delay(ms: number): Promise<void> {
   })
 }
 
-export async function isProviderPtyLive(
+/** Which of these PTYs the provider still lists; one inventory however many ids it checks. */
+export async function listLiveProviderPtyIds(
   provider: IPtyProvider,
-  ptyId: string,
+  ptyIds: readonly string[],
   deadlineMs?: number
-): Promise<boolean> {
+): Promise<Set<string>> {
+  const wanted = new Set(ptyIds)
   // Share the teardown deadline with the liveness RPC; other callers retain provider defaults.
-  return (await provider.listProcesses({ deadlineMs, ptyIds: [ptyId] })).some(
-    (session) => session.id === ptyId
-  )
+  const sessions = await provider.listProcesses({ deadlineMs, ptyIds: [...wanted] })
+  return new Set(sessions.filter((session) => wanted.has(session.id)).map((session) => session.id))
 }
 
 export async function isProviderAgentSessionOwnerLive(
@@ -76,33 +77,53 @@ export async function isProviderAgentSessionOwnerLive(
   )
 }
 
-export async function verifyPtyStopped(
+export type PtyStopAwaitingVerification = { ptyId: string; exitObserved: boolean }
+
+/** Whether each stopped PTY is gone; each round reads one inventory for every PTY it still checks. */
+export async function verifyPtysStopped(
   provider: IPtyProvider,
-  ptyId: string,
-  opts: { keepHistory?: boolean; deadlineMs?: number } | undefined,
-  exitObserved = false
-): Promise<boolean> {
-  if (await isProviderPtyLive(provider, ptyId, opts?.deadlineMs)) {
-    return false
+  stops: readonly PtyStopAwaitingVerification[],
+  opts: { keepHistory?: boolean; deadlineMs?: number } | undefined
+): Promise<Map<string, boolean>> {
+  const stopped = new Map<string, boolean>()
+  const live = await listLiveProviderPtyIds(
+    provider,
+    stops.map((stop) => stop.ptyId),
+    opts?.deadlineMs
+  )
+  let unsettled: string[] = []
+  for (const { ptyId, exitObserved } of stops) {
+    if (live.has(ptyId)) {
+      stopped.set(ptyId, false)
+    } else if (!opts?.keepHistory || exitObserved) {
+      // Observed exit already proves this incarnation stopped; polling guards only unobserved stops.
+      stopped.set(ptyId, true)
+    } else {
+      unsettled.push(ptyId)
+    }
   }
-  // Observed exit already proves this incarnation stopped; polling guards only unobserved stops.
-  if (!opts?.keepHistory || exitObserved) {
-    return true
+  if (unsettled.length === 0) {
+    return stopped
   }
   const settleDeadline = Date.now() + KEEP_HISTORY_STOP_SETTLE_MS
   // Polling must remain within the caller's absolute teardown deadline.
   const deadline =
-    opts.deadlineMs !== undefined ? Math.min(settleDeadline, opts.deadlineMs) : settleDeadline
-  while (Date.now() < deadline) {
+    opts?.deadlineMs !== undefined ? Math.min(settleDeadline, opts.deadlineMs) : settleDeadline
+  while (unsettled.length > 0 && Date.now() < deadline) {
     await delay(Math.min(KEEP_HISTORY_STOP_POLL_MS, deadline - Date.now()))
     if (Date.now() >= deadline) {
       break
     }
-    if (await isProviderPtyLive(provider, ptyId, deadline)) {
-      return false
+    const stillLive = await listLiveProviderPtyIds(provider, unsettled, deadline)
+    for (const ptyId of stillLive) {
+      stopped.set(ptyId, false)
     }
+    unsettled = unsettled.filter((ptyId) => !stillLive.has(ptyId))
   }
-  return true
+  for (const ptyId of unsettled) {
+    stopped.set(ptyId, true)
+  }
+  return stopped
 }
 
 /** Returns the retired incarnation, or `null` when the proof names a different incarnation than

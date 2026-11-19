@@ -6,7 +6,7 @@ import {
   getPtySshConnectionId,
   resolvePtyExecutionHost
 } from '../provider/registry'
-import { isPtyAlreadyGoneError, delay, verifyPtyStopped } from '../provider/liveness'
+import { isPtyAlreadyGoneError } from '../provider/liveness'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { errorMessage } from '../../../../shared/errors/error-message'
@@ -15,14 +15,10 @@ import {
   PtyRetirementWithoutProof,
   type PtyRetirementEvidence
 } from '../../../pty/process-retirement/pty-exit-proof'
-import {
-  closeLegacyRelayPane,
-  isLegacyRelayBridgedPty,
-  stopLegacyRelayPaneAndWait
-} from '../../../ssh/legacy-relay/bridge/legacy-relay-bridge-registry'
+import { closeLegacyRelayPane, isLegacyRelayBridgedPty } from '../../../ssh/legacy-relay/bridge/legacy-relay-bridge-registry'
 
 // Bounds the wait for an observed exit to reach the runtime record when the caller set no deadline.
-const OBSERVED_EXIT_RECORD_WAIT_MS = 10_000
+export const OBSERVED_EXIT_RECORD_WAIT_MS = 10_000
 
 /** Unproved synthetic exit stays unverifiable; rejected incarnation proof publishes nothing for a same-ID respawn. */
 export function publishSyntheticExit(
@@ -174,131 +170,4 @@ export function retireRejectedPtyFromRuntimeController(
   const proof = PtyExitProof.from('stop-confirmed', incarnationId)
   const connectionId = getPtySshConnectionId(ptyId)
   publishSyntheticExit(deps, ptyId, 0, finishPtyShutdown(ptyId, connectionId, store, proof), proof)
-}
-
-/** Reversible stops must not leave durable kill orders that could destroy a later-woken pane; return failure for retry. */
-export async function stopAndWaitPtyFromRuntimeController(
-  deps: PtyRuntimeControllerDeps,
-  ptyId: string,
-  opts?: { keepHistory?: boolean; deadlineMs?: number }
-): Promise<boolean> {
-  // A final relay stop is owed until the relay proves it, so an unproven one still reads as closing.
-  const relayOwesStop =
-    !opts?.keepHistory && Boolean(getPtySshConnectionId(ptyId)) && isLegacyRelayBridgedPty(ptyId)
-  let stopped = false
-  try {
-    stopped = await stopAndWaitPty(deps, ptyId, opts)
-    return stopped
-  } finally {
-    if (!stopped && !relayOwesStop) {
-      // Refused, failed or thrown: the process may run on, so it must not read as closing.
-      deps.runtime?.clearPtyStopRequest?.(ptyId)
-    }
-  }
-}
-
-async function stopAndWaitPty(
-  deps: PtyRuntimeControllerDeps,
-  ptyId: string,
-  opts?: { keepHistory?: boolean; deadlineMs?: number }
-): Promise<boolean> {
-  const {
-    runtime,
-    store,
-    getLocalPtyProviderStartupPromise,
-    shutdownProviderAndDetectExit,
-    finishPtyShutdown
-  } = deps
-  runtime?.markPtyStopRequested?.(ptyId)
-  const connectionId = getPtySshConnectionId(ptyId)
-  if (connectionId && isLegacyRelayBridgedPty(ptyId)) {
-    // A reversible stop must not leave the bridge's durable stop behind, so the pane stays live.
-    if (opts?.keepHistory) {
-      return false
-    }
-    const stoppingIncarnationId = ptyIncarnationById.get(ptyId)
-    const deadline = opts?.deadlineMs ?? Date.now() + OBSERVED_EXIT_RECORD_WAIT_MS
-    const stopped = await Promise.race([
-      stopLegacyRelayPaneAndWait(ptyId, deadline),
-      delay(Math.max(1, deadline - Date.now())).then(() => null)
-    ])
-    if (stopped) {
-      // The bridge retired the lease and holds no pane. An exit it saw already reached the runtime.
-      const proof = PtyExitProof.from('absent', stoppingIncarnationId)
-      const publishTo = stopped === 'reported' ? { ...deps, runtime: undefined } : deps
-      publishSyntheticExit(publishTo, ptyId, 0, finishPtyShutdown(ptyId, null, store, proof), proof)
-    }
-    return stopped !== null
-  }
-  // Share one absolute teardown deadline across sequential awaits and RPC leaves.
-  const deadlineMs = opts?.deadlineMs
-  const startupPromise = getLocalPtyProviderStartupPromise(resolvePtyExecutionHost(ptyId))
-  if (startupPromise) {
-    // Resolve the provider only after startup; fallback cannot prove daemon teardown.
-    if (deadlineMs !== undefined) {
-      // Bound startup by teardown budget rather than the longer fail-open startup cap.
-      const won = await Promise.race([
-        // Rejected startup fails closed and must not leave an unhandled losing promise.
-        startupPromise.then(
-          () => true,
-          () => false
-        ),
-        delay(Math.max(1, deadlineMs - Date.now())).then(() => false)
-      ])
-      if (!won) {
-        return false
-      }
-    } else {
-      await startupPromise
-    }
-  }
-  let provider: IPtyProvider
-  try {
-    provider = getProviderForPty(ptyId)
-  } catch {
-    if (connectionId) {
-      // Missing SSH provider cannot confirm remote exit; retain its tombstoned lease.
-      const unproven = PtyRetirementWithoutProof.because(SSH_PROVIDER_UNREGISTERED_REASON)
-      const incarnationId = finishPtyShutdown(ptyId, connectionId, store, unproven)
-      publishSyntheticExit(deps, ptyId, -1, incarnationId, unproven)
-    }
-    return false
-  }
-  const stoppingIncarnationId = ptyIncarnationById.get(ptyId)
-  let providerExitObserved = false
-  try {
-    providerExitObserved = await shutdownProviderAndDetectExit(provider, ptyId, {
-      immediate: true,
-      keepHistory: opts?.keepHistory ?? false,
-      deadlineMs
-    })
-  } catch (err) {
-    if (!isPtyAlreadyGoneError(err)) {
-      console.warn(`[pty] Failed to stop PTY ${ptyId}: ${errorMessage(err)}`)
-      return false
-    }
-  }
-  try {
-    if (!(await verifyPtyStopped(provider, ptyId, opts, providerExitObserved))) {
-      runtime?.markPtyLivenessLive?.(ptyId)
-      return false
-    }
-  } catch (err) {
-    console.warn(`[pty] Failed to verify PTY ${ptyId} stopped: ${errorMessage(err)}`)
-    return false
-  }
-  const proof = PtyExitProof.from(
-    providerExitObserved ? 'exit-observed' : 'absent',
-    stoppingIncarnationId
-  )
-  const incarnationId = finishPtyShutdown(ptyId, connectionId, store, proof)
-  if (!providerExitObserved) {
-    // Fresh owning-provider absence proves exit even if its event was missed.
-    publishSyntheticExit(deps, ptyId, 0, incarnationId, proof)
-  } else {
-    // SSH exit records follow output drain; wait before returning a verdict consumers can read.
-    const waitUntil = Math.min(deadlineMs ?? Infinity, Date.now() + OBSERVED_EXIT_RECORD_WAIT_MS)
-    await runtime?.waitForPtyExitRecord?.(ptyId, waitUntil - Date.now())
-  }
-  return true
 }

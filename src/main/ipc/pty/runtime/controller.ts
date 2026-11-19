@@ -10,11 +10,11 @@ import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { claimRuntimePaneCreate, makePaneSpawnReservationKey } from '../pane/spawn-reservation'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import { spawnPtyFromRuntimeController } from './spawn'
+import { killPtyFromRuntimeController, retireRejectedPtyFromRuntimeController } from './kill'
 import {
-  killPtyFromRuntimeController,
-  retireRejectedPtyFromRuntimeController,
-  stopAndWaitPtyFromRuntimeController
-} from './kill'
+  stopAndWaitPtyFromRuntimeController,
+  stopAndWaitPtysFromRuntimeController
+} from './stop-and-wait'
 import {
   attachPtyFromRuntimeController,
   clearBufferFromRuntimeController,
@@ -76,6 +76,7 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
     retireRejectedPty: (ptyId, stopConfirmed, incarnationId) =>
       retireRejectedPtyFromRuntimeController(deps, ptyId, stopConfirmed, incarnationId),
     stopAndWait: (ptyId, opts) => stopAndWaitPtyFromRuntimeController(deps, ptyId, opts),
+    stopAndWaitMany: (ptyIds, opts) => stopAndWaitPtysFromRuntimeController(deps, ptyIds, opts),
     getForegroundProcess: (ptyId) => getForegroundProcessFromRuntimeController(ptyId),
     supportsForegroundObservation: (ptyId) =>
       supportsForegroundObservationFromRuntimeController(ptyId),
