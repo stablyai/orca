@@ -4,9 +4,12 @@ type Entry = { read: () => unknown; last: unknown }
 
 // Committed root selectors only, keyed by a per-hook token so the hook never mutates its own state.
 const committed = new Map<object, Entry>()
-// One check per interval: a selector that read a channel field stays wrong until its next root write.
+// Leading edge, at most once per interval, a bounded slice per pass: costs stay flat as mounted selectors grow,
+// and successive passes walk the whole registry.
 const CHECK_INTERVAL_MS = 1000
-let checkQueued = false
+const CHECK_BUDGET = 200
+let nextCheckAt = 0
+let cursor: Iterator<Entry> | null = null
 
 /** Development only: records, at commit, what each mounted root selector showed. */
 export function useRecordedRootSelection(read: () => unknown): void {
@@ -21,13 +24,19 @@ export function useRecordedRootSelection(read: () => unknown): void {
 }
 
 function checkCommittedRootSelectors(): void {
-  checkQueued = false
-  committed.forEach((entry) => {
+  for (let checked = 0; checked < CHECK_BUDGET; checked++) {
+    cursor ??= committed.values()
+    const next = cursor.next()
+    if (next.done) {
+      cursor = null
+      return
+    }
+    const entry = next.value
     let value: unknown
     try {
       value = entry.read()
     } catch {
-      return
+      continue
     }
     if (!Object.is(value, entry.last)) {
       entry.last = value
@@ -36,13 +45,15 @@ function checkCommittedRootSelectors(): void {
         entry.read
       )
     }
-  })
+  }
 }
 
 /** After a channel-only write skipped root selectors: any whose result moved read a channel field. */
 export function checkSkippedRootSelectors(): void {
-  if (!checkQueued) {
-    checkQueued = true
-    setTimeout(checkCommittedRootSelectors, CHECK_INTERVAL_MS)
+  const now = performance.now()
+  if (now < nextCheckAt) {
+    return
   }
+  nextCheckAt = now + CHECK_INTERVAL_MS
+  checkCommittedRootSelectors()
 }
