@@ -1,9 +1,8 @@
 import { open, readFile, rm, stat, statfs, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { tmpdir } from 'node:os'
-import { spawnProcess } from '@orca/process-host'
 import { potentiallyLiveRemoteAttachmentSql } from '../federation/remote-attachment-liveness'
-import { compactionChildSource } from './orchestration-db-compaction-child-source'
+import { runChild, runCompactionChild } from './orchestration-db-compaction-children'
 
 const MIB = 1024 * 1024
 const MIN_FREE_BYTES = 32 * MIB
@@ -88,38 +87,6 @@ async function settlesWithin<T>(work: Promise<T>, ms: number): Promise<T | 'late
   }
 }
 
-/** Runs the child for one job only, stopped at `ms`; resolves when it has exited or at `ms`. */
-function runChild(filename: string, job: { recoverOnly: true }, ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    let child: ReturnType<typeof spawnProcess>
-    try {
-      child = spawnProcess({
-        program: process.execPath,
-        args: ['-e', compactionChildSource],
-        env: {
-          ...process.env,
-          ELECTRON_RUN_AS_NODE: '1',
-          ORCA_ORCHESTRATION_COMPACTION: JSON.stringify({ filename, ...job })
-        },
-        stdio: 'ignore'
-      })
-    } catch {
-      resolve()
-      return
-    }
-    const stop = setTimeout(() => {
-      child.kill('SIGKILL')
-      resolve()
-    }, ms)
-    const done = (): void => {
-      clearTimeout(stop)
-      resolve()
-    }
-    child.once('error', done)
-    child.once('close', done)
-  })
-}
-
 /** The page counts in a SQLite header; null when the file is missing or not a database. */
 async function readHeaderCounts(filename: string): Promise<PageCounts | null> {
   let file
@@ -146,18 +113,6 @@ async function readHeaderCounts(filename: string): Promise<PageCounts | null> {
     }
   } finally {
     await file.close()
-  }
-}
-
-function readChildResult(output: string): OrchestrationDbCompaction | null {
-  try {
-    const parsed: unknown = JSON.parse(output.trim().split('\n').at(-1) ?? '')
-    return typeof parsed === 'object' && parsed !== null && 'kind' in parsed
-      ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: written by compactionChildSource above.
-        (parsed as OrchestrationDbCompaction)
-      : null
-  } catch {
-    return null
   }
 }
 
@@ -272,7 +227,21 @@ export async function compactOrchestrationDb(
   const remainingMs = budgetMs - (performance.now() - started)
   const { result, heldLock } =
     remainingMs > 0
-      ? await runCompactionChild(filename, remainingMs, release, started)
+      ? await runCompactionChild({
+          filename,
+          budgetMs: remainingMs,
+          graceMs: EXIT_GRACE_MS,
+          release,
+          started,
+          job: {
+            tempDir: sqliteTempDir(),
+            minFreeBytes: MIN_FREE_BYTES,
+            minFreeFraction: MIN_FREE_FRACTION,
+            maxLiveBytes: MAX_LIVE_BYTES,
+            activeWorkSql: ACTIVE_ORCHESTRATION_WORK_SQL,
+            lockWaitMs: LOCK_WAIT_MS
+          }
+        })
       : {
           result: { kind: 'timed-out' as const, ms: Math.round(performance.now() - started) },
           heldLock: false
@@ -288,88 +257,6 @@ export async function compactOrchestrationDb(
     await runChild(filename, { recoverOnly: true }, Math.max(leftMs, 0))
   }
   return result
-}
-
-function runCompactionChild(
-  filename: string,
-  budgetMs: number,
-  release: () => void,
-  started: number
-): Promise<{ result: OrchestrationDbCompaction; heldLock: boolean }> {
-  let heldLock = false
-  return new Promise((settle) => {
-    const resolve = (result: OrchestrationDbCompaction): void => settle({ result, heldLock })
-    let child: ReturnType<typeof spawnProcess>
-    try {
-      child = spawnProcess({
-        program: process.execPath,
-        args: ['-e', compactionChildSource],
-        env: {
-          ...process.env,
-          ELECTRON_RUN_AS_NODE: '1',
-          ORCA_ORCHESTRATION_COMPACTION: JSON.stringify({
-            filename,
-            tempDir: sqliteTempDir(),
-            minFreeBytes: MIN_FREE_BYTES,
-            minFreeFraction: MIN_FREE_FRACTION,
-            maxLiveBytes: MAX_LIVE_BYTES,
-            activeWorkSql: ACTIVE_ORCHESTRATION_WORK_SQL,
-            lockWaitMs: LOCK_WAIT_MS
-          })
-        },
-        stdio: 'pipe'
-      })
-    } catch (error) {
-      resolve({ kind: 'failed', error: String(error) })
-      return
-    }
-    // A child gone before it reads 'go' makes that write fail; at quit that must never be unhandled.
-    child.stdin?.on('error', () => {})
-    let output = ''
-    let released = false
-    let timedOut = false
-    child.stdout?.on('data', (chunk: Buffer) => {
-      output += chunk.toString()
-      heldLock ||= output.startsWith('ready\nlocked\n')
-      if (!released && output.startsWith('ready\n')) {
-        released = true
-        // A stopped child can't take over; the WAL cap bounds the close if it died unseen.
-        if (timedOut || child.exitCode !== null || child.signalCode !== null) {
-          return
-        }
-        try {
-          release()
-          child.stdin?.end('go\n')
-        } catch (error) {
-          child.kill('SIGKILL')
-          finish({ kind: 'failed', error: String(error) })
-        }
-      }
-    })
-    let grace: NodeJS.Timeout | undefined
-    const finish = (result: OrchestrationDbCompaction): void => {
-      clearTimeout(budget)
-      clearTimeout(grace)
-      resolve(result)
-    }
-    // Killing it rolls the VACUUM back; quit then waits briefly for the lock to drop, never longer.
-    const budget = setTimeout(() => {
-      timedOut = true
-      child.kill('SIGKILL')
-      grace = setTimeout(
-        () => finish({ kind: 'timed-out', ms: Math.round(performance.now() - started) }),
-        EXIT_GRACE_MS
-      )
-    }, budgetMs)
-    child.once('error', (error) => finish({ kind: 'failed', error: String(error) }))
-    child.once('close', () =>
-      finish(
-        timedOut
-          ? { kind: 'timed-out', ms: Math.round(performance.now() - started) }
-          : (readChildResult(output) ?? { kind: 'failed', error: 'no result from compaction' })
-      )
-    )
-  })
 }
 
 /** Last step of a clean quit, after every other teardown settled: nothing else uses the file. */
