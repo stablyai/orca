@@ -151,7 +151,7 @@ export function SourceControlChangeScopeMenuContent({
         </DropdownMenuRadioItem>
         <DropdownMenuSeparator />
         <DropdownMenuLabel>{commitsLabel}</DropdownMenuLabel>
-        {commits.length > COMMIT_FILTER_THRESHOLD ? (
+        {commits.length > COMMIT_FILTER_THRESHOLD || query.length > 0 ? (
           <div className="px-1.5 pb-1">
             <input
               type="text"

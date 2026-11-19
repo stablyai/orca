@@ -30,9 +30,11 @@ function readCollapsedSections(worktreeId: string | null): Set<string> {
 
 export function useSourceControlPanelViewState({
   activeWorktreeId,
+  owner,
   settings,
   updateSettings
 }: {
+  owner: string
   activeWorktreeId: string | null
   settings: SourceControlWorktreeContext['settings']
   updateSettings: SourceControlStoreActions['updateSettings']
@@ -54,7 +56,7 @@ export function useSourceControlPanelViewState({
   const [baseRefDialogOpen, setBaseRefDialogOpen] = useState(false)
   const [filterQuery, setFilterQuery] = useState('')
   const [changeScope, setChangeScopeState] = useState<SourceControlChangeScope>(() =>
-    readRememberedChangeScope(activeWorktreeId)
+    readRememberedChangeScope(activeWorktreeId, owner)
   )
   const [commitScopeFiles, setCommitScopeFiles] = useState<SourceControlCommitScopeFiles | null>(
     null
@@ -62,10 +64,10 @@ export function useSourceControlPanelViewState({
   const [changeScopeMenuOpen, setChangeScopeMenuOpen] = useState(false)
   const setChangeScope = useCallback(
     (scope: SourceControlChangeScope) => {
-      rememberChangeScope(activeWorktreeId, scope)
+      rememberChangeScope(activeWorktreeId, scope, owner)
       setChangeScopeState(scope)
     },
-    [activeWorktreeId]
+    [activeWorktreeId, owner]
   )
 
   const handleToggleSourceControlViewMode = useCallback(() => {
@@ -81,16 +83,17 @@ export function useSourceControlPanelViewState({
   }, [updateSettings])
 
   // Reset during render; key-based remounts on switches caused Windows IPC storms.
-  const [viewStateWorktreeId, setViewStateWorktreeId] = useState(activeWorktreeId)
-  if (viewStateWorktreeId !== activeWorktreeId) {
-    setViewStateWorktreeId(activeWorktreeId)
+  const viewIdentity = JSON.stringify([activeWorktreeId, owner])
+  const [viewStateWorktreeId, setViewStateWorktreeId] = useState(viewIdentity)
+  if (viewStateWorktreeId !== viewIdentity) {
+    setViewStateWorktreeId(viewIdentity)
     setFilterExpanded(false)
     setCollapsedSections(readCollapsedSections(activeWorktreeId))
     setCollapsedTreeDirs(new Set())
     setBaseRefDialogOpen(false)
     // Preserve repo-scoped defaultBaseRef and per-worktree in-flight commits so switches cannot clobber defaults or enable duplicate commits.
     setFilterQuery('')
-    rememberChangeScope(activeWorktreeId, ALL_CHANGES_SCOPE)
+    rememberChangeScope(activeWorktreeId, ALL_CHANGES_SCOPE, owner)
     setChangeScopeState(ALL_CHANGES_SCOPE)
     setCommitScopeFiles(null)
     setChangeScopeMenuOpen(false)

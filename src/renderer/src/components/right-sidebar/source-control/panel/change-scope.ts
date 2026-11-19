@@ -24,19 +24,24 @@ export type SourceControlCommitScopeFiles =
 export const ALL_CHANGES_SCOPE: SourceControlChangeScope = { kind: 'all' }
 
 // Survives sidebar-tab unmounts for the same worktree; any worktree switch starts at All changes.
-let rememberedScope: { worktreeId: string; scope: SourceControlChangeScope } | null = null
+let rememberedScope: { worktreeId: string; scope: SourceControlChangeScope; owner: string } | null =
+  null
 
-export function readRememberedChangeScope(worktreeId: string | null): SourceControlChangeScope {
-  return worktreeId && rememberedScope?.worktreeId === worktreeId
+export function readRememberedChangeScope(
+  worktreeId: string | null,
+  owner: string
+): SourceControlChangeScope {
+  return worktreeId && rememberedScope?.worktreeId === worktreeId && rememberedScope.owner === owner
     ? rememberedScope.scope
     : ALL_CHANGES_SCOPE
 }
 
 export function rememberChangeScope(
   worktreeId: string | null,
-  scope: SourceControlChangeScope
+  scope: SourceControlChangeScope,
+  owner: string
 ): void {
-  rememberedScope = worktreeId ? { worktreeId, scope } : null
+  rememberedScope = worktreeId ? { worktreeId, scope, owner } : null
 }
 
 export function changeScopeKey(scope: SourceControlChangeScope): string {
