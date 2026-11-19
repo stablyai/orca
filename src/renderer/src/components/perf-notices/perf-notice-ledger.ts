@@ -9,10 +9,12 @@ const DAY = 24 * 60 * MINUTE
 const WEEK = 7 * DAY
 const LAUNCH_QUIET_MS = 10 * MINUTE
 
-/** Disk breaks work now: it skips the launch quiet period and the shared daily cap, and snoozes for a day. */
+/** Disk breaks work now: it skips the launch quiet period, and repeats and snoozes by the day. */
 const URGENT: ReadonlySet<PerfNoticeId> = new Set(['disk-almost-full'])
 
 const launchedAt = Date.now()
+// Why: if storage fails, this copy keeps snoozes and caps for the rest of the session.
+let sessionLedger: Ledger = { lastToastAt: null, notices: {} }
 
 function isLedger(value: unknown): value is Ledger {
   return (
@@ -31,19 +33,20 @@ function read(): Ledger {
     const raw = window.localStorage.getItem(STORAGE_KEY)
     const parsed: unknown = raw ? JSON.parse(raw) : null
     if (isLedger(parsed)) {
-      return parsed
+      sessionLedger = parsed
     }
   } catch {
-    // Unreadable storage starts fresh; worst case one extra toast.
+    // Unreadable storage keeps the session copy.
   }
-  return { lastToastAt: null, notices: {} }
+  return sessionLedger
 }
 
 function write(ledger: Ledger): void {
+  sessionLedger = ledger
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(ledger))
   } catch {
-    // Storage can be full or blocked; rate limits then last for this session only.
+    // Storage can be full or blocked; the session copy still holds.
   }
 }
 
@@ -53,16 +56,13 @@ export function canShowPerfNotice(id: PerfNoticeId, now: number): boolean {
   if (record?.off || (record && now < record.snoozedUntil)) {
     return false
   }
-  if (URGENT.has(id)) {
-    return !record || now - record.lastShownAt >= DAY
-  }
-  if (now - launchedAt < LAUNCH_QUIET_MS) {
+  if (!URGENT.has(id) && now - launchedAt < LAUNCH_QUIET_MS) {
     return false
   }
   if (ledger.lastToastAt !== null && now - ledger.lastToastAt < DAY) {
     return false
   }
-  return !record || now - record.lastShownAt >= WEEK
+  return !record || now - record.lastShownAt >= (URGENT.has(id) ? DAY : WEEK)
 }
 
 /** Records the showing and returns how many times this notice has now been shown. */
@@ -70,16 +70,18 @@ export function recordPerfNoticeShown(id: PerfNoticeId, now: number): number {
   const ledger = read()
   const previous = ledger.notices[id]
   const shownCount = (previous?.shownCount ?? 0) + 1
-  ledger.notices[id] = {
-    shownCount,
-    lastShownAt: now,
-    snoozedUntil: previous?.snoozedUntil ?? 0,
-    off: previous?.off ?? false
-  }
-  if (!URGENT.has(id)) {
-    ledger.lastToastAt = now
-  }
-  write(ledger)
+  write({
+    lastToastAt: now,
+    notices: {
+      ...ledger.notices,
+      [id]: {
+        shownCount,
+        lastShownAt: now,
+        snoozedUntil: previous?.snoozedUntil ?? 0,
+        off: previous?.off ?? false
+      }
+    }
+  })
   return shownCount
 }
 
@@ -87,8 +89,13 @@ export function snoozePerfNotice(id: PerfNoticeId, now: number): void {
   const ledger = read()
   const record = ledger.notices[id]
   if (record) {
-    record.snoozedUntil = now + (URGENT.has(id) ? DAY : WEEK)
-    write(ledger)
+    write({
+      ...ledger,
+      notices: {
+        ...ledger.notices,
+        [id]: { ...record, snoozedUntil: now + (URGENT.has(id) ? DAY : WEEK) }
+      }
+    })
   }
 }
 
@@ -96,7 +103,6 @@ export function turnOffPerfNotice(id: PerfNoticeId): void {
   const ledger = read()
   const record = ledger.notices[id]
   if (record) {
-    record.off = true
-    write(ledger)
+    write({ ...ledger, notices: { ...ledger.notices, [id]: { ...record, off: true } } })
   }
 }

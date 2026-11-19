@@ -133,8 +133,9 @@ export async function readInProcessAvailableMemory(): Promise<{
     return null
   }
   if (process.platform === 'win32') {
-    const freeKib = nonNegativeNumber(readElectronSystemMemoryInfo()?.free)
-    return freeKib > 0
+    const freeKib = readElectronSystemMemoryInfo()?.free
+    // Zero free is a real reading at peak pressure; only a missing value is unknown.
+    return typeof freeKib === 'number' && Number.isFinite(freeKib) && freeKib >= 0
       ? { totalMemory, availableMemory: Math.min(totalMemory, freeKib * KIB) }
       : null
   }

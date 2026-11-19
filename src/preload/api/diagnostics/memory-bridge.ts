@@ -10,6 +10,8 @@ export const memoryApi = {
     ipcRenderer.invoke('memory:getSnapshot', admission),
   readPerfNoticeSignals: (): Promise<PerfNoticeSignals> =>
     ipcRenderer.invoke('memory:readPerfNoticeSignals'),
+  countHiddenBrowserPages: (hiddenForMs: number): Promise<number> =>
+    ipcRenderer.invoke('memory:countHiddenBrowserPages', hiddenForMs),
   resourceWindowVisible: (): Promise<boolean> => ipcRenderer.invoke('memory:resourceWindowVisible'),
   onResourceWindowVisibility: (callback: (visible: boolean) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, visible: boolean): void =>

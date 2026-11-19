@@ -4,26 +4,35 @@ import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrom
 import type { PerfNoticeSignals } from '../../../../shared/diagnostics/perf-notice-signals'
 import { formatMemory } from '../status-bar/resources/popover/resource-usage-metrics'
 import { splitSnapshotByOwner } from '../status-bar/resources/popover/resource-owner-split'
-import { isResourceManagerOpen } from '../status-bar/resources/resource-manager-open-request'
+import {
+  hasResourceManager,
+  isResourceManagerOpen
+} from '../status-bar/resources/resource-manager-open-request'
 import { canShowPerfNotice } from './perf-notice-ledger'
 import {
   availableFraction,
   countIdleAgents,
+  HIDDEN_TAB_MIN,
+  IDLE_AGENT_MIN,
+  idleAgentCandidates,
   isDiskAlmostFull,
-  isHiddenBrowserTabsDue,
-  isIdleAgentsDue,
   LOW_MEMORY_FRACTION,
-  TIGHT_MEMORY_FRACTION,
-  PERF_NOTICE_OFFERS_AGENT_SLEEP
+  PERF_NOTICE_OFFERS_AGENT_SLEEP,
+  TERMINAL_SHARE_MIN,
+  TIGHT_MEMORY_FRACTION
 } from './perf-notice-rules'
-import { showPerfNotice, type PerfNotice } from './perf-notice-toast'
+import { memorySaverHours, showPerfNotice, type PerfNotice } from './perf-notice-toast'
 
 const MINUTE = 60_000
+const HOUR = 60 * MINUTE
 const LOW_MEMORY_HOLD_MS = 2 * MINUTE
-const OWNER_SHARE_RECHECK_MS = 60 * MINUTE
+// Why: each owner check takes a full process snapshot, so a failed one waits hours, not minutes.
+const OWNER_SHARE_RECHECK_MS = 6 * HOUR
+const IDLE_AGENT_RECHECK_MS = 10 * MINUTE
+const HIDDEN_TABS_RECHECK_MS = 10 * MINUTE
 const AGENT_SLEEP_IDLE_MS = 30 * MINUTE
 const TYPING_QUIET_MS = 5_000
-const USER_AWAY_SECONDS = 5 * 60
+const USER_AWAY_MS = 5 * MINUTE
 
 const CADENCE = {
   low: 30_000,
@@ -32,21 +41,42 @@ const CADENCE = {
   waiting: 15_000
 } as const
 
-type Tracking = { lowSince: number | null; ownerShareCheckedAt: number }
+type Tracking = {
+  lowSince: number | null
+  ownerShareCheckedAt: number
+  idleCheckedAt: number
+  hiddenTabsCheckedAt: number
+}
 
-/** Memory-low needs proof that Orca's terminals, not other apps, hold the memory: one snapshot, at most hourly. */
-async function memoryLowNotice(now: number): Promise<PerfNotice | null> {
-  const snapshot = await window.api.memory.getSnapshot()
+/** Why the loop must hold off right now; rechecked after every await before anything shows. */
+type Gate = () => boolean
+
+async function localSessions(): Promise<Awaited<ReturnType<typeof window.api.pty.listSessions>>> {
+  try {
+    return await window.api.pty.listSessions({ connectionId: null })
+  } catch {
+    return []
+  }
+}
+
+/** Memory-low names terminals only when they hold most of the used memory; never Orca, never other apps. */
+async function memoryLowNotice(now: number, blocked: Gate): Promise<PerfNotice | null> {
+  const [snapshot, sessions] = await Promise.all([window.api.memory.getSnapshot(), localSessions()])
+  if (blocked()) {
+    return null
+  }
   const state = useAppStore.getState()
-  const split = splitSnapshotByOwner(snapshot, state.agentStatusByPaneKey)
-  const started = split.orca.memory + split.agents.memory + split.yourProcesses.memory
-  if (snapshot.host.usedMemory <= 0 || started / snapshot.host.usedMemory < 0.4) {
+  const split = splitSnapshotByOwner(snapshot, sessions, state.agentStatusByPaneKey)
+  const used = snapshot.host.usedMemory
+  const terminals = split.agents.memory + split.yourProcesses.memory
+  if (used <= 0 || terminals / used < TERMINAL_SHARE_MIN || !hasResourceManager()) {
     return null
   }
   if (
     PERF_NOTICE_OFFERS_AGENT_SLEEP &&
     !state.settings?.experimentalAgentHibernation &&
-    countIdleAgents(state, now, AGENT_SLEEP_IDLE_MS).terminal > 0
+    countIdleAgents(state, idleAgentCandidates(state, now, AGENT_SLEEP_IDLE_MS), sessions)
+      .terminal > 0
   ) {
     return { id: 'memory-low', variant: 'agent-sleep' }
   }
@@ -56,20 +86,47 @@ async function memoryLowNotice(now: number): Promise<PerfNotice | null> {
   }
 }
 
+async function idleAgentsNotice(now: number, blocked: Gate): Promise<PerfNotice | null> {
+  const candidates = idleAgentCandidates(useAppStore.getState(), now)
+  if (candidates.length < IDLE_AGENT_MIN) {
+    return null
+  }
+  const sessions = await localSessions()
+  if (blocked()) {
+    return null
+  }
+  const idle = countIdleAgents(useAppStore.getState(), candidates, sessions)
+  if (idle.terminal + idle.chats < IDLE_AGENT_MIN) {
+    return null
+  }
+  // Why: terminal-only idle points at Resources, which must exist to open.
+  return idle.chats === 0 && !hasResourceManager() ? null : { id: 'idle-agents', idle }
+}
+
+async function hiddenTabsNotice(blocked: Gate): Promise<PerfNotice | null> {
+  const hours = memorySaverHours()
+  const count = await window.api.memory.countHiddenBrowserPages(hours * HOUR)
+  return blocked() || count < HIDDEN_TAB_MIN ? null : { id: 'hidden-browser-tabs', count, hours }
+}
+
 /** Shows at most one notice and returns the delay before the next reading. */
 async function evaluate(
   signals: PerfNoticeSignals,
   tracking: Tracking,
-  now: number
+  now: number,
+  blocked: Gate
 ): Promise<number> {
   if (signals.disk && isDiskAlmostFull(signals) && canShowPerfNotice('disk-almost-full', now)) {
     showPerfNotice({ id: 'disk-almost-full', freeLabel: formatMemory(signals.disk.freeBytes) }, now)
+    return CADENCE.healthy
   }
   const fraction = availableFraction(signals)
   // Why: macOS has no in-process available-memory reading yet, so memory notices stay off there.
-  if (fraction === null) {
+  if (fraction === null || fraction >= TIGHT_MEMORY_FRACTION) {
+    tracking.lowSince = null
     return CADENCE.healthy
   }
+  let notice: PerfNotice | null = null
   if (fraction >= LOW_MEMORY_FRACTION) {
     tracking.lowSince = null
   } else {
@@ -80,38 +137,51 @@ async function evaluate(
       canShowPerfNotice('memory-low', now)
     ) {
       tracking.ownerShareCheckedAt = now
-      const notice = await memoryLowNotice(now)
-      if (notice) {
-        showPerfNotice(notice, now)
-        return CADENCE.tight
-      }
+      notice = await memoryLowNotice(now, blocked)
     }
   }
-  const state = useAppStore.getState()
-  // Why: counting idle agents walks agent status, so only do it once memory is tight.
-  if (fraction < TIGHT_MEMORY_FRACTION && canShowPerfNotice('idle-agents', now)) {
-    const idle = countIdleAgents(state, now)
-    if (isIdleAgentsDue(idle, signals)) {
-      showPerfNotice({ id: 'idle-agents', idle }, now)
-      return CADENCE.tight
-    }
+  if (
+    !notice &&
+    now - tracking.idleCheckedAt >= IDLE_AGENT_RECHECK_MS &&
+    canShowPerfNotice('idle-agents', now)
+  ) {
+    tracking.idleCheckedAt = now
+    notice = await idleAgentsNotice(now, blocked)
   }
-  if (isHiddenBrowserTabsDue(state, signals) && canShowPerfNotice('hidden-browser-tabs', now)) {
-    showPerfNotice({ id: 'hidden-browser-tabs', count: signals.hiddenBrowserPages }, now)
+  if (
+    !notice &&
+    useAppStore.getState().settings?.browserGuestWorktreeRetentionBudget === false &&
+    now - tracking.hiddenTabsCheckedAt >= HIDDEN_TABS_RECHECK_MS &&
+    canShowPerfNotice('hidden-browser-tabs', now)
+  ) {
+    tracking.hiddenTabsCheckedAt = now
+    notice = await hiddenTabsNotice(blocked)
   }
-  return fraction < LOW_MEMORY_FRACTION
-    ? CADENCE.low
-    : fraction < TIGHT_MEMORY_FRACTION
-      ? CADENCE.tight
-      : CADENCE.healthy
+  if (notice && !blocked()) {
+    showPerfNotice(notice, now)
+  }
+  return fraction < LOW_MEMORY_FRACTION ? CADENCE.low : CADENCE.tight
 }
 
-/** Reads run only while this window has focus, slow down when memory is fine, and stop while the user is away. */
+/** Reads run only while this window has focus, one at a time, slow down when memory is fine, and
+ *  stop once the user has been away 5 minutes until their next key or click. */
 function startPerfNoticeLoop(): () => void {
-  const tracking: Tracking = { lowSince: null, ownerShareCheckedAt: 0 }
+  const tracking: Tracking = {
+    lowSince: null,
+    ownerShareCheckedAt: 0,
+    idleCheckedAt: 0,
+    hiddenTabsCheckedAt: 0
+  }
   let timer: ReturnType<typeof setTimeout> | null = null
+  let reading = false
   let disposed = false
   let lastKeyAt = 0
+  let lastActivityAt = Date.now()
+  const isQuietTime = (): boolean =>
+    Date.now() - lastKeyAt < TYPING_QUIET_MS ||
+    useAppStore.getState().activeModal !== 'none' ||
+    isResourceManagerOpen()
+  const blocked: Gate = () => disposed || !document.hasFocus() || isQuietTime()
   const clear = (): void => {
     if (timer !== null) {
       clearTimeout(timer)
@@ -120,55 +190,60 @@ function startPerfNoticeLoop(): () => void {
   }
   const schedule = (delayMs: number): void => {
     clear()
-    if (!disposed && document.hasFocus()) {
+    if (!disposed && !reading && document.hasFocus()) {
       timer = setTimeout(() => void tick(), delayMs)
     }
   }
   const tick = async (): Promise<void> => {
     timer = null
     const now = Date.now()
-    if (
-      now - lastKeyAt < TYPING_QUIET_MS ||
-      useAppStore.getState().activeModal !== 'none' ||
-      isResourceManagerOpen()
-    ) {
+    if (now - lastActivityAt >= USER_AWAY_MS) {
+      return
+    }
+    if (isQuietTime()) {
       schedule(CADENCE.waiting)
       return
     }
-    let next: number = CADENCE.healthy
+    reading = true
+    let next: number | null = CADENCE.healthy
     try {
       const signals = await window.api.memory.readPerfNoticeSignals()
-      // Why: with the user away, stop until their next key or click instead of polling.
-      if (!signals || signals.userIdleSeconds >= USER_AWAY_SECONDS) {
-        return
+      if (!signals || signals.userIdleSeconds * 1000 >= USER_AWAY_MS) {
+        next = null
+      } else if (!blocked()) {
+        next = await evaluate(signals, tracking, now, blocked)
       }
-      next = await evaluate(signals, tracking, now)
     } catch {
       // A failed reading waits for the slow cadence instead of retrying hot.
+    } finally {
+      reading = false
     }
-    schedule(next)
+    if (next !== null) {
+      schedule(next)
+    }
   }
-  const onFocus = (): void => {
-    if (timer === null) {
+  const onActivity = (): void => {
+    lastActivityAt = Date.now()
+    if (timer === null && !reading) {
       schedule(CADENCE.tight)
     }
   }
   const onKey = (): void => {
     lastKeyAt = Date.now()
-    onFocus()
+    onActivity()
   }
-  window.addEventListener('focus', onFocus)
+  window.addEventListener('focus', onActivity)
   window.addEventListener('blur', clear)
   window.addEventListener('keydown', onKey, { capture: true, passive: true })
-  window.addEventListener('pointerdown', onFocus, { capture: true, passive: true })
-  onFocus()
+  window.addEventListener('pointerdown', onActivity, { capture: true, passive: true })
+  onActivity()
   return () => {
     disposed = true
     clear()
-    window.removeEventListener('focus', onFocus)
+    window.removeEventListener('focus', onActivity)
     window.removeEventListener('blur', clear)
     window.removeEventListener('keydown', onKey, { capture: true })
-    window.removeEventListener('pointerdown', onFocus, { capture: true })
+    window.removeEventListener('pointerdown', onActivity, { capture: true })
   }
 }
 

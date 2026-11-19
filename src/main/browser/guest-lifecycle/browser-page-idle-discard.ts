@@ -224,6 +224,7 @@ export function createBrowserPageIdleDiscard(sources: {
       let count = 0
       for (const episode of pages.values()) {
         if (
+          episode.visibilityKnown &&
           episode.visible === false &&
           !episode.consumed &&
           episode.hiddenAt !== null &&

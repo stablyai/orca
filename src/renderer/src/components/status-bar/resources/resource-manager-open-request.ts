@@ -8,6 +8,11 @@ export function requestResourceManagerOpen(): void {
   }
 }
 
+/** False when the status-bar item is hidden, so a toast never offers an Open Resources that does nothing. */
+export function hasResourceManager(): boolean {
+  return listeners.size > 0
+}
+
 export function onResourceManagerOpenRequest(listener: () => void): () => void {
   listeners.add(listener)
   return () => listeners.delete(listener)

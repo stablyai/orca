@@ -2788,9 +2788,17 @@
     "zoom": "Zoom"
   },
   "perfNotices": {
+    "hiddenTabs": {
+      "description_one": "Memory Saver frees tabs you haven't viewed in {{count}} hour. They reload when you open them.",
+      "description_other": "Memory Saver frees tabs you haven't viewed in {{count}} hours. They reload when you open them."
+    },
     "idleAgents": {
+      "chatCount_one": "{{count}} chat",
+      "chatCount_other": "{{count}} chats",
       "chats_one": "{{count}} chat has been idle for 2 hours",
       "chats_other": "{{count}} chats have been idle for 2 hours",
+      "terminalCount_one": "{{count}} terminal agent",
+      "terminalCount_other": "{{count}} terminal agents",
       "terminal_one": "{{count}} terminal agent has been idle for 2 hours",
       "terminal_other": "{{count}} terminal agents have been idle for 2 hours"
     }

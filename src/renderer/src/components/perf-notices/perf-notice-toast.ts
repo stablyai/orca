@@ -3,6 +3,7 @@ import { getIntlLocale, translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import { TRAILING_ACTIONS_CLASS_NAMES } from '@/components/ui/sonner'
 import { DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES } from '../../../../shared/native-chat/settings/native-chat-idle-stop'
+import { getEffectiveBrowserMemorySaverHours } from '../../../../shared/browser/guest-lifecycle/browser-memory-saver'
 import { requestResourceManagerOpen } from '../status-bar/resources/resource-manager-open-request'
 import {
   recordPerfNoticeShown,
@@ -15,10 +16,17 @@ import type { IdleAgents } from './perf-notice-rules'
 export type PerfNotice =
   | { id: 'memory-low'; variant: 'agent-sleep' | 'agents' | 'your-terminals' }
   | { id: 'idle-agents'; idle: IdleAgents }
-  | { id: 'hidden-browser-tabs'; count: number }
+  | { id: 'hidden-browser-tabs'; count: number; hours: number }
   | { id: 'disk-almost-full'; freeLabel: string }
 
 type Copy = { title: string; description: string; action: string; run: () => void }
+
+/** The hours Memory Saver will use once on, so the copy matches what the button does. */
+export function memorySaverHours(): number {
+  return getEffectiveBrowserMemorySaverHours(
+    useAppStore.getState().settings?.browserMemorySaverHours
+  )
+}
 
 function formatList(items: readonly string[]): string {
   return new Intl.ListFormat(getIntlLocale(), { style: 'long', type: 'conjunction' }).format(items)
@@ -87,8 +95,21 @@ function copyFor(notice: PerfNotice): Copy {
         return {
           title: translate(
             'perfNotices.idleAgents.mixed',
-            '{{terminal}} terminal agents and {{chats}} chats have been idle for 2 hours',
-            { terminal, chats }
+            '{{terminal}} and {{chats}} have been idle for 2 hours',
+            {
+              terminal: translate(
+                'perfNotices.idleAgents.terminalCount',
+                '{{count}} terminal agents',
+                {
+                  count: terminal,
+                  defaultValue_one: '{{count}} terminal agent'
+                }
+              ),
+              chats: translate('perfNotices.idleAgents.chatCount', '{{count}} chats', {
+                count: chats,
+                defaultValue_one: '{{count}} chat'
+              })
+            }
           ),
           ...autoStop
         }
@@ -104,7 +125,7 @@ function copyFor(notice: PerfNotice): Copy {
         ),
         description: translate(
           'perfNotices.idleAgents.terminalDescription',
-          "{{agents}} are still using memory. End the ones you're done with in Resources.",
+          "{{agents}} sessions are still using memory. End the ones you're done with in Resources.",
           { agents: formatList(terminalLabels) }
         ),
         action: openResources,
@@ -116,13 +137,16 @@ function copyFor(notice: PerfNotice): Copy {
         title: translate(
           'perfNotices.hiddenTabs.title',
           '{{count}} hidden browser tabs are still loaded',
-          {
-            count: notice.count
-          }
+          { count: notice.count }
         ),
         description: translate(
           'perfNotices.hiddenTabs.description',
-          "Memory Saver frees tabs you haven't viewed in 4 hours. They reload when you open them."
+          "Memory Saver frees tabs you haven't viewed in {{count}} hours. They reload when you open them.",
+          {
+            count: notice.hours,
+            defaultValue_one:
+              "Memory Saver frees tabs you haven't viewed in {{count}} hour. They reload when you open them."
+          }
         ),
         action: translate('perfNotices.hiddenTabs.turnOnMemorySaver', 'Turn on Memory Saver'),
         run: () =>
