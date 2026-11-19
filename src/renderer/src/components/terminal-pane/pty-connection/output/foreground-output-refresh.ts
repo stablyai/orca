@@ -28,7 +28,7 @@ import {
 } from './foreground-output-budgets'
 import { shouldWritePtyOutputForeground } from './foreground-output-visibility'
 import { syncRemoteOutputCadence } from './remote-output-cadence'
-import { syncHiddenGraphicsDelivery } from './hidden-graphics-delivery'
+import { bindHiddenGraphicsDelivery } from './hidden-graphics-delivery'
 
 import { terminalInputEchoAllowanceMs } from './terminal-input-echo-delay'
 
@@ -159,11 +159,19 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
     }
   }
 
+  let claimRetainsGraphics = false
+  const hiddenGraphics = bindHiddenGraphicsDelivery(session)
   session.syncHiddenRendererPtyDelivery = (): void => {
     const ptyId = session.transport.getPtyId()
     const shouldHide =
       !session.disposed && !shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)
-    const retainGraphics = syncHiddenGraphicsDelivery(session.pane.terminal, ptyId, shouldHide)
+    const canSnapshot = session.canUseHiddenOutputSnapshot(ptyId)
+    // COMPAT(legacy-relay-bridge): paused panes recover from the relay's screen on reveal.
+    const transportGate =
+      (ptyId !== null && ptyId === session.legacyRelayBridgePtyId) ||
+      (isRemoteRuntimePtyId(ptyId) && canSnapshot)
+    const mainGate = !transportGate && canSnapshot && session.isHiddenDeliveryGateManagedPty(ptyId)
+    const retain = hiddenGraphics.sync(ptyId, shouldHide, transportGate, mainGate)
     syncModelRestoreNeededSubscription(ptyId)
     syncRemoteOutputCadence(session)
     if (session.remoteOutputGatedPtyId !== null && session.remoteOutputGatedPtyId !== ptyId) {
@@ -172,32 +180,25 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
         session.dropSideEffectFactConsumer()
       }
     }
-    // COMPAT(legacy-relay-bridge): paused panes recover from the relay's screen on reveal.
-    if (
-      (ptyId !== null && ptyId === session.legacyRelayBridgePtyId) ||
-      (isRemoteRuntimePtyId(ptyId) && session.canUseHiddenOutputSnapshot(ptyId))
-    ) {
-      session.transport.setOutputPaused?.(shouldHide && !retainGraphics)
-      return
-    }
-    if (session.hiddenDeliverySyncedPtyId !== null && session.hiddenDeliverySyncedPtyId !== ptyId) {
+    if (session.hiddenDeliverySyncedPtyId !== ptyId || !mainGate) {
       session.releaseHiddenDeliveryClaim?.()
       session.releaseHiddenDeliveryClaim = null
       session.hiddenDeliverySyncedPtyId = null
     }
-    if (
-      !ptyId ||
-      !session.isHiddenDeliveryGateManagedPty(ptyId) ||
-      !session.canUseHiddenOutputSnapshot(ptyId)
-    ) {
+    if (transportGate) {
+      session.transport.setOutputPaused?.(shouldHide && !retain)
+      return
+    }
+    if (!ptyId || !mainGate) {
       return
     }
     if (shouldHide) {
-      if (!session.releaseHiddenDeliveryClaim) {
-        session.releaseHiddenDeliveryClaim = acquireHiddenRendererPtyDeliveryClaim(
-          ptyId,
-          retainGraphics
-        )
+      const previous = session.releaseHiddenDeliveryClaim
+      if (!previous || claimRetainsGraphics !== retain) {
+        // Replace the graphics flag without briefly revealing a still-hidden PTY.
+        session.releaseHiddenDeliveryClaim = acquireHiddenRendererPtyDeliveryClaim(ptyId, retain)
+        claimRetainsGraphics = retain
+        previous?.()
       }
     } else if (session.releaseHiddenDeliveryClaim) {
       session.releaseHiddenDeliveryClaim()
@@ -209,7 +210,7 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
     session.hiddenDeliverySyncedPtyId = ptyId
   }
   session.releaseHiddenRendererPtyDelivery = (): void => {
-    syncHiddenGraphicsDelivery(session.pane.terminal, null, false)
+    hiddenGraphics.release()
     session.transport.setOutputPaused?.(false)
     if (session.remoteOutputGatedPtyId !== null) {
       session.remoteOutputGatedPtyId = null

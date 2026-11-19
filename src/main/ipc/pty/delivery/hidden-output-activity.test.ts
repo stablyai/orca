@@ -59,4 +59,23 @@ describe('hidden PTY output activity', () => {
       expect.objectContaining({ id: PTY_ID, data: 'hidden output\r\n', seq: 15, background: true })
     )
   })
+
+  it('delivers an already-queued renderer query when a hidden claim stops retaining graphics', () => {
+    vi.useFakeTimers()
+    const send = vi.fn()
+    const session = createPtyIpcSession({ mainWindow: rendererWindow(send) })
+    wirePtyIpcSession(session)
+    session.rendererPtyDispatcherReady = true
+    rendererVisibilityKnownPtys.add(PTY_ID)
+    updateHiddenRendererPtyClaim(session, { id: PTY_ID, hidden: true, retainGraphics: true })
+
+    acceptPtyDataForRenderer(session, { id: PTY_ID, data: 'queued\x1b[6n' }, 10)
+    updateHiddenRendererPtyClaim(session, { id: PTY_ID, hidden: true })
+    acceptPtyDataForRenderer(session, { id: PTY_ID, data: 'dropped\x1b[c' }, 20)
+    vi.runOnlyPendingTimers()
+
+    expect(send.mock.calls.filter(([channel]) => channel === 'pty:data')).toEqual([
+      ['pty:data', { id: PTY_ID, data: '\x1b[6n', droppedOutput: true }]
+    ])
+  })
 })

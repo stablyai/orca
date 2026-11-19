@@ -33,7 +33,7 @@ function sendVisibility(ptyId: string, visible: boolean): void {
 
 /**
  * Holds a hidden-delivery claim until the returned release function runs.
- * Main sees only the first-acquire/last-release transitions for each PTY.
+ * Main sees the first acquire, last release, and changes to aggregate graphics retention.
  */
 export function acquireHiddenRendererPtyDeliveryClaim(
   ptyId: string,

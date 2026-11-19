@@ -169,7 +169,7 @@ export function bindHiddenRendererQueryAdmission(session: ConnectPanePtySession)
     const ptyId = session.transport.getPtyId()
     if (
       foreground ||
-      retainsHiddenGraphics(session.pane.terminal, ptyId) ||
+      retainsHiddenGraphics(session.transport, ptyId) ||
       (!session.shouldSnapshotHiddenCodexOutput && session.remoteOutputGatedPtyId !== ptyId) ||
       !session.canUseHiddenOutputSnapshot(ptyId)
     ) {
