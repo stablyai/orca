@@ -318,8 +318,8 @@ it.each([10, 100])(
   'equivalent session snapshots for %i sleepers/live/quit panes have no downstream callbacks',
   async (count) => {
     const db = new OrchestrationDb(':memory:')
-    const records = Object.fromEntries(
-      Array.from({ length: count * 3 }, (_, i) => {
+    const records: Record<string, SleepingAgentSessionRecord> = Object.fromEntries(
+      Array.from({ length: count * 3 }, (_, i): [string, SleepingAgentSessionRecord] => {
         const paneKey = `pane-${i}`
         return [
           paneKey,
@@ -330,7 +330,7 @@ it.each([10, 100])(
           }
         ]
       })
-    ) as Record<string, SleepingAgentSessionRecord>
+    )
     const { runtime, write } = fixture(db, records)
     try {
       await settled()
