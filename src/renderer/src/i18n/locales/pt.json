@@ -21462,9 +21462,6 @@
         "explanation": "Ao continuar, o agente verifica primeiro se a última etapa foi concluída.",
         "usageLimitExplanation": "Pede ao agente para continuar de onde parou. Use-o quando o limite for redefinido."
       },
-      "antigravitySignIn": {
-        "sentence": "Você não está conectado ao Antigravity. Entre em <settings>Configurações → Contas → Antigravity</settings>. Depois envie sua mensagem novamente."
-      },
       "claudeSignIn": {
         "signingIn": "Entrando…"
       },
@@ -23619,7 +23616,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "Alternar worktree",
+      "worktreePalette": "Buscar tudo",
       "worktreeNavigateUp": "Worktree anterior",
       "worktreeNavigateDown": "Próximo worktree",
       "workspaceCreate": "Criar worktree",
@@ -23732,6 +23729,9 @@
       "45347db2a3": "Navegação entre abas",
       "aab2837fa5": "Comandos Rápidos",
       "3492a954c8": "Painéis do terminal"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "Alternar worktree"
     }
   },
   "gpuFallback": {

@@ -19,7 +19,9 @@
   },
   "agentCliUpdate": {
     "heading_one": "{{count}} CLI update available",
-    "heading_other": "{{count}} CLI updates available"
+    "heading_other": "{{count}} CLI updates available",
+    "statusCount_one": "{{count}} CLI update",
+    "statusCount_other": "{{count}} CLI updates"
   },
   "agentLaunch": {
     "opencode": {

@@ -164,7 +164,8 @@ export function openClaudeConnectionOf(
               {
                 command: launch.pathToClaudeCodeExecutable,
                 prefixArgs: launch.prefixArgs,
-                cwd: launch.cwd
+                cwd: launch.cwd,
+                env: launch.env ?? {}
               },
               args[0]
             )

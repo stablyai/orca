@@ -19695,9 +19695,6 @@
         "failed": "無法繼續此聊天。請重試，或傳送一則訊息。",
         "explanation": "繼續後，代理程式會先檢查其上一步是否已完成。"
       },
-      "antigravitySignIn": {
-        "sentence": "Antigravity 尚未登入。請前往 <settings>設定 → 帳戶 → Antigravity</settings> 登入，再重新傳送訊息。"
-      },
       "claudeSignIn": {
         "signingIn": "正在登入…"
       },
@@ -22345,7 +22342,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "切換工作樹",
+      "worktreePalette": "全域搜尋",
       "worktreeNavigateUp": "上一個工作樹",
       "worktreeNavigateDown": "下一個工作樹",
       "workspaceCreate": "建立工作樹",
@@ -22457,6 +22454,9 @@
       "45347db2a3": "分頁導覽",
       "aab2837fa5": "快速指令",
       "3492a954c8": "終端機窗格"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "切換工作樹"
     }
   },
   "gpuFallback": {

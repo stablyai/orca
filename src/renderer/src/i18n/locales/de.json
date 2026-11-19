@@ -20007,9 +20007,6 @@
         "failed": "Dieser Chat konnte nicht fortgesetzt werden. Erneut versuchen oder eine Nachricht senden.",
         "explanation": "Beim Fortfahren prüft der Agent zuerst, ob sein letzter Schritt abgeschlossen wurde."
       },
-      "antigravitySignIn": {
-        "sentence": "Antigravity ist nicht angemeldet. Unter <settings>Einstellungen → Konten → Antigravity</settings> anmelden. Danach die Nachricht erneut senden."
-      },
       "claudeSignIn": {
         "signingIn": "Anmeldung läuft…"
       },
@@ -22839,7 +22836,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "Worktree wechseln",
+      "worktreePalette": "Alles durchsuchen",
       "worktreeNavigateUp": "Zum vorherigen Worktree wechseln",
       "worktreeNavigateDown": "Zum nächsten Worktree wechseln",
       "workspaceCreate": "Worktree erstellen",
@@ -22951,6 +22948,9 @@
       "45347db2a3": "Tab-Navigation",
       "aab2837fa5": "Schnellbefehle",
       "3492a954c8": "Terminal-Bereiche"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "Worktree wechseln"
     }
   },
   "gpuFallback": {

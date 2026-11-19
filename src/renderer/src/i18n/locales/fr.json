@@ -20043,9 +20043,6 @@
         "replaceDescription": "Reprendre « {{title}} » ici arrêtera ce que {{agent}} fait dans ce chat.",
         "replaceTitle": "Remplacer ce chat ?"
       },
-      "antigravitySignIn": {
-        "sentence": "Antigravity n’est pas connecté. Connectez-vous dans <settings>Paramètres → Comptes → Antigravity</settings>. Puis renvoyez votre message."
-      },
       "claudeSignIn": {
         "signingIn": "Connexion…"
       },
@@ -23081,7 +23078,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "Changer de worktree",
+      "worktreePalette": "Tout rechercher",
       "worktreeNavigateUp": "Worktree précédent",
       "worktreeNavigateDown": "Worktree suivant",
       "workspaceCreate": "Créer un worktree",
@@ -23193,6 +23190,9 @@
       "45347db2a3": "Navigation entre onglets",
       "aab2837fa5": "Commandes rapides",
       "3492a954c8": "Volets du terminal"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "Changer de worktree"
     }
   },
   "gpuFallback": {

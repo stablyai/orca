@@ -21814,9 +21814,6 @@
         "explanation": "Continue, and the agent first checks whether its last step finished.",
         "usageLimitExplanation": "Asks the agent to continue where it left off. Use it once the limit resets."
       },
-      "antigravitySignIn": {
-        "sentence": "Antigravity isn't signed in. Sign in under <settings>Settings → Accounts → Antigravity</settings>. Then send your message again."
-      },
       "signIn": {
         "title": "Sign in to {{agent}} to start chatting"
       },
@@ -22500,6 +22497,16 @@
         "showMore": "Show more",
         "running": "Running",
         "failed": "Failed"
+      },
+      "signInNotice": {
+        "signedIn": "Signed in. Send again.",
+        "notSent": "Not sent: {{agent}} isn't signed in.",
+        "notSignedIn": "{{agent}} isn't signed in.",
+        "opensAntigravitySettings": "Opens Settings → Accounts → Antigravity",
+        "signIn": "Sign in",
+        "signsInClaudeAccount": "Signs in this Claude account",
+        "runsCommand": "Runs {{command}} in a terminal",
+        "thenSlashCommand": "Sign in, then type {{slashCommand}}."
       }
     },
     "tab": {
@@ -25872,7 +25879,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "Switch worktree",
+      "worktreePalette": "Search everything",
       "worktreeNavigateUp": "Previous worktree",
       "worktreeNavigateDown": "Next worktree",
       "workspaceCreate": "Create worktree",
@@ -25988,6 +25995,9 @@
       "aab2837fa5": "Quick commands",
       "3492a954c8": "Terminal panes",
       "bots": "Bots"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "Switch worktree"
     }
   },
   "gpuFallback": {
@@ -28951,9 +28961,6 @@
     },
     "items": {
       "activity": {
-        "answered": "Answered",
-        "askedYou": "asked you",
-        "asksYou": "asks you",
         "canceled": "canceled this",
         "changed": "changed {{field}}",
         "closed": "marked this done",
@@ -28969,6 +28976,7 @@
         "retry": "Retry",
         "discard": "Discard",
         "reopened": "reopened this",
+        "waitingOnYou": "Waiting on you",
         "workerFailed": "Worker stopped:",
         "workerFinished": "Worker finished:",
         "workerStarted": "Worker started:",
@@ -29029,7 +29037,6 @@
       "chatFallback": "Chat",
       "comment": {
         "add": "Add a comment…",
-        "answering": "Answering:",
         "chatDeleted": "{{chat}} was deleted, so files can't be attached here.",
         "hostTooOld": "{{host}} needs an update to attach files to comments.",
         "label": "Comment",
@@ -29145,6 +29152,27 @@
         "inHours_one": "In {{count}} hours",
         "inHours_other": "In {{count}} hours",
         "pickCustom": "Pick a date and time"
+      },
+      "ask": {
+        "closed": "That question closed before your answer went. Your answer is kept on the item.",
+        "asks": "{{name}} asks",
+        "asksAt": "{{name}} asks · {{time}}",
+        "answeredInComment": "Answered in a comment",
+        "notAnswered": "Not answered",
+        "youAnswered": "You answered:",
+        "skipped": "Skipped",
+        "answeredEarlier": "You answered an earlier question",
+        "hostCannotRecord": "This Orca host can’t record answers yet, so nothing was sent. Update Orca on the bot’s computer; your answer is kept here.",
+        "answeredElsewhere": "Answered elsewhere before yours went. Your answer is kept here.",
+        "changed": "This question changed before your answer went. Your answer is kept here.",
+        "withdrawn": "This question closed before your answer went. Your answer is kept here.",
+        "copied": "Copied",
+        "copy": "Copy",
+        "toComment": "Put in the comment box",
+        "dismiss": "Dismiss",
+        "commentNotAnswer": "A comment, with any files, goes to the bot and moves this item to In progress, but isn’t recorded as your answer. Expand the question to answer it.",
+        "uncertain": "This question closed while your answer was being sent, and no reply came, so it may not have gone. Check Activity; your answer is kept here.",
+        "oursEditedAfter": "Your answer was recorded. Words of yours it didn’t include are kept here."
       }
     },
     "search": {
@@ -29447,7 +29475,8 @@
     "tryAgain": "Try again",
     "update": "Update",
     "versions": "{{installed}} → {{latest}}",
-    "modelRequires": "Requires {{product}} {{version}}",
+    "modelRequiresClaude": "Requires Claude Code CLI {{version}}",
+    "modelRequiresCodex": "Requires Codex CLI {{version}}",
     "claudeProduct": "Claude Code",
     "codexProduct": "Codex CLI",
     "commandCopied": "Command copied",
@@ -29463,9 +29492,10 @@
     "statusUpdatingTooltip": "Agent CLI updates are running",
     "statusFailed": "CLI update failed",
     "statusFailedTooltip": "Open to see what went wrong",
-    "statusOne": "CLI update",
-    "statusCount": "{{count}} CLI updates",
+    "statusCount_one": "{{count}} CLI update",
+    "statusCount_other": "{{count}} CLI updates",
     "statusTooltip": "Newer agent CLI versions are out",
+    "failedButton": "Update failed",
     "failedChip": "update failed",
     "failedChipLabel": "Update failed: view error",
     "failedChipTooltip": "Update failed. Click to see details.",

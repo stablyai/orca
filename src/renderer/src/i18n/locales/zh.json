@@ -20361,9 +20361,6 @@
         "replaceDescription": "在此恢复“{{title}}”将停止 {{agent}} 在此聊天中正在进行的工作",
         "replace": "替换"
       },
-      "antigravitySignIn": {
-        "sentence": "尚未登录 Antigravity，请在<settings>设置 → 账户 → Antigravity</settings>中登录，然后重新发送消息"
-      },
       "claudeSignIn": {
         "signingIn": "正在登录…"
       },
@@ -24384,7 +24381,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "切换工作树",
+      "worktreePalette": "全局搜索",
       "worktreeNavigateUp": "上一个工作树",
       "worktreeNavigateDown": "下一个工作树",
       "workspaceCreate": "创建工作树",
@@ -24498,6 +24495,9 @@
       "45347db2a3": "标签页导航",
       "aab2837fa5": "快捷命令",
       "3492a954c8": "终端窗格"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "切换工作树"
     }
   },
   "gpuFallback": {

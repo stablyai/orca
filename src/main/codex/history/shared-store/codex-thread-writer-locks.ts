@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { createInterface } from 'node:readline'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { spawnProcess } from '@orca/process-host'
+import { windowsPowerShellPath } from '@orca/process-host/windows-system-binary'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { DirectoryLinkError, lstatIfPresent } from '../../../filesystem/merged-directory-link'
 
@@ -105,7 +106,7 @@ async function startProbe(dirs: string[], hold: boolean): Promise<LockHold | nul
   const spec =
     process.platform === 'win32'
       ? {
-          program: 'powershell.exe',
+          program: windowsPowerShellPath(),
           args: ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', POWERSHELL_PROBE],
           env: {
             ...process.env,

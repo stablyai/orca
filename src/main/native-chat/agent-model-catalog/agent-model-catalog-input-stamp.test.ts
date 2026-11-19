@@ -92,20 +92,17 @@ it('resolves relative PATH installs and direct interpreter scripts from their ac
   expect(await agentModelCatalogInputStamp(input)).not.toBe(installed)
 })
 
-it.each(['bun', 'deno'])(
-  'observes the direct %s run operand rather than the run subcommand',
-  async (command) => {
-    const folder = await mkdtemp(join(tmpdir(), 'orca-catalog-script-'))
-    onTestFinished(() => rm(folder, { recursive: true, force: true }))
-    await writeFile(join(folder, 'agent.ts'), 'one')
-    const input = { command, prefixArgs: ['run', 'agent.ts'], cwd: folder, env: {} }
-    const original = await agentModelCatalogInputStamp(input)
-    await writeFile(join(folder, 'run'), 'unrelated')
-    expect(await agentModelCatalogInputStamp(input)).toBe(original)
-    await writeFile(join(folder, 'agent.ts'), 'replacement-script')
-    expect(await agentModelCatalogInputStamp(input)).not.toBe(original)
-  }
-)
+it('observes the direct Bun run operand rather than the subcommand', async () => {
+  const folder = await mkdtemp(join(tmpdir(), 'orca-catalog-script-'))
+  onTestFinished(() => rm(folder, { recursive: true, force: true }))
+  await writeFile(join(folder, 'agent.ts'), 'one')
+  const input = { command: 'bun', prefixArgs: ['run', 'agent.ts'], cwd: folder, env: {} }
+  const original = await agentModelCatalogInputStamp(input)
+  await writeFile(join(folder, 'run'), 'unrelated')
+  expect(await agentModelCatalogInputStamp(input)).toBe(original)
+  await writeFile(join(folder, 'agent.ts'), 'replacement-script')
+  expect(await agentModelCatalogInputStamp(input)).not.toBe(original)
+})
 
 it('observes the real ACP legacy command script in its listing folder before using saved rows', async () => {
   const folder = await mkdtemp(join(tmpdir(), 'orca-catalog-legacy-acp-'))
@@ -243,6 +240,7 @@ it.each([
     const input = { command, prefixArgs: args, cwd: folder, env: {} }
     const original = await agentModelCatalogInputStamp(input)
     for (const name of [
+      'run',
       'preload.js',
       'loader.js',
       'ignore',

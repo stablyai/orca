@@ -17,6 +17,7 @@ export type AgentFinishDropCause =
   | 'turn-end-not-counted'
   | 'restored-unconfirmed'
   | 'host-replay-skipped'
+  | 'resume-restatement'
 
 /** Every path that drops a finish was silent, so a missing unread could not be traced (#40340). */
 export function recordAgentFinishDropped(

@@ -483,6 +483,7 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
           shellForeground: true
         })
         expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledWith(cacheKey)
+        expect(window.api.agentStatus.reconcileEndedProcess).toHaveBeenCalledWith(cacheKey)
 
         mockStoreState.paneForegroundAgentByPaneKey[cacheKey] = {
           agent: null,

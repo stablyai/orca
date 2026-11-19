@@ -299,7 +299,7 @@
 3 src/main/codex/configuration/homes/codex-managed-home-rules.ts
 12 src/main/codex/configuration/homes/codex-pane-account-registry.ts
 3 src/main/codex/configuration/homes/codex-real-home-path.ts
-1 src/main/codex/configuration/homes/codex-runtime-home-launch-preparation.ts
+2 src/main/codex/configuration/homes/codex-runtime-home-launch-preparation.ts # +1: the deferred config mirror now runs here from data (it was a closure built in runtime-home-service-*); main runs it only when the trust worker did not
 1 src/main/codex/configuration/homes/codex-stale-pane-accounts.ts
 9 src/main/codex/configuration/homes/codex-windows-sandbox-read-grant.ts
 1 src/main/codex/configuration/settings/codex-config-mirror-merge.ts
@@ -339,10 +339,12 @@
 2 src/main/codex/history/rollouts/codex-session-link.ts
 2 src/main/codex/history/shared-store/wsl-codex-account-history.ts
 3 src/main/codex/hooks/definitions/codex-hook-definition.ts
-9 src/main/codex/hooks/installation/codex-hook-launch-preparation.ts
-14 src/main/codex/hooks/installation/codex-hook-local-install.ts
-21 src/main/codex/hooks/installation/codex-hook-local-maintenance.ts
-13 src/main/codex/hooks/installation/codex-hook-service-implementation.ts
+9 src/main/codex/hooks/installation/codex-hook-launch-preparation.ts # unchanged from main: Off now routes its strip through the worker (strip runs on main only when the worker is down)
+2 src/main/codex/hooks/installation/codex-hook-local-install.ts # was 14 on main; the pass now runs on the trust worker, main keeps legacy cleanup and status
+8 src/main/codex/hooks/installation/codex-hook-local-maintenance.ts
+6 src/main/codex/hooks/installation/codex-hook-managed-strip.ts # moved from codex-hook-local-maintenance (the managed-hook strip, shared by the trust worker and Off removal)
+5 src/main/codex/hooks/installation/codex-hook-pass-off-main.ts # moved from codex-hook-local-install/-maintenance (legacy cleanup and status); +1 names the worker-death recovery, whose main strip runs only when a fresh worker also fails
+12 src/main/codex/hooks/installation/codex-hook-service-implementation.ts
 9 src/main/codex/hooks/installation/codex-hook-wsl-runtime.ts
 1 src/main/codex/hooks/installation/codex-wsl-hook-install-plan.ts
 2 src/main/codex/hooks/installation/hook-service.ts
@@ -369,12 +371,10 @@
 7 src/main/codex/trust/hooks/codex-hook-approval-first-write.ts
 14 src/main/codex/trust/hooks/codex-hook-hash-lookup.ts
 11 src/main/codex/trust/hooks/codex-hook-orca-approvals.ts
-1 src/main/codex/trust/hooks/codex-hook-system-trust.ts
 11 src/main/codex/trust/hooks/codex-hook-trust-cleanup.ts
 4 src/main/codex/trust/hooks/codex-hook-trust-derivation.ts
 6 src/main/codex/trust/hooks/codex-hook-trust-memo.ts
 1 src/main/codex/trust/hooks/codex-hook-trust-queue.ts
-7 src/main/codex/trust/hooks/codex-hook-user-mirroring.ts
 1 src/main/codex/trust/hooks/codex-user-hook-trust-moves.ts
 15 src/main/codex/trust/hooks/hook-trust-promotion.ts
 1 src/main/codex/trust/identity/codex-trust-identity.ts
@@ -1185,6 +1185,7 @@
 1 src/main/rate-limits/service/service-muse-usage-fetch.ts
 3 src/main/rate-limits/service/service-provider-cycles.ts
 1 src/main/rate-limits/service/service-state.ts
+2 src/main/remote-policies/release-asset-policy-live-update.ts
 4 src/main/ripgrep/bundled-ripgrep-path.ts
 1 src/main/ripgrep/bundled-ripgrep-spawn.ts
 1 src/main/ripgrep/bundled-ripgrep-text-search.ts
@@ -1588,11 +1589,10 @@
 1 src/main/wsl/filesystem/wsl-unc-delete.ts
 1 src/main/wsl/history/wsl-fish-history-cleanup.ts
 4 src/main/wsl/host-lifecycle/wsl-host-connector.ts
-1 src/main/wsl/host-lifecycle/wsl-host-gate-startup.ts
 6 src/main/wsl/host-lifecycle/wsl-host-kept-for-peers.ts
 2 src/main/wsl/host-lifecycle/wsl-host-removal.ts
 1 src/main/wsl/host-lifecycle/wsl-host-uninstall-server-stop.ts
-2 src/main/wsl/host-lifecycle/wsl-hosts-policy-live-update.ts
+1 src/main/wsl/host-lifecycle/wsl-hosts-policy-live-update.ts
 1 src/main/wsl/host-lifecycle/wsl-orphan-holder-release.ts
 1 src/main/wsl/orcad/wsl-orcad-active-probe.ts
 2 src/main/wsl/orcad/wsl-orcad-connection.ts

@@ -5485,7 +5485,6 @@
       },
       "comment": {
         "offline": "{{host}} is offline. Your comment is kept; Comment works again when it’s back.",
-        "answering": "Answering:",
         "label": "Comment",
         "add": "Add a comment…",
         "submit": "Comment"
@@ -5607,7 +5606,10 @@
         "pickDay": "Snooze until which day?",
         "pickHour": "At what time?"
       },
-      "readFailedTitle": "Couldn’t load items"
+      "readFailedTitle": "Couldn’t load items",
+      "ask": {
+        "youAnswered": "You answered:"
+      }
     },
     "needs": {
       "permissionTool": "Permission · {{tool}}",

@@ -20154,9 +20154,6 @@
         "failed": "Bu sohbete devam edilemedi. Yeniden deneyin veya bir mesaj gönderin.",
         "explanation": "Devam ettiğinizde ajan önce son adımının tamamlanıp tamamlanmadığını kontrol eder."
       },
-      "antigravitySignIn": {
-        "sentence": "Antigravity'de oturum açılmamış. <settings>Ayarlar → Hesaplar → Antigravity</settings> bölümünden oturum açın. Ardından mesajınızı yeniden gönderin."
-      },
       "claudeSignIn": {
         "signingIn": "Oturum açılıyor…"
       },
@@ -22824,7 +22821,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "Worktree değiştir",
+      "worktreePalette": "Her şeyde ara",
       "worktreeNavigateUp": "Önceki worktree",
       "worktreeNavigateDown": "Sonraki worktree",
       "workspaceCreate": "Worktree oluştur",
@@ -22936,6 +22933,9 @@
       "45347db2a3": "Sekmeler arası gezinme",
       "aab2837fa5": "Hızlı komutlar",
       "3492a954c8": "Terminal bölmeleri"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "Worktree değiştir"
     }
   },
   "gpuFallback": {
