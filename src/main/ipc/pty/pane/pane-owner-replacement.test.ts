@@ -94,6 +94,7 @@ it('commits an SSH replacement to its authoritative partition when the local pan
   await savePtySpawnPaneBinding(
     {
       result: { id: 'ssh-new', incarnationId: 'inc-ssh-new' },
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a successful durable swap never accesses the cleanup-only provider.
       provider: {} as never,
       replacedPaneOwner: { ptyId: 'ssh-old', pane: { ...pane, hostId } },
       deps: {}

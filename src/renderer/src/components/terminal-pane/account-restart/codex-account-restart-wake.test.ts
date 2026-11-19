@@ -402,7 +402,17 @@ it('reattaches a proven undispatched original without resuming or creating on an
   }
   const view = mountSession(current, false)
   view.session.deps.accountRestartToken = undefined
-  view.session.buildColdRestoreAgentResumeStartup = () => first.request.startup as never
+  view.session.buildColdRestoreAgentResumeStartup = () => ({
+    agent: 'codex',
+    command: 'codex resume conversation-1',
+    resumeProviderSession: { key: 'session_id', id: 'conversation-1' },
+    resumeOrigin: 'saved',
+    launchConfig: { agentCommand: 'codex', agentArgs: '', agentEnv: {} },
+    launchToken: 'proof-original',
+    useLiveEntry: false,
+    hasSleepingRecord: false,
+    sleepingRecordEntry: null
+  })
   const attachments: unknown[] = []
   view.connect.mockImplementation(async (options) => {
     attachments.push({
