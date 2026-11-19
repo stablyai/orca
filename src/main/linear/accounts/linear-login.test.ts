@@ -162,10 +162,16 @@ describe('Refreshing the login', () => {
     await store.keepConnectedLinearLogin(login(NOW + HOUR / 2), linked)
     const fs = await import('node:fs/promises')
     await store.readWorkspaceLogin('org-acme')
+    const loginPath = paths.getWorkspaceLoginPath('org-acme')
+    const passThrough = fs.readFile.bind(fs)
     const request = vi.fn(async () => {
-      vi.spyOn(fs, 'readFile').mockRejectedValueOnce(
-        Object.assign(new Error('credential read denied'), { code: 'EACCES' })
-      )
+      // Only the guarded read of this login fails; other reads in the refresh pass through.
+      vi.spyOn(fs, 'readFile').mockImplementation(async (file, options) => {
+        if (String(file) === loginPath) {
+          throw Object.assign(new Error('credential read denied'), { code: 'EACCES' })
+        }
+        return passThrough(file, options)
+      })
       return new Response(
         JSON.stringify({
           access_token: 'lin_oauth_access_2',
