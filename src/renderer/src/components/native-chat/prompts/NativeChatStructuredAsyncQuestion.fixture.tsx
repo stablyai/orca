@@ -1,7 +1,7 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { stubAwaitedQuestion } from '../../../component-fixtures/awaited-question-stubs'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
-import { nativeChatStructuredAsyncQuestion } from './NativeChatStructuredAsyncQuestion'
+import { nativeChatStructuredQuestions } from './NativeChatStructuredAsyncQuestion'
 import { newestOpenStructuredAgentSessionAsyncQuestion } from '../../../../../shared/agent-session/view/structured-agent-session-async-questions'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 
@@ -51,8 +51,16 @@ export const olderQuestion = defineFixture({
   },
   render: () => (
     <div className="bg-background p-3">
-      {nativeChatStructuredAsyncQuestion(
-        { target: { kind: 'local' }, agent: 'codex', sessionId: 'chat-older', tabId: 'tab' },
+      {nativeChatStructuredQuestions(
+        // A hidden pane draws no session-link owner question, so only the async card shows.
+        {
+          target: { kind: 'local' },
+          agent: 'codex',
+          sessionId: 'chat-older',
+          tabId: 'tab',
+          isVisible: false,
+          isFocusedGroup: false
+        },
         { epoch: 'epoch', prompts: [], submissions: [] },
         { messages: [NOTICE], readPhase: 'ready' },
         { send: () => true },
