@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -12,6 +12,8 @@ vi.mock('@orca/process-host', async (importOriginal) => {
   const actual = await importOriginal<typeof ProcessHost>()
   return { ...actual, runProcess: vi.fn(actual.runProcess) }
 })
+
+const originalPlatform = process.platform
 
 describe('project formatter execution', () => {
   let root: string
@@ -45,6 +47,8 @@ describe('project formatter execution', () => {
   })
 
   afterEach(async () => {
+    Object.defineProperty(process, 'platform', { value: originalPlatform })
+    vi.unstubAllEnvs()
     await rm(root, { recursive: true, force: true })
   })
 
@@ -96,6 +100,140 @@ describe('project formatter execution', () => {
       } finally {
         await rm(outside, { recursive: true, force: true })
       }
+    }
+  )
+
+  it('spawns a Windows PATH .cmd formatter shim by its resolved path', async () => {
+    const pathDir = join(root, 'bin')
+    await mkdir(pathDir, { recursive: true })
+    await writeFile(join(pathDir, 'mock-fmt'), '#!/bin/sh\n')
+    await writeFile(join(pathDir, 'mock-fmt.cmd'), '@echo off\r\n')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    vi.stubEnv('PATH', pathDir)
+    vi.stubEnv('PATHEXT', '.EXE;.cmd')
+    vi.mocked(runProcess).mockResolvedValueOnce({
+      code: 0,
+      signal: null,
+      stdout: 'formatted\n',
+      stderr: '',
+      timedOut: false
+    })
+
+    repo.editorFormatter!.command = 'mock-fmt --stdin-filepath "${file}"'
+    expect(await formatEditorText(store, target(), 'const a=1;')).toEqual({
+      kind: 'formatted',
+      text: 'formatted\n'
+    })
+    expect(runProcess).toHaveBeenCalledWith(
+      expect.objectContaining({
+        program: `${pathDir}/mock-fmt.cmd`,
+        args: ['--stdin-filepath', target().path]
+      })
+    )
+  })
+
+  it('resolves a worktree-relative Windows formatter shim without matching an extensionless sibling', async () => {
+    const localBin = join(root, 'node_modules', '.bin')
+    await mkdir(localBin, { recursive: true })
+    await writeFile(join(localBin, 'mock-fmt'), '#!/bin/sh\n')
+    await writeFile(join(localBin, 'mock-fmt.cmd'), '@echo off\r\n')
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    vi.stubEnv('PATH', '')
+    vi.stubEnv('PATHEXT', '.EXE;.cmd')
+    vi.mocked(runProcess).mockResolvedValueOnce({
+      code: 0,
+      signal: null,
+      stdout: 'formatted\n',
+      stderr: '',
+      timedOut: false
+    })
+
+    repo.editorFormatter!.command =
+      './node_modules/.bin/mock-fmt --stdin-filepath "${relativeFile}"'
+    expect(await formatEditorText(store, target(), 'const a=1;')).toEqual({
+      kind: 'formatted',
+      text: 'formatted\n'
+    })
+    expect(runProcess).toHaveBeenCalledWith(
+      expect.objectContaining({
+        program: `${localBin}/mock-fmt.cmd`,
+        args: ['--stdin-filepath', 'a.ts']
+      })
+    )
+  })
+
+  it('spawns the bare formatter name on Windows when PATH has no match', async () => {
+    const emptyDir = join(root, 'empty-bin')
+    await mkdir(emptyDir, { recursive: true })
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    vi.stubEnv('PATH', emptyDir)
+    vi.stubEnv('PATHEXT', '.EXE;.cmd')
+    vi.mocked(runProcess).mockResolvedValueOnce({
+      code: 0,
+      signal: null,
+      stdout: 'formatted\n',
+      stderr: '',
+      timedOut: false
+    })
+
+    repo.editorFormatter!.command = 'missing-fmt --stdin-filepath "${file}"'
+    await formatEditorText(store, target(), 'const a=1;')
+    expect(runProcess).toHaveBeenCalledWith(expect.objectContaining({ program: 'missing-fmt' }))
+  })
+
+  it('leaves POSIX formatter commands to PATH lookup by bare name', async () => {
+    const pathDir = join(root, 'bin')
+    await mkdir(pathDir, { recursive: true })
+    const binary = join(pathDir, 'mock-fmt')
+    await writeFile(binary, '#!/bin/sh\n')
+    if (originalPlatform !== 'win32') {
+      await chmod(binary, 0o755)
+    }
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+    vi.stubEnv('PATH', pathDir)
+    vi.mocked(runProcess).mockResolvedValueOnce({
+      code: 0,
+      signal: null,
+      stdout: 'formatted\n',
+      stderr: '',
+      timedOut: false
+    })
+
+    repo.editorFormatter!.command = 'mock-fmt --stdin-filepath "${file}"'
+    await formatEditorText(store, target(), 'const a=1;')
+    expect(runProcess).toHaveBeenCalledWith(expect.objectContaining({ program: 'mock-fmt' }))
+  })
+
+  it.skipIf(process.platform !== 'win32')(
+    'formats end-to-end through real Windows .cmd shims on PATH and under node_modules/.bin',
+    async () => {
+      const localBin = join(root, 'node_modules', '.bin')
+      const pathDir = join(root, 'bin')
+      await Promise.all([mkdir(localBin, { recursive: true }), mkdir(pathDir, { recursive: true })])
+
+      const worker = join(root, 'fmt-worker.js')
+      await writeFile(
+        worker,
+        'let s="";process.stdin.setEncoding("utf8");process.stdin.on("data",x=>s+=x);process.stdin.on("end",()=>process.stdout.write(s.trim().toUpperCase()+"\\n"));'
+      )
+      const shimBody = `@echo off\r\n"${process.execPath}" "${worker}" %*\r\n`
+
+      await writeFile(join(localBin, 'mock-fmt'), '#!/bin/sh\nexit 1\n')
+      await writeFile(join(localBin, 'mock-fmt.cmd'), shimBody)
+      repo.editorFormatter!.command = './node_modules/.bin/mock-fmt --stdin-filepath "${file}"'
+      expect(await formatEditorText(store, target(), '  const a = 1;  ')).toEqual({
+        kind: 'formatted',
+        text: 'CONST A = 1;\n'
+      })
+
+      await writeFile(join(pathDir, 'mock-path-fmt'), '#!/bin/sh\nexit 1\n')
+      await writeFile(join(pathDir, 'mock-path-fmt.cmd'), shimBody)
+      vi.stubEnv('PATH', `${pathDir};${process.env.PATH ?? ''}`)
+      repo.editorFormatter!.command = 'mock-path-fmt --stdin-filepath "${relativeFile}"'
+      expect(await formatEditorText(store, target(), '  hello  ')).toEqual({
+        kind: 'formatted',
+        text: 'HELLO\n'
+      })
     }
   )
 })
