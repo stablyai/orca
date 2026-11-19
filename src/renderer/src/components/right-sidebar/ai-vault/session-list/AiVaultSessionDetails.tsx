@@ -7,7 +7,6 @@ import {
   FolderGit2,
   MessageSquare,
   MessageSquarePlus,
-  MessagesSquare,
   Play,
   SquareTerminal
 } from 'lucide-react'
@@ -20,6 +19,8 @@ import {
   type AiVaultSession
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store/index'
+import { nativeChatPreferenceFor } from '../../../../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { FirstPromptCard } from './ai-vault-first-prompt-card'
 import { ResumeInNewCliTooltipText } from '../session-actions/ai-vault-session-cli-fork-copy'
@@ -35,6 +36,7 @@ import { SessionUnsavedConversationNotice } from './AiVaultSessionUnsavedNotice'
 import { useAiVaultSessionAccount } from '../accounts/ai-vault-session-account'
 import { SessionAccountSection } from '../accounts/AiVaultSessionAccount'
 import { SessionReceiptSection } from './AiVaultSessionReceiptSection'
+import { ResumeInNewChatButton } from './AiVaultResumeInNewChatButton'
 import './ai-vault-session-worktree'
 import {
   aiVaultResumeInSessionWorkspaceLabel,
@@ -93,6 +95,13 @@ export function SessionInlineDetails({
   const promptPreview = sessionPromptPreview(session)
   const detailTurns = sessionDetailConversationTurns(session, 3)
   const accountLabel = useAiVaultSessionAccount(session)
+  // Chat first where chat is this agent's default; each button keeps its own surface.
+  const chatFirst =
+    useAppStore((state) => nativeChatPreferenceFor(state.settings, session.agent)) &&
+    onResumeInNewChat !== undefined
+  const resumeInNewChatButton = onResumeInNewChat ? (
+    <ResumeInNewChatButton primary={chatFirst} onResume={onResumeInNewChat} />
+  ) : null
 
   return (
     <div
@@ -114,10 +123,11 @@ export function SessionInlineDetails({
         onResumeInNewCli ||
         onOpenLog) ? (
         <div className="flex flex-wrap items-center gap-1.5 border-b border-sidebar-border/80 bg-sidebar-accent/15 px-3 py-2">
+          {chatFirst ? resumeInNewChatButton : null}
           {showResumeInWorktree ? (
             <Button
               type="button"
-              variant="default"
+              variant={chatFirst ? 'secondary' : 'default'}
               size="xs"
               disabled={resumeActions.worktree.disabled}
               draggable={false}
@@ -136,7 +146,7 @@ export function SessionInlineDetails({
           {showResumeInNewTab ? (
             <Button
               type="button"
-              variant={showResumeInWorktree ? 'secondary' : 'default'}
+              variant={showResumeInWorktree || chatFirst ? 'secondary' : 'default'}
               size="xs"
               disabled={resumeActions.newTab.disabled}
               draggable={false}
@@ -155,25 +165,7 @@ export function SessionInlineDetails({
                   )}
             </Button>
           ) : null}
-          {onResumeInNewChat ? (
-            <Button
-              type="button"
-              variant="secondary"
-              size="xs"
-              draggable={false}
-              onClick={(event) => {
-                event.stopPropagation()
-                onResumeInNewChat()
-              }}
-              className="h-7 shrink-0 px-2.5 text-[11px]"
-            >
-              <MessagesSquare className="size-3.5" />
-              {t(
-                'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewNativeChat',
-                'Resume in New Chat'
-              )}
-            </Button>
-          ) : null}
+          {chatFirst ? null : resumeInNewChatButton}
           {onResumeInNewCli ? (
             <Tooltip>
               <TooltipTrigger asChild>
