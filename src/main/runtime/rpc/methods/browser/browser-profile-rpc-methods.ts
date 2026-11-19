@@ -9,7 +9,7 @@ import {
   TabShow
 } from '../../../../../shared/rpc-contract/browser/browser-params'
 import {
-  assertAgentMayChangeTabProfile,
+  pinAgentTabProfileChange,
   assertAgentMayDeleteProfile
 } from './browser-site-list-agent-gate'
 
@@ -19,8 +19,9 @@ export const BROWSER_PROFILE_METHODS = [
     permission: 'workspace',
     params: TabSetProfile,
     handler: async (params, context) => {
-      await assertAgentMayChangeTabProfile(context, params, params.profileId)
-      return context.runtime.browserTabSetProfile(params)
+      return context.runtime.browserTabSetProfile(
+        await pinAgentTabProfileChange(context, params, params.profileId)
+      )
     }
   }),
   defineMethod({
@@ -34,8 +35,9 @@ export const BROWSER_PROFILE_METHODS = [
     permission: 'workspace',
     params: TabProfileClone,
     handler: async (params, context) => {
-      await assertAgentMayChangeTabProfile(context, params, params.profileId)
-      return context.runtime.browserTabProfileClone(params)
+      return context.runtime.browserTabProfileClone(
+        await pinAgentTabProfileChange(context, params, params.profileId)
+      )
     }
   }),
   defineMethod({

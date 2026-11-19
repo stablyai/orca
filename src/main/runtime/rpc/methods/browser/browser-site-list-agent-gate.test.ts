@@ -18,7 +18,9 @@ function setup(repoProfileId: string | null = 'work', scope?: string) {
     showManagedWorktree: vi.fn(async () => ({ id: 'r1::/w', repoId: 'r1' })),
     showRepo: vi.fn(async () => ({ id: 'r1', browserProfileId: repoProfileId })),
     requireStore: () => ({ getSettings: () => ({ browserProfileScope: scope }) }),
-    browserTabCurrent: vi.fn(async () => ({ tab: { profileId: 'work' } })),
+    browserTabCurrent: vi.fn(async () => ({
+      tab: { profileId: 'work', browserPageId: 'p-current' }
+    })),
     browserOpenUrlOnClient: vi.fn(async () => ({ browserPageId: 'p2' })),
     browserTabCreate: vi.fn(async (_params: unknown) => ({ browserPageId: 'p1' })),
     browserTabSetProfile: vi.fn(async () => ({})),
@@ -67,6 +69,13 @@ describe('agents and a browser profile with a site list', () => {
     expect(runtime.browserTabCreate.mock.calls[0][0]).toMatchObject({ profileId: 'default' })
   })
 
+  it("refuses an agent tab when the worktree's repo can't be read", async () => {
+    const { runtime, call } = setup()
+    runtime.showRepo.mockRejectedValueOnce(new Error('repo store unavailable'))
+    expect(await call('browser.tabCreate', { worktree: 'id:w' })).toMatchObject({ ok: false })
+    expect(runtime.browserTabCreate).not.toHaveBeenCalled()
+  })
+
   it('leaves the owner and unlisted profiles alone on tab create', async () => {
     const { runtime, call } = setup()
     const params = { worktree: 'id:w', profileId: 'other' }
@@ -96,6 +105,11 @@ describe('agents and a browser profile with a site list', () => {
     setBrowserProfileSiteList('work', ['example.com'])
     expect(await call(method, { profileId: 'other' })).toMatchObject(LOCKED)
     expect(await call(method, { profileId: 'work' })).toMatchObject({ ok: true })
+    // The change goes to the tab the gate checked, not whichever tab is current by then.
+    expect(runtime[runtimeMethod]).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ page: 'p-current' })
+    )
     expect(await call(method, { profileId: 'other' }, DESKTOP_RPC_CALLER)).toMatchObject({
       ok: true
     })

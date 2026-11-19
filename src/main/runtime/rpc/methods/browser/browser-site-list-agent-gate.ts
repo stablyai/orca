@@ -24,19 +24,19 @@ async function expectedNewTabProfileId(
   context: GateContext,
   worktree: string | undefined
 ): Promise<string | null> {
-  let worktreeId: string | undefined
-  let repo: Repo | null = null
+  let found: { id: string; repoId?: string | null } | undefined
   try {
-    if (worktree) {
-      const found = await context.runtime.showManagedWorktree(worktree, undefined, {
-        matchFolders: true
-      })
-      worktreeId = found.id
-      repo = found.repoId ? await context.runtime.showRepo(`id:${found.repoId}`) : null
-    }
+    found = worktree
+      ? await context.runtime.showManagedWorktree(worktree, undefined, { matchFolders: true })
+      : undefined
   } catch {
     // The command itself resolves the same selector and reports the real failure.
   }
+  const worktreeId = found?.id
+  // Why no catch: a repo we can't read might pick a listed profile, so its failure refuses the call.
+  const repo: Repo | null = found?.repoId
+    ? await context.runtime.showRepo(`id:${found.repoId}`)
+    : null
   if (repo?.browserProfileId) {
     return repo.browserProfileId
   }
@@ -69,18 +69,20 @@ async function pinAgentTabCreateToListedProfile<
   return { ...params, profileId: expected }
 }
 
-export async function assertAgentMayChangeTabProfile(
+/** Returns params naming the exact tab it checked, so the change can't land on another tab. */
+export async function pinAgentTabProfileChange<T extends { worktree?: string; page?: string }>(
   context: GateContext,
-  params: { worktree?: string; page?: string },
+  params: T,
   targetProfileId: string
-): Promise<void> {
+): Promise<T> {
   if (!isAgentRpcCaller(context.caller)) {
-    return
+    return params
   }
   const tab = params.page
     ? await context.runtime.browserTabProfileShow({ page: params.page, worktree: params.worktree })
     : (await context.runtime.browserTabCurrent({ worktree: params.worktree })).tab
   assertAgentMayMoveBrowsingOut(tab.profileId, targetProfileId)
+  return { ...params, page: tab.browserPageId }
 }
 
 export function assertAgentMayDeleteProfile(context: GateContext, profileId: string): void {
