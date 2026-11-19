@@ -41,6 +41,22 @@ describe('macOS browser leftovers during updates', () => {
     expect(deps.listBlockers).toHaveBeenCalledTimes(2)
   })
 
+  it('recovers an orphan on the persistent orcad profile too', async () => {
+    const deps = setup()
+    const persistent = command.replace(
+      '/tmp/orcad-browser-test',
+      '/Users/me/Library/Application Support/orcad/browser-sidecar-profile'
+    )
+    deps.readProcesses.mockResolvedValue([{ ...row, command: persistent }])
+    await recoverMacBrowserSidecars(executable, [123], deps)
+    expect(deps.isOwnedSidecar).toHaveBeenCalledWith(
+      '/Users/me/Library/Application Support/orcad/browser-sidecar-profile',
+      123,
+      501
+    )
+    expect(deps.signal).toHaveBeenCalledExactlyOnceWith(123)
+  })
+
   it.each([
     { ...row, parentPid: 42 },
     { ...row, uid: 999 },

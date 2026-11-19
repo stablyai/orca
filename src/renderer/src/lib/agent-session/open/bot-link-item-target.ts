@@ -1,10 +1,12 @@
 import { create } from 'zustand'
 
 export type BotLinkItemTarget = { sessionId: string; itemId: string }
+/** Without an item: the chat's newest output. */
+export type BotLinkTarget = { sessionId: string; itemId?: string }
 
 /** Scroll once; the selected pending prompt stays selected until it resolves. */
 export const useBotLinkItemTarget = create<{
-  target: BotLinkItemTarget | null
+  target: BotLinkTarget | null
   prompt: BotLinkItemTarget | null
 }>()(() => ({ target: null, prompt: null }))
 
@@ -13,7 +15,12 @@ export function targetBotLinkItem(sessionId: string, itemId?: string): void {
   useBotLinkItemTarget.setState({ target, prompt: target })
 }
 
-export function consumeBotLinkItem(target: BotLinkItemTarget): void {
+/** Back to the chat's newest output, keeping any selected prompt. */
+export function targetBotChatLatest(sessionId: string): void {
+  useBotLinkItemTarget.setState({ target: { sessionId } })
+}
+
+export function consumeBotLinkItem(target: BotLinkTarget): void {
   if (useBotLinkItemTarget.getState().target === target) {
     useBotLinkItemTarget.setState({ target: null })
   }

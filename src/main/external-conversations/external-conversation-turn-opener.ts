@@ -8,6 +8,7 @@ import { isRootAgentJournalItem } from '../../shared/agent-session/journal/agent
 import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { AgentSessionJournalReads } from '../native-chat/agent-session-journal/journal-reads'
 import { readJournalTurnOpenerRows } from '../native-chat/agent-session-journal/journal-turn-opener-rows'
+import { readAutomationRunMessage } from '../../shared/automations/automation-run-message'
 
 /** Resolve the completed request's persisted opener, never a newer turn or a joined delivery. */
 /** The ended turn's own row: its lifecycle record, or the item the turn id names. */
@@ -55,11 +56,18 @@ export async function readEndedChatTurnOpener(
 
 /** Mail a turn opens as its conversation's own ask, as Orca proved when it delivered it: reports to
  *  the Run the chat coordinates from workers its conversation's turns started, and answers to requests
- *  those turns sent other bots. Any other mail (another bot's own mail, item mail, a worker an
- *  Orca-raised turn started) answers in Orca. */
+ *  those turns sent other bots, and the runs of waits those turns made. Any other mail (another bot's
+ *  own mail, item mail, a worker an Orca-raised turn started) answers in Orca. */
 export function isConversationReport(body: AgentJournalRenderItem['body']): boolean {
   if (body.kind !== 'message') {
     return false
+  }
+  // A wait's run whose wait its conversation's turn made answers where that turn did.
+  if (
+    body.origin === 'automation-run' &&
+    readAutomationRunMessage(body.automationRun)?.toConversation
+  ) {
+    return true
   }
   const notice = orchestrationMailNotice(body.from)
   const senders = body.from?.senders ?? []

@@ -1,35 +1,47 @@
-import { createHash } from 'node:crypto'
 import type Database from '../../../sqlite/sync-database'
-import type { SqliteRow } from '../../../sqlite/sqlite-statement'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
-import { prepareJournalDomainImport, type JournalDomainImportPage } from '../journal-domain-import'
-import {
-  finishJournalDomainImport,
-  insertJournalDomainImportPage
-} from '../journal-domain-import-rows'
 import { runJournalTransaction } from './journal-database'
+import { isSqliteCorruption, isSqliteStorageFailure } from '../../../sqlite/sqlite-read-failure'
 import { AGENT_SESSION_TABS_RECORDED } from '../../../runtime/agent-session/records/agent-session-record-rows'
+import { readAdoption, type Adoption, type Claim } from './journal-legacy-adoption'
 import { journalDatabasePath } from './journal-host-database'
 import {
   journalLegacyChatRevision,
   journalLegacyChatRevisionKey,
   openJournalLegacySource,
-  recordJournalLegacyChatRevision
+  recordJournalLegacyChatRevision,
+  settleJournalLegacyCopy
 } from './journal-legacy-source'
 import {
-  captureJournalLegacySourceReceipt,
+  keepContinuedChat,
+  keepForcedCopy,
+  type JournalLegacyForcedCopy
+} from './journal-legacy-copies'
+import {
+  JOURNAL_LEGACY_COMPARE,
+  JOURNAL_LEGACY_COPY_DUE,
+  metaKeys,
+  readMeta,
+  recordJournalLegacyFailure,
+  strandedCopies,
+  writeMeta,
+  type JournalLegacyFailure
+} from './journal-legacy-reconcile-marks'
+import {
   JOURNAL_LEGACY_SOURCE_RECEIPT,
   sameJournalLegacySource
 } from './journal-legacy-source-receipt'
+import { captureJournalLegacySourceReceipt } from './journal-legacy-source-capture'
 
 /** Set after a pass absorbed every original chat, so each chat here carries its revision. */
 export const JOURNAL_LEGACY_REVISIONS_KEPT = 'journal.legacy-revisions-kept.v1'
-
 /**
  * An older Orca keeps writing the original journal after a downgrade. When the original changed,
  * each original chat's revision is compared with the one this file shows: a chat it started, or
  * one not converted here yet, joins as itself; a converted chat it continued is kept as a second
  * chat beside it, so no turn it saved goes missing. Nothing here deletes a chat or its turns.
+ * Terminal restore waits for this pass, so it reads no history: a copy's history converts later
+ * like any unconverted chat's, and a chat needing a history compare is compared in the background.
  */
 export function reconcileJournalLegacySource(stateDirectory: string, db: Database.Database): void {
   const sourcePath = journalDatabasePath(stateDirectory)
@@ -42,19 +54,29 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
   const saved = readMeta(db, JOURNAL_LEGACY_SOURCE_RECEIPT)
   const unchanged = sameJournalLegacySource(saved, captured)
   const kept = readMeta(db, JOURNAL_LEGACY_REVISIONS_KEPT) !== undefined
-  if (unchanged && kept) {
+  const forced = new Map<string, JournalLegacyForcedCopy>(
+    metaKeys(db, JOURNAL_LEGACY_COPY_DUE).map((id) => [id, {}])
+  )
+  for (const [id, copy] of strandedCopies(db)) {
+    forced.set(id, { stranded: copy })
+  }
+  if (unchanged && kept && forced.size === 0) {
     return
   }
   const receipt = JSON.stringify(captured)
-  const pass: Pass = { kept, baselines: [] }
+  const pass: Pass = { kept, forced, baselines: [], compares: [], failures: [] }
   const source = openJournalLegacySource(sourcePath)
   let complete = true
   try {
     if (unchanged) {
-      // The original wrote nothing since the copy, so each chat is as shown here.
-      pass.baselines = missingBaselines(source, db)
+      // The original wrote nothing since the copy, so each chat is as shown here; once every
+      // chat carries its revision, only chats due a copy have work.
+      if (!kept) {
+        pass.baselines = missingBaselines(source, db).filter(([id]) => !forced.has(id))
+      }
+      complete = forced.size === 0 || absorbChats(source, db, pass, false)
     } else {
-      complete = absorbChats(source, db, pass)
+      complete = absorbChats(source, db, pass, true)
     }
   } finally {
     source.close()
@@ -71,7 +93,17 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
     for (const [id, revision] of pass.baselines) {
       recordJournalLegacyChatRevision(db, id, revision)
     }
-    // A failed chat leaves the original unabsorbed, so the next launch retries it.
+    for (const [id, revision] of pass.compares) {
+      writeMeta(db, `${JOURNAL_LEGACY_COMPARE}${id}`, revision)
+    }
+    for (const failure of pass.failures) {
+      recordJournalLegacyFailure(db, failure)
+      const { stranded } = pass.forced.get(failure.sessionId) ?? {}
+      if (stranded !== undefined) {
+        settleJournalLegacyCopy(db, stranded)
+      }
+    }
+    // A storage failure leaves the original unabsorbed; the next launch retries it.
     if (complete) {
       writeMeta(db, JOURNAL_LEGACY_SOURCE_RECEIPT, receipt)
       writeMeta(db, JOURNAL_LEGACY_REVISIONS_KEPT, '1')
@@ -83,19 +115,12 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
 type Pass = {
   /** Every chat in the original at the copy was given a revision here. */
   kept: boolean
+  /** Chats that get a copy whatever their revision shows. */
+  forced: ReadonlyMap<string, JournalLegacyForcedCopy>
   baselines: [string, string][]
-}
-
-type Claim = SqliteRow
-
-/** The original's tabs and claims, and this file's tabs, read once per pass. */
-type Adoption = {
-  savedTabs: Map<string, string>
-  claims: Map<string, Claim[]>
-  tabbed: Set<string>
-  takenTabs: Set<string>
-  nextPosition: number
-  tabsRecorded: boolean
+  /** Converted chats with no revision to compare, for the background compare. */
+  compares: [string, string][]
+  failures: JournalLegacyFailure[]
 }
 
 /**
@@ -120,64 +145,69 @@ function originalChatIds(source: Database.Database, order: 'saved' | 'any'): str
     .map((row) => String(row.session_id))
 }
 
-/** True when every chat was absorbed; a failed chat is logged and retried next launch. */
-function absorbChats(source: Database.Database, db: Database.Database, pass: Pass): boolean {
-  let adoption = readAdoption(source, db)
+/**
+ * False only when a storage failure stopped the pass. A chat that fails otherwise is recorded with its
+ * error and taken as absorbed, so one bad chat can't rerun the pass at every launch. Without a walk,
+ * only chats due a copy are visited.
+ */
+function absorbChats(
+  source: Database.Database,
+  db: Database.Database,
+  pass: Pass,
+  walk: boolean
+): boolean {
+  const adoption = readAdoption(source, db, walk ? null : [...pass.forced.keys()])
   runJournalTransaction(db, () => {
     for (const [sessionId, claims] of adoption.claims) {
       insertClaims(db, sessionId, claims)
     }
   })
-  let complete = true
-  for (const id of originalChatIds(source, 'saved')) {
+  const chats = walk ? originalChatIds(source, 'saved') : [...pass.forced.keys()]
+  for (const id of chats) {
+    let revision: string | undefined
+    const added = adoption.added.length
+    const { nextPosition, tabsRecorded } = adoption
     try {
-      absorbChat(source, db, id, adoption, pass)
+      // A chat with no history still has a value, so one deleted here stays deleted.
+      revision = journalLegacyChatRevision(source, id) ?? 'null'
+      absorbChat(source, db, id, revision, adoption, pass)
     } catch (error) {
-      complete = false
-      // The failed chat's transaction rolled back; reread what this file now holds.
-      adoption = readAdoption(source, db)
-      console.warn('[agent-session-journal] keeping an older Orca chat failed', error)
+      // Corruption past the original's own revision read may be this file's: never absorb it. A
+      // rollback that failed leaves this connection mid-transaction for every later chat.
+      if (
+        isSqliteStorageFailure(error) ||
+        (revision !== undefined && isSqliteCorruption(error)) ||
+        db.isTransaction
+      ) {
+        console.warn('[agent-session-journal] keeping chats an older Orca saved paused', error)
+        return false
+      }
+      pass.failures.push({ sessionId: id, revision, error })
+      // The failed chat's transaction rolled back, and with it any tab it added.
+      for (const [sessionId, tab] of adoption.added.splice(added)) {
+        adoption.tabbed.delete(sessionId)
+        adoption.takenTabs.delete(tab)
+      }
+      Object.assign(adoption, { nextPosition, tabsRecorded })
     }
   }
-  return complete
-}
-
-function readAdoption(source: Database.Database, db: Database.Database): Adoption {
-  const claims = new Map<string, Claim[]>()
-  for (const claim of source
-    .prepare('SELECT upload_id,session_id,claimed_at FROM agent_session_attachment_claims')
-    .all()) {
-    const id = String(claim.session_id)
-    const list = claims.get(id) ?? []
-    list.push(claim)
-    claims.set(id, list)
-  }
-  const tabs = db.prepare('SELECT tab_id,session_id FROM agent_session_tabs').all()
-  const tail = db.prepare('SELECT COALESCE(MAX(position),-1) AS tail FROM agent_session_tabs').get()
-  return {
-    savedTabs: new Map(
-      source
-        .prepare('SELECT tab_id,session_id FROM agent_session_tabs')
-        .all()
-        .map((row) => [String(row.session_id), String(row.tab_id)])
-    ),
-    claims,
-    tabbed: new Set(tabs.map((row) => String(row.session_id))),
-    takenTabs: new Set(tabs.map((row) => String(row.tab_id))),
-    nextPosition: Number(tail?.tail ?? -1) + 1,
-    tabsRecorded: readMeta(db, AGENT_SESSION_TABS_RECORDED) !== undefined
-  }
+  return true
 }
 
 function absorbChat(
   source: Database.Database,
   db: Database.Database,
   id: string,
+  revision: string,
   adoption: Adoption,
   pass: Pass
 ): void {
-  // A chat with no history still has a value, so one deleted here stays deleted.
-  const revision = journalLegacyChatRevision(source, id) ?? 'null'
+  const adopt = (copy: string) => adoptChat(source, db, id, copy, adoption)
+  const forced = pass.forced.get(id)
+  if (forced) {
+    runJournalTransaction(db, () => keepForcedCopy(db, id, revision, forced, adopt))
+    return
+  }
   const shown = readMeta(db, journalLegacyChatRevisionKey(id))
   if (revision === shown) {
     return
@@ -197,7 +227,7 @@ function absorbChat(
     return
   }
   if (converted) {
-    keepContinuedChat(source, db, id, revision, shown !== undefined, adoption, pass)
+    keepContinuedChat(db, id, revision, shown, adopt, pass)
     return
   }
   // Not converted here yet: its conversion reads the current original, so it joins as itself.
@@ -238,10 +268,11 @@ function adoptChat(
   const session = source
     .prepare('SELECT workspace_id FROM journal_sessions WHERE session_id=?')
     .get(id)
-  if (as === id && session) {
+  // A copy is cataloged unconverted too; its history converts from the original chat.
+  if (session) {
     db.prepare(
       'INSERT INTO journal_chat_state(session_id,workspace_id) VALUES(?,?) ON CONFLICT DO NOTHING'
-    ).run(id, session.workspace_id)
+    ).run(as, session.workspace_id)
   }
   if (as !== id) {
     insertClaims(db, as, adoption.claims.get(id) ?? [])
@@ -274,73 +305,7 @@ function addTab(db: Database.Database, adoption: Adoption, sessionId: string, ta
   adoption.nextPosition += 1
   adoption.tabbed.add(sessionId)
   adoption.takenTabs.add(tab)
-}
-
-/**
- * The original's version of a converted chat it moved past becomes a second chat beside it. With
- * no revision to compare (files copied before revisions were kept), the original moved past this
- * chat only if its restored history has an item this chat never held.
- */
-function keepContinuedChat(
-  source: Database.Database,
-  db: Database.Database,
-  id: string,
-  revision: string,
-  compared: boolean,
-  adoption: Adoption,
-  pass: Pass
-): void {
-  const imported = prepareJournalDomainImport(source, id)
-  if (!imported) {
-    pass.baselines.push([id, revision])
-    return
-  }
-  const { pages: read, ...header } = imported
-  let pages: Iterable<JournalDomainImportPage> = read
-  if (!compared) {
-    const all = [...read]
-    if (heldEveryItem(db, id, all)) {
-      pass.baselines.push([id, revision])
-      return
-    }
-    pages = all
-  }
-  // Derived from the revision, so an interrupted import resumes into the same chat.
-  const copy = createHash('sha256').update(`${id}\0${revision}`).digest('hex').slice(0, 32)
-  const target = { sessionId: copy, epoch: header.epoch }
-  for (const page of pages) {
-    runJournalTransaction(db, () => insertJournalDomainImportPage(db, target, page))
-  }
-  runJournalTransaction(db, () => {
-    finishJournalDomainImport(db, { ...header, sessionId: copy, sourceRevision: null })
-    adoptChat(source, db, id, copy, adoption)
-    recordJournalLegacyChatRevision(db, id, revision)
-  })
-}
-
-/**
- * Removing an item here leaves its tombstone, so every item this chat converted stays held, at
- * its converted revision or a later one.
- */
-function heldEveryItem(
-  db: Database.Database,
-  id: string,
-  pages: readonly JournalDomainImportPage[]
-): boolean {
-  const held = new Map(
-    db
-      .prepare(`SELECT item_id AS id, MAX(revision) AS revision FROM (
-          SELECT item_id, revision FROM journal_items WHERE session_id=?1
-          UNION ALL SELECT item_id, ?2 FROM journal_item_tombstones WHERE session_id=?1)
-        GROUP BY item_id`)
-      .all(id, Number.MAX_SAFE_INTEGER)
-      .map((row) => [String(row.id), Number(row.revision)])
-  )
-  return pages.every(
-    (page) =>
-      page.kind !== 'items' ||
-      page.rows.every(({ item }) => (held.get(item.itemId) ?? -1) >= item.revision)
-  )
+  adoption.added.push([sessionId, tab])
 }
 
 /** Uploads the older Orca attached stay claimed, so the sweeper never removes them. */
@@ -350,16 +315,4 @@ function insertClaims(db: Database.Database, sessionId: string, claims: readonly
   for (const claim of claims) {
     insert.run(claim.upload_id!, sessionId, claim.claimed_at!)
   }
-}
-
-function readMeta(db: Database.Database, key: string): string | undefined {
-  const row = db.prepare('SELECT value FROM agent_session_store_meta WHERE key=?').get(key)
-  return row === undefined ? undefined : String(row.value)
-}
-
-function writeMeta(db: Database.Database, key: string, value: string): void {
-  db.prepare('INSERT OR REPLACE INTO agent_session_store_meta (key, value) VALUES (?, ?)').run(
-    key,
-    value
-  )
 }

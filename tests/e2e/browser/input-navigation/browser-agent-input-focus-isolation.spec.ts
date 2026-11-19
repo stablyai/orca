@@ -12,7 +12,7 @@ import {
   rpc,
   startProbeServer
 } from './browser-agent-focus-scenarios'
-import './browser-agent-composition-scenario'
+import { runAgentInputDuringUserCompositionScenario } from './browser-agent-composition-scenario'
 
 import { getActiveTabId } from '../../desktop/renderer-probes/store'
 
@@ -125,4 +125,10 @@ test('text insertion needs a focused page target and never crashes or wedges the
   } finally {
     await server.close()
   }
+})
+
+test('agent input that moves page focus is refused during the user’s IME composition', async ({
+  orcaPage
+}) => {
+  await runAgentInputDuringUserCompositionScenario(orcaPage)
 })

@@ -22,6 +22,7 @@ import {
 } from '../../../bots/bot-chat-session'
 import { readPairedBotRosters, withPairedBotRosters } from '../../../bots/paired-bot-rosters'
 import { botOfSession } from '../../../bots/bot-session-tabs'
+import { openEmptyBotChat, runtimeBotChatTreeHost } from '../../../bots/bot-chat-tree-host'
 import { forgetDeletedBotTools } from './bots-tools'
 import { composioBotsOf } from './bots-composio'
 import { ownerOnly } from './bots-caller-gates'
@@ -43,6 +44,10 @@ import { normalizeBotSidebarView } from '../../../../shared/bots/bot-sidebar-vie
 async function updateBot(params: BotUpdateParams, context: RpcContext) {
   if (params.updates.slackMirror !== undefined) {
     ownerOnly(context, 'Only the owner can change what posts to Slack')
+  }
+  const { members, addMembers: added, permissionMode } = params.updates
+  if (members !== undefined || added !== undefined || permissionMode !== undefined) {
+    ownerOnly(context, 'Only your owner changes your Who can ask or permissions, in Orca.')
   }
   assertBotAgentRunsOnThisHost(params.updates.agent)
   const bot = await context.runtime.bots.update(params.botId, params.updates)
@@ -254,9 +259,15 @@ export const BOT_METHODS = [
         throw new Error('bot_not_found')
       }
       assertBotAgentRunsOnThisHost(params.agent)
-      return {
-        sessionId: await startBotSession(runtime, botOnAgent(bot, params.agent))
-      }
+      const onAgent = botOnAgent(bot, params.agent)
+      // Like a blank page: an empty chat already open is the new chat, not one more.
+      const empty = await openEmptyBotChat(runtimeBotChatTreeHost(runtime), onAgent).catch(
+        (error: unknown) => {
+          console.error('[bots] failed to look for an empty chat to reuse:', error)
+          return null
+        }
+      )
+      return { sessionId: empty ?? (await startBotSession(runtime, onAgent)) }
     }
   })
 ]

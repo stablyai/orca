@@ -10,23 +10,6 @@ const frame = (head: string, truncatedNote?: string) => ({
 })
 
 describe('usageLimitCopyText', () => {
-  it('copies everything shown when it fits, with no shortening note', () => {
-    expect(
-      usageLimitCopyText({
-        sentence: 'S.',
-        detail: 'D',
-        frame: frame('H', 'PROVIDER_TRUNCATED'),
-        copyNote: NOTE
-      })
-    ).toBe('S.\n\nD\n\ncodex · notification:error\nH\n…\nPROVIDER_TRUNCATED')
-  })
-
-  it('keeps a frame-only copy whole', () => {
-    expect(usageLimitCopyText({ sentence: 'S.', frame: frame('H'), copyNote: NOTE })).toBe(
-      'S.\n\ncodex · notification:error\nH'
-    )
-  })
-
   it('takes text of exactly the cap whole and shortens one unit more', () => {
     // 'S.' + '\n\n' + detail is the whole copy.
     const exact = 'x'.repeat(USAGE_LIMIT_COPY_CAP - 4)

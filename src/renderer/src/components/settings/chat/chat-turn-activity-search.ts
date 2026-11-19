@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { translateSearchKeyword } from '../search/settings-search-keywords'
 import type { Translate } from '@/i18n/use-translate'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import type { SettingsSearchEntry } from '../search/settings-search'
@@ -20,8 +21,11 @@ export const getChatTurnActivityEntriesByKey = createLocalizedCatalog(
           'Shows the files each turn changed, with line counts, below the reply.'
         ),
         keywords: [
-          translate('components.settings.nativeChat.turnDiffsSearchChangedFiles', 'changed files'),
-          translate('components.settings.nativeChat.turnDiffsSearchEdits', 'edits')
+          ...translateSearchKeyword(
+            'components.settings.nativeChat.turnDiffsSearchChangedFiles',
+            'changed files'
+          ),
+          ...translateSearchKeyword('components.settings.nativeChat.turnDiffsSearchEdits', 'edits')
         ]
       },
       openedPullRequests: {
@@ -35,8 +39,11 @@ export const getChatTurnActivityEntriesByKey = createLocalizedCatalog(
           'Shows the pull requests each turn opened, with titles and line counts, below the reply.'
         ),
         keywords: [
-          translate('components.settings.nativeChat.openedPullRequestsSearchPr', 'PR'),
-          translate(
+          ...translateSearchKeyword(
+            'components.settings.nativeChat.openedPullRequestsSearchPr',
+            'PR'
+          ),
+          ...translateSearchKeyword(
             'components.settings.nativeChat.openedPullRequestsSearchCard',
             'pull request card'
           )
@@ -50,8 +57,11 @@ export const getChatTurnActivityEntriesByKey = createLocalizedCatalog(
           'A line in the chat when CI finishes on a pull request the agent opened or pushed to.'
         ),
         keywords: [
-          translate('components.settings.nativeChat.ciResultLinesSearchChecks', 'checks'),
-          translate('components.settings.nativeChat.ciResultLinesSearchPr', 'PR')
+          ...translateSearchKeyword(
+            'components.settings.nativeChat.ciResultLinesSearchChecks',
+            'checks'
+          ),
+          ...translateSearchKeyword('components.settings.nativeChat.ciResultLinesSearchPr', 'PR')
         ]
       }
     }) satisfies Record<string, SettingsSearchEntry>

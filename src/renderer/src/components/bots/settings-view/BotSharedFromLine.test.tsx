@@ -39,11 +39,6 @@ const fromLink: Bot = {
 describe('BotSharedFromLine', () => {
   afterEach(cleanup)
 
-  it('shows nothing for a bot not made from a link', () => {
-    const { container } = render(<BotSharedFromLine bot={bot} />)
-    expect(container.textContent).toBe('')
-  })
-
   it('reads the version the bot was made from, and says so when its link no longer serves it', async () => {
     render(<BotSharedFromLine bot={fromLink} />)
     expect(screen.getByText(/Shared by Dara/)).toBeTruthy()

@@ -8,17 +8,15 @@ import type {
 export function normalizeOpenCodeUsagePersistedDatabases(
   databases: OpenCodeUsagePersistedDatabase[] | undefined
 ): OpenCodeUsagePersistedDatabase[] {
-  // A record missing a projection would be reused as zero usage; drop it so the scanner rereads the database.
-  return (databases ?? []).flatMap((database) =>
+  return (databases ?? []).map((database) =>
+    // A record missing a projection must be reread, not reused as zero usage; keep its claims so a deleted owner still frees them.
     Array.isArray(database.sessions) && Array.isArray(database.dailyAggregates)
-      ? [
-          {
-            ...database,
-            sessions: database.sessions.map(normalizeSessionCost),
-            dailyAggregates: database.dailyAggregates.map(normalizeDailyAggregateCost)
-          }
-        ]
-      : []
+      ? {
+          ...database,
+          sessions: database.sessions.map(normalizeSessionCost),
+          dailyAggregates: database.dailyAggregates.map(normalizeDailyAggregateCost)
+        }
+      : { ...database, sessions: [], dailyAggregates: [], mtimeMs: -1, size: -1 }
   )
 }
 

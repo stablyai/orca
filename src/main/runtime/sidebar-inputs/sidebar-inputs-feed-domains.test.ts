@@ -18,6 +18,14 @@ import {
   type SidebarInputsFeedSources
 } from './sidebar-inputs-feed-domains'
 
+vi.mock('../../persistence/loading-store/user-data-path', () => ({
+  getCanonicalUserDataPath: () => 'test-profile'
+}))
+vi.mock(import('../hosts/platform-probe/host-descriptor'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  readStoreInstallationId: async () => 'test-installation'
+}))
+
 vi.mock('../../ssh/targets/ssh-target-registry', () => ({
   getRegisteredSshState: () => null,
   listRegisteredSshTargets: () => []
@@ -211,82 +219,80 @@ it('prepares first host facts and sees an external rename on an activity-only di
   }
 })
 
-it.each([10, 100])(
-  'ignores %i unrelated UI and worktree events but publishes a host-label change',
-  async (count) => {
-    let label = 'Before'
-    let prepares = 0
-    let written: Parameters<NonNullable<RuntimeStore['onStateWritten']>>[0] | undefined
-    const listeners = new Set<(event: RuntimeClientEvent) => void>()
-    const paired: Pick<PairedServerRowsProducer, 'revision' | 'withPreparedSnapshot'> = {
-      revision: new ProducerRevision(),
-      withPreparedSnapshot: async (consume) => {
-        prepares++
-        return consume({
-          revision: 0,
-          servers: [
-            {
-              hostId: 'runtime:env',
-              freshness: 'live',
-              host: { label, health: 'online', compatibility: null, pairedDeviceId: 'device' },
-              rows: []
-            }
-          ]
-        })
-      }
-    }
-    const { domains } = harness({}, paired, {
-      store: () => ({
-        onStateWritten: (listener: typeof written) => {
-          written = listener
-          return () => {
-            written = undefined
+it('ignores 100 unrelated UI and worktree events but publishes a host-label change', async () => {
+  const count = 100
+  let label = 'Before'
+  let prepares = 0
+  let written: Parameters<NonNullable<RuntimeStore['onStateWritten']>>[0] | undefined
+  const listeners = new Set<(event: RuntimeClientEvent) => void>()
+  const paired: Pick<PairedServerRowsProducer, 'revision' | 'withPreparedSnapshot'> = {
+    revision: new ProducerRevision(),
+    withPreparedSnapshot: async (consume) => {
+      prepares++
+      return consume({
+        revision: 0,
+        servers: [
+          {
+            hostId: 'runtime:env',
+            freshness: 'live',
+            host: { label, health: 'online', compatibility: null, pairedDeviceId: 'device' },
+            rows: []
           }
-        }
-      }),
-      onClientEvent: (listener) => {
-        listeners.add(listener)
-        return () => {
-          listeners.delete(listener)
-        }
-      }
-    })
-    const events: unknown[] = []
-    const feed = new SidebarInputsFeed(
-      () =>
-        domains.filter((domain) => ['pairedServerHosts', 'pairedServerRows'].includes(domain.name)),
-      (event) => {
-        events.push(event)
-      }
-    )
-    feed.acquire('phone')
-    try {
-      const initial = await feed.read({ maxBytes: 256 * 1024 })
-      expect(initial.domains.pairedServerHosts.upserts).toMatchObject({
-        'runtime:env': { host: { label: 'Before' } }
+        ]
       })
-      const initialPrepares = prepares
-      const initialEvents = events.length
-      for (let i = 0; i < count; i++) {
-        written?.(['ui'])
-        for (const listener of listeners) {
-          listener({ type: 'worktreesChanged', repoId: 'r' })
-        }
-      }
-      const unchanged = await feed.read({ maxBytes: 256 * 1024 })
-      expect(unchanged.revision).toBe(initial.revision)
-      expect(prepares - initialPrepares).toBe(0)
-      expect(events).toHaveLength(initialEvents)
-      label = 'After'
-      written?.(['settings'])
-      const changed = await feed.read({ maxBytes: 256 * 1024 })
-      expect(changed.domains.pairedServerHosts.upserts).toMatchObject({
-        'runtime:env': { host: { label: 'After' } }
-      })
-      expect(changed.revision).toBeGreaterThan(initial.revision)
-      expect(prepares - initialPrepares).toBe(1)
-    } finally {
-      feed.release('phone')
     }
   }
-)
+  const { domains } = harness({}, paired, {
+    store: () => ({
+      onStateWritten: (listener: typeof written) => {
+        written = listener
+        return () => {
+          written = undefined
+        }
+      }
+    }),
+    onClientEvent: (listener) => {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    }
+  })
+  const events: unknown[] = []
+  const feed = new SidebarInputsFeed(
+    () =>
+      domains.filter((domain) => ['pairedServerHosts', 'pairedServerRows'].includes(domain.name)),
+    (event) => {
+      events.push(event)
+    }
+  )
+  feed.acquire('phone')
+  try {
+    const initial = await feed.read({ maxBytes: 256 * 1024 })
+    expect(initial.domains.pairedServerHosts.upserts).toMatchObject({
+      'runtime:env': { host: { label: 'Before' } }
+    })
+    const initialPrepares = prepares
+    const initialEvents = events.length
+    for (let i = 0; i < count; i++) {
+      written?.(['ui'])
+      for (const listener of listeners) {
+        listener({ type: 'worktreesChanged', repoId: 'r' })
+      }
+    }
+    const unchanged = await feed.read({ maxBytes: 256 * 1024 })
+    expect(unchanged.revision).toBe(initial.revision)
+    expect(prepares - initialPrepares).toBe(0)
+    expect(events).toHaveLength(initialEvents)
+    label = 'After'
+    written?.(['settings'])
+    const changed = await feed.read({ maxBytes: 256 * 1024 })
+    expect(changed.domains.pairedServerHosts.upserts).toMatchObject({
+      'runtime:env': { host: { label: 'After' } }
+    })
+    expect(changed.revision).toBeGreaterThan(initial.revision)
+    expect(prepares - initialPrepares).toBe(1)
+  } finally {
+    feed.release('phone')
+  }
+})

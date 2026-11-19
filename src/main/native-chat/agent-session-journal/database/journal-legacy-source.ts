@@ -90,6 +90,7 @@ export function journalLegacyChatRevisionKey(sessionId: string): string {
   return `journal.legacy-revision:${sessionId}`
 }
 
+/** Absorbing a revision clears any failure an earlier one recorded. */
 export function recordJournalLegacyChatRevision(
   db: Database.Database,
   sessionId: string,
@@ -98,5 +99,48 @@ export function recordJournalLegacyChatRevision(
   db.prepare('INSERT OR REPLACE INTO agent_session_store_meta (key, value) VALUES (?, ?)').run(
     journalLegacyChatRevisionKey(sessionId),
     revision
+  )
+  db.prepare('DELETE FROM agent_session_store_meta WHERE key=?').run(
+    journalLegacyFailureKey(sessionId)
+  )
+}
+
+/** A chat, or a copy's history, that could not be kept, with its error; not retried by itself. */
+export function journalLegacyFailureKey(sessionId: string): string {
+  return `journal.legacy-failed:${sessionId}`
+}
+
+/** A copy kept for an original chat an older Orca continued converts its history from that chat. */
+export function journalLegacyCopySourceKey(copyId: string): string {
+  return `journal.legacy-copy-source:${copyId}`
+}
+
+/** The original chat a copy converts from, or the chat itself. */
+export function journalLegacyConversionSource(db: Database.Database, sessionId: string): string {
+  const row = db
+    .prepare('SELECT value FROM agent_session_store_meta WHERE key=?')
+    .get(journalLegacyCopySourceKey(sessionId))
+  return row === undefined ? sessionId : String(row.value)
+}
+
+/** The copy kept for an original chat that hasn't converted here yet. */
+export function journalLegacyPendingCopyKey(sessionId: string): string {
+  return `journal.legacy-pending-copy:${sessionId}`
+}
+
+/** Once a copy is ready here its history no longer reads from the original. */
+export function settleJournalLegacyCopy(db: Database.Database, copyId: string): void {
+  const key = journalLegacyCopySourceKey(copyId)
+  const original = db.prepare('SELECT value FROM agent_session_store_meta WHERE key=?').get(key)
+  if (original === undefined) {
+    return
+  }
+  db.prepare('DELETE FROM agent_session_store_meta WHERE key IN (?,?)').run(
+    key,
+    journalLegacyFailureKey(copyId)
+  )
+  db.prepare('DELETE FROM agent_session_store_meta WHERE key=? AND value=?').run(
+    journalLegacyPendingCopyKey(String(original.value)),
+    copyId
   )
 }

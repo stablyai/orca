@@ -7,6 +7,7 @@ import type { Bot } from '../../shared/bot-types'
 import { botLookAround, lookAroundSupported } from '../../shared/bots/bot-look-around'
 import type { BotAutomationSessions } from '../automations/bot-automation-launch'
 import type { BotTurnEnd, BotTurnWatch } from './bot-run-turn-watch'
+import type { LookUsageLimit } from './bot-background-run-history'
 import type { BotLookAroundStore } from './bot-look-around-store'
 import {
   beginRun,
@@ -18,7 +19,8 @@ import {
 import {
   failedLooksInARow,
   LOOK_FAILURES_TO_TURN_OFF,
-  lookFailureIsQuiet
+  lookFailureIsQuiet,
+  usageLimitAlreadyNoted
 } from './bot-look-around-failures'
 import { lookAroundPrompt } from './bot-look-around-prompt'
 import { lookAroundDueAt } from './bot-look-around-schedule'
@@ -61,6 +63,11 @@ export type BotLookAroundRunnerDeps = {
   stopTurn: (sessionId: string) => Promise<void>
   /** Whether the session's host still runs its turn or holds a question in it. */
   turnRunning: (sessionId: string) => boolean
+  /** The usage limit that ended the session's last turn, or null when none did. */
+  usageLimitOf: (sessionId: string) => Promise<LookUsageLimit | null>
+  /** Whether a usage-limited look finishes in its own chat (see `limitedLookContinuesInItsChat`),
+   *  so its slot starts no other. */
+  usageLimitContinues: (sessionId: string) => Promise<boolean>
   /** Turns the bot's Look around off, after too many failed looks in a row. */
   turnOff: (bot: Bot) => Promise<void>
   power: BackgroundRunPower
@@ -120,7 +127,16 @@ export class BotLookAroundRunner {
           continue
         }
         const slot = lookAroundDueAt(setting, state, now)
-        if (slot !== null) {
+        const limited = state.runs.findLast((run) => run.endedAt !== undefined)
+        // Only the slot the limited look took finishes in its chat; later slots are their own.
+        if (
+          slot !== null &&
+          !(
+            limited?.usageLimited &&
+            limited.startedAt >= slot &&
+            (await this.deps.usageLimitContinues(limited.sessionId).catch(() => false))
+          )
+        ) {
           due.push({ bot, slot })
         }
       }
@@ -205,6 +221,7 @@ export class BotLookAroundRunner {
     const watch = watchBackgroundRun(this.deps.power, sessionId)
     let failure: string | undefined
     let notifies = false
+    let usageLimited: LookUsageLimit | undefined
     const gate = runGate(this.deps.power, {
       scheduled: slot !== undefined,
       mayStart: () => slot !== undefined && this.mayStart(bot.id, sessionId, slot)
@@ -237,6 +254,9 @@ export class BotLookAroundRunner {
       const ended = await awaitRunEnd(watch, this.deps, sessionId, start)
       failure = failureOf(ended)
       notifies = turnFailed(ended)
+      if (notifies) {
+        usageLimited = (await this.deps.usageLimitOf(sessionId).catch(() => null)) ?? undefined
+      }
     } catch (error) {
       if (!gate.deferred()) {
         console.warn('[bots] look-around could not run', error)
@@ -262,8 +282,11 @@ export class BotLookAroundRunner {
               sessionId,
               this.deps.now(),
               failure,
-              notifies && !lookFailureIsQuiet(state, sessionId),
-              asleep
+              notifies &&
+                !lookFailureIsQuiet(state, sessionId) &&
+                !(usageLimited && usageLimitAlreadyNoted(state.runs)),
+              asleep,
+              usageLimited
             )
       )
       this.running.delete(bot.id)
