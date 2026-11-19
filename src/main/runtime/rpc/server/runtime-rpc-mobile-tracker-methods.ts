@@ -1,5 +1,4 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
-import type { MobileRelayHostCatalog } from '../../mobile-desktop-relay/mobile-relay-host-catalog'
 import type { RpcRequest } from '../core'
 
 /** Linear and Jira have no workspace; untagged phone calls use the desktop's "New projects open on" host, as its Tasks page does. */
@@ -40,7 +39,7 @@ export const DEFAULT_SCOPE_HOST_METHODS = [
 export function isUntaggedTrackerCall(request: RpcRequest): boolean {
   return (
     request.executionHost === undefined &&
-    (DEFAULT_SCOPE_HOST_METHODS as readonly string[]).includes(request.method)
+    DEFAULT_SCOPE_HOST_METHODS.some((method) => method === request.method)
   )
 }
 
@@ -51,7 +50,7 @@ export function isUntaggedTrackerCall(request: RpcRequest): boolean {
 export async function withDefaultScopeServer(
   request: RpcRequest,
   runtime: { getClientDefaultScopeHost: () => ExecutionHostId },
-  relayHosts: Pick<MobileRelayHostCatalog, 'relayReady'> | null
+  relayHosts: { relayReady: (hostId: ExecutionHostId) => Promise<boolean> } | null
 ): Promise<RpcRequest> {
   const host = runtime.getClientDefaultScopeHost()
   if (!host.startsWith('runtime:') || !(await relayHosts?.relayReady(host))) {
