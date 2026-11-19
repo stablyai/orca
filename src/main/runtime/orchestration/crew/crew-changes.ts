@@ -32,6 +32,11 @@ export function scopedCrewChange(facets: CrewFacet[], scope: CrewScope): CrewInv
   return Object.assign(new Set(facets), scope)
 }
 
+/** A chat's status or name changed: a crew that doesn't show that chat reads nothing for it. */
+export function crewChatStatusChange(sessionId: string): CrewInvalidation {
+  return scopedCrewChange(['status', 'names'], { sessionIds: new Set([sessionId]) })
+}
+
 /** A hook status row added, changed or removed: a status and name change about its pane alone. */
 export function crewStatusRowChange(mutation: {
   before: { paneKey: string } | null

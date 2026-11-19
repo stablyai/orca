@@ -1,4 +1,4 @@
-import { scopedCrewChange } from '../../orchestration/crew/crew-changes'
+import { crewChatStatusChange } from '../../orchestration/crew/crew-changes'
 import { getRepoHostIdentityForParts } from '../../../../shared/repository/repo-host-identity'
 import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
 import { resolveWorktreeHostRouting } from '../catalog/worktree-launch-host-repo'
@@ -282,9 +282,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       onIdleProviderDeath: (death) => this.onStructuredIdleProviderDeathForMail(death),
       // Structured chat has no CLI hooks; this projection drives first-work renaming.
       onSessionStatusChanged: (summary, options) => {
-        this.crewChanges.notify(
-          scopedCrewChange(['status', 'names'], { sessionIds: new Set([summary.sessionId]) })
-        )
+        this.crewChanges.notify(crewChatStatusChange(summary.sessionId))
         this.onStructuredSessionStatusForMail(summary)
         this.workerAutoReleaseActivity.observeChat(summary)
         nameChat(summary, options)
