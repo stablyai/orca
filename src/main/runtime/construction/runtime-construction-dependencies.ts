@@ -74,7 +74,7 @@ export type RuntimeConstructionDependencies = {
   /** `launchRetired`: a command finished after an earlier mark already retired the launch. */
   retireAgentHookCompatibilityAuthority?: (
     paneKey: string,
-    options?: { confirmedExit?: boolean; launchRetired?: true }
+    options?: { confirmedExit?: boolean; jobStopped?: boolean; launchRetired?: true }
   ) => void
   readHookCliWriterObservation?: (row: AgentStatusIpcPayload) => CliWriterObservation | null
   /** `exitedSince`: also answer `exited` for an exit the hook store proved at or after it. */

@@ -11,7 +11,10 @@ import { getProviderForPty } from '../provider/registry'
 import { inspectPtyProviderProcess } from '../../../providers/pty/process-inspection'
 import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
 import { isRemoteExecutionHostPtyId } from '../../../../shared/execution-host/remote-execution-host-pty-id'
-import { confirmRootShellAloneFromProcessTable } from '../../../runtime/terminal/lifecycle/run-terminal-shell-alone'
+import {
+  confirmRootShellAloneFromProcessTable,
+  isStoppedAgent
+} from '../../../runtime/terminal/lifecycle/run-terminal-shell-alone'
 
 export function bindTerminalPaneStatusLifecycle(
   runtime: OrcaRuntimeService | undefined,
@@ -29,13 +32,15 @@ export function bindTerminalPaneStatusLifecycle(
             runtime,
             paneKey,
             () => runtime?.getLaunchStatementForPaneKey(paneKey, agent) === launch
-          ))
+          )) === true
         )
       } catch {
         return false
       }
     },
-    confirmShellAlone: (paneKey) => paneShellAlone(runtime, paneKey),
+    // Windows gives a command mark no proof against a nested shell, so the mark stands, as on main.
+    confirmShellAlone: async (paneKey) =>
+      process.platform === 'win32' ? null : paneShellAlone(runtime, paneKey),
     readSavedRecord: (paneKey) => {
       try {
         const worktreeId = runtime?.getTerminalWorktreeIdForPaneKey(paneKey)
@@ -105,19 +110,23 @@ export function bindTerminalPaneStatusLifecycle(
   agentHookServer.pruneUnplacedSleepingPanes()
 }
 
-/** A local pane's shell alone holds its PTY, and the pane still runs that PTY afterwards. */
+/** A local pane's shell alone holds its PTY, and the pane still runs that PTY afterwards; null on
+ *  a remote host, which reports no process tree to main. */
 async function paneShellAlone(
   runtime: OrcaRuntimeService | undefined,
   paneKey: string,
   stillCurrent: () => boolean = () => true
-): Promise<boolean> {
+): Promise<boolean | null> {
   if (!runtime) {
     return false
   }
   try {
     const pane = runtime.resolveTerminalPane(paneKey)
-    if (!pane.ptyId || isRemoteExecutionHostPtyId(pane.ptyId)) {
+    if (!pane.ptyId) {
       return false
+    }
+    if (isRemoteExecutionHostPtyId(pane.ptyId)) {
+      return null
     }
     const shellAlone = await confirmShellAlone(pane.ptyId, pane.incarnationId ?? undefined)
     const current = runtime.resolveTerminalPane(paneKey)
@@ -137,12 +146,37 @@ async function paneShellAlone(
  *  table instead, local or daemon alike. Windows shells stop no jobs, so the host's job census
  *  finding no child beside a shell foreground suffices there. Never fall back to a foreground
  *  name, which a live unrecognized agent shares. */
+// A PTY keeps its root process for its incarnation, so repeated proofs skip the inventory.
+const rootPidByPtyIncarnation = new Map<string, number>()
+
+async function readPtyRootPid(
+  provider: ReturnType<typeof getProviderForPty>,
+  ptyId: string,
+  incarnationId: string | undefined
+): Promise<number | undefined> {
+  const key = `${ptyId}\0${incarnationId ?? ''}`
+  const known = rootPidByPtyIncarnation.get(key)
+  if (known) {
+    return known
+  }
+  const processes = await provider.listProcesses({ ptyIds: [ptyId] }).catch(() => [])
+  const rootPid = processes.find((entry) => entry.id === ptyId)?.rootProcessId
+  if (rootPid) {
+    if (rootPidByPtyIncarnation.size >= 64) {
+      rootPidByPtyIncarnation.delete(rootPidByPtyIncarnation.keys().next().value!)
+    }
+    rootPidByPtyIncarnation.set(key, rootPid)
+  }
+  return rootPid
+}
+
 async function confirmShellAlone(ptyId: string, incarnationId?: string): Promise<boolean> {
   const provider = getProviderForPty(ptyId)
   if (process.platform !== 'win32') {
-    const processes = await provider.listProcesses({ ptyIds: [ptyId] }).catch(() => [])
-    const rootPid = processes.find((entry) => entry.id === ptyId)?.rootProcessId
-    return rootPid ? confirmRootShellAloneFromProcessTable(rootPid) : false
+    const rootPid = await readPtyRootPid(provider, ptyId, incarnationId)
+    return rootPid
+      ? confirmRootShellAloneFromProcessTable(rootPid, { stoppedJobBlocks: isStoppedAgent })
+      : false
   }
   if ((await provider.confirmShellForeground?.(ptyId)) === true) {
     return true

@@ -241,13 +241,16 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
     ['macOS suspended', ['146'], true],
     ['suspended, then another command', ['148', '0'], true],
     ['macOS suspended, then another command', ['146', '0'], true],
-    ['macOS suspended, then a listing and another command', ['146', 'listing', '0'], true]
+    ['macOS suspended, then a listing and another command', ['146', 'listing', '0'], true],
+    ['suspended, resumed (fg), then quit', ['148', 'fg', '0'], false],
+    ['quit where the host gives no shell proof (remote, Windows)', ['unproven'], false]
   ] as const)('%s', async (_, finishes, keepsRecovery) => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(1_000)
     const tick = () => vi.setSystemTime(Date.now() + 1_000)
     // The host's word on the pane's shell: alone unless a nested shell marked a command.
-    let shellAlone = true
+    let shellAlone: boolean | null = true
+    let stopped = false
     const fixture = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
         sleepingAgentSessionsByPaneKey: { [PANE_KEY]: SLEPT }
@@ -333,6 +336,8 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
         tick()
         if (status === 'unmarked') {
           await server.reconcilePaneProcessExit(PANE_KEY)
+        } else if (status === 'fg') {
+          stopped = false
         } else if (status === 'listing') {
           // An inventory refresh (`orca worktree ps`) re-mints the restored surface's receipt.
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reaches the protected receipt minter the listing path calls.
@@ -346,8 +351,9 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
             'pty-3'
           )
         } else {
-          shellAlone = status !== 'nested'
-          const code = status === 'nested' ? '0' : status
+          stopped ||= status === '148' || status === '146'
+          shellAlone = status === 'unproven' ? null : status !== 'nested' && !stopped
+          const code = status === 'nested' || status === 'unproven' ? '0' : status
           runtime.onPtyData('pty-3', `\x1b]133;C\x07\x1b]133;D;${code}\x07`, Date.now())
           // Let the host's shell-alone answer land.
           await new Promise((resolve) => setImmediate(resolve))

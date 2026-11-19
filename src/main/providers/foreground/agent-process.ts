@@ -41,7 +41,7 @@ export type AgentForegroundProcessResolution = {
   anchorPidForeign?: boolean
 }
 
-type ShellForegroundConfirmationOptions = {
+export type ShellForegroundConfirmationOptions = {
   readWindowsPtyJobProcessIds?: () =>
     | ReadonlySet<number>
     | null
@@ -49,6 +49,8 @@ type ShellForegroundConfirmationOptions = {
   readWindowsProcessIdentityTable?: () => Promise<WindowsProcessIdentityRow[]>
   /** POSIX: a capture the caller already took, so one proof costs one table read. */
   processIndex?: ProcessTableIndex
+  /** POSIX: which stopped jobs deny the shell its foreground; every one by default. */
+  stoppedJobBlocks?: (row: ProcessTableRow) => boolean
 }
 
 export function commandExecutable(command: string): string {
@@ -102,7 +104,8 @@ export async function confirmShellForegroundProcess(
           isShellProcess(commandExecutable(row.command))
       )
       .sort((left, right) => left.depth - right.depth)[0]
-    if (tree.some((row) => row.depth > 0 && row.stat.includes('T'))) {
+    const blocks = options.stoppedJobBlocks ?? (() => true)
+    if (tree.some((row) => row.depth > 0 && row.stat.includes('T') && blocks(row))) {
       return false
     }
     const confirmed = foregroundShell?.stat.includes('+') === true

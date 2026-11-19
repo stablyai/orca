@@ -10,7 +10,8 @@ vi.mock(
   })
 )
 
-const { confirmRootShellAloneFromProcessTable } = await import('./run-terminal-shell-alone')
+const { confirmRootShellAloneFromProcessTable, isStoppedAgent } =
+  await import('./run-terminal-shell-alone')
 
 const SHELL: ProcessTableRow = { pid: 100, ppid: 1, stat: 'Ss+', command: '/bin/zsh' }
 // macOS roots each PTY at login, with the login shell beneath it.
@@ -32,8 +33,16 @@ it.skipIf(process.platform === 'win32').each([
     [LOGIN, { ...LOGIN_SHELL, stat: 'S' }, { pid: 101, ppid: 100, stat: 'S+', command: 'codex' }],
     false
   ],
-  ['no shell under the root', 90, [LOGIN], false]
+  ['no shell under the root', 90, [LOGIN], false],
+  [
+    'a login root, an editor stopped before the agent ran',
+    90,
+    [LOGIN, LOGIN_SHELL, { pid: 102, ppid: 100, stat: 'T', command: 'vim notes.md' }],
+    true
+  ]
 ] as const)('confirms the shell alone from %s', async (_, rootPid, rows, expected) => {
   snapshot.mockResolvedValue([...rows])
-  expect(await confirmRootShellAloneFromProcessTable(rootPid)).toBe(expected)
+  expect(
+    await confirmRootShellAloneFromProcessTable(rootPid, { stoppedJobBlocks: isStoppedAgent })
+  ).toBe(expected)
 })

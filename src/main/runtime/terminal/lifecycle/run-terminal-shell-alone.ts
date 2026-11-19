@@ -1,18 +1,29 @@
 /** Read execution-host process tables: daemon shell-ownership changes only after full-screen exit and misses plain failed/finished commands. Observation failure is unproven. */
 import {
   commandExecutable,
-  confirmShellForegroundProcess
+  confirmShellForegroundProcess,
+  type ShellForegroundConfirmationOptions
 } from '../../../providers/foreground/agent-process'
 import { getFreshShellForegroundSnapshot } from '../../../../shared/process-observation/tables/process-table-snapshot-reader'
 import {
   collectDescendantsFromIndex,
   getProcessTableIndex
 } from '../../../../shared/process-observation/tables/process-table-index'
+import { recognizeAgentProcessFromCommandLine } from '../../../../shared/agent-status/process/agent-process-recognition'
 import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
 import type { TerminalProcessInspection } from '../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 
+/** Only a stopped agent keeps an agent's exit unproven; a stopped editor from before its launch
+ *  does not. */
+export function isStoppedAgent(row: { command: string }): boolean {
+  return recognizeAgentProcessFromCommandLine(row.command) !== null
+}
+
 /** POSIX: the PTY's shell owns the terminal's foreground group and nothing under it is stopped. */
-export async function confirmRootShellAloneFromProcessTable(rootPid: number): Promise<boolean> {
+export async function confirmRootShellAloneFromProcessTable(
+  rootPid: number,
+  options?: Pick<ShellForegroundConfirmationOptions, 'stoppedJobBlocks'>
+): Promise<boolean> {
   try {
     const processIndex = getProcessTableIndex(await getFreshShellForegroundSnapshot())
     const root = processIndex.byPid.get(rootPid)
@@ -25,7 +36,7 @@ export async function confirmRootShellAloneFromProcessTable(rootPid: number): Pr
       .filter((row) => isShellProcess(row.executable))
       .sort((left, right) => left.depth - right.depth)[0]
     return shell
-      ? await confirmShellForegroundProcess(rootPid, shell.executable, { processIndex })
+      ? await confirmShellForegroundProcess(rootPid, shell.executable, { ...options, processIndex })
       : false
   } catch {
     return false
