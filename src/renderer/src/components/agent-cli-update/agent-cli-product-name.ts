@@ -2,8 +2,12 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { AgentCliUpdateAgent } from '../../../../shared/agent-launch/installation/agent-cli-update'
 
-/** The product the user installed, as its own docs name it. */
-export function agentCliProductName(agent: AgentCliUpdateAgent, t: Translate = translate): string {
+/** The product the user installed, as its own docs name it; `short` fits a list row. */
+export function agentCliProductName(
+  agent: AgentCliUpdateAgent,
+  t: Translate = translate,
+  length: 'full' | 'short' = 'full'
+): string {
   switch (agent) {
     case 'claude':
       return t('agentCliUpdate.claudeProduct', 'Claude Code')
@@ -18,7 +22,9 @@ export function agentCliProductName(agent: AgentCliUpdateAgent, t: Translate = t
     case 'omp':
       return t('agentCliUpdate.ompProduct', 'OMP')
     case 'copilot':
-      return t('agentCliUpdate.copilotProduct', 'GitHub Copilot CLI')
+      return length === 'short'
+        ? t('agentCliUpdate.copilotShortProduct', 'Copilot CLI')
+        : t('agentCliUpdate.copilotProduct', 'GitHub Copilot CLI')
     case 'kimi':
       return t('agentCliUpdate.kimiProduct', 'Kimi Code')
     case 'cursor':
