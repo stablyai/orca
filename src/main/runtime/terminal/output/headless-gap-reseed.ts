@@ -23,7 +23,7 @@ import {
 const GAP_RESEED_MIN_INTERVAL_MS = 1_000
 const GAP_RESEED_BACKOFF_MAX_MS = 30_000
 const GAP_RESEED_WARN_AFTER_ATTEMPTS = 5
-// Past the daemon client's own request timeout, so every capture settles before its slot frees.
+// One attempt's wait; a capture still running past it keeps its slot until it settles.
 const GAP_RESEED_CAPTURE_TIMEOUT_MS = 35_000
 // Why: a storm gaps every hidden PTY at once; the daemon serializing them is the one already behind.
 const GAP_RESEED_MAX_CONCURRENT_CAPTURES = 8
@@ -189,12 +189,15 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     // The snapshot's seq is mapped through the offset as it lands; one that moves before the repaint cannot place it.
     const revision = this.providerSequenceAnchorRevisions.get(ptyId)
     // Screen only: a storm repeats this, and history readers go to the provider instead.
-    const { snapshot } = await this.awaitProviderTerminalBuffer(
+    const { snapshot, late } = await this.awaitProviderTerminalBuffer(
       ptyId,
       { scrollbackRows: 0 },
       { timeoutMs: GAP_RESEED_CAPTURE_TIMEOUT_MS, fresh: true }
     )
     if (!snapshot) {
+      // The slot bounds live captures, not attempts: hold it until a timed-out capture settles.
+      stopGapJournal(recovery)
+      await late?.catch(() => {})
       return false
     }
     const deadline = Date.now() + GAP_RESEED_CAPTURE_TIMEOUT_MS
