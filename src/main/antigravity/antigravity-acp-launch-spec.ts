@@ -104,11 +104,18 @@ const ANTIGRAVITY_MANAGED_LAUNCH_SPEC = {
   launchGate: ANTIGRAVITY_LAUNCH_GATE
 } satisfies AcpLaunchSpec
 
-// An inherited Gemini API key switches agy to key auth, which its models reject (401).
+// An inherited Gemini API key switches agy to key auth, which its models reject (401);
+// alternate-case updater flags on Windows would shadow the configured uppercase entry.
 function scrubAgyHostApiKeys(env: Record<string, string>, inherited: NodeJS.ProcessEnv): string[] {
   const removed = [...new Set([...Object.keys(env), ...Object.keys(inherited)])].filter((key) => {
     const normalized = process.platform === 'win32' ? key.toUpperCase() : key
-    return normalized === 'GEMINI_API_KEY' || normalized === 'GOOGLE_API_KEY'
+    const shadowsDisableAutoUpdate =
+      process.platform === 'win32' &&
+      normalized === 'AGY_CLI_DISABLE_AUTO_UPDATE' &&
+      key !== normalized
+    return (
+      shadowsDisableAutoUpdate || normalized === 'GEMINI_API_KEY' || normalized === 'GOOGLE_API_KEY'
+    )
   })
   for (const key of removed) {
     delete env[key]
@@ -121,7 +128,9 @@ const ANTIGRAVITY_HOST_LAUNCH_SPEC: AcpLaunchSpec = {
   ...ANTIGRAVITY_MANAGED_LAUNCH_SPEC,
   command: 'agy',
   args: ({ fullAccess }) => ['acp', ...(fullAccess ? [AGY_SKIP_PERMISSIONS_FLAG] : [])],
-  env: {},
+  // Match terminal and quota launches: a background updater steals focus on Windows (#27390)
+  // and can replace agy mid-probe.
+  env: { AGY_CLI_DISABLE_AUTO_UPDATE: 'true' },
   scrubEnvironment: scrubAgyHostApiKeys,
   authMethod: undefined,
   authMethodUnavailableMessage: undefined,
