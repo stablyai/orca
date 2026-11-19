@@ -1,5 +1,5 @@
 import { ExternalLink, MoreHorizontal } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../../ui/button'
@@ -26,30 +26,46 @@ export function AgentCatalogActionsMenu({
 >): React.JSX.Element {
   const t = useTranslate()
   const menuButton = useRef<HTMLButtonElement>(null)
-  const [menuPlacement, setMenuPlacement] = useState<{
-    card: HTMLElement
-    side: 'top' | 'bottom'
-  } | null>(null)
+  const [openList, setOpenList] = useState<HTMLElement | null>(null)
+  const [side, setSide] = useState<'top' | 'bottom'>()
+  useLayoutEffect(() => {
+    const button = menuButton.current
+    if (!button || !openList) {
+      return
+    }
+    let scrolling: boolean | undefined
+    const update = (): void => {
+      const overflows = openList.scrollHeight > openList.clientHeight
+      if (overflows === scrolling) {
+        return
+      }
+      scrolling = overflows
+      if (!overflows) {
+        setSide(undefined)
+        return
+      }
+      const bounds = openList.getBoundingClientRect()
+      const anchor = button.getBoundingClientRect()
+      const above = anchor.top - Math.max(0, bounds.top)
+      const below = Math.min(window.innerHeight, bounds.bottom) - anchor.bottom
+      setSide(below >= above ? 'bottom' : 'top')
+    }
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(openList)
+    if (openList.firstElementChild) {
+      observer.observe(openList.firstElementChild)
+    }
+    return () => observer.disconnect()
+  }, [openList])
   return (
     <DropdownMenu
       modal={false}
-      onOpenChange={(open) => {
-        if (open) {
-          const button = menuButton.current
-          const list = button?.closest<HTMLElement>('[data-settings-scroll-list]')
-          const card = list?.closest<HTMLElement>('[data-settings-group-card]')
-          if (button && list && card && list.scrollHeight > list.clientHeight) {
-            const bounds = list.getBoundingClientRect()
-            const anchor = button.getBoundingClientRect()
-            const above = anchor.top - Math.max(0, bounds.top)
-            const below = Math.min(window.innerHeight, bounds.bottom) - anchor.bottom
-            // Choose once so scrolling clips the menu instead of flipping it across its row.
-            setMenuPlacement({ card, side: below >= above ? 'bottom' : 'top' })
-          } else {
-            setMenuPlacement(null)
-          }
-        }
-      }}
+      onOpenChange={(open) =>
+        setOpenList(
+          open ? (menuButton.current?.closest('[data-settings-scroll-list]') ?? null) : null
+        )
+      }
     >
       <DropdownMenuTrigger asChild>
         <Button
@@ -67,10 +83,11 @@ export function AgentCatalogActionsMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="end"
-        className={cn('min-w-44', menuPlacement && 'max-h-none')}
-        portalContainer={menuPlacement?.card}
-        side={menuPlacement?.side}
-        avoidCollisions={!menuPlacement}
+        className={cn('min-w-44', side && 'max-h-none')}
+        data-clip-agent-menu={side ? '' : undefined}
+        portalContainer={openList?.closest<HTMLElement>('[data-settings-group-card]')}
+        side={side}
+        avoidCollisions={!side}
       >
         <DropdownMenuItem
           disabled={!isSavedDefault && !(isDetected && isEnabled)}
