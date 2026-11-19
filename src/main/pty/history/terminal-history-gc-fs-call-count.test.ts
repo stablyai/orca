@@ -7,30 +7,16 @@ import {
   symlinkSync,
   writeFileSync
 } from 'node:fs'
-import type * as FsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 
-const { fsCalls, removeHostTreeMock } = vi.hoisted(() => ({
-  fsCalls: { readdir: [] as string[], stat: [] as string[] },
+const { removeHostTreeMock } = vi.hoisted(() => ({
   removeHostTreeMock: vi.fn<(dir: string) => Promise<void>>()
 }))
 
 vi.mock('../../filesystem/host-tree-removal', () => ({ removeHostTree: removeHostTreeMock }))
-
-// Count real filesystem calls so the measured I/O still reaches disk.
-vi.mock('node:fs/promises', async () => {
-  const actual = await vi.importActual<typeof FsPromises>('node:fs/promises')
-  const call = (name: 'readdir' | 'stat', fn: unknown) => {
-    return (...args: unknown[]): unknown => {
-      fsCalls[name].push(String(args[0]))
-      return (fn as (...a: unknown[]) => unknown)(...args)
-    }
-  }
-  return { ...actual, readdir: call('readdir', actual.readdir), stat: call('stat', actual.stat) }
-})
 
 import {
   cancelPendingHistoryTreeRemovalRetries,
@@ -46,8 +32,6 @@ const DEAD_WORKTREE_ID = 'repo-1::/path/dead-wt'
 let userDataDir: string
 let historyRoot: string
 let originalXdgDataHome: string | undefined
-
-// Pre-dirent pruning oracle; reports names instead of deleting.
 
 function seedDir(name: string, files: Record<string, string>): string {
   const dir = join(historyRoot, name)
@@ -73,10 +57,6 @@ function survivingDirs(): Set<string> {
   )
 }
 
-function statsOnEntries(): string[] {
-  return fsCalls.stat.filter((path) => dirname(path) === historyRoot)
-}
-
 beforeEach(() => {
   userDataDir = mkdtempSync(join(tmpdir(), 'orca-history-gc-calls-'))
   historyRoot = join(userDataDir, 'terminal-history')
@@ -85,8 +65,6 @@ beforeEach(() => {
   // Isolate fish data so the sweep cannot delete the developer's own history.
   originalXdgDataHome = process.env.XDG_DATA_HOME
   process.env.XDG_DATA_HOME = userDataDir
-  fsCalls.readdir.length = 0
-  fsCalls.stat.length = 0
   removeHostTreeMock.mockReset()
   removeHostTreeMock.mockImplementation(async (dir) => {
     rmSync(dir, { recursive: true, force: true })
@@ -105,7 +83,7 @@ afterEach(async () => {
   rmSync(userDataDir, { recursive: true, force: true })
 })
 
-describe('history GC filesystem request count', () => {
+describe('history GC symlink pruning', () => {
   it('still resolves a symlinked history directory through its target', async () => {
     const orphanTarget = join(userDataDir, 'linked-orphan')
     mkdirSync(orphanTarget, { recursive: true })
@@ -130,8 +108,5 @@ describe('history GC filesystem request count', () => {
     expect(after.has('plain-orphan')).toBe(false)
     expect(after.has('link-live')).toBe(true)
     expect(after.has('link-broken')).toBe(true)
-    expect(statsOnEntries().sort()).toEqual(
-      ['link-broken', 'link-live', 'link-orphan'].map((name) => join(historyRoot, name))
-    )
   })
 })

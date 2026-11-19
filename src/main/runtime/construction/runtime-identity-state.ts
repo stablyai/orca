@@ -70,7 +70,7 @@ import type { PtyLivenessVerdict } from '../../../shared/terminal/pty/lifecycle/
 import type { HostScopedWorktreeKey } from '../../../shared/worktree/host-qualified-identity'
 import type { TerminalHandleAccess } from '../agent-senders/runtime-agent-sender-associations'
 
-import { RuntimeConstructionServices } from './runtime-construction-services'
+import { RuntimeBotConstructionHooks } from './runtime-bot-construction-hooks'
 
 export type ClientHostedPageObservation = MobileSessionTabSubscription | symbol
 
@@ -86,11 +86,10 @@ export type MobileSessionTabSubscription = {
   acceptsWorktree?: (worktree: string) => boolean
 }
 
-export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServices {
+export abstract class OrcaRuntimeWithRuntimeId extends RuntimeBotConstructionHooks {
   protected getLeafKey(tabId: string, leafId: string): string {
     return `${tabId}::${leafId}`
   }
-
   protected abstract claimIdleShellPromptForPty(ptyId: string): Promise<boolean>
   protected abstract isAgentSettledForDelivery(ptyId: string): boolean
   protected abstract terminalHandleAccess(): TerminalHandleAccess
@@ -362,10 +361,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     ...this.tuiIdleEvidenceSource,
     intervalMs: TUI_IDLE_POLL_INTERVAL_MS,
     getForegroundProcess: (ptyId) => this.ptyController?.getForegroundProcess(ptyId) ?? null,
-    hasCommandPainted: (ptyId) => {
-      const pty = this.ptysById.get(ptyId)
-      return pty === undefined || hasTerminalCommandPainted(pty)
-    },
+    hasCommandPainted: (ptyId) => hasTerminalCommandPainted(this.ptysById.get(ptyId) ?? {}),
     // Runtime emulator reads avoid a provider round trip on every poll.
     readVisibleScreen: (ptyId) =>
       this.headlessTerminals.has(ptyId)
@@ -373,7 +369,9 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
             (screen) => screen?.lines.join('\n') ?? null
           )
         : null,
-    resolve: (waiter, result) => this.terminalWaiters.resolve(waiter, result)
+    resolve: (waiter, result) => this.terminalWaiters.resolve(waiter, result),
+    requestReattachedRepaint: (ptyId) => this.requestReattachedRepaint(ptyId),
+    confirmRestTitle: (ptyId, agent) => this.confirmReattachedRestTitle(ptyId, agent)
   })
 
   protected readonly terminalWait = new RuntimeTerminalWaitController(

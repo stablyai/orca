@@ -30,7 +30,7 @@ type OrcadAccountServices = {
   runtimeDeps: {
     prepareCodexStructuredLaunch: (input: StructuredLaunchInput) => Promise<string | null>
     resolveCodexStructuredLaunchHome: (input: StructuredLaunchInput) => string | null
-    prepareCodexCatalogProbeHome: (homePath: string) => void
+    prepareCodexCatalogProbeHome: (homePath: string) => void | Promise<void>
     prepareAiVaultSessionResume: (
       args: AiVaultPrepareSessionResumeArgs
     ) => Promise<AiVaultPrepareSessionResumeResult>

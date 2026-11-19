@@ -18,6 +18,7 @@ import { StatusBarUsageEmptyCta } from './usage/StatusBarUsageEmptyCta'
 import { StatusBarUsageChangeNotices } from './usage/StatusBarUsageChangeNotices'
 import { UpdateStatusSegment } from './updates/UpdateStatusSegment'
 import { SkillUpdateStatusSegment } from './updates/SkillUpdateStatusSegment'
+import { AgentCliUpdateStatusSegment } from './updates/AgentCliUpdateStatusSegment'
 import { NativeChatResumeStatusSegment } from './NativeChatResumeStatusSegment'
 import { CaffeinateStatusSegment } from './CaffeinateStatusSegment'
 import { PluginsStatusSegment } from './plugins/PluginsStatusSegment'
@@ -38,6 +39,7 @@ import {
 } from './usage/usage-unit-label'
 import { useStatusBarController } from './composition/use-status-bar-controller'
 import { isOwnerNotSetUpPlaceholder } from './usage/owner-usage-rate-limits'
+import { getAccountOwnerKey } from './accounts/owner-account-rows'
 import { StatusBarVisibilityMenu } from './composition/StatusBarVisibilityMenu'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { GitBlameStatusSegment } from './GitBlameStatusSegment'
@@ -95,6 +97,7 @@ export function StatusBarSurface({
     isEmptyUsageState,
     isRefreshing,
     overflowing,
+    ownerUsage,
     petEnabled,
     remoteOwner,
     rosterProviders,
@@ -236,6 +239,7 @@ export function StatusBarSurface({
                         return (
                           <ClaudeSwitcherMenu
                             claude={p}
+                            ownerUsage={ownerUsage}
                             compact={compact}
                             iconOnly={false}
                             asSubmenu
@@ -257,7 +261,9 @@ export function StatusBarSurface({
                       if (p.provider === 'codex') {
                         return (
                           <CodexSwitcherMenu
+                            key={getAccountOwnerKey(ownerUsage.owner)}
                             codex={p}
+                            ownerUsage={ownerUsage}
                             compact={compact}
                             iconOnly={false}
                             asSubmenu
@@ -325,6 +331,7 @@ export function StatusBarSurface({
           ) : null}
           <RemoteServerUpdateStatusSegment iconOnly={segmentsIconOnly} />
           <SkillUpdateStatusSegment iconOnly={segmentsIconOnly} />
+          <AgentCliUpdateStatusSegment iconOnly={segmentsIconOnly} />
           <NativeChatResumeStatusSegment iconOnly={segmentsIconOnly} />
           <UpdateStatusSegment compact={compact} iconOnly={segmentsIconOnly} />
           {showGitBlame ? <GitBlameStatusSegment iconOnly={segmentsIconOnly} /> : null}

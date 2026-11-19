@@ -14,6 +14,7 @@ import {
   getNewWorkspaceDialogEligibleRepos,
   resolveNewWorkspaceDialogRepoId
 } from '../../../../../src/shared/new-workspace/new-workspace-dialog-repo'
+import { pickerRepos } from '../../../../../src/shared/project/catalog/hidden-projects'
 import type { MobileWorkspaceRepo } from '../forms/new-worktree-modal-types'
 
 const NO_SERVER_CLIENTS: ReadonlyMap<ExecutionHostId, RpcClient> = new Map()
@@ -60,11 +61,12 @@ export function useNewWorkspaceRepositories(args: {
   const initialRepoHost = initialRepo?.executionHostId
   // Opened for one host's folder: every picker offers only that host, whose store holds the folder.
   const repos = useMemo(() => {
-    const eligible = getNewWorkspaceDialogEligibleRepos(allRepos)
+    // Hidden projects drop out as on desktop, except the one this form was opened for.
+    const eligible = pickerRepos(getNewWorkspaceDialogEligibleRepos(allRepos), initialRepoId)
     return initialRepoHost
       ? eligible.filter((repo) => getRepoExecutionHostId(repo) === initialRepoHost)
       : eligible
-  }, [allRepos, initialRepoHost])
+  }, [allRepos, initialRepoHost, initialRepoId])
   // Derive the pick so it follows updated listings and disappears when its host stops listing it.
   const selectedRepo = useMemo(
     () => refreshMobileNewWorkspaceDialogSelectedRepo(repos, pickedRepo),

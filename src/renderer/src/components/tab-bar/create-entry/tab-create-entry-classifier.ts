@@ -2,7 +2,7 @@ import {
   getPreparedQuickOpenFiles,
   isQuickOpenQueryTooLarge
 } from '../../../../../shared/quick-open/quick-open-path-search'
-import type { RuntimeFileListState } from '../../quick-open-file-list'
+import type { RuntimeFileListState } from '../../file-actions/quick-open/quick-open-file-list'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { getTabEntryOmniboxPlaceholder } from './tab-create-entry-copy'

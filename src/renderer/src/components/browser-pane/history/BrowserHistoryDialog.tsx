@@ -1,6 +1,6 @@
 import { useDeferredValue, useMemo, useRef, useState } from 'react'
 import { FileText, Trash2 } from 'lucide-react'
-import { BrowserFavicon } from '@/components/browser-favicon'
+import { BrowserFavicon } from '@/components/browser-pane/describe-page/browser-favicon'
 import { Button } from '@/components/ui/button'
 import {
   CommandDialog,

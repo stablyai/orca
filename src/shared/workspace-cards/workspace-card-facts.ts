@@ -79,7 +79,8 @@ export type WorkspaceCardFacts = {
     linearIssue: boolean
     jiraIssue: boolean
   }
-  provenance: { automation: boolean; cli: boolean }
+  /** `bot`: a bot made or owns this workspace. */
+  provenance: { automation: boolean; cli: boolean; bot: boolean }
   ports: { count: number }
   lineage: { childCount: number; collapsed: boolean; toggleable: boolean }
   place: {
@@ -91,6 +92,10 @@ export type WorkspaceCardFacts = {
     affiliateList: boolean
     /** The delete modifier is held over a card that may be deleted. */
     deleteQuickAction: boolean
+    /** A one-line row under a bot, which names its project at the row's end. */
+    compactLine: boolean
+    /** A line on another paired server than its bot's: that server's name, in place of the host mark. */
+    lineHostLabel: string | null
   }
   options: {
     style: WorkspaceCardStyle

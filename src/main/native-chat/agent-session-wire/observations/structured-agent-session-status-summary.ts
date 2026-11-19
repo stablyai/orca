@@ -32,6 +32,7 @@ export function structuredAgentSessionStatusSummary({
   stopping,
   starting,
   usageLimitContinue,
+  runningPermissionMode,
   childWork,
   namingFailure,
   now
@@ -50,6 +51,7 @@ export function structuredAgentSessionStatusSummary({
   state: StructuredAgentSessionStatusState
   starting?: boolean
   usageLimitContinue?: AgentSessionStatusSummary['usageLimitContinue']
+  runningPermissionMode?: string
   stopping: boolean
   childWork: Pick<AgentSessionStatusSummary, 'children' | 'backgroundTasks'>
   namingFailure: StructuredChatNamingFailure | undefined
@@ -81,7 +83,7 @@ export function structuredAgentSessionStatusSummary({
     ...(session.restartResume ? { restartResume: { phase: session.restartResume.phase } } : {}),
     ...projected,
     ...(structuredAgentSessionAwaitsAnswer(openAsyncQuestion, skippedThrough)
-      ? { awaitsAnswer: true as const }
+      ? { awaitsAnswer: true as const, awaitsQuestion: openAsyncQuestion }
       : {}),
     ...(skippedThrough ? { asyncQuestionsSkippedThrough: skippedThrough } : {}),
     runtimePermission: structuredAgentSessionRuntimePermission(session.child ?? undefined),
@@ -93,7 +95,10 @@ export function structuredAgentSessionStatusSummary({
     ...(model ? { model } : {}),
     ...(isAgentChatPermissionMode(permissionMode) ? { permissionMode } : {}),
     ...(session.child?.permissionMode
-      ? { launchPermissionMode: session.child.permissionMode }
+      ? {
+          launchPermissionMode: session.child.permissionMode,
+          runningPermissionMode: runningPermissionMode ?? session.child.permissionMode
+        }
       : {}),
     ...(effort ? { effort } : {}),
     ...(fastMode ? { fastMode } : {}),

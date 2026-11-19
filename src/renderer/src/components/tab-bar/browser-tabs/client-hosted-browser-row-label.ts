@@ -1,21 +1,11 @@
 import type { ClientHostedBrowserRow } from '../../../../../shared/browser/client-hosting/client-hosted-browser-rows'
 import '../../../../../shared/orca-profiles/constants'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { formatBrowserTabUrlLabel } from './browser-tab-label'
+import { formatBrowserTabTitleLabel } from './browser-tab-label'
 
-// Why: same fallback ladder as a local browser tab — a title equal to the URL is not a title.
 export function getClientHostedBrowserRowLabel(row: ClientHostedBrowserRow, t?: Translate): string {
-  if (
-    !row.title ||
-    row.title === row.url ||
-    row.title === ORCA_BROWSER_BLANK_URL ||
-    row.title === 'about:blank'
-  ) {
-    return formatBrowserTabUrlLabel(row.url, t)
-  }
-  return row.title
+  return formatBrowserTabTitleLabel(row.title, row.url, t)
 }
 
 export function describeClientHostedBrowserRowHost(

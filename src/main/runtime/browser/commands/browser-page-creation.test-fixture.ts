@@ -79,6 +79,7 @@ export async function attach(pageId: string, rendererId = 99) {
     getType: () => 'webview',
     isDestroyed: () => destroyed,
     isLoading: () => false,
+    isLoadingMainFrame: () => false,
     isDevToolsOpened: () => false,
     debugger: { isAttached: () => false },
     loadURL: async () => {},

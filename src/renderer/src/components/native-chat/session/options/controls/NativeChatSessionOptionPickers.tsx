@@ -11,6 +11,7 @@ import { sortNativeChatSessionOptions } from '../../../../../../../shared/native
 import {
   sessionOptionDispatchUnconfirmed,
   type SessionOptionDescriptor,
+  type SessionOptionsCliUpdate,
   type SessionOptionsSurface,
   type SessionOptionValue
 } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
@@ -84,6 +85,7 @@ function SessionOptionPopover(props: {
   presetScope?: string
   onApplyPreset: (preset: NativeChatModelPreset) => Promise<void>
   demandModelCatalog?: () => void
+  cliUpdate?: SessionOptionsCliUpdate
   model: SessionOptionDescriptor
   options: readonly SessionOptionDescriptor[]
   isWorking: boolean
@@ -257,12 +259,11 @@ function SessionOptionPopover(props: {
           className="flex w-96 max-w-(--radix-popover-content-available-width) flex-col"
           onOpenAutoFocus={(event) => {
             const content = event.currentTarget
-            const optionId = requestedOptionId
             setRequestedOptionId(null)
-            if (!optionId || !(content instanceof HTMLElement)) {
+            if (!requestedOptionId || !(content instanceof HTMLElement)) {
               return
             }
-            const row = content.querySelector(`[data-option-id="${CSS.escape(optionId)}"]`)
+            const row = content.querySelector(`[data-option-id="${CSS.escape(requestedOptionId)}"]`)
             const control =
               row?.querySelector<HTMLElement>('[aria-checked="true"]:not(:disabled)') ??
               row?.querySelector<HTMLElement>('button:not(:disabled)')
@@ -294,6 +295,7 @@ function SessionOptionPopover(props: {
               readOnlyReason={modelReason}
               busy={pendingIds.has(model.id)}
               onSelect={(value) => set(model, value)}
+              cliUpdate={props.cliUpdate}
             />
           ) : (
             <NativeChatSessionOptionWriteGroup
@@ -395,6 +397,7 @@ function NativeChatSessionOptionPickersInner({
         presetScope={presetScope}
         onApplyPreset={(preset) => applyNativeChatModelPreset(surface, preset, isWorking)}
         demandModelCatalog={surface.demandModelCatalog}
+        cliUpdate={surface.cliUpdate}
         model={model}
         options={options}
         isWorking={isWorking}

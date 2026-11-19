@@ -7,7 +7,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
 import { TabBarQuickCommandsList } from './TabBarQuickCommandsList'
 import {
   getTerminalQuickCommandBody,
@@ -315,9 +315,9 @@ export function TabBarQuickCommandsMenu({
               menuImeEnter.setComposing(true)
             }
           }}
-          onCompositionEnd={(event) => {
+          onCompositionEnd={() => {
             if (!showSearch) {
-              menuImeEnter.setComposing(false, event.data)
+              menuImeEnter.setComposing(false)
             }
           }}
           onKeyDown={(event) => {
@@ -329,11 +329,6 @@ export function TabBarQuickCommandsMenu({
             }
             event.preventDefault()
             runAndClose(filteredVisibleCommands[0])
-          }}
-          onKeyUp={(event) => {
-            if (!showSearch) {
-              menuImeEnter.onKeyUp(event)
-            }
           }}
           onBlur={menuImeEnter.reset}
         >

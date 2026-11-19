@@ -11,39 +11,12 @@ import {
   resolveWslRepoWorktreeBasePath
 } from '../../../../shared/file-access/wsl-paths'
 import { splitWorktreeId } from '../../../../shared/worktree/id'
-import {
-  containsEmoji,
-  replaceKnownEmojiWithShortcodes,
-  setEmojiShortcodeDatasetLoader
-} from '../../../../shared/text/emoji-shortcode-catalog'
-import { requireEmojiShortcodeDataset } from './deferred-emoji-shortcode-dataset'
 import { getWslHome, getWslHomeAsync } from '../../../wsl/discovery/distro-catalog'
 import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
 
-setEmojiShortcodeDatasetLoader(requireEmojiShortcodeDataset)
-
 type WorktreeBasePathRepo = Pick<Repo, 'path' | 'worktreeBasePath'>
 
-export function sanitizeWorktreeName(input: string): string {
-  // Preserve Unicode letters/numbers: Git permits them and workspace names must support users' languages.
-  const sanitized = replaceKnownEmojiWithShortcodes(input)
-    .trim()
-    .replace(/[^\p{L}\p{N}._-]+/gu, '-')
-    .replace(/-+/g, '-')
-    // Git rejects internal .. even after path separators are slugified.
-    .replace(/\.{2,}/g, '.')
-    .replace(/^[.-]+|[.-]+$/g, '')
-
-  if (!sanitized && containsEmoji(input)) {
-    return 'workspace'
-  }
-
-  if (!sanitized || sanitized === '.' || sanitized === '..') {
-    throw new Error('Invalid worktree name')
-  }
-
-  return sanitized
-}
+export { sanitizeWorktreeName, sanitizeWorktreeBranchName } from './worktree-name-sanitization'
 
 export function ensurePathWithinWorkspace(targetPath: string, workspaceDir: string): string {
   const resolvedWorkspaceDir = resolve(workspaceDir)

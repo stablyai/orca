@@ -28,6 +28,12 @@ import {
 } from './installation/browser-extension-list-changes'
 import { getBrowserExtensionMainWindow } from './tabs-and-windows/browser-extension-window-model'
 import {
+  installIdleBrowserExtensionProfiles,
+  isBrowserExtensionPageContents,
+  trackBrowserExtensionPage
+} from './profile-sessions/browser-extension-idle-profiles'
+import { isBrowserExtensionSidePanelGuest } from './side-panel/browser-extension-side-panel-guests'
+import {
   setSavedBrowserTabsSource,
   type SavedBrowserTabsSource
 } from './tabs-and-windows/browser-extension-discarded-tabs'
@@ -110,6 +116,7 @@ function installBrowserExtensionSupport(): void {
     }
   })
   startBrowserExtensionUpdateChecks()
+  installIdleBrowserExtensionProfiles(observeExtensionContents)
   // Why synchronous: loadURL right after construction emits did-start-loading before a microtask runs.
   app.on('web-contents-created', (_event, contents) => observeExtensionContents(contents))
 }
@@ -118,18 +125,17 @@ const observedContents = new WeakSet<Electron.WebContents>()
 
 /** Tabs (webview guests and serve's offscreen pages) and extension popouts in a session that runs extensions. */
 function observeExtensionContents(contents: Electron.WebContents): void {
-  const type = contents.getType()
-  if (
-    (type !== 'webview' && type !== 'window' && type !== 'offscreen') ||
-    isHiddenHelperContents(contents) ||
-    observedContents.has(contents) ||
-    !getBrowserExtensionProfileIdForSession(contents.session)
-  ) {
+  const profileId = getBrowserExtensionProfileIdForSession(contents.session)
+  if (!isBrowserExtensionPageContents(contents) || observedContents.has(contents) || !profileId) {
     return
   }
   observedContents.add(contents)
-  observeBrowserExtensionWebNavigation(contents)
-  observeBrowserExtensionTabLifecycle(contents)
+  trackBrowserExtensionPage(profileId, contents)
+  // Side panels are extension views, not tabs: no tab or webNavigation events, but DNR and commands.
+  if (!isBrowserExtensionSidePanelGuest(contents)) {
+    observeBrowserExtensionWebNavigation(contents)
+    observeBrowserExtensionTabLifecycle(contents)
+  }
   observeBrowserExtensionDnrContents(contents)
   observeBrowserExtensionCommands(contents)
 }

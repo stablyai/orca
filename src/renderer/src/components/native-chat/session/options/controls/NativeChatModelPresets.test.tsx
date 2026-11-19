@@ -228,6 +228,29 @@ it.each([1, 2, 3])('switches to saved preset %s when its button is clicked', asy
   expect(screen.queryByRole('dialog')).toBeNull()
 })
 
+it('keeps the host CLI update available alongside saved presets', async () => {
+  const source = session()
+  const startUpdate = vi.fn()
+  source.surface.cliUpdate = {
+    agent: 'codex',
+    phase: 'idle',
+    start: startUpdate,
+    openFailure: vi.fn()
+  }
+  render(<View source={source} />)
+  openPicker()
+  await saveSlot()
+  fireEvent.click(await screen.findByRole('option', { name: 'Update Codex CLI for new models' }))
+  expect(startUpdate).toHaveBeenCalledOnce()
+  pressPreset()
+  await waitFor(() =>
+    expect(source.writes).toEqual([
+      ['model', 'strong'],
+      ['effort', 'high']
+    ])
+  )
+})
+
 it('uses remapped shortcuts and ignores repeat, composition, and keys from another pane', async () => {
   const source = session()
   useAppStore.setState({ keybindings: { 'chat.openModelPicker': ['Mod+Alt+K'] } })

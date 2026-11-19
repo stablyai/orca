@@ -1,7 +1,7 @@
 import type React from 'react'
 
 import type { ShortcutKeyComboDetails } from '@/lib/keyboard/useShortcutLabel'
-import { ShortcutKeyCombo } from '../../ShortcutKeyCombo'
+import { ShortcutKeyCombo } from '../../ui/ShortcutKeyCombo'
 import { useTranslate } from '@/i18n/use-translate'
 import { translateUnassignedLabel } from '@/i18n/unassigned-label'
 

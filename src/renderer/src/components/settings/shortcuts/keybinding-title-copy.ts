@@ -148,6 +148,7 @@ const STATIC_TITLE_COPY = {
   'chat.modelPreset1': () => translate('keybindings.title.chatModelPreset1', 'Use model preset 1'),
   'chat.modelPreset2': () => translate('keybindings.title.chatModelPreset2', 'Use model preset 2'),
   'chat.modelPreset3': () => translate('keybindings.title.chatModelPreset3', 'Use model preset 3'),
+  'botItem.back': () => translate('keybindings.title.botItemBack', 'Back to items'),
   'terminal.toggleNativeChat': () =>
     translate('keybindings.title.terminalToggleNativeChat', 'Switch between Chat UI and terminal'),
   'sidebar.childWorkspaces.toggle': () =>
@@ -178,6 +179,7 @@ const GROUP_COPY = {
   Settings: () => translate('keybindings.group.settings', 'Settings'),
   'Terminal Panes': () => translate('keybindings.group.3492a954c8', 'Terminal panes'),
   Chat: () => translate('keybindings.group.chat', 'Chat'),
+  Bots: () => translate('keybindings.group.bots', 'Bots'),
   Agents: () => translate('keybindings.group.agents', 'Agents')
 } satisfies Record<string, () => string>
 

@@ -1,7 +1,3 @@
-import {
-  selectSidebarLineageParentIdentities,
-  selectCrossStoreFolderChildrenById
-} from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { useAppStore } from '@/store/index'
@@ -22,10 +18,8 @@ import {
   runLimitedParentPrChecksRefreshes
 } from './parent-pr-checks-refresh'
 import { createParentPrChecksProjectionSelector } from './parent-pr-checks-projection-selector'
-import {
-  selectFolderWorkspaces,
-  selectWorktreesByRepo
-} from '@/store/workspaces/catalog/workspace-record-fields'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
+import { selectSidebarChildrenByParentIdentity } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { FolderWorkspaceEmptyState } from '../../folder-workspaces/folder-workspace-empty-state'
 
 type FolderWorkspacePrChecksPanelProps = {
@@ -39,11 +33,7 @@ export default function FolderWorkspacePrChecksPanel({
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorkspaceKey = useAppStore((s) => s.activeWorkspaceKey)
   const folderWorkspaces = useAppStore((s) => selectFolderWorkspaces(s))
-  const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
-  const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
-  const lineageParentIdentities = useAppStore(selectSidebarLineageParentIdentities)
-  const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
-  const crossStoreChildrenByFolderId = useAppStore(selectCrossStoreFolderChildrenById)
+  const childrenByParentIdentity = useAppStore(selectSidebarChildrenByParentIdentity)
   const repos = useAppStore((s) => s.repos)
   const settings = useAppStore((s) => s.settings)
   const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)
@@ -62,22 +52,9 @@ export default function FolderWorkspacePrChecksPanel({
         activeWorkspaceKey,
         activeWorktreeId,
         folderWorkspaces,
-        workspaceLineageByChildKey,
-        lineageParentIdentities,
-        worktreeLineageById,
-        worktreesByRepo,
-        crossStoreChildrenByFolderId
+        childrenByParentIdentity
       }),
-    [
-      activeWorkspaceKey,
-      activeWorktreeId,
-      folderWorkspaces,
-      workspaceLineageByChildKey,
-      lineageParentIdentities,
-      worktreeLineageById,
-      worktreesByRepo,
-      crossStoreChildrenByFolderId
-    ]
+    [activeWorkspaceKey, activeWorktreeId, folderWorkspaces, childrenByParentIdentity]
   )
   const projectionSelector = useMemo(
     () =>

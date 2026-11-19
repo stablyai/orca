@@ -23,6 +23,7 @@ export const PrForBranch = RepoSelector.extend({
   acceptRevalidationOnly: z.boolean().optional(),
   selected: z.boolean().optional(),
   linkedPRNumber: z.number().int().positive().nullable().optional(),
+  linkedPRUrl: z.string().max(4096).optional(),
   fallbackPRNumber: z.number().int().positive().nullable().optional(),
   acceptMergedFallbackPR: z.boolean().optional(),
   currentHeadOid: z.string().nullable().optional()

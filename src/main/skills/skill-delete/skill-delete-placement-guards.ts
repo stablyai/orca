@@ -50,7 +50,7 @@ export function owningSkillRoot(
   return null
 }
 
-/** Re-derive canonical eligibility on the host: symlinked plugin/.system skills may report home on clients. External content stays untouched, but its owned in-root links may be deleted; no owned placements means unowned. */
+/** Re-derive canonical eligibility on the host: symlinked plugin/bundled skills may report home on clients. External content stays untouched, but its owned in-root links may be deleted; no owned placements means unowned. */
 export function blockedCanonicalReason(
   canonicalDirectoryPath: string,
   context: SkillDeleteGuardContext
@@ -64,6 +64,9 @@ export function blockedCanonicalReason(
     }
     if (root.sourceKind === 'plugin') {
       return 'plugin'
+    }
+    if (root.sourceKind === 'bundled') {
+      return 'bundled'
     }
     if (
       root.sourceKind === 'home' &&

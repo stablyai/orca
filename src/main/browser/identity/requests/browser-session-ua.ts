@@ -3,13 +3,18 @@ import type { BrowserTabIdentity } from '../browser-tab-identity'
 import { getBrowserProcessUserAgentIdentity } from '../browser-process-user-agent'
 import { decideBrowserSessionRequestHeaders } from '../../sessions/requests/browser-session-request-decisions'
 import { reportBrowserSessionWebRequest } from '../../sessions/requests/browser-session-web-request-observer'
+import { holdBrowserSessionWebRequest } from '../../sessions/requests/browser-session-web-request-owner'
 import {
   currentUserAgent,
   setUserAgentHeader,
   stripClientHints,
   applyUserAgentMetadataHeaders
 } from './browser-user-agent-request-headers'
-import { googleAuthUserAgent, shouldUseGoogleAuthIdentity } from '../browser-google-auth-ua'
+import {
+  googleAuthUserAgent,
+  shouldUseGoogleAuthIdentity,
+  teamsRequestUserAgent
+} from '../browser-site-user-agent'
 
 export type BrowserSessionRequestUserAgentResolver = (args: {
   session: Session
@@ -56,16 +61,20 @@ export function installBrowserSessionUserAgentPolicy(
       currentUserAgent: requestUserAgent,
       effectiveUserAgent
     })
-    if (!identity) {
-      return
+    if (identity) {
+      setUserAgentHeader(headers, identity.userAgent)
+      if (identity.kind === 'mobile') {
+        applyUserAgentMetadataHeaders(headers, identity.userAgentMetadata)
+      }
     }
-    setUserAgentHeader(headers, identity.userAgent)
-    if (identity.kind === 'mobile') {
-      applyUserAgentMetadataHeaders(headers, identity.userAgentMetadata)
+    const outgoingUserAgent = currentUserAgent(headers)
+    if (outgoingUserAgent) {
+      setUserAgentHeader(headers, teamsRequestUserAgent(details.url, outgoingUserAgent))
     }
   }
-  sess.webRequest.onBeforeSendHeaders(
-    { urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*'] },
+  return holdBrowserSessionWebRequest(
+    sess,
+    'onBeforeSendHeaders',
     (details, callback) => {
       reportBrowserSessionWebRequest(sess, 'onBeforeSendHeaders', details)
       applyUserAgentPolicy(details)
@@ -73,14 +82,7 @@ export function installBrowserSessionUserAgentPolicy(
       callback({
         requestHeaders: decideBrowserSessionRequestHeaders(sess, details, details.requestHeaders)
       })
-    }
+    },
+    { urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*'] }
   )
-  let disposed = false
-  return (): void => {
-    if (disposed) {
-      return
-    }
-    disposed = true
-    sess.webRequest.onBeforeSendHeaders(null)
-  }
 }

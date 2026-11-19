@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { resolveCodexCommand } from '../../../codex-cli/command'
 import { NATIVE_CHAT_VISUALS_SKILL_NAME } from '../../../native-chat/conversation-files/native-chat-visuals-skill-location'
 import { openCodexAppServerConnection } from '../../app-server/codex-app-server-connection'
-import { withCodexVisualsThreadConfig } from './codex-structured-visuals'
+import { withCodexSkillRootsThreadConfig } from './codex-structured-skill-roots'
 import { codexStructuredPermissionPolicy } from '../../../../shared/agent-launch/permissions/codex-permission-policy'
 
 const enabled = process.env.ORCA_REAL_CODEX_CLI_TEST === '1'
@@ -34,7 +34,7 @@ describe.skipIf(!enabled)('Codex real app-server chat visuals', () => {
         env: { HOME: base, CODEX_HOME: codexHome }
       })
       try {
-        const launch = await withCodexVisualsThreadConfig(
+        const launch = await withCodexSkillRootsThreadConfig(
           connection,
           {
             cwd,

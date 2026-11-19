@@ -9,6 +9,7 @@ import type { TerminalProcessInspection as RuntimeTerminalProcessInspection } fr
 import { dispatchTerminalNotification } from '../../notifications/dispatch-terminal-notification'
 import { getPtyIdForPaneKey } from '../../../../lib/pane-manager/pane-layout/pane-key-pty-id'
 import { dispatchAgentHookTerminalLifecycle } from '@/components/terminal-pane/agent-completion/agent-hook-terminal-lifecycle'
+import { applyUnmountedPaneCacheTimer } from './agent-hook-unmounted-pane-cache-timer'
 import { isAgentTaskCompleteTrackingEnabledFromState as isAgentHookCompletionTrackingEnabled } from '../../notifications/agent-task-complete-policy'
 import {
   shouldSyncAgentHookCompletionForStoreUpdate,
@@ -140,7 +141,11 @@ function createCoordinator(paneKey: string, worktreeId: string): AgentCompletion
       foregroundProcess: null,
       hasChildProcesses: false
     }),
-    dispatchHookLifecycle: (payload) => dispatchAgentHookTerminalLifecycle(paneKey, payload),
+    dispatchHookLifecycle: (payload) => {
+      if (!dispatchAgentHookTerminalLifecycle(paneKey, payload)) {
+        applyUnmountedPaneCacheTimer(paneKey, payload)
+      }
+    },
     dispatchCompletion: (title, meta) => {
       if (!hookLaneDispatchEnabled(paneKey)) {
         finishDrops.recordHookLaneDisabled(worktreeId, paneKey)

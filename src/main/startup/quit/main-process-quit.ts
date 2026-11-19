@@ -7,6 +7,7 @@ import { killAllPty } from '../../ipc/pty/provider/kill-all'
 import * as daemon from '../../daemon/providers/lifecycle/daemon-provider-state'
 import { beginSshShutdown } from '../../ipc/ssh/ssh-shutdown-drain'
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
+import { botToolRelay } from '../../bots/tool-relay/bot-tool-relay'
 import { wslHookRelayManager } from '../../agent-hooks/wsl-relay/wsl-hook-relay-manager'
 import { removeManagedAgentHooksAsync } from '../../agent-hooks/installation/managed-agent-hook-controls'
 import { stopStructuredAgentSessionRuntime } from '../../runtime/agent-session/installation/structured-agent-session-runtime'
@@ -32,13 +33,15 @@ import { pendingServeSupervisorQuitCommit } from '../../updater/lifecycle/serve-
 import { stopTccPromptNotice } from '../../macos-permissions/macos-tcc-prompt-notice'
 import { cancelHistoryGc } from '../../pty/history/terminal-history-gc'
 import { installWindowAllClosedHandler } from './window-all-closed-quit-handler'
-import { desktopConnectorCloud } from '../cloud-startup/main-process-connector-startup'
+import { fenceMainProcessCloudOnQuit } from '../cloud-startup/main-process-connector-startup'
+import { ConnectorTurnEvents } from '../../connector-cloud/connector-turn-events'
 import { mainProcessState as state } from '../main-process-state'
 import { isDevParentShutdownRequested } from '../configure-process'
 import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-data-path'
 import { flushUnsavedCloudSessions } from '../../orca-profiles/cloud-session/profile-cloud-session-owner'
 import { getWorkspaceCleanupRunner } from '../../workspaces/cleanup/workspace-cleanup-runner-registry'
 import { closeBrowserExtensionProfileDocumentStores } from '../../browser/extensions/profile-storage/browser-extension-profile-document-store'
+import { closeBrowserExtensionProfileStateStore } from '../../browser/extensions/profile-storage/browser-extension-profile-state-store'
 import { shutdownWatchersOnce } from './filesystem-watcher-quit-shutdown'
 import { flushBrowserSessionCookiesOnQuit } from '../../browser/cookies/session-restore/browser-session-cookie-restore'
 
@@ -61,8 +64,7 @@ function installBeforeQuitHandler(): void {
     }
     state.isQuitting = true
     flushUnsavedCloudSessions()
-    state.desktopRelayService?.fenceAndCloseNow()
-    desktopConnectorCloud()?.fence()
+    fenceMainProcessCloudOnQuit()
     state.runtimeRpc?.setMobileRelayPairingProvider(null)
     state.unsubscribeAgentAwakeStatusChanges?.()
     state.unsubscribeAgentAwakeStatusChanges = null
@@ -154,6 +156,7 @@ function installWillQuitHandler(): void {
     state.uninstallRepoMaintenanceIdleGate = null
     // Chat teardown reads background work afterward; clearing status loses subagent/command-only resume offers.
     agentHookServer.stop({ keepStatus: true })
+    botToolRelay.close()
     // Windows bare hook paths lack POSIX ORCA_PANE_KEY guards, so remove Grok hooks on quit; bound cleanup because GROK_HOME can be a stalled network mount.
     const grokHookCleanup =
       process.platform === 'win32'
@@ -180,6 +183,9 @@ function installWillQuitHandler(): void {
     // A closed WSL-host channel still in its EOF grace must not outlive the app.
     killWslChannelsInCloseGrace()
     const statsFlush = state.stats?.flushAsync() ?? Promise.resolve()
+    // The connector was fenced at before-quit; its last turn ends and memory history rows land now.
+    const connectorTurnEndsFlush = ConnectorTurnEvents.settled()
+    const botMemoryHistoryFlush = state.runtime?.bots.memory.historySettled() ?? Promise.resolve()
     const browserSessionCookieFlush = flushBrowserSessionCookiesOnQuit()
     // Await per-session close children so browser daemons cannot retain ports/state after quit (#16367); retire headless owners first to avoid duplicate fanout.
     const browserShutdown = (async (): Promise<void> => {
@@ -282,6 +288,8 @@ function installWillQuitHandler(): void {
       { name: 'usage-cache', promise: usageCacheFlush },
       { name: 'notification-dismissals', promise: notificationDismissalClose },
       { name: 'stats', promise: statsFlush },
+      { name: 'connector-turn-ends', promise: connectorTurnEndsFlush },
+      { name: 'bot-memory-history', promise: botMemoryHistoryFlush },
       { name: 'state', promise: storeFlush }
     ]
     const teardownSettlement = Promise.allSettled(teardowns.map((item) => item.promise))
@@ -300,7 +308,12 @@ function installWillQuitHandler(): void {
         /* swallow — telemetry must never prevent app.quit() */
       })
       // Last before quitting, so it saves every extension write accepted during teardown.
-      .then(() => closeBrowserExtensionProfileDocumentStores())
+      .then(() =>
+        Promise.all([
+          closeBrowserExtensionProfileDocumentStores(),
+          closeBrowserExtensionProfileStateStore()
+        ])
+      )
       .then(() => {
         daemonDisconnectDone = true
         app.quit()

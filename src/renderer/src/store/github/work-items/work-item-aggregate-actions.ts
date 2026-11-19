@@ -1,4 +1,5 @@
 import { githubTaskBinding } from '@/lib/work-items/github/github-task-observation'
+import { knownUnreachableRuntimeHostError } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import { getWorkItemPageErrorTypes } from '../../../../../shared/github/work-items/work-item-page-errors'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
@@ -45,6 +46,9 @@ export const createWorkItemAggregateActions = (
     const perProjectResults = await Promise.all(
       repos.map(async (r) => {
         try {
+          if (r.hostUnreachable) {
+            throw knownUnreachableRuntimeHostError('github.listWorkItems')
+          }
           return await state.fetchWorkItems(r.repoId, r.path, perRepoLimit, query, {
             ...options,
             sourceContext: r.sourceContext ?? options?.sourceContext
@@ -126,6 +130,10 @@ export const createWorkItemAggregateActions = (
           r.sourceContext
         )
         const attempt = requestState.githubSourceCollections.capture(repo, r.sourceContext)
+        if (r.hostUnreachable) {
+          failedCount += 1
+          return [] as GitHubWorkItem[]
+        }
         await acquireWorkItemSlot()
         try {
           if (!get().githubSourceCollections.current(attempt)) {
