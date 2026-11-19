@@ -20,6 +20,7 @@ import {
 import '@/components/native-chat/composer/focus/use-native-chat-composer-reveal-focus'
 import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import { openBackgroundDeclinedTerminal } from '@/lib/workspace/creation/worktree-creation-background-mount'
+import { settleAgentTabLaunch } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-host-agents'
 import {
   captureNativeChatStagedInput,
   hasNativeChatStagedFiles
@@ -192,11 +193,11 @@ export async function launchStructuredWorktreeSession(
       )
     }
   }
-  // Whether a surface took the first message: the chat tab, or a declined chat's terminal.
+  // The surfaces that took the input: a published chat, or (plain text only) a terminal.
+  let chatOpened = false
   let reached = false
-  // Chat-only input needs the chat tab; plain text also lands in that terminal.
   const inputLost = (): boolean =>
-    (primaryTabId === null && needsChat()) || (!reached && Boolean(plan.prompt?.trim()))
+    (!chatOpened && needsChat()) || (!reached && Boolean(plan.prompt?.trim()))
   try {
     const launch = beginStructuredAgentSessionProvisionalLaunch({
       plan,
@@ -237,8 +238,9 @@ export async function launchStructuredWorktreeSession(
         launch.cancel()
         return { ...settled, cancelled: true, activation, primaryTabId }
       }
+      chatOpened = primaryTabId !== null
       reached =
-        primaryTabId !== null ||
+        chatOpened ||
         (!layoutRefused && launch.tab === null && (await launch.settlement).kind === 'terminal')
     }
     const stillVisible = (): boolean => {
@@ -249,7 +251,6 @@ export async function launchStructuredWorktreeSession(
         state.activePendingCreationId === args.creationId
       )
     }
-    let recovered = false
     if (
       launch &&
       args.shouldActivateOnCompletion &&
@@ -278,9 +279,10 @@ export async function launchStructuredWorktreeSession(
           worktreeId: args.worktreeId
         })
       })
-      if (fallback && !('refused' in fallback)) {
+      // A paired host accepts before it creates; only the created terminal holds the message.
+      const settledFallback = await settleAgentTabLaunch(fallback)
+      if (settledFallback.kind === 'terminal' && fallback && !('refused' in fallback)) {
         reached = true
-        recovered = true
         primaryTabId = fallback.surface.kind === 'local-terminal' ? fallback.surface.tabId : null
       }
     }
@@ -289,7 +291,7 @@ export async function launchStructuredWorktreeSession(
     }
     if (launch && args.shouldActivateOnCompletion && stillVisible()) {
       activation = activateAndRevealWorktree(args.worktreeId, {
-        providesInitialSurface: primaryTabId !== null || recovered,
+        providesInitialSurface: chatOpened || (reached && layoutRefused),
         worktreeCreationId: args.creationId
       })
       primaryTabId ??= activation === false ? null : activation.primaryTabId
