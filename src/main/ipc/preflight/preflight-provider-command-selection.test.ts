@@ -11,6 +11,16 @@ import {
   findRunnableLocalCommand
 } from './preflight-command-exec'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
+import type * as WorkerChildProcessModule from '../../worker-thread-child-process/worker-thread-child-process'
+
+// These tests drive the in-thread native runner; source runs have no built worker entry.
+vi.mock(
+  '../../worker-thread-child-process/worker-thread-child-process',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof WorkerChildProcessModule>()),
+    canSpawnOnWorkerThread: () => false
+  })
+)
 
 vi.mock('../../../shared/shell/command-resolution/system-cli-install-dirs', () => ({
   getSystemCliInstallDirectories: (_platform: NodeJS.Platform, home: string) => [
