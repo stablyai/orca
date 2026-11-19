@@ -22489,6 +22489,9 @@
       "45347db2a3": "탭 탐색",
       "aab2837fa5": "빠른 명령어",
       "3492a954c8": "터미널 창"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "워크트리 전환"
     }
   },
   "gpuFallback": {

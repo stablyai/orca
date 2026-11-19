@@ -25941,6 +25941,9 @@
       "aab2837fa5": "Quick commands",
       "3492a954c8": "Terminal panes",
       "bots": "Bots"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "Switch worktree"
     }
   },
   "gpuFallback": {

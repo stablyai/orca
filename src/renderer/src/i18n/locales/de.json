@@ -22953,6 +22953,9 @@
       "45347db2a3": "Tab-Navigation",
       "aab2837fa5": "Schnellbefehle",
       "3492a954c8": "Terminal-Bereiche"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "Worktree wechseln"
     }
   },
   "gpuFallback": {

@@ -23174,6 +23174,9 @@
       "45347db2a3": "Navegación entre pestañas",
       "aab2837fa5": "Comandos rápidos",
       "3492a954c8": "Paneles del terminal"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "Cambiar de worktree"
     }
   },
   "gpuFallback": {

@@ -22459,6 +22459,9 @@
       "45347db2a3": "分頁導覽",
       "aab2837fa5": "快速指令",
       "3492a954c8": "終端機窗格"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "切換工作樹"
     }
   },
   "gpuFallback": {

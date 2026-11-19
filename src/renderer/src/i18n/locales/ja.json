@@ -24013,6 +24013,9 @@
       "45347db2a3": "タブナビゲーション",
       "aab2837fa5": "クイックコマンド",
       "3492a954c8": "ターミナルペイン"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "ワークツリーを切り替え"
     }
   },
   "gpuFallback": {

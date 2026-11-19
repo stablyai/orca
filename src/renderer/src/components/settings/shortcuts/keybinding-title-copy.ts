@@ -10,7 +10,7 @@ import {
   TUI_AGENT_DISPLAY_NAMES
 } from '../../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { translate } from '@/i18n/i18n'
-import { uniqueKeywords } from '../search/settings-search-keywords'
+import { translateSearchKeyword, uniqueKeywords } from '../search/settings-search-keywords'
 
 type StaticKeybindingActionId = Exclude<
   KeybindingActionId,
@@ -191,6 +191,18 @@ const TITLE_COPY_BY_ID = new Map<string, () => string>([
 
 const GROUP_COPY_BY_NAME = new Map<string, () => string>(Object.entries(GROUP_COPY))
 
+// Renamed rows keep their former localized title searchable for users who learned it.
+const FORMER_TITLE_KEYWORDS_BY_ID = new Map<string, () => string[]>([
+  [
+    'worktree.palette',
+    () =>
+      translateSearchKeyword(
+        'keybindings.searchKeyword.worktreePaletteFormerTitle',
+        'Switch worktree'
+      )
+  ]
+])
+
 // Plugin and unknown actions keep their registry title.
 export function localizedKeybindingTitle(
   definition: Pick<KeybindingDefinition, 'id' | 'title'>
@@ -218,7 +230,8 @@ export function localizeKeybindingDefinition(
     searchKeywords: uniqueKeywords([
       ...definition.searchKeywords,
       definition.title,
-      definition.group
+      definition.group,
+      ...(FORMER_TITLE_KEYWORDS_BY_ID.get(definition.id)?.() ?? [])
     ])
   }
 }
