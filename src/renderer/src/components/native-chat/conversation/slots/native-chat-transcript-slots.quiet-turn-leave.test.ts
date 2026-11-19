@@ -3,15 +3,19 @@ import type { NativeChatMessage } from '../../../../../../shared/native-chat/nat
 import { buildNativeChatTranscriptSlots } from './native-chat-transcript-slots'
 
 const WORKER: NativeChatMessage['from'] = { kind: 'agent', senders: [], orchestration: null }
-const at = (id: string, role: NativeChatMessage['role'], text: string, extra = {}) =>
-  ({
-    id,
-    role,
-    timestamp: 1,
-    source: 'transcript',
-    blocks: [{ type: 'text', text }],
-    ...extra
-  }) as NativeChatMessage
+const at = (
+  id: string,
+  role: NativeChatMessage['role'],
+  text: string,
+  extra: Partial<NativeChatMessage> = {}
+): NativeChatMessage => ({
+  id,
+  role,
+  timestamp: 1,
+  source: 'transcript',
+  blocks: [{ type: 'text', text }],
+  ...extra
+})
 const note: NativeChatMessage = {
   ...at('n1', 'system', ''),
   blocks: [],

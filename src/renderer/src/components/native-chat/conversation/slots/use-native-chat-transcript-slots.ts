@@ -139,6 +139,7 @@ export function useNativeChatTranscriptSlots({
     quietTurnKeys,
     liveTurnKey,
     working: isWorking || lifecycleWorking,
+    leaving: leavingTurnKeys,
     setLeaving: setLeavingTurnKeys
   })
   return { slots, forkPoint, liveLine }

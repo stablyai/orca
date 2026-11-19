@@ -38,7 +38,22 @@ const tool = (id: string): NativeChatMessage => ({
     }
   ]
 })
-const RUN = { runId: 'run-1' } as AutomationRunMessage
+const RUN: AutomationRunMessage = {
+  runId: 'run-1',
+  automation: {
+    id: 'auto-1',
+    name: 'Morning triage',
+    enabled: true,
+    nextRunAt: 0,
+    updatedAt: 0,
+    dtstart: 0,
+    rrule: 'FREQ=DAILY',
+    workspaceId: 'folder:w',
+    bot: { botId: 'b' }
+  },
+  trigger: 'scheduled',
+  instructionsLength: 0
+}
 
 function settled(keys: string[], verdict?: AgentTurnOutcome) {
   return Object.fromEntries(
