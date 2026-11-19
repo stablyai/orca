@@ -120,6 +120,20 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
 
   protected providerBufferAcquisitionsByPtyId = new Map<string, ProviderBufferAcquisition>()
 
+  private readonly ptyBufferMutationEpochById = new Map<string, number>()
+
+  protected getPtyBufferMutationEpoch(ptyId: string): number {
+    return this.ptyBufferMutationEpochById.get(ptyId) ?? 0
+  }
+
+  protected advancePtyBufferMutationEpoch(ptyId: string): void {
+    this.ptyBufferMutationEpochById.set(ptyId, this.getPtyBufferMutationEpoch(ptyId) + 1)
+  }
+
+  protected forgetPtyBufferMutationEpoch(ptyId: string): void {
+    this.ptyBufferMutationEpochById.delete(ptyId)
+  }
+
   protected providerVisibleStateByPtyId = new Map<string, RuntimeVisibleTerminalState>()
 
   protected providerVisibleStateReadsByPtyId = new Map<

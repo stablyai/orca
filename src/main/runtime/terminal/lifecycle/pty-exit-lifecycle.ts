@@ -212,6 +212,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimePtyExitSurfaceRead
       this.providerModeTrackersByPtyId.delete(ptyId)
       this.providerModeSnapshotScansByPtyId.delete(ptyId)
       this.providerBufferAcquisitionsByPtyId.delete(ptyId)
+      this.forgetPtyBufferMutationEpoch(ptyId)
       this.forgetProviderVisibleState(ptyId)
       this.agentPromptExplicitStatusFloorByPtyId.delete(ptyId)
       this.ptyLifecycleGenerationById.delete(ptyId)

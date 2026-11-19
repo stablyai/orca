@@ -13,8 +13,10 @@ import {
 const grid = { cols: 80, rows: 24 }
 const partial = 'prompt\r\n> \x1b[?'
 
-function createRuntime() {
-  const runtime = new OrcaRuntimeService()
+function createRuntime(scrollbackRows?: number) {
+  const runtime = new OrcaRuntimeService(undefined, undefined, {
+    headlessTerminalScrollbackRows: scrollbackRows
+  })
   runtime.setPtyController({
     write: () => true,
     kill: () => true,
@@ -322,46 +324,47 @@ function historyReads(runtime: OrcaRuntimeService, ptyId: string) {
   return { stream, read }
 }
 
-function recoveredHistoryRuntime(historyRows: number, oldOutput = 'stale\r\n') {
-  const runtime = createRuntime()
+function recoveredHistoryRuntime(
+  historyRows: number,
+  oldOutput = 'stale\r\n',
+  scrollbackRows?: number
+) {
+  const runtime = createRuntime(scrollbackRows)
   const { read, stream } = historyReads(runtime, 'pty-history')
   const history = Array.from({ length: historyRows }, (_, index) => `h${index + 1}`)
   const screen = Array.from({ length: 24 }, (_, index) => `s${index + 1}`)
+  const requests: (number | undefined)[] = []
   let rebuilt = false
   runtime.setPtyController({
     write: () => true,
     kill: () => true,
     getForegroundProcess: async () => null,
     getSize: () => grid,
-    serializeProviderBuffer: async (_ptyId, opts) => ({
-      data: rebuilt ? 'different provider rows' : screen.join('\r\n'),
-      scrollbackAnsi:
-        !rebuilt && opts?.scrollbackRows
-          ? `${history.slice(-opts.scrollbackRows).join('\r\n')}\r\n`
-          : '',
-      scrollbackLines: Math.min(historyRows, opts?.scrollbackRows ?? historyRows),
-      ...grid,
-      seq: runtime.getPtyOutputSequence('pty-history'),
-      source: 'headless'
-    })
+    serializeProviderBuffer: async (_ptyId, opts) => {
+      requests.push(opts?.scrollbackRows)
+      return {
+        data: rebuilt ? 'different provider rows' : screen.join('\r\n'),
+        scrollbackAnsi:
+          !rebuilt && opts?.scrollbackRows
+            ? `${history.slice(-opts.scrollbackRows).join('\r\n')}\r\n`
+            : '',
+        scrollbackLines: Math.min(historyRows, opts?.scrollbackRows ?? historyRows),
+        ...grid,
+        seq: runtime.getPtyOutputSequence('pty-history'),
+        source: 'headless'
+      }
+    }
   })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: inherited protected runtime methods retain these signatures.
-  const reads = runtime as unknown as {
-    serializeHeadlessTerminalBuffer(ptyId: string): Promise<{ data: string } | null>
-    withVisibleSnapshotFallback(
-      ptyId: string,
-      read: RuntimeTerminalRead,
-      opts: { limit: number }
-    ): Promise<RuntimeTerminalRead>
-  }
   const ready = async () => {
     anchorStream(runtime, 'pty-history')
     runtime.onPtyData('pty-history', oldOutput, 1)
     runtime.notePtyDataGap('pty-history', 9)
-    await vi.waitFor(async () => assert(await reads.serializeHeadlessTerminalBuffer('pty-history')))
+    await vi.waitFor(async () =>
+      assert(await headlessOf(runtime).serializeHeadlessTerminalBuffer('pty-history'))
+    )
     rebuilt = true
   }
-  return { runtime, ready, read, stream }
+  return { runtime, ready, read, stream, requests }
 }
 
 it('reads the seeded live history and later output locally after a history cut', async () => {
@@ -404,6 +407,24 @@ it('does not mark short complete recovered history limited', async () => {
     expect(result.limited).toBe(false)
   } finally {
     clearNativeWindowsConptyPty('pty-history')
+    await runtime.onPtyExit('pty-history', 0)
+  }
+})
+
+it('reports local eviction after recovering short complete history', async () => {
+  const { runtime, ready, read } = recoveredHistoryRuntime(200, 'stale\r\n', 1000)
+  try {
+    await ready()
+    runtime.onPtyData(
+      'pty-history',
+      `\r\n${Array.from({ length: 2000 }, (_, index) => `p${index + 1}`).join('\r\n')}`,
+      2
+    )
+    const result = await read({ limit: 1500 })
+    expect(result.tail).toHaveLength(1024)
+    expect([result.tail[0], result.tail.at(-1)]).toEqual(['p977', 'p2000'])
+    expect(result.limited).toBe(true)
+  } finally {
     await runtime.onPtyExit('pty-history', 0)
   }
 })
@@ -617,12 +638,13 @@ it.each([0, -10, 100_000_000])('bounds provider projections for user limit %s', 
 
 it.each([500, 5000])('uses the configured live window for recovery (%s rows)', async (window) => {
   vi.stubEnv('ORCA_DAEMON_SESSION_SCROLLBACK_ROWS', String(window))
-  const { runtime, ready, read } = recoveredHistoryRuntime(window)
+  const { runtime, ready, read, requests } = recoveredHistoryRuntime(window)
   try {
     await ready()
+    expect(requests).toEqual(window === 500 ? [500] : [1000])
     const result = await read({ limit: 2000 })
-    expect(result.limited).toBe(window === 500)
-    expect(result.tail[0]).toBe(window === 500 ? 'h1' : 'h3025')
+    expect(result.limited).toBe(true)
+    expect(result.tail[0]).toBe(window === 500 ? 'h1' : 'h4001')
     expect(result.tail.at(-1)).toBe('s24')
   } finally {
     vi.unstubAllEnvs()
@@ -631,6 +653,7 @@ it.each([500, 5000])('uses the configured live window for recovery (%s rows)', a
 })
 
 it('caps mid-recovery acquisitions and never falls back to the stale stream', async () => {
+  vi.stubEnv('ORCA_DAEMON_SESSION_SCROLLBACK_ROWS', '5000')
   const runtime = createRuntime()
   const requests: (number | undefined)[] = []
   let recovering = false
@@ -700,6 +723,7 @@ it('caps mid-recovery acquisitions and never falls back to the stale stream', as
     replyOld?.({ data: 'stale-old-acquisition', ...grid, seq: 100, source: 'headless' })
     expect(await old).toBeNull()
   } finally {
+    vi.unstubAllEnvs()
     clearNativeWindowsConptyPty('pty-mid')
     await runtime.onPtyExit('pty-mid', 0)
   }

@@ -204,12 +204,13 @@ export type RuntimeVisibleTerminalState = {
 }
 
 export type ProviderTerminalBufferWait = {
-  snapshot: PtyProviderBufferSnapshot | null
+  snapshot: (PtyProviderBufferSnapshot & { scrollbackRows?: number }) | null
   late: Promise<PtyProviderBufferSnapshot | null> | null
 }
 
 export type ProviderBufferAcquisition = {
   generation: number
+  mutationEpoch: number
   scrollbackRows: number
   promise: Promise<PtyProviderBufferSnapshot | null>
   timedOut: boolean

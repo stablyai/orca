@@ -1,4 +1,3 @@
-import { resolveDaemonSessionScrollbackRows } from '../../../daemon/sessions/daemon-session-scrollback-window'
 import { OrcaRuntimeWithHeadlessGapReseed } from './headless-gap-reseed'
 import type { TerminalOscLinkRange } from '../../../../shared/terminal/links/terminal-osc-link-ranges'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
@@ -140,15 +139,7 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
     wait: { timeoutMs?: number; retireOnTimeout?: boolean } = {}
   ): Promise<(PtyProviderBufferSnapshot & { scrollbackRows?: number }) | null> {
     const { snapshot } = await this.awaitProviderTerminalBuffer(ptyId, opts, wait)
-    return snapshot && this.providerHistoryNeedsLiveWindow(ptyId)
-      ? {
-          ...snapshot,
-          scrollbackRows: Math.min(
-            opts.scrollbackRows ?? resolveDaemonSessionScrollbackRows(),
-            resolveDaemonSessionScrollbackRows()
-          )
-        }
-      : snapshot
+    return snapshot
   }
 
   protected providerHistoryNeedsLiveWindow(ptyId: string): boolean {
@@ -162,30 +153,38 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
     wait: { timeoutMs?: number; retireOnTimeout?: boolean } = {}
   ): Promise<ProviderTerminalBufferWait> {
     const generation = this.getPtyLifecycleGeneration(ptyId)
+    const mutationEpoch = this.getPtyBufferMutationEpoch(ptyId)
+    const isCurrent = () =>
+      this.ptyLifecycleGenerationById.get(ptyId) === generation &&
+      this.getPtyBufferMutationEpoch(ptyId) === mutationEpoch
     const capped = this.providerHistoryNeedsLiveWindow(ptyId)
-    const requested =
-      opts.scrollbackRows ?? (capped ? resolveDaemonSessionScrollbackRows() : Infinity)
+    const liveWindow = this.providerHistoryLiveWindowRows()
+    const requested = opts.scrollbackRows ?? (capped ? liveWindow : Infinity)
     const scrollbackRows = Math.max(
       0,
-      Math.floor(capped ? Math.min(requested, resolveDaemonSessionScrollbackRows()) : requested)
+      Math.floor(capped ? Math.min(requested, liveWindow) : requested)
     )
     const captureOptions = capped ? { ...opts, scrollbackRows } : opts
     let acquisition = this.providerBufferAcquisitionsByPtyId.get(ptyId)
     if (
       acquisition?.generation === generation &&
+      acquisition.mutationEpoch === mutationEpoch &&
       acquisition.timedOut &&
-      (!capped || acquisition.scrollbackRows <= resolveDaemonSessionScrollbackRows())
+      (!capped || acquisition.scrollbackRows <= liveWindow)
     ) {
       return { snapshot: null, late: acquisition.promise }
     }
     if (
       !acquisition ||
       acquisition.generation !== generation ||
+      acquisition.mutationEpoch !== mutationEpoch ||
       acquisition.scrollbackRows < scrollbackRows ||
-      (capped && acquisition.scrollbackRows > resolveDaemonSessionScrollbackRows())
+      (capped && acquisition.scrollbackRows > liveWindow)
     ) {
-      const promise = this.captureProviderTerminalBuffer(ptyId, captureOptions, generation)
-      acquisition = { generation, scrollbackRows, promise, timedOut: false }
+      const promise = this.captureProviderTerminalBuffer(ptyId, captureOptions, generation).then(
+        (snapshot) => (isCurrent() ? snapshot : null)
+      )
+      acquisition = { generation, mutationEpoch, scrollbackRows, promise, timedOut: false }
       this.providerBufferAcquisitionsByPtyId.set(ptyId, acquisition)
       void promise.finally(() => {
         if (this.providerBufferAcquisitionsByPtyId.get(ptyId) === acquisition) {
@@ -205,8 +204,8 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
       { settled: false as const }
     )
     if (
-      this.providerHistoryNeedsLiveWindow(ptyId) &&
-      acquisition.scrollbackRows > resolveDaemonSessionScrollbackRows()
+      !isCurrent() ||
+      (this.providerHistoryNeedsLiveWindow(ptyId) && acquisition.scrollbackRows > liveWindow)
     ) {
       return { snapshot: null, late: null }
     }
@@ -216,6 +215,12 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
       }
       return { snapshot: null, late: acquisition.promise }
     }
-    return { snapshot: result.value, late: null }
+    return {
+      snapshot:
+        result.value && capped
+          ? { ...result.value, scrollbackRows: acquisition.scrollbackRows }
+          : result.value,
+      late: null
+    }
   }
 }

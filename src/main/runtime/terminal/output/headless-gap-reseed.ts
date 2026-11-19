@@ -1,4 +1,3 @@
-import { resolveDaemonSessionScrollbackRows } from '../../../daemon/sessions/daemon-session-scrollback-window'
 import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import { OrcaRuntimeWithCreatePtyHeadlessTerminalState } from './headless-terminal-state'
 import type {
@@ -199,7 +198,7 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     // Seed the live window: real history the daemon holds in memory.
     // Its own capture, shared with no reader: cancelling it on timeout touches nothing else.
     const capture = new AbortController()
-    const scrollbackRows = resolveDaemonSessionScrollbackRows()
+    const scrollbackRows = this.providerHistoryLiveWindowRows()
     const pending = this.captureProviderTerminalBuffer(
       ptyId,
       { scrollbackRows, signal: capture.signal, recovery: true },
@@ -306,7 +305,7 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     const contextChangePending = state.gapReseed?.contextChangePending === true
     state.gapReseed = undefined
     state.recoveredHistoryCut ||=
-      (snapshot.scrollbackLines ?? 0) >= resolveDaemonSessionScrollbackRows()
+      (snapshot.scrollbackLines ?? 0) >= this.providerHistoryLiveWindowRows()
     this.headlessHydrationState.set(ptyId, 'done')
     this.providerSnapshotPreferredPtys.delete(ptyId)
     // No new text: observers confirm candidates that arrived while untrusted, with their own arrival times.

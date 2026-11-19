@@ -7,6 +7,10 @@ import type { RuntimeTerminalDataMeta } from './runtime-terminal-stream-consumer
 import { TerminalPublishedOutputRings } from './terminal-published-output-ring'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import { readLaunchCommandOutput } from '../wait/launched-agent-exit-watch'
+import {
+  DAEMON_SESSION_SCROLLBACK_ROWS,
+  resolveDaemonSessionScrollbackRows
+} from '../../../daemon/sessions/daemon-session-scrollback-window'
 
 export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector {
   private readonly ptyLifecycleCancellation = new Map<string, AbortController>()
@@ -90,6 +94,10 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
     return this.ptyOutputSequenceById.get(ptyId) ?? 0
   }
 
+  protected providerHistoryLiveWindowRows(): number {
+    return Math.min(resolveDaemonSessionScrollbackRows(), DAEMON_SESSION_SCROLLBACK_ROWS)
+  }
+
   /** The hidden renderer missed any dropped output: once its PTY gaps in a generation it never stands in for the
    *  screen (null). Compare a read's token before and after its IPC, so exit, reuse and stream resets fence it too. */
   protected rendererScreenToken(ptyId: string): number | null {
@@ -109,6 +117,7 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
   }
 
   protected advancePtyLifecycleGeneration(ptyId: string): void {
+    this.advancePtyBufferMutationEpoch(ptyId)
     this.ptyLifecycleGenerationById.set(ptyId, this.nextPtyLifecycleGeneration++)
     const cancellation = this.ptyLifecycleCancellation.get(ptyId)
     this.ptyLifecycleCancellation.delete(ptyId)
