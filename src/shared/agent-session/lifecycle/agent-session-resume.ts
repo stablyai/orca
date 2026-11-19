@@ -1,3 +1,4 @@
+import type { SleepingAgentLaunchConfig } from './resume/sleeping-agent-launch-config'
 import { readAgentEffortLevel } from '../../agent-launch/choices/agent-effort-level'
 import { readClaudePermissionMode } from './resume/provider-session-live-settings'
 import type { AgentHookSource } from '../../agent-hook-listener/transport/agent-hook-relay'
@@ -55,12 +56,7 @@ export type AgentProviderSessionMetadata = {
   permissionMode?: string
 }
 
-export type SleepingAgentLaunchConfig = {
-  agentCommand?: string
-  agentArgs: string
-  agentEnv: Record<string, string>
-  ompResumeFilePath?: string
-}
+export type { SleepingAgentLaunchConfig } from './resume/sleeping-agent-launch-config'
 
 export type SleepingAgentSessionRecord = {
   paneKey: string

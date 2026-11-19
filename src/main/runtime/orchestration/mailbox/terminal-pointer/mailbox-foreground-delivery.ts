@@ -21,6 +21,7 @@ export class MailboxForegroundDelivery {
   ): void {
     try {
       const terminal = deps.deliveryTarget.resolveTerminal(handle)
+      deps.wakeSleepingRecipient?.(handle, reservedTypes)
       if (
         !terminal ||
         (!isMailboxTerminalTakingInput(terminal) &&
