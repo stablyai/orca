@@ -108,7 +108,7 @@ export function SessionActionMenuItems({
       {onCloseOriginalPane ? (
         <Item onSelect={onCloseOriginalPane}>
           <Square className="size-3.5" />
-          {translate(
+          {t(
             'auto.components.right.sidebar.AiVaultSessionRow.closeOriginalPane',
             'Close Open Session'
           )}

@@ -164,7 +164,7 @@ export function SessionRowTrailingActions({
                   type="button"
                   variant="ghost"
                   size="icon-xs"
-                  aria-label={translate(
+                  aria-label={t(
                     'auto.components.right.sidebar.AiVaultSessionRow.closeOriginalPane',
                     'Close Open Session'
                   )}
@@ -180,7 +180,7 @@ export function SessionRowTrailingActions({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>
-                {translate(
+                {t(
                   'auto.components.right.sidebar.AiVaultSessionRow.closeOriginalPane',
                   'Close Open Session'
                 )}
