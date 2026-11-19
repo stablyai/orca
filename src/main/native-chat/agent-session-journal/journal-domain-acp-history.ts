@@ -83,7 +83,8 @@ export function readJournalDomainAcpHistory(
     ORDER BY turn_id,sequence,sequence_index,ordinal LIMIT ?`)
     .iterate(
       ...prefix,
-      namespace,
+      // The seek starts at the cursor's turn; the row comparison only settles ties within it.
+      read.after?.[0] ?? namespace,
       `${namespace.slice(0, -1)};`,
       ...(read.after ?? []),
       TURNS_PAGE
