@@ -53,7 +53,12 @@ export function sweepJournalOutputFiles(
     )) {
       // A live write renames within its own transaction; an old one was left by a crash.
       if (entry.modifiedAt <= now - UNREFERENCED_GRACE_MS) {
-        rmSync(entry.path, { force: true })
+        try {
+          rmSync(entry.path, { force: true })
+        } catch (error) {
+          // A file another process holds is retried by the next sweep; the rest still go.
+          console.warn('[agent-session-journal] could not remove a stale staging file', error)
+        }
       }
     }
     return result
