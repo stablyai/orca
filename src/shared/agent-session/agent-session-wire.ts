@@ -285,6 +285,8 @@ export type AgentSessionConversationName = {
   sessionId: string
   conversationName: string | null
   namingError?: AgentSessionNamingError
+  /** The chat's agent, so an older fork can title itself from an unnamed source no longer open. */
+  agent?: AgentSessionStatusSummary['agent']
 } & Pick<AgentSessionStatusSummary, 'conversationNameSource' | 'forkedFrom' | 'sideChat'>
 
 /** Retain projections after child eviction; idle remains idle. Tabs decide list membership, never this feed. */
