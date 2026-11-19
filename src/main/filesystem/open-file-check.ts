@@ -12,7 +12,7 @@ const PROC_SCAN_BUDGET_MS = 5_000
 // libuv opens with no sharing under this flag, which Windows refuses while any handle is open.
 const WINDOWS_EXCLUSIVE_OPEN = 0x10000000
 
-type Target = { path: string; ino: bigint }
+type Target = { path: string; ino: bigint; dev: bigint }
 
 // Every readable process's open files, from the /proc fd links: reading a link never touches the
 // file's own filesystem, so a dead network mount can't stall it. Processes Orca can't read are
@@ -23,6 +23,7 @@ async function openOnLinux(
   shouldStop: () => boolean
 ): Promise<Set<string> | null> {
   const paths = new Set(targets.map((target) => target.path))
+  const byInode = new Map(targets.map((target) => [`${target.dev}:${target.ino}`, target.path]))
   const found = new Set<string>()
   const deadline = Date.now() + PROC_SCAN_BUDGET_MS
   const uid = process.getuid?.()
@@ -40,9 +41,21 @@ async function openOnLinux(
       if (Date.now() > deadline || shouldStop()) {
         return null
       }
-      const path = await readlink(join('/proc', pid, 'fd', fd)).catch(() => null)
-      if (path && paths.has(path)) {
-        found.add(path)
+      const link = join('/proc', pid, 'fd', fd)
+      const path = await readlink(link).catch(() => null)
+      // A file moved by hard link keeps the descriptor under its old, unlinked name: only those
+      // are matched by inode, so the scan still never touches other files' filesystems.
+      const match =
+        path && paths.has(path)
+          ? path
+          : path?.endsWith(' (deleted)')
+            ? await stat(link, { bigint: true }).then(
+                (file) => byInode.get(`${file.dev}:${file.ino}`),
+                () => undefined
+              )
+            : undefined
+      if (match) {
+        found.add(match)
         if (firstOnly || found.size === paths.size) {
           return found
         }
@@ -134,7 +147,7 @@ async function resolveTargets(
       const path = await realpath(file)
       const stats = await lstat(path, { bigint: true })
       if (stats.isFile()) {
-        targets.push({ path, ino: stats.ino })
+        targets.push({ path, ino: stats.ino, dev: stats.dev })
         original.set(path, file)
       }
     } catch (error) {
