@@ -14,6 +14,7 @@ import {
 } from './codex-account-history-index'
 import { shareCodexAccountHistory, unshareCodexAccountHistory } from './codex-account-history-links'
 import { importCodexHistory } from '../import/codex-history-import'
+import { forgetStoreFoldersWithoutHardLinks } from '../import/codex-history-import-publish'
 import { resolveHostCodexSessionSourceHome } from '../rollouts/codex-session-source-home'
 import { isCodexHistorySharedAcrossAccounts } from '../../../codex-accounts/runtime-home/routing/codex-history-sharing'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
@@ -131,6 +132,9 @@ export class CodexAccountHistoryPasses {
     getSettings: () => CodexHistoryImportSettings,
     options: { settingChanged?: boolean } = {}
   ): Promise<void> {
+    if (options.settingChanged) {
+      forgetStoreFoldersWithoutHardLinks()
+    }
     const importHome = resolveImportHome(getSettings())
     if (!importHome) {
       return Promise.resolve()

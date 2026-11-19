@@ -3,7 +3,7 @@ import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { rolloutTwinPath } from '../rollouts/codex-rollout-compressed-twin'
-import { removeStagedCopy } from '../rollouts/codex-rollout-copy'
+import { removeStagedCopy } from '../rollouts/codex-rollout-staged-copy'
 
 export async function readEntries(folder: string): Promise<Dirent[]> {
   try {

@@ -105,9 +105,6 @@ type FolderResult = ImportedFolder & {
   halt?: 'no-hard-links' | 'failed'
 }
 
-// A pass that found the store without hard links isn't repeated until the setting changes or Orca restarts.
-const withoutHardLinks = new Set<string>()
-
 async function importFolder(
   args: CodexHistoryImportArgs,
   folder: string,
@@ -215,9 +212,6 @@ async function importFolder(
  * Returns how many were copied, or null when it stopped early (progress so far is kept).
  */
 export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<number | null> {
-  if (withoutHardLinks.has(args.importHome)) {
-    return 0
-  }
   const reason = await unusableReason(args.importHome, args.storeHome)
   if (reason) {
     if (reason !== 'missing') {
@@ -293,12 +287,6 @@ export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<
           break
         }
         if (result.halt) {
-          if (result.halt === 'no-hard-links') {
-            withoutHardLinks.add(args.importHome)
-            console.warn(
-              `[codex-history-import] Not importing from ${args.importHome}: ${args.storeHome} has no hard links`
-            )
-          }
           break
         }
         if (unsaved >= LEDGER_SAVE_EVERY) {

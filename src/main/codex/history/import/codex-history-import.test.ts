@@ -1,5 +1,6 @@
 import {
   appendFileSync,
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -31,6 +32,11 @@ afterEach(() => {
   }
 })
 
+// Launch checks made while a copy is staged don't count, so the chunk size doesn't matter.
+function isStaging(storeHome: string): boolean {
+  return readdirSync(join(storeHome, DAY)).some((name) => name.startsWith('.orca-import-'))
+}
+
 function setup(stopAfterChecks = Infinity): {
   importHome: string
   storeHome: string
@@ -50,7 +56,7 @@ function setup(stopAfterChecks = Infinity): {
       storeHome,
       ledgerPath: join(root, 'import-ledger.json'),
       indexPendingDir: join(root, 'index-pending'),
-      shouldStop: () => ++checks > stopAfterChecks
+      shouldStop: () => !isStaging(storeHome) && ++checks > stopAfterChecks
     })
   }
   return { importHome, storeHome, run }
@@ -111,7 +117,7 @@ describe('importCodexHistory', () => {
   })
 
   it('keeps progress across passes a launch stops, with both forms of each conversation here', async () => {
-    // Each pass checks for a launch twice before its first conversation, so it copies one.
+    // Each pass checks for a launch once per folder before its first conversation, so it copies one.
     const { importHome, storeHome, run } = setup(3)
     const older = new Date('2026-01-01T00:00:00Z')
     const newer = new Date('2026-02-01T00:00:00Z')
@@ -128,5 +134,16 @@ describe('importCodexHistory', () => {
 
     expect(readdirSync(join(storeHome, DAY)).sort()).toEqual([COMPRESSED, NEW, TAKEN].sort())
     expect(readFileSync(join(storeHome, DAY, TAKEN), 'utf8')).toBe('plain with later turns\n')
+  })
+
+  it('imports the dated conversations when one archived rollout is unreadable', async () => {
+    const { importHome, storeHome, run } = setup()
+    writeFileSync(join(importHome, 'archived_sessions', ARCHIVED), 'archived\n')
+    chmodSync(join(importHome, 'archived_sessions', ARCHIVED), 0o000)
+    writeFileSync(join(importHome, DAY, NEW), 'new\n')
+
+    await run()
+
+    expect(readFileSync(join(storeHome, DAY, NEW), 'utf8')).toBe('new\n')
   })
 })

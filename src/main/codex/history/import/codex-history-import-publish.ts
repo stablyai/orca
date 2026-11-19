@@ -9,6 +9,7 @@ import {
   copyCodexRolloutWithoutOverwrite,
   isHardLinkUnsupportedError
 } from '../rollouts/codex-rollout-copy'
+import { RolloutSourceReadError } from '../rollouts/codex-rollout-staged-copy'
 import { linkCodexRolloutUnlessHeld } from '../rollouts/codex-rollout-deletion-guard'
 
 /**
@@ -34,8 +35,18 @@ export async function pickImportForm(
   return !compressed?.isFile() || plainWins(plain, compressed) ? key : compressedName
 }
 
+// Store folders a probe found without hard links; tried again once the setting changes or Orca restarts.
+const foldersWithoutHardLinks = new Set<string>()
+
+export function forgetStoreFoldersWithoutHardLinks(): void {
+  foldersWithoutHardLinks.clear()
+}
+
 /** Whether `folder` takes hard links, which publishing a copy needs; checked before any copy. */
 export async function canHardLinkIn(folder: string): Promise<boolean> {
+  if (foldersWithoutHardLinks.has(folder)) {
+    return false
+  }
   // Both names match the staged-copy sweep, so a crash here leaves nothing behind for good.
   const probe = join(folder, `.orca-import-probe-${randomUUID()}.tmp`)
   const probeLink = join(folder, `.orca-import-probe-${randomUUID()}.tmp`)
@@ -44,10 +55,12 @@ export async function canHardLinkIn(folder: string): Promise<boolean> {
     await link(probe, probeLink)
     return true
   } catch (error) {
-    if (isHardLinkUnsupportedError(error)) {
-      return false
+    if (!isHardLinkUnsupportedError(error)) {
+      throw error
     }
-    throw error
+    foldersWithoutHardLinks.add(folder)
+    console.warn(`[codex-history-import] Not importing into ${folder}: it has no hard links`)
+    return false
   } finally {
     await rm(probeLink, { force: true })
     await rm(probe, { force: true })
@@ -55,16 +68,11 @@ export async function canHardLinkIn(folder: string): Promise<boolean> {
 }
 
 /**
- * `retry`: the source went, changed while copied, or is being deleted; its folder is read again.
- * `failed` and `no-hard-links` end the pass, so one broken store isn't copied into file after file.
+ * `retry`: this file alone failed (its source unreadable, gone, changed while copied or being
+ * deleted); its folder is read again next pass. `failed`: the store refused a write, which ends
+ * the pass so a broken store isn't copied into file after file.
  */
-export type ImportPublishOutcome =
-  | 'copied'
-  | 'existing'
-  | 'retry'
-  | 'stopped'
-  | 'failed'
-  | 'no-hard-links'
+export type ImportPublishOutcome = 'copied' | 'existing' | 'retry' | 'stopped' | 'failed'
 
 export async function copyIntoStore(
   from: string,
@@ -86,6 +94,10 @@ export async function copyIntoStore(
       return 'retry'
     }
     console.warn(`[codex-history-import] Could not copy ${from}:`, error)
-    return error instanceof AtomicNoReplaceUnsupportedError ? 'no-hard-links' : 'failed'
+    // The probe found hard links here, so a refused link is this file's alone.
+    return error instanceof RolloutSourceReadError ||
+      error instanceof AtomicNoReplaceUnsupportedError
+      ? 'retry'
+      : 'failed'
   }
 }
