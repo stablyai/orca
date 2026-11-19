@@ -54,8 +54,14 @@ function evaluate(environmentIds: Iterable<string>): void {
   }
   // Every baseline is set before a listener can commit a nested write.
   for (const watch of due) {
-    if (watch.active) {
+    if (!watch.active) {
+      continue
+    }
+    // Baselines already moved, so one failing watcher must not swallow another's wake.
+    try {
       watch.listener()
+    } catch (error) {
+      console.error('Runtime host contact watcher failed', error)
     }
   }
 }
