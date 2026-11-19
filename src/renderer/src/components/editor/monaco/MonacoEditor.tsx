@@ -38,6 +38,9 @@ import {
 import { useMonacoTheme } from '@/lib/editor/appearance/use-monaco-theme'
 import { useEditorModelRekeyCarry } from '../model-lifetime/identity/editor-model-rekey-carry'
 import { useNewModelLineEnding } from '../model-lifetime/buffer-text/editor-new-model-line-ending'
+import { useMonacoEmacsMode } from './use-monaco-emacs-mode'
+
+const EMACS_STATUS_BAR_HEIGHT = 22
 
 type MonacoEditorProps = {
   fileId: string
@@ -91,6 +94,7 @@ export default function MonacoEditor({
 }: MonacoEditorProps): React.JSX.Element {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const editorContainerRef = useRef<HTMLDivElement | null>(null)
+  const emacsStatusBarRef = useRef<HTMLDivElement | null>(null)
   const [mountedEditor, setMountedEditor] = useState<editor.IStandaloneCodeEditor | null>(null)
   const [autoHeightContentHeight, setAutoHeightContentHeight] = useState<number | null>(null)
   const language = usePluginSyntaxLanguage(filePath, coreLanguage)
@@ -120,6 +124,14 @@ export default function MonacoEditor({
   // Mirrors Monaco's automatic spacing closely enough to size before mount.
   const autoHeightLineHeight = typography.lineHeight || Math.ceil(typography.fontSize * 1.45)
   const editorWordWrap = settings?.editorWordWrap
+  // Presets apply only to the editable full-height file editor, not read-only diffs or inline previews.
+  const emacsModeEnabled = !readOnly && !autoHeight && settings?.editorKeybindings === 'emacs'
+  useMonacoEmacsMode({
+    editor: mountedEditor,
+    enabled: emacsModeEnabled,
+    statusBarRef: emacsStatusBarRef,
+    propsRef
+  })
   const modelOwnerKey = useAppStore((state) => {
     const file = state.openFiles?.find((entry) => entry.id === fileId)
     return file
@@ -289,6 +301,7 @@ export default function MonacoEditor({
   return (
     <div
       ref={editorContainerRef}
+      data-orca-file-editor
       className={autoHeight ? 'relative' : 'relative h-full'}
       style={renderedEditorHeight === null ? undefined : { height: renderedEditorHeight }}
     >
@@ -302,7 +315,13 @@ export default function MonacoEditor({
       />
       <Editor
         key={modelUri}
-        height={renderedEditorHeight === null ? '100%' : `${renderedEditorHeight}px`}
+        height={
+          renderedEditorHeight !== null
+            ? `${renderedEditorHeight}px`
+            : emacsModeEnabled
+              ? `calc(100% - ${EMACS_STATUS_BAR_HEIGHT}px)`
+              : '100%'
+        }
         language={language}
         // Use defaultValue because Orca owns later content sync; controlled values would duplicate setValue.
         defaultValue={content}
@@ -343,6 +362,14 @@ export default function MonacoEditor({
         saveViewState={false}
         keepCurrentModel
       />
+      {emacsModeEnabled ? (
+        <div
+          ref={emacsStatusBarRef}
+          data-orca-emacs-statusbar
+          className="overflow-hidden border-t border-border bg-editor-surface px-2 font-mono text-xs leading-[21px] text-muted-foreground"
+          style={{ height: EMACS_STATUS_BAR_HEIGHT }}
+        />
+      ) : null}
 
       {toastNode}
       <MonacoGutterContextMenu
