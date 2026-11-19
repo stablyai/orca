@@ -88,6 +88,8 @@ async function placedExitSession() {
     cacheKey: PANE,
     runtimeEnvironmentId: null,
     processExitStateByPtyId: new Map(),
+    // Why: setup auto-close reads the exit's startup command, so the partial session needs one.
+    currentProcessExitState: { startup: undefined },
     resetRendererOrderedSeqForPtyExit: () => {},
     agentCompletionCoordinator: { dispose: () => {} },
     dropSideEffectFactConsumer: () => {},

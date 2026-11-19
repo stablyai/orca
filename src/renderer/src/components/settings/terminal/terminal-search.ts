@@ -29,7 +29,10 @@ import {
   getTerminalWindowsAdministratorSearchEntry
 } from './platform/terminal-windows-search'
 import { getManageSessionsSearchEntries } from './session-management/manage-sessions-search'
-import { getTerminalWindowSearchEntries } from './appearance/terminal-window-search'
+import {
+  getTerminalSetupScriptSearchEntries,
+  getTerminalWindowSearchEntries
+} from './appearance/terminal-window-search'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
@@ -171,6 +174,7 @@ export function getTerminalPaneSearchEntries(
         ]
       : []),
     ...getTerminalRightClickToPasteSearchEntry(),
+    ...getTerminalSetupScriptSearchEntries(),
     ...getManageSessionsSearchEntries(),
     ...getTerminalAdvancedSearchEntries(),
     ...(platform.isMac
