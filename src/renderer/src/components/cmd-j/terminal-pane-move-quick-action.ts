@@ -2,35 +2,49 @@ import { PanelTopOpen } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import type { AppState } from '@/store/types'
 import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
-import { requestTerminalPaneMoveToNewTab } from '@/components/terminal-pane/layout/detach/terminal-pane-move-request-routing'
+import { requestActiveTerminalPaneMoveToNewTab } from '@/components/terminal-pane/layout/detach/terminal-pane-move-request-routing'
 import type { CmdJQuickAction } from './quick-actions'
 import type { CmdJQuickActionContext } from './quick-action-context'
 
-export type ActiveTerminalPaneMove = { worktreeId: string; tabId: string; leafId: string }
+export type ActiveTerminalPaneMove = { worktreeId: string; tabId: string }
 
-/** The active pane of the active group's terminal tab, when that tab has another pane to keep. */
+/** The terminal tab the user sees, when it has a pane to move and another to keep. */
 export function resolveActiveTerminalPaneMove(
-  state: Pick<AppState, 'groupsByWorktree' | 'unifiedTabsByWorktree' | 'terminalLayoutsByTabId'>,
+  state: Pick<
+    AppState,
+    | 'activeTabId'
+    | 'activeTabType'
+    | 'tabsByWorktree'
+    | 'groupsByWorktree'
+    | 'unifiedTabsByWorktree'
+    | 'terminalLayoutsByTabId'
+  >,
   worktreeId: string | null,
   groupId: string | null
 ): ActiveTerminalPaneMove | null {
-  if (!worktreeId || !groupId) {
+  if (!worktreeId) {
     return null
   }
-  const group = state.groupsByWorktree[worktreeId]?.find((entry) => entry.id === groupId)
-  const tab = state.unifiedTabsByWorktree[worktreeId]?.find(
-    (entry) => entry.id === group?.activeTabId && entry.contentType === 'terminal'
-  )
-  const layout = tab ? state.terminalLayoutsByTabId[tab.entityId] : undefined
-  if (!tab || !layout?.root) {
+  // The shown terminal is activeTabId; a group's own active tab can lag it.
+  const shownTabId =
+    state.activeTabType === 'terminal' &&
+    state.activeTabId &&
+    state.tabsByWorktree[worktreeId]?.some((tab) => tab.id === state.activeTabId)
+      ? state.activeTabId
+      : null
+  const group = groupId
+    ? state.groupsByWorktree[worktreeId]?.find((entry) => entry.id === groupId)
+    : undefined
+  const tabId =
+    shownTabId ??
+    state.unifiedTabsByWorktree[worktreeId]?.find(
+      (entry) => entry.id === group?.activeTabId && entry.contentType === 'terminal'
+    )?.entityId
+  const layout = tabId ? state.terminalLayoutsByTabId[tabId] : undefined
+  if (!tabId || !layout?.root) {
     return null
   }
-  const leafIds = collectLayoutLeafIdsInOrder(layout.root)
-  const leafId = layout.activeLeafId
-  if (leafIds.length < 2 || !leafId || !leafIds.includes(leafId)) {
-    return null
-  }
-  return { worktreeId, tabId: tab.entityId, leafId }
+  return collectLayoutLeafIdsInOrder(layout.root).length < 2 ? null : { worktreeId, tabId }
 }
 
 function availability(ctx: CmdJQuickActionContext) {
@@ -61,7 +75,7 @@ export function getTerminalPaneMoveQuickAction(): CmdJQuickAction {
     isAvailable: availability,
     run: async (ctx) => {
       const move = ctx.activePaneMove
-      if (!move || !requestTerminalPaneMoveToNewTab(move.worktreeId, move.tabId, move.leafId)) {
+      if (!move || !requestActiveTerminalPaneMoveToNewTab(move.worktreeId, move.tabId)) {
         return { status: 'unavailable', reason: 'no-movable-pane' }
       }
       return { status: 'ok' }

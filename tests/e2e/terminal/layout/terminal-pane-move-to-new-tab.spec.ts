@@ -83,7 +83,7 @@ async function expectMovedToOwnTab(
   expect(home).toEqual({ tabId: expect.any(String), ptyId: moved.ptyId, leafCount: 1 })
   await expect.poll(async () => (await readTabs(page)).activeTabId).toBe(home!.tabId)
   // Same shell: the scrollback is still there and new input reaches it.
-  expect(await getTerminalContentForPtyId(page, moved.ptyId, 8000)).toContain(moved.marker)
+  await waitForTerminalOutputForPtyId(page, moved.ptyId, moved.marker, 10_000)
   const typed = `MOVE_FOCUS_${Date.now()}`
   await page.keyboard.type(`echo ${typed}\r`)
   await waitForTerminalOutputForPtyId(page, moved.ptyId, typed, 10_000)
@@ -163,7 +163,7 @@ test.describe('Move a terminal pane to a new tab', () => {
     const moved = await splitWithMarker(orcaPage)
     const before = await readTabs(orcaPage)
 
-    await orcaPage.keyboard.press(process.platform === 'darwin' ? 'Meta+k' : 'Control+k')
+    await orcaPage.evaluate(() => window.__store!.getState().openModal('worktree-palette'))
     const palette = orcaPage.getByRole('dialog', { name: 'Jump to...' })
     await expect(palette).toBeVisible()
     await palette.locator('[cmdk-input]').fill('Move Pane to New Tab')

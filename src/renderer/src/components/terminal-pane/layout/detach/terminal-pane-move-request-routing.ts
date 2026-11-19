@@ -111,8 +111,8 @@ export async function moveTerminalPaneToNewTabForClient(
   return { status: 'refused', reason: 'pane_unavailable' }
 }
 
-/** This window's user asked to move one of a mounted tab's panes; false when it cannot move now. */
-type UserPaneMoveHandler = (leafId: string) => boolean
+/** This window's user asked to move a mounted tab's active pane; false when it cannot move now. */
+type UserPaneMoveHandler = () => boolean
 
 const userMoveHandlersByTab = new Map<string, UserPaneMoveHandler>()
 
@@ -130,10 +130,6 @@ export function registerTerminalPaneUserMoveHandler(
   }
 }
 
-export function requestTerminalPaneMoveToNewTab(
-  worktreeId: string,
-  tabId: string,
-  leafId: string
-): boolean {
-  return userMoveHandlersByTab.get(tabKey(worktreeId, tabId))?.(leafId) ?? false
+export function requestActiveTerminalPaneMoveToNewTab(worktreeId: string, tabId: string): boolean {
+  return userMoveHandlersByTab.get(tabKey(worktreeId, tabId))?.() ?? false
 }

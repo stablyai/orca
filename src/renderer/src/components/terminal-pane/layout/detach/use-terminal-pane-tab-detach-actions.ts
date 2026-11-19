@@ -106,11 +106,11 @@ export function useTerminalPaneTabDetachActions(controller: TerminalPaneBindingC
     },
     [detachPaneToNewTab, tabId, worktreeId]
   )
-  // The Cmd+J palette reaches this tab's panes through the registry, not a React path.
+  // The search palette reaches this tab's active pane through the registry, not a React path.
   useEffect(
     () =>
-      registerTerminalPaneUserMoveHandler(worktreeId, tabId, (leafId) => {
-        const paneId = managerRef.current?.getNumericIdForLeaf(leafId) ?? null
+      registerTerminalPaneUserMoveHandler(worktreeId, tabId, () => {
+        const paneId = managerRef.current?.getActivePane()?.id ?? null
         if (paneId === null || getPaneMoveReadiness(paneId) !== 'ready') {
           return false
         }
