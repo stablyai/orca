@@ -1,16 +1,12 @@
 import { stripAnsiEscapeSequences } from '../../../../shared/terminal/protocol/escape/ansi-escape-sequences'
 import { createOsc133CommandFinishedScanner } from '../../../../shared/terminal/output/terminal-osc133-command-finished'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type {
-  DraftPasteMarkerSignal,
-  TuiAgentConfig
-} from '../../../../shared/agent-launch/catalog/tui-agent-config-types'
-import { TUI_AGENT_CONFIG } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import type { DraftPasteMarkerSignal } from '../../../../shared/agent-launch/catalog/tui-agent-config-types'
 import {
   createDraftPasteReadyScanner,
-  draftPasteReadySignalHasMarker,
   type DraftPasteReadyScanner
 } from '../../../../shared/agent-launch/startup/readiness/draft-paste-ready-scanner'
+import { AGENT_PAINT_SIGNALS, agentPaintSignal } from './terminal-agent-paint-signal'
 import { normalizeTerminalChunk } from '../output/terminal-ansi-normalization'
 
 // eslint-disable-next-line no-control-regex -- control bytes are exactly what is not visible.
@@ -19,38 +15,6 @@ const VISIBLE_CHARACTER_RE = /[^\s\u0000-\u001f\u007f-\u009f]/
 function hasVisibleText(normalizedText: string): boolean {
   return VISIBLE_CHARACTER_RE.test(stripAnsiEscapeSequences(normalizedText))
 }
-
-/**
- * The composer marker that says this agent's command painted, for agents whose bare-name title
- * is weak and whose composer draws a marker only the agent emits (Claude: `❯`+NBSP after
- * DECSET 2031, which no shell sends). Why not any visible byte: Orca's zsh OSC 133;C hook runs
- * first in `preexec_functions`, so a later user or framework preexec hook can print before the
- * agent process exists, and a cold-starting agent can print a banner long before its composer
- * (STA-2380). Null for agents whose name-only idle keeps any post-marker paint as corroboration.
- */
-function paintSignalOf(config: TuiAgentConfig): DraftPasteMarkerSignal | null {
-  const signal = config.draftPasteReadySignal
-  return config.workerStartReadsComposerMarker === true &&
-    signal !== undefined &&
-    draftPasteReadySignalHasMarker(signal)
-    ? signal
-    : null
-}
-
-export function agentPaintSignal(
-  agent: TuiAgent | null | undefined
-): DraftPasteMarkerSignal | null {
-  return agent ? paintSignalOf(TUI_AGENT_CONFIG[agent]) : null
-}
-
-/** One scanner per distinct agent-owned marker, so every PTY attributes paint the same way. */
-const AGENT_PAINT_SIGNALS: readonly DraftPasteMarkerSignal[] = [
-  ...new Set(
-    Object.values(TUI_AGENT_CONFIG)
-      .map(paintSignalOf)
-      .filter((signal): signal is DraftPasteMarkerSignal => signal !== null)
-  )
-]
 
 /** OSC 133;C follows the prompt/echo; only visible bytes after it prove the running command painted. */
 export class TerminalCommandPaint {
@@ -276,6 +240,17 @@ export class TerminalCommandPaint {
 
   hasPainted(): boolean {
     return !this.awaitingPaint
+  }
+
+  /** It painted, it is still the command in front, and its start is known (a 133;C this run, or
+   *  the reattach that hid it). Markerless panes never are. */
+  hasAttributedPaint(): boolean {
+    return (
+      !this.awaitingPaint &&
+      this.startedAt !== null &&
+      !this.betweenCommands &&
+      !this.startFollowsFinishInRead
+    )
   }
 
   /** Whether the agent's own composer marker has arrived since the command started; before any

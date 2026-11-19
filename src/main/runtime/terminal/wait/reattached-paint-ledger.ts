@@ -21,7 +21,7 @@ export type ReattachedPaintEntry = {
   incarnationId: string
   sequence: number
   agent: string
-  /** When a quit saved it; another runtime's entry is kept this long. */
+  /** When a quit saved it; an entry for a terminal no run attached since is kept this long. */
   savedAt?: number
 }
 
@@ -32,7 +32,7 @@ const SAVE_BUDGET_MS = 500
 const READ_BUDGET_MS = 500
 /** An entry for a terminal no run attached since is kept this long. */
 const UNTRACKED_ENTRY_MS = 7 * 24 * 60 * 60_000
-/** A temp file this old is a writer's that stopped mid-quit; younger ones may be another instance's. */
+/** A temp file this old is a writer's that stopped mid-quit; a younger one may still be mid-write. */
 const STALE_TEMP_MS = 60_000
 
 type LedgerFile = { version: number; entries: Record<string, ReattachedPaintEntry> }
@@ -144,17 +144,6 @@ export type PaintLedgerPty = TerminalCommandPaintRecord & {
   launchCommandAgent: TuiAgent | null
 }
 
-/** The command's own paint is attributed: it painted, it is still the command in front, and its
- *  start is known (a 133;C this run, or the reattach that hid it). Markerless panes never are. */
-function hasAttributedPaint({ commandPaint: paint }: TerminalCommandPaintRecord): boolean {
-  return (
-    !!paint &&
-    paint.hasPainted() &&
-    paint.isCurrentReport(Number.POSITIVE_INFINITY) &&
-    !paint.isCurrentReport(undefined)
-  )
-}
-
 /** This terminal's ledger entry at quit; `sequence` is the daemon's output count, or undefined
  *  when the host gives none. Only screen-ruled agents need one. */
 export function reattachedPaintEntry(
@@ -167,7 +156,7 @@ export function reattachedPaintEntry(
     sequence !== undefined &&
     isTuiAgent(agent) &&
     readsTrustedScreen(agent) &&
-    hasAttributedPaint(pty)
+    !!pty.commandPaint?.hasAttributedPaint()
     ? { incarnationId: pty.incarnationId, sequence, agent }
     : null
 }
