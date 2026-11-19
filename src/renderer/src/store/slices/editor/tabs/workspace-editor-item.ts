@@ -107,7 +107,8 @@ export function getReplaceablePreviewFileId(
     'openFiles' | 'unifiedTabsByWorktree' | 'layoutByWorktree' | 'groupsByWorktree' | 'settings'
   >,
   worktreeId: string,
-  targetGroupId: string | undefined
+  targetGroupId: string | undefined,
+  contentType?: EditorTabContentType
 ): string | null {
   // Why: callers resolve intent first, but this helper is shared by five open paths — keep it correct for a caller that doesn't.
   if (!areEditorPreviewTabsEnabled(state)) {
@@ -115,7 +116,8 @@ export function getReplaceablePreviewFileId(
   }
   // Why: this open is about to become a new right pane, so it replaces nothing — evicting here
   // would delete the left pane's OpenFile and leave its tab with nothing behind it.
-  if (findLonePaneSourceGroupId(state, worktreeId, targetGroupId)) {
+  // A diff never splits a lone pane (resolveAutoPlacementGroupId), so it may replace there.
+  if (contentType !== 'diff' && findLonePaneSourceGroupId(state, worktreeId, targetGroupId)) {
     return null
   }
   const tabsForWorktree = state.unifiedTabsByWorktree?.[worktreeId] ?? []

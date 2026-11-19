@@ -62,4 +62,23 @@ describe('preview state when the second pane opens beside the first', () => {
       expect(state.openFiles.some((file) => file.id === tab.entityId)).toBe(true)
     }
   })
+
+  it('opens a diff over a lone pane and replaces the previous diff preview there', () => {
+    openPreview(store, 'a')
+    for (const name of ['b', 'c']) {
+      store.getState().openDiff(WT, `/repo/${name}.ts`, `${name}.ts`, 'typescript', false, {
+        preview: true
+      })
+    }
+
+    const state = store.getState()
+    expect(state.groupsByWorktree[WT]).toHaveLength(1)
+    const tabs = state.unifiedTabsByWorktree[WT] ?? []
+    expect(tabs.some((tab) => tab.entityId?.includes('a.ts'))).toBe(false)
+    expect(tabs.some((tab) => tab.entityId?.includes('b.ts'))).toBe(false)
+    expect(tabs.some((tab) => tab.entityId?.includes('c.ts'))).toBe(true)
+    for (const tab of tabs) {
+      expect(state.openFiles.some((file) => file.id === tab.entityId)).toBe(true)
+    }
+  })
 })

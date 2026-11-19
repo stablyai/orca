@@ -120,7 +120,9 @@ export function resolveAutoPlacementGroupId(
   }
   const loneGroupId = findLonePaneSourceGroupId(state, worktreeId, requestedGroupId)
   // Why: a browser joins a lone pane already showing a browser as another tab, not a split.
+  // A diff is a wide read, so half a pane is too narrow; it opens over the lone pane instead.
   return loneGroupId === null ||
+    contentType === 'diff' ||
     (contentType === 'browser' && groupShowsBrowser(state, worktreeId, loneGroupId))
     ? null
     : resolveRightSplitTargetGroupId(state, worktreeId, loneGroupId, {
