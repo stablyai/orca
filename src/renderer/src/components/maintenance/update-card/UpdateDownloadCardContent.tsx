@@ -5,6 +5,7 @@ import { Button } from '../../ui/button'
 import { Progress } from '../../ui/progress'
 import { useTranslate } from '@/i18n/use-translate'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { PairedServersFollowUpdateNote } from './PairedServersFollowUpdateNote'
 
 function isAnimatedGif(url: string | undefined): boolean {
   return typeof url === 'string' && url.toLowerCase().endsWith('.gif')
@@ -141,6 +142,7 @@ export function UpdateReadyToInstallContent({
           { value0: version }
         )}
       </p>
+      <PairedServersFollowUpdateNote />
       <Button variant="default" size="sm" onClick={onRestart} className="w-full">
         {t('auto.components.UpdateCard.68b235d264', 'Restart to Update')}
       </Button>

@@ -4,7 +4,12 @@ import { GENERAL_SETTING_ANCHORS, generalSetting } from './general-setting-ancho
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { getGeneralEditorSearchEntries } from '../editor/general-editor-search'
 import { translate } from '@/i18n/i18n'
-import { searchKeywords, translateSearchKeyword } from '../search/settings-search-keywords'
+import type { Translate } from '@/i18n/use-translate'
+import {
+  searchKeywords,
+  searchKeywordTranslator,
+  translateSearchKeyword
+} from '../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { getGeneralProjectRuntimeSearchEntries } from './project-runtime/general-project-runtime-search'
 import { getGeneralSupportSearchEntries } from './general-support-search'
@@ -181,6 +186,36 @@ export const getGeneralCliSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export function getUpdateRemoteServersWithAppSearchEntry(
+  t: Translate = translate
+): SettingsSearchEntry {
+  const translateSearchKeyword = searchKeywordTranslator(t)
+  return {
+    title: t(
+      'auto.components.settings.GeneralRemoteServerUpdates.updateWithOrca',
+      'Auto-update remote servers when Orca updates'
+    ),
+    description: t(
+      'auto.components.settings.GeneralRemoteServerUpdates.updateWithOrcaDescription',
+      'Servers on an older version update automatically after this app updates. Orca restarts on those computers and terminals reconnect.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.GeneralRemoteServerUpdates.keywordAutomatic',
+        'automatic'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.GeneralRemoteServerUpdates.keywordRemoteServer',
+        'remote server'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.GeneralRemoteServerUpdates.keywordPaired',
+        'paired'
+      )
+    ]
+  }
+}
+
 export const getGeneralUpdateSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate('auto.components.settings.general.search.0504f69ba0', 'Check for updates'),
@@ -207,7 +242,8 @@ export const getGeneralUpdateSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('settings.updateDelay.keywordCooldown', 'cooldown'),
       ...translateSearchKeyword('settings.updateDelay.keywordSecurity', 'security')
     ]
-  }
+  },
+  getUpdateRemoteServersWithAppSearchEntry()
 ])
 
 type GeneralPaneSearchOptions = {
