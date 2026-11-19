@@ -21,6 +21,7 @@ import {
 } from './native-chat-transcript-slots'
 import type { NativeChatSideChatForkPoint } from '../../messages/actions/native-chat-side-chat-fork-point'
 import type { NativeChatTranscriptSlotsInput } from './native-chat-transcript-input'
+import { useNativeChatWorkers } from '../../native-chat-workers-context'
 
 /** Choose slots/activity together so reasoning shown by the activity line never also gets a transcript row. */
 export function useNativeChatTranscriptSlots({
@@ -30,7 +31,7 @@ export function useNativeChatTranscriptSlots({
   ...input
 }: Omit<
   NativeChatTranscriptSlotsInput,
-  'liveReasoningId' | 'expandedTurnKeys' | 'turnFold' | 'tailRowBelow'
+  'liveReasoningId' | 'expandedTurnKeys' | 'turnFold' | 'tailRowBelow' | 'workers'
 > & {
   scopeKey: string
   historyHead?: string
@@ -48,6 +49,7 @@ export function useNativeChatTranscriptSlots({
   forkPoint: NativeChatSideChatForkPoint | null
 } {
   const visualOwner = useContext(NativeChatVisualOwnerContext)
+  const workers = useNativeChatWorkers()
   const imageSources = visualOwner
     ? nativeChatVisualMarkdownImageSources
     : nativeChatMarkdownImageSources
@@ -146,10 +148,12 @@ export function useNativeChatTranscriptSlots({
         lifecycleWorking,
         subagentHeads,
         liveReasoningId,
-        forkOffer
+        forkOffer,
+        workers
       }),
     [
       historyFold,
+      workers,
       imageSources,
       forkOffer,
       isWorking,

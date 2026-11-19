@@ -8,6 +8,7 @@ import {
   isQuietReadyScreenBody
 } from './terminal-wait-detection'
 import { readScreenInputVeto, type RuledScreen } from './screen-input-veto'
+import { isProgramSignInWaitScreen } from './program-sign-in-screen'
 import {
   evaluateAgentStateRules,
   readsTrustedScreen,
@@ -211,6 +212,7 @@ export function ptyTuiIdleEvidence(
       isQuietReadyScreenBody(waitText(), agent, readScreen) && readScreenPainted(),
     readAgentRuleVerdict: () => readAgentRuleVerdict(agent, record, readScreen, waitText),
     readScreenInputVeto: screenInputVetoReader(source, agent, pty.ptyId),
+    readProgramSignInWaitScreen: () => isProgramSignInWaitScreen(waitText()),
     titleObservedAtEpochMs: pty.lastOscTitleEpochMs,
     agent,
     firstPartyStatus:

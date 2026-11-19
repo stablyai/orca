@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { JiraIssueFilter, JiraIssueListFilters } from '../../shared/jira/jira-types'
 import type { JiraClientForSite } from './authenticated-request'
 import { JiraApiError } from './jira-api-error'
 import { listIssues } from './jira-issue-search'
@@ -54,16 +55,28 @@ describe('Jira presets on servers without statusCategory', () => {
   })
 
   it.each([
-    ['all', 'resolution = Unresolved ORDER BY updated DESC'],
-    ['done', 'assignee = currentUser() AND resolution IS NOT EMPTY ORDER BY updated DESC']
-  ] as const)('retries the %s preset with resolution', async (filter, fallback) => {
-    getClientsMock.mockReturnValue([client(`legacy-${filter}`, 'server')])
-    const queries = mockSearch("字段 'statusCategory' 不存在")
-    const issues = await listIssues(filter, 30, `legacy-${filter}`, true)
-    expect(issues.map((issue) => issue.key)).toEqual(['OLD-1'])
-    expect(queries).toHaveLength(2)
-    expect(queries[1]).toBe(fallback)
-  })
+    {
+      filter: 'reported',
+      filters: { statuses: ['In Progress'], currentSprint: true },
+      fallback:
+        'reporter = currentUser() AND resolution = Unresolved AND status in ("In Progress") AND sprint in openSprints() ORDER BY updated DESC'
+    },
+    {
+      filter: 'done',
+      filters: undefined,
+      fallback: 'assignee = currentUser() AND resolution IS NOT EMPTY ORDER BY updated DESC'
+    }
+  ] satisfies { filter: JiraIssueFilter; filters?: JiraIssueListFilters; fallback: string }[])(
+    'retries the $filter preset with resolution',
+    async ({ filter, filters, fallback }) => {
+      getClientsMock.mockReturnValue([client(`legacy-${filter}`, 'server')])
+      const queries = mockSearch("字段 'statusCategory' 不存在")
+      const issues = await listIssues(filter, 30, `legacy-${filter}`, true, filters)
+      expect(issues.map((issue) => issue.key)).toEqual(['OLD-1'])
+      expect(queries).toHaveLength(2)
+      expect(queries[1]).toBe(fallback)
+    }
+  )
 
   it('does not retry Cloud sites or unrelated Server rejections', async () => {
     getClientsMock.mockReturnValue([client('cloud-site', 'cloud')])

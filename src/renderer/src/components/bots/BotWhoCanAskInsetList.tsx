@@ -138,6 +138,11 @@ export function BotWhoCanAskInsetList({
           </PopoverContent>
         </Popover>
       </SettingsInsetGroup>
+      <BotAccessControlLine
+        bot={bot}
+        others={listed.map(memberName)}
+        className="mt-1.5 px-3 text-xs leading-[17px] text-muted-foreground"
+      />
       {save.kind === 'failed' ? (
         <div
           role="alert"
@@ -150,11 +155,6 @@ export function BotWhoCanAskInsetList({
           </Button>
         </div>
       ) : null}
-      <BotAccessControlLine
-        bot={bot}
-        others={listed.map(memberName)}
-        className="mt-1.5 px-3 text-xs leading-[17px] text-muted-foreground"
-      />
     </>
   )
 }
