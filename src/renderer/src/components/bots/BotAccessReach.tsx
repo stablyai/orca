@@ -39,7 +39,7 @@ import {
   type GoogleReachArea
 } from '../../../../shared/bots/bot-access-reach'
 import { botAgentLabel, botErrorMessage } from './bot-presentation'
-import { setBotGoogle, useBotGoogleReaches } from './google/google-connect-client'
+import { setBotGoogle, useBotGoogleReach } from './google/google-connect-client'
 import { useTurnOnBotGoogle } from './google/use-turn-on-bot-google'
 import { NewBotDialog } from './NewBotDialog'
 
@@ -53,12 +53,18 @@ const copy = (t: Translate, id: BotAccessCopyId, values: Record<string, unknown>
 export function useBotAccessSignals(bot: Bot): {
   permission: BotStartingPermission
   google: GoogleReachArea[]
+  /** Google is on but its status isn't known yet, so it may reach anything. */
+  googleUnknown: boolean
 } {
   const appDefault = useAppStore((state) =>
     newChatPermissionModeForSettings(bot.agent, state.settings)
   )
-  const google = useBotGoogleReaches(bot)
-  return { permission: botStartingPermission(bot, appDefault ?? null), google }
+  const { areas, unknown } = useBotGoogleReach(bot)
+  return {
+    permission: botStartingPermission(bot, appDefault ?? null),
+    google: areas,
+    googleUnknown: unknown
+  }
 }
 
 /** "You and Bob can ask CoS.", then what that lets them do. */
