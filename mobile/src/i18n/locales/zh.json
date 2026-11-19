@@ -1891,7 +1891,12 @@
       "deleteFailed": "无法删除“{{name}}”",
       "sleep": "休眠",
       "unpin": "取消固定",
-      "rename": "重命名"
+      "rename": "重命名",
+      "markRead": "标记为已读",
+      "markUnread": "标记为未读",
+      "muteNotifications": "静音通知",
+      "unmuteNotifications": "取消静音通知",
+      "moveToStatus": "移至状态"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "检查项：未通过",

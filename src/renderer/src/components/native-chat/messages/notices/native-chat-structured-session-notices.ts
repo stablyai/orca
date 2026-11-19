@@ -27,6 +27,7 @@ function nativeChatLaunchNotice(
     lifecycle,
     failure = null,
     agentLabel,
+    hostName,
     onRetry,
     setup = null,
     wslHostOffer = null,
@@ -35,6 +36,8 @@ function nativeChatLaunchNotice(
     lifecycle: StructuredAgentSessionLaunchLifecycle | null
     failure?: StructuredLaunchFailure | null
     agentLabel?: string
+    /** Where the chat runs, as a sentence names it. */
+    hostName?: string
     onRetry: () => void
     /** Replace Retry with the host setup step (sign in, install) that fixes the failure. */
     setup?: NativeChatHostSetup | null
@@ -65,12 +68,19 @@ function nativeChatLaunchNotice(
   const cause = failure
     ? (failure.causeText ??
       agentSessionWriteNoticeText(
-        agentSessionRefusalCauseParts(failure, agentLabel ? { agentName: agentLabel } : {})
+        agentSessionRefusalCauseParts(failure, {
+          ...(agentLabel ? { agentName: agentLabel } : {}),
+          ...(hostName ? { hostName } : {})
+        })
       ))
     : ''
-  // An argument problem already says the start failed; the generic lead would repeat it.
+  const cliTooOld =
+    failure?.code === 'agent_session_operation_invalid' &&
+    Boolean(failure.details?.agentInstallation ?? failure.details?.codexInstallation)
+  // An argument problem already says the start failed; a too-old CLI says what chats need.
   const saysStartFailure =
-    failure?.code === 'agent_session_operation_invalid' && failure.details?.argumentProblem
+    cliTooOld ||
+    (failure?.code === 'agent_session_operation_invalid' && failure.details?.argumentProblem)
   const details = failure?.details
   // No retry continues a conversation saved in another folder.
   const retryable = !(
@@ -90,12 +100,7 @@ function nativeChatLaunchNotice(
     text: cause ? (saysStartFailure ? cause : joinSentences([message, cause])) : message,
     action:
       nativeChatSetupAction(failure?.details?.reason, setup, t) ??
-      nativeChatCliUpdateAction(
-        failure?.code === 'agent_session_operation_invalid' &&
-          Boolean(failure.details?.agentInstallation ?? failure.details?.codexInstallation),
-        setup,
-        t
-      ) ??
+      nativeChatCliUpdateAction(cliTooOld, setup, t) ??
       (signInContent || !retryable
         ? undefined
         : {
@@ -109,6 +114,7 @@ export function structuredSessionNotices(
   {
     launch,
     agentLabel,
+    hostName,
     sessionError,
     readRefusal,
     composerError,
@@ -124,6 +130,7 @@ export function structuredSessionNotices(
       retry: () => void
     }
     agentLabel: string
+    hostName?: string
     sessionError: string | null
     readRefusal?: AgentSessionRefusalReference
     composerError: (NativeChatComposerNoticeContent & { onDismiss: () => void }) | null
@@ -142,6 +149,7 @@ export function structuredSessionNotices(
       lifecycle: hostPermission ? null : launch.lifecycle,
       failure: launch.failure,
       agentLabel,
+      hostName,
       onRetry: launch.retry,
       setup,
       wslHostOffer,

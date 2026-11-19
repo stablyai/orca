@@ -185,7 +185,10 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
       {slot.statusAbove ? null : statusRow}
       {turnDiff ? <NativeChatTurnDiffRollup diff={turnDiff} /> : null}
       {openedPullRequests ? (
-        <NativeChatOpenedPullRequestCard pullRequests={openedPullRequests} />
+        <NativeChatOpenedPullRequestCard
+          pullRequests={openedPullRequests}
+          timestamp={message.timestamp}
+        />
       ) : null}
       {(itemNotes ?? [message]).flatMap(
         (member) =>

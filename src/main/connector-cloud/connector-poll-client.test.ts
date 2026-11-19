@@ -17,26 +17,21 @@ const h = pollClientHarness()
 const { startClient, poll } = h
 
 describe('ConnectorPollClient', () => {
-  it('publishes its initial snapshot after connecting', async () => {
-    const { client } = startClient()
+  it('applies the hello answer, publishes the initial snapshot and starts polling', async () => {
+    const helloAnswered = vi.fn()
+    h.fake.features = ['webhooks']
+    h.fake.webhookTombstones = ['wh_7Kx2pQ9mZbV4tL1r']
+    const { client } = startClient(undefined, undefined, (machine) => {
+      machine.helloAnswered = helloAnswered
+    })
     await settle()
+    expect(helloAnswered).toHaveBeenCalledExactlyOnceWith({
+      helloRev: expect.any(Number),
+      features: ['webhooks'],
+      webhookTombstones: ['wh_7Kx2pQ9mZbV4tL1r']
+    })
     expect(h.fake.events).toEqual([{ kind: 'snapshot', conversations: [] }])
     expect(h.fake.requestsTo(CONNECTOR_PATHS.poll)).toHaveLength(1)
-    client.stop()
-  })
-
-  it('starts a bot with the prompt alone: its final message is its reply', async () => {
-    const seam = fakeSeam()
-    const { client, calls } = startClient(seam)
-    await settle()
-    const placeId = Buffer.from(JSON.stringify(['bot', 'b1'])).toString('base64url')
-    poll([{ ...base, deliveryId: 'd1', kind: 'start', agent: 'claude', placeId, prompt: 'hi' }])
-    await settle()
-    expect(calls.start).toHaveBeenCalledWith(expect.anything(), conversation, 'd1', {
-      agent: 'claude',
-      prompt: 'hi',
-      target: { kind: 'bot', botId: 'b1' }
-    })
     client.stop()
   })
 
@@ -475,17 +470,6 @@ describe('ConnectorPollClient', () => {
     client.stop()
   })
 
-  it('says hello again when its bots change', async () => {
-    const { client, machine } = startClient()
-    await settle()
-    machine.botList = [FAKE_BOT]
-    poll([])
-    await settle()
-    expect(h.fake.hellos.at(-1)).toMatchObject({ bots: [FAKE_BOT] })
-    expect(h.fake.hellos).toHaveLength(2)
-    client.stop()
-  })
-
   it('says a changed hello at once, while the poll stays held', async () => {
     const { client, machine } = startClient()
     await settle()
@@ -549,6 +533,7 @@ describe('ConnectorPollClient', () => {
     poll([], { unsettled: [{ deliveryId: 'd1', conversation }] })
     await settle()
     expect(h.fake.hellos).toHaveLength(2)
+    expect(h.fake.hellos.at(-1)).toMatchObject({ bots: [FAKE_BOT] })
     h.fake.release(CONNECTOR_PATHS.acks)
     await settle(5_000)
     expect(h.fake.acks).toContainEqual({

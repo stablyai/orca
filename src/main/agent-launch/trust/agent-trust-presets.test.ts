@@ -31,6 +31,12 @@ vi.mock('electron', () => ({
   }
 }))
 
+vi.mock('../../codex/trust/project-trust/codex-project-trust-worker-spawn', async () => ({
+  spawnCodexProjectTrustWorker: (
+    await import('../../codex/trust/project-trust/codex-project-trust-worker.test-fixture')
+  ).codexProjectTrustTestWorker.factory
+}))
+
 const { markCodexProjectTrusted, markCopilotFolderTrusted } = await import('./agent-trust-presets')
 const { runExclusivelyForCodexTrustConfig } =
   await import('../../codex/trust/toml/codex-trust-config-mutation-queue')

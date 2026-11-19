@@ -43,6 +43,9 @@ export type MobileNativeChatForkRun = (
 /** A copy of the chat's own history, or another agent's recap of it. */
 export type MobileNativeChatForkKind = 'copy' | 'recap'
 
+/** What `/fork` did: opened a fork, waited on one already opening, or found no response to copy. */
+export type MobileNativeChatForkLatestOutcome = 'started' | 'pending' | 'working' | 'none'
+
 export type MobileNativeChatFork = {
   subscribe: (listener: () => void) => () => void
   offerFor: (message: NativeChatMessage) => MobileNativeChatForkOffer
@@ -60,6 +63,10 @@ export type MobileNativeChatFork = {
   /** Whether this host can fork a chat into a new worktree. */
   worktreeForkOffered: () => boolean
   hostCapabilities: () => readonly string[] | undefined
+  /** Whether `/fork` is Orca's here: the host and agent confirmed they can fork, as on desktop. */
+  commandOffered: () => boolean
+  /** `/fork`: copies through the newest response that offers a fork, as desktop's command does. */
+  forkLatest: () => MobileNativeChatForkLatestOutcome
 }
 
 /** Fixed by the row's own kind, never by support or turn state, so the meta row never shifts. */
@@ -248,6 +255,21 @@ export function useMobileNativeChatFork(input: {
     () => messages.findLast((candidate) => offerFor(candidate) === 'available'),
     [messages, offerFor]
   )
+  const commandOffered = useCallback(
+    () => support.kind === 'known' && !!sessionId && isTuiAgent(agent ?? ''),
+    [agent, sessionId, support]
+  )
+  const forkLatest = useCallback((): MobileNativeChatForkLatestOutcome => {
+    if (inFlight.current) {
+      return 'pending'
+    }
+    const through = latestForkable()
+    if (!through) {
+      return agentWorking ? 'working' : 'none'
+    }
+    fork(through)
+    return 'started'
+  }, [agentWorking, fork, latestForkable])
   // One stable value: each button re-renders only when its own offer changes, not on every
   // streamed revision of the transcript.
   const latest = useRef({
@@ -257,6 +279,8 @@ export function useMobileNativeChatFork(input: {
     latestForkable,
     worktreeForkSupported,
     copyOffered,
+    commandOffered,
+    forkLatest,
     hostCapabilities: input.hostCapabilities
   })
   const listeners = useRef(new Set<() => void>())
@@ -268,6 +292,8 @@ export function useMobileNativeChatFork(input: {
       latestForkable,
       worktreeForkSupported,
       copyOffered,
+      commandOffered,
+      forkLatest,
       hostCapabilities: input.hostCapabilities
     }
     for (const listener of listeners.current) {
@@ -280,6 +306,8 @@ export function useMobileNativeChatFork(input: {
     latestForkable,
     worktreeForkSupported,
     copyOffered,
+    commandOffered,
+    forkLatest,
     input.hostCapabilities
   ])
   return useMemo(
@@ -294,7 +322,9 @@ export function useMobileNativeChatFork(input: {
       copyOffered: () => latest.current.copyOffered,
       latestForkable: () => latest.current.latestForkable(),
       worktreeForkOffered: () => latest.current.worktreeForkSupported,
-      hostCapabilities: () => latest.current.hostCapabilities
+      hostCapabilities: () => latest.current.hostCapabilities,
+      commandOffered: () => latest.current.commandOffered(),
+      forkLatest: () => latest.current.forkLatest()
     }),
     []
   )

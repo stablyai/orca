@@ -81,6 +81,22 @@ it('reads a Hermes conversation as chat items a chat can take over, tool calls o
   expect(readHermesChatTranscript({ dbPath: path, sessionId: 'missing' })).toBeNull()
 })
 
+it('reads a multimodal tool result as its text with images marked', () => {
+  const { path, db } = createStore()
+  const parts = [
+    { type: 'text', text: 'Screenshot taken.' },
+    { type: 'image_url', image_url: { url: `data:image/png;base64,${'A'.repeat(100_000)}` } }
+  ]
+  db.prepare(
+    "INSERT INTO messages (session_id, role, content, tool_call_id, timestamp) VALUES ('s', 'tool', ?, 'c1', 1773300001)"
+  ).run(`\u0000json:${JSON.stringify(parts)}`)
+  db.close()
+
+  expect(readHermesChatTranscript({ dbPath: path, sessionId: 's' })?.[0].blocks).toEqual([
+    { type: 'tool-result', output: 'Screenshot taken.\n[image]', callId: 'c1' }
+  ])
+})
+
 it('keeps the newest messages of a conversation too long to take over whole', () => {
   const { path, db } = createStore()
   const add = db.prepare(

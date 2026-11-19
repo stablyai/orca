@@ -50,11 +50,6 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
   sectionPendingSpinner: {
     marginLeft: spacing.sm
   },
-  // At the header's end, as the desktop's Bots + is.
-  sectionNewBot: {
-    marginLeft: 'auto',
-    paddingHorizontal: spacing.xs
-  },
   separator: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle,
@@ -82,12 +77,6 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
   },
   optionSegmented: {
     marginBottom: spacing.md
-  },
-  // Over the sheet header's empty leading side, centred in its 52pt row.
-  optionPageBack: {
-    position: 'absolute',
-    top: 8,
-    left: spacing.xs
   },
   filterRepoDot: {
     width: 8,
