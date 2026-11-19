@@ -183,7 +183,11 @@ export class StructuredAgentSessionRestoredPrompts {
         continuationId
       )
       if ('verdict' in started) {
-        void started.verdict().catch(() => this.drop(sessionId))
+        // A start that fails after the answer is recorded is reported by the chat's own note.
+        void started.verdict().then(
+          (outcome) => outcome.outcome === 'refused' && this.drop(sessionId),
+          () => this.drop(sessionId)
+        )
       } else if (started.done.outcome === 'refused') {
         this.drop(sessionId)
         return {
