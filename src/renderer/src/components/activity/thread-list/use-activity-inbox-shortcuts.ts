@@ -127,6 +127,12 @@ export function useActivityInboxShortcuts({
   }, [scrollToIndex, selectedItemIndex])
   // Sidebar selection follows pane focus, which some rows never take (closed tabs, floating panel); anchor on the row the keyboard chose until focus moves.
   const keyboardAnchorRef = useRef<{ paneKey: string; focusedBefore: string | null } | null>(null)
+  // Once focus moves, a later return to focusedBefore is the user's choice, not a stale keyboard move.
+  useEffect(() => {
+    if (keyboardAnchorRef.current?.focusedBefore !== selectedPaneKey) {
+      keyboardAnchorRef.current = null
+    }
+  }, [selectedPaneKey])
 
   useEffect(() => {
     if (!enabled) {
@@ -246,8 +252,16 @@ export function useActivityInboxShortcuts({
         select(neighbor)
       }
     }
+    // A click picks its own row even when focus does not move (clicking the still-focused pane).
+    const dropAnchor = (): void => {
+      keyboardAnchorRef.current = null
+    }
     addAppKeyListener('keydown', onKeyDown)
-    return () => removeAppKeyListener('keydown', onKeyDown)
+    window.addEventListener('pointerdown', dropAnchor, true)
+    return () => {
+      removeAppKeyListener('keydown', onKeyDown)
+      window.removeEventListener('pointerdown', dropAnchor, true)
+    }
   }, [enabled])
   return hintNumberByPaneKey
 }
