@@ -40,6 +40,7 @@ export function structuredAgentSessionDeliveryNotices(args: {
   }
   const shown = submissions.some((submission) => submission.dispatchState === 'rejected')
     ? structuredAgentSessionRejectedShownInPlace(submissions, args.commandItemIds ?? NO_COMMANDS)
+        .shown
     : new Set<string>()
   for (const submission of submissions) {
     const id = agentJournalSubmissionKey(submission.clientMessageId)
