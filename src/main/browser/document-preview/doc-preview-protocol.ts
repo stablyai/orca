@@ -117,11 +117,12 @@ export function installDocPreviewProtocolHandler(): void {
   if (previewSession.protocol.isProtocolHandled(DOC_PREVIEW_SCHEME)) {
     return
   }
-  previewSession.protocol.handle(DOC_PREVIEW_SCHEME, handleDocPreviewRequest)
   // Block network requests beyond CSP; explicit DNS-prefetch bypasses this hook.
+  // Why first: if the block can't be held, previews never get their scheme and stay closed.
   holdBrowserSessionWebRequest(previewSession, 'onBeforeRequest', (details, callback) => {
     callback({ cancel: !isAllowedDocPreviewRequestUrl(details.url) })
   })
+  previewSession.protocol.handle(DOC_PREVIEW_SCHEME, handleDocPreviewRequest)
   installBrowserSessionPartitionPolicies(
     {
       id: DOC_PREVIEW_PARTITION,
