@@ -194,31 +194,24 @@ describe('look-around suggestions', () => {
     expect(upNextItems(state, OPEN_FOR_MS + 10)).toEqual([])
   })
 
-  it('starts or dismisses a suggestion once', () => {
-    const made = suggested(beginRun(EMPTY_BOT_LOOK, 'run-1', 0), 'run-1', idea('A'))
-    const started = resolve(made.state, made.suggestion.id, 'started', 1)
-    expect(started.outcome).toMatchObject({ ok: true, suggestion: { ask: 'Look at A' } })
-    expect(resolve(started.state, made.suggestion.id, 'started', 2).outcome).toEqual({
-      ok: false,
-      refusal: 'already_started'
-    })
-    expect(resolve(started.state, made.suggestion.id, 'dismissed', 2).outcome).toEqual({
-      ok: false,
-      refusal: 'already_started'
-    })
-    expect(resolve(made.state, 'missing', 'started', 1).outcome).toEqual({
-      ok: false,
-      refusal: 'not_found'
-    })
-  })
-
-  it('tells the next look what is open, started and dismissed', () => {
+  it('resolves a suggestion once and tells the next look what happened', () => {
     let state = beginRun(EMPTY_BOT_LOOK, 'run-1', 0)
     const a = suggested(state, 'run-1', idea('A'))
     const b = suggested(a.state, 'run-1', idea('B'))
     state = suggested(b.state, 'run-1', idea('C')).state
-    state = resolve(state, a.suggestion.id, 'started', 1).state
-    state = resolve(state, b.suggestion.id, 'dismissed', 1).state
+    const started = resolve(state, a.suggestion.id, 'started', 1)
+    expect(started.outcome).toMatchObject({ ok: true, suggestion: { ask: 'Look at A' } })
+    state = resolve(started.state, b.suggestion.id, 'dismissed', 1).state
+    for (const action of ['started', 'dismissed'] as const) {
+      expect(resolve(state, a.suggestion.id, action, 2).outcome).toEqual({
+        ok: false,
+        refusal: 'already_started'
+      })
+    }
+    expect(resolve(state, 'missing', 'started', 2).outcome).toEqual({
+      ok: false,
+      refusal: 'not_found'
+    })
     expect(lookHistory(state, 2)).toEqual({ open: ['C'], started: ['A'], dismissed: ['B'] })
   })
 
@@ -266,16 +259,12 @@ describe('a failed look', () => {
   const state = (runs: LookAroundRun[]): BotLookState => ({ ...EMPTY_BOT_LOOK, runs })
   const now: LookAroundRun = { sessionId: 'now', startedAt: 2 }
 
-  it('is news when nothing in its streak notified, even after failures that never could', () => {
-    const runs = [{ sessionId: 'ok', startedAt: 0, endedAt: 1 }, failed('could-not-start'), now]
-    expect(lookFailureIsQuiet(state(runs), 'now')).toBe(false)
-  })
-
-  it('is quiet once its streak notified, until a success ends the streak', () => {
+  it('notifies once per streak and starts over after a success', () => {
+    const success = { sessionId: 'ok', startedAt: 0, endedAt: 1 }
     expect(lookFailureIsQuiet(state([failed('told', true), failed('later'), now]), 'now')).toBe(
       true
     )
-    const afterSuccess = [failed('told', true), { sessionId: 'ok', startedAt: 0, endedAt: 1 }, now]
+    const afterSuccess = [failed('told', true), success, failed('could-not-start'), now]
     expect(lookFailureIsQuiet(state(afterSuccess), 'now')).toBe(false)
   })
 
