@@ -186,13 +186,14 @@ export function structuredSessionNotices(
           key: 'session',
           kind: 'error' as const,
           text: sessionError,
-          ...(launchNotice ? { action: launchNotice.action, signIn: launchNotice.signIn } : {})
+          ...(launchNotice && !launchNotice.signIn ? { action: launchNotice.action } : {})
         }
       : null
   return [
     ...(hostPermission ? [hostPermission] : []),
     ...(availability ? [availability] : []),
-    ...(launchNotice && !sessionNotice ? [launchNotice] : []),
+    // Sign in keeps its own row: its "Signed in" would otherwise read over an unrelated error.
+    ...(launchNotice && (!sessionNotice || launchNotice.signIn) ? [launchNotice] : []),
     ...(sessionNotice ? [sessionNotice] : []),
     ...(composerError ? [{ key: 'composer-error', kind: 'error' as const, ...composerError }] : [])
   ]
