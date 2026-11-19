@@ -273,7 +273,8 @@ export function renderResourceUsageSummary(
             </div>
           </div>
         </HoverCardTrigger>
-        <HoverCardContent variant="workspace-details" side="bottom" className="w-auto">
+        {/* Why: the Resource Manager popover sits at z-60, so its own hover card must stack above it. */}
+        <HoverCardContent variant="workspace-details" side="bottom" className="z-[70] w-auto">
           <table className="tabular-nums">
             <thead>
               <tr className="text-muted-foreground">
