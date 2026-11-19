@@ -3,6 +3,7 @@ import { CommandGroup, CommandItem, CommandSeparator } from '@/components/ui/com
 import { useTranslate } from '@/i18n/use-translate'
 import { agentCliProductName } from '@/components/agent-cli-update/agent-cli-product-name'
 import type { SessionOptionsCliUpdate } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 
 /** Only for the user's own CLI behind its latest release; Orca's own copy updates by itself. */
 export function NativeChatModelCliUpdateRow({
@@ -34,7 +35,7 @@ export function NativeChatModelCliUpdateRow({
             {running ? (
               <>
                 {t('agentCliUpdate.updating', 'Updating…')}
-                <Loader2 className="size-3.5 animate-spin" />
+                <Loader2 ref={observeVisibleAnimation} className="size-3.5 visible-animate-spin" />
               </>
             ) : update.phase === 'failed' ? (
               <span className="text-destructive">

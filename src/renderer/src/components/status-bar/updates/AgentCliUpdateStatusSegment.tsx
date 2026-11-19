@@ -14,6 +14,7 @@ import {
   type AgentCliUpdateGroup,
   type AgentCliUpdateRow
 } from './AgentCliUpdateList'
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 
 const LOCAL_TARGET = { kind: 'local' } as const
 const NO_HOST_NAMES: Readonly<Record<string, string>> = Object.freeze({})
@@ -75,7 +76,12 @@ export function AgentCliUpdateStatusSegment({
   const failed = rows.some((row) => row.run?.phase === 'failed')
   const segment = busy
     ? {
-        icon: <Loader2 className="size-3 animate-spin text-muted-foreground" />,
+        icon: (
+          <Loader2
+            ref={observeVisibleAnimation}
+            className="size-3 visible-animate-spin text-muted-foreground"
+          />
+        ),
         label: t('agentCliUpdate.statusUpdating', 'Updating CLIs'),
         tooltip: t('agentCliUpdate.statusUpdatingTooltip', 'Agent CLI updates are running')
       }

@@ -15,6 +15,7 @@ import {
   type AgentCliUpdate,
   type AgentCliUpdateAgent
 } from '../../../../../shared/agent-launch/installation/agent-cli-update'
+import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 
 export type AgentCliUpdateRow = {
   hostKey: string
@@ -75,7 +76,10 @@ function AgentCliUpdateListRow({
               <span className="text-2xs text-muted-foreground">
                 {t('agentCliUpdate.updating', 'Updating…')}
               </span>
-              <Loader2 className="size-3 animate-spin text-muted-foreground" />
+              <Loader2
+                ref={observeVisibleAnimation}
+                className="size-3 visible-animate-spin text-muted-foreground"
+              />
             </>
           ) : run?.phase === 'failed' ? (
             <>
