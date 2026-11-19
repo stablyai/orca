@@ -15,7 +15,10 @@ it('removes a folder row through folderWorkspace.delete, since no git selector n
   await Promise.resolve()
 
   expect(client.requests.map((request) => [request.method, request.args[1]])).toEqual([
-    ['folderWorkspace.delete', { folderWorkspaceId: 'notes', runHooks: false }]
+    [
+      'folderWorkspace.delete',
+      { folderWorkspaceId: 'notes', requireUniqueId: true, runHooks: false }
+    ]
   ])
   client.requests[0].resolve(rpcSuccess('1', { deleted: true }))
   await expect(removing).resolves.toEqual({ accepted: true })

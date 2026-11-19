@@ -13,7 +13,7 @@ export type WorktreeRemoveHooks = {
 type WorktreeRemoveRequest =
   | {
       kind: 'folder'
-      params: WorktreeRemoveHooks & { folderWorkspaceId: string }
+      params: WorktreeRemoveHooks & { folderWorkspaceId: string; requireUniqueId: true }
       timeoutMs: number
     }
   | {
@@ -32,7 +32,8 @@ function buildWorktreeRemoveRequest(
   if (scope?.type === 'folder') {
     return {
       kind: 'folder',
-      params: { folderWorkspaceId: scope.folderWorkspaceId, ...hooks },
+      // Like the CLI: an id two folder workspaces share is refused, never guessed.
+      params: { folderWorkspaceId: scope.folderWorkspaceId, requireUniqueId: true, ...hooks },
       timeoutMs: worktreeRemovalReplyTimeoutMs(hooks.runHooks)
     }
   }
