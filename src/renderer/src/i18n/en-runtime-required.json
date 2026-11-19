@@ -2807,5 +2807,17 @@
       "ariaActiveCount_one": "Filter: {{count}} active.",
       "ariaActiveCount_other": "Filter: {{count}} active."
     }
+  },
+  "zotz": {
+    "deleteReview": {
+      "truncated_one": "… {{count}} more line",
+      "truncated_other": "… {{count}} more lines"
+    },
+    "removeProject": {
+      "changesKept_one": "{{count}} uncommitted change",
+      "changesKept_other": "{{count}} uncommitted changes",
+      "uncommitted_one": "{{count}} conversation has uncommitted changes",
+      "uncommitted_other": "{{count}} conversations have uncommitted changes"
+    }
   }
 }

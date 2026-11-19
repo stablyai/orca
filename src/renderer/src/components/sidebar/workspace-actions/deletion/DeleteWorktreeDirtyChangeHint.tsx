@@ -9,15 +9,25 @@ import type {
   DeleteWorktreeChangeCheckState,
   DeleteWorktreeDirtyChangePreview
 } from './delete-worktree-dirty-change-counts'
+import {
+  ZotzDirtyFileToggle,
+  type ZotzDirtyFileOwner
+} from '../../../zotz/deletion/ZotzDirtyFileDiff'
 
 export function DeleteWorktreeDirtyChangeHint({
   changeCount,
   checkState,
-  preview
+  preview,
+  owner,
+  keptLabel
 }: {
   changeCount: number | undefined
   checkState?: DeleteWorktreeChangeCheckState
   preview?: DeleteWorktreeDirtyChangePreview
+  /** Zotz: the worktree whose paths expand to their diff. */
+  owner?: ZotzDirtyFileOwner
+  /** Zotz: replaces "will be lost" where the changes stay on disk. */
+  keptLabel?: string
 }): JSX.Element | null {
   const t = useTranslate()
   if (changeCount === undefined) {
@@ -37,8 +47,9 @@ export function DeleteWorktreeDirtyChangeHint({
     )
   }
 
-  const label =
-    changeCount > 0
+  const label = keptLabel
+    ? keptLabel
+    : changeCount > 0
       ? t(
           'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.changesLost',
           '{{count}} uncommitted changes will be lost',
@@ -93,7 +104,7 @@ export function DeleteWorktreeDirtyChangeHint({
             'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.loadedChangedPaths',
             'Loaded changed paths'
           )}
-          className="w-80 max-w-[calc(100vw-2rem)]"
+          className={`${owner ? 'w-[32rem]' : 'w-80'} max-w-[calc(100vw-2rem)]`}
           wheelScroll
         >
           <div className="scrollbar-sleek max-h-[var(--radix-popover-content-available-height)] overflow-y-auto p-3 text-xs">
@@ -128,17 +139,19 @@ export function DeleteWorktreeDirtyChangeHint({
                     >
                       {STATUS_LABELS[file.status]}
                     </span>
-                    <div className="min-w-0 break-all text-foreground">
-                      {file.path}
-                      {file.hasUnresolvedConflict ? (
-                        <span className="ml-2 font-sans text-destructive">
-                          {t(
-                            'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.unresolvedConflict',
-                            'Unresolved conflict'
-                          )}
-                        </span>
-                      ) : null}
-                    </div>
+                    <ZotzDirtyFileToggle owner={owner} filePath={file.path}>
+                      <div className="min-w-0 break-all text-foreground">
+                        {file.path}
+                        {file.hasUnresolvedConflict ? (
+                          <span className="ml-2 font-sans text-destructive">
+                            {t(
+                              'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.unresolvedConflict',
+                              'Unresolved conflict'
+                            )}
+                          </span>
+                        ) : null}
+                      </div>
+                    </ZotzDirtyFileToggle>
                   </li>
                 ))}
               </ul>

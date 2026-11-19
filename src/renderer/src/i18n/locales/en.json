@@ -26001,6 +26001,23 @@
     "orcaPluginCatalog": {
       "settingLabel": "Download Orca's plugin catalog",
       "settingDescription": "Shows the official and community plugins from Orca and checks their safety list. Off by default because Zotz is a fork; your own plugin sources work either way."
+    },
+    "deleteReview": {
+      "loading": "Loading changes…",
+      "failed": "Could not load the changes",
+      "binary": "Binary file; compare it in Source Control",
+      "noTextChanges": "No text changes",
+      "truncated_one": "… {{count}} more line",
+      "truncated_other": "… {{count}} more lines",
+      "showDiff": "Show changes"
+    },
+    "removeProject": {
+      "checking": "Checking conversations for uncommitted changes…",
+      "uncommitted_one": "{{count}} conversation has uncommitted changes",
+      "uncommitted_other": "{{count}} conversations have uncommitted changes",
+      "uncommittedDetail": "They stay on disk, but this project and its conversations leave Zotz. Open a list to review each change.",
+      "changesKept_one": "{{count}} uncommitted change",
+      "changesKept_other": "{{count}} uncommitted changes"
     }
   }
 }
