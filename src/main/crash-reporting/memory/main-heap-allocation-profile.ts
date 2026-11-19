@@ -22,7 +22,8 @@ const STOP_BYTES = 0.75 * GB
 const FIRST_READ_BYTES = 1.5 * GB
 // Each read runs a full GC on main, so later reads wait for real growth.
 const READ_GROWTH_BYTES = 512 * MB
-// Below this, a read is a diagnosis rather than a crash annotation, so its full GC is rate-limited.
+// Reads below this are rate-limited, failed ones included: each forces a full GC on main, and a heap
+// hovering here needs no fresh sites every minute. Near the cage limit, freshness matters more.
 const UNRATED_READ_BYTES = 2.5 * GB
 const EARLY_READ_MIN_INTERVAL_MS = 30 * 60_000
 const ANNOTATED_SITES = 2
@@ -123,6 +124,7 @@ function stop(): void {
 function read(current: Sampling, totalBytes: number, mainBytes: number): void {
   current.reading = true
   current.nextReadBytes = totalBytes + READ_GROWTH_BYTES
+  const readStartedAt = performance.now()
   void post(current.session, 'HeapProfiler.getSamplingProfile')
     .then((result) => {
       const profile = readSamplingProfile(result)
@@ -135,6 +137,8 @@ function read(current: Sampling, totalBytes: number, mainBytes: number): void {
         mainHeapMB: Math.round(mainBytes / MB),
         startedAtMB: current.startedAtMB,
         sampledMinutes: Math.round((Date.now() - current.startedAtMs) / 60_000),
+        // The read's own forced GC, so traces can tell it apart from the stalls it explains.
+        readMs: Math.round(performance.now() - readStartedAt),
         ...summary
       })
       annotateCrashReport(summary)
