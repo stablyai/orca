@@ -116,13 +116,17 @@ describe('importCodexHistory', () => {
     expect(readFileSync(join(storeHome, DAY, LATER), 'utf8')).toBe('later\n')
   })
 
-  it('does not publish a conversation deleted between its copy and its publish', async () => {
+  it('does not publish a conversation deleted while it was copied', async () => {
     let deleting = true
+    // A deletion already under way when its copy starts finishes before the publish.
+    let underWay: (() => void) | null = null
     const { importHome, storeHome, run } = setup(async () => {
       if (deleting) {
         deleting = false
         ;(await holdCodexRolloutForDeletion(join(storeHome, DAY, NEW)))()
       }
+      underWay?.()
+      underWay = null
     })
     writeFileSync(join(importHome, DAY, NEW), 'new\n')
 
@@ -130,6 +134,13 @@ describe('importCodexHistory', () => {
     expect(readdirSync(join(storeHome, DAY))).toEqual([])
     expect(await run()).toBe(1)
     expect(readFileSync(join(storeHome, DAY, NEW), 'utf8')).toBe('new\n')
+
+    writeFileSync(join(importHome, DAY, LATER), 'later\n')
+    const release = await holdCodexRolloutForDeletion(join(storeHome, DAY, LATER))
+    underWay = release
+    expect(await run()).toBe(0)
+    release()
+    expect(existsSync(join(storeHome, DAY, LATER))).toBe(false)
   })
 
   it('imports the dated conversations when one archived rollout is unreadable', async () => {

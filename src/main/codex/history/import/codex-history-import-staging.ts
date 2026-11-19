@@ -80,19 +80,29 @@ function sameSource(before: BigIntStats, after: BigIntStats): boolean {
   )
 }
 
+/** Whether `folder` takes a new file: a copy that failed while it does failed on its source. */
+export async function canWriteIn(folder: string, runId: string): Promise<boolean> {
+  const probe = stagedImportPath(folder, runId)
+  try {
+    await writeFile(probe, '', { flag: 'wx' })
+    await rm(probe, { force: true })
+    return true
+  } catch {
+    return false
+  }
+}
+
 /**
- * Copies `from` into `folder` under a staged name, outside the history queue so a slow or frozen
- * import folder holds up only the import. `source-changed`: Codex wrote to it meanwhile, so the
- * copy is dropped. A failure reading the source throws `RolloutSourceReadError`.
+ * Copies `from` to the staged path `staged`, outside the history queue so a slow or frozen import
+ * folder holds up only the import. `source-changed`: Codex wrote to it meanwhile, so the copy is
+ * dropped (as on any failure).
  */
 export async function stageImportRollout(
   from: string,
-  folder: string,
-  runId: string
-): Promise<{ staged: string } | 'source-changed'> {
+  staged: string
+): Promise<'staged' | 'source-changed'> {
   const readSource = (): Promise<BigIntStats> =>
     readingSource(from, () => stat(from, { bigint: true }))
-  const staged = stagedImportPath(folder, runId)
   const source = await readSource()
   let kept = false
   try {
@@ -101,7 +111,7 @@ export async function stageImportRollout(
       return 'source-changed'
     }
     kept = true
-    return { staged }
+    return 'staged'
   } finally {
     if (!kept) {
       await removeStagedCopy(staged).catch((error: unknown) =>

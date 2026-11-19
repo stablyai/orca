@@ -10,10 +10,12 @@ import { isCodexSessionRolloutFileName } from '../rollouts/codex-session-file-li
 import { StoreNames, readEntries } from './codex-history-store-names'
 import { datedFolderOf, listDayFolders } from './codex-history-import-folders'
 import { importHomeUnusableReason } from './codex-history-import-home-check'
-import { codexRolloutDeletionGeneration } from '../rollouts/codex-rollout-deletion-guard'
-import { RolloutSourceReadError } from '../rollouts/codex-rollout-staged-copy'
-import { publishStagedImport } from './codex-history-import-publish'
-import { canHardLinkIn, pickImportForm, stageImportRollout } from './codex-history-import-staging'
+import { copyConversationIntoStore } from './codex-history-import-conversation'
+import { canHardLinkIn, pickImportForm } from './codex-history-import-staging'
+import {
+  removeAbandonedStagedImport,
+  stagingRecordPath
+} from './codex-history-import-staging-record'
 import {
   hasUnsavedImportLedger,
   readImportLedger,
@@ -126,36 +128,13 @@ async function importFolder(
       await mkdir(args.indexPendingDir, { recursive: true })
       targetReady = true
     }
-    const from = join(path, name)
-    const generation = codexRolloutDeletionGeneration(from)
-    let staged: string
-    try {
-      const outcome = await stageImportRollout(from, targetDir, args.runId)
-      if (outcome === 'source-changed') {
-        failed = true
-        continue
-      }
-      staged = outcome.staged
-    } catch (error) {
-      console.warn(`[codex-history-import] Could not copy ${from}:`, error)
-      // An unreadable source is that conversation's problem; a store that refuses writes ends the pass.
-      if (error instanceof RolloutSourceReadError) {
-        failed = true
-        continue
-      }
-      return { copied, stopped: false, halt: 'failed' }
-    }
-    const published = await args.publish(() =>
-      publishStagedImport({
-        staged,
-        final: join(targetDir, name),
-        storeFolders: [targetDir, ...(otherFolder ? [join(args.storeHome, otherFolder)] : [])],
-        indexPendingDir: args.indexPendingDir,
-        generation,
-        isCurrent: args.isCurrent,
-        isHandled: () => handled.has(key)
-      })
-    )
+    const published = await copyConversationIntoStore(args, {
+      from: join(path, name),
+      targetDir,
+      name,
+      otherFolder: otherFolder ? join(args.storeHome, otherFolder) : null,
+      isHandled: () => handled.has(key)
+    })
     if (published === 'failed') {
       return { copied, stopped: false, halt: 'failed' }
     }
@@ -183,6 +162,9 @@ async function importFolder(
  * Returns how many were copied, or null when it stopped early (progress so far is kept).
  */
 export async function importCodexHistory(args: CodexHistoryImportArgs): Promise<number | null> {
+  await removeAbandonedStagedImport(stagingRecordPath(args.ledgerPath)).catch((error: unknown) =>
+    console.warn('[codex-history-import] Could not remove an abandoned staged copy:', error)
+  )
   const reason = await importHomeUnusableReason(args.importHome, args.storeHome)
   if (reason) {
     if (reason !== 'missing') {

@@ -1,5 +1,5 @@
 import { constants, type BigIntStats } from 'node:fs'
-import { copyFile, open, rm, stat, utimes } from 'node:fs/promises'
+import { copyFile, rm, stat, utimes } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { runProcess } from '@orca/process-host'
 
@@ -68,19 +68,9 @@ async function cloneOnDarwin(sourcePath: string, temporaryPath: string): Promise
   return false
 }
 
-async function assertSourceReadable(sourcePath: string): Promise<void> {
-  const handle = await readingSource(sourcePath, () => open(sourcePath, 'r'))
-  try {
-    await readingSource(sourcePath, () => handle.read(Buffer.alloc(1), 0, 1, 0))
-  } finally {
-    await handle.close()
-  }
-}
-
 /**
  * Stages `source` at `temporaryPath` with the source's times: a macOS clone on the same volume,
  * otherwise a copy that reflinks (Linux) or block-clones (Windows ReFS, Dev Drive) where it can.
- * A failure reading the source throws `RolloutSourceReadError`.
  */
 export async function stageRolloutCopy(
   source: BigIntStats,
@@ -95,13 +85,7 @@ export async function stageRolloutCopy(
   ) {
     return
   }
-  try {
-    await copyFile(sourcePath, temporaryPath, constants.COPYFILE_EXCL | constants.COPYFILE_FICLONE)
-  } catch (error) {
-    // copyFile doesn't say which side failed; a source that can't be read is that file's problem.
-    await assertSourceReadable(sourcePath)
-    throw error
-  }
+  await copyFile(sourcePath, temporaryPath, constants.COPYFILE_EXCL | constants.COPYFILE_FICLONE)
   // Compressed-twin rules and recency read the rollout's mtime.
   await utimes(temporaryPath, Number(source.atimeNs) / 1e9, Number(source.mtimeNs) / 1e9)
 }
