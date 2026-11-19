@@ -92,7 +92,8 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
         url,
         worktree,
         profileId,
-        ...(split ? { split, ...(callerTabId ? { splitFromTabId: callerTabId } : {}) } : {})
+        ...(split ? { split, ...(callerTabId ? { splitFromTabId: callerTabId } : {}) } : {}),
+        ...(flags.has('headless') ? { placement: { kind: 'server' } } : {})
       },
       { timeoutMs: 60_000 }
     )
