@@ -144,7 +144,9 @@ export function useMobileAgentLaunchQueries(args: {
     enabled,
     subscribed: observed(detectedAgentsQuery.family, target, input)
   })
-  const settingsSignalled = useHostSettingsChangeSignal(hostId, client)
+  // The desktop's settings events don't cover a relayed server's agent preferences.
+  const settingsSignalled =
+    useHostSettingsChangeSignal(hostId, client) && !exec.startsWith('runtime:')
   const settings = useHostQuery(newTabSettingsQuery, { hostId, client }, settingsTarget, NO_INPUT, {
     enabled,
     subscribed: observed(newTabSettingsQuery.family, settingsTarget, NO_INPUT),

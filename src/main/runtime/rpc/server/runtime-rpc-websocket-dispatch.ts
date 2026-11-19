@@ -16,7 +16,7 @@ import type { RpcBinarySender } from '../transports/rpc-binary-sender'
 import { limitRuntimeRpcReplySize } from './runtime-rpc-reply-size-limit'
 import { MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc-mobile-method-allowlist'
 import { MOBILE_RPC_METHOD_ROUTES } from './runtime-rpc-mobile-method-routing'
-import { defaultScopeServer } from './runtime-rpc-mobile-tracker-methods'
+import { isUntaggedTrackerCall, withDefaultScopeServer } from './runtime-rpc-mobile-tracker-methods'
 import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { WorktreeRemove } from '../../../../shared/rpc-contract/workspaces/worktree-params'
 
@@ -41,12 +41,9 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
     rawMessage: string,
     reply: (response: string) => void,
     sendBinary: RpcBinarySender,
-    socket: AuthenticatedMobileSocket | undefined,
-    relaysDefaults: boolean
+    socket: AuthenticatedMobileSocket | undefined
   ): RpcRequest | null {
-    const executionHost =
-      request.executionHost ??
-      (socket && relaysDefaults ? defaultScopeServer(request.method, this.runtime) : undefined)
+    const { executionHost } = request
     if (executionHost === undefined) {
       return request
     }
@@ -195,14 +192,16 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
           rawMessage
         )
       }
+      // A phone relayed in from another desktop already got that desktop's default host.
+      if (isUntaggedTrackerCall(request) && authenticatedSocket && !device.parentDeviceId) {
+        request = await withDefaultScopeServer(request, this.runtime, this.mobileRelayHostCatalog)
+      }
       const localRequest = this.relayMobileRequest(
         request,
         rawMessage,
         reply,
         sendBinary,
-        authenticatedSocket,
-        // A phone relayed in from another desktop already got that desktop's default host.
-        device.parentDeviceId === undefined && this.mobileDesktopRelay !== null
+        authenticatedSocket
       )
       if (!localRequest) {
         return

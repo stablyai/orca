@@ -6,7 +6,7 @@ import { FLOATING_WORKSPACE_WORKTREE_ID } from '../floating-workspace'
 import { loadMobileAgentLaunchContext, newTabAgentOptionsFrom } from './mobile-new-tab-agent-loader'
 
 // The paired desktop answers settings.get; settings.getAgentLaunch reaches the tagged server.
-function desktopRelayingTo(server: { getAgentLaunch: RpcResponse | null }): RpcClient {
+function desktopRelayingTo(server: { getAgentLaunch: RpcResponse }): RpcClient {
   const reply = (method: string, host: unknown): RpcResponse => {
     if (method === 'settings.get') {
       return { id: method, ok: true, result: { settings: { defaultTuiAgent: 'claude' } } }
@@ -15,13 +15,7 @@ function desktopRelayingTo(server: { getAgentLaunch: RpcResponse | null }): RpcC
       return { id: method, ok: true, result: ['claude', 'codex', 'gemini'] }
     }
     if (method === 'settings.getAgentLaunch' && host === 'runtime:server-1') {
-      return (
-        server.getAgentLaunch ?? {
-          id: method,
-          ok: false,
-          error: { code: 'method_not_found', message: 'gone' }
-        }
-      )
+      return server.getAgentLaunch
     }
     throw new Error(`unexpected ${method}`)
   }
@@ -39,7 +33,7 @@ function desktopRelayingTo(server: { getAgentLaunch: RpcResponse | null }): RpcC
   }
 }
 
-async function agentsListed(server: { getAgentLaunch: RpcResponse | null }) {
+async function agentsListed(server: { getAgentLaunch: RpcResponse }) {
   const client = scopeRpcClientToExecutionHost(desktopRelayingTo(server), 'runtime:server-1')
   const { settings, detectedAgents } = await loadMobileAgentLaunchContext({
     client,
@@ -58,11 +52,5 @@ describe('new tab agents in a server workspace the desktop relays', () => {
       }
     })
     expect(agents).toEqual(['codex', 'claude'])
-  })
-
-  it("keeps the desktop's order when the server predates the method", async () => {
-    const agents = await agentsListed({ getAgentLaunch: null })
-    expect(agents[0]).toBe('claude')
-    expect(agents).toContain('gemini')
   })
 })

@@ -1,4 +1,6 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { MobileRelayHostCatalog } from '../../mobile-desktop-relay/mobile-relay-host-catalog'
+import type { RpcRequest } from '../core'
 
 /** Linear and Jira have no workspace; untagged phone calls use the desktop's "New projects open on" host, as its Tasks page does. */
 export const DEFAULT_SCOPE_HOST_METHODS = [
@@ -35,12 +37,25 @@ export const DEFAULT_SCOPE_HOST_METHODS = [
   'linear.updateIssue'
 ] as const
 
-/** The server an untagged tracker call goes to; this desktop answers when its default is itself. */
-export function defaultScopeServer(
-  method: string,
-  runtime: { getClientDefaultScopeHost: () => ExecutionHostId }
-): ExecutionHostId | undefined {
-  const tracker = (DEFAULT_SCOPE_HOST_METHODS as readonly string[]).includes(method)
-  const host = tracker ? runtime.getClientDefaultScopeHost() : undefined
-  return host?.startsWith('runtime:') ? host : undefined
+export function isUntaggedTrackerCall(request: RpcRequest): boolean {
+  return (
+    request.executionHost === undefined &&
+    (DEFAULT_SCOPE_HOST_METHODS as readonly string[]).includes(request.method)
+  )
+}
+
+/**
+ * Sends the call to the desktop's default server when a phone can reach it there now. Otherwise this
+ * desktop answers, as before: an old, offline or sleeping server must not stall or wake for Tasks.
+ */
+export async function withDefaultScopeServer(
+  request: RpcRequest,
+  runtime: { getClientDefaultScopeHost: () => ExecutionHostId },
+  relayHosts: Pick<MobileRelayHostCatalog, 'relayReady'> | null
+): Promise<RpcRequest> {
+  const host = runtime.getClientDefaultScopeHost()
+  if (!host.startsWith('runtime:') || !(await relayHosts?.relayReady(host))) {
+    return request
+  }
+  return { ...request, executionHost: host }
 }
