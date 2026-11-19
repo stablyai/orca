@@ -114,12 +114,9 @@ export function MobileNativeChatSubagentGroup({
   fontScale: number
 }): React.JSX.Element | null {
   useMobileColorScheme()
+  // `t` changes identity with the reader's language, so the words follow it.
   const t = useMobileTranslation()
-  const header = useMemo(
-    () => nativeChatSubagentGroupHeader(block.agents, say),
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- `say` reads the UI language implicitly; `t` tracks it.
-    [block.agents, t]
-  )
+  const header = useMemo(() => nativeChatSubagentGroupHeader(block.agents, say), [block.agents, t])
   if (header.total === 0) {
     return null
   }
