@@ -1,6 +1,7 @@
 import type { RuntimeEnvironmentStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import type { RuntimeHostConnectionState } from '../../../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
+import { readRecordChanges } from '@/store/record-transitions/keyed-record-change-reads'
 import { createPairedRuntimeParkingEnvironmentIdsSelector } from '@/components/terminal-pane/parking/retention/paired-runtime-parking-capabilities'
 
 type RuntimeStatusState = {
@@ -18,6 +19,8 @@ type ConnectionSubscription = {
 
 export function createRuntimeStatusSubscriptions(store: RuntimeStatusStore) {
   const connections = new Map<string, ConnectionSubscription>()
+  const entryListeners = new Map<string, Set<Listener>>()
+  const statusesListeners = new Set<Listener>()
   const parkingListeners = new Set<Listener>()
   let selectParking = createPairedRuntimeParkingEnvironmentIdsSelector()
   let parkingSnapshot: ReadonlySet<string> | null = null
@@ -49,8 +52,23 @@ export function createRuntimeStatusSubscriptions(store: RuntimeStatusStore) {
       }
       previousStatuses = statuses
       const pending: { listeners: Set<Listener>; listener: Listener }[] = []
-      for (const [environmentId, subscription] of connections) {
-        if (statuses.get(environmentId) === previous?.get(environmentId)) {
+      for (const listener of statusesListeners) {
+        pending.push({ listeners: statusesListeners, listener })
+      }
+      // One host's verification attempt visits only that host; a full resync visits every subscriber.
+      const changes = previous ? readRecordChanges(statuses, previous) : null
+      const changedIds = changes?.kind === 'addressed' ? changes.keys : null
+      for (const environmentId of changedIds ?? entryListeners.keys()) {
+        const listeners = entryListeners.get(environmentId)
+        if (listeners && statuses.get(environmentId) !== previous?.get(environmentId)) {
+          for (const listener of listeners) {
+            pending.push({ listeners, listener })
+          }
+        }
+      }
+      for (const environmentId of changedIds ?? connections.keys()) {
+        const subscription = connections.get(environmentId)
+        if (!subscription || statuses.get(environmentId) === previous?.get(environmentId)) {
           continue
         }
         const snapshot = runtimeHostConnectionStateForEntry(statuses.get(environmentId))
@@ -81,7 +99,12 @@ export function createRuntimeStatusSubscriptions(store: RuntimeStatusStore) {
   }
 
   function releaseIfUnused(): void {
-    if (connections.size > 0 || parkingListeners.size > 0) {
+    if (
+      connections.size > 0 ||
+      parkingListeners.size > 0 ||
+      entryListeners.size > 0 ||
+      statusesListeners.size > 0
+    ) {
       return
     }
     unsubscribeStore?.()
@@ -135,5 +158,46 @@ export function createRuntimeStatusSubscriptions(store: RuntimeStatusStore) {
     }
   }
 
-  return { getConnectionSnapshot, subscribeConnection, getParkingSnapshot, subscribeParking }
+  /** Wakes when this host's status entry changes; another host's change never reaches it. */
+  function subscribeEntry(environmentId: string | null, listener: Listener): () => void {
+    if (environmentId === null) {
+      return () => {}
+    }
+    ensureSubscription()
+    let listeners = entryListeners.get(environmentId)
+    if (!listeners) {
+      listeners = new Set()
+      entryListeners.set(environmentId, listeners)
+    }
+    const registered = () => listener()
+    listeners.add(registered)
+    const owned = listeners
+    return () => {
+      owned.delete(registered)
+      if (owned.size === 0 && entryListeners.get(environmentId) === owned) {
+        entryListeners.delete(environmentId)
+      }
+      releaseIfUnused()
+    }
+  }
+
+  /** Wakes when any host's status changes, and on nothing else. */
+  function subscribeStatuses(listener: Listener): () => void {
+    ensureSubscription()
+    const registered = () => listener()
+    statusesListeners.add(registered)
+    return () => {
+      statusesListeners.delete(registered)
+      releaseIfUnused()
+    }
+  }
+
+  return {
+    getConnectionSnapshot,
+    subscribeConnection,
+    getParkingSnapshot,
+    subscribeParking,
+    subscribeEntry,
+    subscribeStatuses
+  }
 }

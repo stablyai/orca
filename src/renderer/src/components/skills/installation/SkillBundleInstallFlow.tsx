@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Download, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DialogFooter } from '@/components/ui/dialog'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store/index'
 import { notifyInstalledAgentSkillsChanged } from '@/hooks/skills/discovery/installed-agent-skill-discovery'
 import { SKILL_BUNDLE_INSTALL_CAPABILITY } from '../../../../../shared/skills/capabilities/skill-install-capability'
@@ -54,7 +55,7 @@ export function SkillBundleInstallFlow(props: {
 }): React.JSX.Element {
   const t = useTranslate()
   const runtimeEnvironments = useAppStore((state) => state.runtimeEnvironments)
-  const runtimeStatus = useAppStore((state) => state.runtimeStatusByEnvironmentId)
+  const runtimeStatus = useRuntimeStatusByEnvironmentId()
   const worktreesByRepo = useAppStore((state) => selectWorktreesByRepo(state))
   const repos = useAppStore((state) => state.repos)
   const folderWorkspaces = useAppStore((state) => selectFolderWorkspaces(state))
