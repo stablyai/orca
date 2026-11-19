@@ -4,6 +4,7 @@ import { useAppStore } from '@/store'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { matchKeybindingDigitIndex } from '../../../../../shared/keybindings/matching'
+import { getKeybindingContext } from '../../terminal/workbench/terminal-workspace-model'
 import type { ActivityVirtualItemDescriptor } from './activity-thread-virtual-items'
 import type { AgentPaneThread } from '../threads/activity-thread-types'
 
@@ -21,13 +22,19 @@ function isActivityIndexChordHeld(event: KeyboardEvent): boolean {
     altKey: event.altKey,
     shiftKey: event.shiftKey
   }
-  const { keybindings } = useAppStore.getState()
+  const { keybindings, settings } = useAppStore.getState()
+  // Same context and policy as the handler, so badges never show for a digit the terminal keeps.
+  const options = {
+    context: getKeybindingContext(event.target),
+    terminalShortcutPolicy: settings?.terminalShortcutPolicy
+  }
   return (
     matchKeybindingDigitIndex(
       ACTIVITY_INDEX_ACTION_ID,
       probe,
       getShortcutPlatform(),
-      keybindings
+      keybindings,
+      options
     ) !== null
   )
 }
