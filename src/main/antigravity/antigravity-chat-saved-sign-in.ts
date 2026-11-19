@@ -48,7 +48,8 @@ export function seedAntigravityChatAuth(
   home?: string
 ): Promise<void> {
   const { value, revision } = antigravityChatSignIn.get()
-  if (value.auth !== 'unknown' || seeding) {
+  // A running flow is about to answer, and may be replacing this very token.
+  if (value.auth !== 'unknown' || value.flow !== null || seeding) {
     return seeding ?? Promise.resolve()
   }
   let method: AntigravityChatAuthConfig['method'] | null
@@ -64,7 +65,7 @@ export function seedAntigravityChatAuth(
     .then((saved) => {
       const now = antigravityChatSignIn.get()
       // Anything that happened meanwhile (an answer, a flow, a method change) is newer than the file.
-      if (saved && now.revision === revision && now.value.auth === 'unknown') {
+      if (saved && now.revision === revision && now.value.auth === 'unknown' && !now.value.flow) {
         antigravityChatSignIn.set({ ...now.value, auth: 'signedIn' })
       }
     })

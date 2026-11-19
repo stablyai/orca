@@ -13,6 +13,8 @@ type Entry = {
   detection: AntigravityChatAuthDetection | null
   fetchedAt: number
   inFlight: Promise<void> | null
+  /** The host's sign-in revision the last read saw; a newer one forces a read. */
+  revision: number
   /** The one read queued behind `inFlight` for every forced caller. */
   forced: Promise<void> | null
   observers: number
@@ -32,7 +34,15 @@ const hostKey = (owner: RuntimeClientTarget): string =>
 function entryFor(owner: RuntimeClientTarget): Entry {
   let entry = entries.get(hostKey(owner))
   if (!entry) {
-    entry = { owner, detection: null, fetchedAt: 0, inFlight: null, forced: null, observers: 0 }
+    entry = {
+      owner,
+      detection: null,
+      fetchedAt: 0,
+      revision: -1,
+      inFlight: null,
+      forced: null,
+      observers: 0
+    }
     entries.set(hostKey(owner), entry)
   }
   return entry
@@ -66,8 +76,6 @@ export function refreshAntigravityChatAuthDetection(
     return Promise.resolve()
   }
   const read = callAntigravityChatAuthDetect(entry.owner)
-    // A failed read shows no detections; the next mount or focus asks again.
-    .catch(() => null)
     .then((detection) => {
       entry.fetchedAt = now()
       if (!sameDetection(entry.detection, detection)) {
@@ -75,11 +83,30 @@ export function refreshAntigravityChatAuthDetection(
         listeners.forEach((listener) => listener())
       }
     })
+    // A failed read keeps the last answer; the next mount, focus or sign-in change asks again.
+    .catch(() => undefined)
     .finally(() => {
       entry.inFlight = null
     })
   entry.inFlight = read
   return read
+}
+
+/** Re-reads once per new sign-in revision: every apply and sign-in answer bumps it. */
+export function refreshAntigravityChatAuthDetectionAt(
+  owner: RuntimeClientTarget,
+  revision: number
+): void {
+  const entry = entryFor(owner)
+  if (revision < 0 || entry.revision === revision) {
+    return
+  }
+  // The first revision seen only records where this client starts; mount already reads.
+  const first = entry.revision < 0
+  entry.revision = revision
+  if (!first) {
+    void refreshAntigravityChatAuthDetection(owner, { force: true })
+  }
 }
 
 function refreshObservedHosts(): void {

@@ -22501,7 +22501,8 @@
         "useKeyOrGcloud": "Use an API key or gcloud instead",
         "agy": "agy sign-in",
         "agyItem": "agy's own login",
-        "agyHint": "This chat runs the Antigravity CLI on this host. Another method applies to new chats."
+        "agyHint": "This chat runs the Antigravity CLI on this host. Another method applies to new chats.",
+        "confirmSignIn": "Sign in with Google?"
       }
     },
     "tab": {

@@ -179,10 +179,12 @@ export async function resolveHostAgentBaseEnvironment(
   settings: Pick<
     GlobalSettings,
     'nativeChatInheritShellEnvironment' | 'nativeChatShellEnvironmentVariables'
-  >
+  >,
+  /** Never start a login shell: a read that runs on focus serves the last capture. */
+  cachedOnly = false
 ): Promise<Record<string, string>> {
   return structuredAgentBaseEnvironment({
-    shellEnv: await hostShellEnvironment(),
+    shellEnv: await hostShellEnvironment(cachedOnly),
     policy: nativeChatShellEnvironmentPolicy(settings)
   })
 }

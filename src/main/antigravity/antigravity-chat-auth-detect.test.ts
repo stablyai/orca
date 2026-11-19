@@ -110,4 +110,13 @@ describe('seedAntigravityChatAuth', () => {
     await seeded
     expect(antigravityChatSignIn.get().value.auth).toBe('signedOut')
   })
+  it('waits for a running sign-in flow to answer instead of seeding', async () => {
+    const home = folder({ 'antigravity-acp/acp_token.json': '{}' })
+    antigravityChatSignIn.set({
+      auth: 'unknown',
+      flow: { flowId: 'f', owner: 'o', phase: 'waiting' }
+    })
+    await seedAntigravityChatAuth(() => 'oauth-personal', home)
+    expect(antigravityChatSignIn.get().value.auth).toBe('unknown')
+  })
 })

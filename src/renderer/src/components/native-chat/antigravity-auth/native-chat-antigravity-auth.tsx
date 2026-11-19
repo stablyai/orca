@@ -23,6 +23,7 @@ import { callAntigravityChatAuthConfig } from '@/runtime/provider-accounts/sign-
 import {
   readAntigravityChatAuthDetection,
   refreshAntigravityChatAuthDetection,
+  refreshAntigravityChatAuthDetectionAt,
   useAntigravityChatAuthDetection
 } from '@/runtime/provider-accounts/sign-in/antigravity-chat-auth-detection'
 import {
@@ -74,6 +75,10 @@ export const NativeChatAntigravityAuthContext = createContext<NativeChatAntigrav
 export function useNativeChatAntigravityAuth(): NativeChatAntigravityAuth | null {
   return useContext(NativeChatAntigravityAuthContext)
 }
+
+/** Starts Google sign-in on the saved Google method without changing it. */
+const GOOGLE_SIGN_IN = 'google-sign-in'
+type AuthAction = AntigravitySwitchableMethod | typeof GOOGLE_SIGN_IN
 
 const isGoogle = (method: Method | null | undefined): boolean =>
   method === 'oauth-personal' || method === 'oauth-business'
@@ -148,17 +153,21 @@ export function NativeChatAntigravityAuthProvider({
       ANTIGRAVITY_CHAT_KEY_AND_ADC_AUTH_RUNTIME_CAPABILITY
     ) === 'supported'
   const [switching, setSwitching] = useState<Method | null>(null)
-  const [confirming, setConfirming] = useState<AntigravitySwitchableMethod | null>(null)
+  const [confirming, setConfirming] = useState<AuthAction | null>(null)
   const busy = useRef(false)
 
   const apply = useCallback(
-    (target: RuntimeClientTarget, method: AntigravitySwitchableMethod): Promise<void> => {
+    (target: RuntimeClientTarget, action: AuthAction): Promise<void> => {
       if (busy.current) {
         return Promise.resolve()
       }
       busy.current = true
-      setSwitching(method)
-      return applyAntigravityChatAuthMethod(target, method, t).then(() => {
+      setSwitching(action === GOOGLE_SIGN_IN ? 'oauth-personal' : action)
+      const done =
+        action === GOOGLE_SIGN_IN
+          ? startAntigravityChatSignIn(target)
+          : applyAntigravityChatAuthMethod(target, action, t)
+      return done.then(() => {
         busy.current = false
         setSwitching(null)
       })
@@ -166,36 +175,36 @@ export function NativeChatAntigravityAuthProvider({
     [t]
   )
 
-  // Applying stops the host's running chats, so re-read first: a chat may have started since.
+  // Applying and signing in both stop the host's running chats, so re-read first: a chat may
+  // have started since mount. An unanswered read can't rule chats out, so it asks too.
   const decide = useCallback(
-    async (target: RuntimeClientTarget, method: AntigravitySwitchableMethod): Promise<void> => {
+    async (target: RuntimeClientTarget, action: AuthAction): Promise<void> => {
       if (busy.current) {
         return
       }
       await refreshAntigravityChatAuthDetection(target, { force: true })
       const current = readAntigravityChatAuthDetection(target)
-      if (current?.method === method) {
+      if (action !== GOOGLE_SIGN_IN && current?.method === action) {
         return
       }
-      if (current && current.liveChats > 0) {
-        setConfirming(method)
+      if (!current || current.liveChats > 0) {
+        setConfirming(action)
         return
       }
-      await apply(target, method)
+      await apply(target, action)
     },
     [apply]
   )
 
   // A sign-in or a method saved elsewhere (Settings, another client) changes what's detected.
-  // Every apply and every sign-in answer bumps the host's sign-in revision.
   useAntigravityChatSignIn(host)
   const signInRevision = useSyncExternalStore(subscribeAntigravityChatSignIns, () => {
     const snapshot = host ? readAntigravityChatSignInSnapshot(host) : null
     return snapshot?.kind === 'known' ? snapshot.state.revision : -1
   })
   useEffect(() => {
-    if (host && signInRevision >= 0) {
-      void refreshAntigravityChatAuthDetection(host, { force: true })
+    if (host) {
+      refreshAntigravityChatAuthDetectionAt(host, signInRevision)
     }
   }, [host, signInRevision])
 
@@ -212,15 +221,21 @@ export function NativeChatAntigravityAuthProvider({
       switchTo: (method) => void decide(host, method),
       // Without a detection (older host, first read out) the saved method is unknown: only sign in.
       signInWithGoogle: () =>
-        !detection?.method || isGoogle(detection.method)
-          ? void startAntigravityChatSignIn(host)
-          : void decide(host, 'oauth-personal'),
+        void decide(
+          host,
+          !detection?.method || isGoogle(detection.method) ? GOOGLE_SIGN_IN : 'oauth-personal'
+        ),
       openSettings: () => openAntigravitySignInSettings(host),
       refresh: () => void refreshAntigravityChatAuthDetection(host, { force: true })
     }
   }, [host, backend, detection, keyAndAdc, switching, decide])
 
-  const confirmLabel = confirming ? (antigravityChatAuthMethodLabel(confirming, t) ?? '') : ''
+  const confirmTitle =
+    confirming === GOOGLE_SIGN_IN
+      ? t('components.native-chat.antigravityAuth.confirmSignIn', 'Sign in with Google?')
+      : t('components.native-chat.antigravityAuth.confirmTitle', 'Switch to {{method}}?', {
+          method: confirming ? (antigravityChatAuthMethodLabel(confirming, t) ?? '') : ''
+        })
   return (
     <NativeChatAntigravityAuthContext value={value}>
       {children}
@@ -228,11 +243,7 @@ export function NativeChatAntigravityAuthProvider({
         <Dialog open={confirming !== null} onOpenChange={(open) => !open && setConfirming(null)}>
           <DialogContent className="sm:max-w-[420px]">
             <DialogHeader>
-              <DialogTitle>
-                {t('components.native-chat.antigravityAuth.confirmTitle', 'Switch to {{method}}?', {
-                  method: confirmLabel
-                })}
-              </DialogTitle>
+              <DialogTitle>{confirmTitle}</DialogTitle>
               <DialogDescription>
                 {t(
                   'components.native-chat.antigravityAuth.confirmBody',
@@ -247,10 +258,10 @@ export function NativeChatAntigravityAuthProvider({
               <Button
                 size="sm"
                 onClick={() => {
-                  const method = confirming
+                  const action = confirming
                   setConfirming(null)
-                  if (method) {
-                    void apply(host, method)
+                  if (action) {
+                    void apply(host, action)
                   }
                 }}
               >

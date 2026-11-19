@@ -57,8 +57,12 @@ const savedChatMethod = (runtime: OrcaRuntimeService) => () =>
   readAntigravityChatAuthConfig(runtime.requireStore())?.method ?? null
 
 function detectChatAuth(runtime: OrcaRuntimeService) {
-  // One environment read serves both the key check and the ADC lookup.
-  const env = chatLaunchEnv(runtime)()
+  // One cached environment read serves the key check and the ADC lookup; never a login shell.
+  const env = resolveHostStructuredAgentLaunchEnvironment(
+    'antigravity',
+    runtime.requireStore().getSettings(),
+    true
+  )
   const launchEnv = () => env
   void seedAntigravityChatAuth(savedChatMethod(runtime))
   return detectAntigravityChatAuth({
