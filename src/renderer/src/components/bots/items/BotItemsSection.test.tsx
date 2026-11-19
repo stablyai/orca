@@ -135,7 +135,9 @@ it('lists Orca’s asks while items load and after', () => {
   )
 
   expect(screen.getByRole('button', { name: 'Open Linear' })).toBeTruthy()
-  expect(screen.getByText('Loading items…')).toBeTruthy()
+  const loading = screen.getByRole('status')
+  expect(loading.getAttribute('aria-busy')).toBe('true')
+  expect(loading.textContent).toBe('Loading items…')
 
   const asked = makeTestBotItem(2, { status: 'needs_you', lastActivityAt: NOW })
   rerender(
