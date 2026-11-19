@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentPaneChange } from '../../../agent-hooks/observations/agent-transition-detector'
+import type {
+  AgentPhase,
+  AgentTransition
+} from '../../../../shared/agent-status/lifecycle/agent-transitions'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { getDefaultNotificationSettings } from '../../../../shared/notifications/notification-settings-defaults'
 import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
@@ -48,17 +51,8 @@ function windowlessHost(settings: { agentTaskComplete?: boolean } = {}) {
       timer.run()
     }
   }
-  const moved = (paneKey: string, change: Partial<AgentPaneChange>) =>
-    push.observe({
-      kind: 'moved',
-      paneKey,
-      workspace,
-      from: 'working',
-      to: 'done',
-      at: clock,
-      transition: 'turn-finished',
-      ...change
-    } as AgentPaneChange)
+  const moved = (paneKey: string, to: AgentPhase, transition: AgentTransition): void =>
+    push.observe({ kind: 'moved', paneKey, workspace, from: 'working', to, at: clock, transition })
   const facts = (paneKey: string, ...chunk: TerminalSideEffectFact[]) =>
     clientListeners.forEach((listener) =>
       listener({
@@ -92,7 +86,7 @@ describe('TerminalAgentPhonePush on a windowless host', () => {
     host.facts('tab-1:leaf-1', { kind: 'bell' })
     host.advance(250)
 
-    host.hookRows.set('tab-2:leaf-1', {
+    const waiting: AgentStatusIpcPayload = {
       paneKey: 'tab-2:leaf-1',
       state: 'waiting',
       prompt: 'deploy?',
@@ -100,8 +94,9 @@ describe('TerminalAgentPhonePush on a windowless host', () => {
       connectionId: null,
       receivedAt: host.now(),
       stateStartedAt: host.now()
-    } as AgentStatusIpcPayload)
-    host.moved('tab-2:leaf-1', { to: 'needs-you', transition: 'needs-input' })
+    }
+    host.hookRows.set('tab-2:leaf-1', waiting)
+    host.moved('tab-2:leaf-1', 'needs-you', 'needs-input')
     host.facts('tab-2:leaf-1', { kind: 'bell' })
     host.advance(250)
 
