@@ -33,6 +33,10 @@ const ANTIGRAVITY_STDIN_LIMITS: Limits = Limits {
     max_bytes: REQUEST_BYTE_LIMIT,
 };
 
+// Tells the antigravity core script this build owned stdin; older builds exit 0 for any agent,
+// so the script falls back to its Node reader. Matches src/main/antigravity/hook-script.ts.
+const ANTIGRAVITY_HANDLED_EXIT_CODE: i32 = 17;
+
 /// What one agent's hooks report under, and which of its env vars veto reporting.
 struct Agent {
     source: &'static str,
@@ -44,6 +48,8 @@ struct Agent {
     stdin_limits: Option<&'static Limits>,
     /// The env var naming the event, posted as `hook_event_name`.
     event_var: Option<&'static str>,
+    /// Seen only by the calling script; agent hosts that run the exe directly get 0.
+    exit_code: i32,
 }
 
 // Why first: Claude-compatible permission hooks fail closed on empty stdout (#14818).
@@ -59,6 +65,7 @@ fn agent(name: &str) -> Option<Agent> {
             reply: CLAUDE_REPLY,
             stdin_limits: None,
             event_var: None,
+            exit_code: 0,
         }),
         "antigravity" => Some(Agent {
             source: "antigravity",
@@ -66,6 +73,7 @@ fn agent(name: &str) -> Option<Agent> {
             exit_vars: &[],
             stdin_limits: Some(&ANTIGRAVITY_STDIN_LIMITS),
             event_var: Some("ORCA_ANTIGRAVITY_EVENT"),
+            exit_code: ANTIGRAVITY_HANDLED_EXIT_CODE,
         }),
         _ => None,
     }
@@ -80,11 +88,12 @@ fn main() {
         let _ = stdout.flush();
     }
     // Why no stdin for an unknown agent: a newer Orca may register one this copy predates.
+    let exit_code = agent.as_ref().map_or(0, |agent| agent.exit_code);
     if let Some(agent) = agent {
         run(&agent);
     }
-    // Why always 0: a hook failure must never block or fail the agent's tool call.
-    std::process::exit(0);
+    // Why never a failure code: a hook failure must never block or fail the agent's tool call.
+    std::process::exit(exit_code);
 }
 
 fn run(agent: &Agent) {
