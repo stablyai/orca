@@ -292,6 +292,10 @@ export function ProjectedAgentMenuItems({
                 <span className="min-w-0 shrink truncate text-xs text-muted-foreground">
                   {pendingReason}
                 </span>
+              ) : row.kind === 'chat' && row.setup ? (
+                <span className="text-xs text-muted-foreground">
+                  {chatUnavailableLabel('not-installed', t)}
+                </span>
               ) : null}
               {showsDefaultAgentShortcut ? (
                 <DropdownMenuShortcut>{newAgentShortcut}</DropdownMenuShortcut>

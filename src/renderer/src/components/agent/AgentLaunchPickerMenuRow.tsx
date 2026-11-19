@@ -220,6 +220,11 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
                 <span className="text-xs text-muted-foreground">
                   {chatUnavailableLabel(unavailable.reason)}
                 </span>
+              ) : surface === 'chat' &&
+                entry.rows.some((row) => row.kind === 'chat' && row.setup) ? (
+                <span className="text-xs text-muted-foreground">
+                  {chatUnavailableLabel('not-installed')}
+                </span>
               ) : null}
             </Button>
           </AgentDefaultContextMenu>
