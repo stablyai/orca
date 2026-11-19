@@ -106,16 +106,12 @@ export function noteWslDistroWokenForPath(path: string, wslDistro?: string | nul
   }
 }
 
-/**
- * Throws when a background touch of `path` (or its Git) would boot a distro, or WSL can't say it won't.
- * `leaseMs`: how old a running read may be; 0 asks WSL afresh.
- */
+/** Throws when a background touch of `path` (or its Git) would boot a distro, or WSL can't say it won't. */
 export async function assertWslUncPathRunning(
   path: string,
-  wslDistro?: string | null,
-  options: { leaseMs?: number } = {}
+  wslDistro?: string | null
 ): Promise<void> {
-  const blocked = await blockedWslDistroForPath(path, wslDistro, options)
+  const blocked = await blockedWslDistroForPath(path, wslDistro)
   if (blocked?.state === 'stopped') {
     throw new WslDistroStoppedError(blocked.distro)
   }

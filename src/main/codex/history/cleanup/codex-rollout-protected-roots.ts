@@ -2,17 +2,16 @@ import { realpath, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { isPathInsideOrEqual } from '../../../../shared/file-access/cross-platform-path'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
-import { assertWslUncPathRunning } from '../../../wsl/filesystem/wsl-unc-access-gate'
-
-// A stop nothing reported leaves the shared 15 s "running" standing; a sweep asks WSL at most once a second.
-const CLEANUP_WSL_RUNNING_LEASE_MS = 1_000
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
+import { wslDistroForPath } from '../../../wsl/filesystem/wsl-unc-access-gate'
 
 /** Orca's homes to delete in, and roots (the user's import folder) no deletion may reach. */
 export type RolloutHomes = { homes: readonly string[]; protectedRoots: readonly string[] }
 
 /**
  * A protected root as seen from one rollout: the dev:ino of the root and of the folders that hold
- * this rollout in it, or, on a filesystem that gives the root no inode, its real path.
+ * this rollout in it, or, on a filesystem that gives the root no inode, its real path. A WSL root is
+ * never read, so it has only its spelling.
  */
 export type ProtectedRoot = { folderIds: ReadonlySet<string>; inodelessRealPath: string | null }
 
@@ -41,6 +40,12 @@ async function folderId(path: string): Promise<string | null> {
   }
 }
 
+/** One spelling for a WSL folder on Windows, whichever host name and case reach it; null for any other. */
+function wslFolderSpelling(path: string): string | null {
+  const wsl = wslDistroForPath(path) ? parseWslUncPath(path) : null
+  return wsl ? `//wsl.localhost/${wsl.distro.toLowerCase()}${wsl.linuxPath}` : null
+}
+
 /** Without inodes to compare, only a home whose real path is exactly the root's is that root. */
 async function isHomeRealPath(homes: readonly string[], realPath: string): Promise<boolean> {
   const homePaths = await Promise.all(
@@ -51,8 +56,7 @@ async function isHomeRealPath(homes: readonly string[], realPath: string): Promi
 
 /**
  * Each protected root for the rollout at `stem` (`YYYY/MM/DD/<name>`), unless it is the very folder
- * of a home Orca deletes from. A root that can't be read for a reason other than being gone, or
- * sits in a WSL distro that isn't running, throws.
+ * of a home Orca deletes from. A root that can't be read for a reason other than being gone throws.
  */
 export async function resolveProtectedRoots(
   { homes, protectedRoots }: RolloutHomes,
@@ -66,8 +70,13 @@ export async function resolveProtectedRoots(
   const dated = dirname(stem).split('/')
   const resolved: ProtectedRoot[] = []
   for (const root of protectedRoots) {
-    // Reading a stopped distro's folder boots it; the chat waits for a sweep where it runs.
-    await assertWslUncPathRunning(root, null, { leaseMs: CLEANUP_WSL_RUNNING_LEASE_MS })
+    // Known by its spelling alone: reading it would boot a stopped distro, and a home linked into it
+    // resolves to it.
+    const wslRoot = wslFolderSpelling(root)
+    if (wslRoot) {
+      resolved.push({ folderIds: new Set(), inodelessRealPath: wslRoot })
+      continue
+    }
     const realPath = await realpathUnlessAbsent(root)
     if (!realPath) {
       continue
@@ -112,7 +121,8 @@ export async function isOutsideProtectedRoots(
   if (
     protectedRoots.some(
       (root) =>
-        root.inodelessRealPath !== null && isPathInsideOrEqual(root.inodelessRealPath, realFolder)
+        root.inodelessRealPath !== null &&
+        isPathInsideOrEqual(root.inodelessRealPath, wslFolderSpelling(realFolder) ?? realFolder)
     )
   ) {
     return false

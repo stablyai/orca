@@ -1,46 +1,35 @@
 import { afterEach, expect, it, vi } from 'vitest'
 
-const { realpath, stat, probe } = vi.hoisted(() => ({
-  realpath: vi.fn(),
-  stat: vi.fn(),
-  probe: vi.fn<() => Promise<string[]>>()
-}))
+const { realpath, stat } = vi.hoisted(() => ({ realpath: vi.fn(), stat: vi.fn() }))
 
 vi.mock('node:fs/promises', () => ({ realpath, stat }))
-vi.mock('../../../wsl/discovery/distro-catalog', async () => {
-  const { resolveRunningWslDistros } =
-    await import('../../../wsl/discovery/wsl-running-distro-cache')
-  return {
-    listRunningWslDistrosAsync: (options: object) => resolveRunningWslDistros(probe, options),
-    listWslDistrosAsync: async () => ['Ubuntu']
-  }
-})
 
-import { resolveProtectedRoots } from './codex-rollout-protected-roots'
-import { assertWslUncPathRunning } from '../../../wsl/filesystem/wsl-unc-access-gate'
-
-const IMPORT_FOLDER = '\\\\wsl.localhost\\Ubuntu\\home\\me\\.codex'
+import { isOutsideProtectedRoots, resolveProtectedRoots } from './codex-rollout-protected-roots'
 
 afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-it('refuses to protect an import folder whose distro stopped since it was last seen running, seconds ago', async () => {
+it('protects a WSL import folder without reading it, and keeps a name that resolves into it', async () => {
   vi.stubGlobal('process', { ...process, platform: 'win32' })
-  realpath.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
-  stat.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
-  probe.mockResolvedValueOnce(['Ubuntu'])
-  await assertWslUncPathRunning(IMPORT_FOLDER)
-  // Two seconds later it has stopped, with nothing in it to tell Orca.
-  probe.mockResolvedValue([])
-  const later = performance.now() + 2_000
-  vi.stubGlobal('performance', { now: () => later })
+  stat.mockResolvedValue({ dev: 1n, ino: 2n })
+  realpath.mockImplementation(async (path: string) =>
+    path === 'C:/Users/me/.codex/sessions/2026/11/01'
+      ? '\\\\wsl$\\ubuntu\\home\\me\\.codex\\sessions\\2026\\11\\01'
+      : path
+  )
 
-  await expect(
-    resolveProtectedRoots(
-      { homes: ['C:\\Users\\me\\.codex'], protectedRoots: [IMPORT_FOLDER] },
-      '2026/11/01/rollout'
-    )
-  ).rejects.toMatchObject({ code: 'WSL_DISTRO_STOPPED' })
-  expect(realpath).not.toHaveBeenCalledWith(IMPORT_FOLDER)
+  const roots = await resolveProtectedRoots(
+    {
+      homes: ['C:\\Users\\me\\.codex'],
+      protectedRoots: ['\\\\wsl.localhost\\Ubuntu\\home\\me\\.codex']
+    },
+    '2026/11/01/rollout'
+  )
+  const touched = [...realpath.mock.calls, ...stat.mock.calls].map(([path]) => path)
+  expect(touched.filter((path) => path.startsWith('\\\\wsl'))).toEqual([])
+
+  expect(
+    await isOutsideProtectedRoots('C:/Users/me/.codex/sessions/2026/11/01/rollout.jsonl', roots)
+  ).toBe(false)
 })
