@@ -1,12 +1,13 @@
 import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { CODEX_TERMINAL_SERVER_ISOLATION_SETTINGS_TARGET_ID } from '@/components/settings/navigation/settings-navigation-types'
 import { isCodexTerminalServerIsolationEnabled } from '../../../../../../shared/agent-launch/startup/codex-terminal-server-isolation'
 import { whenAgentTerminalAppears } from '../agent-presence/agent-terminal-presence'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 // Why no hydration check: the seen flag defaults to true until the persisted value arrives.
 function isNoticeDue(state: AppState): boolean {
@@ -62,7 +63,7 @@ function showCodexTerminalServerIsolationNotice(): void {
 }
 
 export function useCodexTerminalServerIsolationNotice(): void {
-  const due = useAppStore(isNoticeDue)
+  const due = useAppStoreWithChannels(isNoticeDue)
 
   useEffect(() => {
     // Why: a paired web client's terminals follow the host's setting, not this window's.

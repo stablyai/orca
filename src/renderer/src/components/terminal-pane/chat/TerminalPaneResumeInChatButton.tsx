@@ -3,12 +3,12 @@ import { MessagesSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store/index'
 import { resolveCliChatResumeSource } from '../../tab-bar/session-actions/cli-chat-resume-source'
 import {
   runCliChatResume,
   useCliChatResumePending
 } from '../../tab-bar/session-actions/cli-chat-resume-run'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export function TerminalPaneResumeInChatButton({
   tabId,
@@ -20,7 +20,7 @@ export function TerminalPaneResumeInChatButton({
   paneKey: string
 }): React.JSX.Element {
   const t = useTranslate()
-  const source = useAppStore(
+  const source = useAppStoreWithChannels(
     useShallow((state) =>
       resolveCliChatResumeSource(state, {
         tab: { id: tabId, worktreeId },

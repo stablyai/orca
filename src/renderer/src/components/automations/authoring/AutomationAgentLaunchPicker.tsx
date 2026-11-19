@@ -1,5 +1,4 @@
 import { useCallback, useMemo, useState, type ComponentProps } from 'react'
-import { useAppStore } from '@/store/index'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
 import { useAgentPickerDraftScope } from '@/components/agent/agent-launch-picker-drafts'
 import { useAgentLaunchPickerInventory } from '@/components/agent/use-agent-launch-picker-inventory'
@@ -31,6 +30,7 @@ import {
   editsSupplementalArguments
 } from './automation-launch-draft'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 function legacyArgumentsDraft(draft: AutomationDraft): AutomationDraft {
   return {
@@ -62,7 +62,7 @@ export function AutomationAgentLaunchPicker({
   onDraftChange: (updater: (current: AutomationDraft) => AutomationDraft) => void
 }) {
   const t = useTranslate()
-  const state = useAppStore(selectAgentLaunchRouteView)
+  const state = useAppStoreWithChannels(selectAgentLaunchRouteView)
   const [menuOpen, setMenuOpen] = useState(false)
   const [catalogAgent, setCatalogAgent] = useState<AgentPickerEntry['agent']>()
   const route = buildAgentLaunchRouteInput(state, { agent: draft.agentId, workspace })

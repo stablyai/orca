@@ -10,7 +10,6 @@ import {
 } from './worktree-card-slot-summary'
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { getIndexedWorktreesById } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import type { Worktree } from '../../../../../../shared/worktree/types'
@@ -40,6 +39,7 @@ import {
   workspaceUnreadTarget,
   type SlotTarget
 } from './worktree-card-slot-targets'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 function worktreeForIdentity(
   state: AppState,
@@ -203,7 +203,7 @@ export function useLineageSlotSummary(
     () => createLineageSlotSummarySelector(source, collapsed),
     [source, collapsed]
   )
-  const summary = useAppStore(useShallow(select))
+  const summary = useAppStoreWithChannels(useShallow(select))
   return useMemo(
     () => ({ exceptions: fromLineageSlotRecord(summary), latestAt: summary.latestAt }),
     [summary]

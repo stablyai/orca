@@ -2,7 +2,6 @@ import { useCallback } from 'react'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { useAppStore } from '@/store/index'
 import { selectAgentLaunchRouteView } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { useChatProgramFactsVersion } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
 import { recomputeOn } from '@/lib/recompute-on'
@@ -18,6 +17,7 @@ import {
   useAiVaultSessionWorktreeMap
 } from '../session-list/ai-vault-session-worktree'
 import { withAiVaultCurrentWorktreeStatus } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-worktree'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export function useAiVaultPanelSessionResume(args: {
   sessions: readonly AiVaultSession[]
@@ -66,7 +66,7 @@ export function useAiVaultPanelSessionResume(args: {
     [getSessionRowResumeArgs]
   )
   // Chat resume must preserve the session’s workspace: Claude finds transcripts through launch-cwd-derived paths.
-  const launchRoute = useAppStore(selectAgentLaunchRouteView)
+  const launchRoute = useAppStoreWithChannels(selectAgentLaunchRouteView)
   const chatProgramFactsVersion = useChatProgramFactsVersion()
   const getSessionResumeInChat = useCallback(
     (session: AiVaultSession): AiVaultResumeInChatEligibility =>

@@ -24,7 +24,6 @@ import { readBotWaits, subscribeToBotChanges } from '@/lib/bot-catalog-snapshot'
 import { openBotGroup } from '@/lib/bot-group-catalog'
 import { useBotGroups } from '@/lib/bot-group-list'
 import { useBotUpNextUnseen } from '@/lib/bot-up-next-unseen'
-import { useAppStore } from '@/store'
 import type { Bot } from '../../../../shared/bot-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
@@ -59,6 +58,7 @@ import { UpNextIcon } from './BotUpNextCount'
 import { botErrorMessage } from './bot-presentation'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { useBotPurposes } from './use-bot-purposes'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 const BOT_PALETTE_EMPTY_QUERY_CAP = 3
 const PALETTE_BOT_VIEW = { ...DEFAULT_BOT_SIDEBAR_VIEW, sortBy: 'smart' } as const
@@ -338,7 +338,7 @@ function BotGroupPaletteAvatar({
   members: readonly Bot[]
 }): React.JSX.Element {
   // Rerun on every store change, as the sidebar row does, so freshness re-reads the clock.
-  const status = useAppStore((state) =>
+  const status = useAppStoreWithChannels((state) =>
     botGroupStatus(group, state.agentStatusByPaneKey, Date.now())
   )
   return (

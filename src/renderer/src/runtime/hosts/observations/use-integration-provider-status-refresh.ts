@@ -3,6 +3,7 @@ import { getLocalPreflightContext } from '@/runtime/hosts/preflight/local-prefli
 import { localPreflightContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
 import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export function useIntegrationProviderStatusRefresh(): void {
   const settings = useAppStore((s) => s.settings)
@@ -15,7 +16,7 @@ export function useIntegrationProviderStatusRefresh(): void {
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
-  const expectedPreflightContextKey = useAppStore((s) =>
+  const expectedPreflightContextKey = useAppStoreWithChannels((s) =>
     localPreflightContextKey(getLocalPreflightContext(s))
   )
   const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)

@@ -9,9 +9,10 @@ import { LINEAR_AGENT_SKILL_NAMES } from '@/lib/skills/installation/agent-featur
 import { getLocalPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { localPreflightContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
 import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
-import { useAppStore } from '@/store/index'
 import type { TaskProvider } from '../../../../../shared/work-items/task-providers'
 import type { TaskProviderReadiness } from './task-source-setup-state'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export function useTaskSourceProviderReadiness(
   visibleProviders: readonly TaskProvider[]
@@ -22,7 +23,7 @@ export function useTaskSourceProviderReadiness(
   const preflightStatusContextKey = useAppStore((s) => s.preflightStatusContextKey)
   const preflightStatusError = useAppStore((s) => s.preflightStatusError)
   const preflightStatusLoading = useAppStore((s) => s.preflightStatusLoading)
-  const expectedPreflightContextKey = useAppStore((s) =>
+  const expectedPreflightContextKey = useAppStoreWithChannels((s) =>
     localPreflightContextKey(getLocalPreflightContext(s))
   )
   const jiraStatus = useAppStore((s) => s.jiraStatus)

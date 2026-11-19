@@ -1,10 +1,11 @@
 import { useEffect } from 'react'
-import { useAppStore } from '@/store/index'
 import { getLocalPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { deriveIntegrationConnectionStatus } from './use-integration-connection-status'
 import type { FeatureWallWorkflow } from '../../../../../../shared/feature-education/explore/feature-wall-workflows'
 import { localPreflightContextKey } from '../../../../runtime/hosts/preflight/local-preflight-context-key'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export type FeatureWallTaskSourcePresentation = {
   workflow: FeatureWallWorkflow
@@ -32,7 +33,7 @@ export function useFeatureWallTaskSourcePresentation(
   const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
   const settings = useAppStore((s) => s.settings)
-  const expectedPreflightContextKey = useAppStore((s) =>
+  const expectedPreflightContextKey = useAppStoreWithChannels((s) =>
     localPreflightContextKey(getLocalPreflightContext(s))
   )
   const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)

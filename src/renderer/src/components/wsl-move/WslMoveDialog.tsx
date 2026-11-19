@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useTranslate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store/index'
 import {
   Dialog,
   DialogContent,
@@ -44,6 +43,8 @@ import type {
   WslMoveRowRef
 } from '../../../../shared/wsl-move/wsl-move-driver-types'
 import type { WslMoveBlockerView } from './WslMoveBlockerList'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 function useMoveCatalog(): WslMoveCatalog {
   return useAppStore(
@@ -92,7 +93,7 @@ export function WslMoveDialogHost(): React.JSX.Element | null {
   )
   // Opening a bridge project is the trigger bridge users give; main checks it runs.
   // Gated so flag-off windows skip the per-update worktree lookup.
-  const activeWslDistro = useAppStore((s) => {
+  const activeWslDistro = useAppStoreWithChannels((s) => {
     const worktree = enabled && s.activeWorktreeId ? findWorktreeById(s, s.activeWorktreeId) : null
     return worktree ? getWslDistroFromPath(worktree.path) : null
   })

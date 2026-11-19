@@ -1,4 +1,3 @@
-import { useAppStore } from '@/store/index'
 import type { CalmStatusView } from '@/runtime/hosts/connections/use-calm-status-reveal'
 import { RemoteRuntimeRecoveryCard } from '../../remote-runtime/recovery/RemoteRuntimeRecoveryCard'
 import { remoteRuntimeRecoveryCopy } from '../../remote-runtime/recovery/remote-runtime-recovery-copy'
@@ -8,6 +7,7 @@ import {
   selectRuntimeServerTailscaleHost
 } from './remote-server-outage'
 import { useTranslate } from '@/i18n/use-translate'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 /** Show one shared server-outage notice; its reveal state keeps pane recovery banners quiet. */
 export function RemoteServerOutageNotice({
@@ -18,9 +18,13 @@ export function RemoteServerOutageNotice({
   reveal: CalmStatusView
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const serverName = useAppStore((state) => selectRuntimeServerName(state, environmentId))
-  const cause = useAppStore((state) => selectRemoteServerOutageCause(state, environmentId))
-  const tailscaleHost = useAppStore((state) =>
+  const serverName = useAppStoreWithChannels((state) =>
+    selectRuntimeServerName(state, environmentId)
+  )
+  const cause = useAppStoreWithChannels((state) =>
+    selectRemoteServerOutageCause(state, environmentId)
+  )
+  const tailscaleHost = useAppStoreWithChannels((state) =>
     selectRuntimeServerTailscaleHost(state, environmentId)
   )
   if (!reveal.visible) {

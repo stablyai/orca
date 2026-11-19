@@ -1,7 +1,6 @@
 import type { BranchContext } from './worktree-agent-branch-context'
 import React, { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store/index'
 import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
 import { useNow } from '@/lib/window-activity/use-now'
 import { deriveRunningAgentSendTargets } from '@/lib/agent-session/messaging/running-agent-targets'
@@ -29,6 +28,8 @@ import { opensClaudeParentConversation } from '@/lib/agent-session/navigation/cl
 import { IdleChildAgentGroupRow } from './worktree-card-idle-child-agents'
 import type { AgentChildren } from '@/store/slices/agent-status/projection/agent-row-display-model'
 import type { DashboardAgentRow as AgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 const stopBubble = (event: React.SyntheticEvent) => event.stopPropagation()
 type Props = {
@@ -74,8 +75,10 @@ function WorktreeCardAgentsBody({
   const onActivate = useWorktreeAgentActivation(worktreeId, executionHostId)
   const onDismiss = useAppStore((s) => s.dropAgentStatus)
   const send = useAppStore((s) => s.sendPromptToSidebarAgentTarget)
-  const control = useAppStore(useShallow((s) => selectSendTargetControlInputs(s, worktreeId)))
-  const inputs = useAppStore(useShallow((s) => selectSendTargetInputs(s, worktreeId)))
+  const control = useAppStoreWithChannels(
+    useShallow((s) => selectSendTargetControlInputs(s, worktreeId))
+  )
+  const inputs = useAppStoreWithChannels(useShallow((s) => selectSendTargetInputs(s, worktreeId)))
   const targets = useMemo(
     () =>
       recomputeOn([languageRevision], () => {

@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next'
 import { SidebarActivityBadge } from './sidebar-activity-badge'
 import { activityThreadStatusId } from '@/components/activity/threads/activity-thread-presentation'
 import { Input } from '@/components/ui/input'
-import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
 import { hasActivityThreadWorkspace } from '@/components/activity/thread-list/activity-thread-actions'
 import { useActivityThreadActionBindings } from '@/components/activity/thread-list/use-activity-thread-action-bindings'
@@ -22,6 +21,8 @@ import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
+import { useAppStore } from '@/store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 /** Select threads by revealing their existing panes; threads whose panes are gone remain listed but inert. */
 export type SidebarAgentsListProps = {
@@ -44,7 +45,7 @@ export default function SidebarAgentsList({
 }: SidebarAgentsListProps): React.JSX.Element | null {
   useTranslation()
   const showChildAgents = useAppStore((s) => s.agentsShowChildAgents)
-  const selectedPaneKey = useAppStore((s) =>
+  const selectedPaneKey = useAppStoreWithChannels((s) =>
     active && s.activeWorktreeId ? getFocusedAgentPaneKeyForWorktree(s, s.activeWorktreeId) : null
   )
 

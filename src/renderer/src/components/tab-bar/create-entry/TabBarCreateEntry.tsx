@@ -30,7 +30,6 @@ import { activateOpenTabSearchResult } from './open-tab-selection-routing'
 import { useTabCreateEntrySearchResults } from './use-tab-create-entry-search-results'
 import { DEFAULT_SEARCH_ENGINE } from '../../../../../shared/browser/navigation/browser-url'
 import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
-import { useAppStore } from '@/store/index'
 import { useFileListWorktree } from '@/store/workspaces/selection/use-selected-worktree'
 import { isQuickOpenQueryTooLarge } from '../../../../../shared/quick-open/quick-open-path-search'
 import { parseForcedSearchQuery } from './tab-create-entry-forced-search'
@@ -44,6 +43,8 @@ import { EMPTY_AGENT_OPTIONS, EMPTY_MENU_OPTIONS } from './tab-create-entry-empt
 import type { TabEntryActionClassification } from './tab-create-entry-classifier'
 import type { TabBarCreateEntryProps } from './tab-create-entry-props'
 import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export default function TabBarCreateEntry(props: TabBarCreateEntryProps): React.JSX.Element {
   return <TabBarCreateEntrySession key={String(props.menuOpen)} {...props} />
@@ -104,7 +105,7 @@ function TabBarCreateEntrySession({
       }),
     [shouldResolveAbsolutePaths, worktreeId]
   )
-  const allowAbsolutePaths = useAppStore(allowAbsolutePathsSelector)
+  const allowAbsolutePaths = useAppStoreWithChannels(allowAbsolutePathsSelector)
   // Deduplicate using the workspace filesystem; the client platform cannot establish path case sensitivity.
   const worktreePath = useFileListWorktree(menuOpen ? worktreeId : null)?.path ?? null
   const localPlatform = getRendererAppPlatform() === 'win32' ? 'windows' : 'posix'

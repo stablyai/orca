@@ -22,6 +22,9 @@ vi.mock('../right-sidebar/ai-vault/panel/agent-session-history-modal', () => ({
   openAgentSessionHistoryModal: mocks.openHistory
 }))
 vi.mock('@/store', () => ({ useAppStore: () => null }))
+vi.mock('@/store/channels/use-app-store-with-channels', () => ({
+  useAppStoreWithChannels: () => null
+}))
 
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { Bot } from '../../../../shared/bot-types'

@@ -2,10 +2,10 @@ import { useMemo } from 'react'
 import { parseGitHubIssueOrPRLink } from '../../../../shared/github/repositories/links'
 import { githubRepoIdentityKey } from '../../../../shared/github/repositories/repository-identity-key'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { getGitHubWorkItemRowHostId } from '@/store/github/work-items/work-item-routing'
 import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 // Reuse the empty result to avoid allocating on every store write while the picker is closed.
 const NO_DUPLICATE_CANDIDATES: readonly GitHubWorkItem[] = []
@@ -55,5 +55,5 @@ export function useGitHubDuplicateIssueCandidates(
       return result
     }
   }, [pickerOpen, repoId, number, url, repoHostId])
-  return useAppStore(useShallow(select))
+  return useAppStoreWithChannels(useShallow(select))
 }

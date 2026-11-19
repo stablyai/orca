@@ -6,7 +6,6 @@ import { getConnectionIdForFile } from '@/lib/workspace/ownership/connection-con
 import { editorTabFileAccess } from '@/lib/files/access/local-file-access'
 import { readRuntimeFileContent } from '@/runtime/files/reads/runtime-file-read-client'
 import { getRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
-import { useAppStore } from '@/store/index'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
@@ -24,6 +23,8 @@ import {
 } from '../save/queue/editor-save-disk-precondition'
 import { setModelExternalMutation } from '../save/queue/editor-save-rebaseline'
 import { notifyEditorFileCacheStale } from '../autosave/editor-autosave'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 // External writes preserve unsaved drafts and mark a conflict; expose recovery before a later save can overwrite the newer disk content.
 
@@ -162,11 +163,11 @@ export function ExternalFileChangeBanner({
   const t = useTranslate()
   const [compareOpen, setCompareOpen] = useState(false)
   // A sibling of this code model may own its unsaved text.
-  const isModelDirty = useAppStore((state) => {
+  const isModelDirty = useAppStoreWithChannels((state) => {
     const live = state.openFiles.find((openFile) => openFile.id === file.id)
     return live ? isEditorModelDirty(state, live) : file.isDirty
   })
-  const modelDraft = useAppStore((state) => {
+  const modelDraft = useAppStoreWithChannels((state) => {
     const live = state.openFiles.find((openFile) => openFile.id === file.id)
     const holder = live ? editorModelDraftHolder(state, live) : undefined
     return holder ? state.editorDrafts[holder.id] : undefined

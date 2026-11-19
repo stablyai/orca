@@ -1,4 +1,3 @@
-import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
@@ -18,6 +17,8 @@ import {
   getConnectionIdForWorktreeCopy,
   getConnectionIdFromState
 } from './connection-owner-resolution'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 /**
  * One host's copy of a worktree, for git work whose answer is written back to the store. Worktree
@@ -92,7 +93,9 @@ export function resolveWorktreeGitCopyNow(
 
 /** The selected copy's host, for a callback that must keep answering for it after a switch. */
 export function useWorktreeGitCopyHostId(worktreeId: string | null): ExecutionHostId | null {
-  return useAppStore((state) => (worktreeId ? worktreeGitCopyHostId(state, worktreeId) : null))
+  return useAppStoreWithChannels((state) =>
+    worktreeId ? worktreeGitCopyHostId(state, worktreeId) : null
+  )
 }
 
 /**

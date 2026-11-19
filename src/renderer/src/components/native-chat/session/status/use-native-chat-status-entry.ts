@@ -1,12 +1,12 @@
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '../../../../store/index'
 import { findTabAgentEntry } from './native-chat-tab-agent-entry'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export function useNativeChatStatusEntry(
   terminalTabId: string,
   preferredPaneKey: string | undefined
 ) {
-  const entry = useAppStore(
+  const entry = useAppStoreWithChannels(
     useShallow((state) =>
       preferredPaneKey
         ? state.agentStatusByPaneKey.get(preferredPaneKey)

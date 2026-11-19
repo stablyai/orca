@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { useAppStore } from '../../../index'
 import type { AppState } from '../../../types'
 import { rightSidebarShowsPullRequestData } from '../../../../components/right-sidebar/visibility/right-sidebar-visibility'
 import { findWorktreeById, buildPRRefreshCandidate } from '../../../github/refresh/worktree-refresh'
@@ -12,6 +11,8 @@ import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
+import { useAppStore } from '../../../index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 function visibleReviewWorkspacesForState(state: AppState) {
   const ids = new Set(state.visibleReviewCardWorktreeIds ?? [])
@@ -157,7 +158,7 @@ export function refreshForegroundVisibleReview(state: AppState): void {
 export function useVisibleReviewRefreshReporting(): void {
   const selectIdentity = useMemo(() => createVisibleReviewReportIdentitySelector(), [])
   const foregroundRef = useRef<string | null>(null)
-  const identity = useAppStore(selectIdentity)
+  const identity = useAppStoreWithChannels(selectIdentity)
   const report = useAppStore((s) => s.reportVisibleGitHubPRRefreshCandidates)
   useEffect(() => {
     let mounted = true

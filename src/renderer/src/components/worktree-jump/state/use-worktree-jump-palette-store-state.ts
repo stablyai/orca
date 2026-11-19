@@ -1,7 +1,6 @@
 import { useMemo, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store/index'
 import { usePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { usePluginNewFiles } from '@/store/plugins/file-creation/plugin-new-files'
 import { useSettingsNavigationMetadata } from '@/components/settings/navigation/useSettingsNavigationMetadata'
@@ -23,6 +22,8 @@ import {
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
 import { getFolderWorkspaceWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export function useWorktreeJumpPaletteStoreState({
   visible,
@@ -77,7 +78,7 @@ export function useWorktreeJumpPaletteStoreState({
   const pluginCommands = usePluginCommands()
   const pluginNewFiles = usePluginNewFiles()
   const paletteStatusInputsActive = visible || lingering
-  const { ptyIdsByTabId, terminalLayoutsByTabId, tabsByWorktree } = useAppStore(
+  const { ptyIdsByTabId, terminalLayoutsByTabId, tabsByWorktree } = useAppStoreWithChannels(
     useShallow((state) => selectPaletteStatusInputs(state, paletteStatusInputsActive))
   )
   const { prCache, issueCache, hostedReviewCache } = useAppStore(

@@ -1,5 +1,4 @@
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store/index'
 import { useActiveRepo } from '@/store/repos/use-repository-catalog'
 import {
   useActiveWorktree,
@@ -10,6 +9,7 @@ import {
   type AiVaultPanelWorkspace,
   type AiVaultPanelWorkspaceRows
 } from './ai-vault-panel-workspace'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 const NO_ROWS: AiVaultPanelWorkspaceRows = { worktree: null, repo: null }
 
@@ -19,7 +19,7 @@ export function useAiVaultPanelWorkspace(
   const activeWorktreeId = useActiveWorktreeId()
   const activeWorktree = useActiveWorktree()
   const activeRepo = useActiveRepo()
-  const bound = useAppStore(
+  const bound = useAppStoreWithChannels(
     useShallow((state) => (workspace ? selectAiVaultPanelWorkspace(state, workspace) : NO_ROWS))
   )
   return workspace

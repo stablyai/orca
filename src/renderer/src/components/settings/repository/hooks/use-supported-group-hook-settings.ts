@@ -12,13 +12,14 @@ import {
   PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY
 } from '../../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import { runtimeEnvironmentSupportsCapabilities } from '@/runtime/rpc/compatibility/runtime-capability-proof'
-import { useAppStore } from '@/store'
 import { subscribeRuntimeHostContactRegained } from '@/runtime/hosts/connections/runtime-host-contact-regained'
 import {
   captureRuntimeEnvironmentRequestRevision,
   getRuntimeEnvironmentRevision,
   resolveContinuedRuntimeEnvironmentRevision
 } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import { useAppStore } from '@/store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export type ProjectGroupHookSupport = {
   setup: boolean
@@ -34,7 +35,7 @@ export type ProjectGroupSettingsEntry = ProjectGroup & {
 
 export function useSupportedGroupHookSettings(): readonly ProjectGroupSettingsEntry[] {
   const groups = useAppStore((state) => state.projectGroups)
-  const labels = useAppStore(
+  const labels = useAppStoreWithChannels(
     useShallow((state) =>
       groups.map(
         (group) =>

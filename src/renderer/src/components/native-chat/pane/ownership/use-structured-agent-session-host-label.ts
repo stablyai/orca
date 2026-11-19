@@ -3,12 +3,12 @@ import { executionHostIdForStructuredTarget } from '@/runtime/native-chat/sessio
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { sayNativeChatOrcaStopTranslated } from '@/components/native-chat/messages/notices/native-chat-orca-stop-words-text'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import { useAppStore } from '../../../../store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 /** Return the host’s display name, or null for unnamed paired servers; raw IDs are not names. */
 export function useStructuredAgentSessionHostLabel(target: RuntimeClientTarget): string | null {
   const t = useTranslate()
-  return useAppStore((state) => {
+  return useAppStoreWithChannels((state) => {
     const label = selectExecutionHostDisplayLabel(
       state,
       executionHostIdForStructuredTarget(target),

@@ -39,7 +39,8 @@ vi.mock('@/store', () => {
   const state = { tabsByWorktree: {} }
   return {
     useAppStore: Object.assign((select: (s: typeof state) => unknown) => select(state), {
-      getState: () => state
+      getState: () => state,
+      subscribe: () => () => {}
     })
   }
 })

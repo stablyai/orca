@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import { getFolderWorkspaceStatusRequestDependencies } from '@/store/folder-workspaces/folder-path-status'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { useFolderWorkspacePathStatusCacheExpiryTick } from '@/lib/workspace/paths/folder-workspace-path-status-cache-expiry'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
@@ -10,6 +9,8 @@ import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { AppState } from '@/store/types'
 import { getFolderPathStatusRouteOptionsForRows } from './folder-path-status-routing'
 import { recomputeOn } from '@/lib/recompute-on'
+import { useAppStore } from '@/store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 type FolderPathStatusRequest = Parameters<AppState['fetchFolderWorkspacePathStatus']>[0]
 
@@ -152,7 +153,7 @@ export function useFolderWorkspacePathStatusRows(args: {
     () => createFolderPathStatusDependenciesSelector(requests),
     [requests]
   )
-  const dependencies = useAppStore(selectDependencies)
+  const dependencies = useAppStoreWithChannels(selectDependencies)
   useEffect(() => {
     for (const { request, options } of requests.values()) {
       void fetchFolderWorkspacePathStatus(request, { force: true, ...options })

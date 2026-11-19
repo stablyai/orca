@@ -4,9 +4,9 @@ import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { botOfFolders, selectFolderAncestors } from '@/components/bots/use-worktree-bot'
 import { useTranslate } from '@/i18n/use-translate'
 import { useBots, useBotsEnabled } from '@/lib/bot-catalog'
-import { useAppStore } from '@/store'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 const NO_FOLDERS: readonly FolderWorkspace[] = []
 
@@ -23,7 +23,7 @@ export function WorktreeRemoveParentMenuItem({
   const t = useTranslate()
   // With bots off, the home is an ordinary folder and the workspace already shows in its project.
   const botsEnabled = useBotsEnabled()
-  const folders = useAppStore((s) =>
+  const folders = useAppStoreWithChannels((s) =>
     botsEnabled ? selectFolderAncestors(s, worktree) : NO_FOLDERS
   )
   const bot = botOfFolders(folders, useBots(folders.length > 0))

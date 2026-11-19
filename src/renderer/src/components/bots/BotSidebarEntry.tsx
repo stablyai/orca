@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button'
 import { AttachedWorktreeCards } from '@/components/sidebar/AttachedWorktreeCards'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
-import { useAppStore } from '@/store'
 import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-style'
 import type { Bot } from '../../../../shared/bot-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -35,6 +34,8 @@ import { setBotSidebarChildren } from './bot-sidebar-child-presence'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { useBotsRevealSettle } from './bots-sidebar-reveal-context'
+import { useAppStore } from '@/store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 // The bot row's status lane and gap, so a line's status glyph lands under the bot's avatar.
 export const BOT_WORKSPACE_LINE_INDENT = 18
@@ -95,7 +96,7 @@ export function BotSidebarEntry({
   }, [ordered, lineageChildrenByParentIdentity, activeWorktreeId, activeHostId])
   const hideSleeping = useAppStore((s) => s.botSidebarView.hideSleepingWorkers)
   // Joined ids keep the selector's result stable between unrelated store writes.
-  const sleepingIds = useAppStore((s) =>
+  const sleepingIds = useAppStoreWithChannels((s) =>
     hideSleeping
       ? ordered
           .filter((worktree) => worktree !== activeLine && selectIsSleepingWorktree(s, worktree.id))

@@ -1,5 +1,4 @@
 import { Fragment, useMemo, type ComponentType, type JSX } from 'react'
-import { useAppStore } from '@/store'
 import {
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
@@ -39,12 +38,14 @@ import { HideBotCreatedFilterRow } from '@/components/bots/HideBotCreatedFilterR
 import { withoutHiddenRepos } from '../../../../../../shared/project/catalog/hidden-projects'
 import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-style'
 import { trackWorktreeCardStyleChanged } from '../../workspace-card/template/worktree-card-style-telemetry'
+import { useAppStore } from '@/store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export function useWorkspaceOptionsFilterBadge(): {
   hasAnyFilter: boolean
   activeFilterCount: number
 } {
-  const filterState = useAppStore(useShallow(selectSidebarFilterState))
+  const filterState = useAppStoreWithChannels(useShallow(selectSidebarFilterState))
   const repos = useAppStore((s) => s.repos)
   const activeFilterCount = useMemo(
     () =>

@@ -1,5 +1,4 @@
 import { useMemo } from 'react'
-import { useAppStore } from '@/store'
 import { useAccessRequests } from '@/lib/bot-access-requests'
 import type { Bot } from '../../../../shared/bot-types'
 import type { HostAccessRequest } from '@/lib/bot-access-requests'
@@ -15,6 +14,7 @@ import { structuredAgentSessionStatusPaneKey } from '../../../../shared/agent-se
 import { useBotActivity } from './use-bot-activity'
 import { useBotChatTree } from './use-bot-chat-tree'
 import { useBotConnectorEntries, type BotConnectorEntry } from './bot-connector-entries'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export type BotNowView = BotNow<BotConnectorEntry, HostAccessRequest>
 export type BotNeedView = BotNeed<BotConnectorEntry, HostAccessRequest>
@@ -22,7 +22,7 @@ export type BotNeedView = BotNeed<BotConnectorEntry, HostAccessRequest>
 /** What needs the owner and what is working, for the panel header, Activity tab and list, and panel toggle. */
 export function useBotNow(bot: Bot | null): BotNowView {
   const activity = useBotActivity(bot)
-  const chatState = useAppStore((s) =>
+  const chatState = useAppStoreWithChannels((s) =>
     bot?.chatSessionId
       ? (s.agentStatusByPaneKey.get(structuredAgentSessionStatusPaneKey(bot.chatSessionId))
           ?.state ?? null)

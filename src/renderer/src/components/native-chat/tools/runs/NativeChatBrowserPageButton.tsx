@@ -2,7 +2,6 @@ import { useEffect, useState, useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
 import { BrowserFavicon } from '@/components/browser-pane/describe-page/browser-favicon'
 import { useTranslate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store'
 import { findPage } from '@/store/slices/browser/pages/browser-page-records'
 import { findBrowserWorkspaceForRemotePage } from '@/runtime/web-session-tabs-sync/tab-projection/mirrored-browser-tabs'
 import { activateBrowserPagePaletteResult } from '@/lib/browser/palette/browser-page-palette-activation'
@@ -21,6 +20,7 @@ import { nativeChatFullCommand } from '../../../../../../shared/native-chat/tool
 import { parseOrcaBrowserCommand } from '../../../../../../shared/browser/automation/orca-browser-cli-commands'
 import type { NativeChatToolCallBlock } from '../../../../../../shared/native-chat/native-chat-types'
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 // A run's page outlives the run only here: no transcript records the page a command without
 // `--page` drove, so a run seen while it was the chat's latest keeps that page in this renderer.
@@ -132,7 +132,7 @@ function BrowserPageButton({
       }
     }
   }, [runCallId, rememberedPageId])
-  const page = useAppStore((state) => {
+  const page = useAppStoreWithChannels((state) => {
     if (!targetPageId) {
       return null
     }

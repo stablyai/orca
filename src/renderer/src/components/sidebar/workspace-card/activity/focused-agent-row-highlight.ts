@@ -1,4 +1,3 @@
-import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
@@ -6,6 +5,7 @@ import {
   isTerminalLeafId,
   makePaneKey
 } from '../../../../../../shared/workspace-layout/stable-pane-id'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export type FocusedAgentRowHighlightState = Pick<
   AppState,
@@ -88,5 +88,5 @@ export function getFocusedAgentPaneKeyForWorktree(
 }
 
 export function useFocusedAgentPaneKey(worktreeId: string): string | null {
-  return useAppStore((state) => getFocusedAgentPaneKeyForWorktree(state, worktreeId))
+  return useAppStoreWithChannels((state) => getFocusedAgentPaneKeyForWorktree(state, worktreeId))
 }

@@ -1,3 +1,4 @@
+import { useAppStore } from '@/store/index'
 import {
   getTerminalNoticeLifetime,
   isTerminalNoticeLifetimeCurrent,
@@ -6,7 +7,6 @@ import {
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { paneClaudeTarget } from '../../host-state/terminal-pane-claude-target'
@@ -17,9 +17,10 @@ import {
   PaneBannerLearnMore,
   PaneTopWarningBanner
 } from '../../appearance/pane-top-banner/PaneTopWarningBanner'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 // System default already matches new terminals; key explicit selections so account switches recheck old shells.
-function selectedClaudeAccountKey(state: AppState): string | null {
+function selectedClaudeAccountKey(state: Pick<AppState, 'settings'>): string | null {
   const settings = state.settings
   if (!settings || settings.claudeManagedAccounts.length === 0) {
     return null
@@ -82,7 +83,7 @@ export function ClaudeOldTerminalBanner({
     (dismissedLifetime === lifetime || lifetime.dismissed.has('claude-old-terminal'))
   const selectionKey = useAppStore(selectedClaudeAccountKey)
   // Why either signal: a typed claude is seen by the process read, or by its hooks.
-  const claudeInPane = useAppStore(
+  const claudeInPane = useAppStoreWithChannels(
     (state) =>
       state.paneForegroundAgentByPaneKey[paneKey]?.agent === 'claude' ||
       state.agentStatusByPaneKey.get(paneKey)?.agentType === 'claude'

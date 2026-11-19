@@ -37,6 +37,7 @@ import type { BrowserWorkspace } from '../../../../shared/browser/workspaces/bro
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { useNow } from '@/lib/window-activity/use-now'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 /** Confines the app's hottest status subscriptions here so only the dots re-render on their churn. */
 type PaletteLiveStatus = {
@@ -74,7 +75,7 @@ export function PaletteLiveStatusProvider({
     migrationUnsupportedByPtyId,
     unreadTerminalTabs,
     unreadAgentCompletionPanes
-  } = useAppStore(
+  } = useAppStoreWithChannels(
     useShallow((s) =>
       active
         ? {
@@ -91,7 +92,7 @@ export function PaletteLiveStatusProvider({
         : EMPTY_LIVE_INPUTS
     )
   )
-  const statusEpoch = useAppStore((s) => (active ? s.agentStatusEpoch : 0))
+  const statusEpoch = useAppStoreWithChannels((s) => (active ? s.agentStatusEpoch : 0))
 
   const value = useMemo<PaletteLiveStatus>(() => {
     // Share one freshness tick so worktree state and its done dot cannot expire at different times.

@@ -1,7 +1,6 @@
 import { useEffect } from 'react'
 import type { editor } from 'monaco-editor'
 import type { AppState } from '@/store/types'
-import { useAppStore } from '@/store/index'
 import {
   resolveNewModelLineEnding,
   type EditorLineEnding
@@ -13,6 +12,7 @@ import {
   endProgrammaticContentSync,
   isProgrammaticContentSyncInFlight
 } from './monaco-programmatic-sync'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export function resolveOpenFileNewModelLineEnding(
   state: AppState,
@@ -103,7 +103,7 @@ export function useNewModelLineEnding(
   fileId: string,
   language: string
 ): void {
-  const lineEnding = useAppStore((state) =>
+  const lineEnding = useAppStoreWithChannels((state) =>
     resolveOpenFileNewModelLineEnding(state, fileId, language)
   )
   useEffect(() => {

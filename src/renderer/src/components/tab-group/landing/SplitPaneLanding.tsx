@@ -2,7 +2,6 @@ import { useCallback, useRef, useState } from 'react'
 import { FilePlus, Globe, Smartphone, TerminalSquare } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '../../../store/index'
 import { useOptionalShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 import {
@@ -30,6 +29,8 @@ import {
 import { LandingAgentResults, LandingDefaultAgentItem } from './split-pane-landing-agents'
 import { LandingFileResults } from './split-pane-landing-files'
 import { LandingItemShortcut, landingQueryMatches } from './split-pane-landing-item'
+import { useAppStore } from '../../../store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 /** Fills an empty split pane so the user picks what opens there; each action creates into this group. */
 export function SplitPaneLanding({
@@ -63,7 +64,7 @@ export function SplitPaneLanding({
   )
   const worktreePath = useFileListWorktree(worktreeId)?.path ?? null
   // Why: paired web clients without host streaming hide these, as the tab bar's + menu does.
-  const [browserEnabled, emulatorEnabled] = useAppStore(
+  const [browserEnabled, emulatorEnabled] = useAppStoreWithChannels(
     useShallow((state) => {
       const policy = getWorkspaceClientCreationActionPolicy(state, worktreeId)
       return [

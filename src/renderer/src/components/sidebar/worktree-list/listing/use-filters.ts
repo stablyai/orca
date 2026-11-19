@@ -1,5 +1,4 @@
 import { useCallback } from 'react'
-import { useAppStore } from '@/store'
 import {
   clearSidebarFilters,
   selectSidebarFilterState,
@@ -34,6 +33,8 @@ import {
 } from '../../../../../../shared/workspace-view/workspace-creator-visibility'
 import { createSleepingSweepHiddenCheck } from './sleeping-sweep-visibility'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
+import { useAppStore } from '@/store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export type SidebarWorktreeFilters = ReturnType<typeof useSidebarWorktreeFilters>
 
@@ -119,7 +120,7 @@ function getRevealTargetHostId(state: AppState, worktree: Worktree, repo: Repo |
 }
 
 export function useSidebarWorktreeFilters() {
-  const filterState = useAppStore(useShallow(selectSidebarFilterState))
+  const filterState = useAppStoreWithChannels(useShallow(selectSidebarFilterState))
 
   const revealWorkspaceFilters = useCallback((worktree: Worktree) => {
     const state = useAppStore.getState()

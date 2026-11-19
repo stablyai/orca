@@ -2,7 +2,6 @@ import { useMemo } from 'react'
 import { Folder, GitBranch, GitCommitHorizontal, Server } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
-import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
@@ -15,6 +14,7 @@ import {
 } from './native-chat-composer-workspace'
 import { NativeChatComposerBranchPicker } from './NativeChatComposerBranchPicker'
 import { NativeChatSlackMirrorItem } from '../../slack-mirror/NativeChatSlackMirrorItem'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 // Trim to cap height so flex centering aligns glyphs with icons; clip x only to keep descenders.
 const FOOTER_TEXT =
@@ -52,7 +52,7 @@ export function NativeChatComposerWorkspace({
     path,
     branch,
     head
-  } = useAppStore(useShallow(selector))
+  } = useAppStoreWithChannels(useShallow(selector))
 
   const identity = getWorktreeGitIdentityDisplay({ branch, head })
   const label =

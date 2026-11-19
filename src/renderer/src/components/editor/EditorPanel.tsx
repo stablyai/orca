@@ -1,5 +1,4 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react'
-import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { formatClipboardFilePath } from '@/lib/clipboard/clipboard-file-path'
 import { getOpenFileRevealOwner } from '@/lib/files/os-open/reveal-in-file-manager'
@@ -35,6 +34,8 @@ import { useFileCustomEditors } from '@/store/plugins/file-editors/plugin-custom
 import { applyCustomEditorToggle } from './view-mode/custom-editor-toggle'
 import { editorPanelFileActions } from './panel/editor-panel-file-actions'
 import { runAfterEditorFramesFlush } from './save/flush/editor-pending-flush'
+import { useAppStore } from '@/store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 function EditorPanelInner({
   activeFileId: activeFileIdProp,
@@ -55,7 +56,7 @@ function EditorPanelInner({
   const activeViewStateId = activeViewStateIdProp ?? activeFileId
   const activeFile = openFiles.find((f) => f.id === activeFileId) ?? null
   const activeWorktreeId = activeFile?.worktreeId
-  const canOpenWorkspaceFileBrowser = useAppStore((s) =>
+  const canOpenWorkspaceFileBrowser = useAppStoreWithChannels((s) =>
     activeWorktreeId && activeFile
       ? canShowWorkspaceFileBrowserAction(s, activeWorktreeId, activeFile.filePath)
       : false

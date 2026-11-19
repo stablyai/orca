@@ -6,8 +6,8 @@ import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusI
 import { selectIsSleepingWorktree } from '@/components/sidebar/workspace-actions/sleep/use-worktree-sleep-state'
 import { useTranslate } from '@/i18n/use-translate'
 import { getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
-import { useAppStore } from '@/store'
 import type { WorktreeStatus } from '../../../../shared/worktree/row-display/worktree-status-rollup'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 // StatusIndicator draws these as 12px icons; every other status is an 8px dot or spinner.
 const ICON_STATUSES = new Set<WorktreeStatus | null>(['monitoring', 'permission', 'unconfirmed'])
@@ -32,7 +32,9 @@ export function useBotAvatarBadgeSleeping(
   workspaceId: string,
   status: WorktreeStatus | null
 ): boolean {
-  return useAppStore((s) => QUIET_STATUSES.has(status) && selectIsSleepingWorktree(s, workspaceId))
+  return useAppStoreWithChannels(
+    (s) => QUIET_STATUSES.has(status) && selectIsSleepingWorktree(s, workspaceId)
+  )
 }
 
 /** A 2px gap around the badge, cut from the picture so the row's own background (hover and

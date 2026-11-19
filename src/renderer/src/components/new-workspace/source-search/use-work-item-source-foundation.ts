@@ -7,7 +7,6 @@ import { parseBoundedSmartWorkspaceLinearIssueUrlIntent } from '../../../../../s
 import { isSmartWorkspaceSourceQueryWithinLimit } from '../../../../../shared/new-workspace/smart-workspace-source-query'
 import React, { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store/index'
 import { getLocalPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { buildTaskSourceContextFromRepo } from '../../../../../shared/work-items/task-source-context'
 import { useJiraSourceConnection } from './use-jira-source-connection'
@@ -25,6 +24,8 @@ import type {
   NormalizedWorkItemSourceSearchProps,
   RepoBackedSearchTarget
 } from '../name-field/smart-workspace-name-field-model'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export function useWorkItemSourceFoundation(props: NormalizedWorkItemSourceSearchProps) {
   const {
@@ -56,7 +57,7 @@ export function useWorkItemSourceFoundation(props: NormalizedWorkItemSourceSearc
     refreshPreflightStatus,
     searchJiraIssues,
     searchLinearIssues
-  } = useAppStore(
+  } = useAppStoreWithChannels(
     useShallow((s) => ({
       settings: s.settings,
       checkLinearConnection: s.checkLinearConnection,

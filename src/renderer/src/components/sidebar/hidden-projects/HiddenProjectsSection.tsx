@@ -2,7 +2,6 @@ import React, { useId, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChevronRight } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
@@ -16,6 +15,8 @@ import { isRepoHidden } from '../../../../../shared/project/catalog/hidden-proje
 import { getRepoRowIdentity } from '@/store/repos/repo-host-identity'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import { setProjectHidden } from './set-project-hidden'
+import { useAppStore } from '@/store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 function selectHiddenRepos(repos: readonly Repo[]): Repo[] {
   return repos
@@ -37,7 +38,7 @@ const HiddenProjectsSection = React.memo(function HiddenProjectsSection() {
   const [pendingKeys, setPendingKeys] = useState<ReadonlySet<string>>(new Set())
   // Name hosts only when one is not this computer; a local-only list needs no host column.
   // Why: this selector reruns on every store write; skip it while the list is collapsed.
-  const hostLabels = useAppStore(
+  const hostLabels = useAppStoreWithChannels(
     useShallow((state) =>
       expanded &&
       hiddenRepos.some((repo) => getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID)

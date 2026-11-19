@@ -13,6 +13,7 @@ import {
 } from './pet-agent-state'
 import { usePetPointerInteraction } from './usePetPointerInteraction'
 import { buildSpriteAnimationCss } from './sprite-animation-css'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 type Sprite = NonNullable<CustomPet['sprite']>
 
@@ -21,8 +22,8 @@ function usePetAnimationName(
   dragAnimation: PetDragAnimation,
   hovering: boolean
 ): PetAnimationName {
-  const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
-  const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
+  const agentStatusByPaneKey = useAppStoreWithChannels((s) => s.agentStatusByPaneKey)
+  const agentStatusEpoch = useAppStoreWithChannels((s) => s.agentStatusEpoch)
   // Scheduler ticks expire animation evidence even without other store updates; read the boundary clock before paint.
   const agentStatusNow = getAgentStatusEpochNow(agentStatusEpoch)
 

@@ -1,4 +1,3 @@
-import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { useTranslate } from '@/i18n/use-translate'
 import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host/execution-host'
@@ -12,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '../ui/dialog'
+import { useAppStateValueWithChannels } from '@/store/retained-views/app-state-view'
 
 export function ManagedRuntimeRemoveDialog(props: {
   agentLabel: string
@@ -22,7 +22,7 @@ export function ManagedRuntimeRemoveDialog(props: {
 }): React.JSX.Element {
   const t = useTranslate()
   const { agentLabel, host, open, onOpenChange, onRemove } = props
-  const hostLabel = useAppStateValue((state) =>
+  const hostLabel = useAppStateValueWithChannels((state) =>
     host.kind === 'environment'
       ? selectExecutionHostDisplayLabel(state, toRuntimeExecutionHostId(host.environmentId))
       : t('components.managed-runtime.thisComputer', 'this computer')

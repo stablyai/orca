@@ -10,7 +10,6 @@ import {
   readLocalRuntimeCapabilityObservation,
   subscribeLocalRuntimeCapabilityObservation
 } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
-import { useAppStore } from '@/store/index'
 import {
   capturePRCheckContract,
   type PRCheckContract
@@ -31,6 +30,8 @@ import { PR_CHECKS_EAGER_PREFETCH_LIMIT } from '../../task-page-source-context'
 import { getTaskPageRepoSourceContext } from '../../../../lib/work-items/task-repo-source-context'
 import { sameOptionalGitHubOwnerRepo } from './task-page-github-review-model'
 import { recomputeOn } from '@/lib/recompute-on'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 export function useTaskPagePRCheckHydration(
   model: TaskPageJiraCreationMetadataModel,
   filteredWorkItems: GitHubWorkItem[],
@@ -53,7 +54,7 @@ export function useTaskPagePRCheckHydration(
       [localSelected]
     )
   )
-  const runtimeStatuses = useAppStore((state) =>
+  const runtimeStatuses = useAppStoreWithChannels((state) =>
     sourceContracts
       .map(({ source, target }) => {
         const contract = capturePRCheckContract(() => state, target, source)

@@ -1,7 +1,8 @@
-import { useAppStore } from '@/store/index'
 import { getLocalPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { localPreflightContextKey } from '../../../../runtime/hosts/preflight/local-preflight-context-key'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export type IntegrationStepState = 'active' | 'done' | 'upcoming'
 
@@ -212,7 +213,7 @@ export function useIntegrationConnectionStatus(): IntegrationConnectionStatus {
   const jiraStatusChecked = useAppStore((s) => s.jiraStatusChecked)
   const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
   const settings = useAppStore((s) => s.settings)
-  const expectedPreflightContextKey = useAppStore((s) =>
+  const expectedPreflightContextKey = useAppStoreWithChannels((s) =>
     localPreflightContextKey(getLocalPreflightContext(s))
   )
 

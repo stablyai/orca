@@ -1,11 +1,15 @@
-import { useAppStateViewActive, useAppStateValue } from '@/store/retained-views/app-state-view'
 import { useCallback, useEffect, useRef } from 'react'
-import { useAppStore } from '@/store/index'
 import { getLocalAgentPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { localAgentInventoryContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
 import { runtimeHostContactForEntry } from '../../../../../../shared/remote-runtime/host-status/runtime-host-contact'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/agent-inventory/runtime-agent-inventory-key'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import { useAppStore } from '@/store/index'
+import {
+  useAppStateViewActive,
+  useAppStateValue,
+  useAppStateValueWithChannels
+} from '@/store/retained-views/app-state-view'
 
 export type UseDetectedAgentsResult = {
   /** Null while detection is in flight on first load. */
@@ -66,7 +70,7 @@ export function useDetectedAgents(
       ? getRuntimeAgentInventoryKey(targetId, runtimeWorktreeId)
       : targetId
   const includeDisabled = inventory === 'all'
-  const completeLocalContextKey = useAppStateValue((s) =>
+  const completeLocalContextKey = useAppStateValueWithChannels((s) =>
     targetKind === 'local' && includeDisabled
       ? localAgentInventoryContextKey(
           getLocalAgentPreflightContext(s, undefined, undefined, localWorktreeId),

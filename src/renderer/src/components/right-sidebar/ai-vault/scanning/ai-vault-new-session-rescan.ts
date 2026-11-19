@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { useAppStore } from '@/store/index'
 import { getAgentSessionIdsKey } from './ai-vault-agent-session-refresh-key'
 import { claimAiVaultForcedRescan, aiVaultForcedRescanDelay } from './ai-vault-forced-rescan-budget'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 /** In-app launches never blur; rescan on new provider session IDs, avoiding frequent state transitions. */
 export function useAiVaultNewSessionRescan(
@@ -37,7 +37,9 @@ export function useAiVaultNewSessionRescan(
     []
   )
 
-  const agentSessionIdsKey = useAppStore((s) => getAgentSessionIdsKey(s.agentStatusByPaneKey))
+  const agentSessionIdsKey = useAppStoreWithChannels((s) =>
+    getAgentSessionIdsKey(s.agentStatusByPaneKey)
+  )
   const seenAgentSessionIdsRef = useRef<Set<string> | null>(null)
   useEffect(() => {
     const ids = agentSessionIdsKey === '' ? [] : agentSessionIdsKey.split('\n')

@@ -13,7 +13,6 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { track } from '@/diagnostics/telemetry/telemetry'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
-import { useAppStore } from '@/store/index'
 import {
   bundledSkillInstallNeedsAttention,
   useBundledSkillInstall
@@ -30,11 +29,13 @@ import {
 } from '../FeatureWallSetupWorkflowActions'
 import { getClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
 import type { OnboardingFeatureSetupRuntimeContext } from '../../../onboarding/onboarding-feature-setup-runtime'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export function BrowserAction(props: { done: boolean }): React.JSX.Element {
   const t = useTranslate()
   const targetWorktree = useSetupTargetWorktree()
-  const browserCreationEnabled = useAppStore(
+  const browserCreationEnabled = useAppStoreWithChannels(
     (state) =>
       getClientCreationActionPolicy(state, targetWorktree?.id ?? null)['managed-browser'].state ===
       'enabled'

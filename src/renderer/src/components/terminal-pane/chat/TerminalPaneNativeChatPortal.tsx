@@ -3,9 +3,9 @@ import NativeChatView from '../../native-chat/NativeChatView'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { canContinueAgentSessionInNewSession } from '../session-continuation/terminal-agent-session-continuation'
 import type { TerminalPaneController } from '../controller/use-terminal-pane-controller'
-import { useAppStore } from '@/store/index'
 import { resolvePaneAgentSessionId } from '../../../lib/agent-session/identity/pane-agent-session-id'
 import { NativeChatPaneCover } from './NativeChatPaneCover'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export function TerminalPaneNativeChatPortal({
   controller
@@ -32,7 +32,7 @@ export function TerminalPaneNativeChatPortal({
     switchNativeChatToTerminal,
     tabId
   } = controller
-  const chatPaneSessionId = useAppStore((state) =>
+  const chatPaneSessionId = useAppStoreWithChannels((state) =>
     effectiveChatViewMode && chatPane
       ? resolvePaneAgentSessionId(state, makePaneKey(tabId, chatPane.leafId))
       : null

@@ -1,4 +1,3 @@
-import { useAppStore } from '@/store/index'
 import { getAgentStatusEpochNow } from '@/lib/agent-status/evidence/agent-status-epoch-clock'
 import {
   getWorktreeIdsWithLiveAgent,
@@ -11,13 +10,14 @@ import {
   hasUnknownStructuredChat,
   type StructuredChatSleptAtByPaneKey
 } from '@/store/slices/agent-status/structured-sessions/structured-chat-slept-at'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 type TabLike = { id: string }
 
-// Partial store mocks may omit slices; shared predicates treat absence as empty.
+// Channel fields are required so root selectors (which can't see them) can't call this; others may be absent.
 type SleepStateInput = {
-  agentStatusByPaneKey?: ReadonlyMap<string, AgentStatusEntry> | null
-  agentStatusEpoch?: number
+  agentStatusByPaneKey: ReadonlyMap<string, AgentStatusEntry> | null
+  agentStatusEpoch: number
   tabsByWorktree?: Record<string, readonly TabLike[]> | null
   ptyIdsByTabId?: Record<string, string[]> | null
   browserTabsByWorktree?: Record<string, readonly TabLike[]> | null
@@ -83,7 +83,7 @@ export function selectIsSleepingWorktree(state: SleepStateInput, worktreeId: str
 }
 
 export function useIsSleepingWorktree(worktreeId: string): boolean {
-  return useAppStore((state) => selectIsSleepingWorktree(state, worktreeId))
+  return useAppStoreWithChannels((state) => selectIsSleepingWorktree(state, worktreeId))
 }
 
 export function resetWorktreeSleepStateCacheForTests(): void {

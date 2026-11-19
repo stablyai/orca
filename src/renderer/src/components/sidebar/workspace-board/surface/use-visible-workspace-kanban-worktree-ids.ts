@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react'
-import { useAppStore } from '@/store/index'
 import { getAgentStatusEpochNow } from '@/lib/agent-status/evidence/agent-status-epoch-clock'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
@@ -16,6 +15,8 @@ import { getStructuredChatWorktreeIds } from '../../worktree-list/listing/visibl
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { indexHiddenProjects } from '../../../../../../shared/project/catalog/hidden-projects'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 type UseVisibleWorkspaceKanbanWorktreeIdsParams = {
   allWorktrees: readonly Worktree[]
@@ -63,12 +64,14 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
       s.structuredChatSleptAtByPaneKey
     )
   )
-  const agentStatusEpoch = useAppStore((s) => (!showSleepingWorkspaces ? s.agentStatusEpoch : 0))
+  const agentStatusEpoch = useAppStoreWithChannels((s) =>
+    !showSleepingWorkspaces ? s.agentStatusEpoch : 0
+  )
   // Skip the shared clock for opt-out boards so they cannot evict the live-board sample.
   const agentStatusNow = showSleepingWorkspaces ? 0 : getAgentStatusEpochNow(agentStatusEpoch)
   // Recompute on epoch, not every hook ping; key on the epoch too since ticks can share a millisecond sample.
   const [selectLiveAgentWorktreeIds] = useState(createLiveAgentWorktreeIdsSelector)
-  const worktreeIdsWithLiveAgent = useAppStore((s) =>
+  const worktreeIdsWithLiveAgent = useAppStoreWithChannels((s) =>
     showSleepingWorkspaces
       ? EMPTY_WORKTREE_ID_SET
       : selectLiveAgentWorktreeIds(s, tabsByWorktree, agentStatusNow)

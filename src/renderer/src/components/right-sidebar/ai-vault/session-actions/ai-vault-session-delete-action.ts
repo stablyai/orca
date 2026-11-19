@@ -8,7 +8,6 @@ import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/executi
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { resolveContinuedRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
-import { useAppStore } from '@/store/index'
 import { forgetAiVaultSessionResult } from '../scanning/ai-vault-session-result-cache'
 import '../session-list/ai-vault-session-filters'
 import { agentLabel } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-filters'
@@ -17,11 +16,15 @@ import {
   aiVaultSessionRuntimeEnvironmentId,
   type AiVaultSessionDeleteHost
 } from './ai-vault-session-deletability'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export function useAiVaultSessionDeleteHost(
   session: Pick<AiVaultSession, 'executionHostId'>
 ): AiVaultSessionDeleteHost {
-  const label = useAppStore((s) => selectExecutionHostDisplayLabel(s, session.executionHostId))
+  const label = useAppStoreWithChannels((s) =>
+    selectExecutionHostDisplayLabel(s, session.executionHostId)
+  )
   const environmentId = aiVaultSessionRuntimeEnvironmentId(session)
   // Subscribe to the host's verified status so an in-place host update re-enables Delete.
   const deleteSupported = useAppStore((s) => {

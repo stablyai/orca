@@ -5,6 +5,7 @@ import type { AppState } from '@/store/types'
 import { deriveRunningAgentSendTargets } from '@/lib/agent-session/messaging/running-agent-targets'
 import { recomputeOn } from '@/lib/recompute-on'
 import { selectSendApprovalGuardEnvironmentIds } from '@/runtime/hosts/capabilities/send-approval-guard-hosts'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 // Why: selectors that opt out of a slice must return one stable reference, or every store tick looks like a change.
 const EMPTY_AGENT_STATUS_BY_PANE_KEY: AppState['agentStatusByPaneKey'] = acceptedAgentStatuses()
@@ -19,10 +20,10 @@ const NO_GUARDED_HOSTS: ReadonlySet<string> = new Set()
 export function useAgentSendTargetWorktreeId(): string | null {
   const agentSendPopoverTargetMode = useAppStore((s) => s.agentSendPopoverTargetMode)
   // Why: eligibility only matters while the picker is open; when closed, don't subscribe to wake-time layout churn.
-  const agentTargetStatusByPaneKey = useAppStore((s) =>
+  const agentTargetStatusByPaneKey = useAppStoreWithChannels((s) =>
     agentSendPopoverTargetMode ? s.agentStatusByPaneKey : EMPTY_AGENT_STATUS_BY_PANE_KEY
   )
-  const agentTargetStatusEpoch = useAppStore((s) =>
+  const agentTargetStatusEpoch = useAppStoreWithChannels((s) =>
     agentSendPopoverTargetMode ? s.agentStatusEpoch : 0
   )
   const agentTargetTabsByWorktree = useAppStore((s) =>

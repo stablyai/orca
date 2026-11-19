@@ -3,7 +3,6 @@ import { useCallback, useMemo } from 'react'
 import { useWorktreeActivityStatuses } from '@/components/sidebar/workspace-card/activity/use-worktree-activity-statuses'
 import { selectLiveAgentStatusEntriesForWorktree } from '@/components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
 import { isWorktreeHostDisconnected } from '@/lib/workspace/ownership/worktree-host-disconnected'
-import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { selectSidebarChildrenByParentIdentity } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { getFolderWorkspaceChildWorktrees } from '../../../../shared/folder-workspace-child-worktrees'
@@ -11,6 +10,8 @@ import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folde
 import { getFolderWorkspaceHostIdentity } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { botWorkerWorkspaceStatus } from '../../../../shared/bots/bot-sidebar-workspaces'
 import type { WorktreeStatus } from '../../../../shared/worktree/row-display/worktree-status-rollup'
+import { useAppStore } from '@/store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 /** The bot home's worker workspaces, as its sidebar lists them. */
 export function useBotWorkerWorkspaces(
@@ -40,7 +41,7 @@ export function useBotWorkerWorkspaceStatuses(
         .join('\n'),
     [workspaceIds]
   )
-  const askingIds = useAppStore(selectAsking)
+  const askingIds = useAppStoreWithChannels(selectAsking)
   return useMemo(() => {
     const asking = new Set(askingIds ? askingIds.split('\n') : [])
     return new Map(
@@ -52,7 +53,7 @@ export function useBotWorkerWorkspaceStatuses(
 /** Each workspace's status; a line whose own server is down shows no live work, whatever its bot's server does. */
 export function useLiveWorkspaceStatuses(workspaceIds: readonly string[]): WorktreeStatus[] {
   const statusById = useBotWorkerWorkspaceStatuses(workspaceIds)
-  const downIds = useAppStore((s) =>
+  const downIds = useAppStoreWithChannels((s) =>
     workspaceIds.filter((id) => isWorktreeHostDisconnected(s, id)).join('\n')
   )
   return useMemo(() => {

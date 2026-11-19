@@ -1,14 +1,18 @@
-import { useAgentStatus } from '@/runtime/agent-status/use-agent-status'
+import { useAgentStatus, useAgentStatusSelector } from '@/runtime/agent-status/use-agent-status'
+import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { asyncQuestionSourceScope } from '../../../../../shared/native-chat/input/native-chat-ask'
 import { useNativeChatAsyncQuestions } from './use-native-chat-async-questions'
 import { useNativeChatPromptCardPresentation } from './use-native-chat-prompt-card-presentation'
 import { useMemo } from 'react'
-import { useAppStore } from '../../../store/index'
 import type { AskPrompt } from '../../../../../shared/native-chat/input/questions/native-chat-ask-types'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import { resolveNativeChatInteractivePromptCard } from '../../../../../shared/native-chat/input/native-chat-interactive-prompt'
 import { sayNativeChatApprovalTranslated } from './native-chat-interactive-prompt'
 import type { InteractivePromptCard } from '../../../../../shared/native-chat/input/native-chat-interactive-prompt'
+
+function selectInteractiveToolName(entry: AgentStatusEntry | undefined): string | null {
+  return entry?.interactivePrompt ? (entry.toolName ?? null) : null
+}
 
 export function useNativeChatInteractivePromptCard({
   paneKey,
@@ -24,10 +28,7 @@ export function useNativeChatInteractivePromptCard({
 }): InteractivePromptCard {
   const interactivePrompt = useAgentStatus(paneKey)?.interactivePrompt ?? null
   // Read toolName only beside a prompt for parser dispatch; ordinary tool changes would rerender the whole pane.
-  const interactiveToolName = useAppStore((s) => {
-    const entry = s.agentStatusByPaneKey.get(paneKey)
-    return entry?.interactivePrompt ? (entry.toolName ?? null) : null
-  })
+  const interactiveToolName = useAgentStatusSelector(paneKey, selectInteractiveToolName)
   const agent = useAgentStatus(paneKey)?.agentType
   return useMemo(
     () =>

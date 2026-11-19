@@ -31,7 +31,7 @@ vi.mock('@/store', () => {
   return {
     useAppStore: Object.assign(
       (selector: (current: Record<string, unknown>) => unknown) => selector(state),
-      { getState: () => state }
+      { getState: () => state, subscribe: () => () => {} }
     )
   }
 })

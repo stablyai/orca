@@ -2,7 +2,6 @@ import { currentDraftScope, captureLaunchDraftDestination } from './native-chat-
 // Restored store images are checked only with affirmative execution-host ownership.
 
 import { useEffect, useMemo, useSyncExternalStore } from 'react'
-import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { resolveNativeChatDraftOwner } from '@/components/native-chat/drafts/native-chat-draft-owner'
 import { chatImageAccess } from '@/lib/files/access/local-file-access'
@@ -25,6 +24,8 @@ import {
   readNativeChatComposerDraft,
   updateNativeChatComposerDraft
 } from './native-chat-composer-draft-store'
+import { useAppStore } from '@/store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 /** Mark only proven missing files; unavailable permissions/hosts remain unknown and send-time validation still guards them. */
 export async function findMissingNativeChatComposerDraftImages(
@@ -212,7 +213,7 @@ export function useRestoredNativeChatComposerDraftImageCheck(
     subscribe,
     () => restoredImageChecks.get(currentDraftScope(scopeKey)) ?? NO_IMAGE_CHECKS
   )
-  const local = useAppStore((state) => localStoreAuthority(state, scopeKey, checks))
+  const local = useAppStoreWithChannels((state) => localStoreAuthority(state, scopeKey, checks))
   const pending = useMemo(
     () =>
       new Set(

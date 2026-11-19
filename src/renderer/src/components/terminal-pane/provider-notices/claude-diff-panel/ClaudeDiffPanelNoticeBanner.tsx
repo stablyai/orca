@@ -5,6 +5,7 @@ import { useAppStore } from '@/store/index'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { paneClaudeTarget } from '../../host-state/terminal-pane-claude-target'
 import { PaneTopWarningBanner } from '../../appearance/pane-top-banner/PaneTopWarningBanner'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 const RESIZE_RECHECK_MS = 300
 
@@ -75,7 +76,7 @@ export function ClaudeDiffPanelNoticeBanner({
   const seen = useAppStore((state) => state.claudeDiffPanelNoticeSeen)
   const markSeen = useAppStore((state) => state.markClaudeDiffPanelNoticeSeen)
   // Why either signal: a typed claude is seen by the process read, or by its hooks.
-  const claudeInPane = useAppStore(
+  const claudeInPane = useAppStoreWithChannels(
     (state) =>
       state.paneForegroundAgentByPaneKey[paneKey]?.agent === 'claude' ||
       state.agentStatusByPaneKey.get(paneKey)?.agentType === 'claude'

@@ -1,11 +1,10 @@
-import { createContext, useContext, useMemo, useSyncExternalStore } from 'react'
-import type { StoreApi, UseBoundStore } from 'zustand'
+import { createContext, useCallback, useContext, useMemo, useSyncExternalStore } from 'react'
 import { useAppStore } from '../index'
 import type { AppState } from '../types'
+import type { AppStore, RootSelectorState } from '../channels/app-store-channels'
 
-export type AppStateView = UseBoundStore<
-  Pick<StoreApi<AppState>, 'getState' | 'getInitialState' | 'subscribe'>
->
+export type AppStateView = Pick<AppStore, 'getState' | 'getInitialState' | 'subscribe'> &
+  (<U>(selector: (state: RootSelectorState) => U) => U)
 // Null defers the default store read until render, including shared hooks imported by the store.
 export const AppStateViewContext = createContext<AppStateView | null>(null)
 
@@ -14,9 +13,17 @@ export function useAppStateView(): AppStateView {
   return useContext(AppStateViewContext) ?? useAppStore
 }
 
-export function useAppStateValue<T>(selector: (state: AppState) => T): T {
+export function useAppStateValue<T>(selector: (state: RootSelectorState) => T): T {
   const useViewStore = useAppStateView()
   return useViewStore(selector)
+}
+
+/** useAppStateValue for a selector that reads channel fields; a retained view never changes. */
+export function useAppStateValueWithChannels<T>(selector: (state: AppState) => T): T {
+  const store = useAppStateView()
+  const active = useAppStateViewActive()
+  const read = useCallback(() => selector(store.getState()), [store, selector])
+  return useSyncExternalStore(active ? store.subscribe : subscribeNothing, read, read)
 }
 
 export function useAppStateViewActive(): boolean {

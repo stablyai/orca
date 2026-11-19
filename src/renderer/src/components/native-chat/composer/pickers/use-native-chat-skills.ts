@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '../../../../store/index'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type {
   DiscoveredSkill,
@@ -16,6 +15,7 @@ import {
   selectNativeChatSkillStateInputs,
   type NativeChatSkillDiscoveryContext
 } from './native-chat-skill-discovery-context'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 // The host scan budget honored by runtime targets that respect timeoutMs.
 const DISCOVERY_TIMEOUT_MS = 10_000
@@ -64,7 +64,7 @@ export function useNativeChatSkills(
   launchWorktreeId?: string
 ): NativeChatSkillDiscovery {
   // Closed is the common state, so the tab-map subscription only runs while the picker is open.
-  const inputs = useAppStore(
+  const inputs = useAppStoreWithChannels(
     useShallow(enabled ? selectNativeChatSkillStateInputs : selectNoSkillStateInputs)
   )
   const context = useMemo(

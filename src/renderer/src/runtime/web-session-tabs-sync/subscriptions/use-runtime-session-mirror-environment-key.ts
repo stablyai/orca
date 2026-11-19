@@ -1,12 +1,12 @@
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { getReachableRuntimeSessionMirrorTargets } from '@/runtime/web-session-tabs-sync/subscriptions/runtime-session-mirror-targets'
-import { useAppStore } from '@/store/index'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { AppState } from '@/store/types'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export type RuntimeSessionMirrorTargetInputs = Pick<
   AppState,
@@ -71,7 +71,7 @@ export function buildRuntimeSessionMirrorEnvironmentKeys(
 
 export function useRuntimeSessionMirrorEnvironmentKeys(): RuntimeSessionMirrorEnvironmentKeys {
   // Agent/tab writes are hot; rescan ownership only when its sources change.
-  const inputs = useAppStore(useShallow(selectRuntimeSessionMirrorTargetInputs))
+  const inputs = useAppStoreWithChannels(useShallow(selectRuntimeSessionMirrorTargetInputs))
   const {
     activeRuntimeEnvironmentId,
     repos,

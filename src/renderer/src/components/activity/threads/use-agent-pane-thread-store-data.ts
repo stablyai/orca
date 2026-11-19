@@ -15,6 +15,7 @@ import {
   selectFolderWorkspaces,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export type AllAgentPaneThreadsStoreData = Pick<
   AppState,
@@ -58,7 +59,7 @@ export function useAllAgentPaneThreadStoreData(): AllAgentPaneThreadsStoreData {
     raw: AppState['unifiedTabsByWorktree'] | null
     projected: ActivityTabProjection | null
   }>({ raw: null, projected: null })
-  return useAppStore(
+  return useAppStoreWithChannels(
     useShallow((s) => ({
       agentStatusByPaneKey: s.agentStatusByPaneKey,
       runtimeAgentOrchestrationByPaneKey: selectVisibleAgentOrchestration(s),

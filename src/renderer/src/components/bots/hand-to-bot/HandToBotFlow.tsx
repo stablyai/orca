@@ -3,7 +3,6 @@
 import { botRefKey, isSameBot } from '@/lib/bot-hosts'
 import React, { useMemo, useRef, useState } from 'react'
 import { ChevronRight, Plus } from 'lucide-react'
-import { useAppStore } from '@/store'
 import {
   Dialog,
   DialogContent,
@@ -49,6 +48,8 @@ import {
   suggestedBotName,
   suggestedBotPurpose
 } from './hand-to-bot-workspace'
+import { useAppStore } from '@/store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 const NEW_BOT_TILE =
   'flex size-7 items-center justify-center rounded-lg border border-dashed border-input text-muted-foreground'
@@ -90,7 +91,7 @@ export function HandToBotFlow({
     [workspaceHostId]
   )
   const purposes = useBotPurposes()
-  const folders = useAppStore((s) => selectFolderAncestors(s, worktree))
+  const folders = useAppStoreWithChannels((s) => selectFolderAncestors(s, worktree))
   const owner = botOfFolders(folders, bots)
   const agents = useWorktreeAgentRows(worktree.id).filter((row) => row.rowSource !== 'subagent')
   const takeOver = useTakeOver(

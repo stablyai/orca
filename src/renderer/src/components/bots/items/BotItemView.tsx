@@ -6,7 +6,6 @@ import { ExternalLink, House, MessageSquare } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store'
 import { selectFocusedTab } from '@/lib/focused-chat-workers'
 import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
@@ -37,6 +36,7 @@ import { useBotItemSnoozing } from './BotItemSnooze'
 import { useBotItemView, type BotItemViewRead } from './use-bot-item-view'
 import { useBotItemPendingComments } from './use-bot-item-pending-comments'
 import { BotItemsReadFailed } from './BotItemsReadFailed'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 const NO_FOLDERS: never[] = []
 
@@ -145,7 +145,7 @@ export function BotItemBody({
   })
   // Comment and description links open as in chat, from the bot's folder; the panel has no tab of
   // its own, so opens place beside the bot workspace's focused tab, as a click in that chat would.
-  const sourceTabId = useAppStore(
+  const sourceTabId = useAppStoreWithChannels(
     (state) => selectFocusedTab(state, folderWorkspaceKey(bot.folderWorkspaceId))?.id ?? ''
   )
   const fileContext = useBotGroupFileContexts(NO_FOLDERS, bot, sourceTabId).get(bot.id)

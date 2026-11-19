@@ -5,7 +5,6 @@ import {
   useWorktreeGitOwnerTarget
 } from './worktree-git-owner-target'
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
-import { useAppStore } from '@/store/index'
 import { useRepoById } from '@/store/repos/use-repository-catalog'
 import { useWorktreeById } from '@/store/workspaces/selection/use-selected-worktree'
 import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
@@ -35,6 +34,8 @@ import {
   type GitStatusRefreshReason,
   type GitStatusRefreshScheduler
 } from './git-status-refresh-scheduler'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 const NO_OWNER_FILES: OpenFile[] = []
 
@@ -61,7 +62,7 @@ export function useWorktreeGitStatusObservation(
   const activeExecutionHostId = useAppStore(
     (s) => owner?.executionHostId ?? getExecutionHostIdForWorktree(s, activeWorktreeId)
   )
-  const fileWatchRuntimeEnvironmentId = useAppStore((state) =>
+  const fileWatchRuntimeEnvironmentId = useAppStoreWithChannels((state) =>
     owner ? sourceControlFileWatchRuntimeEnvironmentId(state, owner) : undefined
   )
   const updateWorktreeGitIdentity = useAppStore((s) => s.updateWorktreeGitIdentity)

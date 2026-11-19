@@ -21,7 +21,6 @@ import {
 import { selectWorktreeHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store/index'
 import { openDocPreviewExternally, openDocPreviewSource } from './doc-preview-document-actions'
 import {
   DocPreviewDirectoryAccessBanner,
@@ -38,6 +37,8 @@ import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirm
 import { formatClipboardFilePath } from '@/lib/clipboard/clipboard-file-path'
 import { getOpenFileRevealOwner } from '@/lib/files/os-open/reveal-in-file-manager'
 import { subscribeDocPreviewExternalLinkConfirmation } from './doc-preview-external-link-confirmation'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 type PreviewState = 'loading' | 'ready' | 'unavailable'
 
@@ -115,7 +116,9 @@ export function HtmlDocPreview({
   )
 
   const worktreeRoot = useAppStore((store) => store.getKnownWorktreeById(worktreeId)?.path ?? null)
-  const hostLabel = useAppStore((store) => selectWorktreeHostDisplayLabel(store, worktreeId))
+  const hostLabel = useAppStoreWithChannels((store) =>
+    selectWorktreeHostDisplayLabel(store, worktreeId)
+  )
   const identity = useMemo(
     () => buildDocPreviewDocumentIdentity({ filePath, worktreeRoot, hostLabel }),
     [filePath, hostLabel, worktreeRoot]

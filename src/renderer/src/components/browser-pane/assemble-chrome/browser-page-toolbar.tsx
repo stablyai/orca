@@ -2,7 +2,6 @@ import { issueBrowserGuestNavigation } from '../host-guest/metadata/browser-gues
 import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
 import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
-import { useAppStore } from '@/store/index'
 import type { BrowserReloadTrigger } from '../navigate/browser-reload-action'
 import BrowserAddressBar from './address-bar/BrowserAddressBar'
 import { BrowserChromeToolbar } from './toolbar/browser-chrome-toolbar'
@@ -41,6 +40,8 @@ import '@/lib/browser/documents/file-preview'
 import { convertBrowserPageToWorkspaceDoc } from '@/lib/browser/documents/file-preview-page-conversion'
 import type { GrabIntent } from '../../../../../shared/browser/element-grab/browser-grab-types'
 import type { BrowserChromeNoteActions } from './toolbar/browser-annotate-tool-button'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 /** Binds the shared browser chrome to a browsing page: an editable address bar and session tools. */
 export function BrowserPageToolbar({
@@ -131,7 +132,7 @@ export function BrowserPageToolbar({
   const annotateElementShortcut = useShortcutLabel('browser.annotateElement')
   const localHtmlFilePath = getShareableBrowserArtifactFile(currentBrowserUrl)?.filePath ?? null
   // Why the URL check first: every other page skips the workspace-owner lookup on each store write.
-  const canOpenSourceFile = useAppStore(
+  const canOpenSourceFile = useAppStoreWithChannels(
     (state) => localHtmlFilePath !== null && canOpenBrowserFileInWorkspaceEditor(state, worktreeId)
   )
   const openSourceFile =

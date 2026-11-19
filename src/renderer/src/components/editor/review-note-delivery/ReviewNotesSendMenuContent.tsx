@@ -1,8 +1,3 @@
-import {
-  useAppStateValue,
-  useAppStateView,
-  useAppStateViewActive
-} from '@/store/retained-views/app-state-view'
 import { selectSendApprovalGuardEnvironmentIds } from '@/runtime/hosts/capabilities/send-approval-guard-hosts'
 import { toast } from 'sonner'
 import { shallow } from 'zustand/shallow'
@@ -15,7 +10,6 @@ import {
   selectRuntimePaneTitlesForWorktree,
   selectLivePtyIdsForWorktree
 } from '@/components/sidebar/workspace-card/activity/worktree-card-status-inputs'
-import { useAppStore } from '@/store/index'
 import { selectKnownWorktreeById } from '@/store/workspaces/selection/known-worktree-selection'
 import {
   useWorktreeStructuredChatTabNames,
@@ -57,6 +51,13 @@ import { agentSendDisabledReasonLabel } from '@/lib/agent-session/messaging/agen
 import { addQuoteToAgent } from '@/components/native-chat/selection-quotes/native-chat-workspace-selection'
 import React, { useCallback, useMemo } from 'react'
 import { orderSendTargetsByWorktreeAgentRows } from './review-notes-send-target-order'
+import { useAppStore } from '@/store/index'
+import {
+  useAppStateView,
+  useAppStateViewActive,
+  useAppStateValue,
+  useAppStateValueWithChannels
+} from '@/store/retained-views/app-state-view'
 
 export function ReviewNotesSendMenuContent({
   worktreeId,
@@ -128,7 +129,7 @@ export function ReviewNotesSendMenuContent({
       return previous
     }
   }, [worktreeId, chatNames])
-  const sendTargets = useAppStateValue(selectTargets)
+  const sendTargets = useAppStateValueWithChannels(selectTargets)
   const orderedSendTargets = useMemo(
     () => orderSendTargetsByWorktreeAgentRows(sendTargets, agentRows),
     [agentRows, sendTargets]

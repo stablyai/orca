@@ -1,12 +1,12 @@
 import { useState } from 'react'
 
 import { migrationUnsupportedToAgentStatusEntry } from '../../../../../shared/agent-status/presentation/migration-unsupported-agent-entry'
-import { useAppStore } from '@/store'
 import { createAgentStatusEpochSelector } from '@/lib/agent-status/evidence/agent-status-epoch-selector'
 import type { AppState } from '@/store/types'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 
 import { freshActivityLiveAgentState, isHistoricalActivityState } from './activity-event-state'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 type ActivityUnreadCountSource = Pick<
   AppState,
@@ -77,7 +77,7 @@ const createActivityUnreadCountSelector = () =>
 
 export function useActivityUnreadCount(): number {
   const [selectActivityUnreadCount] = useState(createActivityUnreadCountSelector)
-  return useAppStore((state) =>
+  return useAppStoreWithChannels((state) =>
     selectActivityUnreadCount(
       state,
       state.migrationUnsupportedByPtyId,

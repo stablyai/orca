@@ -21,7 +21,6 @@ import {
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import type { SettingsSearchEntry } from '../search/settings-search'
-import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { countOpenRepoTerminalTabs } from '@/store/repos/repo-removal'
@@ -29,6 +28,8 @@ import { getRecipeVmRemovalTargets } from '@/store/repos/recipe-vm-project-remov
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 type RemovedHostGroup = { hostId: ExecutionHostId; label: string; setups: ProjectHostSetup[] }
 
@@ -136,7 +137,7 @@ export function RepositoryRemoveProjectSection({
   const [dialogOpen, setDialogOpen] = useState(false)
   // Read once on open: a live subscription would walk every tab on each store write.
   const [openTerminalCount, setOpenTerminalCount] = useState(0)
-  const hostLabels = useAppStore(
+  const hostLabels = useAppStoreWithChannels(
     useShallow((state) => setups.map((setup) => selectSetupHostLabel(state, setup, t)))
   )
   // Select only these repos' lists so writes to other repos don't re-render this pane.

@@ -2,12 +2,6 @@ import {
   createAgentMenuTerminalPendingSelector,
   readAgentMenuLaunchFacts
 } from './agent-menu-launch-facts'
-import {
-  useAppViewExternalStore,
-  useAppStateView,
-  useAppStateViewActive,
-  useAppStateValue
-} from '@/store/retained-views/app-state-view'
 import { nativeChatPreferenceFor } from '../../../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import type { AgentMenuRowsTarget, NewTabAgentMenuModel } from './new-tab-agent-menu-model'
 
@@ -45,6 +39,8 @@ import { resolveAgentMenuSelection } from '@/lib/agent-session/launch/routing/ag
 import { useHostAgentMenuSettings } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
+// oxfmt-ignore
+import { useAppViewExternalStore, useAppStateView, useAppStateViewActive, useAppStateValue, useAppStateValueWithChannels } from '@/store/retained-views/app-state-view'
 
 /** `detectionTarget` is the workspace's agent-inventory host, resolved by the caller. */
 export function useNewTabAgentMenuRows(
@@ -103,7 +99,9 @@ export function useAgentMenuObservation(
     typeof target === 'string'
       ? { kind: workspaceKindForWorktreeId(target), worktreeId: target }
       : (target?.workspace ?? { kind: 'floating' as const })
-  const facts = useAppStateValue(useShallow((state) => readAgentMenuLaunchFacts(state, workspace)))
+  const facts = useAppStateValueWithChannels(
+    useShallow((state) => readAgentMenuLaunchFacts(state, workspace))
+  )
   const prospective = typeof target === 'string' ? undefined : target?.workspace
   const repoId = prospective?.repoId
   const repoHostId = prospective?.executionHostId
@@ -112,7 +110,7 @@ export function useAgentMenuObservation(
       createAgentMenuTerminalPendingSelector({ worktreeId, repoId, executionHostId: repoHostId }),
     [worktreeId, repoId, repoHostId]
   )
-  const terminalPending = useAppStateValue(terminalPendingSelector)
+  const terminalPending = useAppStateValueWithChannels(terminalPendingSelector)
   const input = buildAgentLaunchRouteInput(state, { agent: 'claude', workspace })
   const { settings, pending: preferencesPending } = useHostAgentMenuSettings(
     unresolvedTarget ? null : facts,

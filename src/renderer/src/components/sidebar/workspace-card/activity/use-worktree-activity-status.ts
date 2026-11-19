@@ -1,6 +1,5 @@
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { hasAwakeStructuredChat } from '@/store/slices/agent-status/structured-sessions/structured-chat-slept-at'
 import { resolveWorktreeStatus } from '@/lib/workspace/activity/worktree-status'
@@ -15,6 +14,8 @@ import { selectWorktreeAgentActivitySummary } from './worktree-agent-activity-su
 import { selectStoppedWslDistro } from '@/runtime/hosts/wsl/wsl-host-stopped-status'
 import { selectWorkspaceRuntimeEnvironmentId } from '../../../../lib/workspace/ownership/workspace-runtime-environment'
 import { parseRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 /** The Start card's rule: a pane with no server yet, or on the stopped one, ended with its distro. */
 function withoutStoppedHostPtys(
@@ -70,13 +71,15 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
   const runtimePaneTitlesForWorktree = useAppStore(
     useShallow((s) => selectRuntimePaneTitlesForWorktree(s, worktreeId))
   )
-  const ptyIdsForWorktree = useAppStore(
+  const ptyIdsForWorktree = useAppStoreWithChannels(
     useShallow((s) => selectWorktreeActivityPtyIds(s, worktreeId))
   )
   const terminalLayoutRootsByTabId = useAppStore(
     useShallow((s) => selectTerminalLayoutRootsForWorktree(s, worktreeId))
   )
-  const summary = useAppStore(useShallow((s) => selectWorktreeAgentActivitySummary(s, worktreeId)))
+  const summary = useAppStoreWithChannels(
+    useShallow((s) => selectWorktreeAgentActivitySummary(s, worktreeId))
+  )
 
   // Use common liveness and agent-row precedence so compact and detailed cards show the same status.
   return useMemo(

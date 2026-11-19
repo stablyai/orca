@@ -1,11 +1,11 @@
 import { useShallow } from 'zustand/react/shallow'
-import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import {
   resolveEditorTypography,
   type EditorTypography,
   type EditorTypographySurface
 } from '../../../../../shared/editor/editor-typography'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 type ResolvedEditorTypography = {
   settings: AppState['settings']
@@ -39,5 +39,5 @@ function selectEditorTypography(
 
 /** Shallow selection of the resolved values keeps the result stable unless the effective typography changes. */
 export function useEditorTypography(surface: EditorTypographySurface = 'editor'): EditorTypography {
-  return useAppStore(useShallow((s) => selectEditorTypography(s, surface)))
+  return useAppStoreWithChannels(useShallow((s) => selectEditorTypography(s, surface)))
 }

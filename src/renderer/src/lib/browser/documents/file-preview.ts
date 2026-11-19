@@ -16,7 +16,6 @@ import {
   remoteFileBrowserUnsupportedMessage,
   twinFileBrowserUnsupportedMessage
 } from '@/lib/browser/documents/workspace-file-browser-open-target'
-import { useAppStore } from '@/store/index'
 import { findSiblingGroupId } from '../../../../../shared/workspace-layout/tab-groups/tab-group-layout-tree'
 import '../../../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
@@ -31,6 +30,8 @@ import type {
 } from '../navigation/browser-link-destination'
 import type { AppState } from '@/store/types'
 import type { CreateBrowserTabOptions } from '@/store/slices/browser/browser-slice-contract'
+import { useAppStore } from '@/store/index'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 export type PreviewableLanguage = 'html'
 
@@ -113,7 +114,7 @@ export function useWorkspaceFileBrowserActionPredicate(
   worktreeId: string | null
 ): (filePath: string) => boolean {
   // Subscribe only to trigger rerenders; use the action’s live plan for visibility so the rules cannot drift and handlers retain stable identity.
-  useAppStore(
+  useAppStoreWithChannels(
     useShallow((state) => ({
       managedBrowser: worktreeId
         ? getWorkspaceClientCreationActionPolicy(state, worktreeId)['managed-browser'].state

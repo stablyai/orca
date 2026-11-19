@@ -4,7 +4,6 @@ import { Trash2, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu'
 import { useNow } from '@/lib/window-activity/use-now'
-import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
 import { openBotGroup } from '@/lib/bot-group-catalog'
 import type { Bot } from '../../../../shared/bot-types'
@@ -21,6 +20,7 @@ import { BotSidebarRow } from './BotSidebarRow'
 import { botErrorMessage } from './bot-presentation'
 import { botGroupFaces } from '../../../../shared/bots/bot-group-face-layout'
 import { BotGroupFaces } from './BotGroupFaces'
+import { useAppStoreWithChannels } from '@/store/channels/use-app-store-with-channels'
 
 /** A group in the Bots section: its members' faces, then the room's newest post. */
 export function BotGroupRow({
@@ -47,7 +47,7 @@ export function BotGroupRow({
   const workspaceId = folderWorkspaceKey(home.id)
   const now = useNow(60_000)
   // Rerun on every store change, so a freshness epoch bump re-reads the clock.
-  const status = useAppStore((state) =>
+  const status = useAppStoreWithChannels((state) =>
     botGroupStatus(group, state.agentStatusByPaneKey, Date.now())
   )
   const line: BotRowLine = {

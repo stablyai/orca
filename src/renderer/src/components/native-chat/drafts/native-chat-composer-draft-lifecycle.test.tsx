@@ -41,7 +41,8 @@ vi.mock('../../../store/index', () => ({
         clearNativeChatLaunchDraft: (tabId: string) => {
           delete mocks.launchDrafts[tabId]
         }
-      })
+      }),
+      subscribe: () => () => {}
     }
   )
 }))
