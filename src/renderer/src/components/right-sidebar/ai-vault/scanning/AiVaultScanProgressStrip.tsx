@@ -68,14 +68,29 @@ function foundCount(agent: AiVaultScanAgentProgress): number {
 function StripText({ progress, active }: StripActivity): React.JSX.Element {
   const intlLocale = useIntlLocale()
   const t = useTranslate()
+  const found = progress.agents.reduce((sum, agent) => sum + foundCount(agent), 0)
+  // Why: until a file is found the count would read a bare "0 files"; show the label alone, or an ellipsis where it is hidden.
+  if (progress.stage === 'finding' && found === 0) {
+    const pending = active
+      ? t(
+          'auto.components.right.sidebar.AiVaultScanProgressStrip.loadingSessions',
+          'Loading sessions…'
+        )
+      : '…'
+    return (
+      <span className="flex min-w-0" title={pending}>
+        <span className="min-w-0 truncate @max-[240px]/ai-vault:sr-only">{pending}</span>
+        {/* Why: hidden from 240px up rather than shown below it, so no base display utility can override it. */}
+        <span aria-hidden className="@min-[240px]/ai-vault:sr-only">
+          …
+        </span>
+      </span>
+    )
+  }
   const emphasis =
     active && progress.stage === 'reading'
       ? `${formatCount(progress.read.done + (progress.read.skipped ?? 0), intlLocale)} / ${formatCount(progress.read.total, intlLocale)}`
-      : fileCountLabel(
-          progress.agents.reduce((sum, agent) => sum + foundCount(agent), 0),
-          t,
-          intlLocale
-        )
+      : fileCountLabel(found, t, intlLocale)
   const sentence =
     active || progress.stage === 'finished' ? stripSentence(progress, t) : EMPHASIS_TOKEN
   const [before, after] = sentence.split(EMPHASIS_TOKEN)

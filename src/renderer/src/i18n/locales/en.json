@@ -16568,7 +16568,8 @@
             "agentCheckedCount_one": "{{agent}}: {{settled}} of {{total}} history candidate checked",
             "agentCheckedCount_other": "{{agent}}: {{settled}} of {{total}} history candidates checked",
             "historyRefreshed": "History refreshed",
-            "loadingSessionList": "Loading sessions: {{value0}}"
+            "loadingSessionList": "Loading sessions: {{value0}}",
+            "loadingSessions": "Loading sessions…"
           },
           "run": {
             "source": {
