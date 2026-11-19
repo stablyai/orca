@@ -3,6 +3,7 @@
 import type { WorkspaceSessionState } from '../../workspace-session/workspace-session-state-types'
 import { collectLayoutLeafIdsInOrder } from '../terminal-topology/terminal-pane-tree'
 import { paneKeyOf, type WorkspaceLayout } from '../workspace-layout-model'
+import { CARRIED_SESSION_FIELDS, FACT_SESSION_FIELDS } from './workspace-layout-beside'
 import { resolveWorktreeId } from './workspace-layout-load-records'
 
 /** The workspace-keyed maps, in the order that sets partition order (workspaceKeys). */
@@ -104,8 +105,9 @@ function pick<T>(
 }
 
 /**
- * The keys' own entries (keys in partition order) and the records their panes and worktree ids name.
- * Partition-wide view and fact fields pass through. Callers rule out legacy surface tombstones.
+ * The keys' own entries (keys in partition order) and the records their rows, panes and worktree ids name.
+ * Partition-wide view fields pass through; carried and fact fields, which partition readers never use, are left out.
+ * Callers rule out legacy surface tombstones.
  */
 export function sliceWorkspaceSession(
   session: WorkspaceSessionState,
@@ -113,6 +115,9 @@ export function sliceWorkspaceSession(
   worktreeIds: ReadonlySet<string>
 ): WorkspaceSessionState {
   const slice: WorkspaceSessionState = { ...session }
+  for (const field of [...CARRIED_SESSION_FIELDS, ...FACT_SESSION_FIELDS]) {
+    delete slice[field]
+  }
   for (const field of WORKSPACE_FIELDS) {
     const picked = pick<unknown>(session[field], keys)
     if (picked) {
@@ -131,6 +136,11 @@ export function sliceWorkspaceSession(
     }
   }
   slice.terminalLayoutsByTabId = pick(session.terminalLayoutsByTabId, rowIds) ?? {}
+  // Read per row to resolve which rows a tab-bar terminal subsumes.
+  const remoteSessions = pick(session.remoteSessionIdsByTabId, rowIds)
+  if (remoteSessions) {
+    slice.remoteSessionIdsByTabId = remoteSessions
+  }
   const sleeping = pick(session.sleepingAgentSessionsByPaneKey, paneKeys)
   const incarnations = pick(session.terminalPtyIncarnationsByPaneKey, paneKeys)
   const closed = session.closedTerminalTabTombstonesByTabId

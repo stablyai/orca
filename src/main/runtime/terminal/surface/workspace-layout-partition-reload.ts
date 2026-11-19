@@ -28,8 +28,8 @@ const MAX_RELOADED_WORKSPACES = 64
 /** What a whole load learned about how the partition's workspaces tie together. */
 type PartitionRefs = {
   byKey: ReverseIndexedMap<string, ReadonlySet<string>, string>
-  /** Partition order and map membership; a change in membership can reorder workspaces. */
-  rank: ReadonlyMap<string, number>
+  /** Partition order as of the last whole load or tied reload, and map membership. */
+  rank: Map<string, number>
   membership: ReadonlyMap<string, number>
   subsumedByKey: Map<string, ReadonlyMap<string, string>>
 }
@@ -89,10 +89,14 @@ export function reloadWorkspaces(
   if (!tied) {
     return null
   }
-  const keys = [...tied.keys()].sort((left, right) => refs.rank.get(left)! - refs.rank.get(right)!)
-  if (keys.length === 0) {
-    return { load: previous, keys }
+  if (tied.size === 0) {
+    return { load: previous, keys: [] }
   }
+  if (tied.size > 1) {
+    // Tied workspaces load in partition order, which a write may have changed (a frozen workspace is re-added last).
+    refs.rank = new Map(workspaceKeys(session).map((key, rank) => [key, rank]))
+  }
+  const keys = [...tied.keys()].sort((left, right) => refs.rank.get(left)! - refs.rank.get(right)!)
   const subsumedElsewhere = new Map<string, string>()
   for (const [key, subsumed] of refs.subsumedByKey) {
     if (!tied.has(key)) {
@@ -143,22 +147,27 @@ function tiedWorkspaces(
   written: ReadonlySet<string>
 ): Map<string, { refs: ReadonlySet<string>; worktreeId: string }> | null {
   const tied = new Map<string, { refs: ReadonlySet<string>; worktreeId: string }>()
+  if (written.size > MAX_RELOADED_WORKSPACES) {
+    return null
+  }
+  const queued = new Set(written)
   const queue = [...written]
   for (let key = queue.pop(); key !== undefined; key = queue.pop()) {
-    if (tied.has(key)) {
-      continue
-    }
     if (!refs.rank.has(key) || workspaceMembership(session, key) !== refs.membership.get(key)) {
       return null
     }
     const stored = storedShareRefs(session, key)
-    if (!stored || tied.size === MAX_RELOADED_WORKSPACES) {
+    if (!stored) {
       return null
     }
     tied.set(key, stored)
     for (const ref of [...stored.refs, ...(refs.byKey.get(key) ?? [])]) {
       for (const sharer of refs.byKey.keysFor(ref)) {
-        if (!tied.has(sharer)) {
+        if (!queued.has(sharer)) {
+          if (queued.size === MAX_RELOADED_WORKSPACES) {
+            return null
+          }
+          queued.add(sharer)
           queue.push(sharer)
         }
       }

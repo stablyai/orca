@@ -22,7 +22,7 @@ export function markPtyBindingSessionDirty(
   )
 }
 
-/** Bind in place; report the workspaces it changed unless it unbound a reused id elsewhere. */
+/** Bind in place and report the workspaces it changed. */
 export function writePtyBinding(
   {
     runtime,
@@ -60,7 +60,7 @@ export function writePtyBinding(
     markPtyBindingSessionDirty(runtime, resolvedHostId)
     const boundSession = cloneWorkspaceSessionState(session)
     return {
-      ...(workspaces ? { writtenWorkspaces: new Map([[resolvedHostId, workspaces]]) } : {}),
+      writtenWorkspaces: new Map([[resolvedHostId, workspaces]]),
       rollback: () => {
         const current = sessions.getWorkspaceSession(resolvedHostId)
         const rolledBack = rollbackFailedPtyBinding(

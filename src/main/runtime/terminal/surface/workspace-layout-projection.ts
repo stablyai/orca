@@ -81,6 +81,9 @@ class ProjectedPartition {
 
   /** Republish only the reloaded workspaces; the rest keep their projected objects. */
   reloaded(load: PartitionLoad, keys: readonly string[]): ProjectedPartition {
+    if (keys.length === 0) {
+      return this
+    }
     if (!this.published) {
       return new ProjectedPartition(this.hostId, load)
     }

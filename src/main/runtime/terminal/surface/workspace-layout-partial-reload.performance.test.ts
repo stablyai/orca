@@ -1,4 +1,4 @@
-// Perf contract (STA-16223): every Store write reloaded and republished the whole partition while layouts were watched, so starting terminals at about 1,900 workspaces stalled main for seconds.
+// Perf contract (#44781, STA-16223): every Store write reloaded and republished the whole partition while layouts were watched, so starting terminals at about 1,900 workspaces stalled main for seconds.
 
 import { expect, it, vi } from 'vitest'
 import {

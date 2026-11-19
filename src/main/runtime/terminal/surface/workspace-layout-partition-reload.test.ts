@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
-import { loadWorkspaceLayoutWithoutReport } from '../../../../shared/workspace-layout/persistence/workspace-layout-load'
+import type { LoadedWorkspaceLayoutRead } from '../../../../shared/workspace-layout/persistence/workspace-layout-load-types'
 import { nameBasedLoadContext } from '../../../../shared/workspace-layout/persistence/workspace-layout-minted-ids'
 import {
   addWorkspace,
@@ -33,15 +33,6 @@ function session(panes: { a: Pane; b: Pane; c?: Pane }): WorkspaceSessionState {
   return built
 }
 
-function wholeRead(stored: WorkspaceSessionState) {
-  const { layout, desktopView, facts } = loadWorkspaceLayoutWithoutReport(
-    LOCAL_EXECUTION_HOST_ID,
-    stored,
-    nameBasedLoadContext()
-  )
-  return { layout: { hostId: layout.hostId, workspaces: layout.workspaces }, desktopView, facts }
-}
-
 function reload(before: WorkspaceSessionState, after: WorkspaceSessionState, written: string[]) {
   const previous = loadWholePartition(LOCAL_EXECUTION_HOST_ID, before, nameBasedLoadContext())
   const reloaded = reloadWorkspaces(
@@ -54,7 +45,7 @@ function reload(before: WorkspaceSessionState, after: WorkspaceSessionState, wri
   return { previous, reloaded }
 }
 
-const paneOf = (loaded: ReturnType<typeof wholeRead>, key: string) => {
+const paneOf = (loaded: LoadedWorkspaceLayoutRead, key: string) => {
   const workspace = loaded.layout.workspaces[key]!
   const tab = workspace.tabs[0]!
   const leafId =
@@ -82,7 +73,6 @@ describe('reloadWorkspaces', () => {
     expect(reloaded?.keys).toEqual([A, B])
     // B no longer repeats A's pane id, so it keeps its id and its terminal.
     expect(paneOf(reloaded!.load.loaded, B)).toEqual({ leafId: leaf(1), ptyId: PTY })
-    expect(reloaded!.load.loaded).toEqual(wholeRead(after))
   })
 
   it('reloads a workspace whose duplicate terminal the written one releases', () => {
@@ -91,7 +81,6 @@ describe('reloadWorkspaces', () => {
 
     expect(reloaded?.keys).toEqual([A, B])
     expect(paneOf(reloaded!.load.loaded, B)).toEqual({ leafId: leaf(2), ptyId: PTY })
-    expect(reloaded!.load.loaded).toEqual(wholeRead(after))
   })
 
   it('reloads the earlier workspace a written one starts repeating a pane id with', () => {
@@ -100,7 +89,21 @@ describe('reloadWorkspaces', () => {
 
     expect(reloaded?.keys).toEqual([A, B])
     expect(paneOf(reloaded!.load.loaded, B).leafId).not.toBe(leaf(1))
-    expect(reloaded!.load.loaded).toEqual(wholeRead(after))
+  })
+
+  it('loads tied workspaces in the order the write left them', () => {
+    const before = session({ a: [leaf(1), PTY], b: [leaf(2), PTY] })
+    // A frozen workspace is re-added after the others.
+    const { [A]: rows, ...others } = before.tabsByWorktree
+    const after = {
+      ...session({ a: [leaf(1), PTY], b: [leaf(2), PTY] }),
+      tabsByWorktree: { ...others, [A]: rows! }
+    }
+    const { reloaded } = reload(before, after, [B])
+
+    expect(reloaded?.keys).toEqual([B, A])
+    expect(paneOf(reloaded!.load.loaded, B)).toEqual({ leafId: leaf(2), ptyId: PTY })
+    expect(paneOf(reloaded!.load.loaded, A)).toEqual({ leafId: leaf(1), ptyId: undefined })
   })
 
   it('leaves a new workspace to a whole load', () => {

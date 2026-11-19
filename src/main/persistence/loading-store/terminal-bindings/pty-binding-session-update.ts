@@ -15,7 +15,7 @@ export function applyPtyBinding(
   session: WorkspaceSessionState,
   bindingWorktreeId: string,
   paneKey: string
-): ReadonlySet<string> | undefined {
+): ReadonlySet<string> {
   const reconciledIncarnation =
     args.expectedBinding !== undefined && args.incarnationId !== args.expectedBinding.incarnationId
   let terminalMembershipChanged = false
@@ -154,6 +154,5 @@ export function applyPtyBinding(
   }
   session.terminalLayoutsByTabId = layoutsByTab
   advanceTopologyFence()
-  // Unbinding a reused ID edits other workspaces' panes; report the whole partition then.
-  return unbound ? undefined : new Set([bindingWorktreeId])
+  return new Set([bindingWorktreeId, ...(unbound?.workspaces ?? [])])
 }

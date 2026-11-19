@@ -4,6 +4,7 @@ import type { WorkspaceSessionState } from '../../workspace-session/workspace-se
 import type {
   CarriedSessionFields,
   DesktopLayoutView,
+  FactSessionField,
   LayoutContentFacts
 } from './workspace-layout-beside'
 import type { LayoutLoadChange } from './workspace-layout-load-report'
@@ -28,9 +29,10 @@ export type LoadedWorkspaceLayout = {
   carried: CarriedSessionFields
 }
 
-/** What partition readers use; a partly reloaded partition holds no save inputs. */
-export type LoadedWorkspaceLayoutRead = Pick<LoadedWorkspaceLayout, 'desktopView' | 'facts'> & {
+/** What partition readers use; a partly reloaded partition holds no save inputs or partition-wide facts. */
+export type LoadedWorkspaceLayoutRead = Pick<LoadedWorkspaceLayout, 'desktopView'> & {
   layout: Pick<WorkspaceLayoutModel, 'hostId' | 'workspaces'>
+  facts: Omit<LayoutContentFacts, FactSessionField>
 }
 
 export type WorkspaceLayoutLoadResult = LoadedWorkspaceLayout & {
