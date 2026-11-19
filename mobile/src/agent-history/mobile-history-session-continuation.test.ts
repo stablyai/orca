@@ -92,7 +92,8 @@ describe('mobile history handoff', () => {
       } else {
         await expect(result).resolves.toEqual({
           worktreeId: 'route',
-          paneKey: 'group:11111111-1111-4111-8111-111111111111'
+          paneKey: 'group:11111111-1111-4111-8111-111111111111',
+          terminal: 'pty'
         })
       }
       expect(launchedPrompt).toMatchObject({
