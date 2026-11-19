@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { journalTypedByOf, typedByOf } from './rpc-caller-typed-by'
+import { typedByOf } from './rpc-caller-typed-by'
 
 const hostSignedInAs = (account: string | null) => () => ({ signedInAccount: () => account })
 
@@ -62,17 +62,5 @@ describe('where a message was typed', () => {
       }
     })
     expect(seen).toEqual([null, undefined])
-  })
-
-  it('saves no typist on messages while the oldest supported release would refuse it', () => {
-    const phone = {
-      caller: { kind: 'paired-device' as const, deviceId: 'phone-1' },
-      clientKind: 'mobile' as const,
-      runtime: { pairedDeviceAccount: () => ({ id: 'acct-alice', name: 'Alice' }) }
-    }
-    expect(journalTypedByOf(phone)).toBeUndefined()
-    expect(
-      journalTypedByOf({ caller: { kind: 'local-cli' as const }, runtime: {} })
-    ).toBeUndefined()
   })
 })

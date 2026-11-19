@@ -122,7 +122,8 @@ export async function createQueuedMessageTestRig(
 
   /** Match client RPC sends; internal marks host-origin mail/continuations, from identifies the agent. */
   function send(text: string, delivery?: 'queue-if-active', options?: RigSendOptions) {
-    const body = { ...hostTestMessage(text), ...(options?.from ? { from: options.from } : {}) }
+    const { internal: _internal, carried: _carried, ...sender } = options ?? {}
+    const body = { ...hostTestMessage(text), ...sender }
     const clientOperationId = hostTestOperationId()
     // Sender identity is excluded from the payload fingerprint.
     const fields = {
@@ -201,8 +202,8 @@ export async function createQueuedMessageTestRig(
   }
 
   /** Wait for startup proof before the first send can hold work. */
-  async function workingSend(carried?: RigSendOptions['carried']): Promise<string> {
-    const { id, result } = send('work on this', undefined, carried ? { carried } : undefined)
+  async function workingSend(options?: RigSendOptions): Promise<string> {
+    const { id, result } = send('work on this', undefined, options)
     await result
     await eventually(async () => {
       if (host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase === 'starting') {

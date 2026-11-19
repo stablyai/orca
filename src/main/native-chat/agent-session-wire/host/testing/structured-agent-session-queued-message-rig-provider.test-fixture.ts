@@ -1,6 +1,7 @@
 import type { AgentSessionAccountHome } from '../../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { readTestJournalSnapshot } from '../../../agent-session-journal/journal-observation.test-support'
 import type { AgentMessageSource } from '../../../../../shared/agent-session/journal/agent-session-message-source'
+import type { AgentJournalTypedBy } from '../../../../../shared/agent-session/journal/agent-journal-typed-by'
 import { vi, type Mock } from 'vitest'
 import { parseAgentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -236,5 +237,6 @@ export function eventually(assertion: () => void | Promise<void>): Promise<void>
 export type RigSendOptions = {
   internal?: true
   from?: AgentMessageSource
+  typedBy?: AgentJournalTypedBy
   carried?: Readonly<Record<string, string>>
 }

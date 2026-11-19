@@ -17,7 +17,7 @@ beforeEach(async () => {
 
 afterEach(() => rig.dispose())
 
-it('saves a queued edit with the host’s typist stamp, which the client never fingerprinted', async () => {
+it('takes a queued edit stamped by the host, which the client never fingerprinted, and saves it unstamped', async () => {
   await rig.workingSend()
   const queued = await rig.send('run the deploy', 'queue-if-active').result
   if (!queued.ok || !('queued' in queued.value)) {
@@ -38,5 +38,5 @@ it('saves a queued edit with the host’s typist stamp, which the client never f
     typedBy: { by: 'host' }
   })
   expect(edited).toMatchObject({ ok: true, value: { status: 'updated' } })
-  expect((await journal?.queuedMessages.get(messageId))?.body.typedBy).toEqual({ by: 'host' })
+  expect((await journal?.queuedMessages.get(messageId))?.body).not.toHaveProperty('typedBy')
 })

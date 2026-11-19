@@ -33,11 +33,10 @@ const edit = (typedBy?: AgentJournalMessageItem['typedBy']) =>
   })
 
 describe('editing a queued message', () => {
-  it('stamps the changed card with where the edit was typed, not where the card came from', () => {
-    expect(edit({ by: 'host' })).toMatchObject({
-      status: 'ready',
-      body: { typedBy: { by: 'host' } }
-    })
+  it('saves the changed card with no typist stamp, neither where it was typed nor where it came from', () => {
+    const typed = edit({ by: 'host' })
+    expect(typed.status).toBe('ready')
+    expect(typed).not.toHaveProperty('body.typedBy')
     const unknown = edit()
     expect(unknown.status).toBe('ready')
     expect(unknown).not.toHaveProperty('body.typedBy')

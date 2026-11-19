@@ -6,6 +6,7 @@ import {
   queuedMessageWithEdit,
   type QueuedMessageEdit
 } from '../../../../shared/native-chat/input/queued-messages/queued-message-edit'
+import { journalSavedTypedBy } from '../journal-typed-by-writes'
 import { isUnsettledQueuedMessage, type QueuedMessageRow } from './queued-message-table'
 
 export type QueuedMessageUpdate = QueuedMessageEdit & {
@@ -49,7 +50,7 @@ export function queuedMessageUpdateDecision(
   const { from: _sender, typedBy: _typedBefore, ...body } = edited.body
   return {
     status: 'ready',
-    body: { ...body, ...(input.typedBy ? { typedBy: input.typedBy } : {}) },
+    body: journalSavedTypedBy({ ...body, ...(input.typedBy ? { typedBy: input.typedBy } : {}) }),
     previous: row.body,
     fingerprint
   }

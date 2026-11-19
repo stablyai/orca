@@ -3,7 +3,12 @@ import type { AgentMessageSource } from '../../../shared/agent-session/journal/a
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { createQueuedMessageTestRig } from './host/testing/structured-agent-session-queued-message-rig.test-fixture'
 import { eventually } from './host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
-import { hostTestMessage } from './host/testing/structured-agent-session-host-test-data.test-fixture'
+import {
+  HOST_TEST_SESSION,
+  hostTestMessage
+} from './host/testing/structured-agent-session-host-test-data.test-fixture'
+import { readTestHostJournal } from '../agent-session-journal/journal-observation.test-support'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 
 it('holds a revoked queued request before handoff, including explicit Send after restart', async () => {
   let allowed = true
@@ -136,6 +141,24 @@ it('tells each message it takes once: an opener at once, a queued one only when 
       body: hostTestMessage('next turn'),
       joinsRunningTurn: false
     })
+  } finally {
+    await rig.dispose()
+  }
+})
+
+it('saves a send without its typist stamp but tells the listener who typed it', async () => {
+  const admitted: AgentJournalMessageItem[] = []
+  const rig = await createQueuedMessageTestRig({
+    hostDeps: { onMessageAdmitted: (message) => admitted.push(message.body) }
+  })
+  try {
+    const typedBy = { by: 'device', deviceId: 'phone-1', account: 'Sam' } as const
+    const id = await rig.workingSend({ typedBy })
+    expect(admitted).toEqual([{ ...hostTestMessage('work on this'), typedBy }])
+    const saved = (await readTestHostJournal(rig.host, HOST_TEST_SESSION)).items.find(
+      (item) => item.itemId === agentJournalSubmissionKey(id)
+    )
+    expect(saved?.body).toEqual(hostTestMessage('work on this'))
   } finally {
     await rig.dispose()
   }

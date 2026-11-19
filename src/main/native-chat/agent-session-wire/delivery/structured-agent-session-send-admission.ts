@@ -15,6 +15,7 @@ import {
   agentSessionAdmissionWriteRefusal
 } from '../operations/structured-agent-session-turns'
 import { captureStructuredExecutionOptions } from '../options/structured-agent-session-execution-options'
+import { journalSavedTypedBy } from '../../agent-session-journal/journal-typed-by-writes'
 
 export type StructuredSendAdmissionParams = {
   envelope: { clientOperationId: string }
@@ -75,7 +76,7 @@ export async function admitStructuredAgentSessionSend(
         kind: 'send-admission',
         input: {
           clientMessageId: params.envelope.clientOperationId,
-          body: params.body,
+          body: journalSavedTypedBy(params.body),
           payloadFingerprint: agentSessionSendBodyFingerprint(ctx.sessionId, params.body),
           fence: ctx.fence,
           handoverRecorded: true,

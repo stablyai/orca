@@ -44,14 +44,3 @@ export function typedByOf(context: {
     ...(claim.phone ? { phone: claim.phone } : {})
   }
 }
-
-/** 1.4.263 opens a chat holding a saved `typedBy` read-only, so the stamp is kept off saved messages
- *  until a release that declares it is the oldest one users downgrade to. */
-export const JOURNAL_TYPED_BY_WRITES = false
-
-/** The typist stamp a sent or edited message saves, or none while saving it would strand older builds. */
-export function journalTypedByOf(
-  context: Parameters<typeof typedByOf>[0]
-): AgentJournalTypedBy | undefined {
-  return JOURNAL_TYPED_BY_WRITES ? typedByOf(context) : undefined
-}
