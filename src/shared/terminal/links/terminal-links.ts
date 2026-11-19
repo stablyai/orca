@@ -69,11 +69,7 @@ function detectLocalPathLinks(lineText: string): {
   for (const match of lineText.matchAll(LOCAL_PATH_REGEX)) {
     const rawStart = match.index ?? 0
     const literalRange = trimTerminalPathBoundaryPunctuation(match[0], rawStart)
-    const parenthesizedRange = readParenthesizedTerminalPathRange(
-      lineText,
-      rawStart,
-      rawStart + match[0].length
-    )
+    const parenthesizedRange = readParenthesizedTerminalPathRange(match[0], rawStart)
     const range = parenthesizedRange ?? literalRange
     if (!range || !hasPathSeparator(range.text) || isInsideUriScheme(lineText, range)) {
       continue

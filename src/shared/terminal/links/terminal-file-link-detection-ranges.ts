@@ -16,24 +16,19 @@ export function hasPathSeparator(text: string): boolean {
   return text.includes('/') || text.includes('\\')
 }
 
+// Why: an unmatched `)` closes a wrapper around the path, so anything after it is prose.
 export function readParenthesizedTerminalPathRange(
-  lineText: string,
-  startIndex: number,
-  endIndex: number
+  value: string,
+  startIndex: number
 ): DetectedTerminalFileLinkRange | null {
-  if (
-    lineText[startIndex - 1] !== '(' ||
-    (startIndex > 1 && !/\s/.test(lineText[startIndex - 2]))
-  ) {
-    return null
-  }
   let depth = 0
-  for (let index = startIndex; index < endIndex; index++) {
-    if (lineText[index] === '(') {
+  for (let index = 0; index < value.length; index++) {
+    if (value[index] === '(') {
       depth++
-    } else if (lineText[index] === ')') {
+    } else if (value[index] === ')') {
       if (depth === 0) {
-        return { text: lineText.slice(startIndex, index), startIndex, endIndex: index }
+        const range = trimTerminalPathBoundaryPunctuation(value.slice(0, index), startIndex)
+        return range && hasPathSeparator(range.text) ? range : null
       }
       depth--
     }

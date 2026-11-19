@@ -32,3 +32,9 @@ it('offers both the wrapped target and the longer literal filename for host veri
   expect(links.map((link) => link.pathText)).toEqual(['src/report.docx'])
   expect(guesses.map((link) => link.pathText)).toContain('src/report.docx)에')
 })
+
+it('ends the link at the wrapper when prose leads into the parentheses without a space', () => {
+  const links = (line: string) => extractTerminalFileLinks(line).map((link) => link.pathText)
+  expect(links('已保存到(/tmp/x/report.md)中')).toEqual(['/tmp/x/report.md'])
+  expect(links('(수정: src/a.ts)에서')).toEqual(['src/a.ts'])
+})
