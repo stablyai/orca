@@ -12,6 +12,8 @@ import type {
   CdpUserAgentOverrideState
 } from './browser-user-agent-override-state'
 import { BrowserManagerVisibility } from '../browser-manager-visibility'
+import { setBrowserGuestUserAgentDemand } from '../../../identity/requests/browser-session-ua-demand'
+import { teamsRequestUserAgent } from '../../../identity/browser-site-user-agent'
 
 export abstract class BrowserManagerNavigation extends BrowserManagerVisibility {
   resolveBrowserGuestRequestUserAgent(
@@ -68,6 +70,7 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
     sameDocument: boolean
   ): Promise<boolean> {
     const identity = this.resolveGuestTabIdentity(guest, url)
+    this.noteUserAgentDemand(guest, url, identity)
     // Mobile identity needs CDP metadata that setUserAgent cannot supply.
     const webContentsUserAgent =
       identity.kind === 'site' ? identity.userAgent : getBrowserProcessUserAgentIdentity().userAgent
@@ -80,10 +83,24 @@ export abstract class BrowserManagerNavigation extends BrowserManagerVisibility 
   }
 
   protected retargetTabIdentity(guest: Electron.WebContents, url: string): Promise<boolean> {
-    return this.writeTabIdentityOverride(
-      guest,
-      this.resolveGuestTabIdentity(guest, url),
-      guest.getUserAgent()
+    const identity = this.resolveGuestTabIdentity(guest, url)
+    this.noteUserAgentDemand(guest, url, identity)
+    return this.writeTabIdentityOverride(guest, identity, guest.getUserAgent())
+  }
+
+  /** Synchronous so the session's header policy is listening before this navigation's request. */
+  private noteUserAgentDemand(
+    guest: Electron.WebContents,
+    url: string,
+    identity: BrowserTabIdentity
+  ): void {
+    const processUserAgent = getBrowserProcessUserAgentIdentity().userAgent
+    setBrowserGuestUserAgentDemand(
+      guest.session,
+      guest.id,
+      identity.kind === 'mobile' ||
+        identity.userAgent !== processUserAgent ||
+        teamsRequestUserAgent(url, processUserAgent) !== processUserAgent
     )
   }
 

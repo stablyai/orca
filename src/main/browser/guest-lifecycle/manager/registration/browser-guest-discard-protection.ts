@@ -2,12 +2,14 @@ import {
   installBrowserGuestIdleProtection,
   readBrowserGuestIdleProtection
 } from './browser-guest-idle-protection'
+
 export {
   setBrowserGuestSemanticVisibility,
   registerBrowserSessionNotificationGrant
 } from './browser-guest-idle-protection'
 import { randomUUID } from 'node:crypto'
 import { observeBrowserGuestRequests } from '../../../sessions/requests/browser-session-web-request-observer'
+import { createFormPostNavigationTracker } from './browser-guest-form-post-navigation'
 import {
   BROWSER_GUEST_PROTECTION_CHALLENGE,
   BROWSER_GUEST_PROTECTION_REPORT,
@@ -167,6 +169,10 @@ export function installBrowserGuestDiscardProtection(
     ) {
       return
     }
+    if ('formPost' in payload && typeof payload.formPost === 'string') {
+      formPost.submitted(payload.formPost)
+      return
+    }
     if ('ready' in payload && payload.ready === true) {
       snapshot()
       return
@@ -198,7 +204,10 @@ export function installBrowserGuestDiscardProtection(
     publish()
   }
   // Only the current document protects; restored back/forward entries reload on demand.
+  // The method comes from request observers when a session listens, else from the form the
+  // preload saw submitted for this exact navigation.
   let pendingMethod: string | null = null
+  const formPost = createFormPostNavigationTracker()
   const stopRequests = observeBrowserGuestRequests(guest.id, (session, event, details) => {
     if (
       event === 'onBeforeRequest' &&
@@ -213,6 +222,7 @@ export function installBrowserGuestDiscardProtection(
   ): void => {
     if (details.isMainFrame && !details.isSameDocument) {
       pendingMethod = null
+      formPost.started(details.url)
       owner.navigating = true
       invalidate()
     } else if (!details.isMainFrame) {
@@ -221,9 +231,16 @@ export function installBrowserGuestDiscardProtection(
   }
   const committed = (): void => {
     owner.currentEdited = false
-    owner.currentPost = pendingMethod !== null && pendingMethod !== 'GET'
+    owner.currentPost = pendingMethod !== null ? pendingMethod !== 'GET' : formPost.isPost()
     owner.mediaGranted = false
     publish()
+  }
+  const redirected = (
+    details: Electron.Event<Electron.WebContentsDidRedirectNavigationEventParams>
+  ): void => {
+    if (details.isMainFrame) {
+      formPost.redirected()
+    }
   }
   const settled = (): void => {
     owner.navigating = false
@@ -262,6 +279,7 @@ export function installBrowserGuestDiscardProtection(
   guest.on('render-process-gone', unresponsive)
   guest.on('frame-created', frameCreated)
   guest.on('did-start-navigation', navigation)
+  guest.on('did-redirect-navigation', redirected)
   guest.on('did-navigate', committed)
   guest.on('did-navigate-in-page', inPageNavigation)
   return () => {
@@ -278,6 +296,7 @@ export function installBrowserGuestDiscardProtection(
     guest.off('render-process-gone', unresponsive)
     guest.off('frame-created', frameCreated)
     guest.off('did-start-navigation', navigation)
+    guest.off('did-redirect-navigation', redirected)
     guest.off('did-navigate', committed)
     guest.off('did-navigate-in-page', inPageNavigation)
   }
