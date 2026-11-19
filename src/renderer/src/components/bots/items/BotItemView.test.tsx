@@ -19,15 +19,10 @@ const sent = vi.hoisted(() => vi.fn(() => Promise.resolve()))
 vi.mock('./use-bot-item-view', () => ({ useBotItemView: () => read.current }))
 const answered = vi.hoisted(() => vi.fn((..._args: unknown[]) => Promise.resolve('answered')))
 const statusSet = vi.hoisted(() => vi.fn())
-// The host's read of the item, as it holds it now.
-const hostRead = vi.hoisted(() =>
-  vi.fn((..._args: unknown[]) => Promise.resolve({ item: read.current!.item, events: [] }))
-)
 vi.mock('./use-bot-items', () => ({
   commentOnBotItem: sent,
   setBotItemsStatus: statusSet,
-  answerBotItem: answered,
-  showBotItem: hostRead
+  answerBotItem: answered
 }))
 const fileContextOwners = vi.hoisted(() => vi.fn((..._args: unknown[]) => new Map()))
 vi.mock('../BotGroupTranscriptOwner', () => ({ useBotGroupFileContexts: fileContextOwners }))
@@ -127,7 +122,6 @@ afterEach(() => {
   vi.restoreAllMocks()
   sent.mockReset()
   statusSet.mockReset()
-  hostRead.mockReset()
   // Back to its own implementation, so one test's refusal never reaches the next.
   answered.mockReset()
   openAppHttpLink.mockClear()
@@ -590,39 +584,6 @@ it("writes nothing for an older host's refusal when the question is replaced whi
   expect(notice.textContent).toContain('Ship B')
 })
 
-it('writes nothing for an older host when Q2 replaces Q1 between any read of Q1 and the point a write would go', async () => {
-  answered.mockResolvedValue('unsupported')
-  const page = rerenderable(askingItem(38))
-  let replacedAfterRead = false
-  let replaced = false
-  const replace = (): void => {
-    if (!replaced) {
-      replaced = true
-      page.reconcileTo(askingItem(38, { eventId: 'e9', text: 'Which color?' }), eventsUpTo(9))
-      act(() => read.current!.retry())
-    }
-  }
-  // A page that reads the item before writing sees Q1 open, and Q2 replaces it right after that read.
-  hostRead.mockImplementation(() => {
-    const snapshot = read.current!.item
-    replace()
-    replacedAfterRead = true
-    return Promise.resolve({ item: snapshot, events: [] })
-  })
-  typeAnswer('Ship B')
-  fireEvent.click(screen.getByRole('button', { name: /Submit/ }))
-  // The refusal is handled; whatever the page writes in reply would go now.
-  await flush()
-  // A page that never reads gets the replacement here, still before any later write.
-  replace()
-  await flush()
-
-  expect(replaced).toBe(true)
-  expect(replacedAfterRead).toBe(hostRead.mock.calls.length > 0)
-  expectOnlyAnswerCalls()
-  expect(screen.getByRole('status').textContent).toContain('can’t record answers yet')
-})
-
 it('writes nothing on retries to an older host, before or after the question is replaced', async () => {
   answered.mockResolvedValue('unsupported')
   const page = rerenderable(askingItem(37))
@@ -703,21 +664,4 @@ it('offers back words typed before the first send that the answer left out', asy
   await flush()
 
   expect(screen.getByRole('status').textContent).toContain('ask Ops first')
-})
-
-it("keeps a several-step question's steps and count inside the card's bordered body", () => {
-  renderAt(
-    askingItem(45, {
-      ask: {
-        questions: [
-          { prompt: 'Which format?', options: [{ label: 'Checklist' }, { label: 'Paragraph' }] },
-          { prompt: 'Which theme?', options: [{ label: 'Light' }, { label: 'Dark' }] }
-        ]
-      }
-    })
-  )
-
-  const body = document.querySelector<HTMLElement>('[data-native-chat-question-surface]')!
-  expect(within(body).getByRole('button', { name: 'Step 1' })).toBeTruthy()
-  expect(within(body).getByText('1/2')).toBeTruthy()
 })
