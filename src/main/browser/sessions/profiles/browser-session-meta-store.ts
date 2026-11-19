@@ -167,15 +167,7 @@ export function getCachedBrowserExtensionEnabledIds(
   return byProfileId ? [...(byProfileId[profileId] ?? [])] : null
 }
 
-/** False when the file exists but can't be read or parsed: rewriting it would drop whatever it holds, such as saved site lists. */
-function isMetaFileSafeToRewrite(path: string): boolean {
-  try {
-    JSON.parse(readFileSync(path, 'utf-8'))
-    return true
-  } catch (error) {
-    return isMissingFileError(error)
-  }
-}
+const warnedUnreadablePaths = new Set<string>()
 
 // Write to a temporary file so an interrupted write leaves the existing metadata intact.
 export function persistBrowserSessionMeta(
@@ -184,16 +176,27 @@ export function persistBrowserSessionMeta(
   updates: Partial<BrowserSessionMeta>
 ): void {
   try {
-    if (!isMetaFileSafeToRewrite(resolveMetadataPath())) {
-      return
+    const path = resolveMetadataPath()
+    let existing = emptyBrowserSessionMeta()
+    try {
+      existing = parseBrowserSessionMeta(JSON.parse(readFileSync(path, 'utf-8')), defaultPartition)
+    } catch (error) {
+      // A file that reads but isn't JSON is overwritten as it always was. One we couldn't read may
+      // hold saved site lists, so it is never replaced blind.
+      if (!isMissingFileError(error) && !(error instanceof SyntaxError)) {
+        if (!warnedUnreadablePaths.has(path)) {
+          warnedUnreadablePaths.add(path)
+          console.warn('[browser] session metadata is unreadable; not saving over it:', error)
+        }
+        return
+      }
     }
-    const existing = loadBrowserSessionMeta(resolveMetadataPath, defaultPartition)
-    const tmpPath = `${resolveMetadataPath()}.tmp`
-    mkdirSync(dirname(resolveMetadataPath()), { recursive: true })
+    const tmpPath = `${path}.tmp`
+    mkdirSync(dirname(path), { recursive: true })
     writeFileSync(tmpPath, JSON.stringify({ ...existing, ...updates }))
-    renameSync(tmpPath, resolveMetadataPath())
-    // After the rename: the read above cached the contents this write replaced.
-    enabledExtensionIdsByPath.delete(resolveMetadataPath())
+    renameSync(tmpPath, path)
+    // The cache may hold contents this write replaced.
+    enabledExtensionIdsByPath.delete(path)
   } catch {}
 }
 

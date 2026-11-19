@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -19,9 +19,21 @@ describe('persistBrowserSessionMeta', () => {
 
   it('leaves a file it cannot read alone, so saved site lists survive', () => {
     const path = metaPath()
+    writeFileSync(path, '{"allowedHostsByProfileId": {"p": ["example.com"]}}')
+    chmodSync(path, 0o000)
+    try {
+      persistBrowserSessionMeta(() => path, 'persist:default', { defaultSource: null })
+    } finally {
+      chmodSync(path, 0o600)
+    }
+    expect(readFileSync(path, 'utf-8')).toContain('example.com')
+  })
+
+  it('overwrites a file that reads but is not valid JSON, as before site lists', () => {
+    const path = metaPath()
     writeFileSync(path, '{"allowedHostsByProfileId": {"p": ["example.com"]')
     persistBrowserSessionMeta(() => path, 'persist:default', { defaultSource: null })
-    expect(readFileSync(path, 'utf-8')).toContain('example.com')
+    expect(JSON.parse(readFileSync(path, 'utf-8'))).toMatchObject({ allowedHostsByProfileId: {} })
   })
 
   it('creates the file when it is missing', () => {
