@@ -14,6 +14,7 @@ import {
   type ElectronProxyCredentials
 } from './electron-proxy-credentials'
 import { runBoundedProxyApplication } from './bounded-proxy-application'
+import { notifyProxySessionReadinessChanged } from './proxy-session-readiness-listeners'
 import { defaultProxySession, type ProxySession } from './electron-default-proxy-session'
 import { resolveProxyPolicyWithoutSession, type ProxyApplyResult } from './proxy-policy-resolution'
 
@@ -109,6 +110,7 @@ export async function releaseProxySessionApplication(
 export async function retireProxySessionApplication(proxySession: ProxySession): Promise<void> {
   const state = getSessionProxyApplicationState(proxySession)
   state.retired = true
+  notifyProxySessionReadinessChanged(proxySession)
   try {
     await releaseProxySessionApplication(proxySession, true)
   } finally {
@@ -147,18 +149,14 @@ async function enqueueSessionProxyApplication(
     .then(() => runBoundedProxyApplication(() => apply(state)))
   state.tail = operation
   state.readiness = 'pending'
-  void operation.then(
-    () => {
-      if (state.tail === operation) {
-        state.readiness = 'ready'
-      }
-    },
-    () => {
-      if (state.tail === operation) {
-        state.readiness = 'failed'
-      }
+  notifyProxySessionReadinessChanged(proxySession)
+  const settle = (readiness: 'ready' | 'failed') => (): void => {
+    if (state.tail === operation) {
+      state.readiness = readiness
+      notifyProxySessionReadinessChanged(proxySession)
     }
-  )
+  }
+  void operation.then(settle('ready'), settle('failed'))
   return operation
 }
 
