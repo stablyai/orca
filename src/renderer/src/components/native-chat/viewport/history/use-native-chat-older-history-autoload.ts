@@ -63,6 +63,8 @@ export function useNativeChatOlderHistoryAutoload({
   // Let the lane own in-flight state so abandoned reads cannot strand a latch; stop on no progress to prevent endless observer reloads.
   const loadRecorded = (): Promise<NativeChatOlderPageResult> => {
     const key = historyKey
+    // Cleared now too: a read can settle before the render that commits its loading state.
+    setReadFailedHistoryKey(null)
     return loadEarlier().then((result) => {
       // Any caller's failure stops auto-load too, so the row shows the error instead of retrying.
       if (key === currentKey.current && (result === 'failed' || result === 'unchanged')) {
