@@ -9,10 +9,11 @@ export type BrowserPermissionDeniedEvent = {
 }
 
 /**
- * Where an uncommitted main-frame load stopped moving: before any request (`not-sent`), inside
- * Orca's own request checks (`held`), or after its headers went to the network (`waiting`).
+ * The last main-frame request step Orca saw for an uncommitted load: none (`no-request-seen`),
+ * inside Orca's own request checks (`held`), or handed on to the network (`sent`), where it waits
+ * for a socket, a connection or the server's response.
  */
-export type BrowserLoadStallPhase = 'not-sent' | 'held' | 'waiting'
+export type BrowserLoadStallPhase = 'no-request-seen' | 'held' | 'sent'
 
 export type BrowserLoadStall = {
   phase: BrowserLoadStallPhase

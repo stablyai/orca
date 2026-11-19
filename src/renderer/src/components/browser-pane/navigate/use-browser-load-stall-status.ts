@@ -1,20 +1,39 @@
-import { useEffect, useState } from 'react'
+import { useSyncExternalStore } from 'react'
 import type { BrowserLoadStall } from '../../../../../shared/browser/guest-lifecycle/browser-guest-events'
 import { useTranslate } from '@/i18n/use-translate'
 
-/** Status-bubble text for a load whose request went to the network and has had no response. */
-export function useBrowserLoadStallStatus(browserPageId: string): string | null {
-  const t = useTranslate()
-  const [stall, setStall] = useState<BrowserLoadStall | null>(null)
-  useEffect(() => {
-    setStall(null)
-    return window.api.browser.onLoadStall((event) => {
-      if (event.browserPageId === browserPageId) {
-        setStall(event.stall)
+// One subscription for the app, so a pane that remounts mid-stall still knows its load is stuck.
+const stalls = new Map<string, BrowserLoadStall>()
+const listeners = new Set<() => void>()
+let listening = false
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener)
+  if (!listening) {
+    listening = true
+    window.api.browser.onLoadStall((event) => {
+      if (event.stall) {
+        stalls.set(event.browserPageId, event.stall)
+      } else if (!stalls.delete(event.browserPageId)) {
+        return
+      }
+      for (const notify of listeners) {
+        notify()
       }
     })
-  }, [browserPageId])
-  if (stall?.phase !== 'waiting') {
+  }
+  return () => listeners.delete(listener)
+}
+
+/** Status-bubble text for a page load that hasn't committed after a few seconds. */
+export function useBrowserLoadStallStatus(browserPageId: string): string | null {
+  const t = useTranslate()
+  const stall = useSyncExternalStore(
+    subscribe,
+    () => stalls.get(browserPageId) ?? null,
+    () => null
+  )
+  if (!stall) {
     return null
   }
   // HTTPS sites usually share one HTTP/2 connection, so the pool is named only for plain HTTP.

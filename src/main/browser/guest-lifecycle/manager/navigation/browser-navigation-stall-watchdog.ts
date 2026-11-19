@@ -77,9 +77,7 @@ export function installBrowserNavigationStallWatchdog(
         'browser.load.stalledMs': Math.round(performance.now() - load.startedAt)
       }
     }).end()
-    if (outcome !== 'closed') {
-      report(null)
-    }
+    report(null)
   }
 
   const stall = (load: PendingLoad): void => {
@@ -117,7 +115,7 @@ export function installBrowserNavigationStallWatchdog(
       origin: url.origin,
       url,
       startedAt: performance.now(),
-      phase: 'not-sent',
+      phase: 'no-request-seen',
       requestId: null,
       timer: null,
       stalled: false
@@ -125,6 +123,20 @@ export function installBrowserNavigationStallWatchdog(
     load.timer = setTimeout(() => stall(load), BROWSER_LOAD_STALL_AFTER_MS)
     load.timer.unref?.()
     pending = load
+  }
+
+  // The bubble and the hidden-page count follow a redirect to its new host.
+  const redirected = (
+    details: Electron.Event<Electron.WebContentsDidRedirectNavigationEventParams>
+  ): void => {
+    const url = details.isMainFrame && pending ? webOrigin(details.url) : null
+    if (pending && url) {
+      pending.url = url
+      pending.origin = url.origin
+      if (pending.stalled) {
+        stall(pending)
+      }
+    }
   }
 
   const stopRequests = observeBrowserGuestRequests(guest.id, (session, event, details) => {
@@ -136,7 +148,7 @@ export function installBrowserNavigationStallWatchdog(
       load.requestId = details.id
       load.phase = 'held'
     } else if (event === 'onBeforeSendHeaders' && details.id === load.requestId) {
-      load.phase = 'waiting'
+      load.phase = 'sent'
     }
   })
 
@@ -161,6 +173,7 @@ export function installBrowserNavigationStallWatchdog(
   const closed = (): void => finish('closed')
 
   guest.on('did-start-navigation', started)
+  guest.on('did-redirect-navigation', redirected)
   guest.on('did-navigate', committed)
   guest.on('did-fail-load', failed)
   guest.on('did-stop-loading', stopped)
@@ -170,6 +183,7 @@ export function installBrowserNavigationStallWatchdog(
     stopRequests()
     if (!guest.isDestroyed()) {
       guest.off('did-start-navigation', started)
+      guest.off('did-redirect-navigation', redirected)
       guest.off('did-navigate', committed)
       guest.off('did-fail-load', failed)
       guest.off('did-stop-loading', stopped)

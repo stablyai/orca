@@ -74,7 +74,11 @@ export function reportBrowserSessionWebRequest(
     const observers = guestObservers.get(details.webContentsId)
     if (observers) {
       for (const guestObserver of observers) {
-        guestObserver(session, event, details)
+        try {
+          guestObserver(session, event, details)
+        } catch (error) {
+          console.warn('[browser] guest web request observer failed:', error)
+        }
       }
     }
   }

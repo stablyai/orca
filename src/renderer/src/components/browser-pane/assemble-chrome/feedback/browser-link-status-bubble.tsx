@@ -121,28 +121,33 @@ export function BrowserLinkStatusBubble({
   const showLoadStatus = !status.visible && loadStatus !== null
   const { head, tail } = useMemo(() => splitLinkStatusText(status.text), [status.text])
   return (
-    <div
-      ref={bubbleRef}
-      aria-hidden={!showLoadStatus}
-      role={showLoadStatus ? 'status' : undefined}
-      data-browser-link-status={side}
-      className={cn(
-        'pointer-events-none absolute bottom-1 z-30 flex rounded-md border border-border bg-popover/95 px-2 py-0.5 text-xs text-popover-foreground shadow-xs transition-opacity ease-out',
-        side === 'left' ? 'left-1' : 'right-1',
-        status.expanded || showLoadStatus
-          ? 'max-w-[calc(100%-0.5rem)]'
-          : 'max-w-[min(calc(100%-0.5rem),max(33%,20rem))]',
-        status.visible || showLoadStatus ? 'opacity-100 duration-100' : 'opacity-0 duration-200'
-      )}
-    >
-      {showLoadStatus ? (
-        <span className="truncate">{loadStatus}</span>
-      ) : (
-        <>
-          <span className="truncate">{head}</span>
-          <span className="shrink-0 whitespace-nowrap">{tail}</span>
-        </>
-      )}
-    </div>
+    <>
+      {/* Mounted for the page's life so screen readers announce the text when it changes. */}
+      <span role="status" className="sr-only">
+        {loadStatus ?? ''}
+      </span>
+      <div
+        ref={bubbleRef}
+        aria-hidden
+        data-browser-link-status={side}
+        className={cn(
+          'pointer-events-none absolute bottom-1 z-30 flex rounded-md border border-border bg-popover/95 px-2 py-0.5 text-xs text-popover-foreground shadow-xs transition-opacity ease-out',
+          side === 'left' ? 'left-1' : 'right-1',
+          status.expanded || showLoadStatus
+            ? 'max-w-[calc(100%-0.5rem)]'
+            : 'max-w-[min(calc(100%-0.5rem),max(33%,20rem))]',
+          status.visible || showLoadStatus ? 'opacity-100 duration-100' : 'opacity-0 duration-200'
+        )}
+      >
+        {showLoadStatus ? (
+          <span className="truncate">{loadStatus}</span>
+        ) : (
+          <>
+            <span className="truncate">{head}</span>
+            <span className="shrink-0 whitespace-nowrap">{tail}</span>
+          </>
+        )}
+      </div>
+    </>
   )
 }
