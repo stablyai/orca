@@ -19514,7 +19514,7 @@
         "fallbackShort": "Не удалось возобновить.",
         "unconfirmedShort": "Продолжение не подтверждено.",
         "supersededShort": "После перезапуска пришла новая работа.",
-        "conflictShort": "Открыт в другом окне.",
+        "conflictShort": "Открыт в другом окне или терминале.",
         "ownershipUnknownShort": "Ещё не готов.",
         "notAttachedShort": "Не переподключился.",
         "dispatchRejectedShort": "Агент отказался продолжить.",

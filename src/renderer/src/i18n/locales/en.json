@@ -20280,7 +20280,7 @@
         "fallbackShort": "Couldn’t resume.",
         "unconfirmedShort": "Couldn’t confirm it continued.",
         "supersededShort": "New work arrived after the restart.",
-        "conflictShort": "Open in another window.",
+        "conflictShort": "Open in another window or terminal.",
         "ownershipUnknownShort": "Not ready to resume yet.",
         "notAttachedShort": "Didn’t reconnect.",
         "dispatchRejectedShort": "The agent declined to continue.",

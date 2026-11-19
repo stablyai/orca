@@ -18945,7 +18945,7 @@
         "fallbackShort": "Nicht fortgesetzt.",
         "unconfirmedShort": "Fortsetzen nicht bestätigt.",
         "supersededShort": "Nach dem Neustart kam neue Arbeit.",
-        "conflictShort": "In einem anderen Fenster offen.",
+        "conflictShort": "In einem anderen Fenster oder Terminal offen.",
         "ownershipUnknownShort": "Noch nicht bereit.",
         "notAttachedShort": "Keine Verbindung.",
         "dispatchRejectedShort": "Der Agent hat abgelehnt.",

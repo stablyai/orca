@@ -73,7 +73,7 @@ function reasonGuidance(
     return {
       text: t(
         'auto.components.NativeChatResumeFailureGuidance.conflictShort',
-        'Open in another window.'
+        'Open in another window or terminal.'
       ),
       primary: 'retry',
       secondary: 'open'
