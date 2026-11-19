@@ -144,8 +144,12 @@ export function codexApprovalItem(input: {
   detail: string | null
   /** The announced item's full diff, hashed when the request omits its own. */
   announcedChanges?: unknown
+  /** False for a subagent's request: a resumed session can't re-ask it, so it is never hashed. */
+  restorable?: boolean
 }): AgentJournalApprovalItem {
   const params = readParams(input.params)
+  const digest = (subject: Record<string, unknown>) =>
+    input.restorable === false ? {} : codexRequestDigest(input.method, subject)
   if (input.method === CODEX_MCP_ELICITATION_METHOD) {
     return codexMcpToolApprovalItem(params)
   }
@@ -162,7 +166,7 @@ export function codexApprovalItem(input: {
       ),
       options: codexApprovalOptions(input.params),
       // The diff the person reviewed: a request's own changes may name paths without content.
-      ...codexRequestDigest(input.method, {
+      ...digest({
         ...params,
         changes: present(params.changes) ? params.changes : input.announcedChanges,
         announcedChanges: input.announcedChanges
@@ -176,7 +180,7 @@ export function codexApprovalItem(input: {
       input.method === CODEX_COMMAND_APPROVAL_METHOD ? 'Run a command?' : 'Approve this action?',
     detail: boundNullablePromptText(approvalDetail(params) ?? input.detail),
     options: codexApprovalOptions(input.params),
-    ...codexRequestDigest(input.method, params),
+    ...digest(params),
     resolution: { ...PENDING }
   }
 }
@@ -225,6 +229,7 @@ export function codexQuestionItems(input: {
   threadId: string
   promptKey: string
   params: unknown
+  restorable?: boolean
 }): CodexQuestionItem[] {
   const questions = readParams(input.params).questions
   if (!Array.isArray(questions)) {
@@ -232,7 +237,10 @@ export function codexQuestionItems(input: {
   }
   const items: CodexQuestionItem[] = []
   // Only a single-question request gets one: grouped answers go back to Codex together, live.
-  const digest = codexRequestDigest(CODEX_USER_INPUT_METHOD, readParams(input.params))
+  const digest =
+    input.restorable === false
+      ? {}
+      : codexRequestDigest(CODEX_USER_INPUT_METHOD, readParams(input.params))
   for (const entry of questions.slice(0, MAX_CODEX_PROMPT_QUESTIONS)) {
     const question = readParams(entry)
     const questionId = readString(question, 'id')

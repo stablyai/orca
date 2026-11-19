@@ -1,3 +1,4 @@
+import { answeredApprovalOptions } from '../../shared/agent-session/requests/prompts/agent-session-restored-prompt'
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { agentSessionPromptQuestions } from '../../shared/agent-session/requests/prompts/agent-session-question-answer'
 import type { ConversationEvent, ConversationSnapshot } from './external-conversation-events'
@@ -16,7 +17,7 @@ function answeredWith(item: AgentJournalRenderItem | null): string | undefined {
   const resolution = body.resolution
   let labels: string[]
   if (body.kind === 'approval') {
-    labels = body.options
+    labels = answeredApprovalOptions(body)
       .filter((option) => option.id === resolution.selectedOptionId)
       .map((option) => option.label)
   } else {

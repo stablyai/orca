@@ -58,6 +58,7 @@ function rig({ startRejected = false, sendRefused = false } = {}) {
   ])
   let emit: ((event: AgentSessionTurnCompletionEvent) => void) | null = null
   let onState: StructuredAgentSessionTurnCompletionSubscriber['onState'] | null = null
+  let onClosed: StructuredAgentSessionTurnCompletionSubscriber['onClosed'] | null = null
   let running = false
   const sent: string[] = []
   const respond = vi.fn<StructuredAgentSessionRestoredPromptsDeps['respond']>(async () => REFUSED)
@@ -139,6 +140,7 @@ function rig({ startRejected = false, sendRefused = false } = {}) {
     subscribeTurnCompletions: (subscriber) => {
       emit = subscriber.emit
       onState = subscriber.onState ?? null
+      onClosed = subscriber.onClosed ?? null
       return () => {
         emit = null
         onState = null
@@ -192,7 +194,10 @@ function rig({ startRejected = false, sendRefused = false } = {}) {
     answer,
     reask,
     listening: () => emit !== null,
-    reaskAsFirstState: async (itemId: string, digest: string) => {
+    reaskAsFirstState: async (itemId: string, digest: string, earlier?: string) => {
+      if (earlier) {
+        items.set(earlier, approval(earlier, 'digest-other', 'pending'))
+      }
       items.set(itemId, approval(itemId, digest, 'pending'))
       onState?.({
         scope: {
@@ -202,13 +207,14 @@ function rig({ startRejected = false, sendRefused = false } = {}) {
           workspaceKind: 'git-worktree'
         },
         sessionId: SESSION,
-        pendingPromptIds: [itemId]
+        pendingPromptIds: earlier ? [earlier, itemId] : [itemId]
       })
       await new Promise((resolve) => setTimeout(resolve, 0))
     },
     agentExits: () => {
       running = false
-    }
+    },
+    closes: () => onClosed?.(SESSION)
   }
 }
 
@@ -314,6 +320,15 @@ describe('answering a prompt whose agent exited before the restart', () => {
     expect(r.respond.mock.calls[0]?.[1]).toMatchObject({ itemId: 'new', optionId: 'allow' })
   })
 
+  it('answers nothing when the first state already holds a different request and the same one', async () => {
+    const r = rig()
+    await r.answer('allow')
+    await r.reaskAsFirstState('new', 'digest-a', 'other')
+
+    expect(r.respond).not.toHaveBeenCalled()
+    expect(r.listening()).toBe(false)
+  })
+
   it('denies with an added Deny when the request offered only Allow and Stop', async () => {
     const r = rig()
     const old = r.items.get('old')!
@@ -333,5 +348,16 @@ describe('answering a prompt whose agent exited before the restart', () => {
 
     expect(result.ok).toBe(true)
     expect(r.sent[0]).toContain('The user denied it.')
+  })
+
+  it('lets go of the answer when the chat closes with no agent left, not while one starts', async () => {
+    const r = rig()
+    await r.answer('allow')
+    r.closes()
+    expect(r.listening()).toBe(true)
+
+    r.agentExits()
+    r.closes()
+    expect(r.listening()).toBe(false)
   })
 })

@@ -47,16 +47,15 @@ export class CodexJournalPrompts {
     promptKey: string
   }): CodexJournalTranslationAdmission {
     const turnId = readCodexTurnId(event.params) ?? this.activeTurn(event.threadId)
+    // A subagent's request can't be re-asked by a resumed session, so it is never hashed.
+    const restorable = !this.deps.attributionFor(event.threadId, turnId).agentId
     if (event.method === CODEX_USER_INPUT_METHOD) {
-      const questions = codexQuestionItems({
+      const promptItems = codexQuestionItems({
         threadId: event.threadId,
         promptKey: event.promptKey,
-        params: event.params
-      })
-      const promptItems = questions.map(({ identity, body }) => ({
-        identity,
-        body: this.leadOnly(event.threadId, turnId, body)
-      }))
+        params: event.params,
+        restorable
+      }).map(({ identity, body }) => ({ identity, body }))
       const admission = this.admit(event, turnId, promptItems)
       if (!admission.accepted) {
         return admission
@@ -82,16 +81,13 @@ export class CodexJournalPrompts {
       threadId: event.threadId,
       promptKey: event.promptKey
     })
-    const body = this.leadOnly(
-      event.threadId,
-      turnId,
-      codexApprovalItem({
-        method: event.method,
-        params: event.params,
-        detail: this.announced.detailFor(event.threadId, event.codexItemId),
-        announcedChanges: this.announced.changesFor(event.threadId, event.codexItemId)
-      })
-    )
+    const body = codexApprovalItem({
+      method: event.method,
+      params: event.params,
+      detail: this.announced.detailFor(event.threadId, event.codexItemId),
+      announcedChanges: this.announced.changesFor(event.threadId, event.codexItemId),
+      restorable
+    })
     const admission = this.admit(event, turnId, [{ identity, body }])
     if (!admission.accepted) {
       return admission
@@ -149,17 +145,6 @@ export class CodexJournalPrompts {
 
   dispose(): void {
     this.pending.clear()
-  }
-
-  /** A subagent's request can't be re-asked by a resumed session, so only the lead's keep a digest. */
-  private leadOnly<T extends { requestDigest?: string }>(
-    threadId: string,
-    turnId: string | null,
-    body: T
-  ): T {
-    return body.requestDigest === undefined || !this.deps.attributionFor(threadId, turnId).agentId
-      ? body
-      : { ...body, requestDigest: undefined }
   }
 
   private admit(

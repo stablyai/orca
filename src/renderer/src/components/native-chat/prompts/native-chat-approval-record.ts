@@ -9,7 +9,7 @@ import {
 } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 import {
   AGENT_EXIT_PROMPT_ENDING,
-  restoredApprovalOptions
+  answeredApprovalOptions
 } from '../../../../../shared/agent-session/requests/prompts/agent-session-restored-prompt'
 
 /** Which shield the line shows: an answer either way, or a prompt that closed with none. */
@@ -69,11 +69,9 @@ export function ownApprovalRecordLine(
       values: { tool }
     }
   }
-  const options =
-    resolution.endedBy === AGENT_EXIT_PROMPT_ENDING
-      ? restoredApprovalOptions(body.options)
-      : body.options
-  const option = options.find((entry) => entry.id === resolution.selectedOptionId)
+  const option = answeredApprovalOptions(body).find(
+    (entry) => entry.id === resolution.selectedOptionId
+  )
   const resolvedBy = resolution.resolvedBy ?? ''
   // Orca answers a worker's prompt only by allowing or refusing this one call.
   const allows = option?.intent === 'allow_once'

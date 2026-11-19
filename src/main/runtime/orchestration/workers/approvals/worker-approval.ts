@@ -1,5 +1,6 @@
 /** A worker's permission prompt as its coordinator sees it: which option an answer picks, and the
  *  structured payload its escalation and closing message carry. */
+import { answeredApprovalOptions } from '../../../../../shared/agent-session/requests/prompts/agent-session-restored-prompt'
 import type {
   AgentJournalApprovalItem,
   AgentJournalPromptOption
@@ -59,7 +60,9 @@ export function workerApprovalActions(
 export function workerApprovalDecisionOf(
   item: AgentJournalApprovalItem
 ): WorkerApprovalDecision | null {
-  const selected = item.options.find((option) => option.id === item.resolution.selectedOptionId)
+  const selected = answeredApprovalOptions(item).find(
+    (option) => option.id === item.resolution.selectedOptionId
+  )
   return selected?.intent === 'allow_once' || selected?.intent === 'allow_always'
     ? 'allow'
     : selected?.intent === 'reject_once' || selected?.intent === 'reject_always'

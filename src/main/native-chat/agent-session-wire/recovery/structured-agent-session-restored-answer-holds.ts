@@ -29,7 +29,8 @@ export const RESTORED_PROMPT_ANSWER_CALLER = 'trusted-local:restored-prompt-answ
 
 type Hold = {
   digest: string
-  restored: PromptBody
+  /** Only what matching needs: a hold never keeps the request's text. */
+  restored: Pick<PromptBody, 'kind' | 'options'>
   resolution: AgentJournalResolution
   timer: ReturnType<typeof setTimeout>
 }
@@ -37,6 +38,8 @@ type Hold = {
 export type RestoredAnswerHoldsDeps = {
   conversation: (sessionId: string) => Promise<{ journal: Pick<RestoredPromptJournal, 'reads'> }>
   conversationFence: (sessionId: string) => number | null
+  /** A child or a start in flight: the request the answer waits for can still come. */
+  agentRunning: (sessionId: string) => boolean
   respond: (
     caller: StructuredAgentSessionCaller,
     params: AgentSessionPromptRequest & { envelope: AgentSessionMutationEnvelope }
@@ -48,7 +51,7 @@ export type RestoredAnswerHoldsDeps = {
   now: () => number
 }
 
-// Host authority accepts only `<13-digit ms>-<32 hex>` ids; the hash keeps a retry idempotent.
+// Host authority accepts only `<13-digit ms>-<32 hex>` ids.
 const operationId = (at: number, parts: readonly unknown[]): string =>
   `${String(Math.trunc(at)).padStart(13, '0')}-${createHash('sha256').update(JSON.stringify(parts)).digest('hex').slice(0, 32)}`
 
@@ -83,17 +86,30 @@ export class RestoredAnswerHolds {
     this.drop(sessionId)
     const timer = setTimeout(() => this.drop(sessionId), RESTORED_ANSWER_HOLD_MS)
     timer.unref?.()
-    this.holds.set(sessionId, { digest, restored, resolution, timer })
+    this.holds.set(sessionId, {
+      digest,
+      restored: { kind: restored.kind, options: restored.options },
+      resolution,
+      timer
+    })
     // Listens only while an answer waits, so idle chats cost nothing.
     this.unsubscribe ??= this.deps.subscribeTurnCompletions({
       id: RESTORED_PROMPT_ANSWER_CALLER,
       includePrompts: true,
       emit: (event) => this.onEvent(event),
+      // A closed chat with no agent left can't ask again; a reattach while its agent starts can.
+      onClosed: (closed) => {
+        if (!this.deps.agentRunning(closed)) {
+          this.drop(closed)
+        }
+      },
       // A chat reattached as its agent starts announces its first state here, without an edge.
-      onState: (state) => {
-        const raised = state.pendingPromptIds.at(-1)
-        if (raised !== undefined) {
-          this.reasked(state.sessionId, raised)
+      onState: ({ sessionId, pendingPromptIds }) => {
+        if (pendingPromptIds.length === 1) {
+          this.reasked(sessionId, pendingPromptIds[0]!)
+        } else if (pendingPromptIds.length > 1) {
+          // Which came first is unknown, so none is taken as the re-ask: the answer is spent.
+          this.drop(sessionId)
         }
       }
     })

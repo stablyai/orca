@@ -78,6 +78,7 @@ export class StructuredAgentSessionRestoredPrompts {
     this.holds = new RestoredAnswerHolds({
       conversation: deps.conversation,
       conversationFence: (sessionId) => deps.continuationHost().conversationFence(sessionId),
+      agentRunning: deps.agentRunning,
       respond: deps.respond,
       subscribeTurnCompletions: deps.subscribeTurnCompletions,
       logger: () => deps.continuationHost().logger,
@@ -195,7 +196,7 @@ export class StructuredAgentSessionRestoredPrompts {
               await this.undo(journal, params, committed.revision)
             }
           },
-          () => this.holds.drop(sessionId)
+          () => committed.revision !== undefined && this.holds.drop(sessionId)
         )
       } else if (started.done.outcome === 'refused') {
         await this.undo(journal, params, committed.revision)

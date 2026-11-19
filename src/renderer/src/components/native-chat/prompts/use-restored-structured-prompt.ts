@@ -18,18 +18,19 @@ export function useRestoredStructuredPrompt(
     [eligible, journalItems]
   )
   const prompt = found && found.itemId !== dismissed ? found : null
-  const key = prompt ? `${prompt.itemId}:${prompt.revision}` : null
   return {
     prompt,
-    failed: key !== null && failed === key,
+    // Keyed by item: a refused resume puts the card back at a later revision.
+    failed: prompt !== null && failed === prompt.itemId,
     dismiss: () => setDismissed(prompt?.itemId ?? null),
     /** A refused answer keeps the card answerable and says it couldn't be resumed. */
     response: (inner: PromptResponse): PromptResponse => ({
       holds: inner.holds,
       respond: async (item, choice) => {
+        setFailed(null)
         const result = await inner.respond(item, choice)
         if (result === null) {
-          setFailed(`${item.itemId}:${item.revision}`)
+          setFailed(item.itemId)
         }
         return result
       }

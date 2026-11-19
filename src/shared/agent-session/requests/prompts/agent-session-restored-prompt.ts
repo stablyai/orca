@@ -13,7 +13,7 @@ import { readAgentJournalTurn } from '../../lifecycle/records/agent-session-turn
 export const AGENT_EXIT_PROMPT_ENDING = 'agent_exit'
 
 /** Prompts one turn may hold before its newest; past this the card isn't offered, never guessed. */
-export const SAME_TURN_PROMPTS_CHECKED = 32
+export const SAME_TURN_PROMPTS_CHECKED = 200
 
 type PromptBody = AgentJournalApprovalItem | AgentJournalQuestionItem
 export type RestoredAgentJournalPrompt = AgentJournalRenderItem & { body: PromptBody }
@@ -98,6 +98,15 @@ export function restoredApprovalOptions(
   return kept.some((option) => option.intent?.startsWith('reject'))
     ? kept
     : [...kept, RESTORED_DENY_OPTION]
+}
+
+/** The choices an approval's answer was picked from: a restored card's, once answered there. */
+export function answeredApprovalOptions(
+  body: Pick<AgentJournalApprovalItem, 'options' | 'resolution'>
+): AgentJournalPromptOption[] {
+  return body.resolution.endedBy === AGENT_EXIT_PROMPT_ENDING
+    ? restoredApprovalOptions(body.options)
+    : [...body.options]
 }
 
 /** The re-asked request's option with the chosen option's meaning; ids can differ between asks. */
