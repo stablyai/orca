@@ -7,7 +7,12 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { CACHE_ROOT } from './fleet-gate-builds.mjs'
 import { identityState, probeProcess, processIdentity } from './fleet-gate-cache-lock.mjs'
-import { descendantPids, readDaemonPids, stopCopyDaemons } from './fleet-gate-copies.mjs'
+import {
+  daemonTreesAlive,
+  descendantPids,
+  readDaemonPids,
+  stopCopyDaemons
+} from './fleet-gate-copies.mjs'
 
 export const RUNS_ROOT = path.join(CACHE_ROOT, 'runs')
 // A folder with no owner yet is one being created right now, unless it is this old.
@@ -151,7 +156,7 @@ function killVerified(pid, identity, group) {
 }
 
 /** true once every daemon recorded in userDataDir is provably gone; a failed ps or read is never proof. */
-export function daemonsGone(userDataDir) {
+export async function daemonsGone(userDataDir) {
   const daemonDir = path.join(userDataDir, 'daemon')
   let names
   try {
@@ -179,7 +184,7 @@ export function daemonsGone(userDataDir) {
       return false
     }
   }
-  return readDaemonPids(userDataDir).length === 0
+  return readDaemonPids(userDataDir).length === 0 && !(await daemonTreesAlive(userDataDir))
 }
 
 /** For process 'exit': synchronous, so it also runs on a thrown error or process.exit. */
@@ -311,7 +316,7 @@ async function reapFolderOrThrow(dir) {
     // Only daemons recorded inside this folder: a pid record anywhere else could be another gate's.
     if (inside(record.userDataDir)) {
       await stopCopyDaemons(record.userDataDir)
-      if (!daemonsGone(record.userDataDir)) {
+      if (!(await daemonsGone(record.userDataDir))) {
         return false
       }
     }

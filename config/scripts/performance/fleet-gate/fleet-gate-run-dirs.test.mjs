@@ -76,7 +76,18 @@ async function runFolderWithCopy(dir, marker) {
     path.join(dir, 'helpers', String(helper.pid)),
     JSON.stringify({ identity: processIdentity(helper.pid) })
   )
-  return [app, daemon, launching, helper].map((child) => child.pid)
+  // A daemon's child that outlived its daemon: only the tree record an earlier stop wrote can still find it.
+  const orphan = sleeper()
+  await until(() => processIdentity(orphan.pid))
+  const started = execFileSync('ps', ['-o', 'lstart=', '-p', String(orphan.pid)], {
+    encoding: 'utf8',
+    env: { ...process.env, LC_ALL: 'C', TZ: 'UTC' }
+  }).trim()
+  fs.writeFileSync(
+    path.join(userDataDir, 'daemon', 'fleet-gate-tree-1.json'),
+    JSON.stringify([{ pid: orphan.pid, started }])
+  )
+  return [app, daemon, launching, helper, orphan].map((child) => child.pid)
 }
 
 // The gate is Mac and Linux only; it reads process start times with ps.
@@ -96,9 +107,9 @@ it.skipIf(process.platform === 'win32')(
     expect(await reapStaleRunDirs(root)).toBe(1)
 
     await until(() => deadCopy.every((pid) => !alive(pid)))
-    expect(deadCopy.map(alive)).toEqual([false, false, false, false])
+    expect(deadCopy.map(alive)).toEqual([false, false, false, false, false])
     expect(fs.existsSync(dead)).toBe(false)
-    expect(liveCopy.map(alive)).toEqual([true, true, true, true])
+    expect(liveCopy.map(alive)).toEqual([true, true, true, true, true])
     expect(fs.existsSync(live)).toBe(true)
     expect(fs.existsSync(starting)).toBe(true)
   },
@@ -133,7 +144,7 @@ it.skipIf(process.platform === 'win32')(
 
     expect(await reapStaleRunDirs(root)).toBe(1)
     await until(() => deadCopy.every((pid) => !alive(pid)))
-    expect(deadCopy.map(alive)).toEqual([false, false, false, false])
+    expect(deadCopy.map(alive)).toEqual([false, false, false, false, false])
   },
   30_000
 )

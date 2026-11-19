@@ -141,7 +141,7 @@ function isolatedEnv(runDir, userDataDir) {
 async function daemonsStopped(userDataDir) {
   try {
     await stopCopyDaemons(userDataDir)
-    return daemonsGone(userDataDir)
+    return await daemonsGone(userDataDir)
   } catch {
     return false
   }
