@@ -145,6 +145,34 @@ test.describe('Move a terminal pane to a new tab', () => {
     expect((await readLeafHome(orcaPage, pane.leafId))?.tabId).toBe(before.activeTabId)
   })
 
+  test('a drag across the first terminal row selects text instead of moving the pane', async ({
+    orcaPage
+  }) => {
+    const pane = await splitWithMarker(orcaPage)
+    const before = await readTabs(orcaPage)
+    const box = (await orcaPage.locator(`.pane[data-leaf-id="${pane.leafId}"]`).boundingBox())!
+
+    // Row 1 sits under the grip strip; start left of the centred grip tab, in its height.
+    await orcaPage.mouse.move(box.x + 6, box.y + 4)
+    await orcaPage.mouse.down()
+    await orcaPage.mouse.move(box.x + box.width / 2 - 40, box.y + 4, { steps: 10 })
+    await expect(orcaPage.locator('.is-pane-dragging')).toHaveCount(0)
+    await orcaPage.mouse.up()
+
+    expect(
+      await orcaPage.evaluate(
+        ({ tabId, leafId }) =>
+          window.__paneManagers
+            ?.get(tabId)
+            ?.getPanes()
+            .find((entry) => entry.leafId === leafId)
+            ?.terminal.hasSelection() ?? false,
+        { tabId: before.activeTabId!, leafId: pane.leafId }
+      )
+    ).toBe(true)
+    expect(await readTabs(orcaPage)).toEqual(before)
+  })
+
   test('the pane menu moves a pane into a new tab right after its own', async ({ orcaPage }) => {
     const moved = await splitWithMarker(orcaPage)
     const before = await readTabs(orcaPage)

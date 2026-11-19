@@ -128,12 +128,15 @@
   transition: none;
 }
 
+/* A small tab around the grip, not the full width: the rest of terminal row 1 keeps text selection. */
 .pane-drag-handle {
   pointer-events: none;
   position: absolute;
   top: 0;
-  left: 0;
-  right: 0;
+  left: 50%;
+  width: 48px;
+  transform: translateX(-50%);
+  border-radius: 0 0 4px 4px;
   height: 12px;
   z-index: 10;
   cursor: grab;
