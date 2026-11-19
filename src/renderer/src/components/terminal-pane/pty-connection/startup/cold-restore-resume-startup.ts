@@ -28,6 +28,7 @@ import type { HeldPaneReopenOutcome } from '../../session-restore/newer-daemon/n
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
 
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
+import { prepareColdRestoreHistoryAccount } from './cold-restore-history-account'
 
 export const NOT_REOPENED: HeldPaneReopenOutcome = { reopened: false, agentResumed: false }
 
@@ -110,7 +111,7 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
         session.executionHostId
       )
     })
-    const startupPlan = buildAgentResumeStartupPlan({
+    const startupArgs = {
       agent,
       providerSession,
       cmdOverrides: state.settings?.agentCmdOverrides ?? {},
@@ -119,12 +120,13 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       agentHostPlatform: resumeTarget.agentHostPlatform,
       shell: resumeTarget.shell,
       launchCwd: session.worktree?.path
-    })
+    }
+    const startupPlan = buildAgentResumeStartupPlan(startupArgs)
     if (!startupPlan) {
       return null
     }
     const coldRestoreLaunchToken = createBrowserUuid()
-    return {
+    const startup: ColdRestoreAgentResumeStartup = {
       agent,
       command: startupPlan.launchCommand,
       env: {
@@ -156,6 +158,14 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       hasSleepingRecord: Boolean(sleepingRecord),
       sleepingRecordEntry
     }
+    return connectionId
+      ? startup
+      : prepareColdRestoreHistoryAccount(
+          startup,
+          startupArgs,
+          session.deps.worktreeId,
+          session.executionHostId
+        )
   }
 }
 

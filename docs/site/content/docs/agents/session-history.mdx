@@ -63,6 +63,8 @@ When you resume from History:
 
 The choice applies to this continuation only. It does not change the workspace account or the host default. Opening an existing running pane returns to that pane instead of starting a second copy.
 
+When reopening the app restores a local Codex pane whose saved transcript is in the retired shared home, Orca uses this same account-choice flow before starting its terminal. Cancelling keeps the saved session available for a later resume. Sessions already stored in a private account home keep their normal restore path.
+
 ### What changing accounts copies
 
 Continuing with another account creates an **independent session with a new session ID** in the selected account's home. Orca carries the conversation history forward, preserves the source transcript, and uses the selected account's sign-in and quota. It does not copy credentials from the source account. Codex history prefixes are materialized into the continuation; Claude companion and file history are copied under the new session identity.

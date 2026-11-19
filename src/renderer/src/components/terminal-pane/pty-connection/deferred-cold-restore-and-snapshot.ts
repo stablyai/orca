@@ -25,6 +25,7 @@ import { bindReplacedProcessInputModes } from './output/replaced-process-input-m
 import { deferHiddenAgentResume } from './spawn/hidden-agent-resume-deferral'
 import { attachToMainResumedSleepPane, mainResumedSleepPane } from './spawn/main-resumed-sleep-pane'
 import { startPaneThroughMainThenAttach } from './spawn/main-pane-start-request'
+import { spawnColdRestoreWithAccount } from './startup/cold-restore-history-account'
 
 export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySession): void {
   session.applyColdRestoreAgentResumeStartup = (
@@ -124,10 +125,9 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     if (mainPane && startup?.sleepingRecordEntry) {
       return attachToMainResumedSleepPane(session, mainPane, startup, options, automatic)
     }
-    return startPaneThroughMainThenAttach(session, () => {
-      session.applyColdRestoreAgentResumeStartup(startup)
-      return session.startFreshSpawn(startup, options)
-    })
+    return startPaneThroughMainThenAttach(session, () =>
+      spawnColdRestoreWithAccount(session, startup, options)
+    )
   }
   session.startFreshColdRestoreAgentResume = (
     startup: ColdRestoreAgentResumeStartup | null = session.buildColdRestoreAgentResumeStartup(),

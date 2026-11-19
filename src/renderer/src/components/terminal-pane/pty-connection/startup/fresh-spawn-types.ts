@@ -20,6 +20,8 @@ export type FreshSpawnOptions = {
 }
 
 export type ColdRestoreAgentResumeStartup = PendingStartupCommand & {
+  prepareAccount?: () => Promise<ColdRestoreAgentResumeStartup>
+  commitAccount?: () => Promise<void>
   agent: ResumableTuiAgent
   resumeProviderSession: AgentProviderSessionMetadata
   connectionId?: string | null
