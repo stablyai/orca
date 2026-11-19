@@ -196,17 +196,19 @@ describe('the Chats tab', () => {
   it('shows loading, offers retry on failure and renders the chat once retry succeeds', () => {
     const retry = vi.fn()
     showTree({ state: 'loading' })
-    const view = renderPanel()
+    const loading = renderPanel()
     expect(screen.getByText('Loading chats…')).toBeTruthy()
 
+    loading.unmount()
     showTree({ state: 'failed', retry })
-    view.rerender(<BotChatsPanel />)
+    const view = renderPanel()
     expect(screen.getByText(/Couldn't read this bot's chats/)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
     expect(retry).toHaveBeenCalledTimes(1)
 
+    view.unmount()
     showTree({ chats: [rollout] })
-    view.rerender(<BotChatsPanel />)
+    renderPanel()
     expect(screen.getByRole('button', { name: /^Connector fix rollout · Side chat/ })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
   })
