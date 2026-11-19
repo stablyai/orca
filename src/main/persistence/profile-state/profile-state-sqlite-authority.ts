@@ -6,7 +6,7 @@ import type {
   ProfileStateMaintenance
 } from '../loading-store/profile-writing/profile-state-authority'
 import {
-  importProfileStateFragments,
+  importProfileStateJson,
   readAcceptedProfileStateParsedSnapshot,
   readProfileStateParsedSnapshot,
   readProfileStateSnapshot
@@ -33,6 +33,7 @@ import {
 import { writeProfileStateAuthorityJsonExport } from './legacy-json/profile-state-authority-exports'
 import {
   buildCompleteDocumentReplacements,
+  spliceProfileStateFragments,
   splitProfileStatePayload
 } from './documents/profile-state-complete-replacements'
 import { ProfileStateBackupRotation } from './backup/profile-state-backup-rotation'
@@ -206,7 +207,8 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
       for (const replacement of replacements) {
         prepareProfileStateDomainMutation(replacement)
       }
-      this.observedRevision = importProfileStateFragments(opened.db, replacements, {
+      const rawJson = spliceProfileStateFragments(replacements)
+      this.observedRevision = importProfileStateJson(opened.db, rawJson, {
         expectedRevision: this.observedRevision
       })
       return

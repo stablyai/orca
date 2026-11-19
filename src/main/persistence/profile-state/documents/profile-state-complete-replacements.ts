@@ -2,6 +2,14 @@ import type { ProfileStateDomainReplacement } from '../../loading-store/profile-
 import type { openProfileStateDatabase } from '../database/profile-state-database'
 import { parseProfileStateRoot } from './profile-state-document-validation'
 
+/** Splices domain fragments into one document; null payloads are omitted. */
+export function spliceProfileStateFragments(
+  fragments: readonly ProfileStateDomainReplacement[]
+): string {
+  const present = fragments.filter(({ payload }) => payload !== null)
+  return `{${present.map(({ domain, payload }) => `${JSON.stringify(domain)}:${payload}`).join(',')}}`
+}
+
 /** One whole-document payload as per-domain replacements. */
 export function splitProfileStatePayload(payload: Buffer): ProfileStateDomainReplacement[] {
   const serialized = payload.toString('utf8')
