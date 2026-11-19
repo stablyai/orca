@@ -1,4 +1,5 @@
 import { ExternalLink, MoreHorizontal } from 'lucide-react'
+import { useState } from 'react'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { cn } from '@/lib/class-names'
@@ -120,6 +121,7 @@ export function AgentCatalogRow({
   onExpandedChange: setCmdOpen
 }: AgentCatalogRowViewProps): React.JSX.Element {
   const t = useTranslate()
+  const [menuCard, setMenuCard] = useState<HTMLElement | null>(null)
   const envSummary = environmentNames?.join(' ') ?? stringifyAgentDefaultEnvDraft(envOverride)
   const { rowRef, panelRef, permissionRef, openPermission, toggleOpen } =
     useAgentCatalogRowExpansion(cmdOpen, setCmdOpen)
@@ -237,7 +239,20 @@ export function AgentCatalogRow({
               }
             )}
           />
-          <DropdownMenu modal={false}>
+          <DropdownMenu
+            modal={false}
+            onOpenChange={(open) => {
+              if (open) {
+                const list = rowRef.current?.closest<HTMLElement>('[data-settings-scroll-list]')
+                // Short lists need room outside the card to show both actions.
+                setMenuCard(
+                  list && list.scrollHeight > list.clientHeight
+                    ? list.closest<HTMLElement>('[data-settings-group-card]')
+                    : null
+                )
+              }
+            }}
+          >
             <DropdownMenuTrigger asChild>
               <Button
                 type="button"
@@ -251,7 +266,12 @@ export function AgentCatalogRow({
                 <MoreHorizontal className="size-3.5" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-44">
+            <DropdownMenuContent
+              align="end"
+              className="min-w-44"
+              portalContainer={menuCard ?? undefined}
+              collisionBoundary={menuCard ?? undefined}
+            >
               <DropdownMenuItem
                 disabled={!isSavedDefault && !(isDetected && isEnabled)}
                 onSelect={() => onSetDefault(!isSavedDefault)}
