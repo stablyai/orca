@@ -26,6 +26,7 @@ export function installLocalHookRootEvidence(server: AgentHookServer): LocalPtyI
   })
   if (process.platform !== 'win32') {
     const resolveRoot = createLocalHookPaneRootResolver(readInventory)
+    const tmuxRoot = createLocalHookPaneRootResolver(readInventory, true)
     // Root evidence and tmux host probes share one process-read budget; hook admission goes first.
     const slots = createHookProcessReadSlots()
     const gate = hookProcessReadGate(slots, undefined, 1)
@@ -34,7 +35,7 @@ export function installLocalHookRootEvidence(server: AgentHookServer): LocalPtyI
       (request) =>
         readPaneTmuxHost(
           {
-            resolveRoot,
+            resolveRoot: tmuxRoot,
             readProcesses: (pids) => readSelectedRows(pids, gate).catch(() => []),
             readTerminal: (tty) => readTerminalRows(tty, gate).catch(() => [])
           },

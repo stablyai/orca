@@ -10,36 +10,31 @@ type InventoryOptions = {
 /** A pane's row in the owning provider's authenticated inventory, re-checked after the read. */
 export type LocalPtyInventoryReader = (
   paneKey: string,
-  options?: { bySpawnPaneKey?: boolean }
+  options?: { bySpawnPaneKey?: boolean; indexed?: boolean }
 ) => Promise<PtyProcessInfo | null>
 
-/** A snapshot indexed as far as lookups have scanned it: no lookup visits more rows than a plain
- *  search would, and rows already passed are never scanned again. */
 type InventoryIndex = {
-  rows: PtyProcessInfo[]
-  scanned: number
   byId: Map<string, PtyProcessInfo>
   bySpawnPaneKey: Map<string, PtyProcessInfo[]>
 }
 
-function scanInventory(index: InventoryIndex, foundId?: string): void {
-  while (index.scanned < index.rows.length) {
-    const row = index.rows[index.scanned++]
-    if (!index.byId.has(row.id)) {
-      index.byId.set(row.id, row)
+function indexInventory(rows: PtyProcessInfo[]): InventoryIndex {
+  const byId = new Map<string, PtyProcessInfo>()
+  const bySpawnPaneKey = new Map<string, PtyProcessInfo[]>()
+  for (const row of rows) {
+    if (!byId.has(row.id)) {
+      byId.set(row.id, row)
     }
     if (row.paneKey !== undefined) {
-      const spawned = index.bySpawnPaneKey.get(row.paneKey)
+      const spawned = bySpawnPaneKey.get(row.paneKey)
       if (spawned) {
         spawned.push(row)
       } else {
-        index.bySpawnPaneKey.set(row.paneKey, [row])
+        bySpawnPaneKey.set(row.paneKey, [row])
       }
     }
-    if (foundId !== undefined && row.id === foundId) {
-      return
-    }
   }
+  return { byId, bySpawnPaneKey }
 }
 
 /** Reuse the daemon's authenticated inventory; never resolve an SSH pane from the client. */
@@ -67,31 +62,30 @@ export function createLocalPtyInventoryReader(options: InventoryOptions): LocalP
     }
     return pending
   }
-  const indexes = new WeakMap<PtyProcessInfo[], InventoryIndex>()
   const find = (rows: PtyProcessInfo[], paneKey: string, id: string | undefined | null) => {
+    // Before a restored pane reattaches, the provider's own spawn record still names its PTY.
+    const spawned = id ? [] : rows.filter((entry) => entry.paneKey === paneKey)
+    return (id ? rows.find((entry) => entry.id === id) : spawned.length === 1 && spawned[0]) || null
+  }
+  // Sleep capture resolves every pane of a workspace against one snapshot; only it indexes.
+  const indexes = new WeakMap<PtyProcessInfo[], InventoryIndex>()
+  const findIndexed = (rows: PtyProcessInfo[], paneKey: string, id: string | undefined | null) => {
     let index = indexes.get(rows)
     if (!index) {
-      index = { rows, scanned: 0, byId: new Map(), bySpawnPaneKey: new Map() }
+      index = indexInventory(rows)
       indexes.set(rows, index)
     }
-    if (id) {
-      if (!index.byId.has(id)) {
-        scanInventory(index, id)
-      }
-      return index.byId.get(id) ?? null
-    }
-    // Before a restored pane reattaches, the provider's own spawn record still names its PTY.
-    scanInventory(index)
-    const spawned = index.bySpawnPaneKey.get(paneKey)
-    return spawned?.length === 1 ? spawned[0] : null
+    const spawned = id ? undefined : index.bySpawnPaneKey.get(paneKey)
+    return (id ? index.byId.get(id) : spawned?.length === 1 && spawned[0]) || null
   }
   return async (paneKey, lookup) => {
+    const lookUp = lookup?.indexed ? findIndexed : find
     const id = options.getPtyId(paneKey)
     if (!id && !lookup?.bySpawnPaneKey) {
       return null
     }
     const cachedAt = capturedAt
-    let row = find(await read(), paneKey, id)
+    let row = lookUp(await read(), paneKey, id)
     // A snapshot taken before this PTY spawned (or reported its guest root) is no answer for it.
     if (
       (!row || (row.wslDistro && !row.wslGuestRoot)) &&
@@ -100,7 +94,7 @@ export function createLocalPtyInventoryReader(options: InventoryOptions): LocalP
       cachedAt !== forcedAt
     ) {
       capturedAt = -Infinity
-      row = find(await read(), paneKey, id)
+      row = lookUp(await read(), paneKey, id)
       forcedAt = capturedAt
     }
     return row && options.getPtyId(paneKey) === id ? row : null
@@ -134,10 +128,11 @@ export function createLocalTmuxManagedPtyResolver(
 /** The root a hook must descend from to own a pane; a provider without root identity (an older
  *  daemon's retained PTY) keeps the legacy path. */
 export function createLocalHookPaneRootResolver(
-  readInventory: LocalPtyInventoryReader
+  readInventory: LocalPtyInventoryReader,
+  indexed = false
 ): HookPaneProcessIo['resolveRoot'] {
   return async (paneKey, worktreeId) => {
-    const row = await readInventory(paneKey, { bySpawnPaneKey: true }).catch(() => null)
+    const row = await readInventory(paneKey, { bySpawnPaneKey: true, indexed }).catch(() => null)
     if (!row || row.wslDistro || (worktreeId && row.worktreeId && row.worktreeId !== worktreeId)) {
       return null
     }
