@@ -27,7 +27,7 @@ export function captureCodexAccountRestartConnection(session: ConnectPanePtySess
   if (!request?.condition || !['claimed', 'preparing', 'dispatched'].includes(request.phase)) {
     return false
   }
-  const { condition, startup, resultPtyId } = request
+  const { condition, startup, resultPtyId, resultIncarnationId } = request
   let error: unknown
   let deferred = false
   const captureFailure = (failure: unknown): void => {
@@ -69,7 +69,11 @@ export function captureCodexAccountRestartConnection(session: ConnectPanePtySess
           }
         : {}),
       ...(resultPtyId
-        ? { sessionId: resultPtyId, attachOnlyView: true as const }
+        ? {
+            sessionId: resultPtyId,
+            expectedIncarnationId: resultIncarnationId,
+            attachOnlyView: true as const
+          }
         : { accountRestart: condition }),
       isAccountRestartCurrent: () =>
         isCurrent() && Boolean(currentCodexAccountRestart(useAppStore.getState(), token)),

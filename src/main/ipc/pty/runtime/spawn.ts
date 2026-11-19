@@ -1,3 +1,4 @@
+import { toSshExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { beginAccountRestartOperation } from '../pane/account-restart-owner'
 import { readAccountRestartCondition } from '../../../../shared/terminal/pty/lifecycle/account-restart-contract'
 import { stopAndWaitPtyFromRuntimeController } from './kill'
@@ -67,7 +68,7 @@ export async function spawnPtyFromRuntimeController(
               ptyId: condition.expected.kind === 'endpoint' ? condition.expected.ptyId : '',
               pane: {
                 ...condition.pane,
-                hostId: args.connectionId ? `ssh:${args.connectionId}` : undefined
+                hostId: args.connectionId ? toSshExecutionHostId(args.connectionId) : undefined
               }
             }
           }

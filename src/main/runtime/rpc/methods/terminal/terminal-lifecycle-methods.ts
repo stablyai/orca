@@ -91,7 +91,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
           pairedDeviceId ?? clientId ?? 'local',
           params.worktree,
           params.accountRestart
-            ? `account-restart:${params.accountRestart.requestId}:${params.accountRestart.attemptId}`
+            ? `account-restart:${JSON.stringify([params.accountRestart.requestId, params.accountRestart.attemptId])}`
             : params.clientMutationId,
           params.reconcileExisting === true,
           (canonicalWorktreeSelector, preAllocatedHandle) =>
