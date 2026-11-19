@@ -400,11 +400,30 @@ function uncoveredCardPair(page) {
   })
 }
 
+// Why no pair was found: how many cards are on screen, and what sits over the first one's centre.
+function cardBlocker(page) {
+  return page.evaluate(() => {
+    const cards = [...document.querySelectorAll('[data-worktree-id]')].filter((card) => {
+      const rect = card.getBoundingClientRect()
+      return rect.height > 0 && rect.top >= 0 && rect.bottom <= innerHeight
+    })
+    const box = cards[0]?.getBoundingClientRect()
+    const hit = box
+      ? document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)
+      : null
+    const over = hit
+      ? `${hit.tagName.toLowerCase()}.${String(hit.className).split(' ')[0]}`
+      : 'nothing'
+    return `${cards.length} cards on screen, first covered by ${over}`
+  })
+}
+
 async function switchWorkspaces({ page, windowMs }) {
   await dismissOverlays(page)
   let pair = await uncoveredCardPair(page)
   if (pair.length < 2) {
-    return { note: 'fewer than two visible workspace cards', undriven: 'no two clickable cards' }
+    const why = await cardBlocker(page)
+    return { note: `no two clickable cards: ${why}`, undriven: `no two clickable cards (${why})` }
   }
   const started = Date.now()
   const deadline = started + windowMs
