@@ -68,33 +68,54 @@ const SQL_CLOSERS: Readonly<Record<string, string>> = {
   '/*': '*/'
 }
 
-/** Whether each character of `sql` is code, as opposed to a literal, quoted name or comment. */
-function sqlCodeMask(sql: string): boolean[] {
-  const code = Array.from({ length: sql.length }, () => true)
-  for (let i = 0; i < sql.length; i++) {
+/** SQLite's whitespace; other Unicode spaces can be part of an unquoted name. */
+const SQL_WHITESPACE = /[ \t\n\f\r]/
+
+/** `sql` with comments blanked to spaces, and whether each character is code rather than a literal or quoted name. */
+function sqlCode(sql: string): { text: string; code: boolean[] } {
+  let text = ''
+  const code: boolean[] = []
+  for (let i = 0; i < sql.length;) {
     const opener = SQL_CLOSERS[sql.slice(i, i + 2)] ? sql.slice(i, i + 2) : sql[i]
     const closer = SQL_CLOSERS[opener]
-    if (closer) {
-      const found = sql.indexOf(closer, i + opener.length)
-      const end = found === -1 ? sql.length : found + closer.length
-      code.fill(false, i, end)
-      i = end - 1
+    if (!closer) {
+      text += sql[i]
+      code.push(true)
+      i++
+      continue
     }
+    const found = sql.indexOf(closer, i + opener.length)
+    const end = found === -1 ? sql.length : found + closer.length
+    const comment = opener === '--' || opener === '/*'
+    for (let j = i; j < end; j++) {
+      text += comment ? ' ' : sql[j]
+      code.push(comment)
+    }
+    i = end
   }
-  return code
+  return { text, code }
 }
 
-/** Collapse whitespace in SQL code; literals, quoted names and comments stay as written. */
+/** Collapse whitespace and drop comments in SQL code; literals and quoted names stay as written. */
 export function normalizeSql(sql: string): string {
-  const code = sqlCodeMask(sql)
+  const { text, code } = sqlCode(sql)
   let out = ''
-  for (let i = 0; i < sql.length; i++) {
-    out += code[i] && /\s/.test(sql[i]) ? (out.endsWith(' ') ? '' : ' ') : sql[i]
+  for (let i = 0; i < text.length; i++) {
+    out += code[i] && SQL_WHITESPACE.test(text[i]) ? (out.endsWith(' ') ? '' : ' ') : text[i]
   }
   return out.trim()
 }
 
-/** Every CHECK (...) clause in a CREATE TABLE; parentheses inside literals and comments don't count. */
+/** A column name as SQLite reports it: quotes removed and doubled quotes undone. */
+function unquoteSqlName(name: string): string {
+  const quote = name[0]
+  if (quote === '"' || quote === '`') {
+    return name.slice(1, -1).replaceAll(quote + quote, quote)
+  }
+  return quote === '[' ? name.slice(1, -1) : name
+}
+
+/** Every CHECK (...) clause in a CREATE TABLE; comments, and parentheses inside literals, don't count. */
 export function tableCheckClauses(sql: string): string[] {
   return parenthesizedClauses(sql, /\bCHECK\s*\(/gi)
     .map(([, clause]) => clause)
@@ -106,9 +127,9 @@ function generatedColumnExpressions(sql: string): Map<string, string> {
   return new Map(
     parenthesizedClauses(
       sql,
-      /("[^"]*"|`[^`]*`|\[[^\]]*\]|\w+)(?:\(\s*[+-]?\d+\s*(?:,\s*[+-]?\d+\s*)?\)|[^,(])*?\bAS\s*\(/gi,
+      /("(?:[^"]|"")*"|`(?:[^`]|``)*`|\[[^\]]*\]|\w+)(?:\([^()]*\)|[^,(])*?\bAS\s*\(/gi,
       true
-    ).map(([name, clause]) => [/^["`[]/.test(name) ? name.slice(1, -1) : name, clause])
+    ).map(([name, clause]) => [unquoteSqlName(name), clause])
   )
 }
 
@@ -132,20 +153,20 @@ function parenthesizedClauses(
   expressionOnly = false
 ): [string, string][] {
   const clauses: [string, string][] = []
-  const code = sqlCodeMask(sql)
-  for (let match = pattern.exec(sql); match; match = pattern.exec(sql)) {
+  const { text, code } = sqlCode(sql)
+  for (let match = pattern.exec(text); match; match = pattern.exec(text)) {
     if (!code[match.index + match[0].length - 1]) {
       continue
     }
     let depth = 1
     let end = match.index + match[0].length
-    for (; end < sql.length && depth > 0; end++) {
+    for (; end < text.length && depth > 0; end++) {
       if (code[end]) {
-        depth += sql[end] === '(' ? 1 : sql[end] === ')' ? -1 : 0
+        depth += text[end] === '(' ? 1 : text[end] === ')' ? -1 : 0
       }
     }
     const start = expressionOnly ? match.index + match[0].length - 1 : match.index
-    clauses.push([match[1] ?? '', normalizeSql(sql.slice(start, end))])
+    clauses.push([match[1] ?? '', normalizeSql(text.slice(start, end))])
   }
   return clauses
 }
