@@ -34,8 +34,8 @@ import {
 const FREE_SPACE_MARGIN_BYTES = 256 * 1024 * 1024
 const PROGRESS_INTERVAL_MS = 250
 // Unpacked files aren't listed up front; packages unpack to about three times their download.
-const TAR_UNPACKED_RATIO = 3
-const TAR_EXTRACT_TIMEOUT_MS = 10 * 60_000
+const UNPACKED_RATIO = 3
+const EXTRACT_TIMEOUT_MS = 10 * 60_000
 
 export type RuntimeReleaseInstall = {
   agent: string
@@ -87,12 +87,11 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
     console.warn(`[managed-runtime] ${agent} free space unknown; not checked:`, error)
   })
   // A single-file release is renamed into place, so it never needs room for two copies.
-  const needed =
-    pin.format === 'tar.gz'
-      ? pin.archiveBytes * (1 + TAR_UNPACKED_RATIO)
-      : pin.format === 'file'
-        ? pin.archiveBytes
-        : pin.members.reduce((sum, m) => sum + m.bytes, pin.archiveBytes)
+  const needed = !('members' in pin)
+    ? pin.archiveBytes * (1 + UNPACKED_RATIO)
+    : pin.format === 'file'
+      ? pin.archiveBytes
+      : pin.members.reduce((sum, m) => sum + m.bytes, pin.archiveBytes)
   if (space && space.bavail * space.bsize < needed + FREE_SPACE_MARGIN_BYTES) {
     const megabytes = Math.ceil((needed + FREE_SPACE_MARGIN_BYTES) / 1024 ** 2)
     throw new Error(`${label} needs ${megabytes} MB of free disk space to install.`)
@@ -128,8 +127,8 @@ export async function installRuntimeRelease(input: RuntimeReleaseInstall): Promi
       throw new Error(downloadFailureMessage(label, error), { cause: error })
     })
     publish({ phase: 'extracting', downloadedBytes: pin.archiveBytes })
-    await (pin.format === 'tar.gz'
-      ? extractWholeTarGz(archive, release, label, signal)
+    await (!('members' in pin)
+      ? extractWholeArchive(archive, release, label, signal)
       : pin.format === 'file'
         ? rename(archive, join(release, onlyMember(pin.members).path))
         : extractPinnedZipMembers(archive, release, pin.members, label, signal))
@@ -158,7 +157,7 @@ function onlyMember(members: readonly ManagedRuntimeMember[]): ManagedRuntimeMem
   return member
 }
 
-async function extractWholeTarGz(
+async function extractWholeArchive(
   archive: string,
   release: string,
   label: string,
@@ -169,7 +168,7 @@ async function extractWholeTarGz(
     archive,
     release,
     signal,
-    TAR_EXTRACT_TIMEOUT_MS
+    EXTRACT_TIMEOUT_MS
   )
   signal.throwIfAborted()
   if (result.code !== 0 || result.timedOut) {

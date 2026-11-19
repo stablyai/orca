@@ -22,7 +22,7 @@ export type ManagedRuntimePin = {
     }
   | {
       /** Only the archive's hash is published; it vouches for every file, and these must be executable. */
-      format: 'tar.gz'
+      format: 'tar.gz' | 'zip'
       executables: readonly string[]
     }
 )

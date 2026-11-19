@@ -12,10 +12,17 @@ import {
   codexManagedExecutable,
   codexManagedTarget
 } from '../codex/managed-runtime/codex-managed-runtime'
+import { acpRegistryManagedRuntime } from '../acp/registry/acp-registry-managed-runtime'
+import {
+  CURSOR_MINIMUM_VERSIONS,
+  OPENCODE2_MINIMUM_VERSIONS,
+  OPENCODE_MINIMUM_VERSIONS
+} from '../acp/launch/acp-minimum-versions'
 import { readInheritedPath } from '../ipc/pty/host-env/path'
 import { resolvePathEnvKey } from '../pty/environment/windows-path-segment-merge'
 
-export const MANAGED_AGENT_CLI_IDS = ['claude', 'codex'] as const
+// npm/uvx-only and unlisted agents would join here once a runtime installs their distribution.
+export const MANAGED_AGENT_CLI_IDS = ['claude', 'codex', 'opencode', 'opencode2', 'cursor'] as const
 export type ManagedAgentCliId = (typeof MANAGED_AGENT_CLI_IDS)[number]
 
 type ManagedAgentCli = {
@@ -24,6 +31,9 @@ type ManagedAgentCli = {
   available: () => boolean
   executable: (folder: string) => string
 }
+
+const openCodeBinary = (platform: NodeJS.Platform): string =>
+  platform === 'win32' ? 'opencode.exe' : 'opencode'
 
 const MANAGED_AGENT_CLIS: Record<ManagedAgentCliId, ManagedAgentCli> = {
   claude: {
@@ -35,7 +45,30 @@ const MANAGED_AGENT_CLIS: Record<ManagedAgentCliId, ManagedAgentCli> = {
     runtime: CODEX_MANAGED_RUNTIME,
     available: () => codexManagedTarget() !== null,
     executable: codexManagedExecutable
-  }
+  },
+  opencode: acpRegistryManagedRuntime({
+    label: 'OpenCode',
+    agent: 'opencode',
+    registryId: 'opencode',
+    command: openCodeBinary,
+    minimumVersions: OPENCODE_MINIMUM_VERSIONS
+  }),
+  // The 2.x listing ships the same `opencode` binary that Orca's `opencode2` alias names.
+  opencode2: acpRegistryManagedRuntime({
+    label: 'OpenCode 2',
+    agent: 'opencode2',
+    registryId: 'opencode-v2',
+    command: openCodeBinary,
+    minimumVersions: OPENCODE2_MINIMUM_VERSIONS
+  }),
+  cursor: acpRegistryManagedRuntime({
+    label: 'Cursor',
+    agent: 'cursor',
+    registryId: 'cursor',
+    command: (platform) =>
+      platform === 'win32' ? 'dist-package/cursor-agent.cmd' : 'dist-package/cursor-agent',
+    minimumVersions: CURSOR_MINIMUM_VERSIONS
+  })
 }
 
 export function isManagedAgentCli(agent: string): agent is ManagedAgentCliId {
