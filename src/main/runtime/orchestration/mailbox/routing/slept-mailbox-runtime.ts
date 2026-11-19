@@ -29,6 +29,7 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
     wake: async (record) => {
       const stop = new AbortController()
       const confirmed = this.mailWakeInvocations.wait(record, stop.signal)
+      let claimedId: string | undefined
       let timeout: ReturnType<typeof setTimeout> | undefined
       try {
         const accepted = await queueTerminalWorkspaceCommand(this, `id:${record.worktreeId}`, {
@@ -51,6 +52,7 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
             if (!claimed) {
               return false
             }
+            claimedId = claimed.mailWake?.id
             const resumed =
               (await Promise.resolve(
                 this.notifier?.resumeSleepingAgents?.(
@@ -73,7 +75,17 @@ export abstract class RuntimeSleptMailboxWakes extends RuntimeMailWakeAdmission 
         this.watchMailWakeInvocations(record.paneKey)
         timeout = setTimeout(() => stop.abort(), 30_000)
         void this.probeMailWakeForeground(record.paneKey, stop.signal)
-        return await confirmed
+        const woke = await confirmed
+        const attempt = this.mailWakeAttempts.get(record.paneKey)
+        // A window that answered but never launched under this attempt leaves no process to wait for.
+        if (
+          !woke &&
+          attempt?.mailWake?.id === claimedId &&
+          !this.mailWakeAttempts.stampLaunch(attempt).mailWake?.attempt
+        ) {
+          this.settleMailWakeAttempt(attempt)
+        }
+        return woke
       } finally {
         clearTimeout(timeout)
         stop.abort()
