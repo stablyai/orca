@@ -1,28 +1,115 @@
+import { stat } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { posix, win32 } from 'node:path'
 import { runProcess } from '@orca/process-host'
+import { extractExecutableToken } from '../../shared/agent-launch/installation/managed-agent-command-token'
 import {
   isZCodeMissingTuiOutput,
   type ZCodeInteractiveCapability
 } from '../../shared/agent-launch/installation/zcode-missing-tui'
+import { resolveCliCommandAsync } from '../../shared/shell/command-resolution/node-cli-command-async-resolution'
 
 /** Probe before opening a pane to avoid racing fast startup failure. version/doctor never load TUI; no-TTY launch distinguishes missing @zcode/tui from loaded UI rejecting a terminal. npm resolves the package, SEA embeds assets, bundled desktop lacks both. */
 export type { ZCodeInteractiveCapability }
 
-// Measured answers arrive under a second; timeouts mean unknown, never proven missing TUI.
-const PROBE_TIMEOUT_MS = 6_000
-
-let cached: ZCodeInteractiveCapability | undefined
-let inFlight: Promise<ZCodeInteractiveCapability> | undefined
-
-export function _resetZCodeInteractiveCapabilityForTests(): void {
-  cached = undefined
-  inFlight = undefined
+export type ZCodeInteractiveCapabilityOptions = {
+  env?: NodeJS.ProcessEnv
+  homePath?: string
+  platform?: NodeJS.Platform
 }
 
-async function probe(command: string): Promise<ZCodeInteractiveCapability> {
+// Measured answers arrive under a second; timeouts mean unknown, never proven missing TUI.
+const PROBE_TIMEOUT_MS = 6_000
+const WINDOWS_EXECUTABLE_EXTENSION_RE = /\.(cmd|bat|exe|com)$/i
+
+const cached = new Map<string, ZCodeInteractiveCapability>()
+const inFlight = new Map<string, Promise<ZCodeInteractiveCapability>>()
+
+export function _resetZCodeInteractiveCapabilityForTests(): void {
+  cached.clear()
+  inFlight.clear()
+}
+
+function readPathEnv(env: NodeJS.ProcessEnv, platform: NodeJS.Platform): string | null {
+  if (platform !== 'win32') {
+    return env.PATH ?? null
+  }
+  const direct = env.PATH ?? env.Path
+  if (direct !== undefined) {
+    return direct
+  }
+  for (const [key, value] of Object.entries(env)) {
+    if (key.toLowerCase() === 'path' && value !== undefined) {
+      return value
+    }
+  }
+  return null
+}
+
+async function isExistingFile(candidate: string): Promise<boolean> {
+  try {
+    return (await stat(candidate)).isFile()
+  } catch {
+    return false
+  }
+}
+
+/** Extract the executable from Settings → Agents `agentCmdOverrides.zcode`, defaulting to `zcode`. */
+export function resolveZCodeCommandOverride(
+  override: string | undefined,
+  platform: NodeJS.Platform = process.platform
+): string {
+  // PowerShell needs `& "C:\path with spaces\zcode.cmd"` for quoted paths; strip the call operator.
+  const input = platform === 'win32' ? override?.trim().replace(/^&\s+/, '') : override
+  const token = extractExecutableToken(input, { platform })
+  return token && !/[\0\r\n]/.test(token) ? token : 'zcode'
+}
+
+/** Resolve bare names through PATH and standard CLI install dirs so Windows `.cmd` shims keep their extension for process-host's `shell: false` spawn. Returns null when no file exists so missing `.cmd` paths cannot spawn `cmd.exe` and be misclassified as interactive. */
+export async function resolveZCodeExecutable(
+  command = 'zcode',
+  options: ZCodeInteractiveCapabilityOptions = {}
+): Promise<string | null> {
+  const platform = options.platform ?? process.platform
+  const env = options.env ?? process.env
+  const homePath = options.homePath ?? homedir()
+  const raw = command.trim() || 'zcode'
+  const expanded =
+    raw.startsWith('~/') || (platform === 'win32' && raw.startsWith('~\\'))
+      ? (platform === 'win32' ? win32 : posix).join(homePath, raw.slice(2))
+      : raw
+  const hasSeparator = expanded.includes('/') || (platform === 'win32' && expanded.includes('\\'))
+  if (!hasSeparator) {
+    const resolved = await resolveCliCommandAsync(expanded, {
+      pathEnv: readPathEnv(env, platform),
+      homePath,
+      platform
+    })
+    const resolvedHasSeparator =
+      resolved.includes('/') || (platform === 'win32' && resolved.includes('\\'))
+    return resolvedHasSeparator ? resolved : null
+  }
+  if (platform === 'win32' && !WINDOWS_EXECUTABLE_EXTENSION_RE.test(expanded)) {
+    // Explicit Windows paths without an extension should prefer `.cmd`/`.exe`/`.bat` shims over sibling POSIX scripts (e.g. npm's `zcode` next to `zcode.cmd`).
+    for (const extension of ['.cmd', '.exe', '.bat']) {
+      const candidate = `${expanded}${extension}`
+      if (await isExistingFile(candidate)) {
+        return candidate
+      }
+    }
+  }
+  return (await isExistingFile(expanded)) ? expanded : null
+}
+
+async function probe(
+  program: string,
+  env?: NodeJS.ProcessEnv
+): Promise<ZCodeInteractiveCapability> {
   try {
     const result = await runProcess({
-      program: command,
+      program,
       args: [],
+      ...(env ? { env } : {}),
       // Pipe explicit EOF so capable builds reject missing TTY instead of taking the probe interactive.
       input: '',
       timeoutMs: PROBE_TIMEOUT_MS
@@ -39,20 +126,32 @@ async function probe(command: string): Promise<ZCodeInteractiveCapability> {
   }
 }
 
-/** Cache definitive capability for this process; transient unknown verdicts may retry. */
-export function readZCodeInteractiveCapability(
-  command = 'zcode'
+/** Cache definitive capability per resolved executable; transient unknown verdicts may retry. */
+export async function readZCodeInteractiveCapability(
+  command = 'zcode',
+  options: ZCodeInteractiveCapabilityOptions = {}
 ): Promise<ZCodeInteractiveCapability> {
-  if (cached !== undefined) {
-    return Promise.resolve(cached)
+  const platform = options.platform ?? process.platform
+  const program = await resolveZCodeExecutable(command, options)
+  if (!program) {
+    return 'unknown'
   }
-  inFlight ??= probe(command).then((verdict) => {
-    // Retry transient unknowns so temporary load cannot suppress the missing-TUI notice for the whole session.
-    if (verdict !== 'unknown') {
-      cached = verdict
-    }
-    inFlight = undefined
-    return verdict
-  })
-  return inFlight
+  const cacheKey = platform === 'win32' ? program.toLowerCase() : program
+  const existing = cached.get(cacheKey)
+  if (existing !== undefined) {
+    return existing
+  }
+  let pending = inFlight.get(cacheKey)
+  if (!pending) {
+    pending = probe(program, options.env).then((verdict) => {
+      // Retry transient unknowns so temporary load cannot suppress the missing-TUI notice for the whole session.
+      if (verdict !== 'unknown') {
+        cached.set(cacheKey, verdict)
+      }
+      inFlight.delete(cacheKey)
+      return verdict
+    })
+    inFlight.set(cacheKey, pending)
+  }
+  return pending
 }

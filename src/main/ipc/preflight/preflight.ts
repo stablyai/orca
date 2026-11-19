@@ -12,7 +12,10 @@ import type { PreflightStatus } from '../../preflight/agent-detection'
 import type { PreflightRuntimeContext } from './preflight-runtime-target'
 import type { RemoteWindowsTerminalCapabilities } from './preflight-remote-windows-terminal-capabilities'
 
-import { readZCodeInteractiveCapability } from '../../zcode/interactive-capability'
+import {
+  readZCodeInteractiveCapability,
+  resolveZCodeCommandOverride
+} from '../../zcode/interactive-capability'
 import { getPreflightWslTarget } from './preflight-runtime-target'
 import { runAsWslExecUserAct } from '../../wsl/discovery/wsl-background-exec-gate'
 import { deferRefusedPreflight } from './preflight-wsl-refusal-retry'
@@ -69,7 +72,9 @@ export function registerPreflightHandlers(store?: Pick<Store, 'getSettings'>): v
   )
 
   ipcMain.handle('preflight:zcodeInteractiveCapability', async () =>
-    readZCodeInteractiveCapability()
+    readZCodeInteractiveCapability(
+      resolveZCodeCommandOverride(store?.getSettings().agentCmdOverrides?.zcode)
+    )
   )
 
   ipcMain.handle(
