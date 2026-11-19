@@ -1,3 +1,4 @@
+import { DAEMON_SESSION_SCROLLBACK_ROWS } from '../../../daemon/sessions/daemon-session-scrollback-window'
 import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import { OrcaRuntimeWithCreatePtyHeadlessTerminalState } from './headless-terminal-state'
 import type {
@@ -195,12 +196,12 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     startGapJournal(recovery, this.getPtyOutputSequence(ptyId))
     // The snapshot's seq is mapped through the offset as it lands; one that moves before the repaint cannot place it.
     const revision = this.providerSequenceAnchorRevisions.get(ptyId)
-    // Screen only: a storm repeats this, and history readers go to the provider instead.
+    // Seed the live window: real history the daemon holds in memory.
     // Its own capture, shared with no reader: cancelling it on timeout touches nothing else.
     const capture = new AbortController()
     const pending = this.captureProviderTerminalBuffer(
       ptyId,
-      { scrollbackRows: 0, signal: capture.signal, recovery: true },
+      { scrollbackRows: DAEMON_SESSION_SCROLLBACK_ROWS, signal: capture.signal, recovery: true },
       this.getPtyLifecycleGeneration(ptyId)
     )
     const snapshot = await withTimeout(pending, GAP_RESEED_CAPTURE_TIMEOUT_MS, null)
@@ -285,7 +286,7 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
       if (!this.isGapRecovering(ptyId, state, recovery) || recovery.gaps !== gaps) {
         return 'failed'
       }
-      this.finishGapRecovery(ptyId, state)
+      this.finishGapRecovery(ptyId, state, snapshot)
       return 'rebuilt'
     })
     state.writeChain = step.then(
@@ -295,10 +296,14 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
     return step
   }
 
-  private finishGapRecovery(ptyId: string, state: RuntimeHeadlessTerminal): void {
+  private finishGapRecovery(
+    ptyId: string,
+    state: RuntimeHeadlessTerminal,
+    snapshot: PtyProviderBufferSnapshot
+  ): void {
     const contextChangePending = state.gapReseed?.contextChangePending === true
     state.gapReseed = undefined
-    state.historyFromProvider = true
+    state.recoveredHistoryCut ||= (snapshot.scrollbackLines ?? 0) >= DAEMON_SESSION_SCROLLBACK_ROWS
     this.headlessHydrationState.set(ptyId, 'done')
     this.providerSnapshotPreferredPtys.delete(ptyId)
     // No new text: observers confirm candidates that arrived while untrusted, with their own arrival times.

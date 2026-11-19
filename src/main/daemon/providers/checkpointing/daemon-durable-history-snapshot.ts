@@ -25,7 +25,6 @@ export async function buildDurableCheckpointSnapshot(opts: {
   isFirstTake: boolean
   /** The hosting daemon's, which recorded pendingRecords; absent or null means xterm's. */
   resizeModel?: string | null
-  onIncomplete?: () => void
 }): Promise<TerminalSnapshot> {
   const { liveSnapshot, restoreInfo, pendingRecords } = opts
   if (!restoreInfo && pendingRecords.length === 0) {
@@ -57,17 +56,14 @@ export async function buildDurableCheckpointSnapshot(opts: {
         : restoreSegments(restoreInfo)
       for (const segment of segments) {
         if (!(await replay.write(segment))) {
-          opts.onIncomplete?.()
           return liveSnapshot
         }
       }
     }
     if (!(await replayPendingRecords(replay, pendingRecords))) {
-      opts.onIncomplete?.()
       return liveSnapshot
     }
     if (!isValidTerminalHistorySize(liveSnapshot.cols, liveSnapshot.rows)) {
-      opts.onIncomplete?.()
       return liveSnapshot
     }
     // Bottom-relative row counts require both buffers to wrap on the same grid.
@@ -81,7 +77,6 @@ export async function buildDurableCheckpointSnapshot(opts: {
     }
   } catch (error) {
     console.warn('[history] durable snapshot rebuild failed:', error)
-    opts.onIncomplete?.()
     return liveSnapshot
   } finally {
     emulator.dispose()
@@ -110,8 +105,6 @@ function diskCheckpointWithLiveIdentity(
   } = info
   return {
     ...disk,
-    historyRevision: live.historyRevision,
-    sessionIncarnationId: live.sessionIncarnationId,
     ...(live.lastTitle ? { lastTitle: live.lastTitle } : {}),
     // Normal-screen snapshotAnsi already includes scrollback.
     scrollbackAnsi: info.modes.alternateScreen ? info.scrollbackAnsi : '',
@@ -131,9 +124,6 @@ export async function boundSnapshot(
   try {
     return {
       ...emulator.getSnapshot(),
-      historyRevision: snapshot.historyRevision,
-      sessionIncarnationId: snapshot.sessionIncarnationId,
-      lastTitle: snapshot.lastTitle,
       ...(snapshot.terminalOwner ? { terminalOwner: snapshot.terminalOwner } : {}),
       ...(snapshot.outputSequence !== undefined ? { outputSequence: snapshot.outputSequence } : {})
     }

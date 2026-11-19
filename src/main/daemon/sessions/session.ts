@@ -220,8 +220,7 @@ export class Session extends SessionProcessInspection {
 
   getSnapshot(opts: { scrollbackRows?: number } = {}): TerminalSnapshot | null {
     this.startupIngress.snapshotBarrier()
-    const snapshot = this.output.getSnapshot(opts)
-    return snapshot ? { ...snapshot, sessionIncarnationId: this.incarnationId } : null
+    return this.output.getSnapshot(opts)
   }
 
   getPartialEscapeTailAnsi(): string {

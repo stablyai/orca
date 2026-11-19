@@ -1,3 +1,4 @@
+import { DAEMON_SESSION_SCROLLBACK_ROWS } from '../../../daemon/sessions/daemon-session-scrollback-window'
 import { OrcaRuntimeWithHeadlessGapReseed } from './headless-gap-reseed'
 import type { TerminalOscLinkRange } from '../../../../shared/terminal/links/terminal-osc-link-ranges'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
@@ -38,13 +39,6 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
     if (headless?.gapReseed) {
       // The provider already declined above, and the hidden renderer missed the dropped output.
       return null
-    }
-    if (headless?.historyFromProvider && (opts.scrollbackRows ?? 0) > 0) {
-      // A model reseeded screen-only after dropped output lacks the history the provider kept.
-      const providerSnapshot = await this.serializeProviderTerminalBuffer(ptyId, opts)
-      if (providerSnapshot) {
-        return providerSnapshot
-      }
     }
     const headlessSnapshot = await this.serializeHeadlessTerminalBuffer(ptyId, opts)
     if (headlessSnapshot) {
@@ -147,6 +141,10 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
     return (await this.awaitProviderTerminalBuffer(ptyId, opts, wait)).snapshot
   }
 
+  protected providerHistoryNeedsLiveWindow(ptyId: string): boolean {
+    return this.ptyGapCounts.has(ptyId) || Boolean(this.headlessTerminals.get(ptyId)?.gapReseed)
+  }
+
   /** `late` is the capture still running when the bounded wait gave up, so a caller can act once it lands. */
   protected async awaitProviderTerminalBuffer(
     ptyId: string,
@@ -154,17 +152,28 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
     wait: { timeoutMs?: number; retireOnTimeout?: boolean } = {}
   ): Promise<ProviderTerminalBufferWait> {
     const generation = this.getPtyLifecycleGeneration(ptyId)
-    const scrollbackRows = Math.max(0, Math.floor(opts.scrollbackRows ?? 0))
+    const capped = this.providerHistoryNeedsLiveWindow(ptyId)
+    const requested = opts.scrollbackRows ?? (capped ? DAEMON_SESSION_SCROLLBACK_ROWS : Infinity)
+    const scrollbackRows = Math.max(
+      0,
+      Math.floor(capped ? Math.min(requested, DAEMON_SESSION_SCROLLBACK_ROWS) : requested)
+    )
+    const captureOptions = capped ? { ...opts, scrollbackRows } : opts
     let acquisition = this.providerBufferAcquisitionsByPtyId.get(ptyId)
-    if (acquisition?.generation === generation && acquisition.timedOut) {
+    if (
+      acquisition?.generation === generation &&
+      acquisition.timedOut &&
+      (!capped || acquisition.scrollbackRows <= DAEMON_SESSION_SCROLLBACK_ROWS)
+    ) {
       return { snapshot: null, late: acquisition.promise }
     }
     if (
       !acquisition ||
       acquisition.generation !== generation ||
-      acquisition.scrollbackRows < scrollbackRows
+      acquisition.scrollbackRows < scrollbackRows ||
+      (capped && acquisition.scrollbackRows > DAEMON_SESSION_SCROLLBACK_ROWS)
     ) {
-      const promise = this.captureProviderTerminalBuffer(ptyId, opts, generation)
+      const promise = this.captureProviderTerminalBuffer(ptyId, captureOptions, generation)
       acquisition = { generation, scrollbackRows, promise, timedOut: false }
       this.providerBufferAcquisitionsByPtyId.set(ptyId, acquisition)
       void promise.finally(() => {
@@ -184,6 +193,12 @@ export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState e
       wait.timeoutMs ?? AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
       { settled: false as const }
     )
+    if (
+      this.providerHistoryNeedsLiveWindow(ptyId) &&
+      acquisition.scrollbackRows > DAEMON_SESSION_SCROLLBACK_ROWS
+    ) {
+      return { snapshot: null, late: null }
+    }
     if (!result.settled) {
       if (wait.retireOnTimeout) {
         acquisition.timedOut = true

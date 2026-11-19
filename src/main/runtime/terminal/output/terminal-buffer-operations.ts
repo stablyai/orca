@@ -87,7 +87,6 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
   ): RuntimeHeadlessTerminal
   protected abstract applySeededAgentStatus(ptyId: string, title: string): void
 
-  /** A model reseeded screen-only after dropped output lacks the history the provider kept. */
   async serializeMainTerminalBuffer(
     ptyId: string,
     opts: { scrollbackRows?: number } = {}
@@ -106,10 +105,7 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
     pendingEscapeTailAnsi?: string
     terminalOwner?: 'shell'
   } | null> {
-    const wantsProvider =
-      this.headlessTerminals.get(ptyId)?.historyFromProvider && (opts.scrollbackRows ?? 0) > 0
-    const provider = wantsProvider ? await this.serializeProviderTerminalBuffer(ptyId, opts) : null
-    return provider ?? this.serializeHeadlessTerminalBuffer(ptyId, { ...opts, includeEmpty: true })
+    return this.serializeHeadlessTerminalBuffer(ptyId, { ...opts, includeEmpty: true })
   }
 
   async serializeHiddenOutputRecoveryBuffer(

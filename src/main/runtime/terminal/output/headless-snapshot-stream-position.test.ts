@@ -298,186 +298,189 @@ it('cancels a recovery capture the provider never answers before freeing its slo
   }
 })
 
-it("reads a rebuilt ConPTY terminal's history from the provider, which kept it", async () => {
-  const lines = Array.from({ length: 200 }, (_, index) => `line ${index + 1}`)
+function recoveredHistoryRuntime(historyRows: number) {
   const runtime = createRuntime()
+  const history = Array.from({ length: historyRows }, (_, index) => `h${index + 1}`)
+  const screen = Array.from({ length: 24 }, (_, index) => `s${index + 1}`)
+  let rebuilt = false
   runtime.setPtyController({
     write: () => true,
     kill: () => true,
     getForegroundProcess: async () => null,
     getSize: () => grid,
     serializeProviderBuffer: async (_ptyId, opts) => ({
-      data: opts?.scrollbackRows ? lines.join('\r\n') : '\x1b[H\x1b[2Jline 200',
+      data: rebuilt ? 'different provider rows' : screen.join('\r\n'),
+      scrollbackAnsi: !rebuilt && opts?.scrollbackRows ? `${history.join('\r\n')}\r\n` : '',
+      scrollbackLines: historyRows,
       ...grid,
       seq: 16,
       source: 'headless'
     })
   })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: OrcaRuntimeService inherits these protected methods with exactly these signatures.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: inherited protected runtime methods retain these signatures.
   const reads = runtime as unknown as {
     serializeHeadlessTerminalBuffer(ptyId: string): Promise<{ data: string } | null>
     withVisibleSnapshotFallback(
       ptyId: string,
       read: RuntimeTerminalRead,
-      opts: { limit?: number }
+      opts: { limit: number }
     ): Promise<RuntimeTerminalRead>
   }
-  markNativeWindowsConptyPty('pty-win')
-  try {
-    anchorStream(runtime, 'pty-win')
-    runtime.onPtyData('pty-win', 'stale\r\n', 1)
-    runtime.notePtyDataGap('pty-win', 9)
-    await vi.waitFor(async () => assert(await reads.serializeHeadlessTerminalBuffer('pty-win')))
-    const read = await reads.withVisibleSnapshotFallback(
-      'pty-win',
-      { handle: 'term', status: 'running', tail: ['line 200'], truncated: false, nextCursor: null },
-      { limit: 120 }
+  const ready = async () => {
+    anchorStream(runtime, 'pty-history')
+    runtime.onPtyData('pty-history', 'stale\r\n', 1)
+    runtime.notePtyDataGap('pty-history', 9)
+    await vi.waitFor(async () => assert(await reads.serializeHeadlessTerminalBuffer('pty-history')))
+    rebuilt = true
+  }
+  const read = () =>
+    reads.withVisibleSnapshotFallback(
+      'pty-history',
+      { handle: 'term', status: 'running', tail: ['stale'], truncated: false, nextCursor: null },
+      { limit: 2000 }
     )
-    expect(read.tail).toEqual(lines.slice(-120))
+  return { runtime, ready, read }
+}
+
+it('reads the seeded live history and later output locally after a history cut', async () => {
+  const { runtime, ready, read } = recoveredHistoryRuntime(1000)
+  markNativeWindowsConptyPty('pty-history')
+  try {
+    await ready()
+    runtime.onPtyData(
+      'pty-history',
+      `\r\n${Array.from({ length: 50 }, (_, index) => `p${index + 1}`).join('\r\n')}`,
+      2
+    )
+    const result = await read()
+    expect(result.tail).toEqual([
+      ...Array.from({ length: 1000 }, (_, index) => `h${index + 1}`),
+      ...Array.from({ length: 24 }, (_, index) => `s${index + 1}`),
+      ...Array.from({ length: 50 }, (_, index) => `p${index + 1}`)
+    ])
+    expect(result.limited).toBe(true)
   } finally {
-    clearNativeWindowsConptyPty('pty-win')
-    await runtime.onPtyExit('pty-win', 0)
+    clearNativeWindowsConptyPty('pty-history')
+    await runtime.onPtyExit('pty-history', 0)
   }
 })
 
-it.each([
-  {
-    limit: 1500,
-    available: 6000,
-    coverage: 'complete',
-    busy: false,
-    count: 1500,
-    first: 'line 4501',
-    limited: false
-  },
-  {
-    limit: 2000,
-    available: 6000,
-    coverage: 'complete',
-    busy: false,
-    count: 2000,
-    first: 'line 4001',
-    limited: false
-  },
-  {
-    limit: 5000,
-    available: 6000,
-    coverage: 'complete',
-    busy: false,
-    count: 2000,
-    first: 'line 4001',
-    limited: false
-  },
-  {
-    limit: 2000,
-    available: 1112,
-    coverage: 'complete',
-    busy: false,
-    count: 1112,
-    first: 'line 1',
-    limited: true
-  },
-  {
-    limit: 2000,
-    available: 1111,
-    coverage: 'complete',
-    busy: true,
-    count: 1111,
-    first: 'line 1',
-    limited: true
-  },
-  {
-    limit: 2000,
-    available: 1112,
-    coverage: 'limited',
-    busy: false,
-    count: 1112,
-    first: 'line 1',
-    limited: true
-  },
-  {
-    limit: 2000,
-    available: 6000,
-    coverage: 'limited',
-    busy: false,
-    count: 2000,
-    first: 'line 4001',
-    limited: false
-  },
-  {
-    limit: 2000,
-    available: 1112,
-    coverage: 'unavailable',
-    busy: false,
-    count: 1000,
-    first: 'line 113',
-    limited: true
+it('does not mark short complete recovered history limited', async () => {
+  const { runtime, ready, read } = recoveredHistoryRuntime(200)
+  markNativeWindowsConptyPty('pty-history')
+  try {
+    await ready()
+    const result = await read()
+    expect(result.tail).toEqual([
+      ...Array.from({ length: 200 }, (_, index) => `h${index + 1}`),
+      ...Array.from({ length: 24 }, (_, index) => `s${index + 1}`)
+    ])
+    expect(result.limited).toBe(false)
+  } finally {
+    clearNativeWindowsConptyPty('pty-history')
+    await runtime.onPtyExit('pty-history', 0)
   }
-])(
-  'reads recovered history with its own coverage ($limit, $coverage, busy=$busy, available=$available)',
-  async ({ limit, available, coverage, busy, count, first, limited }) => {
-    const lines = Array.from({ length: available }, (_, index) => `line ${index + 1}`)
-    const runtime = createRuntime()
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null,
-      getSize: () => grid,
-      serializeProviderBuffer: async (_ptyId, opts) => {
-        if ((opts?.scrollbackRows ?? 0) > 1000 && coverage === 'unavailable') {
-          return null
-        }
-        if (busy && opts?.scrollbackRows) {
-          stamped(runtime, 'pty-big', 'busy output\r\n', 1_000_000)
-        }
-        return {
-          data: opts?.scrollbackRows ? lines.join('\r\n') : '\x1b[H\x1b[2Jrecovered screen',
-          ...grid,
-          seq: opts?.scrollbackRows ? 1_000_000 : 16,
-          source: 'headless',
-          ...(coverage === 'limited' ? { historyLimited: true as const } : {})
-        }
+})
+
+it('caps mid-recovery acquisitions and never falls back to the stale stream', async () => {
+  const runtime = createRuntime()
+  const requests: (number | undefined)[] = []
+  let recovering = false
+  let replyOld: ((snapshot: PtyProviderBufferSnapshot) => void) | undefined
+  runtime.setPtyController({
+    write: () => true,
+    kill: () => true,
+    getForegroundProcess: async () => null,
+    getSize: () => grid,
+    serializeProviderBuffer: async (_ptyId, opts) => {
+      if (opts?.recovery) {
+        return new Promise<null>((resolve) => {
+          opts.signal?.addEventListener('abort', () => resolve(null), { once: true })
+        })
       }
-    })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: OrcaRuntimeService inherits these protected methods with exactly these signatures.
-    const reads = runtime as unknown as {
-      serializeHeadlessTerminalBuffer(ptyId: string): Promise<{ data: string } | null>
-      withVisibleSnapshotFallback(
-        ptyId: string,
-        read: RuntimeTerminalRead,
-        opts: { limit?: number }
-      ): Promise<RuntimeTerminalRead>
+      if (!recovering) {
+        return new Promise<PtyProviderBufferSnapshot>((resolve) => {
+          replyOld = resolve
+        })
+      }
+      requests.push(opts?.scrollbackRows)
+      return null
     }
-    markNativeWindowsConptyPty('pty-big')
-    try {
-      anchorStream(runtime, 'pty-big')
-      runtime.onPtyData('pty-big', 'stale\r\n', 1)
-      runtime.notePtyDataGap('pty-big', 9)
-      await vi.waitFor(async () => assert(await reads.serializeHeadlessTerminalBuffer('pty-big')))
-      runtime.onPtyData('pty-big', 'stale burst\r\n'.repeat(60), 2)
-      const read = await reads.withVisibleSnapshotFallback(
-        'pty-big',
-        {
-          handle: 'term',
-          status: 'running',
-          tail: ['stale burst'],
-          truncated: true,
-          limited: !busy,
-          nextCursor: null
-        },
-        { limit }
-      )
-      expect(read.tail.at(-1)).toBe(`line ${available}`)
-      expect(read.tail[0]).toBe(first)
-      expect(read.tail).toHaveLength(count)
-      expect(read.tail).not.toContain('stale burst')
-      expect(read.limited).toBe(limited)
-    } finally {
-      clearNativeWindowsConptyPty('pty-big')
-      await runtime.onPtyExit('pty-big', 0)
-    }
+  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: inherited protected runtime methods retain these signatures.
+  const reads = runtime as unknown as {
+    serializeProviderTerminalBuffer(
+      ptyId: string,
+      opts: { scrollbackRows?: number }
+    ): Promise<PtyProviderBufferSnapshot | null>
+    serializeTerminalBufferFromAvailableState(
+      ptyId: string,
+      opts: { scrollbackRows?: number }
+    ): Promise<PtyProviderBufferSnapshot | null>
+    withVisibleSnapshotFallback(
+      ptyId: string,
+      read: RuntimeTerminalRead,
+      opts: { limit: number }
+    ): Promise<RuntimeTerminalRead>
   }
-)
+  markNativeWindowsConptyPty('pty-mid')
+  try {
+    anchorStream(runtime, 'pty-mid')
+    runtime.onPtyData('pty-mid', 'stale-before\r\n', 1)
+    const old = reads.serializeProviderTerminalBuffer('pty-mid', { scrollbackRows: 5000 })
+    recovering = true
+    runtime.notePtyDataGap('pty-mid', 9)
+    const result = await reads.withVisibleSnapshotFallback(
+      'pty-mid',
+      {
+        handle: 'term',
+        status: 'running',
+        tail: ['stale-before', 'stale-after'],
+        truncated: false,
+        nextCursor: null
+      },
+      { limit: 2000 }
+    )
+    expect(requests).toEqual([1000])
+    expect(result.tail).toEqual([])
+    expect(result.limited).toBe(true)
+    expect(
+      await runtime.serializeHiddenOutputRecoveryBuffer('pty-mid', { scrollbackRows: 5000 })
+    ).toBeNull()
+    expect(await reads.serializeTerminalBufferFromAvailableState('pty-mid', {})).toBeNull()
+    expect(requests).toEqual([1000, 1000, 1000])
+    replyOld?.({ data: 'stale-old-acquisition', ...grid, seq: 100, source: 'headless' })
+    expect(await old).toBeNull()
+  } finally {
+    clearNativeWindowsConptyPty('pty-mid')
+    await runtime.onPtyExit('pty-mid', 0)
+  }
+})
+
+it('returns 2000 recovered lines with trailing CRLF and blank rows below the prompt', async () => {
+  const { runtime, ready, read } = recoveredHistoryRuntime(1000)
+  markNativeWindowsConptyPty('pty-history')
+  try {
+    await ready()
+    runtime.onPtyData(
+      'pty-history',
+      `\r\n${Array.from({ length: 1100 }, (_, index) => `p${index + 1}`).join('\r\n')}\r\n\x1b[H\x1b[2J> `,
+      2
+    )
+    const result = await read()
+    expect(result.tail).toEqual([
+      ...Array.from({ length: 898 }, (_, index) => `h${index + 103}`),
+      ...Array.from({ length: 24 }, (_, index) => `s${index + 1}`),
+      ...Array.from({ length: 1077 }, (_, index) => `p${index + 1}`),
+      '>'
+    ])
+    expect(result.tail).toHaveLength(2000)
+    expect(result.limited).toBe(false)
+  } finally {
+    clearNativeWindowsConptyPty('pty-history')
+    await runtime.onPtyExit('pty-history', 0)
+  }
+})
 
 it('keeps a synchronized-output frame open across a rebuild until the frame ends', async () => {
   const runtime = createRuntime()

@@ -48,8 +48,6 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
   }
 
   dispose(): void {
-    this.settledDurableHistory.clear()
-    this.incompleteHistorySessionIds.clear()
     this.respawnAdoptionClosed = true
     this.sessionsAwaitingDaemonRecovery.clear()
     this.writeRecoveryAttempted = false
@@ -191,7 +189,6 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
   // Checkpoint without marking history ended so a daemon crash after app quit remains recoverable.
   async disconnectOnly(): Promise<void> {
     if (!this.disconnectOnlyPromise) {
-      this.settledDurableHistory.clear()
       this.respawnAdoptionClosed = true
       this.sessionsAwaitingDaemonRecovery.clear()
       this.writeRecoveryAttempted = false

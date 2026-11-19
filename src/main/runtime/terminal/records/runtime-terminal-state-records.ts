@@ -188,8 +188,8 @@ export type RuntimeHeadlessTerminal = {
   awaitingContextSeed?: boolean
   /** When the last dropped-output capture started, carried across attempts to pace them. */
   gapReseedLastCaptureAt?: number
-  /** Seeded screen-only after dropped output, so history comes from the provider. */
-  historyFromProvider?: boolean
+  /** Recovery filled the live window, so earlier history may have been cut. */
+  recoveredHistoryCut?: boolean
   /** The grid a reattach reflowed the model onto, until a PTY resize off it repaints the TUI. */
   unrepaintedReflowGrid?: { cols: number; rows: number }
 }
