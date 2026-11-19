@@ -227,26 +227,35 @@ export const UNRELEASED_MINTED_WORKER_TERMINAL_SQL = `release_state = 'not_reque
   AND process_incarnation LIKE '%:________-____-____-____-____________'
   AND terminal_handle NOT LIKE 'structworker\\_%' ESCAPE '\\'`
 
-/** Terminal (not chat) workers older builds settled without releasing their row; these pin their Run. */
+/**
+ * One page of minted, never-requested terminal (not chat) worker rows, in owner order. `eligible` marks
+ * the ones whose worker settled before `updatedBefore`: older builds left these owned, pinning their Run.
+ */
 export function listSettledWorkerTerminalsStillOwned(
   this: OrchestrationDb,
-  afterRowid: number,
+  afterOwnerDispatchId: string,
   limit: number,
   updatedBefore: string
-): (WorkerTerminalResourceRow & { row_id: number })[] {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: res.* plus its rowid.
+): (WorkerTerminalResourceRow & { eligible: number })[] {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: res.* plus its eligibility.
   return this.db
     .prepare(
-      // Only minted ptyId:<uuid> identities can be judged; legacy fences never enter the index.
-      `SELECT res.rowid AS row_id, res.* FROM worker_terminal_resources res
-          INDEXED BY idx_worker_terminal_resources_unreleased_minted
-        JOIN worker_dispatches w ON w.dispatch_id = res.owner_dispatch_id
-        WHERE ${UNRELEASED_MINTED_WORKER_TERMINAL_SQL}
-          AND res.rowid > ? AND w.state IN ('succeeded', 'failed', 'stopped', 'abandoned')
-          AND res.updated_at < ?
-        ORDER BY res.rowid LIMIT ?`
+      // Pages on the partial index's own key, so each page reads at most `limit` entries; legacy fences
+      // never enter the index.
+      `SELECT res.*,
+          (w.state IN ('succeeded', 'failed', 'stopped', 'abandoned') AND res.updated_at < ?) AS eligible
+        FROM (
+          SELECT * FROM worker_terminal_resources
+            INDEXED BY idx_worker_terminal_resources_unreleased_minted
+            WHERE ${UNRELEASED_MINTED_WORKER_TERMINAL_SQL} AND owner_dispatch_id > ?
+            ORDER BY owner_dispatch_id LIMIT ?
+        ) res
+        LEFT JOIN worker_dispatches w ON w.dispatch_id = res.owner_dispatch_id
+        ORDER BY res.owner_dispatch_id`
     )
-    .all(afterRowid, updatedBefore, limit) as (WorkerTerminalResourceRow & { row_id: number })[]
+    .all(updatedBefore, afterOwnerDispatchId, limit) as (WorkerTerminalResourceRow & {
+    eligible: number
+  })[]
 }
 
 export type WorkerTerminalReleaseMethods = {

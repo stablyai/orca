@@ -57,12 +57,12 @@ async function releaseExitedWorkerTerminals(
   // Every row is listed before any host is: a process alive when its row was read is in the listing.
   // Yields while listing are fine: the fence keeps out rows written since, and hosts are listed after.
   const candidates: { resource: WorkerTerminalResourceRow; processIncarnation: string }[] = []
-  for (let after = 0; ;) {
+  for (let after = ''; ;) {
     const page = db.listSettledWorkerTerminalsStillOwned(after, ROWS_PER_SLICE, fence)
     for (const resource of page) {
-      after = resource.row_id
+      after = resource.owner_dispatch_id
       const processIncarnation = resource.process_incarnation
-      if (processIncarnation && isMintedPtyIncarnation(processIncarnation)) {
+      if (resource.eligible && processIncarnation && isMintedPtyIncarnation(processIncarnation)) {
         candidates.push({ resource, processIncarnation })
       }
     }
