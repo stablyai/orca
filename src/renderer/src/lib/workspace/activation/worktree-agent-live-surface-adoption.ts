@@ -1,6 +1,7 @@
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import { hasClosedTerminalTabRecord } from '../../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
+import { RECOVERED_TERMINAL_TITLE } from '../../../../../shared/workspace-layout/commands/workspace-layout-terminal-adoption'
 import { worktreeIdsEqual } from '../../../../../shared/worktree/id'
 import { isLocalCounterPtyId } from '../../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import type { useAppStore } from '@/store/index'
@@ -21,7 +22,9 @@ export type LiveSurfaceAdoptionStore = WorktreeOperationRouteState &
     ReturnType<typeof useAppStore.getState>,
     | 'closedTerminalTabTombstonesByTabId'
     | 'createTab'
+    | 'groupsByWorktree'
     | 'ptyIdsByTabId'
+    | 'reorderUnifiedTabs'
     | 'setTabLayout'
     | 'tabsByWorktree'
     | 'terminalLayoutsByTabId'
@@ -110,6 +113,49 @@ function bindToRecordedSurface(
     !hasClosedTerminalTabRecord(store.closedTerminalTabTombstonesByTabId, recorded.tabId) &&
     adoptHostOwnedSurface(getState, worktreeId, recorded, materializedTabIds)
   )
+}
+
+/** The recorded tab whose pane another live PTY took over (an older build restarted it there), if it is still here. */
+function recoveredTerminalAnchor(
+  store: LiveSurfaceAdoptionStore,
+  worktreeId: string,
+  recorded: LiveTerminalSurfaceOwner | null
+): { tabId: string; groupId: string } | null {
+  const pane = recorded ? parsePaneKey(recorded.paneKey) : null
+  if (!recorded || !pane) {
+    return null
+  }
+  const heldPtyId = store.terminalLayoutsByTabId[recorded.tabId]?.ptyIdsByLeafId?.[pane.leafId]
+  const group = (store.groupsByWorktree[worktreeId] ?? []).find((entry) =>
+    entry.tabOrder.includes(recorded.tabId)
+  )
+  return heldPtyId && heldPtyId !== recorded.ptyId && group
+    ? { tabId: recorded.tabId, groupId: group.id }
+    : null
+}
+
+/** Show a recovered PTY right after the tab whose pane it lost; both shells stay, since neither proves the other unused. */
+function createRecoveredTerminalTab(
+  getState: () => LiveSurfaceAdoptionStore,
+  worktreeId: string,
+  ptyId: string,
+  anchor: { tabId: string; groupId: string }
+): void {
+  const created = getState().createTab(worktreeId, anchor.groupId, undefined, {
+    initialPtyId: ptyId,
+    activate: false,
+    recordInteraction: false,
+    defaultTitle: RECOVERED_TERMINAL_TITLE
+  })
+  const group = getState().groupsByWorktree[worktreeId]?.find(
+    (entry) => entry.id === anchor.groupId
+  )
+  const order = group?.tabOrder.filter((tabId) => tabId !== created.id)
+  const anchorIndex = order?.indexOf(anchor.tabId) ?? -1
+  if (order && anchorIndex >= 0) {
+    order.splice(anchorIndex + 1, 0, created.id)
+    getState().reorderUnifiedTabs(anchor.groupId, order, { recordInteraction: false })
+  }
 }
 
 /** Bind one host-owned PTY to the surface the host names for it; false when none could be named. */
@@ -242,6 +288,8 @@ export async function adoptLiveWorkspacePtySurfaces(
       }
       continue
     }
+    // Read before binding: binding never takes a pane another PTY holds.
+    const recoveredAnchor = recoveredTerminalAnchor(getState(), worktreeId, owner.recorded)
     const bound =
       (owner.recorded &&
         bindToRecordedSurface(getState, worktreeId, owner.recorded, materializedTabIds)) ||
@@ -254,6 +302,10 @@ export async function adoptLiveWorkspacePtySurfaces(
     }
     surfaced = true
     if (bound) {
+      continue
+    }
+    if (recoveredAnchor) {
+      createRecoveredTerminalTab(getState, worktreeId, ptyId, recoveredAnchor)
       continue
     }
     getState().createTab(worktreeId, undefined, undefined, {

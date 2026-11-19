@@ -54,23 +54,41 @@ describe('a live terminal no pane shows, through main', () => {
     expect(applied.ok && applied.effects.startPaneKeys).toEqual([])
   })
 
-  it('makes a new tab when the recorded pane now shows another terminal', () => {
-    const { context, model, paneKey, leafId } = withCliTab(false)
+  it('shows it as a recovered tab right after the tab whose pane now shows another terminal', () => {
+    const context = testContext()
+    const { model, results } = build(context, [
+      { type: 'createTerminalTab', workspace: WS },
+      { type: 'createTerminalTab', workspace: WS }
+    ])
+    const recorded = results[0]!
+    const later = results[1]!
+    // An older build restarted a shell in the recorded pane while this one kept running.
     const rebound: WorkspaceLayoutModel = {
       ...model,
       workspaces: {
-        [WS]: { ...model.workspaces[WS]!, leaves: { [leafId]: { ptyId: `${WS}@@other0001` } } }
+        [WS]: {
+          ...model.workspaces[WS]!,
+          leaves: { [recorded.leafId!]: { ptyId: `${WS}@@other0001` } }
+        }
       }
     }
-    const applied = applyLayoutCommand(rebound, adopt({ recordedPaneKey: paneKey }), context)
+    const applied = applyLayoutCommand(
+      rebound,
+      adopt({ recordedPaneKey: recorded.paneKey! }),
+      context
+    )
     if (!applied.ok) {
       throw new Error(applied.code)
     }
-    expect(applied.result).toMatchObject({ tabId: 'window-tab' })
-    expect(applied.model.workspaces[WS]!.tabs).toHaveLength(2)
-    expect(applied.model.workspaces[WS]!.leaves?.['00000000-0000-4000-8000-0000000000ff']).toEqual({
-      ptyId: PTY
-    })
+    const workspace = applied.model.workspaces[WS]!
+    expect(workspace.groups[0]!.tabOrder).toEqual([recorded.tabId, 'window-tab', later.tabId])
+    const recovered = workspace.tabs.find((tab) => tab.id === 'window-tab')
+    expect(recovered?.kind === 'terminal' && recovered.terminal.defaultTitle).toBe(
+      'Recovered terminal'
+    )
+    expect(workspace.leaves?.[recorded.leafId!]).toEqual({ ptyId: `${WS}@@other0001` })
+    expect(workspace.leaves?.['00000000-0000-4000-8000-0000000000ff']).toEqual({ ptyId: PTY })
+    expect(applied.effects.startPaneKeys).toEqual([])
   })
 
   it('otherwise shows it in a new tab bound to it, starting nothing', () => {

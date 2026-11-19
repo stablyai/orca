@@ -100,7 +100,7 @@ export function createTerminalTabCreationActions(
         const initialLeafId = requestedInitialLeafId ?? createBrowserUuid()
         const shouldActivate = options?.activate !== false
         const nextOrdinal = getNextTerminalOrdinal(existing)
-        const defaultTitle = `Terminal ${nextOrdinal}`
+        const defaultTitle = options?.defaultTitle?.trim() || `Terminal ${nextOrdinal}`
         const quickCommandLabel = options?.quickCommandLabel?.trim()
         const startupCwd = options?.startupCwd
         const facts = options?.executionFacts

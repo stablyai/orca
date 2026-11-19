@@ -35,7 +35,11 @@ import {
   type WorkspaceLayoutModel
 } from '../workspace-layout-model'
 import { admitsInitialSurface } from './workspace-layout-initial-surface'
-import { adoptedLeaf, appliedHeldAdoption } from './workspace-layout-terminal-adoption'
+import {
+  adoptedLeaf,
+  appliedHeldAdoption,
+  recoveredTerminalPlacement
+} from './workspace-layout-terminal-adoption'
 import { removeTabFromWorkspace, withWorkspace } from './workspace-layout-removal'
 
 type RefusedClose = NonNullable<LayoutCommandResult['refused']>[number]
@@ -56,6 +60,7 @@ export function createTerminalTab(
     return held
   }
   const workspace = workspaceOrEmpty(model, command.workspace)
+  const recovered = recoveredTerminalPlacement(model.workspaces[command.workspace], command)
   const terminals = workspace.tabs.flatMap((tab) => (tab.kind === 'terminal' ? [tab] : []))
   const ordinal = getNextTerminalOrdinal(
     terminals.map((tab) => ({ defaultTitle: tab.terminal.defaultTitle, title: '' }))
@@ -71,10 +76,14 @@ export function createTerminalTab(
     ...(command.quickCommandLabel ? { quickCommandLabel: command.quickCommandLabel } : {}),
     ...(command.viewMode ? { viewMode: command.viewMode } : {}),
     kind: 'terminal',
-    terminal: { defaultTitle: `Terminal ${ordinal}`, ...command.creation },
+    terminal: {
+      defaultTitle: recovered?.defaultTitle ?? `Terminal ${ordinal}`,
+      ...command.creation
+    },
     panes: { root: { type: 'leaf', leafId } }
   }
-  const placed = placeNewTab(workspace, command.workspace, tab, command, context)
+  const placement = recovered?.placement ?? command
+  const placed = placeNewTab(workspace, command.workspace, tab, placement, context)
   const paneKey = paneKeyOf(id, leafId)
   if (command.adopt) {
     // Its terminal already runs: the pane binds to it and nothing starts.

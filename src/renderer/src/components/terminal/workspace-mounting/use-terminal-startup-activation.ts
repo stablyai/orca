@@ -4,6 +4,7 @@ import { shouldSeedDefaultSurface } from '@/lib/workspace/activation/initial-sur
 import { findPendingWorktreeCreationId } from '@/lib/workspace/creation/pending-worktree-creation'
 import { isTerminalWorkspaceEmptiedOnPurpose } from '../../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import { gateWorktreeAgentActivation } from '@/lib/workspace/activation/worktree-agent-activation-gate'
+import { adoptFloatingTerminalLiveSurfaces } from '@/lib/workspace/activation/floating-terminal-live-surface-adoption'
 import { createWorkspaceTerminalHostAuthoritySelector } from '@/lib/workspace/ownership/workspace-terminal-host-authority'
 import { hasStructuredAgentLaunchInWorktree } from '@/lib/agent-session/launch/structured-agent-session-launch-status'
 import { isBotPage } from '../../bots/bot-workspace'
@@ -113,6 +114,23 @@ export function useTerminalStartupActivation(controller: TerminalStartupControll
     terminalStartupRestorationReady,
     workspaceSessionReady
   ])
+
+  const floatingAdoptionStartedRef = useRef(false)
+  useEffect(() => {
+    if (
+      !workspaceSessionReady ||
+      !terminalStartupRestorationReady ||
+      !hydrationSucceeded ||
+      floatingAdoptionStartedRef.current
+    ) {
+      return
+    }
+    floatingAdoptionStartedRef.current = true
+    // A failed listing proves nothing; the floating terminal keeps its current pane.
+    void adoptFloatingTerminalLiveSurfaces().catch((error: unknown) =>
+      console.warn('[floating-terminal] live terminal adoption failed', error)
+    )
+  }, [hydrationSucceeded, terminalStartupRestorationReady, workspaceSessionReady])
 
   const startupResumeWorktreeIdsRef = useRef(new Set<string>())
   useEffect(() => {

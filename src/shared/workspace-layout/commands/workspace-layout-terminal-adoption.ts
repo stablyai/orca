@@ -51,6 +51,30 @@ export function heldPaneOfTerminal(
     : null
 }
 
+/** Default title of a live terminal shown beside the pane another terminal took over, e.g. after a downgrade. */
+export const RECOVERED_TERMINAL_TITLE = 'Recovered terminal'
+
+/** When the recorded pane now shows another terminal, the adopted one goes right after its tab as a recovered one.
+ * Both stay: neither proves the other's user never ran anything in it. */
+export function recoveredTerminalPlacement<
+  P extends { adopt?: LiveTerminalAdoption; afterTabId?: string; index?: number }
+>(
+  workspace: WorkspaceLayout | undefined,
+  command: P
+): { defaultTitle: string; placement: P } | null {
+  const recordedPaneKey = command.adopt?.recordedPaneKey
+  const recorded = workspace && recordedPaneKey ? locatePane(workspace, recordedPaneKey) : null
+  const heldPtyId = recorded ? workspace?.leaves?.[recorded.leafId]?.ptyId : undefined
+  if (!recorded || !heldPtyId || heldPtyId === command.adopt?.ptyId) {
+    return null
+  }
+  const placed = command.afterTabId !== undefined || command.index !== undefined
+  return {
+    defaultTitle: RECOVERED_TERMINAL_TITLE,
+    placement: placed ? command : { ...command, afterTabId: recorded.tab.id }
+  }
+}
+
 export function adoptedLeaf({ ptyId, incarnationId }: LiveTerminalAdoption): LayoutLeaf {
   return incarnationId ? { ptyId, incarnationId } : { ptyId }
 }
