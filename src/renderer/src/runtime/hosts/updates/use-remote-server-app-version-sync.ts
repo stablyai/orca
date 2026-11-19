@@ -9,8 +9,9 @@ export function useRemoteServerAppVersionSync(): void {
   const terminalStartupRestorationReady = useAppStore(
     (state) => state.terminalStartupRestorationReady
   )
+  const settingsLoaded = useAppStore((state) => state.settings !== null)
   useEffect(() => {
-    if (started || !terminalStartupRestorationReady || isWebClientLocation()) {
+    if (started || !terminalStartupRestorationReady || !settingsLoaded || isWebClientLocation()) {
       return
     }
     started = true
@@ -24,5 +25,5 @@ export function useRemoteServerAppVersionSync(): void {
     }).catch((error) => {
       console.warn('Failed to sync paired servers after the app update:', error)
     })
-  }, [terminalStartupRestorationReady])
+  }, [terminalStartupRestorationReady, settingsLoaded])
 }

@@ -19,6 +19,8 @@ type SyncState = {
   remoteServerUpdatesChecking: boolean
   remoteServerUpdatesRunning: boolean
   remoteServerUpdateCheckOptions: UpdateCheckOptions | null
+  remoteServerUpdateDialogOpen: boolean
+  setRemoteServerUpdateDialogOpen: (open: boolean) => void
   remoteServerUpdates: ReadonlyMap<
     string,
     Pick<RemoteServerUpdateEntry, 'environmentId' | 'phase' | 'currentVersion'>
@@ -149,8 +151,11 @@ async function syncPendingVersion(store: SyncStore, version: string): Promise<Sy
     .filter((entry) => entry.phase === 'available' && isOlderVersion(entry.currentVersion, version))
     .map((entry) => entry.environmentId)
   if (availableIds.length > 0) {
-    if (state.remoteServerUpdateCheckOptions) {
+    if (state.remoteServerUpdateCheckOptions && state.remoteServerUpdateDialogOpen) {
       return 'retry'
+    }
+    if (state.remoteServerUpdateCheckOptions) {
+      state.setRemoteServerUpdateDialogOpen(false)
     }
     await state.startRemoteServerUpdates(availableIds)
   }

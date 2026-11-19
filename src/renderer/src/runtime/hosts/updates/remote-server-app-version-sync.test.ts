@@ -12,6 +12,8 @@ function createLaunchStore(servers: Map<string, string | null>) {
     remoteServerUpdatesChecking: false,
     remoteServerUpdatesRunning: false,
     remoteServerUpdateCheckOptions: null,
+    remoteServerUpdateDialogOpen: false,
+    setRemoteServerUpdateDialogOpen: () => {},
     remoteServerUpdates: new Map<string, ServerState>(),
     startedIds: noStartedIds,
     refreshRemoteServerUpdates: async () => {
