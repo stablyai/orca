@@ -707,3 +707,39 @@ describe('the hidden renderer after dropped output', () => {
     await runtime.onPtyExit('pty-r', 0)
   })
 })
+
+it("keeps a late capture's alternate screen when the model that took the screen back was disposed by a gap", async () => {
+  const runtime = createRuntime()
+  const ptyId = 'pty-late-mode'
+  let release: (() => void) | undefined
+  runtime.setPtyController({
+    write: () => true,
+    kill: () => true,
+    getForegroundProcess: async () => null,
+    getSize: () => grid,
+    serializeProviderBuffer: () =>
+      new Promise<PtyProviderBufferSnapshot>((resolve) => {
+        release = () =>
+          resolve({
+            data: '\x1b[?1049h\x1b[Htui',
+            ...grid,
+            seq: 0,
+            source: 'headless',
+            alternateScreen: true
+          })
+      })
+  })
+  try {
+    runtime.synchronizePtyOutputSequenceFromProvider(ptyId, { value: 0, generation: 'continued' })
+    const read = runtime.serializeTerminalBuffer(ptyId, { scrollbackRows: 0 })
+    await vi.waitFor(() => assert(release))
+    runtime.seedHeadlessTerminal(ptyId, '\x1b[?1049h\x1b[Htui', grid)
+    await vi.waitFor(() => expect(runtime.isTerminalAlternateScreen(ptyId)).toBe(true))
+    runtime.notePtyDataGap(ptyId, 9)
+    release?.()
+    await read
+    expect(runtime.isTerminalAlternateScreen(ptyId)).toBe(true)
+  } finally {
+    await runtime.onPtyExit(ptyId, 0)
+  }
+})

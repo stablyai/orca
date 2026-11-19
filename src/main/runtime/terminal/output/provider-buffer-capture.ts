@@ -78,8 +78,8 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
         if (liveModeTracker.hasObservedAlternateScreenSwitch) {
           modeTracker.scan(liveModeTracker.isAlternateScreen ? '\x1b[?1049h' : '\x1b[?1049l')
         }
-        // A model that took the screen back during this capture already parses every chunk's mode.
-        if (!providerOwnedScreenAtStart || this.providerSnapshotPreferredPtys.has(ptyId)) {
+        // A trusted model that took the screen back during this capture already parses every chunk's mode.
+        if (!providerOwnedScreenAtStart || !this.readWholeScreenModel(ptyId)) {
           this.providerModeTrackersByPtyId.set(ptyId, modeTracker)
         }
         effectiveAlternateScreen = modeTracker.isAlternateScreen
