@@ -7,11 +7,10 @@ import {
 
 describe('--on "webhook.call ..."', () => {
   it('reads every filter, and asks the host to make the hook', () => {
-    expect(
-      parseAutomationEventTrigger(
-        'webhook.call where="body.action in opened, reopened" where="headers.X-GitHub-Event = pull_request" where="body.draft !exists" contains="deploy now" pick=body.number,body.title subject-from=body.number subject=4512'
-      )
-    ).toEqual({
+    const trigger = parseAutomationEventTrigger(
+      'webhook.call where="body.action in opened, reopened" where="headers.X-GitHub-Event = pull_request" where="body.draft !exists" contains="deploy now" pick=body.number,body.title subject-from=body.number subject=4512'
+    )
+    expect(trigger).toEqual({
       id: '',
       source: 'webhook',
       event: 'call',
@@ -26,19 +25,15 @@ describe('--on "webhook.call ..."', () => {
       subjectFrom: 'body.number',
       subject: '4512'
     })
+    expect(formatAutomationEventTrigger(trigger)).toBe(
+      'webhook.call where="body.action in opened,reopened" where="headers.X-GitHub-Event = pull_request" where="body.draft !exists" contains="deploy now" pick=body.number,body.title subject-from=body.number subject=4512'
+    )
     // One value may hold commas; only `in` lists.
     expect(
       parseAutomationEventTrigger('webhook.call where="body.title contains a, b"')
     ).toMatchObject({
       where: [{ path: 'body.title', op: 'contains', values: ['a, b'] }]
     })
-  })
-
-  it('formats back to the same rule', () => {
-    const spec =
-      'webhook.call where="body.action in opened,reopened" contains="deploy now" pick=body.number subject-from=body.number subject=4512'
-    const rule = parseAutomationEventTrigger(spec)
-    expect(formatAutomationEventTrigger(rule)).toBe(spec)
   })
 
   it.each([

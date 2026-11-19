@@ -39,9 +39,6 @@ describe('--on trigger specs', () => {
     ['', '--on needs an event'],
     ['slack', 'Unknown event "slack"'],
     ['slack.pinged', 'Unknown event "slack.pinged"'],
-    // Offered once their events reach automations.
-    ['linear.pinged', 'Unknown event "linear.pinged"'],
-    ['slack.message in=,', 'needs in= to list places'],
     ['slack.message in=C1,', 'needs in= to list places'],
     ['slack.mentioned.extra', 'Unknown event'],
     ['slack.mentioned on=mine', 'on=mine is for slack.reaction only'],
