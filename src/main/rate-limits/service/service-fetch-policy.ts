@@ -33,7 +33,9 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
 
   protected claudeUsageWithoutOAuth(): ProviderRateLimits {
     const live = this.liveClaudeUsage ? withoutResetWindows(this.liveClaudeUsage, Date.now()) : null
-    return live?.session || live?.weekly ? live : claudeOAuthUsageDisabledResult()
+    return live?.session || live?.weekly || live?.fableWeekly
+      ? live
+      : claudeOAuthUsageDisabledResult()
   }
 
   protected getMiniMaxCredentialError(message: string): ProviderRateLimits {
@@ -203,6 +205,7 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
       provider: 'claude',
       session: freshSession ?? priorLive?.session ?? null,
       weekly: freshWeekly ?? priorLive?.weekly ?? null,
+      fableWeekly: freshFable ?? priorLive?.fableWeekly ?? null,
       updatedAt: now,
       error: null,
       status: 'ok',

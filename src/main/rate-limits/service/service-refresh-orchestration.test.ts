@@ -160,6 +160,33 @@ describe('RateLimitService', () => {
     })
   })
 
+  it('keeps a Fable-only live window through refreshes when OAuth usage is disabled', async () => {
+    mockFreshBackgroundProviderFetches()
+    const service = new RateLimitService()
+    service.setClaudeOAuthUsageEnabledResolver(() => false)
+    service.setClaudeAuthPreparationResolver(async () => ({
+      configDir: '/claude/account-a',
+      envPatch: { CLAUDE_CONFIG_DIR: '/claude/account-a' },
+      provenance: '/claude/account-a'
+    }))
+    service.start({ fetchImmediately: false })
+    await flushMicrotasks(20)
+    service.stop()
+    service.ingestLiveClaudeRateLimits({
+      configDir: '/claude/account-a',
+      fiveHour: null,
+      sevenDay: null,
+      fableWeekly: { used_percentage: 7 }
+    })
+    await service.refresh()
+
+    expect(service.getState().claude).toMatchObject({
+      fableWeekly: { usedPercent: 7 },
+      status: 'ok',
+      usageMetadata: { source: 'live-session' }
+    })
+  })
+
   it('cancels pending Claude usage and rejects its reply even after polling is enabled again', async () => {
     mockFreshBackgroundProviderFetches()
     const service = new RateLimitService()
