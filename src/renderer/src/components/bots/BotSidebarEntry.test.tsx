@@ -341,17 +341,6 @@ describe('BotSidebarEntry', () => {
     expect(busy).toBe(idle)
   })
 
-  it('shows eight active lines, then the rest in place', () => {
-    seed(Object.fromEntries(Array.from({ length: 10 }, (_, index) => [`ws-${index}`, 'done'])))
-    renderEntry()
-
-    expect(lines()).toHaveLength(8)
-    fireEvent.click(screen.getByRole('button', { name: 'Show 2 more' }))
-    expect(lines()).toHaveLength(10)
-    fireEvent.click(screen.getByRole('button', { name: 'Show fewer' }))
-    expect(lines()).toHaveLength(8)
-  })
-
   it('lists workspaces whose PR merged or closed with the rest, with no done fold', () => {
     seed({ open: 'done', merged: 'done', closed: 'inactive' })
     mocks.reviewById = {
@@ -364,7 +353,7 @@ describe('BotSidebarEntry', () => {
     expect(screen.queryByRole('button', { name: /done/ })).toBeNull()
   })
 
-  it('shows the open workspace even when it ranks past the first eight', () => {
+  it('pages workspaces in place and keeps the open workspace past the cap', () => {
     const names = Array.from({ length: 10 }, (_, index) => `ws-${index}`)
     seed(Object.fromEntries(names.map((name) => [name, 'done'])))
     mocks.smartOrder = names
@@ -372,7 +361,10 @@ describe('BotSidebarEntry', () => {
     renderEntry()
 
     expect(lines()).toEqual([...names.slice(0, 8), 'ws-9'])
-    expect(screen.getByRole('button', { name: 'Show 1 more' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Show 1 more' }))
+    expect(lines()).toEqual(names)
+    fireEvent.click(screen.getByRole('button', { name: 'Show fewer' }))
+    expect(lines()).toEqual([...names.slice(0, 8), 'ws-9'])
   })
 
   it('opens a bot with its chats folded: nothing until the first read, then the last tree at once', async () => {
