@@ -28814,7 +28814,6 @@
       "chip": "Bots",
       "chipLabel": "Bots, show everything",
       "searchEverything": "Search everything for \"{{text}}\"",
-      "searchBotsFor": "Search bots for \"{{text}}\"",
       "noMatch": "No bots match \"{{text}}\"",
       "noBotsYet": "No bots yet",
       "filtersPaused": "Filters apply to workspaces, not bots",

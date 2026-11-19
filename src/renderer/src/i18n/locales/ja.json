@@ -25113,7 +25113,6 @@
       "chip": "ボット",
       "chipLabel": "ボット、すべて表示に戻す",
       "searchEverything": "「{{text}}」をすべての項目から検索",
-      "searchBotsFor": "「{{text}}」でボットを検索",
       "noMatch": "「{{text}}」に一致するボットはありません",
       "noBotsYet": "ボットはまだありません",
       "filtersPaused": "フィルターはワークスペースに適用され、ボットには適用されません",

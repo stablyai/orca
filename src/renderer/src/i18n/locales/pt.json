@@ -24759,7 +24759,6 @@
       "chip": "Bots",
       "chipLabel": "Bots, mostrar tudo",
       "searchEverything": "Buscar em tudo por \"{{text}}\"",
-      "searchBotsFor": "Buscar bots por \"{{text}}\"",
       "noMatch": "Nenhum bot corresponde a \"{{text}}\"",
       "noBotsYet": "Ainda não há bots",
       "filtersPaused": "Os filtros se aplicam a worktrees, não a bots",

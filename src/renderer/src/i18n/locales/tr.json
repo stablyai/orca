@@ -23780,7 +23780,6 @@
       "chip": "Botlar",
       "chipLabel": "Botlar, her şeyi göster",
       "searchEverything": "Her yerde \"{{text}}\" ara",
-      "searchBotsFor": "Botlarda \"{{text}}\" ara",
       "noMatch": "\"{{text}}\" ile eşleşen bot yok",
       "noBotsYet": "Henüz bot yok",
       "filtersPaused": "Filtreler botlara değil çalışma alanlarına uygulanır",
