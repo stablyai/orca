@@ -21,19 +21,6 @@ const items = [
 const ids = (visible: ActivityBarItem[]): string[] => visible.map((entry) => entry.id)
 
 describe('getVisibleRightSidebarActivityItems', () => {
-  it("keeps only Activity, Connectors and then Explorer on a bot's page", () => {
-    expect(
-      ids(
-        getVisibleRightSidebarActivityItems(items, {
-          isFolder: true,
-          isFolderWorkspace: true,
-          hasSshHost: true,
-          isBot: true
-        })
-      )
-    ).toEqual(['bot-activity', 'bot-connectors', 'explorer'])
-  })
-
   const pluginItems = getPluginPanelActivityItems([
     {
       id: 'panel',
@@ -44,13 +31,13 @@ describe('getVisibleRightSidebarActivityItems', () => {
     }
   ])
 
-  it("offers installed plugin panels on a bot's page, after Files", () => {
+  it("keeps bot panels and Files before installed plugin panels on a bot's page", () => {
     expect(
       ids(
         getVisibleRightSidebarActivityItems([...items, ...pluginItems], {
           isFolder: true,
           isFolderWorkspace: true,
-          hasSshHost: false,
+          hasSshHost: true,
           isBot: true
         })
       )

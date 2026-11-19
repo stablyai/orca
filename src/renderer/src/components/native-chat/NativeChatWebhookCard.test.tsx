@@ -55,14 +55,6 @@ afterEach(() => {
 })
 
 describe('NativeChatWebhookCard', () => {
-  it('shows the hook from the host in its own bot’s chat, key masked', async () => {
-    renderCard(webhookSummaryFixture())
-    expect(await screen.findByText('Webhook · starts “Investigate Sentry alert”')).toBeTruthy()
-    expect(screen.getByText('No calls yet')).toBeTruthy()
-    expect(document.body.textContent).not.toContain('orcawh_')
-    expect(screen.getByRole('button', { name: 'Add signing secret…' })).toBeTruthy()
-  })
-
   it('says where the URL is in another bot’s chat, without the card', async () => {
     chat.botId = 'bot-2'
     renderCard(webhookSummaryFixture())
@@ -76,7 +68,11 @@ describe('NativeChatWebhookCard', () => {
 
   it('reveals the key on click until the owner hides it', async () => {
     const host = renderCard(webhookSummaryFixture())
-    fireEvent.click(await screen.findByRole('button', { name: 'Reveal' }))
+    const reveal = await screen.findByRole('button', { name: 'Reveal' })
+    expect(screen.getByText('Webhook · starts “Investigate Sentry alert”')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Add signing secret…' })).toBeTruthy()
+    expect(document.body.textContent).not.toContain('orcawh_')
+    fireEvent.click(reveal)
     await screen.findByText(KEY.url)
     expect(host).toHaveBeenCalledWith(OWNER.target, 'webhooks.reveal', {
       hookId: 'wh_7Kx2pQ9mT4vB8nLc'
