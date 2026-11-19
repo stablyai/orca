@@ -41,6 +41,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+// Guards PR #44647: clipped status bar chips stayed mounted and kept reset-countdown timers.
 it('keeps no countdown wakes for status bar chips clipped out of view', () => {
   const now = Date.now()
   const pool: ProviderRateLimits = {
