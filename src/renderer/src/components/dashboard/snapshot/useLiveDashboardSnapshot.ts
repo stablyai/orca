@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store/index'
 import { useStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
-import type { DashboardSnapshot } from '../../../../../shared/dashboard-snapshot'
+import type { DashboardSnapshot } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import { buildDashboardSnapshot } from './build-dashboard-snapshot'
 import {
   selectDetectedWorktreesByRepo,

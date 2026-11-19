@@ -1,4 +1,6 @@
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
+import { AgentCliUpdateButton } from '@/components/agent-cli-update/AgentCliUpdateButton'
+
 import { AgentLaunchChoiceEditor } from '@/components/agent/launch-settings/AgentLaunchChoiceEditor'
 import { agentChatPermissionModes } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import { savedChatPermissionMode } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
@@ -10,7 +12,7 @@ import type {
   AgentLaunchSettings,
   AgentLaunchSettingsMutation
 } from '../../../../../../shared/agent-launch/choices/agent-launch-settings'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { AUTO_TUI_AGENT_ARGS } from '../../../../../../shared/agent-launch/permissions/tui-agent-permissions'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import {
@@ -48,7 +50,10 @@ import {
   resolveChatProgramContext
 } from '@/lib/agent-session/launch/inventory/host-chat-program'
 import { readNativeDetectedAgents } from '@/store/slices/agent-inventory/local-detected-agent-store-state'
-import { useDetectedAgents, type AgentDetectionTarget } from '@/hooks/useDetectedAgents'
+import {
+  useDetectedAgents,
+  type AgentDetectionTarget
+} from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 import { AgentLaunchDefaultsGroup } from '@/components/settings/agents/launch/AgentLaunchDefaultsGroup'
 import { AgentDetectionCatalog } from '@/components/settings/agents/launch/AgentDetectionCatalog'
 import type { AgentCatalogRowProps } from '@/components/settings/agents/launch/AgentCatalogRow'
@@ -64,7 +69,7 @@ import {
   managedRuntimeChatAgents,
   useHostStructuredAgentsVersion
 } from '@/runtime/native-chat/agent-catalogs/chat-provider-agents'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
 import { useTranslate } from '@/i18n/use-translate'
 
 export type AgentPermissionsRenderer = (props: AgentPermissionsSettingProps) => React.ReactNode
@@ -231,6 +236,9 @@ export function AgentLaunchSettingsCatalog({
     agent: (typeof catalog)[number],
     isDetected: boolean
   ): AgentCatalogRowProps => ({
+    cliUpdate: isDetected ? (
+      <AgentCliUpdateButton detectionTarget={detectionTarget} agent={agent.id} />
+    ) : undefined,
     agentId: agent.id,
     label: agent.label,
     homepageUrl: agent.homepageUrl,

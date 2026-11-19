@@ -1,5 +1,5 @@
 import type { TerminalLaunchResult } from '../../agent-session/lifecycle/agent-session-resume'
-import type { ExecutionHostId } from '../../execution-host'
+import type { ExecutionHostId } from '../../execution-host/execution-host'
 import type { StartupCwdFallback } from '../../shell/launch/startup-cwd-fallback'
 
 export type RuntimeTerminalCreate = TerminalLaunchResult & {

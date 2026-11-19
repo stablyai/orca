@@ -20,6 +20,16 @@ const FEATURE_TIP_COPY: Record<
       ),
     ctaLabel: () => translate('featureTips.chatUiHere.cta', 'Use Chat UI')
   },
+  'bots-teammate': {
+    eyebrow: () => translate('featureTips.eyebrowNew', 'New'),
+    title: () => translate('featureTips.botsTeammate.title', 'Meet your AI teammate'),
+    description: () =>
+      translate(
+        'featureTips.botsTeammate.description',
+        'Ask from anywhere. It runs a fleet of agents and remembers what it learns.'
+      ),
+    ctaLabel: () => translate('featureTips.botsTeammate.cta', 'Create your first bot')
+  },
   'agent-session-search': {
     eyebrow: () => translate('auto.components.feature.tips.feature.tip.copy.1fcdfc5fe8', 'New'),
     title: () =>

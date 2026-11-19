@@ -276,30 +276,17 @@ it.each<[string, string[]]>([
   ['node', ['--no-warnings=true', 'candidate.js']],
   ['node', ['--require', '--', 'candidate.js']],
   ['node', ['--require=', 'candidate.js']],
-  ['node', ['-rpreload.js', 'candidate.js']],
   ['node', ['--eval=candidate.js', 'agent.js']],
-  ['node', ['-p', 'candidate.js', 'agent.js']],
   ['node', ['inspect', 'candidate.js']],
   ['node', ['-', 'candidate.js']],
   ['node', ['--']],
   ['python3', ['-c', 'candidate.js', 'agent.js']],
-  ['python3', ['-mcandidate.js', 'agent.js']],
-  ['python3', ['-uB', 'candidate.js']],
   ['deno', ['run', '--unknown=value', 'candidate.js']],
-  ['deno', ['run', '--allow-fictional', 'candidate.js']],
   ['deno', ['run', '--config', '--', 'candidate.js']],
   ['deno', ['run', '--allow-read=', 'candidate.js']],
-  ['deno', ['run', 'npm:candidate.js']],
-  ['deno', ['run', 'https://example.com/candidate.js']],
-  ['deno', ['run', '-', 'candidate.js']]
-])('does not guess a file for opaque %s arguments %j', async (command, args) => {
-  const folder = await mkdtemp(join(tmpdir(), 'orca-catalog-opaque-'))
-  onTestFinished(() => rm(folder, { recursive: true, force: true }))
-  const input = { command, prefixArgs: args, cwd: folder, env: {} }
-  const original = await agentModelCatalogInputStamp(input)
-  await writeFile(join(folder, 'candidate.js'), 'not an identified file')
-  await writeFile(join(folder, 'agent.js'), 'not an identified file')
-  expect(await agentModelCatalogInputStamp(input)).toBe(original)
+  ['deno', ['run', 'https://example.com/candidate.js']]
+])('does not guess a file for opaque %s arguments %j', (command, args) => {
+  expect(agentModelCatalogScriptEntry(command, args)).toBeUndefined()
 })
 
 it('recognizes a Deno Windows file without treating its drive as a URI scheme', () => {

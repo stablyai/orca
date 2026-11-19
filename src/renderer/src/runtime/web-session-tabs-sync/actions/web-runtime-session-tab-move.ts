@@ -133,7 +133,7 @@ async function hostDropResolvers(
   resolveHostBackedTabId: (tabId: string) => string | null
 }> {
   const { resolveHostSessionGroupIdForWebSessionTab, resolveHostSessionTabIdForWebSessionTab } =
-    await import('../tracking-mappings')
+    await import('../identity/tracking-mappings')
   const state = useAppStore.getState()
   const groups = state.groupsByWorktree?.[worktreeId] ?? []
   const targetGroup = groups.find((group) => group.id === targetGroupId)

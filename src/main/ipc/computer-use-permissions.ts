@@ -4,7 +4,7 @@ import type {
   ComputerUsePermissionResetResult,
   ComputerUsePermissionSetupResult,
   ComputerUsePermissionStatusResult
-} from '../../shared/computer-use-permissions-types'
+} from '../../shared/computer/computer-use-permissions-types'
 import { computerUsePermissionStatusGate } from '../computer/macos-permissions/macos-computer-use-permission-status-gate'
 import { mainI18n } from '../i18n/main-i18n'
 

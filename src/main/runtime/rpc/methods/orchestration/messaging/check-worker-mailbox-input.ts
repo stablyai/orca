@@ -2,6 +2,7 @@ import type { MessageType } from '../../../../orchestration/db/orchestration-rec
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { CheckMailReconciliation } from './check-mail-reconciliation'
+import type { OrchestrationSessionCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import type { CheckParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
 import type { z } from 'zod'
 
@@ -21,6 +22,7 @@ export type WorkerMailboxCheckInput = {
   signal: AbortSignal | undefined
   reconciliation: CheckMailReconciliation
   revalidateCaller?: () => void
+  reader: OrchestrationSessionCaller | undefined
   activeDispatch: ActiveDispatch | undefined
   remoteAttachment: RemoteAttachment | undefined
   wakeTypes?: MessageType[]

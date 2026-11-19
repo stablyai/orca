@@ -7,8 +7,8 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { TerminalQuickCommand } from '../../../../src/shared/terminal/quick-commands/terminal-quick-command-types'
-import { getQuickCommandPreview } from './quick-commands'
 import { terminalQuickCommandMatchesRepo as quickCommandMatchesRepo } from '../../../../src/shared/terminal/quick-commands/terminal-quick-commands'
+import { searchTerminalQuickCommands } from '../../../../src/shared/terminal/quick-commands/terminal-quick-command-search'
 import { useQuickCommands } from './use-quick-commands'
 import { QuickCommandEditorForm } from './QuickCommandEditorForm'
 import { QuickCommandAgentPicker, QuickCommandsList } from './QuickCommandsList'
@@ -75,26 +75,23 @@ export function QuickCommandsSheet({
     }
   }, [visible, client, repoId])
 
-  // Why: prompt bodies can total megabytes. Lowercase them once per settings
-  // update instead of allocating the same search text on every keystroke.
-  const searchableCommands = useMemo(() => {
-    return commands
-      .filter((command) => quickCommandMatchesRepo(command, repoId))
-      .map((command) => ({
-        command,
-        searchText: `${command.label} ${getQuickCommandPreview(command)}`.toLowerCase()
-      }))
+  const scoped = useMemo(() => {
+    const matching = commands.filter((command) => quickCommandMatchesRepo(command, repoId))
+    return {
+      count: matching.length,
+      repo: matching.filter((command) => command.scope?.type === 'repo'),
+      global: matching.filter((command) => command.scope?.type !== 'repo')
+    }
   }, [commands, repoId])
-
-  const visibleCommands = useMemo(() => {
-    const trimmed = query.trim().toLowerCase()
-    return searchableCommands
-      .filter((entry) => !trimmed || entry.searchText.includes(trimmed))
-      .map((entry) => entry.command)
-  }, [query, searchableCommands])
-
-  const repoCommands = visibleCommands.filter((command) => command.scope?.type === 'repo')
-  const globalCommands = visibleCommands.filter((command) => command.scope?.type !== 'repo')
+  // Desktop's ranked search, run per section like its tab-bar menu.
+  const repoCommands = useMemo(
+    () => searchTerminalQuickCommands(scoped.repo, query),
+    [scoped, query]
+  )
+  const globalCommands = useMemo(
+    () => searchTerminalQuickCommands(scoped.global, query),
+    [scoped, query]
+  )
 
   const openEditor = (command?: TerminalQuickCommand) => {
     draftRevisionRef.current += 1
@@ -214,7 +211,7 @@ export function QuickCommandsSheet({
         <QuickCommandsList
           repoCommands={repoCommands}
           globalCommands={globalCommands}
-          totalCount={searchableCommands.length}
+          totalCount={scoped.count}
           query={query}
           loading={loading}
           disabled={!ready}

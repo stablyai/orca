@@ -49,6 +49,30 @@ describe.skipIf(process.platform !== 'darwin')('Mac capture during executable lo
     }
   )
 
+  it('does not spawn when eligibility turns false while the executable resolves', async () => {
+    let release!: (selection: { program: string; file: string }) => void
+    vi.spyOn(nativeExecutableResolver, 'resolveAsync').mockReturnValue(
+      new Promise((resolve) => {
+        release = resolve
+      })
+    )
+    const spawn = vi.spyOn(nativeSpawn, 'spawnNativeProcess')
+    const terminated = vi.fn()
+    let eligible = true
+    const pending = execFileCapture(process.execPath, ['-e', 'throw Error("launched late")'], {
+      ownedPosixGroup: true,
+      canStart: () => eligible,
+      onChildTerminated: terminated
+    })
+    const rejected = expect(pending).rejects.toThrow('aborted')
+    await nextTurn()
+    eligible = false
+    release({ program: process.execPath, file: process.execPath })
+    await rejected
+    expect(spawn).not.toHaveBeenCalled()
+    expect(terminated).toHaveBeenCalledOnce()
+  })
+
   it('keeps the preflight-selected CLI ahead of an earlier executable', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-capture-selection-'))
     roots.push(root)
@@ -98,5 +122,21 @@ describe.skipIf(process.platform !== 'darwin')('Mac capture during executable lo
       stderr: Buffer.from('diagnostic')
     })
     expect(observed.join('')).toBe('diagnostic')
+  })
+})
+
+describe('capture spawn admission', () => {
+  it('checks eligibility at the spawn call and launches nothing once it is false', async () => {
+    const spawn = vi.spyOn(nativeSpawn, 'spawnNativeProcess')
+    const terminated = vi.fn()
+    await expect(
+      execFileCapture(process.execPath, ['-e', 'throw Error("launched")'], {
+        ownedPosixGroup: process.platform !== 'win32',
+        canStart: () => false,
+        onChildTerminated: terminated
+      })
+    ).rejects.toThrow('aborted')
+    expect(spawn).not.toHaveBeenCalled()
+    expect(terminated).toHaveBeenCalledOnce()
   })
 })

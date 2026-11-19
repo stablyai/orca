@@ -3,7 +3,7 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId,
   type ParsedExecutionHost
-} from '../../execution-host'
+} from '../../execution-host/execution-host'
 import { isWslUncPath } from '../../file-access/wsl-paths'
 
 /** SSH relays and Orca servers put plain `orca` on PATH; the Linux `orca-ide` rename is for local desktops and WSL. */

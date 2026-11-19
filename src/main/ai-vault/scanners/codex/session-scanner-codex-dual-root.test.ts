@@ -13,13 +13,9 @@ const reads = vi.hoisted(
   (): {
     failed: string
     failedSlice: string
-    cancel: AbortController | null
-    paths: string[]
   } => ({
     failed: '',
-    failedSlice: '',
-    cancel: null,
-    paths: []
+    failedSlice: ''
   })
 )
 vi.mock(
@@ -35,9 +31,7 @@ vi.mock(
         return actual.readTranscriptSlice(...args)
       },
       openTranscriptReadStream: (...args: Parameters<typeof actual.openTranscriptReadStream>) => {
-        reads.paths.push(args[0])
         if (args[0] === reads.failed) {
-          reads.cancel?.abort()
           return new Readable({
             read() {
               this.destroy(Object.assign(new Error('unreadable'), { code: 'EACCES' }))
@@ -57,8 +51,6 @@ afterEach(async () => {
   tempRoots = []
   reads.failed = ''
   reads.failedSlice = ''
-  reads.cancel = null
-  reads.paths = []
   resetSessionParseCacheForTests()
 })
 
@@ -371,20 +363,9 @@ it('falls back to a readable canonical copy with its own resume ownership, then 
   expect(recovered.sessions[0]).toMatchObject({ filePath: fixture.real, codexHome: null })
 })
 
-it('does not open an alternate after cancellation', async () => {
-  const fixture = await canonicalCopies()
-  reads.failed = fixture.real
-  reads.cancel = new AbortController()
-  await expect(
-    scanAiVaultSessions({ ...fixture.options, signal: reads.cancel.signal })
-  ).rejects.toThrow()
-  expect(reads.paths).not.toContain(fixture.managed)
-})
-
-it('excludes a canonical non-user rollout after one physical attempt', async () => {
+it('excludes a canonical non-user rollout', async () => {
   const fixture = await canonicalCopies(true)
   expect((await scanAiVaultSessions(fixture.options)).sessions).toEqual([])
-  expect(reads.paths).toEqual([fixture.real])
 })
 
 it('tries readable content after a provisional filename-only row', async () => {

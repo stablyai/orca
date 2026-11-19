@@ -3,7 +3,7 @@ import {
   getRepoSshConnectionId,
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../shared/repository/repo-types'
 import type { RepoHostTarget } from '../../../shared/repository/repo-host-identity'
 import { githubAvatarIcon, type RepoIcon } from '../../../shared/repository/appearance/repo-icon'

@@ -4,6 +4,7 @@ import { getManagedAccountPrimaryLabel } from '../../../../../../shared/agent-ac
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { selectClaudeProviderAccount } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
+import { signInClaudeAccountOnHost } from '@/runtime/provider-accounts/sign-in/runtime-host-account-sign-in-client'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import { ButtonGroup } from '../../../ui/button-group'
@@ -23,6 +24,7 @@ import {
   withCopiedClaudeLink
 } from './claude-sign-in-link-menu'
 import { AccountRenameButton, renameTargetFor } from '../account-rename-button'
+import { getObservedAccountPlan } from '@/lib/provider-accounts/observed-account-plans'
 
 export function renderClaudeAccountRow(
   account: ClaudeRateLimitAccountsState['accounts'][number],
@@ -35,6 +37,7 @@ export function renderClaudeAccountRow(
     accountRuntime,
     accountRuntimeUnavailable,
     accountVisibilityOptions,
+    claudeAccountPlans,
     claudeAccounts,
     claudeAction,
     isRemoteAccountScope,
@@ -53,19 +56,23 @@ export function renderClaudeAccountRow(
   const isBusy = claudeAction !== 'idle' || accountRuntimeUnavailable
   const accountRuntimeView = getProviderAccountRuntime(account)
   const accountLabel = getManagedAccountPrimaryLabel(account)
+  const plan = getObservedAccountPlan(claudeAccountPlans, account.id, accountRuntimeView)
   // A named row keeps its sign-in email visible, most of all when it needs signing in.
   const namedEmail = account.displayName ? account.email : null
   const reauthenticate = (copyLink: boolean): Promise<void> =>
     runClaudeAccountAction(
       `reauth:${account.id}`,
       () =>
-        withCopiedClaudeLink(
-          copyLink,
-          window.api.claudeAccounts.reauthenticate({
-            accountId: account.id,
-            copyLink
-          })
-        ),
+        // A server's login runs there; its prompt in this section relays the link and code.
+        accountOwner.kind === 'environment'
+          ? signInClaudeAccountOnHost(accountOwner, account.id)
+          : withCopiedClaudeLink(
+              copyLink,
+              window.api.claudeAccounts.reauthenticate({
+                accountId: account.id,
+                copyLink
+              })
+            ),
       accountRuntimeView
     )
 
@@ -121,6 +128,7 @@ export function renderClaudeAccountRow(
                   ]
                 : [
                     account.organizationName,
+                    plan,
                     namedEmail,
                     formatAccountTimestamp(account.lastAuthenticatedAt, intlLocale)
                   ]
@@ -142,7 +150,7 @@ export function renderClaudeAccountRow(
                 event.stopPropagation()
                 void reauthenticate(false)
               }}
-              disabled={isRemoteAccountScope || isBusy}
+              disabled={isBusy}
               className="h-6 px-2 text-muted-foreground hover:text-foreground"
             >
               {isReauthing ? (

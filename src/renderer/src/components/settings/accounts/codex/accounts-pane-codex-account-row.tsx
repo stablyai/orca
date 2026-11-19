@@ -2,8 +2,9 @@ import { Loader2, RefreshCw, Trash2 } from 'lucide-react'
 import type { CodexRateLimitAccountsState } from '../../../../../../shared/agent-accounts/managed-account-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { getCodexAccountDisplayDetail } from '@/lib/provider-accounts/codex-account-display-label'
+import { getCodexAccountDisplayDetail } from '../../../../../../shared/agent-accounts/codex-account-display-label'
 import { selectCodexProviderAccount } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
+import { signInCodexAccountOnHost } from '@/runtime/provider-accounts/sign-in/runtime-host-account-sign-in-client'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import { getCodexAccountAuthWarning } from './codex-account-auth-warning'
@@ -15,6 +16,7 @@ import { formatAccountTimestamp, getCodexAccountRuntimeLabel } from '../scope/ac
 import type { AccountsPaneSectionModel } from '../accounts-pane-types'
 import { getManagedAccountPrimaryLabel } from '../../../../../../shared/agent-accounts/managed-account-display-names'
 import { AccountRenameButton, renameTargetFor } from '../account-rename-button'
+import { getObservedCodexAccountPlan } from '@/lib/provider-accounts/observed-account-plans'
 
 export function renderCodexAccountRow(
   account: CodexRateLimitAccountsState['accounts'][number],
@@ -27,6 +29,7 @@ export function renderCodexAccountRow(
     accountRuntimeUnavailable,
     accountVisibilityOptions,
     activeCodexAccountId,
+    codexAccountPlans,
     codexAccounts,
     codexAction,
     codexRateLimits,
@@ -55,6 +58,11 @@ export function renderCodexAccountRow(
       })
   const needsReauthentication = Boolean(accountAuthWarning)
   const accountDetail = getCodexAccountDisplayDetail(account, codexAccounts.accounts)
+  const plan = getObservedCodexAccountPlan(
+    codexAccountPlans,
+    account,
+    getProviderAccountRuntime(account)
+  )
   const isReauthing = codexAction === `reauth:${account.id}`
   const isRemoving = codexAction === `remove:${account.id}`
   const isBusy = codexAction !== 'idle' || accountRuntimeUnavailable
@@ -126,6 +134,12 @@ export function renderCodexAccountRow(
                 <span className="shrink-0 opacity-50">•</span>
               </>
             ) : null}
+            {plan ? (
+              <>
+                <span className="shrink-0">{plan}</span>
+                <span className="shrink-0 opacity-50">•</span>
+              </>
+            ) : null}
             {account.displayName ? (
               <>
                 <span className="min-w-0 truncate">{account.email}</span>
@@ -165,13 +179,15 @@ export function renderCodexAccountRow(
               void runCodexAccountAction(
                 `reauth:${account.id}`,
                 () =>
-                  window.api.codexAccounts.reauthenticate({
-                    accountId: account.id
-                  }),
+                  accountOwner.kind === 'environment'
+                    ? signInCodexAccountOnHost(accountOwner, account.id)
+                    : window.api.codexAccounts.reauthenticate({
+                        accountId: account.id
+                      }),
                 getProviderAccountRuntime(account)
               )
             }}
-            disabled={isRemoteAccountScope || isBusy}
+            disabled={isBusy}
             className="h-6 px-2 text-muted-foreground hover:text-foreground"
           >
             {isReauthing ? (

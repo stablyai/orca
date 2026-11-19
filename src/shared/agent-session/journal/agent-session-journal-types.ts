@@ -1,31 +1,30 @@
-import type { AgentSessionForkedFromMark } from '../agent-session-fork-name'
+import type { AgentJournalBotMessageFields } from './agent-journal-bot-message-fields'
+import type { AgentJournalTypedBy } from './agent-journal-typed-by'
+import type { AgentSessionForkedFromMark } from '../conversation-naming/agent-session-fork-name'
 import type {
   AgentJournalApprovalMatchedAskRule,
   AgentJournalApprovalSubject
 } from './agent-session-journal-approval-subject'
 import type { AgentJournalCursor, AgentJournalItemIdentity } from './agent-session-journal-identity'
 import type { AgentJournalTurnScope } from './agent-session-journal-turn-scope'
-import type { AgentSessionProviderContextBoundary } from '../agent-session-provider-context'
+import type { AgentSessionProviderContextBoundary } from '../conversation-context/agent-session-provider-context'
 // Persist/republish plain JSON only. Append-only rows are upcast on read, never rewritten;
 // unreadable versions/kinds must refuse writes rather than be skipped or compacted away.
 
 import type { UnreadAgentSessionFailureFact } from '../failures/agent-session-failure'
 import type { AgentSessionFailureRowWords } from '../failures/agent-session-failure-words'
-import type { AgentSessionQuestionAnswer } from '../agent-session-question-answer'
+import type { AgentSessionQuestionAnswer } from '../requests/prompts/agent-session-question-answer'
 import type { AgentJournalTurnOutcome } from '../../agent-status/lifecycle/agent-turn-outcome'
 import type { NativeChatToolMetadata } from '../../native-chat/tools/native-chat-tool-identity'
-import type { AgentSessionContextUsage } from '../agent-session-context-usage'
+import type { AgentSessionContextUsage } from '../conversation-context/agent-session-context-usage'
 import type { NativeChatBlock, NativeChatRole } from '../../native-chat/native-chat-types'
-import type { AgentMessageSource } from '../agent-session-message-source'
+import type { AgentMessageSource } from './agent-session-message-source'
 import type { AgentSessionExecutionOptions } from '../options/protocol/agent-session-execution-options'
-import type {
-  AgentJournalAgentHandoffItem,
-  AgentJournalAgentStartItem
-} from './agent-journal-creation-facts'
+import type { AgentJournalOrcaCardItem } from '../../agent-journal-orca-card-items'
 export type {
   AgentJournalAgentHandoffItem,
   AgentJournalAgentStartItem
-} from './agent-journal-creation-facts'
+} from '../../agent-journal-orca-card-items'
 
 /** Bump only alongside a read-time upcaster in `journal-row-schema.ts`. */
 /** v3 introduced turn items; other rows stay v2. The first v3 row stops older hosts writing (read-only on released builds, failed load here) rather than allowing truncation. */
@@ -86,11 +85,13 @@ export type AgentJournalMessageItem = {
   /** Present on a message another agent sent through Orca; absent, the person's. Host-written,
    *  outside every fingerprint, never sent to the provider. */
   from?: AgentMessageSource
+  /** Where a sent message was typed, from its transport; host-written like `from`. */
+  typedBy?: AgentJournalTypedBy
   /** Reasoning rows only: absence means unknown, never live. observedAt marks the start. */
   state?: AgentJournalMessageState
   /** Host-observed message/turn/stream end; absent for history or crash recovery without a live end, so no duration is claimed. */
   completedAt?: number
-}
+} & AgentJournalBotMessageFields
 
 export type AgentJournalToolCallState = 'running' | 'completed' | 'failed'
 
@@ -117,6 +118,8 @@ export type AgentJournalToolCallItem = NativeChatToolMetadata & {
 export type AgentJournalDiffItem = {
   kind: 'diff'
   path: string
+  /** Every changed file when `path` is a count ("2 files"); absent from older hosts. */
+  paths?: string[]
   patch: AgentJournalBoundedPayload
 }
 
@@ -192,6 +195,8 @@ export type AgentJournalApprovalItem = {
   kind: 'approval'
   title: string
   displayName?: string
+  /** The tool being asked about, when the provider names one; readers fall back to the title. */
+  toolName?: string
   description?: string
   decisionReason?: string
   blockedPath?: string
@@ -324,8 +329,7 @@ export type AgentJournalStatusItem =
 export type AgentJournalTurnItem = { kind: 'turn' } & AgentJournalTurnLifecycle
 
 export type AgentJournalItemBody =
-  | AgentJournalAgentStartItem
-  | AgentJournalAgentHandoffItem
+  | AgentJournalOrcaCardItem
   | AgentJournalMessageItem
   | AgentJournalToolCallItem
   | AgentJournalDiffItem

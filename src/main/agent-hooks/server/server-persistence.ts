@@ -18,7 +18,7 @@ import { authorityCommitmentsMatch } from './server-persistence-validation'
 import { AgentHookServerHydration } from './server-hydration'
 import { pruneAgentExits, serializeAgentExits } from './agent-exit-evidence'
 import { LastStatusStore } from './last-status-store'
-import { StatusCacheExpiry } from './status-cache-expiry'
+import { KeyedDeadlines } from '../../../shared/collections/keyed-deadlines'
 import { rowsOf, selectedStatusEntries } from './last-status-saved-rows'
 import { nextRetryDelayMs } from '../../sqlite/row-cache/row-cache-failure'
 
@@ -29,7 +29,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
   private statusPersistRetryDelayMs = 0
   private statusPersistRetryAt = 0
 
-  private readonly statusCacheExpiry = new StatusCacheExpiry()
+  private readonly statusCacheExpiry = new KeyedDeadlines()
   private persistedExitRevision = -1
 
   protected buildStatusFile(keys?: readonly string[], includeExits = true): LastStatusFile {

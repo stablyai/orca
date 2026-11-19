@@ -9,7 +9,7 @@ import {
 } from '../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentSessionRecordReader } from '../orchestration/addressing/session-lineage/structured-session-lineage'
 import { createCanonicalSessionResolver } from '../orchestration/addressing/session-lineage/structured-session-lineage'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
 import type { AgentSenderAssociation } from '../../../shared/orchestration/mailbox/agent-sender-associations'
 
 /** Chats with an open tab. Without a recorded tab table the store still knows the workspace's

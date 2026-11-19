@@ -100,6 +100,9 @@ export const LINUX_PACKAGE_PREFIXES = [
   'config/scripts/desktop-distribution/appimage/static-appimage-package-contract',
   'native/computer-use-linux/',
   'native/wayland-clipboard/',
+  'native/provider-exec/',
+  'config/provider-exec-resources',
+  'config/scripts/native-build/posix/build-',
   'resources/linux/',
   'config/scripts/run-headless-serve',
   'config/scripts/runtime-verification/daemon-lifecycle/run-headless-serve'
@@ -165,13 +168,13 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/shared/__tests__/process-host/windows-tree-kill-late-taskkill.win32.test.ts',
   'src/shared/agent-launch/startup/omp-fresh-launch-cmd.win32.test.ts',
   'src/shared/shell/launch/windows-batch-spawn.win32.test.ts',
-  'src/main/claude/structured/launch/claude-structured-child-env.test.ts',
   'src/main/jcode/hook-gate-script.test.ts',
   'src/main/agent-hooks/installation/commands/windows-native-hook-exe-hosts.test.ts',
   'src/main/agent-hooks/installation/commands/windows-batch-hook-launcher.test.ts',
   'src/main/codex/hooks/installation/windows-hook-command.test.ts',
   'src/main/codex/hooks/installation/hook-service-managed-install.test.ts',
   'src/main/windows/windows-pty-job.win32.test.ts',
+  'src/main/filesystem/rolling-file-backup.win32.test.ts',
   'src/main/windows/windows-msys-job.win32.test.ts',
   'src/main/daemon/pty-subprocess/testing/agent-foreground-process-git-bash.win32.test.ts',
   'src/main/windows/windows-host-job.win32.test.ts',
@@ -195,10 +198,9 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/runtime/workspaces/catalog/worktree-scan-admin-fingerprint-gate.test.ts',
   'src/shared/secure-storage/secure-path-windows-acl.win32.test.ts',
   'src/main/runtime/rpc/server/pairing/unreadable-secret-store-preservation.win32.test.ts',
-  'src/main/ipc/preflight-provider-command-selection.test.ts',
-  'src/main/ipc/preflight-runnable-local-cli.test.ts',
+  'src/main/ipc/preflight/preflight-provider-command-selection.test.ts',
+  'src/main/ipc/preflight/preflight-runnable-local-cli.test.ts',
   'src/main/managed-server/install/remote-node-runtime-store-windows.test.ts',
-  'src/main/skills/bundled-skill-install/bundled-skill-local-host.test.ts',
   'src/main/skills/bundled-skill-install/bundled-skill-plan-selection.test.ts'
 ]
 

@@ -59,6 +59,9 @@ const lastMutationNextByQueue = new Map<string, DiffComment[]>()
 // Why: bumped on every re-seed, so an in-flight write can tell whether the floor it captured is still the current one.
 const floorSeedEpochByQueue = new Map<string, number>()
 
+// Why: a failed write may still have landed, so until a write succeeds this copy can't name what the host holds.
+const floorsUncertainAfterFailure = new Set<string>()
+
 /** One change to one copy's notes; the owner alone says which rows it reads, writes and rolls back. */
 export type DiffCommentMutation = {
   owner: DiffCommentOwner
@@ -112,6 +115,15 @@ export function enqueueDiffCommentPersist(
     const seedEpoch = floorSeedEpochByQueue.get(floorKey)
     // Retain state-side array rather than disk-normalized clone so rollback preserves getDiffComments identity.
     let stateList: DiffComment[] | undefined
+    // What this copy last saw on disk; the host merges only the edits since then.
+    // Unknown after a failed write, so the next write replaces the list whole and resyncs the host.
+    const base = floorsUncertainAfterFailure.has(floorKey)
+      ? undefined
+      : (
+          (lastPersistedByQueue.has(floorKey)
+            ? lastPersistedByQueue.get(floorKey)
+            : mutation.previous) ?? []
+        ).map(normalizeDiffComment)
     try {
       const scope = parseWorkspaceKey(worktreeId)
       if (scope?.type === 'folder' && mutation.owner.kind === 'folder') {
@@ -120,7 +132,11 @@ export function enqueueDiffCommentPersist(
           throw new Error('The workspace copy is gone; review notes were not saved.')
         }
         stateList = folderWorkspace.diffComments
-        await writeDiffCommentsToHost(mutation.owner, (stateList ?? []).map(normalizeDiffComment))
+        await writeDiffCommentsToHost(
+          mutation.owner,
+          (stateList ?? []).map(normalizeDiffComment),
+          base
+        )
       } else if (mutation.owner.kind === 'worktree') {
         const rows = findCopyRows(get(), worktreeId, mutation.owner.authority)
         // Why: the copy these notes were made on is gone; never send another's list.
@@ -128,7 +144,11 @@ export function enqueueDiffCommentPersist(
           throw new Error('The workspace copy is gone; review notes were not saved.')
         }
         stateList = rows.at(-1)?.diffComments
-        await writeDiffCommentsToHost(mutation.owner, (stateList ?? []).map(normalizeDiffComment))
+        await writeDiffCommentsToHost(
+          mutation.owner,
+          (stateList ?? []).map(normalizeDiffComment),
+          base
+        )
       }
     } catch (err) {
       // Why: converge to what actually landed; rollback's identity guard no-ops when a later mutation owns the array.
@@ -137,8 +157,10 @@ export function enqueueDiffCommentPersist(
         ? lastPersistedByQueue.get(floorKey)
         : mutation.previous
       rollback(set, worktreeId, floor, mutation)
+      floorsUncertainAfterFailure.add(floorKey)
       throw err
     }
+    floorsUncertainAfterFailure.delete(floorKey)
     // Out-of-band replacement during await reseeded floor; never restore the older captured list as floor.
     if (floorSeedEpochByQueue.get(floorKey) === seedEpoch) {
       lastPersistedByQueue.set(floorKey, stateList)

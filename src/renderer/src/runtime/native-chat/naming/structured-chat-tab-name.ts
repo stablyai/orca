@@ -1,7 +1,7 @@
-import type { Tab } from '../../../../../shared/tab-types'
-import { isAgentSessionConversationName } from '../../../../../shared/agent-session/agent-session-conversation-name'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
+import { isAgentSessionConversationName } from '../../../../../shared/agent-session/conversation-naming/agent-session-conversation-name'
 import type { AppState } from '@/store/types'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import {
   structuredAgentSessionOwnerForTab,
   structuredAgentSessionTargetForHost

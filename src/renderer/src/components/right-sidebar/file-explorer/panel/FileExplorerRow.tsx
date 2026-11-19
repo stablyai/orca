@@ -2,7 +2,7 @@ import React from 'react'
 import { ChevronRight, CircleAlert, CircleSlash, Link, Loader2 } from 'lucide-react'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { cn } from '@/lib/class-names'
-import { FileTypeIcon, FolderIcon } from '@/components/FileTypeIcon'
+import { FileTypeIcon, FolderIcon } from '@/components/icons/FileTypeIcon'
 import {
   encodeWorkspaceFilePaths,
   WORKSPACE_FILE_PATH_MIME,
@@ -41,7 +41,6 @@ export type FileExplorerRowProps = {
     paths: readonly string[]
   ) => Omit<WorkspaceFileDragSource, 'workspaceId'> | null
   runtimeDownloadContext?: RuntimeFileOperationArgs | null
-  supportsFolderDownload?: boolean
   canOpenInOrcaBrowser: boolean
   canCollapseFolderSubtree: boolean
   targetDir: string
@@ -87,7 +86,6 @@ export function FileExplorerRow({
   sourceWorkspaceId,
   resolveDragSourceOwner,
   runtimeDownloadContext,
-  supportsFolderDownload = false,
   canOpenInOrcaBrowser,
   canCollapseFolderSubtree,
   targetDir,
@@ -274,7 +272,6 @@ export function FileExplorerRow({
         deleteShortcutLabel={deleteShortcutLabel}
         connectionId={connectionId}
         runtimeDownloadContext={runtimeDownloadContext}
-        supportsFolderDownload={supportsFolderDownload}
         canOpenInOrcaBrowser={canOpenInOrcaBrowser}
         canCollapseFolderSubtree={canCollapseFolderSubtree}
         targetDir={targetDir}
