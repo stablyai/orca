@@ -672,7 +672,7 @@ describe('agents in workspaces handed to the bot', () => {
     ])
   })
 
-  it('lists a worker the bot started on a paired computer once', () => {
+  it('deduplicates a recorded paired worker and distinguishes agents across hosts', () => {
     const activity = buildBotActivity(
       input({
         recordedWorkers: [chatWorker('remote', 'remote:pane')],
@@ -682,25 +682,17 @@ describe('agents in workspaces handed to the bot', () => {
             entry: preamble,
             worktreeId: 'wt-phone',
             hostId: 'runtime:env-1'
-          }
-        ]
-      })
-    )
-    expect(activity.workers.map((row) => row.key)).toEqual(['worker:d-phone'])
-  })
-
-  it("shows a paired computer's agent with its host, apart from a same-key local one", () => {
-    const activity = buildBotActivity(
-      input({
-        handedAgents: [
+          },
           { paneKey: 'p:1', entry: waiting, worktreeId: 'wt-local' },
           { paneKey: 'p:1', entry: waiting, worktreeId: 'wt-remote', hostId: 'runtime:env-1' }
         ]
       })
     )
-    expect(activity.workers.map((row) => [row.key, row.hostId])).toEqual([
-      ['agent:local:p:1', undefined],
-      ['agent:runtime:env-1:p:1', 'runtime:env-1']
+    expect(activity.workers.map((row) => row.key)).toEqual([
+      'worker:d-phone',
+      'agent:local:p:1',
+      'agent:runtime:env-1:p:1'
     ])
+    expect(activity.workers.slice(1).map((row) => row.hostId)).toEqual([undefined, 'runtime:env-1'])
   })
 })
