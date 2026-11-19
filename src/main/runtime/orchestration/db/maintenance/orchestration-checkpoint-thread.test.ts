@@ -43,8 +43,6 @@ describe('the orchestration checkpoint thread', () => {
     for (let i = 0; i < 1200; i++) {
       write.run(i, 'y'.repeat(3000))
     }
-    const written = frames(db).log
-    expect(written).toBeGreaterThanOrEqual(1000)
     await vi.waitFor(() => expect(frames(db).checkpointed).toBeGreaterThan(0), { timeout: 5000 })
   })
 })

@@ -36,14 +36,17 @@ let interval = workerData.busyMs;
 let seen = version.get().data_version;
 // Commits that landed during a checkpoint leave a tail, and the WAL restarts only once it drains.
 let owed = false;
+// The WAL as the last checkpoint left it; frames since then belong to the same WAL only until a restart.
+let last = null;
 const run = (before) => {
   const state = checkpoint.get();
   const after = frames.get();
   // A commit already restarted the WAL: nothing is owed.
   const restarted = after.log < state.log || after.checkpointed < state.checkpointed;
   // A catch-up asks again only while it makes progress; a reader can pin the tail.
-  // A commit after this sample can still leave a tail; an empty WAL clears the debt on the next tick.
+  // A commit after this sample can still leave a tail in this WAL, so the debt stands until a restart or an empty WAL.
   owed = !restarted && state.checkpointed > before.checkpointed;
+  last = after;
 };
 const tick = () => {
   try {
@@ -52,6 +55,10 @@ const tick = () => {
     const paused = current === seen;
     const state = frames.get();
     const pending = state.log - state.checkpointed;
+    // Main's commit restarted the WAL since that checkpoint: what waits now is a new batch, not its tail.
+    if (owed && last && (state.log < last.log || state.checkpointed < last.checkpointed)) {
+      owed = false;
+    }
     if (pending >= workerData.batchFrames || (owed && paused && pending > 0)) {
       run(state);
     } else if (pending === 0) {
