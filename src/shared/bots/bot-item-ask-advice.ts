@@ -41,10 +41,10 @@ const ORDER: readonly BotItemAskAdviceCode[] = [
   'jargon'
 ]
 
-// Choices spelled out in prose: "Reply **yes**", "Reply A or B", "Options: (a) …", "A) …", "Option 2",
+// Choices spelled out in prose: "Reply **yes**", "Reply A or B", "Options: (a) ...", "A) ...", "Option 2",
 // "Pick one:", "A/B/C", "(recommended)".
 const PROSE_CHOICES = [
-  /\b(?:reply|answer|say)\s+(?:with\s+)?(?:e\.g\.\s*)?[*"“'`]/i,
+  /\b(?:reply|answer|say)\s+(?:with\s+)?(?:e\.g\.\s*)?[*"\u201c'`]/i,
   /\b(?:pick(?: one)?|choose|options?)\s*:/i,
   /\(\s*[a-dA-D1-4]\s*\)\s/,
   /(?:^|\s)[A-D]\)\s/m,
@@ -59,8 +59,8 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 // A long lowercase run into a capital or digit ("questionalreadyNeedsyou"), or one past real English
 // words ("internationalization" is 20); camelCase identifiers keep their lowercase runs short.
 const FUSED = /[a-z]{12}[A-Z0-9]|[a-z]{22}/
-const PIECE_SPLIT = /[/+,;:()[\]{}<>"'“”‘’|=*`]+/
-const END_MARKS = /^[.!?…-]+|[.!?…-]+$/g
+const PIECE_SPLIT = /[/+,;:()[\]{}<>"'\u201c\u201d\u2018\u2019|=*`]+/
+const END_MARKS = /^[.!?\u2026-]+|[.!?\u2026-]+$/g
 
 // "Reply A or B" in any case; the letter must be a capital or a digit, so "reply with a summary" is
 // not option A.
@@ -179,7 +179,7 @@ function prose(text: string): string {
 
 /** A path, even wrapped in brackets or quotes: the bot pointed at it, so its ids are fine. */
 function isPath(token: string): boolean {
-  const bare = token.replace(/^[([{<"'“‘`]+/, '')
+  const bare = token.replace(/^[([{<"'\u201c\u2018`]+/, '')
   return (
     bare.startsWith('/') ||
     bare.startsWith('~/') ||
