@@ -82,7 +82,7 @@ async function rightClickPaste(page: Page, target: Locator): Promise<void> {
   await moveAndClick(page, paste)
 }
 
-test('pastes clipboard files and images into the selected folder', async ({
+test('pastes clipboard files and images through the explorer context menus', async ({
   orcaPage: page,
   electronApp,
   registerPostElectronShutdownCleanup
@@ -144,5 +144,11 @@ test('pastes clipboard files and images into the selected folder', async ({
     .toBe(CONTENT)
   await expect.poll(() => readdir(destination)).toHaveLength(2)
   await expect(shell.getByRole('button', { name: FILE_NAME, exact: true })).toBeVisible()
+
+  await rightClickPaste(page, shell.locator('[data-slot="scroll-area-viewport"]'))
+  await expect
+    .poll(() => readFile(path.join(workspace, FILE_NAME), 'utf8').catch(() => null))
+    .toBe(CONTENT)
+  await expect(shell.getByRole('button', { name: FILE_NAME, exact: true })).toHaveCount(2)
   await page.screenshot({ path: testInfo.outputPath('after.png') })
 })
