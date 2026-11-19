@@ -143,4 +143,38 @@ describe('Codex restart attention population', () => {
     state = { ...state, ptyIdsByTabId: { tab: ['successor'] } }
     expect(selectCodexRestartStatus(state).stalePtyIds).toEqual(['successor'])
   })
+  it('keeps a result outside the pane population stable and updates when a result covers a stale pane', () => {
+    const busyLeaf = '00000000-0000-4000-8000-000000000003'
+    const key = `busy:${busyLeaf}`
+    let state = population()
+    state.tabsByWorktree.wt.push({ ...state.tabsByWorktree.wt[0], id: 'busy', ptyId: 'busy-pty' })
+    state.terminalLayoutsByTabId.busy = {
+      root: { type: 'leaf', leafId: busyLeaf },
+      activeLeafId: busyLeaf,
+      expandedLeafId: null,
+      ptyIdsByLeafId: { [busyLeaf]: 'busy-pty' }
+    }
+    state.ptyIdsByTabId.busy = ['busy-pty']
+    const dispatched: CodexAccountRestart = {
+      ...failure(),
+      tabId: 'busy',
+      leafId: busyLeaf,
+      oldPtyId: 'busy-pty',
+      phase: 'dispatched'
+    }
+    state.pendingPaneAccountRestarts[key] = dispatched
+    const before = selectCodexRestartStatus(state)
+    expect(before.stalePtyIds).toEqual(['live'])
+    state = {
+      ...state,
+      pendingPaneAccountRestarts: { [key]: { ...dispatched, resultPtyId: 'unbound-result' } }
+    }
+    expect(selectCodexRestartStatus(state)).toBe(before)
+    state = {
+      ...state,
+      pendingPaneAccountRestarts: { [key]: { ...dispatched, resultPtyId: 'live' } }
+    }
+    expect(selectCodexRestartStatus(state).stalePtyIds).toEqual([])
+    expect(selectCodexRestartStatus(state).attentionCount).toBe(0)
+  })
 })
