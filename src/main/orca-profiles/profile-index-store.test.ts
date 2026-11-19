@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import {
   existsSync,
+  linkSync,
   mkdtempSync,
   readFileSync,
   writeFileSync,
@@ -42,64 +43,6 @@ describe('profile index store', () => {
 
   afterEach(() => {
     removeTreeSync(testState.dir)
-  })
-
-  it('recovers a corrupt index asynchronously without replacing its valid backup', async () => {
-    const { ensureActiveOrcaProfileAsync } = await import('./profile-index-store-async')
-    const profile = { ...createDefaultLocalOrcaProfile(100), id: 'work-profile', name: 'Work' }
-    const indexPath = join(testState.dir, 'orca-profile-index.json')
-    const backup = JSON.stringify({
-      schemaVersion: 1,
-      activeProfileId: 'work-profile',
-      profiles: [profile]
-    })
-    writeFileSync(indexPath, '{broken')
-    writeFileSync(`${indexPath}.bak`, backup)
-    const active = await ensureActiveOrcaProfileAsync(testState.dir)
-    expect(active.profile.id).toBe('work-profile')
-    expect(readFileSync(`${indexPath}.bak`, 'utf8')).toBe(backup)
-  })
-
-  it('keeps legacy JSON out of an asynchronously opened database-authoritative profile', async () => {
-    const { ensureActiveOrcaProfileAsync } = await import('./profile-index-store-async')
-    const directory = join(testState.dir, 'profiles', DEFAULT_LOCAL_ORCA_PROFILE_ID)
-    mkdirSync(directory, { recursive: true })
-    writeFileSync(join(directory, 'profile-state.db.authority'), 'sqlite\n')
-    writeFileSync(join(testState.dir, 'orca-data.json'), '{"legacy":true}')
-    const active = await ensureActiveOrcaProfileAsync(testState.dir)
-    expect(existsSync(active.dataFile)).toBe(false)
-  })
-
-  it('retains both profiles when their cloud links change concurrently', async () => {
-    const store = await loadProfileIndexStore()
-    const { linkOrcaProfileToCloudAsync } = await import('./cloud-auth/profile-cloud-index')
-    const first = store.ensureActiveOrcaProfile(testState.dir)
-    const second = store.createLocalOrcaProfile({ name: 'Work' }, testState.dir)
-    await Promise.all([
-      linkOrcaProfileToCloudAsync(
-        first.profile.id,
-        {
-          userId: 'user-one',
-          cloudProfileId: 'cloud-one',
-          email: 'one@example.com',
-          linkedAt: 1
-        },
-        testState.dir
-      ),
-      linkOrcaProfileToCloudAsync(
-        second.profile.id,
-        {
-          userId: 'user-two',
-          cloudProfileId: 'cloud-two',
-          email: 'two@example.com',
-          linkedAt: 2
-        },
-        testState.dir
-      )
-    ])
-    expect(
-      store.readProfileIndex(join(testState.dir, 'orca-profile-index.json'))?.profiles
-    ).toMatchObject([{ cloud: { userId: 'user-one' } }, { cloud: { userId: 'user-two' } }])
   })
 
   it('uses an existing active profile data file without overwriting it from legacy state', async () => {
@@ -257,5 +200,29 @@ describe('profile index store', () => {
 
     expect(() => store.ensureActiveOrcaProfile()).toThrow('Could not read active profile index')
     expect(readJson(indexPath)).toEqual(index)
+  })
+
+  it('replaces a hard-linked backup without mutating the unrelated inode', async () => {
+    const store = await loadProfileIndexStore()
+    const indexPath = (await import('./profile-storage-paths')).getOrcaProfileIndexPath()
+    const first = createDefaultLocalOrcaProfile(1)
+    const firstIndex: OrcaProfileIndex = {
+      schemaVersion: ORCA_PROFILE_INDEX_SCHEMA_VERSION,
+      activeProfileId: first.id,
+      profiles: [first]
+    }
+    store.writeProfileIndex(indexPath, firstIndex)
+
+    const unrelated = join(testState.dir, 'unrelated.json')
+    writeFileSync(unrelated, '{"preserve":true}', 'utf-8')
+    linkSync(unrelated, `${indexPath}.bak`)
+
+    const second = { ...first, name: 'Updated' }
+    const secondIndex: OrcaProfileIndex = { ...firstIndex, profiles: [second] }
+    store.writeProfileIndex(indexPath, secondIndex)
+
+    expect(readFileSync(unrelated, 'utf-8')).toBe('{"preserve":true}')
+    expect(readJson(`${indexPath}.bak`)).toEqual(firstIndex)
+    expect(readJson(indexPath)).toEqual(secondIndex)
   })
 })

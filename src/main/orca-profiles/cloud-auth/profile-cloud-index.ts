@@ -184,19 +184,3 @@ export function unlinkOrcaProfileFromCloud(
     profiles: nextIndex.profiles
   }
 }
-
-// Index mutations stay indivisible with synchronous profile creation and switching.
-export async function linkOrcaProfileToCloudAsync(
-  profileId: string,
-  cloud: OrcaProfileCloudSummary,
-  userDataPath: string
-): Promise<OrcaProfileListState> {
-  return linkOrcaProfileToCloud(profileId, cloud, userDataPath)
-}
-
-export async function unlinkOrcaProfileFromCloudAsync(
-  profileId: string,
-  userDataPath: string
-): Promise<OrcaProfileListState> {
-  return unlinkOrcaProfileFromCloud(profileId, userDataPath)
-}

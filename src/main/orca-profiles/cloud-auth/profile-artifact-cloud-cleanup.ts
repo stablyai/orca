@@ -54,7 +54,18 @@ function readCleanupMarker(
   } catch (error) {
     throw new Error('Artifact cloud cleanup marker could not be read safely.', { cause: error })
   }
-  return parseCleanupMarker(parsed)
+  if (
+    !parsed ||
+    typeof parsed !== 'object' ||
+    (parsed as Partial<ArtifactCloudCleanupMarker>).version !== 1 ||
+    !['prepared', 'committed'].includes(
+      (parsed as Partial<ArtifactCloudCleanupMarker>).phase ?? ''
+    ) ||
+    typeof (parsed as Partial<ArtifactCloudCleanupMarker>).targetIdentity !== 'string'
+  ) {
+    throw new Error('Artifact cloud cleanup marker has an unsupported format.')
+  }
+  return parsed as ArtifactCloudCleanupMarker
 }
 
 export function artifactCloudCleanupNeedsCommit(
@@ -123,20 +134,4 @@ export function prepareArtifactCloudUse(
 ): void {
   completeArtifactCloudCleanupIfCommitted(profile.id, userDataPath, profile.cloud)
   assertArtifactCloudCleanupReady(profile.id, userDataPath, profile.cloud)
-}
-
-function parseCleanupMarker(parsed: unknown): ArtifactCloudCleanupMarker {
-  if (
-    !parsed ||
-    typeof parsed !== 'object' ||
-    !('version' in parsed) ||
-    parsed.version !== 1 ||
-    !('phase' in parsed) ||
-    (parsed.phase !== 'prepared' && parsed.phase !== 'committed') ||
-    !('targetIdentity' in parsed) ||
-    typeof parsed.targetIdentity !== 'string'
-  ) {
-    throw new Error('Artifact cloud cleanup marker has an unsupported format.')
-  }
-  return { version: 1, phase: parsed.phase, targetIdentity: parsed.targetIdentity }
 }

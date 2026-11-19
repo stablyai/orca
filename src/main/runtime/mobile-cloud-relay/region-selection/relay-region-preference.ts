@@ -1,6 +1,5 @@
 import { measureRelayRegionDecision } from './relay-region-decision'
 import { existsSync, readFileSync, rmSync, statSync } from 'node:fs'
-import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { z } from 'zod'
@@ -56,8 +55,8 @@ const RelayRegionCacheSchema = z
 
 type RelayRegionCache = z.infer<typeof RelayRegionCacheSchema>
 
-export async function clearRelayRegionPreferenceCache(userDataPath: string): Promise<void> {
-  await rm(join(userDataPath, RELAY_REGION_CACHE_FILENAME), { force: true })
+export function clearRelayRegionPreferenceCache(userDataPath: string): void {
+  rmSync(join(userDataPath, RELAY_REGION_CACHE_FILENAME), { force: true })
 }
 
 type RelayRegionPreferenceOptions = {

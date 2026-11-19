@@ -17,23 +17,23 @@ export async function refreshCurrentOrcaProfileAuth(
   const active = ensureActiveOrcaProfile(userDataPath)
   const auth = () => getOrcaProfileAuthStatusFromProfile(active, userDataPath)
   if (!active.profile.cloud) {
-    return { status: 'local', auth: await auth() }
+    return { status: 'local', auth: auth() }
   }
   if (isOrcaCloudDevAuthEnabled()) {
-    const result = await refreshDevOrcaCloudProfile(active, userDataPath)
+    const result = refreshDevOrcaCloudProfile(active, userDataPath)
     if (result.status !== 'updated') {
-      return { status: 'reconnect-required', auth: await auth() }
+      return { status: 'reconnect-required', auth: auth() }
     }
     return {
       status: 'refreshed',
-      auth: await auth(),
+      auth: auth(),
       activeProfileId: result.list.activeProfileId,
       profiles: result.list.profiles
     }
   }
   const configState = getOrcaCloudAuthConfig()
   if (!configState.configured) {
-    return { status: 'unconfigured', auth: await auth() }
+    return { status: 'unconfigured', auth: auth() }
   }
   try {
     const cloud = active.profile.cloud
@@ -49,7 +49,7 @@ export async function refreshCurrentOrcaProfileAuth(
       }
     )
     if (operation.status !== 'ok' || !ticket) {
-      return { status: 'reconnect-required', auth: await auth() }
+      return { status: 'reconnect-required', auth: auth() }
     }
     const refresh = operation.value
     if (
@@ -59,18 +59,13 @@ export async function refreshCurrentOrcaProfileAuth(
     ) {
       throw new Error('orca_cloud_identity_changed_during_capability_refresh')
     }
-    const list = await commitCloudSessionCapabilities(
-      active.profile.id,
-      userDataPath,
-      ticket,
-      refresh
-    )
+    const list = commitCloudSessionCapabilities(active.profile.id, userDataPath, ticket, refresh)
     if (!list) {
-      return { status: 'reconnect-required', auth: await auth() }
+      return { status: 'reconnect-required', auth: auth() }
     }
     return {
       status: 'refreshed',
-      auth: await getOrcaProfileAuthStatusFromProfile(
+      auth: getOrcaProfileAuthStatusFromProfile(
         ensureActiveOrcaProfile(userDataPath),
         userDataPath
       ),
@@ -80,7 +75,7 @@ export async function refreshCurrentOrcaProfileAuth(
   } catch (error) {
     return {
       status: 'failed',
-      auth: await auth(),
+      auth: auth(),
       error: error instanceof Error ? error.message : String(error)
     }
   }

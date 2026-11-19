@@ -80,17 +80,17 @@ export class OrcaAccountService {
     return links.refusal(transition.nextUserId, transition.currentUserId)
   }
 
-  async getAuthStatus(): Promise<OrcaProfileAuthStatus> {
+  getAuthStatus(): OrcaProfileAuthStatus {
     return getCurrentOrcaProfileAuthStatus(this.userDataPath())
   }
 
   /** What a sign-in's approval page shows before it moves this host to another account: the
    *  account it was on, and who its bots' links belong to. */
-  async signInContext(): Promise<{
+  signInContext(): {
     previous: { userId: string; email: string } | null
     links: { ownerUserIds: string[]; botNames: string[] } | null
-  }> {
-    const cloud = (await this.getAuthStatus()).cloud
+  } {
+    const cloud = this.getAuthStatus().cloud
     const previous = cloud ? { userId: cloud.userId, email: cloud.email } : null
     const links = this.accountBoundLinks?.holders?.(previous?.userId ?? null) ?? null
     return { previous, links: links && links.ownerUserIds.length > 0 ? links : null }

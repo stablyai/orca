@@ -1,3 +1,4 @@
+import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { botAccountSwitchBlocker } from '../bots/bot-account-switch-blocker'
 import { OrcaAccountService } from '../orca-profiles/orca-account-service'
 import { flushUnsavedCloudSessions } from '../orca-profiles/cloud-session/profile-cloud-session-owner'
@@ -74,7 +75,7 @@ export function installOrcadOrcaAccount(
   installOrcaServerSignIn(server)
   server.startDailyRefresh()
   // A rotation saved only in memory would be replayed after restart and end the session family.
-  registerCleanup(flushUnsavedCloudSessions)
+  getAppEnvironment().onWillQuit(flushUnsavedCloudSessions)
   registerCleanup(() => installOrcaServerSignIn(null))
   // No browser here: Google sign-in prints its link and takes the pasted address, or a paired desktop's.
   installGoogleConnect(new GoogleConnect())

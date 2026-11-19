@@ -1,25 +1,16 @@
-import {
-  normalizeProfileIndex,
-  createInitialProfileIndex,
-  getActiveProfile
-} from './profile-index-schema'
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  writeFileSync
-} from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { dirname } from 'node:path'
+import { writeRollingFileBackup } from '../filesystem/rolling-file-backup'
 import {
   bestEffortFsyncDirectorySync,
   fsyncFileSync
 } from '../../shared/secure-storage/secure-file'
 import {
+  createDefaultLocalOrcaProfile,
   DEFAULT_LOCAL_ORCA_PROFILE_ID,
   DEFAULT_LOCAL_ORCA_PROFILE_NAME,
+  ORCA_PROFILE_INDEX_SCHEMA_VERSION,
   type CreateLocalOrcaProfileArgs,
   type CreateLocalOrcaProfileResult,
   type OrcaProfileIndex,
@@ -46,6 +37,54 @@ export type ActiveOrcaProfileState = {
   dataFile: string
   stateDatabaseFile: string
   profileDirectory: string
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isProfileSummary(value: unknown): value is OrcaProfileSummary {
+  if (!isObject(value)) {
+    return false
+  }
+  const avatar = value.avatar
+  const cloud = value.cloud
+  return (
+    typeof value.id === 'string' &&
+    // Index IDs become path segments; reject traversal outside the profile directory.
+    /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(value.id) &&
+    typeof value.name === 'string' &&
+    value.name.length > 0 &&
+    (value.kind === 'local' || value.kind === 'cloud-linked') &&
+    typeof value.createdAt === 'number' &&
+    typeof value.updatedAt === 'number' &&
+    typeof value.lastOpenedAt === 'number' &&
+    isObject(avatar) &&
+    avatar.kind === 'initials' &&
+    typeof avatar.initials === 'string' &&
+    avatar.color === 'neutral' &&
+    (cloud === undefined || isObject(cloud))
+  )
+}
+
+function normalizeProfileIndex(raw: unknown): OrcaProfileIndex | null {
+  if (!isObject(raw) || !Array.isArray(raw.profiles)) {
+    return null
+  }
+  const profiles = raw.profiles.filter(isProfileSummary)
+  const activeProfileId =
+    typeof raw.activeProfileId === 'string' &&
+    profiles.some((profile) => profile.id === raw.activeProfileId)
+      ? raw.activeProfileId
+      : profiles[0]?.id
+  if (!activeProfileId) {
+    return null
+  }
+  return {
+    schemaVersion: ORCA_PROFILE_INDEX_SCHEMA_VERSION,
+    activeProfileId,
+    profiles
+  }
 }
 
 function sanitizeProfileName(value: unknown): string {
@@ -79,7 +118,7 @@ export function writeProfileIndex(indexPath: string, index: OrcaProfileIndex): v
   // Never replace the recovery backup with a corrupt primary index.
   if (existsSync(indexPath) && readProfileIndexFile(indexPath)) {
     try {
-      copyFileSync(indexPath, `${indexPath}.bak`)
+      writeRollingFileBackup(indexPath, `${indexPath}.bak`)
     } catch {
       // Backup failure must not block the primary write.
     }
@@ -91,6 +130,15 @@ export function writeProfileIndex(indexPath: string, index: OrcaProfileIndex): v
   bestEffortFsyncDirectorySync(dirname(indexPath))
 }
 
+function createInitialProfileIndex(now = Date.now()): OrcaProfileIndex {
+  const profile = createDefaultLocalOrcaProfile(now)
+  return {
+    schemaVersion: ORCA_PROFILE_INDEX_SCHEMA_VERSION,
+    activeProfileId: profile.id,
+    profiles: [profile]
+  }
+}
+
 export function loadOrCreateProfileIndex(userDataPath: string): OrcaProfileIndex {
   const indexPath = getOrcaProfileIndexPath(userDataPath)
   const index = readExistingProfileIndex(indexPath)
@@ -100,6 +148,14 @@ export function loadOrCreateProfileIndex(userDataPath: string): OrcaProfileIndex
   const nextIndex = createInitialProfileIndex()
   writeProfileIndex(indexPath, nextIndex)
   return nextIndex
+}
+
+function getActiveProfile(index: OrcaProfileIndex): OrcaProfileSummary {
+  return (
+    index.profiles.find((profile) => profile.id === index.activeProfileId) ??
+    index.profiles[0] ??
+    createDefaultLocalOrcaProfile(Date.now())
+  )
 }
 
 export function ensureActiveOrcaProfile(

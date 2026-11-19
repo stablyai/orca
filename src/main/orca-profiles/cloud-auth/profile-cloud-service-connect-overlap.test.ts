@@ -130,9 +130,7 @@ describe('Orca cloud overlapping connect', () => {
     const first = connectCurrentOrcaProfile(userDataPath, openNoBrowser)
     const later = connectCurrentOrcaProfile(userDataPath, openNoBrowser)
     await expect(later).resolves.toMatchObject({ status: 'connected' })
-    expect((await getCurrentOrcaProfileAuthStatus(userDataPath)).cloud?.email).toBe(
-      'ada@example.com'
-    )
+    expect(getCurrentOrcaProfileAuthStatus(userDataPath).cloud?.email).toBe('ada@example.com')
 
     finishFirst({
       code: 'earlier-code',
@@ -147,9 +145,7 @@ describe('Orca cloud overlapping connect', () => {
       expect.any(Object),
       expect.objectContaining({ code: 'later-code' })
     )
-    expect((await getCurrentOrcaProfileAuthStatus(userDataPath)).cloud?.email).toBe(
-      'ada@example.com'
-    )
+    expect(getCurrentOrcaProfileAuthStatus(userDataPath).cloud?.email).toBe('ada@example.com')
   })
 
   it('discards an earlier token exchange that finishes after a later wait has linked', async () => {
@@ -227,9 +223,7 @@ describe('Orca cloud overlapping connect', () => {
       capabilities
     })
     await expect(later).resolves.toMatchObject({ status: 'connected' })
-    expect((await getCurrentOrcaProfileAuthStatus(userDataPath)).cloud?.email).toBe(
-      'ada@example.com'
-    )
+    expect(getCurrentOrcaProfileAuthStatus(userDataPath).cloud?.email).toBe('ada@example.com')
 
     finishEarlierExchange({
       accessToken: 'earlier-access',
@@ -240,9 +234,7 @@ describe('Orca cloud overlapping connect', () => {
       capabilities
     })
     await expect(earlier).resolves.toMatchObject({ status: 'cancelled' })
-    expect((await getCurrentOrcaProfileAuthStatus(userDataPath)).cloud?.email).toBe(
-      'ada@example.com'
-    )
+    expect(getCurrentOrcaProfileAuthStatus(userDataPath).cloud?.email).toBe('ada@example.com')
   })
 
   it('does not relink an in-flight later wait after sign-out', async () => {
@@ -297,6 +289,6 @@ describe('Orca cloud overlapping connect', () => {
     })
     await expect(later).resolves.toMatchObject({ status: 'cancelled' })
     expect(exchangeOrcaCloudAuthCodeMock).toHaveBeenCalledTimes(1)
-    expect(await getCurrentOrcaProfileAuthStatus(userDataPath)).toMatchObject({ state: 'local' })
+    expect(getCurrentOrcaProfileAuthStatus(userDataPath)).toMatchObject({ state: 'local' })
   })
 })

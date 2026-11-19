@@ -12,16 +12,6 @@ const { calls, client, owner } = vi.hoisted(() => {
       })
     },
     owner: {
-      commitCloudSessionChange: async (
-        _id: string,
-        _path: string,
-        change: (session: unknown) => unknown
-      ) =>
-        change({
-          read: owner.readCloudSession,
-          signIn: owner.signInCloudSession,
-          restore: vi.fn()
-        }),
       readCloudSession: vi.fn(),
       sessionFromExchange: (exchange: { refreshToken: string }) => exchange,
       signInCloudSession: vi.fn(
@@ -59,9 +49,9 @@ const code = {
   state: 'state'
 }
 
-async function signIn() {
+function signIn() {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the client that reads the config is mocked.
-  return await signInCurrentOrcaProfileWithCode('/user-data', config as OrcaCloudAuthConfig, code)
+  return signInCurrentOrcaProfileWithCode('/user-data', config as OrcaCloudAuthConfig, code)
 }
 
 describe('signInCurrentOrcaProfileWithCode', () => {

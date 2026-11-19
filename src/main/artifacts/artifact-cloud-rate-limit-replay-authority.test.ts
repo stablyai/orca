@@ -94,7 +94,7 @@ async function signIn(): Promise<Signin> {
   createdPaths.push(userDataPath)
   const profileId = ensureActiveOrcaProfile(userDataPath).profile.id
   linkOrcaProfileToCloud(profileId, cloudA, userDataPath)
-  await saveOrcaCloudSession(profileId, userDataPath, {
+  saveOrcaCloudSession(profileId, userDataPath, {
     accessToken: 'access-a',
     refreshToken: 'refresh-a',
     expiresAt: Date.now() + 60 * 60 * 1000,
@@ -103,19 +103,19 @@ async function signIn(): Promise<Signin> {
   return { userDataPath, profileId, artifacts: new ArtifactCloudService(userDataPath, () => true) }
 }
 
-async function signOutInApp({ profileId, userDataPath }: Signin): Promise<void> {
-  await signOutCloudSession(profileId, userDataPath)
+function signOutInApp({ profileId, userDataPath }: Signin): void {
+  signOutCloudSession(profileId, userDataPath)
   unlinkOrcaProfileFromCloud(profileId, userDataPath)
 }
 
-async function switchAccount(signin: Signin): Promise<void> {
-  await signOutInApp(signin)
+function switchAccount(signin: Signin): void {
+  signOutInApp(signin)
   linkOrcaProfileToCloud(signin.profileId, cloudB, signin.userDataPath)
 }
 
 // A server-revoked session signs out without unlinking the profile.
-async function revokeSession({ profileId, userDataPath }: Signin): Promise<void> {
-  await signOutCloudSession(profileId, userDataPath)
+function revokeSession({ profileId, userDataPath }: Signin): void {
+  signOutCloudSession(profileId, userDataPath)
 }
 
 // The wait is scheduled after the 429 body is read; act only once it exists.
@@ -131,11 +131,11 @@ async function untilRetryScheduled(): Promise<void> {
 /** Starts `run`, changes the account during the 429 wait, then lets the wait end. */
 async function changeAccountDuringWait<T>(
   run: () => Promise<T>,
-  change: () => void | Promise<void>
+  change: () => void
 ): Promise<unknown> {
   const outcome = run().catch((caught: unknown) => caught)
   await untilRetryScheduled()
-  await change()
+  change()
   await vi.advanceTimersByTimeAsync(30_000)
   return outcome
 }
@@ -210,7 +210,7 @@ describe('a rate-limited artifact request whose account changes during the wait'
 
     const outcome = await changeAccountDuringWait(
       () => signin.artifacts.share(writeRequest),
-      async () => await signOutInApp(signin)
+      () => signOutInApp(signin)
     )
 
     expect(outcome).toBeInstanceOf(Error)
@@ -225,7 +225,7 @@ describe('a rate-limited artifact request whose account changes during the wait'
 
     const outcome = await changeAccountDuringWait(
       () => signin.artifacts.update(writeRequest),
-      async () => await switchAccount(signin)
+      () => switchAccount(signin)
     )
 
     expect(String(outcome)).toContain('account changed')
@@ -239,7 +239,7 @@ describe('a rate-limited artifact request whose account changes during the wait'
 
     const outcome = await changeAccountDuringWait(
       () => signin.artifacts.unshare({ sourceKey: writeRequest.sourceKey, apiUrl }),
-      async () => await revokeSession(signin)
+      () => revokeSession(signin)
     )
 
     expect(String(outcome)).toContain('Signed out of Orca while waiting to retry')
@@ -252,7 +252,7 @@ describe('a rate-limited artifact request whose account changes during the wait'
 
     const outcome = await changeAccountDuringWait(
       () => signin.artifacts.delete('artifact-a', { apiUrl }),
-      async () => await switchAccount(signin)
+      () => switchAccount(signin)
     )
 
     expect(String(outcome)).toContain('account changed')

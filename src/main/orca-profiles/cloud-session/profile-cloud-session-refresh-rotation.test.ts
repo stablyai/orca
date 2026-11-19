@@ -4,10 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { OrcaCloudAuthConfig } from '../cloud-auth/profile-cloud-auth-config'
 import type * as ProfileCloudClient from '../cloud-auth/profile-cloud-client'
-import type * as CredentialFileIo from '../../credentials/credential-file-io'
-import type * as Fs from 'node:fs/promises'
+import type * as SecureFile from '../../../shared/secure-storage/secure-file'
+import type * as Fs from 'node:fs'
 import type * as ProfileIndexStore from '../profile-index-store'
-import type * as ProfileIndexStoreAsync from '../profile-index-store-async'
 import type { ActiveOrcaProfileState } from '../profile-index-store'
 import type { OrcaCloudSession } from './profile-cloud-session-store'
 import { setSecretStore } from '../../../shared/secure-storage/secret-store'
@@ -29,17 +28,17 @@ const { refreshMock, selectOrgMock, linkMock, linked, writeFailure, removeFailur
 )
 
 // Simulate Windows antivirus holding a session file open against deletion.
-vi.mock('node:fs/promises', async (importOriginal) => {
+vi.mock('node:fs', async (importOriginal) => {
   const original = await importOriginal<typeof Fs>()
   return {
     ...original,
-    rm: async (...args: Parameters<typeof original.rm>) => {
+    rmSync: (...args: Parameters<typeof original.rmSync>) => {
       if (removeFailure.code && String(args[0]).endsWith('account-session.json.enc')) {
         throw Object.assign(new Error(`${removeFailure.code}: remove failed`), {
           code: removeFailure.code
         })
       }
-      return original.rm(...args)
+      return original.rmSync(...args)
     }
   }
 })
@@ -52,15 +51,11 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../../credentials/credential-file-io', async (importOriginal) => {
-  const original = await importOriginal<typeof CredentialFileIo>()
+vi.mock('../../../shared/secure-storage/secure-file', async (importOriginal) => {
+  const original = await importOriginal<typeof SecureFile>()
   return {
     ...original,
-    stageCredentialFile: async (
-      path: string,
-      value: string,
-      options: Parameters<typeof original.stageCredentialFile>[2]
-    ) => {
+    writeSecureJsonFile: (path: string, value: unknown) => {
       if (writeFailure.code && (!writeFailure.onlyFile || path.endsWith(writeFailure.onlyFile))) {
         if (writeFailure.times !== undefined && --writeFailure.times <= 0) {
           writeFailure.code = null
@@ -69,7 +64,7 @@ vi.mock('../../credentials/credential-file-io', async (importOriginal) => {
           code: writeFailure.code
         })
       }
-      return original.stageCredentialFile(path, value, options)
+      return original.writeSecureJsonFile(path, value)
     }
   }
 })
@@ -83,14 +78,7 @@ vi.mock('../cloud-auth/profile-cloud-client', async (importOriginal) => {
   }
 })
 
-vi.mock('../cloud-auth/profile-cloud-index', () => ({ linkOrcaProfileToCloudAsync: linkMock }))
-
-vi.mock('../profile-index-store-async', async (importOriginal) => ({
-  ...(await importOriginal<typeof ProfileIndexStoreAsync>()),
-  loadOrCreateProfileIndexAsync: async () => ({
-    profiles: [{ id: 'profile-1', cloud: linked.cloud }]
-  })
-}))
+vi.mock('../cloud-auth/profile-cloud-index', () => ({ linkOrcaProfileToCloud: linkMock }))
 
 vi.mock('../profile-index-store', async (importOriginal) => ({
   ...(await importOriginal<typeof ProfileIndexStore>()),
@@ -187,8 +175,8 @@ async function runBrokerRenewals(count: number): Promise<void> {
   }
 }
 
-async function signIn(): Promise<void> {
-  await signInCloudSession('profile-1', userDataPath, {
+function signIn(): void {
+  signInCloudSession('profile-1', userDataPath, {
     accessToken: 'access-0',
     refreshToken: 'refresh-0',
     expiresAt: Date.now() + 1_000,
@@ -246,26 +234,26 @@ describe('cloud session refresh-token rotation', () => {
 
   it('keeps a rotated token when the session file cannot be written, so it is never replayed', async () => {
     const server = createRotatingAuthServer(Date.now)
-    await signIn()
+    signIn()
     writeFailure.code = 'ENOSPC'
 
     await runBrokerRenewals(12)
 
     expect(server.revoked).toBe(false)
     expect(server.sent).toEqual(['refresh-0'])
-    const stored = await readCloudSession('profile-1', userDataPath)
+    const stored = readCloudSession('profile-1', userDataPath)
     expect(stored.status === 'found' && stored.session.refreshToken).toBe('refresh-1')
     expect(existsSync(getOrcaCloudSessionPath('profile-1', userDataPath))).toBe(false)
   })
 
   it('keeps an unsaved rotation when a later capability save also fails', async () => {
     const server = createRotatingAuthServer(Date.now)
-    await signIn()
+    signIn()
     Object.assign(writeFailure, { code: 'EPERM', onlyFile: 'account-session.json.enc' })
 
     for (let renewal = 0; renewal < 12; renewal++) {
       await readFreshOrcaCloudSession(config, active, userDataPath).catch(() => undefined)
-      await expect(
+      expect(() =>
         commitCloudSessionCapabilities(
           'profile-1',
           userDataPath,
@@ -274,7 +262,7 @@ describe('cloud session refresh-token rotation', () => {
             capabilities: { flags: { 'relay.use': true }, refreshedAt: Date.now() }
           }
         )
-      ).rejects.toThrow('EPERM')
+      ).toThrow('EPERM')
       vi.advanceTimersByTime(BROKER_RETRY_MS)
     }
 
@@ -284,7 +272,7 @@ describe('cloud session refresh-token rotation', () => {
 
   it('ends the renewal loop on a 401 even when the revocation cannot be written', async () => {
     const server = createRotatingAuthServer(Date.now)
-    await signIn()
+    signIn()
     server.revoke()
     const ticketBeforeRevocation = takeCloudSessionTicket('profile-1', userDataPath)
     writeFailure.code = 'ENOSPC'
@@ -295,18 +283,18 @@ describe('cloud session refresh-token rotation', () => {
     await runBrokerRenewals(10)
 
     expect(server.sent).toEqual(['refresh-0'])
-    expect((await readCloudSession('profile-1', userDataPath)).status).toBe('missing')
+    expect(readCloudSession('profile-1', userDataPath).status).toBe('missing')
     expect(
-      await commitCloudSessionCapabilities('profile-1', userDataPath, ticketBeforeRevocation, {
+      commitCloudSessionCapabilities('profile-1', userDataPath, ticketBeforeRevocation, {
         capabilities: { flags: {}, refreshedAt: 1 }
       })
     ).toBeNull()
-    expect((await readCloudSession('profile-1', userDataPath)).status).toBe('missing')
+    expect(readCloudSession('profile-1', userDataPath).status).toBe('missing')
   })
 
   it('ends the renewal loop on a 401 even when the session file cannot be removed', async () => {
     const server = createRotatingAuthServer(Date.now)
-    await signIn()
+    signIn()
     server.revoke()
     removeFailure.code = 'EBUSY'
 
@@ -316,15 +304,15 @@ describe('cloud session refresh-token rotation', () => {
     await runBrokerRenewals(10)
 
     expect(server.sent).toEqual(['refresh-0'])
-    expect((await readCloudSession('profile-1', userDataPath)).status).toBe('missing')
+    expect(readCloudSession('profile-1', userDataPath).status).toBe('missing')
   })
 
   it('keeps a rotated token when an org switch began mid-refresh', async () => {
     const server = createRotatingAuthServer(Date.now)
-    await signIn()
+    signIn()
     const respond = refreshMock.getMockImplementation()!
     refreshMock.mockImplementationOnce(async (...args: [unknown, OrcaCloudSession]) => {
-      await beginCloudSessionRelink('profile-1', userDataPath)
+      beginCloudSessionRelink('profile-1', userDataPath)
       return respond(...args)
     })
 
@@ -332,13 +320,13 @@ describe('cloud session refresh-token rotation', () => {
 
     expect(server.revoked).toBe(false)
     expect(server.sent).toEqual(['refresh-0'])
-    const stored = await readCloudSession('profile-1', userDataPath)
+    const stored = readCloudSession('profile-1', userDataPath)
     expect(stored.status === 'found' && stored.session.refreshToken).toBe('refresh-1')
   })
 
   it('does not write spent tokens back when a refresh rotates during org selection', async () => {
     const server = createRotatingAuthServer(Date.now)
-    await signIn()
+    signIn()
     let resolveSelect!: (value: unknown) => void
     selectOrgMock.mockReturnValue(new Promise((resolve) => (resolveSelect = resolve)))
     const selecting = selectCloudOrg({
@@ -355,14 +343,14 @@ describe('cloud session refresh-token rotation', () => {
     })
     await selecting
 
-    const stored = await readCloudSession('profile-1', userDataPath)
+    const stored = readCloudSession('profile-1', userDataPath)
     expect(stored.status === 'found' && stored.session.refreshToken).toBe('refresh-1')
     expect(server.revoked).toBe(false)
   })
 
   it('refreshes through the shared single-flight when org selection gets a 401', async () => {
     const server = createRotatingAuthServer(Date.now)
-    await signIn()
+    signIn()
     selectOrgMock.mockRejectedValueOnce(new OrcaCloudRequestError(401)).mockResolvedValueOnce({
       cloud: { ...cloud, activeOrgId: 'org-2' },
       organizations: [],
@@ -378,13 +366,13 @@ describe('cloud session refresh-token rotation', () => {
     await Promise.all([selecting, renewing])
 
     expect(server.sent).toEqual(['refresh-0'])
-    const stored = await readCloudSession('profile-1', userDataPath)
+    const stored = readCloudSession('profile-1', userDataPath)
     expect(stored.status === 'found' && stored.session.refreshToken).toBe('refresh-1')
   })
 
   it('relinks to the org the server reports when nothing relinked meanwhile', async () => {
     createRotatingAuthServer(Date.now, { ...cloud, activeOrgId: 'org-2' })
-    await signIn()
+    signIn()
 
     await readFreshOrcaCloudSession(config, active, userDataPath)
 
@@ -393,13 +381,13 @@ describe('cloud session refresh-token rotation', () => {
       expect.objectContaining({ activeOrgId: 'org-2' }),
       userDataPath
     )
-    const stored = await readCloudSession('profile-1', userDataPath)
+    const stored = readCloudSession('profile-1', userDataPath)
     expect(stored.status === 'found' && stored.session.refreshToken).toBe('refresh-1')
   })
 
   it('saves the rotated tokens even when relinking to a server-reported org fails', async () => {
     const server = createRotatingAuthServer(Date.now, { ...cloud, activeOrgId: 'org-2' })
-    await signIn()
+    signIn()
     linkMock.mockImplementation(() => {
       throw new Error('EBUSY: profile index locked')
     })
@@ -408,15 +396,15 @@ describe('cloud session refresh-token rotation', () => {
 
     expect(server.sent).toEqual(['refresh-0'])
     expect(server.revoked).toBe(false)
-    const stored = await readCloudSession('profile-1', userDataPath)
+    const stored = readCloudSession('profile-1', userDataPath)
     expect(stored.status === 'found' && stored.session.refreshToken).toBe('refresh-1')
   })
 
   it('refuses a capability reply begun before the org moved, even after it moved back', async () => {
-    await signIn()
+    signIn()
     const ticket = takeCloudSessionTicket('profile-1', userDataPath)
     for (const orgId of ['org-2', 'org-1']) {
-      await commitCloudSessionCapabilities(
+      commitCloudSessionCapabilities(
         'profile-1',
         userDataPath,
         takeCloudSessionTicket('profile-1', userDataPath),
@@ -428,7 +416,7 @@ describe('cloud session refresh-token rotation', () => {
     }
 
     expect(
-      await commitCloudSessionCapabilities('profile-1', userDataPath, ticket, {
+      commitCloudSessionCapabilities('profile-1', userDataPath, ticket, {
         cloud,
         capabilities: { flags: { stale: true }, refreshedAt: Date.now() }
       })
@@ -437,7 +425,7 @@ describe('cloud session refresh-token rotation', () => {
 
   it('still accepts a later capability update after a failed relink', async () => {
     createRotatingAuthServer(Date.now, { ...cloud, activeOrgId: 'org-2' })
-    await signIn()
+    signIn()
     linkMock.mockImplementationOnce(() => {
       throw new Error('EBUSY: profile index locked')
     })
@@ -445,7 +433,7 @@ describe('cloud session refresh-token rotation', () => {
     await readFreshOrcaCloudSession(config, active, userDataPath)
 
     expect(
-      await commitCloudSessionCapabilities(
+      commitCloudSessionCapabilities(
         'profile-1',
         userDataPath,
         takeCloudSessionTicket('profile-1', userDataPath),
@@ -455,7 +443,7 @@ describe('cloud session refresh-token rotation', () => {
   })
 
   it('fails a non-rotating save as before and keeps the still-valid session file', async () => {
-    await signIn()
+    signIn()
     selectOrgMock.mockResolvedValue({
       cloud: { ...cloud, activeOrgId: 'org-2' },
       organizations: [],
@@ -472,7 +460,7 @@ describe('cloud session refresh-token rotation', () => {
   })
 
   it('reports org selection as done when the link already moved to the selected org', async () => {
-    await signIn()
+    signIn()
     let resolveSelect!: (value: unknown) => void
     selectOrgMock.mockReturnValue(new Promise((resolve) => (resolveSelect = resolve)))
     const reply = {
@@ -481,7 +469,7 @@ describe('cloud session refresh-token rotation', () => {
       capabilities: { flags: { 'relay.use': true }, refreshedAt: Date.now() }
     }
     const selecting = selectCloudOrg({ config, active, userDataPath, orgId: 'org-2' })
-    await commitCloudSessionCapabilities(
+    commitCloudSessionCapabilities(
       'profile-1',
       userDataPath,
       takeCloudSessionTicket('profile-1', userDataPath),
@@ -495,40 +483,40 @@ describe('cloud session refresh-token rotation', () => {
 
   it('keeps a rotation that one failed write could not store, across renewals and a restart', async () => {
     const server = createRotatingAuthServer(Date.now)
-    await signIn()
+    signIn()
     Object.assign(writeFailure, { code: 'EBUSY', onlyFile: 'account-session.json.enc', times: 1 })
 
     await runBrokerRenewals(13)
     const { owner } = await restart()
 
     expect(server.sent).toEqual(['refresh-0'])
-    const stored = await owner.readCloudSession('profile-1', userDataPath)
+    const stored = owner.readCloudSession('profile-1', userDataPath)
     expect(stored.status === 'found' && stored.session.refreshToken).toBe('refresh-1')
   })
 
   it('writes the latest token at quit once the write and the stale-file delete stop failing', async () => {
     createRotatingAuthServer(Date.now)
-    await signIn()
+    signIn()
     Object.assign(writeFailure, { code: 'EBUSY', onlyFile: 'account-session.json.enc' })
     removeFailure.code = 'EBUSY'
 
     await runBrokerRenewals(1)
     writeFailure.code = null
     removeFailure.code = null
-    await flushUnsavedOrcaCloudSessions()
+    flushUnsavedOrcaCloudSessions()
     const { owner } = await restart()
 
-    const stored = await owner.readCloudSession('profile-1', userDataPath)
+    const stored = owner.readCloudSession('profile-1', userDataPath)
     expect(stored.status === 'found' && stored.session.refreshToken).toBe('refresh-1')
   })
 
   it('asks for sign-in after a restart when the rotation could never be saved, without a loop', async () => {
     const server = createRotatingAuthServer(Date.now)
-    await signIn()
+    signIn()
     Object.assign(writeFailure, { code: 'ENOSPC', onlyFile: 'account-session.json.enc' })
 
     await runBrokerRenewals(3)
-    await flushUnsavedOrcaCloudSessions()
+    flushUnsavedOrcaCloudSessions()
     const { refresh } = await restart()
     for (let renewal = 0; renewal < 3; renewal++) {
       await expect(
@@ -543,11 +531,11 @@ describe('cloud session refresh-token rotation', () => {
   it('restarts a host-key-sealed server more than a minute after a rotation without replaying the spent token', async () => {
     installHostKeySecretStore()
     const server = createRotatingAuthServer(Date.now)
-    await signIn()
+    signIn()
 
     await readFreshOrcaCloudSession(config, active, userDataPath)
     // The quit flush runs on SIGTERM; with nothing unsaved it must not disturb the saved file.
-    await flushUnsavedOrcaCloudSessions()
+    flushUnsavedOrcaCloudSessions()
     vi.advanceTimersByTime(ROTATION_GRACE_MS + ACCESS_TTL_MS + 1_000)
     const { refresh } = await restart()
     const fresh = await refresh.readFreshOrcaCloudSession(config, active, userDataPath)
@@ -563,12 +551,12 @@ describe('cloud session refresh-token rotation', () => {
   it('restarts a host-key-sealed server after a rotation it could save only at quit', async () => {
     installHostKeySecretStore()
     const server = createRotatingAuthServer(Date.now)
-    await signIn()
+    signIn()
     Object.assign(writeFailure, { code: 'EBUSY', onlyFile: 'account-session.json.enc' })
 
     await readFreshOrcaCloudSession(config, active, userDataPath)
     writeFailure.code = null
-    await flushUnsavedOrcaCloudSessions()
+    flushUnsavedOrcaCloudSessions()
     vi.advanceTimersByTime(ROTATION_GRACE_MS + ACCESS_TTL_MS + 1_000)
     const { refresh } = await restart()
     const fresh = await refresh.readFreshOrcaCloudSession(config, active, userDataPath)
@@ -580,28 +568,28 @@ describe('cloud session refresh-token rotation', () => {
 
   it('still discards a rotation that lands after sign-out', async () => {
     createRotatingAuthServer(Date.now)
-    await signIn()
+    signIn()
     const respond = refreshMock.getMockImplementation()!
     refreshMock.mockImplementationOnce(async (...args: [unknown, OrcaCloudSession]) => {
-      await signOutCloudSession('profile-1', userDataPath)
+      signOutCloudSession('profile-1', userDataPath)
       return respond(...args)
     })
 
     await expect(readFreshOrcaCloudSession(config, active, userDataPath)).rejects.toThrow(
       'stale_cloud_session_mutation'
     )
-    expect((await readCloudSession('profile-1', userDataPath)).status).toBe('missing')
+    expect(readCloudSession('profile-1', userDataPath).status).toBe('missing')
     expect(existsSync(getOrcaCloudSessionPath('profile-1', userDataPath))).toBe(false)
   })
 
   it('keeps the session on a 5xx', async () => {
     refreshMock.mockRejectedValue(new OrcaCloudRequestError(503))
-    await signIn()
+    signIn()
     writeFailure.code = 'ENOSPC'
 
     await expect(readFreshOrcaCloudSession(config, active, userDataPath)).rejects.toThrow(
       'orca_cloud_request_failed_503'
     )
-    expect((await readCloudSession('profile-1', userDataPath)).status).toBe('found')
+    expect(readCloudSession('profile-1', userDataPath).status).toBe('found')
   })
 })

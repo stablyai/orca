@@ -1,4 +1,3 @@
-import { stageCredentialFile } from '../credentials/credential-file-io'
 import { randomUUID } from 'node:crypto'
 import { readFileSync, statSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
@@ -253,30 +252,4 @@ export function isArtifactShareLifecycleCurrent(
   lifecycle: string
 ): boolean {
   return captureArtifactShareLifecycle(profileId, userDataPath) === lifecycle
-}
-
-export async function clearArtifactShareRecordsAsync(
-  profileId: string,
-  userDataPath: string
-): Promise<void> {
-  return serializeArtifactFileChange(recordPath(profileId, userDataPath), async () => {
-    // A recycled inode must not let an in-flight fence keep the lifecycle this clear ends.
-    lifecycleByPath.delete(recordPath(profileId, userDataPath))
-    let lifecycleGeneration = 0
-    try {
-      lifecycleGeneration = (await readRecordsAsync(profileId, userDataPath)).lifecycleGeneration
-    } catch {
-      // Clearing must recover sign-out from an unreadable token index.
-    }
-    await stageCredentialFile(
-      recordPath(profileId, userDataPath),
-      JSON.stringify({
-        version: 2,
-        lifecycleGeneration: lifecycleGeneration + 1,
-        lifecycleNonce: randomUUID(),
-        shares: {}
-      }),
-      { createDirectory: true, durable: true }
-    )
-  })
 }

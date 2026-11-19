@@ -1,5 +1,3 @@
-import { installBeforeQuitHandler } from './main-process-before-quit'
-import { flushUnsavedOrcaCloudSessionsOnShutdown } from '../../orca-profiles/cloud-session/profile-cloud-session-store'
 import { closeEnvironmentStore } from '../../../shared/remote-runtime/host-store/runtime-environment-store-worker-client'
 import { beginProfileShutdownCheckpoint } from '../../persistence/profile-shutdown-checkpoint'
 import { killWslChannelsInCloseGrace } from '../../wsl/execution/wsl-command-channel'
@@ -21,6 +19,7 @@ import { disposeDesktopBrowserBridge } from '../../ipc/browser/desktop-browser-b
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 import { stopCodexStateDbBackfillRecoveries } from '../../codex/history/index/codex-state-db-backfill-recovery'
 import { stopCodexAccountHistoryWork } from '../../codex/history/shared-store/codex-account-history-index'
+import { awaitPackedRefsLockRelease } from '../../git/refs/maintenance/local-repo-ref-maintenance'
 import { worktreeRemovalLifetime } from '../../workspaces/removal/worktree-removal-lifetime'
 import { settleTeardownWithinDeadline, settleWithinMs } from './quit-teardown-deadline'
 import { quitTeardownStartGate } from './quit-teardown-start-gate'
@@ -32,7 +31,9 @@ import { isQuittingForUpdate } from '../../updater/updater-service'
 import { recordUpdaterLifecycle } from '../../updater/updater-lifecycle-diagnostics'
 import { pendingServeSupervisorQuitCommit } from '../../updater/lifecycle/serve-supervisor-install-park'
 import { stopTccPromptNotice } from '../../macos-permissions/macos-tcc-prompt-notice'
+import { cancelHistoryGc } from '../../pty/history/terminal-history-gc'
 import { installWindowAllClosedHandler } from './window-all-closed-quit-handler'
+import { fenceMainProcessCloudOnQuit } from '../cloud-startup/main-process-connector-startup'
 import { ConnectorTurnEvents } from '../../connector-cloud/connector-turn-events'
 import { mainProcessState as state } from '../main-process-state'
 import { isDevParentShutdownRequested } from '../configure-process'
@@ -43,9 +44,40 @@ import { closeBrowserExtensionProfileDocumentStores } from '../../browser/extens
 import { closeBrowserExtensionProfileStateStore } from '../../browser/extensions/profile-storage/browser-extension-profile-state-store'
 import { shutdownWatchersOnce } from './filesystem-watcher-quit-shutdown'
 import { flushBrowserSessionCookiesOnQuit } from '../../browser/cookies/session-restore/browser-session-cookie-restore'
+
+// First will-quit pass awaits teardown; the re-fired pass must exit without starting writes again.
 let daemonDisconnectDone = false
+// Config deletion is best effort, not durable state.
 const GROK_HOOK_CLEANUP_DEADLINE_MS = 2_000
+// Allow pack-refs time to terminate and unlink its lock.
 const REF_MAINTENANCE_QUIT_DEADLINE_MS = 2_000
+
+function installBeforeQuitHandler(): void {
+  app.on('before-quit', (event: Event) => {
+    if (event.defaultPrevented) {
+      return
+    }
+    if (isQuittingForUpdate()) {
+      recordUpdaterLifecycle('before_quit_allowed', undefined, {
+        message: 'before-quit allowed for update install'
+      })
+    }
+    state.isQuitting = true
+    flushUnsavedCloudSessions()
+    fenceMainProcessCloudOnQuit()
+    state.runtimeRpc?.setMobileRelayPairingProvider(null)
+    state.unsubscribeAgentAwakeStatusChanges?.()
+    state.unsubscribeAgentAwakeStatusChanges = null
+    state.agentAwakeService?.dispose()
+    state.agentAwakeService = null
+    // Beforeunload may veto; wait for ref locks now but uninstall only after committed quit. isQuitting already blocks new attempts.
+    state.repoMaintenanceShutdown = awaitPackedRefsLockRelease()
+    // Delay PTY cleanup until scrollback capture; exit events otherwise unmount the renderer callbacks.
+    state.rateLimits?.stop()
+    // History GC is idempotent and rescheduled next launch; a vetoed quit costs only a deferred sweep.
+    cancelHistoryGc()
+  })
+}
 
 function installWillQuitHandler(): void {
   app.on('will-quit', (event: Event) => {
@@ -53,14 +85,13 @@ function installWillQuitHandler(): void {
     if (daemonDisconnectDone) {
       return
     }
-    // Prevent exit before awaiting work; the deadline timer needs this thread.
+    // Prevent exit before awaiting work. Synchronous network-profile writes would block the same thread as their deadline timer (#9447).
     if (!quitTeardownStartGate.tryStart(event)) {
       return
     }
-    const cloudSessionFlush = flushUnsavedCloudSessions()
-    // Include pane grids still inside their write burst in the final save.
+    // Include pane grids still inside their write burst in final save.
     const paneGridFlush = state.runtime?.flushPaneGrids() ?? null
-    // Push must survive renderer vetoes until quit is committed.
+    // A renderer can veto before-quit; push must survive until quit is committed.
     markHostShuttingDown()
     state.profileShutdownCheckpoint ??= beginProfileShutdownCheckpoint(state.store, paneGridFlush)
     const removalShutdown = worktreeRemovalLifetime.close()
@@ -90,11 +121,16 @@ function installWillQuitHandler(): void {
     }
     // Remove the Windows tray icon only after renderer vetoes are past.
     destroySystemTray()
+    // Final stats flush closes working sessions synchronously; quit supplies no terminating hook to preserve their duration.
     state.starNag?.stop()
     state.automations?.stop()
     if (state.runtime) {
       getWorkspaceCleanupRunner(state.runtime)?.stop()
     }
+    // Why: plugin hosts are forked children; dispose sends shutdown and
+    // escalates to SIGKILL so they cannot outlive the app. The promise joins
+    // the teardown barrier below — quitting before it resolves would let
+    // Electron exit first and orphan the hosts.
     state.pluginKillListService?.dispose()
     state.pluginKillListService = null
     state.pluginMarketplaceService = null
@@ -102,16 +138,15 @@ function installWillQuitHandler(): void {
     state.pluginAutoUpdater?.dispose()
     state.pluginAutoUpdater = null
     state.pluginUpdateReviewNotices = null
-    // Await forked hosts through forced termination so Electron cannot orphan them.
     const pluginHostShutdown = state.pluginService?.dispose() ?? Promise.resolve()
     const codexBackfillRecoveryShutdown = stopCodexStateDbBackfillRecoveries()
     stopCodexAccountHistoryWork()
-    // Update restarts need a different resume reason than user quits.
+    // Stamp resume reasons before stopping sessions; an update restart was not a user quit.
     setStructuredAgentSessionTeardownTrigger(updateQuitInProgress ? 'update' : 'quit')
     const structuredAgentSessionShutdown = stopStructuredAgentSessionRuntime()
     state.pluginService = null
     setUnreadDockBadgeCount(0)
-    // Do not kill ref maintenance mid-prune and strand its lock.
+    // Wait briefly for ref maintenance instead of killing mid-prune and stranding its lock; an orphan can finish safely.
     const refMaintenanceShutdown = settleWithinMs(
       Promise.all([state.repoMaintenanceShutdown, state.uninstallRepoMaintenanceIdleGate?.()]).then(
         () => {}
@@ -119,10 +154,10 @@ function installWillQuitHandler(): void {
       REF_MAINTENANCE_QUIT_DEADLINE_MS
     ).then(() => {})
     state.uninstallRepoMaintenanceIdleGate = null
-    // Chat teardown still needs background status to offer session resumes.
+    // Chat teardown reads background work afterward; clearing status loses subagent/command-only resume offers.
     agentHookServer.stop({ keepStatus: true })
     botToolRelay.close()
-    // Windows hook paths lack POSIX pane guards; bound cleanup of remote GROK_HOME paths.
+    // Windows bare hook paths lack POSIX ORCA_PANE_KEY guards, so remove Grok hooks on quit; bound cleanup because GROK_HOME can be a stalled network mount.
     const grokHookCleanup =
       process.platform === 'win32'
         ? settleWithinMs(
@@ -137,27 +172,27 @@ function installWillQuitHandler(): void {
               console.warn('[agent-hooks] Grok hook cleanup on quit failed:', settled.error)
               return
             }
-            // Fulfilled removal results can still carry failures.
+            // Removal failures can be fulfilled status results; inspect their detail too.
             for (const status of settled.value.filter((entry) => entry.detail)) {
               console.warn(`[agent-hooks] ${status.agent} hook cleanup on quit: ${status.detail}`)
             }
           })
         : Promise.resolve()
-    // Relay timers and wsl.exe children must not outlive the app.
+    // Dispose relay timers and wsl.exe children explicitly rather than rely on pipe teardown.
     wslHookRelayManager.disposeAll()
-    // EOF grace does not release ownership of closed WSL channels.
+    // A closed WSL-host channel still in its EOF grace must not outlive the app.
     killWslChannelsInCloseGrace()
     const statsFlush = state.stats?.flushAsync() ?? Promise.resolve()
-    // The connector is fenced; persist its final turn ends and memory history.
+    // The connector was fenced at before-quit; its last turn ends and memory history rows land now.
     const connectorTurnEndsFlush = ConnectorTurnEvents.settled()
     const botMemoryHistoryFlush = state.runtime?.bots.memory.historySettled() ?? Promise.resolve()
     const browserSessionCookieFlush = flushBrowserSessionCookiesOnQuit()
-    // Retire headless owners first to avoid duplicate browser teardown.
+    // Await per-session close children so browser daemons cannot retain ports/state after quit (#16367); retire headless owners first to avoid duplicate fanout.
     const browserShutdown = (async (): Promise<void> => {
       await state.runtime?.getOffscreenBrowserBackend()?.destroyAll?.()
       await state.runtime?.getAgentBrowserBridge()?.destroyAllSessions()
     })()
-    // Loopback listeners and SSH tunnel children must not outlive the app.
+    // Local SSH browser routes own loopback listeners and ssh -N -D children that must not outlive the app (P2-4).
     const localSshRouteShutdown =
       import('../../browser/routing/local-host-partitions/local-ssh-browser-route')
         .then((routes) => routes.closeAllLocalSshBrowserRoutes())
@@ -168,7 +203,7 @@ function installWillQuitHandler(): void {
       state.runtime?.getEmulatorBridge()?.destroyAllSessions() ?? Promise.resolve()
     const finalStore = state.store
     const beginSshShutdownAndFinalSave = (removalStopped: boolean) => {
-      // No await may separate SSH lease detachment from the final save.
+      // Mark SSH leases detached synchronously immediately before final flush; no await may separate mutation from save.
       const sshShutdown = beginSshShutdown()
       killAllPty()
       const watcherShutdown = shutdownWatchersOnce()
@@ -214,24 +249,24 @@ function installWillQuitHandler(): void {
           .then(() => awaitRuntimeFileWatcherUnsubscribes())
           .then(() => {
             if (ownedRuntimeId) {
-              // Match the canonical path used by the runtime metadata writer.
+              // Match the runtime writer's canonical metadata path, not late app.getPath.
               clearRuntimeMetadataIfOwned(getCanonicalUserDataPath(), ownedPid, ownedRuntimeId)
             }
           })
           .catch((error) => console.error('[runtime] Failed to stop local RPC transport:', error))
       : Promise.resolve()
-    // Session and RPC teardown can still retire notifications.
+    // After session and RPC teardown, which can still retire notifications; will-quit is past every veto.
     const notificationDismissalClose = Promise.allSettled([
       structuredAgentSessionShutdown,
       rpcStopAndClear
     ]).then(() => state.runtime?.closeNotificationDismissals())
-    // Normal quits keep the detached daemon warm; dev-parent exit abandons its profile.
+    // Normal quits preserve the detached daemon for warm reattach; dev-parent death leaves its temporary profile ownerless.
     const daemonTeardown = removalQuiescence.then(() =>
       isDevParentShutdownRequested() ? daemon.shutdownDaemon() : daemon.disconnectDaemon()
     )
-    // Bound transports and final writes so quit cannot hang (#9447).
+    // Bound unsettled transports and these final writes so quit cannot hang (#9447). Failures still exit; atomic swaps preserve old files if the final debounce is lost.
+    // Extension storage's final save runs after this, unbounded, as its old synchronous will-quit save was.
     const teardowns = [
-      { name: 'cloud-sessions', promise: cloudSessionFlush },
       { name: 'worktree-removals', promise: removalShutdown },
       { name: 'install-park', promise: pendingServeSupervisorQuitCommit() },
       { name: 'state-checkpoint', promise: state.profileShutdownCheckpoint },
@@ -263,9 +298,6 @@ function installWillQuitHandler(): void {
       { name: 'environment-store', promise: teardownSettlement.then(closeEnvironmentStore) }
     ])
       .then((pendingTeardowns) => {
-        if (pendingTeardowns.includes('cloud-sessions')) {
-          flushUnsavedOrcaCloudSessionsOnShutdown()
-        }
         if (pendingTeardowns.length > 0) {
           console.warn('[shutdown] Quit teardown deadline reached', { pendingTeardowns })
         }
@@ -275,7 +307,7 @@ function installWillQuitHandler(): void {
       .catch(() => {
         /* swallow — telemetry must never prevent app.quit() */
       })
-      // Save extension writes accepted during teardown immediately before quitting.
+      // Last before quitting, so it saves every extension write accepted during teardown.
       .then(() =>
         Promise.all([
           closeBrowserExtensionProfileDocumentStores(),

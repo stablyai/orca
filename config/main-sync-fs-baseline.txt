@@ -318,9 +318,8 @@
 3 src/main/orca-profiles/catalog/other-profile-workspace-catalog.ts
 3 src/main/orca-profiles/cloud-auth/profile-artifact-cloud-cleanup.ts
 1 src/main/orca-profiles/cloud-auth/profile-cloud-index.ts
-3 src/main/orca-profiles/cloud-session/profile-cloud-session-file.ts # Session publication and deletion must be indivisible with OS shutdown recovery; staging and reads stay async
-2 src/main/orca-profiles/cloud-session/profile-cloud-session-store.ts # Ordered deletion and spent-token removal must not resume after synchronous OS shutdown recovery
-12 src/main/orca-profiles/profile-index-store.ts
+5 src/main/orca-profiles/cloud-session/profile-cloud-session-store.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
+11 src/main/orca-profiles/profile-index-store.ts
 4 src/main/orca-profiles/project-transfer/profile-project-move-intent.ts
 3 src/main/orca-profiles/project-transfer/profile-project-move-record.ts
 4 src/main/orca-profiles/project-transfer/profile-project-state-file.ts
@@ -460,7 +459,7 @@
 9 src/main/runtime/host-instance-identity.ts
 3 src/main/runtime/hosts/platform-probe/host-descriptor.ts
 2 src/main/runtime/mobile-cloud-relay/pairing/relay-revoke-outbox.ts
-4 src/main/runtime/mobile-cloud-relay/region-selection/relay-region-preference.ts
+5 src/main/runtime/mobile-cloud-relay/region-selection/relay-region-preference.ts
 1 src/main/runtime/orchestration/db/runtime-orchestration-database-access.ts
 2 src/main/runtime/push/push-unregister-outbox.ts
 1 src/main/runtime/rpc/methods/bots-tools.ts

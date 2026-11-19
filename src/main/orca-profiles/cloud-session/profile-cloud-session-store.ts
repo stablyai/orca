@@ -1,20 +1,54 @@
-import { rmSync } from 'node:fs'
-import type { OrcaCloudSessionPersistence } from '../../../shared/orca-profiles/orca-profiles'
-import { inCredentialFileOrder } from '../../credentials/credential-file-io'
+import { existsSync, readFileSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
+import { getSecretStore, type SecretStore } from '../../../shared/secure-storage/secret-store'
 import {
-  getOrcaCloudSessionPath,
-  readOrcaCloudSessionFile,
-  writeOrcaCloudSessionFile,
-  writeOrcaCloudSessionFileOnShutdown,
-  type OrcaCloudSession,
-  type OrcaCloudSessionReadResult
-} from './profile-cloud-session-file'
-export { getOrcaCloudSessionPath } from './profile-cloud-session-file'
-export type {
-  OrcaCloudSession,
-  OrcaCloudSessionIdentity,
-  OrcaCloudSessionReadResult
-} from './profile-cloud-session-file'
+  OrcaCloudSessionStorageRefusedError,
+  sealedStorageRefusal
+} from './profile-cloud-session-sealing'
+import { isUnreadableError, writeSecureJsonFile } from '../../../shared/secure-storage/secure-file'
+import type {
+  OrcaCloudCapabilities,
+  OrcaCloudOrgSummary,
+  OrcaCloudSessionPersistence
+} from '../../../shared/orca-profiles/orca-profiles'
+import { getOrcaProfileDirectory } from '../profile-storage-paths'
+import { allowsPlaintextOrcaCloudSession } from '../cloud-auth/profile-cloud-auth-config'
+
+export type OrcaCloudSession = {
+  accessToken: string
+  refreshToken: string
+  expiresAt: number
+  capabilities: OrcaCloudCapabilities
+  organizations?: OrcaCloudOrgSummary[]
+  /** Whose tokens these are, so a profile linked to someone else never uses them. Absent on older files. */
+  identity?: OrcaCloudSessionIdentity
+}
+
+export type OrcaCloudSessionIdentity = { userId: string; cloudProfileId: string }
+
+export type OrcaCloudSessionReadResult =
+  | { status: 'found'; session: OrcaCloudSession; persistence: OrcaCloudSessionPersistence }
+  | { status: 'missing'; persistence: 'none' }
+  | { status: 'decrypt-failed'; persistence: 'none'; error: string }
+  /** Unlike decrypt-failed, unreadable proves nothing and must not authorize replacement. */
+  | { status: 'unreadable'; persistence: 'none'; error: string }
+
+// orcad's host-key seal gets its own tag so a data folder shared with a desktop fails clearly, not as a decrypt error.
+type SealedSessionFormat = 'electron-safe-storage-v1' | 'orcad-host-key-v1'
+
+type PersistedEncryptedSession = {
+  version: 1
+  format: SealedSessionFormat
+  savedAt: number
+  ciphertext: string
+}
+
+type PersistedPlaintextSession = {
+  version: 1
+  format: 'dev-plaintext-v1'
+  savedAt: number
+  session: OrcaCloudSession
+}
 
 type CachedOrcaCloudSession = {
   session: OrcaCloudSession
@@ -40,216 +74,172 @@ export function orcaCloudSessionKey(profileId: string, userDataPath: string): st
   return `${userDataPath}\0${profileId}`
 }
 
-type SessionWriteEpoch = { sealed: boolean; pending: number; revision: number }
-const writeEpochs = new Map<string, SessionWriteEpoch>()
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isOrcaCloudSession(value: unknown): value is OrcaCloudSession {
+  if (!isObject(value) || !isObject(value.capabilities) || !isObject(value.capabilities.flags)) {
+    return false
+  }
+  if (value.organizations !== undefined && !isOrcaCloudOrganizations(value.organizations)) {
+    return false
+  }
+  if (
+    value.identity !== undefined &&
+    !(
+      isObject(value.identity) &&
+      typeof value.identity.userId === 'string' &&
+      typeof value.identity.cloudProfileId === 'string'
+    )
+  ) {
+    return false
+  }
+  return (
+    typeof value.accessToken === 'string' &&
+    value.accessToken.length > 0 &&
+    typeof value.refreshToken === 'string' &&
+    value.refreshToken.length > 0 &&
+    typeof value.expiresAt === 'number' &&
+    Number.isFinite(value.expiresAt) &&
+    typeof value.capabilities.refreshedAt === 'number' &&
+    Number.isFinite(value.capabilities.refreshedAt)
+  )
+}
+
+function isOrcaCloudOrganizations(value: unknown): value is OrcaCloudOrgSummary[] {
+  if (!Array.isArray(value)) {
+    return false
+  }
+  return value.every((organization) => {
+    if (!isObject(organization)) {
+      return false
+    }
+    return (
+      typeof organization.orgId === 'string' &&
+      organization.orgId.length > 0 &&
+      typeof organization.name === 'string' &&
+      organization.name.length > 0 &&
+      (organization.role === undefined || typeof organization.role === 'string')
+    )
+  })
+}
+
+export function getOrcaCloudSessionPath(profileId: string, userDataPath: string): string {
+  return join(getOrcaProfileDirectory(profileId, userDataPath), 'account-session.json.enc')
+}
 
 // Disk may hold spent tokens: retry unsaved rotations on reads/quit until saved or superseded.
 const unsavedRotations = new Map<
   string,
-  { profileId: string; userDataPath: string; session: OrcaCloudSession; epoch: SessionWriteEpoch }
+  { profileId: string; userDataPath: string; session: OrcaCloudSession }
 >()
 
-async function writeSession(
+function sealedSessionFormat(secrets: SecretStore): SealedSessionFormat {
+  return secrets.describeSealing?.().kind === 'host-key'
+    ? 'orcad-host-key-v1'
+    : 'electron-safe-storage-v1'
+}
+
+function writeOrcaCloudSession(
   profileId: string,
   userDataPath: string,
   session: OrcaCloudSession,
-  epoch: SessionWriteEpoch,
   requireSealed = false
-): Promise<OrcaCloudSessionPersistence> {
-  const persistence = await writeOrcaCloudSessionFile(
-    profileId,
-    userDataPath,
-    session,
-    requireSealed,
-    () => !epoch.sealed
-  )
-  if (!epoch.sealed) {
-    rememberMemorySession(orcaCloudSessionKey(profileId, userDataPath), { session, persistence })
+): OrcaCloudSessionPersistence {
+  const cacheKey = orcaCloudSessionKey(profileId, userDataPath)
+  const secrets = getSecretStore()
+  // Checked at write time: the store can change while a remote sign-in waits on the browser.
+  const refusal = requireSealed ? sealedStorageRefusal(secrets) : null
+  if (refusal) {
+    throw new OrcaCloudSessionStorageRefusedError(refusal)
   }
-  return persistence
+  if (secrets.isEncryptionAvailable() && secrets.describeSealing?.().kind !== 'none') {
+    const encrypted: PersistedEncryptedSession = {
+      version: 1,
+      format: sealedSessionFormat(secrets),
+      savedAt: Date.now(),
+      ciphertext: secrets.encryptString(JSON.stringify(session)).toString('base64')
+    }
+    writeSecureJsonFile(getOrcaCloudSessionPath(profileId, userDataPath), encrypted)
+    rememberMemorySession(cacheKey, { session, persistence: 'encrypted' })
+    return 'encrypted'
+  }
+
+  if (allowsPlaintextOrcaCloudSession()) {
+    const plaintext: PersistedPlaintextSession = {
+      version: 1,
+      format: 'dev-plaintext-v1',
+      savedAt: Date.now(),
+      session
+    }
+    writeSecureJsonFile(getOrcaCloudSessionPath(profileId, userDataPath), plaintext)
+    rememberMemorySession(cacheKey, { session, persistence: 'dev-plaintext' })
+    return 'dev-plaintext'
+  }
+
+  // A new sign-in or rotation supersedes the old disk session, even when the new tokens stay in memory.
+  rmSync(getOrcaCloudSessionPath(profileId, userDataPath), { force: true })
+  rememberMemorySession(cacheKey, { session, persistence: 'memory-only' })
+  return 'memory-only'
 }
 
-const pendingSessions = new Set<Promise<unknown>>()
-function inSessionOrder<T>(
-  profileId: string,
-  userDataPath: string,
-  run: () => Promise<T>
-): Promise<T> {
-  const next = inCredentialFileOrder(getOrcaCloudSessionPath(profileId, userDataPath), run)
-  pendingSessions.add(next)
-  void next.then(
-    () => pendingSessions.delete(next),
-    () => pendingSessions.delete(next)
-  )
-  return next
-}
-
-export async function saveOrcaCloudSession(
+export function saveOrcaCloudSession(
   profileId: string,
   userDataPath: string,
   session: OrcaCloudSession,
   options: { spentOnFailure?: boolean; requireSealed?: boolean } = {}
-): Promise<OrcaCloudSessionPersistence> {
-  const key = orcaCloudSessionKey(profileId, userDataPath)
-  let epoch = writeEpochs.get(key)
-  if (!epoch || epoch.sealed) {
-    epoch = { sealed: false, pending: 0, revision: 0 }
-    writeEpochs.set(key, epoch)
-  }
-  const previousUnsaved = unsavedRotations.get(key)
-  const revision = ++epoch.revision
-  if (options.spentOnFailure) {
-    unsavedRotations.set(key, { profileId, userDataPath, session, epoch })
-  } else if (previousUnsaved?.session.refreshToken !== session.refreshToken) {
-    unsavedRotations.delete(key)
-  }
-  const admittedEpoch = epoch
-  admittedEpoch.pending++
-  return inSessionOrder(profileId, userDataPath, () =>
-    saveSession(profileId, userDataPath, session, admittedEpoch, options)
-  )
-    .catch((error: unknown) => {
-      if (
-        !admittedEpoch.sealed &&
-        admittedEpoch.revision === revision &&
-        previousUnsaved &&
-        !unsavedRotations.has(key)
-      ) {
-        unsavedRotations.set(key, previousUnsaved)
-      }
-      throw error
-    })
-    .finally(() => {
-      admittedEpoch.pending--
-      releaseWriteEpoch(key, admittedEpoch)
-    })
-}
-export async function readOrcaCloudSession(
-  profileId: string,
-  userDataPath: string
-): Promise<OrcaCloudSessionReadResult> {
-  return inSessionOrder(profileId, userDataPath, () => readSession(profileId, userDataPath))
-}
-function releaseWriteEpoch(key: string, epoch: SessionWriteEpoch): void {
-  if (!epoch.pending && !unsavedRotations.has(key) && writeEpochs.get(key) === epoch) {
-    writeEpochs.delete(key)
-  }
-}
-
-export function discardUnsavedOrcaCloudSession(profileId: string, userDataPath: string): void {
-  const key = orcaCloudSessionKey(profileId, userDataPath)
-  unsavedRotations.delete(key)
-  const epoch = writeEpochs.get(key)
-  if (epoch) {
-    epoch.sealed = true
-    releaseWriteEpoch(key, epoch)
-  }
-}
-
-export async function clearOrcaCloudSession(
-  profileId: string,
-  userDataPath: string
-): Promise<void> {
-  discardUnsavedOrcaCloudSession(profileId, userDataPath)
-  const key = orcaCloudSessionKey(profileId, userDataPath)
-  const epoch = { sealed: false, pending: 1, revision: 0 }
-  writeEpochs.set(key, epoch)
-  return inSessionOrder(profileId, userDataPath, async () => {
-    if (!epoch.sealed) {
-      memorySessions.delete(key)
-      rmSync(getOrcaCloudSessionPath(profileId, userDataPath), { force: true })
-    }
-  }).finally(() => {
-    epoch.pending--
-    releaseWriteEpoch(key, epoch)
-  })
-}
-async function saveSession(
-  profileId: string,
-  userDataPath: string,
-  session: OrcaCloudSession,
-  epoch: SessionWriteEpoch,
-  options: { spentOnFailure?: boolean; requireSealed?: boolean }
-): Promise<OrcaCloudSessionPersistence> {
+): OrcaCloudSessionPersistence {
   const key = orcaCloudSessionKey(profileId, userDataPath)
   try {
-    const persistence = await writeSession(
+    const persistence = writeOrcaCloudSession(
       profileId,
       userDataPath,
       session,
-      epoch,
       options.requireSealed
     )
-    if (!epoch.sealed && unsavedRotations.get(key)?.session.refreshToken === session.refreshToken) {
-      unsavedRotations.delete(key)
-    }
+    unsavedRotations.delete(key)
     return persistence
   } catch (error) {
     if (!options.spentOnFailure) {
       throw error
     }
     // Losing rotated tokens would replay spent disk tokens and risk revoking the family.
-    if (!epoch.sealed && unsavedRotations.get(key)?.session === session) {
-      try {
-        rmSync(getOrcaCloudSessionPath(profileId, userDataPath), { force: true })
-      } catch {
-        // A spent token left on disk costs one sign-in after restart, never a loop.
-      }
+    unsavedRotations.set(key, { profileId, userDataPath, session })
+    try {
+      rmSync(getOrcaCloudSessionPath(profileId, userDataPath), { force: true })
+    } catch {
+      // A spent token left on disk costs one sign-in after restart, never a loop.
     }
     return 'memory-only'
   }
 }
 
-async function retryUnsavedRotation(key: string): Promise<void> {
+function retryUnsavedRotation(key: string): void {
   const unsaved = unsavedRotations.get(key)
   if (!unsaved) {
     return
   }
   try {
-    await writeSession(unsaved.profileId, unsaved.userDataPath, unsaved.session, unsaved.epoch)
-    if (!unsaved.epoch.sealed && unsavedRotations.get(key) === unsaved) {
-      unsavedRotations.delete(key)
-    }
-    releaseWriteEpoch(key, unsaved.epoch)
+    writeOrcaCloudSession(unsaved.profileId, unsaved.userDataPath, unsaved.session)
+    unsavedRotations.delete(key)
   } catch {
     // Retry unsaved rotation on the next read or quit flush.
   }
 }
 
-export async function flushUnsavedOrcaCloudSessions(): Promise<void> {
-  while (pendingSessions.size > 0) {
-    await Promise.allSettled(pendingSessions)
-  }
-  for (const [key, unsaved] of unsavedRotations) {
-    await inSessionOrder(unsaved.profileId, unsaved.userDataPath, () => retryUnsavedRotation(key))
+export function flushUnsavedOrcaCloudSessions(): void {
+  for (const key of unsavedRotations.keys()) {
+    retryUnsavedRotation(key)
   }
 }
 
-// Seal admitted writers before the synchronous handoff; even busy profiles must recover.
-export function flushUnsavedOrcaCloudSessionsOnShutdown(): void {
-  for (const [key, unsaved] of unsavedRotations) {
-    unsaved.epoch.sealed = true
-    try {
-      const persistence = writeOrcaCloudSessionFileOnShutdown(
-        unsaved.profileId,
-        unsaved.userDataPath,
-        unsaved.session
-      )
-      rememberMemorySession(key, { session: unsaved.session, persistence })
-      unsavedRotations.delete(key)
-      releaseWriteEpoch(key, unsaved.epoch)
-    } catch {
-      // Best effort: the OS will not wait for an asynchronous retry.
-    }
-  }
-}
-
-async function readSession(
+export function readOrcaCloudSession(
   profileId: string,
   userDataPath: string
-): Promise<OrcaCloudSessionReadResult> {
+): OrcaCloudSessionReadResult {
   const cacheKey = orcaCloudSessionKey(profileId, userDataPath)
-  await retryUnsavedRotation(cacheKey)
+  retryUnsavedRotation(cacheKey)
   const unsaved = unsavedRotations.get(cacheKey)
   if (unsaved) {
     return { status: 'found', session: unsaved.session, persistence: 'memory-only' }
@@ -265,11 +255,74 @@ async function readSession(
     }
   }
 
-  const result = await readOrcaCloudSessionFile(profileId, userDataPath)
-  if (result.status === 'found') {
-    rememberMemorySession(cacheKey, result)
+  const path = getOrcaCloudSessionPath(profileId, userDataPath)
+  if (!existsSync(path)) {
+    return { status: 'missing', persistence: 'none' }
   }
-  return result
+
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf-8')) as
+      | PersistedEncryptedSession
+      | PersistedPlaintextSession
+    if (parsed.version !== 1) {
+      return { status: 'decrypt-failed', persistence: 'none', error: 'Unsupported session format.' }
+    }
+    if (parsed.format === 'electron-safe-storage-v1' || parsed.format === 'orcad-host-key-v1') {
+      const secrets = getSecretStore()
+      if (parsed.format !== sealedSessionFormat(secrets)) {
+        return {
+          status: 'decrypt-failed',
+          persistence: 'none',
+          error:
+            parsed.format === 'orcad-host-key-v1'
+              ? "This Orca account sign-in was saved by Orca's headless server. Sign in again here."
+              : 'This Orca account sign-in was saved by the Orca app. Sign in again on this server.'
+        }
+      }
+      if (!secrets.isEncryptionAvailable()) {
+        return {
+          status: 'decrypt-failed',
+          persistence: 'none',
+          error: 'OS-backed encryption is unavailable.'
+        }
+      }
+      const decrypted = secrets.decryptString(Buffer.from(parsed.ciphertext, 'base64'))
+      const session = JSON.parse(decrypted) as OrcaCloudSession
+      if (!isOrcaCloudSession(session)) {
+        return { status: 'decrypt-failed', persistence: 'none', error: 'Invalid saved session.' }
+      }
+      rememberMemorySession(cacheKey, { session, persistence: 'encrypted' })
+      return { status: 'found', session, persistence: 'encrypted' }
+    }
+    if (parsed.format === 'dev-plaintext-v1' && allowsPlaintextOrcaCloudSession()) {
+      if (!isOrcaCloudSession(parsed.session)) {
+        return { status: 'decrypt-failed', persistence: 'none', error: 'Invalid saved session.' }
+      }
+      rememberMemorySession(cacheKey, { session: parsed.session, persistence: 'dev-plaintext' })
+      return { status: 'found', session: parsed.session, persistence: 'dev-plaintext' }
+    }
+    return { status: 'decrypt-failed', persistence: 'none', error: 'Unsafe session format.' }
+  } catch (error) {
+    if (isUnreadableError(error)) {
+      return {
+        status: 'unreadable',
+        persistence: 'none',
+        error: 'Cannot read the saved Orca account session: the read failed.'
+      }
+    }
+    return {
+      status: 'decrypt-failed',
+      persistence: 'none',
+      error: 'Could not decrypt saved Orca account session.'
+    }
+  }
+}
+
+export function clearOrcaCloudSession(profileId: string, userDataPath: string): void {
+  const key = orcaCloudSessionKey(profileId, userDataPath)
+  unsavedRotations.delete(key)
+  memorySessions.delete(key)
+  rmSync(getOrcaCloudSessionPath(profileId, userDataPath), { force: true })
 }
 
 export function getOrcaCloudMemorySessionCountForTests(): number {

@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import * as profileIndex from '../profile-index-store-async'
 import type {
   OrcaCloudCapabilities,
   OrcaCloudOrgSummary,
@@ -93,7 +92,7 @@ describe('Orca cloud sign-out vs newer connect', () => {
     exchangeOrcaCloudAuthCodeMock.mockResolvedValue({
       accessToken: 'access-token',
       refreshToken: 'refresh-token',
-      expiresAt: 9_999_999_999_999,
+      expiresAt: Date.now() + 3_600_000,
       cloud,
       organizations,
       capabilities
@@ -109,21 +108,17 @@ describe('Orca cloud sign-out vs newer connect', () => {
     await expect(connectCurrentOrcaProfile(userDataPath, openNoBrowser)).resolves.toMatchObject({
       status: 'connected'
     })
-    const revoking = Promise.withResolvers<void>()
     let finishRevoke!: () => void
-    revokeOrcaCloudSessionMock.mockResolvedValue(undefined).mockImplementationOnce(
-      () =>
-        new Promise<void>((resolve) => {
-          finishRevoke = resolve
-          revoking.resolve()
-        })
+    revokeOrcaCloudSessionMock.mockReturnValue(
+      new Promise<void>((resolve) => {
+        finishRevoke = resolve
+      })
     )
     const signingOut = signOutCurrentOrcaProfile(userDataPath)
-    await revoking.promise
     exchangeOrcaCloudAuthCodeMock.mockResolvedValue({
       accessToken: 'later-access',
       refreshToken: 'later-refresh',
-      expiresAt: 9_999_999_999_999,
+      expiresAt: Date.now() + 3_600_000,
       cloud: laterCloud,
       organizations,
       capabilities
@@ -131,49 +126,12 @@ describe('Orca cloud sign-out vs newer connect', () => {
     await expect(connectCurrentOrcaProfile(userDataPath, openNoBrowser)).resolves.toMatchObject({
       status: 'connected'
     })
-    expect((await getCurrentOrcaProfileAuthStatus(userDataPath)).cloud?.email).toBe(
-      'ada@example.com'
-    )
+    expect(getCurrentOrcaProfileAuthStatus(userDataPath).cloud?.email).toBe('ada@example.com')
     finishRevoke()
     await expect(signingOut).resolves.toMatchObject({ status: 'signed-out' })
-    expect(await getCurrentOrcaProfileAuthStatus(userDataPath)).toMatchObject({
+    expect(getCurrentOrcaProfileAuthStatus(userDataPath)).toMatchObject({
       state: 'connected',
       cloud: { email: 'ada@example.com' }
     })
-  })
-  it('never revokes a newer sign-in completed during the initial profile lookup', async () => {
-    await connectCurrentOrcaProfile(userDataPath, openNoBrowser)
-    const lookup = Promise.withResolvers<void>()
-    const original = profileIndex.ensureActiveOrcaProfileAsync
-    const spy = vi
-      .spyOn(profileIndex, 'ensureActiveOrcaProfileAsync')
-      .mockImplementationOnce(async (...args) => {
-        await lookup.promise
-        return original(...args)
-      })
-    revokeOrcaCloudSessionMock.mockResolvedValue(undefined)
-    const signingOut = signOutCurrentOrcaProfile(userDataPath)
-    exchangeOrcaCloudAuthCodeMock.mockResolvedValue({
-      accessToken: 'later-access',
-      refreshToken: 'later-refresh',
-      expiresAt: 9_999_999_999_999,
-      cloud: laterCloud,
-      organizations,
-      capabilities
-    })
-    await expect(connectCurrentOrcaProfile(userDataPath, openNoBrowser)).resolves.toMatchObject({
-      status: 'connected'
-    })
-    lookup.resolve()
-    await signingOut
-    expect(revokeOrcaCloudSessionMock).not.toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ refreshToken: 'later-refresh' })
-    )
-    expect(await getCurrentOrcaProfileAuthStatus(userDataPath)).toMatchObject({
-      state: 'connected',
-      cloud: { email: 'ada@example.com' }
-    })
-    spy.mockRestore()
   })
 })

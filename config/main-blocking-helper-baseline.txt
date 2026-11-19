@@ -82,7 +82,7 @@
 1 src/main/antigravity/native-file-credentials.ts
 12 src/main/antigravity/native-windows-credentials.ts
 1 src/main/antigravity/native-wsl-credentials.ts
-5 src/main/artifacts/artifact-cloud-auth-context.ts
+6 src/main/artifacts/artifact-cloud-auth-context.ts
 7 src/main/artifacts/artifact-cloud-service.ts
 2 src/main/artifacts/artifact-create-intent-store.ts # sign-out clear (bestEffortFsyncDirectorySync) plus writeArtifactFileWhileCurrent, whose only sync step is the fenced renameSync; was 8
 1 src/main/artifacts/artifact-guarded-secure-write.ts # per artifact write: writeSecureFileAsync keeps only its renameSync in the fence-check turn so a sign-out clear cannot land between; replaces sync reads, stage and fsync
@@ -865,24 +865,21 @@
 7 src/main/orca-profiles/catalog/other-profile-workspace-catalog.ts
 2 src/main/orca-profiles/catalog/profile-project-presence.ts
 11 src/main/orca-profiles/cloud-auth/profile-artifact-cloud-cleanup.ts
+1 src/main/orca-profiles/cloud-auth/profile-cloud-auth-status.ts
 3 src/main/orca-profiles/cloud-auth/profile-cloud-capability-refresh.ts
 3 src/main/orca-profiles/cloud-auth/profile-cloud-code-sign-in.ts
-4 src/main/orca-profiles/cloud-auth/profile-cloud-dev-service.ts
-21 src/main/orca-profiles/cloud-auth/profile-cloud-index.ts # Keep index and cleanup mutations indivisible with synchronous creation, switching and startup
-5 src/main/orca-profiles/cloud-auth/profile-cloud-service-sign-out.ts # Index transitions and generation-fenced session deletion stay indivisible with synchronous mutators and shutdown
-21 src/main/orca-profiles/cloud-auth/profile-cloud-service.ts
+11 src/main/orca-profiles/cloud-auth/profile-cloud-dev-service.ts
+19 src/main/orca-profiles/cloud-auth/profile-cloud-index.ts
+30 src/main/orca-profiles/cloud-auth/profile-cloud-service.ts
 5 src/main/orca-profiles/cloud-org/profile-cloud-org-members-service.ts
-1 src/main/orca-profiles/cloud-org/profile-cloud-org-selection.ts
-6 src/main/orca-profiles/cloud-session/profile-cloud-session-commit.ts
-1 src/main/orca-profiles/cloud-session/profile-cloud-session-file.ts # OS session-end cannot await promises; synchronously save unsaved refresh-token rotations before shutdown
-2 src/main/orca-profiles/cloud-session/profile-cloud-session-link-state.ts # Relink and rare index initialization must not overwrite synchronous profile mutations
-8 src/main/orca-profiles/cloud-session/profile-cloud-session-owner.ts # Session final publication and deletion cannot interleave with synchronous shutdown recovery
-1 src/main/orca-profiles/cloud-session/profile-cloud-session-refresh.ts # Rotation final publication is indivisible with synchronous shutdown recovery
-8 src/main/orca-profiles/cloud-session/profile-cloud-session-store.ts # Fence final publication and spent-token removal against synchronous OS shutdown recovery
-6 src/main/orca-profiles/orca-account-service.ts
+2 src/main/orca-profiles/cloud-org/profile-cloud-org-selection.ts
+9 src/main/orca-profiles/cloud-session/profile-cloud-session-commit.ts
+21 src/main/orca-profiles/cloud-session/profile-cloud-session-owner.ts
+6 src/main/orca-profiles/cloud-session/profile-cloud-session-refresh.ts
+6 src/main/orca-profiles/cloud-session/profile-cloud-session-store.ts
+7 src/main/orca-profiles/orca-account-service.ts
 1 src/main/orca-profiles/profile-account-user-id.ts
-3 src/main/orca-profiles/profile-index-store-async.ts # Rare index initialization and recovery recheck synchronously with all existing index mutators
-20 src/main/orca-profiles/profile-index-store.ts
+21 src/main/orca-profiles/profile-index-store.ts # writeRollingFileBackup replaces copyFileSync (main-sync-fs 12 -> 11)
 1 src/main/orca-profiles/profile-storage-paths.ts
 6 src/main/orca-profiles/project-transfer/profile-active-transfer.ts
 2 src/main/orca-profiles/project-transfer/profile-project-domain-move-intent.ts
@@ -953,6 +950,7 @@
 3 src/main/orcad/native-runtime/orcad-native-preflight.ts
 9 src/main/orcad/native-runtime/orcad-runtime-native-preflight.ts
 1 src/main/orcad/orcad-connector.ts
+1 src/main/orcad/orcad-orca-account.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
 2 src/main/orcad/profile-state/orcad-host-identity-reset.ts
 3 src/main/orcad/profile-state/orcad-profile-state-startup.ts
 6 src/main/orcad/runtime-launch/orcad-bundled-runtime.ts
@@ -1397,7 +1395,7 @@
 5 src/main/startup/profile-startup/profile-state-recovery-preflight.ts
 2 src/main/startup/profile-startup/single-instance-lock.ts
 12 src/main/startup/pty-startup/main-process-pty-startup.ts
-3 src/main/startup/quit/main-process-quit.ts # Recover unsaved cloud rotations synchronously if the quit drain times out
+3 src/main/startup/quit/main-process-quit.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
 15 src/main/startup/runtime-startup/main-process-runtime-launch.ts
 4 src/main/startup/runtime-startup/main-process-runtime-service.ts
 1 src/main/startup/serve-launch/headless-serve-ssh-registration.ts

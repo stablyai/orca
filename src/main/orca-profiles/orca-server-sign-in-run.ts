@@ -62,7 +62,7 @@ export async function runServerSignIn(
   deps: OrcaServerSignInDeps,
   provider: SignInProvider,
   channel: SignInChannel,
-  publish: () => Promise<OrcaAccountServerStatus>
+  publish: () => OrcaAccountServerStatus
 ): Promise<SignInResult> {
   // Bound before any await: a sign-out or another sign-in after this point makes this one stale.
   const epoch = cloudConnectLinkEpoch()
@@ -76,7 +76,7 @@ export async function runServerSignIn(
   if (storage.kind === 'refused') {
     throw new Error(`Orca can't save your sign-in on this server: ${storage.reason}`)
   }
-  await assertMayStart(deps, intentOf(provider))
+  assertMayStart(deps, intentOf(provider))
   const clientId = deps.env?.ORCA_CLOUD_SERVER_CLIENT_ID?.trim() || DEFAULT_SERVER_CLIENT_ID
   const probe = deps.probe ?? probeOrcaServerSignIn
   if (!(await probe(config, clientId))) {
@@ -92,7 +92,7 @@ export async function runServerSignIn(
     codeChallengeMethod: 'S256',
     state: pkce.state,
     nonce: pkce.nonce,
-    localProfileId: (await deps.account.getAuthStatus()).activeProfileId,
+    localProfileId: deps.account.getAuthStatus().activeProfileId,
     machineLabel: (deps.machineLabel ?? hostname)().slice(0, 256),
     machinePlatform: machinePlatform(deps.platform ?? process.platform)
   } satisfies ServerSignInRequestBody
@@ -137,7 +137,7 @@ export async function runServerSignIn(
     )
   }
   console.info('[orca-account] Signed in')
-  return { account: await publish() }
+  return { account: publish() }
 }
 
 /** Starts an Orca Cloud sign-in request and waits for the person to approve it in a browser. */
@@ -153,7 +153,7 @@ async function awaitApproval(
     config,
     binding,
     channel.signal,
-    await moveContext(deps)
+    moveContext(deps)
   )
   // Only show a link on the Orca Cloud this host signs in to.
   if (!isOnOrigin(request.verificationUrl, new URL(config.authorizeEndpoint).origin)) {
@@ -184,10 +184,8 @@ async function awaitApproval(
 }
 
 /** For the approval page: the account this host was on, and who its bots' links belong to. */
-async function moveContext(
-  deps: OrcaServerSignInDeps
-): Promise<ServerSignInMoveContext | undefined> {
-  const context = await deps.account.signInContext?.()
+function moveContext(deps: OrcaServerSignInDeps): ServerSignInMoveContext | undefined {
+  const context = deps.account.signInContext?.()
   if (!context?.previous && !context?.links) {
     return undefined
   }
@@ -208,11 +206,8 @@ async function moveContext(
 const MOVE_CONTEXT_MAX_OWNERS = 8
 const MOVE_CONTEXT_MAX_BOT_NAMES = 5
 
-async function assertMayStart(
-  deps: OrcaServerSignInDeps,
-  intent: OrcaAccountSignInIntent
-): Promise<void> {
-  if (intent === 'sign-in' && (await deps.account.getAuthStatus()).state === 'connected') {
+function assertMayStart(deps: OrcaServerSignInDeps, intent: OrcaAccountSignInIntent): void {
+  if (intent === 'sign-in' && deps.account.getAuthStatus().state === 'connected') {
     throw new Error('This server is already signed in. Use Switch account to change it.')
   }
 }

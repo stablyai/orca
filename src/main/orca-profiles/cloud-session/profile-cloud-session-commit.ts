@@ -14,7 +14,12 @@ import { loadOrCreateProfileIndex, readProfileIndex } from '../profile-index-sto
 import { getOrcaProfileIndexPath } from '../profile-storage-paths'
 import type { OrcaCloudSessionExchangeResponse } from './profile-cloud-session-exchange'
 import type { OrcaCloudSession, OrcaCloudSessionReadResult } from './profile-cloud-session-store'
-import { commitCloudSessionChange, sessionFromExchange } from './profile-cloud-session-owner'
+import {
+  readCloudSession,
+  restoreCloudSession,
+  sessionFromExchange,
+  signInCloudSession
+} from './profile-cloud-session-owner'
 
 export type CloudAccountTransition = {
   /** The profile receiving the account, captured when the sign-in started. */
@@ -56,14 +61,10 @@ export async function commitExchangedCloudSession(
 ): Promise<CloudSessionCommitOutcome> {
   let outcome: CloudSessionCommitOutcome | undefined
   try {
-    outcome = await commitCloudSessionChange(args.profileId, args.userDataPath, (session) =>
-      installExchangedSession(args, session)
-    )
+    outcome = installExchangedSession(args)
     return outcome
   } catch (error) {
-    return errorMessage(error) === 'orca_cloud_auth_cancelled'
-      ? { status: 'cancelled' }
-      : { status: 'refused', error: errorMessage(error) }
+    return { status: 'refused', error: errorMessage(error) }
   } finally {
     if (outcome?.status !== 'committed') {
       revokeInBackground(args.config, sessionFromExchange(args.exchange))
@@ -71,16 +72,13 @@ export async function commitExchangedCloudSession(
   }
 }
 
-async function installExchangedSession(
-  args: CommitArgs,
-  session: Parameters<Parameters<typeof commitCloudSessionChange>[2]>[0]
-): Promise<CloudSessionCommitOutcome> {
+function installExchangedSession(args: CommitArgs): CloudSessionCommitOutcome {
   const { config, profileId, userDataPath, attempt, exchange, guards = {} } = args
-  const cancelled = () =>
+  if (
     isCloudConnectAttemptSuperseded(attempt) ||
     guards.signal?.aborted ||
     (guards.expectedLinkEpoch !== undefined && cloudConnectLinkEpoch() !== guards.expectedLinkEpoch)
-  if (cancelled()) {
+  ) {
     return { status: 'cancelled' }
   }
   const previousCloud = profileCloud(profileId, userDataPath)
@@ -92,25 +90,18 @@ async function installExchangedSession(
   if (refusal) {
     return { status: 'refused', error: refusal }
   }
-  const replaced = await session.read(profileId, userDataPath)
+  const replaced = readCloudSession(profileId, userDataPath)
   const previous = attributed(replaced, previousCloud)
-  if (cancelled()) {
-    return { status: 'cancelled' }
-  }
-  await session.signIn(profileId, userDataPath, exchange, {
+  signInCloudSession(profileId, userDataPath, exchange, {
     requireSealed: guards.requireSealedStorage
   })
-  if (cancelled()) {
-    await session.restore(profileId, userDataPath, previous)
-    return { status: 'cancelled' }
-  }
   let list: OrcaProfileListState
   try {
     list = linkOrcaProfileToCloud(profileId, exchange.cloud, userDataPath)
   } catch (error) {
     const published = readPublishedList(profileId, userDataPath, exchange.cloud)
     if (!published) {
-      await session.restore(profileId, userDataPath, previous)
+      restoreCloudSession(profileId, userDataPath, previous)
       throw error
     }
     // The index already names the new account, so finish the change; the artifact cleanup marker

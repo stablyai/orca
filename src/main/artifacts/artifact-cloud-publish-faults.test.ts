@@ -82,7 +82,6 @@ const request = (sourceKey = '/repo/report.html') => ({
 type Account = { userDataPath: string; profileId: string }
 let account: Account
 let server: FakeArtifactServer
-let signOut: Promise<void> | undefined
 
 /** A new process: every module, cache and queue starts over from what is on disk. */
 async function restartedService() {
@@ -116,7 +115,7 @@ beforeEach(async () => {
   const userDataPath = await mkdtemp(join(tmpdir(), 'orca-artifact-faults-'))
   const profileId = ensureActiveOrcaProfile(userDataPath).profile.id
   linkOrcaProfileToCloud(profileId, cloud, userDataPath)
-  await saveOrcaCloudSession(profileId, userDataPath, {
+  saveOrcaCloudSession(profileId, userDataPath, {
     accessToken: 'access-a',
     refreshToken: 'refresh-a',
     expiresAt: now + 60 * 60 * 1000,
@@ -132,8 +131,6 @@ afterEach(async () => {
   faults.beforeStage = faults.beforePublish = faults.beforeRemove = undefined
   vi.unstubAllGlobals()
   vi.unstubAllEnvs()
-  await signOut
-  signOut = undefined
   await rm(account.userDataPath, { recursive: true, force: true })
 })
 
@@ -215,7 +212,7 @@ describe('artifact share index writers', () => {
 describe('artifact writes in flight when the account changes', () => {
   const changes = {
     'sign-out': () => {
-      signOut = signOutCloudSession(account.profileId, account.userDataPath)
+      signOutCloudSession(account.profileId, account.userDataPath)
       unlinkOrcaProfileFromCloud(account.profileId, account.userDataPath)
     },
     'profile switch': () => {
@@ -230,11 +227,8 @@ describe('artifact writes in flight when the account changes', () => {
     const service = await restartedService()
     // The restarted service holds its own session ticket, so sign out through its module graph.
     const owner = await import('../orca-profiles/cloud-session/profile-cloud-session-owner')
-    faults.beforePublish = (path) => {
-      if (path.includes('intents')) {
-        signOut = owner.signOutCloudSession(account.profileId, account.userDataPath)
-      }
-    }
+    faults.beforePublish = (path) =>
+      path.includes('intents') && owner.signOutCloudSession(account.profileId, account.userDataPath)
     await expect(service.publish(request())).rejects.toThrow('account changed')
     expect(server.posts).toEqual([])
     expect(await intentFiles()).toEqual([])

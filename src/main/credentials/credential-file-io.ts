@@ -19,10 +19,6 @@ function credentialFileKey(path: string): string {
   return process.platform === 'win32' ? absolute.toLowerCase() : absolute
 }
 
-export function hasPendingCredentialFileOperation(path: string): boolean {
-  return operations.has(credentialFileKey(path))
-}
-
 /** Keep reads, replacements and deletes in invocation order, including failed operations. */
 export function inCredentialFileOrder<T>(path: string, run: () => Promise<T>): Promise<T> {
   const key = credentialFileKey(path)
@@ -82,7 +78,6 @@ export async function stageCredentialFile(
   data: string | Buffer,
   options: {
     durable?: boolean
-    publish?: (temporaryPath: string, destinationPath: string) => void
     syncFile?: boolean
     shouldPublish?: () => boolean | Promise<boolean>
     requirePrivateWindowsFile?: boolean
@@ -128,12 +123,7 @@ export async function stageCredentialFile(
     ) {
       return false
     }
-    // Shutdown-sensitive writers must fence and rename without yielding to the shutdown callback.
-    if (options.publish) {
-      options.publish(temp, path)
-    } else {
-      await rename(temp, path)
-    }
+    await rename(temp, path)
     if (options.durable) {
       await bestEffortFsyncDirectory(dir)
     }

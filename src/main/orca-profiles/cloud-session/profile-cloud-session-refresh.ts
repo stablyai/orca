@@ -74,12 +74,12 @@ class StaleCloudSessionMutationError extends Error {
   }
 }
 
-async function clearCloudSessionIfUnchanged(
+function clearCloudSessionIfUnchanged(
   profileId: string,
   userDataPath: string,
   failed: OrcaCloudSession
-): Promise<void> {
-  if (!(await signOutRevokedCloudSession(profileId, userDataPath, failed))) {
+): void {
+  if (!signOutRevokedCloudSession(profileId, userDataPath, failed)) {
     return
   }
   forgetAmbiguousRefreshAttempt(orcaCloudSessionKey(profileId, userDataPath))
@@ -136,7 +136,7 @@ async function attemptCloudSessionRefresh(
         await new Promise((resolve) => setTimeout(resolve, AMBIGUOUS_REFRESH_REPLAY_DELAY_MS))
       }
       // Reuse concurrent rotations instead of replaying the now-spent token.
-      const current = await readCloudSession(active.profile.id, userDataPath)
+      const current = readCloudSession(active.profile.id, userDataPath)
       if (current.status === 'found' && current.session.refreshToken !== session.refreshToken) {
         return { status: 'rotated-elsewhere', session: current.session }
       }
@@ -157,22 +157,18 @@ async function refreshStoredCloudSession(
     return inflight
   }
   const task = (async () => {
-    const ticket = takeCloudSessionTicket(active.profile.id, userDataPath)
-    const current = await readCloudSession(active.profile.id, userDataPath)
+    const current = readCloudSession(active.profile.id, userDataPath)
     if (current.status === 'found' && current.session.refreshToken !== session.refreshToken) {
       return current.session
     }
-    if (
-      !active.profile.cloud ||
-      current.status !== 'found' ||
-      takeCloudSessionTicket(active.profile.id, userDataPath).generation !== ticket.generation
-    ) {
+    if (!active.profile.cloud) {
       throw new StaleCloudSessionMutationError()
     }
     if (blocksAmbiguousRefreshReplay(key, session.refreshToken)) {
       throw new AmbiguousRefreshReplayBlockedError()
     }
     const linked = active.profile.cloud
+    const ticket = takeCloudSessionTicket(active.profile.id, userDataPath)
     const attempt = await attemptCloudSessionRefresh(key, config, active, userDataPath, session)
     if (attempt.status === 'rotated-elsewhere') {
       return attempt.session
@@ -184,7 +180,7 @@ async function refreshStoredCloudSession(
     ) {
       throw new StaleCloudSessionMutationError()
     }
-    const saved = await commitCloudSessionRotation(
+    const saved = commitCloudSessionRotation(
       active.profile.id,
       userDataPath,
       ticket,
@@ -209,7 +205,7 @@ export async function readFreshOrcaCloudSession(
   active: ActiveOrcaProfileState,
   userDataPath: string
 ): Promise<FreshCloudSessionResult> {
-  const session = await readCloudSession(active.profile.id, userDataPath)
+  const session = readCloudSession(active.profile.id, userDataPath)
   if (
     session.status !== 'found' ||
     !sessionBelongsToProfile(session.session, active.profile.cloud)
@@ -227,7 +223,7 @@ export async function readFreshOrcaCloudSession(
   } catch (error) {
     if (isRefreshTokenRejected(error)) {
       warnIfPossibleRefreshReplay(active.profile.id, userDataPath, session.session)
-      await clearCloudSessionIfUnchanged(active.profile.id, userDataPath, session.session)
+      clearCloudSessionIfUnchanged(active.profile.id, userDataPath, session.session)
       return { status: 'reconnect-required' }
     }
     throw error
@@ -248,7 +244,7 @@ export async function forceRefreshOrcaCloudSession(
   } catch (error) {
     if (isRefreshTokenRejected(error)) {
       warnIfPossibleRefreshReplay(active.profile.id, userDataPath, session)
-      await clearCloudSessionIfUnchanged(active.profile.id, userDataPath, session)
+      clearCloudSessionIfUnchanged(active.profile.id, userDataPath, session)
       return { status: 'reconnect-required' }
     }
     throw error
@@ -299,7 +295,7 @@ export async function refreshAfterRejectedAccessToken(
   session: OrcaCloudSession
 ): Promise<FreshCloudSessionResult | { status: 'skipped' }> {
   const key = orcaCloudSessionKey(active.profile.id, userDataPath)
-  const stored = await readCloudSession(active.profile.id, userDataPath)
+  const stored = readCloudSession(active.profile.id, userDataPath)
   const rotatedSince =
     stored.status === 'found' && stored.session.refreshToken !== session.refreshToken
   if (!rotatedSince && !inflightCloudSessionRefreshes.has(key) && !takeForcedRefreshSlot(key)) {

@@ -111,12 +111,8 @@ function stubCloud(responses: (() => Response)[]): CloudStub {
   return stub
 }
 
-async function saveSession(
-  profileId: string,
-  userDataPath: string,
-  expiresInMs: number
-): Promise<void> {
-  await saveOrcaCloudSession(profileId, userDataPath, {
+function saveSession(profileId: string, userDataPath: string, expiresInMs: number): void {
+  saveOrcaCloudSession(profileId, userDataPath, {
     accessToken: 'access-1',
     refreshToken: 'refresh-1',
     expiresAt: Date.now() + expiresInMs,
@@ -133,7 +129,7 @@ async function signIn(): Promise<{
   createdPaths.push(userDataPath)
   const profileId = ensureActiveOrcaProfile(userDataPath).profile.id
   linkOrcaProfileToCloud(profileId, cloud, userDataPath)
-  await saveSession(profileId, userDataPath, 60 * 60 * 1000)
+  saveSession(profileId, userDataPath, 60 * 60 * 1000)
   return { userDataPath, profileId, artifacts: new ArtifactCloudService(userDataPath, () => true) }
 }
 

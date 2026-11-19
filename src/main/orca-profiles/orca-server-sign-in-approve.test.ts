@@ -44,7 +44,7 @@ function approvalHost(
   let requests = 0
   const server = new OrcaServerSignIn({
     account: {
-      getAuthStatus: async () => signedOut,
+      getAuthStatus: () => signedOut,
       signInWithCode,
       selectOrg: vi.fn(),
       signOut: vi.fn(),
