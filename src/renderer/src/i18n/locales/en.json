@@ -21628,7 +21628,6 @@
         "backToMain": "Back to main agent",
         "mainAgent": "Main agent",
         "promptFromMain": "Prompt from main agent",
-        "clickToOpen": "Click to open",
         "backTo": "Back to {{value0}}",
         "path": "Subagent path",
         "stateHeading": {
