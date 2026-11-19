@@ -233,6 +233,21 @@ describe('terminal session name recording', () => {
       expect(saved('s2')).toBe('Fix auth bug')
     })
 
+    it('a resumed tab renamed before its session is known takes the saved name', () => {
+      const now = 1_000_000
+      seed('s1', 'Fix auth bug', 'closed-tab')
+      // The resumed tab shows the saved name; the user renames it before the agent reports s1.
+      recordTerminalTabRename(
+        makeTerminalNamesState([{ id: 'tab-new', customTitle: 'Fix auth bug' }]),
+        'tab-new',
+        'Auth, part two',
+        { now }
+      )
+      pass([{ id: 'tab-new', sessionId: 's1', customTitle: 'Auth, part two' }], now + 1)
+      expect(saved('s1')).toBe('Auth, part two')
+      expect(owner('s1')).toBe('tab-new')
+    })
+
     it('keeps the saved name when naming a resumed tab failed', () => {
       seed('s1', 'Fix auth bug', 'closed-tab')
       // The host ignored the name, so the resumed tab stays unnamed.

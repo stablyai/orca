@@ -13,6 +13,19 @@ vi.mock('@/lib/agent-session/history/session-names/terminal-session-name-recordi
   recordTerminalTabRename: record
 }))
 
+function tab(customTitle: string | null) {
+  return {
+    id: 'tab-1',
+    ptyId: null,
+    worktreeId: 'wt-1',
+    title: 'claude',
+    customTitle,
+    color: null,
+    sortOrder: 0,
+    createdAt: 0
+  }
+}
+
 describe.each([false, true])('tab rename with main owning layout: %s', (layoutOwnerIsMain) => {
   beforeEach(() => {
     vi.resetModules()
@@ -22,29 +35,24 @@ describe.each([false, true])('tab rename with main owning layout: %s', (layoutOw
 
   it("records the tab's session name before the rename is applied", async () => {
     const { useAppStore } = await import('../index')
-    record.mockImplementation((state: { tabsByWorktree: Record<string, unknown> }) => {
-      // The recorder sees the state from before the rename.
-      expect(state.tabsByWorktree).toEqual({})
-    })
+    useAppStore.setState({ tabsByWorktree: { 'wt-1': [tab('Old')] } })
+    let seenTitle: string | null | undefined
+    record.mockImplementation(
+      (state: { tabsByWorktree: Record<string, { customTitle: string | null }[]> }) => {
+        seenTitle = state.tabsByWorktree['wt-1']?.[0]?.customTitle
+      }
+    )
     useAppStore.getState().setTabCustomTitle('tab-1', 'Fix auth bug')
     expect(record).toHaveBeenCalledWith(expect.anything(), 'tab-1', 'Fix auth bug', {
       interactive: true
     })
+    // The recorder saw the name from before the rename.
+    expect(seenTitle).toBe('Old')
   })
 
   it('still renames when recording fails', async () => {
     const { useAppStore } = await import('../index')
-    const tab = {
-      id: 'tab-1',
-      ptyId: null,
-      worktreeId: 'wt-1',
-      title: 'claude',
-      customTitle: null,
-      color: null,
-      sortOrder: 0,
-      createdAt: 0
-    }
-    useAppStore.setState({ tabsByWorktree: { 'wt-1': [tab] } })
+    useAppStore.setState({ tabsByWorktree: { 'wt-1': [tab(null)] } })
     record.mockImplementation(() => {
       throw new Error('boom')
     })

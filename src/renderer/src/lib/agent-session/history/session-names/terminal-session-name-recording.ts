@@ -30,6 +30,8 @@ type LocalNameWrite = {
   name: string
   /** The session a user rename named; only it may take the name once the rename shows. */
   sessionId: string | null
+  /** The tab's name before the rename: a resumed tab renamed before its session was known. */
+  previousName: string
 }
 
 const localNameWriteByTabId = new Map<string, LocalNameWrite>()
@@ -100,7 +102,12 @@ export function recordTerminalTabRename(
     state.tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)?.customTitle
   )
   const name = normalizeTerminalSessionName(title)
-  const write: LocalNameWrite = { at: options.now ?? Date.now(), name, sessionId: null }
+  const write: LocalNameWrite = {
+    at: options.now ?? Date.now(),
+    name,
+    sessionId: null,
+    previousName
+  }
   localNameWriteByTabId.set(tabId, write)
   if (!name && !hasTerminalSessionNames()) {
     return
@@ -210,14 +217,15 @@ export function reconcileTerminalSessionNames(
     const renamedWhileBound =
       previous !== undefined && previous.key === binding.key && previous.name !== name
     // Why not any named tab: a session resumed by hand inside a tab already named something else
-    // must keep its own name. Only a tab showing that name (a resume we named) or renamed while
-    // running the session takes it from a closed owner.
+    // must keep its own name. Only a tab showing that name (a resume we named), renamed while
+    // running the session, or renamed here from that name takes it from a closed owner.
     const closedOwner = entry !== undefined && !owned && !tabsById.has(entry.tabId)
+    const renamedFromSavedName = write !== undefined && write.previousName === entry?.title
     if (name) {
       if (
         !entry ||
         (owned && entry.title !== name) ||
-        (closedOwner && (entry.title === name || renamedWhileBound))
+        (closedOwner && (entry.title === name || renamedWhileBound || renamedFromSavedName))
       ) {
         saveTerminalSessionName({
           executionHostId: binding.executionHostId,
