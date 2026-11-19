@@ -590,25 +590,37 @@ it("writes nothing for an older host's refusal when the question is replaced whi
   expect(notice.textContent).toContain('Ship B')
 })
 
-it('writes nothing for an older host even when Q2 lands right after any read of Q1', async () => {
+it('writes nothing for an older host when Q2 replaces Q1 between any read of Q1 and the point a write would go', async () => {
   answered.mockResolvedValue('unsupported')
   const page = rerenderable(askingItem(38))
-  // Whatever reads the item sees Q1 open; Q2 replaces it before anything that read could write.
+  let replacedAfterRead = false
+  let replaced = false
+  const replace = (): void => {
+    if (!replaced) {
+      replaced = true
+      page.reconcileTo(askingItem(38, { eventId: 'e9', text: 'Which color?' }), eventsUpTo(9))
+      act(() => read.current!.retry())
+    }
+  }
+  // A page that reads the item before writing sees Q1 open, and Q2 replaces it right after that read.
   hostRead.mockImplementation(() => {
     const snapshot = read.current!.item
-    page.reconcileTo(askingItem(38, { eventId: 'e9', text: 'Which color?' }), eventsUpTo(9))
-    act(() => read.current!.retry())
+    replace()
+    replacedAfterRead = true
     return Promise.resolve({ item: snapshot, events: [] })
   })
   typeAnswer('Ship B')
   fireEvent.click(screen.getByRole('button', { name: /Submit/ }))
+  // The refusal is handled; whatever the page writes in reply would go now.
   await flush()
-  for (const again of screen.queryAllByRole('button', { name: 'Send again' })) {
-    fireEvent.click(again)
-  }
+  // A page that never reads gets the replacement here, still before any later write.
+  replace()
   await flush()
 
+  expect(replaced).toBe(true)
+  expect(replacedAfterRead).toBe(hostRead.mock.calls.length > 0)
   expectOnlyAnswerCalls()
+  expect(screen.getByRole('status').textContent).toContain('can’t record answers yet')
 })
 
 it('writes nothing on retries to an older host, before or after the question is replaced', async () => {
