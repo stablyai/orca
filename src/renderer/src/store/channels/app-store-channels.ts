@@ -14,6 +14,10 @@ export type AppStoreChannelField = (typeof CHANNEL_FIELDS)[number]
 
 const channelFields: ReadonlySet<string> = new Set(CHANNEL_FIELDS)
 
+export function isAppStoreChannelField(key: PropertyKey): boolean {
+  return typeof key === 'string' && channelFields.has(key)
+}
+
 /** What a root selector may read: a write touching only channel fields need not wake it. */
 export type RootSelectorState = Omit<AppState, AppStoreChannelField>
 

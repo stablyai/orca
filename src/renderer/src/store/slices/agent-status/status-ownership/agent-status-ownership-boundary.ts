@@ -3,13 +3,18 @@ import type { AppState } from '../../../types'
 import type { StoreSetArgs } from '../../../diagnostics/react-commit-cascade-write-probe'
 import { createAppStoreNotificationRouter } from '../../../channels/app-store-notification-router'
 import { isChannelOnlyWrite } from '../../../channels/app-store-channels'
+import { ORCA_STORE_CHANNELS_SKIP_ROOT_SELECTORS } from '../../../channels/store-channels-switch'
+import { checkSkippedRootSelectors } from '../../../channels/root-selector-oracle'
 
 /** Outermost policy: finish transformations and getters before publishing mutable keyed owners. */
 export function withAgentStatusOwnership(
   createState: StateCreator<AppState, [], []>
 ): StateCreator<AppState, [], []> {
   return (set, get, api) => {
-    const router = createAppStoreNotificationRouter(api.subscribe, get)
+    const router = createAppStoreNotificationRouter(api.subscribe, get, {
+      skipRootSelectorsOnChannelOnlyWrites: ORCA_STORE_CHANNELS_SKIP_ROOT_SELECTORS,
+      afterSkippedDispatch: import.meta.env.DEV ? checkSkippedRootSelectors : undefined
+    })
     api.subscribe = router.subscribe
     Object.assign(api, { subscribeRootSelector: router.subscribeRootSelector })
     const wrap =
