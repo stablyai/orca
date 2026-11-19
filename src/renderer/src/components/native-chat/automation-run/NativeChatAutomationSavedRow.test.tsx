@@ -69,7 +69,8 @@ const hostAnswer = (_target: unknown, method: string) =>
 
 const OWNER = { target: { kind: 'local' }, sessionId: 's1', worktreeId: 'folder:fw-1' } as const
 
-const renderInChat = (saved: Saved) =>
+// The URL is in the opened row.
+const renderInChat = (saved: Saved) => {
   render(
     <TooltipProvider>
       <NativeChatVisualOwnerContext.Provider value={OWNER}>
@@ -77,6 +78,8 @@ const renderInChat = (saved: Saved) =>
       </NativeChatVisualOwnerContext.Provider>
     </TooltipProvider>
   )
+  fireEvent.click(screen.getByRole('button', { expanded: false }))
+}
 
 const HOOKED: Saved = {
   change: 'created',
