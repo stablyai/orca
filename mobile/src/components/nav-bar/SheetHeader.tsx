@@ -1,5 +1,6 @@
+import type { ReactNode } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { X } from 'lucide-react-native'
+import { ChevronLeft, X } from 'lucide-react-native'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { colors, feedback, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
@@ -14,19 +15,25 @@ type SheetHeaderProps = {
   subtitle?: string
   /** "Cancel" or "Reset"; omit for a plain list sheet. */
   leading?: SheetTextAction
+  /** A back chevron instead of a leading text action, on a page pushed inside the sheet. */
+  onBack?: { label: string; onPress: () => void }
   /** "Done" or the sheet's commit, in bold. */
   trailing?: SheetTextAction
   /** A close button instead of a text action, for sheets that only show things. */
   onClose?: () => void
+  /** Up to two NavBarButtons instead of a trailing text action, for a sheet whose actions are icons. */
+  trailingButtons?: ReactNode
 }
 
-// The one sheet header: a centred title, with a text action or close button on either side.
+// The one sheet header: a centred title, with a text action or a round button on either side.
 export function SheetHeader({
   title,
   subtitle,
   leading,
+  onBack,
   trailing,
   onClose,
+  trailingButtons,
   titleAboveActions
 }: SheetHeaderProps) {
   useMobileColorScheme()
@@ -47,13 +54,23 @@ export function SheetHeader({
       ) : null}
       <View style={styles.header}>
         <View style={styles.side}>
-          {leading ? <TextAction action={leading} emphasis={false} /> : null}
+          {leading ? (
+            <TextAction action={leading} emphasis={false} />
+          ) : onBack ? (
+            <NavBarButton
+              icon={ChevronLeft}
+              accessibilityLabel={onBack.label}
+              onPress={onBack.onPress}
+            />
+          ) : null}
         </View>
         {!titleAboveActions ? (
           <View style={styles.center}>
-            <Text style={styles.title} numberOfLines={1} accessibilityRole="header">
-              {title}
-            </Text>
+            {title ? (
+              <Text style={styles.title} numberOfLines={1} accessibilityRole="header">
+                {title}
+              </Text>
+            ) : null}
             {subtitle !== undefined ? (
               <Text style={styles.subtitle} numberOfLines={1}>
                 {subtitle}
@@ -64,8 +81,8 @@ export function SheetHeader({
           <View style={styles.center} />
         )}
         <View style={[styles.side, styles.trailing]}>
-          {trailing ? <TextAction action={trailing} emphasis /> : null}
-          {onClose && !trailing ? (
+          {trailing ? <TextAction action={trailing} emphasis /> : (trailingButtons ?? null)}
+          {onClose && !trailing && !trailingButtons ? (
             <NavBarButton
               icon={X}
               accessibilityLabel={t('components.sheetHeader.close', 'Close')}
@@ -115,7 +132,8 @@ const styles = themedStyleSheet(() => ({
   side: {
     width: 84,
     flexDirection: 'row',
-    alignItems: 'center'
+    alignItems: 'center',
+    gap: spacing.sm
   },
   trailing: {
     justifyContent: 'flex-end'

@@ -187,7 +187,18 @@
       "webView": "웹사이트를 데스크톱 화면으로 보기"
     },
     "loadFailure": {
-      "retry": "다시 시도"
+      "retry": "다시 시도",
+      "connectionNotSecure": "연결이 안전하지 않습니다",
+      "certificateNameMismatch": "인증서가 {{value0}}과(와) 일치하지 않습니다.",
+      "certificateDateInvalid": "{{value0}}의 인증서가 현재 날짜와 시간에는 유효하지 않습니다.",
+      "certificateAuthorityInvalid": "Orca는 {{value0}}의 인증서를 발급한 인증 기관을 신뢰하지 않습니다.",
+      "certificateVerificationFailed": "Orca가 {{value0}}의 인증서를 확인하지 못했습니다.",
+      "proceedUnsafe": "계속(안전하지 않음)",
+      "connecting": "연결 중…",
+      "certificateChallengeExpired": "이 인증서 승인이 만료되었습니다. 페이지를 다시 시도해 새로 요청하세요.",
+      "certificateChallengeChanged": "인증서 요청이 변경되었습니다. 페이지를 다시 시도하고 새 경고를 확인하세요.",
+      "certificateProceedFailed": "Orca가 이 인증서 요청을 승인하지 못했습니다. 페이지를 다시 시도한 후 다시 요청하세요.",
+      "certificateChallengeUnavailable": "이 인증서 요청은 더 이상 사용할 수 없습니다. 페이지를 다시 시도해 새로 요청하세요."
     }
   },
   "chat": {
@@ -1638,7 +1649,12 @@
       "removeHostMessage": "\"{{name}}\"을(를) 제거하시겠습니까? 나중에 다시 페어링할 수 있습니다.",
       "sleep": "슬립",
       "unpin": "고정 해제",
-      "rename": "이름 변경"
+      "rename": "이름 변경",
+      "markRead": "읽음으로 표시",
+      "markUnread": "읽지 않은 것으로 표시",
+      "muteNotifications": "알림 음소거",
+      "unmuteNotifications": "알림 음소거 해제",
+      "moveToStatus": "상태로 이동"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "체크: 실패",
@@ -2789,6 +2805,9 @@
     },
     "nativeChatView": {
       "linkedMessageMissing": "해당 메시지를 찾을 수 없습니다."
+    },
+    "browserProfile": {
+      "default": "기본"
     }
   },
   "settings": {

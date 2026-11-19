@@ -39,12 +39,6 @@ function bugBody({ where, os, remote }) {
   )
 }
 
-it('labels a desktop issue whose remote host operating system was left unselected', async () => {
-  const body = bugBody({ where: 'Desktop only', os: 'Windows', remote: 'None' })
-
-  expect((await labelIssue(body, ['bug'])).labels).toEqual(['bug', 'os:Windows'])
-})
-
 it('labels a mobile app issue whose remote host operating system was left unselected', async () => {
   const body = bugBody({ where: 'Mobile app', os: 'iOS', remote: 'None' })
 

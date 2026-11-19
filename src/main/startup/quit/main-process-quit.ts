@@ -41,6 +41,7 @@ import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-d
 import { flushUnsavedCloudSessions } from '../../orca-profiles/cloud-session/profile-cloud-session-owner'
 import { getWorkspaceCleanupRunner } from '../../workspaces/cleanup/workspace-cleanup-runner-registry'
 import { closeBrowserExtensionProfileDocumentStores } from '../../browser/extensions/profile-storage/browser-extension-profile-document-store'
+import { closeBrowserExtensionProfileStateStore } from '../../browser/extensions/profile-storage/browser-extension-profile-state-store'
 import { shutdownWatchersOnce } from './filesystem-watcher-quit-shutdown'
 import { flushBrowserSessionCookiesOnQuit } from '../../browser/cookies/session-restore/browser-session-cookie-restore'
 
@@ -307,7 +308,12 @@ function installWillQuitHandler(): void {
         /* swallow — telemetry must never prevent app.quit() */
       })
       // Last before quitting, so it saves every extension write accepted during teardown.
-      .then(() => closeBrowserExtensionProfileDocumentStores())
+      .then(() =>
+        Promise.all([
+          closeBrowserExtensionProfileDocumentStores(),
+          closeBrowserExtensionProfileStateStore()
+        ])
+      )
       .then(() => {
         daemonDisconnectDone = true
         app.quit()

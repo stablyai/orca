@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { BotChatTreeChat, BotChatTreeWorker } from './bot-chat-tree'
+import { botOwnChatTree, type BotChatTreeChat, type BotChatTreeWorker } from './bot-chat-tree'
 import { buildBotSidebarTree } from './bot-sidebar-tree'
 
 const chat = (chatId: string, extra: Partial<BotChatTreeChat> = {}): BotChatTreeChat => ({
@@ -55,24 +55,31 @@ describe('buildBotSidebarTree', () => {
       running: [runningIn('w0'), runningIn('w1', 'needs-you')],
       runningTotal: 2
     })
-    const [first] = build([home], lines(15), { folds: { home: 'open' } }).chats
-    expect(first.lines.map((line) => line.id)).toEqual(['w1', 'w0', 'w2', 'w3'])
+    const chats = [
+      chat('slack', { origin: 'slack', tab: true }),
+      home,
+      chat('untabbed', { tab: false }),
+      chat('old', { closed: true })
+    ]
+    const workspaces = lines(18)
+    const workspaceChats = { w15: 'slack', w16: 'old', w17: 'untabbed' }
+    const folds = { home: 'open' } as const
+    const activeLineId = 'w14'
+    const tree = build(chats, workspaces, { workspaceChats, folds, activeLineId })
+    const [first, slack] = tree.chats
+    expect(tree.chats.map((group) => group.chat.chatId)).toEqual(['home', 'slack'])
+    expect(tree.stray).toEqual([])
+    expect(slack.lines.map((line) => line.id)).toEqual(['w15'])
+    expect(first.lines.map((line) => line.id)).toEqual(['w1', 'w0', 'w2', 'w3', 'w14'])
     expect(first.paging).toEqual({ remaining: 11, label: 'step' })
 
-    const [stepped] = build([home], lines(15), {
-      folds: { home: 'open' },
+    const [stepped] = build(chats, workspaces, {
+      workspaceChats,
+      folds,
       steps: { home: 1 }
     }).chats
     expect(stepped.lines).toHaveLength(12)
     expect(stepped.paging).toEqual({ remaining: 3, label: 'count' })
-  })
-
-  it('keeps the open workspace listed past the page', () => {
-    const [home] = build([chat('home', { origin: 'home' })], lines(6), {
-      folds: { home: 'open' },
-      activeLineId: 'w5'
-    }).chats
-    expect(home.lines.map((line) => line.id)).toEqual(['w0', 'w1', 'w5'])
   })
 
   it('starts every chat folded, live or finished, until the owner unfolds it', () => {
@@ -80,14 +87,16 @@ describe('buildBotSidebarTree', () => {
       chat('home', {
         origin: 'home',
         live: 'needs-you',
-        running: [runningIn('w0', 'needs-you')],
-        runningTotal: 1
+        lastActiveAt: 5,
+        running: [runningIn('w0', 'needs-you'), runningIn('w3')],
+        runningTotal: 2
       }),
       chat('done', { tab: true, finishedTotal: 1, lastActiveAt: 7 }),
       chat('kept', { tab: true, finishedTotal: 1 }),
-      chat('empty', { tab: true })
+      chat('empty', { tab: true }),
+      chat('replying', { tab: true, live: 'replying', lastActiveAt: 9 })
     ]
-    const tree = build(chats, lines(3), {
+    const tree = build(chats, lines(4), {
       workspaceChats: { w1: 'done', w2: 'kept' },
       folds: { kept: 'open' }
     })
@@ -99,53 +108,49 @@ describe('buildBotSidebarTree', () => {
         trailing
       ])
     ).toEqual([
-      ['home', true, false, { kind: 'summary', text: '1 waiting' }],
+      ['home', true, false, { kind: 'summary', text: '1 waiting · 1 running' }],
       ['done', true, false, { kind: 'time', at: 7 }],
       ['kept', true, true, null],
-      ['empty', false, false, null]
+      ['empty', false, false, null],
+      ['replying', false, false, null]
     ])
   })
 
-  it("shows a folded chat's live counts, else its time; nothing while it replies", () => {
-    const tree = build(
-      [
-        chat('home', {
-          origin: 'home',
-          lastActiveAt: 5,
-          running: [runningIn('w0', 'needs-you'), runningIn('w1')],
-          runningTotal: 2
-        }),
-        chat('quiet', { tab: true, lastActiveAt: 7 }),
-        chat('replying', { tab: true, live: 'replying', lastActiveAt: 9 })
-      ],
-      lines(3),
-      { workspaceChats: { w2: 'quiet' }, folds: { home: 'folded' } }
-    )
-    expect(tree.chats.map(({ trailing }) => trailing)).toEqual([
-      { kind: 'summary', text: '1 waiting · 1 running' },
-      { kind: 'time', at: 7 },
-      null
-    ])
-  })
-
-  it('lists the open workspace after the chats when its chat has no tab', () => {
-    const tree = build([chat('home', { origin: 'home' }), chat('side', { tab: false })], lines(2), {
-      workspaceChats: { w1: 'side' },
-      activeLineId: 'w1'
-    })
-    expect(tree.stray).toEqual([{ id: 'w1' }])
-  })
-
-  it("keeps a tabless chat's live workspaces listed once another row is open, waiting first", () => {
+  it("keeps a tabless chat's live and open workspaces listed, waiting first", () => {
     const run = chat('run', {
       origin: 'automation',
       tab: false,
       running: [runningIn('w1'), runningIn('w2', 'needs-you')],
       runningTotal: 2
     })
-    const tree = build([chat('home', { origin: 'home' }), run], lines(4), {
-      workspaceChats: { w1: 'run', w2: 'run', w3: 'run' }
+    const tree = build([chat('home', { origin: 'home' }), run], lines(5), {
+      workspaceChats: { w1: 'run', w2: 'run', w3: 'run', w4: 'run' },
+      activeLineId: 'w3'
     })
-    expect(tree.stray.map((line) => line.id)).toEqual(['w2', 'w1'])
+    expect(tree.stray.map((line) => line.id)).toEqual(['w2', 'w1', 'w3'])
+  })
+
+  it("lists a group room's workers under Home Chat, never the room session itself", () => {
+    const room = 'bot-group-member-1'
+    const own = botOwnChatTree({
+      chats: [
+        chat('home', { origin: 'home' }),
+        chat(room, { running: [runningIn('ws1', 'needs-you')], runningTotal: 1 })
+      ],
+      workspaceChats: { ws1: room }
+    })
+    const tree = build(own.chats, [{ id: 'ws1' }], {
+      workspaceChats: own.workspaceChats,
+      folds: { home: 'open' }
+    })
+
+    expect(tree.chats.map((view) => view.chat.chatId)).toEqual(['home'])
+    expect(tree.chats[0]?.lines.map((line) => line.id)).toEqual(['ws1'])
+    expect(own.chats[0]?.running.map((worker) => worker.state)).toEqual(['needs-you'])
+  })
+
+  it('keeps a room session listed when there is no Home Chat to take its workers', () => {
+    const tree = { chats: [chat('bot-group-member-1')], workspaceChats: {} }
+    expect(botOwnChatTree(tree)).toBe(tree)
   })
 })

@@ -3,6 +3,8 @@ import * as z from 'zod'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../../transport/rpc/rpc-operation-result-reader'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
+import { useRouteCapability } from '../../../worktree/execution-hosts/use-route-capability'
+import { SESSION_TABS_TERMINAL_SHELL_CHOICES_RUNTIME_CAPABILITY } from '../../../../../src/shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 import {
   BUILT_IN_WINDOWS_TERMINAL_SHELLS,
   type BuiltInWindowsTerminalShell
@@ -37,16 +39,15 @@ export const terminalShellChoicesRead = bindDeferredRpcOperation(
  */
 export function useMobileWindowsShellChoices({
   client,
-  enabled,
   sheetOpen,
   worktreeId
 }: {
   client: RpcClient | null
-  enabled: boolean
   /** Ask again each time the New Tab sheet opens, so the answer follows the project's runtime. */
   sheetOpen: boolean
   worktreeId: string
 }): readonly BuiltInWindowsTerminalShell[] {
+  const enabled = useRouteCapability(SESSION_TABS_TERMINAL_SHELL_CHOICES_RUNTIME_CAPABILITY)
   const [read, setRead] = useState<{
     key: string
     client: RpcClient

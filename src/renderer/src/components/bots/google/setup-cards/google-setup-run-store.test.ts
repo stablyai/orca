@@ -39,34 +39,31 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('a bot setup run as its cards read it', () => {
-  it('reads again for a card from a run started since, once', async () => {
+  it('refreshes mounted cards for a new run and stops listening after both unmount', async () => {
     mocks.current.run = run('old', 'done')
     const first = renderHook(() => useGoogleSetupRun({ hostId: 'local', id: 'ivy' }, 'old'))
     await waitFor(() => expect(first.result.current?.id).toBe('old'))
     expect(mocks.call).toHaveBeenCalledTimes(1)
-    mocks.current.run = run('new', 'done')
+    mocks.current.run = run('new', 'running')
     const next = renderHook(() => useGoogleSetupRun({ hostId: 'local', id: 'ivy' }, 'new'))
     await waitFor(() => expect(next.result.current?.id).toBe('new'))
     expect(first.result.current?.id).toBe('new')
     // The old card is now from an earlier run, and asks nothing more.
     await act(async () => {})
     expect(mocks.call).toHaveBeenCalledTimes(2)
-  })
 
-  it('reads again when the host says bots changed, and stops listening when no card shows', async () => {
-    mocks.current.run = run('one', 'running')
-    const card = renderHook(() => useGoogleSetupRun({ hostId: 'local', id: 'ivy' }, 'one'))
-    await waitFor(() => expect(card.result.current?.state).toBe('running'))
-    mocks.current.run = { ...run('one', 'done'), revision: 2 }
+    mocks.current.run = { ...run('new', 'done'), revision: 2 }
     act(() => {
       emitBotsChangedWindowEvent('local')
     })
-    await waitFor(() => expect(card.result.current?.state).toBe('done'))
-    const calls = mocks.call.mock.calls.length
-    card.unmount()
+    await waitFor(() => expect(next.result.current?.state).toBe('done'))
+    expect(first.result.current?.state).toBe('done')
+    expect(mocks.call).toHaveBeenCalledTimes(3)
+    first.unmount()
+    next.unmount()
     emitBotsChangedWindowEvent('local')
     await act(async () => {})
-    expect(mocks.call).toHaveBeenCalledTimes(calls)
+    expect(mocks.call).toHaveBeenCalledTimes(3)
   })
 
   it('takes the run and where it’s stuck from one reply, so a new run never shows old buttons', async () => {

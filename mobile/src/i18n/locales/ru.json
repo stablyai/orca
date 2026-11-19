@@ -195,7 +195,18 @@
       "webView": "Показать версию сайта для компьютера"
     },
     "loadFailure": {
-      "retry": "Повторить"
+      "retry": "Повторить",
+      "connectionNotSecure": "Соединение не защищено",
+      "certificateNameMismatch": "Сертификат не соответствует имени {{value0}}.",
+      "certificateDateInvalid": "Сертификат для {{value0}} недействителен на текущую дату и время.",
+      "certificateAuthorityInvalid": "Orca не доверяет центру, выдавшему сертификат для {{value0}}.",
+      "certificateVerificationFailed": "Orca не смогла проверить сертификат для {{value0}}.",
+      "proceedUnsafe": "Всё равно продолжить (небезопасно)",
+      "connecting": "Подключение…",
+      "certificateChallengeExpired": "Срок действия этого подтверждения сертификата истёк. Повторите загрузку страницы, чтобы запросить новое.",
+      "certificateChallengeChanged": "Запрос сертификата изменился. Повторите загрузку страницы и просмотрите новое предупреждение.",
+      "certificateProceedFailed": "Orca не смогла подтвердить сертификат. Загрузите страницу снова и повторите попытку.",
+      "certificateChallengeUnavailable": "Этот запрос сертификата больше недоступен. Загрузите страницу снова, чтобы создать новый."
     }
   },
   "chat": {
@@ -1724,7 +1735,10 @@
       "removeHostMessage": "Удалить «{{name}}»? Позже его можно подключить снова.",
       "sleep": "Перевести в сон",
       "unpin": "Открепить",
-      "rename": "Переименовать"
+      "rename": "Переименовать",
+      "markRead": "Отметить прочитанным",
+      "markUnread": "Отметить непрочитанным",
+      "moveToStatus": "Переместить в статус"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Проверки: не пройдены",
@@ -2933,6 +2947,9 @@
     },
     "nativeChatView": {
       "linkedMessageMissing": "Не удалось найти это сообщение."
+    },
+    "browserProfile": {
+      "default": "По умолчанию"
     }
   },
   "settings": {

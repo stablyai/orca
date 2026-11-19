@@ -109,7 +109,7 @@ describe('a Google setup card in the chat', () => {
     expect(screen.getByText('This Google setup ended.')).toBeTruthy()
   })
 
-  it('answers the path with no chat message, then locks to a receipt with Change', async () => {
+  it('shows a path receipt and offers changes until the project is done', async () => {
     show('path')
     expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(
       expect.arrayContaining([
@@ -138,15 +138,15 @@ describe('a Google setup card in the chat', () => {
     expect(
       screen.getByRole('button', { name: /Guide me in my browser/ }).hasAttribute('disabled')
     ).toBe(false)
-  })
 
-  it('stops offering Change once the bot is past the project', () => {
+    cleanup()
     mocks.run.current = run({
-      answers: { path: { values: ['do-it-for-me'], at: 2 } },
+      mode: 'guide-here',
+      answers: { path: { values: ['guide-here'], at: 2 } },
       steps: { project: { status: 'done', at: 3, by: 'bot' } }
     })
     show('path')
-    expect(screen.getByText('✓ You chose Do it for me')).toBeTruthy()
+    expect(screen.getByText('✓ You chose Guide me here')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Change' })).toBeNull()
   })
 
@@ -337,7 +337,7 @@ describe('a Google setup card in the chat', () => {
     ])
   })
 
-  it('keeps Sign in on the newest Connect Google card, even when older history mounts after it', () => {
+  it('keeps sign-in and recovery actions on the newest Connect Google card', () => {
     mocks.run.current = run({
       account: 'a@x.com',
       steps: { client: { status: 'done', at: 2 } },
@@ -351,12 +351,13 @@ describe('a Google setup card in the chat', () => {
         <GoogleSetupChatCard key="newer" card={newer} fallback="" />
       </div>
     )
-    rerender(
+    const bothCopies = () => (
       <div>
         <GoogleSetupChatCard key="older" card={older} fallback="" />
         <GoogleSetupChatCard key="newer" card={newer} fallback="" />
       </div>
     )
+    rerender(bothCopies())
     expect(screen.getAllByRole('button', { name: 'Sign in to Google' })).toHaveLength(1)
     expect(screen.getAllByText('Continued further down.')).toHaveLength(1)
     expect(
@@ -365,9 +366,6 @@ describe('a Google setup card in the chat', () => {
         .compareDocumentPosition(screen.getByText('Continued further down.')) &
         Node.DOCUMENT_POSITION_PRECEDING
     ).toBeTruthy()
-  })
-
-  it('keeps recovery on the newest Connect Google copy once connect is done', () => {
     mocks.run.current = run({
       account: 'a@x.com',
       services: ['gmail', 'calendar'],
@@ -382,13 +380,7 @@ describe('a Google setup card in the chat', () => {
         { id: 'continue-without', services: ['calendar'] }
       ]
     }
-    const older = { botId: 'ivy', runId: 'run-1', card: 'connect' as const }
-    render(
-      <>
-        <GoogleSetupChatCard card={older} fallback="" />
-        <GoogleSetupChatCard card={{ ...older, copy: 1 }} fallback="" />
-      </>
-    )
+    rerender(bothCopies())
     // Both the primary and the secondary recovery button show once, on the newest copy.
     expect(screen.getAllByRole('button', { name: 'Allow Calendar' })).toHaveLength(1)
     expect(screen.getAllByRole('button', { name: 'Continue without them' })).toHaveLength(1)
@@ -560,16 +552,7 @@ describe('a Google setup card in the chat', () => {
       show('connect')
     }
 
-    it('leaves the bot asleep when Google still can’t be checked', async () => {
-      mocks.refresh.mockResolvedValue({ status: 'failed', error: 'offline' })
-      signedIn({ kind: 'check-failed', services: ['gmail'], actions: [{ id: 'check-again' }] })
-      await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: 'Check again' }))
-      })
-      expect(mocks.answer).not.toHaveBeenCalled()
-    })
-
-    it('opens Turn on for an imported app in its key’s project and account, then checks and wakes the bot', async () => {
+    it('opens the imported app project and only wakes the bot after a successful check', async () => {
       mocks.host.current = {
         status: 'ready',
         google: {
@@ -592,6 +575,13 @@ describe('a Google setup card in the chat', () => {
       const url = new URL(String(mocks.open.mock.calls[0]?.[0]))
       expect(url.searchParams.get('project')).toBe('team-app')
       expect(url.searchParams.get('authuser')).toBe('a@x.com')
+
+      mocks.refresh.mockResolvedValueOnce({ status: 'failed', error: 'offline' })
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Check again' }))
+      })
+      expect(mocks.answer).not.toHaveBeenCalled()
+
       await act(async () => {
         fireEvent.click(screen.getByRole('button', { name: 'Check again' }))
       })

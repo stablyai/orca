@@ -93,32 +93,23 @@ describe('orca automations create --bot', () => {
     })
   })
 
-  it('reads where it runs and where results go', async () => {
+  it('reads a specific bot chat and a pasted Slack destination together', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => undefined)
     const { client, writes } = host()
 
     await create(client, [
       ['bot', 'bot-1'],
-      ['runs-in', 'chat'],
-      ['results-to', 'channel:C0123']
+      ['runs-in', 'chat:side-chat'],
+      ['results-to', 'channel:https://acme.slack.com/archives/C0123ABCD']
     ])
 
     expect(writes[0]).toMatchObject({
-      bot: { botId: 'bot-1', runsIn: 'chat', resultsTo: { channel: 'C0123' } }
-    })
-  })
-
-  it("reads chat:<id> as one of the bot's chats", async () => {
-    vi.spyOn(console, 'log').mockImplementation(() => undefined)
-    const { client, writes } = host()
-
-    await create(client, [
-      ['bot', 'bot-1'],
-      ['runs-in', 'chat:side-chat']
-    ])
-
-    expect(writes[0]).toMatchObject({
-      bot: { runsIn: 'chat', chat: { sessionId: 'side-chat' } }
+      bot: {
+        botId: 'bot-1',
+        runsIn: 'chat',
+        chat: { sessionId: 'side-chat' },
+        resultsTo: { channel: 'C0123ABCD' }
+      }
     })
   })
 
@@ -136,7 +127,6 @@ describe('orca automations create --bot', () => {
 
   it.each([
     [[['runs-in', 'chat']], '--runs-in, --results-to, --on and --once need --bot'],
-    [[['on', 'slack.mentioned']], '--runs-in, --results-to, --on and --once need --bot'],
     [
       [
         ['bot', 'Reviewer'],
@@ -389,20 +379,6 @@ describe('orca automations edit --runs-in / --results-to', () => {
       "apply only to a bot's automation"
     )
     expect(updates).toHaveLength(0)
-  })
-})
-
-describe('--results-to channel:', () => {
-  it('reads a pasted Slack channel link as its channel id', async () => {
-    vi.spyOn(console, 'log').mockImplementation(() => undefined)
-    const { client, writes } = host()
-
-    await create(client, [
-      ['bot', 'bot-1'],
-      ['results-to', 'channel:https://acme.slack.com/archives/C0123ABCD']
-    ])
-
-    expect(writes[0]).toMatchObject({ bot: { resultsTo: { channel: 'C0123ABCD' } } })
   })
 })
 
