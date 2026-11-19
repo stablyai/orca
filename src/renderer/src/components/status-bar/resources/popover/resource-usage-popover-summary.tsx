@@ -144,27 +144,32 @@ const OWNER_SWATCH_CLS = {
 function OwnerSwatch({ owner }: { owner: keyof typeof OWNER_SWATCH_CLS }): React.JSX.Element {
   return (
     <span
-      className={cn('inline-block size-2 shrink-0 rounded-xs', OWNER_SWATCH_CLS[owner])}
+      className={cn('inline-block size-2 shrink-0 rounded-sm', OWNER_SWATCH_CLS[owner])}
       aria-hidden
     />
   )
 }
 
-/** Bar widths in percent of this machine's memory. Summed per-process bytes can count shared
- *  pages twice, so owners shrink to fit the used part and available keeps its true share. */
+function usedAndOwned(split: ResourceOwnerSplit): { used: number; owned: number } {
+  return {
+    used: Math.max(0, split.hostTotal - split.available),
+    owned: split.orca.memory + split.agents.memory + split.yourProcesses.memory
+  }
+}
+
 function barScale(split: ResourceOwnerSplit): number {
-  const used = Math.max(0, split.hostTotal - split.available)
-  const owned = split.orca.memory + split.agents.memory + split.yourProcesses.memory
+  const { used, owned } = usedAndOwned(split)
   return owned > used && owned > 0 ? used / owned : 1
 }
 
+/** Bar widths in percent of this machine's memory. Summed per-process bytes can count shared
+ *  pages twice, so owners shrink to fit the used part and available keeps its true share. */
 function barWidths(split: ResourceOwnerSplit): Record<ResourceOwnerKey, number> {
   const total = split.hostTotal
   if (total <= 0) {
     return { orca: 0, agents: 0, yourProcesses: 0, otherApps: 0 }
   }
-  const used = Math.max(0, total - split.available)
-  const owned = split.orca.memory + split.agents.memory + split.yourProcesses.memory
+  const { used, owned } = usedAndOwned(split)
   const scale = barScale(split)
   const pct = (bytes: number): number => (bytes / total) * 100
   return {

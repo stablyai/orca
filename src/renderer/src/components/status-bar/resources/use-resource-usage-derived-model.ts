@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { AppState } from '../../../store/types'
 import type { MemorySnapshot } from '../../../../../shared/diagnostics/process-stats-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
@@ -31,8 +31,6 @@ import {
   findDuplicateIds
 } from '../../../lib/workspace/ownership/unified-tab-host-ownership'
 import { useTranslate } from '../../../i18n/use-translate'
-
-const NO_SESSIONS: readonly DaemonSession[] = []
 
 export function useResourceUsageDerivedModel({
   open,
@@ -156,8 +154,13 @@ export function useResourceUsageDerivedModel({
 
   // Why: keyed to the 2 s snapshot and daemon inventory only, not titles or bindings; agent status is
   // read here rather than subscribed because it churns many times a second.
-  // Why: closed, the inventory still publishes terminal exits; ignore them, since the snapshot is frozen.
-  const splitSessions = open ? sessions : NO_SESSIONS
+  // Why: closed, the snapshot is frozen, so keep the inventory it was split with; exits published
+  // while closed neither rescan nor drop the daemon's pane keys from the badge tooltip.
+  const [openSessions, setOpenSessions] = useState(sessions)
+  if (open && openSessions !== sessions) {
+    setOpenSessions(sessions)
+  }
+  const splitSessions = open ? sessions : openSessions
   const ownerSplit = useMemo(
     () =>
       resourceSnapshot
