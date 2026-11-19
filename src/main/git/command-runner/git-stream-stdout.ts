@@ -131,7 +131,7 @@ function streamInSpan(
               reportTermination()
             } else if (isAbandonedWorkerChildError(error)) {
               // A streamed read holds only admission, which a lost worker returns.
-              endAbandonedWorkerChild(child, reportTermination, reportTermination)
+              endAbandonedWorkerChild(child, undefined, reportTermination, true)
             }
           })
         })

@@ -37,17 +37,19 @@ function batchTaskkill(pids: readonly number[], onWorker: boolean): Promise<bool
 export function killAbandonedWorkerChildTree(
   child: Pick<ChildProcess, 'pid' | 'exitCode' | 'signalCode' | 'kill'>
 ): Promise<boolean> {
+  const pid = child.pid
+  // An exited root's pid may be reused, so it is never killed; its exit is the evidence, even after a failed earlier kill.
+  if (
+    process.platform !== 'win32' ||
+    !pid ||
+    (child.exitCode ?? null) !== null ||
+    (child.signalCode ?? null) !== null
+  ) {
+    return Promise.resolve(true)
+  }
   const started = child instanceof WorkerThreadChildProcess && workerTreeKills.get(child)
   if (started) {
     return started
-  }
-  const pid = child.pid
-  if (process.platform !== 'win32' || !pid) {
-    return Promise.resolve(true)
-  }
-  // An exited root's pid may be reused, so it is never killed; its exit is the evidence.
-  if ((child.exitCode ?? null) !== null || (child.signalCode ?? null) !== null) {
-    return Promise.resolve(true)
   }
   if (
     !admitSelfInitiatedTreeKill({ pid, site: 'git-command-tree-kill', scope: 'win-taskkill-tree' })
@@ -93,14 +95,21 @@ export function reportWhenAbandonedRootEnds(
   })
 }
 
-/** Capacity returns at once; termination is reported once the tree kill succeeds or the root is gone. */
+/** Capacity returns at once; termination is reported once the tree kill succeeds or the root is gone.
+ * A caller whose lifetime already ends on worker loss (no mutation fence) awaits no proof. */
 export function endAbandonedWorkerChild(
   child: Pick<ChildProcess, 'pid' | 'exitCode' | 'signalCode' | 'kill'>,
   onWorkerLost: (() => void) | undefined,
-  onTerminated: () => void
+  onTerminated: () => void,
+  lifetimeEndsOnLoss = false
 ): void {
   onWorkerLost?.()
-  reportWhenAbandonedRootEnds(child.pid, killAbandonedWorkerChildTree(child), onTerminated)
+  const killed = killAbandonedWorkerChildTree(child)
+  if (lifetimeEndsOnLoss) {
+    onTerminated()
+    return
+  }
+  reportWhenAbandonedRootEnds(child.pid, killed, onTerminated)
 }
 
 /** Resolves once the stop is done; a stopped child's own close still reports its termination. */

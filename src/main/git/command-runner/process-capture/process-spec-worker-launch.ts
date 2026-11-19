@@ -29,7 +29,9 @@ function isPlainPiped(spec: ProcessSpec): boolean {
 export function launchProcessSpecOnWindowsWorker(
   spec: ProcessSpec,
   onWorkerLost: (() => void) | undefined,
-  onTerminated: () => void
+  onTerminated: () => void,
+  /** The caller holds no mutation fence: worker loss ends its lifetime without proof. */
+  lifetimeEndsOnLoss = false
 ): LaunchedProcess | null {
   if (process.platform !== 'win32' || !isPlainPiped(spec) || !canSpawnOnWorkerThread()) {
     return null
@@ -77,6 +79,10 @@ export function launchProcessSpecOnWindowsWorker(
             ([, guestEnded]) => guestEnded
           )
         : treeEnded
+    if (lifetimeEndsOnLoss) {
+      onTerminated()
+      return
+    }
     reportWhenAbandonedRootEnds(child.pid, proven, onTerminated)
   })
   return { child: launched, withdrawPendingLaunch: () => child.cancelPendingSpawn() }

@@ -62,7 +62,12 @@ export async function execFileCaptureToTermination(
       ? {}
       : {
           launch: (spec: ProcessSpec) =>
-            launchProcessSpecOnWindowsWorker(spec, options.onWorkerLost, reportTerminated)
+            launchProcessSpecOnWindowsWorker(
+              spec,
+              options.onWorkerLost,
+              reportTerminated,
+              options.onWorkerLost === options.onChildTerminated
+            )
         }),
     ...(options.stdin === undefined ? {} : { input: options.stdin })
   })

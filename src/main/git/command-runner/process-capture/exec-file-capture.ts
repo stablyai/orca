@@ -271,7 +271,12 @@ export function execFileCapture(
         if (!useWorker && !child?.pid) {
           reportChildTerminated()
         } else if (child && !ownedPosixGroup && isAbandonedWorkerChildError(error)) {
-          endAbandonedWorkerChild(child, options.onWorkerLost, reportChildTerminated)
+          endAbandonedWorkerChild(
+            child,
+            options.onWorkerLost,
+            reportChildTerminated,
+            options.onWorkerLost === options.onChildTerminated
+          )
         }
         if (!terminating) {
           finish(error)
