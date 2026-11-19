@@ -1,4 +1,4 @@
-import { mailWakeObligation } from '../../../../../shared/agent-session/lifecycle/mail-wake-obligation'
+import { mailWakeObligation } from './mail-wake-obligation'
 import { queueTerminalWorkspaceCommand } from '../../../workspaces/lifecycle/workspace-lifecycle-commands'
 import { makePaneKey, parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type {
