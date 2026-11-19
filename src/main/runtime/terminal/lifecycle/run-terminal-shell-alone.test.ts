@@ -39,6 +39,18 @@ it.skipIf(process.platform === 'win32').each([
     [LOGIN, LOGIN_SHELL, { pid: 101, ppid: 100, stat: 'S', command: 'codex exec task' }],
     false
   ],
+  [
+    'a login root, a stopped process whose argv was unreadable',
+    90,
+    [LOGIN, LOGIN_SHELL, { pid: 101, ppid: 100, stat: 'T', command: '(codex)' }],
+    false
+  ],
+  [
+    'a login root, an exited agent not yet reaped',
+    90,
+    [LOGIN, LOGIN_SHELL, { pid: 101, ppid: 100, stat: 'Z', command: '(codex)' }],
+    true
+  ],
   ['no shell under the root', 90, [LOGIN], false],
   [
     'a login root, an editor stopped before the agent ran',

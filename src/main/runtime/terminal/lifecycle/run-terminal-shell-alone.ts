@@ -13,9 +13,15 @@ import { isShellProcess } from '../../../../shared/agent-status/process/shell-pr
 import type { TerminalProcessInspection } from '../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 
 /** The pane's agent (any agent when unknown) still alive under the shell, stopped or in the
- *  background, keeps its exit unproven; a stopped editor or another agent suspended before it does not. */
-export function paneAgentProcess(agent?: string): (row: { command: string }) => boolean {
+ *  background, keeps its exit unproven; a stopped editor or another agent suspended before it does
+ *  not. A live process whose argv the host couldn't read (`(comm)`) may be the agent, so it does. */
+export function paneAgentProcess(
+  agent?: string
+): (row: { command: string; stat?: string }) => boolean {
   return (row) => {
+    if (/^\(.*\)$/.test(row.command.trim())) {
+      return row.stat?.includes('Z') !== true
+    }
     const recognized = recognizeAgentProcessFromCommandLine(row.command)
     return recognized !== null && (!agent || recognized.agent === agent)
   }
@@ -25,7 +31,7 @@ export function paneAgentProcess(agent?: string): (row: { command: string }) => 
  *  (or, given `paneAgent`, no process under it runs the pane's agent, in any state). */
 export async function confirmRootShellAloneFromProcessTable(
   rootPid: number,
-  options?: { paneAgent?: (row: { command: string }) => boolean }
+  options?: { paneAgent?: (row: { command: string; stat?: string }) => boolean }
 ): Promise<boolean> {
   try {
     const processIndex = getProcessTableIndex(await getFreshShellForegroundSnapshot())
