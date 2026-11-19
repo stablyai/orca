@@ -3,7 +3,6 @@
 
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { withTimeoutResult } from '../../../../shared/concurrency/promise-timeout-fallback'
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
@@ -17,11 +16,11 @@ import {
 } from '../../../filesystem/durable-file-write'
 
 /** One terminal at quit: its process incarnation, the daemon's output count when its command's
- *  paint was attributed, and the agent then in front. */
+ *  paint was attributed, and the agent then in front when a launch, title or mail recorded it. */
 export type ReattachedPaintEntry = {
   incarnationId: string
   sequence: number
-  agent: string
+  agent?: string
   /** When a quit saved it; an entry for a terminal no run attached since is kept this long. */
   savedAt?: number
 }
@@ -29,8 +28,6 @@ export type ReattachedPaintEntry = {
 const LEDGER_VERSION = 1
 /** A quit never waits on this write longer than this; a ledger missed only keeps today's hold. */
 const SAVE_BUDGET_MS = 500
-/** One terminal's foreground read at quit; a slower one is left out, so the rest still save. */
-const IDENTIFY_BUDGET_MS = 250
 /** A restore never waits on the read longer than this; a ledger missed only keeps today's hold. */
 const READ_BUDGET_MS = 500
 /** An entry for a terminal no run attached since is kept this long. */
@@ -48,8 +45,7 @@ function isEntry(value: unknown): value is ReattachedPaintEntry {
     typeof value.incarnationId === 'string' &&
     'sequence' in value &&
     Number.isSafeInteger(value.sequence) &&
-    'agent' in value &&
-    typeof value.agent === 'string'
+    (!('agent' in value) || typeof value.agent === 'string')
   )
 }
 
@@ -97,23 +93,20 @@ export class ReattachedPaintLedger {
     return Promise.race([entry, budget]).finally(() => clearTimeout(timer))
   }
 
-  /** Saves this quit's terminals, once identified, over the ledger within a small budget. Recent entries for
+  /** Saves this quit's terminals over the ledger within a small budget. Recent entries for
    *  terminals this run never attached (`tracked` lacks them) are kept for a later start. */
-  save(
-    entries: Promise<Map<string, ReattachedPaintEntry>>,
-    tracked: ReadonlySet<string>
-  ): Promise<void> {
+  save(entries: Map<string, ReattachedPaintEntry>, tracked: ReadonlySet<string>): Promise<void> {
     let timer: NodeJS.Timeout | undefined
     const budget = new Promise<void>((resolve) => {
       timer = setTimeout(resolve, SAVE_BUDGET_MS)
     })
-    const write = Promise.all([this.load(), entries])
-      .then(([previous, current]) => {
+    const write = this.load()
+      .then((previous) => {
         const now = Date.now()
         const kept = [...previous].filter(
           ([ptyId, entry]) => !tracked.has(ptyId) && now - (entry.savedAt ?? 0) < UNTRACKED_ENTRY_MS
         )
-        const saved = [...current].map(([ptyId, entry]) => [ptyId, { ...entry, savedAt: now }])
+        const saved = [...entries].map(([ptyId, entry]) => [ptyId, { ...entry, savedAt: now }])
         const file: LedgerFile = {
           version: LEDGER_VERSION,
           entries: Object.fromEntries([...kept, ...saved])
@@ -126,7 +119,7 @@ export class ReattachedPaintLedger {
 }
 
 /** The proof the retained frame is the reattached agent's own paint: the same process, the same
- *  agent, and not one byte since main saw that command paint. */
+ *  agent when one was recorded, and not one byte since main saw that command paint. */
 export function retainedFrameIsProven(
   entry: ReattachedPaintEntry | null,
   current: { incarnationId: string | null; reattachedSequence: number | undefined; agent: string }
@@ -137,7 +130,7 @@ export function retainedFrameIsProven(
     entry.incarnationId === current.incarnationId &&
     current.reattachedSequence !== undefined &&
     entry.sequence === current.reattachedSequence &&
-    entry.agent === current.agent
+    (entry.agent === undefined || entry.agent === current.agent)
   )
 }
 
@@ -151,26 +144,23 @@ export type PaintLedgerPty = TerminalCommandPaintRecord & {
 }
 
 /** This terminal's ledger entry at quit; `sequence` is the daemon's output count, or undefined
- *  when the host gives none. `identify` reads the agent in front when no launch, title or mail
- *  recorded one, as for an agent the user typed. Only screen-ruled agents need an entry. */
-export async function reattachedPaintEntry(
+ *  when the host gives none. A typed agent has no recorded identity; the restart identifies it,
+ *  and the unchanged count proves nothing ran since. A recorded agent must be screen-ruled. */
+export function reattachedPaintEntry(
   pty: PaintLedgerPty,
-  sequence: number | undefined,
-  identify: () => Promise<TerminalAgent | null>
-): Promise<ReattachedPaintEntry | null> {
+  sequence: number | undefined
+): ReattachedPaintEntry | null {
+  const agent = pty.foregroundAgent ?? pty.launchAgent ?? pty.launchCommandAgent
   if (
     !pty.connected ||
     !pty.incarnationId ||
     sequence === undefined ||
-    !pty.commandPaint?.hasAttributedPaint()
+    !pty.commandPaint?.hasAttributedPaint() ||
+    (agent !== null && !(isTuiAgent(agent) && readsTrustedScreen(agent)))
   ) {
     return null
   }
-  const { incarnationId } = pty
-  const stored = pty.foregroundAgent ?? pty.launchAgent ?? pty.launchCommandAgent
-  const identified = stored ? null : await withTimeoutResult(identify(), IDENTIFY_BUDGET_MS)
-  const agent = stored ?? (identified?.ok ? identified.value : null)
-  return isTuiAgent(agent) && readsTrustedScreen(agent) ? { incarnationId, sequence, agent } : null
+  return { incarnationId: pty.incarnationId, sequence, ...(agent ? { agent } : {}) }
 }
 
 let ledger: ReattachedPaintLedger | null = null

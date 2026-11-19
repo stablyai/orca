@@ -139,18 +139,16 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
 
   /** For quit: lets the next run read each agent's retained frame as the paint this run saw. */
   saveReattachedPaintLedger(): Promise<void> {
-    const entries = Promise.all(
-      [...this.ptysById].map(async ([ptyId, pty]) => {
+    const entries = new Map(
+      [...this.ptysById].flatMap(([ptyId, pty]) => {
         const offset = this.providerSequenceOffsetByPtyId.get(ptyId) ?? 0
         const sequence = this.providerSequenceInitializedPtys.has(ptyId)
           ? this.getPtyOutputSequence(ptyId) - offset
           : undefined
-        const entry = await reattachedPaintEntry(pty, sequence, () =>
-          this.ptyForegroundAgent.identifyForeground(ptyId)
-        )
-        return entry ? ([ptyId, entry] as const) : null
+        const entry = reattachedPaintEntry(pty, sequence)
+        return entry ? [[ptyId, entry] as const] : []
       })
-    ).then((saved) => new Map(saved.filter((pair) => pair !== null)))
+    )
     // A terminal this run never attached keeps the entry its last quit saved.
     return reattachedPaintLedger().save(entries, new Set(this.providerSequenceInitializedPtys))
   }
