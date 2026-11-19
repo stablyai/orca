@@ -16,6 +16,7 @@ import {
   type SkillInstallProviderId
 } from '../../../shared/skills/installation/skill-install-providers'
 import type { SkillProviderRootOverrides } from '../providers/skill-provider-destinations'
+import { isSkillFolderOwnerOthersRead } from '../../../shared/native-chat/input/commands/native-chat-agent-profiles'
 import { stablePathId } from './skill-discovery-classification'
 import {
   resolveDefaultHermesSkillsRoot,
@@ -45,21 +46,38 @@ function skillProvidersFor(id: SkillInstallProviderId): SkillProvider[] {
 function providerHomeSources(
   home: string,
   pathApi: SkillDiscoveryPathApi,
-  overrides: SkillProviderRootOverrides
+  overrides: SkillProviderRootOverrides,
+  keepsDefaultHomes: boolean
 ): SkillScanRoot[] {
   return SKILL_INSTALL_PROVIDERS.flatMap((provider) => {
     if (!provider.globalSegments) {
       return []
     }
+    const id = `home-${provider.id}`
+    const label = `${provider.displayName} home`
+    const providers = skillProvidersFor(provider.id)
+    const defaultPath = pathApi.join(home, ...provider.globalSegments)
+    const relocated = overrides[provider.id]
+    if (!relocated || relocated === defaultPath) {
+      return [source(id, label, defaultPath, 'home', providers, provider.id)]
+    }
+    if (!keepsDefaultHomes || !isSkillFolderOwnerOthersRead(provider.id)) {
+      return [source(id, label, relocated, 'home', providers, provider.id)]
+    }
+    // Agents that read this owner's folders join them to the user's home, whatever its override says.
     return [
-      source(
-        `home-${provider.id}`,
-        `${provider.displayName} home`,
-        overrides[provider.id] ?? pathApi.join(home, ...provider.globalSegments),
-        'home',
-        skillProvidersFor(provider.id),
-        provider.id
-      )
+      { ...source(id, label, relocated, 'home', providers, provider.id), readers: 'owner' },
+      {
+        ...source(
+          `${id}-default`,
+          `${label} (default)`,
+          defaultPath,
+          'home',
+          providers,
+          provider.id
+        ),
+        readers: 'borrowers'
+      }
     ]
   })
 }
@@ -142,7 +160,9 @@ export function buildSkillDiscoverySources(
       'codex'
     ),
     // Provider home roots also receive global npx installs; canonical roots alone miss them.
-    ...providerHomeSources(home, pathApi, providerRootOverrides),
+    // WSL walks each root in the guest, where a relocated home linked to the default one cannot be
+    // folded into one scan, so it keeps the relocated root alone.
+    ...providerHomeSources(home, pathApi, providerRootOverrides, !args.pathApi),
     // Why: discovery-only agent folders; installs for these agents go to the canonical root.
     source(
       'home-opencode',
