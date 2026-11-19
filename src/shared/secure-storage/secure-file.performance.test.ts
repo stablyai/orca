@@ -6,7 +6,7 @@ import { __resetSecureFileHardenedPathsForTests, hardenExistingSecureFile } from
 
 const posixIt = process.platform === 'win32' ? it.skip : it
 
-// Guards #PR_NUMBER: polling processes each chmodded already-restricted files, bumping ctime and
+// Guards #44839: polling processes each chmodded already-restricted files, bumping ctime and
 // invalidating every other process's cache, so userData emitted ~10 file events per second forever.
 describe('secure file hardening', () => {
   const dirs: string[] = []
