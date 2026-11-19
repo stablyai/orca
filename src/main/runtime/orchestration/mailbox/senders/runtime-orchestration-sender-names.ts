@@ -25,6 +25,7 @@ import {
   type TerminalSenderNaming
 } from './orchestration-sender-name'
 import { agentMessageSender, observeSenderSnapshot } from './agent-message-sender'
+import type { WorkerIdentity } from '../../workers/identity/worker-identity'
 import {
   type AgentSessionRecordReader,
   readAgentSessionRecordStore
@@ -76,7 +77,7 @@ export class RuntimeOrchestrationSenderNames {
     return agentMessageSender(
       address,
       this.deps.getDb(),
-      (party, reported) => this.snapshotOf(party, reported),
+      (party, reported, recorded) => this.snapshotOf(party, reported, recorded),
       reportedDispatchId
     )
   }
@@ -102,17 +103,22 @@ export class RuntimeOrchestrationSenderNames {
   }
 
   /** Name and agent share one current chat or terminal observation. */
-  snapshotOf(party: AgentMessageSender['party'], reportedDispatchId?: string) {
-    return observeSenderSnapshot(party, this.namingSources(), reportedDispatchId)
+  snapshotOf(
+    party: AgentMessageSender['party'],
+    reportedDispatchId?: string,
+    recorded?: WorkerIdentity | null
+  ) {
+    return observeSenderSnapshot(party, this.namingSources(), reportedDispatchId, recorded)
   }
 
   snapshotReader(): typeof this.snapshotOf {
     const readLaunch = senderDispatchLaunchReader(this.deps.getDb, this.launchInstallation)
-    return (party, reportedDispatchId) =>
+    return (party, reportedDispatchId, recorded) =>
       observeSenderSnapshot(
         party,
         this.namingSources(readAgentSessionRecordStore(), readLaunch()),
-        reportedDispatchId
+        reportedDispatchId,
+        recorded
       )
   }
 

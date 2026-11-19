@@ -336,5 +336,48 @@ it("names this Orca's own mail about a server's Dispatch by its task and agent",
       }
     ]
   }).senders[0]
-  expect(sender).toMatchObject({ name: 'Verify on Windows', agent: 'claude' })
+  expect(sender).toMatchObject({ name: 'Verify on Windows · Claude', agent: 'claude' })
+})
+
+it("names a worker's mail by its task and agent once its terminal is gone", () => {
+  const run = db.createRun({
+    objective: 'coordinate',
+    coordinatorHandle: null,
+    coordinatorPaneKey: null,
+    coordinatorOrcaSessionId: CHAT
+  })
+  const task = db.createTask({ runId: run.id, spec: 'Fix the login page' })
+  const started = db.createStartingWorkerDispatch({
+    creator: { kind: 'system' },
+    maxDepth: 8,
+    taskId: task.id,
+    startOptions: { agent: 'codex' }
+  })
+  db.prepareStartingWorkerAuthority({
+    dispatchId: started.dispatch.id,
+    handle: 'term_gone',
+    paneKey: 'tab_term_gone:leaf',
+    processIncarnation: 'p:1',
+    worktreeId: WORKTREE,
+    effects: [],
+    setupState: 'not_applicable'
+  })
+  db.markWorkerDispatchReady(started.dispatch.id)
+  const status = db.insertMessage({
+    from: 'term_gone',
+    to: `run:${run.id}`,
+    subject: 'halfway',
+    runId: run.id,
+    senderDispatchId: started.dispatch.id
+  })
+  db.completeDispatch(started.dispatch.id)
+  const sender = structuredMailSource({
+    db,
+    mailboxHandle: `run:${run.id}`,
+    dispatchId: null,
+    senderSnapshot: (party, reported, recorded) => names().snapshotOf(party, reported, recorded),
+    batch: [status]
+  }).senders[0]
+  expect(sender).toMatchObject({ name: 'Fix the login page · Codex', agent: 'codex' })
+  expect(sender).not.toHaveProperty('host')
 })

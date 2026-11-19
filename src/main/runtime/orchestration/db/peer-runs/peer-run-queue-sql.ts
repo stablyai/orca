@@ -32,9 +32,10 @@ CREATE TABLE IF NOT EXISTS peer_run_corrections (
 );
 
 CREATE TABLE IF NOT EXISTS message_dispatch_provenance (
-  message_id  TEXT PRIMARY KEY,
-  dispatch_id TEXT NOT NULL,
-  task_id     TEXT NOT NULL
+  message_id      TEXT PRIMARY KEY,
+  dispatch_id     TEXT NOT NULL,
+  task_id         TEXT NOT NULL,
+  sender_snapshot TEXT
 );
 `
 
