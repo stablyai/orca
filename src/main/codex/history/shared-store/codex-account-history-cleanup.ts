@@ -1,9 +1,7 @@
 import type { BigIntStats } from 'node:fs'
-import { readFile, readdir, unlink } from 'node:fs/promises'
+import { readdir, unlink } from 'node:fs/promises'
 import { join } from 'node:path'
-import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { MERGE_PENDING_SUFFIX, lstatIfPresent } from '../../../filesystem/merged-directory-link'
-import { readCodexSharedSqliteHome } from '../../configuration/toml/config-toml-shared-sqlite-home'
 import {
   SET_ASIDE_ROLLOUTS_DIR,
   PRE_SHARE_DATABASES_DIR,
@@ -15,9 +13,15 @@ import {
   storeFileFacts,
   updateManifest
 } from './codex-account-history-cleanup-manifest'
-import { isCodexAccountHistoryLinked } from './codex-account-history-links'
-import { findOpenFiles } from '../../../filesystem/open-file-check'
 import { checkCodexHistoryLeftBehind, contentSha256 } from './codex-account-history-content-check'
+import {
+  CLEANUP_MIN_SHARED_DAYS,
+  DAY_MS,
+  databasesUnused,
+  hasProvenShared,
+  isTransientDeleteError,
+  openFilesOnce
+} from './codex-account-history-delete-guards'
 import {
   databaseGroup,
   freedBy,
@@ -26,66 +30,13 @@ import {
   removeEmptyFolders
 } from './codex-account-left-behind-paths'
 
-const DAY_MS = 24 * 60 * 60 * 1000
+// Bounds one run's hashing and open-file check; the rest go on later runs.
+const MAX_ROLLOUTS_PER_RUN = 500
+const ROLLOUT_BATCH = 100
 /** The home's databases go only after it has worked shared this long, over this many runs. */
 export const CLEANUP_MIN_SHARED_DAYS = 14
 export const CLEANUP_MIN_SHARED_PASSES = 5
-// A streak not extended lately (the home unused, or a newer build gone) proves nothing current.
-const CLEANUP_MAX_SINCE_LAST_SHARED_DAYS = 30
-
 export type CodexHistoryCleanupResult = { deletedFiles: number; freedBytes: number }
-
-async function readConfig(accountHome: string): Promise<string> {
-  try {
-    return await readFile(join(accountHome, 'config.toml'), 'utf8')
-  } catch (error) {
-    if (isDefinitiveAbsence(error)) {
-      return ''
-    }
-    throw error
-  }
-}
-
-function hasProvenShared(
-  manifest: { firstSharedAt: string | null; lastSharedAt: string | null; sharedPasses: number },
-  now: number
-): boolean {
-  const first = Date.parse(manifest.firstSharedAt ?? '')
-  const last = Date.parse(manifest.lastSharedAt ?? '')
-  return (
-    Number.isFinite(first) &&
-    Number.isFinite(last) &&
-    now - first >= CLEANUP_MIN_SHARED_DAYS * DAY_MS &&
-    now - last <= CLEANUP_MAX_SINCE_LAST_SHARED_DAYS * DAY_MS &&
-    manifest.sharedPasses >= CLEANUP_MIN_SHARED_PASSES
-  )
-}
-
-async function databasesUnused(accountHome: string, storeHome: string): Promise<boolean> {
-  return (
-    readCodexSharedSqliteHome(await readConfig(accountHome)) === storeHome &&
-    (await isCodexAccountHistoryLinked(accountHome, storeHome))
-  )
-}
-
-// Homes whose open-file check couldn't tell this run (too many processes, a slow lsof): asking
-// again would repeat the same scan with the same answer, so nothing there is deleted until restart.
-const openCheckUnknown = new Set<string>()
-
-async function openFilesOnce(
-  home: string,
-  targets: string[],
-  shouldStop: () => boolean
-): Promise<Set<string> | null> {
-  if (openCheckUnknown.has(home)) {
-    return null
-  }
-  const open = await findOpenFiles(targets, { shouldStop })
-  if (!open && !shouldStop()) {
-    openCheckUnknown.add(home)
-  }
-  return open
-}
 
 /**
  * Deletes what sharing left behind in an account home, exactly as the cleanup manifest proved it
@@ -126,58 +77,102 @@ export async function cleanUpCodexHistoryLeftBehind(args: {
       : null
   }
 
-  // Each proof is the file itself and its store copy, so no pass can void it meanwhile.
-  const provenRollouts: { path: string; stats: BigIntStats }[] = []
+  // Each proof is the file itself and its store copy, so no pass can void it meanwhile. Batches
+  // keep a stopped run's deletes, and its open-file check small; the check comes before any hash,
+  // so one that can't tell costs no hashing.
+  const candidates: { path: string; sha256: string; facts: FileFacts }[] = []
   for (const rollout of manifest.rollouts) {
-    if (args.shouldStop()) {
+    if (candidates.length >= MAX_ROLLOUTS_PER_RUN) {
       break
     }
     const check = rollout.check
     if (
-      !check?.sameContent ||
-      rollout.storePath !== check.store.path ||
-      !isLeftBehindPath(rollout.path, 'rollout')
+      check?.sameContent &&
+      rollout.storePath === check.store.path &&
+      isLeftBehindPath(rollout.path, 'rollout')
     ) {
+      candidates.push({ path: rollout.path, sha256: check.sha256, facts: rollout })
+    }
+  }
+  let openCheckFailed = false
+  for (let start = 0; start < candidates.length && !openCheckFailed; start += ROLLOUT_BATCH) {
+    if (args.shouldStop()) {
+      break
+    }
+    const ready: { path: string; stats: BigIntStats; facts: FileFacts; sha256: string }[] = []
+    for (const candidate of candidates.slice(start, start + ROLLOUT_BATCH)) {
+      try {
+        const file = await currentFile(candidate.path)
+        const rollout = manifest.rollouts.find((entry) => entry.path === candidate.path)
+        if (
+          file &&
+          rollout?.check &&
+          sameFacts(candidate.facts, file.facts) &&
+          sameFacts(
+            rollout.check.store,
+            await storeFileFacts(args.storeHome, rollout.check.store.path)
+          )
+        ) {
+          ready.push({ ...candidate, stats: file.stats, facts: file.facts })
+        }
+      } catch {
+        // Left for a later run: the manifest still lists it.
+      }
+    }
+    if (ready.length === 0) {
       continue
     }
-    try {
-      const file = await currentFile(rollout.path)
-      if (
-        file &&
-        sameFacts(rollout, file.facts) &&
-        sameFacts(check.store, await storeFileFacts(args.storeHome, check.store.path))
-      ) {
-        // Size and a millisecond mtime can miss a same-size rewrite of the copy being deleted.
-        if ((await contentSha256(fromManifestPath(home, rollout.path))) === check.sha256) {
-          provenRollouts.push({ path: rollout.path, stats: file.stats })
-        } else {
-          voided.add(rollout.path)
-        }
+    const open = await openFilesOnce(
+      home,
+      ready.map((rollout) => fromManifestPath(home, rollout.path)),
+      args.shouldStop
+    )
+    if (!open) {
+      openCheckFailed = true
+      break
+    }
+    for (const rollout of ready) {
+      if (args.shouldStop()) {
+        break
       }
-    } catch {
-      // Left for a later run: the manifest still lists it.
+      if (open.has(fromManifestPath(home, rollout.path))) {
+        continue
+      }
+      try {
+        // Size and a millisecond mtime can miss a same-size rewrite of the copy being deleted.
+        if ((await contentSha256(fromManifestPath(home, rollout.path))) !== rollout.sha256) {
+          voided.add(rollout.path)
+          continue
+        }
+        // Unchanged since the check: a writer that appended and closed meanwhile shows here.
+        const now = await currentFile(rollout.path)
+        if (now && sameFacts(rollout.facts, now.facts)) {
+          await remove(rollout.path, rollout.stats).catch((error: unknown) => {
+            if (!isTransientDeleteError(error)) {
+              voided.add(rollout.path)
+            }
+          })
+        }
+      } catch {
+        // Left for a later run.
+      }
     }
   }
 
   // Asked once, only for files otherwise ready to go, and before taking the lock, which a starting
   // pass waits only seconds for. A Codex still holding one open would lose its later writes.
-  const readyDatabases = hasProvenShared(manifest, args.now)
-    ? await databasesReadyToDelete(manifest.databases)
-    : []
-  const targets = [
-    ...provenRollouts.map((rollout) => fromManifestPath(home, rollout.path)),
-    ...readyDatabases.map((database) => fromManifestPath(home, database.path))
-  ]
+  const readyDatabases =
+    hasProvenShared(manifest, args.now) && !openCheckFailed
+      ? await databasesReadyToDelete(manifest.databases)
+      : []
   const open =
-    targets.length === 0 || args.shouldStop()
+    readyDatabases.length === 0 || args.shouldStop()
       ? null
-      : await openFilesOnce(home, targets, args.shouldStop)
-  for (const rollout of provenRollouts) {
-    if (!open || args.shouldStop() || open.has(fromManifestPath(home, rollout.path))) {
-      continue
-    }
-    await remove(rollout.path, rollout.stats).catch(() => voided.add(rollout.path))
-  }
+      : await openFilesOnce(
+          home,
+          readyDatabases.map((database) => fromManifestPath(home, database.path)),
+          args.shouldStop
+        )
   // The databases' proof is the sharing streak, so they go under the manifest's lock, which every
   // pass that changes the streak (or unshares and moves the databases aside) takes too.
   await updateManifest(home, async (current) => {
