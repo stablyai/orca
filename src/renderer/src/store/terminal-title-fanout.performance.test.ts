@@ -76,15 +76,23 @@ function scannedRowsPerTitleChange(workspaceCount: number): number {
     state.ptyIdsByTabId
   ]
   let watched = new Set<unknown>()
-  for (const method of ['keys', 'values', 'entries'] as const) {
-    const original = objectReads[method]
-    vi.spyOn(Object, method).mockImplementation((value: Readonly<Record<string, unknown>>) => {
-      if (reads.measuring && watched.has(value)) {
-        reads.count += 1
-      }
-      return original(value) as never
-    })
+  const note = (value: unknown): void => {
+    if (reads.measuring && watched.has(value)) {
+      reads.count += 1
+    }
   }
+  vi.spyOn(Object, 'keys').mockImplementation((value) => {
+    note(value)
+    return objectReads.keys(value)
+  })
+  vi.spyOn(Object, 'values').mockImplementation((value) => {
+    note(value)
+    return objectReads.values(value)
+  })
+  vi.spyOn(Object, 'entries').mockImplementation((value) => {
+    note(value)
+    return objectReads.entries(value)
+  })
 
   // The subscribers a title change reaches, in their store-subscription form, with their indexes warm.
   getTerminalTabOwners(store.getState().tabsByWorktree)
