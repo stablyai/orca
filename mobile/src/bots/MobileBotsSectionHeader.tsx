@@ -194,8 +194,13 @@ const styles = themedStyleSheet(() => ({
     borderColor: colors.bgBase
   },
   count: { alignSelf: 'flex-start', fontSize: 13, color: colors.textMuted },
-  // The section header's vertical padding, so + sits on the title's line.
-  add: { paddingTop: spacing.lg, paddingBottom: 6, paddingRight: spacing.lg },
+  // The section header's vertical padding puts + on the title's line; 44 pt wide from the edge.
+  add: {
+    paddingTop: spacing.lg,
+    paddingBottom: 6,
+    paddingLeft: spacing.md,
+    paddingRight: spacing.lg
+  },
   end: { paddingHorizontal: spacing.lg, paddingVertical: spacing.sm, gap: spacing.md },
   // A bot row's picture (32) and its gap.
   endUnderRows: { paddingLeft: spacing.lg + 32 + spacing.md },
