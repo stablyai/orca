@@ -41,7 +41,7 @@ export type AgentForegroundProcessResolution = {
   anchorPidForeign?: boolean
 }
 
-export type ShellForegroundConfirmationOptions = {
+type ShellForegroundConfirmationOptions = {
   readWindowsPtyJobProcessIds?: () =>
     | ReadonlySet<number>
     | null

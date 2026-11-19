@@ -10,7 +10,7 @@ vi.mock(
   })
 )
 
-const { confirmRootShellAloneFromProcessTable, stoppedAgentBlocks } =
+const { confirmRootShellAloneFromProcessTable, paneAgentProcess } =
   await import('./run-terminal-shell-alone')
 
 const SHELL: ProcessTableRow = { pid: 100, ppid: 1, stat: 'Ss+', command: '/bin/zsh' }
@@ -33,6 +33,12 @@ it.skipIf(process.platform === 'win32').each([
     [LOGIN, { ...LOGIN_SHELL, stat: 'S' }, { pid: 101, ppid: 100, stat: 'S+', command: 'codex' }],
     false
   ],
+  [
+    'a login root, the agent running in the background',
+    90,
+    [LOGIN, LOGIN_SHELL, { pid: 101, ppid: 100, stat: 'S', command: 'codex exec task' }],
+    false
+  ],
   ['no shell under the root', 90, [LOGIN], false],
   [
     'a login root, an editor stopped before the agent ran',
@@ -50,7 +56,7 @@ it.skipIf(process.platform === 'win32').each([
   snapshot.mockResolvedValue([...rows])
   expect(
     await confirmRootShellAloneFromProcessTable(rootPid, {
-      stoppedJobBlocks: stoppedAgentBlocks('codex')
+      paneAgent: paneAgentProcess('codex')
     })
   ).toBe(expected)
 })

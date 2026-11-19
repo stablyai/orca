@@ -14,7 +14,7 @@ import { isShellProcess } from '../../../../shared/agent-status/process/shell-pr
 import { isRemoteExecutionHostPtyId } from '../../../../shared/execution-host/remote-execution-host-pty-id'
 import {
   confirmRootShellAloneFromProcessTable,
-  stoppedAgentBlocks
+  paneAgentProcess
 } from '../../../runtime/terminal/lifecycle/run-terminal-shell-alone'
 
 export function bindTerminalPaneStatusLifecycle(
@@ -203,7 +203,7 @@ async function confirmShellAlone(
     const rootPid = await readPtyRootPid(provider, ptyId, incarnationId)
     return rootPid
       ? confirmRootShellAloneFromProcessTable(rootPid, {
-          stoppedJobBlocks: stoppedAgentBlocks(agent)
+          paneAgent: paneAgentProcess(agent)
         })
       : false
   }
