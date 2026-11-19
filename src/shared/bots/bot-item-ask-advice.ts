@@ -263,11 +263,13 @@ export function botItemAskAdvice({
     const options = ask.questions.flatMap((question) =>
       question.options.flatMap((option) => [option.label, option.detail ?? ''])
     )
+    // Each field is masked on its own, so code never pairs across two of them.
+    const written = [context, ...prompts].map(prose)
     // Choices the bot wrote into its question or context rather than as buttons.
-    if (hasProseChoices(prose([context, ...prompts].join('\n')))) {
+    if (hasProseChoices(written.join('\n'))) {
       found.add('prose_choices')
     }
-    words = prose([context, ...prompts, ...options].join('\n'))
+    words = [...written, ...options.map(prose)].join('\n')
   } else {
     const text = comment ?? ''
     words = prose(text)

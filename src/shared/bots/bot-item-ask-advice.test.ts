@@ -198,6 +198,27 @@ describe('botItemAskAdvice', () => {
     ).toBeNull()
   })
 
+  it('never pairs code across two fields of an ask', () => {
+    expect(
+      codes({
+        ask: {
+          questions: [
+            { prompt: 'Keep ``` as the marker?', options: [] },
+            { prompt: 'Ship it? Reply A or B. ```', options: [] }
+          ]
+        }
+      })
+    ).toEqual(['prose_choices'])
+    expect(
+      codes({
+        ask: {
+          context: 'Keep ``` here.',
+          questions: [{ prompt: 'Restart ctx_zzzzzzzz? ```', options: [] }]
+        }
+      })
+    ).toEqual(['jargon'])
+  })
+
   it('reads the decisions of an ask, not the text written for older hosts', () => {
     expect(
       codes({
