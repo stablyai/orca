@@ -291,6 +291,8 @@ export function createBotMemoryHistory(
         },
         (error: unknown) => {
           undoneLoads.delete(botId)
+          // Answers as for no history until a list reads it, so an unreadable file isn't reread each ask.
+          undoneRows.set(botId, new Set())
           console.warn('[bots] memory history not read', error)
         }
       )
