@@ -9,16 +9,35 @@ import { saveAgentDashboardView } from '../board/agent-dashboard-view-storage'
 import { AgentFleetView } from './AgentFleetView'
 import { saveFleetCollapsedProjects } from './fleet-collapsed-projects-storage'
 import { buildFleetMockSnapshot, FLEET_MOCK_NOW } from './fleet-snapshot-fixtures'
+import { useFleetTeamOpenOverrides } from './use-fleet-team-open-overrides'
 
 const WIDE = 1240
 const NARROW = 520
 const ENGLISH = { settings: { ...getDefaultSettings('/tmp'), uiLanguage: 'en' as const } }
 const { cards, repoIconsByRepoId } = buildFleetMockSnapshot(FLEET_MOCK_NOW)
-const NO_TEAM_OVERRIDES: ReadonlyMap<string, boolean> = new Map()
 
 function clearStoredDashboardChoices(): void {
   saveAgentDashboardView('board')
   saveFleetCollapsedProjects(new Set())
+}
+
+function FleetFixtureView({
+  fixtureCards
+}: {
+  fixtureCards: readonly DashboardCard[]
+}): React.JSX.Element {
+  const [teamOpenOverrides, onTeamOpenChange] = useFleetTeamOpenOverrides()
+  return (
+    <AgentFleetView
+      cards={fixtureCards}
+      buckets={DASHBOARD_BUCKET_ORDER}
+      repoIconsByRepoId={repoIconsByRepoId}
+      now={FLEET_MOCK_NOW}
+      onOpenCard={() => {}}
+      teamOpenOverrides={teamOpenOverrides}
+      onTeamOpenChange={onTeamOpenChange}
+    />
+  )
 }
 
 function fleetFixture(
@@ -31,17 +50,7 @@ function fleetFixture(
     setup: clearStoredDashboardChoices,
     width,
     interact,
-    render: () => (
-      <AgentFleetView
-        cards={fixtureCards}
-        buckets={DASHBOARD_BUCKET_ORDER}
-        repoIconsByRepoId={repoIconsByRepoId}
-        now={FLEET_MOCK_NOW}
-        onOpenCard={() => {}}
-        teamOpenOverrides={NO_TEAM_OVERRIDES}
-        onTeamOpenChange={() => {}}
-      />
-    )
+    render: () => <FleetFixtureView fixtureCards={fixtureCards} />
   })
 }
 
