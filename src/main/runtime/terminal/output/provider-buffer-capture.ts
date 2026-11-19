@@ -184,6 +184,36 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     )
   }
 
+  /** A rendered screen for an explicit screen read, or null when none can be known now. */
+  protected async readScreenProjection(
+    ptyId: string,
+    limit: number | undefined
+  ): Promise<RuntimeTerminalProjection | null> {
+    const visibleState = await this.readVisibleTerminalState(ptyId)
+    if (visibleState) {
+      return visibleState
+    }
+    const recovery = this.headlessTerminals.get(ptyId)?.gapReseed
+    if (recovery) {
+      // A rebuilding screen is unknown, and the daemon is busy with recovery's captures: say so at once.
+      // A screen the provider owned before the gap keeps main's bounded capture.
+      return recovery.providerOwnedBeforeGap
+        ? this.readProviderTerminalTailLines(ptyId, limit, {
+            visibleScreenOnly: true,
+            timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS
+          })
+        : null
+    }
+    // A rebuild that finished during the lookup left a trusted model to answer, not the daemon.
+    if (this.readWholeScreenModel(ptyId)) {
+      const settled = await this.readVisibleTerminalState(ptyId)
+      if (settled) {
+        return settled
+      }
+    }
+    return this.readProviderTerminalTailLines(ptyId, limit, { visibleScreenOnly: true })
+  }
+
   // ConPTY absolute cursor paints overwrite text that raw tails retain, including ghost PSReadLine predictions; read rendered cells.
   private async withConptyRenderedTail(
     ptyId: string,
@@ -208,22 +238,6 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
       : recovering || this.headlessTerminals.get(ptyId)?.gapReseed
         ? buildVisibleSnapshotReadFallback({ ...read, limited: true }, [], limit)
         : read
-  }
-
-  /** Main's answer while a gap rebuild runs: the live model's screen. A daemon capture would queue behind recovery's. */
-  protected async readRecoveringVisibleScreen(
-    ptyId: string
-  ): Promise<RuntimeTerminalProjection | null> {
-    const state = this.headlessTerminals.get(ptyId)
-    if (!state?.gapReseed) {
-      return null
-    }
-    const generation = this.getPtyLifecycleGeneration(ptyId)
-    await state.writeChain
-    return this.headlessTerminals.get(ptyId) === state &&
-      this.getPtyLifecycleGeneration(ptyId) === generation
-      ? projectTerminalVisibleLines(state.emulator)
-      : { lines: [] }
   }
 
   private async readRenderedTerminalTailLines(

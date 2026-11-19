@@ -250,4 +250,6 @@ export type GapRecovery = {
   gaps: number
   /** An execution-context correction deferred until the rebuilt screen is trusted. */
   contextChangePending?: boolean
+  /** The provider already owned the screen before this gap, so reads keep main's provider path. */
+  providerOwnedBeforeGap?: boolean
 }

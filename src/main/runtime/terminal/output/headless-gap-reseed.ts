@@ -125,6 +125,7 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
 
   private startGapRecovery(ptyId: string, state: RuntimeHeadlessTerminal): void {
     const recovery = newGapRecovery()
+    recovery.providerOwnedBeforeGap = this.providerSnapshotPreferredPtys.has(ptyId)
     state.gapReseed = recovery
     this.providerSnapshotPreferredPtys.add(ptyId)
     // Why: the hidden renderer missed the dropped bytes too, so it must not seed this model.

@@ -299,12 +299,8 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
     read: RuntimeTerminalRead,
     opts: { limit?: number } = {}
   ): Promise<RuntimeTerminalRead> {
-    const visibleState = await this.readVisibleTerminalState(ptyId)
-    const projection =
-      visibleState ??
-      (await this.readRecoveringVisibleScreen(ptyId)) ??
-      (await this.readProviderTerminalTailLines(ptyId, opts.limit, { visibleScreenOnly: true }))
-    if (projection.lines.length === 0) {
+    const projection = await this.readScreenProjection(ptyId, opts.limit)
+    if (!projection || projection.lines.length === 0) {
       return { ...read, source: 'screen-unavailable' }
     }
     return buildVisibleSnapshotReadFallback(

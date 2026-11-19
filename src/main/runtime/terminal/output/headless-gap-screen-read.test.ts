@@ -1,49 +1,39 @@
-import { assert, expect, it } from 'vitest'
-import type { RuntimeTerminalRead } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
-import { anchorStream, createRuntime, grid } from './headless-recovery-test-harness'
+import { expect, it, vi } from 'vitest'
+import {
+  createTranscriptPane,
+  TRANSCRIPT_PANE_PTY_ID as PTY_ID
+} from '../wait/agent-transcript-pane-test-harness'
 
-const streamRead: RuntimeTerminalRead = {
-  handle: 'term-gap',
-  status: 'running',
-  tail: [],
-  truncated: false,
-  nextCursor: null
-}
-
-it('answers a screen read from the live model while a gap rebuild waits on a busy daemon', async () => {
-  const runtime = createRuntime()
-  const ptyId = 'pty-gap-screen-read'
-  let recoveryAsked: (() => void) | undefined
-  const recoveryCapture = new Promise<void>((resolve) => {
+it('answers a screen read at once while a gap rebuild waits on a busy daemon', async () => {
+  let recoveryAsked = (): void => {}
+  const asked = new Promise<void>((resolve) => {
     recoveryAsked = resolve
   })
-  runtime.setPtyController({
-    write: () => true,
-    kill: () => true,
-    getForegroundProcess: async () => null,
-    getSize: () => grid,
-    // The daemon is saturated: no capture it is asked for ever lands.
+  const { runtime, handle } = await createTranscriptPane({
+    paneTitle: 'Terminal',
+    foregroundProcess: null,
+    data: '',
+    // The daemon is saturated: no capture it is asked for lands.
     serializeProviderBuffer: () => {
-      recoveryAsked?.()
+      recoveryAsked()
       return new Promise(() => {})
     }
   })
+  // A read that waits on the daemon then never reaches its timeout fallback.
+  vi.useFakeTimers({ toFake: ['setTimeout'] })
   try {
-    anchorStream(runtime, ptyId)
-    runtime.onPtyData(ptyId, 'before gap\r\n', 1)
-    runtime.notePtyDataGap(ptyId, 9)
-    await recoveryCapture
-    runtime.onPtyData(ptyId, 'after gap', 2)
+    runtime.synchronizePtyOutputSequenceFromProvider(PTY_ID, { value: 0, generation: 'reset' })
+    runtime.anchorProviderSequence(PTY_ID, 0, 0)
+    runtime.onPtyData(PTY_ID, 'before gap\r\n', 1)
+    runtime.notePtyDataGap(PTY_ID, 9)
+    await asked
+    runtime.onPtyData(PTY_ID, 'after gap', 2)
 
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: OrcaRuntimeService inherits this protected method with exactly this signature.
-    const screen = runtime as unknown as {
-      readRenderedScreen(ptyId: string, read: RuntimeTerminalRead): Promise<RuntimeTerminalRead>
-    }
-    // Before the fix this read queued its own capture behind recovery's and never returned.
-    const read = await screen.readRenderedScreen(ptyId, streamRead)
-    assert(read.source !== 'screen-unavailable')
+    const read = await runtime.readTerminal(handle, { screen: true })
+    expect(read.source).toBe('screen-unavailable')
     expect(read.tail).toEqual(['before gap', 'after gap'])
   } finally {
-    await runtime.onPtyExit(ptyId, 0)
+    vi.useRealTimers()
+    await runtime.onPtyExit(PTY_ID, 0)
   }
 })
