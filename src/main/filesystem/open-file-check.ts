@@ -49,18 +49,28 @@ async function openOnLinux(
         return null
       }
       const link = join('/proc', pid, 'fd', fd)
-      const path = await readlink(link).catch(() => null)
+      // A descriptor or process that closed meanwhile is gone; any other failure (the process
+      // turning undumpable mid-scan) leaves it unknown.
+      const path = await readlink(link).catch((error: unknown) =>
+        isDefinitiveAbsence(error) ? '' : null
+      )
+      if (path === null) {
+        return null
+      }
       // A file moved by hard link keeps the descriptor under its old, unlinked name: only those
       // are matched by inode, so the scan still never touches other files' filesystems.
-      const match =
-        path && paths.has(path)
-          ? path
-          : path?.endsWith(' (deleted)')
-            ? await stat(link, { bigint: true }).then(
-                (file) => byInode.get(`${file.dev}:${file.ino}`),
-                () => undefined
-              )
-            : undefined
+      let match: string | undefined
+      if (paths.has(path)) {
+        match = path
+      } else if (path.endsWith(' (deleted)')) {
+        const file = await stat(link, { bigint: true }).catch((error: unknown) =>
+          isDefinitiveAbsence(error) ? undefined : null
+        )
+        if (file === null) {
+          return null
+        }
+        match = file && byInode.get(`${file.dev}:${file.ino}`)
+      }
       if (match) {
         found.add(match)
         if (firstOnly || found.size === paths.size) {
