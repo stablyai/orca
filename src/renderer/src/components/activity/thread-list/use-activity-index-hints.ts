@@ -53,7 +53,8 @@ function firstUncoveredItemIndex({
     ? virtualRows.find((row) => virtualItems[row.index]?.type === 'header')
     : undefined
   const top = scrollOffset + (scrollOffset > 0 ? (headerRow?.size ?? 0) : 0)
-  return virtualRows.find((row) => row.start >= top)?.index ?? 0
+  // No row starts below the top edge: nothing is fully visible, so number nothing.
+  return virtualRows.find((row) => row.start >= top)?.index ?? virtualItems.length
 }
 
 /** Numbers the first nine fully visible thread rows, so a digit never selects a row off screen; badges show only while the chord is held. */
