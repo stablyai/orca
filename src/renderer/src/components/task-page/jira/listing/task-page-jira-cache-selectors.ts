@@ -26,7 +26,10 @@ export function findTaskPageJiraIssue(
     options.sourceContext?.provider === 'jira'
       ? getTaskSourceCacheScope(options.sourceContext)
       : null
-  const matchesLookup = (cacheKey: string, issue: JiraIssue | null | undefined): boolean => {
+  const matchesLookup = (
+    cacheKey: string,
+    issue: JiraIssue | null | undefined
+  ): issue is JiraIssue => {
     if (!issue || issue.key !== jiraIssueKey) {
       return false
     }
@@ -37,18 +40,32 @@ export function findTaskPageJiraIssue(
     return sourceScope === null || cacheKey.startsWith(`${sourceScope}::`)
   }
 
+  // Why: entries for older searches outlive their TTL, so the first match can be a stale copy.
+  // Keep the most recently updated copy; ties keep the issue cache first, which carries optimistic edits.
+  let newest: JiraIssue | null = null
+  let newestTime = Number.NEGATIVE_INFINITY
+  const consider = (issue: JiraIssue): void => {
+    const time = Date.parse(issue.updatedAt)
+    const comparable = Number.isNaN(time) ? Number.NEGATIVE_INFINITY : time
+    if (newest === null || comparable > newestTime) {
+      newest = issue
+      newestTime = comparable
+    }
+  }
+
   for (const [cacheKey, entry] of Object.entries(jiraIssueCache)) {
-    if (matchesLookup(cacheKey, entry?.data)) {
-      return entry.data
+    const cached = entry?.data
+    if (matchesLookup(cacheKey, cached)) {
+      consider(cached)
     }
   }
 
   for (const [cacheKey, entry] of Object.entries(jiraSearchCache)) {
     const found = entry?.data?.find((issue) => matchesLookup(cacheKey, issue))
     if (found) {
-      return found
+      consider(found)
     }
   }
 
-  return null
+  return newest
 }
