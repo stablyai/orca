@@ -44,9 +44,24 @@ describe('DaemonRecoveryCredit', () => {
     const credit = new DaemonRecoveryCredit()
     void credit.send('s1', 1, never, never)
     expect(await credit.send('s1', 2, answered, never)).toBeNull()
-    expect(await credit.send('s2', 2, answered, never)).toBe('snapshot')
+    expect(await credit.send('s2', 3, answered, never)).toBe('snapshot')
     credit.observeReply('req-1')
-    expect(await credit.send('s1', 3, answered, never)).toBe('snapshot')
+    expect(await credit.send('s1', 4, answered, never)).toBe('snapshot')
+  })
+
+  it('probes for a lone stuck session on an otherwise idle daemon and resumes on the probe reply', async () => {
+    const credit = new DaemonRecoveryCredit()
+    const probes: number[] = []
+    const probe = (seq: number) => () => {
+      probes.push(seq)
+      return never()
+    }
+    void credit.send('s1', 1, never, never)
+    expect(await credit.send('s1', 2, answered, probe(2))).toBeNull()
+    expect(await credit.send('s1', 3, answered, probe(3))).toBeNull()
+    expect(probes).toEqual([2])
+    credit.observeReply('req-2')
+    expect(await credit.send('s1', 3, answered, probe(3))).toBe('snapshot')
   })
 
   it('starts a new connection with nothing owed', async () => {

@@ -235,6 +235,10 @@ export class DaemonClient {
 
   /** Gap recovery's snapshot; see DaemonRecoveryCredit. */
   requestRecoverySnapshot<T>(sessionId: string, payload: unknown, signal?: AbortSignal) {
+    if (!this.connected || !this.controlSocket) {
+      // Why: an unsent request must not leave a charge for the next connection.
+      return this.request<T>('getSnapshot', payload, REQUEST_TIMEOUT_MS, signal)
+    }
     return this.pendingRequests.recoveryCredit.send(
       sessionId,
       this.requestCounter + 1,

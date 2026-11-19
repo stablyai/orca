@@ -37,9 +37,9 @@ export class DaemonRecoveryCredit {
     return true
   }
 
-  /** A full credit sends one probe whose reply proves the daemon is reading; it is never re-sent while owed. */
+  /** A refusal sends one probe whose reply proves earlier requests were read; it is never re-sent while owed. */
   private takeProbe(nextSeq: number): boolean {
-    if (this.owed.size < RECOVERY_SNAPSHOT_CREDIT || this.probeSeq !== null) {
+    if (this.probeSeq !== null) {
       return false
     }
     this.probeSeq = nextSeq
