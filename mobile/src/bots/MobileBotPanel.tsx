@@ -151,7 +151,7 @@ export function MobileBotPanel(props: {
     itemCount:
       items.read && filter.chatIds === null
         ? botItemsNeedingOwner(items.read.items, staleDays, now)
-        : items.failed && !items.read
+        : items.error !== null && !items.read
           ? 0
           : props.listNeedsYou
   })
@@ -262,6 +262,7 @@ export function MobileBotPanel(props: {
           seenEventId={seenAtOpen ?? items.read?.seenEventId ?? 'e0'}
           now={now}
           online={props.online}
+          hostName={props.hostName}
           selected={selected}
           onSelected={setSelected}
           onOpen={(item) => pager.open(`item:${item.uid}`)}
@@ -289,8 +290,10 @@ export function MobileBotPanel(props: {
           treeActions={props.treeActions}
           upNextActions={upNext}
           loading={props.routeBot.activityLoading}
-          error={!!props.routeBot.activityError}
+          error={props.routeBot.activityError ?? null}
           onRetry={props.routeBot.refresh}
+          online={props.online}
+          hostName={props.hostName}
           withoutUpNext
         />
       </ScrollView>
