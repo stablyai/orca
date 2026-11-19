@@ -7,7 +7,7 @@ import type {
 } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 
 /** One workspace's tab state, as the tab strips render it. */
-export type WorktreeTabStrip = {
+export type WorktreeTabLayout = {
   tabs: readonly Tab[]
   groups: readonly TabGroup[]
   layout: TabGroupLayoutNode | undefined
@@ -16,7 +16,7 @@ export type WorktreeTabStrip = {
 
 const NO_IDS: ReadonlySet<string> = new Set()
 
-function rankVisibleTabs({ tabs, groups, layout, legacyOrder }: WorktreeTabStrip) {
+function rankVisibleTabs({ tabs, groups, layout, legacyOrder }: WorktreeTabLayout) {
   const ranks = new Map<string, number>()
   const add = (id: string): void => {
     if (!ranks.has(id)) {
@@ -59,9 +59,9 @@ function rankVisibleTabs({ tabs, groups, layout, legacyOrder }: WorktreeTabStrip
 export function orderByVisibleTabs<T>(
   items: readonly T[],
   tabIdOf: (item: T) => string | undefined,
-  strip: WorktreeTabStrip
+  tabLayout: WorktreeTabLayout
 ): readonly T[] {
-  const ranks = rankVisibleTabs(strip)
+  const ranks = rankVisibleTabs(tabLayout)
   const rankOf = (item: T): number => {
     const tabId = tabIdOf(item)
     return (tabId === undefined ? undefined : ranks.get(tabId)) ?? Number.MAX_SAFE_INTEGER
