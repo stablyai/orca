@@ -171,19 +171,23 @@ describe('terminal session name sync', () => {
     sync.stop()
   })
 
-  it('settles on close only for tabs whose name the last pass has not seen', () => {
+  it('settles on close only for running sessions whose name or binding the last pass missed', () => {
     const settled = makeTerminalNamesState([
       { id: 'tab-1', sessionId: 's1', customTitle: 'A' },
-      { id: 'tab-2', sessionId: 's2' }
+      { id: 'tab-2', sessionId: 's2' },
+      { id: 'shell', customTitle: 'Named shell' }
     ])
     reconcileTerminalSessionNames(settled, 10_000_000_000_000)
     const none = makeTerminalNamesState([])
-    // Closing tabs a pass already saw, as a bulk close does, needs no settling.
+    // A bulk close of tabs a pass already saw, and of named tabs with no agent, needs nothing.
     expect(unsettledTerminalTabsClosed(none, settled)).toBe(false)
     // A name that arrived after the pass does.
     expect(unsettledTerminalTabsClosed(none, withTabTitle(settled, { customTitle: 'B' }))).toBe(
       true
     )
+    // So does a new session started in a tab the pass saw.
+    const switched = makeTerminalNamesState([{ id: 'tab-1', sessionId: 's9', customTitle: 'A' }])
+    expect(unsettledTerminalTabsClosed(none, switched)).toBe(true)
   })
 
   it('retries tabs skipped for an unknown host when owner facts change', () => {

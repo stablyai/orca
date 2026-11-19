@@ -71,15 +71,15 @@ function namesClearedBy(
   state: AppState,
   tabId: string,
   binding: Binding | null,
-  previousName: string
+  shownNames: readonly string[]
 ): TerminalSessionNameForget[] {
   const names = terminalSessionNamesOwnedBy(tabId)
-  if (binding && previousName) {
+  if (binding) {
     const entry = getTerminalSessionNameEntry(binding.executionHostId, binding.providerSession.id)
     if (
       entry &&
       entry.tabId !== tabId &&
-      entry.title === previousName &&
+      shownNames.some((shown) => shown !== '' && shown === entry.title) &&
       !tabIsOpen(state, entry.tabId)
     ) {
       names.push({ key: binding.key, ownerTabId: entry.tabId })
@@ -127,7 +127,7 @@ export function recordTerminalTabRename(
   const resolved = bindingOf(state, conversation)
   const binding = resolved === 'host-unknown' ? null : resolved
   if (!name) {
-    forgetTerminalSessionNames(namesClearedBy(state, tabId, binding, shownFirst))
+    forgetTerminalSessionNames(namesClearedBy(state, tabId, binding, [shownFirst, previousName]))
     return
   }
   if (binding) {
@@ -141,11 +141,22 @@ export function recordTerminalTabRename(
   }
 }
 
-/** A closing tab whose name the last pass has not settled (it changed since, or was never seen). */
-export function terminalTabNameUnsettled(tab: { id: string; customTitle: string | null }): boolean {
-  const name = normalizeTerminalSessionName(tab.customTitle)
+/** A closing tab running a known session whose binding or name the last pass has not seen. Tabs
+ *  with no known session have nothing a pass could save, so they never need settling. */
+export function terminalTabNameUnsettled(
+  state: AppState,
+  worktreeId: string,
+  tab: { id: string; customTitle: string | null }
+): boolean {
+  const conversation = collectAgentPaneConversations(state, isAiVaultAgent, {
+    tab: { worktreeId, tabId: tab.id }
+  })[0]
+  const binding = bindingOf(state, conversation)
+  if (binding === null || binding === 'host-unknown') {
+    return false
+  }
   const seen = lastSeenByTabId.get(tab.id)
-  return seen ? seen.name !== name : name !== '' || renamedFromByTabId.has(tab.id)
+  return seen?.key !== binding.key || seen.name !== normalizeTerminalSessionName(tab.customTitle)
 }
 
 export type TerminalSessionNamePassResult = {
@@ -256,11 +267,10 @@ export function reconcileTerminalSessionNames(
         })
       }
     } else if (owned || (closedOwner && (renamedWhileBound || renamedFromSavedName))) {
-      const shownBeforeClear = renamedFromSavedName
-        ? renamedFrom
-        : renamedWhileBound
-          ? previous.name
-          : ''
+      const shownBeforeClear = [
+        renamedFromSavedName ? renamedFrom : '',
+        renamedWhileBound ? previous.name : ''
+      ]
       forgetTerminalSessionNames(namesClearedBy(state, tab.id, binding, shownBeforeClear))
     }
   }

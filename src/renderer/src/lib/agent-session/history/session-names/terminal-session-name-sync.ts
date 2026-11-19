@@ -56,8 +56,8 @@ export function unsettledTerminalTabsClosed(current: AppState, previous: AppStat
       open.add(tab.id)
     }
   }
-  return Object.values(previous.tabsByWorktree).some((tabs) =>
-    tabs.some((tab) => !open.has(tab.id) && terminalTabNameUnsettled(tab))
+  return Object.entries(previous.tabsByWorktree).some(([worktreeId, tabs]) =>
+    tabs.some((tab) => !open.has(tab.id) && terminalTabNameUnsettled(previous, worktreeId, tab))
   )
 }
 
