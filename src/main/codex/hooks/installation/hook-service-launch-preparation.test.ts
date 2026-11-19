@@ -16,7 +16,8 @@ import {
 import type * as Fs from 'node:fs'
 import type * as Os from 'node:os'
 import { basename, join } from 'node:path'
-import { setupCodexHookHomes } from './hook-service-test-harness'
+import { hookTrustHeader, setupCodexHookHomes } from './hook-service-test-harness'
+import { upsertHookTrustContent } from '../../trust/toml/config-toml-hook-trust-edit'
 
 const { getPathMock, homedirMock, prepareFactoryHooks, controls } = vi.hoisted(() => {
   const controls: {
@@ -275,6 +276,40 @@ describe('completed Codex launch preparation', () => {
     expect(readFileSync(join(home, 'hooks.json'), 'utf8')).not.toContain(
       basename(getManagedScriptPath())
     )
+  })
+
+  it('keeps user hook approvals at their own slots when Off lands mid-install', async () => {
+    const { service, home, source } = seed()
+    const systemHooks = join(homes.tmpHome, '.codex', 'hooks.json')
+    writeFileSync(
+      systemHooks,
+      `${JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: 'command', command: 'user-stop' }] }] } })}\n`
+    )
+    writeFileSync(
+      source,
+      upsertHookTrustContent('model = "B"\n', [
+        {
+          sourcePath: systemHooks,
+          eventLabel: 'stop',
+          groupIndex: 0,
+          handlerIndex: 0,
+          command: 'user-stop'
+        }
+      ])
+    )
+    let enabled = true
+    controls.aroundMirror = () => {
+      enabled = false
+      return () => {}
+    }
+
+    await service.installForLaunchPrep(home, true, () => enabled)
+
+    const runtimeHooks = join(home, 'hooks.json')
+    expect(readFileSync(runtimeHooks, 'utf8')).toContain('user-stop')
+    const runtimeToml = readFileSync(join(home, 'config.toml'), 'utf8')
+    expect(runtimeToml).toContain(hookTrustHeader(`${runtimeHooks}:stop:0:0`))
+    expect(runtimeToml).not.toContain(hookTrustHeader(`${runtimeHooks}:stop:1:0`))
   })
 
   it('still mirrors the launch config when the hook worker dies', async () => {

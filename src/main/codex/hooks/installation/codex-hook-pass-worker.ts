@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { withHookPassEditGuard } from './codex-hook-pass-edit-guard'
+import { ConcurrentFileEditError } from '../../../filesystem/concurrent-file-edit-guard'
 import {
   withCapturedFileObservation,
   type CapturedFileObservation,
@@ -90,8 +91,25 @@ function writeEffects(request: CodexHookPassWorkerRequest): CodexHookPassEffects
     case 'refresh':
       return writeCodexRuntimeUserHookRefreshEffects(request.runtimeHomePath)
     case 'strip':
-      return stripCodexManagedHookEffects(request.runtimeHomePath, request.codexHashes)
+      return writeStripEffects(request.runtimeHomePath, request.codexHashes)
   }
+}
+
+/** Off mid-flight: rebuild first so user approvals leave the slots Orca's group shifted, then strip. */
+function writeStripEffects(
+  runtimeHomePath: string,
+  codexHashes: CodexHookHashes[]
+): CodexHookPassEffects {
+  try {
+    // An unreadable system hooks.json leaves the runtime hooks as they are; the strip still runs.
+    writeCodexRuntimeUserHookRefreshEffects(runtimeHomePath)
+  } catch (error) {
+    if (error instanceof ConcurrentFileEditError) {
+      throw error
+    }
+    console.warn('[codex-hook-service] user-hook rebuild before strip failed', error)
+  }
+  return stripCodexManagedHookEffects(runtimeHomePath, codexHashes)
 }
 
 /** Redoes the whole pass when another writer changed a file it was editing; never publishes over it. */

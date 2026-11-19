@@ -43,7 +43,7 @@ export function stripCodexManagedHooksFromHome(
     // Strip top-level plugin metadata that makes Codex reject hooks.json.
     writeCodexHooksJson(configPath, nextHooks)
   }
-  removeRuntimeManagedHookTrustEntries(configPath, codexHashes)
+  removeRuntimeManagedHookTrustEntries(configPath, codexHashes, runtimeHomePath)
   return true
 }
 
