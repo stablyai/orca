@@ -109,14 +109,28 @@ export function renderNotificationsSettingsSection(
   t: Translate = translate
 ): React.JSX.Element | null {
   const { model, navigation, view } = context
+  const { target } = model.settingsHostScope
+  const serverName =
+    target.kind === 'environment'
+      ? (model.runtimeEnvironments.find((entry) => entry.id === target.environmentId)?.name ??
+        t('components.settings.notifications.server.fallbackHost', 'this server'))
+      : null
   return model.showDesktopOnlySettings ? (
     <SettingsSection
       id="notifications"
       title={t('auto.components.settings.Settings.9907545fa3', 'Notifications')}
-      description={t(
-        'auto.components.settings.Settings.7210ac09c4',
-        'Native desktop notifications for agent activity and terminal events.'
-      )}
+      description={
+        serverName === null
+          ? t(
+              'auto.components.settings.Settings.7210ac09c4',
+              'Native desktop notifications for agent activity and terminal events.'
+            )
+          : t(
+              'components.settings.notifications.server.sectionDescription',
+              'Alerts {{host}} sends for its agents and terminals.',
+              { host: serverName }
+            )
+      }
       searchEntries={navigation.getSectionSearchEntries('notifications')}
     >
       {!view.isSectionMounted('notifications') ? null : !model.settingsHostScope.available ? (
