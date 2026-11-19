@@ -87,6 +87,35 @@ export function latestAutomationSessionRun(args: {
     .toSorted((a, b) => automationRunRecency(b) - automationRunRecency(a))[0]
 }
 
+/** Failed attempts that kept the pane's PTY hand live reuse back to its last completed run; one that named another PTY ends the search. */
+export function liveReuseEvidenceRun(
+  latest: AutomationRun,
+  args: { currentRunId: string; runs: readonly AutomationRun[] }
+): AutomationRun {
+  const failedPtyIds = new Set<string>()
+  const paneRuns = args.runs
+    .filter(
+      (run) =>
+        run.id !== args.currentRunId &&
+        run.automationId === latest.automationId &&
+        run.terminalPaneKey === latest.terminalPaneKey
+    )
+    .toSorted((a, b) => automationRunRecency(b) - automationRunRecency(a))
+  for (const run of paneRuns) {
+    if (run.status !== 'dispatch_failed') {
+      return run.status === 'completed' &&
+        run.terminalPtyId &&
+        [...failedPtyIds].every((ptyId) => ptyId === run.terminalPtyId)
+        ? run
+        : latest
+    }
+    if (run.terminalPtyId) {
+      failedPtyIds.add(run.terminalPtyId)
+    }
+  }
+  return latest
+}
+
 function isReusableRun(run: AutomationRun, worktreeId: string): run is ReusableAutomationRun {
   return (
     run.workspaceId === worktreeId &&

@@ -14,12 +14,16 @@ function reuse({
   restoreFails = false,
   deliveryFails = false,
   adoptedState = null,
-  recorded = true
+  recorded = true,
+  livePty = null,
+  history = []
 }: {
   restoreFails?: boolean
   deliveryFails?: boolean
   adoptedState?: string | null
   recorded?: boolean
+  livePty?: string | null
+  history?: Partial<AutomationRun>[]
 } = {}) {
   deliver.mockClear()
   deliver.mockResolvedValue(!deliveryFails)
@@ -28,6 +32,10 @@ function reuse({
     getAgentStatusRowsForPane: () =>
       adoptedState ? [{ state: adoptedState, agentType: 'codex', receivedAt: 1 }] : [],
     getTerminalHandleForPaneKey: () => (recorded ? null : 'term_original'),
+    getTerminalPtyIdForHandle: () => livePty,
+    getPtyLivenessVerdict: () => null,
+    getTerminalWorktreeIdForHandle: () => 'workspace',
+    getPtyExecutionHostMetadata: () => ({ executionHostId: 'local' }),
     listRecordedAgentSessions: async () => ({
       sessions: recorded
         ? [
@@ -73,7 +81,10 @@ function reuse({
         workspaceId: 'workspace'
       } as Parameters<typeof sendToReusableSession>[1]['automation'],
       run: { id: 'current', trigger: 'scheduled' },
-      runs: [previous],
+      runs: history.length
+        ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: history runs differ from the previous run only in the listed fields.
+          history.map((run) => ({ ...previous, ...run }) as AutomationRun)
+        : [previous],
       text: 'follow up',
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reuse reads only the resolved repository identity, host and path.
       target: { ok: true, repo: { id: 'repo', path: '/repo' } } as Parameters<
@@ -128,5 +139,38 @@ describe('an automation whose original conversation slept', () => {
       message: 'The previous automation pane is not ready for reuse.',
       target: { terminalSessionId: 'original-tab', terminalPaneKey: PANE, terminalPtyId: null }
     })
+  })
+})
+
+describe('an automation whose follow-up failed on a live pane', () => {
+  const completed = { id: 'completed', terminalPtyId: 'live-pty', createdAt: 1 }
+  const failed = (terminalPtyId: string | null) => ({
+    id: `failed-${terminalPtyId}`,
+    status: 'dispatch_failed' as const,
+    terminalPtyId,
+    createdAt: 2
+  })
+
+  it('reuses the completed run once its agent is idle again', async () => {
+    await expect(
+      reuse({
+        recorded: false,
+        adoptedState: 'done',
+        livePty: 'live-pty',
+        history: [completed, failed('live-pty'), failed(null)]
+      })
+    ).resolves.toMatchObject({ terminalHandle: 'term_original', terminalPtyId: 'live-pty' })
+  })
+
+  it('does not reach past a failed attempt that replaced the PTY', async () => {
+    await expect(
+      reuse({
+        recorded: false,
+        adoptedState: 'done',
+        livePty: 'live-pty',
+        history: [completed, failed('replacement-pty')]
+      })
+    ).rejects.toThrow('The previous automation pane is not ready for reuse.')
+    expect(deliver).not.toHaveBeenCalled()
   })
 })

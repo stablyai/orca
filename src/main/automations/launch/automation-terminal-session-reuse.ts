@@ -3,7 +3,8 @@ import type { AutomationRun } from '../../../shared/automations/history/automati
 import {
   findReusableAutomationRun,
   isIdleAgentOf,
-  latestAutomationSessionRun
+  latestAutomationSessionRun,
+  liveReuseEvidenceRun
 } from '../../../shared/automations/history/automation-session-reuse'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
@@ -65,7 +66,7 @@ export async function sendToReusableSession(
     worktreeId,
     target,
     currentRunId: request.run.id,
-    runs: [previous],
+    runs: [liveReuseEvidenceRun(previous, { currentRunId: request.run.id, runs: request.runs })],
     agentStatusForPane,
     liveSession: (previous) => {
       const handle = runOwnHandle(runtime, previous)
