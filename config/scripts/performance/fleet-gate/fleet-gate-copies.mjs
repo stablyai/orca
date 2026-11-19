@@ -218,7 +218,11 @@ export async function stopCopyDaemons(userDataDir) {
       await new Promise((resolve) => setTimeout(resolve, 100))
       latest = processStartTimes()
     }
-    for (const pid of latest === null ? [] : pids.filter(same(latest))) {
+    if (latest === null) {
+      // Nothing proves these stopped, so the caller must keep the copy's record.
+      throw new ProcessTableUnavailable("ps couldn't confirm the copy's daemons stopped")
+    }
+    for (const pid of pids.filter(same(latest))) {
       try {
         process.kill(pid, 'SIGKILL')
       } catch {

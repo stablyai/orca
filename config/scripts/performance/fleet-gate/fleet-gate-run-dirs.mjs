@@ -258,9 +258,12 @@ function pidsWithEnv(entry) {
     .filter((pid) => {
       try {
         return fs.readFileSync(`/proc/${pid}/environ`, 'utf8').split('\0').includes(entry)
-      } catch {
-        // Exited, or another user's process (never ours).
-        return false
+      } catch (error) {
+        // Exited, or another user's process (never ours); any other failure proves nothing, so the reap keeps the folder.
+        if (['ENOENT', 'ESRCH', 'EACCES', 'EPERM'].includes(error?.code)) {
+          return false
+        }
+        throw error
       }
     })
     .map(Number)
