@@ -4,7 +4,11 @@ import { WorkerApprovalPayloadSchema } from './approvals/worker-approval-payload
 import { parseOrcaSessionAddress } from '../agent-session/identity/orca-session-address'
 
 export const CrewParty = z.string().refine(isPublicOrchestrationAddress)
-export const CrewSubscribeParams = z.object({ party: CrewParty })
+export const CrewSubscribeParams = z.object({
+  party: CrewParty,
+  /** `summary` sends counts alone until rows are asked for; older hosts ignore it and send rows. */
+  view: z.enum(['summary', 'rows']).optional()
+})
 const CrewRowApproval = z.object({
   approval: WorkerApprovalPayloadSchema,
   at: z.string(),
@@ -58,7 +62,14 @@ export const CrewFrame = z.discriminatedUnion('type', [
     rows: z.array(CrewRow)
   }),
   z.object({ type: z.literal('complete') }),
-  z.object({ type: z.literal('end') })
+  z.object({ type: z.literal('end') }),
+  // Sent only to a `summary` subscriber, so clients that never ask never see it.
+  z.object({
+    type: z.literal('summary'),
+    status: z.enum(['ok', 'unknown']),
+    agents: z.number(),
+    needsYou: z.number()
+  })
 ])
 export type OrchestrationCrewFrame = z.infer<typeof CrewFrame>
 
@@ -80,4 +91,34 @@ export const WorkerApprovalsFrame = z.discriminatedUnion('type', [
 export type OrchestrationWorkerApprovalsFrame = z.infer<typeof WorkerApprovalsFrame>
 export function emptyCrew(status: 'ok' | 'unknown'): OrchestrationCrewSnapshot {
   return { status, sections: { managedBy: [], managing: [], talkingWith: [] } }
+}
+
+export type OrchestrationCrewSummary = {
+  status: 'ok' | 'unknown'
+  agents: number
+  needsYou: number
+}
+
+/** A worker of this party waiting on the person's approval or answer; a question to its coordinator is not. */
+export function crewRowNeedsYou(row: Pick<OrchestrationCrewRow, 'role' | 'status'>): boolean {
+  return row.role === 'worker' && (row.status === 'waiting' || row.status === 'blocked')
+}
+
+/** Every party once, however many sections it appears in, and the managed workers waiting on the person. */
+export function crewSummary(snapshot: OrchestrationCrewSnapshot): OrchestrationCrewSummary {
+  const parties = new Set<string>()
+  for (const section of [
+    snapshot.sections.managedBy,
+    snapshot.sections.managing,
+    snapshot.sections.talkingWith
+  ]) {
+    for (const row of section) {
+      parties.add(row.partyKey)
+    }
+  }
+  return {
+    status: snapshot.status,
+    agents: parties.size,
+    needsYou: snapshot.sections.managing.filter(crewRowNeedsYou).length
+  }
 }

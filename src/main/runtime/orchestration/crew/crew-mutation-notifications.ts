@@ -1,4 +1,4 @@
-import type { CrewInvalidation } from './crew-changes'
+import { scopedCrewChange, type CrewInvalidation } from './crew-changes'
 import type { OrchestrationDb } from '../db/orchestration-db'
 
 type CrewMutationPrototype = Partial<OrchestrationDb>
@@ -76,6 +76,23 @@ const trafficMutations: ReadonlySet<keyof OrchestrationDb> = new Set([
   'createGate',
   'resolveGate',
   'timeoutGate'
+])
+
+const dispatchOf = (value: unknown): string | undefined =>
+  typeof value === 'string'
+    ? value
+    : typeof value === 'object' &&
+        value !== null &&
+        'dispatchId' in value &&
+        typeof value.dispatchId === 'string'
+      ? value.dispatchId
+      : undefined
+
+/** Worker progress writes touch one dispatch's own row, never which dispatches a crew shows. */
+const dispatchScopedMutations: ReadonlySet<keyof OrchestrationDb> = new Set([
+  'recordWorkerStage',
+  'markWorkerDispatchReady',
+  'recordAttemptObservation'
 ])
 
 /** Wake after the synchronous outer mutation; nested writes coalesce and rolled-back reads compare equal. */
@@ -161,7 +178,21 @@ export function attachCrewMutationNotifications(ctor: { prototype: CrewMutationP
         ) {
           return result
         }
-        this.crewChanges.notify(new Set([trafficMutations.has(name) ? 'traffic' : 'topology']))
+        if (
+          typeof result === 'object' &&
+          result !== null &&
+          'duplicate' in result &&
+          result.duplicate === true &&
+          name === 'recordAttemptObservation'
+        ) {
+          return result
+        }
+        const dispatchId = dispatchScopedMutations.has(name) ? dispatchOf(args[0]) : undefined
+        this.crewChanges.notify(
+          dispatchId
+            ? scopedCrewChange(['topology'], { dispatchIds: new Set([dispatchId]) })
+            : new Set([trafficMutations.has(name) ? 'traffic' : 'topology'])
+        )
         return result
       }
     })

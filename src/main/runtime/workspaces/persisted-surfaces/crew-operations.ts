@@ -40,11 +40,12 @@ export abstract class OrcaRuntimeWithCrewOperations extends OrcaRuntimeWithWebho
       readCrewRuntimeInputs(
         this.crewRuntimeReaders(),
         this._orchestrationDb,
-        existsSync(this.orchestrationDbPath()),
+        // Read only while no database is bound: a status wake must not stat the disk.
+        !this._orchestrationDb && existsSync(this.orchestrationDbPath()),
         getPublishedHostDescriptor(this.runtimeId)?.installationId ?? this.runtimeId,
         previous
       ),
-    (wake) =>
+    (wake, relevance) =>
       watchCrewRuntimeSources(
         {
           store: this.store,
@@ -52,7 +53,8 @@ export abstract class OrcaRuntimeWithCrewOperations extends OrcaRuntimeWithWebho
           watchTransitions: (listener) => this.agentTransitions.subscribe(listener),
           watchClient: (listener) => this.onClientEvent(listener)
         },
-        wake
+        wake,
+        relevance
       )
   )
 

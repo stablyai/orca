@@ -176,7 +176,8 @@ export function refreshCrewStatuses<
     workersById: Map<string, FleetDurableWorker>
   }
 >(host: T, statuses: CrewReadDependencies['statuses']) {
-  return indexCrewStatuses(host, structuredClone(statuses))
+  // Each status read builds fresh evidence objects, so the host can keep them without a copy.
+  return indexCrewStatuses(host, statuses)
 }
 
 function indexCrewStatuses<

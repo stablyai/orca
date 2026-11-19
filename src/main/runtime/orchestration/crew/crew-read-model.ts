@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from 'node:util'
-import type { CrewFacet, CrewInvalidation } from './crew-changes'
+import { CrewRelevance, type CrewFacet, type CrewInvalidation } from './crew-changes'
 import { buildCrewSnapshot } from './crew-party-snapshot'
 import type { CrewReadDependencies } from './crew-read-dependencies'
 import type { OrchestrationCrewSnapshot } from '../../../../shared/orchestration/orchestration-crew'
@@ -12,6 +12,10 @@ import {
 /** One host derivation is shared by all mounted parties; the last subscriber releases its inputs. */
 export class CrewReadModel {
   private host: CrewHostDerivation | undefined
+  /** What the current host's reads showed; reset with the host, refilled by the reads every wake starts. */
+  private relevance: CrewRelevance | undefined
+  /** Scoped wakes skipped since the host was built: a party subscribing later may show them. */
+  private skipped: 'status' | 'topology' | undefined
   private readonly listeners = new Set<() => void>()
   private readonly renamed = new Set<string>()
   private readonly dirty = new Set<CrewFacet>()
@@ -21,10 +25,48 @@ export class CrewReadModel {
 
   constructor(
     private readonly readDependencies: (previous?: CrewReadDependencies) => CrewReadDependencies,
-    private readonly watch: (wake: (facets: CrewInvalidation) => void) => () => void
+    private readonly watch: (
+      wake: (facets: CrewInvalidation) => void,
+      relevance: () => CrewRelevance | null
+    ) => () => void
   ) {}
 
+  private readRelevance = (): CrewRelevance | null => (this.host && this.relevance) || null
+
+  /** Admit before any rebuild: a scoped wake about panes or dispatches no row shows changes no row. */
+  private admits(facets: CrewInvalidation): boolean {
+    const relevance = this.readRelevance()
+    if (!relevance) {
+      return true
+    }
+    const facetList = [...facets]
+    if (
+      (facets.paneKeys || facets.sessionIds) &&
+      facetList.every((facet) => facet === 'status' || facet === 'names')
+    ) {
+      if (
+        [...(facets.paneKeys ?? [])].some((pane) => relevance.hasPane(pane)) ||
+        [...(facets.sessionIds ?? [])].some((session) => relevance.sessions.has(session))
+      ) {
+        return true
+      }
+      this.skipped ??= 'status'
+      return false
+    }
+    if (facets.dispatchIds && facetList.every((facet) => facet === 'topology')) {
+      if ([...facets.dispatchIds].some((id) => relevance.dispatches.has(id))) {
+        return true
+      }
+      this.skipped = 'topology'
+      return false
+    }
+    return true
+  }
+
   private invalidate = (facets: CrewInvalidation) => {
+    if (!this.admits(facets)) {
+      return
+    }
     for (const id of facets.recordIds ?? []) {
       this.renamed.add(id)
     }
@@ -47,13 +89,22 @@ export class CrewReadModel {
 
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener)
-    this.unwatch ??= this.watch(this.invalidate)
+    this.unwatch ??= this.watch(this.invalidate, this.readRelevance)
+    // A party joining reads rows the skipped wakes may have changed.
+    if (this.skipped === 'topology') {
+      this.dirty.add('topology')
+    } else if (this.skipped === 'status') {
+      this.dirty.add('status').add('names')
+    }
+    this.skipped = undefined
     return () => {
       this.listeners.delete(listener)
       if (this.listeners.size === 0) {
         this.unwatch?.()
         this.unwatch = undefined
         this.host = undefined
+        this.relevance = undefined
+        this.skipped = undefined
         this.dirty.clear()
         this.trafficAddresses.clear()
         this.broadTraffic = false
@@ -71,6 +122,7 @@ export class CrewReadModel {
     this.renamed.clear()
     this.trafficAddresses.clear()
     this.broadTraffic = false
+    const previousHost = this.host
     if (
       !this.host ||
       dirty.has('topology') ||
@@ -91,6 +143,7 @@ export class CrewReadModel {
         return buildCrewSnapshot(address, { ...host.deps, now }, host)
       }
       this.host = host
+      this.skipped = undefined
     } else if (dirty.has('status') || dirty.has('names')) {
       const previous = this.host
       this.host = undefined
@@ -105,6 +158,9 @@ export class CrewReadModel {
           : createCrewHostDerivation({ ...sources, records: previous.deps.records, statuses }, () =>
               Math.max(32, this.listeners.size * 2)
             )
+        if (this.skipped === 'status') {
+          this.skipped = undefined
+        }
       } else {
         this.host = previous
       }
@@ -121,6 +177,9 @@ export class CrewReadModel {
     if (dirty.has('traffic')) {
       this.host.sourceInputs.invalidateTraffic(trafficAddresses)
     }
-    return buildCrewSnapshot(address, { ...this.host.deps, now }, this.host)
+    if (this.host !== previousHost || !this.relevance) {
+      this.relevance = new CrewRelevance()
+    }
+    return buildCrewSnapshot(address, { ...this.host.deps, now }, this.host, this.relevance)
   }
 }

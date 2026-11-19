@@ -1,4 +1,5 @@
 import {
+  crewSummary,
   emptyCrew,
   type OrchestrationCrewFrame,
   type OrchestrationCrewSnapshot
@@ -7,7 +8,9 @@ import {
 export function subscribeCrew(
   read: () => OrchestrationCrewSnapshot,
   watch: (wake: () => void) => () => void,
-  emit: (frame: OrchestrationCrewFrame) => void
+  emit: (frame: OrchestrationCrewFrame) => void,
+  /** `summary` sends the counts a closed strip shows, and only when they change. */
+  view: 'summary' | 'rows' = 'rows'
 ): () => void {
   let alive = true
   let queued = false
@@ -21,6 +24,15 @@ export function subscribeCrew(
       snapshot = read()
     } catch {
       snapshot = emptyCrew('unknown')
+    }
+    if (view === 'summary') {
+      const summary = crewSummary(snapshot)
+      const key = `${summary.status}:${summary.agents}:${summary.needsYou}`
+      if (key !== previous) {
+        previous = key
+        emit({ type: 'summary', ...summary })
+      }
+      return
     }
     const serialized = JSON.stringify(snapshot)
     if (serialized === previous) {

@@ -15,26 +15,39 @@ import { isDeepStrictEqual } from 'node:util'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 import { crewWorkspaceNames } from './crew-workspace-names'
-import { sessionCrewChanges, type CrewInvalidation } from './crew-changes'
+import {
+  scopedCrewChange,
+  sessionCrewChanges,
+  type CrewFacet,
+  type CrewInvalidation,
+  type CrewRelevance
+} from './crew-changes'
 
 type CrewRuntimeWatchDependencies = {
   store: RuntimeStore | null
   watchChanges: (wake: (facets: CrewInvalidation) => void) => () => void
-  watchTransitions: (wake: () => void) => () => void
+  watchTransitions: (wake: (change: { paneKey: string }) => void) => () => void
   watchClient: (wake: (event: RuntimeClientEvent) => void) => () => void
 }
 
+const scoped = (facets: CrewFacet[], paneKey: string): CrewInvalidation =>
+  scopedCrewChange(facets, { paneKeys: new Set([paneKey]) })
+
+/** `relevance` is what mounted crews show, or null before their first read; names compare only that. */
 export function watchCrewRuntimeSources(
   deps: CrewRuntimeWatchDependencies,
-  wake: (facets: CrewInvalidation) => void
+  wake: (facets: CrewInvalidation) => void,
+  relevance: () => CrewRelevance | null = () => null
 ) {
   const hostIds = () => deps.store?.getWorkspaceSessionHostIds?.() ?? (['local'] as const)
-  const namesByHost = new Map(
-    hostIds().map((hostId) => [
-      hostId,
-      crewWorkspaceNames(deps.store?.getWorkspaceSession?.(hostId))
-    ])
-  )
+  const names = (id: ReturnType<typeof hostIds>[number]) => {
+    const scope = relevance()
+    return {
+      scope,
+      names: crewWorkspaceNames(deps.store?.getWorkspaceSession?.(id), scope ?? undefined)
+    }
+  }
+  const namesByHost = new Map(hostIds().map((hostId) => [hostId, names(hostId)]))
   const topology = (id: ReturnType<typeof hostIds>[number]) =>
     mainTerminalSourceInputs(
       deps.store?.getWorkspaceSession?.(id),
@@ -46,7 +59,8 @@ export function watchCrewRuntimeSources(
   const disposers = [
     deps.watchChanges(wake),
     sessionCrewChanges.subscribe(wake),
-    deps.watchTransitions(() => wake(new Set(['status', 'names']))),
+    // A hook observation names its pane: one for a pane no crew row shows wakes nothing.
+    deps.watchTransitions((change) => wake(scoped(['status', 'names'], change.paneKey))),
     deps.store?.onWorkspaceSessionWritten?.((hostId) => {
       for (const id of hostId === null ? hostIds() : [hostId]) {
         if (ORCA_LAYOUT_OWNER_IS_MAIN) {
@@ -56,9 +70,11 @@ export function watchCrewRuntimeSources(
             wake(new Set(['topology']))
           }
         }
-        const next = crewWorkspaceNames(deps.store?.getWorkspaceSession?.(id))
-        if (!isDeepStrictEqual(namesByHost.get(id), next)) {
-          namesByHost.set(id, next)
+        const previous = namesByHost.get(id)
+        const next = names(id)
+        namesByHost.set(id, next)
+        // A changed scope only re-baselines: the read that changed it already read these names.
+        if (previous?.scope === next.scope && !isDeepStrictEqual(previous.names, next.names)) {
           wake(new Set(['names']))
         }
       }
@@ -72,11 +88,13 @@ export function watchCrewRuntimeSources(
       }
     }) ?? (() => {}),
     deps.watchClient((event) => {
+      // Unbound PTYs have no pane, so no crew row can show them.
       if (
         event.type === 'terminalSideEffects' &&
+        event.batch.paneKey &&
         event.batch.facts.some((fact) => fact.kind === 'title')
       ) {
-        wake(new Set(['names']))
+        wake(scoped(['names'], event.batch.paneKey))
       }
     })
   ]

@@ -24,6 +24,7 @@ import { federatedMessageNamesOnlyHome } from '../workers/reports/dispatch-repor
 import { workerReportRefusal } from '../workers/reports/worker-report-admission'
 import { isEquivalentPaneKey } from '../db/pane-key-match'
 import type { CrewReadDependencies } from './crew-read-dependencies'
+import type { CrewRelevance } from './crew-changes'
 
 function preview(body: string): string {
   // One extra UTF-16 unit distinguishes a full ASCII preview from a longer body.
@@ -39,7 +40,9 @@ function preview(body: string): string {
 export function buildCrewSnapshot(
   address: string,
   deps: CrewReadDependencies,
-  host = createCrewHostDerivation(deps)
+  host = createCrewHostDerivation(deps),
+  /** Collects the panes, chats and dispatches the rows read, so unrelated wakes can be skipped. */
+  relevance?: CrewRelevance
 ): OrchestrationCrewSnapshot {
   deps = { ...host.deps, now: deps.now }
   const db = deps.db
@@ -159,6 +162,23 @@ export function buildCrewSnapshot(
     const session = isStructuredWorkerHandle(worker?.agentTerminalHandle)
       ? observeSession(worker!)
       : undefined
+    if (relevance) {
+      relevance.addPane(target.paneKey)
+      relevance.addPane(worker?.paneKey)
+      relevance.addPane(target.terminalHandle ? deps.paneForHandle(target.terminalHandle) : null)
+      for (const id of [
+        target.orcaSessionId,
+        live?.kind === 'here' ? live.sessionId : null,
+        worker?.agentTerminalHandle
+      ]) {
+        if (id) {
+          relevance.sessions.add(id)
+        }
+      }
+      if (assignment) {
+        relevance.dispatches.add(assignment.id)
+      }
+    }
     const fresh = session
       ? sessionActivityEvidence(session)
       : bound && projectLiveness({ resource: null }, evidence, now).verdict === 'live'
