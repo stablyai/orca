@@ -11,6 +11,7 @@ import { configurePairedRuntimeBrowserClientHostsForOrcaProfile } from '../clien
 import { configureBrowserPasswordVaults } from '../../browser-passwords/browser-password-vaults'
 import { restoreBrowserSessionCookies } from '../cookies/session-restore/browser-session-cookie-restore'
 import { configureBrowserSessionCookieSnapshots } from '../cookies/session-restore/browser-session-cookie-snapshot-file'
+import { ensureBrowserProfileSiteListsLoaded } from './site-list/browser-profile-site-list-store'
 import { awaitBrowserSessionProxies } from './proxy/browser-session-proxy'
 import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 import { listenForBrowserPasskeyRequests } from '../webauthn/browser-passkey-requests'
@@ -53,6 +54,10 @@ export function initializeBrowserSessionsForApp(
   // Replay cookies before Chromium opens the live DB via session.fromPartition.
   browserSessionRegistry.applyPendingCookieImport()
   browserSessionRegistry.initializeBrowserSessionsFromPersistedState()
+  // Startup's synchronous read can't say whether it failed; one that did leaves site lists unseeded.
+  void ensureBrowserProfileSiteListsLoaded().catch((error) => {
+    console.warn('[browser] site lists could not be loaded at startup:', error)
+  })
   initialized = true
 }
 
