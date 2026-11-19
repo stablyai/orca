@@ -15,6 +15,12 @@ import { cleanUpCodexHistoryLeftBehind } from './codex-account-history-cleanup'
 import { checkCodexHistoryLeftBehind } from './codex-account-history-content-check'
 import { shareCodexAccountHistory } from './codex-account-history-links'
 
+// The platform's open-file check is its own concern (Linux always answers unknown); here nothing
+// is open, so the proofs alone decide.
+vi.mock('../../../filesystem/open-file-check', () => ({
+  findOpenFiles: async () => new Set<string>()
+}))
+
 const SAME = 'rollout-2026-11-14T10-00-00-0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b.jsonl'
 const TOUCHED = 'rollout-2026-11-14T11-00-00-0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c.jsonl'
 const DIFFERENT = 'rollout-2026-11-14T12-00-00-0199a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5d.jsonl'

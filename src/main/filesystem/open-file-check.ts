@@ -1,6 +1,5 @@
 import { constants } from 'node:fs'
-import { lstat, open, readFile, readdir, readlink, realpath, stat } from 'node:fs/promises'
-import { join } from 'node:path'
+import { lstat, open, realpath } from 'node:fs/promises'
 import { runProcess } from '@orca/process-host'
 import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 import { errnoCodeOrUnknown } from '../../shared/errors/errno-code'
@@ -8,96 +7,10 @@ import { errnoCodeOrUnknown } from '../../shared/errors/errno-code'
 // Past these the answer is "can't tell": a slow check must not hold a launch.
 const LSOF_TIMEOUT_MS = 5_000
 const LSOF_ARGS_BYTES = 256 * 1024
-const PROC_SCAN_BUDGET_MS = 5_000
 // libuv opens with no sharing under this flag, which Windows refuses while any handle is open.
 const WINDOWS_EXCLUSIVE_OPEN = 0x10000000
 
-type Target = { path: string; ino: bigint; dev: bigint }
-
-async function procHidesProcesses(): Promise<boolean> {
-  const mounts = await readFile('/proc/self/mountinfo', 'utf8').catch(() => null)
-  if (mounts === null) {
-    return true
-  }
-  // Fields: id parent major:minor root mountpoint options ... - fstype source superoptions.
-  return mounts.split('\n').some((line) => {
-    const fields = line.split(' ')
-    const hidepid = /(?:^|,)hidepid=([^,]+)/.exec(fields.at(-1) ?? '')?.[1]
-    return fields[4] === '/proc' && hidepid !== undefined && hidepid !== '0' && hidepid !== 'off'
-  })
-}
-
-// Every readable process's open files, from the /proc fd links: reading a link never touches the
-// file's own filesystem, so a dead network mount can't stall it. Other users' processes are
-// skipped (their descriptors are unreadable anyway); one of ours we can't read makes it unknown.
-async function openOnLinux(
-  targets: Target[],
-  firstOnly: boolean,
-  shouldStop: () => boolean
-): Promise<Set<string> | null> {
-  const paths = new Set(targets.map((target) => target.path))
-  const byInode = new Map(targets.map((target) => [`${target.dev}:${target.ino}`, target.path]))
-  const found = new Set<string>()
-  // Under hidepid, processes we may not inspect (an undumpable Codex) aren't even listed.
-  if (await procHidesProcesses()) {
-    return null
-  }
-  const deadline = Date.now() + PROC_SCAN_BUDGET_MS
-  const uid = process.getuid?.()
-  for (const pid of await readdir('/proc')) {
-    if (!/^\d+$/.test(pid)) {
-      continue
-    }
-    const owner = await stat(join('/proc', pid)).catch(() => null)
-    if (!owner || (uid !== undefined && owner.uid !== uid)) {
-      continue
-    }
-    // A process of ours whose descriptors we can't read (Codex marks itself undumpable) may hold
-    // any of the files: the answer is unknown, not "closed". One that exited is simply gone.
-    const fds = await readdir(join('/proc', pid, 'fd')).catch((error: unknown) =>
-      isDefinitiveAbsence(error) ? [] : null
-    )
-    if (fds === null) {
-      return null
-    }
-    for (const fd of fds) {
-      // Checked per descriptor: one process can hold tens of thousands.
-      if (Date.now() > deadline || shouldStop()) {
-        return null
-      }
-      const link = join('/proc', pid, 'fd', fd)
-      // A descriptor or process that closed meanwhile is gone; any other failure (the process
-      // turning undumpable mid-scan) leaves it unknown.
-      const path = await readlink(link).catch((error: unknown) =>
-        isDefinitiveAbsence(error) ? '' : null
-      )
-      if (path === null) {
-        return null
-      }
-      // A file moved by hard link keeps the descriptor under its old, unlinked name: only those
-      // are matched by inode, so the scan still never touches other files' filesystems.
-      let match: string | undefined
-      if (paths.has(path)) {
-        match = path
-      } else if (path.endsWith(' (deleted)')) {
-        const file = await stat(link, { bigint: true }).catch((error: unknown) =>
-          isDefinitiveAbsence(error) ? undefined : null
-        )
-        if (file === null) {
-          return null
-        }
-        match = file && byInode.get(`${file.dev}:${file.ino}`)
-      }
-      if (match) {
-        found.add(match)
-        if (firstOnly || found.size === paths.size) {
-          return found
-        }
-      }
-    }
-  }
-  return found
-}
+type Target = { path: string; ino: bigint }
 
 // Matched by inode: lsof escapes unusual characters in the names it prints. It exits 0 when every
 // file is open, 1 with output when some are, and 1 with no output when none are; an exit 1 that
@@ -181,7 +94,7 @@ async function resolveTargets(
       const path = await realpath(file)
       const stats = await lstat(path, { bigint: true })
       if (stats.isFile()) {
-        targets.push({ path, ino: stats.ino, dev: stats.dev })
+        targets.push({ path, ino: stats.ino })
         original.set(path, file)
       }
     } catch (error) {
@@ -208,27 +121,24 @@ async function findFiles(
   return found && new Set([...found].map((path) => resolved.original.get(path) ?? path))
 }
 
-function openOnThisPlatform(
-  firstOnly: boolean,
-  shouldStop: () => boolean
-): (targets: Target[]) => Promise<Set<string> | null> {
+// Linux can't be told reliably: an undumpable process (Codex is one) hides its descriptors, and
+// another PID or mount namespace hides the process itself. So the answer there is always unknown.
+function openOnThisPlatform(): (targets: Target[]) => Promise<Set<string> | null> {
   return process.platform === 'win32'
     ? openOnWindows
     : process.platform === 'linux'
-      ? (targets) => openOnLinux(targets, firstOnly, shouldStop)
+      ? async () => null
       : openOnMac
 }
 
 /**
- * Which of `files` some process has open; null when that can't be told or `shouldStop` turns true.
- * `firstOnly` stops at the first one found.
+ * Which of `files` some process has open; null when that can't be told, or when `shouldStop`
+ * turned true meanwhile.
  */
-export function findOpenFiles(
+export async function findOpenFiles(
   files: string[],
-  options: { firstOnly?: boolean; shouldStop?: () => boolean } = {}
+  options: { shouldStop?: () => boolean } = {}
 ): Promise<Set<string> | null> {
-  return findFiles(
-    files,
-    openOnThisPlatform(options.firstOnly ?? false, options.shouldStop ?? (() => false))
-  )
+  const open = await findFiles(files, openOnThisPlatform())
+  return options.shouldStop?.() ? null : open
 }

@@ -276,6 +276,11 @@ export async function checkThenCleanUpCodexHistory(args: {
   storeHome: string
   shouldStop: () => boolean
 }): Promise<boolean> {
+  // Linux (WSL included) can't tell whether an old Codex still writes a copy, so none is deleted
+  // there, and checking their content would only cost reads.
+  if (process.platform === 'linux') {
+    return true
+  }
   if (!(await checkCodexHistoryLeftBehind(args))) {
     return false
   }
