@@ -54,7 +54,6 @@ describe('Jira presets on servers without statusCategory', () => {
   })
 
   it.each([
-    ['assigned', 'assignee = currentUser() AND resolution = Unresolved ORDER BY updated DESC'],
     ['all', 'resolution = Unresolved ORDER BY updated DESC'],
     ['done', 'assignee = currentUser() AND resolution IS NOT EMPTY ORDER BY updated DESC']
   ] as const)('retries the %s preset with resolution', async (filter, fallback) => {

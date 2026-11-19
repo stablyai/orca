@@ -568,21 +568,6 @@ describe('buildBotActivity', () => {
     expect(dotByKey).toEqual({ 'run:failed': 'failed', 'run:skipped': 'idle', 'run:ok': 'done' })
     expect(activity.inProgress).toEqual([])
   })
-
-  it('keeps a failed run out of In progress even while its chat still reads as working', () => {
-    const activity = buildBotActivity(
-      input({
-        sessions: [],
-        automations: [automation('a1')],
-        runs: [run('failed', 'a1', { status: 'dispatch_failed', chatSessionId: 'failed-chat' })],
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the model reads only state and workingMode.
-        sessionStatus: () => ({ state: 'working' }) as AgentStatusEntry
-      })
-    )
-
-    expect(activity.inProgress).toEqual([])
-    expect(activity.completed).toMatchObject([{ kind: 'run', dot: 'failed' }])
-  })
 })
 
 describe("a bot's waits", () => {

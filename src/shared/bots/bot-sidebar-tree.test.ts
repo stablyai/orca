@@ -55,12 +55,26 @@ describe('buildBotSidebarTree', () => {
       running: [runningIn('w0'), runningIn('w1', 'needs-you')],
       runningTotal: 2
     })
-    const [first] = build([home], lines(15), { folds: { home: 'open' } }).chats
+    const chats = [
+      chat('slack', { origin: 'slack', tab: true }),
+      home,
+      chat('untabbed', { tab: false }),
+      chat('old', { closed: true })
+    ]
+    const workspaces = lines(18)
+    const workspaceChats = { w15: 'slack', w16: 'old', w17: 'untabbed' }
+    const folds = { home: 'open' } as const
+    const tree = build(chats, workspaces, { workspaceChats, folds })
+    const [first, slack] = tree.chats
+    expect(tree.chats.map((group) => group.chat.chatId)).toEqual(['home', 'slack'])
+    expect(tree.stray).toEqual([])
+    expect(slack.lines.map((line) => line.id)).toEqual(['w15'])
     expect(first.lines.map((line) => line.id)).toEqual(['w1', 'w0', 'w2', 'w3'])
     expect(first.paging).toEqual({ remaining: 11, label: 'step' })
 
-    const [stepped] = build([home], lines(15), {
-      folds: { home: 'open' },
+    const [stepped] = build(chats, workspaces, {
+      workspaceChats,
+      folds,
       steps: { home: 1 }
     }).chats
     expect(stepped.lines).toHaveLength(12)
