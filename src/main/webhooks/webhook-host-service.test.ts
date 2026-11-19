@@ -115,10 +115,13 @@ describe("this host's webhooks", () => {
     vi.restoreAllMocks()
   })
 
-  it('reads only hooks an automation here lists', async () => {
-    const get = vi.fn()
-    await expect(service({ get }).card('wh_0000000000000000')).rejects.toThrow('webhook_not_found')
+  it('checks local hook ownership before attempting a cloud read', async () => {
+    const get = vi.fn(() => null)
+    const webhooks = service({ get })
+    await expect(webhooks.card('wh_0000000000000000')).rejects.toThrow('webhook_not_found')
     expect(get).not.toHaveBeenCalled()
+    await expect(webhooks.card(HOOK)).rejects.toThrow('webhooks_unavailable')
+    expect(get).toHaveBeenCalledWith(HOOK)
   })
 
   it("checks recent calls against the hook's filters, or others, and can't tell a cut body", async () => {
@@ -173,10 +176,6 @@ describe("this host's webhooks", () => {
     expect(notices).toHaveLength(1)
     // Another bot's, or a hook not listed here: not this host's.
     expect(webhooks.notice({ ...notice, botId: 'bot-2' })).toBe(false)
-  })
-
-  it('reads as unavailable while no cloud can be reached', async () => {
-    await expect(service({ get: () => null }).card(HOOK)).rejects.toThrow('webhooks_unavailable')
   })
 
   it("takes webhooks as offered until the poll client's hello answer says otherwise", () => {
