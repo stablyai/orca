@@ -1,14 +1,14 @@
 import { statSync } from 'node:fs'
 import { delimiter, join, win32 } from 'node:path'
 
-/** Windows env key casing varies; a blank value is absent, not a search root. */
+/** Windows env key casing varies; select the child env key before handling its value. */
 function readEnv(env: NodeJS.ProcessEnv, ...names: string[]): string | undefined {
   const wanted = new Set(names.map((name) => name.toLowerCase()))
   // Node sorts child env keys and keeps the first case-insensitive match.
   for (const key of Object.keys(env).sort()) {
-    const value = env[key]
-    if (wanted.has(key.toLowerCase()) && typeof value === 'string' && value.trim()) {
-      return value.trim()
+    if (wanted.has(key.toLowerCase())) {
+      const value = env[key]
+      return typeof value === 'string' && value.trim() ? value.trim() : undefined
     }
   }
   return undefined

@@ -94,6 +94,12 @@ describeOnWindows('resolveWindowsCommand', () => {
     expect(resolveWindowsCommand('tool', { Path: stale, PATH: active })).toBe(shim)
   })
 
+  it('does not fall through when the selected PATH key is blank', () => {
+    const stale = tempDir()
+    writeFileSync(join(stale, 'tool.cmd'), '')
+    expect(resolveWindowsCommand('tool', { PATH: '', Path: stale })).toBe('tool')
+  })
+
   it('ignores a malformed PATH entry without throwing', () => {
     const dir = tempDir()
     const shim = join(dir, 'tool.cmd')
