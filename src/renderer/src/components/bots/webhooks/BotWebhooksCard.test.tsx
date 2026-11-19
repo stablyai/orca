@@ -63,14 +63,6 @@ afterEach(() => {
 })
 
 describe('BotWebhooksCard', () => {
-  it('shows no row until the bot has a hook', async () => {
-    renderRow(() => ({ hooks: [] }))
-    await waitFor(() =>
-      expect(host).toHaveBeenCalledWith(expect.anything(), 'webhooks.list', { botId: 'bot-1' })
-    )
-    expect(screen.queryByText('Webhooks')).toBeNull()
-  })
-
   it('hides Webhooks for an unsupported host and backs off before reading it again', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     renderRow(() => {
@@ -95,15 +87,23 @@ describe('BotWebhooksCard', () => {
     expect(host).toHaveBeenCalledTimes(2)
   })
 
-  it('lists hooks with their destination, filters and recent calls', async () => {
+  it('lists the first hook after it appears, with its destination, filters and recent calls', async () => {
     const summary = webhookSummaryFixture({
       adapter: 'sentry',
       resultsTo: { channel: '#alerts' },
       filters: { where: [{ path: 'level', op: 'in', values: ['error', 'fatal'] }], pick: ['title'] }
     })
-    renderRow((method) =>
-      method === 'webhooks.list' ? { hooks: [summary] } : { calls: webhookCallsFixture(NOW) }
-    )
+    let hooks: (typeof summary)[] = []
+    await act(async () => {
+      renderRow((method) =>
+        method === 'webhooks.list' ? { hooks } : { calls: webhookCallsFixture(NOW) }
+      )
+    })
+    expect(host).toHaveBeenCalledWith(expect.anything(), 'webhooks.list', { botId: 'bot-1' })
+    expect(screen.queryByRole('button', { name: 'Webhooks' })).toBeNull()
+
+    hooks = [summary]
+    act(() => notifyWebhooksChanged())
     // A lone hook opens on its fields.
     expect(await screen.findByText('“Investigate Sentry alert” · results to #alerts')).toBeTruthy()
     expect(screen.getByText('Sentry signature, with your Sentry secret')).toBeTruthy()
