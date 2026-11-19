@@ -211,6 +211,10 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
         return settled
       }
     }
+    // A gap during that lookup started a new rebuild: the same unknown screen as above.
+    if (this.headlessTerminals.get(ptyId)?.gapReseed) {
+      return null
+    }
     return this.readProviderTerminalTailLines(ptyId, limit, { visibleScreenOnly: true })
   }
 

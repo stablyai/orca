@@ -81,6 +81,7 @@ export class TerminalWorkerTurnStops {
       (reason === 'finished' && stop.row.lastAssistantMessage) ||
       (await this.readStopScreen(
         stopped.handle,
+        reason === 'needs-input',
         reason === 'needs-input' && stop.row.agentType === 'claude'
       ))
     const before = this.stillStopped(stop)
@@ -114,12 +115,23 @@ export class TerminalWorkerTurnStops {
   }
 
   /** A prompt's dialog can paint after its hook posts, as a background subagent's did. */
-  private async readStopScreen(handle: string, awaitDialog: boolean): Promise<string | undefined> {
+  private async readStopScreen(
+    handle: string,
+    needsScreen: boolean,
+    awaitDialog: boolean
+  ): Promise<string | undefined> {
+    // A prompt is what the grid shows now; an unavailable screen's tail is older transcript.
     const read = () =>
-      this.deps.readScreen(handle).then((view) => redactWorkerTerminalView(view).tail)
+      this.deps
+        .readScreen(handle)
+        .then((view) =>
+          needsScreen && view.source === 'screen-unavailable'
+            ? null
+            : redactWorkerTerminalView(view).tail
+        )
     const dialog = awaitDialog
       ? await firstWithin(this.deps.setTimer, () =>
-          read().then((tail) => (showsClaudeDialog(tail) ? tail : null))
+          read().then((tail) => (tail && showsClaudeDialog(tail) ? tail : null))
         )
       : null
     return (dialog ?? (await read().catch(() => undefined)))?.join('\n')
