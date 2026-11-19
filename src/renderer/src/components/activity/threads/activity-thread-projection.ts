@@ -145,40 +145,24 @@ function cancelReleaseTimer(): void {
   }
 }
 
-/** Inputs keep their identity until a value the projection reads changes. */
+/** Current inputs; storeData keeps its identity until a field the projection reads changes. */
 function readInputs(): ProjectionInputs {
   const state = useAppStore.getState()
   // Subscribed reads use the observed names; a render before the first subscribe reads them directly.
   const names = chatNames ?? getStructuredChatTabNames()
   const scope = standaloneActivityWorktreeScope()
   const previous = currentInputs
-  if (
-    previous &&
-    previous.state === state &&
-    previous.chatNames === names &&
-    previous.scope === scope
-  ) {
+  if (previous?.state === state && previous.chatNames === names && previous.scope === scope) {
     return previous
   }
   const selected = selectAllAgentPaneThreadStoreData(state)
-  const storeData =
-    previous && shallow(previous.storeData, selected) ? previous.storeData : selected
-  const next: ProjectionInputs = {
+  currentInputs = {
     state,
-    storeData,
+    storeData: previous && shallow(previous.storeData, selected) ? previous.storeData : selected,
     agentStatusEpoch: state.agentStatusEpoch,
     chatNames: names,
     scope
   }
-  // A write the projection does not read keeps the previous inputs, so readers skip rebuilding.
-  currentInputs =
-    previous &&
-    previous.storeData === storeData &&
-    previous.agentStatusEpoch === next.agentStatusEpoch &&
-    previous.chatNames === names &&
-    previous.scope === scope
-      ? { ...previous, state }
-      : next
   return currentInputs
 }
 
