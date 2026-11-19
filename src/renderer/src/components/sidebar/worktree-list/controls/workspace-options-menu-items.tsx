@@ -1,4 +1,3 @@
-import { worktreeCardStyleUpdates } from '@/store/appearance/worktree-card-style'
 import { Fragment, useMemo, type ComponentType, type JSX } from 'react'
 import { useAppStore } from '@/store'
 import {
@@ -38,7 +37,10 @@ import { useTranslate } from '@/i18n/use-translate'
 import { SidebarGroupByToggle } from './SidebarGroupByToggle'
 import { HideBotCreatedFilterRow } from '@/components/bots/HideBotCreatedFilterRow'
 import { withoutHiddenRepos } from '../../../../../../shared/project/catalog/hidden-projects'
-import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-style'
+import {
+  selectDrawsNewWorktreeCards,
+  worktreeCardStyleUpdates
+} from '@/store/appearance/worktree-card-style'
 import { trackWorktreeCardStyleChanged } from '../../workspace-card/template/worktree-card-style-telemetry'
 
 export function useWorkspaceOptionsFilterBadge(): {
