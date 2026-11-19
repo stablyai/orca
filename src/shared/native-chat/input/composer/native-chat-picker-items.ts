@@ -271,17 +271,23 @@ export function preferredNativeChatPickerIndex(
   return bestIndex
 }
 
+const NO_ALIASES: readonly string[] = []
+
 function getMatchRank(
   item: Pick<NativeChatPickerItem, 'name' | 'description'> & { aliases?: readonly string[] },
   query: string,
   matchDescriptions: boolean
 ): number | null {
   const normalizedQuery = query.toLowerCase()
-  const ranks = [item.name, ...(item.aliases ?? [])]
-    .map((name) => getNameRank(name.toLowerCase(), normalizedQuery))
-    .filter((rank) => rank !== null)
-  if (ranks.length > 0) {
-    return Math.min(...ranks)
+  let rank = getNameRank(item.name.toLowerCase(), normalizedQuery)
+  for (const alias of item.aliases ?? NO_ALIASES) {
+    const aliasRank = getNameRank(alias, normalizedQuery)
+    if (aliasRank !== null && (rank === null || aliasRank < rank)) {
+      rank = aliasRank
+    }
+  }
+  if (rank !== null) {
+    return rank
   }
   if (matchDescriptions && item.description?.toLowerCase().includes(normalizedQuery)) {
     return 4
