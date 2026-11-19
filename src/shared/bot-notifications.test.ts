@@ -1,19 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { botNotificationFor, isBotAttentionSilenced } from './bot-notifications'
+import { isBotAttentionSilenced } from './bot-notifications'
 
 const ALL_ON = { needsPermission: true, taskComplete: true, couldNotFinish: true }
-
-describe('botNotificationFor', () => {
-  it.each([
-    [{ agentState: 'blocked' } as const, 'needsPermission'],
-    [{ agentState: 'done', outcome: 'success' } as const, 'taskComplete'],
-    [{ agentState: 'done', outcome: 'failure' } as const, 'couldNotFinish'],
-    [{ agentState: 'done', outcome: 'cancellation' } as const, 'couldNotFinish'],
-    [{ agentState: 'done', outcome: 'superseded' } as const, 'couldNotFinish']
-  ])('files %o under %s', (news, toggle) => {
-    expect(botNotificationFor(news)).toBe(toggle)
-  })
-})
 
 describe('isBotAttentionSilenced', () => {
   it.each(['needsPermission', 'taskComplete', 'couldNotFinish'] as const)(

@@ -17,6 +17,10 @@
       }
     }
   },
+  "agentCliUpdate": {
+    "heading_one": "{{count}} CLI update available",
+    "heading_other": "{{count}} CLI updates available"
+  },
   "agentLaunch": {
     "opencode": {
       "invalidConfig": "OpenCode could not apply this model choice to the launch configuration. Check the OpenCode launch configuration and try again, or omit the model choice.",

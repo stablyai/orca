@@ -37,15 +37,21 @@ describe('artifact share record store', () => {
     const recordsPath = join(path, 'profiles', 'local-profile', 'artifact-shares.json')
     await writeFile(recordsPath, '{broken-json')
 
-    expect(() =>
-      saveArtifactShareRecord('local-profile', path, '/repo/new.html', {
-        ...scopeA,
-        slug: 'new-artifact',
-        editToken: 'new-secret',
-        shareUrl: 'https://share.onorca.dev/a/new-artifact',
-        expiresAt: '2099-01-01T00:00:00.000Z'
-      })
-    ).toThrow(/could not be read safely/)
+    await expect(
+      saveArtifactShareRecord(
+        'local-profile',
+        path,
+        '/repo/new.html',
+        {
+          ...scopeA,
+          slug: 'new-artifact',
+          editToken: 'new-secret',
+          shareUrl: 'https://share.onorca.dev/a/new-artifact',
+          expiresAt: '2099-01-01T00:00:00.000Z'
+        },
+        () => {}
+      )
+    ).rejects.toThrow(/could not be read safely/)
     expect(await readFile(recordsPath, 'utf8')).toBe('{broken-json')
   })
 

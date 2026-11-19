@@ -194,12 +194,24 @@ export function sanitizeHydratedActiveView(value: PersistedUIState['activeView']
   return value
 }
 
-export function hydratedUIPartialMatchesState(
-  state: AppState,
-  hydrated: Partial<UISlice>
-): boolean {
+/**
+ * Swaps each hydrated value that equals state's for state's own reference. Every write echoes the
+ * whole UI back, so unchanged fields must not wake their readers. Run it before capturing the
+ * write baseline so the writer's identity and JSON comparisons see kept fields as saved.
+ */
+export function keepUnchangedHydratedFields(state: AppState, hydrated: Partial<UISlice>): void {
+  const fields = hydrated as Record<string, unknown>
+  for (const [key, value] of Object.entries(fields)) {
+    const current = state[key as keyof AppState]
+    if (!Object.is(current, value) && persistedUIValuesEqual(current, value)) {
+      fields[key] = current
+    }
+  }
+}
+
+export function hydratedFieldsAreState(state: AppState, hydrated: Partial<UISlice>): boolean {
   return Object.entries(hydrated).every(([key, value]) =>
-    persistedUIValuesEqual(state[key as keyof AppState], value)
+    Object.is(state[key as keyof AppState], value)
   )
 }
 

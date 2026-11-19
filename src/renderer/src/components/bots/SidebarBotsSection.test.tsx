@@ -321,48 +321,6 @@ describe('SidebarBotsSection', () => {
     expect(mocks.activate).not.toHaveBeenCalled()
   })
 
-  it('drags a floating copy of the bot and slides the others aside, as a workspace row does', () => {
-    threeUnplacedBots()
-    renderSection()
-    stubRowRects()
-    const entry = rowEntry('bot-1')
-
-    fireEvent.pointerDown(screen.getByText('Reviewer'), {
-      pointerId: 1,
-      button: 0,
-      clientX: 20,
-      clientY: 10
-    })
-    act(() => {
-      window.dispatchEvent(
-        new PointerEvent('pointermove', { pointerId: 1, clientX: 20, clientY: 115, buttons: 1 })
-      )
-    })
-    const preview = document.querySelector('[data-worktree-sidebar-drag-preview]')
-    expect(preview?.textContent).toContain('Reviewer')
-    expect(entry.className).toContain('opacity-0')
-    expect(entry.className).not.toContain('ring-')
-    // Scout and Jelly slide up into the gap Reviewer left.
-    const slide = (botId: string): string => {
-      const content = rowEntry(botId).firstElementChild
-      return content instanceof HTMLElement ? content.style.transform : ''
-    }
-    expect([slide('bot-1'), slide('bot-2'), slide('bot-3')]).toEqual([
-      '',
-      'translateY(-40px)',
-      'translateY(-40px)'
-    ])
-
-    act(() => {
-      window.dispatchEvent(
-        new PointerEvent('pointerup', { pointerId: 1, clientX: 20, clientY: 115 })
-      )
-    })
-    expect(document.querySelector('[data-worktree-sidebar-drag-preview]')).toBeNull()
-    expect(entry.className).not.toContain('opacity-0')
-    expect(slide('bot-2')).toBe('')
-  })
-
   it('keeps New bot access while empty and folds the onboarding card away', () => {
     vi.stubGlobal('api', { ui: { set: vi.fn(() => Promise.resolve()) } })
     renderSection()

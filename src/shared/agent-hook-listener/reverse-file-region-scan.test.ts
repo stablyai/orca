@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { scanFileRegionsBackward } from './reverse-file-region-scan'
+import { scanFileRegionsBackward, scanFileRegionsBackwardAsync } from './reverse-file-region-scan'
 
 const roots: string[] = []
 afterEach(() => {
@@ -63,5 +63,22 @@ describe('scanFileRegionsBackward', () => {
     // A byte cap cannot prove the start of the topmost record.
     const file = writeFixture(`${'x'.repeat(500)}\nkeep-me\n`)
     expect(collectLines(file, 64, 128)).toEqual(['keep-me'])
+  })
+})
+
+describe('scanFileRegionsBackwardAsync with a floor', () => {
+  it('stops at lines an earlier scan saw whole, but finishes one that grew across it', async () => {
+    // An earlier scan saw 'old-a\nold-b\nhalf-' (17 bytes); the half-written line then completed.
+    const file = writeFixture(`old-a\nold-b\nhalf-${'w'.repeat(40)}\nnew-c\n`)
+    const seen: string[] = []
+    await scanFileRegionsBackwardAsync(
+      file,
+      { chunkBytes: 8, maxScanBytes: 4096, floor: 17 },
+      (region) => {
+        seen.push(...region.toString('utf8').split('\n').filter(Boolean))
+        return undefined
+      }
+    )
+    expect(seen).toEqual(['new-c', `half-${'w'.repeat(40)}`])
   })
 })

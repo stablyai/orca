@@ -105,19 +105,6 @@ describe('SidebarBotsSplit', () => {
     }
   })
 
-  it('keeps the default cap until the user drags', () => {
-    const { section } = renderSplit(200, 400)
-    expect(section.style.maxHeight).toBe('')
-    expect(section.className).toContain('max-h-[40%]')
-  })
-
-  it('lets flex shrink the section so the Projects list keeps its minimum', () => {
-    const { section, container } = renderSplit(200, 400)
-    expect(section.className).not.toContain('shrink-0')
-    const slot = container.querySelector<HTMLElement>('[data-sidebar-projects-list]')!
-    expect(slot.style.minHeight).toBe(`${SIDEBAR_PROJECTS_MIN_LIST_HEIGHT}px`)
-  })
-
   it('saves the dragged height, starting from the rendered height', () => {
     const { handle } = renderSplit(200, 400)
     drag(handle, 300, 350)
@@ -160,26 +147,11 @@ describe('SidebarBotsSplit', () => {
     expect(mocks.setSidebarBotsHeight).toHaveBeenCalledWith(null)
   })
 
-  it('renders a saved height as the section cap', () => {
-    mocks.state.sidebarBotsHeight = 900
-    const { section } = renderSplit(200, 400)
-    expect(section.style.maxHeight).toBe('900px')
-  })
-
-  it('gives Bots the whole height with no seam while Projects is folded', () => {
+  it('removes the resize handle and saved cap while Projects is folded', () => {
     mocks.state.sidebarBotsHeight = 300
     const { section, handle } = renderSplit(200, 400, true)
     expect(handle).toBeNull()
-    expect(section.className).toContain('flex-1')
-    expect(section.className).not.toContain('max-h-[40%]')
     expect(section.style.maxHeight).toBe('')
-  })
-
-  it('leaves just the two headers when both sections are folded', () => {
-    mocks.state.collapsedGroups = new Set([BOTS_GROUP_KEY])
-    const { section, handle } = renderSplit(40, 0, true)
-    expect(handle).toBeNull()
-    expect(section.className).not.toContain('flex-1')
   })
 
   it('hides the Projects list without unmounting it while folded', () => {

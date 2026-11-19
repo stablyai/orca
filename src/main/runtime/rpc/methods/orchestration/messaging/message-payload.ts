@@ -33,6 +33,12 @@ export function parseMessageTaskId(payload: string | undefined): string | undefi
   }
 }
 
+/** The payload with its taskId replaced; only called for a payload parseMessageTaskId read a taskId from. */
+export function withMessageTaskId(payload: string | undefined, taskId: string): string | undefined {
+  const parsed = parseRemoteWorkerPayload(payload)
+  return JSON.stringify({ ...parsed, taskId })
+}
+
 export function isConversationReportOutcome(value: unknown): value is 'succeeded' | 'failed' {
   return value === 'succeeded' || value === 'failed'
 }
