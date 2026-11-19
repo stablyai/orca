@@ -15,17 +15,18 @@ import {
   structuredAgentSessionResumeParams
 } from '../recovery/structured-agent-session-resume-eligibility'
 
-export function structuredAgentSessionStartParams(
+export async function structuredAgentSessionStartParams(
   context: StructuredAgentSessionAttachContext,
   sessionId: string,
   startedFor: string | undefined
-):
+): Promise<
   | Extract<StructuredAgentSessionResumeOutcome, { ok: false }>
   | {
       ok: true
       params: NonNullable<ReturnType<typeof structuredAgentSessionResumeParams>>
       startupOptions?: Readonly<Record<string, string>>
-    } {
+    }
+> {
   let record
   try {
     record = context.deps.store.requireWritableRecord(sessionId)
@@ -74,7 +75,7 @@ export function structuredAgentSessionStartParams(
           )
   }
   const startupOptions = startedFor
-    ? context.sessions.get(sessionId)?.journal.submission(startedFor)?.options
+    ? (await context.sessions.get(sessionId)?.journal.reads.submission(startedFor))?.options
     : undefined
   return { ok: true, params, ...(startupOptions ? { startupOptions } : {}) }
 }

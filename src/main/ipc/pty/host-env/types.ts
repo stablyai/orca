@@ -1,9 +1,9 @@
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { NetworkProxySettings } from '../../../../shared/network-proxy'
+import type { NetworkProxySettings } from '../../../../shared/network/network-proxy'
 import type { ClaudeRuntimeAuthPreparation } from '../../../claude-accounts/runtime-auth/runtime-auth-types'
 import type { ClaudeAccountSelectionTarget } from '../../../claude-accounts/selection/runtime-selection'
-import type { CodexAccountSelectionTarget } from '../../../../shared/codex-selection-lane'
+import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import type { CodexPaneHomeRoute } from '../../../codex/configuration/homes/codex-pane-account-registry-types'
 import type { CodexSessionResumePreparation } from '../../../codex/history/resume/codex-session-resume-home'
 
@@ -25,6 +25,8 @@ export type BuildPtyHostEnvOptions = {
   /** WSL relay target; null selects the default distro. Read only for WSL spawns. */
   wslDistro?: string | null
   agentStatusHooksEnabled: boolean
+  /** CLIs found on this host's PATH; a plain shell installs only these agents' plugins. */
+  agentsOnPath?: ReadonlySet<TuiAgent>
   claudeSubagentNavigationEnabled?: boolean
   terminalInlineImages?: boolean
   /** Per-agent opt-out; disabled agents must not receive managed extensions. */

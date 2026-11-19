@@ -1,4 +1,4 @@
-import type { RuntimeSessionTabCloseReason } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeSessionTabCloseReason } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import {
   hasClosedTerminalTabRecord,
@@ -16,7 +16,7 @@ import {
 import { retireTerminalSurfaceFromPersistence } from './mobile-session-terminal-persistence-retirement'
 import { advanceTerminalTopologyRevision } from '../../../persistence/terminal-topology/pane-ownership/terminal-topology-membership'
 import type { DurableProfileStateMutation } from '../../../persistence/loading-store/store-runtime-state'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   capturePersistedTerminalTabCopy,
   isSamePersistedTerminalTabCopy,

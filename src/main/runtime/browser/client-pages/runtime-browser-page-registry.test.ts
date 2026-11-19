@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 
 describe('runtime browser page registry', () => {
@@ -54,6 +54,27 @@ describe('runtime browser page registry', () => {
       url: 'https://example.internal/after'
     })
   })
+
+  it("holds a person's new page while an agent drives the active one, then routes to it once idle", () => {
+    vi.useFakeTimers()
+    const pages = new RuntimeBrowserPageRegistry()
+    const routed = (): string | undefined =>
+      pages.listPages('worktree-a').find((page) => page.active)?.browserPageId
+
+    pages.publishClientPage({ ...clientPage('page-a', 'worktree-a'), active: true }, 'agent')
+    pages.agentUse.begin('page-a')()
+    pages.publishClientPage({ ...clientPage('page-b', 'worktree-a'), active: true }, 'person')
+    expect(routed()).toBe('page-a')
+
+    vi.advanceTimersByTime(19_000)
+    expect(routed()).toBe('page-a')
+    vi.advanceTimersByTime(2_000)
+    expect(routed()).toBe('page-b')
+  })
+})
+
+afterEach(() => {
+  vi.useRealTimers()
 })
 
 function clientPage(browserPageId: string, workspaceId: string) {

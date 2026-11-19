@@ -1,11 +1,11 @@
 import type {
   RuntimeMobileSessionTerminalTab,
   RuntimeMobileTerminalTheme
-} from '../../../../../src/shared/runtime-mobile-session-tab-contracts'
+} from '../../../../../src/shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type { AgentStatusEntry } from '../../../../../src/shared/agent-status/contracts/agent-status-types'
-import type { BrowserLoadError } from '../../../../../src/shared/browser-workspace-types'
-import { browserLoadErrorsEqual } from '../../../../../src/shared/browser-load-failure'
+import { browserLoadErrorsEqual } from '../../../../../src/shared/browser/navigation/browser-load-failure'
 import { translate } from '../../../i18n/mobile-i18n'
+import type { MobileBrowserTab } from '../../../session/tabs/mobile-session-tabs'
 
 export type TerminalRecord = {
   handle: string
@@ -66,25 +66,14 @@ type MobileSessionTabLike =
       isDirty?: boolean
       isActive?: boolean
     }
-  | {
-      type: 'browser'
-      id: string
-      title?: string
-      browserWorkspaceId?: string
-      browserPageId?: string | null
-      url?: string
-      loading?: boolean
-      loadError?: BrowserLoadError | null
-      canGoBack?: boolean
-      canGoForward?: boolean
-      isActive?: boolean
-    }
+  | (Partial<MobileBrowserTab> & { type: 'browser'; id: string })
   | {
       type: 'agent-session'
       id: string
       title?: string
       sessionId?: string
       agent?: string
+      forked?: true
       chatStatus?: unknown
       isActive?: boolean
     }
@@ -197,13 +186,18 @@ function mobileSessionTabEqual(
         a.loading === b.loading &&
         browserLoadErrorsEqual(a.loadError, b.loadError) &&
         a.canGoBack === b.canGoBack &&
-        a.canGoForward === b.canGoForward
+        a.canGoForward === b.canGoForward &&
+        a.faviconUrl === b.faviconUrl &&
+        a.browserProfileId === b.browserProfileId &&
+        a.certificateFailure?.challengeId === b.certificateFailure?.challengeId &&
+        a.certificateFailure?.canProceed === b.certificateFailure?.canProceed
       )
     case 'agent-session':
       return (
         b.type === 'agent-session' &&
         a.sessionId === b.sessionId &&
         a.agent === b.agent &&
+        a.forked === b.forked &&
         JSON.stringify(a.chatStatus ?? null) === JSON.stringify(b.chatStatus ?? null)
       )
   }

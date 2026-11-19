@@ -1,9 +1,9 @@
 import { writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
-import { getAppEnvironment } from '../../../../shared/app-environment'
-import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../../../../shared/local-build-compatibility-contract'
-import { NODE_RUNTIME_DARWIN_MINIMUM_OS } from '../../../../shared/node-runtime-pin'
+import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
+import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../../../../shared/remote-runtime/orcad-distribution/local-build-compatibility-contract'
+import { NODE_RUNTIME_DARWIN_MINIMUM_OS } from '../../../../shared/node-runtime/node-runtime-pin'
 import { runProcess } from '@orca/process-host'
 import { rm } from '../../../filesystem/asar-transparent-fs'
 import { compareDottedVersions } from '../../../orcad/native-runtime/native-host-abi'
@@ -61,7 +61,11 @@ function buildMacDaemonLaunchJob(
   bundle: MacDaemonBundle,
   label: string
 ): Record<string, unknown> {
-  const env: NodeJS.ProcessEnv = { ...process.env, ORCA_USER_DATA_PATH: options.userDataPath }
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    ORCA_USER_DATA_PATH: options.userDataPath,
+    ORCA_PROVIDER_HOST: '1'
+  }
   // Plain Node does not use Electron’s Node-mode switch or inherited IPC descriptors.
   delete env.ELECTRON_RUN_AS_NODE
   delete env.NODE_CHANNEL_FD

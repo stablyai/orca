@@ -9,7 +9,7 @@ import { useChecksPanelTerminalWorktree } from '../refresh/use-checks-panel-term
 import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { readDetectedAgentsForWorktree } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/row-display/git-identity-display'
 import { resolveRepoWorktreeLaunchPlatform } from '@/runtime/hosts/platform/execution-host-facts'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
@@ -23,7 +23,7 @@ import type {
 import type { PRCheckDetail } from '../../../../../../shared/github/checks/check-types'
 import type { PRComment } from '../../../../../../shared/github/comments/comment-types'
 import type { PRRefreshErrorType } from '../../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
-import type { GitLabProjectRef } from '../../../../../../shared/gitlab-types'
+import type { GitLabProjectRef } from '../../../../../../shared/gitlab/gitlab-types'
 import type { PRCommentsListSelectionClearRequest } from '../comments/pr-comments-list-selection'
 import {
   buildChecksPanelGitStatusContextKey,

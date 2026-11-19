@@ -1,8 +1,13 @@
-import { COMPUTER_WAIT_DEFAULT_TIMEOUT_MS } from '../../shared/computer-wait-timeout'
+import { COMPUTER_WAIT_DEFAULT_TIMEOUT_MS } from '../../shared/computer/computer-wait-timeout'
 
 // File focus differs from terminal create's shared --focus help.
 const FILE_OPEN_FOCUS_HELP =
   "--focus                Bring the user to the file (switches Orca's window to its worktree)"
+
+const BOT_ITEM_TITLE_HELP = "--title <text>         The item's title"
+
+const AGENT_ID_FLAG_HELP =
+  "--id <id>              The agent's orca_session_id: ID; also accepted positionally"
 
 const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
   'agent resume': {
@@ -10,6 +15,25 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
     session:
       '--session <id>        Recorded provider conversation ID; requires --agent without --pane',
     agent: '--agent <id>          Agent that owns the recorded conversation'
+  },
+  'bot item add': {
+    title: BOT_ITEM_TITLE_HELP,
+    for: '--for bot:<name>       Make the item for another bot'
+  },
+  'bot item set': {
+    title: BOT_ITEM_TITLE_HELP,
+    comment: '--comment <text>       Add a comment with this change'
+  },
+  'bot item comment': { text: "--text <text>          The comment's text" },
+  'bot item link': { ref: '--ref <ref>            A worker, PR, URL or file to link' },
+  'bot item list': { cursor: '--cursor <c>           Cursor printed with the previous page' },
+  'agent list': {
+    state: '--state <state>        Only agents in this state: working, blocked, waiting or done'
+  },
+  'agent show': { id: AGENT_ID_FLAG_HELP },
+  'agent read': {
+    id: AGENT_ID_FLAG_HELP,
+    limit: '--limit <n>            Newest entries to return (default 20, at most 100)'
   },
   'extension reload': {
     'extension-id':
@@ -97,6 +121,9 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
   },
   'skills install': {
     agent: '--agent <names>        Comma-separated install targets; default is detected agents'
+  },
+  'orchestration check': {
+    format: '--format               Also render the returned rows as local text'
   },
   'orchestration run-show': {
     removed: '--removed              List the Tasks, Dispatches and workers removed from this Run',

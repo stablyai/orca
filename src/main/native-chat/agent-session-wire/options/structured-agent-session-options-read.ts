@@ -1,11 +1,11 @@
 import { readAcpForkSupport } from '../../../acp/capabilities/acp-fork-support'
-import { supportsSessionAccountUsage } from '../../../../shared/agent-session/agent-session-account-usage'
+import { supportsSessionAccountUsage } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-usage'
 import { structuredAgentSessionCatalogScopeOwned } from './structured-agent-session-catalog-reads'
 import { withinAgentModelCatalogRead } from '../../agent-model-catalog/agent-model-catalog-operation'
 import { AGENT_MODEL_CATALOG_PICKER_WAIT_MS } from '../../agent-model-catalog/agent-model-catalog-listing-waiters'
 import {
   independentAgentModelCatalog,
-  usesModelSpecificAcpEfforts
+  fillsLiveModelsFromCatalog
 } from '../../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 import {
   readStructuredAgentSessionOptionsAtRest,
@@ -129,17 +129,23 @@ export async function readStructuredAgentSessionOptions(
   const session = await context.conversation(sessionId)
   const agent = session.params.provider
   const capabilities = agents.capabilities(agent)
-  const floor = session.journal.context.floor()
-  const contextFloor = floor ? { contextFloor: floor } : {}
   const restingOptions = await atRest()
   const recovery = await readStructuredSessionRecovery(session, context, sessionId)
-  if (live && usesModelSpecificAcpEfforts(agent)) {
+  const [floor, goalSource, contextUsage] = await Promise.all([
+    session.journal.reads.contextFloor(),
+    session.journal.reads.threadGoalSource(),
+    capabilities?.contextUsage ? session.journal.reads.contextUsage() : undefined
+  ])
+  const contextFloor = floor ? { contextFloor: floor } : {}
+  if (live && fillsLiveModelsFromCatalog(agent)) {
+    const listed = restingOptions.inventory.origin === 'unknown' ? null : restingOptions.inventory
     options = {
       ...options,
-      models: fillUnknownModelEfforts(
-        options.models,
-        restingOptions.inventory.origin === 'unknown' ? [] : restingOptions.inventory.models
-      )
+      models: fillUnknownModelEfforts(options.models, listed?.models ?? []),
+      // A current model without Fast must not hide it for the listed models that have it.
+      ...(!options.fastModeSupport && listed?.fastModeSupport
+        ? { fastModeSupport: listed.fastModeSupport }
+        : {})
     }
   }
   const resting = live ? restingOptions : null
@@ -165,7 +171,10 @@ export async function readStructuredAgentSessionOptions(
     ...options.current,
     ...(model !== undefined ? { model } : {}),
     effort: saved.effort ?? options.current.effort,
-    fastMode: selected.current.fastMode ?? options.current.fastMode,
+    // A running model's Fast says nothing about another selected model, which keeps its own default.
+    fastMode:
+      selected.current.fastMode ??
+      (model === options.current.model ? options.current.fastMode : undefined),
     // The saved tier as the shared speed rule runs it under the saved model.
     ...(context.deps.agents.definition(agent)?.restingOptions.acceptsKey('interactionMode')
       ? {
@@ -278,11 +287,9 @@ export async function readStructuredAgentSessionOptions(
     acceptsImages: capabilities?.imagePrompts === true && options.acceptsImages !== false,
     ...structuredAgentSessionThreadGoalReport(
       capabilities?.threadGoal === true,
-      session.journal.threadGoal(),
+      goalSource.goal,
       contextFloor
     ),
-    ...(capabilities?.contextUsage
-      ? { contextUsage: { current: session.journal.contextUsage(), ...contextFloor } }
-      : {})
+    ...(contextUsage ? { contextUsage: { current: contextUsage, ...contextFloor } } : {})
   }
 }

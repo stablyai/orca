@@ -2,8 +2,8 @@
 
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { Repo } from '../../../../../../shared/repo-types'
-import type { ProjectHostSetup } from '../../../../../../shared/project-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import type { ProjectHostSetup } from '../../../../../../shared/project/project-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { useAppStore } from '@/store'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'

@@ -129,6 +129,11 @@ export function createClaudeStreamedThinking(deps: {
         ? { identity, body, ...(streamed ? { startedAt: streamed.startedAt } : {}) }
         : null
     },
+    /** End root reasoning only; a subagent's streams continue. */
+    finishRoot: (sessionId: string, completedAt: number): void => {
+      finish({ completedAt }, `${sessionId}/`)
+      blocks.clearScope(sessionId, null)
+    },
     finishOpen: (completedAt: number): void => {
       finish({ completedAt })
       blocks.clear()

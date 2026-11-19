@@ -1,9 +1,24 @@
 import type { CommandSpec } from '../discovery/command-spec'
-import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli-argument-boundary'
+import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
 import { LINEAR_MCP_COMMAND_SPECS } from './linear-mcp'
 
 export const LINEAR_COMMAND_SPECS: CommandSpec[] = [
   ...LINEAR_MCP_COMMAND_SPECS,
+  {
+    path: ['linear', 'connect'],
+    summary: 'Connect Linear on this Orca host with an API key read from stdin',
+    usage: 'orca linear connect [--json] < key-file',
+    allowedFlags: [...GLOBAL_FLAGS],
+    notes: [
+      'Reads the key from stdin so it never lands in shell history or a process list.',
+      'Each Orca host keeps its own Linear connection: with --environment the key is saved on that paired server, not on this machine.'
+    ],
+    examples: [
+      'printf %s "$LINEAR_API_KEY" | orca linear connect',
+      'printf %s "$LINEAR_API_KEY" | orca linear connect --environment build-vm --json',
+      '$env:LINEAR_API_KEY | orca linear connect'
+    ]
+  },
   {
     path: ['linear', 'issue'],
     summary: 'Read Linear issue context for agents',

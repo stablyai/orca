@@ -64,16 +64,16 @@ export type StructuredAgentSessionResumeSetInput = {
   markers: readonly AgentSessionResumeMarker[]
   getRecord: (sessionId: string) => AgentSessionRecord | null
   supportsRecord: (record: AgentSessionRecord) => boolean
-  latestPrompt: (sessionId: string) => string
-  movedOn: (marker: AgentSessionResumeMarker) => boolean
+  latestPrompt: (sessionId: string) => string | Promise<string>
+  movedOn: (marker: AgentSessionResumeMarker) => boolean | Promise<boolean>
   savedByNewerOrca: (sessionId: string) => boolean
   /** may-be-held relaxes ownership only, preserving all other eligibility checks. */
   leaseState?: 'must-be-released' | 'may-be-held'
 }
 
-export function structuredAgentSessionResumableSet(
+export async function structuredAgentSessionResumableSet(
   input: StructuredAgentSessionResumeSetInput
-): StructuredAgentSessionResumableSet {
+): Promise<StructuredAgentSessionResumableSet> {
   const candidates: StructuredAgentSessionResumeCandidate[] = []
   const superseded: AgentSessionResumeMarker[] = []
   for (const marker of input.markers) {
@@ -98,7 +98,7 @@ export function structuredAgentSessionResumableSet(
       superseded.push(marker)
       continue
     }
-    if (input.movedOn(marker)) {
+    if (await input.movedOn(marker)) {
       superseded.push(marker)
       continue
     }
@@ -114,7 +114,7 @@ export function structuredAgentSessionResumableSet(
       work: marker.work,
       trigger: marker.trigger,
       recordedAt: marker.recordedAt,
-      latestPrompt: input.latestPrompt(marker.sessionId),
+      latestPrompt: await input.latestPrompt(marker.sessionId),
       executionHostId: record.location.executionHostId,
       workspaceKind: record.location.workspaceKind,
       ...(model === undefined ? {} : { model }),

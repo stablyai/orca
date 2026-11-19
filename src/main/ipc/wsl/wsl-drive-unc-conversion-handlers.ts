@@ -8,7 +8,7 @@ import { app, ipcMain, type IpcMainInvokeEvent } from 'electron'
 import type {
   WslDriveUncConversionRequest,
   WslDriveUncConversionResult
-} from '../../../shared/wsl-drive-unc-conversion-types'
+} from '../../../shared/wsl-move/wsl-drive-unc-conversion-types'
 import { relaunchApp } from '../../startup/quit/app-relaunch'
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
 import { readProfileProjectTransferState } from '../../orca-profiles/project-transfer/profile-project-domain-state'
@@ -31,7 +31,7 @@ import {
   recordWslDriveUncRendererStoreRewritten
 } from '../../wsl/filesystem/wsl-drive-unc-conversion-renderer'
 import { WSL_DRIVE_UNC_MAIN_STORE_IDS } from '../../wsl/filesystem/wsl-drive-unc-conversion-stores'
-import type { WslDriveUncPendingRendererRewrite } from '../../../shared/wsl-drive-unc-renderer-store-keys'
+import type { WslDriveUncPendingRendererRewrite } from '../../../shared/wsl-move/wsl-drive-unc-renderer-store-keys'
 import type { WslMoveRecordStoreRewrittenResult } from '../../../shared/wsl-move/wsl-move-renderer-rewrite-types'
 import { readWorktreeLinks } from './wsl-drive-worktree-links'
 import { readWslDistroDriveMounts } from '../../wsl/filesystem/wsl-drive-unc-mounts'

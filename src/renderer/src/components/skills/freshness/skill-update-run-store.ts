@@ -1,9 +1,9 @@
 import { useSyncExternalStore } from 'react'
-import type { BundledSkillInstallResult } from '../../../../../shared/bundled-skill-plan'
+import type { BundledSkillInstallResult } from '../../../../../shared/skills/bundled/bundled-skill-plan'
 import {
   summarizeBundledSkillOutcomes,
   type BundledSkillResultSummary
-} from '../../../../../shared/bundled-skill-summary'
+} from '../../../../../shared/skills/bundled/bundled-skill-summary'
 import { notifyInstalledAgentSkillsChanged } from '@/hooks/skills/discovery/installed-agent-skill-discovery'
 import {
   bundledSkillTargetKey,

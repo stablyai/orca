@@ -1,5 +1,5 @@
 import type { StartedPty } from '../../terminal/recovery/restored-pane-start'
-import { OrcaRuntimeWithResumeAgentSessionInWorkspace } from './resume-agent-session-in-workspace'
+import { OrcaRuntimeWithClaudeRunningPaneAccountMove } from './claude-running-pane-account-move'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
@@ -12,7 +12,7 @@ import type {
   RecordedAgentSessionTarget
 } from '../../../../shared/agent-session/recorded-agent-session'
 
-export abstract class OrcaRuntimeWithRecordedAgentSessions extends OrcaRuntimeWithResumeAgentSessionInWorkspace {
+export abstract class OrcaRuntimeWithRecordedAgentSessions extends OrcaRuntimeWithClaudeRunningPaneAccountMove {
   abstract getTerminalPtyIdForHandle(handle: string): string | null
   private readonly recordedResumes = new Map<string, Promise<StartedPty | null>>()
 

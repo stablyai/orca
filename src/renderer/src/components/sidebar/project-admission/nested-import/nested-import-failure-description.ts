@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import type { ProjectGroupImportProjectResult } from '../../../../../../shared/project-group-types'
+import type { ProjectGroupImportProjectResult } from '../../../../../../shared/project/groups/project-group-types'
 
 export function nestedImportFailureDescription(
   failure: ProjectGroupImportProjectResult | undefined

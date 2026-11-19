@@ -5,8 +5,8 @@ import type {
   BrowserLoadError,
   BrowserSessionProfile,
   BrowserSessionProfileSource
-} from '../../browser-workspace-types'
-import type { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../runtime-session-contracts'
+} from '../workspaces/browser-workspace-types'
+import type { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../remote-runtime/session-graph/runtime-session-contracts'
 
 export type BrowserSnapshotRef = { ref: string; role: string; name: string }
 
@@ -91,7 +91,14 @@ export type BrowserScreencastReadyResult = {
 }
 
 export type BrowserScreencastEndResult = { type: 'end'; subscriptionId: string }
-export type BrowserScreencastDialogResult = { type: 'dialog'; dialogType: string; message: string }
+export type BrowserScreencastDialogResult = {
+  type: 'dialog'
+  dialogType: string
+  message: string
+  /** Older hosts omit these two; viewers then start a prompt empty and name no origin. */
+  defaultPromptText?: string
+  origin?: string | null
+}
 export type BrowserScreencastDialogClosedResult = { type: 'dialogClosed' }
 export type BrowserScreencastErrorResult = { type: 'error'; message: string }
 
@@ -105,6 +112,7 @@ export type BrowserScreencastResult =
 export type BrowserEvalResult = { result: string; origin: string }
 
 export type BrowserTabInfo = {
+  generation?: number
   browserPageId: string
   index: number
   url: string

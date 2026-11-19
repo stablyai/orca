@@ -11,7 +11,7 @@ import { ChevronLeft, Copy, ExternalLink, MoreHorizontal } from 'lucide-react-na
 import { NavBar } from '../../components/nav-bar/NavBar'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'
 import { PullDownMenu } from '../../components/nav-bar/PullDownMenu'
-import type { ActionSheetAction } from '../../components/ActionSheetModal'
+import type { ActionSheetAction } from '../../components/sheets/ActionSheetModal'
 import { ListGroup, ListRow, SectionHeader } from '../../components/list/ListGroup'
 import { colors, pressedStyle, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
@@ -272,9 +272,7 @@ export function MobileCommitDetailPage({
           files.error !== null ? null : connected ? (
             <ActivityIndicator style={styles.loading} size="small" color={colors.textSecondary} />
           ) : (
-            <Text style={styles.note}>
-              {t('sourceControl.gitHistoryList.waitingForDesktop', 'Waiting for desktop...')}
-            </Text>
+            <Text style={styles.note}>{t('common.waitingForHost', 'Waiting for host…')}</Text>
           )
         ) : loadedFiles.length === 0 ? (
           <Text style={styles.note}>

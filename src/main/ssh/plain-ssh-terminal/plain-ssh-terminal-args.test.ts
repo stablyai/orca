@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { buildPlainSshTerminalArgs } from './plain-ssh-terminal-args'
 
 const manual: SshTarget = {

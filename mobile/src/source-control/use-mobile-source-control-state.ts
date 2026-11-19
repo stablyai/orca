@@ -2,8 +2,8 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useForceReconnect } from '../transport/connection/host-client-hooks'
-import { useWorkspaceClient } from '../worktree/use-workspace-client'
-import { getWorktreeLabel } from '../worktree/worktree-label'
+import { useWorkspaceClient } from '../worktree/execution-hosts/use-workspace-client'
+import { getWorktreeLabel } from '../worktree/row-presentation/worktree-label'
 import { workspaceDraftRowKey } from '../drafts/durable-draft-rows'
 import { useDurableDraftField } from '../drafts/durable-draft-fields'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
@@ -15,7 +15,7 @@ import { useMobileSourceControlSections } from './changes/mobile-source-control-
 import { useMobileSourceControlRunners } from './workflows/use-mobile-source-control-runners'
 import { useMobileSourceControlCreatePrAction } from './review/creation/use-mobile-source-control-create-pr-action'
 import { useKeyboardOcclusion as useMobileSourceControlKeyboardLift } from '../platform/keyboard/keyboard-occlusion'
-import type { RuntimeGitLocalBranches } from '../../../src/shared/runtime-worktree-contracts'
+import type { RuntimeGitLocalBranches } from '../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import {
   buildMobileBranchCompareSection,
   canOpenMobileBranchCompareDiff
@@ -30,6 +30,7 @@ import {
 import type { MobileGitStatusEntry } from './git/git-status-reply-schema'
 import { getMobileCommitFailureStagedEntries } from './commits/mobile-commit-failure-recovery'
 import { useMobileSourceControlCommitFailure } from './commits/use-mobile-source-control-commit-failure'
+import { useMobileSourceControlAiEnabled } from './commits/use-mobile-source-control-ai-enabled'
 import {
   buildMobileGitStatusEntryViews,
   formatBranchLabel,
@@ -85,6 +86,14 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     onStatusLoadSuccess: clearCommitFailureRecovery
   })
   const { screenState, branchCompareState, mountedRef, setRootRef, loadStatus, settings } = loaders
+  const commitMessageAiEnabled = useMobileSourceControlAiEnabled({
+    hostId,
+    client,
+    connState,
+    worktreeId,
+    executionHost,
+    hostEnabled: settings.sourceControlAiEnabled
+  })
 
   const { router, openDiffForFile } = useMobileSourceControlOpeners({ hostId, worktreeId, name })
 
@@ -220,6 +229,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     commitMessage,
     setCommitMessage,
     generatingMessage,
+    commitMessageAiEnabled,
     showBranchPicker,
     setShowBranchPicker,
     localBranches,

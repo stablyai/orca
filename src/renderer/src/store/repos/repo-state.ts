@@ -2,10 +2,10 @@ import type {
   FolderWorkspaceCreateInput,
   FolderWorkspaceCreateResult
 } from '../../../../shared/folder-workspaces/folder-workspace-create'
-import type { WslHostWindowsDriveRefusal } from '../../../../shared/wsl-host-windows-drive-refusal'
+import type { WslHostWindowsDriveRefusal } from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-windows-drive-refusal'
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachments/workspace-attachment-mutation'
 import type { GhAccountBinding } from '../../../../shared/github/accounts/account-binding'
-import type { SshRepoReadoption } from '../../../../shared/ssh-types'
+import type { SshRepoReadoption } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type {
   NestedRepoScanResult,
@@ -13,7 +13,7 @@ import type {
   ProjectGroupUpdate,
   ProjectGroupMutation,
   ProjectGroupImportResult
-} from '../../../../shared/project-group-types'
+} from '../../../../shared/project/groups/project-group-types'
 import type {
   Project,
   ProjectHostSetup,
@@ -27,17 +27,24 @@ import type {
   ProjectHostSetupUpdateArgs,
   ProjectHostSetupUpdateResult,
   ProjectUpdateArgs
-} from '../../../../shared/project-types'
-import type { Repo } from '../../../../shared/repo-types'
-import type { RepoHostTarget } from '../../../../shared/repo-host-identity'
+} from '../../../../shared/project/project-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import type { RepoHostTarget } from '../../../../shared/repository/repo-host-identity'
 import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest
 } from '../../../../shared/folder-workspaces/folder-workspace-path-status'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { WslMovedProject } from '../../../../shared/wsl-move/wsl-moved-project'
 import type { ConfirmedUnsavedDiscards } from '../slices/worktrees/teardown/removed-workspace-unsaved-files'
 
+export type FolderWorkspaceDeleteOptions = {
+  executionHostId?: ExecutionHostId
+  /** Retry after the Archive script failed, removing the folder anyway. */
+  allowFailedArchiveHook?: boolean
+  /** The host call that removes the workspace, when its owner (a bot) must remove it; defaults to folder delete. */
+  remove?: () => Promise<boolean>
+}
 export const ERROR_TOAST_DURATION = 60_000
 
 export type RepoUpdate = Partial<
@@ -74,6 +81,7 @@ export type RepoUpdate = Partial<
   hiddenAt?: Repo['hiddenAt'] | null
   ghAccount?: GhAccountBinding | null
   workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
+  browserProfileId?: string | null
 }
 
 export type ProjectUpdate = ProjectUpdateArgs['updates']
@@ -262,7 +270,7 @@ export type RepoSlice = {
   ) => Promise<boolean>
   deleteFolderWorkspace: (
     folderWorkspaceId: string,
-    options?: { executionHostId?: ExecutionHostId; allowFailedArchiveHook?: boolean }
+    options?: FolderWorkspaceDeleteOptions
   ) => Promise<boolean>
   // options.hostId targets a specific host's row + RPC target when the id exists on multiple hosts; else the group's own host owns the call.
   updateProjectGroup: (

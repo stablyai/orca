@@ -1,4 +1,4 @@
-import type { TabActivationIntent } from '../../../../src/shared/tab-activation-intent'
+import type { TabActivationIntent } from '../../../../src/shared/workspace-layout/tab-groups/tab-activation-intent'
 import '../../transport/connection/stable-logical-rpc-client'
 import { LogicalClientCutoverError } from '../../transport/connection/logical-client-cutover-error'
 import { sessionTabActivate } from './mobile-session-tab-write-operations'

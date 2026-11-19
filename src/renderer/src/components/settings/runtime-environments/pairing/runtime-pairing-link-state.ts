@@ -1,4 +1,4 @@
-import type { RuntimePairingReach } from '../../../../../../shared/runtime-pairing-reach'
+import type { RuntimePairingReach } from '../../../../../../shared/remote-runtime/pairing/runtime-pairing-reach'
 
 export const RUNTIME_PAIRING_LOOPBACK_ADDRESS = '127.0.0.1'
 

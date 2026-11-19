@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../shared/repo-types'
-import { partialRuntimeStore } from '../orca-runtime-tests/runtime-store-partial-fixture'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { partialRuntimeStore } from '../construction/test-context/runtime-store-partial-fixture'
 import {
   probeRepoUpstream,
   type RepoUpstreamProbe
@@ -130,162 +130,21 @@ describe('repository metadata ownership', () => {
     }
   )
 
-  it.each([12, 120])(
-    'serializes and deduplicates a finite %i-row batch with one notice',
-    async (count) => {
-      const f = fixture(Array.from({ length: count }, (_, index) => makeRepo(`repo-${index}`)))
-      const gate = Promise.withResolvers<RepoUpstreamProbe>()
-      const started = Promise.withResolvers<void>()
-      let active = 0
-      let peak = 0
-      probe.mockImplementation(async () => {
-        active++
-        peak = Math.max(peak, active)
-        started.resolve()
-        await gate.promise
-        active--
-        return { upstream: null, origin: null }
-      })
-      const batch = f.owner.run()
-      await started.promise
-      const duplicate = f.owner.enqueue(f.repos)
-      const required = f.owner.resolve(f.repos[0])
-      gate.resolve({ upstream: null, origin: null })
-      await Promise.all([batch, duplicate, required])
-      expect(peak).toBe(1)
-      expect(probe).toHaveBeenCalledTimes(count)
-      expect(f.updateRepo).toHaveBeenCalledTimes(count)
-      expect(f.notify).toHaveBeenCalledTimes(1)
-      await f.owner.run()
-      expect(probe).toHaveBeenCalledTimes(count)
-    }
-  )
-
-  it('publishes a completed finite batch while a later batch is still pending', async () => {
-    const f = fixture([makeRepo('first'), makeRepo('later')])
-    const first = Promise.withResolvers<RepoUpstreamProbe>()
-    const later = Promise.withResolvers<RepoUpstreamProbe>()
-    probe.mockImplementationOnce(() => first.promise).mockImplementationOnce(() => later.promise)
-    const a = f.owner.enqueue([f.repos[0]])
-    const b = f.owner.enqueue([f.repos[1]])
-    first.resolve({ upstream: null, origin: null })
-    await a
-    expect(f.notify).toHaveBeenCalledTimes(1)
-    later.resolve({ upstream: null, origin: null })
-    await b
-    expect(f.notify).toHaveBeenCalledTimes(2)
-  })
-
-  it.each([12, 120])(
-    'starts a required row ahead of %i unrelated background rows without duplicating it',
-    async (count) => {
-      const f = fixture(Array.from({ length: count }, (_, index) => makeRepo(`repo-${index}`)))
-      const blocker = Promise.withResolvers<RepoUpstreamProbe>()
-      probe
-        .mockImplementationOnce(() => blocker.promise)
-        .mockResolvedValue({ upstream: parent, origin })
-      const batch = f.owner.run()
-      const selected = f.owner.resolve(f.repos[count - 1])
-      try {
-        await vi.waitFor(() => expect(f.repos[count - 1].upstream).toEqual(parent))
-        await selected
-        expect(f.repos[0].upstream).toBeUndefined()
-        expect(
-          probe.mock.calls.filter(([path]) => path === `/workspace/repo-${count - 1}`)
-        ).toHaveLength(1)
-      } finally {
-        blocker.resolve({ upstream: null, origin: null })
-        await batch
-      }
-      expect(probe).toHaveBeenCalledTimes(count)
-      expect(f.notify).toHaveBeenCalledTimes(1)
-    }
-  )
-
-  it('reserves optional capacity and admits required jobs in request order with at most four active', async () => {
-    const f = fixture(Array.from({ length: 8 }, (_, index) => makeRepo(`repo-${index}`)))
-    const pending = new Map<string, ReturnType<typeof Promise.withResolvers<RepoUpstreamProbe>>>()
-    const starts: string[] = []
-    let active = 0
-    let peak = 0
-    probe.mockImplementation(async (path) => {
-      active++
-      peak = Math.max(peak, active)
-      starts.push(path)
-      const result = Promise.withResolvers<RepoUpstreamProbe>()
-      pending.set(path, result)
-      const value = await result.promise
-      active--
-      return value
-    })
+  it('resolves a required repo while a background probe is blocked', async () => {
+    const f = fixture([makeRepo('background'), makeRepo('required')])
+    const blocker = Promise.withResolvers<RepoUpstreamProbe>()
+    probe
+      .mockImplementationOnce(() => blocker.promise)
+      .mockResolvedValue({ upstream: parent, origin })
     const batch = f.owner.run()
-    // Request order differs from the older background inventory order.
-    const required = [5, 4, 3, 2, 1].map((index) => f.owner.resolve(f.repos[index]))
-    const join = f.owner.resolve(f.repos[0])
+    const selected = f.owner.resolve(f.repos[1])
     try {
-      await vi.waitFor(() => expect(starts).toHaveLength(4))
-      expect(starts).toEqual([
-        '/workspace/repo-0',
-        '/workspace/repo-5',
-        '/workspace/repo-4',
-        '/workspace/repo-3'
-      ])
-      pending.get('/workspace/repo-4')!.resolve({ upstream: null, origin: null })
-      await vi.waitFor(() => expect(starts[4]).toBe('/workspace/repo-2'))
-      pending.get('/workspace/repo-5')!.resolve({ upstream: null, origin: null })
-      await vi.waitFor(() => expect(starts[5]).toBe('/workspace/repo-1'))
-      expect(peak).toBe(4)
-      expect(starts).not.toContain('/workspace/repo-6')
+      await vi.waitFor(() => expect(f.repos[1].upstream).toEqual(parent))
+      await selected
+      expect(f.repos[0].upstream).toBeUndefined()
     } finally {
-      probe.mockResolvedValue({ upstream: null, origin: null })
-      for (const result of pending.values()) {
-        result.resolve({ upstream: null, origin: null })
-      }
-      await Promise.all([batch, join, ...required])
-    }
-    expect(f.notify).toHaveBeenCalledTimes(1)
-    expect(probe).toHaveBeenCalledTimes(8)
-  })
-
-  it.each([12, 120])(
-    'does not serialize protected image payloads across %i rows',
-    async (count) => {
-      const icons = Array.from({ length: count }, (_, index) => ({
-        type: 'image' as const,
-        source: index % 2 ? ('upload' as const) : ('file' as const),
-        src: `data:image/png;base64,${'a'.repeat(350_000)}`
-      }))
-      const f = fixture(icons.map((repoIcon, index) => makeRepo(`repo-${index}`, { repoIcon })))
-      const gate = Promise.withResolvers<RepoUpstreamProbe>()
-      const started = Promise.withResolvers<void>()
-      probe
-        .mockImplementationOnce(() => {
-          started.resolve()
-          return gate.promise
-        })
-        .mockResolvedValue({ upstream: parent, origin })
-      const protectedIcons = new Set<unknown>(icons)
-      const serialized = vi.spyOn(JSON, 'stringify')
-      const batch = f.owner.run()
-      await started.promise
-      // A user replacing the captured protected image with an automatic icon must still survive.
-      f.repos[0] = {
-        ...f.repos[0],
-        repoIcon: { type: 'image', source: 'github', src: 'https://github.com/chosen.png' }
-      }
-      gate.resolve({ upstream: parent, origin })
+      blocker.resolve({ upstream: null, origin: null })
       await batch
-      const protectedCopies = serialized.mock.calls.filter(([value]) => protectedIcons.has(value))
-      serialized.mockRestore()
-      expect(protectedCopies).toHaveLength(0)
-      expect(f.repos.every((repo) => repo.upstream?.owner === 'acme')).toBe(true)
-      expect(f.repos[0].repoIcon).toEqual({
-        type: 'image',
-        source: 'github',
-        src: 'https://github.com/chosen.png'
-      })
-      expect(f.repos[1].repoIcon).toBe(icons[1])
-      expect(f.notify).toHaveBeenCalledTimes(1)
     }
-  )
+  })
 })

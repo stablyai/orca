@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../../../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../../../../shared/orca-profiles/constants'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
@@ -9,7 +9,7 @@ import '../../../../orchestration/db/dispatch-row-writer'
 import '../../../../orchestration/db/attempt-outcome-projection'
 import { ORCHESTRATION_METHODS } from '../orchestration'
 import { isStreamingMethod, eraseRpcMethods } from '../../../core'
-import { registerBoundPty } from '../../../../orca-runtime-tests/bind-first-pane.test-fixture'
+import { registerBoundPty } from '../../../../terminal/layout/bind-first-pane.test-fixture'
 
 // Host contact loss never proves worker exit; relay only confirmed stops as settled.
 
@@ -111,7 +111,7 @@ describe('federation host liveness verdicts', () => {
     const hostRuntime = new OrcaRuntimeService(realRuntimeStore() as never)
     hostRuntime.setOrchestrationDb(hostDb)
     hostRuntime.attachWindow(1)
-    hostRuntime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    await hostRuntime.syncWindowGraph(1, { tabs: [], leaves: [] })
     registerBoundPty(hostRuntime, REAL_PTY_ID, REAL_WORKTREE_ID, connectionId, {
       tabId: 'tab_federation_liveness',
       leafId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',

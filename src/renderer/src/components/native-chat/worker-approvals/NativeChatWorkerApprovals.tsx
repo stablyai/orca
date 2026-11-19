@@ -6,13 +6,11 @@ import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { openOrchestrationCrewAgent } from '@/lib/agent-session/open/open-agent-message-sender'
 import { NativeChatApprovalCard } from '../prompts/NativeChatApprovalCard'
-import { NativeChatResolutionReceipt } from '../prompts/NativeChatResolutionReceipt'
+import { NativeChatApprovalRecord } from '../prompts/NativeChatApprovalRecord'
 import {
   isWorkerApprovalDecision,
   workerApprovalCard,
-  workerApprovalReceiptBody,
-  workerApprovalReceiptReason,
-  workerApprovalReceiptText,
+  workerApprovalRecordLine,
   workerApprovalTimeLeft
 } from './worker-approval-card-model'
 import {
@@ -20,12 +18,12 @@ import {
   useNativeChatWorkerApprovalReceipts,
   type NativeChatWorkerApproval
 } from './native-chat-worker-approval-feed'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { NativeChatTimedRow } from '../conversation/slots/native-chat-timed-rows'
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId
-} from '../../../../../shared/orca-session-address'
+} from '../../../../../shared/agent-session/identity/orca-session-address'
 import type { WorkerApprovalDecision } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 
 // The person's own Deny: the worker gets this, word for word where its agent takes a message.
@@ -33,31 +31,26 @@ const OWNER_DENY_REASON = 'Denied by the owner.'
 
 /** A worker's answered or lapsed prompt, in the transcript where the worker first asked. */
 export function NativeChatWorkerApprovalReceipt({
-  entry
+  entry,
+  target
 }: {
   entry: NativeChatWorkerApproval
+  target: RuntimeClientTarget
 }): React.JSX.Element {
   const t = useTranslate()
   const { approval } = entry
   return (
-    <div
-      className="px-3 pb-2 sm:px-4"
-      data-native-chat-worker-approval-receipt={approval.approvalId}
-    >
-      <NativeChatResolutionReceipt
-        body={workerApprovalReceiptBody(approval, entry.at, t)}
-        outcome={{
-          worker: entry.worker.label,
-          text: workerApprovalReceiptText(approval, t),
-          ...workerApprovalReceiptReason(approval, t)
-        }}
+    <div data-native-chat-worker-approval-receipt={approval.approvalId}>
+      <NativeChatApprovalRecord
+        line={workerApprovalRecordLine(approval, entry.worker.label, entry.at, t)}
+        onOpenWorker={() => void openOrchestrationCrewAgent(entry.worker, target)}
       />
     </div>
   )
 }
 
-/** Workers' prompts pinned above the composer, oldest first: open ones as cards, and ones just
- *  closed as their receipt. A card here never takes focus or cancels the chat's turn. */
+/** Workers' prompts pinned above the composer, oldest first: open ones as cards, and ones only the
+ *  worker's terminal can answer as their receipt. A card here never takes focus or cancels the chat's turn. */
 export function NativeChatWorkerApprovalStack({
   approvals,
   target,
@@ -133,13 +126,16 @@ export function NativeChatWorkerApprovalStack({
       {approvals.map((entry) => {
         const { approval } = entry
         if (approval.state !== 'open') {
-          // Settling, or only the worker's terminal can answer it: the outcome stays where the card was.
+          // Only the worker's terminal can answer it: the outcome stays where the card was.
           return (
+            // Laid out as the transcript column is, so the line sits where it lands once it moves there.
             <div
               key={approval.approvalId}
-              className="mx-auto w-full max-w-(--chat-content-max-width) pt-2"
+              className="scrollbar-sleek overflow-hidden px-3 pt-2 pb-1 [scrollbar-gutter:stable_both-edges] sm:px-4"
             >
-              <NativeChatWorkerApprovalReceipt entry={entry} />
+              <div className="mx-auto w-full max-w-(--chat-content-max-width) px-[5px]">
+                <NativeChatWorkerApprovalReceipt entry={entry} target={target} />
+              </div>
             </div>
           )
         }
@@ -220,9 +216,11 @@ export function nativeChatWorkerApprovalParty(pane: {
  *  asked. Holds them itself, so only the transcript redraws, and only when a receipt changes. */
 export function NativeChatWorkerApprovalTimeline({
   party,
+  target,
   children
 }: {
   party: string | null
+  target: RuntimeClientTarget
   children: (timedRows: readonly NativeChatTimedRow[]) => React.ReactNode
 }): React.ReactNode {
   const receipts = useNativeChatWorkerApprovalReceipts(party)
@@ -231,9 +229,9 @@ export function NativeChatWorkerApprovalTimeline({
       receipts.map((entry) => ({
         key: `worker-approval:${entry.approval.approvalId}`,
         at: Date.parse(entry.askedAt ?? entry.at),
-        node: <NativeChatWorkerApprovalReceipt entry={entry} />
+        node: <NativeChatWorkerApprovalReceipt entry={entry} target={target} />
       })),
-    [receipts]
+    [receipts, target]
   )
   return children(timedRows)
 }

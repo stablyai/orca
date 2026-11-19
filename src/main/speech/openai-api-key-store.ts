@@ -1,9 +1,10 @@
-import { getSecretStore } from '../../shared/secret-store'
+import { getSecretStore } from '../../shared/secure-storage/secret-store'
 import { readCredentialFileProtection } from '../credentials/credential-file-protection'
 import {
   classifyUnenvelopedCredential,
+  encryptedCredentialProtection,
   type SecretAtRestProtection
-} from '../../shared/secret-at-rest-protection'
+} from '../../shared/secure-storage/secret-at-rest-protection'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -66,9 +67,9 @@ export function canReadOpenAiSpeechApiKey(): boolean {
 
 /** Stored protection, or null when no key exists. */
 export function getOpenAiSpeechApiKeyProtection(): SecretAtRestProtection | null {
-  // The legacy JSON wrapper only ever held base64 ciphertext, so it is sealed by shape.
-  if (readLegacyJsonStoredOpenAiKey()) {
-    return 'sealed'
+  const legacy = readLegacyJsonStoredOpenAiKey()
+  if (legacy) {
+    return encryptedCredentialProtection(Buffer.from(legacy.encryptedKeyBase64, 'base64'))
   }
   return readCredentialFileProtection(getOpenAiKeyPath())
 }

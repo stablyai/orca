@@ -1,9 +1,9 @@
-import { sha256 } from '../../../sha256'
+import { sha256 } from '../../../hashing/sha256'
 import type {
   StructuredAgentSessionFirstMessage,
   StructuredAgentSessionForkSource,
   StructuredAgentSessionResumeSource
-} from '../../structured-agent-session-create'
+} from './structured-agent-session-create'
 import type { StructuredAgentId } from '../provider-handles/agent-session-provider-handle'
 
 function canonicalize(value: unknown): string {

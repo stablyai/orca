@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
+import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { DeleteWorktreeLineageNotice } from './DeleteWorktreeLineageNotice'
 
@@ -29,8 +30,25 @@ function LineageNotice({ initialPreserve = false, canPreserve = true }) {
   return (
     <DeleteWorktreeLineageNotice
       descendants={[child]}
+      changeCheckStatesByWorktreeId={new Map([[child.id, 'complete']])}
       dirtyChangeCountsByWorktreeId={new Map([[child.id, 3]])}
       dirtyChangePreviewsByWorktreeId={new Map()}
+      atRiskLocalFilesByIdentity={
+        new Map([
+          [
+            getWorktreeHostIdentity(child),
+            {
+              status: 'complete',
+              files: {
+                count: 2,
+                samplePaths: ['.env.local', '.tmp/'],
+                paths: ['.env.local', '.tmp/'],
+                complete: true
+              }
+            }
+          ]
+        ])
+      }
       preserveChildren={preserve}
       canPreserveChildren={canPreserve}
       disabled={false}

@@ -185,6 +185,7 @@ const probeRoots = new Map([
   ['config/tsconfig.node.json', 'src/main'],
   ['config/tsconfig.tc.web.json', 'src/renderer/src'],
   ['config/tsconfig.tc.cli.json', 'src/cli'],
+  ['config/tsconfig.tc.bot-evals.json', 'src/cli/bot-orchestration-eval'],
   ['config/tsconfig.test.pane-launch.json', 'src/shared'],
   ['src/packages/process-host/tsconfig.test.json', 'src/packages/process-host/src']
 ])

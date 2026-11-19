@@ -6,12 +6,12 @@ import {
   latestAutomationSessionRun
 } from '../../../shared/automations/history/automation-session-reuse'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { deliverTerminalAgentLaunchPrompt } from '../../runtime/rpc/methods/agent-launch/agent-launch-terminal-prompt'
 import { AutomationRunLaunchError } from './automation-launch'
 import type { AutomationTerminalAgentLaunch } from './automation-terminal-launch'
-import type { AutomationRunTargetResult } from '../ownership/run-target-resolution'
+import type { AutomationRepoRunTarget } from '../ownership/run-target-resolution'
 
 export async function sendToReusableSession(
   runtime: OrcaRuntimeService,
@@ -20,7 +20,7 @@ export async function sendToReusableSession(
     run: Pick<AutomationRun, 'id' | 'trigger'>
     runs: readonly AutomationRun[]
     text: string
-    target: Extract<AutomationRunTargetResult, { ok: true }>
+    target: AutomationRepoRunTarget
   },
   workspaceDisplayName: string | null,
   physicalHostId: string

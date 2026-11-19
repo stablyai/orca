@@ -1,5 +1,5 @@
 import { readLocalRuntimeCapabilitiesOrUnknown } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
-import { EMULATOR_OPENING_PREFERENCES_CAPABILITY } from '../../../../../shared/emulator-runtime-capabilities'
+import { EMULATOR_OPENING_PREFERENCES_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/emulator-runtime-capabilities'
 import { supportsEmulatorOpeningPreferences } from './emulator-opening-preferences-capability'
 import { toast } from 'sonner'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
@@ -20,7 +20,7 @@ import {
   shutdownManagedSimulatorIfNoPane
 } from '../tabs/simulator-pane-shutdown-scheduler'
 import { assertClientCreationActionAvailable } from '../../workspace/creation/surface-policy/client-creation-action-policy'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import type { EmulatorStreamInfo } from '@/components/emulator-pane/session/emulator-pane-types'
 
 type OpenMobileEmulatorTabOptions = {

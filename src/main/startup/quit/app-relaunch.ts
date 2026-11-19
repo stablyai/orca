@@ -1,9 +1,9 @@
 import { app } from 'electron'
-import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting'
+import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting/crash-reporting'
 import { recordDurableCrashBreadcrumb } from '../../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { runWithLaunchPath } from '../shell-environment/hydrate-shell-path'
 import { getWindowsAdministratorRelaunchOptions } from '../../windows/windows-administrator-restart'
-import { BACKGROUND_OPEN_ARG } from '../../../shared/background-open-argv'
+import { BACKGROUND_OPEN_ARG } from '../../../shared/app-lifecycle/launch/background-open-argv'
 
 export type AppRelaunchReason =
   | 'admin-restart'

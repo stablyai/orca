@@ -7,7 +7,10 @@ import { loadHosts, peekHosts } from '../host-catalog/host-store'
 import { useForceReconnect, useHostClient } from '../transport/connection/host-client-hooks'
 import { useHostConnectionInputs } from '../transport/connection/client-context-connection-metrics'
 import { classifyConnection, isConnectionOutage } from '../transport/connection/connection-health'
-import { HostOfflineBanner, useHostOfflineBanner } from '../components/HostOfflineBanner'
+import {
+  HostOfflineBanner,
+  useHostOfflineBanner
+} from '../components/host-connection/HostOfflineBanner'
 import { useRefreshHint } from '../query/refresh-hint'
 import { MobileAccountsLoadState } from './MobileAccountsLoadState'
 import { colors, spacing } from '../theme/mobile-theme'
@@ -15,7 +18,7 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-accounts-screen-styles'
 import { useNow } from '../hooks/use-now'
-import { ClaudeIcon, OpenAIIcon } from '../components/AgentIcons'
+import { ClaudeIcon, OpenAIIcon } from '../components/icons/AgentIcons'
 import './usage/UsageBar'
 import {
   type ProviderKey,
@@ -24,21 +27,30 @@ import {
   getOtherUsageProviders,
   hasActiveProviderUsage
 } from './usage/usage-selectors'
-import { MobileAgentIcon } from '../components/MobileAgentIcon'
-import { getProviderDisplayName } from '../../../src/shared/usage-provider-windows'
+import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
+import { getProviderDisplayName } from '../../../src/shared/agent-usage/display/usage-provider-windows'
 import { ProviderUsageWindows } from './ProviderUsageWindows'
 import {
   getActiveCodexAccountIdForRateLimitTarget,
   getCodexResetCreditSummary
 } from './usage/codex-reset-credit'
 import { CodexResetCreditAction } from './usage/CodexResetCreditAction'
+import { UsageStatusNote } from './usage/UsageStatusNote'
 import { useCodexResetCreditAction } from './usage/use-codex-reset-credit-action'
-import { ConfirmModal } from '../components/ConfirmModal'
+import { ConfirmModal } from '../components/sheets/ConfirmModal'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { ListGroup, SectionHeader, ListRow } from '../components/list/ListGroup'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { useMobileAccountsSnapshot } from './use-mobile-accounts-snapshot'
+import {
+  getManagedAccountInlineLabel,
+  getManagedAccountPrimaryLabel
+} from '../../../src/shared/agent-accounts/managed-account-display-names'
+import {
+  getCodexAccountDisplayDetail,
+  getCodexAccountDisplayLabel
+} from '../../../src/shared/agent-accounts/codex-account-display-label'
 
 type AccountsNotice = { title: string; message: string }
 
@@ -218,10 +230,24 @@ export function MobileAccountsScreen() {
             const isFetching =
               (isActive && usage?.status === 'fetching') ||
               (!isActive && inactiveEntry?.isFetching === true)
+            const title = getManagedAccountPrimaryLabel(account)
+            // Codex logins can share an email across workspaces; desktop tells them apart the same way.
+            const detail =
+              provider === 'codex' ? getCodexAccountDisplayDetail(account, state.accounts) : null
             return (
               <ListRow
                 key={account.id}
-                title={account.email}
+                title={title}
+                subtitle={
+                  [title === account.email ? null : account.email, detail]
+                    .filter(Boolean)
+                    .join(' · ') || undefined
+                }
+                accessibilityLabel={
+                  provider === 'codex'
+                    ? getCodexAccountDisplayLabel(account, state.accounts)
+                    : getManagedAccountInlineLabel(account)
+                }
                 detail={
                   <>
                     <ProviderUsageWindows
@@ -230,11 +256,7 @@ export function MobileAccountsScreen() {
                       isFetching={isFetching}
                       showEmptyWindows
                     />
-                    {usage?.error ? (
-                      <Text style={styles.errorText} numberOfLines={1}>
-                        {usage.error}
-                      </Text>
-                    ) : null}
+                    {usage ? <UsageStatusNote limits={usage} /> : null}
                   </>
                 }
                 accessory={busyAccountId === account.id ? spinner : undefined}
@@ -280,11 +302,7 @@ export function MobileAccountsScreen() {
               detail={
                 <>
                   <ProviderUsageWindows limits={limits} now={now} />
-                  {limits.error ? (
-                    <Text style={styles.errorText} numberOfLines={1}>
-                      {limits.error}
-                    </Text>
-                  ) : null}
+                  <UsageStatusNote limits={limits} />
                 </>
               }
             />

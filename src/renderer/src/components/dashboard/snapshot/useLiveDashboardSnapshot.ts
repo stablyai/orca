@@ -1,9 +1,8 @@
-import { useMemo, useRef } from 'react'
+import { useMemo } from 'react'
 import { useAppStore } from '@/store/index'
 import { useStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
-import type { DashboardSnapshot } from '../../../../../shared/dashboard-snapshot'
+import type { DashboardSnapshot } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import { buildDashboardSnapshot } from './build-dashboard-snapshot'
-import { createWorktreeAgentRowsCache } from '../rows/worktree-agent-rows-cache'
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
@@ -12,14 +11,11 @@ import {
 
 /** Build in-window snapshots from the store; pop-out windows instead receive the bridge’s serialized version of the same builder. */
 export function useLiveDashboardSnapshot(): DashboardSnapshot {
-  const rowsCacheRef = useRef<ReturnType<typeof createWorktreeAgentRowsCache>>(undefined!)
-  rowsCacheRef.current ??= createWorktreeAgentRowsCache()
   const repos = useAppStore((s) => s.repos)
   const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
   const unifiedTabsByWorktree = useAppStore((s) => s.unifiedTabsByWorktree)
   const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
-  const retainedAgentsByPaneKey = useAppStore((s) => s.retainedAgentsByPaneKey)
   const migrationUnsupportedByPtyId = useAppStore((s) => s.migrationUnsupportedByPtyId)
   const runtimeAgentOrchestrationByPaneKey = useAppStore(
     (s) => s.runtimeAgentOrchestrationByPaneKey
@@ -68,7 +64,6 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
           tabsByWorktree,
           unifiedTabsByWorktree,
           agentStatusByPaneKey,
-          retainedAgentsByPaneKey,
           migrationUnsupportedByPtyId,
           runtimeAgentOrchestrationByPaneKey,
           terminalLayoutsByTabId,
@@ -94,9 +89,7 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
           // Read launch identity non-reactively because Shift+Enter routing does not depend on it; match the bridge gate.
           agentLaunchConfigByPaneKey: useAppStore.getState().agentLaunchConfigByPaneKey
         },
-        Date.now(),
-        // Reuse unchanged worktree rows while assembling cards fresh from current review/host/status slices.
-        { rowsCache: rowsCacheRef.current, rowsGeneration: agentStatusEpoch }
+        Date.now()
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
@@ -105,7 +98,6 @@ export function useLiveDashboardSnapshot(): DashboardSnapshot {
       tabsByWorktree,
       unifiedTabsByWorktree,
       agentStatusByPaneKey,
-      retainedAgentsByPaneKey,
       migrationUnsupportedByPtyId,
       runtimeAgentOrchestrationByPaneKey,
       terminalLayoutsByTabId,

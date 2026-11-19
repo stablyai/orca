@@ -3,15 +3,15 @@ import { captureMainTerminalPaneLookup, findMainTerminalPane } from './pty-pane-
 
 import type { MainTerminalSurfacesHost } from './main-terminal-surfaces-host'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { MainPaneBinding } from './main-pane-verdict'
 import type {
   RuntimeSyncWindowGraph,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../../shared/runtime-session-contracts'
-import { withMainSessionTabRows } from '../../session-tabs/main-session-tab-rows'
-import { withMainTabOrder } from '../../session-tabs/main-session-tab-order'
-import { headlessMobileSnapshotContentUnchanged } from '../../session-tabs/mobile-session-snapshot-equality'
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { withMainSessionTabRows } from '../../session-tabs/layout/main-session-tab-rows'
+import { withMainTabOrder } from '../../session-tabs/layout/main-session-tab-order'
+import { headlessMobileSnapshotContentUnchanged } from '../../session-tabs/publication/mobile-session-snapshot-equality'
 import {
   composeMainTerminalSurfaces,
   TerminalSurfaceIndex,

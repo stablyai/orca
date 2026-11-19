@@ -1,7 +1,7 @@
-import type { AgentDotState } from '@/components/AgentStateDot'
+import type { AgentDotState } from '@/components/agent/status/AgentStateDot'
 import { memo } from 'react'
 import { shallow } from 'zustand/shallow'
-import { isAntigravityReferenceSession } from '../../../../../../shared/antigravity-session-origin'
+import { isAntigravityReferenceSession } from '../../../../../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
 import type {
   AiVaultScope,
   AiVaultSession

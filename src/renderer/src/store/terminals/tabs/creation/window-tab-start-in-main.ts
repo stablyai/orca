@@ -1,11 +1,11 @@
-import { replaceRecordEntries } from '@/store/keyed-record-transitions'
+import { replaceRecordEntries } from '@/store/record-transitions/keyed-record-transitions'
 // Main starts window-drawn tabs under their IDs after recording them; panes wait (D1b-1). Inputs main cannot carry retain window spawn (L252).
 
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { collectLeafIds } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
-import { isSupportedWindowsShellOverride } from '../../../../../../shared/windows-terminal-shell'
+import { isSupportedWindowsShellOverride } from '../../../../../../shared/shell/launch/windows-terminal-shell'
 import type { AppState } from '../../../types'
 import type { TerminalPaneStart } from '../../terminal-state'
 import { getRemoteConnectionIdForWorktree, worktreeUsesWslPath } from './terminal-workspace-routing'

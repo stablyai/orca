@@ -5,8 +5,11 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync } from 'no
 import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { z } from 'zod'
-import { usesNodePtySpawnHelper } from '../../../shared/node-pty-spawn-helper'
-import { COMPAT_SERVER_TARGET_BASES, COMPAT_SERVER_TARGETS } from '../../../shared/node-runtime-pin'
+import { usesNodePtySpawnHelper } from './node-pty-spawn-helper'
+import {
+  COMPAT_SERVER_TARGET_BASES,
+  COMPAT_SERVER_TARGETS
+} from '../../../shared/node-runtime/node-runtime-pin'
 import {
   compareDottedVersions,
   hostNodeApiVersion,
@@ -193,6 +196,10 @@ export function installPrebuiltSlot(options: {
     usesNodePtySpawnHelper(options.abi.platform) && Object.hasOwn(entry.files, 'spawn-helper')
   if (spawnHelper) {
     chmodSync(join(releaseDir, 'spawn-helper'), 0o755)
+  }
+  // The chat-journal lock helper ships in the same slot; a copy drops its executable bit.
+  if (options.abi.platform !== 'win32' && Object.hasOwn(entry.files, 'journal-file-lock')) {
+    chmodSync(join(releaseDir, 'journal-file-lock'), 0o755)
   }
   return { installed: true, slot, spawnHelper }
 }

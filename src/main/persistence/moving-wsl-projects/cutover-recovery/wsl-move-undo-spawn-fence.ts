@@ -1,4 +1,4 @@
-import type { RuntimeRpcFailure } from '../../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcFailure } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 /**
  * While "Use on this computer again" stops a project's terminals on its WSL host, this window's

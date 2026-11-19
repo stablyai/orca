@@ -1,8 +1,8 @@
-import type { StructuredSessionOpenSource } from '../../../../src/shared/open-structured-agent-session'
+import type { StructuredSessionOpenSource } from '../../../../src/shared/agent-session/view/open-structured-agent-session'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BridgeInitRoute } from '../../mobile-web-shell/bridge/bridge-init-route'
+import type { BridgeInitRoute } from '../../mobile-web-shell/bridge/protocol/bridge-init-route'
 import type { MobileSessionTab } from './mobile-session-tabs'
 
 vi.mock('../../navigation/workspace-execution-host', () => ({
@@ -165,5 +165,19 @@ describe('the page pane hook', () => {
     render(true)
     expect(switched.map((tab) => tab.id)).toEqual(['second'])
     expect(pageUrl.params.paneKey).toBeUndefined()
+  })
+
+  it('keeps a later tab pick on a replay and accepts a fresh tap for the same pane', () => {
+    bridge.route = { pathname: '/h/host-1/session/wt-1', params: { paneKey: `tab-b:${LEAF}` } }
+    pageUrl.params = { paneKey: `tab-b:${LEAF}` }
+    const tree = render(true)
+    act(() => tree.update(createElement(Probe, { terminalsLoaded: true })))
+    switched.push(TABS[0]!)
+    deliver(`tab-b:${LEAF}`)
+    expect(switched.at(-1)?.id).toBe('first')
+    deliver('')
+    deliver(`tab-b:${LEAF}`)
+    expect(switched.at(-1)?.id).toBe('second')
+    act(() => tree.unmount())
   })
 })

@@ -4,7 +4,7 @@ import {
   stepCalmStatusReveal,
   type CalmStatusReveal,
   type CalmStatusSchedule
-} from '../../../src/shared/calm-status-reveal'
+} from '../../../src/shared/remote-runtime/connection-status/calm-status-reveal'
 
 // Quick revalidations never show, and a shown hint never flashes.
 const REFRESH_HINT_SCHEDULE: CalmStatusSchedule = {

@@ -1,12 +1,15 @@
-import type { DiffComment } from '../../../../../shared/diff-comment-types'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import { authorityKey, type HostAuthority } from '../../../../../shared/host-authority'
+import type { DiffComment } from '../../../../../shared/file-review/diff-comment-types'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import {
+  authorityKey,
+  type HostAuthority
+} from '../../../../../shared/execution-host/host-authority'
 import {
   findFolderWorkspaceOwner,
   getExecutionHostIdForFolderWorkspace,
   getRuntimeEnvironmentIdForFolderWorkspace
 } from '@/lib/workspace/ownership/folder-workspace-runtime-owner'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import {
   DIFF_COMMENT_OWNER_INPUTS,
   EMPTY_DIFF_COMMENTS,

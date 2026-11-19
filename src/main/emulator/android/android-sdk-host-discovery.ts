@@ -1,7 +1,7 @@
 import { homedir, platform } from 'node:os'
 import { existsSync } from 'node:fs'
 import { discoverAndroidSdk, type AndroidSdkPaths } from './android-sdk-discovery'
-import { resolveExecutableCommand } from '../../../shared/node-cli-command-resolution'
+import { resolveExecutableCommand } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 
 let configuredSdkPath: string | null = null
 

@@ -1,7 +1,7 @@
 import { useCallback, useImperativeHandle, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { hasAskAnswer } from '../../../../../../shared/native-chat/input/questions/native-chat-ask-answer'
-import { nativeChatScrollsToLatestOnSend } from '../../../../../../shared/native-chat/native-chat-appearance-settings'
+import { nativeChatScrollsToLatestOnSend } from '../../../../../../shared/native-chat/settings/native-chat-appearance-settings'
 import { nativeChatSlotCopyText } from './native-chat-message-copy-text'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
 import type { NativeChatInteractiveSend } from '../../session/terminal/send/use-native-chat-interactive-send'

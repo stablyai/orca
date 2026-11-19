@@ -41,7 +41,12 @@ function ask(guest: Electron.WebContents, coalesceKey?: string) {
     kind: 'external-app',
     requester: guest,
     target: targets.get(guest.id) ?? null,
-    details: () => ({ appName: 'Zoom', scheme: 'zoommtg', origin: 'https://zoom.us' }),
+    details: () => ({
+      appName: 'Zoom',
+      scheme: 'zoommtg',
+      origin: 'https://zoom.us',
+      rememberSite: null
+    }),
     coalesceKey,
     parseAnswer: (value) => (value === true ? true : undefined),
     settle
@@ -82,7 +87,12 @@ describe('browser page prompts', () => {
       {
         requestId: expect.any(String),
         kind: 'external-app',
-        details: { appName: 'Zoom', scheme: 'zoommtg', origin: 'https://zoom.us' }
+        details: {
+          appName: 'Zoom',
+          scheme: 'zoommtg',
+          origin: 'https://zoom.us',
+          rememberSite: null
+        }
       }
     ])
     const requestId = latestId(renderer)
@@ -150,7 +160,7 @@ describe('browser page prompts', () => {
     expect(declined.settle).toHaveBeenCalledWith(null)
 
     guest.emit('did-start-navigation', { isMainFrame: true, initiator: {} })
-    guest.emit('input-event', {}, { type: 'mouseMove' })
+    guest.emit('before-mouse-event', {}, { type: 'mouseMove' })
     expect(ask(guest).opening).toBe('refused')
     // A null initiator models toolbar navigation.
     guest.emit('did-start-navigation', { isMainFrame: true, initiator: null })
@@ -158,7 +168,8 @@ describe('browser page prompts', () => {
 
     vi.advanceTimersByTime(BROWSER_PAGE_PROMPT_TIMEOUT_MS)
     expect(ask(guest).opening).toBe('refused')
-    guest.emit('input-event', {}, { type: 'mouseDown' })
+    // Clicks in out-of-process frames reach only before-mouse-event.
+    guest.emit('before-mouse-event', {}, { type: 'mouseDown' })
     expect(ask(guest).opening).toBe('prompting')
 
     await respondToBrowserPagePrompt(renderer, { requestId: latestId(renderer), answer: true })

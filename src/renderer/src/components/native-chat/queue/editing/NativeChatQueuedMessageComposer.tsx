@@ -28,10 +28,16 @@ export function NativeChatQueuedMessageComposer({
   const t = useTranslate()
   const composer = useRef<NativeChatComposerHandle>(null)
   const row = useRef<HTMLDivElement>(null)
+  const awaitingFocus = useRef(true)
   useLayoutEffect(() => {
     if (editor.acquiring) {
+      awaitingFocus.current = true
       return
     }
+    if (!awaitingFocus.current) {
+      return
+    }
+    awaitingFocus.current = false
     composer.current?.focus()
   }, [editor.acquiring])
   useLayoutEffect(() => {

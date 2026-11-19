@@ -1,4 +1,4 @@
-import { parseExecutionHostId, type ExecutionHostId } from '../../execution-host'
+import { parseExecutionHostId, type ExecutionHostId } from '../../execution-host/execution-host'
 import type { TextActionPickerCatalog } from './agent-launch-picker-text-action'
 import { agentPickerLaunchChoices } from './agent-launch-picker-effective-choices'
 import { agentPickerPanelArguments } from './agent-launch-picker-arguments'
@@ -11,12 +11,11 @@ import {
   reconcileAgentChoiceArgs,
   reconcileAgentChoiceArgsDetailed
 } from '../choices/agent-choice-reconciliation'
-import type {
-  AgentSessionModelCatalogResult,
-  AgentSessionModelOption
-} from '../../agent-session/agent-session-wire'
+import type { AgentSessionModelCatalogResult } from '../../agent-session/agent-session-wire'
+import type { AgentSessionModelOption } from '../../agent-session/options/model-catalog/agent-session-model-option'
 import { orderAgentLaunchPickerAgents, type NewTabAgentMenuRow } from './agent-launch-picker-rows'
 import type { TuiAgent } from '../catalog/tui-agent'
+import type { AgentChatPermissionMode } from '../permissions/agent-chat-permission-mode'
 import type { CurrentActionSelection } from '../../source-control/ai/recipes/source-control-action-selection'
 
 export type AgentPickerSurface = 'chat' | 'terminal'
@@ -47,6 +46,9 @@ export type AgentPickerEntry = {
   worktreeId?: string
   defaultsPending?: boolean
   structuredDefaultsPending?: boolean
+  /** Chooses a setup to keep (a bot's), not a launch: these permissions in the card with
+   *  the inherited one as a choice, or none where the permission is set beside the picker. */
+  keptSetup?: { permissions?: readonly AgentChatPermissionMode[]; inheritLabel?: string }
 }
 export type AgentPickerDraft = {
   agent: TuiAgent

@@ -1,13 +1,16 @@
 import { automationTerminalLaunchInputs } from '../../../shared/automations/launch/automation-launch-setup'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import { automationRunFailure } from '../../../shared/automations/history/automation-run-failure-copy'
 // Automations observe PTYs, so launch terminal agents regardless of the chat default.
 
 import type { AgentLaunchSurfaceExecution } from '../../agent-launch/agent-launch-execution'
 import { openAgentLaunch } from '../../agent-launch/agent-launch-executor'
 import { tuiAgentDisplayName } from '../../../shared/agent-launch/catalog/tui-agent-display-names'
-import type { RuntimeTerminalCreate } from '../../../shared/runtime-terminal-create-contract'
+import type { RuntimeTerminalCreate } from '../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import type { Automation } from '../../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../../shared/automations/history/automation-run'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
@@ -16,7 +19,7 @@ import { sendToReusableSession } from './automation-terminal-session-reuse'
 export { runOwnHandle, type RunOwnHandleRuntime } from './automation-terminal-session-reuse'
 import { AutomationDispatchRefusedError } from '../dispatch/automation-launch-runner'
 import { buildAutomationWorktreeCreateArgs } from './automation-workspace-create'
-import type { AutomationRunTargetResult } from '../ownership/run-target-resolution'
+import type { AutomationRepoRunTarget } from '../ownership/run-target-resolution'
 
 const TERMINAL_ONLY_MESSAGE = 'An automation starts a terminal agent only.'
 
@@ -36,7 +39,7 @@ export async function launchAutomationTerminalAgent(
   request: {
     automation: Automation
     run: Pick<AutomationRun, 'id' | 'title' | 'scheduledFor' | 'trigger'>
-    target: Extract<AutomationRunTargetResult, { ok: true }>
+    target: AutomationRepoRunTarget
     runs: readonly AutomationRun[]
   }
 ): Promise<AutomationTerminalAgentLaunch> {
@@ -199,7 +202,7 @@ function runTargetOf(
 async function resolveLocalExistingWorkspace(
   runtime: OrcaRuntimeService,
   automation: Automation,
-  target: Extract<AutomationRunTargetResult, { ok: true }>
+  target: AutomationRepoRunTarget
 ) {
   const unavailable = new AutomationDispatchRefusedError(automationRunFailure('targetUnavailable'))
   const selected = await runtime

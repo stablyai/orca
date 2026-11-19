@@ -1,5 +1,5 @@
-import { BoundedMap } from '../../../shared/bounded-map'
-import { runsOrcaOrchestrationWait } from '../../../shared/orca-cli-invocations'
+import { BoundedMap } from '../../../shared/collections/bounded-map'
+import { runsOrcaOrchestrationWait } from '../../../shared/cli/orca-cli-invocations'
 import {
   claudeRecord,
   claudeToolUses,

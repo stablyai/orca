@@ -29,7 +29,7 @@ import {
 import { removeHostAndCloseClient } from '../../../src/host-catalog/host-removal-lifecycle'
 import { useHostDisplay } from '../../../src/host-descriptors/use-host-display'
 import { leaveHostRoute } from '../../../src/host-route-exit'
-import { ConfirmModal } from '../../../src/components/ConfirmModal'
+import { ConfirmModal } from '../../../src/components/sheets/ConfirmModal'
 import { ListGroup, ListRow } from '../../../src/components/list/ListGroup'
 import type { HostProfile } from '../../../src/host-catalog/host-profile'
 import { hostOs } from '../../../src/platform/host-os'

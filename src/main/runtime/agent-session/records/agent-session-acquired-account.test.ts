@@ -8,11 +8,9 @@ import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
 } from '../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
-import { createRestTestRig } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
-import {
-  openTestAgentSessionRecordStore,
-  seedTestAgentSessionRecordStore
-} from './agent-session-record-store-test-harness'
+import { createRestTestRig } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig.test-fixture'
+import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
+import { seedTestAgentSessionRecordStore } from './agent-session-record-store-persistence.test-fixture'
 import '../ownership/agent-session-lease-transitions'
 
 const RECEIVING_A = '/qa/claude-profiles/qa-a/home'
@@ -98,7 +96,9 @@ describe('actual acquired account receipt in the fenced record owner', () => {
         now: 40_003,
         accountAcquisition: { generation: 'new-generation', recipe }
       })
-      const reloaded = (await openTestAgentSessionRecordStore(f.rig.root)).getRecord(f.root)
+      const reloaded = (
+        await openTestAgentSessionRecordStore(f.rig.root, { mode: 'observe' })
+      ).getRecord(f.root)
       if (!reloaded) {
         throw new Error('durable proof missing')
       }

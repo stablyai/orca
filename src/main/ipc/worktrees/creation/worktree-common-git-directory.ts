@@ -1,10 +1,10 @@
 import { readFile, stat } from 'node:fs/promises'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   getRuntimePathBasename,
   normalizeRuntimePathSeparators,
   resolveRuntimePath
-} from '../../../../shared/cross-platform-path'
+} from '../../../../shared/file-access/cross-platform-path'
 
 function runtimeDirname(pathValue: string): string {
   const normalized = normalizeRuntimePathSeparators(pathValue).replace(/\/+$/, '')

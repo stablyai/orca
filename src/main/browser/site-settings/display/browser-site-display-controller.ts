@@ -7,15 +7,15 @@ import {
   browserSiteDisplayKey,
   type BrowserPageSiteDisplay,
   type BrowserSiteColorScheme
-} from '../../../../shared/browser-site-display'
+} from '../../../../shared/browser/site-settings/browser-site-display'
 import {
   DEFAULT_BROWSER_PAGE_ZOOM_LEVEL,
   nextBrowserPageZoomLevel,
   normalizeBrowserPageZoomLevel,
   type BrowserPageZoomDirection
-} from '../../../../shared/browser-page-zoom'
-import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
-import { errorMessage } from '../../../../shared/error-message'
+} from '../../../../shared/browser/site-settings/browser-page-zoom'
+import type { PersistedUIState } from '../../../../shared/orca-profiles/persisted-ui-state-types'
+import { errorMessage } from '../../../../shared/errors/error-message'
 
 type TrackedGuest = {
   guest: Electron.WebContents
@@ -116,10 +116,10 @@ export class BrowserSiteDisplayController {
   onGuestRetired(guestId: number): void {
     this.releaseColorScheme(guestId)
     const tracked = this.guests.get(guestId)
+    this.guests.delete(guestId)
     if (tracked && !tracked.guest.isDestroyed()) {
       tracked.stopWatchingDomReady()
     }
-    this.guests.delete(guestId)
   }
 
   // Apply the committed site's scheme before document scripts read prefers-color-scheme.
@@ -270,9 +270,14 @@ export class BrowserSiteDisplayController {
     tracked.colorScheme = null
     try {
       state.stopWatchingDetach()
-      state.lease.release()
     } catch {
       // The guest may already be destroyed.
+    } finally {
+      try {
+        state.lease.release()
+      } catch {
+        // The guest may already be destroyed.
+      }
     }
   }
 }

@@ -1,9 +1,10 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import React, { createContext, useContext, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
-import { hasAwakeStructuredChat } from '@/store/slices/agent-status/structured-chat-slept-at'
-import { AgentStateDot } from '@/components/AgentStateDot'
-import { StateIndicatorTooltip } from '@/components/StateIndicatorTooltip'
+import { hasAwakeStructuredChat } from '@/store/slices/agent-status/structured-sessions/structured-chat-slept-at'
+import { AgentStateDot } from '@/components/agent/status/AgentStateDot'
+import { StateIndicatorTooltip } from '@/components/agent/status/StateIndicatorTooltip'
 import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
 import '@/components/sidebar/workspace-card/activity/worktree-card-empty-inputs'
 import { FilledBellIcon } from '@/components/sidebar/workspace-card/identity/worktree-card-glyphs'
@@ -18,7 +19,7 @@ import {
 import { getLiveAgentStatusByWorktreeId } from '@/lib/workspace/activity/worktree-activity-state'
 import type { LiveAgentWorktreeStatus } from '../../../../shared/sidebar-list/feed-facts/workspace-activity-facts'
 import { getWorktreeStatus, getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
-import type { WorktreeStatus } from '../../../../shared/worktree-status-rollup'
+import type { WorktreeStatus } from '../../../../shared/worktree/row-display/worktree-status-rollup'
 import {
   resolveRecentWorkspaceTabStatus,
   type RecentWorkspaceTabRow
@@ -27,15 +28,15 @@ import {
   resolveTerminalTabAttentionBadge,
   terminalTabHasUnreadActivity,
   type TerminalTabAttentionBadge
-} from '@/components/tab-bar/terminal-tab-activity-status'
+} from '@/components/tab-bar/terminal-tabs/terminal-tab-activity-status'
 import { useTranslate } from '@/i18n/use-translate'
 
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
+import type { BrowserWorkspace } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { useNow } from '@/hooks/use-now'
+import { useNow } from '@/lib/window-activity/use-now'
 
 /** Confines the app's hottest status subscriptions here so only the dots re-render on their churn. */
 type PaletteLiveStatus = {
@@ -177,7 +178,7 @@ function buildLiveAgentStatusPaneIdsByTabId(
 }
 
 const EMPTY_LIVE_INPUTS = Object.freeze({
-  agentStatusByPaneKey: {},
+  agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
   runtimePaneTitlesByTabId: {},
   ptyIdsByTabId: {},
   terminalLayoutsByTabId: {},

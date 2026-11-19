@@ -6,18 +6,18 @@ import {
   _resetSecretStoreForTests,
   getSecretStore,
   setSecretStore
-} from '../../shared/secret-store'
+} from '../../shared/secure-storage/secret-store'
 import { createEncryptedAntigravityAccountStore } from './native-account-store'
 import { AntigravityAccountService } from './native-account-service'
 import type { AntigravityCredentialIdentity } from './native-credential-codec'
 import { credential, harness, refreshedWithoutIdToken } from './native-account-test-fixtures'
 import { createAntigravityWindowsCredentialBackend } from './native-windows-credentials'
 import { parseAntigravityWindowsSnapshot } from './native-windows-token-decode'
-import { createFakeWindowsSecurity } from '../../shared/windows-security-addon.test-fixture'
+import { createFakeWindowsSecurity } from '../../shared/secure-storage/windows-security-addon.test-fixture'
 import {
   resetWindowsSecurityLoadForTests,
   setWindowsSecurityForTests
-} from '../../shared/windows-security-addon'
+} from '../../shared/secure-storage/windows-security-addon'
 
 let dir: string
 beforeEach(() => {
@@ -263,7 +263,7 @@ describe('protected Antigravity account snapshots', () => {
     await service.selectAccount(id)
     h.setNative(refreshedWithoutIdToken(2))
     await service.prepareForLaunch()
-    const restarted = new AntigravityAccountService(store, h.backend)
+    const restarted = new AntigravityAccountService(store, h.backend, Date.now, h.lookupIdentity)
     h.setNative(refreshedWithoutIdToken(3))
     expect(await restarted.listAccounts()).toMatchObject({
       activeAccountId: id,
@@ -274,6 +274,32 @@ describe('protected Antigravity account snapshots', () => {
     expect(store.read().accounts[0].credentials).toBe(refreshedWithoutIdToken(3))
     h.setNative(refreshedWithoutIdToken(4, 'refresh-other-grant'))
     await expect(restarted.prepareForLaunch()).rejects.toThrow('native Antigravity account changed')
+    expect(h.backend.write).not.toHaveBeenCalled()
+  })
+
+  it('follows a rewritten login with a new grant when Google names the same account', async () => {
+    const h = harness()
+    const store = createEncryptedAntigravityAccountStore(join(dir, 'vault'))
+    const service = new AntigravityAccountService(store, h.backend, Date.now, h.lookupIdentity)
+    const id = (await service.addCurrentAccount()).activeAccountId!
+    await service.selectAccount(id)
+    h.lookupIdentity.mockResolvedValue({
+      issuer: 'https://accounts.google.com',
+      subject: 'a',
+      email: 'a@example.invalid'
+    })
+    h.setNative(refreshedWithoutIdToken(5, 'refresh-rotated'))
+    await service.prepareForLaunch()
+    expect(store.read().accounts[0].credentials).toBe(refreshedWithoutIdToken(5, 'refresh-rotated'))
+    await service.prepareForLaunch()
+    expect(h.lookupIdentity).toHaveBeenCalledTimes(1)
+    h.lookupIdentity.mockResolvedValue({
+      issuer: 'https://accounts.google.com',
+      subject: 'someone-else',
+      email: null
+    })
+    h.setNative(refreshedWithoutIdToken(6, 'refresh-other-grant'))
+    await expect(service.prepareForLaunch()).rejects.toThrow('native Antigravity account changed')
     expect(h.backend.write).not.toHaveBeenCalled()
   })
 

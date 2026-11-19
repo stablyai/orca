@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { projectSessionTabAgentStatus } from '../../rpc/methods/session-tabs/session-tab-agent-status-projection'
 
@@ -24,9 +25,13 @@ const PROVIDER_SESSION = {
   transcriptPath: '/transcripts/ac1f6b90.jsonl'
 }
 
-async function createRuntime(rows: AgentStatusIpcPayload[] = []): Promise<OrcaRuntimeService> {
+async function createRuntime(
+  rows: AgentStatusIpcPayload[] = [],
+  launchAgent: 'claude' | 'pi' = 'claude'
+): Promise<OrcaRuntimeService> {
   const runtime = new OrcaRuntimeService(null, undefined, {
-    getAgentStatusSnapshot: () => rows
+    getAgentStatusSnapshot: () => rows,
+    getPublicAgentStatusSnapshotForPane: (paneKey) => rows.filter((row) => row.paneKey === paneKey)
   })
   const internals = runtime as unknown as {
     resolveTerminalWorkspaceLaunchScope: (selector: string) => Promise<unknown>
@@ -47,16 +52,21 @@ async function createRuntime(rows: AgentStatusIpcPayload[] = []): Promise<OrcaRu
   await runtime.createTerminal(`id:${WORKTREE_ID}`, {
     tabId: TAB_ID,
     leafId: LEAF_ID,
-    launchAgent: 'claude',
+    launchAgent,
     title: 'Terminal'
   })
   return runtime
 }
 
 /** Publish the renderer's terminal/title/byte-derived status as a paired host mirrors it. */
-function publishRendererWorkingPane(runtime: OrcaRuntimeService, paneTitle: string): void {
+async function publishRendererWorkingPane(
+  runtime: OrcaRuntimeService,
+  paneTitle: string,
+  status?: AgentStatusEntry,
+  launchAgent: 'claude' | 'pi' = 'claude'
+): Promise<void> {
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, {
+  await runtime.syncWindowGraph(1, {
     tabs: [
       {
         tabId: TAB_ID,
@@ -91,8 +101,8 @@ function publishRendererWorkingPane(runtime: OrcaRuntimeService, paneTitle: stri
             parentTabId: TAB_ID,
             leafId: LEAF_ID,
             title: paneTitle,
-            launchAgent: 'claude',
-            agentStatus: {
+            launchAgent,
+            agentStatus: status ?? {
               state: 'working',
               prompt: 'Configurar y entender los comprobantes',
               updatedAt: T0,
@@ -128,7 +138,7 @@ describe('mobile session tabs: live-title evidence vs published agent status', (
       runtime.onPtyData(PTY_ID, '\x1b]0;C:\\WINDOWS\\system32\\cmd.exe\x07', T0 - 1_000)
 
       vi.setSystemTime(T0)
-      publishRendererWorkingPane(runtime, 'C:\\WINDOWS\\system32\\cmd.exe')
+      await publishRendererWorkingPane(runtime, 'C:\\WINDOWS\\system32\\cmd.exe')
 
       expect(await projectAgentStatus(runtime)).toEqual(
         expect.objectContaining({
@@ -152,6 +162,77 @@ describe('mobile session tabs: live-title evidence vs published agent status', (
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('mobile session tabs: a permission report after its hook', () => {
+  const approval = JSON.stringify({ approval: { tool: 'Bash', summary: 'ls' } })
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  async function blockAfterApprovalHook(blockedAt: number): Promise<OrcaRuntimeService> {
+    vi.setSystemTime(T0)
+    const rows: AgentStatusIpcPayload[] = []
+    const runtime = await createRuntime(rows)
+    runtime.onPtyData(PTY_ID, '\x1b]0;Claude Code\x07\x1b]7501;state=working\x1b\\', T0)
+    vi.setSystemTime(T0 + 1_000)
+    rows.push({
+      paneKey: PANE_KEY,
+      state: 'waiting',
+      prompt: 'list files',
+      agentType: 'claude',
+      connectionId: null,
+      receivedAt: T0 + 1_000,
+      stateStartedAt: T0 + 1_000,
+      tabId: TAB_ID,
+      worktreeId: WORKTREE_ID,
+      toolName: 'Bash',
+      toolInput: 'ls',
+      interactivePrompt: approval
+    })
+    vi.setSystemTime(blockedAt)
+    runtime.onPtyData(PTY_ID, '\x1b]7501;state=blocked:kind=permission\x1b\\', blockedAt)
+    return runtime
+  }
+
+  it('keeps the approval the PermissionRequest hook published', async () => {
+    const runtime = await blockAfterApprovalHook(T0 + 1_050)
+
+    expect(await projectAgentStatus(runtime)).toEqual(
+      expect.objectContaining({
+        state: 'waiting',
+        toolName: 'Bash',
+        interactivePrompt: approval,
+        stateStartedAt: T0 + 1_000
+      })
+    )
+  })
+
+  it('does not offer that approval for a later block with no hook of its own', async () => {
+    const runtime = await blockAfterApprovalHook(T0 + 1_050)
+    await projectAgentStatus(runtime)
+    vi.setSystemTime(T0 + 2_000)
+    runtime.onPtyData(PTY_ID, '\x1b]7501;state=working\x1b\\', T0 + 2_000)
+    vi.setSystemTime(T0 + 5_000)
+    runtime.onPtyData(PTY_ID, '\x1b]7501;state=blocked:kind=permission\x1b\\', T0 + 5_000)
+
+    const status = await projectAgentStatus(runtime)
+    expect(status).not.toHaveProperty('interactivePrompt')
+    expect(status).toEqual(expect.objectContaining({ stateStartedAt: T0 + 5_000 }))
+  })
+
+  it('does not offer a wait hook from long before a hookless block in the same working interval', async () => {
+    const runtime = await blockAfterApprovalHook(T0 + 30_000)
+
+    const status = await projectAgentStatus(runtime)
+    expect(status).not.toHaveProperty('interactivePrompt')
+    expect(status).toEqual(expect.objectContaining({ stateStartedAt: T0 + 30_000 }))
   })
 })
 
@@ -215,34 +296,135 @@ describe('mobile session tabs: a process started after its pane last reported', 
     vi.useRealTimers()
   })
 
-  it('publishes identity only, and legacy done to clients that cannot read it', async () => {
-    const completedBeforeRestart: AgentStatusIpcPayload = {
-      paneKey: PANE_KEY,
-      state: 'done',
-      prompt: 'ship it',
-      agentType: 'codex',
-      connectionId: null,
-      receivedAt: T0 - 120_000,
-      stateStartedAt: T0 - 120_000,
-      tabId: TAB_ID,
-      worktreeId: WORKTREE_ID,
-      providerSession: PROVIDER_SESSION
-    }
-    const runtime = await createRuntime([completedBeforeRestart])
-    runtime.noteTerminalSpawnCommit({ id: PTY_ID })
-    runtime.onPtyData(PTY_ID, '\x1b]0;zsh\x07', T0)
+  it.each(['headless', 'published'] as const)(
+    'publishes %s identity only after a new process starts',
+    async (route) => {
+      const completedBeforeRestart: AgentStatusIpcPayload = {
+        paneKey: PANE_KEY,
+        state: 'done',
+        prompt: 'ship it',
+        agentType: 'codex',
+        connectionId: null,
+        receivedAt: T0 - 120_000,
+        stateStartedAt: T0 - 120_000,
+        tabId: TAB_ID,
+        worktreeId: WORKTREE_ID,
+        providerSession: PROVIDER_SESSION
+      }
+      const rows = [completedBeforeRestart]
+      const runtime = await createRuntime(rows)
+      runtime.noteTerminalSpawnCommit({ id: PTY_ID })
+      vi.setSystemTime(T0 + 20)
+      runtime.onPtyData(PTY_ID, '\x1b]0;zsh\x07', T0 + 20)
+      if (route === 'published') {
+        await publishRendererWorkingPane(runtime, 'zsh', {
+          state: 'done',
+          prompt: '',
+          paneKey: PANE_KEY,
+          agentType: 'codex',
+          updatedAt: T0 - 120_000,
+          stateStartedAt: T0 - 120_000,
+          stateHistory: [],
+          paneSleep: { ptyId: PTY_ID }
+        })
+      }
 
-    const result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
-    const tab = result.tabs[0]
-    expect(tab?.type === 'terminal' ? tab.agentStatus : null).toEqual(
-      expect.objectContaining({ restoredUnconfirmed: true, providerSession: PROVIDER_SESSION })
-    )
-    const legacy = projectSessionTabAgentStatus(result, 'runtime', []).tabs[0]
-    expect(legacy?.type === 'terminal' ? legacy.agentStatus : null).toEqual(
-      expect.objectContaining({ state: 'done', providerSession: PROVIDER_SESSION })
-    )
-    expect(legacy?.type === 'terminal' ? legacy.agentStatus : null).not.toHaveProperty(
-      'restoredUnconfirmed'
-    )
+      const result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+      const tab = result.tabs[0]
+      expect(tab?.type === 'terminal' ? tab.agentStatus : null).toEqual(
+        expect.objectContaining({ restoredUnconfirmed: true, providerSession: PROVIDER_SESSION })
+      )
+      const legacy = projectSessionTabAgentStatus(result, 'runtime', []).tabs[0]
+      expect(legacy?.type === 'terminal' ? legacy.agentStatus : null).toEqual(
+        expect.objectContaining({ state: 'done', providerSession: PROVIDER_SESSION })
+      )
+      expect(legacy?.type === 'terminal' ? legacy.agentStatus : null).not.toHaveProperty(
+        'restoredUnconfirmed'
+      )
+      rows.length = 0
+      expect(await projectAgentStatus(runtime)).toBeUndefined()
+      vi.setSystemTime(T0 + 40)
+      runtime.onPtyData(PTY_ID, '\x1b]0;⠧ New turn\x07', T0 + 40)
+      const successor = await projectAgentStatus(runtime)
+      expect(successor?.state).toBe('working')
+      expect(successor).not.toHaveProperty('paneSleep')
+    }
+  )
+})
+
+// #39120: Pi ends its reply (OSC 7501 root done) while async pi-subagents children keep the row working.
+describe('mobile session tabs: a Pi turn held open by background subagents', () => {
+  const subagents = [
+    { id: 'child-a', state: 'working' as const, startedAt: T0 + 100, agentType: 'worker' },
+    { id: 'child-b', state: 'working' as const, startedAt: T0 + 200, agentType: 'worker' }
+  ]
+  const heldRow: AgentStatusIpcPayload = {
+    paneKey: PANE_KEY,
+    state: 'working',
+    prompt: 'start two background workers',
+    agentType: 'pi',
+    connectionId: null,
+    receivedAt: T0 + 1_000,
+    stateStartedAt: T0,
+    tabId: TAB_ID,
+    worktreeId: WORKTREE_ID,
+    lastAssistantMessage: 'Started the background workers.',
+    subagents
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(T0)
   })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it.each(['headless', 'published'] as const)(
+    'keeps the %s row working with its children after the lead reports done',
+    async (route) => {
+      const rows: AgentStatusIpcPayload[] = []
+      const runtime = await createRuntime(rows, 'pi')
+      // Bytes captured from Pi 1.5.2 with pi-subagents 0.89.0.
+      runtime.onPtyData(
+        PTY_ID,
+        '\x1b]0;\u280b \u03c0 - work\x07\x1b]7501;state=working:app=pi\x1b\\' +
+          '\x1b]7501;state=working:id=subagents/child-a:app=pi-subagents:title=d29ya2Vy\x1b\\' +
+          '\x1b]7501;state=working:id=subagents/child-b:app=pi-subagents:title=d29ya2Vy\x1b\\',
+        T0
+      )
+      vi.setSystemTime(T0 + 1_000)
+      rows.push(heldRow)
+      // The hook can land just before the lead's done reaches the PTY.
+      vi.setSystemTime(T0 + 1_001)
+      runtime.onPtyData(
+        PTY_ID,
+        '\x1b]0;\u03c0 - work\x07\x1b]7501;state=done:app=pi\x1b\\',
+        T0 + 1_001
+      )
+      if (route === 'published') {
+        await publishRendererWorkingPane(
+          runtime,
+          '\u03c0 - work',
+          {
+            state: 'working',
+            prompt: heldRow.prompt,
+            paneKey: PANE_KEY,
+            agentType: 'pi',
+            updatedAt: T0 + 1_000,
+            stateStartedAt: T0,
+            stateHistory: [],
+            subagents
+          },
+          'pi'
+        )
+      }
+
+      vi.setSystemTime(T0 + 60_000)
+      expect(await projectAgentStatus(runtime)).toEqual(
+        expect.objectContaining({ state: 'working', subagents })
+      )
+    }
+  )
 })

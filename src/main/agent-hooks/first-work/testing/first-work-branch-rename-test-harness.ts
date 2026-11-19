@@ -1,12 +1,11 @@
 import type { vi } from 'vitest'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
 import '../../../../shared/worktree/id'
 import { WORKTREE_ID_SEPARATOR } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
-import type {
-  FirstWorkBranchRenameDeps,
-  FirstWorkBranchRenameEvent
-} from '../first-work-branch-rename'
+import type { FirstWorkBranchRenameDeps } from '../first-work-branch-rename'
+import type { FirstWorkBranchRenameEvent } from '../first-work-branch-rename-event'
 
 export const REPO_ID = 'repo1'
 export const WORKTREE_ID = `${REPO_ID}${WORKTREE_ID_SEPARATOR}/repo/wt`
@@ -25,12 +24,15 @@ export function gitResponder(opts: {
   return async (args: string[]) => {
     if (args[0] === 'rev-parse' && args.some((arg) => arg.includes('@{u}'))) {
       if (opts.hasUpstream) {
-        return { stdout: 'origin/x\n', stderr: '' }
+        return { stdout: 'refs/remotes/origin/x\norigin/x\n', stderr: '' }
       }
       throw noUpstreamError
     }
-    if (args[0] === 'rev-parse') {
-      return { stdout: `${opts.currentBranch}\n`, stderr: '' }
+    if (
+      args[0] === 'symbolic-ref' ||
+      (args[0] === 'rev-parse' && args[1] === '--symbolic-full-name' && args[2] === 'HEAD')
+    ) {
+      return { stdout: `refs/heads/${opts.currentBranch}\n`, stderr: '' }
     }
     if (args[0] === 'show-ref') {
       const ref = args.at(-1) ?? ''
@@ -63,14 +65,18 @@ export function makeBranchRenameDeps(
   const setDisplayName = mockFn()
   const renameWorktreeFolder = mockFn(async () => false)
   const setRenameError = mockFn()
-  const settings = { autoRenameBranchFromWork: true } as unknown as GlobalSettings
-  const repo = { id: REPO_ID, path: '/repo', connectionId: undefined } as unknown as Repo
+  const settings: GlobalSettings = {
+    ...getDefaultSettings('/tmp/orca-first-work-test'),
+    autoRenameBranchFromWork: true
+  }
+  const repo: Repo = { id: REPO_ID, path: '/repo', displayName: 'repo', badgeColor: '', addedAt: 0 }
   return {
     onRenamed,
     setDisplayName,
     renameWorktreeFolder,
     setRenameError,
     deps: {
+      readIncarnation: (worktreeId) => worktreeId,
       getSettings: () => settings,
       getRepo: () => repo,
       getAgentEnvResolvers: () => undefined,

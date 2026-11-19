@@ -3,7 +3,7 @@ import { registerCoreHandlers } from '../../ipc/register-core-handlers/register-
 import { attachMainWindowServices } from '../../window/attach-main-window-services'
 import { initTccPromptNotice } from '../../macos-permissions/macos-tcc-prompt-notice'
 import { resolveUpdateInstallMode } from '../../updater/updater-service'
-import { desktopConnectorCloud } from '../cloud-startup/main-process-connector-startup'
+import { fenceMainProcessCloudOnQuit } from '../cloud-startup/main-process-connector-startup'
 import { mainProcessState as state } from '../main-process-state'
 import { prepareCodexAiVaultSessionResume } from '../../codex/history/resume/codex-ai-vault-session-resume'
 import { resolveHostCodexSessionSourceHome } from '../../codex/history/rollouts/codex-session-source-home'
@@ -21,16 +21,33 @@ import {
   prepareCodexSessionResumeForLaunch
 } from '../agent-accounts/codex-session-resume-launch'
 import { isRecoveryReloadInFlight } from './main-window-lifecycle-flags'
-import { RELAY_HOST_CLOSE_REASON } from '../../../shared/relay-host-close-reason'
-import { holdLaunchReconnectOptOuts } from '../../ipc/ssh/ssh-host-user-disconnect'
+
+let attachmentTail: Promise<void> = Promise.resolve()
 
 export function attachMainWindowCoreServices(
   window: BrowserWindow,
   deps: {
+    hostInitialization: Promise<void>
     markExpectedRendererReload: (webContentsId: number) => void
     recordRendererReload: (ignoreCache: boolean) => void
   }
-): void {
+): Promise<void> {
+  const attachment = attachmentTail.then(() => installMainWindowCoreServices(window, deps))
+  attachmentTail = attachment.catch(() => {})
+  return attachment
+}
+
+async function installMainWindowCoreServices(
+  window: BrowserWindow,
+  deps: {
+    hostInitialization: Promise<void>
+    markExpectedRendererReload: (webContentsId: number) => void
+    recordRendererReload: (ignoreCache: boolean) => void
+  }
+): Promise<void> {
+  if (window.isDestroyed() || state.mainWindow !== window || state.isQuitting) {
+    throw new Error('Main window closed while preparing services')
+  }
   const store = state.store
   const runtime = state.runtime
   const stats = state.stats
@@ -41,6 +58,7 @@ export function attachMainWindowCoreServices(
   const keybindings = state.keybindings
   const codexRuntimeHome = state.codexRuntimeHome
   const claudeRuntimeAuth = state.claudeRuntimeAuth
+  const orcaAccount = state.orcaAccount
   if (
     !store ||
     !runtime ||
@@ -51,13 +69,12 @@ export function attachMainWindowCoreServices(
     !automations ||
     !keybindings ||
     !codexRuntimeHome ||
-    !claudeRuntimeAuth
+    !claudeRuntimeAuth ||
+    !orcaAccount
   ) {
     throw new Error('Main window services must be initialized before attaching')
   }
-  // Server status probes start inside registerCoreHandlers; held hosts must be marked first.
-  holdLaunchReconnectOptOuts(store.getSshTargets())
-  registerCoreHandlers(
+  await registerCoreHandlers(
     store,
     runtime,
     stats,
@@ -75,6 +92,8 @@ export function attachMainWindowCoreServices(
     state.crashReports ?? undefined,
     keybindings,
     {
+      deferHostInitialization: true,
+      hostInitialization: deps.hostInitialization,
       getAdditionalAiVaultCodexHomePaths: () =>
         codexRuntimeHome.getHostCodexHomePathsForSessionDiscovery(),
       prepareAiVaultSessionResume: (args) =>
@@ -85,23 +104,10 @@ export function attachMainWindowCoreServices(
         }),
       onBeforeRelaunch: async () => {
         state.isQuitting = true
-        state.desktopRelayService?.fenceAndCloseNow()
-        desktopConnectorCloud()?.fence()
+        fenceMainProcessCloudOnQuit()
         await preserveAgentAuthBeforeRestart({ codexRuntimeHome, store })
       },
-      onOrcaProfileAuthMutation: () => {
-        // An auth change retries relay installation after launch-time failure.
-        void state.desktopRelayInstaller?.authChanged()
-        state.desktopRelayService?.authMutated()
-        desktopConnectorCloud()?.accountChanged()
-      },
-      // Only sign-out fences paired phones; reasonless quit/relaunch must not look like logout.
-      onBeforeOrcaProfileSignOut: () => {
-        state.desktopRelayInstaller?.suspend()
-        state.desktopRelayService?.fenceAndCloseNow(RELAY_HOST_CLOSE_REASON.SIGNED_OUT)
-        desktopConnectorCloud()?.signOutStarted()
-      },
-      onAfterOrcaProfileSignOut: () => desktopConnectorCloud()?.signOutFinished()
+      orcaAccount
     },
     state.pluginService ?? undefined,
     state.pluginMarketplaceService && state.pluginMarketplaceInstaller
@@ -118,8 +124,11 @@ export function attachMainWindowCoreServices(
         }
       : undefined
   )
+  if (window.isDestroyed() || state.mainWindow !== window || state.isQuitting) {
+    throw new Error('Main window closed while preparing services')
+  }
   automations.start()
-  attachMainWindowServices(
+  await attachMainWindowServices(
     window,
     store,
     runtime,
@@ -127,6 +136,8 @@ export function attachMainWindowCoreServices(
     (target) => claudeRuntimeAuth.prepareForClaudeLaunch(target),
     {
       prepareCodexSessionResume: prepareCodexSessionResumeForLaunch,
+      deferSshInitialization: true,
+      hostInitialization: deps.hostInitialization,
       awaitLocalPtyStartup: () => state.localPtyStartupReady,
       awaitLocalPtyProviderStartup: () => state.localPtyProviderStartupReady,
       onBeforeRendererReload: ({ ignoreCache, webContentsId }) => {
@@ -145,6 +156,9 @@ export function attachMainWindowCoreServices(
       onWorktreeLifecycle: emitPluginWorktreeLifecycle
     }
   )
+  if (window.isDestroyed() || state.mainWindow !== window || state.isQuitting) {
+    throw new Error('Main window closed while preparing services')
+  }
   // Attach durable diagnostic pulls now, defer process launch past first paint.
   initTccPromptNotice(window, { deferWatchUntilReadyToShow: true })
   rateLimits.attach(window)
