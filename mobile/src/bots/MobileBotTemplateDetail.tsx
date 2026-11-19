@@ -67,6 +67,7 @@ export function MobileBotTemplateDetail(props: {
             key={`skill:${skill}`}
             title={skill}
             subtitle={BOT_TEMPLATE_SKILL_LINES[skill]}
+            subtitleLines={0}
           />
         ))}
         {template.schedules.map((schedule) => (
@@ -75,6 +76,7 @@ export function MobileBotTemplateDetail(props: {
             title={schedule.when}
             wrapTitle
             subtitle={schedule.what}
+            subtitleLines={0}
             value={t('bots.templates.stateOff', 'Off')}
           />
         ))}
