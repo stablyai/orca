@@ -9,6 +9,10 @@ import { codexDatedRolloutRelativePath } from '../resume/codex-session-resume-ho
 import { holdCodexRolloutForDeletion } from '../rollouts/codex-rollout-deletion-guard'
 import { forgetCodexHistoryDiskUsage } from '../disk-usage/codex-history-disk-usage'
 import {
+  WslDistroStoppedError,
+  WslDistroUnverifiableError
+} from '../../../wsl/filesystem/wsl-unc-access-gate'
+import {
   isOutsideProtectedRoots,
   resolveProtectedRoots,
   type ProtectedRoot,
@@ -283,6 +287,10 @@ async function deleteRollout(
       protectedRoots
     ).catch(() => undefined)
   } catch (error) {
+    // The import folder's distro isn't running: the chat stays, as an open one does, for a later sweep.
+    if (error instanceof WslDistroStoppedError || error instanceof WslDistroUnverifiableError) {
+      return
+    }
     console.warn('[workspace-cleanup] Failed to delete Codex rollout:', target.filePath, error)
     result.failed += 1
   } finally {
