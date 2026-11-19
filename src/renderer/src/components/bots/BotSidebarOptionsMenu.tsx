@@ -54,7 +54,7 @@ export function BotSidebarOptionsMenu(): React.JSX.Element {
       tooltip={title}
       activeFilterCount={activeFilterCount}
     >
-      <DropdownMenuLabel variant="title">{title}</DropdownMenuLabel>
+      <DropdownMenuLabel>{title}</DropdownMenuLabel>
       <OptionChoiceSubmenu
         label={t('bots.options.sortBy', 'Sort by')}
         choices={choices}
