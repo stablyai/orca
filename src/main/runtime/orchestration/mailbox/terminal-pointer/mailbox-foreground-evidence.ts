@@ -1,8 +1,10 @@
 import type {
+  MailboxAgentProcess,
   MailboxForeground,
   MailboxForegroundInspection
 } from '../../../terminal/wait/launched-agent-foreground'
 import { PrioritySemaphore } from '../../../../../shared/concurrency/priority-semaphore'
+import { PROCESS_START_TIME_TOLERANCE_MS } from '../../../agent-session/ownership/agent-session-process-identity-probe'
 
 type ForegroundObservation = {
   processIncarnation: string
@@ -11,12 +13,15 @@ type ForegroundObservation = {
   screenRequired: boolean
   contradiction: number
   status?: string
+  /** The admitted agent's process; while held, only that process returning releases the hold. */
+  agentProcess?: MailboxAgentProcess
 }
 
 export type OrchestrationMailboxForegroundObservation = {
   observation: Readonly<Omit<ForegroundObservation, 'held' | 'screenRequired'>>
   generation: number
   contradiction: number
+  process?: MailboxAgentProcess
 }
 
 export type OrchestrationMailboxForegroundProbe = OrchestrationMailboxForegroundObservation & {
@@ -104,7 +109,19 @@ export class MailboxForegroundEvidence {
       observation.screenRequired = true
       observation.contradiction++
     } else if (foreground === 'agent' && admitted) {
+      const known = observation.agentProcess
+      // Why: a same-kind agent started in place of the suspended one is not the agent the held mail awaits.
+      if (
+        observation.held &&
+        known &&
+        proof.process &&
+        (known.pid !== proof.process.pid ||
+          Math.abs(known.startedAtMs - proof.process.startedAtMs) > PROCESS_START_TIME_TOLERANCE_MS)
+      ) {
+        return false
+      }
       observation.held = false
+      observation.agentProcess = proof.process ?? known
     }
     if (wasHeld && !observation.held) {
       this.onRecovery(ptyId)

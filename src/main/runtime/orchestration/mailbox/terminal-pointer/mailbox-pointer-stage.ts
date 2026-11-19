@@ -183,6 +183,7 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
       ? args.state.takeDeferredEnter(ptyId)
       : null
     if (!deferredEnter && !flight.deferredUntilIdle) {
+      // TODO(STA-16235): one PTY-host submission for the text and its Enter, holding other input.
       flight.enterTimer = setTimeout(() => {
         flight.enterTimer = null
         flight.submitEnter = null

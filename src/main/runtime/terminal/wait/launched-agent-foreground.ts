@@ -15,13 +15,20 @@ import {
 import type { RuntimePtyController } from '../lifecycle/runtime-pty-controller-contract'
 import { judgeTerminalForeground } from '../lifecycle/terminal-foreground-group'
 import { readTerminalProcessRows } from '../../../pty/process-retirement/terminal-process-rows'
+import { readProcessStartTimeMs } from '../../agent-session/ownership/agent-session-process-identity-probe'
 import { isTerminalForegroundObservation } from '../../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 
 /** agent permits writing; shell drops readiness; unknown proves neither. */
 export type LaunchedAgentForeground = 'agent' | 'shell' | 'unknown'
 export type MailboxForeground = LaunchedAgentForeground | 'non-shell'
-export type MailboxForegroundInspection = { foreground: MailboxForeground; agent?: TuiAgent }
+/** A local POSIX agent's process, so a returning agent can be told apart from a new one of its kind. */
+export type MailboxAgentProcess = { pid: number; startedAtMs: number }
+export type MailboxForegroundInspection = {
+  foreground: MailboxForeground
+  agent?: TuiAgent
+  process?: MailboxAgentProcess
+}
 
 export type LaunchedAgentHost = {
   remote: boolean
@@ -93,7 +100,7 @@ async function inspectLaunchedAgentForeground(
   agent?: TuiAgent,
   expectedIncarnationId?: string,
   mailboxEvidence = false,
-  onAgent?: (agent: TuiAgent) => void
+  onAgent?: (agent: TuiAgent, process?: MailboxAgentProcess) => void
 ): Promise<MailboxForeground> {
   if (!controller) {
     return 'unknown'
@@ -181,14 +188,17 @@ async function inspectLaunchedAgentForeground(
       const verdict = rows && rootPid ? judgeTerminalForeground(rows, rootPid, agent) : 'unknown'
       if (mailboxEvidence && verdict !== 'unknown') {
         const group = rows?.find((row) => row.pid === rootPid)?.tpgid
-        const candidates = rows
-          ?.filter((row) => row.pgid === group)
-          .map((row) => recognizeAgentProcessFromCommandLine(row.command)?.agent)
-        const found = candidates?.find(
-          (candidate) => isTuiAgent(candidate) && (!agent || candidate === agent)
-        )
-        if (isTuiAgent(found)) {
-          onAgent?.(agent ?? found)
+        const agentRow = rows?.find((row) => {
+          const candidate = recognizeAgentProcessFromCommandLine(row.command)?.agent
+          return row.pgid === group && isTuiAgent(candidate) && (!agent || candidate === agent)
+        })
+        const found = agentRow && recognizeAgentProcessFromCommandLine(agentRow.command)?.agent
+        if (agentRow && isTuiAgent(found)) {
+          const startedAtMs = await readProcessStartTimeMs(agentRow.pid)
+          onAgent?.(
+            agent ?? found,
+            startedAtMs === null ? undefined : { pid: agentRow.pid, startedAtMs }
+          )
           return 'agent'
         }
         return verdict === 'agent' ? 'non-shell' : verdict
@@ -288,8 +298,12 @@ export async function readMailboxForeground(
   ...args: ForegroundReadArgs
 ): Promise<MailboxForegroundInspection> {
   let agent: TuiAgent | undefined
-  const foreground = await inspectLaunchedAgentForeground(...args, true, (value) => {
+  let process: MailboxAgentProcess | undefined
+  const foreground = await inspectLaunchedAgentForeground(...args, true, (value, row) => {
     agent = value
+    process = row
   })
-  return { foreground, ...(foreground === 'agent' ? { agent: agent ?? args[3] } : {}) }
+  return foreground === 'agent'
+    ? { foreground, agent: agent ?? args[3], ...(process ? { process } : {}) }
+    : { foreground }
 }
