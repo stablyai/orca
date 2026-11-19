@@ -89,23 +89,37 @@ export function reassignSshTargetId(
     }
   }
   // Stale carrier IDs otherwise cause SSH target not found on later use.
-  let carrierChanged = migrateWorkspaceSessionSshTargetId(
+  // Publish replacements: rollback of an in-flight session write keeps the previous objects.
+  let carrierChanged = false
+  const localSession = migrateWorkspaceSessionSshTargetId(
     operations.state.workspaceSession,
     oldTargetId,
     newTargetId
   )
-  for (const session of Object.values(operations.state.workspaceSessionsByHostId ?? {})) {
-    if (session && migrateWorkspaceSessionSshTargetId(session, oldTargetId, newTargetId)) {
+  if (localSession) {
+    operations.state.workspaceSession = localSession
+    carrierChanged = true
+  }
+  let partitions = operations.state.workspaceSessionsByHostId
+  for (const [hostId, session] of Object.entries(partitions ?? {})) {
+    const migrated =
+      session && migrateWorkspaceSessionSshTargetId(session, oldTargetId, newTargetId)
+    if (migrated) {
+      partitions = { ...partitions, [hostId]: migrated }
       carrierChanged = true
     }
   }
   // Host-keyed partitions follow the new ID; existing destinations win.
-  const partitions = operations.state.workspaceSessionsByHostId
   const oldPartition = partitions?.[oldHostId]
   if (partitions && oldPartition) {
-    delete partitions[oldHostId]
-    partitions[newHostId] ??= oldPartition
+    const rekeyed = { ...partitions }
+    delete rekeyed[oldHostId]
+    rekeyed[newHostId] ??= oldPartition
+    partitions = rekeyed
     carrierChanged = true
+  }
+  if (partitions !== operations.state.workspaceSessionsByHostId) {
+    operations.state.workspaceSessionsByHostId = partitions
   }
   if (migrateUiHostScopeSshTargetId(operations.state.ui, oldTargetId, newTargetId)) {
     carrierChanged = true

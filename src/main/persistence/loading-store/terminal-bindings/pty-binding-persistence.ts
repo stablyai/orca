@@ -3,10 +3,8 @@ import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../../share
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { rollbackFailedPtyBinding } from './pty-binding-write-rollback'
-import {
-  rollbackWorkspaceSessionAfterFailedAsyncWrite,
-  snapshotWorkspaceSessionForRollback
-} from '../../restoring-sessions/workspace-session-write-rollback'
+import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../../restoring-sessions/workspace-session-write-rollback'
+import { freezePublishedWorkspaceSession } from '../../restoring-sessions/published-workspace-session-freeze'
 import { clearReplacedPaneBinding } from './replaced-pane-binding'
 
 import type { PtyBindingSourceExpectation } from '../store'
@@ -146,7 +144,6 @@ export class PtyBindingPersistenceOperations {
       // Publish directly: renderer snapshot repair would revive the retired binding.
       publish(retired)
       bumpPtyBindingGeneration(runtime, resolved, binding.leafId)
-      const staged = snapshotWorkspaceSessionForRollback(session, retired)
       return {
         value: true,
         writtenHostIds: [resolved],
@@ -154,7 +151,7 @@ export class PtyBindingPersistenceOperations {
           publish(
             rollbackWorkspaceSessionAfterFailedAsyncWrite(
               session,
-              staged,
+              retired,
               sessions.getWorkspaceSession(resolved)
             )
           )
@@ -283,12 +280,11 @@ function writePtyBinding(
     publishPtyBindingSession(runtime, resolvedHostId, session)
     throw error
   }
-  const staged = snapshotWorkspaceSessionForRollback(session, bound)
   return () => {
     const current = sessions.getWorkspaceSession(resolvedHostId)
     const rolledBack = rollbackFailedPtyBinding(
       session,
-      staged,
+      bound,
       current,
       bindingWorktreeId,
       args.tabId,
@@ -306,6 +302,7 @@ function publishPtyBindingSession(
   hostId: ReturnType<typeof resolveHostId>,
   session: WorkspaceSessionState
 ): void {
+  freezePublishedWorkspaceSession(session)
   if (hostId === LOCAL_EXECUTION_HOST_ID) {
     runtime.state.workspaceSession = session
   } else {

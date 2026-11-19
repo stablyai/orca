@@ -1,8 +1,6 @@
 import { persistFreshPaneBinding } from './fresh-pane-binding'
-import {
-  rollbackWorkspaceSessionAfterFailedAsyncWrite,
-  snapshotWorkspaceSessionForRollback
-} from '../../../persistence/restoring-sessions/workspace-session-write-rollback'
+import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../../../persistence/restoring-sessions/workspace-session-write-rollback'
+import { freezePublishedWorkspaceSession } from '../../../persistence/restoring-sessions/published-workspace-session-freeze'
 import { toSshExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { Store } from '../../../persistence/loading-store/store'
@@ -149,8 +147,9 @@ export async function retirePersistedStablePaneOwner(
       return { value: false, persist: false }
     }
     store.setWorkspaceSession(retired, hostId)
-    // The setter may normalize, so snapshot what it published.
-    const staged = snapshotWorkspaceSessionForRollback(session, store.getWorkspaceSession(hostId))
+    // The setter may normalize, so roll back from what it published.
+    const staged = store.getWorkspaceSession(hostId)
+    freezePublishedWorkspaceSession(staged)
     return {
       value: true,
       rollback: () => {
