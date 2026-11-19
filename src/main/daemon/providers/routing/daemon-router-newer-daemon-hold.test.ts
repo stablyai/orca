@@ -15,13 +15,11 @@ const SAVED = 'repo1::/tmp/feature@@d3a0a65b'
 const current = { hasRestorableHistory: () => false } as unknown as DaemonPtyAdapter
 
 function resolver(
-  resolution: DaemonSessionOwnerResolution<DaemonPtyAdapter>,
-  listed: boolean | null = false
+  resolution: DaemonSessionOwnerResolution<DaemonPtyAdapter>
 ): DaemonSessionOwnerResolver<DaemonPtyAdapter> {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hold reads only hasRoute, probe and resolve.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hold reads only hasRoute and resolve.
   return {
     hasRoute: () => false,
-    probe: async () => listed,
     resolve: async () => resolution
   } as unknown as DaemonSessionOwnerResolver<DaemonPtyAdapter>
 }
@@ -43,9 +41,5 @@ describe('a spawn while a newer daemon may still run saved sessions', () => {
     await expect(routeSpawnOrHold({ sessionId: SAVED }, undefined, current, owner)).resolves.toBe(
       current
     )
-    // Another daemon's failed inventory leaves ownership unknown, but this build's daemon lists the id.
-    await expect(
-      heldSpawnRefusal(() => resolver({ kind: 'unknown' }, true))({ sessionId: SAVED })
-    ).resolves.toBeUndefined()
   })
 })
