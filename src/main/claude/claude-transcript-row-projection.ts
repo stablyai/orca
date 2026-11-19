@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from 'node:util'
-import { isSettledCutJournalItem } from '../native-chat/agent-session-journal/journal-cut-output'
+import { isFinishedJournalOutputItem } from '../native-chat/agent-session-journal/journal-finished-item'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
@@ -49,10 +49,13 @@ export function createClaudeTranscriptRowProjection(input: {
       if (body.kind === 'message' && body.role === 'user') {
         return { accepted: true } as const
       }
+      // A provider-finished output is final; its source record is a lossy copy.
+      if (isFinishedJournalOutputItem(existing)) {
+        return { accepted: true } as const
+      }
       turnScope = scopeOf(existing)
       body = claudeRestoredItemBody(body, existing.body)
-      // A cut finished output is settled; only its bounded head was read.
-      if (isSettledCutJournalItem(existing) || isDeepStrictEqual(existing.body, body)) {
+      if (isDeepStrictEqual(existing.body, body)) {
         return { accepted: true } as const
       }
     }

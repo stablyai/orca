@@ -1,6 +1,6 @@
 import { projectCodexHistoryItem } from './codex-history-projection'
 import { isDeepStrictEqual } from 'node:util'
-import { isSettledCutJournalItem } from '../../../native-chat/agent-session-journal/journal-cut-output'
+import { isFinishedJournalOutputItem } from '../../../native-chat/agent-session-journal/journal-finished-item'
 import { CodexSubagentExecutions } from '../../structured/background-work/codex-subagent-executions'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -97,8 +97,8 @@ export function createCodexHistoryImportPlan(input: {
         journal.presentationRemoved(key) ||
         (saved &&
           ((body.kind === 'message' && body.role === 'user') ||
-            // A cut finished output is settled; only its bounded head was read.
-            isSettledCutJournalItem(saved) ||
+            // A provider-finished output is final; its source record is a lossy copy.
+            isFinishedJournalOutputItem(saved) ||
             isDeepStrictEqual(saved.body, body)))
       ) {
         return false
