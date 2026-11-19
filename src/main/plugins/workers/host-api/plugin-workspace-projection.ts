@@ -48,7 +48,13 @@ export type PluginAgentStatusRow = {
 
 export type PluginWorkspaceContext = z.output<typeof pluginWorkspaceContextSchema>
 
-type Context = { worktreeId: string; identityKey?: string; branch: string; displayName: string }
+type Context = {
+  worktreeId: string
+  identityKey?: string
+  activeSessionId?: string | null
+  branch: string
+  displayName: string
+}
 
 /** The session id a plugin may see: what `agent.resume` accepts, else none. */
 export function pluginAgentSessionId(
@@ -113,6 +119,7 @@ export function projectPluginWorkspaceContext(
   })
   return {
     ...(workspaceId ? { workspaceId } : {}),
+    ...(context.activeSessionId !== undefined ? { activeSessionId: context.activeSessionId } : {}),
     branch: shortPluginBranchName(context.branch).slice(0, PLUGIN_WORKSPACE_LABEL_MAX_LENGTH),
     displayName: context.displayName.slice(0, PLUGIN_WORKSPACE_LABEL_MAX_LENGTH),
     terminals: terminals

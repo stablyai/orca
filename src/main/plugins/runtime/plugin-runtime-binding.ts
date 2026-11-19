@@ -79,7 +79,16 @@ export function pluginRuntimeDelegate(
 ): PluginRuntimeDelegate {
   return {
     ...(callRuntime ? { callRuntime } : {}),
-    resolveActiveWorktreeContext: () => runtime.resolveActiveWorktreeContext(),
+    ...(runtime.onActiveSessionChanged
+      ? { onActiveSessionChanged: runtime.onActiveSessionChanged.bind(runtime) }
+      : {}),
+    resolveActiveWorktreeContext: async () => {
+      const context = await runtime.resolveActiveWorktreeContext()
+      const activeSessionId = context
+        ? runtime.readActiveSessionId?.(context.worktreeId)
+        : undefined
+      return context && activeSessionId !== undefined ? { ...context, activeSessionId } : context
+    },
     listTerminals: (...args) => runtime.listTerminals(...args),
     sendTerminal: (...args) => runtime.sendTerminal(...args),
     dispatchPluginNotification: (input) => runtime.dispatchPluginNotification(input),
@@ -213,17 +222,24 @@ export function watchPluginWorkspaceContext(input: {
   events: PluginEvents
   onSessionWritten: (listener: () => void) => () => void
   onStateWritten: (listener: (domains: readonly string[] | undefined) => void) => () => void
+  onSessionTabsChanged?: (listener: () => void) => () => void
   delayMs?: number
 }): () => void {
   let timer: ReturnType<typeof setTimeout> | null = null
   let last: string | null = null
+  let generation = 0
+  let disposed = false
   const check = async (): Promise<void> => {
     timer = null
+    const revision = generation
     if (!input.events.wantsEvent('workspace.changed')) {
       last = null
       return
     }
     const { change, worktreeId } = await readPluginWorkspaceChange(input.delegate)
+    if (disposed || revision !== generation) {
+      return
+    }
     const signature = JSON.stringify({ worktreeId, change })
     if (signature !== last) {
       last = signature
@@ -231,8 +247,10 @@ export function watchPluginWorkspaceContext(input: {
     }
   }
   const schedule = (): void => {
+    generation++
     timer ??= setTimeout(() => void check(), input.delayMs ?? WORKSPACE_CHANGE_DEBOUNCE_MS)
   }
+  const stopTabs = (input.onSessionTabsChanged ?? input.delegate.onActiveSessionChanged)?.(schedule)
   const stopSession = input.onSessionWritten(schedule)
   // A folder workspace rename reaches the context through the catalog, not the session.
   const stopCatalog = input.onStateWritten((domains) => {
@@ -241,7 +259,10 @@ export function watchPluginWorkspaceContext(input: {
     }
   })
   return () => {
+    disposed = true
+    generation++
     stopSession()
+    stopTabs?.()
     stopCatalog()
     if (timer) {
       clearTimeout(timer)
