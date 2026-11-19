@@ -22509,7 +22509,7 @@
         "signIn": "Sign in",
         "signsInClaudeAccount": "Signs in this Claude account",
         "runsCommand": "Runs {{command}} in a terminal",
-        "thenSlashCommand": "After Sign in, type {{slashCommand}} in the terminal."
+        "thenSlashCommand": "Sign in, then type {{slashCommand}}."
       }
     },
     "tab": {

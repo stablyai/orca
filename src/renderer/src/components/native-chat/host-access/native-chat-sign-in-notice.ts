@@ -16,8 +16,8 @@ export type NativeChatSignInButton = {
 export type NativeChatSignInNoticeView = {
   signedIn: boolean
   button: NativeChatSignInButton | null
-  /** A step Sign in can't do itself, said in the row so it never hides in a tooltip. */
-  followUp?: string
+  /** Replaces the sentence where Sign in needs a step it can't do itself, so the step never hides in a tooltip. */
+  steps?: string
 }
 
 export function nativeChatNotSignedInSentence(agentName: string, t: Translate = translate): string {
@@ -79,9 +79,10 @@ export function nativeChatSignInNoticeView(
     },
     ...(slashCommand
       ? {
-          followUp: t(
+          // The icon and button say it isn't signed in; one line must fit at the narrowest chat.
+          steps: t(
             'components.native-chat.signInNotice.thenSlashCommand',
-            'After Sign in, type {{slashCommand}} in the terminal.',
+            'Sign in, then type {{slashCommand}}.',
             { slashCommand }
           )
         }

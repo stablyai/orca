@@ -227,6 +227,12 @@ export const pi520 = defineFixture({ width: 520, render: () => <Scene agent="pi"
 export const omp520 = defineFixture({ width: 520, render: () => <Scene agent="omp" /> })
 export const pi300 = defineFixture({ width: 300, render: () => <Scene agent="pi" /> })
 export const omp300 = defineFixture({ width: 300, render: () => <Scene agent="omp" /> })
+export const pi360 = defineFixture({ width: 360, render: () => <Scene agent="pi" /> })
+export const omp360 = defineFixture({ width: 360, render: () => <Scene agent="omp" /> })
+export const omp300Text15 = defineFixture({
+  width: 300,
+  render: () => <Scene agent="omp" fontSize={15} />
+})
 export const pi300Text15 = defineFixture({
   width: 300,
   render: () => <Scene agent="pi" fontSize={15} />
