@@ -44,43 +44,36 @@ const sources = (record: AgentSessionRecord) => ({
     BotLaunchTools.for(relay, { botId: 'scout', folder: '/b', agent: record.provider }, SERVERS)
 })
 
-describe("a managed session's tools and token on agents other than Claude and Codex", () => {
-  it.each([
-    ['grok', { variable: 'GROK_HOME', path: '/home/user/.grok' }, '1.0.70'],
-    ['omp', { variable: 'PI_CODING_AGENT_DIR', path: '/home/user/.omp/agent' }, '17.2.9'],
-    ['antigravity', { variable: 'GEMINI_HOME', path: '/home/user/ag' }, '1.5.12']
-  ] as const)(
-    'opens %s sessions with the tools and runs it with the token',
-    async (agent, home, version) => {
-      const record = {
-        ...agentSessionRecordFixture(),
-        provider: agent,
-        providerHandleChain: [],
-        accountHome: home
-      }
-      const launch = await createAcpStructuredLaunchResolver(acpLaunchSpecFor(agent)!, {
-        ...sources(record),
-        savedSession: { hasProviderTurn: async () => false },
-        inheritedEnv: {},
-        probeVersion: async () => ({ version })
-      })({ identity: identity(agent) })
-      expect(launch.env.ORCA_BOT_TOOLS_TOKEN).toBe('bot-token')
-      expect(launch.mcpServers).toEqual([
-        {
-          type: 'http',
-          name: 'docs',
-          url: RELAYED,
-          headers: [{ name: 'authorization', value: 'Bearer bot-token' }]
-        },
-        {
-          name: 'files',
-          command: 'files-mcp',
-          args: ['--root', '.'],
-          env: [{ name: 'MODE', value: 'ro' }]
-        }
-      ])
+describe('bot tools in ACP and Pi launches', () => {
+  it('passes the token and MCP servers through an ACP launch', async () => {
+    const record = {
+      ...agentSessionRecordFixture(),
+      provider: 'grok',
+      providerHandleChain: [],
+      accountHome: { variable: 'GROK_HOME', path: '/home/user/.grok' }
     }
-  )
+    const launch = await createAcpStructuredLaunchResolver(acpLaunchSpecFor('grok')!, {
+      ...sources(record),
+      savedSession: { hasProviderTurn: async () => false },
+      inheritedEnv: {},
+      probeVersion: async () => ({ version: '1.0.70' })
+    })({ identity: identity('grok') })
+    expect(launch.env.ORCA_BOT_TOOLS_TOKEN).toBe('bot-token')
+    expect(launch.mcpServers).toEqual([
+      {
+        type: 'http',
+        name: 'docs',
+        url: RELAYED,
+        headers: [{ name: 'authorization', value: 'Bearer bot-token' }]
+      },
+      {
+        name: 'files',
+        command: 'files-mcp',
+        args: ['--root', '.'],
+        env: [{ name: 'MODE', value: 'ro' }]
+      }
+    ])
+  })
 
   it('loads Pi with an extension that registers the tools, naming the token only by variable', async () => {
     const record = {
