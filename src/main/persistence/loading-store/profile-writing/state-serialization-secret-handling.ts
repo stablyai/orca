@@ -23,6 +23,12 @@ import {
   type SecretSentinelSubstitution
 } from './secret-sentinel-substitution'
 import type { StoreRuntimeState } from '../store-runtime-state'
+import type { ProfileStateDomainPatch } from '../../profile-state/documents/profile-state-domain-patches'
+import {
+  WorkspaceSessionSaveBaseline,
+  type WorkspaceSessionSaveCandidate
+} from './workspace-session-save-baseline'
+import { isWorkspaceSessionDomain } from '../../workspace-session-domains'
 
 /** Domains whose saved form differs from state; whole saves keep this order after the durable spread. */
 const PROJECTED_SAVE_DOMAINS = [
@@ -66,6 +72,9 @@ type StateSerializationSecretHandlingOperationsRuntime = Pick<
 >
 
 export class StateSerializationSecretHandlingOperations {
+  /** What the writer last acknowledged of the session domains; only the async writer uses it. */
+  readonly sessionSaveBaseline = new WorkspaceSessionSaveBaseline()
+
   constructor(private readonly runtime: StateSerializationSecretHandlingOperationsRuntime) {}
 
   getDurableState(): Omit<PersistedState, 'githubCache'> {
@@ -73,10 +82,17 @@ export class StateSerializationSecretHandlingOperations {
     return durable
   }
 
-  /** Pending encryption requires full serialization so secret retention stays complete. */
-  buildStateDomainsToSave(domains: ReadonlySet<string>):
+  /** Pending encryption requires full serialization so secret retention stays complete. Session
+   *  domains the writer already holds travel as changed entries with 'patch'; with 'whole' they are
+   *  written whole but still recorded as the writer's new copy. */
+  buildStateDomainsToSave(
+    domains: ReadonlySet<string>,
+    sessionSaves?: 'patch' | 'whole'
+  ):
     | {
         replacements: ProfileStateDomainReplacement[]
+        patches: ProfileStateDomainPatch[]
+        sessionCandidates: WorkspaceSessionSaveCandidate[]
         protectedSecretUpdates: ProtectedSecretRetentionUpdate[]
       }
     | undefined {
@@ -94,11 +110,28 @@ export class StateSerializationSecretHandlingOperations {
     }
     const saved = withDependentSaveDomains(domains)
     const stateToSave: Record<string, unknown> = {}
+    const replaced = new Set<string>()
+    const patches: ProfileStateDomainPatch[] = []
+    const sessionCandidates: WorkspaceSessionSaveCandidate[] = []
     for (const domain of saved) {
-      stateToSave[domain] = this.projectDomainToSave(domain, encrypt)
+      const value = this.projectDomainToSave(domain, encrypt)
+      if (sessionSaves && isWorkspaceSessionDomain(domain)) {
+        const { patch, candidate } = this.sessionSaveBaseline.capture(domain, value)
+        sessionCandidates.push(candidate)
+        if (patch && sessionSaves === 'patch') {
+          if (patch.operations.length > 0) {
+            patches.push(patch)
+          }
+          continue
+        }
+      }
+      stateToSave[domain] = value
+      replaced.add(domain)
     }
     return {
-      replacements: serializeSelectiveProfileStateDomains(stateToSave, saved),
+      replacements: serializeSelectiveProfileStateDomains(stateToSave, replaced),
+      patches,
+      sessionCandidates,
       protectedSecretUpdates
     }
   }

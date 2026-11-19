@@ -1,5 +1,5 @@
 // A bot's Tidy-up as its host has it: the setting, the last run's summary, Tidy now and Undo.
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { BOT_VIEW_KINDS } from '../../../../shared/bots/bot-change-scope'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -38,6 +38,12 @@ export function useBotTidyUp(bot: BotRef): BotTidyUpControls {
   const { hostId, id: botId } = bot
   const [view, setView] = useState<BotTidyUpView | null>(null)
   const reads = useRef(0)
+  // The bot this hook shows now, so an Undo answered after a switch never lands on another bot.
+  const shown = useRef({ hostId, botId })
+  // Before paint, so no Undo answer handled after a switch still sees the old bot.
+  useLayoutEffect(() => {
+    shown.current = { hostId, botId }
+  }, [hostId, botId])
 
   const load = useCallback(async (): Promise<void> => {
     // Only the latest read lands, so an older one finishing late cannot overwrite it.
@@ -81,12 +87,19 @@ export function useBotTidyUp(bot: BotRef): BotTidyUpControls {
 
   const undo = useCallback(
     async (rowId: string): Promise<void> => {
+      const stillShown = (): boolean =>
+        shown.current.hostId === hostId && shown.current.botId === botId
       try {
         const { undone, tidyUp } = await callBotRpc<{ undone: boolean; tidyUp: BotTidyUpView }>(
           { hostId },
           'bots.tidyUp.undo',
           { botId, rowId }
         )
+        if (!stillShown()) {
+          return
+        }
+        // Newer than any read still out: none of them may replace it.
+        reads.current += 1
         setView(tidyUp)
         if (!undone) {
           toast.message(
@@ -97,6 +110,9 @@ export function useBotTidyUp(bot: BotRef): BotTidyUpControls {
           )
         }
       } catch (error) {
+        if (!stillShown()) {
+          return
+        }
         if (error instanceof Error && error.message.includes('tidy_up_stale')) {
           toast.message(
             translate(

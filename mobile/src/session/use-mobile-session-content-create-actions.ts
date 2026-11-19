@@ -102,7 +102,7 @@ export function useMobileSessionContentCreateActions(
     }
   }
 
-  async function handleCreateBrowser(rawUrl = 'about:blank'): Promise<boolean> {
+  async function handleCreateBrowser(rawUrl = 'about:blank', profileId?: string): Promise<boolean> {
     if (!client || creatingBrowser) {
       return false
     }
@@ -133,7 +133,8 @@ export function useMobileSessionContentCreateActions(
         {
           worktree: `id:${worktreeId}`,
           url,
-          activate: true
+          activate: true,
+          ...(profileId ? { profileId } : {})
         },
         { timeoutMs: 30_000 }
       )

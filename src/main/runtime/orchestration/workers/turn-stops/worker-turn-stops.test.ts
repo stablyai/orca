@@ -72,7 +72,7 @@ function terminal(
   overrides: Partial<
     Pick<
       ConstructorParameters<typeof TerminalWorkerTurnStops>[0],
-      'takeOpenApproval' | 'markApprovalReported' | 'setTimer'
+      'takeOpenApproval' | 'markApprovalReported' | 'setTimer' | 'readScreen'
     >
   > = {}
 ) {
@@ -87,15 +87,14 @@ function terminal(
     getProcessIncarnation: () => null,
     takeOpenApproval: async () => null,
     markApprovalReported: () => {},
-    ...overrides,
-    readScreen: async () => ({
-      handle: HANDLE,
-      status: 'running',
-      tail: ['■ Selected model is at capacity. Please try a different model.'],
-      truncated: false,
-      nextCursor: null
-    })
+    readScreen: async () =>
+      screen(['■ Selected model is at capacity. Please try a different model.']),
+    ...overrides
   })
+}
+
+function screen(tail: string[]) {
+  return { handle: HANDLE, status: 'running' as const, tail, truncated: false, nextCursor: null }
 }
 
 const settle = () => new Promise((resolve) => setImmediate(resolve))
@@ -239,6 +238,38 @@ describe('terminal worker turn stops', () => {
     expect(ctx.mail().map((m) => m.subject)).toEqual(
       Array(3).fill('Worker stopped without reporting')
     )
+  })
+  it("reports a background subagent's permission prompt with the dialog Claude paints after its hook", async () => {
+    const ctx = setup()
+    const current = { row: hookRow({ agentType: 'claude', state: 'working', stateStartedAt: 100 }) }
+    // The lead ended its turn waiting on the subagent; its screen before and after the dialog painted.
+    const idle = [
+      "⏺ Waiting for the reviewer's report.",
+      '✻ Waiting for 1 background agent to finish',
+      '❯',
+      '  ◯ general-purpose  Adversarial review of panel mock'
+    ]
+    const dialog = [
+      ' Bash command · from the general-purpose agent',
+      ' │ rm -f ./.rv-shot.mjs; node shot.mjs',
+      ' │ Dangerous rm operation not ruled out — the shell may read this command differently than it was parsed',
+      ' Do you want to proceed?',
+      ' ❯ 1. Yes',
+      '   2. No',
+      ' Esc to cancel · Tab to amend · ctrl+x ctrl+k twice to stop background agents'
+    ]
+    const screens = [idle, idle, dialog]
+    const stops = terminal(ctx, current, {
+      readScreen: async () => screen(screens.shift() ?? dialog)
+    })
+    current.row = hookRow({
+      agentType: 'claude',
+      state: 'waiting',
+      stateStartedAt: 300
+    })
+    stops.observe(moved('working', 'needs-you'))
+    await vi.waitFor(() => expect(ctx.mail()).toHaveLength(1))
+    expect(ctx.mail()[0].body).toContain('Do you want to proceed?')
   })
 })
 

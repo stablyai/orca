@@ -24,6 +24,10 @@ const rendererClaimedHiddenPtys = new Set<string>()
 // A visible report already sent this episode's 'unhide'; the pane's follow-up release must not resend it mid-restore.
 const visibleReportUnhideEpisodes = new Map<string, number>()
 
+// Hidden bytes never reach the renderer, so its agent-exit watch learns about output only from this throttled notice.
+const HIDDEN_OUTPUT_ACTIVITY_NOTICE_INTERVAL_MS = 5_000
+const lastHiddenOutputActivityNoticeAt = new Map<string, number>()
+
 let droppedHiddenDeliveryChars = 0
 let droppedHiddenDeliveryChunks = 0
 
@@ -47,6 +51,7 @@ export function unmarkHiddenRendererPty(id: string): {
   hiddenDropEpisode?: number
 } {
   hiddenRendererPtys.delete(id)
+  lastHiddenOutputActivityNoticeAt.delete(id)
   runtimeOwnedHiddenRendererPtys.delete(id)
   const latch = droppedSinceHiddenPtys.get(id)
   if (!latch) {
@@ -128,17 +133,44 @@ export function shouldDropHiddenRendererPtyData(
 /** Request a restore marker on the first drop after retirement or reveal. */
 export function recordHiddenRendererPtyDataDrop(
   id: string,
-  chars: number
-): { shouldEmitRestoreMarker: boolean; hiddenDropEpisode: number } {
+  chars: number,
+  printed = chars > 0
+): {
+  shouldEmitRestoreMarker: boolean
+  hiddenDropEpisode: number
+  shouldEmitActivityNotice: boolean
+} {
   droppedHiddenDeliveryChars += chars
   droppedHiddenDeliveryChunks += 1
+  const now = Date.now()
+  const lastNoticeAt = lastHiddenOutputActivityNoticeAt.get(id)
+  // Leading edge: the first output after a quiet spell is reported at once.
+  const shouldEmitActivityNotice =
+    printed &&
+    (lastNoticeAt === undefined || now - lastNoticeAt >= HIDDEN_OUTPUT_ACTIVITY_NOTICE_INTERVAL_MS)
+  if (shouldEmitActivityNotice) {
+    lastHiddenOutputActivityNoticeAt.set(id, now)
+  }
   const latch = droppedSinceHiddenPtys.get(id)
   if (latch?.state === 'unrevealed') {
-    return { shouldEmitRestoreMarker: false, hiddenDropEpisode: latch.episode }
+    return {
+      shouldEmitRestoreMarker: false,
+      hiddenDropEpisode: latch.episode,
+      shouldEmitActivityNotice
+    }
   }
   const episode = nextHiddenDropEpisode++
   droppedSinceHiddenPtys.set(id, { state: 'unrevealed', episode })
-  return { shouldEmitRestoreMarker: true, hiddenDropEpisode: episode }
+  return { shouldEmitRestoreMarker: true, hiddenDropEpisode: episode, shouldEmitActivityNotice }
+}
+
+/** Records a dropped pending entry; a byte-cap sentinel carries no data yet stands for output the PTY printed. */
+export function recordHiddenPendingPtyDataDrop(
+  id: string,
+  pending: { data: string; droppedOutput?: true }
+): ReturnType<typeof recordHiddenRendererPtyDataDrop> {
+  const chars = pending.data.length
+  return recordHiddenRendererPtyDataDrop(id, chars, chars > 0 || pending.droppedOutput === true)
 }
 
 export function hiddenRendererPtyDropEpisode(id: string): number | undefined {
@@ -148,6 +180,7 @@ export function hiddenRendererPtyDropEpisode(id: string): number | undefined {
 /** Reload clears renderer-owned marks/interest; runtime marks and unrestored drop episodes must survive. */
 export function resetRendererScopedHiddenPtyDeliveryState(): void {
   hiddenRendererPtys.clear()
+  lastHiddenOutputActivityNoticeAt.clear()
   deliveryInterestRendererPtys.clear()
   rendererClaimedHiddenPtys.clear()
   visibleReportUnhideEpisodes.clear()
@@ -158,6 +191,7 @@ export function resetRendererScopedHiddenPtyDeliveryState(): void {
 
 export function clearHiddenRendererPtyDeliveryState(id: string): void {
   hiddenRendererPtys.delete(id)
+  lastHiddenOutputActivityNoticeAt.delete(id)
   runtimeOwnedHiddenRendererPtys.delete(id)
   rendererClaimedHiddenPtys.delete(id)
   visibleReportUnhideEpisodes.delete(id)
