@@ -55,9 +55,9 @@ describe('browser profile site list in the request guard', () => {
   })
 
   it('re-checks the list after an extension decision that was still pending', async () => {
-    let listener: Listener | null = null
+    const installed: { listener: Listener | null } = { listener: null }
     const fakeSession = {
-      webRequest: { onBeforeRequest: (next: Listener) => (listener = next) }
+      webRequest: { onBeforeRequest: (next: Listener) => (installed.listener = next) }
     }
     if (!isSession(fakeSession)) {
       throw new Error('unreachable')
@@ -76,7 +76,7 @@ describe('browser profile site list in the request guard', () => {
     try {
       setBrowserProfileSiteList('profile-b', ['example.com'])
       const callback = vi.fn()
-      listener?.({ url: 'https://example.com/', resourceType: 'xhr' }, callback)
+      installed.listener?.({ url: 'https://example.com/', resourceType: 'xhr' }, callback)
       setBrowserProfileSiteList('profile-b', ['other.test'])
       settle({})
       await vi.waitFor(() => expect(callback).toHaveBeenCalled())
