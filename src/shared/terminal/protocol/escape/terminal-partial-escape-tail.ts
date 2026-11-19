@@ -18,8 +18,9 @@ const CAN = 0x18
 const SUB = 0x1a
 const BEL = 0x07
 
-// Bound unterminated OSC/DCS memory and snapshot size; beyond the cap, abandon carry and lose partial-sequence fidelity.
-export const MAX_PARTIAL_ESCAPE_TAIL_LENGTH = 4096
+// Carry the clipboard layer's 128 KiB Base64 limit plus a short OSC 52 header (#44623).
+// This bounds UTF-16 code units, not bytes; oversized selectors also count toward the cap.
+export const MAX_PARTIAL_ESCAPE_TAIL_LENGTH = 128 * 1024 + 16
 
 /** ESC-state transition shared by the fresh-ESC and abort-reprocess paths. */
 function stateAfterEscByte(code: number): ScanState {
@@ -232,12 +233,28 @@ export function skipOpenEscapeContinuation(
     : { rest: chunk.slice(length), stillOpen: '' }
 }
 
-/** Advance the incremental tail; abandon it past the cap. */
+/** Advance the incremental tail; oversized commands replay in an inert discard state. */
 export function advancePartialEscapeTail(pendingTail: string, chunk: string): string {
   // Only ESC leaves ground, so no tail + no ESC avoids concatenation and the full chunk walk.
   if (pendingTail.length === 0 && !chunk.includes('\x1b')) {
     return ''
   }
   const tail = extractPartialEscapeTail(pendingTail + chunk)
-  return tail.length > MAX_PARTIAL_ESCAPE_TAIL_LENGTH ? '' : tail
+  if (tail.length <= MAX_PARTIAL_ESCAPE_TAIL_LENGTH) {
+    return tail
+  }
+  // Bare boundary prefixes can reinterpret payload as an OSC command or CSI/DCS parameters.
+  const boundary = advanceTerminalEscapeBoundary('', tail)
+  switch (boundary) {
+    case '\x1b]':
+      return '\x1b]x;' // Invalid OSC identifier: consume without dispatching.
+    case '\x1b[':
+      return '\x1b[0<' // Private marker after a parameter enters CSI_IGNORE.
+    case '\x1bP':
+      return '\x1bP0<' // Likewise DCS_IGNORE, not DCS entry or passthrough.
+    case '\x1b ':
+      return '\x1b!!' // Unregistered ESC intermediate sequence, preserving its final-byte boundary.
+    default:
+      return boundary
+  }
 }

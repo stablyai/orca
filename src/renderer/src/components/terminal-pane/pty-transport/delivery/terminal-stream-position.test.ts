@@ -5,6 +5,7 @@ import {
   TerminalStreamPosition,
   type StreamDelivery
 } from './terminal-stream-position'
+import { MAX_PARTIAL_ESCAPE_TAIL_LENGTH } from '../../../../../../shared/terminal/protocol/escape/terminal-partial-escape-tail'
 
 const PTY = 'pty-1'
 
@@ -173,6 +174,45 @@ describe('streamDeliveryOf', () => {
     expect(cutTail({ data: '2B>4;2m', seq: 7, midEscape: 'unknown' })).toBeUndefined()
     // Cut-off bytes holding a C1 control are not scanned.
     expect(cutTail({ data: '\u009bab\x1b[>4;2m', seq: 10 })).toBeUndefined()
+  })
+
+  it('re-arms a long OSC 52 the cut leaves open, or its parser state past the cap', () => {
+    // A ~5.3 KB OSC 52 copy crossing the cut (#44623): the open sequence is re-armed whole.
+    const longOsc52 = `\x1b]52;c;${'A'.repeat(5300)}`
+    const longTail = streamDeliveryOf(
+      '6K6h4oCd',
+      { data: `${longOsc52}6K6h4oCd`, seq: longOsc52.length + 8 },
+      {
+        seqCountsChars: true
+      }
+    ).cutEscapeTail
+    expect(longTail).toBe(longOsc52)
+    // Only the full, untransformed suffix with a known cut state can re-arm the command.
+    const hugeOsc52 = `\x1b]52;c;${'B'.repeat(MAX_PARTIAL_ESCAPE_TAIL_LENGTH + 100)}`
+    const delivered = { data: `${hugeOsc52}6K6h`, seq: hugeOsc52.length + 4 }
+    const hugeTail = streamDeliveryOf('6K6h', delivered, { seqCountsChars: true }).cutEscapeTail
+    expect(hugeTail).toBe('\x1b]x;')
+    expect(
+      streamDeliveryOf('6K6h', { ...delivered, rawLength: 1 }, { seqCountsChars: true })
+        .cutEscapeTail
+    ).toBeUndefined()
+    expect(
+      streamDeliveryOf(
+        '6K6h',
+        { ...delivered, data: `\u009b${delivered.data}` },
+        { seqCountsChars: true }
+      ).cutEscapeTail
+    ).toBeUndefined()
+    expect(
+      streamDeliveryOf('not-a-suffix', delivered, { seqCountsChars: true }).cutEscapeTail
+    ).toBeUndefined()
+    expect(
+      streamDeliveryOf(
+        '6K6h',
+        { ...delivered, data: `${hugeOsc52}\x07${'B'.repeat(MAX_PARTIAL_ESCAPE_TAIL_LENGTH)}6K6h` },
+        { seqCountsChars: true }
+      ).cutEscapeTail
+    ).toBeUndefined()
   })
 
   it('never fabricates a position for a suffix of a transformed chunk', () => {
