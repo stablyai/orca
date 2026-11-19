@@ -34,9 +34,11 @@ export function writeTomlConfigAtomically(
     if (existsSync(writePath)) {
       writeRollingFileBackup(writePath, `${writePath}.bak`)
     }
-    assertGuardedFileCurrent(writePath)
     // Checked before every rename attempt, so only the re-read is left between check and rename.
-    const stillCurrent = options ? () => options.stillCurrent(writePath) : undefined
+    const stillCurrent = (): boolean => {
+      assertGuardedFileCurrent(writePath)
+      return options ? options.stillCurrent(writePath) : true
+    }
     if (!renameFileWithWindowsRetry(temporaryPath, writePath, stillCurrent)) {
       return false
     }

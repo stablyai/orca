@@ -9,6 +9,7 @@ import { getConfigPath } from '../definitions/codex-hook-definition'
 import type { CodexHookPassEffects } from './codex-hook-install-effects'
 import type { CodexLaunchConfigPreparation } from './codex-hook-launch-preparation'
 import type { CodexHookPassRequest } from './codex-hook-pass-worker'
+import { stripCodexManagedHookEffects } from './codex-hook-managed-strip'
 
 /**
  * Runs a hook pass's file effects on the Codex project trust worker. The caller holds the
@@ -25,6 +26,10 @@ export async function runCodexHookPassEffectsOffMain(
     result = await runCodexHookPassOnTrustWorker({ ...request, configMirror, observation })
   } catch (error) {
     adoptFileObservation({ matches: false, files: [] })
+    if (request.mode === 'strip') {
+      // Why: Off stays authoritative even with the worker down; removal is small and runs once.
+      return stripCodexManagedHookEffects(request.runtimeHomePath, request.codexHashes)
+    }
     if (configMirror) {
       // Why: Codex still needs its mirrored config; the hook pass itself is never rerun on main.
       configPreparation?.run()

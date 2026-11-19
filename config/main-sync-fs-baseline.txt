@@ -156,7 +156,6 @@
 2 src/main/codex/history/resume/codex-session-resume-home.ts
 1 src/main/codex/history/rollouts/codex-session-file-listing.ts
 2 src/main/codex/history/rollouts/codex-session-link.ts
-1 src/main/codex/hooks/installation/codex-hook-local-install.ts
 2 src/main/codex/hooks/installation/codex-hook-local-maintenance.ts
 1 src/main/codex/hooks/reconciliation/codex-hook-legacy-cleanup.ts
 2 src/main/codex/hooks/reconciliation/codex-hook-status.ts

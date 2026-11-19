@@ -2,9 +2,10 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { writeFileAtomically } from './atomic-file-publication'
-import { ConcurrentFileEditError, withConcurrentFileEditGuard } from './concurrent-file-edit-guard'
-import { readObservedFileSync } from './file-content-observation'
+import { writeFileAtomically } from '../../../filesystem/atomic-file-publication'
+import { ConcurrentFileEditError } from '../../../filesystem/concurrent-file-edit-guard'
+import { readObservedFileSync } from '../../../filesystem/file-content-observation'
+import { withHookPassEditGuard } from './codex-hook-pass-edit-guard'
 
 let root: string
 let config: string
@@ -17,7 +18,7 @@ beforeEach(() => {
 afterEach(() => rmSync(root, { recursive: true, force: true }))
 
 it('never publishes over a write another writer made after the pass started', () => {
-  const result = withConcurrentFileEditGuard([config], () => {
+  const result = withHookPassEditGuard([config], () => {
     writeFileSync(config, 'model = "theirs"\n')
     expect(() => writeFileAtomically(config, 'model = "ours"\n')).toThrow(ConcurrentFileEditError)
   })
@@ -27,7 +28,7 @@ it('never publishes over a write another writer made after the pass started', ()
 })
 
 it('lets a pass read back and replace what it published itself', () => {
-  const result = withConcurrentFileEditGuard([config], () => {
+  const result = withHookPassEditGuard([config], () => {
     writeFileAtomically(config, 'model = "first"\n')
     expect(readObservedFileSync(config, 'utf-8')).toBe('model = "first"\n')
     writeFileAtomically(config, 'model = "second"\n')

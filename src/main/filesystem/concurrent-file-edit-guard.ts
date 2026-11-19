@@ -1,7 +1,4 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { createHash } from 'node:crypto'
-import { readFileSync, realpathSync } from 'node:fs'
-import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 import { fileIdentityKey } from './file-identity-key'
 
 /**
@@ -11,7 +8,12 @@ import { fileIdentityKey } from './file-identity-key'
  */
 
 type GuardedFile = { digest: string | null }
-type Guard = { files: Map<string, GuardedFile>; conflict: string | null }
+type Guard = {
+  files: Map<string, GuardedFile>
+  conflict: string | null
+  /** The file's current digest, null when absent, undefined when unreadable. */
+  readDigest: (filePath: string) => string | null | undefined
+}
 
 const guards = new AsyncLocalStorage<Guard>()
 
@@ -22,48 +24,29 @@ export class ConcurrentFileEditError extends Error {
   }
 }
 
-function digest(content: string | Uint8Array): string {
-  return createHash('sha256').update(content).digest('hex')
-}
-
-function readDigest(filePath: string): string | null | undefined {
-  try {
-    return digest(readFileSync(filePath))
-  } catch (error) {
-    // Unknown read failures leave the file unguarded; its own writer reports them.
-    return isDefinitiveAbsence(error) ? null : undefined
-  }
-}
-
 function conflict(guard: Guard, filePath: string): never {
   guard.conflict ??= filePath
   throw new ConcurrentFileEditError(filePath)
 }
 
 /**
- * Runs `run` with `seedPaths` guarded from their current bytes. Returns the first conflicting
- * path, if any: callers swallow write errors in places, so the result, not the throw, decides a retry.
+ * Runs `run` with `seeded` files guarded. Only the worker's guard scope opens one, and it brings
+ * the file reader, so the checks below do no I/O on the main thread.
  */
-export function withConcurrentFileEditGuard<T>(
-  seedPaths: readonly string[],
+export function runWithConcurrentFileEditGuard<T>(
+  seeded: readonly { digest: string | null; aliases: readonly string[] }[],
+  readDigest: Guard['readDigest'],
   run: () => T
 ): { value: T; conflict: string | null } {
   const files = new Map<string, GuardedFile>()
-  for (const filePath of seedPaths) {
-    const seeded = readDigest(filePath)
-    if (seeded === undefined) {
-      continue
-    }
-    const entry = { digest: seeded }
-    files.set(fileIdentityKey(filePath), entry)
-    try {
-      // A symlinked config is published at its target; both spellings share one record.
-      files.set(fileIdentityKey(realpathSync.native(filePath)), entry)
-    } catch {
-      // Absent or unresolvable: the spelled path is the only one written.
+  for (const { digest, aliases } of seeded) {
+    // A symlinked config is published at its target; both spellings share one record.
+    const entry = { digest }
+    for (const alias of aliases) {
+      files.set(fileIdentityKey(alias), entry)
     }
   }
-  const guard: Guard = { files, conflict: null }
+  const guard: Guard = { files, conflict: null, readDigest }
   const value = guards.run(guard, run)
   return { value, conflict: guard.conflict }
 }
@@ -87,14 +70,18 @@ export function assertGuardedFileCurrent(filePath: string): void {
   if (!guard || !entry) {
     return
   }
-  if (guard.conflict !== null || readDigest(filePath) !== entry.digest) {
+  if (guard.conflict !== null || guard.readDigest(filePath) !== entry.digest) {
     conflict(guard, filePath)
   }
 }
 
-export function recordGuardedPublication(filePath: string, published: string | null): void {
+/** `publishedDigest` runs only for a guarded file, so unguarded writes hash nothing. */
+export function recordGuardedPublication(
+  filePath: string,
+  publishedDigest: () => string | null
+): void {
   const entry = guards.getStore()?.files.get(fileIdentityKey(filePath))
   if (entry) {
-    entry.digest = published
+    entry.digest = publishedDigest()
   }
 }

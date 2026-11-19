@@ -116,14 +116,18 @@ export function observeFilePublication(
   filePath: string,
   content: string | Uint8Array | null
 ): void {
-  recordGuardedPublication(filePath, content === null ? null : digestFileContent(content))
+  let digest: string | null | undefined
+  // Why: most publications have no guard or observer; hash only for one that does.
+  const publishedDigest = (): string | null =>
+    (digest ??= content === null ? null : digestFileContent(content))
+  recordGuardedPublication(filePath, publishedDigest)
   const observation = observations.getStore()
   if (!observation?.open || !observation.matches) {
     return
   }
   const expected = observation.files.get(fileObservationKey(filePath))
   if (expected) {
-    expected.digest = content === null ? null : digestFileContent(content)
+    expected.digest = publishedDigest()
   }
 }
 

@@ -10,8 +10,10 @@ import {
 } from '../../trust/hooks/codex-hook-orca-approvals'
 import { refreshCodexRuntimeUserHooksExclusively } from './codex-hook-local-maintenance'
 import { readCodexHookHomeStatus } from '../reconciliation/codex-hook-status'
+import { finishCodexHookPass, runCodexHookPassEffectsOffMain } from './codex-hook-pass-off-main'
 import {
   CODEX_ANSWER_AWAITED,
+  readEveryKnownCodexHookHashes,
   CODEX_HOOK_LAUNCH_WAIT_MS,
   readKnownCodexHookAnswer,
   resolveCodexHookAnswerForLaunch
@@ -135,7 +137,15 @@ export class CodexHookLaunchPreparation {
           return status
         }
         // Why: Off landed while the worker installed; take this home's hooks back out before launch.
-        return refreshCodexRuntimeUserHooksExclusively(runtimeHomePath, getStatus)
+        return finishCodexHookPass(
+          runtimeHomePath,
+          await runCodexHookPassEffectsOffMain({
+            mode: 'strip',
+            runtimeHomePath,
+            codexHashes: readEveryKnownCodexHookHashes()
+          }),
+          getStatus
+        )
       }
       if (!reuseKey) {
         return run()

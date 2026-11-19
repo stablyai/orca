@@ -54,7 +54,9 @@ if (port) {
 
 /** Windows hook commands name a bundled binary under resources; it must match main's spelling. */
 function adoptMainResourcesPath(): void {
-  const resourcesPath = (workerData as { resourcesPath?: unknown } | null)?.resourcesPath
+  const data: unknown = workerData
+  const resourcesPath =
+    data && typeof data === 'object' && 'resourcesPath' in data ? data.resourcesPath : undefined
   if (typeof resourcesPath === 'string' && !('resourcesPath' in process)) {
     Object.defineProperty(process, 'resourcesPath', { value: resourcesPath })
   }

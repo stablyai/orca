@@ -1,4 +1,5 @@
 import {
+  digestFileContent,
   observedExistsSync as existsSync,
   invalidateFileObservation,
   observeFilePublication
@@ -11,7 +12,6 @@ import { isPermissionError } from './permission-errors'
 import { nodeFileContentsEqualSync } from '../../shared/file-content/node-file-content-equality'
 import { renameFileWithWindowsRetry } from '../../shared/file-write/windows-retry-file-operations'
 import { assertGuardedFileCurrent, recordGuardedPublication } from './concurrent-file-edit-guard'
-import { digestFileContent } from './file-content-observation'
 
 export function writeFileAtomically(
   targetPath: string,
@@ -19,10 +19,14 @@ export function writeFileAtomically(
   options?: { mode?: number }
 ): void {
   const tmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
-  assertGuardedFileCurrent(targetPath)
+  // Rechecked before every rename attempt: a Windows retry waits, and another writer can save meanwhile.
+  const stillCurrent = (): boolean => {
+    assertGuardedFileCurrent(targetPath)
+    return true
+  }
   try {
     writeFileSync(tmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
-    renameFileWithWindowsRetry(tmpPath, targetPath)
+    renameFileWithWindowsRetry(tmpPath, targetPath, stillCurrent)
     observeFilePublication(targetPath, contents)
   } catch (error) {
     rmSync(tmpPath, { force: true })
@@ -33,7 +37,7 @@ export function writeFileAtomically(
         const retryTmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
         try {
           writeFileSync(retryTmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
-          renameFileWithWindowsRetry(retryTmpPath, targetPath)
+          renameFileWithWindowsRetry(retryTmpPath, targetPath, stillCurrent)
           observeFilePublication(targetPath, contents)
           return
         } catch {
@@ -56,33 +60,20 @@ export function writeFileAtomicallyIfUnchanged(
   // Guarded recovery moves files through a held name; keep those passes eligible for retry.
   invalidateFileObservation(targetPath)
   assertGuardedFileCurrent(targetPath)
-  const published = attemptGuardedAtomicWriteWithAclRepair(
-    targetPath,
-    expectedContents,
-    contents,
-    options
-  )
-  if (published) {
-    recordGuardedPublication(targetPath, digestFileContent(contents))
-  }
-  return published
-}
-
-function attemptGuardedAtomicWriteWithAclRepair(
-  targetPath: string,
-  expectedContents: string | null,
-  contents: string,
-  options?: { mode?: number }
-): boolean {
+  let published: boolean
   try {
-    return attemptGuardedAtomicWrite(targetPath, expectedContents, contents, options)
+    published = attemptGuardedAtomicWrite(targetPath, expectedContents, contents, options)
   } catch (error) {
     if (!isPermissionError(error) || process.platform !== 'win32') {
       throw error
     }
     grantDirAcl(dirname(targetPath))
-    return attemptGuardedAtomicWrite(targetPath, expectedContents, contents, options)
+    published = attemptGuardedAtomicWrite(targetPath, expectedContents, contents, options)
   }
+  if (published) {
+    recordGuardedPublication(targetPath, () => digestFileContent(contents))
+  }
+  return published
 }
 
 export function removeFileAtomicallyIfUnchanged(

@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { withConcurrentFileEditGuard } from '../../../filesystem/concurrent-file-edit-guard'
+import { withHookPassEditGuard } from './codex-hook-pass-edit-guard'
 import {
   withCapturedFileObservation,
   type CapturedFileObservation,
@@ -17,10 +17,12 @@ import {
   type CodexHookPassEffects
 } from './codex-hook-install-effects'
 import { writeCodexRuntimeUserHookRefreshEffects } from './codex-hook-refresh-effects'
+import { stripCodexManagedHookEffects } from './codex-hook-managed-strip'
 
 export type CodexHookPassRequest =
   | { mode: 'install'; runtimeHomePath: string; hashes: CodexHookHashes }
   | { mode: 'refresh'; runtimeHomePath: string }
+  | { mode: 'strip'; runtimeHomePath: string; codexHashes: CodexHookHashes[] }
 
 export type CodexHookPassWorkerRequest = CodexHookPassRequest & {
   /** The launch's owed config mirror, run first as the main thread used to. */
@@ -75,13 +77,20 @@ function runOnce(request: CodexHookPassWorkerRequest): CodexHookPassWorkerResult
     }
   }
   try {
-    const effects =
-      request.mode === 'install'
-        ? writeCodexHookInstallEffects(request.runtimeHomePath, request.hashes)
-        : writeCodexRuntimeUserHookRefreshEffects(request.runtimeHomePath)
-    return { config, effects }
+    return { config, effects: writeEffects(request) }
   } catch (error) {
     return { config, effectsError: toTransportedError(error) }
+  }
+}
+
+function writeEffects(request: CodexHookPassWorkerRequest): CodexHookPassEffects {
+  switch (request.mode) {
+    case 'install':
+      return writeCodexHookInstallEffects(request.runtimeHomePath, request.hashes)
+    case 'refresh':
+      return writeCodexRuntimeUserHookRefreshEffects(request.runtimeHomePath)
+    case 'strip':
+      return stripCodexManagedHookEffects(request.runtimeHomePath, request.codexHashes)
   }
 }
 
@@ -91,7 +100,7 @@ function runGuarded(request: CodexHookPassWorkerRequest): CodexHookPassWorkerRes
   let conflict: string | null = null
   let last: CodexHookPassWorkerResult = {}
   for (let attempt = 0; attempt < PASS_ATTEMPTS; attempt++) {
-    const guarded = withConcurrentFileEditGuard(paths, () => runOnce(request))
+    const guarded = withHookPassEditGuard(paths, () => runOnce(request))
     last = guarded.value
     conflict = guarded.conflict
     if (conflict === null) {
