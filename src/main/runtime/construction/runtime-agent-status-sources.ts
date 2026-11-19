@@ -1,7 +1,8 @@
 import { paneAgentIdentity } from '../../agent-hooks/server/pane-agent-identity'
-import type {
-  SleepingAgentSessionRecord,
-  AgentProviderSessionMetadata
+import {
+  isPaneSleepRecord,
+  type SleepingAgentSessionRecord,
+  type AgentProviderSessionMetadata
 } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 
 import type { RuntimeConstructionBindings as HostBindings } from './runtime-construction-dependencies'
@@ -51,7 +52,9 @@ export abstract class RuntimeAgentStatusSources extends OrcaRuntimeWithTerminalD
       return identity && !identity.ended ? [identity.status] : []
     })
     for (const record of savedRecords) {
-      if (paneKeys.has(record.paneKey)) {
+      // Only a slept pane's record stands for its agent; a live or quit checkpoint is recovery,
+      // never proof that an agent runs there now.
+      if (paneKeys.has(record.paneKey) || !isPaneSleepRecord(record)) {
         continue
       }
       const identity = this.readPaneAgentIdentity(record.paneKey, record)

@@ -136,3 +136,57 @@ it.each(['claude', 'codex'] as const)(
     await vi.waitFor(async () => expect((await listed())?.agents).toEqual([]))
   }
 )
+
+it('lists no agent from a live checkpoint alone, which is recovery, not a running agent', async () => {
+  const session = getDefaultWorkspaceSession()
+  session.tabsByWorktree[WORKTREE] = [
+    {
+      id: TAB,
+      worktreeId: WORKTREE,
+      ptyId: null,
+      title: 'Terminal',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 100
+    }
+  ]
+  session.sleepingAgentSessionsByPaneKey = {
+    [PANE]: {
+      paneKey: PANE,
+      tabId: TAB,
+      worktreeId: WORKTREE,
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 'checkpointed-codex' },
+      prompt: 'Finish this task',
+      state: 'working',
+      capturedAt: 900,
+      updatedAt: 900,
+      origin: 'live'
+    }
+  }
+  const server = new AgentHookServer()
+  servers.push(server)
+  const runtime = new OrcaRuntimeService(
+    partialRuntimeStore({
+      getWorkspaceSession: () => session,
+      getFolderWorkspaces: () => [
+        storeFolderWorkspace({
+          id: 'saved-sleep',
+          projectGroupId: 'group',
+          folderPath: '/tmp/saved-sleep'
+        })
+      ],
+      getProjectGroups: () => [storeProjectGroup({ id: 'group' })]
+    }),
+    undefined,
+    {
+      getPaneAgentIdentity: (paneKey, saved) => server.paneAgentIdentity(paneKey, saved),
+      getAgentProviderSessionSnapshot: () => server.getStatusSnapshot()
+    }
+  )
+  const row = (await runtime.getWorktreePs(100, true, true)).worktrees.find(
+    (worktree) => worktree.worktreeId === WORKTREE
+  )
+  expect(row?.agents).toEqual([])
+})
