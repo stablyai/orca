@@ -68,8 +68,9 @@ export function useTabGroupCreationCommands({
     duplicateBrowserTab: (browserTabId: string, sourceUnifiedTabId: string) => {
       void (async () => {
         const state = useAppStore.getState()
-        const tabs = state.browserTabsByWorktree[worktreeId] ?? []
-        const source = tabs.find((t) => t.id === browserTabId)
+        const source = Object.values(state.browserTabsByWorktree)
+          .flatMap((tabs) => tabs ?? [])
+          .find((tab) => tab.id === browserTabId)
         if (!source) {
           return
         }

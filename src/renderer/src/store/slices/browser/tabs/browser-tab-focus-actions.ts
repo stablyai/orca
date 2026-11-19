@@ -13,6 +13,7 @@ import {
   hasPendingEntityTab
 } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 
+/** Focus the browser’s visible placement while retaining its source-owned page records. */
 export function createBrowserTabFocusActions(
   set: BrowserSliceSet,
   get: BrowserSliceGet
@@ -41,7 +42,9 @@ export function createBrowserTabFocusActions(
       }
       /** The restored record; a layout-owner build's, before main's frame drew it, as proposed. */
       const restoredRecord = (restored: BrowserWorkspace): BrowserWorkspace | null =>
-        get().browserTabsByWorktree[worktreeId]?.find((tab) => tab.id === restored.id) ??
+        Object.values(get().browserTabsByWorktree)
+          .flat()
+          .find((tab) => tab.id === restored.id) ??
         (hasPendingEntityTab(worktreeId, restored.id) ? restored : null)
 
       const snap = entryToRestore.workspace
@@ -50,7 +53,8 @@ export function createBrowserTabFocusActions(
       const sessionPartition = snap.sessionPartition ?? null
 
       if (pages.length === 0) {
-        const restored = get().createBrowserTab(worktreeId, snap.url, {
+        const restored = get().createBrowserTab(snap.worktreeId, snap.url, {
+          placementWorkspaceId: worktreeId,
           title: snap.title,
           activate: true,
           sessionProfileId,
@@ -68,7 +72,8 @@ export function createBrowserTabFocusActions(
 
       // Why: append remaining pages in original order so multi-page workspaces preserve their page sequence.
       const [firstPage, ...restPages] = pages
-      const restored = get().createBrowserTab(worktreeId, firstPage.url, {
+      const restored = get().createBrowserTab(snap.worktreeId, firstPage.url, {
+        placementWorkspaceId: worktreeId,
         title: firstPage.title,
         activate: true,
         sessionProfileId,
@@ -122,11 +127,11 @@ export function createBrowserTabFocusActions(
             : {}),
           activeBrowserTabIdByWorktree: {
             ...s.activeBrowserTabIdByWorktree,
-            [browserTab.worktreeId]: tabId
+            [scopeWorktreeId]: tabId
           },
           activeTabTypeByWorktree: {
             ...s.activeTabTypeByWorktree,
-            [browserTab.worktreeId]: 'browser'
+            [scopeWorktreeId]: 'browser'
           }
         }
       })

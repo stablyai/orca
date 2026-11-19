@@ -106,6 +106,31 @@ function clickFirstPath(onOpenFailure = vi.fn(), pathExistsCache = makeExistsCac
 }
 
 describe('a modifier-click on a paired-server path followed by more paths', () => {
+  it('keeps the remote file owner when placing its document in floating', async () => {
+    setPlatform('Linux')
+    hostAnswers(() => ({ exists: true }))
+    openDetectedFilePath('/srv/repo/report.md', 8, 2, {
+      worktreeId: 'wt-1',
+      worktreePath: '/srv/repo',
+      runtimeEnvironmentId: 'env-1',
+      floatingWorkspace: true
+    })
+    await flushDoubleRaf()
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/srv/repo/report.md',
+        worktreeId: 'wt-1',
+        runtimeEnvironmentId: 'env-1'
+      }),
+      expect.objectContaining({
+        placementWorkspaceId: 'global-floating-terminal',
+        executionHostId: 'runtime:env-1',
+        suppressActiveRuntimeFallback: false
+      })
+    )
+    expect(statMock).not.toHaveBeenCalled()
+  })
+
   it('opens the clicked path, not the guess joining it to the rows below', async () => {
     setPlatform('Macintosh')
     // Why an error row: hosts before the ENOTDIR fix cannot answer for `a.txt/...`.

@@ -1,3 +1,5 @@
+import { resolveBrowserLinkSession } from '../navigation/browser-link-session'
+import { completePlacedBrowserLink } from './placed-browser-link-completion'
 import { createBrowserLinkHostMatcher } from '../navigation/browser-link-owner'
 import {
   isExpectedRuntimeBrowserRoute,
@@ -16,7 +18,8 @@ import { useAppStore } from '@/store/index'
 import { resolveNewBrowserTabProfile } from '@/store/slices/browser/profiles/browser-new-tab-profile'
 import {
   LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId
+  parseExecutionHostId,
+  toRuntimeExecutionHostId
 } from '../../../../../shared/execution-host/execution-host'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { getClientCreationActionPolicy } from '../../workspace/creation/surface-policy/client-creation-action-policy'
@@ -43,6 +46,8 @@ export type WorkspaceBrowserTabIntent = { kind: 'url' } | { kind: 'search'; engi
 
 export type OpenWorkspaceBrowserTabRequest = {
   workspaceId: string
+  /** Client tab destination; workspaceId and the asserted host retain browser ownership. */
+  placementWorkspaceId?: string
   linkContext?: BrowserLinkOpenContext
   onLinkOutcome?: (outcome: BrowserOpenOutcome) => void
   targetGroupId?: string
@@ -66,6 +71,7 @@ export type OpenWorkspaceBrowserTabRequest = {
   placementPreference?: BrowserClientHostPlacementPreference
 }
 
+/** Create a client browser tab in the requested placement and complete source-aware link outcomes. */
 async function createClientBrowserTab(
   state: AppState,
   request: OpenWorkspaceBrowserTabRequest,
@@ -74,7 +80,7 @@ async function createClientBrowserTab(
   // Desktop-rendered pages in runtime workspaces keep runtime ownership or palette/activation disowns their tabs.
   ownerHostId: ExecutionHostId = hostId
 ): Promise<string | null> {
-  if (request.linkContext) {
+  if (request.linkContext && !request.placementWorkspaceId) {
     const destination = workspaceBrowserLinkDestination(request, ownerHostId, null, hostId)
     const outcome = await openClientWorkspaceBrowserLink(request, destination, presentation.title)
     request.onLinkOutcome?.(outcome)
@@ -82,7 +88,8 @@ async function createClientBrowserTab(
   }
   try {
     const created = state.createBrowserTab(request.workspaceId, request.url, {
-      activate: request.focusOnCreate !== false,
+      placementWorkspaceId: request.placementWorkspaceId,
+      activate: request.focusOnCreate !== false && request.linkContext?.canReveal?.() !== false,
       browserRuntimeEnvironmentId: null,
       focusAddressBar: false,
       executionHostId: ownerHostId,
@@ -92,6 +99,9 @@ async function createClientBrowserTab(
       ...(request.afterTabId ? { afterTabId: request.afterTabId } : {}),
       title: presentation.title
     })
+    if (created.activePageId) {
+      await completePlacedBrowserLink(request, created.activePageId, undefined, created.id)
+    }
     return created.activePageId ?? null
   } catch (error) {
     throw openFailure(presentation.error, 'client tab creation rejected', error)
@@ -142,12 +152,8 @@ export async function openWorkspaceBrowserTab(
     return null
   }
   const environmentId = route.runtimeEnvironmentId?.trim() || null
-  const expectedEnvironmentId =
-    request.expectedRuntimeEnvironmentId === undefined
-      ? null
-      : request.expectedRuntimeEnvironmentId.trim()
-  const expectedSshConnectionId =
-    request.expectedSshConnectionId === undefined ? null : request.expectedSshConnectionId.trim()
+  const expectedEnvironmentId = request.expectedRuntimeEnvironmentId?.trim() ?? null
+  const expectedSshConnectionId = request.expectedSshConnectionId?.trim() ?? null
   if (expectedEnvironmentId !== null && expectedSshConnectionId !== null) {
     throw openFailure(presentation.error, 'browser owner assertion is ambiguous')
   }
@@ -217,7 +223,7 @@ export async function openWorkspaceBrowserTab(
     return createClientBrowserTab(state, request, localHostId, presentation, ownerHostId)
   }
   const destination =
-    request.linkContext && route.executionHostId
+    request.linkContext && !request.placementWorkspaceId && route.executionHostId
       ? workspaceBrowserLinkDestination(
           request,
           route.executionHostId,
@@ -232,26 +238,45 @@ export async function openWorkspaceBrowserTab(
     request.onLinkOutcome?.(placement)
     return placement.status === 'opened' ? placement.result.browserPageId : null
   }
-  const targetGroupId = placement.groupId
+  const session = request.placementWorkspaceId
+    ? resolveBrowserLinkSession(state, request.workspaceId, toRuntimeExecutionHostId(environmentId))
+    : destination
+  let placedPageId: string | undefined
+  let placedBrowserWorkspaceId: string | undefined
   let created = false
   try {
     created = await createWebRuntimeSessionBrowserTab({
       worktreeId: request.workspaceId,
+      placementWorkspaceId: request.placementWorkspaceId,
       environmentId,
       url: request.url,
       ...resolveWebRuntimeBrowserClientTargetGroup(
         state,
-        { ...request, targetGroupId, ...(destination ? { split: placement.split } : {}) },
+        {
+          ...request,
+          workspaceId: request.placementWorkspaceId ?? request.workspaceId,
+          targetGroupId: placement.groupId,
+          ...(destination ? { split: placement.split } : {})
+        },
         environmentId
       ),
-      ...(destination ? { profileId: destination.sessionProfileId } : {}),
+      ...(session ? { profileId: session.sessionProfileId } : {}),
       ...(request.linkContext ? { isCurrentRequest: request.linkContext.isCurrentRequest } : {}),
-      ...(destination
+      ...(request.placementWorkspaceId
         ? {
-            onMaterialized: (pageId: string) =>
-              request.onLinkOutcome?.(materializedBrowserLinkOutcome(request, destination, pageId))
+            onMaterialized: (pageId: string, browserWorkspaceId?: string) => {
+              placedPageId = pageId
+              placedBrowserWorkspaceId = browserWorkspaceId
+            }
           }
-        : {}),
+        : destination
+          ? {
+              onMaterialized: (pageId: string) =>
+                request.onLinkOutcome?.(
+                  materializedBrowserLinkOutcome(request, destination, pageId)
+                )
+            }
+          : {}),
       ...(request.afterTabId ? { clientAfterTabId: request.afterTabId } : {}),
       // Owner-pinned links need the host tab published before client reconciliation.
       ...(expectedEnvironmentId !== null ? { waitForRegistration: true } : {}),
@@ -260,7 +285,7 @@ export async function openWorkspaceBrowserTab(
         : {}),
       // Tab-bar opens must surface their workspace or background creates appear to do nothing.
       ...(request.focusOnCreate !== undefined ? { focusOnCreate: request.focusOnCreate } : {}),
-      selectWorktree: request.selectWorktree !== false,
+      selectWorktree: !request.placementWorkspaceId && request.selectWorktree !== false,
       stagedTitle: presentation.title,
       stagedFocusAddressBar: false,
       failureLogMode: 'operation-only'
@@ -270,6 +295,9 @@ export async function openWorkspaceBrowserTab(
   }
   if (!created) {
     throw openFailure(presentation.error, 'runtime browser tab creation was unavailable')
+  }
+  if (placedPageId) {
+    await completePlacedBrowserLink(request, placedPageId, environmentId, placedBrowserWorkspaceId)
   }
   return null
 }
