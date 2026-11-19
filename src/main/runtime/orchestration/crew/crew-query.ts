@@ -41,7 +41,8 @@ export const CrewAssignment = z.object({
 })
 export type CrewAssignmentRow = z.infer<typeof CrewAssignment>
 
-const assignmentColumns = `d.rowid AS ordinal, d.id, d.run_id, d.task_id,
+// `+d.rowid`: the sort key must not steer the plan; a bare rowid makes SQLite scan for ORDER BY.
+const assignmentColumns = `+d.rowid AS ordinal, d.id, d.run_id, d.task_id,
   d.assignee_handle, d.assignee_pane_key, d.assignee_orca_session_id,
   d.creator_handle, d.creator_pane_key, d.creator_orca_session_id, d.creator_dispatch_id,
   d.status, d.completed_at, t.spec, t.task_title, t.display_name, t.status AS task_status,
