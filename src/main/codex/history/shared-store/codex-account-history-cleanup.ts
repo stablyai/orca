@@ -31,8 +31,9 @@ import {
 } from './codex-account-left-behind-paths'
 
 // Bounds one run's hashing and open-file check; the rest go on later runs.
-const MAX_ROLLOUTS_PER_RUN = 500
+const MAX_HASHED_PER_RUN = 500
 const ROLLOUT_BATCH = 100
+const MAX_ROLLOUT_BATCHES_PER_RUN = 40
 export type CodexHistoryCleanupResult = { deletedFiles: number; freedBytes: number }
 
 /**
@@ -79,9 +80,6 @@ export async function cleanUpCodexHistoryLeftBehind(args: {
   // so one that can't tell costs no hashing.
   const candidates: { path: string; sha256: string; facts: FileFacts }[] = []
   for (const rollout of manifest.rollouts) {
-    if (candidates.length >= MAX_ROLLOUTS_PER_RUN) {
-      break
-    }
     const check = rollout.check
     if (
       check?.sameContent &&
@@ -92,8 +90,14 @@ export async function cleanUpCodexHistoryLeftBehind(args: {
     }
   }
   let openCheckFailed = false
-  for (let start = 0; start < candidates.length && !openCheckFailed; start += ROLLOUT_BATCH) {
-    if (args.shouldStop()) {
+  let hashed = 0
+  // Copies left open don't use up the hashing budget, so they can't hold back the ones after them.
+  for (
+    let start = 0;
+    start < candidates.length && start < MAX_ROLLOUT_BATCHES_PER_RUN * ROLLOUT_BATCH;
+    start += ROLLOUT_BATCH
+  ) {
+    if (args.shouldStop() || openCheckFailed || hashed >= MAX_HASHED_PER_RUN) {
       break
     }
     const ready: { path: string; stats: BigIntStats; facts: FileFacts; sha256: string }[] = []
@@ -136,6 +140,7 @@ export async function cleanUpCodexHistoryLeftBehind(args: {
         continue
       }
       try {
+        hashed += 1
         // Size and a millisecond mtime can miss a same-size rewrite of the copy being deleted.
         if ((await contentSha256(fromManifestPath(home, rollout.path))) !== rollout.sha256) {
           voided.add(rollout.path)
