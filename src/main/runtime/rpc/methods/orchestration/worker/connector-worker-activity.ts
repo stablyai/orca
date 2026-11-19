@@ -67,7 +67,7 @@ export async function readConnectorWorkerActivity(
   // Projected in as few passes as keep each conversation's status owners its own (see packConversations),
   // one after another: a later pass then finds a paired host that missed its deadline marked overdue
   // instead of queueing behind its unanswered read.
-  const projections = []
+  const projections: Awaited<ReturnType<typeof projectDispatchFleet>>[] = []
   for (const group of packConversations(candidates)) {
     const ids = new Set(group.map((candidate) => candidate.row.dispatchId))
     projections.push(
