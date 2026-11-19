@@ -1,3 +1,4 @@
+import { getGitCurrentBranchName } from '../../../shared/git/refs/git-current-branch'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { resolveGitRouteForHost } from '../../providers/execution-host-provider-dispatch'
@@ -63,11 +64,11 @@ export async function recheckBeforeRename(
   attempt.assertIncarnation()
   const probe = await probeBranchUpstream(exec)
   // Read HEAD after the probe so the probe provably described `currentBranch`.
-  const branchNow = (await exec(['rev-parse', '--abbrev-ref', 'HEAD'])).stdout.trim()
+  const branchNow = await getGitCurrentBranchName(exec)
   if (branchNow !== currentBranch) {
     return defer(
       'branch-changed',
-      `branch changed during generation (${currentBranch} -> ${branchNow})`
+      `branch changed during generation (${currentBranch} -> ${branchNow ?? 'detached HEAD'})`
     )
   }
   if (probe.outcome === 'has-upstream') {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import type { StructuredAgentSessionCommandRefusalCause } from '../../../../../../src/shared/agent-session/view/structured-agent-session-composer'
 
 // Keep command-refusal causes only while the chat still shows the work that caused them.
@@ -14,6 +14,14 @@ export type MobileNativeChatSendErrorReporter = (
 export type MobileNativeChatCommandRefusalCauses = Readonly<
   Partial<Record<StructuredAgentSessionCommandRefusalCause, boolean>>
 >
+
+/** What would refuse a command now, kept referentially stable for `keepWhile`. */
+export function useMobileNativeChatCommandRefusalCauses(
+  working: boolean,
+  prompt: boolean
+): MobileNativeChatCommandRefusalCauses {
+  return useMemo(() => ({ working, prompt }), [working, prompt])
+}
 
 const NATIVE_CHAT_SEND_ERROR_HOLD_MS = 4000
 const NATIVE_CHAT_SEND_ERROR_TOAST_MS = 1600

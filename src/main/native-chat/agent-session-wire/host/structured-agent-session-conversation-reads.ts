@@ -183,7 +183,7 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
         const { deps, sessions, publishStatus } = context()
         let live = false
         if (choice) {
-          await deps.store.setProviderRemoteControl(sessionId, choice)
+          await deps.store.updateRecord(sessionId, { kind: 'provider-remote-control', choice })
           live = adapter.setProviderRemoteControl?.(sessionId, choice === 'on') === true
           publishStatus(sessionId)
         }

@@ -42,13 +42,18 @@ export function useRetiredAgentPickerDrafts(
       return
     }
     const state = useAppStore.getState()
-    const workspaces = new Set([
-      ...Object.values(selectWorktreesByRepo(state) ?? {})
-        .flat()
-        .map((row) => row.id),
-      ...(selectFolderWorkspaces(state) ?? []).map((row) => `folder:${row.id}`)
-    ])
-    const repos = new Set((state.repos ?? []).map((repo) => repo.id))
+    // Built only for drafts that name a workspace or repo; a floating picker (a bot's) scans none.
+    let workspaces: Set<string> | undefined
+    let repos: Set<string> | undefined
+    const hasWorkspace = (id: string) =>
+      (workspaces ??= new Set([
+        ...Object.values(selectWorktreesByRepo(state) ?? {})
+          .flat()
+          .map((row) => row.id),
+        ...(selectFolderWorkspaces(state) ?? []).map((row) => `folder:${row.id}`)
+      ])).has(id)
+    const hasRepo = (id: string) =>
+      (repos ??= new Set((state.repos ?? []).map((repo) => repo.id))).has(id)
     retireAgentPickerDrafts(
       entries,
       draftScope,
@@ -58,8 +63,8 @@ export function useRetiredAgentPickerDrafts(
           !(
             host?.kind === 'runtime' && state.removedRuntimeEnvironmentIds?.has(host.environmentId)
           ) &&
-          (!target.worktreeId || workspaces.has(target.worktreeId)) &&
-          (!target.repoId || repos.has(target.repoId))
+          (!target.worktreeId || hasWorkspace(target.worktreeId)) &&
+          (!target.repoId || hasRepo(target.repoId))
         )
       },
       mode

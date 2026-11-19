@@ -32,6 +32,8 @@ export type StructuredClaudeRuntimeAdapterDeps = {
   resolveClaudeInheritedEnv?: () => Promise<Record<string, string>>
   /** Asks Claude for a chat's `/` menu while it isn't running; absent reads the folders. */
   atRestCommandProbe?: ClaudeCommandCatalogProbe
+  /** The resting chat's discovery flags, so the probe lists what its launch would load. */
+  atRestDiscovery?: ClaudeAtRestCommandsDeps['discovery']
   /** Which version-gated flags a Claude CLI takes; absent never passes one. */
   claudeCliFlags?: ClaudeCliFlagSupport
   openClaudeConnection?: ClaudeStructuredSessionAdapterDeps['openConnection']
@@ -96,7 +98,8 @@ export function createStructuredClaudeRuntimeAdapter(
     atRestCommands: new ClaudeAtRestCommandCatalog({
       resolveWorkspacePath: deps.resolveWorkspacePath,
       ...(deps.resolveAccountHome ? { resolveAccountHome: deps.resolveAccountHome } : {}),
-      ...(deps.atRestCommandProbe ? { probe: deps.atRestCommandProbe } : {})
+      ...(deps.atRestCommandProbe ? { probe: deps.atRestCommandProbe } : {}),
+      ...(deps.atRestDiscovery ? { discovery: deps.atRestDiscovery } : {})
     }),
     resolveLaunch: deps.resolveLaunch,
     remoteControlStart: (sessionId) => ({

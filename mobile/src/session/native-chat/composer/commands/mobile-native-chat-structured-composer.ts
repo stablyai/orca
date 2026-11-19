@@ -3,6 +3,7 @@ import type { MobileComposerStructuredCatalog } from '../menus/mobile-native-cha
 import type { PendingNativeChatFile } from '../attachments/mobile-native-chat-file-attachment'
 import type { MobileStructuredThreadGoal } from '../../input/tasks/use-mobile-structured-thread-goal'
 import type { MobileStructuredMcpPanel } from '../../mcp/use-mobile-structured-mcp-panel'
+import type { MobileStructuredAccountUsage } from '../../usage/use-mobile-structured-account-usage'
 
 export type MobileNativeChatStructuredComposer = {
   catalog: MobileComposerStructuredCatalog
@@ -20,4 +21,8 @@ export type MobileNativeChatStructuredComposer = {
   mcpPanel?: MobileStructuredMcpPanel | null
   /** Null unless the host saves this Claude chat's Remote Control choice. */
   remoteControl?: MobileStructuredRemoteControl | null
+  /** Null unless the host shows this chat's account usage; `/usage` opens it. */
+  accountUsage?: MobileStructuredAccountUsage | null
+  /** Why an Orca command (`/fork`, `/resume`) did not run, shown beside the composer. */
+  onCommandNotice?: (message: string) => void
 }

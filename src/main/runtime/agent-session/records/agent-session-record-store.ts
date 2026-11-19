@@ -18,12 +18,12 @@ import {
 } from '../ownership/agent-session-operation-admission'
 import { isAgentSessionClaimKeyVerifiable } from '../ownership/agent-session-claim-key-retention'
 import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
-import {
-  agentSessionScopeKey,
-  type AgentSessionExecutionLocation,
-  type AgentSessionRecord
+import type {
+  AgentSessionExecutionLocation,
+  AgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { readAgentSessionWorkspaceAttention } from './agent-session-workspace-attention'
+import type { AgentSessionConversationKeys } from './agent-session-conversation-key-index'
 import type { AgentSessionOptionsReplacement } from '../../../../shared/agent-session/options/protocol/agent-session-options-replacement'
 import type { AgentSessionProcessIdentityCommit } from '../ownership/agent-session-lease-transitions'
 import type {
@@ -37,7 +37,6 @@ import {
 } from '../ownership/agent-session-restart-reconciliation'
 import type { AgentSessionRecordCommand } from './agent-session-record-command'
 import type { AgentSessionIdleForget } from './agent-session-record-forget'
-import type { AgentSessionProviderRemoteControlChoice } from '../../../../shared/agent-session/remote-control/agent-session-provider-remote-control'
 import type {
   AgentSessionReserveRequest,
   AgentSessionReserveResult
@@ -62,6 +61,7 @@ import type {
   AgentSessionUserNameWrite,
   CompareAndSetConversationName
 } from './agent-session-record-conversation-name'
+import { JournalSqlConnectorReplies } from '../../../native-chat/agent-session-journal/connector-replies/journal-sql-connector-replies'
 
 /** Single-writer records/operation ledger in the host chat-journal database. */
 
@@ -81,6 +81,12 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
     this.founding = createAgentSessionFoundingStore(transactions)
     this.conversationReceipts = createAgentSessionConversationReceipts(transactions)
   }
+
+  /** Open chats with no tab (see `isSessionInBackground`): bot and worker chats. */
+  listBackgroundSessionIds = (): string[] =>
+    this.transactions.state.sessionTabs
+      ?.backgroundSessionIds()
+      .filter(this.isSessionInBackground) ?? []
 
   /** Structural readability does not depend on which agents this host can launch.
    *  `records` must come from this database's own load. */
@@ -117,8 +123,14 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
   getConversation = (sessionId: string) => getAgentSessionConversation(this.state, sessionId)
   listConversations = () => listAgentSessionConversations(this.state)
   workspaceAttentionReads = (location: AgentSessionExecutionLocation) =>
-    readAgentSessionWorkspaceAttention(this.journalDatabase, this.listConversations(), location)
+    readAgentSessionWorkspaceAttention(this.journalDatabase, this.inScope(location), location)
+  private inScope = (location: AgentSessionExecutionLocation) =>
+    this.transactions.keyIndexes.inScope(this.state, location)
+  /** The chats answering to `key` under `keys`, in listing order, without walking the history. */
+  conversationsKeyedBy = (keys: AgentSessionConversationKeys, key: string) =>
+    this.transactions.keyIndexes.conversations(this.state, keys, key)
   senderIdentityRevision = (): number => this.transactions.senderIdentityRevision
+  connectorReplies = () => new JournalSqlConnectorReplies(this.journalDatabase)
   /** Sessions a committed /clear continued into this one, derived from every held conversation
    *  (unreadable leases still count) and rebuilt only when lineage changes. */
   listClearedFrom = (sessionId: string): string[] => {
@@ -139,7 +151,8 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
     return [...(this.clearedFrom.predecessors.get(sessionId) ?? [])]
   }
   lineageRevision = (): object => this.transactions.lineageRevision()
-  providerAliasOwner = (nativeId: string) => this.transactions.providerAliasOwner(nativeId)
+  providerAliasOwner = (nativeId: string): string | null =>
+    this.transactions.keyIndexes.providerAliasOwner(this.state, nativeId)
   selectWritableRecord = (sessionId: string) =>
     selectWritableAgentSessionRecord(this.state, sessionId)
   requireWritableRecord = (sessionId: string) =>
@@ -174,14 +187,9 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
     return result.first
   }
 
-  listByScope(location: AgentSessionExecutionLocation): AgentSessionRecord[] {
-    const scope = agentSessionScopeKey(location)
-    return this.listRecords().filter((record) => agentSessionScopeKey(record.location) === scope)
-  }
-
   /** Readable chats of exactly this workspace, and whether one this build cannot validate is also there. */
   listWorkspaceSessions = (location: AgentSessionExecutionLocation) =>
-    listAgentSessionWorkspaceSessions(this.state, location)
+    listAgentSessionWorkspaceSessions(this.state, this.inScope(location), location)
 
   updateRecord = <C extends AgentSessionRecordCommand>(
     sessionId: string,
@@ -279,9 +287,6 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
 
   skipAsyncQuestions = (id: string, itemId: string) =>
     this.updateRecord(id, { kind: 'skip-async-questions', itemId })
-
-  setProviderRemoteControl = (id: string, choice: AgentSessionProviderRemoteControlChoice) =>
-    this.updateRecord(id, { kind: 'provider-remote-control', choice })
 
   /** Reconcile loaded leases before writer admission. Newer databases keep verdicts in memory only and cannot grant writers. */
   async reconcileOnRestart(args: AgentSessionRestartProbeArgs) {

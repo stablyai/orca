@@ -2,7 +2,7 @@ import { AlertCircle, RefreshCw, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store/index'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
-import { NameGenerationFailedDialog } from '../../sidebar/workspace-card/identity/AutoRenameFailedDialog'
+import { AgentCommandFailedDialog } from '@/components/agent-command-failure/AgentCommandFailedDialog'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { NativeChatNamingFailureControls } from './use-native-chat-naming-failure'
@@ -88,7 +88,7 @@ export function NativeChatNamingFailedDialog({
 }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <NameGenerationFailedDialog
+    <AgentCommandFailedDialog
       open={naming.dialogOpen}
       onOpenChange={naming.setDialogOpen}
       title={t('tabHoverCard.namingFailure.dialogTitle', 'Chat auto-name failed')}

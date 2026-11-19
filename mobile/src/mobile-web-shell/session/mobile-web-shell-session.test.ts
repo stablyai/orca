@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   readyAgain,
+  ROUTE,
   CACHED,
   MANIFEST,
   gates,
@@ -186,6 +187,46 @@ describe('a cached page opened before the verdict', () => {
         bundleRuntimeProtocolVersion: CACHED.compat.runtimeProtocolVersion,
         requiredBundleRuntimeProtocolVersion: 99
       }
+    })
+  })
+})
+
+describe('a resume onto a newer build', () => {
+  it('stages the newer build on resume and reopens the same route when pages agree', () => {
+    const resumed = run(readySession().session, { type: 'app-resumed' })
+    expect(resumed.effects).toEqual([{ kind: 'read-manifest' }])
+    const staged = run(resumed.session, {
+      type: 'manifest-read',
+      manifest: { ...MANIFEST, buildId: 'build-two' }
+    })
+    expect(staged.effects).toEqual([{ kind: 'stage-update' }])
+    expect(staged.session.state).toMatchObject({ kind: 'ready', sessionId: 'session-one' })
+
+    const swapped = run(staged.session, { type: 'update-swap' })
+    expect(swapped.effects).toEqual([{ kind: 'open-cache' }])
+    const newer = {
+      ...CACHED,
+      buildId: 'build-two',
+      directory: '/cache/mobile-web/host/generations/c'
+    }
+    const reopened = run(
+      swapped.session,
+      { type: 'cache-read', generation: newer },
+      {
+        type: 'activated',
+        generationDirectory: newer.directory,
+        sessionId: 'session-two',
+        buildId: newer.buildId,
+        totalBytes: newer.totalBytes,
+        elapsedMs: 4
+      }
+    )
+    expect(reopened.session.routePathname).toBe(ROUTE)
+    expect(reopened.session.state).toMatchObject({
+      kind: 'ready',
+      buildId: 'build-two',
+      generationDirectory: newer.directory,
+      sessionId: 'session-two'
     })
   })
 })

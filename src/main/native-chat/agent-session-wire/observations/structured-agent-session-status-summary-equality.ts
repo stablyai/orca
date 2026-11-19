@@ -54,6 +54,8 @@ export function structuredStatusSummariesEqual(
     a.turnOutcome === b.turnOutcome &&
     a.stopping === b.stopping &&
     a.awaitsAnswer === b.awaitsAnswer &&
+    a.awaitsQuestion?.itemId === b.awaitsQuestion?.itemId &&
+    a.awaitsQuestion?.text === b.awaitsQuestion?.text &&
     a.asyncQuestionsSkippedThrough === b.asyncQuestionsSkippedThrough &&
     agentSessionProviderRemoteControlsEqual(a.providerRemoteControl, b.providerRemoteControl) &&
     a.providerRemoteControlChoice === b.providerRemoteControlChoice &&

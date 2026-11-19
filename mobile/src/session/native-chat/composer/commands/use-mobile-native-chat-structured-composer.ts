@@ -6,6 +6,7 @@ import type { MobileNativeChatFileAttachments } from '../attachments/use-mobile-
 import type { useMobileStructuredSessionCommands } from './use-mobile-structured-session-commands'
 import type { MobileStructuredThreadGoal } from '../../input/tasks/use-mobile-structured-thread-goal'
 import type { MobileStructuredMcpPanel } from '../../mcp/use-mobile-structured-mcp-panel'
+import type { MobileStructuredAccountUsage } from '../../usage/use-mobile-structured-account-usage'
 
 const NO_COMMANDS: readonly AgentSessionConversationCommand[] = []
 
@@ -20,9 +21,11 @@ export function useMobileNativeChatStructuredComposer(args: {
   threadGoal: MobileStructuredThreadGoal | null
   mcpPanel: MobileStructuredMcpPanel | null
   remoteControl: MobileStructuredRemoteControl | null
+  accountUsage: MobileStructuredAccountUsage | null
+  onCommandNotice: (message: string) => void
 }): MobileNativeChatStructuredComposer | null {
   const { structured, acceptsFiles, compactInstructions, files, threadGoal, mcpPanel } = args
-  const { remoteControl } = args
+  const { remoteControl, accountUsage, onCommandNotice } = args
   const conversationCommands = args.conversationCommands ?? NO_COMMANDS
   const { commands, refresh, setMenuOpen } = args.sessionCommands
   const { files: pendingFiles, attachFiles, attachPastedText, removeFiles } = files
@@ -55,13 +58,17 @@ export function useMobileNativeChatStructuredComposer(args: {
             onRemoveFile: (id: string) => removeFiles([id]),
             threadGoal,
             mcpPanel,
-            remoteControl
+            remoteControl,
+            accountUsage,
+            onCommandNotice
           }
         : null,
     [
       threadGoal,
       mcpPanel,
       remoteControl,
+      accountUsage,
+      onCommandNotice,
       acceptsFiles,
       attachFiles,
       attachPastedText,

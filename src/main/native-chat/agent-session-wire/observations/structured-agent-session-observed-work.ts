@@ -30,6 +30,8 @@ export class StructuredAgentSessionObservedWork {
   owesAnySend = () => this.work.owesAnySend
   activeTurn = () => this.work.activeTurn
   activeTurnId = () => this.work.activeTurn?.turnId ?? null
+  /** The message that opened the running turn; null when none runs. */
+  activeTurnOpener = () => this.work.activeTurnOpener ?? null
   turnScope = (): AgentJournalTurnScope =>
     this.work.activeTurn
       ? { kind: 'turn', turnItemId: this.work.activeTurn.item.itemId }

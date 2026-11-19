@@ -1,17 +1,15 @@
 import { MobileNativeChatRemoteControlStrip } from '../remote-control/MobileNativeChatRemoteControlStrip'
+import { MobileSlackMirrorItem } from '../slack-mirror/MobileSlackMirrorItem'
 import { getNativeChatAgentProfile } from '../../../../../src/shared/native-chat/input/commands/native-chat-agent-profiles'
-import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat/input/composer/native-chat-follow-up-behavior'
 import { recordMobileNativeChatSkillPick } from './drafts/mobile-native-chat-draft-store'
 import { useMobileNativeChatComposerDictation } from './dictation/use-mobile-native-chat-composer-dictation'
 import {
   focusMobileNativeChatTextDestination,
   pruneMobileNativeChatDraftSkills
 } from './drafts/mobile-native-chat-draft-inputs'
-import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/composer/native-chat-picker-items'
 import { MobileNativeChatComposerAllocation } from './field/MobileNativeChatComposerAllocation'
 import { useRef, useState } from 'react'
 import { Keyboard, View, type HostInstance, type TextInputInstance } from 'react-native'
-import type { NativeChatContextUsageSummary } from '../../../../../src/shared/native-chat/native-chat-context-usage-summary'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
@@ -20,17 +18,10 @@ import { MobileNativeChatComposerField } from './field/MobileNativeChatComposerF
 import { MobileNativeChatComposerAttachments } from './attachments/MobileNativeChatComposerAttachments'
 import type { PendingNativeChatFile } from './attachments/mobile-native-chat-file-attachment'
 import { MobileNativeChatComposerAttachButton } from './attachments/MobileNativeChatComposerAttachButton'
-import {
-  MobileNativeChatSessionOptionPickers,
-  type MobileNativeChatSessionOptionPickersProps
-} from '../input/session-options/MobileNativeChatSessionOptionPickers'
+import { MobileNativeChatSessionOptionPickers } from '../input/session-options/MobileNativeChatSessionOptionPickers'
 import { useMobileNativeChatPickerPresentation } from '../input/session-options/use-mobile-native-chat-picker-presentation'
-import type { MobileNativeChatSteerHead } from './menus/use-mobile-native-chat-composer-tray'
 import type { PendingNativeChatImage } from './attachments/mobile-native-chat-image-attachment'
-import {
-  mobileNativeChatComposerPasteHandler,
-  type MobilePastedImages
-} from './attachments/mobile-native-chat-composer-paste'
+import { mobileNativeChatComposerPasteHandler } from './attachments/mobile-native-chat-composer-paste'
 import { useMobileNativeChatComposerMenu } from './menus/use-mobile-native-chat-composer-menu'
 import { mobileNativeChatComposerStyles as styles } from './field/mobile-native-chat-composer-styles'
 import { composerInputStyles as inputStyles } from '../../../components/composer-input/composer-input-styles'
@@ -40,11 +31,11 @@ import { useMobileNativeChatContextRing } from './commands/MobileNativeChatConte
 import type { MobileNativeChatSendIntent } from './delivery/mobile-native-chat-send'
 import { useMobileNativeChatSendSurfaceGeneration } from './delivery/use-mobile-native-chat-send-surface-generation'
 import { MobileNativeChatComposerMic } from './dictation/MobileNativeChatComposerMic'
-import type { MobileNativeChatMicProps } from './dictation/MobileNativeChatComposerMic'
 import { MobileNativeChatDictationLeading } from './dictation/MobileNativeChatDictationLeading'
-import type { MobileNativeChatStructuredComposer } from './commands/mobile-native-chat-structured-composer'
 import { useMobileNativeChatComposerGoalMode } from './commands/use-mobile-native-chat-composer-goal-mode'
+import { useMobileNativeChatOrcaCommands } from './commands/use-mobile-native-chat-orca-commands'
 import { MobileNativeChatComposerPlanChip } from './commands/MobileNativeChatComposerPlanChip'
+import type { MobileNativeChatComposerProps } from './mobile-native-chat-composer-props'
 import { MobileNativeChatMcpTray } from '../mcp/MobileNativeChatMcpTray'
 import { MobileNativeChatQuoteTab } from './quotes/MobileNativeChatQuoteTab'
 
@@ -52,64 +43,13 @@ const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
 const NO_FILES: PendingNativeChatFile[] = []
 
-export type MobileNativeChatComposerProps = MobileNativeChatMicProps & {
-  // Applies dictation's edit to the draft this composer shows; false when it can no longer take it.
-  insertDictation?: (insert: (draft: string) => string) => boolean | void
-  draftScopeKey?: string | null
-  editSession?: {
-    cancel: () => void
-    refuseCommand: (text: string) => boolean
-    locked: boolean
-    interactionModeSupported?: boolean
-  }
-  onPickSkill?: (skill: { name: string; path: string }) => void
-  inputRef?: React.RefObject<TextInputInstance | null>
-  // Terminal-backed chats keep curated commands and image-only attachment actions.
-  structured?: MobileNativeChatStructuredComposer | null
-  value: string
-  onChangeText: (text: string) => void
-  onSend: (text: string, intent?: MobileNativeChatSendIntent) => Promise<boolean>
-  /** While the agent works on a host that queues: what a tap on Send does and whether holding it offers the other way; null otherwise. */
-  sendFollowUp?: NativeChatSendFollowUp | null
-  /** Cmd/Ctrl+Enter on an empty composer: steers the head queued card, or with no turn running sends it. */
-  steerHead?: MobileNativeChatSteerHead
-  /** Changes whenever the route focuses a different chat composer surface. */
-  sendSurfaceId: string
-  /** Reads the retained route's focus generation without forcing a screen render. */
-  getSendCompletionGeneration: () => number
-  getComposerEditGeneration: () => number
-  agent?: string | null
-  sessionOptions?: MobileNativeChatSessionOptionPickersProps | null
-  /** A structured chat's context-window readout; null hides the ring. */
-  contextUsage?: NativeChatContextUsageSummary | null
-  onAttachImage?: () => void
-  /** Images pasted into the field attach like a Photos pick. */
-  onPasteImages?: (paste: MobilePastedImages) => void
-  attachments?: PendingNativeChatImage[]
-  onRemoveAttachment?: (id: string) => void
-  isAttaching?: boolean
-  disabled?: boolean
-  /** The desktop is out: typing and Send (which queues) still work; attaching and dictation can't. */
-  offline?: boolean
-  /** Only Send is unavailable; typing, dictation and attachments still edit the draft. */
-  sendDisabled?: boolean
-  placeholder?: string
-  filePaths?: string[]
-  onNeedFiles?: (query: string) => void
-  /** The host's disk-scanned skills, loaded once a skill trigger opens. */
-  skillDiscovery?: NativeChatSkillDiscoverySnapshot
-  onNeedSkills?: () => void
-  /** Set while the agent can be stopped; Stop takes Send's slot when Send can't deliver. */
-  stop?: { onStop?: () => void; held: boolean } | null
-}
+type Props = MobileNativeChatComposerProps
 
 /** What a chat's composer sends through, which the chat view hands down from its route. */
-export type MobileNativeChatSendProps = Pick<
-  MobileNativeChatComposerProps,
-  'onSend' | 'sendFollowUp'
->
+export type MobileNativeChatSendProps = Pick<Props, 'onSend' | 'sendFollowUp'>
 
 export function MobileNativeChatComposer({
+  roomReplies,
   inputRef,
   draftScopeKey,
   insertDictation,
@@ -142,13 +82,14 @@ export function MobileNativeChatComposer({
   sendDisabled = false,
   placeholder,
   filePaths = NO_FILE_PATHS,
+  roomMentions,
   onNeedFiles,
   skillDiscovery,
   onNeedSkills,
   stop = null,
   sendFollowUp = null,
   steerHead
-}: MobileNativeChatComposerProps): React.JSX.Element {
+}: Props): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const fallbackInputRef = useRef<TextInputInstance>(null)
@@ -167,6 +108,13 @@ export function MobileNativeChatComposer({
     onAttachPastedText: structured?.onAttachPastedText
   })
   const goal = useMobileNativeChatComposerGoalMode(structured, !!editSession, sendSurfaceId)
+  const orca = useMobileNativeChatOrcaCommands({
+    structured,
+    agent,
+    sendSurfaceId,
+    editing: editSession !== undefined,
+    clearDraft: () => onChangeText('')
+  })
   const menu = useMobileNativeChatComposerMenu({
     value,
     onChangeText: (text) => {
@@ -187,11 +135,12 @@ export function MobileNativeChatComposer({
         recordMobileNativeChatSkillPick(sendSurfaceId, skill)
       }
     },
-    refuseCommand: editSession?.refuseCommand,
+    refuseCommand: editSession?.refuseCommand ?? orca.refusesPick,
+    onPickOrcaCommand: editSession ? undefined : orca.onPickCommand,
     editing: editSession !== undefined,
     goalMode: goal.menu,
     agent,
-    structuredCatalog: structured?.catalog,
+    structuredCatalog: orca.catalog,
     interactionModeSupported:
       editSession?.interactionModeSupported ??
       sessionOptions?.controller.snapshot.some((entry) => entry.id === 'interactionMode'),
@@ -199,6 +148,7 @@ export function MobileNativeChatComposer({
       sessionOptions?.controller.optionSurface?.admits?.('interactionMode', mode) === true,
     onPickInteractionMode: (mode) => sessionOptions?.controller.setOption('interactionMode', mode),
     filePaths,
+    roomMentions,
     onNeedFiles,
     skillDiscovery,
     onNeedSkills,
@@ -234,7 +184,13 @@ export function MobileNativeChatComposer({
     intent?: MobileNativeChatSendIntent,
     keepFocus = false
   ): Promise<void> => {
-    if (!canSend || sendingRef.current || goal.consumeBareGoal(value, () => onChangeText(''))) {
+    if (
+      !canSend ||
+      sendingRef.current ||
+      // Before goal mode too, so an Orca command never becomes an objective.
+      orca.consume(value) ||
+      goal.consumeBareGoal(value, () => onChangeText(''))
+    ) {
       return
     }
     sendingRef.current = true
@@ -281,6 +237,7 @@ export function MobileNativeChatComposer({
         {editSession ? null : (
           <MobileNativeChatRemoteControlStrip remoteControl={structured?.remoteControl} />
         )}
+        {orca.usageSheet}
         {goal.strip}
         {editSession ? null : <MobileNativeChatQuoteTab {...{ value, onChangeText, fieldRef }} />}
         <View {...contextRing.barProps} style={styles.bar} testID="native-chat-composer">
@@ -347,6 +304,7 @@ export function MobileNativeChatComposer({
                 disabled={disabled || offline}
                 menu={menu}
               />
+              {roomReplies}
               {sessionOptions ? (
                 <MobileNativeChatSessionOptionPickers
                   {...sessionOptions}
@@ -401,6 +359,7 @@ export function MobileNativeChatComposer({
             )}
           </View>
         </View>
+        {editSession ? null : <MobileSlackMirrorItem />}
       </View>
     </View>
   )

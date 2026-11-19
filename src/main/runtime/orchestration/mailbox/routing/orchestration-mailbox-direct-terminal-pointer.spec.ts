@@ -75,6 +75,7 @@ describe('orchestration direct terminal mailbox pointer', () => {
         handle: TERMINAL_HANDLE,
         typeFilter: undefined,
         signal: undefined,
+        reader: undefined,
         reconciliation: new CheckMailReconciliation(harness.runtime, db),
         revalidateConsumer: () => {}
       })

@@ -94,6 +94,7 @@ export function createLocalWorkerStartDispatch(
     mutationReceipt: orchestrationMutation,
     followUpOf: followUp?.of,
     acceptedBy: followUp?.acceptedBy,
-    takesMailOf: followUp?.takesMailOf
+    takesMailOf: followUp?.takesMailOf,
+    ...(params.origin ? { originRef: params.origin } : {})
   })
 }

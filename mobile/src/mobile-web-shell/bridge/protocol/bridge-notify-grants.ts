@@ -11,6 +11,7 @@ import {
 import { BRIDGE_LIVENESS_PROBE_NOTIFY } from '../native-capabilities/bridge-liveness-probe-notify'
 import { BRIDGE_BACK_CLAIM_NOTIFY } from '../page-lifecycle/bridge-page-back'
 import { BRIDGE_PAGE_LOCATION } from '../page-lifecycle/bridge-page-location'
+import { BRIDGE_SWAP_SAFE_NOTIFY } from '../page-lifecycle/bridge-app-resumed'
 import { BRIDGE_PAGE_PAINTED } from '../page-lifecycle/bridge-page-painted'
 import { BRIDGE_ROUTE_PARAM_CLEAR } from '../page-lifecycle/bridge-route-update'
 import {
@@ -29,6 +30,7 @@ const BRIDGE_NOTIFY_GRANTS: Readonly<Record<BridgeNotifyName, string | null>> = 
   [BRIDGE_PAGE_PAINTED]: null,
   [BRIDGE_BACK_CLAIM_NOTIFY]: null,
   [BRIDGE_PAGE_LOCATION]: null,
+  [BRIDGE_SWAP_SAFE_NOTIFY]: null,
   navigate: 'navigate',
   [BRIDGE_NAVIGATE_BACK_NOTIFY]: 'navigate',
   storage: 'storage',

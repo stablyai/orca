@@ -1,5 +1,11 @@
 {
   "agentHistory": {
+    "interrupted": {
+      "count_one": "{{count}} chat was interrupted",
+      "count_other": "{{count}} chats were interrupted",
+      "failedCount_one": "{{count}} chat couldn't resume",
+      "failedCount_other": "{{count}} chats couldn't resume"
+    },
     "panel": {
       "skipped_one": "{{count}} transcript skipped",
       "skipped_other": "{{count}} transcripts skipped"
@@ -156,7 +162,96 @@
       "wslMoveOwnedByHost": "This automation's project now runs on its WSL host, which runs this automation there. Orca no longer runs this local copy."
     }
   },
+  "bots": {
+    "chats": {
+      "moreMatches_one": "{{count}} more match. Search for more of a name to narrow it.",
+      "moreMatches_other": "{{count}} more matches. Search for more of a name to narrow it.",
+      "showMoreWorkers_one": "Show {{count}} more worker",
+      "showMoreWorkers_other": "Show {{count}} more workers"
+    },
+    "items": {
+      "needYouCount_one": "{{count}} item needs you",
+      "needYouCount_other": "{{count}} items need you",
+      "pill": {
+        "moveCount_one": "Move {{count}} item to",
+        "moveCount_other": "Move {{count}} items to"
+      },
+      "stale": {
+        "confirm_one": "Cancel {{count}} stale item?",
+        "confirm_other": "Cancel {{count}} stale items?"
+      },
+      "toast": {
+        "moveFailed_one": "Couldn’t move it: {{why}}",
+        "moveFailed_other": "Couldn’t move {{count}} items: {{why}}"
+      }
+    },
+    "lookAround": {
+      "suggestions_one": "{{count}} suggestion",
+      "suggestions_other": "{{count}} suggestions"
+    },
+    "panel": {
+      "needYou_one": "{{count}} needs you",
+      "needYou_other": "{{count}} need you"
+    },
+    "upNext": {
+      "showMore_one": "Show {{count}} more",
+      "showMore_other": "Show {{count}} more"
+    }
+  },
   "chat": {
+    "botCards": {
+      "memory": {
+        "added": "Added",
+        "indexChanged": "MEMORY.md changed",
+        "noteChanged": "Note changed",
+        "removed": "Removed"
+      },
+      "offer": {
+        "create": "Create bot",
+        "created": "Created",
+        "createdAskedMany": "Created · asked to take over {{count}} workspaces",
+        "createdAskedOne": "Created · asked to take over 1 workspace",
+        "createdTookOverMany": "Created · took over {{count}} workspaces",
+        "createdTookOverOne": "Created · took over 1 workspace",
+        "createdTookOverSome": "Created · took over {{taken}} of {{count}} workspaces",
+        "deleted": "Created, then deleted",
+        "does": "Does",
+        "edit": "Edit",
+        "nameTaken": "You already have a bot named {{name}}.",
+        "open": "Open",
+        "origin": "Proposed by {{bot}}",
+        "originTemplate": "From {{template}}, proposed by {{bot}}",
+        "rename": "Rename",
+        "reports": "Reports",
+        "takesOver": "Takes over",
+        "takesOverMany": "Takes over {{count}} workspaces",
+        "takesOverOne": "Takes over 1 workspace",
+        "template": "Template",
+        "watches": "Watches",
+        "willPropose": "Will propose"
+      },
+      "request": {
+        "asked": "Asked",
+        "botsOff": "Bots are off.",
+        "couldNotTake": "{{bot}} couldn't take it.",
+        "handedTo": "Handed to",
+        "notSentTo": "Not sent to",
+        "paused": "{{bot}} is paused."
+      },
+      "toolAdded": {
+        "heading": "Added a tool",
+        "remove": "Remove",
+        "removed": "Removed"
+      },
+      "webhook": {
+        "sampleNote": "A sample starts a real run.",
+        "secretAdd": "Add signing secret…",
+        "secretChange": "Signing secret: {{sender}} · Change…",
+        "sendSample": "Send a sample call",
+        "starts": "Webhook · starts “{{automation}}”",
+        "title": "Webhook"
+      }
+    },
     "mcp": {
       "status": {
         "tools_one": "{{count}} tool",
@@ -275,6 +370,10 @@
       "needsYou_other": "{{count}} need you"
     },
     "native-chat": {
+      "connectorAsker": {
+        "earlierMessages_one": "{{count}} earlier message in the thread",
+        "earlierMessages_other": "{{count}} earlier messages in the thread"
+      },
       "turnDiff": {
         "changedFiles_one": "{{count}} changed file",
         "changedFiles_other": "{{count}} changed files"
@@ -426,6 +525,7 @@
       "forkOriginalUnavailableNamed": "{{agent}} cannot fork this response in \"{{detail}}\". Open that chat and fork from there.",
       "pluginInputRequired": "{{agent}} stopped because the \"{{plugin}}\" plugin is waiting for input in a terminal pane. Disable the plugin for chat sessions, or run the task in a {{agent}} terminal.",
       "providerResponseFailed": "{{agent}} couldn't finish this response. Open Details for more information.",
+      "providerResponseFailedQuoted": "{{agent}} couldn't finish this response: {{detail}}.",
       "providerSafetyStopped": "{{agent}} stopped this response after a safety check. Review your request and send again.",
       "providerUnavailable": "{{agent}} couldn't respond because the service is busy. Pick another model, or wait a little and send again.",
       "selectedModel": "the selected model"
