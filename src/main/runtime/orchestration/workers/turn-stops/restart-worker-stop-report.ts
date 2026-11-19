@@ -67,9 +67,9 @@ async function reportCutChat(
         (entry) => entry.dispatch.id === dispatchId
       )
     : undefined
-  // The offers were read once for the pass: a chat a person continued since then has moved on.
+  // The offers were read once for the pass: any turn or rest observed since then supersedes the cut.
   const now = readWorkerPresence(deps.db, dispatchId)
-  if (!cut || !worker || (now?.presence === 'working' && now.generation !== seen)) {
+  if (!cut || !worker || now?.generation !== seen) {
     return
   }
   const lastOutput = chats.lastOutput(sessionId)
@@ -166,8 +166,12 @@ export async function reportWorkerStopsAcrossRestart(
       })
     )
   }
+  // Unread offers leave every chat to a person; terminals are decided all the same.
   const offered = chats
-    ? await chats.offeredCuts()
+    ? await chats.offeredCuts().catch((error: unknown) => {
+        console.warn('[orchestration] reading restart offers failed', error)
+        return null
+      })
     : new Map<string, StructuredAgentSessionRestartCut>()
   const root = (sessionId: string) => chats?.lineageRoot(sessionId) ?? sessionId
   // A Dispatch names its chat's /clear root; the cut names the successor that ran.
@@ -176,7 +180,7 @@ export async function reportWorkerStopsAcrossRestart(
     cutsByRoot.set(root(sessionId), [...(cutsByRoot.get(root(sessionId)) ?? []), sessionId])
   }
   // A chat whose cut still waits on a person's decision stays silent until that person acts.
-  const awaitingDecision = new Set([...offered.keys()].map(root))
+  const awaitingDecision = offered && new Set([...offered.keys()].map(root))
   for (const dispatchId of openDispatchIds(db)) {
     // Re-read: an earlier report, a worker's own report or the terminal sweep may have closed it.
     const dispatch = db.getDispatchContextById(dispatchId)
@@ -198,7 +202,7 @@ export async function reportWorkerStopsAcrossRestart(
       continue
     }
     for (const cut of cutsByRoot.get(sessionId) ?? []) {
-      if (chats) {
+      if (chats && offered) {
         visit(dispatchId, () => reportCutChat(deps, chats, dispatchId, cut, sessionId, offered))
       }
     }
@@ -210,7 +214,7 @@ export async function reportWorkerStopsAcrossRestart(
   // No wait for mail outlives a restart, so none holds back a rest any more.
   for (const dispatchId of listUndecidedWorkerRests(db)) {
     const session = db.getDispatchContextById(dispatchId)?.assignee_orca_session_id
-    if (!session || !awaitingDecision.has(session)) {
+    if (!session || (awaitingDecision && !awaitingDecision.has(session))) {
       visit(dispatchId, () => void reconsiderWorkerRest(db, dispatchId, deps.reportDeps))
     }
   }

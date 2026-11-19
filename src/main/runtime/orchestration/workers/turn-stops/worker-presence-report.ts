@@ -20,6 +20,8 @@ import {
   type WorkerTurnStopReportDeps
 } from './worker-turn-stop-report'
 
+import { isTargetStopRequested } from '../lifecycle/worker-exit-observation'
+
 const LIVE_ATTACHMENT_STATES: readonly string[] = POTENTIALLY_LIVE_REMOTE_ATTACHMENT_STATES
 
 // Kept with an undecided rest; the report shows only the end of it.
@@ -266,12 +268,12 @@ function reconcileWorkerReport(
     return false
   }
   // Left undecided: the same rest seen again is decided again. Going away, or a failed request the
-  // chat showed, is never deliberate.
+  // chat showed, is never deliberate; a rest of a worker its coordinator is stopping is no news.
   if (
     rest.reason !== 'exited' &&
     rest.reason !== 'lost' &&
-    !('requestError' in rest && rest.requestError) &&
-    isDeliberateRest(db, target, rest, deps)
+    (isTargetStopRequested(db, target) ||
+      (!('requestError' in rest && rest.requestError) && isDeliberateRest(db, target, rest, deps)))
   ) {
     return keep()
   }

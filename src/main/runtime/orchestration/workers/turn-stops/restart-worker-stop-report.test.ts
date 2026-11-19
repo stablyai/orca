@@ -403,4 +403,65 @@ describe('worker stops across a restart', () => {
     })
     await vi.waitFor(() => expect(ctx.mail()).toHaveLength(1))
   })
+
+  it('drops a cut once its worker has started and rested again since the offers were read', async () => {
+    const ctx = setup(formatOrcaSessionAddress(CHAT_SESSION))
+    const [worker] = chatWorkerDispatches(CHAT_SESSION, ctx.db)
+    const target = { kind: 'local' as const, dispatch: worker!.dispatch }
+    await chatPass(ctx, { cause: 'crash', turnId: 'turn-0' }, async () => {
+      observeWorker(ctx.db, target, { presence: 'working', newTurn: true }, ctx.reportDeps)
+      observeWorker(
+        ctx.db,
+        target,
+        {
+          presence: 'at-rest',
+          fence: 'turn:turn-1',
+          legacyStopKey: 'turn:turn-1',
+          rest: { from: worker!.from, reason: 'needs-input', lastOutput: undefined }
+        },
+        ctx.reportDeps
+      )
+    })
+    expect(ctx.mail().map((report) => report.subject)).toEqual(['Worker is waiting on a prompt'])
+  })
+
+  it('keeps a held-back rest silent at startup while its coordinator stops the worker', async () => {
+    const ctx = setup(formatOrcaSessionAddress(CHAT_SESSION))
+    const [worker] = chatWorkerDispatches(CHAT_SESSION, ctx.db)
+    observeWorker(
+      ctx.db,
+      { kind: 'local', dispatch: worker!.dispatch },
+      {
+        presence: 'at-rest',
+        fence: 'turn:turn-1',
+        legacyStopKey: 'turn:turn-1',
+        rest: { from: worker!.from, reason: 'needs-input', lastOutput: undefined }
+      },
+      { ...ctx.reportDeps, isWaitingForMail: () => true }
+    )
+    ctx.db.getWorkerDispatch = () =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pass reads only the state.
+      ({ state: 'stopping' }) as ReturnType<typeof ctx.db.getWorkerDispatch>
+    await chatPass(ctx, null, undefined, new Set())
+    expect(ctx.mail()).toEqual([])
+  })
+
+  it('still visits resting terminals when the restart offers cannot be read', async () => {
+    const ctx = setup(HANDLE)
+    const visited: string[] = []
+    await reportWorkerStopsAcrossRestart({
+      db: ctx.db,
+      reportDeps: ctx.reportDeps,
+      reportRestingPane: async (paneKey) => void visited.push(paneKey),
+      chats: {
+        cutByLastRun: new Set(),
+        lineageRoot: (sessionId) => sessionId,
+        offeredCuts: () => Promise.reject(new Error('capsule unreadable')),
+        open: async () => undefined,
+        lastOutput: () => undefined,
+        cutOf: async () => null
+      }
+    })
+    expect(visited).toEqual([PANE])
+  })
 })
