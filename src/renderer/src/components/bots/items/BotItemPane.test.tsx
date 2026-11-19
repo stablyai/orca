@@ -96,7 +96,11 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-type Control = { open: (index: number) => void; redraw: () => void }
+type Control = {
+  open: (index: number) => void
+  redraw: () => void
+  setOffline: (offline: boolean) => void
+}
 /** A Closed page being read for a step: it lands on the next item, or fails. */
 type PageRead = { land: () => void; fail: () => void }
 
@@ -112,10 +116,11 @@ function pane({
   const control: { current: Control | null } = { current: null }
   function Walk(): React.JSX.Element {
     const [index, setIndex] = useState(start)
+    const [isOffline, setOffline] = useState(offline)
     const [pending, setPending] = useState(false)
     const [readFailed, setReadFailed] = useState(failed)
     const [, redraw] = useReducer((n: number) => n + 1, 0)
-    control.current = { open: setIndex, redraw }
+    control.current = { open: setIndex, redraw, setOffline }
     const read = (direction: 1 | -1): void => {
       setPending(true)
       setReadFailed(false)
@@ -147,7 +152,9 @@ function pane({
       markGone: vi.fn(),
       close: vi.fn(() => null)
     }
-    return <BotItemPane bot={BOT} uid={UIDS[index]} walk={walk} offline={offline} onBack={onBack} />
+    return (
+      <BotItemPane bot={BOT} uid={UIDS[index]} walk={walk} offline={isOffline} onBack={onBack} />
+    )
   }
   render(
     <TooltipProvider>
@@ -263,6 +270,19 @@ it('keeps the arrow focused when an unread item arrives and its arrows move into
   })
   expect(document.activeElement).toBe(arrow('Previous item'))
   expect(screen.getByTestId('comment-box').contains(document.activeElement)).toBe(true)
+})
+
+it('gives the pane focus when the arrows are replaced while none of them can take it', async () => {
+  unread.add('c')
+  const { control } = pane()
+  fireEvent.click(arrow('Next item'))
+  arrow('Previous item').focus()
+  await act(async () => {
+    unread.delete('c')
+    control().setOffline(true)
+  })
+  expect(arrow('Previous item').disabled).toBe(true)
+  expect(document.activeElement).toBe(paneRoot())
 })
 
 it('gives the pane focus when a chord from a removed control lands on an unread item', () => {

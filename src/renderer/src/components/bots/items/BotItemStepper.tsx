@@ -229,6 +229,9 @@ function keepArrowFocus(pane: HTMLElement | null, direction: BotItemStepDirectio
   const arrow = botItemStepArrow(pane, direction)
   if (pane && dropped && arrow && !arrow.disabled) {
     arrow.focus()
+  } else if (pane && (active === null || active === document.body)) {
+    // No enabled arrow to take it (offline, say): the pane keeps Esc, the chords and typing working.
+    pane.focus({ preventScroll: true })
   }
 }
 
