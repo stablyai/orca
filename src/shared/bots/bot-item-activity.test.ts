@@ -166,7 +166,7 @@ it('never takes a plain comment for the answer to a question asked on a host tha
   ])
 })
 
-it('shows a recorded answer with its question, not again as a comment or a status move', () => {
+it('keeps the noted ask move and folds its recorded answer into the question', () => {
   const answer = {
     id: 'e4',
     kind: 'commented' as const,
@@ -175,7 +175,8 @@ it('shows a recorded answer with its question, not again as a comment or a statu
     at: 250
   }
   const answered = [
-    ...ANSWERABLE,
+    ...ANSWERABLE.slice(0, 2),
+    event('e3', 'status', 200, { from: 'planned', to: 'needs_you', note: 'blocked on you' }),
     answer,
     {
       id: 'e5',
@@ -188,7 +189,7 @@ it('shows a recorded answer with its question, not again as a comment or a statu
 
   const entries = botItemActivity(makeTestBotItem(6), answered)
 
-  expect(entries.map((entry) => entry.key)).toEqual(['e1', 'e2'])
+  expect(entries.map((entry) => entry.key)).toEqual(['e1', 'e2', 'e3'])
   expect(entries[1]).toMatchObject({ kind: 'comment', question: 'answered', answer: { id: 'e4' } })
 })
 
@@ -204,27 +205,6 @@ it('keeps an answer whose question is on an earlier page, on its own', () => {
   ]
 
   expect(botItemActivity(makeTestBotItem(6), page)).toMatchObject([{ kind: 'answer', key: 'e9' }])
-})
-
-it('keeps the receipt of a question whose Needs you move carried a note', () => {
-  const noted = [
-    event('e1', 'made', 100, { status: 'planned' }),
-    event('e2', 'commented', 200, { text: 'Ship behind a flag?', answerable: true }),
-    event('e3', 'status', 200, { from: 'planned', to: 'needs_you', note: 'blocked on you' }),
-    {
-      id: 'e4',
-      kind: 'commented' as const,
-      actor: OWNER,
-      data: { text: 'Yes', decisions: [{ picks: [], text: 'Yes' }], answers: 'e2' },
-      at: 250
-    }
-  ]
-
-  expect(botItemActivity(makeTestBotItem(6), noted)[1]).toMatchObject({
-    key: 'e2',
-    question: 'answered',
-    answer: { id: 'e4' }
-  })
 })
 
 it("marks a question answered in a comment when the owner's reply moved the item to In progress", () => {
