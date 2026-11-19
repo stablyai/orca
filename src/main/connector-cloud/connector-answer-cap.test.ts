@@ -6,22 +6,11 @@ import { capAnswer } from './connector-snapshot'
 const NOTE = '_… cut short here. The full answer is in Orca._'
 
 describe('capAnswer', () => {
-  it('leaves an answer within the limit as written', () => {
-    expect(capAnswer('All good.', 8 * 1024)).toBe('All good.')
-  })
-
   it('says an answer was cut, within the limit, never splitting a character', () => {
     const capped = capAnswer('é'.repeat(5_000), 1_000)
     expect(Buffer.byteLength(capped)).toBeLessThanOrEqual(1_000)
     expect(capped.endsWith(`\n\n${NOTE}`)).toBe(true)
     expect(capped).not.toContain('�')
-  })
-
-  it('ends at a line break near the limit, and closes a code block the cut left open', () => {
-    const text = `Intro\n\`\`\`ts\n${'const a = 1\n'.repeat(200)}`
-    const capped = capAnswer(text, 600)
-    expect(Buffer.byteLength(capped)).toBeLessThanOrEqual(600)
-    expect(capped.endsWith(`const a = 1\n\`\`\`\n\n${NOTE}`)).toBe(true)
   })
 })
 

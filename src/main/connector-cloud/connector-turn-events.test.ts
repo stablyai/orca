@@ -92,18 +92,15 @@ describe('ConnectorTurnEvents', () => {
     ])
   })
 
-  it('keeps a chat turn’s origin through a restart, so Orca-typed turns stay unmirrored', () => {
-    new ConnectorTurnEvents(userDataPath, 'ada').observe({ ...turnEnded(1), origin: 'local' })
-    expect(new ConnectorTurnEvents(userDataPath, 'ada').next(1)?.batch).toEqual([
-      expect.objectContaining({ turnId: 1, origin: 'local' })
-    ])
-  })
-
-  it('keeps a turn end’s pull request links through a restart', () => {
+  it('keeps a turn end’s origin and pull request links through a restart', () => {
     const links = [{ url: 'https://github.com/org/repo/pull/7', title: 'Pull request #7' }]
-    new ConnectorTurnEvents(userDataPath, 'ada').observe({ ...turnEnded(1), links })
+    new ConnectorTurnEvents(userDataPath, 'ada').observe({
+      ...turnEnded(1),
+      origin: 'local',
+      links
+    })
     expect(new ConnectorTurnEvents(userDataPath, 'ada').next(1)?.batch).toEqual([
-      expect.objectContaining({ turnId: 1, links })
+      expect.objectContaining({ turnId: 1, origin: 'local', links })
     ])
   })
 
