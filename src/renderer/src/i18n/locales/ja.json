@@ -6322,7 +6322,6 @@
           "e029a2d775": "状態",
           "c2c7a45cda": "なし",
           "hosts": "ホスト",
-          "showSection": "表示",
           "allHostsDetail": "すべてのホストを表示",
           "configuredSshHost": "設定済み SSH",
           "projectSshHost": "プロジェクト SSH",
@@ -6335,7 +6334,6 @@
           "automation": "オートメーション",
           "folderPathIdentity": "ブランチ / フォルダーパス",
           "cli": "Orca CLI",
-          "workspaceOptions": "ワークスペースのオプション",
           "optionsActiveFilters_other": "ワークスペースのオプション（{{count}} 個のフィルターが有効）",
           "optionsFilterCount_other": "ワークスペースのオプション（{{count}} 個のフィルター）"
         },
