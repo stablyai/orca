@@ -14,11 +14,6 @@ export function useSkillInstallDetectedAgents(target: {
     const isCurrent = (): boolean => generation === generationRef.current
     setDetected(null)
     const probe = async (): Promise<readonly string[] | null> => {
-      if (environmentId.startsWith('ssh:')) {
-        return window.api.preflight.detectRemoteAgents({
-          connectionId: environmentId.slice('ssh:'.length)
-        })
-      }
       if (environmentId !== 'local') {
         return null
       }

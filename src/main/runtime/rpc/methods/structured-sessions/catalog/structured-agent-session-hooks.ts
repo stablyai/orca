@@ -1,5 +1,5 @@
-import { isNativeLocalLocation } from '../../../../../../shared/execution-host'
-import { HooksParams } from '../../../../../../shared/rpc-contract/structured-agent-session-hooks-params'
+import { isNativeLocalLocation } from '../../../../../../shared/execution-host/execution-host'
+import { HooksParams } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-hooks-params'
 import { defineMethod } from '../../../core'
 import {
   requireInstalledStructuredHost,

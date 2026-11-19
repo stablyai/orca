@@ -5,7 +5,7 @@ import { deriveToolInputPreview, readString } from './tool-input-preview'
 import { readClaudeBatchSettledRequests } from './claude-settled-permission-requests'
 import { extractPromptText } from './prompt-fields'
 import { hasExplicitUserPrompt } from './provider-event-routing'
-import { CLAUDE_NEW_SESSION_START_SOURCES } from './providers/claude-session-start-sources'
+import { CLAUDE_NEW_SESSION_START_SOURCES } from './providers/claude/lifecycle/claude-session-start-sources'
 
 /** The fields that tie a Claude PermissionRequest to the PreToolUse it is asking about. */
 export type ClaudeToolRequestFields = {
@@ -67,15 +67,19 @@ export function withClaudeToolRequestId(
   state: HookListenerState,
   paneKey: string,
   eventName: unknown,
-  hookPayload: Record<string, unknown>
+  hookPayload: Record<string, unknown>,
+  opensTurn = false
 ): Record<string, unknown> {
   const toolUseId = readFirstString(hookPayload, ['tool_use_id', 'toolUseId'])
   const fields = readRequestFields(hookPayload)
   const ended = endedRequests(eventName, toolUseId, fields.toolAgentId, hookPayload)
+  // A new prompt_id is the next turn even when its prompt event has not arrived: no lead request outlives its turn.
   const open =
     ended === 'all'
       ? []
-      : (state.claudeOpenToolUsesByPaneKey.get(paneKey) ?? []).filter((entry) => !ended(entry))
+      : (state.claudeOpenToolUsesByPaneKey.get(paneKey) ?? []).filter(
+          (entry) => !ended(entry) && !(opensTurn && entry.toolAgentId === undefined)
+        )
   if (eventName === 'Elicitation') {
     // An MCP dialog waits on the user too; batches never list it, so only its own result or a boundary ends it.
     addUserWait(open, { ...fields, ...elicitationWait(hookPayload) })

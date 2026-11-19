@@ -1,17 +1,17 @@
 import * as z from 'zod'
-import type { SupportedUiLocale } from '../../../src/shared/ui-locale'
+import type { SupportedUiLocale } from '../../../src/shared/i18n/ui-locale'
 import { SHA256_PATTERN } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 import {
   MOBILE_WEB_BUNDLE_LOCALE_CATALOG_METHOD,
   MobileWebBundleLocaleCatalogResultSchema
 } from '../../../src/shared/mobile-web-bundle/locale-catalog-contract'
-import { withTimeoutResult } from '../../../src/shared/promise-timeout-fallback'
+import { withTimeoutResult } from '../../../src/shared/concurrency/promise-timeout-fallback'
 import {
   decodeDeviceStoreValue,
   encodeDeviceStoreValue
 } from '../device-store/device-store-value-codec'
-import type { BridgeRpcClient } from '../mobile-web-shell/bridge/bridge-rpc-client'
-import type { PageDeviceStore } from '../mobile-web-shell/bridge/page-device-store'
+import type { BridgeRpcClient } from '../mobile-web-shell/bridge/client-state/bridge-rpc-client-contract'
+import type { PageDeviceStore } from '../mobile-web-shell/bridge/page-storage/page-device-store'
 import { isMobileMethodUnavailableError } from '../transport/rpc/mobile-method-unavailable'
 import { captureRpcOperationSettlement, defineRpcOperation } from '../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'

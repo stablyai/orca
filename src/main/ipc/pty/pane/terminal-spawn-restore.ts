@@ -1,8 +1,8 @@
-import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { pendingByPaneKey, rendererSerializerReadiness } from './serializer-state'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { buildFreshShellViewportBlankingSequence } from '../../../../shared/terminal/viewport/terminal-fresh-shell-viewport'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
+import { buildFreshShellViewportSequence } from '../../../../shared/terminal/viewport/terminal-fresh-shell-viewport'
 
 export function seedHeadlessTerminalFromSpawnResult(
   runtime: OrcaRuntimeService | undefined,
@@ -43,8 +43,10 @@ export function seedHeadlessTerminalFromSpawnResult(
         : undefined
     // A fresh shell follows the restored history: park the cursor below it, as the window does,
     // or a view painted from this copy (a paired host's desktop, a phone) joins the new prompt.
-    const seed = `${result.coldRestore.scrollback}${buildFreshShellViewportBlankingSequence(
-      size?.rows ?? 24
+    // Cold restores come only from this host's daemon, so its platform names the PTY backend.
+    const seed = `${result.coldRestore.scrollback}${buildFreshShellViewportSequence(
+      size?.rows ?? 24,
+      process.platform === 'win32'
     )}`
     runtime.seedHeadlessTerminal(result.id, seed, size, {
       cwd: result.coldRestore.cwd,

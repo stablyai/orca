@@ -2,7 +2,7 @@ import type { RuntimeAccountController } from '../../agent-session/environment/r
 import { applyRemoteViewerLaunchEnv } from './remote-viewer-launch-env'
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { AgentLaunchPreferences } from '../../../../shared/agent-session/agent-session-host-authority'
+import type { AgentLaunchPreferences } from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import {
   agentLaunchQuotingShell,
   remoteExecutionPlatform,
@@ -15,7 +15,7 @@ import { resolveBareAgentLaunchCommand } from './runtime-agent-launch-resolution
 import {
   buildExecutionHostAgentStartupPlan,
   planExecutionHostStartupWithPromptCandidate
-} from '../../../opencode/opencode-model-startup-plan'
+} from '../../../opencode/model-launch/opencode-model-startup-plan'
 import { agentPromptRidesLaunchCommand } from '../../../../shared/agent-launch/startup/tui-agent-startup'
 import {
   launchHostProvesAgentInFront,

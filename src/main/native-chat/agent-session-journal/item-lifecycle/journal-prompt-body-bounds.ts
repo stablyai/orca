@@ -6,7 +6,7 @@ import type {
   AgentJournalQuestionItem,
   AgentJournalFreeTextInput
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { isPlanApprovalSubject } from '../../../../shared/agent-session/agent-session-approval-subject'
+import { isPlanApprovalSubject } from '../../../../shared/agent-session/requests/prompts/agent-session-approval-subject'
 import { boundInlineText, boundPayload } from './journal-payload-bounds'
 
 export const MAX_JOURNAL_PROMPT_OPTIONS = 64
@@ -137,7 +137,8 @@ function boundPromptOptions(
       : { description: boundInlineText(option.description, JOURNAL_PROMPT_OPTION_LIMITS).text }),
     ...(option.preview === undefined
       ? {}
-      : { preview: boundInlineText(option.preview, JOURNAL_PROMPT_OPTION_PREVIEW_LIMITS).text })
+      : { preview: boundInlineText(option.preview, JOURNAL_PROMPT_OPTION_PREVIEW_LIMITS).text }),
+    ...(option.intent === undefined ? {} : { intent: option.intent })
   }))
 }
 

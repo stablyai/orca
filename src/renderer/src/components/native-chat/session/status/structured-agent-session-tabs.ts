@@ -1,7 +1,7 @@
 import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
-import type { Tab } from '../../../../../../shared/tab-types'
-import { readTabMapChanges } from '@/store/keyed-record-change-reads'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
+import { readTabMapChanges } from '@/store/record-transitions/keyed-record-change-reads'
 
 export type StructuredTab = Tab & { contentType: 'agent-session' }
 
@@ -182,11 +182,17 @@ export function getStructuredAgentSessionTabs(
   return list
 }
 
+const emptyPaneTabs: ReadonlyMap<string, StructuredTab> = new Map()
 const paneTabs = new WeakMap<readonly StructuredTab[], ReadonlyMap<string, StructuredTab>>()
 export function getStructuredAgentSessionTabsByPaneKey(
-  tabs: TabsByWorktree
+  tabs: TabsByWorktree | Tab[] | undefined
 ): ReadonlyMap<string, StructuredTab> {
-  const structuredTabs = getStructuredAgentSessionTabs(tabs)
+  if (!tabs) {
+    return emptyPaneTabs
+  }
+  const structuredTabs = Array.isArray(tabs)
+    ? structuredTabsOf(tabs, undefined)
+    : getStructuredAgentSessionTabs(tabs)
   const cached = paneTabs.get(structuredTabs)
   if (cached) {
     return cached

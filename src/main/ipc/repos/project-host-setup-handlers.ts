@@ -1,7 +1,6 @@
-import type { BrowserWindow } from 'electron'
-import { ipcMain } from 'electron'
+import { type BrowserWindow, ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type {
   ProjectHostSetupCreateArgs,
   ProjectHostSetupCreateResult,
@@ -11,14 +10,17 @@ import type {
   ProjectHostSetupResult,
   ProjectHostSetupUpdateArgs,
   ProjectHostSetupUpdateResult
-} from '../../../shared/project-types'
-import { getProjectHostSetupForRepo } from '../../../shared/project-host-setup-lookup'
+} from '../../../shared/project/project-types'
+import { getProjectHostSetupForRepo } from '../../../shared/project/host-setup/project-host-setup-lookup'
 import {
   linkImportedFolderToProject,
   type RepositoryMetadataOwner
 } from '../../workspaces/catalog/imported-folder-project-link'
 import { readCurrentGitRemoteIdentity } from '../../workspaces/catalog/repo-git-remote-identity'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import { updateProjectHostSetupWithProvenKind } from '../../workspaces/catalog/folder-repo-git-conversion'
 import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
@@ -32,12 +34,12 @@ import {
   parseProjectGroupIpcArgs
 } from './repo-ipc-arg-schemas'
 import { addLocalRepoFromPath } from './local-repo-registration'
-import { sshHostWithoutServerMessage } from '../../../shared/project-host-setup-target'
+import { sshHostWithoutServerMessage } from '../../../shared/project/host-setup/project-host-setup-target'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import {
   assertWslMoveHostSetupIdWritable,
   assertWslMoveHostSetupWritable
-} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
 function buildProjectHostSetupResult(store: Store, repo: Repo): ProjectHostSetupResult {
   const setup = getProjectHostSetupForRepo(store.getProjectHostSetups(), repo)

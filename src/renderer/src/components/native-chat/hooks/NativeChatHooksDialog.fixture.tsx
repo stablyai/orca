@@ -1,5 +1,5 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
-import type { AgentSessionHooks } from '../../../../../shared/agent-session/agent-session-hooks'
+import type { AgentSessionHooks } from '../../../../../shared/agent-session/options/protocol/agent-session-hooks'
 import NativeChatHooksDialog from './NativeChatHooksDialog'
 
 const listing: AgentSessionHooks = {

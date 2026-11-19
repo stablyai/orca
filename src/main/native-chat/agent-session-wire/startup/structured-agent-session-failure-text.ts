@@ -6,7 +6,7 @@ import {
   type AgentSessionFailureKind,
   type ProviderDiagnostic
 } from '../../../../shared/agent-session/failures/agent-session-failure'
-import type { AgentSessionArgumentProblem } from '../../../../shared/agent-session/agent-session-argument-problem'
+import type { AgentSessionArgumentProblem } from '../../../../shared/agent-session/failures/agent-session-argument-problem'
 import type { AgentSessionRefusalReason } from '../../../../shared/agent-session/failures/agent-session-refusal-details'
 import {
   agentSessionFailureWords,
@@ -27,9 +27,10 @@ import {
   providerLaunchFolderMissing
 } from '../../../provider-process/provider-executable-missing'
 import { providerRequestTimeoutOf } from '../../../provider-process/provider-request-timeout'
+import { providerOutcomeLost } from '../../../provider-process/provider-process-exit-status'
 import { findInErrorChain } from '../../../provider-process/provider-error-chain'
-import { argumentProblemOf } from '../../structured-agent-arguments-error'
-import { agentCliInstallationProblemOf } from '../../agent-cli-installation-error'
+import { argumentProblemOf } from '../../agent-launch/structured-agent-arguments-error'
+import { agentCliInstallationProblemOf } from '../../agent-launch/agent-cli-installation-error'
 import { agentCliInstallationFacts } from '../../../../shared/agent-launch/catalog/agent-cli-installation-problem'
 
 const TYPED_START_REFUSALS = [
@@ -121,6 +122,9 @@ export function startupAcquisitionRefusal(
 
 /** A failed start keeps its typed refusal or observed exit, and the provider diagnostic its Details show. */
 export function providerStartupFailureFact(cause?: unknown): SubmissionRejectionFact {
+  if (providerOutcomeLost(cause)) {
+    return agentSessionFailureFact('hostFault')
+  }
   cause = startupAcquisitionRefusal(cause) ?? cause
   const installation = agentCliInstallationProblemOf(cause)
   if (installation) {

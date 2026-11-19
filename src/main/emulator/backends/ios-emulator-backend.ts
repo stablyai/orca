@@ -1,6 +1,6 @@
 import { platform } from 'node:os'
 import { EmulatorError } from '../emulator-errors'
-import { emulatorFailureText } from '../../../shared/emulator-failure-copy'
+import { emulatorFailureText } from '../../../shared/emulator/emulator-failure-copy'
 import type { EmulatorSessionInfo } from '../emulator-types'
 import {
   ensureSimulatorBooted,

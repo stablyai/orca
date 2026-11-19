@@ -1,9 +1,12 @@
-import { formatOrcaSessionAddress, isOrcaSessionId } from '../../../../shared/orca-session-address'
+import {
+  formatOrcaSessionAddress,
+  isOrcaSessionId
+} from '../../../../shared/agent-session/identity/orca-session-address'
 import type { RefObject } from 'react'
 import type { NativeChatComposerHandle } from '../native-chat/composer/native-chat-composer-types'
 import { LazyOrchestrationCrewPanel } from './LazyOrchestrationCrewPanel'
 import { useOrchestrationPanelEnabled } from './use-orchestration-panel-enabled'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export function NativeChatCrewPanel({
   target,

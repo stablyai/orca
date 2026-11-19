@@ -1,6 +1,6 @@
 import { GENERAL_SETTING_ANCHORS } from '../general/general-setting-anchors'
 import type React from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import {
   TERMINAL_FONT_WEIGHT_MAX,
   TERMINAL_FONT_WEIGHT_MIN,
@@ -15,10 +15,8 @@ import {
   resolveEditorLigaturesMode,
   type EditorLigaturesMode
 } from '../../../../../shared/editor/editor-typography'
-import {
-  supportsCodeFontSmoothing,
-  type CodeFontSmoothing
-} from '@/lib/editor/appearance/code-font-smoothing'
+import type { CodeFontSmoothing } from '@/lib/editor/appearance/code-font-smoothing'
+import { isMacUserAgent } from '../../../app-shell/platform/user-agent-platform'
 import { useTranslate } from '@/i18n/use-translate'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import {
@@ -133,7 +131,7 @@ export function EditorTypographySettings({
         />
       </SearchableSetting>
 
-      {supportsCodeFontSmoothing() ? (
+      {isMacUserAgent() ? (
         <SearchableSetting id={GENERAL_SETTING_ANCHORS.fontSmoothing} {...entries.fontSmoothing}>
           <SettingsRow
             label={entries.fontSmoothing.title}

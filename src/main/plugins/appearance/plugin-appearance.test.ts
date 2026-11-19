@@ -2,12 +2,12 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { getDefaultSettings } from '../../../shared/constants'
+import { getDefaultSettings } from '../../../shared/orca-profiles/constants'
 import { fingerprintPluginConsent } from '../../../shared/plugins/approval/plugin-consent-fingerprint'
 import { pluginManifestSchema } from '../../../shared/plugins/manifest/plugin-manifest'
 import { PLUGIN_HOST_API } from '../../../shared/plugins/workers/plugin-host-api'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { devFolderConsentIdentity } from '../plugin-discovery'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
+import { devFolderConsentIdentity } from '../discovery/plugin-discovery'
 import { PluginService } from '../plugin-service'
 import { createPluginAppearanceService } from './plugin-appearance-service'
 
@@ -28,7 +28,7 @@ async function harness(options: { capability?: boolean; desktop?: boolean } = {}
     id: 'appearance',
     name: 'Appearance',
     version: '1.0.0',
-    engines: { orca: '>=1.4.249' },
+    engines: { orca: '>=1.4.251' },
     main: 'worker.mjs',
     capabilities: options.capability === false ? [] : [{ kind: 'appearance:write' }]
   })
@@ -58,7 +58,7 @@ async function harness(options: { capability?: boolean; desktop?: boolean } = {}
     )
     service = new PluginService({
       userDataPath: root,
-      hostVersion: '1.4.249',
+      hostVersion: '1.4.251',
       isPluginSystemEnabled: () => true,
       getDisabledPlugins: () => (disabled ? ['local.appearance'] : []),
       getPluginConsents: () => ({ 'local.appearance': consent }),

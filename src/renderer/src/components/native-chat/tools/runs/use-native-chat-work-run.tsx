@@ -3,11 +3,11 @@ import type {
   NativeChatBlock,
   NativeChatMessage
 } from '../../../../../../shared/native-chat/native-chat-types'
-import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/native-chat-row-content'
+import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
 import {
   nativeChatWorkRunEditKey,
   nativeChatWorkRunEntries
-} from '../../../../../../shared/native-chat/native-chat-work-run'
+} from '../../../../../../shared/native-chat/transcript/folding/native-chat-work-run'
 import { NativeChatReasoningRow } from '../../messages/reasoning/NativeChatReasoningRow'
 import type { NativeChatToolRunAsides } from './NativeChatToolRun'
 import type { NativeChatDiffReveal } from '../../../../../../shared/native-chat/tools/native-chat-turn-diffs'

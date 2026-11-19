@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CONNECTOR_CLIENT_LIMITS } from '../../shared/connector-cloud-contract'
+import { CONNECTOR_CLIENT_LIMITS } from '../../shared/connectors/connector-cloud-contract'
 import type { ConversationSnapshot } from '../external-conversations/external-conversation-events'
 import { connectorSnapshot } from './connector-snapshot'
 

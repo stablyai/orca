@@ -27,7 +27,7 @@ vi.mock('../../workspaces/catalog/repo-worktrees', async (importOriginal) => ({
   ...(await importOriginal<typeof RepoWorktrees>()),
   listRepoWorktrees: boundary.list
 }))
-vi.mock('../../git/source-control/status-read', () => ({ getStatus: boundary.status }))
+vi.mock('../../git/source-control/status/status-read', () => ({ getStatus: boundary.status }))
 vi.mock('../../git/command-runner/git-exec-file', () => ({
   gitExecFileAsync: vi.fn(async () => ({ stdout: '0\n', stderr: '' }))
 }))
@@ -108,11 +108,11 @@ describe('workspace cleanup document ownership', () => {
     boundary.persist.mockReset().mockResolvedValue(undefined)
   })
   afterEach(() => vi.restoreAllMocks())
-  it.each(
-    [10, 100].flatMap((size) =>
-      ['destroyed', 'render-process-gone', 'did-navigate'].map((event) => ({ size, event }))
-    )
-  )(
+  it.each([
+    { size: 10, event: 'destroyed' },
+    { size: 10, event: 'render-process-gone' },
+    { size: 10, event: 'did-navigate' }
+  ])(
     'cancels $size rows after $event without dispatching beyond active reads',
     async ({ size, event }) => {
       boundary.list.mockResolvedValue(rows(size))

@@ -5,14 +5,14 @@ import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership
 import { useWorkspaceFileBrowserActionPredicate } from '@/lib/browser/documents/file-preview'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import type { TreeNode } from './file-explorer-types'
 import {
   buildFolderStatusMap,
   buildStatusMap
-} from '../../../../lib/source-control/paths/git-path-decoration'
+} from '../../../../../../shared/git/status/git-path-decoration'
 import { useFileDeletion } from '../mutations/useFileDeletion'
 import { useFileExplorerDragDrop } from '../mutations/useFileExplorerDragDrop'
 import { useFileExplorerHandlers } from '../mutations/useFileExplorerHandlers'
@@ -57,7 +57,6 @@ type UseFileExplorerTreePaneStateParams = {
 type UseFileExplorerTreePaneStateResult = {
   scrollRef: RefObject<HTMLDivElement | null>
   runtimeDownloadContext: RuntimeFileOperationArgs | null
-  supportsFolderDownload: boolean
   canOpenWorkspaceFileBrowserForPath: ReturnType<typeof useWorkspaceFileBrowserActionPredicate>
   statusByRelativePath: ReturnType<typeof buildStatusMap>
   folderStatusByRelativePath: ReturnType<typeof buildFolderStatusMap>
@@ -127,12 +126,6 @@ export function useFileExplorerTreePaneState({
   const scrollRef = useRef<HTMLDivElement>(null)
   const canOpenWorkspaceFileBrowserForPath =
     useWorkspaceFileBrowserActionPredicate(activeWorktreeId)
-  const supportsFolderDownload = useAppStore((s) => {
-    const connectionId = activeRepo?.connectionId
-    return connectionId
-      ? s.sshConnectionStates.get(connectionId)?.supportsFolderDownload === true
-      : false
-  })
   const ownerRuntimeEnvironmentId = useAppStore((s) =>
     runtimeEnvironmentIdOrLocalUnlessTwin(s, activeWorktreeId)
   )
@@ -301,7 +294,6 @@ export function useFileExplorerTreePaneState({
   return {
     scrollRef,
     runtimeDownloadContext,
-    supportsFolderDownload,
     canOpenWorkspaceFileBrowserForPath,
     statusByRelativePath,
     folderStatusByRelativePath,

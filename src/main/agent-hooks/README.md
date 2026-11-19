@@ -28,7 +28,7 @@ one resolver, `src/shared/program-status/presentation.ts`.
 
 ## OSC 7501 support matrix
 
-_Last updated: 2026-10-17._ Each "✅ live" row was checked by running the real CLI in a PTY whose
+_Last updated: 2026-11-17._ Each "✅ live" row was checked by running the real CLI in a PTY whose
 terminal answered queries the way Orca does.
 
 **Columns:**
@@ -47,20 +47,22 @@ terminal answered queries the way Orca does.
 | pi (`pi`)              | ✅ live, 1.3.0                            | required (`PI_PROGRAM_STATUS=1` forces it) | all five | all three            | session name, dialog title, first line of an error             | —            | extension        | Fallback                                                                      |
 | oh-my-pi (`omp`)       | ✅ live, 18.10.3                          | sends without asking                       | all five | permission, question | on `blocked`/`error` only                                      | —            | extension        | Fallback                                                                      |
 | Codex (`codex`)        | ✅ live, 0.163.0                          | sends without asking                       | all five | none sent (0.163)    | none                                                           | —            | hooks            | Fallback; state only                                                          |
+| Kimi Code (`kimi`)     | ✅ live, 2.6.3 (also in 2.5.3)            | required (`PI_PROGRAM_STATUS=1` forces it) | 3 of 5   | —                    | the turn's prompt                                              | —            | hooks            | Fallback; reports as `app=kimi-code`                                          |
+| Kiro (`kiro`)          | reported on 3.1.0 (#40567), not run live  | —                                          | —        | —                    | —                                                              | —            | hooks            | Fallback; reports as `app=kiro-cli`                                           |
 
 ### Agents that don't send OSC 7501 yet
 
-| Agent                                                                                  | Checked                             | Orca integration           |
-| -------------------------------------------------------------------------------------- | ----------------------------------- | -------------------------- |
-| OpenCode (`opencode`, `opencode2`)                                                     | installed binary v2.0.16 and source | plugin                     |
-| Kilocode (`kilo`)                                                                      | installed package and source        | —                          |
-| Cursor (`cursor`)                                                                      | installed binary 2026.06.02         | hooks                      |
-| Amp, Droid, Hermes, Muse, Devin, Kiro                                                  | installed binaries                  | hooks                      |
-| Qoder (`qoder`)                                                                        | installed binary 1.1.65             | hooks                      |
-| CodeBuddy (`codebuddy`)                                                                | installed package                   | hooks                      |
-| Jcode (`jcode`)                                                                        | installed binary 0.95.0             | hooks                      |
-| Qwen Code, Freebuff, DeepSeek (`dsh`)                                                  | source                              | hooks (qwen-code, dsh)     |
-| Gemini, Antigravity, Copilot, Kimi, Command Code, ZCode, OpenClaude, Mimo, Prime Agent | not checked                         | hooks / plugin / extension |
+| Agent                                                                            | Checked                             | Orca integration           |
+| -------------------------------------------------------------------------------- | ----------------------------------- | -------------------------- |
+| OpenCode (`opencode`, `opencode2`)                                               | installed binary v2.0.16 and source | plugin                     |
+| Kilocode (`kilo`)                                                                | installed package and source        | —                          |
+| Cursor (`cursor`)                                                                | installed binary 2026.06.02         | hooks                      |
+| Amp, Droid, Hermes, Muse, Devin                                                  | installed binaries                  | hooks                      |
+| Qoder (`qoder`)                                                                  | installed binary 1.1.65             | hooks                      |
+| CodeBuddy (`codebuddy`)                                                          | installed package                   | hooks                      |
+| Jcode (`jcode`)                                                                  | installed binary 0.95.0             | hooks                      |
+| Qwen Code, Freebuff, DeepSeek (`dsh`)                                            | source                              | hooks (qwen-code, dsh)     |
+| Gemini, Antigravity, Copilot, Command Code, ZCode, OpenClaude, Mimo, Prime Agent | not checked                         | hooks / plugin / extension |
 
 ¹ Claude Code stops putting its `⠂`/`✳` status glyph in the window title once Orca answers the
 probe. So everything that read that glyph reads the program's activity instead while it reports:
@@ -84,7 +86,8 @@ When an agent ships OSC 7501 support, or changes what it reports:
 1. Run it in a PTY whose terminal answers `OSC 7501 ; ?` and record the reports.
 2. If its `app` id differs from Orca's agent id, add the mapping to `APP_TO_AGENT_TYPE` in
    `src/shared/program-status/agent-status-projector.ts` (examples: `claude-code` → `claude`,
-   `grok-build` → `grok`). Otherwise hook precedence can't match its rows.
+   `grok-build` → `grok`, `kimi-code` → `kimi`, `kiro-cli` → `kiro`). Otherwise hook precedence
+   can't match its rows.
 3. Update the row and the date above.
 
 ## Plugin tool hooks (`agent.tool.before` / `.after`)

@@ -1,6 +1,6 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import { WORKTREE_ROW_LAYOUT } from '../components/worktree-list-row-layout'
+import { WORKTREE_ROW_LAYOUT } from '../worktree/row-presentation/worktree-list-row-layout'
 import { themedStyleSheet } from '../theme/themed-styles'
 
 export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
@@ -46,8 +46,14 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
     color: colors.textMuted,
     marginLeft: 6
   },
+  // Muted and plain, like the header's count: a fact about the section, not an action.
   sectionPendingSpinner: {
     marginLeft: spacing.sm
+  },
+  // At the header's end, as the desktop's Bots + is.
+  sectionNewBot: {
+    marginLeft: 'auto',
+    paddingHorizontal: spacing.xs
   },
   separator: {
     height: StyleSheet.hairlineWidth,

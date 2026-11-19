@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Pressable, ScrollView, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
 import { TriangleAlert, X } from 'lucide-react-native'
 import { colors, radii, spacing, typography, pressedStyle } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { AutoHeight } from '../components/AutoHeight'
+import type { AgentHistoryRestartOffer } from './use-agent-history-restart-offer'
+import { AutoHeight } from '../components/motion/AutoHeight'
 import type { AiVaultScanIssue } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import {
   aiVaultScanIssueKey,
@@ -120,6 +121,59 @@ export function AgentHistoryResumeNotice({
       <Pressable
         style={({ pressed }) => pressed && pressedStyle}
         onPress={onDismiss}
+        hitSlop={12}
+        accessibilityRole="button"
+        accessibilityLabel={t('agentHistory.panel.dismissNotice', 'Dismiss')}
+      >
+        <X size={14} color={colors.textMuted} strokeWidth={2.2} />
+      </Pressable>
+    </View>
+  )
+}
+
+/** Desktop's resume-after-restart offer: the host restarted while these chats were working. */
+export function AgentHistoryInterruptedNotice({ offer }: { offer: AgentHistoryRestartOffer }) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+  const { count, failedCount, requestFailed, resuming } = offer
+  if (count === 0 && failedCount === 0 && !requestFailed) {
+    return null
+  }
+  const message = requestFailed
+    ? t('agentHistory.interrupted.failed', "Couldn't resume the interrupted chats.")
+    : count > 0
+      ? count === 1
+        ? t('agentHistory.interrupted.count_one', '{{count}} chat was interrupted', { count })
+        : t('agentHistory.interrupted.count_other', '{{count}} chats were interrupted', { count })
+      : failedCount === 1
+        ? t('agentHistory.interrupted.failedCount_one', "{{count}} chat couldn't resume", {
+            count: failedCount
+          })
+        : t('agentHistory.interrupted.failedCount_other', "{{count}} chats couldn't resume", {
+            count: failedCount
+          })
+  return (
+    <View style={[styles.notice, styles.noticeRow]}>
+      <Text style={styles.noticeText}>{message}</Text>
+      {resuming ? (
+        <ActivityIndicator size="small" color={colors.textSecondary} />
+      ) : count > 0 || requestFailed ? (
+        <Pressable
+          style={({ pressed }) => pressed && pressedStyle}
+          onPress={offer.resumeAll}
+          hitSlop={10}
+          accessibilityRole="button"
+        >
+          <Text style={styles.noticeAction}>
+            {requestFailed
+              ? t('common.retry', 'Retry')
+              : t('agentHistory.interrupted.resumeAll', 'Resume all')}
+          </Text>
+        </Pressable>
+      ) : null}
+      <Pressable
+        style={({ pressed }) => pressed && pressedStyle}
+        onPress={offer.dismiss}
         hitSlop={12}
         accessibilityRole="button"
         accessibilityLabel={t('agentHistory.panel.dismissNotice', 'Dismiss')}

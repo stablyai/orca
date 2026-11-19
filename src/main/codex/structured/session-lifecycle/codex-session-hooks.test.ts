@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
+import { agentSessionRecordFixture } from '../../../native-chat/testing/agent-session-record-test-fixture'
 import { optionSession } from '../catalog/codex-structured-option-session.test-fixture'
 import {
   resolveCodexHomeProcessLockKey,

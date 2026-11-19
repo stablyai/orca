@@ -1,6 +1,5 @@
 import { clearGoogleCookiesForRuntimeProfile } from '../../../browser/cookies/browser-google-cookie-clear'
-import { browserCookieImportFailure } from '../../../../shared/browser-cookie-import-failure-copy'
-import { createBrowserTabInRenderer } from '../tabs/browser-tab-renderer-create'
+import { browserCookieImportFailure } from '../../../../shared/browser/cookies/browser-cookie-import-failure-copy'
 import type {
   BrowserDetectProfilesResult,
   BrowserProfileCreateResult,
@@ -29,26 +28,27 @@ import type {
 } from './browser-command-contracts'
 import type { RuntimeBrowserCommandTargets } from './browser-command-targets'
 import type { RuntimeBrowserTabCatalog } from '../tabs/browser-tab-catalog'
-import type { RuntimeBrowserClientPlacement } from '../../../../shared/runtime-browser-placement'
+import type { RuntimeBrowserTabCreation } from '../tabs/browser-tab-creation'
+import type { BrowserClientPageOpeningHost } from '../client-pages/browser-client-page-opening'
+import { cloneBrowserTabToProfile } from './browser-tab-profile-clone'
+import type { RuntimeBrowserClientPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 
 export class RuntimeBrowserProfiles {
   constructor(
     private readonly host: Pick<
       RuntimeBrowserCommandHost,
-      | 'getRuntimeId'
-      | 'getAuthoritativeWindow'
-      | 'getRuntimeBrowserPageRegistry'
-      | 'getBrowserHostLeaseRegistry'
-      | 'notifyHeadlessBrowserSessionTabsChanged'
-    >,
+      'getRuntimeId' | 'getAuthoritativeWindow' | 'getAvailableAuthoritativeWindow'
+    > &
+      BrowserClientPageOpeningHost,
     private readonly targets: Pick<
       RuntimeBrowserCommandTargets,
       'requireAgentBrowserBridge' | 'resolveBrowserCommandTarget'
     >,
     private readonly catalog: Pick<
       RuntimeBrowserTabCatalog,
-      'describeBrowserTab' | 'resolveClientHostedBrowserPage'
-    >
+      'describeBrowserTab' | 'describeClientHostedBrowserTab' | 'resolveClientHostedBrowserPage'
+    >,
+    private readonly creation: Pick<RuntimeBrowserTabCreation, 'browserTabCreate'>
   ) {}
 
   async browserTabSetProfile(
@@ -171,8 +171,14 @@ export class RuntimeBrowserProfiles {
     page: string
     worktree?: string
   }): Promise<BrowserTabProfileShowResult> {
-    const target = await this.targets.resolveBrowserCommandTarget(params)
-    const tab = this.catalog.describeBrowserTab(params.page, target.worktreeId)
+    // Client pages live in this runtime's page registry, not in its own browser's tab list.
+    const clientPage = await this.catalog.resolveClientHostedBrowserPage(params)
+    const tab = clientPage
+      ? this.catalog.describeClientHostedBrowserTab(clientPage)
+      : this.catalog.describeBrowserTab(
+          params.page,
+          (await this.targets.resolveBrowserCommandTarget(params)).worktreeId
+        )
     return {
       browserPageId: tab.browserPageId,
       worktreeId: tab.worktreeId ?? null,
@@ -186,38 +192,10 @@ export class RuntimeBrowserProfiles {
       profileId: string
     } & BrowserCommandTargetParams
   ): Promise<BrowserTabProfileCloneResult> {
-    const target = await this.targets.resolveBrowserCommandTarget(params)
-    const sourceBrowserPageId =
-      target.browserPageId ??
-      this.targets.requireAgentBrowserBridge().getActivePageId(target.worktreeId)
-    if (!sourceBrowserPageId) {
-      throw new BrowserError('browser_no_tab', 'No browser tab open in this worktree')
-    }
-    const sourceTab = this.catalog.describeBrowserTab(sourceBrowserPageId, target.worktreeId)
-    const profile = browserSessionRegistry.getProfile(params.profileId)
-    if (!profile) {
-      throw new BrowserError(
-        'invalid_argument',
-        `Browser profile ${params.profileId} was not found`
-      )
-    }
-    const created = await createBrowserTabInRenderer(
-      this.host,
-      sourceTab.url,
-      sourceTab.worktreeId ?? target.worktreeId,
-      profile.id,
-      profile.partition
+    return cloneBrowserTabToProfile(
+      { host: this.host, targets: this.targets, catalog: this.catalog, creation: this.creation },
+      params
     )
-    // Do not return an inoperable clone before its webview registers.
-    try {
-      await waitForTabRegistration(created.browserPageId)
-    } catch {}
-    return {
-      browserPageId: created.browserPageId,
-      sourceBrowserPageId,
-      profileId: profile.id,
-      profileLabel: profile.label
-    }
   }
 
   async browserProfileList(): Promise<BrowserProfileListResult> {

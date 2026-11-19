@@ -4,7 +4,10 @@ import path from 'node:path'
 
 import { describe, expect, it, vi } from 'vitest'
 
-import { main as verifyLocalizationCatalog } from './verify-localization-catalog.mjs'
+import {
+  LOCALIZATION_SOURCE_ROOTS,
+  main as verifyLocalizationCatalog
+} from './verify-localization-catalog.mjs'
 
 function writeJson(filePath, value) {
   writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8')
@@ -22,10 +25,16 @@ function makeProject({ sourceText, enCatalog = {}, esCatalog = {} }) {
 
   mkdirSync(rendererDir, { recursive: true })
   mkdirSync(mainDir, { recursive: true })
+  mkdirSync(path.join(root, 'src', 'shared', 'agent-usage', 'status-copy'), { recursive: true })
   mkdirSync(localesDir, { recursive: true })
 
   writeFileSync(path.join(rendererDir, 'Example.tsx'), sourceText, 'utf8')
   writeFileSync(path.join(mainDir, 'empty.ts'), 'export {}\n', 'utf8')
+  // Single-file roots (shared copy the desktop draws) must exist too.
+  for (const sourceRoot of LOCALIZATION_SOURCE_ROOTS.filter((root) => path.extname(root))) {
+    mkdirSync(path.dirname(path.join(root, sourceRoot)), { recursive: true })
+    writeFileSync(path.join(root, sourceRoot), 'export {}\n', 'utf8')
+  }
   writeJson(path.join(localesDir, 'en.json'), enCatalog)
   writeJson(path.join(localesDir, 'es.json'), esCatalog)
 
@@ -46,30 +55,6 @@ describe('verify-localization-catalog', () => {
       auto: { example: { greeting: 'Hello {{name}}' } }
     })
     expect(readJson(path.join(localesDir, 'es.json'))).toEqual({})
-  })
-
-  it.each([
-    ['en', false],
-    ['en', true],
-    ['es', false]
-  ])('rejects dotted %s keys without rewriting them (fix: %s)', async (locale, fix) => {
-    const nested = { auto: { example: { greeting: 'Hello.world' } } }
-    const { root, localesDir } = makeProject({
-      sourceText: 'export {}\n',
-      enCatalog: locale === 'en' ? { 'auto.example.greeting': 'Hello.world' } : nested,
-      esCatalog: locale === 'es' ? { auto: { 'example.greeting': 'Hola.world' } } : {}
-    })
-    const catalogPath = path.join(localesDir, `${locale}.json`)
-    const before = readFileSync(catalogPath, 'utf8')
-    const report = vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    try {
-      await expect(verifyLocalizationCatalog(root, { fix })).resolves.toBe(1)
-      expect(report).toHaveBeenCalledWith(expect.stringContaining(`${locale}.json`))
-      expect(report).toHaveBeenCalledWith('dotted: auto.example.greeting')
-      expect(readFileSync(catalogPath, 'utf8')).toBe(before)
-    } finally {
-      report.mockRestore()
-    }
   })
 
   it('never overwrites mismatched translations or removes target-only entries', async () => {

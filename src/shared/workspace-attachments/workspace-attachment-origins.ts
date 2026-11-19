@@ -1,5 +1,5 @@
 import type { WorkspaceAttachmentOrigin } from '../worktree/types'
-import { parseExecutionHostId } from '../execution-host'
+import { parseExecutionHostId } from '../execution-host/execution-host'
 
 export function getWorkspaceAttachmentOriginKey(origin: WorkspaceAttachmentOrigin): string {
   return JSON.stringify([

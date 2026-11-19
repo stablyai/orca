@@ -26,14 +26,14 @@ import {
 } from '@/components/native-chat/appearance/native-chat-appearance-style'
 import { useNativeChatStoreAppearanceStyle } from '@/components/native-chat/appearance/use-native-chat-store-appearance-style'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
-import { deriveNativeChatRowContent } from '../../../../shared/native-chat/transcript/native-chat-row-content'
+import { deriveNativeChatRowContent } from '../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
 import WorktreeCreationTabStrip from './WorktreeCreationTabStrip'
 import { WorktreeSetupSteps } from './WorktreeSetupSteps'
 import { deriveWorktreeSetupSteps } from './worktree-setup-steps'
 import { useWorktreeCreationClock } from './worktree-creation-clock'
 import { getRepoMainWorktreeId } from '../../../../shared/worktree/id'
 import type { NativeChatComposerDraftImage } from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { usePendingNativeChatOptions } from './use-pending-native-chat-options'
 
 const NO_COMMAND_CAUSES = {
@@ -84,7 +84,7 @@ export default function PendingNativeChatCreation({
   const handedOff = entry?.chatInputHandedOff === true
   const heldMessage = entry ? pendingCreationHeldChatMessage(entry) : null
   const held = heldMessage !== null
-  // Like t3code, progress shows only in the steps card after a send, never above the composer.
+  // Progress shows only in the steps card after a send, never above the composer.
   const now = useWorktreeCreationClock(status === 'creating' && held)
   const suppressFocus = entry?.request.suppressTerminalFocusOnCompletion === true
 

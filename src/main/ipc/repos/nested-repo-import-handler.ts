@@ -1,21 +1,24 @@
-import type { BrowserWindow } from 'electron'
-import { ipcMain } from 'electron'
+import { type BrowserWindow, ipcMain } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { realpath } from 'node:fs/promises'
 import type { Store } from '../../persistence/loading-store/store'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { RepositoryMetadataOwner } from '../../workspaces/catalog/imported-folder-project-link'
-import type { ProjectGroupImportResult } from '../../../shared/project-group-types'
-import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
-import { awaitWindowsHostGitEnvironmentReady } from '../../git/runner'
-import { isGitRepoAsync, getRepoName } from '../../git/repo'
+import type { ProjectGroupImportResult } from '../../../shared/project/groups/project-group-types'
+import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/repository/appearance/repo-badge-color'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
+import { awaitWindowsHostGitEnvironmentReady } from '../../git/command-runner/host-routing/windows-host-git-environment'
+import { isGitRepoAsync } from '../../git/repositories/discovery/repo-detection'
+import { getRepoName } from '../../git/repositories/repository-name'
 import {
   createNestedProjectGroupResolver,
   resolveNestedRepoSelection
 } from '../../project-groups/nested-repo-import'
 import { createNestedRepoImportTargetResolver } from '../../project-groups/nested-repo-import-target'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../shared/execution-host/execution-host'
 import { detectRepoLocalMetadata } from '../../repository-icons/repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
@@ -64,6 +67,7 @@ export function registerNestedRepoImportHandler(
         (repoPath) => ({
           path: repoPath,
           status: 'failed',
+          errorCode: 'not_in_scan',
           error: 'Repository was not found in the nested repo scan result'
         })
       )
@@ -75,7 +79,12 @@ export function registerNestedRepoImportHandler(
         try {
           // This process cannot validate SSH paths with local Git.
           if (args.connectionId) {
-            results.push({ path: repoPath, status: 'failed', error: 'Not a valid git repository' })
+            results.push({
+              path: repoPath,
+              status: 'failed',
+              errorCode: 'not_git_repository',
+              error: 'Not a valid git repository'
+            })
             continue
           }
           await awaitWindowsHostGitEnvironmentReady({ cwd: repoPath })
@@ -83,6 +92,7 @@ export function registerNestedRepoImportHandler(
             results.push({
               path: repoPath,
               status: 'failed',
+              errorCode: 'not_git_repository',
               error: 'Not a valid git repository'
             })
             continue
@@ -155,6 +165,7 @@ export function registerNestedRepoImportHandler(
           results.push({
             path: repoPath,
             status: 'failed',
+            errorCode: 'import_failed',
             error: sanitizeNestedRepoImportError('Failed to import nested repository', error)
           })
         }

@@ -22,7 +22,7 @@ import {
   type OrcaProfileIndex,
   type OrcaProfileListState,
   type OrcaProfileSummary
-} from '../../shared/orca-profiles'
+} from '../../shared/orca-profiles/orca-profiles'
 import {
   getOrcaProfileDataFile,
   getOrcaProfileDirectory,
@@ -31,21 +31,11 @@ import {
   hasOrcaProfileStateDatabase,
   getProfileUserDataPath
 } from './profile-storage-paths'
-import { copyLegacyStateToProfile } from './profile-legacy-state-import'
+import { copyLegacyStateToProfile } from './storage/profile-legacy-state-import'
+import { supersedeCloudConnectAttempts } from './cloud-auth/profile-cloud-connect-attempts'
 import { profileStateJsonExportPaths } from '../persistence/profile-state/legacy-json/profile-state-export-path'
-import { hasProfileStateAuthorityMarker } from '../persistence/profile-state/profile-state-authority-marker'
-import { profileStateDatabaseBackups } from '../persistence/profile-state/profile-state-backup-path'
-
-export {
-  getOrcaProfileBrowserSessionMetaFile,
-  getOrcaProfileDataFile,
-  getOrcaProfileDirectory,
-  getOrcaProfileIndexPath,
-  getOrcaProfileStateDatabaseFile,
-  hasOrcaProfileStateDatabase,
-  getOrcaProfilesDirectory,
-  initOrcaProfilePaths
-} from './profile-storage-paths'
+import { hasProfileStateAuthorityMarker } from '../persistence/profile-state/database/profile-state-authority-marker'
+import { profileStateDatabaseBackups } from '../persistence/profile-state/backup/profile-state-backup-path'
 
 export type ActiveOrcaProfileState = {
   index: OrcaProfileIndex
@@ -303,6 +293,8 @@ export function setActiveOrcaProfile(
     profiles
   }
   mkdirSync(getOrcaProfileDirectory(profileId, userDataPath), { recursive: true })
+  // A sign-in still in flight belongs to the profile being left.
+  supersedeCloudConnectAttempts()
   writeProfileIndex(getOrcaProfileIndexPath(userDataPath), nextIndex)
   return {
     activeProfileId: nextIndex.activeProfileId,

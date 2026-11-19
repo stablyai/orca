@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { StrictMode } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { AgentSessionHooks } from '../../../../../shared/agent-session/agent-session-hooks'
+import type { AgentSessionHooks } from '../../../../../shared/agent-session/options/protocol/agent-session-hooks'
 import NativeChatHooksDialog from './NativeChatHooksDialog'
 
 const rpc = vi.hoisted(() => vi.fn())

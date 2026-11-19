@@ -1,4 +1,4 @@
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 
 /** Legacy absence may mean explicit opt-out; pin existing hosts off once, then allow new hosts the default. */
 export function migrateExistingHostsRemoteCliControl(

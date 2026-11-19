@@ -3,13 +3,13 @@ import { useAppStore } from '@/store/index'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { textFieldClaimsActionKey } from '@/lib/keyboard/text-field-shortcut-policy'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
-import { hasVisibleOverlay } from '@/lib/visible-overlay'
+import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
 import { showTerminalShortcutCaptureNotification } from '@/lib/notifications/terminal-shortcut-capture-notification'
-import { keybindingMatchesAction } from '../../../../../../shared/keybindings'
+import { keybindingMatchesAction } from '../../../../../../shared/keybindings/matching'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
-} from '../../../../../../shared/modifier-double-tap-detector'
+} from '../../../../../../shared/keybindings/modifier-double-tap-detector'
 
 const ACTION_ID = 'sidebar.projects.toggleCollapse'
 

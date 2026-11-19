@@ -13,13 +13,13 @@ import { AI_VAULT_AGENTS } from '../../../../../../shared/ai-vault/contracts/ai-
 import {
   runNativeChatCliFork,
   useNativeChatCliForkPending
-} from '../../../tab-bar/native-chat-cli-fork-run'
+} from '../../../tab-bar/session-actions/native-chat-cli-fork-run'
 import {
   resolveTabSessionHistorySubject,
   resolveNativeChatCliForkIdentity,
   type NativeChatCliForkIdentity,
   type NativeChatTabSession
-} from '../../../tab-bar/tab-session-history-switch'
+} from '../../../tab-bar/session-actions/tab-session-history-switch'
 
 function createExecutionHostSelector(
   tabId: string,
@@ -75,7 +75,6 @@ export function NativeChatResumeInCliButton({
   const pending = useNativeChatCliForkPending(
     executionHostScope ? { executionHostScope, sessionId: nativeChat.sessionId } : null
   )
-  const commandOverrides = useAppStore((state) => state.settings?.agentCmdOverrides)
   const agent = AI_VAULT_AGENTS.find((candidate) => candidate === nativeChat.agent)
   const label = t(
     'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
@@ -101,7 +100,7 @@ export function NativeChatResumeInCliButton({
               nativeChat
             })
             if (subject?.kind === 'chat') {
-              void runNativeChatCliFork({ subject, tab, agent, commandOverrides })
+              void runNativeChatCliFork({ subject, tab, agent })
             }
           }}
         >

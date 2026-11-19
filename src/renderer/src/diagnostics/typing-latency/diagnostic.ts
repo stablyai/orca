@@ -10,7 +10,7 @@ import {
 import { drainTimedOutEchoCandidates } from './echo-candidate-timeout'
 import { findPaneOwningFocus, findPaneOwningNode, listProbePanes } from './pane-target'
 import type { EchoObservation } from './echo-observation'
-import { setTerminalOutputArrivalObserver } from '@/lib/pane-manager/terminal-output-arrival-observer'
+import { setTerminalOutputArrivalObserver } from '@/lib/pane-manager/terminal-output/terminal-output-arrival-observer'
 import { observeRendererLongTasks } from './renderer-long-tasks'
 import {
   buildTypingLatencyReport,

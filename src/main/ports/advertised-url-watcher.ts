@@ -17,7 +17,7 @@ import {
   lookupBestAdvertisedUrl,
   shouldEvictAdvertisedUrlAfterScan
 } from './advertised-url-reconciliation'
-import { ownRetainedString } from '../../shared/own-retained-string'
+import { ownRetainedString } from '../../shared/text/own-retained-string'
 
 export const MAX_ADVERTISED_URL_SCAN_SNAPSHOTS = 512
 export type HostKind = 'custom' | 'loopback' | 'private-ip' | 'public-ip'

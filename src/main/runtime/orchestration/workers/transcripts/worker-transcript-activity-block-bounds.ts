@@ -1,8 +1,8 @@
 import {
   normalizeBackgroundTaskKind,
   normalizeBackgroundTaskState
-} from '../../../../../shared/native-chat/input/native-chat-background-task-row'
-import { normalizeSubagentState } from '../../../../../shared/native-chat/transcript/native-chat-subagent-summary'
+} from '../../../../../shared/native-chat/input/task-lists/native-chat-background-task-row'
+import { normalizeSubagentState } from '../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-summary'
 import type {
   NativeChatBlock,
   NativeChatSubagentState

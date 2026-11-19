@@ -5,9 +5,9 @@ import { dirname } from '@/lib/path'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
-import type { RuntimeFileListState } from '@/components/quick-open-file-list'
-import type { Repo } from '../../../../../../shared/repo-types'
-import type { RightSidebarExplorerView } from '../../../../../../shared/ui-chrome-types'
+import type { RuntimeFileListState } from '@/components/file-actions/quick-open/quick-open-file-list'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import type { RightSidebarExplorerView } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import { FileExplorerTreeStatus } from './FileExplorerTreeStatus'
 import { FileExplorerVirtualRows } from '../panel/FileExplorerVirtualRows'
 import { canShowAddAsProjectAction } from '../navigation/file-explorer-add-project-action'
@@ -17,7 +17,7 @@ import type { useFileExplorerSelection } from '../selection/useFileExplorerSelec
 import type { useFileExplorerTree } from './useFileExplorerTree'
 import type { useFileExplorerTreePaneState } from './use-file-explorer-tree-pane-state'
 import type { WslHostUnavailableReason } from '../../../../runtime/hosts/wsl/wsl-host-availability'
-import type { StoppedWslHost } from '../../../wsl-host-stopped/use-stopped-wsl-host'
+import type { WslHostReadOutage } from '../../../wsl-host-stopped/use-stopped-wsl-host'
 
 type FileExplorerFilesTreePaneProps = {
   activeRepo: Repo | null
@@ -39,7 +39,7 @@ type FileExplorerFilesTreePaneProps = {
   handleExplorerBackgroundContextMenuCapture: (event: React.MouseEvent<HTMLDivElement>) => void
   handleExplorerBackgroundDoubleClick: (event: React.MouseEvent<HTMLDivElement>) => void
   wslHostUnavailable?: WslHostUnavailableReason | null
-  stoppedWslHost?: StoppedWslHost | null
+  stoppedWslHost?: WslHostReadOutage | null
 }
 
 export function FileExplorerFilesTreePane({
@@ -71,7 +71,6 @@ export function FileExplorerFilesTreePane({
   const {
     scrollRef,
     runtimeDownloadContext,
-    supportsFolderDownload,
     canOpenWorkspaceFileBrowserForPath,
     statusByRelativePath,
     folderStatusByRelativePath,
@@ -220,7 +219,6 @@ export function FileExplorerFilesTreePane({
           sourceWorkspaceId={tree.sourceWorkspaceId}
           dirCache={tree.dirCache}
           runtimeDownloadContext={runtimeDownloadContext}
-          supportsFolderDownload={supportsFolderDownload}
           canOpenInOrcaBrowser={canOpenWorkspaceFileBrowserForPath}
           onClick={handleRowClick}
           onDoubleClick={handleDoubleClick}

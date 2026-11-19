@@ -1,5 +1,5 @@
-import type { EnvironmentDoctorCheck } from '../../shared/environment-doctor-types'
-import { parseOrcaYaml } from '../../shared/orca-yaml'
+import type { EnvironmentDoctorCheck } from '../../shared/workspace-setup/environment-doctor/environment-doctor-types'
+import { parseOrcaYaml } from '../../shared/workspace-setup/orca-yaml'
 import {
   check,
   PROBE_TIMEOUT_MS,

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties, type JSX, type ReactNode } from 'react'
 import { ArrowUp, ChevronDown, ChevronRight, Eye, Hand, Plus, Square, X } from 'lucide-react'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { usePrefersReducedMotion } from '@/components/feature-wall/feature-wall-modal-helpers'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
+import { usePrefersReducedMotion } from '@/hooks/theme/usePrefersReducedMotion'
 import { nativeChatPermissionModeLabel } from '@/components/native-chat/session/options/controls/native-chat-permission-mode-labels'
 import { nativeChatToolRowVerb } from '@/components/native-chat/tools/lines/native-chat-tool-line-label'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
@@ -22,7 +22,13 @@ import {
 const CHAT_SCALE: CSSProperties & { '--chat-font-size': string } = { '--chat-font-size': '12px' }
 
 /** A row that takes no height until it appears, so the transcript grows from its end. */
-function Row({ on, children }: { on: boolean; children: ReactNode }): JSX.Element {
+export function FeatureTipRevealRow({
+  on,
+  children
+}: {
+  on: boolean
+  children: ReactNode
+}): JSX.Element {
   return (
     <div
       data-on={on}
@@ -100,7 +106,7 @@ function Transcript({ copy, frame }: { copy: ChatDemoCopy; frame: ChatDemoFrame 
           </div>
         </div>
       </div>
-      <Row on={frame.tool}>
+      <FeatureTipRevealRow on={frame.tool}>
         <div className="mt-5 flex min-h-6.5 items-center gap-2 whitespace-nowrap">
           <span className="flex size-4 items-center justify-center text-chat-foreground-faint">
             <Eye className="size-3.5" />
@@ -109,16 +115,16 @@ function Transcript({ copy, frame }: { copy: ChatDemoCopy; frame: ChatDemoFrame 
           <span>{CHAT_DEMO_FILE}</span>
           <ChevronRight className="ml-auto size-3.5 text-chat-foreground-faint" />
         </div>
-      </Row>
-      <Row on={frame.working}>
+      </FeatureTipRevealRow>
+      <FeatureTipRevealRow on={frame.working}>
         <div className="mt-3 flex min-h-6 items-center gap-1.5 text-chat-foreground-faint">
           <LoadingSpinner className="size-4 shrink-0" />
           <span className="text-chat-foreground">
             {t('components.native-chat.status.working', 'Working…')}
           </span>
         </div>
-      </Row>
-      <Row on={frame.words > 0}>
+      </FeatureTipRevealRow>
+      <FeatureTipRevealRow on={frame.words > 0}>
         <p className="mt-3">
           {copy.reply.map((token, index) => (
             <span
@@ -134,8 +140,8 @@ function Transcript({ copy, frame }: { copy: ChatDemoCopy; frame: ChatDemoFrame 
             </span>
           ))}
         </p>
-      </Row>
-      <Row on={frame.visual}>
+      </FeatureTipRevealRow>
+      <FeatureTipRevealRow on={frame.visual}>
         <div className="relative mt-1 mb-0.5">
           <div
             data-on={!frame.page}
@@ -148,7 +154,7 @@ function Transcript({ copy, frame }: { copy: ChatDemoCopy; frame: ChatDemoFrame 
             <FlowDiagram flow={copy.flow} frame={frame} />
           </div>
         </div>
-      </Row>
+      </FeatureTipRevealRow>
     </div>
   )
 }

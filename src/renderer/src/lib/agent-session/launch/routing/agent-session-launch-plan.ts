@@ -2,9 +2,12 @@ import {
   notifyAgentLaunchFailure,
   agentLaunchRecoveryMessage
 } from '@/lib/agent-session/launch/failure/agent-launch-failure'
-import { isLocalExecutionHost, parseExecutionHostId } from '../../../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import {
+  isLocalExecutionHost,
+  parseExecutionHostId
+} from '../../../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 import '../structured-agent-session-launch-intent'
 import { StructuredAgentSessionOwnerUnresolvedError } from '../structured-agent-session-launch-errors'
 import { buildAgentLaunchRouteInput } from './agent-launch-route-input'
@@ -27,16 +30,15 @@ import type { StructuredLaunchSurfaceAddress } from '../structured-agent-session
 import type {
   StructuredAgentSessionForkSource,
   StructuredAgentSessionResumeSource
-} from '../../../../../../shared/agent-session/structured-agent-session-create'
+} from '../../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { NativeChatLaunchPromptDelivery } from '../prompt/native-chat-launch-prompt-delivery'
 import type { StructuredAgentLaunchOptions } from '../structured-agent-session-launch-callers'
-import type { AgentLaunchRequestId } from './agent-launch-request-id'
 
 export type AgentLaunchSurface = 'chat' | 'terminal'
 
 export type AgentSessionLaunchRequest = AgentLaunchRouteArgs & {
-  requestId: AgentLaunchRequestId
+  requestId: string
   requestedSurface?: AgentLaunchSurface
   selectedExecutionHostId?: ExecutionHostId
   resumeFrom?: StructuredAgentSessionResumeSource
@@ -56,7 +58,7 @@ export type AgentSessionLaunchVerdict = Pick<
 > & {
   route: AgentLaunchRoute
   requestedSurface?: AgentLaunchSurface
-  requestId: AgentLaunchRequestId
+  requestId: string
   agent: TuiAgent
   worktreeId?: string
   executionHostId?: ExecutionHostId

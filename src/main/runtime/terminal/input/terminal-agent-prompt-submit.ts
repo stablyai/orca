@@ -3,7 +3,7 @@ import type { RuntimeAgentPromptWriteOptions } from './agent-prompt-write-option
 import type {
   RuntimeTerminalPromptDelivery,
   RuntimeTerminalSend
-} from '../../../../shared/runtime-terminal-send-contract'
+} from '../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 import type { AgentTransitionDetector } from '../../../agent-hooks/observations/agent-transition-detector'
 import { OrcaRuntimeWithWriteTerminalAgentPrompt } from './terminal-agent-prompt'
 import {

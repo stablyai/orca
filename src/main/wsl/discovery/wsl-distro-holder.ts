@@ -1,4 +1,4 @@
-import { runKeyedSerializedOperation } from '../../cli/keyed-promise-queue'
+import { runKeyedSerializedOperation } from '../../../shared/concurrency/keyed-serialized-operations'
 import { spawnDetachedWithoutInheritance } from '@orca/process-host/isolated-detached-spawn'
 import { queryWindowsProcess } from '../../daemon/endpoint/identity/daemon-process-inspection'
 import {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { RuntimeBrowserClientPlacement } from '../../../../shared/runtime-browser-placement'
+import type { RuntimeBrowserClientPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 import {
   RESTORED_CLIENT_HOSTED_BROWSER_PLACEMENT,
   RESTORED_CLIENT_HOSTED_EXECUTION_HOST_KEY
@@ -106,6 +106,9 @@ function harness(options: { pairedDeviceId?: string } = {}) {
   const commands: { browserPageId: string; type: string }[] = []
   const placements = new Map<string, RuntimeBrowserClientPlacement | undefined>()
   const authority = {
+    clientPageInitializations: { canContinue: () => false },
+    admitClientPageInitialization: () => 'stale' as const,
+    claimLegacyClientPageRecovery: () => undefined,
     authorityRuntimeId: 'runtime-new',
     authorityEpoch: 'epoch-new',
     getPlacement: vi.fn((browserPageId: string) => placements.get(browserPageId)),
@@ -116,10 +119,16 @@ function harness(options: { pairedDeviceId?: string } = {}) {
       })
     ),
     completePageRetirement: vi.fn(() => true),
-    createClientPage: vi.fn(async (input: { browserPageId: string }) => {
-      placements.set(input.browserPageId, freshPlacement)
-      return freshPlacement
-    }),
+    createClientPage: vi.fn(
+      async (input: {
+        browserPageId: string
+        committed?(placement: RuntimeBrowserClientPlacement): void
+      }) => {
+        placements.set(input.browserPageId, freshPlacement)
+        input.committed?.(freshPlacement)
+        return freshPlacement
+      }
+    ),
     issueClientPageCommand: vi.fn((input: { browserPageId: string }, command: { type: string }) => {
       commands.push({ browserPageId: input.browserPageId, type: command.type })
       return { event: {}, result: Promise.resolve({ status: 'completed' as const }) }

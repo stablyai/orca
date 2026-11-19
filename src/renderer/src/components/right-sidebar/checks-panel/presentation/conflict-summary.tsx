@@ -5,7 +5,7 @@ import type {
   PRConflictSummary,
   ProviderCheckSummary,
   PRMergeableState
-} from '../../../../../../shared/github/pull-request-types'
+} from '../../../../../../shared/github/pull-requests/pull-request-types'
 import { useTranslate } from '@/i18n/use-translate'
 
 export type ConflictReview = {

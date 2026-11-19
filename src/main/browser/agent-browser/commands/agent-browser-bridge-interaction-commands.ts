@@ -14,6 +14,7 @@ import {
   FILE_INPUT_FRAME_URL_FUNCTION,
   FILE_UPLOAD_TARGET_FUNCTION,
   FILL_ELEMENT_FUNCTION,
+  FOCUS_ELEMENT_FUNCTION,
   SELECT_ALL_ELEMENT_FUNCTION
 } from '../../cdp/input/browser-element-functions'
 import { assertUploadFilesExist } from '../../cdp/input/browser-upload-files'
@@ -35,7 +36,7 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserHoverResult> {
-    return this.enqueuePageAction(
+    return this.enqueueInertAction(
       worktreeId,
       browserPageId,
       async (sessionName) => {
@@ -115,7 +116,7 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
           await chooser.release()
         }
       },
-      { elements: [element] }
+      { elements: [element], blockFileChooser: false }
     )
   }
 
@@ -199,7 +200,10 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
       worktreeId,
       browserPageId,
       async (sessionName) => {
-        return (await this.execAgentBrowser(sessionName, ['focus', element])) as BrowserFocusResult
+        await this.actOnElement(sessionName, element, 'focus', FOCUS_ELEMENT_FUNCTION, {
+          movesFocus: true
+        })
+        return { focused: element }
       },
       { elements: [element] }
     )
@@ -214,7 +218,10 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
       worktreeId,
       browserPageId,
       async (sessionName) => {
-        await this.actOnElement(sessionName, element, 'clear', FILL_ELEMENT_FUNCTION, [''])
+        await this.actOnElement(sessionName, element, 'clear', FILL_ELEMENT_FUNCTION, {
+          args: [''],
+          movesFocus: true
+        })
         return { cleared: element }
       },
       { requireScopedTarget: true, elements: [element] }
@@ -234,7 +241,8 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
           sessionName,
           element,
           'select all in',
-          SELECT_ALL_ELEMENT_FUNCTION
+          SELECT_ALL_ELEMENT_FUNCTION,
+          { movesFocus: true }
         )
         // Code editors select their whole document from the shortcut, beyond the DOM they render;
         // an element that can't take focus keeps the DOM selection instead.

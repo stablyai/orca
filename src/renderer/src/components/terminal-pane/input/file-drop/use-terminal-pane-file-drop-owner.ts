@@ -2,12 +2,12 @@ import { useRef, useState, type RefObject } from 'react'
 import { toast } from 'sonner'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { isElementDisplayNone } from '@/lib/pane-manager/pane-display-visibility'
+import { isElementDisplayNone } from '@/lib/pane-manager/terminal-fit/pane-display-visibility'
 import {
   createOsFileDropSequence,
   useOsFileDropOwner,
   type OsFileDropSequence
-} from '@/hooks/use-os-file-drop-owner'
+} from '@/lib/files/drop/use-os-file-drop-owner'
 import { getNativeFileDropRejectionMessage } from '@/lib/files/drop/native-file-drop-rejection-message'
 import { makePaneKey, type PaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'

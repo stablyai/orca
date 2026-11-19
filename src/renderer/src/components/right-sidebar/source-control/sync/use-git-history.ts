@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { requireGitOwnerTarget } from './worktree-git-owner-target'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
 import { getRuntimeGitHistory } from '@/runtime/source-control/git/runtime-git-status-client'
 import type { GitHistoryPanelState } from './git-history-panel'

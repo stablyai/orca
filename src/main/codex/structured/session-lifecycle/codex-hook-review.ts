@@ -2,7 +2,7 @@ import { z } from 'zod'
 import type {
   AgentSessionHooks,
   AgentSessionHookTrust
-} from '../../../../shared/agent-session/agent-session-hooks'
+} from '../../../../shared/agent-session/options/protocol/agent-session-hooks'
 import type { CodexAppServerRpc } from '../../app-server/codex-app-server-session'
 
 const Hook = z.object({

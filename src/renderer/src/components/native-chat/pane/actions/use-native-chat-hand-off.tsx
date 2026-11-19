@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { withTimeout } from '../../../../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../../../../shared/concurrency/promise-timeout-fallback'
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useAppStore } from '@/store/index'
@@ -13,7 +13,7 @@ import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-ag
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { supportsStructuredAgentSessionContinuationContext } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
 import { executionHostIdForStructuredTarget } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
-import { buildAgentSessionHandoffContext } from '../../../../../../shared/agent-session-handoff-context'
+import { buildAgentSessionHandoffContext } from '../../../../../../shared/native-chat/transcript/agent-session-handoff-context'
 import type { AgentSessionContinuationContext } from '../../../../../../shared/agent-session/agent-session-wire'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import type { NativeChatStructuredViewProps } from '../../native-chat-view-types'
@@ -193,7 +193,6 @@ export function useNativeChatHandOff({
         key={currentAttempt.operation}
         open
         request={request}
-        sourceWorkingDirectory={directory?.worktreePath}
         onOpenChange={(isOpen) => {
           if (!isOpen && active.current === currentAttempt) {
             retire()

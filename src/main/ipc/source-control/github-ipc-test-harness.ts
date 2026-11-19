@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import { clearPRRefreshValidationBackoffForTests } from '../../github/pr-refresh-validation-backoff'
+import { clearPRRefreshValidationBackoffForTests } from '../../github/pull-requests/refresh/pr-refresh-validation-backoff'
 import { type GitHubIpcMocks, listGitHubIpcMockFns } from './github-ipc-module-mocks'
 
 const ORIGINAL_PLATFORM = process.platform

@@ -1,6 +1,6 @@
-import { WorktreeSet } from '../../../../../shared/rpc-contract/worktree-params'
-import { displayNameUpdatePinsLabel } from '../../../../../shared/worktree/display-name-provenance'
-import { getWorkspaceStatusWarning } from '../../../../../shared/workspace-status-warning'
+import { WorktreeSet } from '../../../../../shared/rpc-contract/workspaces/worktree-params'
+import { displayNameUpdatePinsLabel } from '../../../../../shared/worktree/metadata/display-name-provenance'
+import { getWorkspaceStatusWarning } from '../../../../../shared/workspace/status/workspace-status-warning'
 import { defineMethod } from '../../core'
 
 export const WORKTREE_SET_METHOD = defineMethod({
@@ -68,7 +68,10 @@ export const WORKTREE_SET_METHOD = defineMethod({
               parentWorktree: params.parentWorktree,
               matchFolderWorkspaces: params.matchFolderWorkspaces === true,
               ...(params.crossStoreParent ? { crossStoreParent: params.crossStoreParent } : {}),
-              noParent: params.noParent === true
+              noParent: params.noParent === true,
+              ...(params.ifParentWorkspace !== undefined
+                ? { ifParentWorkspace: params.ifParentWorkspace }
+                : {})
             }
           : undefined
     })

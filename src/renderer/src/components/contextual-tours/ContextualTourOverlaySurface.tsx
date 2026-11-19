@@ -19,7 +19,7 @@ import {
   type ContextualTourStepPlacement,
   type ContextualTourStepControl,
   type ContextualTourStepAction
-} from '../../../../shared/contextual-tours'
+} from '../../../../shared/feature-education/contextual-tours/contextual-tours'
 import { ContextualTourArrow } from './ContextualTourArrow'
 import { ContextualTourControl } from './ContextualTourControl'
 import { ContextualTourProgressDots } from './ContextualTourProgressDots'
@@ -29,7 +29,7 @@ import {
 } from './contextual-tour-floating-position'
 import { useTranslate } from '@/i18n/use-translate'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
-import { hasVisibleOverlay } from '@/lib/visible-overlay'
+import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
 import { getMeasurableContextualTourTarget } from './contextual-tour-gate'
 
 const FOCUSABLE_SELECTOR =
@@ -48,7 +48,6 @@ export type ActiveTourRenderState = {
   secondaryAction?: ContextualTourStepAction
   preferredPlacement?: ContextualTourStepPlacement
   targetPulse?: boolean
-  hidePrimaryAction?: boolean
   isLastStep: boolean
   isFirstStep: boolean
   panelHost: HTMLElement | null
@@ -134,11 +133,10 @@ export function ContextualTourOverlaySurface({
   const defaultPrimaryAction = {
     kind: renderState.isLastStep ? 'complete' : 'next',
     label: renderState.isLastStep
-      ? t('auto.components.contextual.tours.ContextualTourOverlaySurface.complete', 'Done')
+      ? t('auto.components.contextual.tours.ContextualTourOverlaySurface.complete', 'Finish')
       : t('auto.components.contextual.tours.contextual.tour.overlay.measurement.38b3155418', 'Next')
   } satisfies ContextualTourStepAction
-  const primaryAction =
-    renderState.primaryAction ?? (renderState.hidePrimaryAction ? null : defaultPrimaryAction)
+  const primaryAction = renderState.primaryAction ?? defaultPrimaryAction
   const showTargetRings = renderState.targetPulse === true
   const targetRingStyle = showTargetRings
     ? ({
@@ -255,21 +253,19 @@ export function ContextualTourOverlaySurface({
                 {renderState.secondaryAction.label}
               </Button>
             ) : null}
-            {primaryAction ? (
-              <Button
-                type="button"
-                size="xs"
-                onClick={
-                  primaryAction.kind === defaultPrimaryAction.kind &&
-                  primaryAction.label === defaultPrimaryAction.label
-                    ? onNext
-                    : () => onStepAction(primaryAction)
-                }
-              >
-                {primaryAction.label}
-                {primaryAction.kind === 'next' && !renderState.isLastStep ? <ArrowRight /> : null}
-              </Button>
-            ) : null}
+            <Button
+              type="button"
+              size="xs"
+              onClick={
+                primaryAction.kind === defaultPrimaryAction.kind &&
+                primaryAction.label === defaultPrimaryAction.label
+                  ? onNext
+                  : () => onStepAction(primaryAction)
+              }
+            >
+              {primaryAction.label}
+              {primaryAction.kind === 'next' && !renderState.isLastStep ? <ArrowRight /> : null}
+            </Button>
           </div>
         </div>
       </div>

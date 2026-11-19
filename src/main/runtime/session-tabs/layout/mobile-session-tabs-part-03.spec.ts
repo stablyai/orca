@@ -1,0 +1,166 @@
+import '../../../../shared/workspace-layout/layout-owner-switch'
+import { describe, expect, it, vi } from 'vitest'
+import '../../terminal/layout/bind-first-pane.test-fixture'
+import '../../construction/test-context/runtime-test-module-registration.spec'
+import { MOCK_GIT_WORKTREES, electronMocks } from '../../orca-runtime-test-mocks/setup.spec'
+import { OrcaRuntimeService } from '../../orca-runtime'
+import '../../browser/client-pages/runtime-browser-page-registry'
+import 'electron'
+import { listWorktrees } from '../../../git/worktrees/catalog/worktree-scan-cache'
+import {
+  TEST_WORKTREE_ID,
+  deferred,
+  store
+} from '../../construction/test-context/orca-runtime-test-fixtures.spec'
+import '../../../../shared/orca-profiles/constants'
+import './split-placement-session.test-fixture'
+
+describe('OrcaRuntimeService', () => {
+  it('closes an offscreen browser without overwriting a concurrent session update', async () => {
+    const closeProof = deferred<void>()
+    const closeOffscreenTab = vi.fn(() => closeProof.promise)
+    const closeSessionTab = vi.fn()
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setOffscreenBrowserBackend({
+      createTab: vi.fn(),
+      closeTab: closeOffscreenTab,
+      ownsTab: () => true
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      closeSessionTab,
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    const browserTab = {
+      type: 'browser' as const,
+      id: 'offscreen-page-1',
+      title: 'Offscreen page',
+      browserWorkspaceId: 'offscreen-page-1',
+      browserPageId: 'offscreen-page-1',
+      url: 'https://remote.internal/',
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+      isActive: true
+    }
+    await runtime.syncWindowGraph(0, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'headless:test',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: browserTab.id,
+          activeTabType: 'browser',
+          tabs: [browserTab]
+        }
+      ]
+    })
+
+    const closing = runtime.closeMobileSessionTab(
+      `id:${TEST_WORKTREE_ID}`,
+      browserTab.browserPageId
+    )
+    await vi.waitFor(() => expect(closeOffscreenTab).toHaveBeenCalledWith(browserTab.browserPageId))
+
+    await runtime.syncWindowGraph(0, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'headless:test',
+          snapshotVersion: 2,
+          activeGroupId: 'group-1',
+          activeTabId: browserTab.id,
+          activeTabType: 'browser',
+          tabs: [
+            browserTab,
+            {
+              type: 'markdown',
+              id: 'notes',
+              title: 'Notes',
+              filePath: '/worktree/notes.md',
+              relativePath: 'notes.md',
+              language: 'markdown',
+              mode: 'edit',
+              isDirty: false,
+              sourceFileId: 'notes.md',
+              sourceFilePath: '/worktree/notes.md',
+              sourceRelativePath: 'notes.md',
+              documentVersion: '1',
+              isActive: false
+            }
+          ]
+        }
+      ]
+    })
+    closeProof.resolve()
+    await expect(closing).resolves.toEqual({ closed: true, retirementConfirmed: true })
+
+    expect(closeSessionTab).not.toHaveBeenCalled()
+    expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([
+      expect.objectContaining({ id: 'notes', type: 'markdown' })
+    ])
+  })
+
+  it('rejects a paired create if renderer authority changes across async resolution', async () => {
+    const spawn = vi.fn()
+    const send = vi.fn()
+    const setBackgroundThrottling = vi.fn()
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    electronMocks.BrowserWindow.fromId.mockReturnValue({
+      isDestroyed: () => false,
+      webContents: {
+        isDestroyed: () => false,
+        send,
+        setBackgroundThrottling,
+        capturePage: vi.fn(async () => null)
+      }
+    })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    let resolutionStarted = (): void => {}
+    const started = new Promise<void>((resolve) => {
+      resolutionStarted = resolve
+    })
+    let releaseResolution = (): void => {}
+    vi.mocked(listWorktrees).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseResolution = () => resolve(MOCK_GIT_WORKTREES)
+          resolutionStarted()
+        })
+    )
+
+    const create = runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
+      clientNavigationId: 'device-a',
+      navigation: 'caller'
+    })
+    await started
+    expect(spawn).not.toHaveBeenCalled()
+    runtime.markRendererReloading(1)
+    releaseResolution()
+    await expect(create).rejects.toThrow('runtime_unavailable')
+    expect(send).not.toHaveBeenCalled()
+    expect(spawn).not.toHaveBeenCalled()
+    expect(setBackgroundThrottling).not.toHaveBeenCalled()
+  })
+})

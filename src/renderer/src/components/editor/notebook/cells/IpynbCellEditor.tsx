@@ -7,19 +7,19 @@ import {
   editorTypographyTextStyle,
   monacoTypographyOptions
 } from '@/lib/editor/appearance/editor-typography'
-import { useEditorTypography } from '@/hooks/use-editor-typography'
+import { useEditorTypography } from '@/lib/editor/appearance/use-editor-typography'
 import { cn } from '@/lib/class-names'
-import { installMonacoEditorFindShortcut } from '../../editor-shortcuts'
-import { syncContentUpdate } from '../../monaco-content-sync'
+import { installMonacoEditorFindShortcut } from '../../commands/editor-shortcuts'
+import { syncContentUpdate } from '../../model-lifetime/buffer-text/monaco-content-sync'
 import {
   IPYNB_CODE_CELL_PREVIEW_MAX_LINES,
   getIpynbCodeCellPreviewLines
 } from './ipynb-code-cell-lines'
 import type { IpynbCell } from '../document/ipynb-parse'
 import { MarkdownPreviewBody } from '../../markdown-preview/render-tree/MarkdownPreviewBody'
-import { useMonacoColorizedLines } from '../../MonacoCodeExcerpt'
-import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
-import { useMonacoTheme } from '@/hooks/use-monaco-theme'
+import { useMonacoColorizedLines } from '../../monaco/MonacoCodeExcerpt'
+import { useDocumentDarkTheme } from '@/hooks/theme/use-document-dark-theme'
+import { useMonacoTheme } from '@/lib/editor/appearance/use-monaco-theme'
 
 const NO_MARKDOWN_COMPONENTS: Components = {}
 // Share preview/editor box metrics to avoid shifts on activation.

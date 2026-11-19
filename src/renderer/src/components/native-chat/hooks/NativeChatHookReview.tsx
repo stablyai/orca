@@ -1,4 +1,4 @@
-import type { AgentSessionHook } from '../../../../../shared/agent-session/agent-session-hooks'
+import type { AgentSessionHook } from '../../../../../shared/agent-session/options/protocol/agent-session-hooks'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 

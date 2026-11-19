@@ -4,6 +4,8 @@ import type { WorkspaceSessionPatch } from '../../../../../shared/workspace-sess
 import { SESSION_RELEVANT_FIELDS, shouldPersistWorkspaceSession } from './workspace-session'
 import { buildWorkspaceSessionPatch } from './workspace-session-patch'
 import { createWorktreeTabBucketProjection } from '../tabs/worktree-tab-bucket-projection'
+import { createBrowserSessionHandlesProjection } from './browser-session-handles-projection'
+import { createUnifiedTabSessionCache } from './workspace-session-unified-tabs'
 
 type SessionRelevantField = (typeof SESSION_RELEVANT_FIELDS)[number]
 type TabsByWorktree = AppState['tabsByWorktree']
@@ -104,10 +106,13 @@ export function createSessionWriteSubscriber({
   // prev holds projected maps; retain raw identities separately for the allocation-free scan.
   let prevTabsSource: TabsByWorktree | null = null
   let prevUnifiedTabsSource: UnifiedTabsByWorktree | null = null
+  let prevBrowserHandlesSource: AppState['remoteBrowserPageHandlesByPageId'] | null = null
   // Pending fields are the only owed-write ledger after prev advances. In-flight writes own their fields until ACK; failures merge them back without replacing newer same-field edits.
   const pendingChangedFields = new Set<SessionRelevantField>()
   const terminalTabsProjection = createTerminalSessionTabsProjection()
   const unifiedTabsProjection = createUnifiedSessionTabsProjection()
+  const browserHandlesProjection = createBrowserSessionHandlesProjection()
+  const unifiedTabSessionCache = createUnifiedTabSessionCache()
   const flushPendingWrite = (): void => {
     timer = null
     if (disposed || writing || pendingChangedFields.size === 0) {
@@ -121,7 +126,7 @@ export function createSessionWriteSubscriber({
     }
     const changed = new Set(pendingChangedFields)
     pendingChangedFields.clear()
-    const patch = buildWorkspaceSessionPatch(fresh, changed)
+    const patch = buildWorkspaceSessionPatch(fresh, changed, unifiedTabSessionCache)
     if (Object.keys(patch).length === 0) {
       return
     }
@@ -177,7 +182,9 @@ export function createSessionWriteSubscriber({
           ? state.tabsByWorktree === prevTabsSource
           : key === 'unifiedTabsByWorktree'
             ? state.unifiedTabsByWorktree === prevUnifiedTabsSource
-            : prev[key] === state[key]
+            : key === 'remoteBrowserPageHandlesByPageId'
+              ? state.remoteBrowserPageHandlesByPageId === prevBrowserHandlesSource
+              : prev[key] === state[key]
       if (!unchanged) {
         return true
       }
@@ -209,7 +216,9 @@ export function createSessionWriteSubscriber({
           ? terminalTabsProjection.project(value as TabsByWorktree)
           : key === 'unifiedTabsByWorktree'
             ? unifiedTabsProjection.project(value as UnifiedTabsByWorktree)
-            : value
+            : key === 'remoteBrowserPageHandlesByPageId'
+              ? browserHandlesProjection(state.remoteBrowserPageHandlesByPageId)
+              : value
     }
     const changedFields =
       prev === null
@@ -218,6 +227,7 @@ export function createSessionWriteSubscriber({
     // Equivalent projections still consume the new source identities.
     prevTabsSource = state.tabsByWorktree
     prevUnifiedTabsSource = state.unifiedTabsByWorktree
+    prevBrowserHandlesSource = state.remoteBrowserPageHandlesByPageId
     if (changedFields.length === 0 && pendingChangedFields.size === 0) {
       return
     }

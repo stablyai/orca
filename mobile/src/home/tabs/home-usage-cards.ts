@@ -7,12 +7,14 @@ import {
 } from '../../accounts/usage/usage-selectors'
 import type { AccountsSnapshot, ProviderRateLimits } from '../../accounts/accounts-snapshot'
 import { getActiveCodexAccountIdForRateLimitTarget } from '../../accounts/usage/codex-reset-credit'
+import { getCodexAccountDisplayDetail } from '../../../../src/shared/agent-accounts/codex-account-display-label'
 
 export type HomeUsageCard = {
   /** The managed account's id, or null for the agent's own login (System default). */
   accountId: string | null
   email: string | null
-  /** Claude's organization or Codex's workspace, when the desktop knows it. */
+  displayName?: string
+  /** Claude's organization, or Codex's workspace plus an id prefix when accounts share an email. */
   subtitle: string | null
   active: boolean
   limits: ProviderRateLimits | null
@@ -43,12 +45,14 @@ function managedAccounts(snapshot: AccountsSnapshot, provider: ProviderKey) {
     ? snapshot.claude.accounts.map((account) => ({
         id: account.id,
         email: account.email,
+        displayName: account.displayName,
         subtitle: account.organizationName ?? null
       }))
     : snapshot.codex.accounts.map((account) => ({
         id: account.id,
         email: account.email,
-        subtitle: account.workspaceLabel ?? null
+        displayName: account.displayName,
+        subtitle: getCodexAccountDisplayDetail(account, snapshot.codex.accounts)
       }))
 }
 
@@ -78,6 +82,7 @@ export function selectHomeUsageCards(
     cards.push({
       accountId: account.id,
       email: account.email,
+      displayName: account.displayName,
       subtitle: account.subtitle,
       active,
       limits,

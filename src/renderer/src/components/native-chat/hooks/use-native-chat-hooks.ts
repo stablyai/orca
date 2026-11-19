@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   AgentSessionHooks,
   AgentSessionHookTrust
-} from '../../../../../shared/agent-session/agent-session-hooks'
+} from '../../../../../shared/agent-session/options/protocol/agent-session-hooks'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import type { NativeChatHooksModalRequest } from './native-chat-hooks-modal'
 

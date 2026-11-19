@@ -12,7 +12,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
-import type { SkillCloudOwnedShare } from '../../../../../shared/skill-cloud-contract'
+import type { SkillCloudOwnedShare } from '../../../../../shared/skills/sharing/skill-cloud-contract'
 import { skillCountLabel } from '../presentation/skill-display-labels'
 import { isSkillBundleVersion } from './skill-share-version-summary'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
@@ -156,7 +156,7 @@ export function SkillSharedLinkRow({
               {busy || deleting ? <Loader2 className="animate-spin" /> : null}
               {confirming === 'revoke'
                 ? t('auto.components.settings.shareSkills.confirmUnshare', 'Confirm unshare')
-                : t('auto.components.skills.SkillSharedLinkRow.confirmDelete', 'Confirm delete')}
+                : t('common.delete', 'Delete')}
             </Button>
           ) : (
             <>

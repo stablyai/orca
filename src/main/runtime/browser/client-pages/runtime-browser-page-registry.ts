@@ -1,7 +1,12 @@
 import {
   sameRuntimeBrowserPlacement,
   type RuntimeBrowserClientPlacement
-} from '../../../../shared/runtime-browser-placement'
+} from '../../../../shared/browser/client-hosting/runtime-browser-placement'
+import {
+  AgentPageUse,
+  personPickWaits,
+  type BrowserPagePicker
+} from '../../../browser/agent-browser/session-routing/person-pick-hold'
 
 const DEFAULT_MAX_RUNTIME_BROWSER_PAGES = 256
 const MAX_IDENTITY_LENGTH = 256
@@ -53,7 +58,12 @@ type RuntimeBrowserPageMetadata = Pick<
 export class RuntimeBrowserPageRegistry {
   private readonly pages = new Map<string, RuntimeBrowserClientPage>()
   private globalActivePageId: string | null = null
+  // A person's pick per workspace, waiting for the agent's page to go idle.
+  private readonly heldPersonPicks = new Map<string, string>()
+  /** Agent commands on client pages; a person's pick waits while the routed page is in use. */
+  readonly agentUse = new AgentPageUse()
   private readonly maxPages: number
+  private onRetired?: (page: RuntimeBrowserClientPage) => void
 
   constructor(options: { maxPages?: number } = {}) {
     this.maxPages = options.maxPages ?? DEFAULT_MAX_RUNTIME_BROWSER_PAGES
@@ -62,7 +72,15 @@ export class RuntimeBrowserPageRegistry {
     }
   }
 
-  publishClientPage(input: RuntimeBrowserClientPageInput): RuntimeBrowserClientPage {
+  setRetirementListener(listener: (page: RuntimeBrowserClientPage) => void): void {
+    this.onRetired = listener
+  }
+
+  /** Omitting the picker publishes as asked, as restores and adoptions do. */
+  publishClientPage(
+    input: RuntimeBrowserClientPageInput,
+    picker?: BrowserPagePicker
+  ): RuntimeBrowserClientPage {
     assertIdentity(input.browserPageId)
     assertIdentity(input.workspaceId)
     assertIdentity(input.browserProfileId)
@@ -73,11 +91,17 @@ export class RuntimeBrowserPageRegistry {
     if (this.pages.size >= this.maxPages) {
       throw new Error('browser_runtime_page_capacity')
     }
-    if (input.active) {
+    const held =
+      input.active &&
+      picker === 'person' &&
+      this.personPickWaitsIn(input.workspaceId, input.browserPageId)
+    const active = input.active && !held
+    if (active) {
       this.deactivateWorkspace(input.workspaceId)
     }
     const page = freezePage({
       ...input,
+      active,
       placement: Object.freeze({ ...input.placement }),
       title: input.title ?? 'Browser',
       canGoBack: input.canGoBack ?? false,
@@ -85,6 +109,11 @@ export class RuntimeBrowserPageRegistry {
       metadataRevision: input.metadataRevision ?? 0
     })
     this.pages.set(page.browserPageId, page)
+    if (held) {
+      this.heldPersonPicks.set(page.workspaceId, page.browserPageId)
+    } else if (active && picker !== undefined) {
+      this.picked(page, picker)
+    }
     if (page.active) {
       this.globalActivePageId = page.browserPageId
     }
@@ -129,14 +158,58 @@ export class RuntimeBrowserPageRegistry {
 
   activatePage(
     browserPageId: string,
-    placement: RuntimeBrowserClientPlacement
+    placement: RuntimeBrowserClientPlacement,
+    picker: BrowserPagePicker
   ): RuntimeBrowserClientPage {
     const current = this.requireExactPage(browserPageId, placement)
-    this.deactivateWorkspace(current.workspaceId)
-    const next = freezePage({ ...current, active: true, placement: current.placement })
-    this.pages.set(browserPageId, next)
-    this.globalActivePageId = browserPageId
+    if (picker === 'person' && this.personPickWaitsIn(current.workspaceId, browserPageId)) {
+      this.heldPersonPicks.set(current.workspaceId, browserPageId)
+      return current
+    }
+    const next = this.select(current)
+    this.picked(next, picker)
     return next
+  }
+
+  private picked(page: RuntimeBrowserClientPage, picker: BrowserPagePicker): void {
+    // A newer pick than the held one, by the agent or the person.
+    this.heldPersonPicks.delete(page.workspaceId)
+    if (picker === 'agent') {
+      // Mark the new page now, or a person's pick before the agent's next command would take it.
+      this.agentUse.begin(page.browserPageId)()
+    }
+  }
+
+  private select(page: RuntimeBrowserClientPage, takesGlobal = true): RuntimeBrowserClientPage {
+    this.deactivateWorkspace(page.workspaceId)
+    const next = freezePage({ ...page, active: true, placement: page.placement })
+    this.pages.set(page.browserPageId, next)
+    this.globalActivePageId = takesGlobal ? page.browserPageId : this.globalActivePageId
+    return next
+  }
+
+  private personPickWaitsIn(workspaceId: string, pickedPageId: string): boolean {
+    const routed = [...this.pages.values()].find(
+      (page) => page.workspaceId === workspaceId && page.active
+    )
+    return personPickWaits(routed?.browserPageId ?? null, pickedPageId, this.agentUse.isUsing)
+  }
+
+  private applyHeldPersonPicks(workspaceId?: string): void {
+    for (const [heldWorkspaceId, browserPageId] of this.heldPersonPicks) {
+      if (
+        (workspaceId === undefined || heldWorkspaceId === workspaceId) &&
+        !this.personPickWaitsIn(heldWorkspaceId, browserPageId)
+      ) {
+        this.heldPersonPicks.delete(heldWorkspaceId)
+        const page = this.pages.get(browserPageId)
+        const global = this.globalActivePageId ? this.pages.get(this.globalActivePageId) : undefined
+        if (page) {
+          // A late pick takes the global selection only while nothing newer has moved it elsewhere.
+          this.select(page, global?.workspaceId === heldWorkspaceId)
+        }
+      }
+    }
   }
 
   retirePage(browserPageId: string, placement: RuntimeBrowserClientPlacement): boolean {
@@ -145,6 +218,11 @@ export class RuntimeBrowserPageRegistry {
       return false
     }
     this.pages.delete(browserPageId)
+    this.agentUse.forget(browserPageId)
+    if (this.heldPersonPicks.get(current.workspaceId) === browserPageId) {
+      this.heldPersonPicks.delete(current.workspaceId)
+    }
+    this.onRetired?.(current)
     if (this.globalActivePageId === browserPageId) {
       this.globalActivePageId = null
     }
@@ -183,6 +261,7 @@ export class RuntimeBrowserPageRegistry {
   }
 
   listPages(workspaceId?: string): readonly RuntimeBrowserClientPage[] {
+    this.applyHeldPersonPicks(workspaceId)
     const pages = [...this.pages.values()]
     if (workspaceId !== undefined) {
       return pages.filter((page) => page.workspaceId === workspaceId)
@@ -197,6 +276,16 @@ export class RuntimeBrowserPageRegistry {
 
   deactivateGlobal(): void {
     this.globalActivePageId = null
+  }
+
+  /** An engine tab took the selection; unscoped creates and switches move only the global pick. */
+  yieldSelection(workspaceId: string | undefined): void {
+    this.deactivateGlobal()
+    if (workspaceId !== undefined) {
+      // A newer pick than the held one, by the agent or the person.
+      this.heldPersonPicks.delete(workspaceId)
+      this.deactivateWorkspace(workspaceId)
+    }
   }
 
   deactivateWorkspace(workspaceId: string): void {

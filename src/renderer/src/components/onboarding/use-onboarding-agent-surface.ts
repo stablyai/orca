@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import { nativeChatPreferenceFor } from '../../../../shared/structured-native-chat-launch-route'
+import { nativeChatPreferenceFor } from '../../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import {
   chatProviderAgents,
   useHostStructuredAgentsVersion
@@ -21,6 +21,8 @@ import type { AgentSurface } from './use-onboarding-flow-types'
 
 type AgentSurfaceArgs = {
   settings: GlobalSettings | null
+  /** A past run already saved a surface; otherwise Chat is the recommended default. */
+  surfaceChosen: boolean
   selectedAgent: TuiAgent | null
   agentInteractedRef: { readonly current: boolean }
   setSelectedAgent: Dispatch<SetStateAction<TuiAgent | null>>
@@ -72,14 +74,15 @@ export function useChatAgentDetection() {
 
 export function useOnboardingAgentSurface({
   settings,
+  surfaceChosen,
   selectedAgent,
   agentInteractedRef,
   setSelectedAgent
 }: AgentSurfaceArgs) {
-  // Unchosen, the page reflects the saved Chat UI setting, including once settings hydrate.
+  // Unchosen, a first run recommends Chat; a replay reflects the saved Chat UI setting.
   const [choice, setAgentSurface] = useState<AgentSurface | null>(null)
   const agentSurface: AgentSurface =
-    choice ?? (settings?.agentDefaultSurface === 'chat' ? 'chat' : 'terminal')
+    choice ?? (!surfaceChosen || settings?.agentDefaultSurface === 'chat' ? 'chat' : 'terminal')
 
   const { chatAgents, chatDetected, refreshDetectedAgents } = useChatAgentDetection()
   const chatSettings = {
@@ -94,16 +97,24 @@ export function useOnboardingAgentSurface({
     (agent) => chatDetected?.includes(agent) && nativeChatPreferenceFor(chatSettings, agent)
   )
 
+  // A replay's saved agent stays put until the person picks Chat again.
+  const pickChatAgent = choice === 'chat' || (choice === null && !surfaceChosen)
   useEffect(() => {
     if (
-      choice === 'chat' &&
+      pickChatAgent &&
       !agentInteractedRef.current &&
       !selectedAgentOpensAsChat &&
       installedChatAgent
     ) {
       setSelectedAgent(installedChatAgent)
     }
-  }, [choice, agentInteractedRef, installedChatAgent, selectedAgentOpensAsChat, setSelectedAgent])
+  }, [
+    pickChatAgent,
+    agentInteractedRef,
+    installedChatAgent,
+    selectedAgentOpensAsChat,
+    setSelectedAgent
+  ])
 
   return { agentSurface, setAgentSurface, chatAgents, chatDetected, refreshDetectedAgents }
 }

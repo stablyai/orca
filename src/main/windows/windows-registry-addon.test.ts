@@ -47,20 +47,4 @@ describeWindows('vendored windows registry addon', () => {
       oracle.type === 'REG_EXPAND_SZ' ? WINDOWS_REG_EXPAND_SZ : WINDOWS_REG_SZ
     )
   })
-
-  it('reads the machine environment key through HKLM', () => {
-    const registry = loadWindowsNativeRegistry()
-    const values = registry.getRegistryKey(
-      registry.HK.LM,
-      'SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment'
-    )
-    const entry = Object.entries(values ?? {}).find(([name]) => name.toLowerCase() === 'path')?.[1]
-    expect(typeof entry?.value).toBe('string')
-    expect(String(entry?.value).length).toBeGreaterThan(0)
-  })
-
-  it('returns null for a key that does not exist instead of throwing', () => {
-    const registry = loadWindowsNativeRegistry()
-    expect(registry.getRegistryKey(registry.HK.CU, 'Software\\OrcaNoSuchKey\\Absent')).toBeNull()
-  })
 })

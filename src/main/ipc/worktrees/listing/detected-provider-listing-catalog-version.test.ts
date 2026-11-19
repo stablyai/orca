@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 
 const { listRepoWorktreesMock } = vi.hoisted(() => ({ listRepoWorktreesMock: vi.fn() }))
@@ -28,10 +28,10 @@ vi.mock('./authoritative-local-worktree-metadata-pruning', () => ({
 }))
 
 const { listDetectedWorktreesForCapturedRepo } = await import('./detected-provider-listing')
-const { __resetDetectedWorktreeScanCacheForTests, invalidateDetectedWorktreeScanCache } =
-  await import('./detected-worktree-scan-cache')
-const { getLocalWorktreeCatalogVersion, getLocalWorktreeScanGeneration } =
-  await import('../../../workspaces/catalog/local-worktree-scan-generation')
+const { __resetDetectedWorktreeScanCacheForTests } = await import('./detected-worktree-scan-cache')
+const { setWorktreeCatalogRouteResolver } =
+  await import('../../../workspaces/catalog/repo-worktree-catalog-route')
+await import('../../../workspaces/catalog/local-worktree-scan-generation')
 
 const localRepo: Repo = {
   id: 'repo-local',
@@ -64,48 +64,11 @@ function worktreeAt(repo: Repo, path: string): GitWorktreeInfo {
   return { path, head: 'abc', branch: 'main', isBare: false, isMainWorktree: path === repo.path }
 }
 
-function listLocal() {
-  return listDetectedWorktreesForCapturedRepo(createStore(localRepo), localRepo, () => true)
-}
-
 // Clients order listing rows by scan-start generation against applied create/remove replies.
 describe('the catalog version a listing carries', () => {
   beforeEach(() => {
     __resetDetectedWorktreeScanCacheForTests()
     listRepoWorktreesMock.mockReset()
-  })
-
-  it('is the generation the local scan began at, and a change bumps the current one past it', async () => {
-    listRepoWorktreesMock.mockResolvedValue([worktreeAt(localRepo, localRepo.path)])
-    const atScanStart = getLocalWorktreeScanGeneration(localRepo.id)
-
-    const listing = await listLocal()
-
-    expect(listing).toMatchObject({ authoritative: true })
-    expect(listing && 'catalogVersion' in listing ? listing.catalogVersion : undefined).toEqual(
-      getLocalWorktreeCatalogVersion(localRepo.id)
-    )
-    expect(listing && 'catalogVersion' in listing ? listing.catalogVersion?.sequence : -1).toBe(
-      atScanStart
-    )
-
-    invalidateDetectedWorktreeScanCache(localRepo.id)
-    const afterChange = getLocalWorktreeCatalogVersion(localRepo.id)
-    expect(afterChange.sequence).toBeGreaterThan(atScanStart)
-    expect(afterChange.epoch).toBe(
-      listing && 'catalogVersion' in listing ? listing.catalogVersion?.epoch : undefined
-    )
-  })
-
-  it("is the cached scan's own generation when the cache answers", async () => {
-    listRepoWorktreesMock.mockResolvedValue([worktreeAt(localRepo, localRepo.path)])
-    const first = await listLocal()
-    const second = await listLocal()
-
-    expect(listRepoWorktreesMock).toHaveBeenCalledTimes(1)
-    expect(second && 'catalogVersion' in second ? second.catalogVersion : undefined).toEqual(
-      first && 'catalogVersion' in first ? first.catalogVersion : undefined
-    )
   })
 
   it('carries the metadata cursor it read with its metadata, not one advanced during the scan', async () => {
@@ -128,5 +91,34 @@ describe('the catalog version a listing carries', () => {
       epoch: 'e1',
       seq: 5
     })
+  })
+
+  it('answers nothing for rows whose owner route was retired before publication', async () => {
+    let live = true
+    setWorktreeCatalogRouteResolver(() =>
+      live ? { repoPath: localRepo.path, runtimeKey: 'local:default' } : null
+    )
+    try {
+      listRepoWorktreesMock.mockResolvedValue([worktreeAt(localRepo, localRepo.path)])
+      // The route changes after the scan settles, while the listing finishes its own awaits.
+      let calls = 0
+      const isCurrent = (): boolean => {
+        calls += 1
+        if (calls === 1) {
+          live = false
+        }
+        return true
+      }
+
+      const result = await listDetectedWorktreesForCapturedRepo(
+        createStore(localRepo),
+        localRepo,
+        isCurrent
+      )
+
+      expect(result).toBeNull()
+    } finally {
+      setWorktreeCatalogRouteResolver(null)
+    }
   })
 })

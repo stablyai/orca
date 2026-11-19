@@ -7,8 +7,8 @@ import {
 import type { KnownExecutionHostPlatform } from '@/runtime/hosts/platform/execution-host-facts'
 import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
 import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
-import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../../../shared/local-windows-terminal-runtime'
-import { isWslUncPath } from '../../../../../../shared/wsl-paths'
+import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../../../shared/shell/launch/local-windows-terminal-runtime'
+import { isWslUncPath } from '../../../../../../shared/file-access/wsl-paths'
 import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import type {
   AgentSessionLaunchPlan,
@@ -27,7 +27,6 @@ import type {
   DirectWorkItemLaunchInputs,
   LaunchWorkItemDirectArgs
 } from './launch-work-item-direct-types'
-import type { AgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
 
 export type DirectWorkItemAgentLaunchPreparation = {
   launchConnectionId: string | null
@@ -115,7 +114,7 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
   repoLaunchHost: KnownExecutionHostPlatform
   repoProjectRuntime?: ProjectExecutionRuntimeResolution
   planLaunch: typeof planAgentSessionLaunch
-  requestId: AgentLaunchRequestId
+  requestId: string
   preflightPlan?: AgentSessionLaunchPlan
 }): Promise<DirectWorkItemAgentLaunchPreparation> {
   const agentSelection = await resolveDirectWorkItemAgent({

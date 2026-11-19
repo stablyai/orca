@@ -1,8 +1,12 @@
 import { expect, it } from 'vitest'
 import { StructuredAgentSessionAdapterRouter } from '../../providers/structured-agent-session-adapter-router'
-import { claudeAndCodexAgents } from '../../providers/testing/structured-agent-session-adapter-router-test-support'
-import { createQueuedMessageTestRig } from './structured-agent-session-queued-message-rig.test-fixture'
-import { HOST_TEST_SESSION } from './structured-agent-session-host-test-data'
+import { claudeAndCodexAgents } from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
+import { createTestParams } from './structured-agent-session-create.test-fixture'
+import {
+  createRestTestRig,
+  REST_TEST_CALLER
+} from './structured-agent-session-rest-test-rig.test-fixture'
+import { HOST_TEST_SESSION } from './structured-agent-session-host-test-data.test-fixture'
 
 it.each([
   { agent: undefined, supportsHooks: true, expected: true },
@@ -11,7 +15,21 @@ it.each([
 ])(
   'advertises hook review through the host router only for a supporting Codex registration ($agent, $supportsHooks)',
   async ({ agent, supportsHooks, expected }) => {
-    const rig = await createQueuedMessageTestRig({ atRest: true, ...(agent ? { agent } : {}) })
+    const rig = await createRestTestRig()
+    const created = await rig.host.create(
+      REST_TEST_CALLER,
+      createTestParams(
+        undefined,
+        agent === 'claude'
+          ? {
+              agent,
+              provider: agent,
+              accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: '/private-fixture/claude' }
+            }
+          : {}
+      )
+    )
+    expect(created).toMatchObject({ ok: true })
     const provider = rig.host.deps.adapter
     const agents = claudeAndCodexAgents({
       claude: provider,

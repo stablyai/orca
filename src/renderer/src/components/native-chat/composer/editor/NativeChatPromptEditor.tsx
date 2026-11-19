@@ -3,7 +3,6 @@ import {
   nativeChatDraftPositions,
   hasUnsavedNativeChatComposerDraftChange
 } from '../../drafts/native-chat-composer-draft-memory'
-import { createNativeChatPastedTextHistory } from './native-chat-pasted-text-history'
 import { resolveNativeChatPastedText } from '../../paste/native-chat-composer-pasted-text-references'
 import { NativeChatPastedTextScopeProvider } from './native-chat-pasted-text-state'
 import {
@@ -15,22 +14,27 @@ import { subscribeToNativeChatComposerDraft } from '../../drafts/native-chat-com
 import { closeHistory } from '@tiptap/pm/history'
 import { Slice } from '@tiptap/pm/model'
 import { TextSelection } from '@tiptap/pm/state'
-import { memo, useCallback, useImperativeHandle, useLayoutEffect, useMemo, useRef } from 'react'
+import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { shallow } from 'zustand/shallow'
-import { EditorContent, useEditor } from '@tiptap/react'
+import { EditorContent } from '@tiptap/react'
+import {
+  NativeChatComposerEditorView,
+  useNativeChatComposerEditor
+} from './native-chat-composer-editor-owner'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import {
   fileReferenceContent,
+  insertPromptMention,
   NativeChatFileReference,
   NativeChatImageReference,
-  NativeChatSkill,
+  nativeChatPromptPills,
   promptLeafText,
   promptText,
   promptTextOffset,
   promptTextPosition
 } from './native-chat-prompt-document'
-import { promptTextContent } from './native-chat-prompt-document-text'
+import { openingPromptContent, promptTextContent } from './native-chat-prompt-document-text'
 import type {
   NativeChatComposerInput,
   NativeChatPromptEditorProps
@@ -38,8 +42,11 @@ import type {
 import { NativeChatImageRowProvider } from './NativeChatImageReferencePill'
 import { focusMountedNativeChatEditor, mountedEditorView } from './native-chat-mounted-editor-view'
 import { NativeChatUnkernedRunDecorations } from './native-chat-unkerned-run-decorations'
+import { NativeChatHardBreakParagraphs } from './native-chat-hard-break-paragraphs'
 
 import { useNativeChatComposerMount } from '../focus/native-chat-composer-mount'
+import { useNativeChatPromptEditorHandle } from '../../native-chat-prompt-editor-handle'
+import { useAppStore } from '@/store'
 
 const NO_IMAGES: readonly string[] = []
 const NOT_COMPOSING = (): boolean => false
@@ -65,123 +72,123 @@ function NativePromptEditor({
   className,
   ...events
 }: NativeChatPromptEditorProps): React.JSX.Element {
-  const historyPaths = useMemo(() => createNativeChatPastedTextHistory(scopeKey ?? ''), [scopeKey])
   const adopted = useRef(readNativeChatDraftSnapshot(scopeKey, initialValue))
-  const userOwned = useRef(false)
-  const appliedPosition = useRef<unknown>(undefined)
+  const [initialContent] = useState(() =>
+    openingPromptContent(adopted.current?.document, initialValue)
+  )
+  const spellcheck = useAppStore((s) => s.settings?.nativeChatComposerSpellcheck !== false)
   const claimSelection = () => {
-    userOwned.current = true
+    selection.claim()
     const position = adopted.current && nativeChatDraftPositions.get(adopted.current)
     if (position && position.at !== 'start' && position.target === positionTarget) {
       position.pending = false
     }
   }
-  const placeholderRef = useRef(placeholder)
-  placeholderRef.current = placeholder
-  const editor = useEditor(
-    {
-      extensions: [
-        StarterKit.configure({
-          blockquote: false,
-          bold: false,
-          bulletList: false,
-          code: false,
-          codeBlock: false,
-          dropcursor: false,
-          gapcursor: false,
-          heading: false,
-          horizontalRule: false,
-          italic: false,
-          link: false,
-          listItem: false,
-          orderedList: false,
-          strike: false,
-          underline: false,
-          trailingNode: false
-        }),
-        NativeChatAgentReference,
-        NativeChatSkill,
-        NativeChatFileReference,
-        NativeChatImageReference,
-        NativeChatUnkernedRunDecorations,
-        // A disabled box still says why it is disabled, as the plain text box's placeholder does.
-        Placeholder.configure({
-          placeholder: () => placeholderRef.current,
-          showOnlyWhenEditable: false
-        })
-      ],
-      content: adopted.current?.document || promptTextContent(initialValue),
-      editable: !disabled,
-      editorProps: {
-        attributes: {
-          'data-native-chat-prompt-editor': 'true',
-          role: 'textbox',
-          'aria-multiline': 'true',
-          'aria-label': placeholder,
-          class: `${className ?? ''} whitespace-pre-wrap break-words [&_p]:m-0 [&_p.is-editor-empty:first-child]:before:content-[attr(data-placeholder)] [&_p.is-editor-empty:first-child]:before:text-chat-foreground-faint [&_p.is-editor-empty:first-child]:before:float-left [&_p.is-editor-empty:first-child]:before:h-0 [&_p.is-editor-empty:first-child]:before:pointer-events-none`,
-          ...Object.fromEntries(Object.entries(events).filter(([key]) => key.startsWith('aria-')))
+  const { editor, historyPaths, selection } = useNativeChatComposerEditor(scopeKey ?? '', {
+    extensions: [
+      StarterKit.configure({
+        blockquote: false,
+        bold: false,
+        bulletList: false,
+        code: false,
+        codeBlock: false,
+        dropcursor: false,
+        gapcursor: false,
+        heading: false,
+        horizontalRule: false,
+        italic: false,
+        link: false,
+        listItem: false,
+        orderedList: false,
+        strike: false,
+        underline: false,
+        trailingNode: false
+      }),
+      NativeChatAgentReference,
+      ...nativeChatPromptPills,
+      NativeChatUnkernedRunDecorations,
+      NativeChatHardBreakParagraphs,
+      // A disabled box still says why it is disabled, as the plain text box's placeholder does.
+      Placeholder.configure({
+        placeholder: ({ editor }) => {
+          const attributes = editor.options.editorProps?.attributes
+          return typeof attributes === 'object' ? (attributes['aria-label'] ?? '') : ''
         },
-        // Clipboard input is always literal text; only the picker and attachments create pills.
-        handlePaste: (view, event) => {
-          if (event.defaultPrevented) {
-            return true
-          }
-          const text = event.clipboardData?.getData('text/plain')
-          if (text == null) {
-            return false
-          }
-          const content = editor?.schema.nodeFromJSON(promptTextContent(text))
-          if (!content) {
-            return false
-          }
-          view.dispatch(view.state.tr.replaceSelection(new Slice(content.content, 1, 1)))
+        showOnlyWhenEditable: false
+      })
+    ],
+    content: initialContent,
+    editable: !disabled,
+    editorProps: {
+      attributes: {
+        'data-native-chat-prompt-editor': 'true',
+        role: 'textbox',
+        'aria-multiline': 'true',
+        'aria-label': placeholder,
+        spellcheck: spellcheck ? 'true' : 'false',
+        // Chromium on macOS still applies system text replacements under spellcheck=false; autocorrect=off stops them.
+        ...(spellcheck ? {} : { autocorrect: 'off', autocapitalize: 'off' }),
+        class: `${className ?? ''} whitespace-pre-wrap break-words [&_p]:m-0 [&_p.is-editor-empty:only-child]:before:content-[attr(data-placeholder)] [&_p.is-editor-empty:only-child]:before:text-chat-foreground-faint [&_p.is-editor-empty:only-child]:before:float-left [&_p.is-editor-empty:only-child]:before:h-0 [&_p.is-editor-empty:only-child]:before:pointer-events-none`,
+        ...Object.fromEntries(Object.entries(events).filter(([key]) => key.startsWith('aria-')))
+      },
+      // Clipboard input is read as plain text, as a draft is: a bot's token in it becomes its pill.
+      handlePaste: (view, event) => {
+        if (event.defaultPrevented) {
           return true
-        },
-        clipboardTextSerializer: (slice) =>
-          resolveNativeChatPastedText(
-            scopeKey ?? '',
-            slice.content.textBetween(0, slice.content.size, '\n', promptLeafText),
-            true
-          )
+        }
+        const text = event.clipboardData?.getData('text/plain')
+        if (text == null) {
+          return false
+        }
+        const content = editor?.schema.nodeFromJSON(promptTextContent(text))
+        if (!content) {
+          return false
+        }
+        view.dispatch(view.state.tr.replaceSelection(new Slice(content.content, 1, 1)))
+        return true
       },
-      onTransaction: ({ editor: current, transaction }) => {
-        if (
-          !transaction.getMeta('preventUpdate') &&
-          (transaction.docChanged || transaction.selectionSet)
-        ) {
-          claimSelection()
-        }
-        const pastedTextFiles = transaction.docChanged
-          ? historyPaths(current.state.doc, transaction.docs)
-          : undefined
-        // Remote/late draft adoption is already saved; only this window’s edits should persist their document and skill chips.
-        if (
-          scopeKey &&
-          transaction.docChanged &&
-          (!transaction.getMeta('preventUpdate') ||
-            hasUnsavedNativeChatComposerDraftChange(scopeKey))
-        ) {
-          writeNativeChatDraftDocument(
-            scopeKey,
-            promptText(current.state.doc),
-            current.getJSON(),
-            pastedTextFiles
-          )
-        }
-      },
-      onUpdate: () => {
-        if (inputRef.current) {
-          onChange(inputRef.current)
-        }
-      },
-      onSelectionUpdate: () => {
-        if (inputRef.current) {
-          onSelect(inputRef.current)
-        }
+      clipboardTextSerializer: (slice) =>
+        resolveNativeChatPastedText(
+          scopeKey ?? '',
+          slice.content.textBetween(0, slice.content.size, '\n', promptLeafText),
+          true
+        )
+    },
+    onTransaction: ({ editor: current, transaction }, history) => {
+      if (
+        !transaction.getMeta('preventUpdate') &&
+        (transaction.docChanged || transaction.selectionSet)
+      ) {
+        claimSelection()
+      }
+      const pastedTextFiles = transaction.docChanged
+        ? history(current.state.doc, transaction.docs)
+        : undefined
+      // Remote/late draft adoption is already saved; only this window’s edits should persist their document and skill chips.
+      if (
+        scopeKey &&
+        transaction.docChanged &&
+        (!transaction.getMeta('preventUpdate') || hasUnsavedNativeChatComposerDraftChange(scopeKey))
+      ) {
+        writeNativeChatDraftDocument(
+          scopeKey,
+          promptText(current.state.doc),
+          current.getJSON(),
+          pastedTextFiles
+        )
       }
     },
-    []
-  )
+    onUpdate: () => {
+      if (inputRef.current) {
+        onChange(inputRef.current)
+      }
+    },
+    onSelectionUpdate: () => {
+      if (inputRef.current) {
+        onSelect(inputRef.current)
+      }
+    }
+  })
 
   const applyPosition = useCallback(
     (previousRange?: { from: number; to: number }) => {
@@ -189,12 +196,12 @@ function NativePromptEditor({
       if (
         !editor ||
         !position?.pending ||
-        appliedPosition.current === position ||
+        selection.hasApplied(position) ||
         (position.at !== 'start' && position.target !== positionTarget)
       ) {
         return
       }
-      if (userOwned.current) {
+      if (selection.isUserOwned()) {
         if (position.at !== 'start') {
           position.pending = false
         } else if (previousRange) {
@@ -205,7 +212,7 @@ function NativePromptEditor({
         }
         return
       }
-      appliedPosition.current = position
+      selection.markApplied(position)
       editor.view.dispatch(
         editor.state.tr
           .setSelection(
@@ -225,7 +232,7 @@ function NativePromptEditor({
         position.pending = false
       }
     },
-    [editor, positionTarget]
+    [editor, positionTarget, selection]
   )
   useLayoutEffect(() => applyPosition(), [applyPosition])
 
@@ -267,13 +274,8 @@ function NativePromptEditor({
               }
               adopted.current = readNativeChatDraftSnapshot(scopeKey, value)
               const stored = adopted.current?.document
-              if (stored) {
-                editor.commands.setContent(stored, { emitUpdate: false })
-                applyPosition(previousRange)
-                return
-              }
-              if (!value) {
-                editor.commands.setContent(promptTextContent(''), { emitUpdate: false })
+              if (stored || !value) {
+                editor.commands.setContent(openingPromptContent(stored, ''), { emitUpdate: false })
                 applyPosition(previousRange)
                 return
               }
@@ -333,7 +335,7 @@ function NativePromptEditor({
               // Why both: the text check covers other paragraphs, the view covers soft wraps.
               return (
                 !beyond.includes('\n') &&
-                editor.view.endOfTextblock(edge === 'start' ? 'up' : 'down')
+                mountedEditorView(editor)?.endOfTextblock(edge === 'start' ? 'up' : 'down') === true
               )
             },
             select: () => {
@@ -359,6 +361,7 @@ function NativePromptEditor({
                 .run()
               editor.view.dispatch(closeHistory(editor.state.tr))
             },
+            insertMention: (from, to, token) => insertPromptMention(editor, from, to, token),
             removeImageReferences: (attachmentId) => {
               const { tr } = editor.state
               editor.state.doc.descendants((node, position) => {
@@ -395,12 +398,13 @@ function NativePromptEditor({
         : null,
     [editor, scopeKey, applyPosition]
   )
-  useImperativeHandle(inputRef, () => input!, [input])
+  useNativeChatPromptEditorHandle(inputRef, editor, input)
   useNativeChatComposerMount(scopeKey ?? '', input, isComposing, disabled)
 
   return (
     <NativeChatPastedTextScopeProvider value={scopeKey ?? ''}>
       <NativeChatImageRowProvider value={imageRow}>
+        <NativeChatComposerEditorView editor={editor} />
         <EditorContent
           editor={editor}
           {...events}

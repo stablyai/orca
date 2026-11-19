@@ -1,22 +1,24 @@
 import { useId } from 'react'
 import { ChevronDown } from 'lucide-react'
-import { AgentStateDot } from '@/components/AgentStateDot'
+import { AgentStateDot } from '@/components/agent/status/AgentStateDot'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
-import type { AgentMessageSource } from '../../../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 import {
   agentMessageHeading,
   agentMessagePrimarySender,
   agentMessageCanCopy
-} from '../../../../../../shared/agent-session/agent-message-presentation'
-import { agentMessageTranscriptText } from '../../../../../../shared/agent-session/agent-message-display-text'
+} from '../../../../../../shared/agent-session/view/messages/agent-message-presentation'
+import { agentMessageTranscriptText } from '../../../../../../shared/agent-session/view/messages/agent-message-display-text'
 import { NativeChatAgentMessageSenders } from '../agent-senders/NativeChatAgentMessageSenders'
 import { useAgentMessageSenderView } from '../agent-senders/native-chat-agent-message-sender-view'
+import { useAgentMessageSenderBot } from '../agent-senders/native-chat-agent-message-sender-label'
+import { BotAvatar, CarriedBotAvatar } from '@/components/bots/BotAvatar'
 import { useNativeChatVisualOwner } from '../../media/visuals/native-chat-visual-owner'
 import { useNativeChatDisclosure } from '../disclosure/native-chat-disclosure-store'
 import { NativeChatExpandable } from '../disclosure/NativeChatExpandable'
@@ -26,6 +28,7 @@ import { NativeChatCodeBlock } from '../../markdown/code/NativeChatCodeBlock'
 import { NativeChatCopyButton } from '../actions/NativeChatCopyButton'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { NativeChatImageAttachments } from '../../media/images/NativeChatImageAttachments'
+import { NativeChatCardAvatar } from '../../NativeChatCardFrame'
 
 function heading(
   from: AgentMessageSource,
@@ -35,6 +38,13 @@ function heading(
   switch (agentMessageHeading(from, message)) {
     case 'started':
       return t('components.native-chat.agentMessage.startedWorker', 'Started worker')
+    case 'reopened-worker':
+      return t('components.native-chat.agentMessage.reopenedWorker', 'Reopened worker')
+    case 'followed-up-worker':
+      return t(
+        'components.native-chat.agentMessage.sentFollowUpToWorker',
+        'Sent follow-up to worker'
+      )
     case 'handed-off':
       return t('components.native-chat.agentMessage.handedOffToAgent', 'Handed off to agent')
     case 'started-agent':
@@ -176,6 +186,8 @@ export function NativeChatAgentMessageCard({
   )
 }
 
+const BOT_TILE = 'size-4 rounded-sm border-0 text-3xs'
+
 function AgentMessageAvatar({
   dispatchId,
   sender,
@@ -188,15 +200,27 @@ function AgentMessageAvatar({
   target?: RuntimeClientTarget
 }): React.JSX.Element {
   const view = useAgentMessageSenderView(sender, worktreeId, target, dispatchId)
+  const bot = useAgentMessageSenderBot(sender, worktreeId, target, dispatchId)
   return (
-    <div className="relative flex size-6 shrink-0 items-center justify-center rounded-full border border-border bg-muted">
-      <AgentTypeIcon agentType={view.agentType} size={16} />
+    <NativeChatCardAvatar compact>
+      {bot ? (
+        <BotAvatar bot={bot} className={BOT_TILE} />
+      ) : sender?.bot && sender.host ? (
+        // A paired computer's bot, which this computer's catalog doesn't hold.
+        <CarriedBotAvatar
+          name={sender.name ?? ''}
+          avatar={sender.botAvatar ?? null}
+          className={BOT_TILE}
+        />
+      ) : (
+        <AgentTypeIcon agentType={view.agentType} size={16} />
+      )}
       {view.dot ? (
         // Flex square: the chat line box would stretch a shrink-wrapped badge into a pill.
         <span className="absolute -right-0.5 -bottom-0.5 flex size-3.5 items-center justify-center rounded-full border border-border bg-card">
           <AgentStateDot state={view.dot} size="md" progress={view.progress} />
         </span>
       ) : null}
-    </div>
+    </NativeChatCardAvatar>
   )
 }

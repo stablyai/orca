@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'

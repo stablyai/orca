@@ -5,7 +5,7 @@ import type {
 import {
   insertLeafBeside,
   removeLayoutLeaf
-} from '../../../../shared/workspace-layout/terminal-pane-tree'
+} from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 
 /** Persist headless splits so snapshot rebuilds cannot collapse them to a stale single pane. */
 export function buildHeadlessTerminalSplitLayout(
