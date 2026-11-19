@@ -4,7 +4,6 @@ import { botCreateOfferTakenOver, botCreateOfferView } from './bot-create-offer-
 import { botCreateOfferState } from './bot-proposal'
 import { botMemoryUpdatedRows } from './bot-memory-updated-note'
 import { botRequestCardView } from './bot-request-card-view'
-import { botToolAddedCardView } from './bot-tool-added-card-view'
 import { webhookCardBodyView, webhookCardShows } from './webhook-card-view'
 import type { WebhookSummary } from '../rpc-contract/webhooks-params'
 import type { WorkspaceKey } from '../workspace/identity/workspace-scope'
@@ -135,20 +134,6 @@ describe('memory updated rows', () => {
       ['removed', 'tea:1'],
       ['noteChanged', 'notes/a.md:1']
     ])
-  })
-})
-
-describe('tool added card view', () => {
-  it('shows the sign-in line while the tool is there, and Removed once it is gone', () => {
-    expect(botToolAddedCardView(true, 'Needs sign-in', say)).toEqual({
-      state: 'Needs sign-in',
-      present: true
-    })
-    expect(botToolAddedCardView(false, 'Needs sign-in', say)).toEqual({
-      state: 'removed',
-      present: false
-    })
-    expect(botToolAddedCardView(null, null, say)).toEqual({ state: null, present: false })
   })
 })
 

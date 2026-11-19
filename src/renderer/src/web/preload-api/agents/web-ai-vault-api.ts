@@ -18,7 +18,7 @@ import type {
   AiVaultSessionTitlesResult
 } from '../../../../../shared/ai-vault/contracts/ai-vault-session-title'
 import {
-  AI_VAULT_LIST_TIMEOUT_MS,
+  AI_VAULT_SINGLE_HOST_LIST_TIMEOUT_MS,
   type AiVaultListArgs,
   type AiVaultListResult
 } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
@@ -87,7 +87,7 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
           ...(args?.scopeOnly === true ? { scopeOnly: true } : {}),
           executionHostId
         },
-        AI_VAULT_LIST_TIMEOUT_MS
+        AI_VAULT_SINGLE_HOST_LIST_TIMEOUT_MS
       ).then((result) =>
         // Fence later host mutations on these rows to the pairing that listed them.
         result.sessions

@@ -22,7 +22,7 @@ import {
   wrapRuntimeHomePosixHookCommand
 } from '../../agent-hooks/installation/commands/runtime-home-hook-command'
 import { wrapWindowsDirectCmdHookCommand } from '../../agent-hooks/installation/commands/windows-direct-cmd-hook-command'
-import type { ClaudeManagedHookPlan } from './claude-managed-hook-events'
+import { withPlannedAsync, type ClaudeManagedHookPlan } from './claude-managed-hook-events'
 import {
   claudeManagedHookForms,
   withClaudeAsyncPermissionRequest
@@ -236,7 +236,9 @@ export function applyManagedHooks(
     const previous = Array.isArray(current) ? current : []
     const hook = withClaudeAsyncPermissionRequest(
       event.eventName,
-      withPreviousManagedAsync(hookForEvent(event.eventName), previous, isManagedCommand),
+      withPlannedAsync(plan, event.eventName, hookForEvent(event.eventName), (planned) =>
+        withPreviousManagedAsync(planned, previous, isManagedCommand)
+      ),
       posixCommands
     )
     const cleaned = removeManagedCommands(previous, isManagedCommand)

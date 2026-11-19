@@ -9,7 +9,7 @@ const mocks = groupNativeMocks()
 const closed = () => mocks.close.mock.calls.map(([sessionId]) => sessionId)
 
 describe('group lifecycle', () => {
-  it('takes a deleted bot out of its rooms, which stay in their own homes', async () => {
+  it('removes deleted bots and keeps the room readable after its last member leaves', async () => {
     const { groups } = fixture()
     const group = await groups.create({ name: 'Review', botIds: ['bot-0', 'bot-1'] })
     const message = await groups.send({
@@ -33,19 +33,15 @@ describe('group lifecycle', () => {
         text: 'hey @Forge can you look'
       })
     ).resolves.toMatchObject({ turns: [{ botId: 'bot-1' }] })
-  })
-
-  it('keeps a room with no members readable and refuses sends to it', async () => {
-    const { groups } = fixture()
-    const group = await groups.create({ name: 'Solo', botIds: ['bot-0'] })
-    await groups.removeBot('bot-0')
-    const { group: current } = groups.read(group.id)
-    expect(current.members).toEqual([])
-    expect(current.folderWorkspaceId).toBe(group.folderWorkspaceId)
+    await groups.removeBot('bot-1')
+    const { group: empty } = groups.read(group.id)
+    expect(empty.members).toEqual([])
+    expect(empty.folderWorkspaceId).toBe(group.folderWorkspaceId)
+    expect(closed()).toEqual(group.members.map((member) => member.sessionId))
     await expect(
       groups.send({
         groupId: group.id,
-        revision: current.revision,
+        revision: empty.revision,
         messageId: randomUUID(),
         text: 'anyone?'
       })

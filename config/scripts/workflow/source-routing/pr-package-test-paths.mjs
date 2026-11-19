@@ -174,6 +174,7 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/codex/hooks/installation/windows-hook-command.test.ts',
   'src/main/codex/hooks/installation/hook-service-managed-install.test.ts',
   'src/main/windows/windows-pty-job.win32.test.ts',
+  'src/main/filesystem/rolling-file-backup.win32.test.ts',
   'src/main/windows/windows-msys-job.win32.test.ts',
   'src/main/daemon/pty-subprocess/testing/agent-foreground-process-git-bash.win32.test.ts',
   'src/main/windows/windows-host-job.win32.test.ts',

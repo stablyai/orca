@@ -1,6 +1,6 @@
 import type { Repo } from '../../../shared/repository/repo-types'
 import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
-import { getDefaultRepoHookSettings } from '../../../shared/orca-profiles/constants'
+import { getDefaultRepoHookSettings } from '../../../shared/workspace-setup/repo-hook-settings-defaults'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import { sanitizeRepoIcon } from '../../../shared/repository/appearance/repo-icon'
 import { normalizeGhAccountBinding } from '../../../shared/github/accounts/account-binding'

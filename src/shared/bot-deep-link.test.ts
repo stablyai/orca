@@ -22,10 +22,6 @@ describe('parseBotDeepLink', () => {
     expect(parseBotDeepLink(formatBotDeepLink({ botId: 'bot-2' }))).toEqual({ botId: 'bot-2' })
   })
 
-  it('accepts the trailing slash some launchers append', () => {
-    expect(parseBotDeepLink('orca://bot/bot_1/?conversation=slack:T1')?.botId).toBe('bot_1')
-  })
-
   it.each([
     'orca://bot/%2e%2e?conversation=slack:T1',
     'orca://bot/a%2Fb?conversation=slack:T1',

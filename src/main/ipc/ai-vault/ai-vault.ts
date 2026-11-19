@@ -17,8 +17,8 @@ import {
 import type { AiVaultDeleteSessionArgs } from '../../../shared/ai-vault/contracts/ai-vault-session-deletion'
 
 import {
-  AI_VAULT_LIST_TIMEOUT_MS,
   AI_VAULT_SCOPE_PATHS_MAX_COUNT,
+  AI_VAULT_SINGLE_HOST_LIST_TIMEOUT_MS,
   isAiVaultScanCancelledError,
   type AiVaultFirstUserPromptArgs,
   type AiVaultListArgs,
@@ -208,7 +208,7 @@ async function scanAiVaultSessionsByHostScope(
       },
       scanner: handlerOptions.scanRuntimeAiVaultSessions,
       listArgs: args,
-      options: { signal, timeoutMs: AI_VAULT_LIST_TIMEOUT_MS }
+      options: { signal, responseTimeoutMs: AI_VAULT_SINGLE_HOST_LIST_TIMEOUT_MS }
     })
   }
 

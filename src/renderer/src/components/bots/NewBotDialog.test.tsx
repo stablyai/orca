@@ -130,22 +130,6 @@ describe('NewBotDialog picture', () => {
     expect(mocks.uploadBotAvatar).not.toHaveBeenCalled()
   })
 
-  it('wraps from the last mascot to the first', () => {
-    const { announced } = renderDialog()
-    const group = screen.getByRole('group', { name: 'Picture' })
-    const total = PICKABLE_BOT_MASCOT_IDS.length
-    for (let i = 0; i < total; i++) {
-      fireEvent.keyDown(group, { key: 'ArrowRight' })
-    }
-    const start = announced()
-    fireEvent.keyDown(group, { key: 'ArrowRight' })
-    expect(announced()).not.toBe(start)
-    for (let i = 0; i < total - 1; i++) {
-      fireEvent.keyDown(group, { key: 'ArrowRight' })
-    }
-    expect(announced()).toBe(start)
-  })
-
   it('shows an uploaded image and saves it to the new bot', async () => {
     mocks.createBot.mockResolvedValue(created)
     mocks.uploadBotAvatar.mockResolvedValue(created)

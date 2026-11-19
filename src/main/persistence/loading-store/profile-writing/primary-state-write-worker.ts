@@ -61,6 +61,8 @@ export async function writeProfileStateInWorker(
     }
   } catch (error) {
     restoreIntent()
+    // A failed or indeterminate write leaves the writer's session copy unknown.
+    serialization.sessionSaveBaseline.clear()
     throw error
   }
   try {
@@ -80,22 +82,34 @@ function beginWrite(
   lastWrittenStateHash: string | null,
   isCurrent: () => boolean
 ) {
+  const baseline = serialization.sessionSaveBaseline
   const selective = prepareSelectiveProfileStateWrite(
     authority,
     serialization,
     dirtyDomains,
-    automationRuns
+    automationRuns,
+    true
   )
   if (selective) {
     if (!isCurrent()) {
       return undefined
     }
-    const completion =
+    const { replacements, patches, sessionCandidates } = selective
+    const written =
       selective.automationRuns !== undefined
-        ? authority.writeSerializedAutomationRuns(selective.replacements, selective.automationRuns)
-        : authority.writeSerializedDomains(selective.replacements)
-    return { completion, stateHash: null, protectedSecretUpdates: selective.protectedSecretUpdates }
+        ? authority.writeSerializedAutomationRuns(replacements, selective.automationRuns)
+        : replacements.length === 0 && patches.length === 0 && sessionCandidates.length > 0
+          ? // The dirty session domains match what the writer holds; still fence the revision.
+            authority.assertCurrentRevision()
+          : authority.writeSerializedDomains(replacements, patches)
+    return {
+      completion: written.then(() => baseline.acknowledge(sessionCandidates)),
+      stateHash: null,
+      protectedSecretUpdates: selective.protectedSecretUpdates
+    }
   }
+  // Complete saves write every domain whole; the next session save re-establishes the baseline.
+  baseline.clear()
   const complete = serialization.buildStateToSave(true)
   if (!isCurrent()) {
     return undefined

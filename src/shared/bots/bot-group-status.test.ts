@@ -84,16 +84,12 @@ describe('botGroupStatus with threads', () => {
     ]
   }
 
-  it("shows a thread's work while the original room is idle", () => {
+  it("includes thread work and lets the thread's approval wait take precedence", () => {
     const statuses = new Map([entry('bot-group-member-t1', { state: 'working' })])
     expect(botGroupStatus(threaded, statuses, 2)).toBe('working')
-  })
 
-  it("lets a thread's approval wait beat the original room's work", () => {
-    const statuses = new Map([
-      entry('bot-group-member-1', { state: 'working' }),
-      entry('bot-group-member-t1', { state: 'blocked' })
-    ])
+    statuses.set(...entry('bot-group-member-1', { state: 'working' }))
+    statuses.set(...entry('bot-group-member-t1', { state: 'blocked' }))
     expect(botGroupStatus(threaded, statuses, 2)).toBe('permission')
   })
 })

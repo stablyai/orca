@@ -1,7 +1,7 @@
 import { openMobileAgentHistoryChat } from './open-mobile-agent-history-chat'
 import { mobileStructuredSessionOpenMessage } from '../session/native-chat/agent-session/mobile-structured-session-open-message'
 import { prepareMobileHistoryResumeTarget } from './mobile-history-resume-target-preparation'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ChevronLeft, History, RefreshCw } from 'lucide-react-native'
@@ -16,7 +16,6 @@ import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { useWorkspaceClient } from '../worktree/execution-hosts/use-workspace-client'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { useSessionScreenHandlers } from '../session/session-screen-handlers'
-import { worktreeCatalogRead } from '../worktree/catalog/worktree-catalog-operations'
 import { getWorktreeLabel } from '../worktree/row-presentation/worktree-label'
 import {
   buildMobileAiVaultResumeLaunch,
@@ -27,10 +26,10 @@ import {
 } from './ai-vault-resume-launch'
 import { prepareMobileAiVaultSessionResume } from './ai-vault-resume-preparation'
 import { triggerError, triggerSuccess } from '../platform/haptics/haptics'
-import type * as AiVault from '../../../src/shared/ai-vault/contracts/ai-vault-types'
-import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
+import * as AiVault from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import { useMobileAgentHistoryState } from './use-mobile-agent-history-state'
 import { agentHistoryHostStatusRead } from './mobile-agent-history-operations'
+import { useAgentHistoryWorkspaceContext } from './use-agent-history-workspace-context'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc/rpc-refusal-message'
 import { useRefreshHint } from '../query/refresh-hint'
 import { buildMobileAgentHistorySections } from './agent-history-sections'
@@ -44,7 +43,13 @@ import {
   MobileOfflineState,
   MobileStateView
 } from '../components/feedback/MobileStateView'
-import { AgentHistoryResumeNotice, AgentHistoryScanNotices } from './AgentHistoryNotices'
+import {
+  AgentHistoryInterruptedNotice,
+  AgentHistoryResumeNotice,
+  AgentHistoryScanNotices
+} from './AgentHistoryNotices'
+import { AgentHistoryViewControls } from './AgentHistoryViewControls'
+import { useAgentHistoryRestartOffer } from './use-agent-history-restart-offer'
 import { TransientToast, useTransientToast } from '../components/feedback/TransientToast'
 import { useNow } from '../hooks/use-now'
 import { useMobileResumeOperationOwnership } from './use-mobile-resume-operation-ownership'
@@ -88,9 +93,14 @@ function MobileAgentSessionHistoryPanelContent({
     client,
     connState
   )
-  const [worktrees, setWorktrees] = useState<Worktree[]>([])
-  const [worktreesLoaded, setWorktreesLoaded] = useState(false)
+  const { worktrees, worktreesLoaded, projectSetups } = useAgentHistoryWorkspaceContext(
+    client,
+    connState
+  )
   const [query, setQuery] = useState('')
+  // Desktop History's defaults: every agent, most recently updated first.
+  const [agents, setAgents] = useState<readonly AiVault.AiVaultAgent[]>(AiVault.AI_VAULT_AGENTS)
+  const [sort, setSort] = useState<AiVault.AiVaultSort>('updated')
   const [searchBarHeight, setSearchBarHeight] = useState(0)
   const insets = useSafeAreaInsets()
   const [resumingSessionId, setResumingSessionId] = useState<string | null>(null)
@@ -113,40 +123,7 @@ function MobileAgentSessionHistoryPanelContent({
     onSelectScope,
     onRefresh,
     retry
-  } = useMobileAgentHistoryState({ hostId, worktreeId, worktrees, worktreesLoaded })
-
-  // Worktree list seeds host-local scopePaths and current-worktree badge.
-  useEffect(() => {
-    if (!client || connState !== 'connected') {
-      return
-    }
-    let cancelled = false
-    void (async () => {
-      try {
-        const worktreeReply = await worktreeCatalogRead.request(client, { limit: 10000 })
-        if (cancelled) {
-          return
-        }
-        const catalog = worktreeCatalogRead.interpret(worktreeReply)
-        if (catalog.accepted) {
-          // Why `?? []`: the member is salvaged, so an envelope the host answers without rows leaves it
-          // absent, and `use-mobile-agent-history-state.ts:61` calls `.find` on it unguarded.
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the rows stay opaque in the reader because three screens project them differently; this panel reads only `path` off a row to seed `scopePaths`, and `matrix-aivault.history-screen-worktree.ps-1` records every partition of its own family rendering a list rather than a crash.
-          setWorktrees((catalog.value.worktrees ?? []) as Worktree[])
-        }
-      } catch {
-        // Best-effort context: failed worktree list leaves scoped tabs scanning full history.
-      } finally {
-        // Mark loaded on failure too so scoped tabs fetch unscoped instead of spinning forever.
-        if (!cancelled) {
-          setWorktreesLoaded(true)
-        }
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [client, connState])
+  } = useMobileAgentHistoryState({ hostId, worktreeId, worktrees, worktreesLoaded, projectSetups })
 
   const sessions = screenState.kind === 'ready' ? screenState.sessions : EMPTY_SESSIONS
   const issues = screenState.kind === 'ready' ? screenState.issues : EMPTY_ISSUES
@@ -158,15 +135,18 @@ function MobileAgentSessionHistoryPanelContent({
     () =>
       buildMobileAgentHistorySections(sessions, {
         query,
+        agents,
+        sort,
         scope,
         scopeFilterPaths,
         activeWorktreePath,
         now
       }),
-    [sessions, query, scope, scopeFilterPaths, activeWorktreePath, now, t]
+    [sessions, query, agents, sort, scope, scopeFilterPaths, activeWorktreePath, now, t]
   )
 
   const showRefreshLine = useRefreshHint(revalidating)
+  const restartOffer = useAgentHistoryRestartOffer(client, connState === 'connected')
 
   const resumeActionStateBySessionId = useMemo(
     () => buildMobileAgentHistoryResumeActionState(sessions, resumingSessionId),
@@ -333,13 +313,22 @@ function MobileAgentSessionHistoryPanelContent({
           }
           accessory={
             screenState.kind === 'ready' ? (
-              <MobileSegmentedControl
-                segments={scopeSegments(t)}
-                selected={scope}
-                onSelect={onSelectScope}
-                fill
-                style={styles.scopeTabs}
-              />
+              <View>
+                <MobileSegmentedControl
+                  segments={scopeSegments(t)}
+                  selected={scope}
+                  onSelect={onSelectScope}
+                  fill
+                  style={styles.scopeTabs}
+                />
+                <AgentHistoryViewControls
+                  sessions={sessions}
+                  agents={agents}
+                  sort={sort}
+                  onAgentsChange={setAgents}
+                  onSortChange={setSort}
+                />
+              </View>
             ) : null
           }
         />
@@ -365,6 +354,7 @@ function MobileAgentSessionHistoryPanelContent({
         <MobileLoadErrorState error={screenState.message} onRetry={retry} />
       ) : (
         <>
+          <AgentHistoryInterruptedNotice offer={restartOffer} />
           <AgentHistoryScanNotices sessions={sessions} issues={issues} />
           {resumeMessage ? (
             <AgentHistoryResumeNotice
