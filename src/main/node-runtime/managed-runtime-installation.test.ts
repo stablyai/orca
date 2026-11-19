@@ -281,3 +281,62 @@ it.each([
     }
   }
 )
+
+it.each([
+  { digest: 'published', installedVersion: '1.0' },
+  { digest: 'other', installedVersion: null }
+])(
+  'installs a package hashed only by sha512 when it matches, checking the command prepare unpacks: $digest',
+  async ({ digest, installedVersion }) => {
+    const dataDirectory = await mkdtemp(join(tmpdir(), 'orca-runtime-install-'))
+    roots.push(dataDirectory)
+    const packed = join(dataDirectory, 'packed')
+    await mkdir(join(packed, 'package'), { recursive: true })
+    await writeFile(join(packed, 'package', 'agent.packed'), 'agent bytes')
+    const archivePath = join(dataDirectory, 'agent.tgz')
+    const packing = await runProcess({
+      program: getTarProgram(),
+      args: ['-czf', archivePath, '-C', packed, 'package']
+    })
+    expect(packing.code).toBe(0)
+    const archive = await readFile(archivePath)
+    const root = join(dataDirectory, 'agent-runtimes', 'agent')
+    const runtime: ManagedRuntime = {
+      label: 'Agent',
+      root: () => root,
+      pin: () => ({
+        version: '1.0',
+        url: 'https://example.test/agent-1.0.tgz',
+        archiveSha512: createHash('sha512')
+          .update(digest === 'published' ? archive : 'other bytes')
+          .digest('hex'),
+        archiveBytes: archive.length,
+        format: 'tar.gz',
+        executables: ['bin/agent']
+      }),
+      prepare: async (folder) => {
+        await mkdir(join(folder, 'bin'))
+        await writeFile(
+          join(folder, 'bin', 'agent'),
+          await readFile(join(folder, 'package', 'agent.packed'))
+        )
+      }
+    }
+    const installation = new ManagedRuntimeInstallation('agent', runtime, {
+      dataDirectory,
+      findExternal: async () => false,
+      fence: (work) => work(),
+      fetcher: async () => new Response(archive)
+    })
+    installation.install()
+    await vi.waitFor(
+      async () =>
+        expect(['succeeded', 'failed']).toContain((await installation.status()).operation?.phase),
+      { timeout: 10_000 }
+    )
+    expect(await installation.status()).toMatchObject({ installedVersion })
+    if (installedVersion) {
+      expect(await readFile(join(root, '1.0', 'bin', 'agent'), 'utf8')).toBe('agent bytes')
+    }
+  }
+)
