@@ -74,8 +74,8 @@ describe('ZotzAgentLaunchQueue', () => {
       ['nightly', 2]
     ])
 
-    // 9 GB free: room for one 2.5 GB agent next to the one already running.
-    governor.sample(9, 1)
+    // 6 GB free: room for one 2.5 GB agent before 2.4 GB must stay free.
+    governor.sample(6, 1)
     await Promise.all([mine, remount])
     expect(started).toEqual(['mine'])
     expect(queue.list().map((task) => task.id)).toEqual(['nightly'])
@@ -83,6 +83,33 @@ describe('ZotzAgentLaunchQueue', () => {
     governor.sample(12, 0)
     await nightly
     expect(started).toEqual(['mine', 'nightly'])
+  })
+
+  it('admits by free memory alone, however many agents already run', async () => {
+    const governor = fakeGovernor()
+    const queue = new ZotzAgentLaunchQueue(governor, now)
+    governor.sample(12, 5)
+    await expect(
+      queue.admit({ agent: 'claude', priority: 'manual', paneKey: 'new', label: 'new' })
+    ).resolves.toBe('admitted')
+  })
+
+  it('holds the unmeasured part of a just-started agent so a burst does not overfill memory', async () => {
+    const governor = fakeGovernor()
+    const queue = new ZotzAgentLaunchQueue(governor, now)
+    governor.sample(6, 0)
+    await queue.admit({ agent: 'claude', priority: 'manual', paneKey: 'first', label: 'first' })
+    // Measured at 1 GB of its 2.5 GB estimate: 1.5 GB stays held, leaving 4.5 GB.
+    governor.sample(6, 1, ['first'])
+    let secondStarted = false
+    void queue
+      .admit({ agent: 'claude', priority: 'manual', paneKey: 'second', label: 'second' })
+      .then(() => {
+        secondStarted = true
+      })
+    await Promise.resolve()
+    expect(secondStarted).toBe(false)
+    expect(queue.list().map((task) => task.waitReason)).toEqual(['memory'])
   })
 
   it('lets the user cancel a queued launch or start it anyway', async () => {
@@ -144,32 +171,5 @@ describe('ZotzAgentLaunchQueue', () => {
       queue.admit({ agent: 'codex', priority: 'manual', paneKey: 'b', label: 'b' })
     ).resolves.toBe('admitted')
     expect(queue.list()).toEqual([])
-  })
-
-  it('stops reserving for an admitted agent once a sample measures it', async () => {
-    const governor = fakeGovernor()
-    const queue = new ZotzAgentLaunchQueue(governor, now)
-    const started: string[] = []
-    const launch = (paneKey: string) =>
-      queue.admit({ agent: 'codex', priority: 'manual', paneKey, label: paneKey }).then(() => {
-        started.push(paneKey)
-      })
-
-    // 16 GB: two agents at a time; one already runs, so only the first launch fits.
-    governor.sample(12, 1)
-    const first = launch('first')
-    void launch('second')
-    await first
-    expect(started).toEqual(['first'])
-
-    // The next sample measures "first"; its reservation must not take the last slot twice.
-    governor.sample(11, 2, ['running-0', 'first'])
-    await Promise.resolve()
-    expect(started).toEqual(['first'])
-
-    // "running-0" ends: the slot frees at once, without waiting out the reservation.
-    governor.sample(12, 1, ['first'])
-    await Promise.resolve()
-    expect(started).toEqual(['first', 'second'])
   })
 })

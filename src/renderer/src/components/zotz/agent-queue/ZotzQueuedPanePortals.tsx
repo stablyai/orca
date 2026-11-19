@@ -6,7 +6,8 @@ import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type { ZotzAgentQueueSnapshot } from '../../../../../shared/zotz/agent-queue/zotz-agent-queue-snapshot'
 import type { TerminalPaneController } from '../../terminal-pane/controller/use-terminal-pane-controller'
-import { formatZotzGb } from './zotz-memory-format'
+import { useNow } from '@/hooks/use-now'
+import { formatZotzGb, minutesSince } from './zotz-memory-format'
 import { useZotzAgentQueue } from './zotz-agent-queue-store'
 
 type QueuedTask = ZotzAgentQueueSnapshot['queued'][number]
@@ -14,12 +15,6 @@ type QueuedTask = ZotzAgentQueueSnapshot['queued'][number]
 function waitDetail(task: QueuedTask, snapshot: ZotzAgentQueueSnapshot, t: Translate): string {
   const memory = snapshot.memory
   switch (task.waitReason) {
-    case 'concurrency':
-      return t(
-        'zotz.agentQueue.waitConcurrency',
-        '{{running}} of {{max}} agents are already working on this machine.',
-        { running: snapshot.running.length, max: memory?.maxConcurrentAgents ?? '—' }
-      )
     case 'memory':
       return t(
         'zotz.agentQueue.waitMemory',
@@ -28,15 +23,6 @@ function waitDetail(task: QueuedTask, snapshot: ZotzAgentQueueSnapshot, t: Trans
           need: formatZotzGb(task.estimatedBytes),
           free: formatZotzGb(memory?.availableBytes ?? 0),
           min: formatZotzGb(memory?.minFreeBytes ?? 0)
-        }
-      )
-    case 'budget':
-      return t(
-        'zotz.agentQueue.waitBudget',
-        'Agents already use {{used}} of their {{budget}} GB budget.',
-        {
-          used: formatZotzGb(snapshot.running.reduce((sum, agent) => sum + agent.bytes, 0)),
-          budget: formatZotzGb(memory?.agentBudgetBytes ?? 0)
         }
       )
     case 'pressure':
@@ -62,6 +48,7 @@ export function ZotzQueuedPaneCard({
   onForceStart: () => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const now = useNow(30_000)
   return (
     <div
       role="status"
@@ -78,6 +65,12 @@ export function ZotzQueuedPaneCard({
               : t('zotz.agentQueue.title', 'Queued · {{ahead}} ahead', {
                   ahead: task.position - 1
                 })}
+            <span className="font-normal text-muted-foreground">
+              {' · '}
+              {t('zotz.agentQueue.board.waitingFor', '{{minutes}} min waiting', {
+                minutes: minutesSince(task.enqueuedAt, now)
+              })}
+            </span>
           </div>
           <div className="text-xs text-muted-foreground">{waitDetail(task, snapshot, t)}</div>
           <div className="text-xs text-muted-foreground">

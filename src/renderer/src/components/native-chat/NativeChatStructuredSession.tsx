@@ -80,6 +80,7 @@ import {
   NativeChatWorkerApprovalTimeline,
   nativeChatWorkerApprovalParty
 } from '@/components/native-chat/worker-approvals/NativeChatWorkerApprovals'
+import { ZotzQueuedChatNotice } from '@/components/zotz/agent-queue/ZotzQueuedChatNotice'
 
 export function NativeChatStructuredSession(props: Omit<NativeChatStructuredViewProps, 'mode'>) {
   const ownerWorktreeId = useNativeChatTabOwnerWorktreeId(props.tabId)
@@ -344,6 +345,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
       </NativeChatCrewFrame>
       {readFailure?.final ? null : (
         <>
+          <ZotzQueuedChatNotice sessionId={props.sessionId} />
           {/* Keep queued drafts outside the transcript and above the background-task dock. */}
           <NativeChatQueuedMessageList
             controller={submits.queuedMessages}

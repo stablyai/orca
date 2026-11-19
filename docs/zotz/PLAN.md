@@ -283,7 +283,7 @@ Nuevo `zotz-agent-memory-ledger.ts`:
 
 En `terminal-spawn-gate.ts` (y en `openAgentLaunch` de `src/main/agent-launch/agent-launch-executor.ts` para los lanzamientos manuales):
 
-- Un agente entra solo si `disponible − costo_estimado ≥ reserva_minima` **y** la suma de costos de los agentes vivos no rebasa `agentMemoryBudget`. Además, nunca más de `maxConcurrentAgents`.
+- Un agente entra solo si `disponible − costo_estimado ≥ reserva_minima` y la presión de memoria es `ok`. **Sin tope por cantidad ni presupuesto por agentes** (decisión de Hugo, 2026-11-19): la máquina se aprovecha hasta que la RAM de verdad se carga. `disponible` sale del sistema, así que cuenta todo, también los procesos en segundo plano que lancen los agentes.
 - Si no cabe: **en cola**, usando los waiters existentes. Se arranca **en orden de llegada** cuando un agente termina o la memoria se recupera. Nunca se descarta una tarea.
 - Aplica a **todos los lanzamientos de agentes** (manuales, automatizaciones, orquestación, remotos por `serve`). **No** aplica a terminales normales sin agente.
 - Interruptor "Lanzar de todos modos" por tarea, para cuando Hugo decida forzar.
@@ -309,14 +309,12 @@ Si con agentes ya corriendo la presión sube:
 
 Nueva sección **Settings → Recursos** y claves en `src/shared/default-global-settings.ts`:
 
-| Clave                      | Default                                               | Qué es                                                 |
-| -------------------------- | ----------------------------------------------------- | ------------------------------------------------------ |
-| `agentMemoryBudgetPercent` | 70                                                    | Máximo de RAM total que pueden usar los agentes juntos |
-| `minFreeGb`                | max(2, 15 % de la RAM)                                | Memoria que siempre se deja libre para el sistema      |
-| `perAgentMaxGb`            | min(6, 35 % de la RAM)                                | Tope por agente (árbol completo)                       |
-| `maxConcurrentAgents`      | según RAM: ≤8 GB → 1, ≤16 GB → 2, ≤32 GB → 4, más → 6 | Agentes simultáneos                                    |
-| `agentDefaultReserveGb`    | 2.5                                                   | Costo supuesto de un agente sin historial              |
-| `onAgentOverLimit`         | `pause`                                               | `notify` / `pause` / `kill`                            |
+| Clave                   | Default                | Qué es                                            |
+| ----------------------- | ---------------------- | ------------------------------------------------- |
+| `minFreeGb`             | max(2, 15 % de la RAM) | Memoria que siempre se deja libre para el sistema |
+| `perAgentMaxGb`         | min(6, 35 % de la RAM) | Tope por agente (árbol completo)                  |
+| `agentDefaultReserveGb` | 2.5                    | Costo supuesto de un agente sin historial         |
+| `onAgentOverLimit`      | `pause`                | `notify` / `pause` / `kill`                       |
 
 - **Primer arranque y `zotz-node-setup.ps1`:** detectar la RAM total, calcular los defaults de la tabla y mostrarlos ("Esta máquina tiene 16 GB: hasta 2 agentes a la vez, 4 GB libres siempre"). Hugo puede ajustarlos ahí mismo.
 - Los defaults se calculan una vez y se guardan; no se recalculan si Hugo ya los cambió.
@@ -622,3 +620,12 @@ Las fases 1, 2 y 3 se pueden trabajar en paralelo en worktrees separados.
 - **Borrar conversación/worktree:** upstream ya contaba los cambios sin commitear y listaba los archivos en un popover. Ahora cada archivo de esa lista se despliega con su diff contra HEAD (`ZotzDirtyFileDiff`, unificado con `structuredPatch` de `diff`, hasta 200 líneas). El diff se pide por `getRuntimeGitDiff` con el contexto de `getEditorFileReadContext`, así que funciona igual en local, SSH y WSL. Gancho: prop `owner` en `DeleteWorktreeDirtyChangeHint` (tres llamadas). Los folder workspaces no cambian: upstream no revisa cambios en ellos.
 - **Quitar proyecto:** solo lo desregistra (los archivos y worktrees se quedan en el disco o en el host remoto; se cierran sus terminales y ya avisaba de archivos sin guardar del editor). `ZotzProjectRemovalChanges` revisa las conversaciones del proyecto con la misma hidratación de estado del diálogo de borrar y lista las que tienen cambios sin commitear, con sus archivos y diffs, antes de confirmar. El aviso dice "N cambios sin commitear" (prop `keptLabel`), no "se perderán".
 - Sin verificar en local: las dependencias compartidas (`node_modules` de grunt) quedaron con enlaces rotos tras una reinstalación del 2026-11-19, así que no corrieron vitest, los plugins de oxlint ni `check:code-quality:changed`; los cubre el CI del PR. Sí pasaron `pnpm tc`, oxfmt, oxlint base, los ratchets de max-lines y workspace-record-read, y la extracción, cobertura y catálogos de traducciones.
+
+### 2026-11-19 — Fase 8: ver qué espera en la cola (`memory-limiter-backlog-indicador`)
+
+- Un chat nativo retenido por la cola no decía nada: el agente se quedó ~20 min en Backlog sin que se notara. Ahora el chat muestra la misma tarjeta "En cola" que la terminal, arriba del compositor (`ZotzQueuedChatNotice`, una línea en `NativeChatStructuredSession`). Se busca por la llave canónica de la sesión, sin importar qué pestaña la muestre.
+- Barra lateral simple: la conversación con un agente en cola lleva un reloj de arena y "En cola · N min" en color de pendiente, por encima del estado de sus hilos.
+- La tarjeta dice cuántos minutos lleva esperando.
+- **Por qué esperó con RAM de sobra:** el tope de agentes simultáneos (4 con 32 GB, 2 con 16 GB) contaba a todos los agentes con sesión abierta, también los que esperaban respuesta. Con 4 chats abiertos, el quinto se quedaba en cola por `concurrency` aunque sobrara memoria.
+- **Decisión (Hugo, 2026-11-19): solo decide la RAM.** Se quitaron el tope por cantidad (`maxConcurrentAgents`) y el presupuesto del 70 % para agentes (`agentBudgetBytes`). Un agente entra si, después de su costo estimado, quedan libres `minFreeGb` (max(2 GB, 15 %)) y la presión es `ok`; si no, espera y arranca solo cuando se libera memoria (muestra cada 15 s mientras haya cola). La memoria disponible la reporta el sistema, así que incluye los procesos en segundo plano de los agentes.
+- Para que una ráfaga no llene la RAM: un agente admitido aparta durante 90 s lo que le falta de su estimación (estimación − lo medido), porque al arrancar mide poco. Antes la reserva se soltaba con la primera medición y el tope por cantidad tapaba el hueco.

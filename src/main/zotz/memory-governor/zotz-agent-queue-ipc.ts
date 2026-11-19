@@ -16,9 +16,7 @@ export function buildZotzAgentQueueSnapshot(
           availableBytes: state.availableBytes,
           pressure: state.pressure,
           minFreeBytes: state.limits.minFreeBytes,
-          agentBudgetBytes: state.limits.agentBudgetBytes,
           perAgentMaxBytes: state.limits.perAgentMaxBytes,
-          maxConcurrentAgents: state.limits.maxConcurrentAgents,
           sampledAt: state.sampledAt
         }
       : null,

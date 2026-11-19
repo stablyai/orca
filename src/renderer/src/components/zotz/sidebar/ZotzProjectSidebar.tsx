@@ -119,15 +119,27 @@ export default function ZotzProjectSidebar(): React.JSX.Element {
     () => new Set(queueSnapshot.canceled.map((launch) => launch.label)),
     [queueSnapshot.canceled]
   )
+  // Oldest wait per workspace: its agent has not started, whatever its threads say.
+  const queuedSince = useMemo(() => {
+    const result = new Map<string, number>()
+    for (const task of queueSnapshot.queued) {
+      result.set(task.label, Math.min(result.get(task.label) ?? Infinity, task.enqueuedAt))
+    }
+    return result
+  }, [queueSnapshot.queued])
 
   const sections = useMemo(
     () =>
       buildZotzProjectSections({
         repos,
         worktreesByRepoId: worktreesByRepo,
-        workspacesWithAgents: new Set([...statusByWorkspace.keys(), ...canceledWorkspaces])
+        workspacesWithAgents: new Set([
+          ...statusByWorkspace.keys(),
+          ...canceledWorkspaces,
+          ...queuedSince.keys()
+        ])
       }),
-    [repos, worktreesByRepo, statusByWorkspace, canceledWorkspaces]
+    [repos, worktreesByRepo, statusByWorkspace, canceledWorkspaces, queuedSince]
   )
   // Upstream refreshes PR status only for cards it reports as on screen; this list is the cards here.
   const setVisibleReviewIds = useAppStore((s) => s.setVisibleReviewCardWorktreeIds)
@@ -180,6 +192,7 @@ export default function ZotzProjectSidebar(): React.JSX.Element {
                   active={row.id === activeWorktreeId}
                   status={statusByWorkspace.get(row.id) ?? null}
                   canceled={canceledWorkspaces.has(row.id)}
+                  queuedSince={queuedSince.get(row.id) ?? null}
                 />
               </ZotzConversationMenu>
             ))}
@@ -198,6 +211,7 @@ export default function ZotzProjectSidebar(): React.JSX.Element {
                 active={row.id === activeWorktreeId}
                 status={statusByWorkspace.get(row.id) ?? null}
                 canceled={canceledWorkspaces.has(row.id)}
+                queuedSince={queuedSince.get(row.id) ?? null}
               />
             ))}
           </section>

@@ -13,9 +13,7 @@ const SNAPSHOT: ZotzAgentQueueSnapshot = {
     availableBytes: 5.2 * GB,
     pressure: 'ok',
     minFreeBytes: 2.4 * GB,
-    agentBudgetBytes: 11.2 * GB,
     perAgentMaxBytes: 5.6 * GB,
-    maxConcurrentAgents: 3,
     sampledAt: NOW
   },
   running: [
@@ -75,7 +73,7 @@ const SNAPSHOT: ZotzAgentQueueSnapshot = {
       estimatedBytes: 1.4 * GB,
       enqueuedAt: NOW - 2 * MIN,
       position: 1,
-      waitReason: 'concurrency'
+      waitReason: 'memory'
     },
     {
       id: 'q2',
@@ -85,7 +83,7 @@ const SNAPSHOT: ZotzAgentQueueSnapshot = {
       estimatedBytes: 3 * GB,
       enqueuedAt: NOW - 4 * MIN,
       position: 2,
-      waitReason: 'concurrency'
+      waitReason: 'memory'
     },
     {
       id: 'q3',
@@ -95,7 +93,7 @@ const SNAPSHOT: ZotzAgentQueueSnapshot = {
       estimatedBytes: 2.5 * GB,
       enqueuedAt: NOW - 30 * MIN,
       position: 3,
-      waitReason: 'concurrency'
+      waitReason: 'memory'
     },
     {
       id: 'q4',
@@ -105,7 +103,7 @@ const SNAPSHOT: ZotzAgentQueueSnapshot = {
       estimatedBytes: 1.8 * GB,
       enqueuedAt: NOW - 31 * MIN,
       position: 4,
-      waitReason: 'concurrency'
+      waitReason: 'memory'
     }
   ]
 }

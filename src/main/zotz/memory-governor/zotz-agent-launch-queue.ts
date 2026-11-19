@@ -44,7 +44,7 @@ type Waiter = {
   label: string
 }
 
-/** Holds an admitted agent's estimate until a sample measures it (by pane) or it times out. */
+/** Holds the part of an admitted agent's estimate its measurement has not reached yet, until it times out. */
 type Reservation = { id: string; agent: TuiAgent; bytes: number; until: number }
 
 // A started agent shows up in the memory sample within a few samples; until then its estimate holds its place.
@@ -212,20 +212,17 @@ export class ZotzAgentLaunchQueue {
     if (!state || now - state.sampledAt > FRESH_SAMPLE_MS) {
       return null
     }
-    // A measured agent already counts in the sample; keeping its reservation counted it twice.
-    const measured = new Set(state.agents.map((agent) => agent.paneKey))
-    this.reservations = this.reservations.filter(
-      (reservation) => reservation.until > now && !measured.has(reservation.id)
+    this.reservations = this.reservations.filter((reservation) => reservation.until > now)
+    // A just-started agent is measured small at first; hold the rest of its estimate until it grows.
+    const measured = new Map(state.agents.map((agent) => [agent.paneKey, agent.bytes]))
+    const pendingBytes = this.reservations.reduce(
+      (sum, reservation) =>
+        sum + Math.max(0, reservation.bytes - (measured.get(reservation.id) ?? 0)),
+      0
     )
-    const reservedBytes = this.reservations.reduce((sum, reservation) => sum + reservation.bytes, 0)
-    const measuredBytes = state.agents.reduce((sum, agent) => sum + agent.bytes, 0)
     return {
-      availableBytes: state.availableBytes - reservedBytes,
-      minFreeBytes: state.limits.minFreeBytes,
-      agentBudgetBytes: state.limits.agentBudgetBytes,
-      committedAgentBytes: measuredBytes + reservedBytes,
-      liveAgents: state.agents.length + this.reservations.length,
-      maxConcurrentAgents: state.limits.maxConcurrentAgents
+      availableBytes: state.availableBytes - pendingBytes,
+      minFreeBytes: state.limits.minFreeBytes
     }
   }
 
