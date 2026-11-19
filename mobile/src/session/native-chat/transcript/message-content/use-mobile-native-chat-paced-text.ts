@@ -7,47 +7,17 @@ import {
   useSyncExternalStore
 } from 'react'
 import {
+  NATIVE_CHAT_REVEAL_STEP_FRAMES,
   playNativeChatTextReveal,
   receiveNativeChatText,
-  startNativeChatTextReveal,
-  type NativeChatTextRevealFrames
+  startNativeChatTextReveal
 } from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-text-reveal'
 import { MobileNativeChatReplyRevealsContext } from '../tool-results/mobile-native-chat-reply-reveals'
 import { MobileNativeChatGrowthHoldContext } from '../viewport/mobile-native-chat-growth-hold'
 
 /** Phones spread each arrival over less time than desktop, so new words show sooner. */
 const REVEAL_MS = 180
-/** Each reveal step parses and draws the reply again, so phones step at most 30 times a second. */
-const REVEAL_STEP_MS = 1000 / 30
-/** Half a 60 Hz frame, so a step lands on every second frame there and every fourth at 120 Hz. */
-const FRAME_SLACK_MS = 8
-/** The animation frame each pending step is waiting on. */
-const waitingSteps = new Map<number, number>()
-
-const FRAMES: NativeChatTextRevealFrames = {
-  now: () => performance.now(),
-  request: (step) => {
-    const due = performance.now() + REVEAL_STEP_MS - FRAME_SLACK_MS
-    const wait = (frameStart: number): void => {
-      if (frameStart < due) {
-        waitingSteps.set(id, requestAnimationFrame(wait))
-        return
-      }
-      waitingSteps.delete(id)
-      step()
-    }
-    const id = requestAnimationFrame(wait)
-    waitingSteps.set(id, id)
-    return id
-  },
-  cancel: (id) => {
-    const frame = waitingSteps.get(id)
-    if (frame !== undefined) {
-      cancelAnimationFrame(frame)
-      waitingSteps.delete(id)
-    }
-  }
-}
+const FRAMES = NATIVE_CHAT_REVEAL_STEP_FRAMES
 
 export type MobileNativeChatPacedText = { text: string; revealing: boolean }
 
