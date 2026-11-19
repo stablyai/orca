@@ -192,6 +192,8 @@ export function useAiVaultSessionRefresh(
         refreshIdRef.current === refreshId &&
         scanKey === currentScanScopeKey() &&
         associationCurrent()
+      // Why: the finished list may wait for typing to pause; the outstanding flag clears in the commit that shows it.
+      let published = false
       try {
         const previous = conditionalSnapshotRef.current
         const result = await refreshAiVaultSessionList(
@@ -209,9 +211,16 @@ export function useAiVaultSessionRefresh(
         }
         setFailure(null)
         cacheAiVaultSessionList(request, result, { replaceHostEntries: args.force === true })
-        publicationGateRef.current.publish(result, (published) => {
-          if (requestCurrent()) {
-            applyListed(published, true)
+        published = true
+        publicationGateRef.current.publish(result, (list) => {
+          // A superseded list is dropped; the refresh that replaced it settles the flag instead.
+          if (!requestCurrent()) {
+            return
+          }
+          applyListed(list, true)
+          // A queued foreground request keeps the flag until its own list lands.
+          if (!(pendingRefreshRef.current && pendingForegroundRef.current)) {
+            setRefreshing(false)
           }
         })
       } catch (err) {
@@ -230,7 +239,10 @@ export function useAiVaultSessionRefresh(
         if (mountedRef.current && refreshIdRef.current === refreshId) {
           setLoading(false)
           // A queued foreground request is still outstanding until its own refresh settles.
-          setRefreshing(pendingRefreshRef.current && pendingForegroundRef.current)
+          const queuedForeground = pendingRefreshRef.current && pendingForegroundRef.current
+          if (queuedForeground || !published) {
+            setRefreshing(queuedForeground)
+          }
         }
         if (pendingRefreshRef.current && mountedRef.current) {
           pendingRefreshRef.current = false
