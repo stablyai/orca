@@ -142,7 +142,7 @@ export function MobileNativeChatSubagentGroup({
       badge={
         working ? 'running' : (alertState ?? header.verdictState) === 'failed' ? 'failed' : null
       }
-      label={`${headline}, ${summary}`}
+      label={[headline, summary, header.tokens].filter(Boolean).join(', ')}
       disclosureKey={`subagent-roster:${block.groupId}`}
       fontScale={fontScale}
       details={rows}

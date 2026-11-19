@@ -150,7 +150,7 @@ export function NativeChatSubagentRun({
       badge={
         working ? 'running' : (alertState ?? header.verdictState) === 'failed' ? 'failed' : null
       }
-      label={`${headline}, ${summary}`}
+      label={[headline, summary, header.tokens].filter(Boolean).join(', ')}
       disclosureKey={
         disclosureId === undefined ? undefined : `subagent-roster:${disclosureId}:${block.groupId}`
       }
