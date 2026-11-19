@@ -29,12 +29,15 @@ export type ConversationWorkersHost = {
   >
 }
 
+/** A conversation's activity as one read found it; `unread` where that read failed. */
+export type ConversationWorkerAnswer = ConversationWorkerActivity | 'unread'
+
 /** Each conversation's activity, by session id, in one read; a paused or removed bot's workers no
- *  longer hold its conversation. Null where none can be read. */
+ *  longer hold its conversation, whether or not the others' read succeeds. Null where none can be read. */
 export async function conversationWorkerActivities(
   host: { workers?: ConversationWorkersHost; bots?: ConversationBots },
   links: readonly ExternalConversationLink[]
-): Promise<ReadonlyMap<string, ConversationWorkerActivity> | null> {
+): Promise<ReadonlyMap<string, ConversationWorkerAnswer> | null> {
   if (!host.workers) {
     return null
   }
@@ -44,11 +47,23 @@ export async function conversationWorkerActivities(
     )
   )
   const read = links.flatMap((link) => (refused.has(link.sessionId) ? [] : [link.sessionId]))
-  const workers = read.length > 0 ? await host.workers.read([...new Set(read)]) : new Map()
+  let workers: Awaited<ReturnType<ConversationWorkersHost['read']>> | null = new Map()
+  if (read.length > 0) {
+    try {
+      workers = await host.workers.read([...new Set(read)])
+    } catch (error) {
+      console.warn('[connector] could not read conversations’ workers', error)
+      workers = null
+    }
+  }
   return new Map(
-    links.map((link) => [
+    links.map((link): [string, ConversationWorkerAnswer] => [
       link.sessionId,
-      refused.has(link.sessionId) ? 'none' : workerActivityOf(workers.get(link.sessionId) ?? [])
+      refused.has(link.sessionId)
+        ? 'none'
+        : workers
+          ? workerActivityOf(workers.get(link.sessionId) ?? [])
+          : 'unread'
     ])
   )
 }
@@ -88,7 +103,7 @@ export type ConversationWorkersDeps = Pick<ConversationEventsDeps, 'setTimer' | 
    *  read; null where none can be read. */
   workerActivities: (
     links: readonly ExternalConversationLink[]
-  ) => Promise<ReadonlyMap<string, ConversationWorkerActivity> | null>
+  ) => Promise<ReadonlyMap<string, ConversationWorkerAnswer> | null>
   linkedFor: (paneKey: string) => LinkedConversation | null
   emit: (event: ConversationEvent) => void
 }
@@ -185,7 +200,7 @@ export class ConversationWorkers {
         this.forget(paneKey)
       }
     }
-    let activities: ReadonlyMap<string, ConversationWorkerActivity> | null | undefined
+    let activities: ReadonlyMap<string, ConversationWorkerAnswer> | null | undefined
     try {
       activities =
         linked.size > 0
@@ -207,10 +222,11 @@ export class ConversationWorkers {
         }
         newer.settled.push(...entry.settled)
       } else {
-        const activity =
+        const answer =
           activities === undefined
-            ? this.unreadActivity(paneKey)
+            ? 'unread'
             : (activities?.get(conversation.link.sessionId) ?? null)
+        const activity = answer === 'unread' ? this.unreadActivity(paneKey) : answer
         if (activity !== null) {
           this.apply(paneKey, conversation, activity, entry.reasons)
         }

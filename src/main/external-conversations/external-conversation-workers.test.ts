@@ -33,13 +33,14 @@ function tracker(initial: ConversationWorkerActivity | null) {
   let held: (() => void)[] | null = null
   const workers = new ConversationWorkers({
     workerActivities: async (links) => {
+      // A read answers with the state when it began, however long it then waits.
+      const answer = activity
       if (held) {
         await new Promise<void>((resolve) => held!.push(resolve))
       }
-      if (activity instanceof Error) {
-        throw activity
+      if (answer instanceof Error) {
+        throw answer
       }
-      const answer = activity
       return answer === null ? null : new Map(links.map((link) => [link.sessionId, answer]))
     },
     linkedFor: (paneKey): LinkedConversation | null =>
@@ -255,5 +256,31 @@ describe('what a conversation’s workers are doing', () => {
 
   it('cannot be read without a workers host', async () => {
     await expect(activity({})).resolves.toBeNull()
+  })
+
+  it('is none for a paused bot even when the other conversations’ read fails', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const paused: ExternalConversationLink = {
+      ...LINK,
+      sessionId: 's2',
+      bot: { kind: 'bot', botId: 'paused' }
+    }
+    const read = await conversationWorkerActivities(
+      {
+        workers: {
+          read: async () => {
+            throw new Error('database locked')
+          }
+        },
+        bots: {
+          refusal: (botId: string) => (botId === 'paused' ? 'bot_paused' : null),
+          open: vi.fn(),
+          workLinks: async () => []
+        }
+      },
+      [LINK, paused]
+    )
+    expect(Object.fromEntries(read ?? [])).toEqual({ s1: 'unread', s2: 'none' })
+    warn.mockRestore()
   })
 })

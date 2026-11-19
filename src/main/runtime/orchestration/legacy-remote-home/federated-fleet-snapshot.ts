@@ -10,6 +10,7 @@ import { projectFleetNextAction } from '../../../../shared/orchestration/fleet/o
 import { getOrchestrationPeerCapabilityCache } from '../federation/orchestration-peer-capability-cache'
 import { liveFederatedHomeAutoReleaseAt } from '../terminal-authority/release/worker-terminal-ownership'
 import type { OrchestrationDb } from '../db/orchestration-db'
+import type { FederatedDispatchRow } from '../db/orchestration-records'
 import { OrchestrationError } from '../orchestration-error'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { resolvePinnedFederatedServer } from './pinned-federated-server'
@@ -47,6 +48,8 @@ export async function readFederatedFleetSnapshots(args: {
   runtime: FederatedFleetRuntime
   db: OrchestrationDb
   dispatchIds: readonly string[]
+  /** Their federated rows, when the caller already read them. */
+  rows?: readonly FederatedDispatchRow[]
 }): Promise<{
   observations: Map<string, FederatedFleetObservation>
   errors: FederatedFleetHostError[]

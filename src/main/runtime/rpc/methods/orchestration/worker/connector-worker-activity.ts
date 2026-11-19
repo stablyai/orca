@@ -64,11 +64,14 @@ export async function readConnectorWorkerActivity(
   const sessionOf = new Map(
     candidates.map((candidate) => [candidate.row.dispatchId, candidate.sessionId])
   )
-  // Projected in as few passes as keep each conversation's status owners its own (see packConversations).
-  const projections = await Promise.all(
-    packConversations(candidates).map((group) => {
-      const ids = new Set(group.map((candidate) => candidate.row.dispatchId))
-      return projectDispatchFleet(
+  // Projected in as few passes as keep each conversation's status owners its own (see packConversations),
+  // one after another: a later pass then finds a paired host that missed its deadline marked overdue
+  // instead of queueing behind its unanswered read.
+  const projections = []
+  for (const group of packConversations(candidates)) {
+    const ids = new Set(group.map((candidate) => candidate.row.dispatchId))
+    projections.push(
+      await projectDispatchFleet(
         runtime,
         group.map((candidate) => candidate.row),
         new Map(
@@ -80,8 +83,8 @@ export async function readConnectorWorkerActivity(
         now,
         { federatedRows: federated.filter((row) => ids.has(row.dispatch_id)), evidence, parties }
       )
-    })
-  )
+    )
+  }
   for (const { fleet, chatStatusRows } of projections) {
     for (const projected of fleet.workers) {
       const durable = fleet.durable.get(projected.dispatchId)

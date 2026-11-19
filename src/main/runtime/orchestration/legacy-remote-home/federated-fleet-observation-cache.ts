@@ -33,7 +33,8 @@ type HostLane = {
   asking: { ids: ReadonlySet<string>; done: Promise<void> } | null
   /** Its read outlived the deadline and gave up its slot; its call has not settled yet. */
   overdue: boolean
-  queued: Set<string>
+  /** The rows to ask about, by Dispatch id: the read reuses them rather than reading them again. */
+  queued: Map<string, FederatedDispatchRow>
   queuedDone: { promise: Promise<void>; resolve: () => void } | null
 }
 
@@ -87,7 +88,7 @@ function ask(
         name: row.environment_name,
         asking: null,
         overdue: false,
-        queued: new Set(),
+        queued: new Map(),
         queuedDone: null
       }
       cache.lanes.set(key, lane)
@@ -103,7 +104,7 @@ function ask(
       waits.add(lane.asking.done)
       continue
     }
-    lane.queued.add(row.dispatch_id)
+    lane.queued.set(row.dispatch_id, row)
     lane.queuedDone ??= deferred()
     waits.add(lane.queuedDone.promise)
     if (!lane.asking && !cache.waiting.includes(key)) {
@@ -138,9 +139,10 @@ function read(
     cache.lanes.delete(key)
     return
   }
-  const ids = lane.queued
+  const rows = [...lane.queued.values()]
+  const ids = new Set(lane.queued.keys())
   const finished = lane.queuedDone
-  lane.queued = new Set()
+  lane.queued = new Map()
   lane.queuedDone = null
   lane.asking = { ids, done: finished.promise }
   cache.active += 1
@@ -160,7 +162,7 @@ function read(
     release()
     pump(runtime, db, cache)
   }, FLEET_HOST_TIMEOUT_MS)
-  void readFederatedFleetSnapshots({ runtime, db, dispatchIds: [...ids] })
+  void readFederatedFleetSnapshots({ runtime, db, dispatchIds: [...ids], rows })
     .then((snapshots) => {
       if (!lane.overdue) {
         remember(db, cache, [...ids], snapshots)
