@@ -1266,18 +1266,25 @@ export function createRemoteRuntimePtyTransport(
   }
 
   async function attachHostSessionMirror(
-    options: { cols?: number; rows?: number; sessionId?: string },
+    options: {
+      cols?: number
+      rows?: number
+      sessionId?: string
+      isAccountRestartCurrent?: () => boolean
+    },
     notifySpawn = true,
     expectedAttachGeneration?: number,
     expectedLifecycleEpoch?: number
   ): Promise<PtyConnectResult | undefined> {
+    const isAccountRestartCurrent = options.isAccountRestartCurrent
     if (!tabId || !isWebTerminalSurfaceTabId(tabId)) {
       return undefined
     }
     const isCurrent = (): boolean =>
       !destroyed &&
       (expectedAttachGeneration === undefined || expectedAttachGeneration === attachGeneration) &&
-      (expectedLifecycleEpoch === undefined || expectedLifecycleEpoch === lifecycleEpoch)
+      (expectedLifecycleEpoch === undefined || expectedLifecycleEpoch === lifecycleEpoch) &&
+      (!isAccountRestartCurrent || isAccountRestartCurrent())
     const hostTabId = toHostSessionTabId(tabId)
     const paneHandle = options.sessionId
       ? getRemoteRuntimeTerminalHandle(options.sessionId)
@@ -1640,14 +1647,21 @@ export function createRemoteRuntimePtyTransport(
 
   async function adoptResolvedHostPane(
     terminal: RuntimeTerminalResolvePane,
-    options: { cols?: number; rows?: number; existingPtyId?: string },
+    options: {
+      cols?: number
+      rows?: number
+      existingPtyId?: string
+      isAccountRestartCurrent?: () => boolean
+    },
     notifySpawn = true,
     expectedAttachGeneration?: number,
     expectedRecoveryEpoch?: number,
     expectedLifecycleEpoch?: number
   ): Promise<PtyConnectResult | undefined> {
+    const isAccountRestartCurrent = options.isAccountRestartCurrent
     if (
       destroyed ||
+      (isAccountRestartCurrent && !isAccountRestartCurrent()) ||
       (expectedAttachGeneration !== undefined && expectedAttachGeneration !== attachGeneration) ||
       (expectedLifecycleEpoch !== undefined && expectedLifecycleEpoch !== lifecycleEpoch)
     ) {
@@ -1693,6 +1707,7 @@ export function createRemoteRuntimePtyTransport(
       destroyed ||
       !connected ||
       !remotePtyId ||
+      (isAccountRestartCurrent && !isAccountRestartCurrent()) ||
       (expectedAttachGeneration !== undefined && expectedAttachGeneration !== attachGeneration) ||
       (expectedLifecycleEpoch !== undefined && expectedLifecycleEpoch !== lifecycleEpoch)
     ) {
@@ -2177,7 +2192,8 @@ export function createRemoteRuntimePtyTransport(
       }
     }
     // Why: normal sendInput may be awaiting size validation; drain it before acknowledged writes so terminal bytes stay ordered.
-    const pendingTyping = inputBatcher.takePending()
+    const queuedTyping = inputBatcher.takePending()
+    const pendingTyping = canSendAccountInput('driving') ? queuedTyping : ''
     const text = `${pendingTyping}${data}`
     try {
       const tooLarge = isTerminalInputTooLargeWithDeferredMeasurement(text)
@@ -2192,25 +2208,45 @@ export function createRemoteRuntimePtyTransport(
     }
     const stream = getCurrentMultiplexedStream(targetHandle)
     if (stream?.acknowledgesInput()) {
-      return sendSequencedInputAccepted(stream, targetHandle, pendingTyping, data, signal)
+      return sendSequencedInputAccepted(
+        stream,
+        targetHandle,
+        canSendAccountInput('driving') ? pendingTyping : '',
+        data,
+        signal
+      )
     }
     try {
-      for (const chunk of iterateTerminalInputChunks(text)) {
-        if (!isCurrent()) {
-          return false
-        }
-        // Why: acknowledged sends order behind pending debounce text but must not collapse large paste back into one remote RPC.
-        const result = await trackTerminalSend(
-          targetHandle,
-          callRuntime<{ send: RuntimeTerminalSend }>('terminal.send', {
-            terminal: targetHandle,
-            text: chunk,
-            client: { id: clientId, type: 'desktop' },
-            ...(desiredViewport ? { viewport: desiredViewport, claimViewport: true as const } : {})
-          })
-        )
-        if (result.send.accepted !== true) {
-          return false
+      const writes: { text: string; kind: TerminalInputKind }[] =
+        _inputKind === 'query-reply'
+          ? [
+              { text: pendingTyping, kind: 'driving' },
+              { text: data, kind: 'query-reply' }
+            ]
+          : [{ text, kind: _inputKind ?? 'driving' }]
+      for (const write of writes) {
+        for (const chunk of iterateTerminalInputChunks(write.text)) {
+          if (!isCurrent()) {
+            return false
+          }
+          if (!canSendAccountInput(write.kind)) {
+            break
+          }
+          // Why: keep protocol replies separate from typing, and recheck permission at each delivery.
+          const result = await trackTerminalSend(
+            targetHandle,
+            callRuntime<{ send: RuntimeTerminalSend }>('terminal.send', {
+              terminal: targetHandle,
+              text: chunk,
+              client: { id: clientId, type: 'desktop' },
+              ...(desiredViewport
+                ? { viewport: desiredViewport, claimViewport: true as const }
+                : {})
+            })
+          )
+          if (result.send.accepted !== true) {
+            return false
+          }
         }
       }
       return true
@@ -4139,6 +4175,7 @@ export function createRemoteRuntimePtyTransport(
       if (
         destroyed ||
         lifecycleEpoch !== connectLifecycleEpoch ||
+        (isAccountRestartCurrent && !isAccountRestartCurrent()) ||
         !connected ||
         remotePtyId !== createdPtyId ||
         handle !== createdTerminal.handle ||
