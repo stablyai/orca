@@ -22,10 +22,11 @@ import {
   type SubscriberDeliveryPort
 } from './agent-session-subscriber-catch-up'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
+import { republishSubscriberBackgroundTasks } from './agent-session-live-publications'
 import {
   publishSubscriberLiveText,
-  republishSubscriberBackgroundTasks
-} from './agent-session-live-publications'
+  rememberSubscriberHostWork
+} from './agent-session-subscriber-live-text'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import { rememberLatestPerSession } from './structured-agent-session-activity-retention'
 import { resumeSubscriber } from './agent-session-stop-note-refresh'
@@ -134,17 +135,18 @@ export class AgentSessionSubscribers {
     sessionId: string,
     journal: AgentSessionJournal,
     fence: number,
-    items: readonly AgentJournalRenderItem[],
+    read: readonly AgentJournalRenderItem[] | (() => readonly AgentJournalRenderItem[]),
     targets = this.subscribers(sessionId)
   ): void => {
     const hostNow = this.now()
     for (const subscriber of targets) {
+      // Read at emission, so text never trails a durable frame queued ahead of it.
       this.enqueue(subscriber, () =>
         publishSubscriberLiveText(this.deliveryPort(), {
           sessionId,
           journal,
           fence,
-          items,
+          items: typeof read === 'function' ? read() : read,
           subscribers: [subscriber],
           hostNow
         })
@@ -278,6 +280,7 @@ export class AgentSessionSubscribers {
         ...options,
         isActive: () => this.isActive(subscriber)
       })
+      rememberSubscriberHostWork(subscriber, event)
       if (options?.historyView !== undefined && this.isActive(subscriber)) {
         subscriber.historyView = options.historyView
       }

@@ -4,6 +4,7 @@ import {
   hostClockField,
   replacePage,
   mergeItems,
+  mergeLiveItems,
   liveItemsWithinWindow
 } from '../structured-agent-session-history-state'
 import {
@@ -268,11 +269,10 @@ export function reduceStructuredAgentSession(
   ) {
     return state
   }
-  const merged = journalUnchanged
-    ? state.items
-    : mergeItems(state.items, liveItems, event.batch.removedItemIds)
-  // Retained items already fit the limits, which only grow, so an unchanged journal skips the scan.
-  const items = journalUnchanged
+  const { items: merged, rescan } = journalUnchanged
+    ? { items: state.items, rescan: false }
+    : mergeLiveItems(state.items, liveItems, event.batch.removedItemIds)
+  const items = !rescan
     ? merged
     : trimRetainedItems(
         merged,

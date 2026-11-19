@@ -6,6 +6,7 @@ import {
   agentSessionTranscriptRows,
   latestAgentSessionContextClearSequence
 } from '../../../../../../shared/agent-session/conversation-context/agent-session-context-clear'
+import { rowsBesideStreamedText } from '../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
 
 /** Matches the transcript's `duration-150` fade, so the swap happens while it is invisible. */
 export const NATIVE_CHAT_CONTEXT_CLEAR_FADE_MS = 150
@@ -36,7 +37,9 @@ export function useNativeChatContextClearFloor(
   /** Call as this view's /clear goes out; the returned restore shows the transcript again if refused. */
   onClearSent: () => () => void
 } {
-  const latest = useMemo(() => latestAgentSessionContextClearSequence(items), [items])
+  // A streaming reply never moves the /clear floor, so its text revisions keep this memo.
+  const clearRows = rowsBesideStreamedText(items)
+  const latest = useMemo(() => latestAgentSessionContextClearSequence(clearRows), [clearRows])
   const [state, setState] = useState<ClearFloorState>(() => ({
     epoch,
     floor: latest,
