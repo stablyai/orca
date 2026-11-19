@@ -234,6 +234,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   openInApplications?: OpenInApplication[]
   /** Deprecated: migration/backward-compat only. Use PersistedUIState.rightSidebarOpen. */
   rightSidebarOpenByDefault: boolean
+  /** Suppresses the right-sidebar file explorer's keyboard paste confirmation. */
+  fileExplorerKeyboardPasteConfirmationDismissed?: boolean
   followSymlinkedDirectories?: boolean
   showGitIgnoredFiles?: boolean
   /** Preferred Source Control changes layout. Per-user, not per-workspace. */

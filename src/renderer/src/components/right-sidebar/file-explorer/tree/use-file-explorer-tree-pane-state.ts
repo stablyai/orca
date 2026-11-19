@@ -68,6 +68,9 @@ type UseFileExplorerTreePaneStateResult = {
   nodeCommands: ReturnType<typeof useFileExplorerNodeCommands>
   fileDropOwnerRef: (root: HTMLElement | null) => void
   pasteToDirectory: (directory?: string | null) => void
+  keyboardPasteConfirmationOpen: boolean
+  cancelKeyboardPasteConfirmation: () => void
+  confirmKeyboardPasteConfirmation: (dontAskAgain: boolean) => void
 }
 
 /** Call above FileExplorer’s null-worktree return; losing reset/SSH refs for one render would discard the returning workspace’s directory cache. */
@@ -305,6 +308,9 @@ export function useFileExplorerTreePaneState({
     handlers,
     nodeCommands,
     fileDropOwnerRef: fileExplorerImport.fileDropOwnerRef,
-    pasteToDirectory: fileExplorerImport.pasteToDirectory
+    pasteToDirectory: fileExplorerImport.pasteToDirectory,
+    keyboardPasteConfirmationOpen: fileExplorerImport.keyboardPasteConfirmationOpen,
+    cancelKeyboardPasteConfirmation: fileExplorerImport.cancelKeyboardPasteConfirmation,
+    confirmKeyboardPasteConfirmation: fileExplorerImport.confirmKeyboardPasteConfirmation
   }
 }

@@ -7,6 +7,7 @@ import { openFileExplorer } from './file-explorer'
 import { expect, type Locator, type Page } from '@stablyai/playwright-test'
 
 test.use({ seedTestRepo: false })
+test.skip(process.platform !== 'linux', 'File clipboard test writes Linux text/uri-list format')
 
 const PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC'

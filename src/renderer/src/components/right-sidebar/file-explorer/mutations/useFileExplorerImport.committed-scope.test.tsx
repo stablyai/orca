@@ -1,8 +1,9 @@
 // @vitest-environment happy-dom
 import { Suspense, startTransition } from 'react'
-import { act, cleanup, render, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useFileExplorerImport } from './useFileExplorerImport'
+import { FileExplorerKeyboardPasteConfirmationDialog } from '../panel/FileExplorerKeyboardPasteConfirmationDialog'
 
 const mocks = vi.hoisted(() => ({ importPaths: vi.fn(), prepare: vi.fn() }))
 vi.mock('@/runtime/files/imports/runtime-file-import-client', () => ({
@@ -33,6 +34,11 @@ function pasteOn(target: Element): Event {
   const event = new Event('paste', { bubbles: true, cancelable: true })
   target.dispatchEvent(event)
   return event
+}
+
+async function confirmKeyboardPaste(view: ReturnType<typeof render>): Promise<void> {
+  const dialog = await view.findByRole('dialog')
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Paste' }))
 }
 
 it('keeps native drops on committed scope when a new scope render suspends', async () => {
@@ -139,7 +145,7 @@ it('pastes copied files and clipboard images into the target folder without inte
     })
 
   function Probe() {
-    const { fileDropOwnerRef } = useFileExplorerImport({
+    const fileExplorerImport = useFileExplorerImport({
       worktreeId: 'wt',
       worktreePath: '/repo',
       displayRootPath: '/repo',
@@ -148,19 +154,26 @@ it('pastes copied files and clipboard images into the target folder without inte
       setSelectedPath: selected
     })
     return (
-      <div ref={fileDropOwnerRef}>
-        <button
-          data-testid="folder"
-          data-file-explorer-drop-dir="/repo/app"
-          data-file-explorer-drop-directory=""
-        >
-          app
-        </button>
-        <button data-testid="file" data-file-explorer-drop-dir="/repo/app">
-          file
-        </button>
-        <input data-testid="text-input" />
-      </div>
+      <>
+        <div ref={fileExplorerImport.fileDropOwnerRef}>
+          <button
+            data-testid="folder"
+            data-file-explorer-drop-dir="/repo/app"
+            data-file-explorer-drop-directory=""
+          >
+            app
+          </button>
+          <button data-testid="file" data-file-explorer-drop-dir="/repo/app">
+            file
+          </button>
+          <input data-testid="text-input" />
+        </div>
+        <FileExplorerKeyboardPasteConfirmationDialog
+          open={fileExplorerImport.keyboardPasteConfirmationOpen}
+          onCancel={fileExplorerImport.cancelKeyboardPasteConfirmation}
+          onConfirm={fileExplorerImport.confirmKeyboardPasteConfirmation}
+        />
+      </>
     )
   }
 
@@ -168,12 +181,14 @@ it('pastes copied files and clipboard images into the target folder without inte
   await act(async () => {
     pasteOn(view.getByTestId('folder'))
   })
+  await confirmKeyboardPaste(view)
   await waitFor(() => expect(selected).toHaveBeenCalledWith('/repo/app/file.ts'))
   expect(refresh).toHaveBeenCalledWith('/repo/app')
 
   await act(async () => {
     pasteOn(view.getByTestId('file'))
   })
+  await confirmKeyboardPaste(view)
   await waitFor(() => expect(selected).toHaveBeenCalledWith('/repo/file.ts'))
   expect(refresh).toHaveBeenCalledWith('/repo')
 
@@ -183,6 +198,7 @@ it('pastes copied files and clipboard images into the target folder without inte
   await act(async () => {
     pasteOn(view.getByTestId('folder'))
   })
+  await confirmKeyboardPaste(view)
   await waitFor(() => expect(selected).toHaveBeenCalledWith('/repo/app/pasted-image.png'))
   expect(ui.saveClipboardImageAsTempFile).toHaveBeenCalledOnce()
   expect(refresh).toHaveBeenCalledTimes(3)

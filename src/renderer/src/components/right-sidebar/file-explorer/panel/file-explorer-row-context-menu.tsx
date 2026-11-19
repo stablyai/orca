@@ -1,5 +1,5 @@
 import { preventSecondaryMenuSelection } from '@/components/ui/prevent-secondary-menu-selection'
-import React, { useCallback } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import {
   ClipboardPaste,
   Copy,
@@ -49,6 +49,10 @@ import {
 } from './file-explorer-row-action-visibility'
 import { copyFileToOsClipboard, downloadRemoteFile } from './file-explorer-row-file-transfer'
 import { fileExplorerNodeTabRelativePath } from '../tree/file-explorer-directory-listing'
+import {
+  readClipboardPastePreview,
+  type ClipboardPastePreview
+} from '../mutations/file-explorer-clipboard-import'
 
 const isMac = navigator.userAgent.includes('Mac')
 
@@ -104,6 +108,8 @@ export function FileExplorerRowContextMenu({
   onPasteToDirectory
 }: FileExplorerRowContextMenuProps): React.JSX.Element {
   const t = useTranslate()
+  const [pastePreview, setPastePreview] = useState<ClipboardPastePreview | null>(null)
+  const pasteCheckIdRef = useRef(0)
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const copyPathShortcutLabel = useShortcutLabel('fileExplorer.copyPath')
@@ -149,15 +155,37 @@ export function FileExplorerRowContextMenu({
     <ContextMenuContent
       className="min-w-64"
       onPointerUpCapture={preventSecondaryMenuSelection}
-      onCloseAutoFocus={(e) => e.preventDefault()}
+      onOpenAutoFocus={() => {
+        const checkId = ++pasteCheckIdRef.current
+        void readClipboardPastePreview().then((preview) => {
+          if (pasteCheckIdRef.current === checkId) {
+            setPastePreview(preview)
+          }
+        })
+      }}
+      onCloseAutoFocus={(event) => {
+        pasteCheckIdRef.current += 1
+        setPastePreview(null)
+        event.preventDefault()
+      }}
     >
-      <ContextMenuItem
-        disabled={writesBlocked}
-        onSelect={() => onPasteToDirectory(node.isDirectory ? node.path : targetDir)}
-      >
-        <ClipboardPaste />
-        {t('auto.components.right.sidebar.FileExplorerPaste.paste', 'Paste')}
-      </ContextMenuItem>
+      {pastePreview ? (
+        <ContextMenuItem
+          disabled={writesBlocked}
+          onSelect={() => onPasteToDirectory(node.isDirectory ? node.path : undefined)}
+        >
+          <ClipboardPaste />
+          {t('auto.components.right.sidebar.FileExplorerPaste.paste', 'Paste')}
+          <ContextMenuShortcut
+            className="ml-auto max-w-28 truncate normal-case tracking-normal"
+            title={pastePreview.kind === 'image' ? 'Clipboard image' : pastePreview.title}
+          >
+            {pastePreview.kind === 'image'
+              ? t('auto.components.right.sidebar.FileExplorerPaste.clipboardImage', 'Image')
+              : pastePreview.label}
+          </ContextMenuShortcut>
+        </ContextMenuItem>
+      ) : null}
       <ContextMenuSeparator />
       <ContextMenuItem
         disabled={writesBlocked}
