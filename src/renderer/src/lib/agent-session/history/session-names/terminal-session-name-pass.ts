@@ -55,9 +55,12 @@ function settleDeferredOfClosedTabs(
     }
     deferredByTabId.delete(tabId)
     const entry = getTerminalSessionNameEntry(deferred.executionHostId, deferred.sessionId)
-    // Only the tab's own name, and not the stale echo of what this client's rename replaced: one
-    // moved to another tab since stays with it.
-    if (entry?.tabId !== tabId || deferred.replacedNames.includes(deferred.name)) {
+    // Not a stale echo of what this client's renames replaced, and only the tab's own name (one
+    // moved to another tab since stays with it), or a new name where none is saved.
+    if (
+      deferred.replacedNames.includes(deferred.name) ||
+      (entry ? entry.tabId !== tabId : !deferred.name)
+    ) {
       continue
     }
     if (deferred.name) {

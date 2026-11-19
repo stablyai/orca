@@ -555,6 +555,22 @@ describe('terminal session name recording', () => {
       expect(owner('s1')).toBe('tab-b')
     })
 
+    it('a name given elsewhere after a local clear is kept when the tab closes in the window', () => {
+      const now = 1_000_000
+      seed('s1', 'Draft', 'tab-1')
+      recordTerminalTabRename(
+        makeTerminalNamesState([{ id: 'tab-1', sessionId: 's1', customTitle: 'Draft' }]),
+        'tab-1',
+        null,
+        { now }
+      )
+      expect(saved('s1')).toBeNull()
+      // Another client names the tab inside the window; the pass holds back, then the tab closes.
+      pass([{ id: 'tab-1', sessionId: 's1', customTitle: 'Review' }], now + 10)
+      pass([], now + LOCAL_TAB_NAME_WRITE_GRACE_MS)
+      expect(saved('s1')).toBe('Review')
+    })
+
     it('keeps the saved name when naming a resumed tab failed', () => {
       seed('s1', 'Fix auth bug', 'closed-tab')
       // The host ignored the name, so the resumed tab stays unnamed.

@@ -109,8 +109,11 @@ function readStored(): Entries {
 }
 
 type Mutation =
-  | { key: string; entry: TerminalSessionNameEntry }
+  /** `keepNamedAt`: a handoff of the same name to another tab keeps when storage says it was named. */
+  | { key: string; entry: TerminalSessionNameEntry; keepNamedAt?: true }
   | { key: string; forgetOwnedBy: string }
+
+const lastUsedAt = (entry: TerminalSessionNameEntry) => entry.usedAt ?? entry.savedAt
 
 // Changes storage refused (quota, a disabled store). Each write re-applies them to what it reads,
 // so a refused clear is not undone by the next successful write; dropped once one lands.
@@ -121,8 +124,8 @@ function applyMutations(current: Entries, mutations: readonly Mutation[], replay
   for (const mutation of mutations) {
     if ('entry' in mutation) {
       const stored = current.get(mutation.key)
-      // A refused save replayed later must not undo a newer save another window made since.
-      if (replay && stored && stored.savedAt > mutation.entry.savedAt) {
+      // A refused save replayed later must not undo a newer save or handoff another window made.
+      if (replay && stored && lastUsedAt(stored) > lastUsedAt(mutation.entry)) {
         continue
       }
       if (
@@ -130,7 +133,12 @@ function applyMutations(current: Entries, mutations: readonly Mutation[], replay
         stored.tabId !== mutation.entry.tabId ||
         stored.agent !== mutation.entry.agent
       ) {
-        current.set(mutation.key, mutation.entry)
+        // Decided against what storage holds now, not this window's possibly stale copy.
+        const savedAt =
+          mutation.keepNamedAt && stored?.title === mutation.entry.title
+            ? stored.savedAt
+            : mutation.entry.savedAt
+        current.set(mutation.key, { ...mutation.entry, savedAt })
         changed = true
       }
     } else if (current.get(mutation.key)?.tabId === mutation.forgetOwnedBy) {
@@ -168,8 +176,7 @@ function commit(mutations: readonly Mutation[]): void {
     return
   }
   if (current.size > TERMINAL_SESSION_NAMES_MAX_ENTRIES) {
-    const lastUsed = (entry: TerminalSessionNameEntry) => entry.usedAt ?? entry.savedAt
-    const oldestFirst = [...current.entries()].sort((a, b) => lastUsed(a[1]) - lastUsed(b[1]))
+    const oldestFirst = [...current.entries()].sort((a, b) => lastUsedAt(a[1]) - lastUsedAt(b[1]))
     for (const [key] of oldestFirst.slice(0, current.size - TERMINAL_SESSION_NAMES_MAX_ENTRIES)) {
       current.delete(key)
     }
@@ -223,8 +230,13 @@ export function saveTerminalSessionName(args: {
   }
   // Handing the same name to another tab is not a newer name: keep when it was named.
   const now = Date.now()
-  const savedAt = existing?.title === title ? existing.savedAt : now
-  commit([{ key, entry: { title, agent: args.agent, tabId: args.tabId, savedAt, usedAt: now } }])
+  commit([
+    {
+      key,
+      entry: { title, agent: args.agent, tabId: args.tabId, savedAt: now, usedAt: now },
+      keepNamedAt: true
+    }
+  ])
 }
 
 export type TerminalSessionNameForget = { key: string; ownerTabId: string }

@@ -198,6 +198,38 @@ describe('terminal session names', () => {
     expect(keys).not.toContain(terminalSessionNameKey('local', 'filler-0'))
   })
 
+  it("a refused handoff replayed later does not undo another window's newer handoff", () => {
+    let now = 1_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now++)
+    save('s1', 'X', 'tab-a')
+    const named = getTerminalSessionNameEntry('local', 's1')
+    const setItem = vi.spyOn(localStorage, 'setItem').mockImplementationOnce(() => {
+      throw new Error('QuotaExceededError')
+    })
+    save('s1', 'X', 'tab-b')
+    setItem.mockRestore()
+    // Another window hands the same name to tab-c afterwards; the naming time is unchanged.
+    const key = terminalSessionNameKey('local', 's1')
+    const other = stored()
+    other[key] = { ...named, tabId: 'tab-c', usedAt: now + 1_000 }
+    localStorage.setItem(TERMINAL_SESSION_NAMES_STORAGE_KEY, JSON.stringify(other))
+    save('s2', 'Unrelated', 'tab-3')
+    expect(stored()[key]).toMatchObject({ title: 'X', tabId: 'tab-c' })
+  })
+
+  it('a handoff keeps the naming time storage holds, not a stale copy', () => {
+    let now = 1_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now++)
+    save('s1', 'X', 'tab-a')
+    // Another window renames the session to Y and back to X later; this window has not heard.
+    const key = terminalSessionNameKey('local', 's1')
+    const other = stored()
+    other[key] = { title: 'X', agent: 'claude', tabId: 'tab-c', savedAt: 3_000, usedAt: 3_000 }
+    localStorage.setItem(TERMINAL_SESSION_NAMES_STORAGE_KEY, JSON.stringify(other))
+    save('s1', 'X', 'tab-b')
+    expect(stored()[key]).toMatchObject({ tabId: 'tab-b', savedAt: 3_000 })
+  })
+
   it("refreshes and notifies on another window's storage event", () => {
     const listener = vi.fn()
     const unsubscribe = subscribeTerminalSessionNames(listener)
