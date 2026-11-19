@@ -11,13 +11,29 @@ export type CrewInvalidation = ReadonlySet<CrewFacet> & {
   readonly sessionIds?: ReadonlySet<string>
   /** A topology or assignments change about these dispatches only; dispatches no crew row shows are skipped. */
   readonly dispatchIds?: ReadonlySet<string>
+  /** With topology: parties (session, handle or pane) a new Dispatch or Run names; a crew showing one reads it. */
+  readonly parties?: ReadonlySet<string>
 }
 
-type CrewScope = Pick<CrewInvalidation, 'paneKeys' | 'sessionIds' | 'dispatchIds'>
+type CrewScope = Pick<CrewInvalidation, 'paneKeys' | 'sessionIds' | 'dispatchIds' | 'parties'>
 
 /** A change about the scoped panes, chats or dispatches alone. */
 export function scopedCrewChange(facets: CrewFacet[], scope: CrewScope): CrewInvalidation {
   return Object.assign(new Set(facets), scope)
+}
+
+/** A hook status row added, changed or removed: a status and name change about its pane alone. */
+export function crewStatusRowChange(mutation: {
+  before: { paneKey: string } | null
+  after: { paneKey: string } | null
+}): CrewInvalidation {
+  const paneKeys = new Set<string>()
+  for (const row of [mutation.before, mutation.after]) {
+    if (row) {
+      paneKeys.add(row.paneKey)
+    }
+  }
+  return scopedCrewChange(['status', 'names'], { paneKeys })
 }
 
 /** What the mounted crews' rows read: wakes about anything else cannot change a row. */
@@ -26,7 +42,42 @@ export class CrewRelevance {
   readonly leaves = new Set<string>()
   readonly tabs = new Set<string>()
   readonly sessions = new Set<string>()
+  readonly handles = new Set<string>()
+  /** As `run:<id>`: Runs the rows' Dispatches belong to, and Runs a shown party coordinates. */
+  readonly runs = new Set<string>()
   readonly dispatches = new Set<string>()
+  /** Every address a mounted party's mail goes by: a message between other addresses is no crew's traffic. */
+  readonly addresses = new Set<string>()
+
+  /** A shown party, by every identity a new Dispatch or Run may name it by. */
+  addParty(party: {
+    paneKey?: string | null
+    orcaSessionId?: string | null
+    terminalHandle?: string | null
+  }): void {
+    this.addPane(party.paneKey)
+    if (party.orcaSessionId) {
+      this.sessions.add(party.orcaSessionId)
+    }
+    if (party.terminalHandle) {
+      this.handles.add(party.terminalHandle)
+    }
+  }
+
+  /** Whether one of these identities is a party a crew shows. */
+  showsParty(parties: Iterable<string>): boolean {
+    for (const party of parties) {
+      if (
+        this.runs.has(party) ||
+        this.sessions.has(party) ||
+        this.handles.has(party) ||
+        this.hasPane(party)
+      ) {
+        return true
+      }
+    }
+    return false
+  }
 
   addPane(pane: string | null | undefined): void {
     if (!pane || this.panes.has(pane)) {
@@ -43,15 +94,32 @@ export class CrewRelevance {
     }
   }
 
-  /** A party's own Dispatches and remote attachment place it under its manager; their writes can change it. */
-  addOwnDispatches(aliases: readonly string[], remoteAttachment: string | undefined): void {
+  /** A mounted party: its identities, every address its mail goes by, and its own Dispatches, Runs and
+   *  remote attachment, which place it under its manager. */
+  addSelf(
+    party: Parameters<CrewRelevance['addParty']>[0],
+    aliases: readonly string[],
+    remoteAttachment: string | undefined
+  ): void {
+    this.addParty(party)
     for (const alias of aliases) {
+      this.addresses.add(alias)
       if (alias.startsWith('dispatch:')) {
         this.dispatches.add(alias.slice('dispatch:'.length))
+      } else if (alias.startsWith('run:')) {
+        this.runs.add(alias)
       }
     }
     if (remoteAttachment) {
       this.dispatches.add(remoteAttachment)
+    }
+  }
+
+  /** A shown Dispatch, and its Run, whose new Dispatches may join the same crew. */
+  addAssignment(assignment: { id: string; run_id: string } | undefined): void {
+    if (assignment) {
+      this.dispatches.add(assignment.id)
+      this.runs.add(`run:${assignment.run_id}`)
     }
   }
 

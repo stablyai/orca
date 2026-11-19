@@ -102,7 +102,6 @@ export function buildCrewSnapshot(
           remoteAttachment.process === deps.processForHandle?.(self.terminalHandle)
         )
       }))
-  relevance?.addOwnDispatches(aliasesFor(self.address), remoteAttachment?.id)
   const ownedRunAddresses = host.sourceInputs.ownedRuns(self)
   for (const current of host.sourceInputs.runInputs(ownedRunAddresses)) {
     const coordinator = party(current.session, current.handle, current.pane, `run:${current.id}`)
@@ -111,6 +110,7 @@ export function buildCrewSnapshot(
     }
   }
   const selfAliases = () => aliasesFor(self.address)
+  relevance?.addSelf(self, selfAliases(), remoteAttachment?.id)
   const traffic = host.sourceInputs.traffic(selfAliases(), now)
   const questions = host.sourceInputs.questions(selfAliases())
   hydrate([
@@ -164,7 +164,7 @@ export function buildCrewSnapshot(
       ? observeSession(worker!)
       : undefined
     if (relevance) {
-      relevance.addPane(target.paneKey)
+      relevance.addParty(target)
       relevance.addPane(worker?.paneKey)
       relevance.addPane(target.terminalHandle ? deps.paneForHandle(target.terminalHandle) : null)
       for (const id of [
@@ -176,9 +176,7 @@ export function buildCrewSnapshot(
           relevance.sessions.add(id)
         }
       }
-      if (assignment) {
-        relevance.dispatches.add(assignment.id)
-      }
+      relevance.addAssignment(assignment)
     }
     const fresh = session
       ? sessionActivityEvidence(session)

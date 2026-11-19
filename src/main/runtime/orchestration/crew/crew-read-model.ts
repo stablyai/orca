@@ -17,7 +17,7 @@ const STALE_CAP = 4096
 
 export class CrewReadModel {
   private host: CrewHostDerivation | undefined
-  /** What the current host's reads showed; reset with the host, refilled by the reads every wake starts. */
+  /** What the current host's reads showed: reset when a rebuild may change who rows show, else only grown. */
   private relevance: CrewRelevance | undefined
   /** Status wakes skipped since the host was built: a party subscribing later may show them. */
   private skipped: 'status' | undefined
@@ -62,17 +62,30 @@ export class CrewReadModel {
       this.skipped ??= 'status'
       return false
     }
+    if (facetList.every((facet) => facet === 'traffic')) {
+      if (facets.trafficAddresses) {
+        return [...facets.trafficAddresses].some((address) => relevance.addresses.has(address))
+      }
+      if (facets.dispatchIds) {
+        return [...facets.dispatchIds].some(
+          (id) => relevance.dispatches.has(id) || relevance.addresses.has(`dispatch:${id}`)
+        )
+      }
+    }
     if (
-      facets.dispatchIds &&
+      (facets.dispatchIds || facets.parties) &&
       facetList.every((facet) => facet === 'topology' || facet === 'assignments')
     ) {
-      let shown = false
-      for (const id of facets.dispatchIds) {
+      // A new Dispatch or Run naming a shown party or Run changes who that crew shows.
+      let shown = Boolean(facets.parties && relevance.showsParty(facets.parties))
+      for (const id of facets.dispatchIds ?? []) {
         if (relevance.dispatches.has(id)) {
           shown = true
           if (facets.has('assignments')) {
             this.patches.add(id)
           }
+        } else if (shown) {
+          continue
         } else if (this.stale.size < STALE_CAP) {
           this.stale.add(id)
         } else {
@@ -150,6 +163,8 @@ export class CrewReadModel {
 
   private rebuilt(host: CrewHostDerivation): CrewHostDerivation {
     this.stale.clear()
+    // Who the rows show may have changed: the next reads collect it afresh.
+    this.relevance = undefined
     return host
   }
 
@@ -162,7 +177,6 @@ export class CrewReadModel {
     this.renamed.clear()
     this.trafficAddresses.clear()
     this.broadTraffic = false
-    const previousHost = this.host
     if (this.host && this.patches.size > 0 && !dirty.has('topology') && !dirty.has('records')) {
       const patched = this.host.deps.db
         ? patchCrewAssignmentStages(
@@ -197,17 +211,28 @@ export class CrewReadModel {
       if (this.listeners.size === 0) {
         return buildCrewSnapshot(address, { ...host.deps, now }, host)
       }
-      this.host = host
+      this.host = this.rebuilt(host)
       this.skipped = undefined
-      this.stale.clear()
     } else if (dirty.has('status') || dirty.has('names')) {
       const previous = this.host
       this.host = undefined
       const deps = this.readDependencies(previous.deps)
       if (dirty.has('status')) {
         const { statuses, ...sources } = deps
+        const relevance = this.relevance
+        // Only bindings a row can show: an unrelated pane's row appearing or leaving rebuilds nothing.
         const identities = (rows: typeof statuses) =>
-          new Map(rows.map((row) => [row.activity.paneKey, row.binding]))
+          new Map(
+            rows.flatMap((row) =>
+              !relevance ||
+              relevance.hasPane(row.activity.paneKey) ||
+              (row.binding.kind !== 'unresolved' &&
+                relevance.handles.has(row.binding.terminalHandle)) ||
+              (row.binding.kind === 'worker' && relevance.dispatches.has(row.binding.dispatchId))
+                ? [[row.activity.paneKey, row.binding] as const]
+                : []
+            )
+          )
         previous.registry.refreshRecordNames(deps.records, renamed)
         this.host = isDeepStrictEqual(identities(previous.deps.statuses), identities(statuses))
           ? refreshCrewStatuses(previous, statuses)
@@ -236,9 +261,8 @@ export class CrewReadModel {
     if (dirty.has('traffic')) {
       this.host.sourceInputs.invalidateTraffic(trafficAddresses)
     }
-    if (this.host !== previousHost || !this.relevance) {
-      this.relevance = new CrewRelevance()
-    }
+    // Kept across status, name and stage refreshes, so the session-write scope and its worktree cache hold.
+    this.relevance ??= new CrewRelevance()
     return buildCrewSnapshot(address, { ...this.host.deps, now }, this.host, this.relevance)
   }
 }
