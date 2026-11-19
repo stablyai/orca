@@ -201,7 +201,11 @@ export function createWorkspaceTabPaletteIndex() {
           indexTerminalTabs(options, worktreeId)
         }
         if (rebuilt) {
-          next = flatten()
+          // A rebuilt workspace whose entries all stay hidden behind earlier copies keeps the published list.
+          const flattened = flatten()
+          if (!sameItems(entries, flattened)) {
+            next = flattened
+          }
         }
       }
       for (const tabId of dirtyTabs) {
