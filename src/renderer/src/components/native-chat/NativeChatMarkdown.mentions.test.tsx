@@ -101,30 +101,26 @@ describe("a Slack message's mentions", () => {
 })
 
 describe("Slack mention tokens in an agent's reply", () => {
-  it('shows them as names, leaving code as written', () => {
+  it('shows leading and inline Slack mentions as names while preserving code and math', () => {
     const { container } = render(
       <NativeChatSlackPeopleContext value={new Map([['U05BRPQSABY', 'Jinjing']])}>
         <NativeChatMarkdown
-          content="Hi <!here> <@U05BRPQSABY> The limit, see `<@U05BRPQSABY>` and $<@U2>$; ask <@U2>"
+          content={[
+            '<!here> run `pnpm test` before merging',
+            'Hi <@U05BRPQSABY> The limit, see `<@U05BRPQSABY>` and $<@U2>$; ask <@U2>'
+          ].join('\n\n')}
           variant="document"
         />
       </NativeChatSlackPeopleContext>
     )
     expect(chips(container)).toEqual(['@here', '@Jinjing'])
-    expect(container.querySelector('code')?.textContent).toBe('<@U05BRPQSABY>')
+    expect([...container.querySelectorAll('code')].map((code) => code.textContent)).toEqual([
+      'pnpm test',
+      '<@U05BRPQSABY>'
+    ])
+    expect(container.textContent).toContain('before merging')
     expect(container.textContent).toContain('ask @user')
     expect(container.textContent).toContain('<@U2>')
-  })
-
-  it('draws a line led by <!here> with its code span, never dropping it', () => {
-    const { container } = render(
-      <NativeChatSlackPeopleContext value={new Map()}>
-        <NativeChatMarkdown content="<!here> run `pnpm test` before merging" variant="document" />
-      </NativeChatSlackPeopleContext>
-    )
-    expect(chips(container)).toEqual(['@here'])
-    expect(container.querySelector('code')?.textContent).toBe('pnpm test')
-    expect(container.textContent).toContain('before merging')
   })
 
   it('keeps them as names in a chat whose repo links #123', () => {
