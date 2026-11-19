@@ -78,11 +78,12 @@ export type RuntimeConstructionDependencies = {
   ) => void
   readHookCliWriterObservation?: (row: AgentStatusIpcPayload) => CliWriterObservation | null
   /** `exitedSince`: also answer `exited` for an exit the hook store proved at or after it. */
-  /** `forSleep`: a sleep capture, which re-proves a pane whose agent may have ended unseen. */
+  /** `settleForSleep`: only settle the pane's exit proofs for a sleep capture (a fresh one for a
+   *  pane whose agent may have ended unseen); answers null without probing. */
   checkHookAgentPresence?: (
     paneKey: string,
     exitedSince?: number,
-    options?: { forSleep?: true }
+    options?: { settleForSleep?: true }
   ) => Promise<'live' | 'unverifiable' | 'exited' | null>
   reconcileAgentStatusForEndedProcess?: (
     paneKeys: Iterable<string>,

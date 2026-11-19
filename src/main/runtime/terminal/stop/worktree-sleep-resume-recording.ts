@@ -36,12 +36,13 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
   /** Capture after earlier status writes so their saved copy participates in exact cleanup. */
   readSavedResumeSource(
     worktreeId: string,
-    paneKey: string
+    paneKey: string,
+    /** A capture resolves its workspace's host once for every pane. */
+    hostId = this.getWorkspaceSessionHostIdForWorktree(worktreeId)
   ): Promise<SleepingAgentSessionRecord | undefined> {
     return this.inResumeRecordOrder(
       async () =>
-        this.store?.getWorkspaceSession?.(this.getWorkspaceSessionHostIdForWorktree(worktreeId))
-          ?.sleepingAgentSessionsByPaneKey?.[paneKey]
+        this.store?.getWorkspaceSession?.(hostId)?.sleepingAgentSessionsByPaneKey?.[paneKey]
     )
   }
 
@@ -112,20 +113,27 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
   }
 
   protected readonly sleepResumeRecords: WorktreeSleepResumeRecorder = {
-    capture: (worktreeId, ptyIds) => {
+    capture: async (worktreeId, ptyIds) => {
       const paneKeysByPtyId = new Map(
         [...ptyIds].map((ptyId) => [ptyId, this.collectAgentStatusPaneKeysForPty(ptyId)])
       )
+      // Settle every pane's exit proof at once, so their process-table reads coalesce.
+      const paneKeys = new Set([...paneKeysByPtyId.values()].flatMap((keys) => [...keys]))
+      await Promise.all(
+        [...paneKeys].map((paneKey) =>
+          this.checkHookAgentPresenceFn?.(paneKey, 0, { settleForSleep: true })
+        )
+      )
+      const hostId = this.getWorkspaceSessionHostIdForWorktree(worktreeId)
       return captureWorktreeSleepResumeRecords({
         worktreeId,
         paneKeysByPtyId,
         launchByPtyId: new Map([...ptyIds].map((ptyId) => [ptyId, this.ptysById.get(ptyId)])),
         readRowsForPane: (paneKey) => this.getAgentProviderSessionRowsForPaneFn?.(paneKey) ?? [],
-        readSavedRecord: (paneKey) => this.readSavedResumeSource(worktreeId, paneKey),
+        readSavedRecord: (paneKey) => this.readSavedResumeSource(worktreeId, paneKey, hostId),
         readIdentity: (paneKey, savedRecord) => this.readPaneAgentIdentity(paneKey, savedRecord),
         checkAgentPresence: (paneKey, since) =>
-          this.checkHookAgentPresenceFn?.(paneKey, since, { forSleep: true }) ??
-          Promise.resolve(null),
+          this.checkHookAgentPresenceFn?.(paneKey, since) ?? Promise.resolve(null),
         capturedAt: Date.now()
       })
     },
