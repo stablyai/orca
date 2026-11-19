@@ -7,6 +7,7 @@ import type { JournalWriterCommand, JournalWriterOperation } from './journal-wri
 import type { JournalWriterHostFacts } from './journal-writer-host-facts'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { migrateJournalDomainSchema } from './journal-domain-schema'
+import { JOURNAL_ENDED_TURN_COUNTS_SCHEMA } from './database/journal-ended-turn-counts'
 import { JournalSqlCommand } from './journal-sql-command'
 import { JournalSqlBatch } from './journal-sql-batch'
 
@@ -33,6 +34,8 @@ export function domainLifecycleFixture(cleanups: (() => void)[], sessionId = 'ch
   const filename = join(directory, 'journal.sqlite')
   let db = new Database(filename)
   migrateJournalDomainSchema(db)
+  // As the journal SQL worker opens it.
+  db.exec(JOURNAL_ENDED_TURN_COUNTS_SCHEMA)
   db.prepare(
     `INSERT INTO journal_chat_state(session_id,workspace_id,epoch,highest_fence) VALUES(?,'workspace','epoch',1)`
   ).run(sessionId)

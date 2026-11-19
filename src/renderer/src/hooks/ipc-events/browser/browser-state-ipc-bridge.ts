@@ -3,7 +3,6 @@ import {
   clearBrowserGuestMetadata
 } from '@/components/browser-pane/host-guest/metadata/browser-guest-metadata-cache'
 import { rememberLiveBrowserUrl } from '@/components/browser-pane/describe-page/live-browser-url-registry'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { findVisibleBrowserLinkTarget } from '@/lib/browser/navigation/visible-browser-link-target'
 import { openUrlInTabBesideBrowserPage } from '@/lib/browser/palette/browser-page-tab-opening'
 import {
@@ -17,7 +16,7 @@ import { findPage } from '../../../store/slices/browser/pages/browser-page-recor
 import {
   acquireBrowserAutomationVisibility,
   releaseBrowserAutomationVisibility
-} from '@/components/browser-pane/host-guest/retention/browser-automation-visibility'
+} from '@/components/browser-pane/host-guest/retention/browser-automation-visibility-store'
 import { acquireBrowserAutomationBootstrapLease } from './browser-automation-bootstrap-lease'
 import { markBrowserPageOpenedByPage } from '@/components/browser-pane/host-guest/lifecycle/browser-page-window-close'
 import { setBrowserPageAgentViewportSize } from '@/components/browser-pane/host-guest/viewport/browser-page-viewport'
@@ -216,6 +215,7 @@ export function registerBrowserStateIpcBridge(
     })
   )
   unsubs.push(
+    // Why no runtime guard: only guests in this process ask, so SSH-routed pages in a server-owned workspace open here too.
     window.api.browser.onOpenLinkInOrcaTab(({ browserPageId, url, activate }) => {
       const store = useAppStore.getState()
       const sourcePage = Object.values(store.browserPagesByWorkspace)
@@ -233,9 +233,6 @@ export function registerBrowserStateIpcBridge(
           activate: activate ?? true,
           onOpened: markBrowserPageOpenedByPage
         })
-        return
-      }
-      if (runtimeEnvironmentIdOrLocalUnlessTwin(store, sourcePage.worktreeId)) {
         return
       }
       const placement = findVisibleBrowserLinkTarget(store, sourcePage.worktreeId)

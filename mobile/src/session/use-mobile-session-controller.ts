@@ -1,4 +1,5 @@
 import { useLayoutEffect } from 'react'
+import { useMobileSessionItemLink } from './use-mobile-session-item-link'
 import { useMobileStructuredSessionOpening } from './use-mobile-structured-session-opening'
 import { useNotificationPaneNavigation } from './tabs/use-notification-pane-navigation'
 import { useMobileSessionFoundation } from './use-mobile-session-foundation'
@@ -34,6 +35,8 @@ import { useMobileSessionBulkClose } from './tabs/use-mobile-session-bulk-close'
 import { useMobileSessionPresentation } from './use-mobile-session-presentation'
 import { useMobileSessionStoredChatTab } from './use-mobile-session-stored-chat-tab'
 import { useMobileSessionPanelRouteActions } from './use-mobile-session-panel-route-actions'
+import { useMobileSessionBot } from './use-mobile-session-bot'
+import { useTerminalHostSettings } from '../terminal/preferences/terminal-host-settings'
 
 export function useMobileSessionController() {
   const foundation = useMobileSessionFoundation()
@@ -45,9 +48,10 @@ export function useMobileSessionController() {
   )
   const sendLiveTerminalInput = (handle: string, bytes: string) =>
     feedbackCapabilities.sendLiveTerminalInputRef.current(handle, bytes)
+  const itemLink = useMobileSessionItemLink(feedbackCapabilities.showToast)
   const nativeChatDictation = Object.assign(
     feedbackCapabilities,
-    useMobileSessionNativeChatDictation(feedbackCapabilities, sendLiveTerminalInput)
+    useMobileSessionNativeChatDictation(feedbackCapabilities, sendLiveTerminalInput, itemLink)
   )
   // Chat covers a split, so only its own terminal stays visible; this is the ref's one writer per commit.
   if (nativeChatDictation.showNativeChat) {
@@ -140,8 +144,10 @@ export function useMobileSessionController() {
     presentation,
     useMobileSessionPanelRouteActions(presentation)
   )
+  const bot = Object.assign(panelRouteActions, useMobileSessionBot(panelRouteActions))
   // The one owner of opening an existing chat, so a fork's source link follows its selection rules.
-  return Object.assign(panelRouteActions, preferences, { openNativeSession })
+  const terminalHostSettings = useTerminalHostSettings(bot.client, bot.connState)
+  return Object.assign(bot, preferences, { openNativeSession, terminalHostSettings })
 }
 
 export type MobileSessionController = ReturnType<typeof useMobileSessionController>

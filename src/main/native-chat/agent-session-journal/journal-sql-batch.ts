@@ -52,7 +52,7 @@ export class JournalSqlBatch {
   async run<Command, Value>(
     commands: readonly Command[],
     apply: (command: Command) => Value | Promise<Value>,
-    durability: 'normal' | 'full' = 'normal',
+    durability: 'normal' | 'full' | 'retirement' = 'normal',
     urgent = false
   ): Promise<JournalSqlBatchResult<Value>> {
     if (this.failure) {
@@ -63,6 +63,12 @@ export class JournalSqlBatch {
       return { outcomes }
     }
     const drain = commands.slice()
+    const pragmas =
+      durability === 'retirement'
+        ? ['synchronous', 'busy_timeout', 'fullfsync', 'checkpoint_fullfsync'].map(
+            (name) => [name, this.db.pragma(name, { simple: true })] as const
+          )
+        : []
     let began = false
     let committing = false
     let failed: JournalSqlBatchError | undefined
@@ -70,6 +76,11 @@ export class JournalSqlBatch {
       await this.checkpoint?.beforeWrite(urgent)
       if (durability !== 'normal') {
         this.db.pragma('synchronous=FULL')
+        if (durability === 'retirement') {
+          this.db.pragma('busy_timeout=0')
+          this.db.pragma('fullfsync=ON')
+          this.db.pragma('checkpoint_fullfsync=ON')
+        }
       }
       this.db.exec('BEGIN IMMEDIATE')
       began = true
@@ -115,7 +126,13 @@ export class JournalSqlBatch {
     } finally {
       if (durability !== 'normal' && !this.db.isTransaction) {
         try {
-          this.db.pragma('synchronous=NORMAL')
+          if (durability === 'retirement') {
+            for (const [name, value] of pragmas) {
+              this.db.pragma(`${name}=${Number(value)}`)
+            }
+          } else {
+            this.db.pragma('synchronous=NORMAL')
+          }
         } catch (cause) {
           failed ??= new JournalSqlBatchError('indeterminate', cause)
           this.failure = failed

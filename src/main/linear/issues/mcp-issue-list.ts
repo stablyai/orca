@@ -73,7 +73,7 @@ export async function listMcpIssues(
     if (entryFailures[0]) {
       throw entryFailures[0].error
     }
-    throw linearNotConnectedError('issue list')
+    throw linearNotConnectedError()
   }
   const pagedRequest = {
     ...request,

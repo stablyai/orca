@@ -1,3 +1,4 @@
+import { STRUCTURED_AGENT_SESSION_CANCEL_METHOD } from '../structured-agent-session-cancel-method'
 import { STRUCTURED_AGENT_SESSION_MCP_METHODS } from './catalog/structured-agent-session-mcp'
 import { STRUCTURED_AGENT_SESSION_AUTO_REVIEW_METHODS } from './conversation/structured-agent-session-auto-review-approval'
 import { STRUCTURED_AGENT_SESSION_ACCOUNT_USAGE_METHODS } from './catalog/structured-agent-session-account-usage'
@@ -43,7 +44,6 @@ import { STRUCTURED_AGENT_SESSION_SEND_RECORDED_METHODS } from './history/struct
 import { STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS } from './catalog/structured-agent-session-options-read'
 import {
   AttachParams,
-  CancelParams,
   ConversationCommandParams,
   CreateParams,
   CreateSupportParams,
@@ -109,12 +109,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     params: SendParams,
     handler: sendStructuredAgentSessionForClient
   }),
-  defineMethod({
-    name: 'agentSession.cancel',
-    permission: 'workspace',
-    params: CancelParams,
-    handler: async (params, ctx) => requireStructuredCleanupHost(ctx).cancel(callerFor(ctx), params)
-  }),
+  STRUCTURED_AGENT_SESSION_CANCEL_METHOD,
   ...STRUCTURED_AGENT_SESSION_QUEUED_METHODS,
   STRUCTURED_AGENT_SESSION_CLOSE_METHOD,
   defineMethod({

@@ -5,9 +5,16 @@ import { isSameBrowserUrl } from '../../../../shared/browser/client-hosting/brow
 import type { BrowserExecutionHostKeyResolution } from './runtime-browser-client-page-adoption'
 import { BrowserClientAutomationMethod } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import { BrowserError } from '../../../browser/browser-error'
+import {
+  browserClientPageRefusal,
+  readableBrowserClientPageRefusal
+} from './browser-client-page-refusal-copy'
 import { browserExpectedUrlMismatchError } from '../../../browser/cdp/input/browser-expected-page-url'
 import type { BrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry'
-import type { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
+import type {
+  RuntimeBrowserClientPage,
+  RuntimeBrowserPageRegistry
+} from './runtime-browser-page-registry'
 import { isAgentRpcCaller, type RpcCallerIdentity } from '../../rpc/callers/rpc-caller-identity'
 import {
   isWindowsAbsolutePathLike,
@@ -16,7 +23,7 @@ import {
 
 export type ClientHostedBrowserRpcRoute = { handled: false } | { handled: true; result: unknown }
 
-export async function routeRuntimeBrowserClientAutomation(options: {
+type ClientAutomationRoute = {
   method: string
   params: unknown
   caller: RpcCallerIdentity | undefined
@@ -26,7 +33,11 @@ export async function routeRuntimeBrowserClientAutomation(options: {
   notifyWorkspace?(workspaceId: string): void
   resolveWorkspace(selector: string): Promise<{ id: string }>
   resolveWorkspacePath(workspaceId: string): Promise<string>
-}): Promise<ClientHostedBrowserRpcRoute> {
+}
+
+export async function routeRuntimeBrowserClientAutomation(
+  options: ClientAutomationRoute
+): Promise<ClientHostedBrowserRpcRoute> {
   const method = BrowserClientAutomationMethod.safeParse(options.method)
   if (!method.success || !isRecord(options.params)) {
     return { handled: false }
@@ -35,19 +46,36 @@ export async function routeRuntimeBrowserClientAutomation(options: {
   if (!page) {
     return { handled: false }
   }
+  const agent = isAgentRpcCaller(options.caller)
+  // A person's tab pick waits while the agent drives this page.
+  const settle = agent ? options.pages.agentUse.begin(page.browserPageId) : undefined
+  try {
+    return await runOnClientPage(options, method.data, options.params, page, agent)
+  } finally {
+    settle?.()
+  }
+}
+
+async function runOnClientPage(
+  options: ClientAutomationRoute,
+  method: BrowserClientAutomationMethod,
+  requestParams: Record<string, unknown>,
+  page: RuntimeBrowserClientPage,
+  agent: boolean
+): Promise<ClientHostedBrowserRpcRoute> {
   if (
-    method.data === 'browser.goto' &&
-    typeof options.params.url === 'string' &&
+    method === 'browser.goto' &&
+    typeof requestParams.url === 'string' &&
     options.leases.clientPageInitializations.lease(page.browserPageId, page.placement) &&
     options.resolveExecutionHostKey &&
     options.notifyWorkspace
   ) {
     if (
-      typeof options.params.expectUrl === 'string' &&
-      !isSameBrowserUrl(options.params.expectUrl, page.url)
+      typeof requestParams.expectUrl === 'string' &&
+      !isSameBrowserUrl(requestParams.expectUrl, page.url)
     ) {
       throw browserExpectedUrlMismatchError({
-        expectedUrl: options.params.expectUrl,
+        expectedUrl: requestParams.expectUrl,
         actualUrl: page.url,
         browserPageId: page.browserPageId,
         mayHaveStarted: false
@@ -57,7 +85,7 @@ export async function routeRuntimeBrowserClientAutomation(options: {
       pages: options.pages,
       authority: options.leases,
       page,
-      action: { type: 'navigate', url: options.params.url },
+      action: { type: 'navigate', url: requestParams.url },
       resolveExecutionHostKey: options.resolveExecutionHostKey,
       notifyWorkspace: options.notifyWorkspace
     })
@@ -67,34 +95,40 @@ export async function routeRuntimeBrowserClientAutomation(options: {
     }
     return { handled: true, result: { url, title: current.title } }
   }
-  const issued = options.leases.issueClientPageCommand(
-    {
-      authorityRuntimeId: options.leases.authorityRuntimeId,
-      authorityEpoch: options.leases.authorityEpoch,
-      browserPageId: page.browserPageId,
-      browserHostClientId: page.placement.browserHostClientId,
-      browserHostGeneration: page.placement.browserHostGeneration,
-      pageHostGeneration: page.placement.pageHostGeneration
-    },
-    {
-      type: 'automation',
-      method: method.data,
-      params:
-        method.data === 'browser.upload'
-          ? await toWorkspaceRelativeUploadParams(options.params, () =>
-              options.resolveWorkspacePath(page.workspaceId)
-            )
-          : options.params,
-      // A person's link or relayed input must not light the desktop page as agent-driven.
-      agent: isAgentRpcCaller(options.caller),
-      stagedResults: true
-    }
-  )
+  const params =
+    method === 'browser.upload'
+      ? await toWorkspaceRelativeUploadParams(requestParams, () =>
+          options.resolveWorkspacePath(page.workspaceId)
+        )
+      : requestParams
+  let issued: ReturnType<BrowserHostLeaseRegistry['issueClientPageCommand']>
+  try {
+    issued = options.leases.issueClientPageCommand(
+      {
+        authorityRuntimeId: options.leases.authorityRuntimeId,
+        authorityEpoch: options.leases.authorityEpoch,
+        browserPageId: page.browserPageId,
+        browserHostClientId: page.placement.browserHostClientId,
+        browserHostGeneration: page.placement.browserHostGeneration,
+        pageHostGeneration: page.placement.pageHostGeneration
+      },
+      {
+        type: 'automation',
+        method,
+        params,
+        // A person's link or relayed input must not light the desktop page as agent-driven.
+        agent,
+        stagedResults: true
+      }
+    )
+  } catch (error) {
+    throw readableBrowserClientPageRefusal(error)
+  }
   const result = await issued.result
   if (result.status === 'failed') {
     throw result.expectedUrlMismatch
       ? browserExpectedUrlMismatchError(result.expectedUrlMismatch)
-      : new BrowserError(result.errorCode, result.errorMessage ?? result.errorCode)
+      : browserClientPageRefusal(result.errorCode, result.errorMessage)
   }
   return { handled: true, result: result.value }
 }

@@ -94,6 +94,11 @@ export class TerminalAgentTurnNews<Prepared> {
     this.announce(paneKey, change.workspace.worktreeId, row, waitOutQuiet)
   }
 
+  /** A finish decided for this pane and still waiting out its quiet window. */
+  hasPending(paneKey: string): boolean {
+    return this.pendingByPane.has(paneKey)
+  }
+
   dispose(): void {
     for (const paneKey of this.pendingByPane.keys()) {
       this.cancelPending(paneKey)
