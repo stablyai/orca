@@ -16,6 +16,7 @@ import type { Bot } from '../../../../../shared/bot-types'
 import { BotAvatar } from '../BotAvatar'
 import { composioLogoUrl } from '../../../../../shared/composio/composio-apps'
 import { botAppCategoryName, type BotAppCategory } from './bot-app-catalog'
+import { BotAppCategoryIcon } from './BotAppCategoryIcon'
 
 /** What the list shows: everything, the bot's own, one category, or Composio's apps. */
 export type BotAppsView = 'all' | 'mine' | BotAppCategory | 'composio' | 'catalog'
@@ -82,7 +83,7 @@ export function BotAppsRail(props: BotAppsRailProps): React.JSX.Element {
     <div className="shrink-0 max-sm:hidden">
       <nav
         aria-label={t('bots.apps.categories', 'Categories')}
-        className="flex h-full w-46 flex-col gap-px border-r border-border px-2 py-2.5"
+        className="flex h-full w-52 flex-col gap-px border-r border-border px-2 py-2.5"
       >
         <RailButton
           pressed={view === 'all'}
@@ -105,6 +106,7 @@ export function BotAppsRail(props: BotAppsRailProps): React.JSX.Element {
             key={category}
             pressed={view === category}
             onClick={() => onView(category)}
+            icon={<BotAppCategoryIcon category={category} />}
             label={botAppCategoryName(category)}
             count={count}
           />
@@ -144,25 +146,32 @@ export function BotAppsRail(props: BotAppsRailProps): React.JSX.Element {
 /** The rail as one menu, for a window too narrow for it. */
 export function BotAppsRailMenu(props: BotAppsRailProps): React.JSX.Element {
   const t = useTranslate()
-  const options: { value: BotAppsView; label: string }[] = [
-    { value: 'all', label: t('bots.apps.allApps', 'All apps') },
+  const options: { value: BotAppsView; label: string; icon: React.ReactNode }[] = [
+    {
+      value: 'all',
+      label: t('bots.apps.allApps', 'All apps'),
+      icon: <LayoutGrid className="size-3.5" />
+    },
     ...(props.mineCount > 0
       ? [
           {
             value: 'mine' as const,
-            label: t('bots.apps.onBot', 'On {{bot}}', { bot: props.bot.name })
+            label: t('bots.apps.onBot', 'On {{bot}}', { bot: props.bot.name }),
+            icon: <BotAvatar bot={props.bot} className="size-3.5 rounded-[3px] text-3xs" />
           }
         ]
       : []),
     ...props.categories.map(({ category }) => ({
       value: category,
-      label: botAppCategoryName(category)
+      label: botAppCategoryName(category),
+      icon: <BotAppCategoryIcon category={category} />
     })),
     ...(props.composio
       ? [
           {
             value: 'composio' as const,
-            label: t('bots.apps.composio.withComposio', 'With Composio')
+            label: t('bots.apps.composio.withComposio', 'With Composio'),
+            icon: <img src={composioLogoUrl('composio')} alt="" className="size-3.5 shrink-0" />
           }
         ]
       : [])
@@ -191,6 +200,7 @@ export function BotAppsRailMenu(props: BotAppsRailProps): React.JSX.Element {
           >
             {options.map((option) => (
               <DropdownMenuRadioItem key={option.value} value={option.value}>
+                {option.icon}
                 {option.label}
               </DropdownMenuRadioItem>
             ))}

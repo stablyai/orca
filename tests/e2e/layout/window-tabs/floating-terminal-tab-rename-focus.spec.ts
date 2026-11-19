@@ -134,7 +134,7 @@ test('blur preserves focus in the worktree search dialog', async ({ orcaPage }) 
   const input = await beginRename(orcaPage, first, 'double-click')
   await input.fill('Search committed')
   await orcaPage
-    .getByRole('button', { name: 'Search worktrees and browser tabs', exact: true })
+    .getByRole('button', { name: 'Search bots, workspaces, and browser tabs', exact: true })
     .click()
   await expect(input).toHaveCount(0)
   await expect(first).toHaveAttribute('data-tab-title', 'Search committed')

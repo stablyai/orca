@@ -92,7 +92,10 @@ describe('a bot’s quiet result on the phone', () => {
     renderer = null
   })
 
-  function render(text: string, { botChat = true } = {}): { markdown: unknown[]; texts: string[] } {
+  function render(
+    text: string,
+    { botChat = true, live = false } = {}
+  ): { markdown: unknown[]; texts: string[] } {
     act(() => {
       renderer = create(
         createElement(
@@ -102,7 +105,11 @@ describe('a bot’s quiet result on the phone', () => {
           createElement(
             MobileNativeChatQuietTurnContext.Provider,
             { value: { inAutomationTurn: false, inActingTurn: false } },
-            createElement(MobileNativeChatMessage, { message: answer(text) })
+            createElement(MobileNativeChatMessage, {
+              message: answer(text),
+              mayStillGrow: live,
+              activeTurnIsWorking: live
+            })
           )
         )
       )
@@ -126,6 +133,12 @@ describe('a bot’s quiet result on the phone', () => {
     const row = render('Checked the queue.\n\nNO_REPLY')
     expect(row.markdown).toEqual(['Checked the queue.'])
     expect(row.texts).not.toContain('Nothing to report')
+  })
+
+  it('never draws the marker while the reply still grows', () => {
+    expect(render('Checked the queue.\n\nNO_REPL', { live: true }).markdown).toEqual([
+      'Checked the queue.'
+    ])
   })
 
   it('leaves the words alone outside a bot’s chat', () => {

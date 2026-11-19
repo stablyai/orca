@@ -6,11 +6,12 @@ import {
 } from '../../../../../../shared/native-chat/transcript/notices/claude-model-fallback'
 import { NativeChatUsageLimitRow } from '../../usage/NativeChatUsageLimitRow'
 import { agentSessionGoalControlWords } from '../../session/goals/agent-session-goal-control-words'
-import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
+import { AlertCircle, AlertTriangle, Info, Notebook } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { NativeChatForkedFromRow } from './NativeChatForkedFromRow'
 import { NativeChatAutoReviewDenialRow } from './NativeChatAutoReviewDenialRow'
 import { NativeChatPullRequestEventLine } from './NativeChatPullRequestEventLine'
+import { NativeChatEventRow } from '../events/NativeChatEventRow'
 import { PULL_REQUEST_EVENT_PRESENTATION } from '../../../../../../shared/native-chat/transcript/notices/native-chat-pull-request-event'
 import { NativeChatMarkdown } from '../../markdown/NativeChatMarkdown'
 import { NativeChatCodeBlock } from '../../markdown/code/NativeChatCodeBlock'
@@ -52,6 +53,11 @@ import {
 import { agentSessionFailureDetailText } from '../../../../../../shared/agent-session/failures/agent-session-failure-quoted-detail'
 import { readWholeAgentSessionFailureFact } from '../../../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureSentence } from '../../../../../../shared/agent-session/failures/agent-session-failure-words'
+import {
+  agentCliInstallationFailureWords,
+  sayAgentSessionFailureEnglish
+} from '../../../../../../shared/agent-session/failures/agent-session-failure-copy'
+import { structuredAgentSessionHostPlace } from '../../pane/ownership/use-structured-agent-session-host-label'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import { nativeChatAntigravitySignInContent } from '../../host-access/native-chat-antigravity-settings'
 
@@ -108,7 +114,9 @@ export function NativeChatNoticeRow({
   const orcaStopView = useNativeChatOrcaStopView()
 
   if (block.presentation === PULL_REQUEST_EVENT_PRESENTATION) {
-    return <NativeChatPullRequestEventLine block={block} messageId={messageId} />
+    return (
+      <NativeChatPullRequestEventLine block={block} messageId={messageId} timestamp={timestamp} />
+    )
   }
   const look = nativeChatNoticeLook(block)
   if (look.kind === 'forked-from') {
@@ -139,13 +147,18 @@ export function NativeChatNoticeRow({
   if (block.botContext) {
     const { botId, changed } = block.botContext
     return (
-      <button
-        type="button"
-        onClick={() => openBotSettings(botId, changed.length === 1 ? changed[0] : undefined)}
-        className="min-w-0 max-w-full rounded-md text-left text-sm text-chat-foreground-faint hover:text-chat-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      <NativeChatEventRow
+        icon={<Notebook aria-hidden className="size-3.5" />}
+        timestamp={timestamp}
       >
-        {changed.map((change) => BOT_CONTEXT_WORDS[change]()).join(' · ')}
-      </button>
+        <button
+          type="button"
+          onClick={() => openBotSettings(botId, changed.length === 1 ? changed[0] : undefined)}
+          className="line-clamp-2 rounded-sm text-left hover:text-chat-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {changed.map((change) => BOT_CONTEXT_WORDS[change]()).join(' · ')}
+        </button>
+      </NativeChatEventRow>
     )
   }
   if (look.kind === 'host-status') {
@@ -272,6 +285,14 @@ export function NativeChatNoticeRow({
           (surface) => block.text === agentSessionFailureSentence(failure, surface, { agentName })
         )
       : undefined
+  // The host calls itself this computer; a too-old CLI's words name the host as this reader does.
+  const cliTooOldSurface =
+    failure?.kind === 'startFailed' &&
+    agentCliInstallationFailureWords(failure.refusal, sayAgentSessionFailureEnglish)
+      ? (['row', 'rejection'] as const).find(
+          (surface) => block.text === agentSessionFailureSentence(failure, surface, { agentName })
+        )
+      : undefined
   const text = named
     ? nativeChatOrcaStopRowText(
         orcaStop.cause,
@@ -293,7 +314,14 @@ export function NativeChatNoticeRow({
             { agentName, wslDistro },
             sayAgentSessionFailureTranslated
           )
-        : (agentSessionRestartNoteText(block.text, t) ?? agentSessionGoalControlWords(block.text))
+        : failure && cliTooOldSurface
+          ? agentSessionFailureSentence(
+              failure,
+              cliTooOldSurface,
+              { agentName, hostName: structuredAgentSessionHostPlace(remoteHost, hostLabel, t) },
+              sayAgentSessionFailureTranslated
+            )
+          : (agentSessionRestartNoteText(block.text, t) ?? agentSessionGoalControlWords(block.text))
   const failureDetail = agentSessionFailureDetailText(failure)
   if (block.orcaStop === undefined && failure?.kind === 'usageLimitReached') {
     return (

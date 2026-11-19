@@ -215,15 +215,21 @@ function DropdownMenuRadioItem({
 function DropdownMenuLabel({
   className,
   inset,
+  variant,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Label> & {
   inset?: boolean
+  variant?: 'title'
 }) {
   return (
     <DropdownMenuPrimitive.Label
       data-slot="dropdown-menu-label"
       data-inset={inset}
-      className={cn(MENU_LABEL_CLASS, className)}
+      className={cn(
+        MENU_LABEL_CLASS,
+        variant === 'title' && 'pb-0 text-sm text-foreground',
+        className
+      )}
       {...props}
     />
   )

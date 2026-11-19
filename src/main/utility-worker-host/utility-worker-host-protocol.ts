@@ -6,6 +6,8 @@ export type HostedWorkerThread = {
   ref(): void
   unref(): void
   terminate(): Promise<number>
+  /** Relayed bytes main has not released yet; only a hosted worker under a relay budget has any. */
+  readonly unreleasedBytes?: number
   on(event: string, listener: (...args: any[]) => void): unknown
   once(event: string, listener: (...args: any[]) => void): unknown
   off(event: string, listener: (...args: any[]) => void): unknown
@@ -16,12 +18,19 @@ export type UtilityWorkerSpawn = {
   filename: string
   name: WorkerThreadRole
   workerData?: unknown
+  /** Merged into workerData only when the worker runs in main's process (shared memory can't cross). */
+  inProcessWorkerData?: Record<string, unknown>
   /** Where the worker logs sends big enough to take down a receiver; set only with log consent. */
   largeSendLog?: string
 }
 
 /** Main to host over the process channel; each spawn carries its worker's port and id. */
-export type UtilityWorkerHostRequest = { type: 'spawn'; id: number } & UtilityWorkerSpawn
+export type UtilityWorkerHostRequest =
+  | ({ type: 'spawn'; id: number } & UtilityWorkerSpawn)
+  /** Bytes main may hold delivered but unconsumed; sent once, before any spawn. */
+  | { type: 'budget'; bytes: number }
+  /** Main consumed the reply relayed with this seq; on this channel, since a worker's port closes at exit. */
+  | { type: 'ack'; seq: number }
 
 /** Committed heap of the host isolate and of each worker by its spawn id; null when unknown. */
 export type UtilityWorkerHeapReport = {
@@ -52,7 +61,8 @@ export type UtilityWorkerPortRequest = { type: 'post'; message: unknown } | { ty
  */
 export type UtilityWorkerPortEvent =
   | { type: 'loaded' }
-  | { type: 'message'; bytes: Uint8Array; more: boolean }
+  /** `seq` on every chunk of a reply held against the relay budget; main acks it once consumed. */
+  | { type: 'message'; bytes: Uint8Array; more: boolean; seq?: number }
   | { type: 'error'; error: UtilityWorkerFailure }
   | { type: 'exit'; code: number }
 

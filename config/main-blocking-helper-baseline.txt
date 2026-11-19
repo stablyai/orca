@@ -24,11 +24,11 @@
 2 src/main/agent-hooks/wsl-relay/wsl-hook-relay-deps.ts
 3 src/main/agent-hooks/wsl-relay/wsl-hook-relay-launch.ts
 2 src/main/agent-launch/trust/agent-trust-ownership-ledger.ts
-12 src/main/agent-launch/trust/agent-trust-presets.ts
+10 src/main/agent-launch/trust/agent-trust-presets.ts
 2 src/main/agent-launch/trust/agent-workspace-trust-spawn.ts
 5 src/main/agent-launch/trust/agent-workspace-trust.ts
 3 src/main/agent-launch/trust/antigravity-workspace-trust-ownership.ts
-13 src/main/agent-launch/trust/execution-host-workspace-trust.ts
+12 src/main/agent-launch/trust/execution-host-workspace-trust.ts
 3 src/main/ai-vault-search/session-search-child-service.ts
 4 src/main/ai-vault-search/session-search-enablement.ts
 2 src/main/ai-vault-search/storage/session-search-schema.ts
@@ -84,10 +84,11 @@
 13 src/main/antigravity/native-windows-credentials.ts
 1 src/main/antigravity/native-wsl-credentials.ts
 6 src/main/artifacts/artifact-cloud-auth-context.ts
-10 src/main/artifacts/artifact-cloud-service.ts
-8 src/main/artifacts/artifact-create-intent-store.ts
-9 src/main/artifacts/artifact-publisher.ts
-12 src/main/artifacts/artifact-share-record-store.ts
+7 src/main/artifacts/artifact-cloud-service.ts
+2 src/main/artifacts/artifact-create-intent-store.ts # sign-out clear (bestEffortFsyncDirectorySync) plus writeArtifactFileWhileCurrent, whose only sync step is the fenced renameSync; was 8
+1 src/main/artifacts/artifact-guarded-secure-write.ts # per artifact write: writeSecureFileAsync keeps only its renameSync in the fence-check turn so a sign-out clear cannot land between; replaces sync reads, stage and fsync
+1 src/main/artifacts/artifact-publisher.ts
+8 src/main/artifacts/artifact-share-record-store.ts
 1 src/main/automations/bot-automation-service-wiring.ts
 1 src/main/automations/external-managers/external-manager-discovery.ts
 1 src/main/automations/external-managers/scoped-external-automations.ts
@@ -302,14 +303,15 @@
 1 src/main/codex/configuration/homes/codex-stale-pane-accounts.ts
 9 src/main/codex/configuration/homes/codex-windows-sandbox-read-grant.ts
 1 src/main/codex/configuration/settings/codex-config-mirror-merge.ts
-30 src/main/codex/configuration/settings/codex-config-mirror.ts
+3 src/main/codex/configuration/settings/codex-config-mirror-source.ts # moved from codex-config-mirror.ts with the system-config preparation helpers; no new calls
+27 src/main/codex/configuration/settings/codex-config-mirror.ts
 2 src/main/codex/configuration/settings/codex-config-path-reference-rewrite.ts
 1 src/main/codex/configuration/settings/codex-config-runtime-owned-values.ts
 2 src/main/codex/configuration/settings/config-settings-baseline.ts
 1 src/main/codex/configuration/settings/config-settings-promotion-write-target.ts
 8 src/main/codex/configuration/settings/config-settings-promotion.ts
 1 src/main/codex/configuration/settings/config-sync-stall.ts
-2 src/main/codex/configuration/shared-server/codex-daemon-socket-path-guard.ts
+1 src/main/codex/configuration/shared-server/codex-daemon-socket-path-guard.ts
 1 src/main/codex/configuration/shared-server/codex-shared-server-fix.ts
 3 src/main/codex/configuration/shared-server/codex-shared-server-pane.ts
 2 src/main/codex/configuration/shared-server/codex-shared-server-probe.ts
@@ -377,7 +379,7 @@
 15 src/main/codex/trust/hooks/hook-trust-promotion.ts
 1 src/main/codex/trust/identity/codex-trust-identity.ts
 1 src/main/codex/trust/toml/config-toml-project-trust.ts
-30 src/main/codex/trust/toml/config-toml-trust.ts
+23 src/main/codex/trust/toml/config-toml-trust.ts
 6 src/main/command-code/hook-service.ts
 7 src/main/composio/composio-bot-tool.ts
 5 src/main/composio/composio-bots.ts
@@ -923,7 +925,7 @@
 6 src/main/orca-profiles/cloud-session/profile-cloud-session-store.ts
 7 src/main/orca-profiles/orca-account-service.ts
 1 src/main/orca-profiles/profile-account-user-id.ts
-20 src/main/orca-profiles/profile-index-store.ts
+21 src/main/orca-profiles/profile-index-store.ts # writeRollingFileBackup replaces copyFileSync (main-sync-fs 12 -> 11)
 1 src/main/orca-profiles/profile-storage-paths.ts
 6 src/main/orca-profiles/project-transfer/profile-active-transfer.ts
 2 src/main/orca-profiles/project-transfer/profile-project-domain-move-intent.ts
@@ -976,7 +978,7 @@
 2 src/main/orcad/host-runtime/orcad-speech-services.ts
 2 src/main/orcad/host-runtime/orcad-wsl-host-login-environment.ts
 1 src/main/orcad/instance-lock/orcad-data-root-privacy.ts
-5 src/main/orcad/instance-lock/orcad-instance-lock-hold.ts
+6 src/main/orcad/instance-lock/orcad-instance-lock-hold.ts # journal legacy retirement: <=2 reads of the small (64 KiB-capped) profile lock file per attempt; attempts back off 1m->1h and stop once retired or refused
 14 src/main/orcad/instance-lock/orcad-instance-lock-reclaim.ts
 1 src/main/orcad/instance-lock/orcad-instance-lock-record.ts
 20 src/main/orcad/instance-lock/orcad-instance-lock.ts
@@ -1368,7 +1370,7 @@
 2 src/main/runtime/workspaces/removal/runtime-unregistered-worktree-removal.ts
 2 src/main/runtime/workspaces/removal/workspace-registration-removal.ts
 2 src/main/runtime/workspaces/removal/workspace-removal.ts
-2 src/main/runtime/workspaces/removal/worktree-removal-agent-trust-cleanup.ts
+1 src/main/runtime/workspaces/removal/worktree-removal-agent-trust-cleanup.ts
 2 src/main/runtime/workspaces/workspace-removal-target.ts
 1 src/main/server/serve-pairing-readiness.ts
 2 src/main/skills/cloud/skill-cloud-auth.ts
@@ -1660,6 +1662,7 @@
 5 src/shared/remote-runtime/serve-supervisor/serve-bundle-park.ts
 2 src/shared/remote-runtime/serve-supervisor/serve-user-data-path.ts
 1 src/shared/secure-storage/bounded-secure-json-file.ts
+1 src/shared/secure-storage/secure-file-async-write.ts # Windows only: the ACL addon creates restricted files synchronously, so the async writer falls back to writeSecureFile there
 19 src/shared/secure-storage/secure-file.ts
 6 src/shared/secure-storage/secure-path-windows-acl.ts
 2 src/shared/secure-storage/windows-security-addon.ts

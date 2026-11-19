@@ -204,7 +204,18 @@
       "webView": "显示电脑版网站"
     },
     "loadFailure": {
-      "retry": "重试"
+      "retry": "重试",
+      "connectionNotSecure": "连接不安全",
+      "certificateNameMismatch": "证书与 {{value0}} 不匹配",
+      "certificateDateInvalid": "{{value0}} 的证书在当前日期和时间无效",
+      "certificateAuthorityInvalid": "Orca 不信任签发 {{value0}} 证书的机构",
+      "certificateVerificationFailed": "Orca 无法验证 {{value0}} 的证书",
+      "proceedUnsafe": "仍然继续(不安全)",
+      "connecting": "正在连接…",
+      "certificateChallengeExpired": "此证书审批已过期，请重试该页面以请求新的审批",
+      "certificateChallengeChanged": "证书请求已更改，请重试该页面并查看新的警告",
+      "certificateProceedFailed": "Orca 无法批准此证书请求，请重试该页面后再试，",
+      "certificateChallengeUnavailable": "此证书请求已不可用，请重试该页面以重新请求"
     }
   },
   "chat": {
@@ -647,17 +658,6 @@
       "disconnected": "添加失败（连接已断开）",
       "imageTooLarge": "图片过大，无法添加",
       "permissionDenied": "照片访问权限被拒绝"
-    },
-    "agentMessage": {
-      "startedWorker": "已启动工作者",
-      "reopenedWorker": "已重新打开工作者",
-      "sentFollowUpToWorker": "已向工作者发送后续消息",
-      "handedOffToAgent": "已移交给智能体",
-      "startedAgent": "已启动智能体",
-      "taskFromCoordinator": "来自协调者的任务",
-      "messageFromCoordinator": "来自协调者的消息",
-      "updateFromWorker": "来自工作者的更新",
-      "messageFrom": "消息来自"
     },
     "textAttachmentPreview": {
       "unreadableReply": "无法读取附件响应。请重试。",
@@ -1876,7 +1876,12 @@
       "deleteFailed": "无法删除“{{name}}”",
       "sleep": "休眠",
       "unpin": "取消固定",
-      "rename": "重命名"
+      "rename": "重命名",
+      "markRead": "标记为已读",
+      "markUnread": "标记为未读",
+      "muteNotifications": "静音通知",
+      "unmuteNotifications": "取消静音通知",
+      "moveToStatus": "移至状态"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "检查项：未通过",
@@ -2697,6 +2702,7 @@
       "providerUnavailable": "{{agent}} 因服务繁忙而无法回复。请选择其他模型，或稍等片刻后重新发送。",
       "providerSafetyStopped": "{{agent}} 在安全检查后停止了此次回复。请检查您的请求后重新发送。",
       "providerResponseFailed": "{{agent}} 未能完成此回复。打开详情了解更多信息。",
+      "providerResponseFailedQuoted": "{{agent}} 未能完成此回复：{{detail}}",
       "selectedModel": "所选模型"
     },
     "fileReader": {
@@ -3326,6 +3332,10 @@
       "next": "下一个标签页",
       "previous": "上一个标签页",
       "hint": "显示所有标签页"
+    },
+    "browserProfile": {
+      "title": "配置文件",
+      "default": "默认"
     }
   },
   "settings": {

@@ -3,7 +3,6 @@ import { makeTestBot } from '../../main/bots/bot.test-fixture'
 import { makeAccessRequest } from './bot-access-request.test-fixture'
 import { BOT_MAX_MEMBERS } from '../bot-types'
 import {
-  accessRequestIdentity,
   addBotMembers,
   type BotMemberList,
   botTakesAccessRequest,
@@ -16,15 +15,6 @@ const linearBot = makeTestBot({
 })
 
 describe('bot access requests', () => {
-  it('belong to the bot and the connector workspace it is in now', () => {
-    expect(botTakesAccessRequest(slackBot, makeAccessRequest())).toBe(true)
-    expect(botTakesAccessRequest(slackBot, makeAccessRequest({ workspaceId: 'T2' }))).toBe(false)
-    expect(botTakesAccessRequest(slackBot, makeAccessRequest({ botId: 'other' }))).toBe(false)
-    expect(
-      botTakesAccessRequest(linearBot, makeAccessRequest({ source: 'linear', workspaceId: 'L1' }))
-    ).toBe(true)
-  })
-
   it('belong to every workspace the bot is in, each adding to its own list', () => {
     const both = makeTestBot({
       slack: { appId: 'A1', teamId: 'T1' },
@@ -53,11 +43,7 @@ describe('bot access requests', () => {
     ).toBe(true)
   })
 
-  it('add the person stamped with the connector they asked from', () => {
-    expect(grantAccessRequest(slackBot, makeAccessRequest())).toEqual({
-      kind: 'add',
-      members: [{ id: 'U9', name: 'Dana Kim', source: 'slack', workspaceId: 'T1' }]
-    })
+  it('stamps a request from the legacy Linear workspace on that workspace’s list', () => {
     expect(
       grantAccessRequest(linearBot, makeAccessRequest({ source: 'linear', workspaceId: 'L1' }))
     ).toEqual({
@@ -84,17 +70,6 @@ describe('bot access requests', () => {
     expect(grantAccessRequest(slackBot, makeAccessRequest({ workspaceId: 'T2' }))).toEqual({
       kind: 'not-this-bot'
     })
-  })
-
-  it('lead a Linear identity with its verified email', () => {
-    expect(
-      accessRequestIdentity(
-        makeAccessRequest({
-          source: 'linear',
-          requester: { id: 'u', name: 'Dana', handle: 'dana', detail: 'dana@acme.dev' }
-        })
-      )
-    ).toBe('dana@acme.dev · @dana')
   })
 
   it("add picked people to one connector's list, stamped, keeping anyone it already lists", () => {

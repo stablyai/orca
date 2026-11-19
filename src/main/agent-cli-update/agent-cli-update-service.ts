@@ -21,6 +21,7 @@ import {
   type OwnAgentCli
 } from './agent-cli-own-install'
 import { latestAgentCliRelease } from './agent-cli-latest-release'
+import { readModelsNeedingCliUpdate } from './agent-cli-model-requirements'
 
 // `codex update` arrived in 0.126.0; older builds are updated by hand.
 const CODEX_UPDATE_COMMAND_SINCE = '0.126.0'
@@ -94,11 +95,13 @@ async function readAgentCliUpdate(
   if (!version || !latest || compareAppVersions(version, latest) >= 0) {
     return null
   }
+  const models = await readModelsNeedingCliUpdate(agent, version, latest)
   return {
     agent,
     installedVersion: version,
     latestVersion: latest,
-    ...updateCommand(agent, cli, version)
+    ...updateCommand(agent, cli, version),
+    ...(models.length > 0 ? { models } : {})
   }
 }
 
@@ -141,6 +144,7 @@ async function runUpdate(
   if (plan && !plan.runnable) {
     return { ok: false, output: `Run this to update:\n${plan.command}` }
   }
+  const command = `${agent} update`
   let result: Awaited<ReturnType<typeof runProcess>>
   try {
     result = await runProcess(
@@ -156,7 +160,7 @@ async function runUpdate(
       'tail'
     )
   } catch (error) {
-    return { ok: false, output: error instanceof Error ? error.message : String(error) }
+    return { ok: false, output: error instanceof Error ? error.message : String(error), command }
   }
   // New chats and the model list read the replaced binary.
   agentModelCatalogStore.expireLaunchScopes((catalogAgent) => catalogAgent === agent)
@@ -165,7 +169,7 @@ async function runUpdate(
     .filter(Boolean)
     .join('\n')
   if (result.code !== 0 || result.timedOut) {
-    return { ok: false, output }
+    return { ok: false, output, command }
   }
   const [after, latest] = await Promise.all([
     installedVersion(agent, cli),
@@ -173,7 +177,7 @@ async function runUpdate(
   ])
   // A package manager behind the release (e.g. Homebrew) exits cleanly on the old version.
   if (after && latest && compareAppVersions(after, latest) < 0) {
-    return { ok: false, output }
+    return { ok: false, output, command }
   }
   return { ok: true }
 }

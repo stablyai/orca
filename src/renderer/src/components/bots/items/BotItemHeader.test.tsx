@@ -126,8 +126,18 @@ it('draws no links row for an item without links', () => {
   expect(screen.queryByRole('button', { name: /more links/ })).toBeNull()
 })
 
-it('puts the links two lines have no room for behind +N, which lists them', async () => {
+it('lists overflow links in the popover and updates the count on resize', async () => {
   renderHeader(LINKS)
+  expect(screen.getByRole('button', { name: '2 more links' })).toBeTruthy()
+  lines = 1
+  act(() => resize())
+  expect(screen.getByRole('button', { name: '5 more links' })).toBeTruthy()
+  lines = 3
+  act(() => resize())
+  expect(screen.queryByRole('button', { name: /more links/ })).toBeNull()
+  lines = 2
+  act(() => resize())
+
   const more = screen.getByRole('button', { name: '2 more links' })
   fireEvent.pointerDown(more, { button: 0, ctrlKey: false })
   fireEvent.click(more)
@@ -137,17 +147,6 @@ it('puts the links two lines have no room for behind +N, which lists them', asyn
   expect(within(popover).getByRole('button', { name: /Change 8/ })).toBeTruthy()
   const shown = within(screen.getByRole('list', { name: 'Links' }))
   expect(shown.queryByRole('button', { name: /Change 7/ })).toBeNull()
-})
-
-it('counts again when the row changes size, as a short window leaves it one line', () => {
-  renderHeader(LINKS)
-  expect(screen.getByRole('button', { name: '2 more links' })).toBeTruthy()
-  lines = 1
-  act(() => resize())
-  expect(screen.getByRole('button', { name: '5 more links' })).toBeTruthy()
-  lines = 3
-  act(() => resize())
-  expect(screen.queryByRole('button', { name: /more links/ })).toBeNull()
 })
 
 it('keeps live workers and PRs in view ahead of workers that have finished', () => {

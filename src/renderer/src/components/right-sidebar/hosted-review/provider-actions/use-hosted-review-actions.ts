@@ -117,7 +117,8 @@ export function useHostedReviewActions({
               repo,
               prNumber: review.number,
               method,
-              prRepo: githubPR?.prRepo ?? null
+              prRepo: githubPR?.prRepo ?? null,
+              expectedHeadSha: githubPR?.headSha ?? null
             })
         if (!result.ok) {
           setActionError(codeHostErrorText(result))
@@ -131,6 +132,7 @@ export function useHostedReviewActions({
     },
     [
       confirm,
+      githubPR?.headSha,
       githubPR?.prRepo,
       githubPR?.mergeQueueRequired,
       githubPR?.stack,

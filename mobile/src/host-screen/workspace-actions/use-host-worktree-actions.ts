@@ -26,6 +26,7 @@ import type { Worktree } from '../../worktree/workspace-list/workspace-list-type
 import { worktreeActivate, worktreePinWrite, worktreeSleep } from '../host-screen-operations'
 import type { HostScreenState } from '../use-host-screen-state'
 import { useHostWorktreeDelete } from './use-host-worktree-delete'
+import { useHostWorktreeRowWrites } from './use-host-worktree-row-writes'
 import { useHostMutation, type HostMutationPhase } from '../../query/host-mutation'
 import { workspaceRename } from './workspace-rename-mutation'
 
@@ -209,6 +210,7 @@ export function useHostWorktreeActions(args: {
   )
 
   const worktreeDelete = useHostWorktreeDelete({ client, clientForRow, fetchWorktrees, state })
+  const rowWrites = useHostWorktreeRowWrites({ clientForRow, state })
 
   const handleRemoveHost = useCallback(async () => {
     if (!hostId) {
@@ -308,6 +310,7 @@ export function useHostWorktreeActions(args: {
 
   return {
     ...worktreeDelete,
+    ...rowWrites,
     handleRemoveHost,
     leaveHost,
     navigateFromHostList,
