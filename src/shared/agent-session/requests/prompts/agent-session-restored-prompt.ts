@@ -11,6 +11,9 @@ import { readAgentJournalTurn } from '../../lifecycle/records/agent-session-turn
 
 export const AGENT_EXIT_PROMPT_ENDING = 'agent_exit'
 
+/** Prompts one turn may hold before its newest; past this the card isn't offered, never guessed. */
+export const SAME_TURN_PROMPTS_CHECKED = 32
+
 type PromptBody = AgentJournalApprovalItem | AgentJournalQuestionItem
 export type RestoredAgentJournalPrompt = AgentJournalRenderItem & { body: PromptBody }
 
@@ -57,13 +60,17 @@ export function restoredAgentJournalPrompt(
     return null
   }
   // Two waiting in one turn (grouped questions, parallel calls) can't be told apart on resume.
+  let checked = 0
   for (let at = index - 1; at >= 0 && items[at]!.itemId !== turnItemId; at -= 1) {
     const previous = items[at]!
-    if (isPrompt(previous)) {
-      if (isAgentExitPromptBody(previous.body) && turnOf(previous) === turnItemId) {
-        return null
-      }
+    if (!isPrompt(previous)) {
+      continue
+    }
+    if (turnOf(previous) !== turnItemId) {
       break
+    }
+    if (isAgentExitPromptBody(previous.body) || ++checked >= SAME_TURN_PROMPTS_CHECKED) {
+      return null
     }
   }
   return { ...item, body: item.body }

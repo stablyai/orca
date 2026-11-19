@@ -99,7 +99,7 @@ export function* sqlJournalStatusItems(
       ascending = true
       break
     case 'latest-prompt-row':
-      // The newest two, so a request split over grouped rows can be told apart from a lone one.
+      // Newest first, a short page: usually only the newest one is read.
       predicates.push(JOURNAL_PROMPT_ROWS)
       limit = 2
       break

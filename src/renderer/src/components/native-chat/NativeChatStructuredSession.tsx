@@ -166,9 +166,9 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     rewind: controller.rewind.surface
   })
   const livePrompt = useBotLinkPrompt(props.sessionId, controller.prompts)
-  // A card whose agent exited waiting on it (Orca restarted): answering it resumes the chat.
+  // A card whose agent exited waiting on it: looked for only once the host reads the chat as waiting.
   const restored = useRestoredStructuredPrompt(
-    livePrompt === null && hostExecution.phase === null && !controller.isWorking,
+    livePrompt === null && hostExecution.awaitsPerson && !controller.isWorking,
     controller.journalItems
   )
   const prompt = livePrompt ?? restored.prompt

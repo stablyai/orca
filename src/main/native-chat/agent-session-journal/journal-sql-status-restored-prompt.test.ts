@@ -126,6 +126,13 @@ it('finds the prompt an exited agent waited on until the chat moves on', () => {
   ).toBeNull()
   // Two waiting in one turn can't be told apart when the agent asks again.
   expect(restored([...waiting, approval('second', 'cancelled', 't1')]).found).toBeNull()
+  expect(
+    restored([
+      ...waiting,
+      approval('answered', 'resolved', 't1'),
+      approval('third', 'cancelled', 't1')
+    ]).found
+  ).toBeNull()
 })
 
 it('seeks the newest prompt without walking or sorting earlier ones', () => {

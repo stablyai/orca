@@ -25,7 +25,10 @@ function claudeRequestDigest(prompt: ClaudePendingPrompt): { requestDigest?: str
         requestDigest: journalPromptRequestDigest('claude', {
           kind: prompt.kind,
           toolName: prompt.toolName,
-          input: prompt.input
+          input: prompt.input,
+          // "Allow for this session" grants the re-asked request's own suggestions.
+          suggestions: prompt.suggestions,
+          blockedPath: prompt.blockedPath
         })
       }
 }

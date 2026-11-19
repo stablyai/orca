@@ -144,12 +144,27 @@ export function useStructuredAgentSessionHostExecution(
   phase: ReturnType<typeof useStructuredAgentSessionHostExecutionPhase>
   stopping: boolean
   optionStamp: string
+  /** The host reads the chat as waiting on the person, as a chat at rest with a restorable card does. */
+  awaitsPerson: boolean
 } {
   return {
     phase: useStructuredAgentSessionHostExecutionPhase(sessionId, target),
     stopping: useStructuredAgentSessionHostStopping(sessionId, target),
-    optionStamp: useStructuredAgentSessionOptionStamp(sessionId, target)
+    optionStamp: useStructuredAgentSessionOptionStamp(sessionId, target),
+    awaitsPerson: useStructuredAgentSessionAwaitsPerson(sessionId, target)
   }
+}
+
+function useStructuredAgentSessionAwaitsPerson(
+  sessionId: string,
+  target: RuntimeClientTarget
+): boolean {
+  const { feed, subscribe } = useSessionFeed(sessionId, target)
+  return useSyncExternalStore(
+    subscribe,
+    () => feed.getSnapshot().get(sessionId)?.status === 'attention',
+    () => false
+  )
 }
 
 /** Subscribe only to rewind recovery changes, avoiding unrelated status renders. */

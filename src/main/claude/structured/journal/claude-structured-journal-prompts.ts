@@ -82,6 +82,9 @@ export class ClaudeJournalPrompts {
     const items: ClaudeJournalPrompt[] = []
     const turnScope = this.deps.turnScope()
     let admitted = true
+    // A subagent's request can't be re-asked by a resumed lead, however it was attributed.
+    const leadOnly = <B extends ClaudeJournalPrompt['body']>(body: B): B =>
+      producer.agentId ? { ...body, requestDigest: undefined } : body
     const append = (identity: AgentJournalItemIdentity, body: ClaudeJournalPrompt['body']) => {
       const options = { ...producer, turnScope }
       if (this.deps.sink.tryAppendItem) {
@@ -96,8 +99,9 @@ export class ClaudeJournalPrompts {
         sessionId: event.sessionId,
         prompt: event.prompt
       })) {
-        items.push({ ...question, turnScope })
-        append(question.identity, question.body)
+        const body = leadOnly(question.body)
+        items.push({ ...question, body, turnScope })
+        append(question.identity, body)
         this.deps.bindPromptItemId?.(agentJournalItemKey(question.identity), event.prompt.promptKey)
       }
     } else {
@@ -105,7 +109,7 @@ export class ClaudeJournalPrompts {
         sessionId: event.sessionId,
         promptKey: event.prompt.promptKey
       })
-      const body = claudeApprovalItem(event.prompt)
+      const body = leadOnly(claudeApprovalItem(event.prompt))
       items.push({ identity, body, turnScope })
       append(identity, body)
       this.deps.bindPromptItemId?.(agentJournalItemKey(identity), event.prompt.promptKey)
