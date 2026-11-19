@@ -18,7 +18,10 @@ export function readAppStoreListenerCounts(): { rootSelectors: number; all: numb
 export function createAppStoreNotificationRouter(
   innerSubscribe: (listener: Listener) => () => void,
   getState: () => AppState,
-  options: { skipRootSelectorsOnChannelOnlyWrites: boolean; afterSkippedDispatch?: () => void }
+  options: {
+    skipRootSelectorsOnChannelOnlyWrites: boolean
+    afterSkippedDispatch?: (state: AppState, previousState: AppState) => void
+  }
 ) {
   const all = new Set<Subscription>()
   const rootSelectors = new Set<Subscription>()
@@ -28,7 +31,7 @@ export function createAppStoreNotificationRouter(
 
   // Live sets and a fresh state per listener, as the store's own Set.forEach dispatch does:
   // listeners added mid-dispatch still hear this write, and a nested write's state reaches later ones.
-  innerSubscribe((_state, previousState) => {
+  innerSubscribe((state, previousState) => {
     const skipRootSelectors = nextWriteChannelOnly && options.skipRootSelectorsOnChannelOnlyWrites
     nextWriteChannelOnly = false
     ;(skipRootSelectors ? others : all).forEach((subscription) => {
@@ -39,7 +42,7 @@ export function createAppStoreNotificationRouter(
       }
     })
     if (skipRootSelectors) {
-      options.afterSkippedDispatch?.()
+      options.afterSkippedDispatch?.(state, previousState)
     }
   })
 

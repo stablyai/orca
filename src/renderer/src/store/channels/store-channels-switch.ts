@@ -1,4 +1,4 @@
-/** Substituted by electron.vite.config.ts; absent (off) in tests, the CLI and the web client. */
+/** Substituted by electron.vite.config.ts; absent in the CLI and web client. Unit tests run with DEV on. */
 declare const ORCA_STORE_CHANNELS: 'root' | 'main' | undefined
 
 /** Channel-only writes skip root selectors in development and in ORCA_STORE_CHANNELS=main dark builds. */

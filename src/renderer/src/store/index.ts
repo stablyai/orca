@@ -185,11 +185,11 @@ function useAppStoreSelector<U>(selector: (state: RootSelectorState) => U): U {
 
 // Development checks that a skipped root selector would not have changed.
 function useCheckedAppStoreSelector<U>(selector: (state: RootSelectorState) => U): U {
-  const read = useRecordedRootSelection(
-    useCallback(() => selector(appStoreApi.getState()), [selector])
-  )
+  const read = useCallback(() => selector(appStoreApi.getState()), [selector])
   const readInitial = useCallback(() => selector(appStoreApi.getInitialState()), [selector])
-  return useSyncExternalStore(subscribeRootSelector, read, readInitial)
+  const selection = useSyncExternalStore(subscribeRootSelector, read, readInitial)
+  useRecordedRootSelection(selector)
+  return selection
 }
 
 export const useAppStore: AppStore = Object.assign(
