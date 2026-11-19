@@ -35,7 +35,7 @@ export function NativeChatPacedMarkdown({
   rowKey: string
   streaming: boolean
 }): React.JSX.Element {
-  const drawn = useNativeChatRedrawPace(content, streaming)
+  const drawn = content
   return (
     <NativeChatMarkdown
       {...props}
