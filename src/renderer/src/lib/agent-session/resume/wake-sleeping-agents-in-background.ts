@@ -1,6 +1,3 @@
-import { restoreUndispatchedMailWake } from '@/components/terminal-pane/pty-connection/startup/pane-resume-record'
-import { patchWorkspaceSessionByHost } from '../../workspace/persistence/workspace-session-host-persistence'
-import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import { waitForAgentPaneSleep } from '@/store/terminals/agent-pane-sleep-in-flight'
 import { WAKE_HIBERNATED_AGENTS_WORKTREE_EVENT } from '@/constants/terminal'
 import type { WakeHibernatedAgentsWorktreeDetail } from '@/constants/terminal'
@@ -227,8 +224,7 @@ export function wakeSleepingAgentsForWorktreeInBackground(
     // If tab identity is unresolved, mount the whole workspace rather than strand recovery.
     dispatchBackgroundMount(
       worktreeId,
-      hasUntargetablePassiveRecord ? undefined : [...passiveTabIds],
-      paneKey
+      hasUntargetablePassiveRecord ? undefined : [...passiveTabIds]
     )
   }
   const resumeOptions = {
@@ -261,32 +257,6 @@ async function wakeSleepingPaneInBackground(
     record.origin !== 'worktree-sleep' ||
     isWorkspaceSleepRecord(record)
   ) {
-    return false
-  }
-  // The wake claim sits beside the sleep record; restoration fields stay as Agent Sleep wrote them.
-  const captured: SleepingAgentSessionRecord = {
-    ...record,
-    mailWake: {
-      id: createNonSecureContextUuid(),
-      capturedAt: record.capturedAt,
-      startedAt: Date.now()
-    }
-  }
-  useAppStore.getState().rememberSleepingAgentSession(captured, record)
-  try {
-    await patchWorkspaceSessionByHost(
-      window.api.session,
-      {
-        sleepingAgentSessionsByPaneKey: useAppStore.getState().sleepingAgentSessionsByPaneKey
-      },
-      useAppStore.getState()
-    ).written
-    await window.api.session.flush()
-  } catch (error) {
-    restoreUndispatchedMailWake(captured)
-    throw error
-  }
-  if (useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey] !== captured) {
     return false
   }
   wakeSleepingAgentsForWorktreeInBackground(worktreeId, paneKey)

@@ -1,5 +1,3 @@
-import { storedPaneBinding } from '../../terminal/recovery/restored-pane-binding'
-import { retainMailWakeAttempt, restoreUndispatchedMailWake } from './retained-mail-wake-attempt'
 // Restore terminal-less saved panes for pending-row activation and workspace wakes; main-owned layouts also handle triggers outside desktop restore.
 
 import type { OrcaRuntimeWithAgentSessionResumeOwnership as AgentSessionResume } from './agent-session-resume-ownership'
@@ -10,7 +8,7 @@ import type {
 import { OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs } from './build-headless-mobile-session-browser-tabs'
 import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
-import { unclaimedRunningSleepPanes, markResumedRecordLive } from './sleep-record-pane-claim'
+import { isUnclaimedRunningSleepRecord, markResumedRecordLive } from './sleep-record-pane-claim'
 import { isWorktreeTerminalsSleepingError } from '../../../../shared/workspace/lifecycle/workspace-sleep'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
@@ -33,8 +31,9 @@ import { getDaemonHistoryDir } from '../../../daemon/launch/daemon-launch-paths'
 import { HistoryReader } from '../../../daemon/history/restoration/history-reader'
 import { servesWslMovedPaneHistory } from '../../../orcad/migration/orcad-migration-wsl-destination'
 import { movedPaneHistorySessionId } from '../../../persistence/migrating-orcad-catalog/terminal-history/orcad-terminal-history-installer'
-import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
+import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 
 export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs {
   protected abstract resolveAgentLaunchRuntime(
@@ -66,8 +65,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
     trigger: RestoredPaneTrigger = {}
   ): Promise<StartedPty | null> {
     this.restoredPanes ??= new RestoredPaneStarter({
-      boundPtyId: (target) =>
-        storedPaneBinding(this.getWorkspaceSessionForWorktree(target.worktreeId), target),
+      boundPtyId: (target) => this.storedPaneBinding(target),
       isLive: (ptyId) => this.ptysById.get(ptyId)?.connected === true,
       starting: (target) =>
         this.showRestoredPaneStart(`${target.tabId}:${target.leafId}`, 'starting'),
@@ -106,10 +104,16 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
 
   /** Resume slept agents in their own panes and await every start; tabs closed in the meantime start nothing. */
   async resumeSleptWorkspaceAgents(worktreeId: string): Promise<void> {
-    const panes = unclaimedRunningSleepPanes(
-      this.getWorkspaceSessionForWorktree(worktreeId),
-      worktreeId
+    const records = Object.values(
+      this.getWorkspaceSessionForWorktree(worktreeId)?.sleepingAgentSessionsByPaneKey ?? {}
+    ).filter(
+      (record) =>
+        worktreeIdsEqual(record.worktreeId, worktreeId) && isUnclaimedRunningSleepRecord(record)
     )
+    const panes = records.flatMap((record) => {
+      const pane = parsePaneKey(record.paneKey)
+      return pane ? [{ worktreeId, tabId: pane.tabId, leafId: pane.leafId }] : []
+    })
     const started = await Promise.allSettled(
       panes.map((pane) => this.ensureRestoredPaneStarted(pane))
     )
@@ -127,7 +131,7 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
 
   /** Whether main's layout binds the pane to this terminal now: a view's ack names its current one. */
   isRestoredPaneBoundTo(pane: RestoredPane, ptyId: string): boolean {
-    return storedPaneBinding(this.getWorkspaceSessionForWorktree(pane.worktreeId), pane) === ptyId
+    return this.storedPaneBinding(pane) === ptyId
   }
 
   /** Layout-owner build: a paired desktop's Reopen of the panes main publishes held. */
@@ -179,6 +183,22 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
     }
   }
 
+  /** The pane's stored terminal; undefined while unbound, null once main no longer holds it. */
+  private storedPaneBinding({
+    worktreeId,
+    tabId,
+    leafId
+  }: RestoredPane): string | null | undefined {
+    const session = this.getWorkspaceSessionForWorktree(worktreeId)
+    const row = session?.tabsByWorktree?.[worktreeId]?.find((candidate) => candidate.id === tabId)
+    if (!row) {
+      return null
+    }
+    const layout = session?.terminalLayoutsByTabId?.[tabId]
+    // Why: a tab saved with no layout is one pane, the one the projection lists for it.
+    return layout ? layout.ptyIdsByLeafId?.[leafId] : (row.ptyId ?? undefined)
+  }
+
   /** Starts a pending terminal row in its own pane, resuming the agent the host recorded there. */
   protected async materializePendingMobileSessionTerminal(
     worktreeId: string,
@@ -195,14 +215,9 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
     const resumeStartup = await this.resolvePaneOwnedResumeStartup(worktreeId, tab)
     // After a claimed-record resume starts, mark that record live.
     const paneKey = `${tab.parentTabId}:${tab.leafId}`
-    const hostId = this.getWorkspaceSessionHostIdForWorktree(worktreeId)
-    const savedRecord =
-      this.getWorkspaceSessionForWorktree(worktreeId)?.sleepingAgentSessionsByPaneKey?.[paneKey]
     const resumedRecord =
-      resumeStartup &&
-      'resumeProviderSession' in resumeStartup &&
-      (ORCA_LAYOUT_OWNER_IS_MAIN || savedRecord?.mailWake)
-        ? savedRecord
+      ORCA_LAYOUT_OWNER_IS_MAIN && resumeStartup && 'resumeProviderSession' in resumeStartup
+        ? this.getWorkspaceSessionForWorktree(worktreeId)?.sleepingAgentSessionsByPaneKey?.[paneKey]
         : undefined
     let agentStartup: MobileTerminalCommand | MobileTerminalResumeCommand = resumeStartup ?? {}
     const resumeClaim =
@@ -224,7 +239,6 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
       }
     }
     let dispatched = false
-    let mailWakeWrite: Promise<void> | undefined
     try {
       const startSessionId =
         sessionId ??
@@ -266,14 +280,6 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
           ...(resumeClaim
             ? {
                 onPtyCreated: (ptyId: string, result: RuntimeTerminalCreate) => {
-                  if (resumedRecord?.mailWake) {
-                    mailWakeWrite = retainMailWakeAttempt(
-                      (edit) => this.commitWorkspaceSessionEdit(hostId, edit),
-                      resumedRecord,
-                      ptyId,
-                      result
-                    )
-                  }
                   const decision = result.savedResumeDecision
                   if (
                     !result.isReattach &&
@@ -301,9 +307,9 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
           ...(resumedRecord ? { resumesSleepingRecord: true as const } : {})
         }
       )
-      await mailWakeWrite
       // A running resumed agent's record must not remain asleep.
       if (created.tab.ptyId && resumedRecord) {
+        const hostId = this.getWorkspaceSessionHostIdForWorktree(worktreeId)
         void markResumedRecordLive(
           (edit) => this.commitWorkspaceSessionEdit(hostId, edit),
           paneKey,
@@ -313,12 +319,6 @@ export abstract class OrcaRuntimeWithRestoredPaneStart extends OrcaRuntimeWithBu
       return created
     } catch (err) {
       resumeClaim?.settleFailure(dispatched, err)
-      if (!dispatched && resumedRecord) {
-        await restoreUndispatchedMailWake(
-          (edit) => this.commitWorkspaceSessionEdit(hostId, edit),
-          resumedRecord
-        )
-      }
       if (
         !(automatic && isWorktreeTerminalsSleepingError(err)) &&
         sessionId &&

@@ -1,8 +1,7 @@
 import type { SleptMailboxWake } from './slept-mailbox-wake'
-import { mailWakeObligation } from '../../../../../shared/agent-session/lifecycle/mail-wake-obligation'
+import { mailWakeObligation, type SleptMailRecord } from './mail-wake-obligation'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import type { MailboxDeliveryHold } from '../delivery-hold/mailbox-delivery-hold'
-import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { OrcaRuntimeWithPruneMobileSessionTabGroupLayout } from '../../../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
 import type { RuntimePtyWorktreeRecord } from '../../../terminal/records/runtime-terminal-state-records'
 import type { MailWakeInvocations } from './mail-wake-invocations'
@@ -10,7 +9,7 @@ import type { MailWakeInvocations } from './mail-wake-invocations'
 export abstract class RuntimeMailWakeAdmission extends OrcaRuntimeWithPruneMobileSessionTabGroupLayout {
   protected abstract readonly mailWakeInvocations: MailWakeInvocations
   protected abstract hasSleepingMailForPane(paneKey: string): boolean
-  protected abstract sleepingMailRecord(paneKey: string): SleepingAgentSessionRecord | null
+  protected abstract sleepingMailRecord(paneKey: string): SleptMailRecord | null
   protected abstract readonly sleptMailboxWake: SleptMailboxWake
   protected abstract watchSleepingMail(): void
   protected abstract getPtyRecordForPaneKey(paneKey: string): RuntimePtyWorktreeRecord | null

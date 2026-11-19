@@ -64,6 +64,7 @@ import { attachWorkerTerminalAutoRelease } from './worker-terminal/worker-termin
 import { attachWorkerTerminalListing } from './worker-terminal/worker-terminal-listing'
 import { attachWorkerTerminalRelease } from './worker-terminal/worker-terminal-release'
 import { attachWorkerTerminalResourceStore } from './worker-terminal/worker-terminal-resource-store'
+import { attachMailWakeAttemptStore } from './messages/mail-wake-attempt-store'
 import { attachWorkerTerminalTransfer } from './worker-terminal/worker-terminal-transfer'
 
 export function attachOrchestrationDbMethods(ctor: { prototype: object }): void {
@@ -71,6 +72,7 @@ export function attachOrchestrationDbMethods(ctor: { prototype: object }): void 
   attachBotRequestStore(ctor)
   attachBotConversationActsForStore(ctor)
   attachBotRunResendStore(ctor)
+  attachMailWakeAttemptStore(ctor)
   attachBotRequestOutcomes(ctor)
   attachCreateTables(ctor)
   attachSchemaMigrate(ctor)

@@ -1,8 +1,7 @@
 import { sleepingMailOwnerMailboxes } from './sleeping-mail-owner-mailboxes'
 import { POTENTIALLY_LIVE_REMOTE_ATTACHMENT_STATES } from '../../db/federation/remote-attachment-liveness'
-import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentProviderSessionsEqual } from '../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
-import { mailWakeObligation } from '../../../../../shared/agent-session/lifecycle/mail-wake-obligation'
+import { mailWakeObligation, type SleptMailRecord } from './mail-wake-obligation'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import {
   selectOrchestrationPointerSequence,
@@ -32,10 +31,10 @@ export function mailboxOwnerPane(db: OrchestrationDb, mailbox: string): string |
 
 type WakeDeps = {
   db: () => OrchestrationDb | null
-  record: (paneKey: string) => SleepingAgentSessionRecord | null
+  record: (paneKey: string) => SleptMailRecord | null
   waiters: (mailbox: string) => ReadonlySet<OrchestrationMessageWaiter> | undefined
-  prepare: (record: SleepingAgentSessionRecord) => Promise<void>
-  wake: (record: SleepingAgentSessionRecord) => Promise<boolean>
+  prepare: (record: SleptMailRecord) => Promise<void>
+  wake: (record: SleptMailRecord) => Promise<boolean>
 }
 
 /** Durable mail derives the obligation; only a proven wake suppresses the same unconsumed batch. */
@@ -49,18 +48,15 @@ export class SleptMailboxWake {
   private readonly failed = new Map<string, number>()
   private readonly owed = new Map<string, { paneKey: string; sequence: number }>()
   private readonly byPane = new Map<string, Set<string>>()
-  private readonly attempted = new Map<
-    string,
-    { record: SleepingAgentSessionRecord; sequence: number }
-  >()
+  private readonly attempted = new Map<string, { record: SleptMailRecord; sequence: number }>()
   private readonly held = new Map<string, string>()
   private readonly workspaceCounts = new Map<string, number>()
   private active = 0
 
   constructor(private readonly deps: WakeDeps) {}
 
-  failedToWake(record: SleepingAgentSessionRecord): boolean {
-    return this.failed.get(record.paneKey) === (record.mailWake?.capturedAt ?? record.capturedAt)
+  failedToWake(record: SleptMailRecord): boolean {
+    return this.failed.get(record.paneKey) === record.capturedAt
   }
 
   batch(mailbox: string, reservedTypes?: ReadonlySet<string>) {
@@ -205,7 +201,7 @@ export class SleptMailboxWake {
     return [...this.workspaceCounts.keys()].sort()
   }
 
-  confirmed(record: SleepingAgentSessionRecord): void {
+  confirmed(record: SleptMailRecord): void {
     for (const mailbox of this.mailboxesForPane(record.paneKey)) {
       const attempt = this.attempted.get(mailbox)
       if (
@@ -213,8 +209,7 @@ export class SleptMailboxWake {
         attempt.record.worktreeId !== record.worktreeId ||
         attempt.record.agent !== record.agent ||
         (attempt.record.connectionId ?? null) !== (record.connectionId ?? null) ||
-        (attempt.record.mailWake?.capturedAt ?? attempt.record.capturedAt) !==
-          record.mailWake?.capturedAt ||
+        attempt.record.capturedAt !== record.capturedAt ||
         (attempt.record.mailWake && attempt.record.mailWake.id !== record.mailWake?.id) ||
         !agentProviderSessionsEqual(
           record.agent,
@@ -305,10 +300,7 @@ export class SleptMailboxWake {
       this.failed.delete(current.record.paneKey)
       this.attempted.delete(mailbox)
     } else if (this.deps.record(current.record.paneKey)) {
-      this.failed.set(
-        current.record.paneKey,
-        current.record.mailWake?.capturedAt ?? current.record.capturedAt
-      )
+      this.failed.set(current.record.paneKey, current.record.capturedAt)
     }
   }
 }
