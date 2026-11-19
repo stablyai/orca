@@ -79,7 +79,13 @@ describe('look-around suggestions', () => {
     let state = beginRun(EMPTY_BOT_LOOK, 'run-1', 0)
     const first = suggested(state, 'run-1', idea('Review PR #12', { link: pr }))
     expect(
-      refusal(first.state, 'run-1', idea('Look at Bob’s comments', { link: `${pr}/files` }))
+      refusal(
+        first.state,
+        'run-1',
+        idea('Look at Bob’s comments', {
+          link: 'https://www.github.com/StablyAI/Orca/pull/12/files?w=1#r99'
+        })
+      )
     ).toBe(SUGGEST_REFUSALS.repeated)
     // Another PR with the same title is a different suggestion.
     state = suggested(
@@ -87,6 +93,18 @@ describe('look-around suggestions', () => {
       'run-1',
       idea('Review PR #12', { link: 'https://github.com/stablyai/orca/pull/13' })
     ).state
+    state = suggested(
+      state,
+      'run-1',
+      idea('Look into ENG-1', { link: 'https://linear.app/globex/issue/ENG-1/old-slug' })
+    ).state
+    expect(
+      refusal(
+        state,
+        'run-1',
+        idea('Review the incident', { link: 'https://linear.app/globex/issue/eng-1/new-slug' })
+      )
+    ).toBe(SUGGEST_REFUSALS.repeated)
     state = beginRun(endRun(state, 'run-1', 1), 'run-2', 2)
     const again = suggested(state, 'run-2', idea('Answer the review on #12', { link: pr }), 2)
     expect(again.suggestion).toMatchObject({

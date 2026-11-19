@@ -4,6 +4,11 @@ import { sampleUtilityWorkerHeaps } from './utility-worker-heap-sampler'
 import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 import { setWorkerLargeSendLog } from '../worker-threads/worker-send-ledger'
 import {
+  UTILITY_WORKER_RELAY_EXPIRED,
+  UTILITY_WORKER_RELAY_HOLD_LIMIT_MS,
+  UtilityWorkerRelayBudget
+} from './utility-worker-relay-budget'
+import {
   UTILITY_WORKER_MESSAGE_CHUNK_BYTES,
   type UtilityWorkerFailure,
   type UtilityWorkerHostEvent,
@@ -33,6 +38,7 @@ if (!parent) {
 const LOADED = 'orca-hosted-worker-loaded'
 const control = parent
 const workers = new Map<number, Worker>()
+const ports = new Map<number, WorkerPort>()
 const heaps = sampleUtilityWorkerHeaps(workers, (report) =>
   control.postMessage({ type: 'heap', report })
 )
@@ -65,7 +71,11 @@ require(${JSON.stringify(filename)})
 post(${JSON.stringify(LOADED)})`
 }
 
-function relay(port: WorkerPort, bytes: Uint8Array): void {
+function relay(id: number, bytes: Uint8Array, seq?: number): void {
+  const port = ports.get(id)
+  if (!port) {
+    return
+  }
   for (let start = 0; start < bytes.byteLength; start += UTILITY_WORKER_MESSAGE_CHUNK_BYTES) {
     const end = Math.min(start + UTILITY_WORKER_MESSAGE_CHUNK_BYTES, bytes.byteLength)
     const view = bytes.subarray(start, end)
@@ -74,15 +84,28 @@ function relay(port: WorkerPort, bytes: Uint8Array): void {
       view.byteOffset === 0 && view.byteLength === view.buffer.byteLength
         ? view
         : new Uint8Array(view)
-    send(port, { type: 'message', bytes: chunk, more: end < bytes.byteLength })
+    const more = end < bytes.byteLength
+    send(port, { type: 'message', bytes: chunk, more, ...(seq === undefined ? {} : { seq }) })
   }
 }
+
+const budget = new UtilityWorkerRelayBudget(relay, (id) => {
+  const message = `worker reply waited ${UTILITY_WORKER_RELAY_HOLD_LIMIT_MS / 1000} s for main to consume earlier replies`
+  const port = ports.get(id)
+  if (port) {
+    send(port, { type: 'error', error: { name: UTILITY_WORKER_RELAY_EXPIRED, message } })
+  }
+  void workers.get(id)?.terminate()
+})
 
 function send(port: WorkerPort, event: UtilityWorkerPortEvent): void {
   port.postMessage(event)
 }
 
-function host(request: UtilityWorkerHostRequest, port: WorkerPort): void {
+function host(
+  request: Extract<UtilityWorkerHostRequest, { type: 'spawn' }>,
+  port: WorkerPort
+): void {
   let worker: ReturnType<typeof spawnWorkerThread>
   try {
     if (request.largeSendLog) {
@@ -99,17 +122,28 @@ function host(request: UtilityWorkerHostRequest, port: WorkerPort): void {
     send(port, { type: 'exit', code: 1 })
     return
   }
+  const { id } = request
+  ports.set(id, port)
+  // Everything but replies waits behind this worker's own held replies, never another worker's.
   worker.on('message', (bytes: Uint8Array | typeof LOADED) =>
-    bytes === LOADED ? send(port, { type: 'loaded' }) : relay(port, bytes)
+    bytes === LOADED
+      ? budget.after(id, () => send(port, { type: 'loaded' }))
+      : budget.offer(id, bytes)
   )
-  workers.set(request.id, worker)
+  workers.set(id, worker)
   heaps.workersChanged()
-  worker.on('error', (error) => send(port, { type: 'error', error: failure(error) }))
+  worker.on('error', (error) =>
+    budget.after(id, () => send(port, { type: 'error', error: failure(error) }))
+  )
   // The consumer closes the port once it reads this, so the frame is never cut off.
   worker.once('exit', (code) => {
-    workers.delete(request.id)
+    workers.delete(id)
     heaps.workersChanged()
-    send(port, { type: 'exit', code })
+    budget.after(id, () => {
+      budget.forget(id)
+      ports.delete(id)
+      send(port, { type: 'exit', code })
+    })
   })
   port.on('message', ({ data }) => {
     if (data.type === 'post') {
@@ -119,13 +153,27 @@ function host(request: UtilityWorkerHostRequest, port: WorkerPort): void {
     }
   })
   // The consumer is gone (main retired it or itself died); nothing can read this worker's replies.
-  port.on('close', () => void worker.terminate())
+  port.on('close', () => {
+    // After its exit the port is already gone; releasing then would mark a finished worker forever.
+    if (ports.delete(id)) {
+      budget.release(id)
+    }
+    void worker.terminate()
+  })
   port.start()
 }
 
-parent.on('message', ({ data, ports }) => {
-  const port = ports[0]
-  if (data.type === 'spawn' && port) {
+parent.on('message', ({ data, ports: transferred }) => {
+  if (data.type === 'budget') {
+    budget.setLimit(data.bytes)
+    return
+  }
+  if (data.type === 'ack') {
+    budget.ack(data.seq)
+    return
+  }
+  const port = transferred[0]
+  if (port) {
     host(data, port)
   }
 })

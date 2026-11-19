@@ -36,34 +36,62 @@ export function assertLegacyChatSettled(store: Database.Database, sessionId: str
  * Copies the reconcile kept for chats an older Orca continued take their history from the
  * original when they convert, which clears their mapping. Pages of those still mapped at `copies`,
  * then a check at `copies + 1` that none remain: a copy another build readied empty keeps the
- * original.
+ * original. A copy whose chat the original no longer holds has nothing left to take from it.
  */
 export function readLegacyCopiesProofPage(
+  source: Database.Database,
   store: Database.Database,
   cursor: LegacyProofCursor,
   copies: number
 ): LegacyProofPage {
-  const pending = readPendingCopies(store, cursor.table === copies ? cursor.after : null)
   if (cursor.table !== copies) {
-    if (pending.length > 0) {
-      throw new JournalLegacyRetentionError('a copy of an older Orca chat has not converted yet')
+    for (let after: string | null = null; ;) {
+      const page = readPendingCopies(source, store, after)
+      if (page.copies.length > 0) {
+        throw new JournalLegacyRetentionError('a copy of an older Orca chat has not converted yet')
+      }
+      if (page.last === null) {
+        return { next: null, sessions: [] }
+      }
+      after = page.last
     }
-    return { next: null, sessions: [] }
   }
+  const page = readPendingCopies(source, store, cursor.after)
   return {
-    next: pending.length
-      ? { table: copies, after: pending.at(-1)! }
-      : { table: copies + 1, after: null },
+    next:
+      page.last === null ? { table: copies + 1, after: null } : { table: copies, after: page.last },
     sessions: [],
-    copies: pending
+    copies: page.copies
   }
 }
 
-function readPendingCopies(store: Database.Database, after: string | null): string[] {
-  return store
-    .prepare('SELECT key FROM agent_session_store_meta WHERE key>? AND key<? ORDER BY key LIMIT 32')
+function readPendingCopies(
+  source: Database.Database,
+  store: Database.Database,
+  after: string | null
+): { copies: string[]; last: string | null } {
+  const rows = store
+    .prepare(`SELECT key,value FROM agent_session_store_meta WHERE key>? AND key<? ORDER BY key
+      LIMIT 32`)
     .all(`${COPY_SOURCE}${after ?? ''}`, prefixEnd(COPY_SOURCE))
-    .map((row) => String(row.key).slice(COPY_SOURCE.length))
+  const held = source.prepare('SELECT 1 FROM journal_sessions WHERE session_id=?')
+  const copies: string[] = []
+  for (const row of rows) {
+    const copy = String(row.key).slice(COPY_SOURCE.length)
+    if (!held.get(String(row.value))) {
+      continue
+    }
+    // A copy whose conversion failed is retried only when opened, never by this proof.
+    if (meta(store, journalLegacyFailureKey(copy)) !== undefined) {
+      throw new JournalLegacyRetentionError(
+        'a copy of an older Orca chat could not be converted',
+        'source-failed'
+      )
+    }
+    copies.push(copy)
+  }
+  const tail = rows.at(-1)
+  return { copies, last: tail ? String(tail.key).slice(COPY_SOURCE.length) : null }
 }
 
 function meta(db: Database.Database, key: string): string | undefined {

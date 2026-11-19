@@ -478,12 +478,58 @@ it('converts the copies the reconcile keeps, and keeps the original while a chat
   expect(companions(failed.filename)).toContain(failed.filename)
   expect(String(failed.errors.at(-1))).toContain('could not be kept')
 
-  // A compare still due hasn't said whether this store holds the chat.
+  // A compare still due hasn't said whether this store holds the chat; once it settles, the same
+  // launch retires the original.
   const comparing = await profile()
   await comparing.convert('unopened')
   comparing.db.exec(`INSERT INTO agent_session_store_meta
     VALUES('journal.legacy-compare:unopened','["epoch",9,null,null]')`)
-  await comparing.launch().run()
+  vi.useFakeTimers({ toFake: ['performance'] })
+  const retirement = comparing.launch()
+  await retirement.run()
   expect(companions(comparing.filename)).toContain(comparing.filename)
   expect(String(comparing.errors.at(-1))).toContain('still being compared')
+  comparing.db.exec(
+    "DELETE FROM agent_session_store_meta WHERE key='journal.legacy-compare:unopened'"
+  )
+  vi.advanceTimersByTime(60_000)
+  await retirement.run()
+  vi.useRealTimers()
+  expect(companions(comparing.filename)).toEqual([])
+
+  // A copy whose conversion failed is left for an open to retry; the proof only refuses.
+  const failedCopy = await profile()
+  await failedCopy.convert('unopened')
+  continueInOlderOrca(failedCopy.filename, 'unopened')
+  await initializeJournalDomainDatabase(failedCopy.root)
+  const failedCopyId = String(
+    failedCopy.db
+      .prepare(
+        "SELECT key FROM agent_session_store_meta WHERE key LIKE 'journal.legacy-copy-source:%'"
+      )
+      .get()!.key
+  ).slice('journal.legacy-copy-source:'.length)
+  failedCopy.db
+    .prepare('INSERT INTO agent_session_store_meta VALUES(?,?)')
+    .run(`journal.legacy-failed:${failedCopyId}`, '{"revision":null,"error":"reply too large"}')
+  failedCopy.ensured.length = 0
+  await failedCopy.launch().run()
+  expect(companions(failedCopy.filename)).toContain(failedCopy.filename)
+  expect(failedCopy.ensured).not.toContain(failedCopyId)
+  expect(String(failedCopy.errors.at(-1))).toContain('could not be converted')
+
+  // A copy whose chat an older Orca then deleted from the original has nothing left to take.
+  const goneCopy = await profile()
+  await goneCopy.convert('unopened')
+  continueInOlderOrca(goneCopy.filename, 'unopened')
+  await initializeJournalDomainDatabase(goneCopy.root)
+  const gone = new Database(goneCopy.filename)
+  gone.exec(`DELETE FROM journal_rows WHERE session_id='unopened';
+    DELETE FROM journal_sessions WHERE session_id='unopened';
+    DELETE FROM agent_session_records WHERE session_id='unopened'`)
+  gone.close()
+  await initializeJournalDomainDatabase(goneCopy.root)
+  await goneCopy.launch().run()
+  expect(goneCopy.errors).toEqual([])
+  expect(companions(goneCopy.filename)).toEqual([])
 })

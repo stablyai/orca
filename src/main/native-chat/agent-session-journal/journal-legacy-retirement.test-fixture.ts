@@ -20,6 +20,7 @@ import { journalSqlRetryRows } from './journal-sql-retry-rows.test-fixture'
 import { insertJournalRow, publishJournalSessionEpoch } from './durable-rows/journal-row-table'
 import { acquireJournalLegacyFileLock } from './journal-legacy-file-lock'
 import { JournalLegacyRetirement } from './journal-legacy-retirement'
+import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
 
 export const cleanup: (() => void)[] = []
 afterEach(() => {
@@ -113,7 +114,17 @@ export async function profile(
     }
   }
   const readers = {
-    legacyProof: async (cursor) => readJournalLegacyProofPage(source(), cursor, db),
+    // As the reader does: a refusal comes back as a page, not a thrown error.
+    legacyProof: async (cursor) => {
+      try {
+        return readJournalLegacyProofPage(source(), cursor, db)
+      } catch (error) {
+        if (!(error instanceof JournalLegacyRetentionError)) {
+          throw error
+        }
+        return { next: null, sessions: [], retained: error.message, reason: error.reason }
+      }
+    },
     importState: async (id) => journalDomainImportState(db, id),
     recycleSourceReaders: async (): Promise<AbortController | null> => {
       original?.close()
@@ -125,8 +136,10 @@ export async function profile(
     JournalSqlReaderPool,
     'legacyProof' | 'importState' | 'recycleSourceReaders' | 'releaseSourceReaders'
   >
+  const ensured: string[] = []
   const conversions = {
     ensure: async (id: string) => {
+      ensured.push(id)
       if (journalDomainImportState(db, id).state === 'ready') {
         return 'epoch'
       }
@@ -165,5 +178,15 @@ export async function profile(
       eligibility ?? (native ? undefined : { check: async () => {}, present: () => {} }),
       version
     )
-  return { root, filename, db, launch, errors, source, readers, convert: conversions.ensure }
+  return {
+    root,
+    filename,
+    db,
+    launch,
+    errors,
+    source,
+    readers,
+    convert: conversions.ensure,
+    ensured
+  }
 }

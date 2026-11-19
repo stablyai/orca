@@ -39,7 +39,9 @@ export type JournalSqlReaderOperation =
   | { kind: 'legacy-compare'; sessionId: string }
 
 export type JournalSqlReaderRequest = { id: number; operation: JournalSqlReaderOperation }
-export type JournalSqlReaderReply =
+/** A charged reply's bytes, which main releases once the caller has taken it. */
+type JournalSqlReaderReplyCharge = { bytes?: number; creditWaitExpired?: true }
+export type JournalSqlReaderReply = (
   | { type: 'legacy-proof'; id: number; page: LegacyProofPage }
   | { type: 'fork-prepared'; id: number }
   | { type: 'fork-next'; id: number; result: JournalForkPreparationResult }
@@ -53,5 +55,7 @@ export type JournalSqlReaderReply =
   | { type: 'released'; id: number }
   | { type: 'legacy-compare'; id: number; result: JournalLegacyChatComparison | null }
   | { type: 'failed'; id?: number; error: JournalSqlFailure }
+) &
+  JournalSqlReaderReplyCharge
 
 export type JournalSqlReaderResult = Exclude<JournalSqlReaderReply, { type: 'ready' | 'failed' }>

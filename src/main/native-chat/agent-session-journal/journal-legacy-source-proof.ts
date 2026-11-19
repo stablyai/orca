@@ -152,7 +152,7 @@ function readSourcePage(
   }
   // Last, the copies the reconcile kept: converted from the original, then none may remain.
   if (cursor.table >= COPIES) {
-    return readLegacyCopiesProofPage(destination, cursor, COPIES)
+    return readLegacyCopiesProofPage(db, destination, cursor, COPIES)
   }
   // After the content tables: the original's attachment claims, taken in for chats kept here.
   if (cursor.table > CONTENT_TABLES.length) {

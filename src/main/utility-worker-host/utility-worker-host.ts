@@ -56,7 +56,9 @@ export class UtilityWorkerHost {
     private readonly exitContext?: (
       workers: readonly HostedWorkerThread[]
     ) => CrashReportBreadcrumbData,
-    crashCap?: UtilityWorkerHostCrashCap
+    crashCap?: UtilityWorkerHostCrashCap,
+    /** Serialized reply bytes main may hold unconsumed; past it the host holds replies itself. */
+    private readonly relayBudgetBytes?: number
   ) {
     this.crashLoop = crashCap && new UtilityWorkerHostCrashLoop(serviceName, crashCap)
     app.once('will-quit', () => {
@@ -98,12 +100,19 @@ export class UtilityWorkerHost {
           host.workers.delete(id)
           this.scheduleIdleExit(host)
         }
-      }
+      },
+      ack: (seq) => this.ack(host, seq)
     })
     host.workers.set(id, worker)
     clearTimeout(host.idleTimer)
     host.idleTimer = undefined
-    const request: UtilityWorkerHostRequest = { type: 'spawn', id, ...spawn }
+    // Shared memory can't cross into the host; only an in-process worker gets these.
+    const { inProcessWorkerData: _inProcess, ...hosted } = spawn
+    const request: Extract<UtilityWorkerHostRequest, { type: 'spawn' }> = {
+      type: 'spawn',
+      id,
+      ...hosted
+    }
     if (host.ready) {
       try {
         host.child.postMessage(request, [port1])
@@ -168,6 +177,10 @@ export class UtilityWorkerHost {
     clearTimeout(host.readyTimer)
     host.ready = true
     this.retryMs = 0
+    if (this.relayBudgetBytes !== undefined) {
+      // Before any spawn, so no worker's reply is ever relayed past an unset budget.
+      host.child.postMessage({ type: 'budget', bytes: this.relayBudgetBytes })
+    }
     for (const { request, port } of host.queued.splice(0)) {
       try {
         host.child.postMessage(request, [port])
@@ -176,6 +189,18 @@ export class UtilityWorkerHost {
         port.close()
         host.workers.get(request.id)?.fail(asError(error), 1)
       }
+    }
+  }
+
+  /** On the process channel, since the worker's port closes once main reads its exit. */
+  private ack(host: Host, seq: number): void {
+    if (host.retired) {
+      return
+    }
+    try {
+      host.child.postMessage({ type: 'ack', seq } satisfies UtilityWorkerHostRequest)
+    } catch {
+      // The host is exiting; its budget goes with it.
     }
   }
 

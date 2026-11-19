@@ -183,28 +183,24 @@ describe('recovery from the journal', () => {
     expect(f.rows[0]?.fill).toMatchObject({ outcome: 'answered', prose: 'NO_REPLY' })
   })
 
-  it('fills a request rejected before any turn opened as failed', async () => {
-    const f = fixture({
-      items: [asked('d1', 1)],
-      submissions: [submission('d1', { dispatchState: 'rejected', answeredInTurn: null })]
-    })
+  it('fills rejections before any turn opens and preserves a recorded reason', async () => {
+    const f = fixture(
+      {
+        items: [asked('d1', 1), asked('d2', 2)],
+        submissions: [
+          submission('d1', { dispatchState: 'rejected', answeredInTurn: null }),
+          submission('d2', {
+            dispatchState: 'rejected',
+            answeredInTurn: null,
+            rejection: agentSessionFailureFact('notSignedIn')
+          })
+        ]
+      },
+      { rows: [row('d1'), row('d2')] }
+    )
     await f.recovery.boot()
     expect(f.rows[0]?.fill?.outcome).toBe('failed')
-  })
-
-  it('fills a rejected request with why it was rejected', async () => {
-    const f = fixture({
-      items: [asked('d1', 1)],
-      submissions: [
-        submission('d1', {
-          dispatchState: 'rejected',
-          answeredInTurn: null,
-          rejection: agentSessionFailureFact('notSignedIn')
-        })
-      ]
-    })
-    await f.recovery.boot()
-    expect(f.rows[0]?.fill).toMatchObject({
+    expect(f.rows[1]?.fill).toMatchObject({
       outcome: 'failed',
       failure: { category: 'signed_out', agentName: 'Claude' }
     })

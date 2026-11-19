@@ -41,6 +41,8 @@ export async function completeJournalLegacyProof(
     }
     const page = frontier.page
     if (page.retained) {
+      // A refusal is read again on the next attempt: what it waited on may have settled since.
+      frontier.page = undefined
       throw new JournalLegacyRetentionError(page.retained, page.reason)
     }
     const originals = page.sessions.flatMap(({ sessionId, original }) =>
