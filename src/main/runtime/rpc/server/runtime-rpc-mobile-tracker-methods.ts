@@ -1,5 +1,4 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
-import type { RpcRequest } from '../core'
 
 /** Linear and Jira have no workspace; untagged phone calls use the desktop's "New projects open on" host, as its Tasks page does. */
 export const DEFAULT_SCOPE_HOST_METHODS = [
@@ -36,7 +35,10 @@ export const DEFAULT_SCOPE_HOST_METHODS = [
   'linear.updateIssue'
 ] as const
 
-export function isUntaggedTrackerCall(request: RpcRequest): boolean {
+// Structural, not RpcRequest: the CLI typecheck reaches this file, and core.ts would pull in all of main.
+type TrackerCall = { method: string; executionHost?: unknown }
+
+export function isUntaggedTrackerCall(request: TrackerCall): boolean {
   return (
     request.executionHost === undefined &&
     DEFAULT_SCOPE_HOST_METHODS.some((method) => method === request.method)
@@ -47,11 +49,11 @@ export function isUntaggedTrackerCall(request: RpcRequest): boolean {
  * Sends the call to the desktop's default server when a phone can reach it there now. Otherwise this
  * desktop answers, as before: an old, offline or sleeping server must not stall or wake for Tasks.
  */
-export async function withDefaultScopeServer(
-  request: RpcRequest,
+export async function withDefaultScopeServer<Request extends TrackerCall>(
+  request: Request,
   runtime: { getClientDefaultScopeHost: () => ExecutionHostId },
   relayHosts: { relayReady: (hostId: ExecutionHostId) => Promise<boolean> } | null
-): Promise<RpcRequest> {
+): Promise<Request> {
   const host = runtime.getClientDefaultScopeHost()
   if (!host.startsWith('runtime:') || !(await relayHosts?.relayReady(host))) {
     return request
