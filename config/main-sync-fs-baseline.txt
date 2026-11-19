@@ -334,7 +334,7 @@
 3 src/main/orca-profiles/catalog/other-profile-workspace-catalog.ts
 3 src/main/orca-profiles/cloud-auth/profile-artifact-cloud-cleanup.ts
 1 src/main/orca-profiles/cloud-auth/profile-cloud-index.ts
-5 src/main/orca-profiles/cloud-session/profile-cloud-session-store.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
+4 src/main/orca-profiles/cloud-session/profile-cloud-session-store.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
 11 src/main/orca-profiles/profile-index-store.ts
 4 src/main/orca-profiles/project-transfer/profile-project-move-intent.ts
 3 src/main/orca-profiles/project-transfer/profile-project-move-record.ts
@@ -604,8 +604,8 @@
 3 src/shared/remote-runtime/serve-supervisor/serve-abort-park.ts
 7 src/shared/remote-runtime/serve-supervisor/serve-bundle-park.ts
 1 src/shared/remote-runtime/serve-supervisor/serve-user-data-path.ts
-14 src/shared/secure-storage/secure-file.ts
 1 src/shared/secure-storage/secure-file-async-write.ts # one renameSync per publish, in the same turn as the shouldPublish fence so a sign-out clear cannot land between; staging and fsync are async
+14 src/shared/secure-storage/secure-file.ts
 1 src/shared/secure-storage/secure-path-metadata-snapshot.ts
 2 src/shared/secure-storage/secure-path-windows-acl.ts
 2 src/shared/secure-storage/windows-security-addon.ts

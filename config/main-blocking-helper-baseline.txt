@@ -996,7 +996,6 @@
 3 src/main/orcad/native-runtime/orcad-native-preflight.ts
 9 src/main/orcad/native-runtime/orcad-runtime-native-preflight.ts
 1 src/main/orcad/orcad-connector.ts
-1 src/main/orcad/orcad-orca-account.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
 2 src/main/orcad/profile-state/orcad-host-identity-reset.ts
 3 src/main/orcad/profile-state/orcad-profile-state-startup.ts
 6 src/main/orcad/runtime-launch/orcad-bundled-runtime.ts
@@ -1432,7 +1431,6 @@
 1 src/main/startup/agent-accounts/codex-launch-preparation.ts
 1 src/main/startup/agent-accounts/codex-session-resume-launch.ts
 1 src/main/startup/agent-accounts/main-process-account-services.ts
-1 src/main/startup/cloud-startup/cloud-session-shutdown-flush.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
 1 src/main/startup/cloud-startup/main-process-connector-startup.ts
 7 src/main/startup/configure-process.ts
 1 src/main/startup/diagnostics/event-loop-stall-probe.ts
@@ -1462,7 +1460,7 @@
 5 src/main/startup/profile-startup/profile-state-recovery-preflight.ts
 2 src/main/startup/profile-startup/single-instance-lock.ts
 12 src/main/startup/pty-startup/main-process-pty-startup.ts
-3 src/main/startup/quit/main-process-quit.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
+2 src/main/startup/quit/main-process-quit.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
 15 src/main/startup/runtime-startup/main-process-runtime-launch.ts
 4 src/main/startup/runtime-startup/main-process-runtime-service.ts
 1 src/main/startup/serve-launch/headless-serve-ssh-registration.ts
@@ -1521,7 +1519,7 @@
 3 src/main/webhooks/webhook-host-ledger.ts
 8 src/main/window/attach-main-window-services.ts
 1 src/main/window/clipboard/clipboard-ipc-handlers.ts
-3 src/main/window/createMainWindow.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
+2 src/main/window/createMainWindow.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
 3 src/main/window/desktop-integration/app-icon.ts
 1 src/main/window/desktop-integration/custom-app-icon.ts
 2 src/main/window/desktop-integration/macos-press-and-hold-default.ts
