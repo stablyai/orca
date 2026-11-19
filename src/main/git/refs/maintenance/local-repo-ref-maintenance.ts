@@ -238,7 +238,8 @@ export function createLocalRepoRefMaintenanceTarget(
           admissionTier: 'background',
           timeout: PACK_REFS_TIMEOUT_MS,
           admissionSignal,
-          canStart
+          canStart,
+          ...(process.platform === 'win32' ? { terminationBarrier: true } : {})
         })
       } finally {
         watch?.stop()

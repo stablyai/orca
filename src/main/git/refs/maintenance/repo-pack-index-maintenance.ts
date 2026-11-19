@@ -108,7 +108,8 @@ export async function maintainRepoPackIndex(
       admissionTier: 'background',
       timeout: PACK_INDEX_TIMEOUT_MS,
       admissionSignal: signal,
-      canStart: args.canWrite
+      canStart: args.canWrite,
+      ...(process.platform === 'win32' ? { terminationBarrier: true } : {})
     })
     const writtenStamp = await readRepoPackDirectoryStamp(directory).catch(() => undefined)
     // A racing new pack remains readable; the forced refresh bounds a missed directory change.
