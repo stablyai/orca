@@ -1,6 +1,7 @@
 import { useAppStore } from '@/store'
 import { BOTS_GROUP_KEY } from '../../../../shared/sidebar-list/sections/group-keys'
 import { readBotsEnabled } from '@/lib/bot-catalog'
+import { botSidebarVirtualScrollers } from './bot-sidebar-virtual-scroll'
 
 // One owner for "show a Bots row": the sidebar search (focuses the row's name) and Cmd+K (never moves focus).
 
@@ -62,8 +63,8 @@ export function revealBotSidebarRow({
   if (store.collapsedGroups.has(BOTS_GROUP_KEY)) {
     store.toggleCollapsedGroup(BOTS_GROUP_KEY)
   }
-  // One extra frame covers a list that mounts a commit after the unfold.
   let retries = defer ? 1 : 0
+  let sought = false
   const step = (): void => {
     frame = null
     if (cancelled || !isCurrent()) {
@@ -71,12 +72,19 @@ export function revealBotSidebarRow({
     }
     const found = findListedRow(sidebarKey, getList)
     if (!found) {
+      const list = getList()
+      if (!sought && list && botSidebarVirtualScrollers.get(list)?.(sidebarKey)) {
+        sought = true
+        // Give the scroll observer time to mount and measure the requested window.
+        retries = 2
+      }
       if (retries-- > 0) {
         frame = requestAnimationFrame(step)
       }
       return
     }
-    scrollListToRow(found.list, found.row)
+    const card = found.row.querySelector<HTMLElement>('[data-worktree-card-surface]')
+    scrollListToRow(found.list, card ?? found.row)
     if (focusName) {
       found.row
         .querySelector<HTMLElement>('[data-worktree-title-inline-rename]')

@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -6,11 +6,13 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store'
+import { botRefKey } from '@/lib/bot-hosts'
 import { holdSidebarBotsHeightForSearch } from '@/components/sidebar/SidebarBotsSplit'
 import type { Bot } from '../../../../shared/bot-types'
 import { createBotSidebarSearchIndex } from '../../../../shared/bots/bot-sidebar-search'
 import { buildByIdIndex } from '../../../../shared/collections/first-row-by-id-index'
 import { getBotPurpose, useBotPurposeReader } from './bot-purpose-cache'
+import { useBotPurposes } from './use-bot-purposes'
 import { BotSearchResultRow, type BotSearchEntry } from './BotSearchResultRow'
 import { useBotSearchViewport } from './use-bot-search-viewport'
 import { setBotSidebarSearchHasQuery } from './reveal-bot-sidebar-row'
@@ -160,7 +162,9 @@ function BotSidebarSearchPanel({
   const inputRef = useRef<HTMLInputElement>(null)
   const hidePaused = useAppStore((s) => s.botSidebarView.hidePausedBots)
   const setView = useAppStore((s) => s.setBotSidebarView)
-  const readPurpose = useBotPurposeReader()
+  const readRowPurpose = useBotPurposeReader()
+  const hasQuery = query.trim() !== ''
+  const rosterPurposes = useBotPurposes()
   const search = useMemo(
     () =>
       createBotSidebarSearchIndex({
@@ -170,11 +174,14 @@ function BotSidebarSearchPanel({
       }),
     [entries, allEntries, hidePaused]
   )
-  const result = useMemo(
-    () => search(query, (entry) => readPurpose(entry.id)),
-    [search, query, readPurpose]
+  const readPurpose = useCallback(
+    (entry: BotSearchEntry) =>
+      entry.kind === 'bot'
+        ? (readRowPurpose(entry.id) ?? rosterPurposes.get(botRefKey(entry.bot)) ?? null)
+        : null,
+    [readRowPurpose, rosterPurposes]
   )
-  const hasQuery = query.trim() !== ''
+  const result = useMemo(() => search(query, readPurpose), [search, query, readPurpose])
   // Before the first paint, so the open field never shows at a height typing would then change.
   useLayoutEffect(() => {
     const input = inputRef.current
@@ -277,7 +284,7 @@ function BotSidebarSearchPanel({
               key={match.entry.id}
               match={match}
               // A name match still shows what the bot is for, as its row does.
-              purposeLine={match.purpose ? null : readPurpose(match.entry.id)}
+              purposeLine={match.purpose ? null : readPurpose(match.entry)}
               botsById={botsById}
               onSelect={onSelect}
             />
