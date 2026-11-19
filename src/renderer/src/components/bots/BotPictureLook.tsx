@@ -98,6 +98,7 @@ function OutfitTile({
   outfit,
   label,
   selected,
+  side,
   onPick
 }: {
   id: BotMascotId
@@ -105,6 +106,8 @@ function OutfitTile({
   outfit: BotAvatarOutfit | null
   label: string
   selected: boolean
+  /** Away from the other row, so the label never covers a tile. */
+  side: 'top' | 'bottom'
   onPick: () => void
 }): React.JSX.Element {
   const src = botMascotSrc(id, color, outfit)
@@ -124,7 +127,7 @@ function OutfitTile({
           <BotAvatarTile src={src} fallback="" className="size-9 rounded-md" />
         </button>
       </TooltipTrigger>
-      <TooltipContent side="bottom" sideOffset={4}>
+      <TooltipContent side={side} sideOffset={4}>
         {label}
       </TooltipContent>
     </Tooltip>
@@ -132,6 +135,8 @@ function OutfitTile({
 }
 
 /** What the mascot wears, under a row that names it: nothing, then each outfit, shown on the mascot itself. */
+const OUTFIT_GRID_COLUMNS = 5
+
 export function BotPictureOutfits({
   id,
   color,
@@ -178,9 +183,10 @@ export function BotPictureOutfits({
             outfit={null}
             label={t('bots.new.outfitNone', 'No outfit')}
             selected={outfit === null}
+            side="top"
             onPick={() => onChange(null)}
           />
-          {BOT_AVATAR_OUTFITS.map((worn) => (
+          {BOT_AVATAR_OUTFITS.map((worn, index) => (
             <OutfitTile
               key={worn}
               id={id}
@@ -188,6 +194,8 @@ export function BotPictureOutfits({
               outfit={worn}
               label={names[worn]}
               selected={outfit === worn}
+              // "No outfit" fills the first row's first place.
+              side={index < OUTFIT_GRID_COLUMNS - 1 ? 'top' : 'bottom'}
               onPick={() => onChange(worn)}
             />
           ))}

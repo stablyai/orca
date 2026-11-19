@@ -2,7 +2,7 @@ import React, { useRef } from 'react'
 import { Trans } from 'react-i18next'
 import { ChevronLeft, ChevronRight, ImageUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { i18n } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
@@ -220,97 +220,100 @@ export function BotPicturePicker({
   const { line } = intake
   const dropping = line.kind === 'drop'
   return (
-    <div
-      ref={rootRef}
-      data-dropping={(dropping && intake.outlinePicker) || undefined}
-      className="relative before:pointer-events-none before:absolute before:-inset-x-2.5 before:-top-2.5 before:-bottom-1.5 before:hidden before:rounded-[14px] before:border-[1.5px] before:border-dashed before:border-foreground/35 data-dropping:before:block"
-    >
-      <BotPictureCarousel
-        faces={faces}
-        index={faceIndex}
-        dropping={dropping}
-        description={
-          showingCustom
-            ? custom.description
-            : t('bots.new.pictureMascot', 'Mascot {{n}} of {{total}}', {
-                n: mascotIndex + 1,
-                total: PICKABLE_BOT_MASCOT_IDS.length
-              })
-        }
-        onIndexChange={(index) => {
-          if (line.kind === 'error') {
-            intake.dismiss()
-          }
-          if (faces[index]?.key === CUSTOM_KEY) {
-            onChange({ kind: 'custom' })
-          } else {
-            onChange({ kind: 'mascot', index: index - (custom && index > custom.after ? 1 : 0) })
-          }
-        }}
-      />
-      {onColorChange && !showingCustom ? (
-        <BotPictureColors color={color} onChange={onColorChange} />
-      ) : null}
-      {onOutfitChange && !showingCustom ? (
-        <BotPictureOutfits
-          id={PICKABLE_BOT_MASCOT_IDS[mascotIndex] ?? PICKABLE_BOT_MASCOT_IDS[0]}
-          color={color}
-          outfit={outfit}
-          onChange={onOutfitChange}
-        />
-      ) : null}
-      <BotPictureIntakeLine
-        line={line}
-        onUndo={() => {
-          intake.dismiss()
-          onUndo?.()
-        }}
+    // Once one label has shown, moving to the next tile, arrow or swatch shows its label at once.
+    <TooltipProvider skipDelayDuration={300}>
+      <div
+        ref={rootRef}
+        data-dropping={(dropping && intake.outlinePicker) || undefined}
+        className="relative before:pointer-events-none before:absolute before:-inset-x-2.5 before:-top-2.5 before:-bottom-1.5 before:hidden before:rounded-[14px] before:border-[1.5px] before:border-dashed before:border-foreground/35 data-dropping:before:block"
       >
-        {uploadLink ? (
-          <span>
-            <Trans
-              i18n={i18n}
-              defaults={t(
-                'bots.new.uploadDropOrPaste',
-                '<upload>Upload</upload>, drop, or paste an image'
-              )}
-              components={{ upload: <LineAction onClick={() => fileRef.current?.click()} /> }}
-            />
-          </span>
-        ) : (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="xs"
-                onClick={() => fileRef.current?.click()}
-              >
-                <ImageUp />
-                {t('bots.new.uploadPasteOrDrop', 'or upload, paste or drop your own')}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={4}>
-              {t('bots.new.pasteHint', 'Paste an image with {{shortcut}}', {
-                shortcut: isMacUserAgent() ? '⌘V' : 'Ctrl+V'
-              })}
-            </TooltipContent>
-          </Tooltip>
-        )}
-      </BotPictureIntakeLine>
-      <input
-        ref={fileRef}
-        type="file"
-        accept={BOT_AVATAR_ACCEPT}
-        className="hidden"
-        onChange={(event) => {
-          const file = event.currentTarget.files?.[0]
-          event.currentTarget.value = ''
-          if (file) {
-            intake.take(file)
+        <BotPictureCarousel
+          faces={faces}
+          index={faceIndex}
+          dropping={dropping}
+          description={
+            showingCustom
+              ? custom.description
+              : t('bots.new.pictureMascot', 'Mascot {{n}} of {{total}}', {
+                  n: mascotIndex + 1,
+                  total: PICKABLE_BOT_MASCOT_IDS.length
+                })
           }
-        }}
-      />
-    </div>
+          onIndexChange={(index) => {
+            if (line.kind === 'error') {
+              intake.dismiss()
+            }
+            if (faces[index]?.key === CUSTOM_KEY) {
+              onChange({ kind: 'custom' })
+            } else {
+              onChange({ kind: 'mascot', index: index - (custom && index > custom.after ? 1 : 0) })
+            }
+          }}
+        />
+        {onColorChange && !showingCustom ? (
+          <BotPictureColors color={color} onChange={onColorChange} />
+        ) : null}
+        {onOutfitChange && !showingCustom ? (
+          <BotPictureOutfits
+            id={PICKABLE_BOT_MASCOT_IDS[mascotIndex] ?? PICKABLE_BOT_MASCOT_IDS[0]}
+            color={color}
+            outfit={outfit}
+            onChange={onOutfitChange}
+          />
+        ) : null}
+        <BotPictureIntakeLine
+          line={line}
+          onUndo={() => {
+            intake.dismiss()
+            onUndo?.()
+          }}
+        >
+          {uploadLink ? (
+            <span>
+              <Trans
+                i18n={i18n}
+                defaults={t(
+                  'bots.new.uploadDropOrPaste',
+                  '<upload>Upload</upload>, drop, or paste an image'
+                )}
+                components={{ upload: <LineAction onClick={() => fileRef.current?.click()} /> }}
+              />
+            </span>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => fileRef.current?.click()}
+                >
+                  <ImageUp />
+                  {t('bots.new.uploadPasteOrDrop', 'or upload, paste or drop your own')}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={4}>
+                {t('bots.new.pasteHint', 'Paste an image with {{shortcut}}', {
+                  shortcut: isMacUserAgent() ? '⌘V' : 'Ctrl+V'
+                })}
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </BotPictureIntakeLine>
+        <input
+          ref={fileRef}
+          type="file"
+          accept={BOT_AVATAR_ACCEPT}
+          className="hidden"
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0]
+            event.currentTarget.value = ''
+            if (file) {
+              intake.take(file)
+            }
+          }}
+        />
+      </div>
+    </TooltipProvider>
   )
 }
