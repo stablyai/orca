@@ -123,6 +123,7 @@ it('sweeps week-old hand-offs and crashed parts on publish, keeping recent ones'
   await actualFiles.utimes(part, eightDaysAgo, eightDaysAgo)
 
   const current = await contextSnapshots.writeAgentSessionContextSnapshot(root, SESSION, 'current')
+  await contextSnapshots.sweepAgentSessionContextSnapshots(folder)
 
   expect((await actualFiles.readdir(folder)).sort()).toEqual(
     [recent, current].map((path) => path.slice(folder.length + 1)).sort()

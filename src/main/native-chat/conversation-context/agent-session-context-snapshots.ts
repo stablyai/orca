@@ -11,7 +11,9 @@ import {
 
 const claims = new Map<string, object>()
 const publications = new Map<string, Promise<void>>()
-const sweeps = new Map<string, Promise<void>>()
+const sweeps = new Map<string, { done: Promise<void>; again: boolean }>()
+// Staging files of hand-offs still being written, however long one pauses; the sweep leaves them.
+const staging = new Set<string>()
 
 // Temp isn't emptied everywhere (Windows never), and a hand-off can carry every byte of huge outputs.
 const SNAPSHOT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
@@ -35,6 +37,7 @@ export async function writeAgentSessionContextSnapshot(
   const path = join(root, `${name}.txt`)
   const temporary = `${path}.${randomUUID()}.part`
   const claim = {}
+  staging.add(temporary)
   claims.set(path, claim)
   const isCurrent = () => claims.get(path) === claim
   let published = false
@@ -50,12 +53,13 @@ export async function writeAgentSessionContextSnapshot(
       )
     } finally {
       await rm(temporary, { force: true }).catch(() => undefined)
+      staging.delete(temporary)
     }
     // Cleanup can yield to a newer capture after this attempt's rename completed.
     if (!published || !isCurrent()) {
       throw new Error('Chat context snapshot publication was replaced')
     }
-    await sweepAgentSessionContextSnapshots(root, path)
+    void sweepAgentSessionContextSnapshots(root)
     return path
   } finally {
     if (isCurrent()) {
@@ -66,48 +70,71 @@ export async function writeAgentSessionContextSnapshot(
 
 /**
  * Removes snapshots unchanged for a week, crashed parts, then the oldest until the folder fits its
- * cap, so deleted chats' and workspaces' hand-offs can't pile up. Never fails the hand-off.
+ * cap, so deleted chats' and workspaces' hand-offs can't pile up. Runs off the hand-off; never fails it.
  */
-export function sweepAgentSessionContextSnapshots(
-  root: string,
-  keep: string,
-  now = Date.now()
-): Promise<void> {
-  if (!sweeps.has(root)) {
-    const sweep = sweepSnapshotFolder(root, keep, now)
-      .catch((error) => console.warn('[agent-session-context] snapshot sweep failed', error))
-      .finally(() => sweeps.delete(root))
-    sweeps.set(root, sweep)
+export function sweepAgentSessionContextSnapshots(root: string): Promise<void> {
+  const running = sweeps.get(root)
+  if (running) {
+    // A hand-off published after this sweep's listing gets a sweep that counts it.
+    running.again = true
+    return running.done
   }
-  return sweeps.get(root)!
+  const state = { done: Promise.resolve(), again: false }
+  state.done = (async () => {
+    do {
+      state.again = false
+      await sweepSnapshotFolder(root, Date.now()).catch((error) =>
+        console.warn('[agent-session-context] snapshot sweep failed', error)
+      )
+    } while (state.again)
+    sweeps.delete(root)
+  })()
+  sweeps.set(root, state)
+  return state.done
 }
 
-async function sweepSnapshotFolder(root: string, keep: string, now: number): Promise<void> {
+async function sweepSnapshotFolder(root: string, now: number): Promise<void> {
   const files: { path: string; size: number; modified: number }[] = []
   for (const name of await readdir(root)) {
     const path = join(root, name)
     const part = name.endsWith('.part')
-    if ((!part && !name.endsWith('.txt')) || path === keep) {
-      continue
-    }
-    const info = await stat(path).catch(() => null)
+    const info = part || name.endsWith('.txt') ? await stat(path).catch(() => null) : null
     if (!info?.isFile()) {
       continue
     }
     const age = now - info.mtimeMs
-    if (age > SNAPSHOT_MAX_AGE_MS || (part && age > SNAPSHOT_MIN_AGE_MS)) {
-      await rm(path, { force: true })
-    } else if (!part) {
+    if (part) {
+      if (age > SNAPSHOT_MIN_AGE_MS && !staging.has(path)) {
+        await rm(path, { force: true }).catch(() => undefined)
+      }
+    } else if (age > SNAPSHOT_MAX_AGE_MS) {
+      await removeSnapshot(path, now)
+    } else {
       files.push({ path, size: info.size, modified: info.mtimeMs })
     }
   }
-  let total = (await stat(keep).catch(() => null))?.size ?? 0
-  total += files.reduce((sum, file) => sum + file.size, 0)
+  let total = files.reduce((sum, file) => sum + file.size, 0)
   for (const file of files.sort((a, b) => a.modified - b.modified)) {
     if (total <= SNAPSHOT_FOLDER_MAX_BYTES || now - file.modified < SNAPSHOT_MIN_AGE_MS) {
       return
     }
-    await rm(file.path, { force: true })
-    total -= file.size
+    if (await removeSnapshot(file.path, now)) {
+      total -= file.size
+    }
   }
+}
+
+/** In the path's publication queue, so a hand-off republished since the scan is never taken. */
+function removeSnapshot(path: string, now: number): Promise<boolean> {
+  return runKeyedSerializedOperation(publications, path, async () => {
+    const info = await stat(path).catch(() => null)
+    if (claims.has(path) || !info || now - info.mtimeMs < SNAPSHOT_MIN_AGE_MS) {
+      return false
+    }
+    // A file another process holds open (Windows) waits for a later sweep.
+    return rm(path, { force: true }).then(
+      () => true,
+      () => false
+    )
+  })
 }
