@@ -13,6 +13,21 @@ export type ChangelogData = {
   releasesBehind: number | null
 }
 
+/** A stable release newer than the installed build; `notes` is its GitHub release body (Markdown). */
+export type UpdateReleaseNote = {
+  version: string
+  publishedAt: string | null
+  notes: string
+  releaseUrl: string
+}
+
+export type UpdateReleaseHistory = {
+  installedVersion: string
+  /** Newest first, capped; `newerReleaseCount` counts every newer release found. */
+  releases: UpdateReleaseNote[]
+  newerReleaseCount: number
+}
+
 export type UpdateCheckOptions = {
   includePrerelease?: boolean
   includePerfPrerelease?: boolean
@@ -90,6 +105,8 @@ export type UpdateStatus = (
       releaseUrl?: string
       // Main always sets this: null means fetch failure/missing version, object enables rich mode. Avoid an undefined third state.
       changelog: ChangelogData | null
+      /** Optional so older clients keep the single release-notes link. */
+      releaseHistory?: UpdateReleaseHistory
       /** Linux only: a package manager owns this install, so Orca cannot apply the update itself.
        *  Additive and optional — older clients simply keep offering their own download. */
       externallyManaged?: boolean

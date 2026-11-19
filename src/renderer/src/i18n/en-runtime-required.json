@@ -3317,6 +3317,10 @@
       "unknownReleaseChannel": "Unknown release channel \"{{channel}}\".",
       "unsignedDevChannel": "{{channel}} builds are unsigned, and this signed build only installs updates signed by Orca's publisher. Download the installer from the release page and run it once — updates work normally from there, including back to Stable.",
       "updateServerUnreachable": "Couldn't reach the update server. Try again in a few minutes."
+    },
+    "releaseHistory": {
+      "summary_one": "You're on v{{installed}} · {{count}} new release",
+      "summary_other": "You're on v{{installed}} · {{count}} new releases"
     }
   },
   "workspace": {

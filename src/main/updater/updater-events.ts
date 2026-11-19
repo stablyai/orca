@@ -6,6 +6,7 @@ import {
 } from './mac-install/updater-mac-install'
 import { compareVersions } from './releases/updater-fallback'
 import { fetchChangelog } from './releases/updater-changelog'
+import { fetchReleaseHistory } from './releases/updater-release-history'
 import { getUnsupportedSystemUpdate } from './releases/updater-system-requirement'
 import type { UpdaterHandlerContext } from './updater-handler-context'
 import { recordUpdaterLifecycle } from './updater-lifecycle-diagnostics'
@@ -131,10 +132,14 @@ export function registerAutoUpdaterHandlers({
     markUpdateAvailableEventPending(attemptId)
     void (async () => {
       try {
-        const changelog =
-          isLocalBuildCheck() || isPinnedBuildCheck()
-            ? null
-            : await fetchChangelog(info.version, app.getVersion()).catch(() => null)
+        const releaseCheck = !isLocalBuildCheck() && !isPinnedBuildCheck()
+        // Start the listing now; it attaches to the available status when it lands.
+        const releaseHistory = releaseCheck
+          ? fetchReleaseHistory(info.version, app.getVersion())
+          : null
+        const changelog = releaseCheck
+          ? await fetchChangelog(info.version, app.getVersion()).catch(() => null)
+          : null
 
         if (!isActiveUpdateCheckAttempt(attemptId)) {
           return
@@ -176,6 +181,18 @@ export function registerAutoUpdaterHandlers({
             backgroundCheck: !wasUserInitiated && !getUserInitiatedCheck()
           }
         )
+        void releaseHistory?.then((history) => {
+          const status = getCurrentStatus()
+          // Attach only while this offer is still shown and no newer check could be cut short.
+          if (
+            history &&
+            status.state === 'available' &&
+            status.version === info.version &&
+            getActiveUpdateCheckEventAttemptId() === null
+          ) {
+            sendStatus({ ...status, releaseHistory: history })
+          }
+        })
       } finally {
         clearUpdateAvailableEventPending(attemptId)
       }

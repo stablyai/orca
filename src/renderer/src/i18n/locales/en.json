@@ -25293,6 +25293,14 @@
     }
   },
   "updates": {
+    "releaseHistory": {
+      "summary_one": "You're on v{{installed}} · {{count}} new release",
+      "summary_other": "You're on v{{installed}} · {{count}} new releases",
+      "position": "{{current}} of {{total}}",
+      "newer": "Newer release",
+      "older": "Older release",
+      "viewOnGitHub": "View on GitHub"
+    },
     "installBlock": {
       "instancesLabel": "Instances using Orca",
       "browserLabel": "Background browser",

@@ -1,4 +1,5 @@
 import { getUpdateInstallBlockGuidance } from '../../maintenance/update-card/update-install-block-guidance'
+import { UpdateReleaseHistoryPager } from '../../maintenance/update-card/UpdateReleaseHistoryPager'
 import type React from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { Download, Loader2, RefreshCw } from 'lucide-react'
@@ -199,7 +200,7 @@ export function GeneralUpdateSettingsSection({
                     'auto.components.settings.GeneralUpdateSettingsSection.8311da27ba',
                     'is available.'
                   )}{' '}
-              {updateStatus.source !== 'local' && (
+              {updateStatus.source !== 'local' && !updateStatus.releaseHistory && (
                 <a
                   href={
                     updateStatus.releaseUrl ?? getReleaseNotesUrlForVersion(updateStatus.version)
@@ -298,6 +299,9 @@ export function GeneralUpdateSettingsSection({
                       { value0: updaterMessageText(updateStatus) }
                     ))}
         </p>
+        {updateStatus.state === 'available' && updateStatus.releaseHistory && (
+          <UpdateReleaseHistoryPager history={updateStatus.releaseHistory} />
+        )}
       </SearchableSetting>
       {isWebClientLocation() ? null : <AutomaticUpdatesSetting />}
       <UpdateDelaySetting />

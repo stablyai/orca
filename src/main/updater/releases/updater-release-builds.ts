@@ -22,16 +22,17 @@ const FETCH_TIMEOUT_MS = 8000
 const MAX_LISTED_BUILDS = 100
 const RETRY_AFTER_MAX_MS = 60 * 60_000
 
-function getReleasesApiUrl(repo: string): string {
-  return `https://api.github.com/repos/${repo}/releases?per_page=${MAX_LISTED_BUILDS}`
+function getReleasesApiUrl(repo: string, page: number): string {
+  const pageParam = page > 1 ? `&page=${page}` : ''
+  return `https://api.github.com/repos/${repo}/releases?per_page=${MAX_LISTED_BUILDS}${pageParam}`
 }
 
-function fetchReleases(repo: string, token: string | null): Promise<Response> {
+function fetchReleases(repo: string, token: string | null, page: number): Promise<Response> {
   const headers: Record<string, string> = { Accept: 'application/vnd.github+json' }
   if (token) {
     headers.Authorization = `Bearer ${token}`
   }
-  return net.fetch(getReleasesApiUrl(repo), {
+  return net.fetch(getReleasesApiUrl(repo, page), {
     headers,
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
   })
@@ -153,12 +154,13 @@ function parseReleaseEntry(
   }
 }
 
-// REST exposes older builds the short Atom feed omits; use only for explicit picker requests.
-export async function listReleaseBuilds(
-  channel: ReleaseChannel,
-  platform: NodeJS.Platform = process.platform
-): Promise<ReleaseBuild[]> {
-  const repo = getReleaseRepoForChannel(channel)
+export const RELEASES_PER_PAGE = MAX_LISTED_BUILDS
+
+/** One page of a repo's GitHub releases, newest first, preferring gh auth over the shared per-IP quota. */
+export async function fetchReleaseListPage(
+  repo: string,
+  page = 1
+): Promise<{ res: Response; signedIn: boolean }> {
   // Skip a known-exhausted token bucket and try the separate per-IP quota.
   const credential = await resolveReleaseApiToken()
   const tokenBucketBlocked =
@@ -166,20 +168,30 @@ export async function listReleaseBuilds(
     getGhRateLimitBlockedUntilMs('core', Date.now(), credential.rateLimitScope) !== null
   const token = tokenBucketBlocked ? null : (credential?.token ?? null)
   let signedIn = credential !== null
-  let res = await fetchReleases(repo, token)
+  let res = await fetchReleases(repo, token, page)
   if (token && res.status === 401) {
     // A rejected token must not prevent listing a public repo unauthenticated.
     rejectReleaseApiToken()
     signedIn = false
-    res = await fetchReleases(repo, null)
+    res = await fetchReleases(repo, null, page)
   } else if (token && isRateLimited(res) && isPrimaryRateLimited(res)) {
     // The per-IP quota may still be available; mark the token bucket spent before retrying.
     const resetAtMs = rateLimitResetAtMs(res.headers, Date.now())
     if (resetAtMs !== null && credential) {
       recordGhPrimaryRateLimit('core', resetAtMs, credential.rateLimitScope)
     }
-    res = await fetchReleases(repo, null)
+    res = await fetchReleases(repo, null, page)
   }
+  return { res, signedIn }
+}
+
+// REST exposes older builds the short Atom feed omits; use only for explicit picker requests.
+export async function listReleaseBuilds(
+  channel: ReleaseChannel,
+  platform: NodeJS.Platform = process.platform
+): Promise<ReleaseBuild[]> {
+  const repo = getReleaseRepoForChannel(channel)
+  const { res, signedIn } = await fetchReleaseListPage(repo)
   if (!res.ok) {
     throw releaseListError(res, repo, channel, signedIn)
   }
