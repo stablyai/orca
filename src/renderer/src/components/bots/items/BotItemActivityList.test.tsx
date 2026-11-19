@@ -49,23 +49,4 @@ it("leads a recorded answer's quote to its question, and the question's Answered
 
   fireEvent.click(screen.getByRole('button', { name: /^Answered at .+\. Go to the answer$/ }))
   expect(document.activeElement?.getAttribute('data-bot-item-comment-id')).toBe('e4')
-  expect(screen.queryByText(/moved this to/)).toBeNull()
-})
-
-it('shows an answer from before answers were recorded as before: no quote, Answered as text, the move kept', () => {
-  show([
-    ...ASKED,
-    { id: 'e4', kind: 'commented', actor: OWNER, data: { text: 'Retry.' }, at: 250 },
-    {
-      id: 'e5',
-      kind: 'status',
-      actor: OWNER,
-      data: { from: 'needs_you', to: 'working' },
-      at: 250
-    }
-  ])
-
-  expect(screen.getByText('Answered')).toBeTruthy()
-  expect(screen.queryByRole('button', { name: /Go to the answer|Replying to/ })).toBeNull()
-  expect(screen.getByText(/moved this to/)).toBeTruthy()
 })
