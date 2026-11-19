@@ -16,7 +16,8 @@ import { nativeChatQueueFollowUps } from '../../../../../shared/native-chat/inpu
 import {
   nativeChatMarksNewMessages,
   nativeChatScrollsToLatestOnSend,
-  nativeChatShowsPromptSuggestions
+  nativeChatShowsPromptSuggestions,
+  nativeChatWrapsCodeBlocks
 } from '../../../../../shared/native-chat/settings/native-chat-appearance-settings'
 import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import type { SettingsHostScope } from '../host-scope/settings-host-scope'
@@ -67,6 +68,7 @@ export function ChatBehaviorSetting({
     entries.linkPreviews,
     entries.composerSpellcheck,
     entries.promptSuggestions,
+    entries.wrapCodeBlocks,
     entries.shellEnvironment
   ]
   if (!forceVisible && !matchesSettingsSearch(query, rows)) {
@@ -79,6 +81,7 @@ export function ChatBehaviorSetting({
   const linkPreviewsEnabled = settings.nativeChatLinkPreviews !== false
   const composerSpellcheckEnabled = settings.nativeChatComposerSpellcheck !== false
   const promptSuggestions = nativeChatShowsPromptSuggestions(settings)
+  const wrapCodeBlocks = nativeChatWrapsCodeBlocks(settings)
   return (
     <SettingsGroup id="chat-behavior" title={getChatBehaviorTitle(t)}>
       <ChatPermissionSetting
@@ -223,6 +226,20 @@ export function ChatBehaviorSetting({
           checked={promptSuggestions}
           ariaLabel={entries.promptSuggestions.title}
           onChange={() => updateSettings({ nativeChatPromptSuggestions: !promptSuggestions })}
+        />
+      </SearchableSetting>
+      <SearchableSetting
+        {...entries.wrapCodeBlocks}
+        id={entries.wrapCodeBlocks.targetSectionId}
+        forceVisible={forceVisible}
+        className="max-w-none"
+      >
+        <SettingsSwitchRow
+          label={entries.wrapCodeBlocks.title}
+          description={entries.wrapCodeBlocks.description}
+          checked={wrapCodeBlocks}
+          ariaLabel={entries.wrapCodeBlocks.title}
+          onChange={() => updateSettings({ nativeChatWrapCodeBlocks: !wrapCodeBlocks })}
         />
       </SearchableSetting>
       <SearchableSetting

@@ -6,6 +6,9 @@ import {
   NativeChatDisclosureContext,
   useNativeChatDisclosures
 } from './messages/disclosure/native-chat-disclosure-store'
+import { NativeChatCodeWrapDefaultContext } from './markdown/code/native-chat-code-wrap-default'
+import { nativeChatWrapsCodeBlocks } from '../../../../shared/native-chat/settings/native-chat-appearance-settings'
+import { useAppStore } from '@/store'
 import type { ReaderGesture } from './viewport/scroll/native-chat-autoscroll'
 import { NativeChatForwardedGestureContext } from './viewport/scroll/native-chat-reader-scroll-input'
 import {
@@ -40,28 +43,32 @@ export function NativeChatTranscriptViewport({
 }): React.JSX.Element {
   const t = useTranslate()
   const disclosures = useNativeChatDisclosures()
+  // One settings read for the whole transcript; each code block takes the default from context.
+  const wrapCodeBlocks = useAppStore((state) => nativeChatWrapsCodeBlocks(state.settings))
   return (
     <NativeChatDisclosureContext.Provider value={disclosures}>
-      <NativeChatForwardedGestureContext.Provider value={forwardedGesture}>
-        <div className="relative min-h-0 flex-1">
-          <div
-            ref={scrollRef}
-            {...scrollerProps}
-            onCopy={copyChatMathSelection}
-            // Measurement finds this named scroll root independently of utility classes.
-            data-native-chat-scroll
-            aria-label={label ?? t('components.native-chat.transcriptLabel', 'Conversation')}
-            // Browser anchoring would add unattributed movement beside the follow policy's anchor.
-            className="scrollbar-sleek relative h-full overflow-y-auto [overflow-anchor:none] [scrollbar-gutter:stable_both-edges] focus-visible:outline-none"
-          >
-            <NativeChatTranscriptScrollContext.Provider value={toolRunScroll}>
-              {children}
-            </NativeChatTranscriptScrollContext.Provider>
+      <NativeChatCodeWrapDefaultContext.Provider value={wrapCodeBlocks}>
+        <NativeChatForwardedGestureContext.Provider value={forwardedGesture}>
+          <div className="relative min-h-0 flex-1">
+            <div
+              ref={scrollRef}
+              {...scrollerProps}
+              onCopy={copyChatMathSelection}
+              // Measurement finds this named scroll root independently of utility classes.
+              data-native-chat-scroll
+              aria-label={label ?? t('components.native-chat.transcriptLabel', 'Conversation')}
+              // Browser anchoring would add unattributed movement beside the follow policy's anchor.
+              className="scrollbar-sleek relative h-full overflow-y-auto [overflow-anchor:none] [scrollbar-gutter:stable_both-edges] focus-visible:outline-none"
+            >
+              <NativeChatTranscriptScrollContext.Provider value={toolRunScroll}>
+                {children}
+              </NativeChatTranscriptScrollContext.Provider>
+            </div>
+            {overlays}
+            <NativeChatJumpToLatest visible={showJump} onJump={onJump} />
           </div>
-          {overlays}
-          <NativeChatJumpToLatest visible={showJump} onJump={onJump} />
-        </div>
-      </NativeChatForwardedGestureContext.Provider>
+        </NativeChatForwardedGestureContext.Provider>
+      </NativeChatCodeWrapDefaultContext.Provider>
     </NativeChatDisclosureContext.Provider>
   )
 }
