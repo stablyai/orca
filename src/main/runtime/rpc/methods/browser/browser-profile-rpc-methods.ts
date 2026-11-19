@@ -8,13 +8,20 @@ import {
   TabSetProfile,
   TabShow
 } from '../../../../../shared/rpc-contract/browser/browser-params'
+import {
+  assertAgentMayChangeTabProfile,
+  assertAgentMayDeleteProfile
+} from './browser-site-list-agent-gate'
 
 export const BROWSER_PROFILE_METHODS = [
   defineMethod({
     name: 'browser.tabSetProfile',
     permission: 'workspace',
     params: TabSetProfile,
-    handler: async (params, { runtime }) => runtime.browserTabSetProfile(params)
+    handler: async (params, context) => {
+      await assertAgentMayChangeTabProfile(context, params, params.profileId)
+      return context.runtime.browserTabSetProfile(params)
+    }
   }),
   defineMethod({
     name: 'browser.tabProfileShow',
@@ -26,7 +33,10 @@ export const BROWSER_PROFILE_METHODS = [
     name: 'browser.tabProfileClone',
     permission: 'workspace',
     params: TabProfileClone,
-    handler: async (params, { runtime }) => runtime.browserTabProfileClone(params)
+    handler: async (params, context) => {
+      await assertAgentMayChangeTabProfile(context, params, params.profileId)
+      return context.runtime.browserTabProfileClone(params)
+    }
   }),
   defineMethod({
     name: 'browser.profileList',
@@ -44,7 +54,10 @@ export const BROWSER_PROFILE_METHODS = [
     name: 'browser.profileDelete',
     permission: 'workspace',
     params: ProfileDelete,
-    handler: async (params, { runtime }) => runtime.browserProfileDelete(params)
+    handler: async (params, context) => {
+      assertAgentMayDeleteProfile(context, params.profileId)
+      return context.runtime.browserProfileDelete(params)
+    }
   }),
   defineMethod({
     name: 'browser.profileDetectBrowsers',

@@ -16,6 +16,7 @@ import {
   type AgentSessionRefusalError
 } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { RpcEnvelopeMeta, RpcFailure, RpcSuccess } from '../core'
+import { BROWSER_PROFILE_SITE_LIST_LOCKED_CODE } from '../../../browser/sessions/site-list/browser-profile-site-list-lock'
 import { RUNTIME_PASSTHROUGH_CODES } from '../runtime-passthrough-codes'
 import { CONNECTOR_ACT_ERROR_CODES } from '../../../../shared/connector-action-contract'
 import { BOTS_DISABLED_CODE } from '../../../../shared/bots-switch'
@@ -86,6 +87,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   WORKTREE_CREATE_EXACT_NAME_TAKEN_CODE,
   AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE,
   'worktree_id_requires_full_path',
+  BROWSER_PROFILE_SITE_LIST_LOCKED_CODE,
   // A workspace selector's choices ride in data; a plain Error('selector_ambiguous') keeps the bare code.
   'selector_ambiguous',
   'run_not_found',
