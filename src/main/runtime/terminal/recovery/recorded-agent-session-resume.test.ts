@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { partialRuntimeStore } from '../../construction/test-context/runtime-store-partial-fixture'
+import type { AgentSessionResumeClaims } from '../../session-lifecycle/projection/agent-session-resume-claims'
 
 await import('../../construction/test-context/runtime-test-module-registration.spec')
 const { OrcaRuntimeService } = await import('../../orca-runtime')
@@ -18,7 +19,7 @@ const SESSION = '0bc9e9f8-192c-4bd4-beb8-8b745c59c8b0'
 
 function sleepingConversation(
   overrides: Partial<SleepingAgentSessionRecord> = {},
-  spawnError?: Error,
+  spawnError?: Error | (() => Error | undefined),
   pty: { reattach?: boolean; shellAlone?: () => boolean } = {}
 ) {
   const record: SleepingAgentSessionRecord = {
@@ -47,8 +48,9 @@ function sleepingConversation(
       runtime,
       vi.fn(async (args) => {
         launches.push(args)
-        if (spawnError) {
-          throw spawnError
+        const error = typeof spawnError === 'function' ? spawnError() : spawnError
+        if (error) {
+          throw error
         }
         return { id: 'resumed-original-pane', ...(pty.reattach ? { isReattach: true } : {}) }
       })
@@ -106,6 +108,28 @@ describe('resuming an explicitly selected recorded conversation', () => {
     expect(launches).toEqual([
       expect.objectContaining({ tabId: 'host-tab', leafId: HEADLESS_LEAF_ID })
     ])
+  })
+
+  it('retries a failed restore once no overlapping resume of its pane is unsettled', async () => {
+    let spawnError: Error | undefined = new Error('agent_session_exited_during_start')
+    const { runtime, launches } = sleepingConversation({}, () => spawnError)
+    // Another resumer of the same pane, such as a window materializing it, still owns its share.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the test plays that resumer through the runtime's own claim registry.
+    const claims = (runtime as unknown as { agentSessionResumeClaims: AgentSessionResumeClaims })
+      .agentSessionResumeClaims
+    const overlapping = claims.claim(
+      { agent: 'codex', providerSession: { key: 'session_id', id: SESSION } },
+      PANE
+    )!
+    const resume = () =>
+      runtime.resumeRecordedAgentSession(`id:${TEST_WORKTREE_ID}`, { paneKey: PANE })
+    await expect(resume()).rejects.toThrow('agent_session_exited_during_start')
+    await expect(resume()).rejects.toThrow('agent_session_exited_during_start')
+    expect(launches).toHaveLength(1)
+    overlapping.settleFailure(false)
+    spawnError = undefined
+    expect((await resume()).disposition).toBe('resumed')
+    expect(launches).toHaveLength(2)
   })
 
   it('refuses a different session instead of launching a fresh agent', async () => {

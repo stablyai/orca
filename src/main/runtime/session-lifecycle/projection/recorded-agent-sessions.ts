@@ -15,6 +15,8 @@ import type {
 export abstract class OrcaRuntimeWithRecordedAgentSessions extends OrcaRuntimeWithClaudeRunningPaneAccountMove {
   abstract getTerminalPtyIdForHandle(handle: string): string | null
   private readonly recordedResumes = new Map<string, Promise<StartedPty | null>>()
+  /** Rejected restores kept only while an unsettled claim may still own the pane. */
+  private readonly failedRecordedResumes = new Set<Promise<StartedPty | null>>()
 
   async listRecordedAgentSessions(selector: string): Promise<{ sessions: RecordedAgentSession[] }> {
     const workspace = await this.showManagedWorktree(selector)
@@ -83,8 +85,16 @@ export abstract class OrcaRuntimeWithRecordedAgentSessions extends OrcaRuntimeWi
     }
     const resumeKey = `${workspace.id}\0${record.paneKey}`
     let restoring = this.recordedResumes.get(resumeKey)
+    if (
+      restoring &&
+      this.failedRecordedResumes.has(restoring) &&
+      !this.agentSessionResumeClaims.hasUnsettledResume(record, record.paneKey)
+    ) {
+      this.failedRecordedResumes.delete(restoring)
+      restoring = undefined
+    }
     if (!restoring) {
-      restoring = Promise.resolve()
+      const attempt: Promise<StartedPty | null> = Promise.resolve()
         .then(() =>
           this.ensureRestoredPaneStarted(
             { worktreeId: workspace.id, ...pane },
@@ -100,12 +110,15 @@ export abstract class OrcaRuntimeWithRecordedAgentSessions extends OrcaRuntimeWi
             return started
           },
           (error: unknown) => {
-            if (!this.agentSessionResumeClaims.hasUnsettledResume(record, record.paneKey)) {
+            if (this.agentSessionResumeClaims.hasUnsettledResume(record, record.paneKey)) {
+              this.failedRecordedResumes.add(attempt)
+            } else {
               this.recordedResumes.delete(resumeKey)
             }
             throw error
           }
         )
+      restoring = attempt
       this.recordedResumes.set(resumeKey, restoring)
     }
     const started = await restoring
