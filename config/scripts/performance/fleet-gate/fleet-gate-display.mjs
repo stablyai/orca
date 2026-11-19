@@ -13,7 +13,8 @@ function findOnPath(binary) {
   return null
 }
 
-export async function startVirtualDisplay() {
+/** record(pid) runs right after the spawn, so a gate killed during Xvfb's startup still has it on file. */
+export async function startVirtualDisplay(record = () => () => {}) {
   const xvfb = process.platform === 'linux' ? findOnPath('Xvfb') : null
   if (!xvfb) {
     return null
@@ -26,6 +27,7 @@ export async function startVirtualDisplay() {
       stdio: ['ignore', 'ignore', 'ignore', 'pipe']
     }
   )
+  const forget = record(child.pid)
   const number = await new Promise((resolve) => {
     let text = ''
     const timer = setTimeout(() => resolve(null), 10_000)
@@ -45,15 +47,14 @@ export async function startVirtualDisplay() {
   })
   if (!number || !/^\d+$/.test(number)) {
     child.kill('SIGKILL')
+    forget()
     return null
   }
   return {
     display: `:${number}`,
-    pid: child.pid,
-    forget: () => {},
     stop() {
       child.kill('SIGTERM')
-      this.forget()
+      forget()
     }
   }
 }

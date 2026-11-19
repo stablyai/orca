@@ -88,8 +88,15 @@ export function readDaemonPids(userDataDir) {
   if (!fs.existsSync(daemonDir)) {
     return []
   }
+  let entries = []
+  try {
+    entries = fs.readdirSync(daemonDir)
+  } catch {
+    // Another gate's reap removed it first.
+    return []
+  }
   const pids = []
-  for (const entry of fs.readdirSync(daemonDir)) {
+  for (const entry of entries) {
     if (!entry.endsWith('.pid')) {
       continue
     }

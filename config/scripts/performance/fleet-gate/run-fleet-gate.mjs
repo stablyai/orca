@@ -436,10 +436,7 @@ async function main() {
     ensureFleetCorpus(path.join(CACHE_ROOT, 'corpus'))
   }
   installStopHandlers()
-  virtualDisplay = await startVirtualDisplay()
-  if (virtualDisplay) {
-    virtualDisplay.forget = recordHelper(gateRunDir, virtualDisplay.pid)
-  }
+  virtualDisplay = await startVirtualDisplay((pid) => recordHelper(gateRunDir, pid))
   // Without a private display copies stay hidden and unpainted, so clicks and focus can't be driven.
   options.scenarios ??= virtualDisplay
     ? [...Object.keys(SCENARIOS), 'burst']
@@ -563,7 +560,8 @@ function installStopHandlers() {
 // Last resort for any exit path that skipped the graceful closes (a thrown error, a stop signal's process.exit).
 process.on('exit', () => {
   killLiveNow()
-  if (gateRunDir) {
+  // A copy still launching isn't in the live list yet: keep its pending record for the next gate's reap.
+  if (gateRunDir && launchesInFlight === 0) {
     fs.rmSync(gateRunDir, { recursive: true, force: true })
   }
 })

@@ -59,11 +59,13 @@ export function recordCopyLaunch(runDir, userDataDir) {
     arg: `--fleet-gate-copy=${marker}`,
     commit(pid) {
       const identity = processIdentity(pid)
-      if (identity) {
-        committed = path.join(apps, String(pid))
-        writeRecord(committed, { identity, userDataDir })
-        live.set(pid, { identity, userDataDir })
+      if (!identity) {
+        // ps failed: the pending record (found by marker) stays the copy's only proof.
+        return
       }
+      committed = path.join(apps, String(pid))
+      writeRecord(committed, { identity, userDataDir })
+      live.set(pid, { identity, userDataDir })
       fs.rmSync(pending, { force: true })
     },
     forget() {
@@ -130,6 +132,7 @@ export function killLiveNow() {
   live.clear()
 }
 
+/** pids whose command line has exactly this argument, or null when ps failed (unknown, never "none"). */
 function pidsCarrying(arg) {
   try {
     return execFileSync('ps', ['-eo', 'pid=,args='], { encoding: 'utf8' })
@@ -138,7 +141,7 @@ function pidsCarrying(arg) {
       .filter((match) => match && match[2].split(' ').includes(arg))
       .map((match) => Number(match[1]))
   } catch {
-    return []
+    return null
   }
 }
 
@@ -160,12 +163,17 @@ function readRecords(dir) {
   }
 }
 
+/** false when it couldn't prove a recorded copy gone; the folder then stays for a later reap. */
 async function reapFolder(dir) {
   const inside = (userDataDir) =>
     typeof userDataDir === 'string' && !path.relative(dir, userDataDir).startsWith('..')
   for (const record of readRecords(path.join(dir, 'apps'))) {
     if (record.name.startsWith('pending-')) {
-      for (const pid of pidsCarrying(`--fleet-gate-copy=${String(record.marker)}`)) {
+      const pids = pidsCarrying(`--fleet-gate-copy=${String(record.marker)}`)
+      if (pids === null) {
+        return false
+      }
+      for (const pid of pids) {
         signal(pid, 'SIGKILL', true)
       }
     } else {
@@ -180,6 +188,7 @@ async function reapFolder(dir) {
     killVerified(Number(record.name), record.identity, false)
   }
   fs.rmSync(dir, { recursive: true, force: true })
+  return true
 }
 
 /** Stops what dead gates left behind (verified processes only), then deletes their folders. */
@@ -202,8 +211,9 @@ export async function reapStaleRunDirs(root = RUNS_ROOT) {
       // Alive, or ps failed: never reap a folder on a guess.
       continue
     }
-    await reapFolder(dir)
-    reaped += 1
+    if (await reapFolder(dir)) {
+      reaped += 1
+    }
   }
   return reaped
 }
