@@ -6,11 +6,6 @@ import {
 } from '../../runtime/workspaces/lifecycle/workspace-lifecycle-commands'
 import { getEffectiveHooks } from '../../workspace-hooks/hooks'
 import { errorMessage } from '../../../shared/errors/error-message'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
-import {
-  getExecutionHostIdFromWorktreeHostIdentity,
-  getWorktreeIdFromHostIdentity
-} from '../../../shared/worktree/host-qualified-identity'
 import {
   evaluateWorkspaceCleanup,
   keepFolderWorkspaceSiblings,
@@ -95,60 +90,30 @@ type RemovalOutcome = Pick<
   'outcome' | 'reason' | 'keepCause' | 'waiting' | 'keptOnRecheck' | 'branchKept' | 'error'
 >
 
-type RemovalArgs = {
+/** Re-reads every piece of evidence, its folder siblings' too, right before removing one workspace;
+ * removal itself goes through the lifecycle queue. */
+export async function removeWorkspaceForCleanup(args: {
   runtime: OrcaRuntimeService
   store: RuntimeStore
   globalRules: () => WorkspaceCleanupRules
   workspace: WorkspaceCleanupWorkspace
   now: () => number
   signal?: AbortSignal
-}
-
-function recollect(args: RemovalArgs, worktreeId: string): Promise<WorkspaceCleanupWorkspace[]> {
-  return collectWorkspaceCleanupWorkspaces({
-    store: args.store,
-    runtime: args.runtime,
-    globalRules: args.globalRules(),
-    now: args.now(),
-    worktreeId,
-    signal: args.signal
-  })
-}
-
-/** The workspace, then its folder siblings as they are now. A sibling of this host no longer listed
- * was removed since; one on another host gets no verdict here, so it still holds the group. */
-async function recollectWorkspaceCleanupGroup(
-  args: RemovalArgs
-): Promise<WorkspaceCleanupWorkspace[]> {
-  const [fresh] = await recollect(args, args.workspace.ref.worktreeId)
-  if (!fresh) {
-    return []
-  }
-  const siblings: WorkspaceCleanupWorkspace[] = []
-  const gone = new Set<string>()
-  for (const identity of args.workspace.folderSiblings) {
-    if (getExecutionHostIdFromWorktreeHostIdentity(identity) !== LOCAL_EXECUTION_HOST_ID) {
-      continue
-    }
-    const [sibling] = await recollect(args, getWorktreeIdFromHostIdentity(identity))
-    if (sibling) {
-      siblings.push(sibling)
-    } else {
-      gone.add(identity)
-    }
-  }
-  const folderSiblings = args.workspace.folderSiblings.filter((identity) => !gone.has(identity))
-  return [{ ...fresh, folderSiblings }, ...siblings]
-}
-
-/** Re-reads every piece of evidence, its folder siblings' too, right before removing one workspace;
- * removal itself goes through the lifecycle queue. */
-export async function removeWorkspaceForCleanup(args: RemovalArgs): Promise<RemovalOutcome> {
-  const { runtime, workspace } = args
+}): Promise<RemovalOutcome> {
+  const { runtime, store, workspace } = args
   const selector = selectorFor(workspace)
   try {
     // Earlier removals in this run took time: decide on what is true now, not what the scan saw.
-    const [fresh, ...siblings] = await recollectWorkspaceCleanupGroup(args)
+    // A folder member is re-read with its folder as listed now: a sibling added since holds it too.
+    const [fresh, ...siblings] = await collectWorkspaceCleanupWorkspaces({
+      store,
+      runtime,
+      globalRules: args.globalRules(),
+      now: args.now(),
+      worktreeId: workspace.ref.worktreeId,
+      withFolderSiblings: workspace.folderSiblings.length > 0,
+      signal: args.signal
+    })
     if (!fresh) {
       return { outcome: 'kept', keepCause: 'git-unknown', keptOnRecheck: true }
     }

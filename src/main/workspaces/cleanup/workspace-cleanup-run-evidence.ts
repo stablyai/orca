@@ -1,18 +1,21 @@
 import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { worktreeIdentityKey } from '../../../shared/worktree/id'
-import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
+import {
+  folderGroupOf,
+  folderSiblingsByWorktree,
+  summaryHostId,
+  summaryIdentity
+} from './workspace-cleanup-folder-membership'
 import { listClientUnsavedEditorWorktreeIds } from './workspace-cleanup-client-unsaved-editors'
 import { runtimeVisibleRepos } from '../../runtime/workspaces/catalog/runtime-visible-catalog'
 import { scanWorkspaceCleanup } from '../../ipc/workspace-cleanup/workspace-cleanup-scan'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
-import { isWorktreeRetiredByRemoval } from '../../../shared/worktree/removal/removal-visibility'
 import type { Repo } from '../../../shared/repository/repo-types'
 import {
   isRepoOnCatalogHost,
   LOCAL_EXECUTION_HOST_ID,
-  normalizeExecutionHostId,
-  type ExecutionHostId
+  normalizeExecutionHostId
 } from '../../../shared/execution-host/execution-host'
 import type { RuntimeWorktreePsSummary } from '../../../shared/worktree/catalog/runtime-worktree-contracts'
 import {
@@ -44,7 +47,7 @@ export type WorkspaceCleanupWorkspace = {
   removing: boolean
   /** Its host identity; every workspace here is this host's. */
   identity: string
-  /** The host identities of the other worktrees its folder workspace lists, on any host; a re-check of one id lists none. */
+  /** The host identities of the other worktrees its folder workspace lists, on any host. */
   folderSiblings: string[]
 }
 
@@ -59,65 +62,12 @@ export function listWorkspaceCleanupOwnedRepos(store: RuntimeStore): Map<string,
   return repos
 }
 
-function summaryHostId(summary: RuntimeWorktreePsSummary): ExecutionHostId | null {
-  return summary.hostId ? normalizeExecutionHostId(summary.hostId) : LOCAL_EXECUTION_HOST_ID
-}
-
-/** A same-id row on another host is a different checkout. */
-function summaryIdentity(summary: RuntimeWorktreePsSummary): string {
-  return composeWorktreeHostIdentity(summaryHostId(summary) ?? undefined, summary.worktreeId)
-}
-
 function isOwnedSummary(summary: RuntimeWorktreePsSummary, repos: Map<string, Repo>): boolean {
   return (
     repos.has(summary.repoId) &&
     summaryHostId(summary) === LOCAL_EXECUTION_HOST_ID &&
     summary.workspaceKind !== 'folder-workspace'
   )
-}
-
-/** Each listed worktree's folder siblings by host identity: the others its folder workspace's Source
- * Control lists, attached worktrees and their lineage children alike, on any host. */
-function folderSiblingsByWorktree(
-  summaries: readonly RuntimeWorktreePsSummary[]
-): (summary: RuntimeWorktreePsSummary) => string[] {
-  const byIdentity = new Map(summaries.map((summary) => [summaryIdentity(summary), summary]))
-  // An archived ancestor hides its subtree from the folder; a retired one passes its children up.
-  const folderOf = (summary: RuntimeWorktreePsSummary): string | null => {
-    const visited = new Set<RuntimeWorktreePsSummary>()
-    let row: RuntimeWorktreePsSummary | undefined = summary
-    while (row && !row.isArchived && !visited.has(row)) {
-      if (row.workspaceLineage) {
-        return row.workspaceLineage.parentWorkspaceKey
-      }
-      visited.add(row)
-      row = row.parentWorktreeId
-        ? byIdentity.get(
-            composeWorktreeHostIdentity(summaryHostId(row) ?? undefined, row.parentWorktreeId)
-          )
-        : undefined
-    }
-    return null
-  }
-  const folderByMember = new Map<RuntimeWorktreePsSummary, string>()
-  const membersByFolder = new Map<string, string[]>()
-  for (const summary of summaries) {
-    const folderKey =
-      summary.workspaceKind === 'folder-workspace' || isWorktreeRetiredByRemoval(summary)
-        ? null
-        : folderOf(summary)
-    if (folderKey) {
-      folderByMember.set(summary, folderKey)
-      const members = membersByFolder.get(folderKey) ?? []
-      members.push(summaryIdentity(summary))
-      membersByFolder.set(folderKey, members)
-    }
-  }
-  return (summary) => {
-    const folderKey = folderByMember.get(summary)
-    const self = summaryIdentity(summary)
-    return folderKey ? membersByFolder.get(folderKey)!.filter((id) => id !== self) : []
-  }
 }
 
 function summaryActivityAt(summary: RuntimeWorktreePsSummary): number {
@@ -229,24 +179,36 @@ function withHostBlockers(
   return { ...input, blockers }
 }
 
-/** Every workspace this process owns, with the evidence the evaluator reads; one id narrows it for a re-check. */
+/** Every workspace this process owns, with the evidence the evaluator reads; one id narrows it for a
+ * re-check, to that workspace and its folder siblings as listed now when `withFolderSiblings` is set. */
 export async function collectWorkspaceCleanupWorkspaces(args: {
   store: RuntimeStore
   runtime: OrcaRuntimeService
   globalRules: WorkspaceCleanupRules
   now: number
   worktreeId?: string
+  withFolderSiblings?: boolean
   signal?: AbortSignal
 }): Promise<WorkspaceCleanupWorkspace[]> {
   const { store, runtime, globalRules, now, worktreeId, signal } = args
   const repos = listWorkspaceCleanupOwnedRepos(store)
-  // A re-check projects only its target, so M removals don't rebuild the whole host's listing M times.
-  const ps = await runtime.getWorktreePs(WORKTREE_PS_LIMIT, true, false, worktreeId)
+  // A re-check projects only its target, so M removals don't rebuild the whole host's listing M times;
+  // a folder member needs the whole listing to see who is in its folder now.
+  const ps = await runtime.getWorktreePs(
+    WORKTREE_PS_LIMIT,
+    true,
+    false,
+    args.withFolderSiblings ? undefined : worktreeId
+  )
   if (ps.truncated) {
     throw new Error('Could not list every workspace on this host.')
   }
-  const summaries = ps.worktrees.filter((summary) => isOwnedSummary(summary, repos))
-  const folderSiblingsOf = folderSiblingsByWorktree(ps.worktrees)
+  const folderSiblingsOf = folderSiblingsByWorktree(store, ps.worktrees)
+  const owned = ps.worktrees.filter((summary) => isOwnedSummary(summary, repos))
+  const summaries =
+    args.withFolderSiblings && worktreeId !== undefined
+      ? folderGroupOf(owned, worktreeId, folderSiblingsOf)
+      : owned
   const policies = new Map<string, ResolvedWorkspaceCleanupPolicy>()
   for (const summary of summaries) {
     if (!policies.has(summary.repoId)) {

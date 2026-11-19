@@ -22,6 +22,8 @@ vi.mock('../../ipc/workspace-cleanup/workspace-cleanup-scan', () => ({
 }))
 
 import { WorkspaceCleanupRunner } from './workspace-cleanup-runner'
+import { collectWorkspaceCleanupWorkspaces } from './workspace-cleanup-run-evidence'
+import { removeWorkspaceForCleanup } from './workspace-cleanup-removal-step'
 
 const RULES: WorkspaceCleanupRules = {
   merged: { enabled: true },
@@ -56,7 +58,13 @@ function row(
   } as unknown as RuntimeWorktreePsSummary
 }
 
-function makeRunner(rows: RuntimeWorktreePsSummary[]): WorkspaceCleanupRunner {
+function makeHost(
+  rows: RuntimeWorktreePsSummary[],
+  recorded: { lineage?: Record<string, unknown>; botHomes?: string[] } = {}
+): {
+  runtime: OrcaRuntimeService
+  store: RuntimeStore
+} {
   const repos = [...new Set(rows.map((summary) => summary.repoId))].map((id) => ({
     id,
     path: `/${id}`,
@@ -68,7 +76,9 @@ function makeRunner(rows: RuntimeWorktreePsSummary[]): WorkspaceCleanupRunner {
   const store = {
     getRepos: () => repos,
     getSettings: () => ({ workspaceCleanupPolicy: RULES }),
-    getWorkspaceSession: () => undefined
+    getWorkspaceSession: () => undefined,
+    getAllWorkspaceLineage: () => recorded.lineage ?? {},
+    getBots: () => (recorded.botHomes ?? []).map((folderWorkspaceId) => ({ folderWorkspaceId }))
   } as unknown as RuntimeStore
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the evidence read uses only these runtime members.
   const runtime = {
@@ -78,9 +88,20 @@ function makeRunner(rows: RuntimeWorktreePsSummary[]): WorkspaceCleanupRunner {
     }),
     getExistingOrchestrationDb: () => null,
     listTerminals: async () => ({ terminals: [], totalCount: 0, truncated: false }),
-    getLocalProvider: () => ({ listProcesses: async () => [] })
+    getLocalProvider: () => ({ listProcesses: async () => [] }),
+    removeManagedWorktree: vi.fn()
   } as unknown as OrcaRuntimeService
-  return new WorkspaceCleanupRunner({ runtime, store, historyDirectory: '/nonexistent' })
+  return { runtime, store }
+}
+
+function makeRunner(
+  rows: RuntimeWorktreePsSummary[],
+  recorded?: Parameters<typeof makeHost>[1]
+): WorkspaceCleanupRunner {
+  return new WorkspaceCleanupRunner({
+    ...makeHost(rows, recorded),
+    historyDirectory: '/nonexistent'
+  })
 }
 
 async function verdicts(runner: WorkspaceCleanupRunner): Promise<Record<string, unknown>> {
@@ -112,15 +133,62 @@ describe('folder workspace cleanup group', () => {
     })
   })
 
-  it('keeps the group when a sibling lives on another host, even under the same id', async () => {
-    const runner = makeRunner([
-      row('repo-a::/a1', { folder: 'F' }),
-      row('repo-b::/b1', { folder: 'F' }),
-      row('repo-b::/b1', { folder: 'F', hostId: 'ssh:remote' })
-    ])
+  it('keeps the group while a sibling cannot be judged on this host', async () => {
+    const runner = makeRunner(
+      [
+        row('repo-a::/a1', { folder: 'F' }),
+        row('repo-b::/b1', { folder: 'F' }),
+        // Same id, another machine's checkout.
+        row('repo-b::/b1', { folder: 'F', hostId: 'ssh:remote' }),
+        row('repo-a::/h1', { folder: 'H' })
+      ],
+      // Its repo's scan failed, so the listing lacks it.
+      {
+        lineage: {
+          x: { childWorkspaceKey: 'worktree:repo-c::/h2', parentWorkspaceKey: 'folder:H' }
+        }
+      }
+    )
     expect(await verdicts(runner)).toEqual({
       'repo-a::/a1': { action: 'keep', cause: 'folder-workspace-sibling', reason: 'merged' },
-      'repo-b::/b1': { action: 'keep', cause: 'folder-workspace-sibling', reason: 'merged' }
+      'repo-b::/b1': { action: 'keep', cause: 'folder-workspace-sibling', reason: 'merged' },
+      'repo-a::/h1': { action: 'keep', cause: 'folder-workspace-sibling', reason: 'merged' }
     })
+  })
+
+  it("cleans a bot's workspaces one by one", async () => {
+    dirty.add('repo-b::/t2')
+    const runner = makeRunner(
+      [row('repo-a::/t1', { folder: 'home' }), row('repo-b::/t2', { folder: 'home' })],
+      { botHomes: ['home'] }
+    )
+    expect(await verdicts(runner)).toEqual({
+      'repo-a::/t1': { action: 'delete', reason: 'merged' },
+      'repo-b::/t2': { action: 'keep', cause: 'uncommitted-changes', reason: 'merged' }
+    })
+  })
+
+  it('re-checks the folder as listed at removal time, not as the scan saw it', async () => {
+    const rows = [row('repo-a::/a1', { folder: 'F' }), row('repo-b::/b1', { folder: 'F' })]
+    const host = makeHost(rows)
+    const scanned = await collectWorkspaceCleanupWorkspaces({ ...host, globalRules: RULES, now: 1 })
+    // Created in F while the run was removing other workspaces.
+    rows.push(row('repo-c::/n1', { folder: 'F' }))
+    dirty.add('repo-c::/n1')
+
+    const outcome = await removeWorkspaceForCleanup({
+      ...host,
+      globalRules: () => RULES,
+      workspace: scanned.find((workspace) => workspace.ref.worktreeId === 'repo-a::/a1')!,
+      now: () => Date.now()
+    })
+
+    expect(outcome).toEqual({
+      outcome: 'kept',
+      keepCause: 'folder-workspace-sibling',
+      reason: 'merged',
+      keptOnRecheck: true
+    })
+    expect(host.runtime.removeManagedWorktree).not.toHaveBeenCalled()
   })
 })
