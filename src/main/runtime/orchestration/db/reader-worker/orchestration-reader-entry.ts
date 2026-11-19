@@ -41,6 +41,8 @@ export function handleOrchestrationRead(
       connection.db.exec('COMMIT')
     }
   } catch (error) {
+    // A connection left inside a transaction would refuse every later read; the next one reopens it.
+    closeOrchestrationReader()
     return {
       id: request.id,
       ok: false,
@@ -60,8 +62,13 @@ function runRead(
 }
 
 export function closeOrchestrationReader(): void {
-  opened?.connection.db.close()
+  const closing = opened
   opened = null
+  try {
+    closing?.connection.db.close()
+  } catch {
+    // A connection that cannot close is dropped all the same; the next read opens a new one.
+  }
 }
 
 const port = parentPort

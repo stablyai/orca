@@ -160,7 +160,15 @@ export class ConversationWorkers {
     while (this.pending.size > 0) {
       const batch = this.pending
       this.pending = new Map()
-      await this.read(batch)
+      try {
+        await this.read(batch)
+      } catch (error) {
+        // One failed apply must not wedge every later check behind it.
+        console.warn('[connector] could not apply conversations’ workers', error)
+        for (const entry of batch.values()) {
+          settle(entry)
+        }
+      }
     }
     this.reading = false
   }
@@ -208,6 +216,7 @@ export class ConversationWorkers {
         settle(entry)
       }
     }
+    this.schedule()
   }
 
   // An unread answer is no exit: a running state stays, under the out-of-contact bound.
@@ -238,7 +247,6 @@ export class ConversationWorkers {
     if (running !== told) {
       this.deps.emit({ kind: 'workers', ...pane, running })
     }
-    this.schedule()
   }
 
   // An unlinked conversation's workers no longer hold it.

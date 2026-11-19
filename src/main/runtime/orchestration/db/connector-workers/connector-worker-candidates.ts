@@ -14,6 +14,8 @@ import type { FederatedDispatchRow } from '../orchestration-records'
 
 export type ConnectorWorkerRow = ReturnType<typeof listWorkerTerminalResources>[number]
 
+const LISTING_CHUNK = 500
+
 /** The workers that may still run, and the paired-host rows of those started on one. */
 export type ConnectorWorkerCandidates = {
   candidates: ConnectorWorkerCandidate[]
@@ -63,9 +65,16 @@ export function readConnectorWorkerCandidates(
   if (sessionByDispatch.size === 0) {
     return none
   }
-  const rows = listWorkerTerminalResources.call(connection, {
-    dispatchIds: [...sessionByDispatch.keys()]
-  })
+  const ids = [...sessionByDispatch.keys()]
+  const rows: ConnectorWorkerRow[] = []
+  // The listing binds one variable per id; a first watch of every recent chat can name thousands.
+  for (let offset = 0; offset < ids.length; offset += LISTING_CHUNK) {
+    rows.push(
+      ...listWorkerTerminalResources.call(connection, {
+        dispatchIds: ids.slice(offset, offset + LISTING_CHUNK)
+      })
+    )
+  }
   const attention = readWorkerAttentionInputs(
     connection,
     rows.map((row) => row.dispatchId)
