@@ -3667,6 +3667,18 @@ export function createRemoteRuntimePtyTransport(
         ) {
           throw new Error('terminal_pane_owner_changed')
         }
+        if (
+          options.verifyAccountRestartResult &&
+          (!(await options.verifyAccountRestartResult({
+            id: toRemoteRuntimePtyId(terminal.handle, createEnvironmentId),
+            incarnationId: terminal.incarnationId
+          })) ||
+            destroyed ||
+            lifecycleEpoch !== connectLifecycleEpoch ||
+            (isAccountRestartCurrent && !isAccountRestartCurrent()))
+        ) {
+          return undefined
+        }
         return await adoptResolvedHostPane(
           terminal,
           options,
@@ -4063,6 +4075,23 @@ export function createRemoteRuntimePtyTransport(
         }
         return
       }
+      const createdPtyId = toRemoteRuntimePtyId(createdTerminal.handle, createEnvironmentId)
+      if (
+        options.verifyAccountRestartResult &&
+        (!(await options.verifyAccountRestartResult({
+          id: createdPtyId,
+          incarnationId: createdTerminal.incarnationId
+        })) ||
+          destroyed ||
+          lifecycleEpoch !== connectLifecycleEpoch ||
+          (shouldContinue &&
+            !shouldContinue({
+              id: createdPtyId,
+              incarnationId: createdTerminal.incarnationId
+            })))
+      ) {
+        return
+      }
       handle = createdTerminal.handle
 
       if (createdTerminal.isReattach === true) {
@@ -4088,18 +4117,28 @@ export function createRemoteRuntimePtyTransport(
           throw error
         }
       }
-      if (destroyed || lifecycleEpoch !== connectLifecycleEpoch || !connected || !remotePtyId) {
+      if (
+        destroyed ||
+        lifecycleEpoch !== connectLifecycleEpoch ||
+        !connected ||
+        remotePtyId !== createdPtyId ||
+        handle !== createdTerminal.handle ||
+        (createdTerminal.incarnationId &&
+          authoritativePtyIncarnationId &&
+          createdTerminal.incarnationId !== authoritativePtyIncarnationId)
+      ) {
         return
       }
 
+      const resultIncarnationId = createdTerminal.incarnationId ?? authoritativePtyIncarnationId
       return {
         ...terminalLaunchFacts(createdTerminal),
         ...(createdTerminal.isReattach !== true && createdTerminal.coldRestore
           ? { coldRestore: createdTerminal.coldRestore }
           : {}),
-        id: remotePtyId,
+        id: createdPtyId,
         replay: '',
-        ...(authoritativePtyIncarnationId ? { incarnationId: authoritativePtyIncarnationId } : {}),
+        ...(resultIncarnationId ? { incarnationId: resultIncarnationId } : {}),
         ...(createdTerminal.isReattach === true ? { isReattach: true } : {})
       } satisfies PtyConnectResult
     } catch (error) {

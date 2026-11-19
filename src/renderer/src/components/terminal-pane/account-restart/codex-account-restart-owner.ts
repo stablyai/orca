@@ -102,7 +102,7 @@ export async function resolveCodexAccountRestartPane(
     'accountRestart' in terminal ? terminal.accountRestart : undefined
   )
   const latest = currentCodexAccountRestart(useAppStore.getState(), token)
-  if (!latest || !['claimed', 'preparing', 'reconciling'].includes(latest.phase)) {
+  if (!latest) {
     return null
   }
   if (
@@ -126,6 +126,10 @@ export async function prepareCodexAccountRestartOwner(
   const token = codexAccountRestartToken(request)
   const resolved = await resolveCodexAccountRestartPane(request)
   if (!resolved) {
+    return null
+  }
+  const latest = currentCodexAccountRestart(useAppStore.getState(), token)
+  if (!latest || !['claimed', 'preparing', 'reconciling'].includes(latest.phase)) {
     return null
   }
   const { terminal, snapshot, hostPane, environmentId } = resolved

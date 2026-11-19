@@ -93,6 +93,14 @@ export async function connectIpcPty(
     if (accountRestart && shouldContinue && !shouldContinue(spawnResult)) {
       return
     }
+    if (
+      options.verifyAccountRestartResult &&
+      (!(await options.verifyAccountRestartResult(spawnResult)) ||
+        context.isDestroyed() ||
+        (shouldContinue && !shouldContinue(spawnResult)))
+    ) {
+      return
+    }
     settleAgentLaunchPaneStart(transportOptions.tabId, transportOptions.leafId, spawnResult.id)
     // Any resolved spawn or cold restore is live under this id, even if this transport was destroyed meanwhile.
     markTerminalProviderSessionBound(spawnResult.id)
