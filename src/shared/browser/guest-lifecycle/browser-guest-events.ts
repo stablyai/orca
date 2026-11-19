@@ -17,7 +17,6 @@ export type BrowserLoadStallPhase = 'no-request-seen' | 'held' | 'sent'
 
 export type BrowserLoadStall = {
   phase: BrowserLoadStallPhase
-  scheme: 'http' | 'https'
   /** host[:port] only, so paths and queries never reach UI state. */
   host: string
   /** Same-profile pages on this scheme, host and port that the user isn't looking at. */

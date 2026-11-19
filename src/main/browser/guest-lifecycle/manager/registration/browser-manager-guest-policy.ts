@@ -45,20 +45,22 @@ export abstract class BrowserManagerGuestPolicy extends BrowserManagerGuestClean
     const disposeDiscardProtection = installBrowserGuestDiscardProtection(guest, () =>
       this.invalidateGuestMemoryProtection(guest)
     )
-    // Cleanup unmaps a replaced guest before disposing it, so the clear goes to the page that saw the stall.
-    let stalledPageId: string | undefined
     const disposeStallWatchdog = installBrowserNavigationStallWatchdog(guest, (stall) => {
       const mappedPageId = this.tabIdByWebContentsId.get(guest.id)
-      if (stall && !mappedPageId) {
+      if (!stall) {
+        this.pendingLoadStallsByGuestId.delete(guest.id)
+        // Cleanup unmaps a replaced guest before disposing it, so the clear goes to the page that saw the stall.
+        const stalledPageId = this.loadStallPageIdByGuestId.get(guest.id) ?? mappedPageId
+        this.loadStallPageIdByGuestId.delete(guest.id)
+        if (stalledPageId) {
+          this.sendLoadStall(stalledPageId, guest.id, null)
+        }
+      } else if (mappedPageId) {
+        this.loadStallPageIdByGuestId.set(guest.id, mappedPageId)
+        this.sendLoadStall(mappedPageId, guest.id, stall)
+      } else {
         // Registration replays it, like a load failure that precedes it.
         this.pendingLoadStallsByGuestId.set(guest.id, stall)
-        return
-      }
-      this.pendingLoadStallsByGuestId.delete(guest.id)
-      const browserPageId = stall ? mappedPageId : (stalledPageId ?? mappedPageId)
-      stalledPageId = stall ? browserPageId : undefined
-      if (browserPageId) {
-        this.sendLoadStall(browserPageId, guest.id, stall)
       }
     })
     const invalidate = (): void => this.invalidateGuestMemoryProtection(guest)

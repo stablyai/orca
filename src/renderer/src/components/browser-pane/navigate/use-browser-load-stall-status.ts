@@ -5,9 +5,6 @@ import type {
 } from '../../../../../shared/browser/guest-lifecycle/browser-guest-events'
 import { useTranslate } from '@/i18n/use-translate'
 
-// Chromium's per-host HTTP/1.1 socket limit: fewer hidden pages than this can't fill the pool alone.
-const SOCKETS_PER_HOST = 6
-
 // One subscription for the app, so a pane that remounts mid-stall still knows its load is stuck.
 const stalls = new Map<string, { webContentsId: number; stall: BrowserLoadStall }>()
 const listenersByPage = new Map<string, Set<() => void>>()
@@ -62,12 +59,17 @@ export function useBrowserLoadStallStatus(browserPageId: string): string | null 
   if (!stall) {
     return null
   }
-  // HTTPS sites usually share one HTTP/2 connection, so the pool is named only for plain HTTP.
-  return stall.scheme === 'http' && stall.hiddenSameOriginPages >= SOCKETS_PER_HOST
+  // States the background tabs as a fact: Orca can't see which pages hold the site's connections.
+  return stall.hiddenSameOriginPages > 0
     ? t(
-        'browser.loadStall.waitingForConnection',
-        'Waiting for a free connection to {{host}}. {{pages}} hidden tabs on this site may be holding them.',
-        { host: stall.host, pages: stall.hiddenSameOriginPages }
+        'browser.loadStall.waitingWithBackgroundTabs',
+        'Waiting for {{host}}… {{count}} other tabs on this site are open in the background.',
+        {
+          host: stall.host,
+          count: stall.hiddenSameOriginPages,
+          defaultValue_one:
+            'Waiting for {{host}}… 1 other tab on this site is open in the background.'
+        }
       )
     : t('browser.loadStall.waitingForHost', 'Waiting for {{host}}…', { host: stall.host })
 }

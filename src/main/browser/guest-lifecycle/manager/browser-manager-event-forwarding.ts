@@ -125,6 +125,7 @@ export abstract class BrowserManagerEventForwarding extends BrowserManagerBindin
     const stall = this.pendingLoadStallsByGuestId.get(guestWebContentsId)
     if (stall) {
       this.pendingLoadStallsByGuestId.delete(guestWebContentsId)
+      this.loadStallPageIdByGuestId.set(guestWebContentsId, browserTabId)
       this.sendLoadStall(browserTabId, guestWebContentsId, stall)
     }
   }

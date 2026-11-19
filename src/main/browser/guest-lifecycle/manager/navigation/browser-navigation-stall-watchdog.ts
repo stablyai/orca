@@ -5,7 +5,10 @@ import type {
 import { isEligibleLocalCertificateHost } from '../../../../../shared/browser/navigation/browser-url'
 import { startSpan } from '../../../../observability/tracer'
 import { observeBrowserGuestRequests } from '../../../sessions/requests/browser-session-web-request-observer'
-import { readBrowserGuestSemanticVisibility } from '../registration/browser-guest-idle-protection'
+import {
+  onBrowserGuestSemanticVisibilityChanged,
+  readBrowserGuestSemanticVisibility
+} from '../registration/browser-guest-idle-protection'
 
 /** Long enough that a slow server or a cold dev-server compile isn't called stuck. */
 export const BROWSER_LOAD_STALL_AFTER_MS = 5_000
@@ -29,60 +32,57 @@ function webOrigin(rawUrl: string): URL | null {
   }
 }
 
-// Watched guests by session and committed origin, so a stall counts only same-site pages.
-const committedGuests = new Map<Electron.Session, Map<string, Set<Electron.WebContents>>>()
+// Hidden watched pages per session and committed origin, kept current on commit and on
+// visibility change, so a stall reads one number however many tabs share the site.
+type IndexedGuest = { session: Electron.Session; origin: string | null; hidden: boolean }
+const indexedGuests = new Map<Electron.WebContents, IndexedGuest>()
+const hiddenPages = new Map<Electron.Session, Map<string, number>>()
 
-function indexCommittedOrigin(
-  session: Electron.Session,
-  guest: Electron.WebContents,
-  previous: string | null,
-  next: string | null
-): void {
-  if (previous === next) {
+function countHidden(entry: IndexedGuest, delta: 1 | -1): void {
+  if (!entry.hidden || !entry.origin) {
     return
   }
-  const bySession = committedGuests.get(session)
-  if (previous && bySession) {
-    const guests = bySession.get(previous)
-    guests?.delete(guest)
-    if (guests?.size === 0) {
-      bySession.delete(previous)
-    }
-    if (bySession.size === 0) {
-      committedGuests.delete(session)
-    }
+  let bySession = hiddenPages.get(entry.session)
+  if (!bySession) {
+    bySession = new Map()
+    hiddenPages.set(entry.session, bySession)
   }
-  if (next) {
-    let target = committedGuests.get(session)
-    if (!target) {
-      target = new Map()
-      committedGuests.set(session, target)
+  const next = (bySession.get(entry.origin) ?? 0) + delta
+  if (next > 0) {
+    bySession.set(entry.origin, next)
+  } else {
+    bySession.delete(entry.origin)
+    if (bySession.size === 0) {
+      hiddenPages.delete(entry.session)
     }
-    let guests = target.get(next)
-    if (!guests) {
-      guests = new Set()
-      target.set(next, guests)
-    }
-    guests.add(guest)
   }
 }
 
-function countHiddenSameOriginPages(
-  session: Electron.Session,
-  guest: Electron.WebContents,
-  origin: string
-): number {
-  let count = 0
-  for (const other of committedGuests.get(session)?.get(origin) ?? []) {
-    if (
-      other !== guest &&
-      !other.isDestroyed() &&
-      readBrowserGuestSemanticVisibility(other) === false
-    ) {
-      count++
-    }
+function reindex(guest: Electron.WebContents, origin: string | null): void {
+  const entry = indexedGuests.get(guest)
+  if (!entry) {
+    return
   }
-  return count
+  countHidden(entry, -1)
+  entry.origin = origin
+  entry.hidden = readBrowserGuestSemanticVisibility(guest) === false
+  countHidden(entry, 1)
+}
+
+onBrowserGuestSemanticVisibilityChanged((guest) => {
+  const entry = indexedGuests.get(guest)
+  if (entry) {
+    reindex(guest, entry.origin)
+  }
+})
+
+function countHiddenSameOriginPages(guest: Electron.WebContents, origin: string): number {
+  const entry = indexedGuests.get(guest)
+  if (!entry) {
+    return 0
+  }
+  const count = hiddenPages.get(entry.session)?.get(origin) ?? 0
+  return entry.hidden && entry.origin === origin ? count - 1 : count
 }
 
 /**
@@ -98,11 +98,9 @@ export function installBrowserNavigationStallWatchdog(
   // Read once: a destroyed guest throws on .session, and dispose can run after destruction.
   const session = guest.session
   let pending: PendingLoad | null = null
-  let committedOrigin: string | null = null
+  indexedGuests.set(guest, { session, origin: null, hidden: false })
   const recordCommit = (): void => {
-    const next = guest.isDestroyed() ? null : (webOrigin(guest.getURL())?.origin ?? null)
-    indexCommittedOrigin(session, guest, committedOrigin, next)
-    committedOrigin = next
+    reindex(guest, guest.isDestroyed() ? null : (webOrigin(guest.getURL())?.origin ?? null))
   }
   recordCommit()
 
@@ -130,9 +128,8 @@ export function installBrowserNavigationStallWatchdog(
 
   const describe = (load: PendingLoad): BrowserLoadStall => ({
     phase: load.phase,
-    scheme: load.url.protocol === 'https:' ? 'https' : 'http',
     host: load.url.host,
-    hiddenSameOriginPages: countHiddenSameOriginPages(session, guest, load.origin)
+    hiddenSameOriginPages: countHiddenSameOriginPages(guest, load.origin)
   })
 
   const stall = (load: PendingLoad): void => {
@@ -145,9 +142,9 @@ export function installBrowserNavigationStallWatchdog(
     startSpan('browser.loadStalled', {
       attributes: {
         'browser.load.phase': current.phase,
-        'browser.load.scheme': current.scheme,
+        'browser.load.scheme': load.url.protocol.slice(0, -1),
         'browser.load.local': isEligibleLocalCertificateHost(load.url.hostname),
-        'browser.load.port': Number(load.url.port) || (current.scheme === 'https' ? 443 : 80),
+        'browser.load.port': Number(load.url.port) || (load.url.protocol === 'https:' ? 443 : 80),
         'browser.load.hiddenSameOriginPages': current.hiddenSameOriginPages
       }
     }).end()
@@ -238,8 +235,11 @@ export function installBrowserNavigationStallWatchdog(
   return () => {
     finish('closed')
     stopRequests()
-    indexCommittedOrigin(session, guest, committedOrigin, null)
-    committedOrigin = null
+    const entry = indexedGuests.get(guest)
+    if (entry) {
+      countHidden(entry, -1)
+      indexedGuests.delete(guest)
+    }
     if (!guest.isDestroyed()) {
       guest.off('did-start-navigation', started)
       guest.off('did-redirect-navigation', redirected)

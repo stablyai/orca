@@ -598,8 +598,9 @@
       "profile": "Profile"
     },
     "loadStall": {
-      "waitingForConnection": "Waiting for a free connection to {{host}}. {{pages}} hidden tabs on this site may be holding them.",
-      "waitingForHost": "Waiting for {{host}}…"
+      "waitingForHost": "Waiting for {{host}}…",
+      "waitingWithBackgroundTabs_one": "Waiting for {{host}}… 1 other tab on this site is open in the background.",
+      "waitingWithBackgroundTabs_other": "Waiting for {{host}}… {{count}} other tabs on this site are open in the background."
     }
   },
   "editor": {

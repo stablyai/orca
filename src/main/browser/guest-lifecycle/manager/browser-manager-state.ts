@@ -71,6 +71,11 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   ): void
   protected abstract flushPendingLoadFailure(browserTabId: string, guestWebContentsId: number): void
   protected abstract flushPendingLoadStall(browserTabId: string, guestWebContentsId: number): void
+  protected abstract sendLoadStall(
+    browserPageId: string,
+    webContentsId: number,
+    stall: BrowserLoadStall | null
+  ): void
   protected abstract flushPendingPermissionEvents(
     browserTabId: string,
     guestWebContentsId: number
@@ -189,6 +194,8 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     { code: number; description: string; validatedUrl: string }
   >()
   protected readonly pendingLoadStallsByGuestId = new Map<number, BrowserLoadStall>()
+  /** The page showing a guest's stall; cleanup unmaps the guest before its clear is sent. */
+  protected readonly loadStallPageIdByGuestId = new Map<number, string>()
   protected readonly pendingPermissionEventsByGuestId = new Map<number, PendingPermissionEvent[]>()
   protected readonly pendingPopupEventsByGuestId = new Map<number, PendingPopupEvent[]>()
   protected readonly pendingDownloadIdsByGuestId = new Map<number, string[]>()

@@ -7,6 +7,8 @@ const semanticVisibility = new WeakMap<Electron.WebContents, boolean>()
 const notificationGrants = new WeakMap<Electron.Session, (pageUrl: string) => boolean>()
 const RECENT_AUDIO_MS = 60_000
 
+const semanticVisibilityListeners = new Set<(guest: Electron.WebContents) => void>()
+
 export function setBrowserGuestSemanticVisibility(
   guest: Electron.WebContents,
   visible: boolean | null
@@ -16,6 +18,16 @@ export function setBrowserGuestSemanticVisibility(
   } else {
     semanticVisibility.set(guest, visible)
   }
+  for (const listener of semanticVisibilityListeners) {
+    listener(guest)
+  }
+}
+
+export function onBrowserGuestSemanticVisibilityChanged(
+  listener: (guest: Electron.WebContents) => void
+): () => void {
+  semanticVisibilityListeners.add(listener)
+  return () => semanticVisibilityListeners.delete(listener)
 }
 
 /** Null until the owning renderer has reported this page's visibility. */

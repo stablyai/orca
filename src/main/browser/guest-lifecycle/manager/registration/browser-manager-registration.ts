@@ -253,6 +253,7 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     this.pendingNavigationByGuestId.clear()
     this.pendingLoadFailuresByGuestId.clear()
     this.pendingLoadStallsByGuestId.clear()
+    this.loadStallPageIdByGuestId.clear()
     this.loadErrorsByGuestId.clear()
     this.clearedLoadErrorsByGuestId.clear()
     this.pendingPermissionEventsByGuestId.clear()
