@@ -9,7 +9,7 @@ import {
   parseExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
 import { nativeChatIdleStopMinutes } from '../../../../shared/native-chat/settings/native-chat-idle-stop'
-import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
+import { getFolderWorkspaceWorktreeHostId } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import type { AppState } from '../../store/types'
 import {
@@ -107,7 +107,7 @@ export function countIdleAgents(
 function collectLocalWorktreeIds(state: AppState): Set<string> {
   const ids = new Set<string>()
   for (const folder of selectFolderWorkspaces(state)) {
-    if (parseExecutionHostId(folderWorkspaceToWorktree(folder).hostId)?.kind === 'local') {
+    if (parseExecutionHostId(getFolderWorkspaceWorktreeHostId(folder))?.kind === 'local') {
       ids.add(folderWorkspaceKey(folder.id))
     }
   }
