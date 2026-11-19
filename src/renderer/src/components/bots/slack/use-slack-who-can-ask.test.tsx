@@ -34,8 +34,7 @@ vi.mock('@/store', () => {
     settings: {
       hostSettingOverrides: {
         'runtime:server-1': { displayLabel: 'Atlas Server' },
-        'runtime:server-2': { displayLabel: 'server-2' },
-        local: { displayLabel: 'Atlas Server' }
+        'runtime:server-2': { displayLabel: 'server-2' }
       }
     }
   }
@@ -127,7 +126,6 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
-  vi.unstubAllGlobals()
   Reflect.deleteProperty(window, 'api')
 })
 
@@ -466,12 +464,6 @@ describe('BotWhoCanAskInsetList', () => {
     }
     renderList(<Inset />)
   }
-
-  it('keeps the configured server name for a directly paired web client', () => {
-    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
-    renderInset('local')
-    expect(screen.getByText(/Atlas Server/, { selector: 'p' })).toBeVisible()
-  })
 
   it('keeps a configured server name that matches its host ID', () => {
     renderInset('runtime:server-2')

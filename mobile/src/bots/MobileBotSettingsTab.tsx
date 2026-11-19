@@ -38,7 +38,6 @@ import {
 import type { BotAccessRequests } from './use-bot-access-requests'
 import type { RouteBot } from './use-route-bot'
 import { WorkspaceServerContext } from '../worktree/execution-hosts/workspace-server-context'
-import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { readConnectionStatusProbe } from '../transport/connection/runtime-status-probe'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { ListRow } from '../components/list/ListGroup'
@@ -120,9 +119,8 @@ export function MobileBotSettingsTab(props: {
   const t = useMobileTranslation()
   const { bot, applyBot } = props.routeBot
   const server = useContext(WorkspaceServerContext)
-  const executionHost = useWorkspaceExecutionHost()
   const status = props.client ? readConnectionStatusProbe(props.client) : undefined
-  const accessBot = { ...bot, accessHost: phoneAccessHost(server, executionHost, status) }
+  const accessBot = { ...bot, accessHost: phoneAccessHost(server, status) }
   const [saving, setSaving] = useState(false)
   const [removing, setRemoving] = useState<BotMember | null>(null)
   const [granting, setGranting] = useState<ConnectorAccessRequest | null>(null)

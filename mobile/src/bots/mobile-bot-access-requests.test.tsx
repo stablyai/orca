@@ -79,36 +79,39 @@ afterEach(() => {
   tree = null
 })
 
-function renderTab(
-  access: BotAccessRequests | null,
-  options: { bot?: RouteBot['bot']; client?: RpcClient; serverName?: string } = {}
-) {
+type TabOptions = { bot?: RouteBot['bot']; client?: RpcClient; serverName?: string }
+function tabContent(access: BotAccessRequests | null, options: TabOptions = {}) {
+  return createElement(
+    WorkspaceServerContext.Provider,
+    {
+      value:
+        options.serverName === undefined
+          ? undefined
+          : {
+              client: null,
+              state: 'connected',
+              desktopCapabilities: [],
+              name: options.serverName
+            }
+    },
+    createElement(MobileBotSettingsTab, {
+      routeBot: { ...routeBot, bot: options.bot ?? routeBot.bot },
+      client: options.client ?? null,
+      showToast: () => {},
+      accessRequests: access,
+      lookAround: null
+    })
+  )
+}
+function renderTab(access: BotAccessRequests | null, options: TabOptions = {}) {
   act(() => {
-    tree = create(
-      createElement(
-        WorkspaceServerContext.Provider,
-        {
-          value:
-            options.serverName === undefined
-              ? undefined
-              : {
-                  client: null,
-                  state: 'connected',
-                  desktopCapabilities: [],
-                  name: options.serverName
-                }
-        },
-        createElement(MobileBotSettingsTab, {
-          routeBot: { ...routeBot, bot: options.bot ?? routeBot.bot },
-          client: options.client ?? null,
-          showToast: () => {},
-          accessRequests: access,
-          lookAround: null
-        })
-      )
-    )
+    tree = create(tabContent(access, options))
   })
   return tree!
+}
+function updateTab(access: BotAccessRequests, direct: RpcClient): ReactTestInstance {
+  act(() => tree!.update(tabContent(access, { client: direct })))
+  return tree!.root
 }
 
 // A row's button by its label; the confirm's by its text.
@@ -174,6 +177,60 @@ describe('access requests in the bot sheet', () => {
     }
   )
 
+  it('names a directly paired machine in the warning and consent', async () => {
+    const direct = { ...client(machineStatus('Atlas Server')), getLastConnectedAt: () => 1 }
+    await readHostStatusReply(direct)
+    const access = { requests: [request], deciding: false, decide: vi.fn(async () => {}) }
+    const root = renderTab(access, { client: direct }).root
+    expectNamedWarningAndConsent(root, 'Atlas Server')
+  })
+
+  it('follows the newly paired machine on the same logical client', async () => {
+    let generation = 1
+    const direct: RpcClient = {
+      ...client(machineStatus('Atlas Server')),
+      getGeneration: () => generation,
+      getLastConnectedAt: () => generation,
+      sendRequest: async () => machineStatus(generation === 1 ? 'Atlas Server' : 'Boreal Server')
+    }
+    await readHostStatusReply(direct)
+    const access = { requests: [request], deciding: false, decide: vi.fn(async () => {}) }
+    expectNamedWarningAndConsent(renderTab(access, { client: direct }).root, 'Atlas Server')
+    generation = 2
+    const pending = updateTab(access, direct)
+    expect(texts(pending).some((text) => text.includes('the computer this agent runs on'))).toBe(
+      true
+    )
+    await readHostStatusReply(direct)
+    expectNamedWarningAndConsent(updateTab(access, direct), 'Boreal Server')
+  })
+
+  it('keeps a late response from the previous pairing out of warning and consent', async () => {
+    let generation = 1
+    let finishOld: (reply: RpcResponse) => void = () => {}
+    const oldReply = new Promise<RpcResponse>((resolve) => {
+      finishOld = resolve
+    })
+    const direct: RpcClient = {
+      ...client(machineStatus('Boreal Server')),
+      getGeneration: () => generation,
+      getLastConnectedAt: () => generation,
+      sendRequest: () =>
+        generation === 1 ? oldReply : Promise.resolve(machineStatus('Boreal Server'))
+    }
+    const oldRead = readHostStatusReply(direct)
+    const access = { requests: [request], deciding: false, decide: vi.fn(async () => {}) }
+    renderTab(access, { client: direct })
+    generation = 2
+    await readHostStatusReply(direct)
+    expectNamedWarningAndConsent(updateTab(access, direct), 'Boreal Server')
+    finishOld(machineStatus('Atlas Server'))
+    await oldRead
+    const root = updateTab(access, direct)
+    expectNamedWarningAndConsent(root, 'Boreal Server')
+    expect(texts(root).some((text) => text.includes('Atlas Server'))).toBe(false)
+  })
+
   it('declines without asking, as the desktop does', () => {
     const decide = vi.fn(async () => {})
     const root = renderTab({ requests: [request], deciding: false, decide }).root
@@ -183,6 +240,20 @@ describe('access requests in the bot sheet', () => {
     expect(decide).toHaveBeenCalledExactlyOnceWith(request, 'declined')
   })
 })
+
+function machineStatus(machineName: string): RpcResponse {
+  return {
+    id: 'status',
+    ok: true,
+    result: { hostPlatform: 'linux', machineName, hostMachine: { kind: 'desktop', model: null } }
+  }
+}
+function expectNamedWarningAndConsent(root: ReactTestInstance, name: string): void {
+  expect(texts(root).some((text) => text.includes(name))).toBe(true)
+  press(root, 'Review Dana Kim')
+  expect(root.findByProps({ confirmLabel: 'Give access' }).props.message).toContain(name)
+  press(root, 'Cancel')
+}
 
 function client(reply: RpcResponse | Error, sent: unknown[] = []): RpcClient {
   return {

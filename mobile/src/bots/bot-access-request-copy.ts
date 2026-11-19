@@ -11,7 +11,7 @@ import {
 import type { ConnectorAccessRequest } from '../../../src/shared/connector-bot-access-contract'
 import { CONNECTOR_SOURCE_NAMES } from '../../../src/shared/connectors/external-conversation-link'
 import type { HostStatusReply } from '../transport/hosts/host-status-reply-schema'
-import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
+import { normalizeMachineName } from '../../../src/shared/remote-runtime/host-metadata/machine-name'
 import type { AgentChatPermissionMode } from '../../../src/shared/agent-launch/permissions/agent-chat-permission-mode'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { isTuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent-config'
@@ -33,19 +33,12 @@ export type PhoneAccessBot = {
 
 export function phoneAccessHost(
   server: { name?: string | null } | undefined,
-  executionHost: ExecutionHostId | undefined,
   status: HostStatusReply | undefined
 ): BotAccessHost {
-  if (
-    server ||
-    status?.hostMachine?.kind === 'server' ||
-    (executionHost && executionHost !== 'local')
-  ) {
-    return { kind: 'server', name: server?.name ?? status?.machineName ?? null }
+  return {
+    kind: 'unknown',
+    name: normalizeMachineName(status?.machineName) || normalizeMachineName(server?.name) || null
   }
-  return status?.hostMachine
-    ? { kind: 'owner-computer' }
-    : { kind: 'unknown', name: status?.machineName ?? null }
 }
 
 export function phoneBotReachLines(bot: PhoneAccessBot): { title: string; detail?: string }[] {
