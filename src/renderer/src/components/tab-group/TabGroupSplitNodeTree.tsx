@@ -29,10 +29,8 @@ function SplitNode({
   touchesTopEdge,
   touchesRightEdge,
   touchesLeftEdge,
-  touchesBottomEdge,
   suppressLeftBorder,
   suppressRightBorder,
-  suppressBottomBorder,
   isTabDragActive,
   hoveredTabInsertion
 }: {
@@ -47,10 +45,8 @@ function SplitNode({
   touchesTopEdge: boolean
   touchesRightEdge: boolean
   touchesLeftEdge: boolean
-  touchesBottomEdge: boolean
   suppressLeftBorder: boolean
   suppressRightBorder: boolean
-  suppressBottomBorder: boolean
   isTabDragActive: boolean
   hoveredTabInsertion: HoveredTabInsertion | null
 }): React.JSX.Element {
@@ -70,10 +66,8 @@ function SplitNode({
         markdownAnnotationsEnabled={markdownAnnotationsEnabled}
         touchesRightEdge={touchesRightEdge}
         touchesLeftEdge={touchesLeftEdge}
-        touchesBottomEdge={touchesBottomEdge}
         suppressLeftBorder={suppressLeftBorder}
         suppressRightBorder={suppressRightBorder}
-        suppressBottomBorder={suppressBottomBorder}
         reserveClosedExplorerToggleSpace={touchesTopEdge && touchesRightEdge}
         reserveCollapsedSidebarHeaderSpace={touchesTopEdge && touchesLeftEdge}
         isTabDragActive={isTabDragActive}
@@ -111,11 +105,9 @@ function SplitNode({
           touchesTopEdge={touchesTopEdge}
           touchesRightEdge={isHorizontal ? false : touchesRightEdge}
           touchesLeftEdge={touchesLeftEdge}
-          touchesBottomEdge={isHorizontal ? touchesBottomEdge : false}
           suppressLeftBorder={suppressLeftBorder}
           // The resize handle owns the inner seam; pane borders would stack into extra lines.
           suppressRightBorder={isHorizontal ? true : suppressRightBorder}
-          suppressBottomBorder={isHorizontal ? suppressBottomBorder : true}
           isTabDragActive={isTabDragActive}
           hoveredTabInsertion={hoveredTabInsertion}
         />
@@ -147,10 +139,8 @@ function SplitNode({
           touchesTopEdge={isHorizontal ? touchesTopEdge : false}
           touchesRightEdge={touchesRightEdge}
           touchesLeftEdge={isHorizontal ? false : touchesLeftEdge}
-          touchesBottomEdge={touchesBottomEdge}
           suppressLeftBorder={isHorizontal ? true : suppressLeftBorder}
           suppressRightBorder={suppressRightBorder}
-          suppressBottomBorder={suppressBottomBorder}
           isTabDragActive={isTabDragActive}
           hoveredTabInsertion={hoveredTabInsertion}
         />
@@ -168,8 +158,7 @@ export function TabGroupSplitNodeTree({
   isTabDragActive,
   hoveredTabInsertion,
   tabStrip = 'attached',
-  markdownAnnotationsEnabled = true,
-  rootTouchesBottomEdge = false
+  markdownAnnotationsEnabled = true
 }: {
   layout: TabGroupLayoutNode
   worktreeId: string
@@ -180,8 +169,6 @@ export function TabGroupSplitNodeTree({
   tabStrip?: TabGroupPanelTabStrip
   /** Off for scratch workspaces (the floating panel) whose markdown is not a review surface. */
   markdownAnnotationsEnabled?: boolean
-  /** True when the host's own chrome bounds the tree's bottom edge (no border-b to paint). */
-  rootTouchesBottomEdge?: boolean
 }): React.JSX.Element {
   return (
     <SplitNode
@@ -196,10 +183,8 @@ export function TabGroupSplitNodeTree({
       touchesTopEdge={true}
       touchesRightEdge={true}
       touchesLeftEdge={true}
-      touchesBottomEdge={rootTouchesBottomEdge}
       suppressLeftBorder={false}
       suppressRightBorder={false}
-      suppressBottomBorder={false}
       isTabDragActive={isTabDragActive}
       hoveredTabInsertion={hoveredTabInsertion}
     />

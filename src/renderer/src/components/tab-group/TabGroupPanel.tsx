@@ -50,10 +50,8 @@ export default function TabGroupPanel({
   markdownAnnotationsEnabled = true,
   touchesRightEdge,
   touchesLeftEdge,
-  touchesBottomEdge = false,
   suppressLeftBorder = false,
   suppressRightBorder = false,
-  suppressBottomBorder = false,
   reserveClosedExplorerToggleSpace,
   reserveCollapsedSidebarHeaderSpace,
   isTabDragActive = false,
@@ -69,10 +67,8 @@ export default function TabGroupPanel({
   markdownAnnotationsEnabled?: boolean
   touchesRightEdge: boolean
   touchesLeftEdge: boolean
-  touchesBottomEdge?: boolean
   suppressLeftBorder?: boolean
   suppressRightBorder?: boolean
-  suppressBottomBorder?: boolean
   reserveClosedExplorerToggleSpace: boolean
   reserveCollapsedSidebarHeaderSpace: boolean
   isTabDragActive?: boolean
@@ -257,17 +253,14 @@ export default function TabGroupPanel({
   )
   return (
     <div
-      // Dim unfocused splits only when siblings exist; keep vertical seams neutral and change only the bottom focus border.
+      // Dim unfocused splits only when siblings exist; keep seams neutral and mark focus on the tab strip edge.
       className={`group/tab-group relative flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${
         hasSplitGroups
           ? // Why: skip border-l/border-r on edge-touching groups; the split-layout wrapper and right sidebar already paint borders at those seams (double line otherwise).
+            // No border-b: every host bounds the tree's bottom with its own chrome (the status bar's line), and seams own the inner edges.
             ` ${
               touchesLeftEdge || suppressLeftBorder ? '' : 'border-l'
-            } ${touchesRightEdge || suppressRightBorder ? '' : 'border-r'} ${
-              touchesBottomEdge || suppressBottomBorder ? '' : 'border-b'
-            } border-border ${
-              isFocused && !touchesBottomEdge && !suppressBottomBorder ? 'border-b-accent' : ''
-            }`
+            } ${touchesRightEdge || suppressRightBorder ? '' : 'border-r'} border-border`
           : ''
       }`}
       // Why not over a window backdrop (material or theme image): group opacity would let it bleed through opaque chrome.
@@ -284,7 +277,11 @@ export default function TabGroupPanel({
       {/* Omit external strips entirely because hidden duplicates would still register competing drag sortables. */}
       {tabStrip !== 'attached' ? null : (
         <div
-          className="h-[32px] shrink-0 border-b border-border bg-tab-bar"
+          className={cn(
+            'h-[32px] shrink-0 border-b border-border bg-tab-bar',
+            // Why the strip edge: it marks the focused split in any position and never stacks on the status-bar line.
+            hasSplitGroups && isFocused && 'border-b-accent'
+          )}
           data-tab-group-strip-id={groupId}
           data-terminal-focus-release-surface="true"
           data-worktree-id={worktreeId}
