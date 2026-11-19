@@ -1,4 +1,4 @@
-/** One rule for pressing a chat row (a bot's own row only opens; its chevron folds): it opens and unfolds; pressed again while it is the open
+/** The phone's rule for pressing a chat row (the desktop sidebar's chat rows only open; their chevron folds): it opens and unfolds; pressed again while it is the open
  *  one, it folds or unfolds. A double-click's second click does nothing, so it never opens then folds.
  *  A phone, whose chat covers the list, never passes `active`: there a press always opens. */
 export function pressFoldableRow(

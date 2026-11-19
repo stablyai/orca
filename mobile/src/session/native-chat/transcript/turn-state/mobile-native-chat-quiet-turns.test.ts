@@ -1,0 +1,82 @@
+import { describe, expect, it } from 'vitest'
+import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
+import { mobileNativeChatQuietTurns } from './mobile-native-chat-quiet-turns'
+
+const WORKER: NativeChatMessage['from'] = { kind: 'agent', senders: [], orchestration: null }
+const at = (
+  id: string,
+  role: NativeChatMessage['role'],
+  text: string,
+  extra: Partial<NativeChatMessage> = {}
+): NativeChatMessage => ({
+  id,
+  role,
+  timestamp: 1,
+  source: 'transcript',
+  blocks: [{ type: 'text', text }],
+  ...extra
+})
+
+const note: NativeChatMessage = {
+  ...at('n1', 'system', ''),
+  blocks: [],
+  botItemNote: {
+    noteId: 'n1',
+    by: 'bot',
+    entries: [
+      {
+        uid: 'i',
+        number: 1,
+        title: 'Export',
+        status: 'working',
+        event: 'commented',
+        text: 'Yes.'
+      }
+    ]
+  }
+}
+
+describe('a quiet turn on the phone', () => {
+  it('drops the answer and bar of mail that only changed an item, keeping the mail and its note', () => {
+    const rows = [
+      at('w1', 'user', 'repro found', { from: WORKER }),
+      note,
+      at('a1', 'assistant', 'NO_REPLY')
+    ]
+    const quiet = mobileNativeChatQuietTurns(
+      rows,
+      ['w1', 'w1', 'w1'],
+      { w1: { startedAt: 0, thinking: false, workedSeconds: 9 } },
+      new Map()
+    )
+    expect([...quiet.ids]).toEqual(['a1'])
+    expect([...quiet.turns]).toEqual(['w1'])
+  })
+
+  it('keeps the bar and rows of a turn that opened a PR, whatever its clipped output says', () => {
+    const create: NativeChatMessage = {
+      ...at('t1', 'assistant', ''),
+      blocks: [
+        {
+          type: 'tool-call',
+          name: 'Bash',
+          input: { command: 'gh pr create --fill' },
+          state: 'completed'
+        }
+      ]
+    }
+    const rows = [
+      at('w1', 'user', 'repro found', { from: WORKER }),
+      create,
+      at('a1', 'assistant', 'NO_REPLY')
+    ]
+    const quiet = mobileNativeChatQuietTurns(
+      rows,
+      ['w1', 'w1', 'w1'],
+      { w1: { startedAt: 0, thinking: false, workedSeconds: 9 } },
+      new Map()
+    )
+    expect([...quiet.ids]).toEqual([])
+    expect([...quiet.turns]).toEqual([])
+  })
+})

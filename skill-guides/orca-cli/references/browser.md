@@ -86,7 +86,7 @@ Browser rules:
 - `fill` sets a field's whole value in one step, at any size. `type` presses real keys into the focused element, so `minlength`/`maxlength`, key handlers, Enter and Tab act as they would for a person; `ORCA focus` the element first. Use `type` when the page reacts to keystrokes.
 - Fill passwords and other secrets with `--value-stdin`, not `--value`: argv is visible to `ps` and shell history. One trailing newline is dropped.
 - On server-hosted pages `fill` and `type` still insert text the engine's own way. If either does nothing on a custom input there, try `ORCA focus --page <browserPageId> --element @e1 --json` then `ORCA inserttext --page <browserPageId> --text "text" --json`.
-- A client-hosted page renders in the paired desktop's browser engine, so every command against it needs that desktop online and returns `browser_host_unavailable` while it is closed, asleep, or disconnected. Server-hosted pages run with no desktop attached; prefer them for long or unattended automation.
+- A client-hosted page renders in the paired desktop's browser engine, so every command against it needs that desktop online and returns `browser_host_unavailable` while it is closed, asleep, or disconnected. Server-hosted pages run with no desktop attached; prefer them for long or unattended automation. On a Linux server, WSL or SSH host, `tab create` fails when no Orca desktop can show the tab; `ORCA tab create --headless` opens it in the host's own headless browser instead, which nobody sees.
 
 Common recoveries:
 

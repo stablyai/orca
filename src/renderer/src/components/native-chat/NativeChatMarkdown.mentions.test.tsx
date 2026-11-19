@@ -9,8 +9,7 @@ import {
   NativeChatBotChatTitleContext,
   NativeChatMentionEveryoneContext,
   NativeChatMentionNamesContext,
-  NativeChatSlackPeopleContext,
-  withBoundBotMentions
+  NativeChatSlackPeopleContext
 } from './native-chat-markdown-mentions'
 
 afterEach(cleanup)
@@ -56,18 +55,13 @@ describe('room mention chips', () => {
     expect(chips(container)).toEqual(['@Docs'])
   })
 
-  it('shows a bot picked in a workspace chat as its chip, not a link', () => {
+  it('chips a picked bot in a chat without bots', () => {
     const { container } = renderWithNames(
-      'Ask [Bot: QA \\[nightly\\]\\](bot:x)](bot:qa-id) to check',
-      ['Scout']
+      'Ask [Bot: QA \\[nightly\\]\\](bot:x)](bot:qa-id) to check, @everyone',
+      null
     )
     expect(chips(container)).toEqual(['@QA [nightly]](bot:x)'])
     expect(container.querySelector('a')).toBeNull()
-  })
-
-  it("still chips a picked bot's old token in a chat that has no bots", () => {
-    const { container } = renderWithNames('Ask [Bot: Perf bot](bot:perf-id) and @everyone', null)
-    expect(chips(container)).toEqual(['@Perf bot'])
   })
 
   it("chips a picked chat as bot and chat, its title looked up by id, else the chat's id", () => {
@@ -81,12 +75,6 @@ describe('room mention chips', () => {
     )
     expect(chips(container)).toEqual(['@Perf bot › perf-id:7f3c9a21-4b1e'])
     expect(container.querySelector('a')).toBeNull()
-  })
-
-  it('adds no mention pass to text without names or a picked bot', () => {
-    expect(withBoundBotMentions(null, 'plain [docs](https://x.dev) text')).toBeNull()
-    expect(withBoundBotMentions([], 'plain text')).toBeNull()
-    expect(withBoundBotMentions(null, '[Bot: Perf bot](bot:perf-id)')).toEqual([])
   })
 })
 

@@ -8107,7 +8107,7 @@
           "8a52ca1d02": "发行说明",
           "d89806cc89": "已准备好安装",
           "a6b37929dc": "版本",
-          "8311da27ba": "可用! 单击\"安装更新\"下载并安装它",
+          "8311da27ba": "可用。",
           "02dc082e70": "无法开始更新下载",
           "ceb579abaf": "检查应用程序更新并安装较新的 Orca 版本",
           "bd79d412f0": "更新检查失败，{{value0}}",
@@ -16151,11 +16151,9 @@
           "feature": {
             "tip": {
               "copy": {
-                "1fcdfc5fe8": "新功能",
                 "f98e9d1bad": "搜索所有智能体会话",
                 "990cc29865": "按对话内容查找任意过往会话，然后从智能体停止的位置继续",
                 "91e2719807": "启用会话搜索",
-                "52e9e84809": "提示",
                 "3eacedec93": "用 Orca CLI 让智能体驱动 Orca",
                 "8d54d0ff53": "让智能体协调子工作树，并在工作树之间通信",
                 "0080bc86eb": "安装 CLI 与技能",
@@ -18907,47 +18905,15 @@
         "description": "请直接在 Orca 中登录 Google"
       },
       "NativeChatResumeOnRestartModal": {
-        "serverTitle": "{{machine}} 已重启",
-        "serverBody": "这些聊天在 {{machine}} 上的 Orca 重启时正在进行中。恢复会把每个聊天还原到中断处，并让智能体继续。你自己的提示词不会重新发送",
-        "serverDismiss": "忽略",
-        "serverResumeAll": "恢复 {{machine}} 上的全部 {{count}} 个",
-        "title": "重新连接被中断的对话？",
-        "body": "Orca 关闭时，这些对话仍在回复中，重新连接会从中断处恢复每个对话，保留完整上下文且不会重新发送你的提示词——被中断的回复不会自行继续",
-        "updateBody": "Orca 安装更新时，这些对话仍在回复中，重新连接会从中断处恢复每个对话，保留完整上下文且不会重新发送你的提示词——被中断的回复不会自行继续",
-        "resuming": "正在重新连接…",
-        "untitled": "未命名对话",
-        "listLabel": "将重新连接的对话",
-        "dontAskAgain": "不再询问——下次自动重新连接",
-        "dontAskAgainHint": "你可以在设置 → 聊天 → 行为中关闭此选项",
-        "selectAgent": "重新连接 {{value2}} 中的 {{value0}} 对话“{{value1}}”",
-        "dismissAll": "全部忽略",
-        "viewChats": "查看聊天",
-        "review": "检查",
         "activityUnnamed": "未命名",
         "activityApproval": "等待您的批准：{{value0}}",
         "activityQuestion": "等待您的回答：{{value0}}",
         "activityMidReply": "回复进行中",
         "activitySubagentOne": "子代理运行中：{{value0}}",
         "activityMonitorOne": "正在监控：{{value0}}",
-        "selectWorkspace": "选择 {{value0}} 中的全部聊天",
         "workspaceSelectedCount": "{{value0}}/{{value1}}",
-        "selectAll": "选择全部聊天",
-        "selectAllLabel": "选择全部",
-        "selectedCount": "已选择 {{value0}}/{{value1}}",
-        "selectProject": "选择 {{value0}} 中的全部聊天",
         "collapseNode": "折叠 {{value0}}",
         "expandNode": "展开 {{value0}}",
-        "selectMachine": "选择 {{value0}} 上的全部聊天",
-        "sshHost": "SSH",
-        "done": "完成",
-        "resultListLabel": "本次恢复的聊天",
-        "resumeChats_one": "恢复 {{count}} 个聊天",
-        "resumeChats_other": "恢复 {{count}} 个聊天",
-        "serverResumeHereCount_other": "恢复在此启动的 {{count}} 个聊天",
-        "continuedCount_other": "已恢复 {{count}} 个聊天",
-        "notContinuedCount_other": "{{count}} 个聊天无法恢复",
-        "notConfirmedCount_other": "无法确认 {{count}} 个聊天是否已恢复",
-        "notConfirmedOtherCount_other": "无法确认其他 {{count}} 个聊天是否已恢复",
         "activitySubagentCount_other": "{{count}} 个子智能体正在运行",
         "activityMonitorCount_other": "正在监控 {{count}} 个后台任务"
       },
@@ -19081,26 +19047,6 @@
         "3d8e5f1b9c": "通过非公开链接分享技能，并在你使用的任何计算机上安装",
         "c5b3e8a17d": "登录 Orca"
       },
-      "NativeChatResumeOutcomeRow": {
-        "openChat": "打开聊天",
-        "retry": "重试",
-        "dismiss": "关闭",
-        "unconfirmed": "无法确认聊天已恢复",
-        "failed": "无法恢复",
-        "statusFor": "{{value0}}：{{value1}}",
-        "dismissChat": "关闭 {{value1}} 中的“{{value0}}”",
-        "toResume": "待恢复："
-      },
-      "NativeChatResumeFailureGuidance": {
-        "unconfirmed": "Orca 无法确认“continue”消息已送达，请打开聊天进行检查，确认后再发送其他消息",
-        "superseded": "请打开聊天并回复，重启后紧接着有新的工作到达，因此 Orca 未发送其“continue”消息",
-        "conflict": "此聊天已在另一个 Orca 窗口或终端中打开，请在那里关闭后重试",
-        "ownershipUnknown": "此聊天尚未准备好恢复，请稍等片刻后重试",
-        "notAttached": "聊天未能重新连接，请重试，或将其打开以开始新的轮次",
-        "dispatchRejected": "代理拒绝了“continue”消息，请打开聊天并自行发送一条",
-        "unsupported": "此聊天无法由 Orca 恢复，请将其打开以查看停止位置",
-        "fallback": "Orca 无法恢复此聊天，请将其打开以手动继续"
-      },
       "web": {
         "preloadApi": {
           "cursorAccounts": {
@@ -19111,39 +19057,6 @@
             "claudeWslDefaultUnavailable": "将 WSL 账户切换回系统默认仅在桌面应用中可用"
           }
         }
-      },
-      "NativeChatResumeRunPanel": {
-        "description": "每个聊天都会带着完整上下文恢复，并被要求检查它停在了哪里，你可以关闭此窗口，状态栏会继续显示进度",
-        "finished": "Orca 关闭时这些聊天正在工作，Orca 已将每个聊天恢复到停止的位置并保留完整上下文，并让代理在继续之前先检查它之前在做什么，你自己的提示没有被重新发送",
-        "finishedUpdate": "Orca 安装更新时这些聊天正在工作，Orca 已将每个聊天恢复到停止的位置并保留完整上下文，并让代理在继续之前先检查它之前在做什么，你自己的提示没有被重新发送",
-        "finishedPartial": "Orca 关闭时这些聊天正在工作，Orca 恢复的聊天已回到停止的位置并保留完整上下文，并被要求在继续之前先检查之前在做什么，你自己的提示没有被重新发送，请在列表中查看仍需处理或可以恢复的聊天",
-        "finishedPartialUpdate": "Orca 安装更新时这些聊天正在工作，Orca 恢复的聊天已回到停止的位置并保留完整上下文，并被要求在继续之前先检查之前在做什么，你自己的提示没有被重新发送，请在列表中查看仍需处理或可以恢复的聊天",
-        "resumedOfTotal_other": "已恢复 {{resumed}}/{{count}} 个聊天",
-        "resumingCount_other": "正在恢复 {{count}} 个聊天"
-      },
-      "NativeChatResumeRunStatusIcon": {
-        "waitingForReply": "等待回复",
-        "starting": "正在启动",
-        "waitingToStart": "等待启动",
-        "inFlight": "{{value0}} · {{value1}}",
-        "resumed": "已恢复"
-      },
-      "NativeChatResumeRunSummary": {
-        "done": "已完成 {{value0}}/{{value1}}",
-        "starting": "{{value0}} 个正在启动",
-        "waitingForReply": "{{value0}} 个等待回复",
-        "waitingToStart": "{{value0}} 个等待启动",
-        "all": "全部",
-        "inProgress": "进行中",
-        "resumed": "已恢复",
-        "attention": "需要处理",
-        "running": "已运行 {{value0}}",
-        "filter": "显示聊天"
-      },
-      "NativeChatResumeAutoNote": {
-        "resuming": "重启后正在自动恢复",
-        "resumed": "重启后已自动恢复",
-        "changeInSettings": "在设置中更改"
       },
       "TaskPageJiraSavedFilters": {
         "6c381858a1": "已保存的筛选器",
@@ -19331,6 +19244,46 @@
       },
       "NewWorkspaceComposerFooter": {
         "create": "创建"
+      },
+      "NativeChatResumeToast": {
+        "resumingOn_other": "正在恢复 {{machine}} 上的 {{count}} 个聊天…",
+        "resuming_other": "正在恢复 {{count}} 个聊天…",
+        "resumedOn_other": "已恢复 {{machine}} 上的 {{count}} 个聊天。",
+        "resumedUpdate_other": "更新后已恢复 {{count}} 个聊天。",
+        "resumedRestart_other": "重启后已恢复 {{count}} 个聊天。",
+        "partial_other": "已恢复 {{total}} 个聊天中的 {{resumed}} 个。{{count}} 个需要你处理。",
+        "stoppedOn_other": "{{machine}} 上有 {{count}} 个聊天已停止。",
+        "stoppedUpdate_other": "Orca 更新时有 {{count}} 个聊天已停止。",
+        "stoppedRestart_other": "Orca 关闭时有 {{count}} 个聊天已停止。",
+        "promptsNotResent": "恢复不会重新发送你的提示。",
+        "promptsNotSent": "你的提示没有被重新发送。",
+        "resume": "恢复",
+        "details": "详情",
+        "close": "关闭",
+        "listLabel": "聊天",
+        "untitled": "无标题聊天",
+        "willAsk": "Orca 会请求聊天继续。排队中的消息可能会被发送。",
+        "asked": "Orca 已请求聊天继续。排队中的消息可能会被发送。",
+        "resumedAutomatically": "已自动恢复。",
+        "changeInSettings": "在设置中更改",
+        "dismissAll": "全部忽略",
+        "open": "打开",
+        "dismiss": "忽略",
+        "retry": "重试",
+        "stateResumed": "已恢复",
+        "stateNeedsYou": "需要你处理",
+        "stateResuming": "正在恢复",
+        "stateStopped": "已停止"
+      },
+      "NativeChatResumeFailureGuidance": {
+        "fallbackShort": "无法恢复。",
+        "unconfirmedShort": "无法确认已继续。",
+        "supersededShort": "重启后有新的工作。",
+        "conflictShort": "已在其他窗口或终端中打开。",
+        "ownershipUnknownShort": "尚未准备好恢复。",
+        "notAttachedShort": "未重新连接。",
+        "dispatchRejectedShort": "智能体拒绝继续。",
+        "unsupportedShort": "Orca 无法恢复此聊天。"
       }
     },
     "i18n": {
@@ -22706,16 +22659,17 @@
   },
   "featureTips": {
     "voice": {
-      "demoPrompt": "评审此差异的边界情况，并为发现的问题补充测试",
-      "startDictation": "开始听写",
-      "agentPromptTitle": "代理提示",
-      "listening": "正在聆听...",
       "unassignedInstruction": "在聚焦窗格中开始语音听写前，请先指定听写快捷键",
       "shortcutInstruction": "将焦点移至终端、编辑器或智能体提示词输入框，然后按 <shortcut/> 开始语音听写。再次按 <shortcut/> 即可停止",
       "changeInSettings": "随时在<link>设置 → 语音</link>中更改模型、听写模式或快捷键",
       "title": "在任意窗格中听写",
       "description": "在任意已聚焦的窗格中开始语音听写，再次使用快捷键即可停止",
-      "cta": "设置语音听写"
+      "cta": "设置语音听写",
+      "demoFirstPhrase": "在小屏幕上，结账按钮会盖住页脚。",
+      "demoSecondPhrase": "能加个测试吗？",
+      "demoUserPrompt": "加上支付徽标",
+      "demoTabTitle": "结账页脚",
+      "demoReply": "已在结账页脚加上支付徽标。"
     },
     "sessionSearch": {
       "ageHours": "2小时",
@@ -23715,11 +23669,9 @@
     },
     "nestedRemoval": {
       "refreshFailed": "无法刷新工作区列表",
-      "review": "连同嵌套工作树一起删除…",
       "description": "这将永久删除“{{name}}”、下面列出的每个嵌套工作树及其中的所有文件（包括未提交的更改），它们的终端和代理将被停止",
       "detached": "分离 HEAD",
       "loading": "正在检查嵌套工作树…",
-      "order": "嵌套工作树会先被删除，如果其中一个失败，删除将停止并保留父工作树，分支遵循您现有的删除设置",
       "cancel": "取消",
       "retry": "重新检查",
       "deleting": "正在删除…",
@@ -23756,12 +23708,10 @@
       "forceDelete": "强制删除",
       "alwaysForceDelete": "始终强制删除",
       "batchTitle": "要删除 {{count}} 个工作区吗？",
-      "batchVerb": "删除 {{count}} 个工作区",
       "withChildrenTitle_one": "要删除 {{name}} 和 {{count}} 个子工作区吗？",
       "withChildrenTitle_other": "要删除 {{name}} 和 {{count}} 个子工作区吗？",
       "allVerb": "全部删除",
       "singleTitle": "要删除 {{name}} 吗？",
-      "singleVerb": "删除工作区",
       "forceExplanation": "存在更改，Git 无法删除该工作树。强制删除仍会移除这些更改。",
       "errorDetails": "详细信息",
       "changesIncomplete": "部分更改未能完整检查。"

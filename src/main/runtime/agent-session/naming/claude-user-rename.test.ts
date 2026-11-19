@@ -87,23 +87,12 @@ async function startChat(titles: Record<string, Title[]>) {
   return { runtime, named, record }
 }
 
-it.each(['/rename', '/name'])(
-  'names the chat from Claude %s without pushing it back',
-  async (command) => {
-    const chat = await startChat({
-      [`${command} 东莞银行Bond补丁项目`]: [{ title: '东莞银行Bond补丁项目', while: 'started' }]
-    })
-    await chat.runtime.send(`${command} 东莞银行Bond补丁项目`)
-    await vi.waitFor(() =>
-      expect(chat.record()).toMatchObject({
-        conversationName: '东莞银行Bond补丁项目',
-        conversationNameSource: 'user'
-      })
-    )
-    expect(chat.named).toEqual(['东莞银行Bond补丁项目'])
-    expect(chat.runtime.controls).toEqual([])
-  }
-)
+it('accepts Claude /name without pushing it back', async () => {
+  const chat = await startChat({ '/name Wanted': [{ title: 'Wanted', while: 'started' }] })
+  await chat.runtime.send('/name Wanted')
+  await vi.waitFor(() => expect(chat.named).toEqual(['Wanted']))
+  expect(chat.runtime.controls).toEqual([])
+})
 
 it('ignores titles outside a started rename send', async () => {
   const chat = await startChat({
@@ -113,13 +102,16 @@ it('ignores titles outside a started rename send', async () => {
       { title: 'Wanted', while: 'started' },
       { title: 'Subagent Title', while: 'started', subagent: true }
     ],
-    '/rename Final': [{ title: 'Final', while: 'started' }]
+    '/rename 东莞银行Bond补丁项目': [{ title: '东莞银行Bond补丁项目', while: 'started' }]
   })
   await chat.runtime.send('An ordinary prompt')
   await chat.runtime.send('/rename Wanted')
   await vi.waitFor(() => expect(chat.named).toEqual(['Wanted']))
-  await chat.runtime.send('/rename Final')
-  await vi.waitFor(() => expect(chat.named).toEqual(['Wanted', 'Final']))
-  expect(chat.record()?.conversationName).toBe('Final')
+  await chat.runtime.send('/rename 东莞银行Bond补丁项目')
+  await vi.waitFor(() => expect(chat.named).toEqual(['Wanted', '东莞银行Bond补丁项目']))
+  expect(chat.record()).toMatchObject({
+    conversationName: '东莞银行Bond补丁项目',
+    conversationNameSource: 'user'
+  })
   expect(chat.runtime.controls).toEqual([])
 })

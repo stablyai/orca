@@ -73,10 +73,10 @@ export function MobileBotItemPage({
   const now = useNow(60_000)
   const comment = useRef<BotItemCommentBoxHandle>(null)
   const jump = useJumpToEnd()
-  // The item's own title heads the page, so the header carries only the way back.
+  // Titled like the drawer's other pages; the item's number leads its own heading below.
   const back = (
     <SheetHeader
-      title=""
+      title={t('bots.items.view.title', 'Item')}
       onBack={{
         label: t('bots.panel.backTo', 'Back to {{name}}', { name: t('bots.items.tab', 'Items') }),
         onPress: onBack
@@ -136,8 +136,7 @@ export function MobileBotItemPage({
               {item.title}
             </Text>
             <Text style={styles.sub} numberOfLines={1}>
-              {t('bots.items.view.sub', 'Item {{number}} · {{chat}} · {{when}}', {
-                number: item.number,
+              {t('bots.items.view.chatAndWhen', '{{chat}} · {{when}}', {
                 chat: chatTitle,
                 when: new Intl.DateTimeFormat(getUiIntlLocale(), {
                   weekday: 'short',

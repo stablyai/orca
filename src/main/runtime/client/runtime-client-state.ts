@@ -9,6 +9,7 @@ import type { WorkspaceSessionState } from '../../../shared/workspace-session/wo
 
 import {
   type ExecutionHostId,
+  getSettingsFocusedExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId
 } from '../../../shared/execution-host/execution-host'
@@ -235,6 +236,11 @@ export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRunti
 
   getClientTerminalQuickCommands(): TerminalQuickCommand[] {
     return this.clientSettings.getTerminalQuickCommands()
+  }
+
+  /** The "New projects open on" host, which desktop's Linear and Jira pages read from. */
+  getClientDefaultScopeHost(): ExecutionHostId {
+    return getSettingsFocusedExecutionHostId(this.store?.getSettings?.())
   }
 
   getClientAgentLaunchSettings() {
