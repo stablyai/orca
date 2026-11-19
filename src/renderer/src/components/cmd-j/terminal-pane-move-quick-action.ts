@@ -1,4 +1,4 @@
-import { PanelTopOpen } from 'lucide-react'
+import { AppWindow } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import type { AppState } from '@/store/types'
 import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
@@ -66,7 +66,7 @@ export function getTerminalPaneMoveQuickAction(): CmdJQuickAction {
       'components.terminalPane.movePaneToNewTab.paletteDescription',
       'Move the active split pane into its own tab.'
     ),
-    icon: PanelTopOpen,
+    icon: AppWindow,
     verbKeywords: [
       title,
       translate('components.terminalPane.movePaneToNewTab.verbs.splitToTab', 'split to tab'),

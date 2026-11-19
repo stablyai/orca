@@ -45,7 +45,11 @@ export function resolveTerminalPaneAppearance({
     ['--orca-terminal-divider-color-strong' as string]: normalizeColor(
       effectiveAppearance?.dividerColor,
       DEFAULT_TERMINAL_DIVIDER_DARK
-    )
+    ),
+    // The pane grip sits on the terminal's own background, which can be light in a dark app.
+    ['--orca-pane-drag-handle-fg' as string]: titleUsesLightSurface
+      ? 'var(--terminal-pane-title-on-light-button-hover-fg)'
+      : 'var(--terminal-pane-title-on-dark-button-hover-fg)'
   }
   return {
     effectiveAppearance,

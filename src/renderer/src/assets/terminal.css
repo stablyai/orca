@@ -142,7 +142,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.15);
+  background: color-mix(
+    in srgb,
+    var(--orca-pane-drag-handle-fg, rgb(255 255 255)) 15%,
+    transparent
+  );
 }
 
 .pane-drag-handle::after {
@@ -150,7 +154,7 @@
   font-size: 10px;
   letter-spacing: 1px;
   line-height: 1;
-  color: rgba(255, 255, 255, 0.45);
+  color: color-mix(in srgb, var(--orca-pane-drag-handle-fg, rgb(255 255 255)) 60%, transparent);
 }
 
 .has-multiple-panes .pane-drag-handle {

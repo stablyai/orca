@@ -3,7 +3,7 @@ import {
   Maximize2,
   Minimize2,
   PanelBottomClose,
-  PanelTopOpen,
+  AppWindow,
   PanelsTopLeft,
   PanelRightClose,
   Pencil,
@@ -62,7 +62,7 @@ export function NativeChatPaneMenuItems({
           disabled={!actions.canMovePaneToNewTab?.()}
           onSelect={actions.onMovePaneToNewTab}
         >
-          <PanelTopOpen />
+          <AppWindow />
           {t('components.terminalPane.TerminalContextMenu.movePaneToNewTab', 'Move to New Tab')}
         </DropdownMenuItem>
       ) : null}

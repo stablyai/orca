@@ -8,7 +8,7 @@ import {
   MessageSquare,
   Minimize2,
   PanelBottomClose,
-  PanelTopOpen,
+  AppWindow,
   PanelsTopLeft,
   Quote,
   PanelRightClose,
@@ -309,7 +309,7 @@ function TerminalContextMenuItems({
       )}
       {paneMoveReadiness !== 'single-pane' ? (
         <DropdownMenuItem disabled={paneMoveReadiness !== 'ready'} onSelect={onMovePaneToNewTab}>
-          <PanelTopOpen />
+          <AppWindow />
           {t('components.terminalPane.TerminalContextMenu.movePaneToNewTab', 'Move to New Tab')}
           {shortcuts.movePaneToNewTab ? (
             <DropdownMenuShortcut>{shortcuts.movePaneToNewTab}</DropdownMenuShortcut>
