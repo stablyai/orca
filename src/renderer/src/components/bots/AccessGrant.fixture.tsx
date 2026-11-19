@@ -3,16 +3,18 @@ import { defineFixture } from '../../component-fixtures/component-fixture'
 import { ConfirmationDialogProvider } from '../dismiss/confirmation/confirmation-dialog'
 import { Button } from '../ui/button'
 import { useAppStore } from '@/store'
-import type { Bot } from '../../../../shared/bot-types'
+import { stampBotHost } from '@/lib/bot-catalog-snapshot'
+import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
 import { RUNTIME_PROTOCOL_VERSION } from '../../../../shared/remote-runtime/protocol/protocol-version'
 import { BotWhoCanAskInsetList } from './BotWhoCanAskInsetList'
 import type { BotWhoCanAskService } from './BotWhoCanAskList'
 import { useConfirmBotAccess } from './bot-access-confirm'
 
-const remote: Bot = {
+const HOST = 'runtime:access-example'
+const remote = stampBotHost(HOST, {
   id: 'access-example',
   name: 'Helper',
-  hostId: 'runtime:access-example',
+  hostId: 'local',
   folder: 'helper',
   folderWorkspaceId: 'access-example-home',
   agent: 'claude',
@@ -27,7 +29,7 @@ const remote: Bot = {
   chatSessionId: null,
   createdAt: 1,
   updatedAt: 1
-}
+})
 const service: BotWhoCanAskService = {
   listed: () => [],
   stamp: { source: 'slack' },
@@ -49,8 +51,8 @@ const service: BotWhoCanAskService = {
 function setup(): void {
   useAppStore.setState((state) => ({
     settings: {
-      ...state.settings,
-      hostSettingOverrides: { [remote.hostId]: { displayLabel: 'Atlas Server' } }
+      ...(state.settings ?? getDefaultSettings('/home/fixture')),
+      hostSettingOverrides: { [HOST]: { displayLabel: 'Atlas Server' } }
     }
   }))
   window.api.runtimeEnvironments.call = async ({ method }) => ({
