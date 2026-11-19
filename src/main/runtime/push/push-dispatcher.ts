@@ -15,7 +15,11 @@ const PUSH_RETRY_DELAY_MS = 2_000
 const MAX_REGISTRATIONS_PER_SEND = 20
 
 export type PushDispatcherRegistry = {
-  listDevices(): readonly { deviceId: string; pushRegistration?: MobilePushRegistration }[]
+  // Read per batch and retry: a row revoked on disk, or by an ancestor's removal, gets nothing.
+  listAuthorizedDevices(): readonly {
+    deviceId: string
+    pushRegistration?: MobilePushRegistration
+  }[]
   setPushRegistration(deviceId: string, registration: MobilePushRegistration | null): boolean
 }
 
@@ -94,7 +98,7 @@ export class PushDispatcher {
         return null
       }
       const targets = this.registry
-        .listDevices()
+        .listAuthorizedDevices()
         .flatMap(({ deviceId, pushRegistration: registration }) =>
           registration && registration.expiresAt > Date.now() ? [{ deviceId, registration }] : []
         )
@@ -118,7 +122,7 @@ export class PushDispatcher {
     if (!content) {
       return null
     }
-    const targets = this.registry.listDevices().flatMap((device) => {
+    const targets = this.registry.listAuthorizedDevices().flatMap((device) => {
       const registration = device.pushRegistration
       if (
         !registration ||
@@ -164,15 +168,14 @@ export class PushDispatcher {
     if (this.stopped) {
       return
     }
+    const devices = this.registry.listAuthorizedDevices()
     const currentTargets = targets.filter((target) =>
-      this.registry
-        .listDevices()
-        .some(
-          (device) =>
-            device.deviceId === target.deviceId &&
-            device.pushRegistration === target.registration &&
-            target.registration.expiresAt > Date.now()
-        )
+      devices.some(
+        (device) =>
+          device.deviceId === target.deviceId &&
+          device.pushRegistration === target.registration &&
+          target.registration.expiresAt > Date.now()
+      )
     )
     if (!currentTargets.length) {
       return
@@ -210,17 +213,16 @@ export class PushDispatcher {
     targets: readonly PushTarget[],
     results: readonly { registrationId: string; status: string }[]
   ): void {
-    for (const result of results) {
-      if (result.status !== 'dead') {
-        continue
-      }
+    const dead = results.filter((result) => result.status === 'dead')
+    const devices = dead.length > 0 ? this.registry.listAuthorizedDevices() : []
+    for (const result of dead) {
       const target = targets.find(
         (entry) => entry.registration.registrationId === result.registrationId
       )
       if (
         !target ||
-        this.registry.listDevices().find((device) => device.deviceId === target.deviceId)
-          ?.pushRegistration !== target.registration
+        devices.find((device) => device.deviceId === target.deviceId)?.pushRegistration !==
+          target.registration
       ) {
         continue
       }

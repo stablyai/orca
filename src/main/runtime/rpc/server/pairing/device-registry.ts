@@ -37,7 +37,8 @@ import {
   type DeviceOrcaAccount,
   type DeviceKeyLookup,
   type PendingOfferOptions,
-  type TokenDeviceEntry
+  type TokenDeviceEntry,
+  withAuthorizedAncestry
 } from './device-entry'
 import type { MobilePushRegistration } from '../../../../../shared/notifications/mobile-push-contract'
 
@@ -60,7 +61,7 @@ export class DeviceRegistry extends DeviceRegistrySightings {
     grants: readonly RuntimeDeviceGrant[],
     options: PendingOfferOptions
   ): TokenDeviceEntry {
-    const entry = mintTokenDevice(name, scope, pairingReach, grants, options)
+    const entry = mintTokenDevice(name, scope, pairingReach, grants, this.withLiveCreator(options))
     const nextDevices = [...existingDevices, entry]
     // Credentials become valid only after durable persistence.
     this.devices = this.save(nextDevices)
@@ -73,10 +74,11 @@ export class DeviceRegistry extends DeviceRegistrySightings {
     scope: DeviceScope = 'mobile',
     pairingReach: RuntimePairingReach = 'network',
     grants: readonly RuntimeDeviceGrant[] = [],
-    options: PendingOfferOptions = {}
+    requestedOptions: PendingOfferOptions = {}
   ): TokenDeviceEntry {
     // Never show a QR for an offer an admin removed on disk.
     this.adoptExternalEdits({ fresh: true })
+    const options = this.withLiveCreator(requestedOptions)
     // Relay-bound rows leave through the caller's discard, which queues the cloud revoke first.
     const live = withoutExpiredUnboundOffers(this.devices, this.seenDeviceIds)
     if (live !== this.devices) {
@@ -97,6 +99,14 @@ export class DeviceRegistry extends DeviceRegistrySightings {
       return offered ?? this.addDevice(name, scope, pairingReach, grants, options)
     }
     return this.addDevice(name, scope, pairingReach, grants, options)
+  }
+
+  /** A creator already revoked would leave the new offer unusable: attribute only a paired one. */
+  private withLiveCreator(options: PendingOfferOptions): PendingOfferOptions {
+    const { createdByDeviceId, ...rest } = options
+    return createdByDeviceId !== undefined && this.getDevice(createdByDeviceId) === null
+      ? rest
+      : options
   }
 
   private setPairingReach(
@@ -229,6 +239,12 @@ export class DeviceRegistry extends DeviceRegistrySightings {
 
   listDevices(): readonly DeviceEntry[] {
     return this.devices
+  }
+
+  /** The file as it is now, without rows whose authority an ancestor's removal revoked. */
+  listAuthorizedDevices(): readonly DeviceEntry[] {
+    this.adoptExternalEdits({ fresh: true })
+    return withAuthorizedAncestry(this.devices)
   }
 
   validateToken(token: string): DeviceEntry | null {

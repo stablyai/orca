@@ -2,7 +2,12 @@ import type {
   RelayDeviceBinding,
   RelayRevokeOutboxItem
 } from '../../mobile-cloud-relay/pairing/relay-revoke-outbox'
-import type { DeviceEntry, DeviceOrcaAccount, PairedDeviceTypist } from './pairing/device-entry'
+import {
+  authorityParentIdsOf,
+  type DeviceEntry,
+  type DeviceOrcaAccount,
+  type PairedDeviceTypist
+} from './pairing/device-entry'
 import type { DeviceSelfRpcContext } from '../core'
 import { pairedDeviceTypistOf } from './pairing/paired-device-typist'
 import type {
@@ -44,11 +49,7 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
       }
       visited.add(device.deviceId)
       for (const child of paired) {
-        if (
-          child.parentDeviceId === device.deviceId ||
-          child.forkedFrom === device.deviceId ||
-          child.createdByDeviceId === device.deviceId
-        ) {
+        if (authorityParentIdsOf(child).includes(device.deviceId)) {
           visit(child)
         }
       }

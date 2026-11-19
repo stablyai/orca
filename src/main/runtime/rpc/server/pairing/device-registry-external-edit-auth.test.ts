@@ -24,7 +24,54 @@ function registryPath(): string {
   return join(dir, DEVICE_REGISTRY_FILENAME)
 }
 
+type DiskRow = { deviceId: string; token?: string; credentialRevision?: number }
+
+/** Another writer (an admin, a second host process) rewrites the rows in place. */
+function editOnDisk(edit: (rows: DiskRow[]) => DiskRow[]): void {
+  writeFileSync(
+    registryPath(),
+    JSON.stringify(edit(JSON.parse(readFileSync(registryPath(), 'utf8'))))
+  )
+}
+
 describe('device registry auth checks see edits made on disk', () => {
+  it('refuses a phone once the desktop that paired it is removed on disk', () => {
+    const registry = new DeviceRegistry(dir)
+    const desktop = registry.addDevice('desktop', 'runtime')
+    const phone = registry.addDevice('phone', 'mobile', 'network', [], {
+      createdByDeviceId: desktop.deviceId
+    })
+    registry.updateLastSeen(phone.deviceId)
+
+    editOnDisk((rows) => rows.filter((row) => row.deviceId !== desktop.deviceId))
+
+    expect(registry.validateToken(phone.token)).toBeNull()
+  })
+
+  it('adopts a credential another writer rotated, and a later save keeps it', () => {
+    const registry = new DeviceRegistry(dir)
+    const desktop = registry.addDevice('desktop', 'runtime')
+    const other = registry.addDevice('other', 'runtime')
+    registry.updateLastSeen(desktop.deviceId)
+
+    editOnDisk((rows) =>
+      rows.map((row) =>
+        row.deviceId === desktop.deviceId
+          ? { ...row, token: 'rotated-token', credentialRevision: 1 }
+          : row
+      )
+    )
+
+    expect(registry.validateToken(desktop.token)).toBeNull()
+    expect(registry.validateToken('rotated-token')?.credentialRevision).toBe(1)
+    registry.setOriginClientInstance(other.deviceId, 'instance-1')
+    const saved: DiskRow[] = JSON.parse(readFileSync(registryPath(), 'utf8'))
+    expect(saved.find((row) => row.deviceId === desktop.deviceId)).toMatchObject({
+      token: 'rotated-token',
+      credentialRevision: 1
+    })
+  })
+
   it('refuses every device once the file is deleted, and keeps working', () => {
     const registry = new DeviceRegistry(dir)
     const desktop = registry.addDevice('desktop', 'runtime')

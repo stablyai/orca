@@ -6,9 +6,10 @@ import type * as FileReadModule from './device-registry-file-read'
 import { DeviceRegistry } from './device-registry'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
 
-// Runs once right after the saving process has read the file: another process's write lands then.
+// Each runs once, in order, right after the saving process reads the file: another process's
+// write lands then.
 const afterRead = vi.hoisted(() => {
-  const state: { hook: (() => void) | null } = { hook: null }
+  const state: { hooks: (() => void)[] } = { hooks: [] }
   return state
 })
 vi.mock('./device-registry-file-read', async (importOriginal) => {
@@ -17,9 +18,7 @@ vi.mock('./device-registry-file-read', async (importOriginal) => {
     ...actual,
     readDeviceRegistryFile: (path: string) => {
       const read = actual.readDeviceRegistryFile(path)
-      const hook = afterRead.hook
-      afterRead.hook = null
-      hook?.()
+      afterRead.hooks.shift()?.()
       return read
     }
   }
@@ -34,7 +33,8 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  afterRead.hook = null
+  afterRead.hooks = []
+  vi.restoreAllMocks()
   rmSync(dir, { recursive: true, force: true })
 })
 
@@ -63,12 +63,28 @@ describe('device registry save racing another writer', () => {
     const { kept, revoked } = pairedDevices(registry)
     registry.updateLastSeenDeferred(revoked.deviceId)
 
-    afterRead.hook = () => adminRemoves(revoked.deviceId)
+    afterRead.hooks = [() => adminRemoves(revoked.deviceId)]
     registry.flushPendingLastSeen()
 
     expect(diskIds()).toEqual([kept.deviceId])
     expect(registry.validateToken(revoked.token)).toBeNull()
     expect(new DeviceRegistry(dir).validateToken(revoked.token)).toBeNull()
     expect(registry.validateToken(kept.token)?.deviceId).toBe(kept.deviceId)
+  })
+
+  it('leaves the file as it is when another writer keeps landing through every attempt', () => {
+    const registry = new DeviceRegistry(dir)
+    const { kept, revoked } = pairedDevices(registry)
+    registry.updateLastSeenDeferred(kept.deviceId)
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    // Unrelated rewrites lose the first races; the revoke lands after the last attempt's read.
+    const rewrite = (): void =>
+      writeFileSync(registryPath, `${readFileSync(registryPath, 'utf8')} `)
+    afterRead.hooks = [rewrite, rewrite, rewrite, rewrite, () => adminRemoves(revoked.deviceId)]
+    registry.flushPendingLastSeen()
+
+    expect(diskIds()).toEqual([kept.deviceId])
+    expect(new DeviceRegistry(dir).validateToken(revoked.token)).toBeNull()
   })
 })

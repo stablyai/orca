@@ -1,4 +1,5 @@
 import { readFileSync, statSync } from 'node:fs'
+import { isDeepStrictEqual } from 'node:util'
 import {
   writeDurableSecureJsonFile,
   writeSecureJsonFile
@@ -21,6 +22,9 @@ const TORN_READ_RETRY_MS = 25
  * - rows this save adds, and this save's version of rows still on disk, are kept;
  * - rows that appeared on disk since are kept, unless this process ever removed them: `removed`
  *   holds those ids, so a stale writer putting a revoked row back can't get it adopted;
+ * - in a row on both sides, only the fields this process changed since it last saw the file
+ *   (`observed`) are its own; the rest take the file's value, so another writer's credential
+ *   rotation (token, revision) is adopted rather than rolled back;
  * - a sighting never goes backwards, so a stale writer cannot turn a paired row back into an
  *   unscanned (expirable, rotatable) offer.
  */
@@ -28,24 +32,52 @@ export function mergeDeviceRegistrySave(
   before: readonly DeviceEntry[],
   next: readonly DeviceEntry[],
   disk: DeviceRegistryFileRead,
-  removed: ReadonlySet<string> = new Set()
+  removed: ReadonlySet<string>,
+  observed: readonly DeviceEntry[]
 ): DeviceEntry[] {
   const known = new Set([...before.map((device) => device.deviceId), ...removed])
-  const onDisk = new Set(disk.devices.map((device) => device.deviceId))
+  const onDisk = new Map(disk.devices.map((device) => [device.deviceId, device]))
   const saving = new Set(next.map((device) => device.deviceId))
-  const diskLastSeen = new Map(disk.devices.map((device) => [device.deviceId, device.lastSeenAt]))
+  const baseline = new Map(observed.map((device) => [device.deviceId, device]))
   return [
     ...next
       .filter((device) => onDisk.has(device.deviceId) || !known.has(device.deviceId))
-      .map((device) => withLatestSighting(device, diskLastSeen.get(device.deviceId))),
+      .map((device) => {
+        const diskRow = onDisk.get(device.deviceId)
+        return diskRow
+          ? withLatestSighting(
+              mergeRow(baseline.get(device.deviceId), device, diskRow),
+              diskRow.lastSeenAt
+            )
+          : device
+      }),
     ...disk.devices.filter((device) => !known.has(device.deviceId) && !saving.has(device.deviceId))
   ]
 }
 
-function withLatestSighting(device: DeviceEntry, diskLastSeenAt: number | undefined): DeviceEntry {
-  return diskLastSeenAt !== undefined && diskLastSeenAt > device.lastSeenAt
-    ? { ...device, lastSeenAt: diskLastSeenAt }
-    : device
+/** Three-way, per field; returns `local` itself when it already matches, keeping row identity. */
+function mergeRow(
+  base: DeviceEntry | undefined,
+  local: DeviceEntry,
+  disk: DeviceEntry
+): DeviceEntry {
+  if (!base) {
+    return local
+  }
+  const fromDisk: Partial<DeviceEntry> = {}
+  for (const key of new Set([...Object.keys(local), ...Object.keys(disk)])) {
+    const ours: unknown = Reflect.get(local, key)
+    const theirs: unknown = Reflect.get(disk, key)
+    if (!isDeepStrictEqual(ours, theirs) && isDeepStrictEqual(ours, Reflect.get(base, key))) {
+      // An undefined value is dropped when written, the same as an absent field.
+      Object.assign(fromDisk, { [key]: theirs })
+    }
+  }
+  return Object.keys(fromDisk).length > 0 ? { ...local, ...fromDisk } : local
+}
+
+function withLatestSighting(device: DeviceEntry, diskLastSeenAt: number): DeviceEntry {
+  return diskLastSeenAt > device.lastSeenAt ? { ...device, lastSeenAt: diskLastSeenAt } : device
 }
 
 /**
@@ -63,6 +95,8 @@ export class DeviceRegistryWriter {
   /** Stat identity of the file when this process last read it; null forces the next re-read. */
   private readStamp: string | null = null
   private checkedAt = Number.NEGATIVE_INFINITY
+  /** Rows as this process last read or wrote them: the baseline its own field changes are measured from. */
+  private observed: readonly DeviceEntry[] = []
 
   constructor(private readonly registryPath: string) {}
 
@@ -75,7 +109,11 @@ export class DeviceRegistryWriter {
   /** Stamped before reading, so a write landing during the read is caught by the next check. */
   read(): DeviceRegistryFileRead {
     this.readStamp = fileStamp(this.registryPath)
-    return readDeviceRegistryFile(this.registryPath)
+    const read = readDeviceRegistryFile(this.registryPath)
+    if (!read.unreadable && !read.corruptFilePending) {
+      this.observed = read.devices
+    }
+    return read
   }
 
   /**
@@ -103,17 +141,19 @@ export class DeviceRegistryWriter {
     if (fileStamp(this.registryPath) === this.readStamp) {
       return null
     }
+    const observed = this.observed
     const disk = this.read()
     return disk.unreadable || disk.corruptFilePending
       ? null
-      : mergeDeviceRegistrySave(current, current, disk, this.removedIds)
+      : mergeDeviceRegistrySave(current, current, disk, this.removedIds, observed)
   }
 
   /**
    * Returns what was written. Security transitions pass `durable`. The merge is published only if
    * the file is still exactly what it was read from (compare-and-swap); otherwise another writer
    * landed in between, so the save re-reads and re-merges. Without that, a save that read the file
-   * before an admin's revoke and renamed after it would put the revoked row back.
+   * before an admin's revoke and renamed after it would put the revoked row back. When another
+   * writer keeps landing, the save throws and leaves that writer's file as it is.
    */
   write(
     before: readonly DeviceEntry[],
@@ -128,8 +168,8 @@ export class DeviceRegistryWriter {
     }
     // Stat after our rename can't tell our write from one right after it; re-read once instead.
     this.readStamp = null
-    for (let attempt = 1; ; attempt++) {
-      const lastAttempt = attempt >= MAX_WRITE_ATTEMPTS
+    for (let attempt = 1; attempt <= MAX_WRITE_ATTEMPTS; attempt++) {
+      const lastAttempt = attempt === MAX_WRITE_ATTEMPTS
       const snapshot = readRawRegistry(this.registryPath)
       const disk = readDeviceRegistryFile(this.registryPath)
       if (
@@ -147,19 +187,22 @@ export class DeviceRegistryWriter {
       const merged =
         disk.unreadable || disk.corruptFilePending
           ? [...next]
-          : mergeDeviceRegistrySave(baseline, next, disk, this.removedIds)
+          : mergeDeviceRegistrySave(baseline, next, disk, this.removedIds, this.observed)
       let unchanged = true
       const write = options.durable ? writeDurableSecureJsonFile : writeSecureJsonFile
       write(this.registryPath, merged, {
         // Last check before the rename; a lost race discards the stage and merges again.
-        shouldPublish: () =>
-          (unchanged = lastAttempt || readRawRegistry(this.registryPath) === snapshot)
+        shouldPublish: () => (unchanged = readRawRegistry(this.registryPath) === snapshot)
       })
       if (unchanged) {
         this.quarantinedUntilWritten = false
+        this.observed = merged
         return merged
       }
     }
+    throw new Error(
+      `The device registry at ${this.registryPath} kept changing while saving; left it as it is.`
+    )
   }
 }
 
