@@ -155,6 +155,38 @@ export const TeammatePageCopy = memo(function TeammatePageCopy({
   )
 })
 
+export const ItemsPageCopy = memo(function ItemsPageCopy({
+  active
+}: {
+  active: boolean
+}): JSX.Element {
+  const t = useTranslate()
+  return (
+    <PageCopy
+      active={active}
+      title={t('featureTips.botsTeammate.itemsTitle', 'Its work, in one list')}
+      description={t(
+        'featureTips.botsTeammate.itemsDescription',
+        'Ask for a few things at once. It tracks each one as an item until it’s done.'
+      )}
+      lines={[
+        [
+          t('featureTips.botsTeammate.itemsListLead', 'One list of its work.'),
+          t('featureTips.botsTeammate.itemsList', 'Every task you hand it.')
+        ],
+        [
+          t('featureTips.botsTeammate.itemsMovesLead', 'Moves it along itself.'),
+          t('featureTips.botsTeammate.itemsMoves', 'In progress, then closed.')
+        ],
+        [
+          t('featureTips.botsTeammate.itemsAsksLead', 'Asks you on the item.'),
+          t('featureTips.botsTeammate.itemsAsks', 'Reply there and it carries on.')
+        ]
+      ]}
+    />
+  )
+})
+
 export const GroupPageCopy = memo(function GroupPageCopy({
   active
 }: {
