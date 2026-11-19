@@ -62,15 +62,23 @@ export function createLocalPtyInventoryReader(options: InventoryOptions): LocalP
     }
     return pending
   }
-  // Sleep capture looks up every pane against one snapshot; index it once per snapshot.
-  const indexes = new WeakMap<PtyProcessInfo[], InventoryIndex>()
+  // A lone lookup scans as before; a second against the same snapshot (sleep capture walks every
+  // pane) indexes it once.
+  const indexes = new WeakMap<PtyProcessInfo[], InventoryIndex | 'scanned'>()
   const find = (rows: PtyProcessInfo[], paneKey: string, id: string | undefined | null) => {
     let index = indexes.get(rows)
     if (!index) {
+      indexes.set(rows, 'scanned')
+      // Before a restored pane reattaches, the provider's own spawn record still names its PTY.
+      const spawned = id ? [] : rows.filter((entry) => entry.paneKey === paneKey)
+      return (
+        (id ? rows.find((entry) => entry.id === id) : spawned.length === 1 && spawned[0]) || null
+      )
+    }
+    if (index === 'scanned') {
       index = indexInventory(rows)
       indexes.set(rows, index)
     }
-    // Before a restored pane reattaches, the provider's own spawn record still names its PTY.
     const spawned = id ? undefined : index.bySpawnPaneKey.get(paneKey)
     return (id ? index.byId.get(id) : spawned?.length === 1 && spawned[0]) || null
   }

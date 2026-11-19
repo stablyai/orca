@@ -36,10 +36,11 @@ function isAttachingTmuxClient(row: ProcessTableRow): boolean {
   let index = 0
   while (args[index]?.startsWith('-')) {
     // Flags may be grouped (`-vc`); the rest of a group after -L/-S/-f/-T is that flag's value.
+    // -c runs a shell command and -D runs the server itself: neither is an attached client.
     const flags = args[index].slice(1)
     const valueAt = flags.search(/[LSfT]/)
-    const shellAt = flags.indexOf('c')
-    if (shellAt !== -1 && (valueAt === -1 || shellAt < valueAt)) {
+    const notClientAt = flags.search(/[cD]/)
+    if (notClientAt !== -1 && (valueAt === -1 || notClientAt < valueAt)) {
       return false
     }
     index += valueAt !== -1 && valueAt === flags.length - 1 ? 2 : 1
