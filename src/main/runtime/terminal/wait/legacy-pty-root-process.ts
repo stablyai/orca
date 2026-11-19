@@ -2,7 +2,6 @@ import type { RuntimePtyController } from '../lifecycle/runtime-pty-controller-c
 import { readProcessStartTimeMs } from '../../agent-session/ownership/agent-session-process-identity-probe'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 
-const MAX_REMEMBERED_ROOTS = 256
 const rootByPtyId = new Map<
   string,
   { incarnationId: string; pid: number; startedAtMs: number | null }
@@ -43,15 +42,13 @@ export async function readLegacyPtyRootProcessId(
   if (expectedIncarnationId && target.incarnationId === expectedIncarnationId) {
     const startedAtMs = await readProcessStartTimeMs(pid)
     if (startedAtMs !== null) {
-      rootByPtyId.delete(ptyId)
       rootByPtyId.set(ptyId, { incarnationId: expectedIncarnationId, pid, startedAtMs })
-      if (rootByPtyId.size > MAX_REMEMBERED_ROOTS) {
-        const oldest = rootByPtyId.keys().next()
-        if (!oldest.done) {
-          rootByPtyId.delete(oldest.value)
-        }
-      }
     }
   }
   return pid
+}
+
+/** The root lives as long as its terminal: bounded by live PTYs, not a size cap that would thrash. */
+export function forgetLegacyPtyRoot(ptyId: string): void {
+  rootByPtyId.delete(ptyId)
 }

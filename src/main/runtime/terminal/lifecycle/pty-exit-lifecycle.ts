@@ -10,6 +10,7 @@ import {
 } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { SSH_EXIT_UNCONFIRMED_REASON } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type { PtyLivenessVerdict } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
+import { forgetLegacyPtyRoot } from '../wait/legacy-pty-root-process'
 import type { RetiredTerminalSurface } from '../surface/mobile-session-terminal-retirement'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { advertisedUrlWatcher } from '../../../ports/advertised-url-watcher'
@@ -232,6 +233,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimePtyExitSurfaceRead
       this.cancelPendingDriverMutations(ptyId)
       // Cold restore can reuse ids during delayed Enter; revoke it before it injects into a replacement.
       this.orchestrationMailboxNotifications.retirePty(ptyId)
+      forgetLegacyPtyRoot(ptyId)
       // Repoint retained handle/pane mailbox pointers away from the retired session.
       for (const leaf of this.getLeavesForPty(ptyId)) {
         const mailboxHandle = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
