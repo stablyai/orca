@@ -29400,7 +29400,7 @@
         "replyTo": "Reply to {{name}}…"
       },
       "empty": {
-        "allClear": "Nothing needs you and nothing is running.",
+        "allClear": "Nothing needs you",
         "body": "When {{bot}} takes on something for you, it shows up here with what it is doing and what it needs from you.",
         "filtered": "No items match.",
         "needsYou": "Nothing needs you.",
