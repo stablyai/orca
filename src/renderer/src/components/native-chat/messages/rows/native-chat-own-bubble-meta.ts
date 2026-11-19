@@ -27,6 +27,11 @@ export function nativeChatRowEndsInOwnBubbleMeta(message: NativeChatMessage): bo
   if (blocks.some((block) => block.type === 'text' && block.providerFrame)) {
     return false
   }
-  // The hover row shows a time or a copy button; an image-only prompt with no time has neither.
-  return message.timestamp !== null || deriveNativeChatRowContent(blocks).markdown.length > 0
+  const { markdown, hasImages } = deriveNativeChatRowContent(blocks)
+  // MessageRow draws nothing without words or images. The hover row shows a time or a copy
+  // button, so an image-only prompt with no time has none (a rewind-only row just keeps its gap).
+  if (markdown.length === 0 && !hasImages) {
+    return false
+  }
+  return message.timestamp !== null || markdown.length > 0
 }
