@@ -243,6 +243,8 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
     ['macOS suspended, then another command', ['146', '0'], true],
     ['macOS suspended, then a listing and another command', ['146', 'listing', '0'], true],
     ['suspended, resumed (fg), then quit', ['148', 'fg', '0'], false],
+    // A restored receipt whose launch already finished leaves the quit to the shell-alone proof.
+    ['macOS suspended, resumed (fg), a listing, then quit', ['146', 'fg', 'listing', '0'], false],
     // A stop-like status is no proof: an agent that exits 146 for real is gone at that mark.
     ['quit with a stop-like exit status', ['exit146'], false],
     ['quit, then sleep while its exit proof still runs', ['quit-then-sleep'], false],
