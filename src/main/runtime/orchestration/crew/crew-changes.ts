@@ -128,8 +128,9 @@ export class CrewRelevance {
     if (this.panes.has(pane)) {
       return true
     }
-    const leaf = parsePaneKey(pane)?.leafId
-    return Boolean(leaf && this.leaves.has(leaf))
+    // `leaves` holds parsed leaf ids only, so the text after the colon matching one is the parse's own
+    // answer, without parsing every fleet pane a status read checks.
+    return this.leaves.size > 0 && this.leaves.has(pane.slice(pane.indexOf(':') + 1))
   }
 }
 

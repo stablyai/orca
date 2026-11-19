@@ -221,18 +221,22 @@ export class CrewReadModel {
         const { statuses, ...sources } = deps
         const relevance = this.relevance
         // Only bindings a row can show: an unrelated pane's row appearing or leaving rebuilds nothing.
-        const identities = (rows: typeof statuses) =>
-          new Map(
-            rows.flatMap((row) =>
+        const identities = (rows: typeof statuses) => {
+          const shown = new Map<string, (typeof rows)[number]['binding']>()
+          for (const row of rows) {
+            const { binding } = row
+            if (
               !relevance ||
-              relevance.hasPane(row.activity.paneKey) ||
-              (row.binding.kind !== 'unresolved' &&
-                relevance.handles.has(row.binding.terminalHandle)) ||
-              (row.binding.kind === 'worker' && relevance.dispatches.has(row.binding.dispatchId))
-                ? [[row.activity.paneKey, row.binding] as const]
-                : []
-            )
-          )
+              relevance.panes.has(row.activity.paneKey) ||
+              (binding.kind !== 'unresolved' && relevance.handles.has(binding.terminalHandle)) ||
+              (binding.kind === 'worker' && relevance.dispatches.has(binding.dispatchId)) ||
+              relevance.hasPane(row.activity.paneKey)
+            ) {
+              shown.set(row.activity.paneKey, binding)
+            }
+          }
+          return shown
+        }
         previous.registry.refreshRecordNames(deps.records, renamed)
         this.host = isDeepStrictEqual(identities(previous.deps.statuses), identities(statuses))
           ? refreshCrewStatuses(previous, statuses)
