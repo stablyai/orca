@@ -140,17 +140,20 @@ function claudeAccountReason(
   state: AppState,
   session: AgentProviderSessionMetadata,
   view: ClaudeAccountView
-): 'own-folder' | 'other-account' | null {
+): AgentRestartCantReason | null {
   const folder = resolveClaudePaneFolder(
     session.transcriptPath,
     state.settings?.claudeManagedAccounts ?? [],
     view.host,
     getRendererAppPlatform()
   )
-  if (folder?.kind === 'own-folder') {
+  // Why fail closed: the restart launches on the selected account, which may not be this pane's.
+  if (!folder) {
+    return 'couldnt-check'
+  }
+  if (folder.kind === 'own-folder') {
     return 'own-folder'
   }
-  // Why an unknown folder too: the restart launches on the selected account, so fail closed as the switch does.
   return isClaudePaneOnAccount(folder, view.launchAccountId, view.host) ? null : 'other-account'
 }
 

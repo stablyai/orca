@@ -180,7 +180,7 @@ describe('localAgentRestartCandidates', () => {
     stubClaudeAccountsList()
     seedPane({ agentType: 'claude', providerSession: SESSION, foreground: 'claude' })
     expect(await localAgentRestartCandidates(get())).toMatchObject([
-      { restartable: false, reason: 'other-account' }
+      { restartable: false, reason: 'couldnt-check' }
     ])
   })
 
