@@ -1,13 +1,17 @@
 import { spawnWorkerThread } from '../../../../worker-threads/worker-thread-spawn'
 import type { OrchestrationDb } from '../orchestration-db'
 
-// Prompt while writes land; slower while the WAL stays empty, so an idle database barely wakes it.
+// Checks often while other connections commit, rarely while none do, so an idle database barely wakes it.
 const CHECKPOINT_BUSY_INTERVAL_MS = 250
 const CHECKPOINT_IDLE_INTERVAL_MS = 5000
-// Main checkpoints only if the thread falls this far behind (~40 MiB of 4 KiB pages), so the WAL stays bounded.
+// SQLite's own threshold: a checkpoint lets main's next commit restart the WAL, whose header it syncs, so
+// checkpointing smaller batches would sync on main more often than before.
+const CHECKPOINT_BATCH_FRAMES = 1000
+// Main checkpoints only if the thread falls this far behind (~40 MiB of 4 KiB pages).
 export const MAIN_CHECKPOINT_BACKSTOP_PAGES = 10_000
 
 // Evaluated source, as the chat journal's checkpoint worker: a passive checkpoint never blocks the writer.
+// A SQLite without NOOP checkpoints throws here, and the exit hands checkpoints back to main.
 const checkpointWorkerSource = `
 const { workerData } = require('node:worker_threads');
 const { DatabaseSync } = require('node:sqlite');
@@ -16,14 +20,24 @@ if (db.prepare('PRAGMA journal_mode').get().journal_mode !== 'wal') {
   throw new Error('orchestration database is not in WAL mode');
 }
 db.exec('PRAGMA busy_timeout = 1000;');
+const frames = db.prepare('PRAGMA wal_checkpoint(NOOP)');
 const checkpoint = db.prepare('PRAGMA wal_checkpoint(PASSIVE)');
+const version = db.prepare('PRAGMA data_version');
+frames.get();
 let failures = 0;
 let interval = workerData.busyMs;
+let seen = version.get().data_version;
 const tick = () => {
   try {
-    const { log } = checkpoint.get();
+    // Changes only when another connection commits.
+    const current = version.get().data_version;
+    const state = frames.get();
+    if (state.log - state.checkpointed >= workerData.batchFrames) {
+      checkpoint.get();
+    }
     failures = 0;
-    interval = log > 0 ? workerData.busyMs : Math.min(interval * 2, workerData.idleMs);
+    interval = current !== seen ? workerData.busyMs : Math.min(interval * 2, workerData.idleMs);
+    seen = current;
   } catch (error) {
     // Exiting hands checkpoints back to main rather than letting the WAL grow.
     if (++failures >= 3) throw error;
@@ -57,7 +71,8 @@ export function checkpointOffMainThread({ db }: OrchestrationDb): () => void {
       workerData: {
         filename,
         busyMs: CHECKPOINT_BUSY_INTERVAL_MS,
-        idleMs: CHECKPOINT_IDLE_INTERVAL_MS
+        idleMs: CHECKPOINT_IDLE_INTERVAL_MS,
+        batchFrames: CHECKPOINT_BATCH_FRAMES
       }
     })
   } catch {
