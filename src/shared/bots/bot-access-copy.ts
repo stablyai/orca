@@ -4,17 +4,25 @@ export const BOT_ACCESS_COPY = {
   titleOne: 'Give {{person}} access to {{name}}?',
   titleMany: 'Give {{count}} people access to {{name}}?',
   place: '{{connector}} ({{workspace}})',
+  // The desktop confirm: one warning line, then up to four one-line rows of what they reach.
+  confirmWarning: 'They’ll act as you on this computer.',
+  confirmComputer: 'Run commands and change files',
+  confirmNoApprovals: 'Acts without asking first',
+  confirmMaySkipApprovals: 'May act without asking first',
+  confirmApproveOne: '{{person}} can approve its prompts',
+  confirmApproveMany: 'They can approve its prompts',
+  confirmGoogle: 'Use your Google account',
+  confirmGitHub: 'Comment and push on GitHub as you',
+  confirmLinear: 'Update Linear issues as you',
+  // The phone's confirm, which words the grant in full; the desktop shows the lines above.
   descriptionOne:
     '{{person}} will be able to ask {{name}} from {{place}} and control it remotely: start, steer, approve and stop its work, using its access on {{computer}}.',
-  descriptionMany:
-    'They will be able to ask {{name}} from {{place}} and control it remotely: start, steer, approve and stop its work, using its access on {{computer}}.',
   account: 'Their {{connector}} account: {{identity}}',
   yourAccess:
     'Their requests use your access, not their own. Anything {{name}} can do {{there}}, they can ask it to do.',
-  // {{computer}} and {{there}} for the desktop, which is the computer the bot runs on.
-  thisComputer: 'this computer',
-  here: 'here',
   removeAnyTime: 'You can remove them from Who can ask at any time.',
+  // {{computer}} for the desktop, which is the computer the bot runs on.
+  thisComputer: 'this computer',
   confirm: 'Give access',
   heading: 'Asking for access',
   decline: 'Decline',

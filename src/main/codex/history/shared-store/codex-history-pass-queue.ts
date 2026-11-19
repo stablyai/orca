@@ -49,6 +49,11 @@ export class CodexHistoryPassRequests {
   private readonly queues = new Map<string, CodexHistoryPassQueue>()
   private readonly newest = new Map<string, { pass?: Promise<void> }>()
 
+  /** Whether a pass for the home is queued or running. */
+  has(home: string): boolean {
+    return this.latest.has(home)
+  }
+
   request(
     target: { queue: string; home: string; shared: boolean; forLaunch: boolean },
     work: () => Promise<void>

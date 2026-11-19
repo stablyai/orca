@@ -1735,7 +1735,10 @@
       "removeHostMessage": "Удалить «{{name}}»? Позже его можно подключить снова.",
       "sleep": "Перевести в сон",
       "unpin": "Открепить",
-      "rename": "Переименовать"
+      "rename": "Переименовать",
+      "markRead": "Отметить прочитанным",
+      "markUnread": "Отметить непрочитанным",
+      "moveToStatus": "Переместить в статус"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Проверки: не пройдены",
@@ -2354,6 +2357,7 @@
       "providerUnavailable": "{{agent}} не смог ответить, поскольку сервис занят. Выберите другую модель или немного подождите и отправьте сообщение снова.",
       "providerSafetyStopped": "{{agent}} остановил этот ответ после проверки безопасности. Проверьте запрос и отправьте его снова.",
       "providerResponseFailed": "{{agent}} не удалось завершить этот ответ. Откройте подробности, чтобы узнать больше.",
+      "providerResponseFailedQuoted": "{{agent}} не удалось завершить этот ответ: {{detail}}.",
       "selectedModel": "выбранную модель",
       "providerRejected": "{{agent}} не принял это сообщение.",
       "providerRejectedQuoted": "{{agent}} не принял это сообщение: {{detail}}.",

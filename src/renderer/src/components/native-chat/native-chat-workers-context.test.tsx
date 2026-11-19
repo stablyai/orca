@@ -5,12 +5,13 @@ import { NativeChatWorkersProvider, useRereadWorkersOnNewRows } from './native-c
 
 const reread = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/orchestration-session-workers', () => ({
-  rereadOrchestrationSessionWorkersOnNewRow: reread
+  rereadOrchestrationSessionWorkersOnNewRow: reread,
+  useOrchestrationSessionsWorkers: () => new Map()
 }))
 
 function Wrapper({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
-    <NativeChatWorkersProvider target={{ kind: 'local' }} sessionId="chat">
+    <NativeChatWorkersProvider target={{ kind: 'local' }} sessionId="chat" visible>
       {children}
     </NativeChatWorkersProvider>
   )

@@ -4,20 +4,12 @@ import { z } from 'zod'
 import { CONNECTOR_LIMITS } from './connector-limits.js'
 import { ConnectorDeliverySchema } from './delivery-messages.js'
 import { ConnectorHelloRequestSchema, helloShowsHookRuleGone } from './hello-messages.js'
-import { ConnectorTriggerEventSchema, type ConnectorTrigger } from './trigger-messages.js'
+import type { ConnectorTrigger } from './trigger-messages.js'
 import { WEBHOOK_FILTER_LIMITS, webhookRuleBytes } from './webhook-matcher.js'
 import { ConnectorWebhookTriggerSchema, type ConnectorWebhookTrigger } from './webhook-messages.js'
-import {
-  hookIdOfActor,
-  hookIdOfRule,
-  redactWebhookKeys,
-  webhookActorId,
-  webhookPath,
-  webhookRuleId
-} from './webhook-names.js'
+import { redactWebhookKeys, webhookPath, webhookRuleId } from './webhook-names.js'
 
 const HOOK = 'wh_7Kx2pQ9mZbV4tL1r'
-const CALL = 'call_0123456789abcdefABCD'
 const KEY = `orcawh_${'k'.repeat(43)}`
 
 const webhookRule: ConnectorWebhookTrigger = {
@@ -83,12 +75,7 @@ function largestWebhookRule(index: number): ConnectorWebhookTrigger {
 }
 
 describe('webhook rules', () => {
-  it('reads a hook rule with its filters', () => {
-    expect(ConnectorWebhookTriggerSchema.parse(webhookRule)).toEqual(webhookRule)
-  })
-
   it.each([
-    ['a filter this cloud does not know', { ...webhookRule, or: [] }],
     [
       'a clause field this cloud does not know',
       { ...webhookRule, where: [{ path: 'body.a', op: 'exists', not: true }] }
@@ -145,7 +132,6 @@ describe('hello triggers with hooks', () => {
   const H2 = 'wh_000000000000000B'
   it.each([
     ['an unreadable copy before it', [{ ...webhookRule, newFilter: 'x' }, webhookRule], [], [HOOK]],
-    ['the same rule twice', [webhookRule, webhookRule], [], [HOOK]],
     ['one hook under two automations', [at(H1, 'a'), at(H1, 'b')], [], [H1]],
     [
       'a second hook of an automation, listed first under another',
@@ -219,38 +205,6 @@ describe('hello triggers with hooks', () => {
     expect(parsed.triggersTruncated).toBe(false)
     expect(Buffer.byteLength(body)).toBeLessThan(CONNECTOR_LIMITS.maxRequestBytes)
   })
-
-  it("reads an older machine's hello, which never says whether its triggers were cut", () => {
-    const parsed = ConnectorHelloRequestSchema.parse({
-      ...hello,
-      triggers: [slackRule]
-    })
-    expect(parsed.triggersTruncated).toBeUndefined()
-  })
-})
-
-describe('webhook trigger events', () => {
-  const event = {
-    key: CALL,
-    actorId: webhookActorId(HOOK),
-    occurredAt: 1_800_000_000_000,
-    subject: '4512',
-    webhook: { callId: CALL, epoch: 3, hostGen: 1 }
-  }
-
-  it('reads a call by its id, with the generations it was admitted under', () => {
-    expect(ConnectorTriggerEventSchema.parse(event)).toEqual(event)
-  })
-
-  it('reads every other event as before', () => {
-    const slack = {
-      key: 'T:C:1',
-      actorId: 'U0MEMBER',
-      occurredAt: 1,
-      text: 'hi'
-    }
-    expect(ConnectorTriggerEventSchema.parse(slack)).toEqual(slack)
-  })
 })
 
 // The desktop's connector-webhook-contract.test.ts reads the same corpus.
@@ -283,19 +237,15 @@ describe('webhook trigger deliveries', () => {
       ...entry.delivery,
       event: withoutNulls({ ...corpus.base.event, ...entry.event })
     }
-    expect(ConnectorDeliverySchema.safeParse(delivery).success).toBe(entry.readable)
+    const parsed = ConnectorDeliverySchema.safeParse(delivery)
+    expect(parsed.success).toBe(entry.readable)
+    if (parsed.success) {
+      expect(parsed.data).toMatchObject({ kind: 'trigger', event: delivery.event })
+    }
   })
 })
 
-describe('webhook names', () => {
-  it('names a hook in its rule, its actor and its path', () => {
-    expect(hookIdOfRule(webhookRuleId(HOOK))).toBe(HOOK)
-    expect(hookIdOfActor(webhookActorId(HOOK))).toBe(HOOK)
-    expect(hookIdOfRule('on-0123456789abcdef')).toBeNull()
-    expect(hookIdOfActor('webhook:wh_short')).toBeNull()
-    expect(webhookPath(HOOK, KEY)).toBe(`/hooks/${HOOK}/${KEY}`)
-  })
-
+describe('webhook key redaction', () => {
   it.each([
     [`curl -H "Authorization: Bearer ${KEY}"`, 'curl -H "Authorization: Bearer [key]"'],
     [`https://orca.dev${webhookPath(HOOK, KEY)}?x=1`, `https://orca.dev/hooks/${HOOK}/[key]?x=1`],

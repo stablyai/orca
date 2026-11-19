@@ -18,6 +18,7 @@ type SidebarSectionHeaderProps = {
   title: string
   /** Names the section for tests and tours, e.g. `projects`. */
   sectionId: string
+  /** The section's controls on the right; null leaves the row to the title and its summary. */
   actions: React.ReactNode
   /** Makes the title area a fold button; Bots and Projects share it. */
   fold?: SidebarSectionFold
@@ -89,7 +90,7 @@ export function SidebarSectionHeader({
         {titleAccessory}
         {summary}
       </div>
-      <div className="flex shrink-0 items-center gap-1">{actions}</div>
+      {actions == null ? null : <div className="flex shrink-0 items-center gap-1">{actions}</div>}
     </div>
   )
 }

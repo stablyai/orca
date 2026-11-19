@@ -1649,7 +1649,12 @@
       "removeHostMessage": "「{{name}}」を削除しますか？後で再度ペアリングできます。",
       "sleep": "スリープ",
       "unpin": "固定を解除する",
-      "rename": "名前を変更"
+      "rename": "名前を変更",
+      "markRead": "既読マークを付ける",
+      "markUnread": "未読としてマークする",
+      "muteNotifications": "通知をミュート",
+      "unmuteNotifications": "通知のミュートを解除",
+      "moveToStatus": "ステータスに移動"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "チェック：失敗",
@@ -2214,6 +2219,7 @@
       "providerUnavailable": "サービスが混雑しているため、{{agent}} は応答できませんでした。別のモデルを選ぶか、しばらく待ってから再送してください。",
       "providerSafetyStopped": "{{agent}} は安全確認の後、この応答を停止しました。リクエストを見直して再送してください。",
       "providerResponseFailed": "{{agent}} はこの応答を完了できませんでした。詳細を開いて確認してください。",
+      "providerResponseFailedQuoted": "{{agent}} はこの応答を完了できませんでした: {{detail}}。",
       "selectedModel": "選択されたモデル",
       "providerRejected": "{{agent}} はこのメッセージを受け付けませんでした。",
       "providerRejectedQuoted": "{{agent}} はこのメッセージを受け付けませんでした: {{detail}}。",

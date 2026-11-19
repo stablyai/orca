@@ -96,7 +96,11 @@ it('stops automatically continuing once five continues in a row end in another u
 function sweepOver(
   open: { tabs: string[]; background: string[] },
   sent: string[],
-  { enabled = true, loaded = true } = {}
+  {
+    enabled = true,
+    loaded = true,
+    unreadable = []
+  }: { enabled?: boolean; loaded?: boolean; unreadable?: readonly string[] } = {}
 ): StructuredAgentSessionUsageLimitContinue {
   const now = HOST_TEST_NOW
   const ids = [...open.tabs, ...open.background]
@@ -126,7 +130,12 @@ function sweepOver(
     },
     sessions: new Map(loaded ? ids.map((id) => [id, {}]) : []),
     readSavedCut: async (id) => (loaded ? null : cut(id)),
-    readLoadedCut: async (id) => cut(id),
+    readLoadedCut: async (id) => {
+      if (unreadable.includes(id)) {
+        throw new Error('database disk image is malformed')
+      }
+      return cut(id)
+    },
     serialize: (_id, run) => run(),
     // Each send is answered as superseded, which spends no budget; only who was sent matters here.
     send: async (params) => {
@@ -164,4 +173,13 @@ it('continues tabless chats that are not loaded, as after a restart or a release
   const sent: string[] = []
   await sweepOver(TABLESS, sent, { loaded: false }).tick()
   expect(sent).toEqual(['bot-chat', 'worker-chat'])
+})
+
+it('still continues the other chats when one chat cannot be read', async () => {
+  const sent: string[] = []
+  const sweep = sweepOver({ tabs: ['chat-a', 'chat-corrupt', 'chat-c'], background: [] }, sent, {
+    unreadable: ['chat-corrupt']
+  })
+  await sweep.tick()
+  expect(sent).toEqual(['chat-a', 'chat-c'])
 })

@@ -67,6 +67,8 @@ export async function installBrowserSessionPartitionPolicies(
     applyAppWideProxy?: boolean
     userAgentExceptions?: boolean
     siteListProfile?: boolean
+    /** False for a session that blocks all network itself, so no certificate exception can apply. */
+    certificateRequestGuard?: boolean
   } = {}
 ): Promise<void> {
   const { partition } = profile
@@ -86,7 +88,9 @@ export async function installBrowserSessionPartitionPolicies(
   if (options.siteListProfile !== false) {
     bindBrowserSessionToSiteListProfile(sess, profile.id)
   }
-  browserManager.installCertificateRequestGuard(sess)
+  if (options.certificateRequestGuard !== false) {
+    browserManager.installCertificateRequestGuard(sess)
+  }
   if (options?.permissions === 'deny') {
     sess.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
     sess.setPermissionCheckHandler(() => false)

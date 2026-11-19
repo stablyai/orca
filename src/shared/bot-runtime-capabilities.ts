@@ -32,6 +32,15 @@ export const BOTS_ITEMS_RUNTIME_CAPABILITY = 'bots.items.v1' as const
 export const BOTS_ITEM_COMMENT_ATTACHMENTS_RUNTIME_CAPABILITY =
   'bots.item-comment-attachments.v1' as const
 
+// Host dedupes the owner's item comments by `requestId` (bots.items.owner.comment): a repeat returns the
+// comment already made. An older host refuses the field, so a client sends it only where advertised.
+export const BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY =
+  'bots.item-comment-request-id.v1' as const
+
+// Host stores a picture's background color (bots.update and bots.create `avatarColor`); an older host's strict
+// update refuses the field, so clients offer the colors only where this is advertised.
+export const BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY = 'bots.avatar-color.v1' as const
+
 export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_GROUPS_RUNTIME_CAPABILITY,
   BOTS_MOBILE_RUNTIME_CAPABILITY,
@@ -42,5 +51,7 @@ export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_CHAT_MENTIONS_RUNTIME_CAPABILITY,
   BOTS_ITEMS_RUNTIME_CAPABILITY,
   BOTS_ITEM_COMMENT_ATTACHMENTS_RUNTIME_CAPABILITY,
-  BOTS_SESSION_LINKS_RUNTIME_CAPABILITY
+  BOTS_ITEM_COMMENT_REQUEST_ID_RUNTIME_CAPABILITY,
+  BOTS_SESSION_LINKS_RUNTIME_CAPABILITY,
+  BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY
 ] as const

@@ -140,24 +140,16 @@ export class AntigravityAccountService {
       if (!account) {
         throw new Error('Antigravity account was not found.')
       }
-      if (vault.selectedAccountId === id || (current && this.matches(account, current))) {
-        throw new Error('Select another Antigravity account before removing this account.')
+      if (current && this.matches(account, current)) {
+        throw new Error('Switch agy to another account before removing the one it is signed in to.')
       }
-      const readback = await this.backend.read()
-      const latest = this.store.read()
-      const latestAccount = latest.accounts.find((entry) => entry.id === id)
-      if (!latestAccount) {
-        throw new Error('Antigravity account snapshots changed; refresh before retrying.')
+      vault.accounts = vault.accounts.filter((entry) => entry.id !== id)
+      // Only Orca's snapshot goes; agy keeps its own login, so a removed selection must stop gating launches.
+      if (vault.selectedAccountId === id) {
+        vault.selectedAccountId = null
       }
-      if (latest.selectedAccountId === id || (readback && this.matches(latestAccount, readback))) {
-        throw new Error('Select another Antigravity account before removing this account.')
-      }
-      if (readback) {
-        this.updateSnapshot(latest, readback)
-      }
-      latest.accounts = latest.accounts.filter((entry) => entry.id !== id)
-      this.store.write(latest)
-      return this.state({ vault: latest, current: readback })
+      this.store.write(vault)
+      return this.state({ vault, current })
     })
   }
 

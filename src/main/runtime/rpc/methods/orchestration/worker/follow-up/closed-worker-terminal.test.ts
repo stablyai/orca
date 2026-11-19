@@ -6,7 +6,10 @@ import { agentProviderSessionsEqual } from '../../../../../../../shared/agent-se
 
 import { AgentHookServer } from '../../../../../../agent-hooks/server/agent-hook-server'
 import { agentHookRuntimeDeps } from '../../../../../../agent-hooks/runtime/agent-hook-runtime-deps'
-import { watchMovedWorkerResumeSessions } from './worker-resume-session-capture'
+import {
+  captureReportedWorkerResumeSession,
+  watchMovedWorkerResumeSessions
+} from './worker-resume-session-capture'
 
 const CONVERSATION = { key: 'session_id', id: 'fixture-conversation' } as const
 const REOPENED_PANE = 'tab_reopened:leaf'
@@ -164,6 +167,30 @@ describe('opening a terminal worker Orca closed', () => {
     const [uncertainId, later] = resume.mock.calls.map(([, request]) => request.mutationId)
     expect(resume).toHaveBeenCalledTimes(2)
     expect(later).not.toBe(uncertainId)
+  })
+
+  it('reopens with the recipe the worker launched with after its agent exited (#43875)', async () => {
+    const { helper } = await pair()
+    const recipe = { agentArgs: "--dangerously-skip-permissions --model 'M'", agentEnv: {} }
+    const session = {
+      paneKey: panes.get('term_helper')!,
+      agent: 'claude',
+      processIncarnation: 'process:term_helper',
+      providerSession: CONVERSATION,
+      observedAt: 1
+    }
+    const capture = vi.mocked(h.runtime.getExactWorkerProviderSession)
+    capture.mockReturnValue({ ...session, launchConfig: recipe })
+    captureReportedWorkerResumeSession(h.runtime, h.db, helper.dispatchId)
+    // Its agent exited, so release reads the same conversation without a held launch.
+    capture.mockReturnValue(session)
+    await success('worker-release', '--dispatch', helper.dispatchId)
+    const resource = h.db.getWorkerTerminalResourceByOwner(helper.dispatchId)!
+    const resume = vi
+      .spyOn(h.runtime, 'resumeAgentSessionInWorkspace')
+      .mockResolvedValue({ ok: true, handle: 'term_reopened', paneKey: REOPENED_PANE, ptyId: 'p' })
+    await open(resource.terminal_handle)
+    expect(resume.mock.calls[0]?.[1].launchConfig).toEqual(recipe)
   })
 
   it('resumes again once the agent left the reopened terminal', async () => {
