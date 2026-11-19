@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useAppStore } from '@/store/index'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import type { PerfNoticeSignals } from '../../../../shared/diagnostics/perf-notice-signals'
+import type { MemorySnapshot } from '../../../../shared/diagnostics/process-stats-types'
 import { formatMemory } from '../status-bar/resources/popover/resource-usage-metrics'
 import {
   readAgentPaneKeys,
@@ -15,12 +16,13 @@ import { canShowPerfNotice } from './perf-notice-ledger'
 import {
   availableFraction,
   countIdleAgents,
-  hasTerminalCandidates,
   HIDDEN_TAB_MIN,
   IDLE_AGENT_MIN,
   idleAgentCandidates,
   isDiskAlmostFull,
   liveLocalTerminals,
+  localIdleCandidates,
+  NO_LIVE_TERMINALS,
   LOW_MEMORY_FRACTION,
   PERF_NOTICE_OFFERS_AGENT_SLEEP,
   TERMINAL_SHARE_MIN,
@@ -58,21 +60,29 @@ type Tracking = {
 type Gate = () => boolean
 /** Wall-clock ms at which the user counts as away, so main starts no process sweep after it. */
 type ActiveUntil = () => number
+/** One evaluation's process snapshot, so memory-low and idle agents never sweep twice in a tick. */
+type TickSnapshot = { current: MemorySnapshot | null }
+
+function readSnapshot(tick: TickSnapshot, activeUntil: ActiveUntil): Promise<MemorySnapshot> {
+  return tick.current
+    ? Promise.resolve(tick.current)
+    : window.api.memory
+        .getSnapshot({ whileFocused: true, activeUntil: activeUntil() })
+        .then((snapshot) => (tick.current = snapshot))
+}
 
 /** Memory-low names terminals only when they hold most of the used memory; never Orca, never other apps. */
 async function memoryLowNotice(
   now: number,
   blocked: Gate,
-  activeUntil: ActiveUntil
+  activeUntil: ActiveUntil,
+  tick: TickSnapshot
 ): Promise<PerfNotice | null> {
   // Why: every variant can open Resources, so skip the process snapshot when it can't.
   if (!hasResourceManager()) {
     return null
   }
-  const snapshot = await window.api.memory.getSnapshot({
-    whileFocused: true,
-    activeUntil: activeUntil()
-  })
+  const snapshot = await readSnapshot(tick, activeUntil)
   if (blocked()) {
     return null
   }
@@ -93,7 +103,7 @@ async function memoryLowNotice(
     !state.settings?.experimentalAgentHibernation &&
     countIdleAgents(
       state,
-      idleAgentCandidates(state, now, AGENT_SLEEP_IDLE_MS),
+      localIdleCandidates(state, idleAgentCandidates(state, now, AGENT_SLEEP_IDLE_MS)),
       liveLocalTerminals(snapshot)
     ).terminal > 0
   ) {
@@ -114,29 +124,41 @@ async function idleAgentsNotice(
   now: number,
   blocked: Gate,
   activeUntil: ActiveUntil,
-  tracking: Tracking
+  tracking: Tracking,
+  tick: TickSnapshot
 ): Promise<PerfNotice | null> {
-  const candidates = idleAgentCandidates(useAppStore.getState(), now)
+  const before = useAppStore.getState()
+  const candidates = idleAgentCandidates(before, now)
   if (candidates.length < IDLE_AGENT_MIN) {
     return null
   }
   tracking.idleCheckedAt = now
-  // Why: only terminal agents need the snapshot's proof that their process is alive.
-  const live = hasTerminalCandidates(candidates)
-    ? liveLocalTerminals(
-        await window.api.memory.getSnapshot({ whileFocused: true, activeUntil: activeUntil() })
-      )
-    : null
+  const local = localIdleCandidates(before, candidates)
+  // Why: snapshot only when a notice could still show: enough local agents, and terminal-only
+  // idle needs Resources to open.
+  if (
+    local.chats + local.terminals.length < IDLE_AGENT_MIN ||
+    (local.chats === 0 && !hasResourceManager())
+  ) {
+    return null
+  }
+  if (local.terminals.length === 0) {
+    return { id: 'idle-agents', idle: countIdleAgents(before, local, NO_LIVE_TERMINALS) }
+  }
+  const live = liveLocalTerminals(await readSnapshot(tick, activeUntil))
   if (blocked()) {
     return null
   }
   // Why: agents may have started working during the snapshot; only rows still idle count.
   const state = useAppStore.getState()
-  const idle = countIdleAgents(state, idleAgentCandidates(state, Date.now()), live)
+  const idle = countIdleAgents(
+    state,
+    localIdleCandidates(state, idleAgentCandidates(state, Date.now())),
+    live
+  )
   if (idle.terminal + idle.chats < IDLE_AGENT_MIN) {
     return null
   }
-  // Why: terminal-only idle points at Resources, which must exist to open.
   return idle.chats === 0 && !hasResourceManager() ? null : { id: 'idle-agents', idle }
 }
 
@@ -165,6 +187,7 @@ async function evaluate(
     return CADENCE.healthy
   }
   let notice: PerfNotice | null = null
+  const tick: TickSnapshot = { current: null }
   if (fraction >= LOW_MEMORY_FRACTION) {
     tracking.lowSince = null
   } else {
@@ -178,7 +201,7 @@ async function evaluate(
       canShowPerfNotice('memory-low', now)
     ) {
       tracking.ownerShareCheckedAt = now
-      notice = await memoryLowNotice(now, blocked, activeUntil)
+      notice = await memoryLowNotice(now, blocked, activeUntil, tick)
     }
   }
   // Why: a blocked step admits no further work; the next tick starts over.
@@ -190,7 +213,7 @@ async function evaluate(
     now - tracking.idleCheckedAt >= IDLE_AGENT_RECHECK_MS &&
     canShowPerfNotice('idle-agents', now)
   ) {
-    notice = await idleAgentsNotice(now, blocked, activeUntil, tracking)
+    notice = await idleAgentsNotice(now, blocked, activeUntil, tracking, tick)
   }
   if (blocked()) {
     return CADENCE.tight

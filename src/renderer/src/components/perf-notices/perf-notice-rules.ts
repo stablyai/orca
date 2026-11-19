@@ -64,13 +64,10 @@ export function idleAgentCandidates(
   return candidates
 }
 
-/** Terminal agents need proof their process is alive; chats are proven from the store alone. */
-export function hasTerminalCandidates(candidates: readonly AgentStatusEntry[]): boolean {
-  return candidates.some((entry) => !entry.structuredHostOwned)
-}
-
 /** PTYs with a running process on this machine, from one memory snapshot. */
 export type LiveLocalTerminals = { sessionIds: ReadonlySet<string>; paneKeys: ReadonlySet<string> }
+
+export const NO_LIVE_TERMINALS: LiveLocalTerminals = { sessionIds: new Set(), paneKeys: new Set() }
 
 export function liveLocalTerminals(snapshot: MemorySnapshot): LiveLocalTerminals {
   const sessionIds = new Set<string>()
@@ -86,15 +83,41 @@ export function liveLocalTerminals(snapshot: MemorySnapshot): LiveLocalTerminals
   return { sessionIds, paneKeys }
 }
 
+/** Store-only split: chats that count, and local terminal rows that still need a snapshot to prove they're alive. */
+export type LocalIdleCandidates = { chats: number; terminals: AgentStatusEntry[] }
+
+/** A chat counts while the host runs its agent, its workspace is local, and auto-stop is off. */
+export function localIdleCandidates(
+  state: AppState,
+  candidates: readonly AgentStatusEntry[]
+): LocalIdleCandidates {
+  const chatsNeverStop = nativeChatIdleStopMinutes(state.settings) === 0
+  const possible = candidates.filter((entry) =>
+    entry.structuredHostOwned ? chatsNeverStop : entry.connectionId == null
+  )
+  // Why: one catalog walk per check, never one per agent.
+  const localWorktrees = possible.length > 0 ? collectLocalWorktreeIds(state) : null
+  let chats = 0
+  const terminals: AgentStatusEntry[] = []
+  for (const entry of possible) {
+    if (!localWorktrees || !entry.worktreeId || !localWorktrees.has(entry.worktreeId)) {
+      continue
+    }
+    if (entry.structuredHostOwned) {
+      chats += 1
+    } else {
+      terminals.push(entry)
+    }
+  }
+  return { chats, terminals }
+}
+
 /** A restored pane keeps its PTY id and finished row after its process is gone, so liveness comes from the snapshot. */
 function hasLiveLocalPty(
   state: AppState,
   entry: AgentStatusEntry,
   live: LiveLocalTerminals
 ): boolean {
-  if (entry.connectionId != null) {
-    return false
-  }
   if (live.paneKeys.has(entry.paneKey)) {
     return true
   }
@@ -103,39 +126,21 @@ function hasLiveLocalPty(
   return !!ptyId && getPtyExecutionHost(ptyId) === null && live.sessionIds.has(ptyId)
 }
 
-/**
- * Agents still holding memory on this machine. A terminal agent counts while its PTY appears in the
- * local memory snapshot and its workspace is local; a chat counts while the host runs its agent, its
- * workspace is local, and auto-stop is off.
- */
+/** Agents still holding memory on this machine: local chats, and local terminal agents whose PTY is alive. */
 export function countIdleAgents(
   state: AppState,
-  candidates: readonly AgentStatusEntry[],
-  live: LiveLocalTerminals | null
+  local: LocalIdleCandidates,
+  live: LiveLocalTerminals
 ): IdleAgents {
-  const chatsNeverStop = nativeChatIdleStopMinutes(state.settings) === 0
-  const counted = candidates.filter((entry) =>
-    entry.structuredHostOwned ? chatsNeverStop : !!live && hasLiveLocalPty(state, entry, live)
-  )
-  // Why: one catalog walk per check, never one per agent.
-  const localWorktrees = counted.length > 0 ? collectLocalWorktreeIds(state) : null
-  const isLocal = (entry: AgentStatusEntry): boolean =>
-    !!localWorktrees && !!entry.worktreeId && localWorktrees.has(entry.worktreeId)
   const labels = new Set<string>()
   let terminal = 0
-  let chats = 0
-  for (const entry of counted) {
-    if (!isLocal(entry)) {
-      continue
-    }
-    if (entry.structuredHostOwned) {
-      chats += 1
-    } else {
+  for (const entry of local.terminals) {
+    if (hasLiveLocalPty(state, entry, live)) {
       terminal += 1
       labels.add(formatAgentTypeLabel(entry.agentType))
     }
   }
-  return { terminal, chats, terminalLabels: [...labels] }
+  return { terminal, chats: local.chats, terminalLabels: [...labels] }
 }
 
 function collectLocalWorktreeIds(state: AppState): Set<string> {
