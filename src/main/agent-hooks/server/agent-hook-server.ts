@@ -107,26 +107,36 @@ export class AgentHookServer extends AgentHookServerLifecycle {
     }
   }
 
-  /** Include retained exits proven at or after `exitedSince`. */
   /** A sleep settles every pane's exit proofs together, so their fresh process-table reads
    *  coalesce into one; the capture's own presence reads then find them answered. */
   async settleExitProofForSleep(paneKey: string): Promise<null> {
     const resolved = this.resolvePaneKeyAlias(paneKey)
-    if (!this.forgetUnprovenExitOfVerifiableOwner(resolved)) {
+    if (!this.forgetUnowedExitProof(resolved)) {
       await this.unprovenExits.settled(resolved, true)
     }
     return null
   }
 
-  /** An agent that now reports a process its presence probe can check needs no shell proof. */
-  private forgetUnprovenExitOfVerifiableOwner(resolved: string): boolean {
-    if (!this.unprovenExits.has(resolved) || !this.hasVerifiableAgentProcess(resolved)) {
+  /** A pane's agent that now reports a process its presence probe can check, became a shared
+   *  host's, or already ended is owed no shell proof. */
+  private exitProofOwed(resolved: string): boolean {
+    const identity = this.paneAgentIdentity(resolved)
+    return (
+      identity?.ended === false &&
+      identity.processTopology !== 'shared' &&
+      !this.hasVerifiableAgentProcess(resolved)
+    )
+  }
+
+  private forgetUnowedExitProof(resolved: string): boolean {
+    if (!this.unprovenExits.has(resolved) || this.exitProofOwed(resolved)) {
       return false
     }
     this.unprovenExits.forget(resolved)
     return true
   }
 
+  /** Include retained exits proven at or after `exitedSince`. */
   async checkAgentPresenceSince(
     paneKey: string,
     exitedSince: number
@@ -154,21 +164,16 @@ export class AgentHookServer extends AgentHookServerLifecycle {
    *  plain shell, which lands on every prompt, skips the saved-record read. */
   protected noticeLaunchlessCommandMark(resolved: string): void {
     const row = this.state.lastStatusByPaneKey.get(resolved)
-    if (
-      (!this.unprovenExits.has(resolved) && !row) ||
-      this.forgetUnprovenExitOfVerifiableOwner(resolved)
-    ) {
+    if (!this.unprovenExits.has(resolved) && !row) {
       return
     }
-    const identity = this.paneAgentIdentity(resolved)
+    if (!this.exitProofOwed(resolved)) {
+      this.unprovenExits.forget(resolved)
+      return
+    }
     // Main retired a local pane's record when its shell came back; a POSIX host now proves that,
     // and Windows and WSL, which give no proof, let the mark stand. SSH retires it in the window.
-    const unseen =
-      isLocalHookConnectionId(row?.connectionId) &&
-      identity?.ended === false &&
-      identity.processTopology !== 'shared' &&
-      !this.hasVerifiableAgentProcess(resolved)
-    this.unprovenExits.onCommandFinished(resolved, unseen)
+    this.unprovenExits.onCommandFinished(resolved, isLocalHookConnectionId(row?.connectionId))
   }
 
   checkAgentPresence(paneKey: string): Promise<AgentProcessVerdict | null> {
