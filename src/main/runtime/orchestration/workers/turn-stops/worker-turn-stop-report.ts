@@ -10,7 +10,7 @@ import { escalateWorkerFailure } from '../reports/worker-failure-escalation'
 import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transaction-runner'
 import type { WorkerApprovalPayload } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 import { describeApprovalClosed } from './worker-approval-text'
-import { describeStop, requestErrorSubject, WORKER_STOP_SUBJECTS } from './worker-turn-stop-wording'
+import { describeStop, WORKER_STOP_SUBJECTS } from './worker-turn-stop-wording'
 
 export type WorkerTurnStopReason = 'finished' | 'errored' | 'needs-input' | 'exited' | 'lost'
 
@@ -97,9 +97,7 @@ export function sendWorkerReport(
   const dispatchId = workerTurnStopDispatchId(target)
   const subject = stop.approval
     ? 'Worker is waiting for permission'
-    : stop.requestError
-      ? requestErrorSubject(stop.requestError)
-      : WORKER_STOP_SUBJECTS[stop.reason]
+    : WORKER_STOP_SUBJECTS[stop.reason]
   const payload = {
     dispatchId,
     handle: stop.from,

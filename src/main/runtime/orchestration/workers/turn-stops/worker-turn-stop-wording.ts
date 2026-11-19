@@ -2,11 +2,7 @@ import { redactString } from '../../../../../shared/observability/redactor'
 import { replaceDispatchCapabilities } from '../../terminal-authority/views/worker-terminal-redaction'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/agent-session/identity/orca-session-address-prefix'
 import { describeCoordinatorAnswer } from './worker-approval-text'
-import type {
-  WorkerRequestError,
-  WorkerTurnStop,
-  WorkerTurnStopReason
-} from './worker-turn-stop-report'
+import type { WorkerTurnStop, WorkerTurnStopReason } from './worker-turn-stop-report'
 
 // One screenful: enough to show the agent's last words or error banner without flooding the inbox.
 const LAST_OUTPUT_MAX_CHARS = 2_000
@@ -33,10 +29,6 @@ export type StopContext = {
   taskReady?: boolean
   /** The user lets the coordinator allow this machine's workers' prompts. */
   coordinatorApprovals?: boolean
-}
-
-export function requestErrorSubject({ text }: WorkerRequestError): string {
-  return `Agent hit an error: ${text.length > 120 ? `${text.slice(0, 119)}…` : text}`
 }
 
 export function describeStop(stop: WorkerTurnStop, context: StopContext): string {
