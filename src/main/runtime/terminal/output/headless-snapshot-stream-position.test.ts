@@ -340,6 +340,62 @@ it("reads a rebuilt ConPTY terminal's history from the provider, which kept it",
   }
 })
 
+it('reads a 2,000-line history of a rebuilt ConPTY terminal from the daemon, never the stale model', async () => {
+  const lines = Array.from({ length: 1500 }, (_, index) => `line ${index + 1}`)
+  const runtime = createRuntime()
+  runtime.setPtyController({
+    write: () => true,
+    kill: () => true,
+    getForegroundProcess: async () => null,
+    getSize: () => grid,
+    // Above the live window the daemon serves durable history, which can miss the read deadline.
+    serializeProviderBuffer: async (_ptyId, opts) =>
+      (opts?.scrollbackRows ?? 0) > 1000
+        ? null
+        : {
+            data: opts?.scrollbackRows ? lines.join('\r\n') : '\x1b[H\x1b[2Jline 1500',
+            ...grid,
+            // History reads land after the post-rebuild output; the recovery capture at the gap.
+            seq: opts?.scrollbackRows ? 1_000_000 : 16,
+            source: 'headless'
+          }
+  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: OrcaRuntimeService inherits these protected methods with exactly these signatures.
+  const reads = runtime as unknown as {
+    serializeHeadlessTerminalBuffer(ptyId: string): Promise<{ data: string } | null>
+    withVisibleSnapshotFallback(
+      ptyId: string,
+      read: RuntimeTerminalRead,
+      opts: { limit?: number }
+    ): Promise<RuntimeTerminalRead>
+  }
+  markNativeWindowsConptyPty('pty-big')
+  try {
+    anchorStream(runtime, 'pty-big')
+    runtime.onPtyData('pty-big', 'stale\r\n', 1)
+    runtime.notePtyDataGap('pty-big', 9)
+    await vi.waitFor(async () => assert(await reads.serializeHeadlessTerminalBuffer('pty-big')))
+    runtime.onPtyData('pty-big', `${'stale burst\r\n'.repeat(60)}`, 2)
+    const read = await reads.withVisibleSnapshotFallback(
+      'pty-big',
+      {
+        handle: 'term',
+        status: 'running',
+        tail: ['line 1500'],
+        truncated: false,
+        nextCursor: null
+      },
+      { limit: 2000 }
+    )
+    expect(read.tail.at(-1)).toBe('line 1500')
+    expect(read.tail.length).toBeGreaterThan(900)
+    expect(read.tail).not.toContain('stale burst')
+  } finally {
+    clearNativeWindowsConptyPty('pty-big')
+    await runtime.onPtyExit('pty-big', 0)
+  }
+})
+
 it('keeps a synchronized-output frame open across a rebuild until the frame ends', async () => {
   const runtime = createRuntime()
   runtime.setPtyController({

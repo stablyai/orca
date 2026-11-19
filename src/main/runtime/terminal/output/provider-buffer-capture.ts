@@ -19,7 +19,11 @@ import {
   projectTerminalTailLines,
   projectTerminalVisibleLines
 } from '../view/orca-runtime-terminal-projection'
-import { VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from './provider-snapshot-budget'
+import {
+  AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
+  VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS
+} from './provider-snapshot-budget'
+import { DAEMON_SESSION_SCROLLBACK_ROWS } from '../../../daemon/sessions/daemon-session-scrollback-window'
 import { isNativeWindowsConptyPty } from './terminal-model-query-authority'
 
 export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaRuntimeWithSerializeTerminalBufferFromAvailableState {
@@ -210,21 +214,20 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
       (this.getTerminalSize(ptyId)?.rows ?? 0)
     const state = this.readWholeScreenModel(ptyId)
     const generation = this.getPtyLifecycleGeneration(ptyId)
-    // A model rebuilt screen-only after dropped output has no history; the provider kept it.
-    const fromProvider =
-      !state || (state.historyFromProvider && !providerSnapshot.visibleScreenOnly)
-    // A busy terminal can outrun one snapshot; a few attempts bound the daemon reads.
-    for (let attempt = 0; fromProvider && attempt < (state ? 3 : 1); attempt++) {
-      const provider = await this.readProviderTerminalTailLines(ptyId, rowLimit, {
+    if (!state) {
+      return this.readProviderTerminalTailLines(ptyId, rowLimit, {
         timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
         ...providerSnapshot
       })
-      if (!state || provider.lines.length > 0) {
+    }
+    // A model rebuilt screen-only after dropped output has no history; the provider kept it.
+    const recoveredHistory = state.historyFromProvider && !providerSnapshot.visibleScreenOnly
+    if (recoveredHistory) {
+      const provider = await this.readRecoveredTerminalHistory(ptyId, rowLimit, providerSnapshot)
+      if (provider.lines.length > 0) {
         return provider
       }
-    }
-    if (!state) {
-      return { lines: [] }
+      console.warn('[terminal] recovered history unavailable; reading the visible screen:', ptyId)
     }
     await state.writeChain
     // The same model can turn untrusted while the read waited: a gap keeps it rather than replacing it.
@@ -234,9 +237,40 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     ) {
       return { lines: [] }
     }
-    return providerSnapshot.visibleScreenOnly
+    // The rebuilt model's own history predates the rebuild, so only its current screen is safe to return.
+    return providerSnapshot.visibleScreenOnly || recoveredHistory
       ? projectTerminalVisibleLines(state.emulator)
       : projectTerminalTailLines(state.emulator, rowLimit)
+  }
+
+  /** Daemon history: the full request (durable history can take seconds), then its live window, retried for a busy terminal. */
+  private async readRecoveredTerminalHistory(
+    ptyId: string,
+    rowLimit: number,
+    providerSnapshot: RuntimeProviderSnapshotReadOptions
+  ): Promise<RuntimeTerminalProjection> {
+    const liveRows = Math.min(rowLimit, DAEMON_SESSION_SCROLLBACK_ROWS)
+    const attempts = [
+      {
+        rows: rowLimit,
+        timeoutMs:
+          rowLimit > liveRows
+            ? AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS
+            : VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS
+      },
+      { rows: liveRows, timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS },
+      { rows: liveRows, timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS }
+    ]
+    for (const attempt of attempts) {
+      const provider = await this.readProviderTerminalTailLines(ptyId, attempt.rows, {
+        ...providerSnapshot,
+        timeoutMs: attempt.timeoutMs
+      })
+      if (provider.lines.length > 0) {
+        return provider
+      }
+    }
+    return { lines: [] }
   }
 
   protected async readProviderTerminalTailLines(
