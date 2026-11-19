@@ -12,7 +12,8 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 import type {
   SavedResumeStartupSource,
   AgentProviderSessionMetadata,
-  SleepingAgentLaunchConfig
+  SleepingAgentLaunchConfig,
+  ResumableTuiAgent
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { StartupCommandDelivery } from '../../../../shared/agent-launch/startup/codex-startup-delivery'
@@ -23,7 +24,6 @@ import type {
   NativeChatLaunchPrompt
 } from '@/components/native-chat/drafts/native-chat-launch-prompt'
 import type { HostSessionSlices } from '@/lib/workspace/persistence/workspace-session-host-split'
-import type { ResumableTuiAgent } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type {
   AccountRestartAgent,
   AutomaticAgentResumeClaim,
