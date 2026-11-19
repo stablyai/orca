@@ -171,7 +171,7 @@ export function estimateNativeChatRowHeight(
     height = RECEIPT_PX * scale
     partCount = 1
   } else if (chrome.folded === true) {
-    height = content.subagentGroupCount * SUBAGENT_ROW_PX * scale
+    height = content.subagentGroupCount * STATUS_ROW_PX * scale
     partCount = height > 0 ? 1 : 0
   } else if (content.compactAgentMessage) {
     height = COMPACT_AGENT_MESSAGE_PX * scale
@@ -195,7 +195,7 @@ export function estimateNativeChatRowHeight(
       // A run is one collapsed header by default; its members only exist while open.
       height += TOOL_RUN_CHROME_PX * scale + 2 * typography.lineHeightPx
     }
-    height += content.subagentGroupCount * SUBAGENT_ROW_PX * scale
+    height += content.subagentGroupCount * STATUS_ROW_PX * scale
     partCount = height > 0 ? 1 : 0
   }
   if (chrome.hasStatus) {

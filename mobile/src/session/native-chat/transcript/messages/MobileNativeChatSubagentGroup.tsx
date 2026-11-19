@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { Text, View } from 'react-native'
 import { Bot } from 'lucide-react-native'
 import {
@@ -17,6 +18,9 @@ import type {
   NativeChatSubagentEntry,
   NativeChatSubagentGroupBlock
 } from '../../../../../../src/shared/native-chat/native-chat-types'
+import { formatNativeChatDuration } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
+import { useNow } from '../../../../hooks/use-now'
+import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { colors, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
@@ -38,6 +42,21 @@ function subagentDetails(agent: NativeChatSubagentEntry): { text: string; facts:
     .filter(Boolean)
     .join(' · ')
   return text || facts ? { text, facts } : null
+}
+
+/** Leaf so the shared 1s clock re-renders only the digits, never the group. */
+function Elapsed({
+  startedAt,
+  settledAt,
+  counting
+}: {
+  startedAt: number
+  settledAt: number | null
+  counting: boolean
+}): React.JSX.Element {
+  const now = useNow(1_000, counting)
+  const end = counting ? now : (settledAt ?? now)
+  return <>{formatNativeChatDuration(Math.max(0, (end - startedAt) / 1000))}</>
 }
 
 /** One subagent as a status row: the agent mark with a spinner while it works and a red ✕ when it
@@ -95,7 +114,13 @@ export function MobileNativeChatSubagentGroup({
   fontScale: number
 }): React.JSX.Element | null {
   useMobileColorScheme()
-  if (block.agents.length === 0) {
+  const t = useMobileTranslation()
+  const header = useMemo(
+    () => nativeChatSubagentGroupHeader(block.agents, say),
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- `say` reads the UI language implicitly; `t` tracks it.
+    [block.agents, t]
+  )
+  if (header.total === 0) {
     return null
   }
   const rows = (
@@ -105,26 +130,32 @@ export function MobileNativeChatSubagentGroup({
       ))}
     </View>
   )
-  if (block.agents.length === 1) {
+  if (header.total === 1) {
     return rows
   }
-  const header = nativeChatSubagentGroupHeader(block.agents, say)
-  const state = header.alertState ?? header.verdictState
-  const verdict = [header.verdict, header.alert === null ? null : `+${header.alert}`, header.tokens]
-    .filter(Boolean)
-    .join(' · ')
+  const { working, headline, verdict, alertState, alert, clockStartedAt } = header
+  const summary = alert === null ? verdict : `${verdict} +${alert}`
   return (
     <MobileNativeChatEventRow
       testID="subagent-summary"
       icon={<Bot size={14} color={colors.textMuted} strokeWidth={2} />}
-      badge={header.working ? 'running' : state === 'failed' ? 'failed' : null}
-      label={`${header.headline}, ${verdict}`}
+      badge={
+        working ? 'running' : (alertState ?? header.verdictState) === 'failed' ? 'failed' : null
+      }
+      label={`${headline}, ${summary}`}
       disclosureKey={`subagent-roster:${block.groupId}`}
       fontScale={fontScale}
       details={rows}
     >
-      <MobileNativeChatEventName>{header.headline}</MobileNativeChatEventName>
-      {` · ${verdict}`}
+      <MobileNativeChatEventName>{headline}</MobileNativeChatEventName>
+      {` · ${summary}`}
+      {clockStartedAt !== null ? (
+        <>
+          {' · '}
+          <Elapsed startedAt={clockStartedAt} settledAt={header.settledAt} counting={working} />
+        </>
+      ) : null}
+      {header.tokens !== null ? ` · ${header.tokens}` : null}
     </MobileNativeChatEventRow>
   )
 }
