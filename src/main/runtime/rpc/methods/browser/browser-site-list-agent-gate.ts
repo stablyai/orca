@@ -114,3 +114,17 @@ export async function createBrowserTabForCaller(
     ? runtime.browserTabCreate(pinned, { pairedDeviceId, clientKind, signal })
     : runtime.browserTabCreate(pinned, { clientKind, signal })
 }
+
+/** openUrl always opens in the Default profile, so a worktree whose new tabs belong in a listed profile can't use it. */
+export async function openBrowserUrlForCaller(
+  params: Parameters<RpcContext['runtime']['browserOpenUrlOnClient']>[0],
+  context: RpcContext
+): ReturnType<RpcContext['runtime']['browserOpenUrlOnClient']> {
+  const expected = isAgentRpcCaller(context.caller)
+    ? await expectedNewTabProfileId(context, params.worktree)
+    : null
+  if (expected) {
+    assertAgentMayMoveBrowsingOut(expected, DEFAULT_PROFILE_ID)
+  }
+  return context.runtime.browserOpenUrlOnClient(params, { signal: context.signal })
+}

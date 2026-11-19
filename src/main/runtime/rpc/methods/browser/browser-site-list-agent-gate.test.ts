@@ -17,6 +17,7 @@ function setup(repoProfileId: string | null = 'work') {
     showRepo: vi.fn(async () => ({ id: 'r1', browserProfileId: repoProfileId })),
     requireStore: () => ({ getSettings: () => ({}) }),
     browserTabCurrent: vi.fn(async () => ({ tab: { profileId: 'work' } })),
+    browserOpenUrlOnClient: vi.fn(async () => ({ browserPageId: 'p2' })),
     browserTabCreate: vi.fn(async (_params: unknown) => ({ browserPageId: 'p1' })),
     browserTabSetProfile: vi.fn(async () => ({})),
     browserTabProfileClone: vi.fn(async () => ({})),
@@ -69,6 +70,17 @@ describe('agents and a browser profile with a site list', () => {
     setBrowserProfileSiteList('work', [])
     await call('browser.tabCreate', params)
     expect(runtime.browserTabCreate.mock.calls.map(([sent]) => sent)).toEqual([params, params])
+  })
+
+  it('refuses an agent opening a URL in Default when its worktree belongs in a listed profile', async () => {
+    const { runtime, call } = setup()
+    const open = { worktree: 'id:w', url: 'https://example.com' }
+    setBrowserProfileSiteList('work', ['example.com'])
+    expect(await call('browser.openUrl', open)).toMatchObject(LOCKED)
+    expect(await call('browser.openUrl', open, DESKTOP_RPC_CALLER)).toMatchObject({ ok: true })
+    setBrowserProfileSiteList('work', [])
+    expect(await call('browser.openUrl', open)).toMatchObject({ ok: true })
+    expect(runtime.browserOpenUrlOnClient).toHaveBeenCalledTimes(2)
   })
 
   it.each([

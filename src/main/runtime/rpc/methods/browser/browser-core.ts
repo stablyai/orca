@@ -36,7 +36,7 @@ import {
 } from '../../../../../shared/rpc-contract/browser/browser-tab-create-params'
 import { BROWSER_TEXT_METHODS } from './browser-text-rpc-methods'
 import { BROWSER_PROFILE_METHODS } from './browser-profile-rpc-methods'
-import { createBrowserTabForCaller } from './browser-site-list-agent-gate'
+import { createBrowserTabForCaller, openBrowserUrlForCaller } from './browser-site-list-agent-gate'
 import { CertificateProceed } from '../../../../../shared/rpc-contract/browser/browser-core-params'
 
 export const BROWSER_CORE_METHODS = [
@@ -141,8 +141,7 @@ export const BROWSER_CORE_METHODS = [
     name: 'browser.openUrl',
     permission: 'workspace',
     params: BrowserOpenUrlParams,
-    handler: async (params, { runtime, signal }) =>
-      runtime.browserOpenUrlOnClient(params, { signal })
+    handler: (params, context) => openBrowserUrlForCaller(params, context)
   }),
   defineMethod({
     name: 'browser.tabClose',
