@@ -14,6 +14,8 @@ const publications = new Map<string, Promise<void>>()
 const sweeps = new Map<string, { done: Promise<void>; again: boolean }>()
 // Staging files of hand-offs still being written, however long one pauses; the sweep leaves them.
 const staging = new Set<string>()
+// When each snapshot was last published here, in case its file times couldn't be set.
+const publishedAt = new Map<string, number>()
 
 // Temp isn't emptied everywhere (Windows never), and a hand-off can carry every byte of huge outputs.
 const SNAPSHOT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
@@ -60,8 +62,9 @@ export async function writeAgentSessionContextSnapshot(
       throw new Error('Chat context snapshot publication was replaced')
     }
     // Rename keeps the last write's time, which a paused capture can leave old; the sweep ages by this.
-    const publishedAt = new Date()
-    await utimes(path, publishedAt, publishedAt).catch(() => undefined)
+    const now = new Date()
+    publishedAt.set(path, now.getTime())
+    await utimes(path, now, now).catch(() => undefined)
     void sweepAgentSessionContextSnapshots(root)
     return path
   } finally {
@@ -129,7 +132,11 @@ async function sweepSnapshotFolder(root: string, now: number): Promise<void> {
 function removeSnapshot(path: string, now: number): Promise<boolean> {
   return runKeyedSerializedOperation(publications, path, async () => {
     const info = await stat(path).catch(() => null)
-    if (claims.has(path) || !info || now - info.mtimeMs < SNAPSHOT_MIN_AGE_MS) {
+    const published = Math.max(info?.mtimeMs ?? 0, publishedAt.get(path) ?? 0)
+    if (now - (publishedAt.get(path) ?? 0) >= SNAPSHOT_MIN_AGE_MS) {
+      publishedAt.delete(path)
+    }
+    if (claims.has(path) || !info || now - published < SNAPSHOT_MIN_AGE_MS) {
       return false
     }
     // A file another process holds open (Windows) waits for a later sweep.
