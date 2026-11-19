@@ -201,6 +201,7 @@ export function journalSqlReads(
     input,
     usageLimitCut: async () => (await read({ kind: 'usage-limit-cut' })).cut,
     orcaStopCut: async () => (await read({ kind: 'orca-stop-cut' })).cut,
+    restoredPrompt: async () => (await read({ kind: 'restored-prompt' })).item,
     pendingSubmissions: async () => (await input({ kind: 'pending-submissions' })).submissions,
     newestTurn: async () => (await input({ kind: 'newest-turn' })).turn,
     namedTurn: async (turnId) => (await read({ kind: 'named-turn', turnId })).turn,

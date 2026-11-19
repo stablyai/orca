@@ -3,6 +3,7 @@ import {
   JOURNAL_ASYNC_QUESTION_ROWS,
   JOURNAL_PERSON_PROMPT_ROWS
 } from './database/journal-async-question-index'
+import { JOURNAL_PROMPT_ROWS } from './database/journal-prompt-position-index'
 import { AGENT_SESSION_ITEM_WIRE_VERSION } from '../agent-session-wire/publication/history/agent-session-item-presentation-contract'
 import {
   readJournalDomainStopStates,
@@ -14,15 +15,6 @@ import type { JournalSqlScope } from './journal-sql-scope'
 import type { JournalStatusItem, JournalStatusItemSelection } from './journal-status-items'
 
 const PAGE = 128
-
-/** Pinned where a newest-first walk over every row would otherwise be chosen. */
-function indexFor(selection: JournalStatusItemSelection): string {
-  if (selection.kind === 'tools' && selection.running) {
-    return 'INDEXED BY journal_items_unsettled'
-  }
-  // Prompt rows are few; walking the visible rows from the end to find one is not.
-  return selection.kind === 'latest-prompt-row' ? 'INDEXED BY journal_items_kind' : ''
-}
 
 /** Select current metadata in keyset pages, then decode only the reached candidates. */
 export function* sqlJournalStatusItems(
@@ -107,8 +99,9 @@ export function* sqlJournalStatusItems(
       ascending = true
       break
     case 'latest-prompt-row':
-      predicates.push("kind IN ('approval','question')")
-      single = true
+      // The newest two, so a request split over grouped rows can be told apart from a lone one.
+      predicates.push(JOURNAL_PROMPT_ROWS)
+      limit = 2
       break
     case 'scoped-statuses':
       predicates.push("kind='status' AND turn_item_id=?")
@@ -139,7 +132,7 @@ export function* sqlJournalStatusItems(
       : ''
     const rows = scope.db
       .prepare(`SELECT item_id,sequence,sequence_index,ordinal
-      FROM journal_items ${indexFor(selection)}
+      FROM journal_items ${selection.kind === 'tools' && selection.running ? 'INDEXED BY journal_items_unsettled' : ''}
       WHERE ${predicates.join(' AND ')}${cursor}
       ${unordered ? '' : `ORDER BY ${order}`} LIMIT ?`)
       .all(...params, ...(after ?? []), single ? 1 : limit)

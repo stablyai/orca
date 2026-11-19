@@ -10,6 +10,7 @@ import {
   type RestoredPromptJournal,
   type StructuredAgentSessionRestoredPromptsDeps
 } from './structured-agent-session-restored-prompts'
+import { restoredAgentJournalPrompt } from '../../../../shared/agent-session/requests/prompts/agent-session-restored-prompt'
 
 const SESSION = 'session-1'
 const REFUSED = {
@@ -49,7 +50,7 @@ function approval(
   }
 }
 
-function rig() {
+function rig({ startRejected = false } = {}) {
   const items = new Map<string, AgentJournalRenderItem>([
     ['old', approval('old', 'digest-a', 'cancelled')]
   ])
@@ -60,7 +61,7 @@ function rig() {
   const journal: RestoredPromptJournal = {
     reads: {
       item: async (id) => items.get(id) ?? null,
-      generation: async () => ({ items: [...items.values()] }),
+      restoredPrompt: async () => restoredAgentJournalPrompt([...items.values()]),
       cursor: async () => ({ epoch: 'e', sequence: 9 })
     },
     mutatePrompt: async (input) => {
@@ -105,7 +106,19 @@ function rig() {
           }
         }
       },
-      awaitSendHandedOver: async () => undefined,
+      awaitSendHandedOver: async (_sessionId, clientMessageId) =>
+        startRejected
+          ? {
+              clientMessageId,
+              fence: 3,
+              payloadFingerprint: 'fp',
+              dispatchState: 'rejected',
+              providerItemId: null,
+              reason: 'spawn failed',
+              submittedAt: 1_000,
+              resolvedAt: 1_000
+            }
+          : undefined,
       awaitSendSettlement: async () => undefined,
       awaitSendDispatched: async () => undefined,
       sessions: new Map(),
@@ -122,12 +135,12 @@ function rig() {
   }
   const prompts = new StructuredAgentSessionRestoredPrompts(deps)
   const live = vi.fn(async () => REFUSED)
-  const answer = (optionId: string) =>
+  const answer = (optionId: string, expectedRevision = 1) =>
     prompts.respond(
       { callerKey: 'desktop' },
       {
         itemId: 'old',
-        expectedRevision: 1,
+        expectedRevision,
         kind: 'approval',
         optionId,
         envelope: {
@@ -158,7 +171,18 @@ function rig() {
     })
     await new Promise((resolve) => setTimeout(resolve, 0))
   }
-  return { items, sent, respond, live, answer, reask, listening: () => emit !== null }
+  return {
+    items,
+    sent,
+    respond,
+    live,
+    answer,
+    reask,
+    listening: () => emit !== null,
+    agentExits: () => {
+      running = false
+    }
+  }
 }
 
 describe('answering a prompt whose agent exited before the restart', () => {
@@ -217,5 +241,28 @@ describe('answering a prompt whose agent exited before the restart', () => {
     expect(result.ok).toBe(false)
     expect(r.sent).toHaveLength(0)
     expect(r.items.get('old')!.body).toMatchObject({ resolution: { state: 'cancelled' } })
+  })
+
+  it('refuses a second device with a different answer instead of reporting it sent', async () => {
+    const r = rig()
+    await r.answer('allow')
+    r.agentExits()
+    const result = await r.answer('deny')
+
+    expect(result).toMatchObject({ ok: false, refusal: { code: 'agent_session_already_resolved' } })
+    expect(r.sent).toHaveLength(1)
+    expect(r.items.get('old')!.body).toMatchObject({ resolution: { selectedOptionId: 'allow' } })
+  })
+
+  it('puts the card back when the agent could not be started', async () => {
+    const r = rig({ startRejected: true })
+    await r.answer('allow')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(r.items.get('old')!.body).toMatchObject({
+      resolution: { state: 'cancelled', selectedOptionId: null, endedBy: 'agent_exit' }
+    })
+    await r.reask('new', 'digest-a')
+    expect(r.respond).not.toHaveBeenCalled()
   })
 })

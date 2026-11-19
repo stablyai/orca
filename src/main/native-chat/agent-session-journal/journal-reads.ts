@@ -58,6 +58,8 @@ export type AgentSessionJournalReads = {
   input: JournalInputReader
   usageLimitCut(): Promise<HostUsageLimitCut | null>
   orcaStopCut(): Promise<NativeChatOrcaStopCut | null>
+  /** The prompt an exited agent still waits on, when nothing has happened in the chat since. */
+  restoredPrompt(): Promise<AgentJournalRenderItem | null>
   contextFloor(): Promise<AgentJournalCursor | null>
   cursor(): Promise<AgentJournalCursor>
   physicalCursor(): Promise<AgentJournalCursor>

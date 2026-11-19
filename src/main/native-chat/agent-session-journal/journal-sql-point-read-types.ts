@@ -62,6 +62,7 @@ export type JournalSqlPointRead = {
     | { kind: 'status-state'; currentFence?: number | null }
     | { kind: 'usage-limit-cut' }
     | { kind: 'orca-stop-cut' }
+    | { kind: 'restored-prompt' }
     | { kind: 'input-read'; operation: JournalInputRead }
     | { kind: 'metadata' }
     | { kind: 'item'; itemId: string }
@@ -107,6 +108,7 @@ export type JournalSqlPointReadResult =
   | { kind: 'status-state'; status: JournalStatusState }
   | { kind: 'usage-limit-cut'; cut: HostUsageLimitCut | null }
   | { kind: 'orca-stop-cut'; cut: NativeChatOrcaStopCut | null }
+  | { kind: 'restored-prompt'; item: AgentJournalRenderItem | null }
   | { kind: 'input-read'; result: JournalInputReadResult }
   | {
       kind: 'metadata'

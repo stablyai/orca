@@ -23,6 +23,7 @@ import { readJournalSqlInput } from './journal-sql-input-reads'
 import { JournalSqlStatusContext } from './journal-sql-status-context'
 import { readJournalSqlUsageLimitCut, readJournalSqlOrcaStopCut } from './journal-sql-status-cuts'
 import { readJournalSqlStatusState } from './journal-sql-status-state'
+import { readJournalSqlRestoredPrompt } from './journal-sql-status-restored-prompt'
 import { readJournalSqlStatusIndicators } from './journal-sql-status-indicators'
 import { readJournalSqlQueue } from './journal-sql-queued-messages'
 import { readJournalDomainItems } from './journal-sql-item-reads'
@@ -140,6 +141,13 @@ function read(
       return operation.kind === 'usage-limit-cut'
         ? { kind: 'usage-limit-cut', cut: readJournalSqlUsageLimitCut(state) }
         : { kind: 'orca-stop-cut', cut: readJournalSqlOrcaStopCut(state) }
+    }
+    case 'restored-prompt': {
+      const state = new JournalSqlStatusContext(scope)
+      return {
+        kind: 'restored-prompt',
+        item: readJournalSqlRestoredPrompt(state, state.contextFloor())
+      }
     }
     case 'input-read':
       return { kind: 'input-read', result: readJournalSqlInput(scope, operation.operation) }

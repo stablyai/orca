@@ -137,11 +137,13 @@ function pendingPrompts(
     ) {
       continue
     }
-    prompts.push(
-      body.kind === 'approval'
+    prompts.push({
+      ...(body.kind === 'approval'
         ? { kind: 'approval', label: boundedLabel(body.displayName ?? body.title) }
-        : { kind: 'question', label: boundedLabel(body.question) }
-    )
+        : { kind: 'question', label: boundedLabel(body.question) }),
+      // Only a request with a digest can be matched when the resumed agent asks again.
+      ...(body.requestDigest ? { restorable: true } : {})
+    })
     if (prompts.length === AGENT_SESSION_RESTART_ACTIVITY_MAX_PROMPTS) {
       break
     }

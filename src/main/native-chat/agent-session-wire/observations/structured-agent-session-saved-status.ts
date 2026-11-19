@@ -212,9 +212,11 @@ export async function seedSavedStructuredSessionTabs(
     for (const marker of [...(pending ?? []), ...(failed ?? []).map((entry) => entry.marker)]) {
       markers.set(marker.sessionId, marker.recordedAt)
     }
-    // An unanswered offer whose agent was asking the person: its card can still be answered.
+    // An unanswered offer whose agent was asking the person one thing: its card can still be
+    // answered. Several at once are answered live, as the chat itself shows them.
     for (const marker of pending ?? []) {
-      if ((marker.activity?.prompts.length ?? 0) > 0) {
+      const prompts = marker.activity?.prompts ?? []
+      if (prompts.length === 1 && prompts[0]?.restorable) {
         waiting.add(marker.sessionId)
       }
     }

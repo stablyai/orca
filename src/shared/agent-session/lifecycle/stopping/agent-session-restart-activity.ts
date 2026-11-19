@@ -2,7 +2,12 @@ import type { AgentChildWorkKind } from '../../../agent-status/child-work/agent-
 import type { AgentStatusState } from '../../../agent-status/contracts/agent-status-types'
 
 /** A prompt the session was waiting on the user for when the stop cut it off. */
-export type AgentSessionRestartPrompt = { kind: 'approval' | 'question'; label: string }
+export type AgentSessionRestartPrompt = {
+  kind: 'approval' | 'question'
+  label: string
+  /** Its card can be answered after the restart: the agent's identical request takes the answer. */
+  restorable?: true
+}
 
 /** A child the stop cut off: a subagent, background command, monitor or workflow. */
 export type AgentSessionRestartTask = { kind: AgentChildWorkKind; label: string }

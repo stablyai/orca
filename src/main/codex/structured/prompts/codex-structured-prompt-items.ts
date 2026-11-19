@@ -85,32 +85,47 @@ export function codexApprovalOptions(params: unknown): AgentJournalPromptOption[
   return decisions.map(codexApprovalOption)
 }
 
-// Transport identity and the model's own wording: they change when the same request is re-asked.
-const UNHASHED_REQUEST_KEYS = new Set([
-  'threadId',
-  'turnId',
-  'itemId',
-  'approvalId',
-  'callId',
-  'reason',
-  'availableDecisions'
-])
+function present(value: unknown): boolean {
+  return Array.isArray(value)
+    ? value.length > 0
+    : typeof value === 'string'
+      ? value.length > 0
+      : typeof value === 'object' && value !== null && Object.keys(value).length > 0
+}
 
-/** A request without its full subject (a file change whose diff lives on its item) gets none. */
+/** What the request asks to do, named field by field, never ids, timestamps or the model's reason.
+ *  Null when the request doesn't carry its whole subject: such a card is only ever answered live. */
+function codexRequestSubject(
+  method: string,
+  params: Record<string, unknown>
+): Record<string, unknown> | null {
+  if (method === CODEX_COMMAND_APPROVAL_METHOD) {
+    return present(params.command)
+      ? {
+          command: params.command,
+          cwd: params.cwd,
+          amendment: params.proposedExecpolicyAmendment,
+          network: params.networkApprovalContext
+        }
+      : null
+  }
+  if (method === CODEX_FILE_CHANGE_APPROVAL_METHOD) {
+    return present(params.changes) ? { changes: params.changes, grantRoot: params.grantRoot } : null
+  }
+  if (method === CODEX_USER_INPUT_METHOD) {
+    return Array.isArray(params.questions) && params.questions.length === 1
+      ? { questions: params.questions }
+      : null
+  }
+  return null
+}
+
 function codexRequestDigest(
   method: string,
   params: Record<string, unknown>
 ): { requestDigest?: string } {
-  if (
-    (method === CODEX_COMMAND_APPROVAL_METHOD && params.command === undefined) ||
-    (method === CODEX_FILE_CHANGE_APPROVAL_METHOD && params.changes === undefined)
-  ) {
-    return {}
-  }
-  const request = Object.fromEntries(
-    Object.entries(params).filter(([key]) => !UNHASHED_REQUEST_KEYS.has(key))
-  )
-  return { requestDigest: journalPromptRequestDigest('codex', { method, request }) }
+  const subject = codexRequestSubject(method, params)
+  return subject ? { requestDigest: journalPromptRequestDigest('codex', { method, subject }) } : {}
 }
 
 export function codexApprovalItem(input: {
@@ -163,7 +178,6 @@ function codexMcpToolApprovalItem(params: Record<string, unknown>): AgentJournal
       // MCP cancel refuses this one call; the turn continues.
       intent: decision === 'cancel' ? 'reject_once' : APPROVAL_DECISION_INTENTS[decision]
     })),
-    ...codexRequestDigest(CODEX_MCP_ELICITATION_METHOD, params),
     resolution: { ...PENDING }
   }
 }
@@ -201,7 +215,7 @@ export function codexQuestionItems(input: {
     return []
   }
   const items: CodexQuestionItem[] = []
-  // One digest per row: a single-question request is the only kind a resumed agent's answer can take.
+  // Only a single-question request gets one: grouped answers go back to Codex together, live.
   const digest = codexRequestDigest(CODEX_USER_INPUT_METHOD, readParams(input.params))
   for (const entry of questions.slice(0, MAX_CODEX_PROMPT_QUESTIONS)) {
     const question = readParams(entry)
@@ -220,7 +234,7 @@ export function codexQuestionItems(input: {
         ...(questionAllowsFreeText(question)
           ? { freeTextQuestionId: codexJournalPromptIdPart(questionId) }
           : {}),
-        ...(questions.length === 1 ? digest : {}),
+        ...digest,
         resolution: { ...PENDING }
       }
     })

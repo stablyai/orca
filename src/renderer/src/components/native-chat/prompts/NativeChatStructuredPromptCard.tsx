@@ -43,7 +43,7 @@ export function NativeChatStructuredPromptCard({
           )
         : t(
             'components.native-chat.restoredPrompt.note',
-            'Asked before Orca restarted. Answering resumes the chat.'
+            'Asked before the agent stopped. Answering resumes the chat.'
           )}
     </p>
   ) : null

@@ -22289,7 +22289,7 @@
         "questionUnconfirmedDetail": "Check the side chat before asking again. Your question is still in this chat."
       },
       "restoredPrompt": {
-        "note": "Asked before Orca restarted. Answering resumes the chat.",
+        "note": "Asked before the agent stopped. Answering resumes the chat.",
         "failed": "Couldn't resume this chat, so your answer wasn't sent. Send a message to continue it."
       },
       "urlRequest": {

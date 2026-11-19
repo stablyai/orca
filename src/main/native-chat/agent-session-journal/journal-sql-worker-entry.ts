@@ -1,5 +1,6 @@
 import { JournalForkStages } from './journal-fork-stages'
 import { JOURNAL_ASYNC_QUESTION_INDEXES } from './database/journal-async-question-index'
+import { JOURNAL_PROMPT_POSITION_INDEX } from './database/journal-prompt-position-index'
 import { JOURNAL_ENDED_TURN_COUNTS_SCHEMA } from './database/journal-ended-turn-counts'
 import { runJournalTransaction } from './database/journal-database'
 import { mkdirSync } from 'node:fs'
@@ -58,6 +59,7 @@ async function open(): Promise<void> {
     readOnly = opened.readOnly
     if (!readOnly) {
       db.exec(JOURNAL_ASYNC_QUESTION_INDEXES)
+      db.exec(JOURNAL_PROMPT_POSITION_INDEX)
       runJournalTransaction(db, (writer) => writer.exec(JOURNAL_ENDED_TURN_COUNTS_SCHEMA))
     }
     forks = new JournalForkStages(db, stateDirectory)

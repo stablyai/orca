@@ -92,8 +92,8 @@ export function createStructuredAgentSessionTabSurface(
         ids,
         (visit) =>
           delivery.publishSavedStatusGroup((publish) =>
-            visit((record, markerAt) => {
-              publish(record, markerAt)
+            visit((record, markerAt, waiting) => {
+              publish(record, markerAt, waiting)
             })
           ),
         recover

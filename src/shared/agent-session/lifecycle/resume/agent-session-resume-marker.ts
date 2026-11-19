@@ -65,7 +65,13 @@ const activityLabel = z.string().max(AGENT_SESSION_RESTART_ACTIVITY_MAX_LABEL_LE
 const agentSessionRestartActivitySchema = z.object({
   state: z.enum(AGENT_STATUS_STATES),
   prompts: z
-    .array(z.object({ kind: z.enum(['approval', 'question']), label: activityLabel }))
+    .array(
+      z.object({
+        kind: z.enum(['approval', 'question']),
+        label: activityLabel,
+        restorable: z.literal(true).optional().catch(undefined)
+      })
+    )
     .max(AGENT_SESSION_RESTART_ACTIVITY_MAX_PROMPTS),
   tasks: z
     .array(z.object({ kind: z.enum(AGENT_CHILD_WORK_KINDS), label: activityLabel }))

@@ -84,7 +84,9 @@ export class RestoredAnswerHolds {
     this.unsubscribe ??= this.deps.subscribeTurnCompletions({
       id: RESTORED_PROMPT_ANSWER_CALLER,
       includePrompts: true,
-      emit: (event) => this.onEvent(event)
+      emit: (event) => this.onEvent(event),
+      // A closed chat's agent is gone, and so is the request its answer waited for.
+      onClosed: (closed) => this.drop(closed)
     })
   }
 

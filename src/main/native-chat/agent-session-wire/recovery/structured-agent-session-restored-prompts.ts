@@ -9,15 +9,12 @@ import type {
 } from '../../../../shared/agent-session/agent-session-wire'
 import type {
   AgentJournalItemBody,
-  AgentJournalRenderItem,
   AgentJournalResolution
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { refuse } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   AGENT_EXIT_PROMPT_ENDING,
-  isAgentExitPromptBody,
-  restoredAgentJournalPrompt,
   restoredPromptContinuationMessage
 } from '../../../../shared/agent-session/requests/prompts/agent-session-restored-prompt'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
@@ -43,8 +40,7 @@ type PromptBody = Extract<AgentJournalItemBody, { kind: 'approval' | 'question' 
 
 /** The reads and the one write a restored answer needs from the chat's journal. */
 export type RestoredPromptJournal = {
-  reads: Pick<AgentSessionJournal['reads'], 'item'> & {
-    generation: () => Promise<{ items: readonly AgentJournalRenderItem[] }>
+  reads: Pick<AgentSessionJournal['reads'], 'item' | 'restoredPrompt'> & {
     cursor: () => Promise<AgentJournalCursor>
   }
   mutatePrompt: (input: JournalPromptMutationInput) => Promise<{ revision: number }>
@@ -111,13 +107,9 @@ export class StructuredAgentSessionRestoredPrompts {
     }
     // A retry after a lost reply: the recorded answer stands.
     if (body.resolution.state === 'resolved') {
-      return body.resolution.selectedOptionId === choice.selectedOptionId
-        ? this.accepted(sessionId, journal, item.itemId, item.revision, body.resolution, true)
-        : invalid('promptGone', `Item ${params.itemId} was already answered.`)
+      return this.recorded(sessionId, journal, params.itemId, choice.selectedOptionId)
     }
-    const { items } = await journal.reads.generation()
-    const restored = restoredAgentJournalPrompt(items)
-    if (restored?.itemId !== item.itemId || !isAgentExitPromptBody(body) || !body.requestDigest) {
+    if ((await journal.reads.restoredPrompt())?.itemId !== item.itemId || !body.requestDigest) {
       return invalid('promptGone', `Item ${params.itemId} can no longer be answered.`)
     }
     // Stop has no meaning for an agent that isn't running; only allow and deny carry over.
@@ -150,6 +142,10 @@ export class StructuredAgentSessionRestoredPrompts {
     const host = this.deps.continuationHost()
     const committed: { revision?: number } = {}
     const commit = async (): Promise<void> => {
+      // Rechecked in the send's own lane: a message another device sent since ends the card.
+      if ((await journal.reads.restoredPrompt())?.itemId !== params.itemId) {
+        throw new RestartContinuationSupersededError()
+      }
       // The answer is recorded before the agent hears of it; a second device's answer loses here.
       const written = await journal
         .mutatePrompt({
@@ -186,9 +182,8 @@ export class StructuredAgentSessionRestoredPrompts {
         continuationId
       )
       if ('verdict' in started) {
-        // A start that fails after the answer is recorded is reported by the chat's own note.
         void started.verdict().then(
-          (outcome) => outcome.outcome === 'refused' && this.holds.drop(sessionId),
+          (outcome) => outcome.outcome === 'refused' && this.undo(journal, sessionId, params),
           () => this.holds.drop(sessionId)
         )
       } else if (started.done.outcome === 'refused') {
@@ -208,19 +203,72 @@ export class StructuredAgentSessionRestoredPrompts {
         throw error
       }
     }
-    const item = await journal.reads.item(params.itemId)
-    const now = item?.body.kind === body.kind ? item.body.resolution : null
-    if (!item || !now || now.state !== 'resolved') {
-      return invalid('promptGone', `Item ${params.itemId} can no longer be answered.`)
-    }
-    return this.accepted(
+    return this.recorded(
       sessionId,
       journal,
-      item.itemId,
-      item.revision,
-      now,
+      params.itemId,
+      choice.selectedOptionId,
       committed.revision === undefined
     )
+  }
+
+  /** Success only for the answer the card holds now; another device's different answer wins. */
+  private async recorded(
+    sessionId: string,
+    journal: RestoredPromptJournal,
+    itemId: string,
+    selectedOptionId: string,
+    replayed = true
+  ): Promise<PromptResult> {
+    const item = await journal.reads.item(itemId)
+    const body = item?.body
+    if (!item || (body?.kind !== 'approval' && body?.kind !== 'question')) {
+      return invalid('promptGone', `Item ${itemId} can no longer be answered.`)
+    }
+    const { resolution } = body
+    if (resolution.state !== 'resolved' || resolution.selectedOptionId !== selectedOptionId) {
+      return {
+        ok: false,
+        refusal: refuse(
+          'agent_session_already_resolved',
+          { reason: 'promptAlreadyResolved', currentRevision: item.revision, resolution },
+          `Item ${itemId} was already ${resolution.state}.`
+        )
+      }
+    }
+    return this.accepted(sessionId, journal, item.itemId, item.revision, resolution, replayed)
+  }
+
+  /** The agent could not be started: the answer never reached it, so the card asks again. */
+  private async undo(
+    journal: RestoredPromptJournal,
+    sessionId: string,
+    params: PromptParams
+  ): Promise<void> {
+    this.holds.drop(sessionId)
+    const item = await journal.reads.item(params.itemId)
+    if (!item) {
+      return
+    }
+    await journal
+      .mutatePrompt({
+        itemId: params.itemId,
+        expectedRevision: item.revision,
+        kind: params.kind,
+        resolution: {
+          state: 'cancelled',
+          selectedOptionId: null,
+          resolvedBy: null,
+          resolvedAt: null,
+          endedBy: AGENT_EXIT_PROMPT_ENDING
+        },
+        restored: true,
+        options: {
+          fence: this.deps.continuationHost().conversationFence(sessionId) ?? 0,
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        }
+      })
+      .catch(() => {})
   }
 
   private async accepted(

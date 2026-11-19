@@ -13,7 +13,10 @@ import type { JournalReducerState } from '../projection/journal-reducer'
 import { readJournalInputItem } from '../input-order/journal-input-obligations'
 import { journalContextCursor } from '../context-epochs/journal-context-epoch'
 import { journalItemRowBuilder } from './journal-row-builders'
-import { isAgentExitPromptBody } from '../../../../shared/agent-session/requests/prompts/agent-session-restored-prompt'
+import {
+  AGENT_EXIT_PROMPT_ENDING,
+  isAgentExitPromptBody
+} from '../../../../shared/agent-session/requests/prompts/agent-session-restored-prompt'
 import type { JournalRowWriter, JournalOperationReceipt } from './journal-row-writer'
 
 export type PendingPromptBody = Extract<AgentJournalItemBody, { kind: 'approval' | 'question' }>
@@ -26,6 +29,15 @@ function promptGone(message: string): PendingPromptValidation {
     ok: false,
     refusal: refuse('agent_session_operation_invalid', { reason: 'promptGone' }, message)
   }
+}
+
+/** A restored answer writes over the agent-exit ending, or puts it back when delivery failed. */
+function restorable(prompt: PendingPromptBody): boolean {
+  return (
+    isAgentExitPromptBody(prompt) ||
+    (prompt.resolution.state === 'resolved' &&
+      prompt.resolution.endedBy === AGENT_EXIT_PROMPT_ENDING)
+  )
 }
 
 export function validateJournalPendingPrompt(
@@ -57,7 +69,7 @@ export function validateJournalPendingPrompt(
       )
     }
   }
-  if (input.restored ? !isAgentExitPromptBody(prompt) : prompt.resolution.state !== 'pending') {
+  if (input.restored ? !restorable(prompt) : prompt.resolution.state !== 'pending') {
     return {
       ok: false,
       refusal: refuse(

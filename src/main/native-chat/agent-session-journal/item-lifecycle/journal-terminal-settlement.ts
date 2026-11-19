@@ -35,18 +35,19 @@ export function endedUnseenMessageBody(body: AgentJournalItemBody): AgentJournal
   return { ...open, ...endedJournalReasoning() }
 }
 
-/** Settle abandoned calls/prompts; null end leaves calls to their provider, and turn rows to their writer. */
+/** Settle abandoned calls/prompts; null end leaves calls to their provider, and turn rows to their writer.
+ *  `agentExited`: the agent's process is gone, so its prompts can still be answered by resuming. */
 export function terminalAgentJournalBody(
   body: AgentJournalItemBody,
-  end: AgentJournalRunningCallEnd | null
+  end: AgentJournalRunningCallEnd | null,
+  agentExited = false
 ): AgentJournalItemBody | null {
   if (body.kind === 'tool-call') {
     return body.state === 'running' && end ? endedRunningAgentJournalToolCall(body, end) : null
   }
   if (body.kind === 'approval' || body.kind === 'question') {
-    // Only a dead agent reaches here: its prompt can still be answered by resuming the chat.
     return body.resolution.state === 'pending'
-      ? cancelledJournalPromptBody(body, AGENT_EXIT_PROMPT_ENDING)
+      ? cancelledJournalPromptBody(body, agentExited ? AGENT_EXIT_PROMPT_ENDING : undefined)
       : null
   }
   return null

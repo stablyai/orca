@@ -37,9 +37,16 @@ export function restoredAgentJournalPrompt(
     return null
   }
   const turnItemId = item.turnScope?.kind === 'turn' ? item.turnScope.turnItemId : null
-  // Grouped questions span rows; their provider needs every answer at once, so they are answered live.
-  const previous = items[index - 1]
-  if (previous && isAgentExitPromptBody(previous.body)) {
+  // Two waiting in one turn (grouped questions, parallel calls) can't be told apart on resume.
+  const previous = items.findLast(
+    (other, at) => at < index && (other.body.kind === 'approval' || other.body.kind === 'question')
+  )
+  if (
+    previous &&
+    isAgentExitPromptBody(previous.body) &&
+    previous.turnScope?.kind === 'turn' &&
+    previous.turnScope.turnItemId === turnItemId
+  ) {
     return null
   }
   for (const later of items.slice(index + 1)) {
@@ -92,8 +99,9 @@ function answerWords(
       const picked = answer.optionIds.map(
         (id) => question?.options.find((option) => option.id === id)?.label ?? id
       )
+      // The answer goes over whole: the agent carries on with it and won't ask again.
       const words = [...picked, ...(answer.other ? [answer.other] : [])].join(', ')
-      return question ? `"${clip(question.question)}": ${clip(words)}` : clip(words)
+      return question ? `"${clip(question.question)}": ${words}` : words
     })
     .join('; ')
 }
@@ -108,7 +116,8 @@ export function restoredPromptContinuationMessage(
         answers: readonly { questionId: string; optionIds: string[]; other?: string }[]
       }
 ): string {
-  const lead = 'Orca restarted while you were waiting for the user, so your request was cut off.'
+  const lead =
+    'Your session stopped while you were waiting for the user (Orca restarted or the agent exited), so your request was cut off.'
   if (body.kind === 'question') {
     const answers = choice.kind === 'answers' ? answerWords(body, choice.answers) : ''
     return `${lead} You asked them a question, and they answered ${answers}. Carry on with that answer; if you ask the same question again, Orca answers it for them.`
