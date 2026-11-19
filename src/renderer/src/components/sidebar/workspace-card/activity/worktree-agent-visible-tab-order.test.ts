@@ -4,14 +4,13 @@ import { partitionPinnedTabOrder } from '../../../../../../shared/workspace-layo
 import { orderByVisibleTabs } from './worktree-agent-visible-tab-order'
 
 type Row = { name: string; tabId?: string }
-const tabIdOf = (row: Row): string | undefined => row.tabId
 
-function terminal(tab: { id: string; groupId: string; isPinned?: boolean }) {
+function terminal(tab: { id: string; entityId: string; groupId: string; isPinned?: boolean }) {
   return makeUnifiedTab({ ...tab, worktreeId: 'workspace' })
 }
 
 describe('orderByVisibleTabs', () => {
-  it('follows the tab order a drag wrote into the group', () => {
+  it("follows the group's tab order, matching terminal agents by entity id", () => {
     // Arrange
     const rows: Row[] = [
       { name: 'agent on alpha', tabId: 'alpha' },
@@ -20,15 +19,15 @@ describe('orderByVisibleTabs', () => {
     ]
     const strip = {
       tabs: [
-        terminal({ id: 'alpha', groupId: 'main' }),
-        terminal({ id: 'bravo', groupId: 'main' }),
-        terminal({ id: 'charlie', groupId: 'main' })
+        terminal({ id: 'alpha-tab', entityId: 'alpha', groupId: 'main' }),
+        terminal({ id: 'bravo-tab', entityId: 'bravo', groupId: 'main' }),
+        terminal({ id: 'charlie-tab', entityId: 'charlie', groupId: 'main' })
       ],
       groups: [
         makeTabGroup({
           id: 'main',
           worktreeId: 'workspace',
-          tabOrder: ['charlie', 'alpha', 'bravo']
+          tabOrder: ['charlie-tab', 'alpha-tab', 'bravo-tab']
         })
       ],
       layout: { type: 'leaf' as const, groupId: 'main' },
@@ -36,7 +35,7 @@ describe('orderByVisibleTabs', () => {
     }
 
     // Act
-    const ordered = orderByVisibleTabs(rows, tabIdOf, strip)
+    const ordered = orderByVisibleTabs(rows, (row) => row.tabId, strip)
 
     // Assert
     expect(ordered.map((row) => row.name)).toEqual([
@@ -49,9 +48,9 @@ describe('orderByVisibleTabs', () => {
   it('moves the agent of a pinned tab first', () => {
     // Arrange
     const tabs = [
-      terminal({ id: 'alpha', groupId: 'main' }),
-      terminal({ id: 'bravo', groupId: 'main' }),
-      terminal({ id: 'charlie', groupId: 'main', isPinned: true })
+      terminal({ id: 'alpha-tab', entityId: 'alpha', groupId: 'main' }),
+      terminal({ id: 'bravo-tab', entityId: 'bravo', groupId: 'main' }),
+      terminal({ id: 'charlie-tab', entityId: 'charlie', groupId: 'main', isPinned: true })
     ]
     const rows: Row[] = [
       { name: 'agent on alpha', tabId: 'alpha' },
@@ -64,7 +63,11 @@ describe('orderByVisibleTabs', () => {
         makeTabGroup({
           id: 'main',
           worktreeId: 'workspace',
-          tabOrder: partitionPinnedTabOrder(['alpha', 'bravo', 'charlie'], tabs, 'charlie')
+          tabOrder: partitionPinnedTabOrder(
+            ['alpha-tab', 'bravo-tab', 'charlie-tab'],
+            tabs,
+            'charlie-tab'
+          )
         })
       ],
       layout: { type: 'leaf' as const, groupId: 'main' },
@@ -72,7 +75,7 @@ describe('orderByVisibleTabs', () => {
     }
 
     // Act
-    const ordered = orderByVisibleTabs(rows, tabIdOf, strip)
+    const ordered = orderByVisibleTabs(rows, (row) => row.tabId, strip)
 
     // Assert
     expect(ordered.map((row) => row.name)).toEqual([
@@ -82,16 +85,16 @@ describe('orderByVisibleTabs', () => {
     ])
   })
 
-  it('ranks split groups in layout order, not in group list order', () => {
+  it('ranks split groups in layout order', () => {
     // Arrange
     const rows: Row[] = [
-      { name: 'agent on left-tab', tabId: 'left-tab' },
-      { name: 'agent on right-tab', tabId: 'right-tab' }
+      { name: 'agent on left-tab', tabId: 'left-terminal' },
+      { name: 'agent on right-tab', tabId: 'right-terminal' }
     ]
     const strip = {
       tabs: [
-        terminal({ id: 'left-tab', groupId: 'left' }),
-        terminal({ id: 'right-tab', groupId: 'right' })
+        terminal({ id: 'left-tab', entityId: 'left-terminal', groupId: 'left' }),
+        terminal({ id: 'right-tab', entityId: 'right-terminal', groupId: 'right' })
       ],
       groups: [
         makeTabGroup({ id: 'left', worktreeId: 'workspace', tabOrder: ['left-tab'] }),
@@ -107,13 +110,13 @@ describe('orderByVisibleTabs', () => {
     }
 
     // Act
-    const ordered = orderByVisibleTabs(rows, tabIdOf, strip)
+    const ordered = orderByVisibleTabs(rows, (row) => row.tabId, strip)
 
     // Assert
     expect(ordered.map((row) => row.name)).toEqual(['agent on right-tab', 'agent on left-tab'])
   })
 
-  it('ranks an agent-session tab by its tab id, not its session id', () => {
+  it('ranks an agent-session tab by its tab id', () => {
     // Arrange
     const rows: Row[] = [
       { name: 'agent on alpha', tabId: 'alpha' },
@@ -121,7 +124,7 @@ describe('orderByVisibleTabs', () => {
     ]
     const strip = {
       tabs: [
-        terminal({ id: 'alpha', groupId: 'main' }),
+        terminal({ id: 'alpha-tab', entityId: 'alpha', groupId: 'main' }),
         makeUnifiedTab({
           id: 'session-tab',
           entityId: 'session',
@@ -131,14 +134,18 @@ describe('orderByVisibleTabs', () => {
         })
       ],
       groups: [
-        makeTabGroup({ id: 'main', worktreeId: 'workspace', tabOrder: ['session-tab', 'alpha'] })
+        makeTabGroup({
+          id: 'main',
+          worktreeId: 'workspace',
+          tabOrder: ['session-tab', 'alpha-tab']
+        })
       ],
       layout: { type: 'leaf' as const, groupId: 'main' },
       legacyOrder: []
     }
 
     // Act
-    const ordered = orderByVisibleTabs(rows, tabIdOf, strip)
+    const ordered = orderByVisibleTabs(rows, (row) => row.tabId, strip)
 
     // Assert
     expect(ordered.map((row) => row.name)).toEqual(['agent on session-tab', 'agent on alpha'])
@@ -153,16 +160,18 @@ describe('orderByVisibleTabs', () => {
     ]
     const strip = {
       tabs: [
-        terminal({ id: 'alpha', groupId: 'main' }),
-        terminal({ id: 'bravo', groupId: 'main' })
+        terminal({ id: 'alpha-tab', entityId: 'alpha', groupId: 'main' }),
+        terminal({ id: 'bravo-tab', entityId: 'bravo', groupId: 'main' })
       ],
-      groups: [makeTabGroup({ id: 'main', worktreeId: 'workspace', tabOrder: ['bravo', 'alpha'] })],
+      groups: [
+        makeTabGroup({ id: 'main', worktreeId: 'workspace', tabOrder: ['bravo-tab', 'alpha-tab'] })
+      ],
       layout: { type: 'leaf' as const, groupId: 'main' },
       legacyOrder: []
     }
 
     // Act
-    const ordered = orderByVisibleTabs(rows, tabIdOf, strip)
+    const ordered = orderByVisibleTabs(rows, (row) => row.tabId, strip)
 
     // Assert
     expect(ordered.map((row) => row.name)).toEqual([
@@ -180,14 +189,14 @@ describe('orderByVisibleTabs', () => {
       { name: 'agent on yankee', tabId: 'yankee' }
     ]
     const strip = {
-      tabs: [terminal({ id: 'yankee', groupId: 'main' })],
-      groups: [makeTabGroup({ id: 'main', worktreeId: 'workspace', tabOrder: ['yankee'] })],
+      tabs: [terminal({ id: 'yankee-tab', entityId: 'yankee', groupId: 'main' })],
+      groups: [makeTabGroup({ id: 'main', worktreeId: 'workspace', tabOrder: ['yankee-tab'] })],
       layout: { type: 'leaf' as const, groupId: 'main' },
       legacyOrder: []
     }
 
     // Act
-    const ordered = orderByVisibleTabs(rows, tabIdOf, strip)
+    const ordered = orderByVisibleTabs(rows, (row) => row.tabId, strip)
 
     // Assert
     expect(ordered.map((row) => row.name)).toEqual([
@@ -206,7 +215,7 @@ describe('orderByVisibleTabs', () => {
     const strip = { tabs: [], groups: [], layout: undefined, legacyOrder: ['bravo', 'alpha'] }
 
     // Act
-    const ordered = orderByVisibleTabs(rows, tabIdOf, strip)
+    const ordered = orderByVisibleTabs(rows, (row) => row.tabId, strip)
 
     // Assert
     expect(ordered.map((row) => row.name)).toEqual(['agent on bravo', 'agent on alpha'])
@@ -220,14 +229,14 @@ describe('orderByVisibleTabs', () => {
       { name: 'agent on yankee', tabId: 'yankee' }
     ]
     const strip = {
-      tabs: [terminal({ id: 'yankee', groupId: 'main' })],
-      groups: [makeTabGroup({ id: 'main', worktreeId: 'workspace', tabOrder: ['yankee'] })],
+      tabs: [terminal({ id: 'yankee-tab', entityId: 'yankee', groupId: 'main' })],
+      groups: [makeTabGroup({ id: 'main', worktreeId: 'workspace', tabOrder: ['yankee-tab'] })],
       layout: { type: 'leaf' as const, groupId: 'main' },
       legacyOrder: ['stale-tab', 'yankee']
     }
 
     // Act
-    const ordered = orderByVisibleTabs(rows, tabIdOf, strip)
+    const ordered = orderByVisibleTabs(rows, (row) => row.tabId, strip)
 
     // Assert
     expect(ordered.map((row) => row.name)).toEqual([
