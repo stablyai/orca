@@ -326,7 +326,8 @@ export const NativeChatMentionMenu = memo(function NativeChatMentionMenu({
         activeItemRef={activeItemRef}
         onChoose={() => onChoose(path)}
         onPointerEnter={member?.id ? () => setHovered(member.id ?? null) : undefined}
-        className={cn(member && 'items-center', opens && 'pr-20')}
+        // Room for the Chats action; important, as the row's own px-2 comes later in the CSS.
+        className={cn(member && 'items-center', opens && '!pr-20')}
       >
         <NativeChatMentionOption value={path} member={member} />
         {opens ? (
