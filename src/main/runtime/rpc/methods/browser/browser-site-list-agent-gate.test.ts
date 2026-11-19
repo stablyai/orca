@@ -10,11 +10,12 @@ import { REPO_METHODS } from '../projects/repo'
 
 const LOCKED = { ok: false, error: { code: 'browser_profile_site_list_locked' } }
 
-function setup(repoProfileId = 'work') {
+function setup(repoProfileId: string | null = 'work') {
   const runtime = {
     getRuntimeId: () => 'test-runtime',
     showManagedWorktree: vi.fn(async () => ({ id: 'r1::/w', repoId: 'r1' })),
     showRepo: vi.fn(async () => ({ id: 'r1', browserProfileId: repoProfileId })),
+    requireStore: () => ({ getSettings: () => ({}) }),
     browserTabCurrent: vi.fn(async () => ({ tab: { profileId: 'work' } })),
     browserTabCreate: vi.fn(async (_params: unknown) => ({ browserPageId: 'p1' })),
     browserTabSetProfile: vi.fn(async () => ({})),
@@ -34,6 +35,7 @@ function setup(repoProfileId = 'work') {
 
 afterEach(() => {
   setBrowserProfileSiteList('work', [])
+  setBrowserProfileSiteList('default', [])
 })
 
 describe('agents and a browser profile with a site list', () => {
@@ -46,6 +48,17 @@ describe('agents and a browser profile with a site list', () => {
     expect(runtime.browserTabCreate).not.toHaveBeenCalled()
     await call('browser.tabCreate', { worktree: 'id:w' })
     expect(runtime.browserTabCreate.mock.calls[0][0]).toMatchObject({ profileId: 'work' })
+  })
+
+  it('keeps an agent tab in a listed Default profile when the repo picks none', async () => {
+    setBrowserProfileSiteList('default', ['example.com'])
+    const { runtime, call } = setup(null)
+    expect(await call('browser.tabCreate', { worktree: 'id:w', profileId: 'other' })).toMatchObject(
+      LOCKED
+    )
+    expect(runtime.browserTabCreate).not.toHaveBeenCalled()
+    await call('browser.tabCreate', { worktree: 'id:w' })
+    expect(runtime.browserTabCreate.mock.calls[0][0]).toMatchObject({ profileId: 'default' })
   })
 
   it('leaves the owner and unlisted profiles alone on tab create', async () => {

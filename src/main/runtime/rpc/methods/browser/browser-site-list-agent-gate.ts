@@ -8,35 +8,68 @@ import {
   assertAgentMayMoveBrowsingOut,
   browserProfileHasSiteList
 } from '../../../../browser/sessions/site-list/browser-profile-site-list-lock'
+import { browserSessionRegistry } from '../../../../browser/sessions/profiles/browser-session-registry'
+import {
+  getManagedBrowserProfileOwner,
+  isManagedBrowserProfileOf
+} from '../../../../../shared/browser/profiles/browser-profile-scope'
 import type { Repo } from '../../../../../shared/repository/repo-types'
+
+const DEFAULT_PROFILE_ID = 'default'
 
 type GateContext = Pick<RpcContext, 'caller' | 'runtime'>
 
-async function repoForWorktree(context: GateContext, worktree: string): Promise<Repo | null> {
+/** The profile a new tab gets for this worktree, as the renderer resolves it: repo pick, else the managed profile, else Default. */
+async function expectedNewTabProfileId(
+  context: GateContext,
+  worktree: string | undefined
+): Promise<string | null> {
+  let worktreeId: string | undefined
+  let repo: Repo | null = null
   try {
-    const { repoId } = await context.runtime.showManagedWorktree(worktree, undefined, {
-      matchFolders: true
-    })
-    return repoId ? await context.runtime.showRepo(`id:${repoId}`) : null
+    if (worktree) {
+      const found = await context.runtime.showManagedWorktree(worktree, undefined, {
+        matchFolders: true
+      })
+      worktreeId = found.id
+      repo = found.repoId ? await context.runtime.showRepo(`id:${found.repoId}`) : null
+    }
   } catch {
     // The command itself resolves the same selector and reports the real failure.
-    return null
   }
+  if (repo?.browserProfileId) {
+    return repo.browserProfileId
+  }
+  const owner = worktreeId
+    ? getManagedBrowserProfileOwner(
+        context.runtime.requireStore().getSettings().browserProfileScope,
+        worktreeId
+      )
+    : null
+  if (!owner) {
+    return DEFAULT_PROFILE_ID
+  }
+  // Managed profiles are made lazily; none yet means no list to protect.
+  return (
+    browserSessionRegistry
+      .listProfiles()
+      .find((profile) => isManagedBrowserProfileOf(profile, owner))?.id ?? null
+  )
 }
 
-/** Pins an agent's new tab to the repo's listed profile: headless and client placements would otherwise use the host default. */
+/** Pins an agent's new tab to the profile it would get anyway when that profile has a site list: headless and client placements would otherwise use the host default. */
 async function pinAgentTabCreateToListedProfile<
   T extends { worktree?: string; profileId?: string }
 >(context: GateContext, params: T): Promise<T> {
-  if (!isAgentRpcCaller(context.caller) || !params.worktree) {
+  if (!isAgentRpcCaller(context.caller)) {
     return params
   }
-  const repoProfileId = (await repoForWorktree(context, params.worktree))?.browserProfileId
-  if (!repoProfileId || !browserProfileHasSiteList(repoProfileId)) {
+  const expected = await expectedNewTabProfileId(context, params.worktree)
+  if (!expected || !browserProfileHasSiteList(expected)) {
     return params
   }
-  assertAgentMayMoveBrowsingOut(repoProfileId, params.profileId ?? repoProfileId)
-  return { ...params, profileId: repoProfileId }
+  assertAgentMayMoveBrowsingOut(expected, params.profileId ?? expected)
+  return { ...params, profileId: expected }
 }
 
 export async function assertAgentMayChangeTabProfile(
