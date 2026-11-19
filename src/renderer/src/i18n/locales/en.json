@@ -22061,7 +22061,8 @@
       "toolAdded": {
         "removed": "Removed",
         "heading": "Added a tool",
-        "remove": "Remove"
+        "remove": "Remove",
+        "added": "Added"
       },
       "usageLimitActions": {
         "switchAccount": "Switch account",
@@ -28944,7 +28945,6 @@
         "added": "Added {{items}}",
         "canceled": "Canceled {{items}}",
         "changes": "{{from}} → {{to}} · {{count}} changes",
-        "openInItems": "Click to open in Items",
         "updated": "Updated {{items}}",
         "youCanceled": "You canceled {{items}}",
         "youCanceledMany": "You canceled {{count}} items: {{items}}",
@@ -28953,8 +28953,6 @@
         "youMarkedManyDone": "You marked {{count}} items done: {{items}}",
         "youMoved": "You moved {{items}} to {{status}}",
         "youMovedMany": "You moved {{count}} items to {{status}}: {{items}}",
-        "showLess": "Show less",
-        "showMore": "Show more",
         "moreItems": "+{{count}} more",
         "askedYou": "Asked you about {{items}}",
         "aWorker": "a worker",
