@@ -11,7 +11,7 @@ import {
   saveTerminalSessionName,
   subscribeTerminalSessionNames,
   terminalSessionNameKey,
-  terminalSessionNameKeysOwnedBy
+  terminalSessionNamesOwnedBy
 } from './terminal-session-names'
 
 function stored(): Record<string, unknown> {
@@ -114,10 +114,23 @@ describe('terminal session names', () => {
     localStorage.setItem(TERMINAL_SESSION_NAMES_STORAGE_KEY, JSON.stringify(other))
     save('mine2', 'Mine 2')
     expect(Object.keys(stored())).toHaveLength(3)
-    forgetTerminalSessionNames([terminalSessionNameKey('local', 'mine')])
+    forgetTerminalSessionNames([
+      { key: terminalSessionNameKey('local', 'mine'), ownerTabId: 'tab-1' }
+    ])
     expect(Object.keys(stored()).sort()).toEqual(
       [terminalSessionNameKey('local', 'mine2'), terminalSessionNameKey('local', 'theirs')].sort()
     )
+  })
+
+  it('does not forget a name another window moved to a different tab', () => {
+    save('s1', 'Mine', 'tab-a')
+    const key = terminalSessionNameKey('local', 's1')
+    // Another window moves the name to tab-b before this window hears of it.
+    const other = stored()
+    other[key] = { title: 'Theirs', agent: 'claude', tabId: 'tab-b', savedAt: Date.now() + 1 }
+    localStorage.setItem(TERMINAL_SESSION_NAMES_STORAGE_KEY, JSON.stringify(other))
+    forgetTerminalSessionNames([{ key, ownerTabId: 'tab-a' }])
+    expect(stored()[key]).toMatchObject({ title: 'Theirs', tabId: 'tab-b' })
   })
 
   it("refreshes and notifies on another window's storage event", () => {
@@ -146,9 +159,11 @@ describe('terminal session names', () => {
     save('a', 'A', 'tab-a')
     save('b', 'B', 'tab-a')
     save('c', 'C', 'tab-c')
-    expect(terminalSessionNameKeysOwnedBy('tab-a').sort()).toEqual(
-      [terminalSessionNameKey('local', 'a'), terminalSessionNameKey('local', 'b')].sort()
-    )
+    expect(
+      terminalSessionNamesOwnedBy('tab-a')
+        .map(({ key }) => key)
+        .sort()
+    ).toEqual([terminalSessionNameKey('local', 'a'), terminalSessionNameKey('local', 'b')].sort())
 
     for (let index = 0; index < TERMINAL_SESSION_NAMES_MAX_ENTRIES + 5; index++) {
       save(`bulk-${index}`, `Name ${index}`)

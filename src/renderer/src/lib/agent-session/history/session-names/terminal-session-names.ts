@@ -187,30 +187,34 @@ export function saveTerminalSessionName(args: {
   })
 }
 
-/** Forget the given keys; no write when none is stored. */
-export function forgetTerminalSessionNames(keys: Iterable<string>): void {
-  const wanted = [...keys].filter((key) => loaded().has(key))
+export type TerminalSessionNameForget = { key: string; ownerTabId: string }
+
+/** Forget names still owned by the expected tab; another window may have moved one since. */
+export function forgetTerminalSessionNames(names: Iterable<TerminalSessionNameForget>): void {
+  const wanted = [...names].filter(({ key, ownerTabId }) => loaded().get(key)?.tabId === ownerTabId)
   if (wanted.length === 0) {
     return
   }
   commit((current) => {
     let changed = false
-    for (const key of wanted) {
-      changed = current.delete(key) || changed
+    for (const { key, ownerTabId } of wanted) {
+      if (current.get(key)?.tabId === ownerTabId) {
+        changed = current.delete(key) || changed
+      }
     }
     return changed
   })
 }
 
-/** Keys of every entry this tab owns. */
-export function terminalSessionNameKeysOwnedBy(tabId: string): string[] {
-  const keys: string[] = []
+/** Every name this tab owns. */
+export function terminalSessionNamesOwnedBy(tabId: string): TerminalSessionNameForget[] {
+  const names: TerminalSessionNameForget[] = []
   for (const [key, entry] of loaded()) {
     if (entry.tabId === tabId) {
-      keys.push(key)
+      names.push({ key, ownerTabId: tabId })
     }
   }
-  return keys
+  return names
 }
 
 export function hasTerminalSessionNames(): boolean {

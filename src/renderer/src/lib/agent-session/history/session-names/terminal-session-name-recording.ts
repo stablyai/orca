@@ -16,7 +16,8 @@ import {
   normalizeTerminalSessionName,
   saveTerminalSessionName,
   terminalSessionNameKey,
-  terminalSessionNameKeysOwnedBy
+  terminalSessionNamesOwnedBy,
+  type TerminalSessionNameForget
 } from './terminal-session-names'
 
 /** While this client's own rename echoes back through main or a paired host, the tab may still
@@ -30,11 +31,12 @@ type LocalNameWrite = {
   name: string
   /** The session a user rename named; only it may take the name once the rename shows. */
   sessionId: string | null
-  /** The tab's name before the rename: a resumed tab renamed before its session was known. */
-  previousName: string
 }
 
 const localNameWriteByTabId = new Map<string, LocalNameWrite>()
+// The name a tab showed before renames made here while no session was known (a resumed tab still
+// starting). Kept until the tab's session is known or the tab closes, however long that takes.
+const renamedFromByTabId = new Map<string, string>()
 // What the last pass saw on each bound tab, so a pass can tell a rename made while bound.
 let lastSeenByTabId = new Map<string, { key: string; name: string }>()
 
@@ -63,15 +65,15 @@ function tabIsOpen(state: AppState, tabId: string): boolean {
   return getTerminalTabOwnerWorktreeId(state.tabsByWorktree, tabId) !== null
 }
 
-/** Keys a clear of `tabId` forgets: what it owns, plus its session's name left by a closed tab
+/** Names a clear of `tabId` forgets: what it owns, plus its session's name left by a closed tab
  *  when the tab was showing that name (a resumed tab cleared before a pass adopted it). */
-function keysClearedBy(
+function namesClearedBy(
   state: AppState,
   tabId: string,
   binding: Binding | null,
   previousName: string
-): string[] {
-  const keys = terminalSessionNameKeysOwnedBy(tabId)
+): TerminalSessionNameForget[] {
+  const names = terminalSessionNamesOwnedBy(tabId)
   if (binding && previousName) {
     const entry = getTerminalSessionNameEntry(binding.executionHostId, binding.providerSession.id)
     if (
@@ -80,10 +82,10 @@ function keysClearedBy(
       entry.title === previousName &&
       !tabIsOpen(state, entry.tabId)
     ) {
-      keys.push(binding.key)
+      names.push({ key: binding.key, ownerTabId: entry.tabId })
     }
   }
-  return keys
+  return names
 }
 
 /** A rename through the store: the user's act, so it names the focused pane's session now (a
@@ -102,21 +104,7 @@ export function recordTerminalTabRename(
     state.tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)?.customTitle
   )
   const name = normalizeTerminalSessionName(title)
-  const at = options.now ?? Date.now()
-  const earlier = localNameWriteByTabId.get(tabId)
-  const write: LocalNameWrite = {
-    at,
-    name,
-    sessionId: null,
-    // Renames in quick succession before the session is known still count from the first name the
-    // tab showed (a resume's own naming of an unnamed tab leaves none, so the seeded name counts).
-    previousName:
-      (earlier &&
-        earlier.sessionId === null &&
-        at - earlier.at < LOCAL_TAB_NAME_WRITE_GRACE_MS &&
-        earlier.previousName) ||
-      previousName
-  }
+  const write: LocalNameWrite = { at: options.now ?? Date.now(), name, sessionId: null }
   localNameWriteByTabId.set(tabId, write)
   if (!name && !hasTerminalSessionNames()) {
     return
@@ -124,6 +112,13 @@ export function recordTerminalTabRename(
   const conversation = collectAgentPaneConversations(state, isAiVaultAgent, {
     tab: { worktreeId, tabId }
   })[0]
+  if (conversation?.providerSession.id) {
+    renamedFromByTabId.delete(tabId)
+  } else {
+    // Renames before the session is known count from the first name the tab showed (a resume's
+    // own naming of an unnamed tab leaves none, so the seeded name counts).
+    renamedFromByTabId.set(tabId, renamedFromByTabId.get(tabId) || previousName)
+  }
   // Only a person's rename may later name a session whose host was not known yet; a name a tab was
   // created with, or a session bound after the rename, keeps the normal rules.
   if (name && options.interactive !== false) {
@@ -132,7 +127,7 @@ export function recordTerminalTabRename(
   const resolved = bindingOf(state, conversation)
   const binding = resolved === 'host-unknown' ? null : resolved
   if (!name) {
-    forgetTerminalSessionNames(keysClearedBy(state, tabId, binding, previousName))
+    forgetTerminalSessionNames(namesClearedBy(state, tabId, binding, previousName))
     return
   }
   if (binding) {
@@ -186,6 +181,11 @@ export function reconcileTerminalSessionNames(
       tabsById.set(tab.id, tab)
     }
   }
+  for (const tabId of renamedFromByTabId.keys()) {
+    if (!tabsById.has(tabId)) {
+      renamedFromByTabId.delete(tabId)
+    }
+  }
   const seen = new Map<string, { key: string; name: string }>()
   for (const conversation of collectAgentPaneConversations(state, isAiVaultAgent)) {
     const tab = tabsById.get(conversation.tabId)
@@ -210,6 +210,10 @@ export function reconcileTerminalSessionNames(
       result.recheckAt = Math.min(result.recheckAt ?? due, due)
       continue
     }
+    // The session is known now; what the tab showed before renames made while starting decides
+    // below whether it takes the session's saved name.
+    const renamedFrom = renamedFromByTabId.get(tab.id)
+    renamedFromByTabId.delete(tab.id)
     // The rename shows, for the session the user renamed: it names that session even when its host
     // was not known at rename time. Grace runs its full window: a paired host's optimistic local
     // name shows at once, and a snapshot built before the host applied it may still arrive.
@@ -229,7 +233,7 @@ export function reconcileTerminalSessionNames(
     // must keep its own name. Only a tab showing that name (a resume we named), renamed while
     // running the session, or renamed here from that name takes it from a closed owner.
     const closedOwner = entry !== undefined && !owned && !tabsById.has(entry.tabId)
-    const renamedFromSavedName = write !== undefined && write.previousName === entry?.title
+    const renamedFromSavedName = renamedFrom !== undefined && renamedFrom === entry?.title
     if (name) {
       if (
         !entry ||
@@ -246,11 +250,11 @@ export function reconcileTerminalSessionNames(
       }
     } else if (owned || (closedOwner && (renamedWhileBound || renamedFromSavedName))) {
       const shownBeforeClear = renamedFromSavedName
-        ? write.previousName
+        ? renamedFrom
         : renamedWhileBound
           ? previous.name
           : ''
-      forgetTerminalSessionNames(keysClearedBy(state, tab.id, binding, shownBeforeClear))
+      forgetTerminalSessionNames(namesClearedBy(state, tab.id, binding, shownBeforeClear))
     }
   }
   lastSeenByTabId = seen
@@ -259,5 +263,6 @@ export function reconcileTerminalSessionNames(
 
 export function resetTerminalSessionNameRecordingForTest(): void {
   localNameWriteByTabId.clear()
+  renamedFromByTabId.clear()
   lastSeenByTabId = new Map()
 }

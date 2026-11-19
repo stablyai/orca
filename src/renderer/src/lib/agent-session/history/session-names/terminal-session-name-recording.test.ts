@@ -301,6 +301,33 @@ describe('terminal session name recording', () => {
       expect(saved('s1')).toBeNull()
     })
 
+    it('a resumed tab renamed while starting takes the name even if its session reports late', () => {
+      const now = 1_000_000
+      seed('s1', 'Fix auth bug', 'closed-tab')
+      recordTerminalTabRename(
+        makeTerminalNamesState([{ id: 'tab-new' }]),
+        'tab-new',
+        'Fix auth bug',
+        {
+          now: now - 100,
+          interactive: false
+        }
+      )
+      recordTerminalTabRename(
+        makeTerminalNamesState([{ id: 'tab-new', customTitle: 'Fix auth bug' }]),
+        'tab-new',
+        'Auth, part two',
+        { now }
+      )
+      // The agent is slow to start: no session yet when a pass runs, then it reports a minute later.
+      pass([{ id: 'tab-new', customTitle: 'Auth, part two' }], now + 1_000)
+      pass(
+        [{ id: 'tab-new', sessionId: 's1', customTitle: 'Auth, part two' }],
+        now + LOCAL_TAB_NAME_WRITE_GRACE_MS * 2
+      )
+      expect(saved('s1')).toBe('Auth, part two')
+    })
+
     it('keeps the saved name when naming a resumed tab failed', () => {
       seed('s1', 'Fix auth bug', 'closed-tab')
       // The host ignored the name, so the resumed tab stays unnamed.

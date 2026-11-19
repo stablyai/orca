@@ -120,10 +120,9 @@ function withLayoutOwnerTerminalTabChanges<
 
 /** Every rename, routed or not, names the tab's agent session before it lands, so a close right
  *  after keeps the name in Session History. */
-function withTerminalSessionNameRecording<T extends Pick<TerminalSlice, 'setTabCustomTitle'>>(
-  actions: T,
-  get: TerminalStoreGet
-): T {
+export function withTerminalSessionNameRecording<
+  T extends Pick<TerminalSlice, 'setTabCustomTitle'>
+>(actions: T, get: TerminalStoreGet): T {
   return {
     ...actions,
     setTabCustomTitle: (tabId, title, opts) => {

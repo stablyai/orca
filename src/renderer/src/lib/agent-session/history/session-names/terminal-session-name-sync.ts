@@ -45,6 +45,19 @@ export function terminalTabNamesChanged(current: AppState, previous: AppState): 
   return false
 }
 
+/** Some tab in `previous` is gone from `current`. */
+export function terminalTabsClosed(current: AppState, previous: AppState): boolean {
+  const open = new Set<string>()
+  for (const tabs of Object.values(current.tabsByWorktree)) {
+    for (const tab of tabs) {
+      open.add(tab.id)
+    }
+  }
+  return Object.values(previous.tabsByWorktree).some((tabs) =>
+    tabs.some((tab) => !open.has(tab.id))
+  )
+}
+
 const sessionIdOf = (entry: { providerSession?: { id?: string } }) => entry.providerSession?.id
 
 /** Which session runs in which pane changed, for any agent; status heartbeats leave this false. */
@@ -126,8 +139,14 @@ export function startTerminalSessionNameSync(dependencies: SyncDependencies): ()
   }
 
   const unsubscribe = dependencies.subscribe((state, previous) => {
+    const tabNamesChanged = terminalTabNamesChanged(state, previous)
+    if (tabNamesChanged && cancelScheduled && terminalTabsClosed(state, previous)) {
+      // A waiting pass never sees tabs that close before it runs, so a name that just arrived
+      // from another client would be lost; settle names from the state the tabs closed in.
+      reconcileTerminalSessionNames(previous, now())
+    }
     if (
-      terminalTabNamesChanged(state, previous) ||
+      tabNamesChanged ||
       agentSessionBindingsChanged(state, previous) ||
       (hostSkipped && ownerInputsChanged(state, previous))
     ) {

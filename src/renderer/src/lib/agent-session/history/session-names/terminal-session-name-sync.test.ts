@@ -158,6 +158,17 @@ describe('terminal session name sync', () => {
     sync.stop()
   })
 
+  it('keeps a name from another client when the tab closes before the waiting pass', () => {
+    const sync = harness(makeTerminalNamesState([{ id: 'tab-1', sessionId: 's1' }]))
+    sync.flush()
+    sync.set(withTabTitle(sync.state, { customTitle: 'From phone' }))
+    expect(sync.pending).toHaveLength(1)
+    // The tab closes before the waiting pass runs.
+    sync.set(makeTerminalNamesState([]))
+    expect(getSavedTerminalSessionName('local', 'claude', 's1')).toBe('From phone')
+    sync.stop()
+  })
+
   it('retries tabs skipped for an unknown host when owner facts change', () => {
     const known = makeTerminalNamesState([{ id: 'tab-1', sessionId: 's1', customTitle: 'N' }])
     const unknown = {
