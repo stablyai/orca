@@ -139,6 +139,7 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
       const observedAtEpochMs = identityOnlyTitle ? null : Date.now()
       // A fresh title retires a stale-working display clear, so the row shows the agent again.
       const retiresDisplayClear = !statusOnly && pty.titleDisplayClear != null
+      const retiredDisplayTitle = pty.titleDisplayClear?.title
       if (!statusOnly) {
         pty.titleDisplayClear = null
         pty.lastOscTitle = recordedTitle
@@ -185,6 +186,8 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
       if (agentStatus === 'idle' && prevStatus !== 'permission' && ptyRecordChanged) {
         this.resolvePtyTuiIdleWaiters(pty, ptyId)
       }
+      // Retiring a display clear changes the shown title even when the native title and status repeat.
+      ptyRecordChanged ||= retiresDisplayClear && retiredDisplayTitle !== recordedTitle
       const shouldDelayMobileSnapshot =
         ptyRecordChanged &&
         this.shouldDelayPtyBackedMobileSnapshotForForegroundAgent(pty, normalizedTitle)
