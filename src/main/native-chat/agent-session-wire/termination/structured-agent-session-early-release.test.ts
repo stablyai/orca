@@ -51,6 +51,16 @@ describe('releasing a finished background run', () => {
     expect(agentRunning()).toBe(true)
   })
 
+  it('stops an open chat idle agent when asked to anyway, as an account switch does', async () => {
+    await finishedRun(() => null)
+    await rig.host.subscribe({ id: 'pane', sessionId: SESSION, emit: () => {} })
+
+    await eventually(async () => {
+      await rig.host.releaseIdleSession(SESSION, true)
+      expect(agentRunning()).toBe(false)
+    })
+  })
+
   it('keeps the agent while the provider still holds a send', async () => {
     await finishedRun()
     rig.adapter.holdsDispatch.mockReturnValue(true)

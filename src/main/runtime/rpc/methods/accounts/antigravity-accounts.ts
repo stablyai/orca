@@ -10,6 +10,7 @@ import {
 } from '../../../../../shared/rpc-contract/accounts/antigravity-accounts-params'
 import { AntigravityChatAuthConfigSchema } from '../../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { getAntigravityAccountService } from '../../../../antigravity/native-account-host'
+import { restartIdleAgyChats, withAntigravityChatBackend } from './antigravity-chat-backend'
 import {
   cancelAntigravityChatSignIn,
   completeAntigravityChatSignIn,
@@ -45,27 +46,44 @@ export const ANTIGRAVITY_ACCOUNT_METHODS = [
     name: 'accounts.antigravityList',
     permission: 'workspace',
     params: AntigravityAccountTargetParams,
-    handler: async (target) => (await getAntigravityAccountService(target)).listAccounts()
+    handler: async (target, ctx) =>
+      withAntigravityChatBackend(
+        ctx.runtime,
+        target,
+        await (await getAntigravityAccountService(target)).listAccounts()
+      )
   }),
   defineMethod({
     name: 'accounts.antigravityAddCurrent',
     permission: 'accounts-admin',
     params: AntigravityAccountTargetParams,
-    handler: async (target) => (await getAntigravityAccountService(target)).addCurrentAccount()
+    handler: async (target, ctx) =>
+      withAntigravityChatBackend(
+        ctx.runtime,
+        target,
+        await (await getAntigravityAccountService(target)).addCurrentAccount()
+      )
   }),
   defineMethod({
     name: 'accounts.antigravitySelect',
     permission: 'accounts-admin',
     params: AntigravityAccountMutationParams,
-    handler: async ({ target, accountId }) =>
-      (await getAntigravityAccountService(target)).selectAccount(accountId)
+    handler: async ({ target, accountId }, ctx) => {
+      const state = await (await getAntigravityAccountService(target)).selectAccount(accountId)
+      restartIdleAgyChats(target)
+      return withAntigravityChatBackend(ctx.runtime, target, state)
+    }
   }),
   defineMethod({
     name: 'accounts.antigravityRemove',
     permission: 'accounts-admin',
     params: AntigravityAccountMutationParams,
-    handler: async ({ target, accountId }) =>
-      (await getAntigravityAccountService(target)).removeAccount(accountId)
+    handler: async ({ target, accountId }, ctx) =>
+      withAntigravityChatBackend(
+        ctx.runtime,
+        target,
+        await (await getAntigravityAccountService(target)).removeAccount(accountId)
+      )
   }),
   defineMethod({
     name: 'accounts.antigravityChatSignInStart',
