@@ -198,8 +198,6 @@ export function WorkspaceProviderAccountSubMenu({
           description: failure instanceof Error ? failure.message : String(failure)
         }
       )
-    } finally {
-      setSavingOwner((current) => (current === ownerKey ? null : current))
     }
   }
 
@@ -254,7 +252,11 @@ export function WorkspaceProviderAccountSubMenu({
               )
             : error
       }
-      onSelect={(value) => void save(value)}
+      onSelect={(value) => {
+        void save(value).finally(() => {
+          setSavingOwner((current) => (current === ownerKey ? null : current))
+        })
+      }}
     />
   )
   if (asSection) {
