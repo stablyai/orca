@@ -96,12 +96,13 @@ export function ZotzDirtyFileDiff({
       </p>
     )
   }
-  const shown = lines.slice(0, MAX_DIFF_LINES)
+  // A diff is a fixed sequence, so its line number is a stable identity.
+  const shown = lines.slice(0, MAX_DIFF_LINES).map((text, lineNumber) => ({ text, lineNumber }))
   return (
     <div className="scrollbar-sleek mt-1 max-h-60 overflow-auto rounded-sm border border-border bg-muted/40 py-1 font-mono text-xs leading-4">
-      {shown.map((line, index) => (
+      {shown.map(({ text: line, lineNumber }) => (
         <div
-          key={index}
+          key={lineNumber}
           className={cn(
             'whitespace-pre px-2',
             line.startsWith('+') && 'text-chat-diff-added',
