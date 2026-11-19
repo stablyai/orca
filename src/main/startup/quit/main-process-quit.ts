@@ -294,7 +294,8 @@ function installWillQuitHandler(): void {
       { name: 'state', promise: storeFlush }
     ]
     const teardownSettlement = Promise.allSettled(teardowns.map((item) => item.promise))
-    let teardownSettledCleanly = false
+    // Desktop quits only, and only after every teardown fulfilled.
+    let mayCompact = !state.isServeMode
     settleTeardownWithinDeadline([
       ...teardowns,
       { name: 'environment-store', promise: teardownSettlement.then(closeEnvironmentStore) }
@@ -307,7 +308,7 @@ function installWillQuitHandler(): void {
       })
       .then((settled) => {
         // Settled is not clean: a rejected teardown may have left a writer behind.
-        teardownSettledCleanly = settled?.every((result) => result.status === 'fulfilled') === true
+        mayCompact &&= settled?.every((result) => result.status === 'fulfilled') === true
       })
       .then(() => shutdownTelemetry())
       .then(() => shutdownObservability())
@@ -323,8 +324,8 @@ function installWillQuitHandler(): void {
       )
       // After everything else: nothing can reach the orchestration database again. Bounded to a few seconds.
       .then(() =>
-        // Read live: an update install can start while teardown awaits.
-        teardownSettledCleanly && !isQuittingForUpdate() && !isDevParentShutdownRequested()
+        // Read the updater live: an install can start while teardown awaits.
+        mayCompact && !isQuittingForUpdate() && !isDevParentShutdownRequested()
           ? compactOrchestrationDbAtQuit(state.runtime)
           : undefined
       )
