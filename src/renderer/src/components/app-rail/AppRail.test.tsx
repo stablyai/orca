@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import { AppRail } from './AppRail'
+import type * as HelpMenuControllerModule from '@/components/sidebar/chrome/help-menu-controller'
 import { setWorkspaceListRegionPresent } from './workspace-list-region-presence'
 import {
   registerTitlebarSidebarToggle,
@@ -30,6 +31,19 @@ vi.mock('@/components/sidebar/sidebar-feedback/SidebarFeedbackDialog', () => ({
       </div>
     ) : null
 }))
+
+// Counts rail body executions: the rail calls its Help controller hook exactly once per render.
+let railRenders = 0
+vi.mock('@/components/sidebar/chrome/help-menu-controller', async (importOriginal) => {
+  const actual = await importOriginal<typeof HelpMenuControllerModule>()
+  return {
+    ...actual,
+    useHelpMenuController: (...args: Parameters<typeof actual.useHelpMenuController>) => {
+      railRenders += 1
+      return actual.useHelpMenuController(...args)
+    }
+  }
+})
 
 const initialState = useAppStore.getState()
 
@@ -269,4 +283,11 @@ it('leaves connected focus outside the rail untouched when the rail goes away', 
   unregisterTitlebarSidebarToggle(toggle)
   toggle.remove()
   outside.remove()
+})
+
+it('renders once per relevant store update', () => {
+  renderRail()
+  railRenders = 0
+  act(() => useAppStore.setState({ sidebarBody: 'agents' }))
+  expect(railRenders).toBe(1)
 })

@@ -15,6 +15,7 @@ import { FloatingTerminalToggleButton } from '../components/floating-terminal/tr
 import { TerminalWorkbenchContainer } from '../components/terminal/workbench/TerminalWorkbenchContainer'
 import type { VirtualizedScrollAnchor } from '../lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
 import { TitlebarLeftControls } from './chrome/TitlebarLeftControls'
+import { AppShellLeftColumn } from './chrome/AppShellLeftColumn'
 import { RightSidebarToggle } from './chrome/RightSidebarToggle'
 import { TitlebarMainStrip } from './chrome/TitlebarMainStrip'
 import type { AppChromeLayout } from './chrome/use-app-chrome-layout'
@@ -208,81 +209,17 @@ export function AppWorkspaceShell(props: {
             </div>
           ) : null}
           <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
-            {layout.appRailVisible ? (
-              // One stable position across views so a page switch never remounts the rail and drops keyboard focus.
-              <div className="relative flex min-h-0 shrink-0 flex-row">
-                {layout.showSidebar && layout.leftTitlebarChromeLayout.shouldMount ? (
-                  // Why: first in the DOM so Tab follows the screen: titlebar, then rail, then list.
-                  // It spans rail and list from this wrapper's live width, so drag resizes still track.
-                  <div
-                    className={`titlebar-left absolute top-0 left-0 z-10${
-                      layout.leftTitlebarChromeLayout.isFloating
-                        ? ' titlebar-left-floating w-max border-r border-border'
-                        : ' right-0'
-                    }`}
-                    style={layout.sidebarOpen ? layout.leftSidebarStyle : undefined}
-                  >
-                    {titlebarLeftControls}
-                  </div>
-                ) : null}
-                <div className="flex min-h-0 shrink-0 flex-col">
-                  {/* The left titlebar covers this gap so the traffic-light row spans rail and list. */}
-                  {layout.leftTitlebarChromeLayout.shouldMount ? (
-                    <div className="h-[36px] shrink-0" />
-                  ) : null}
-                  <AppRail
-                    listVisible={layout.showSidebar && layout.sidebarOpen}
-                    style={layout.leftSidebarStyle}
-                  />
-                </div>
-                {layout.showSidebar ? (
-                  layout.leftTitlebarChromeLayout.shouldMount ? (
-                    <div
-                      className={`flex min-h-0 flex-col shrink-0${layout.sidebarOpen ? '' : ' w-0'}`}
-                    >
-                      {layout.leftTitlebarChromeLayout.isFloating ? null : (
-                        <div className="h-[36px] shrink-0" />
-                      )}
-                      <div className="flex min-h-0 flex-1">
-                        <WorktreeSidebar layout={layout} scrollRefs={sidebarScrollRefs} />
-                      </div>
-                    </div>
-                  ) : (
-                    <WorktreeSidebar layout={layout} scrollRefs={sidebarScrollRefs} />
-                  )
-                ) : null}
-              </div>
-            ) : layout.showSidebar ? (
-              layout.leftTitlebarChromeLayout.shouldMount ? (
-                /* Remove the collapsed header from flex layout so panes reclaim the left edge. */
-                <div
-                  className={`flex min-h-0 flex-col shrink-0${layout.sidebarOpen ? '' : ' relative w-0 overflow-visible'}`}
-                >
-                  <div
-                    // The floating header covers the center border; restore the seam and size to its own controls.
-                    className={`titlebar-left${
-                      layout.leftTitlebarChromeLayout.isFloating
-                        ? ' titlebar-left-floating absolute top-0 left-0 z-10 w-max border-r border-border'
-                        : ''
-                    }`}
-                    style={{
-                      // Why: custom sidebar appearances are scoped to the sidebar root; mirror those vars onto the header in the same left-column panel.
-                      ...(layout.sidebarOpen ? layout.leftSidebarStyle : undefined),
-                      // Why: size from the wrapper's live width so the header tracks in-flight drag resizes (persisted to Zustand only on mouseup).
-                      width: layout.sidebarOpen ? '100%' : undefined
-                    }}
-                  >
-                    {titlebarLeftControls}
-                  </div>
-                  {/* Keep a shrinkable flex viewport below the fixed header so the sidebar can scroll. */}
-                  <div className="flex min-h-0 flex-1">
-                    <WorktreeSidebar layout={layout} scrollRefs={sidebarScrollRefs} />
-                  </div>
-                </div>
-              ) : (
-                <WorktreeSidebar layout={layout} scrollRefs={sidebarScrollRefs} />
-              )
-            ) : null}
+            <AppShellLeftColumn
+              layout={layout}
+              titlebarLeftControls={titlebarLeftControls}
+              rail={
+                <AppRail
+                  listVisible={layout.showSidebar && layout.sidebarOpen}
+                  style={layout.leftSidebarStyle}
+                />
+              }
+              list={<WorktreeSidebar layout={layout} scrollRefs={sidebarScrollRefs} />}
+            />
             <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
               {/* Automations/artifacts own their headers; another titlebar would leave an empty stripe. */}
               {layout.stackedSidebarOpen &&

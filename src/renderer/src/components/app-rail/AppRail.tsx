@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { CircleHelp, Layers, Settings } from 'lucide-react'
 import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
@@ -55,6 +55,12 @@ export function AppRail({
 
   const toolbarRef = useRef<HTMLDivElement | null>(null)
   const [toolbar, setToolbar] = useState<HTMLDivElement | null>(null)
+  // Why stable: a new ref callback each render makes React detach (null) and reattach it, and those two setToolbar
+  // calls schedule an extra rail render per update when the compiler is off (ORCA_REACT_COMPILER=0).
+  const attachToolbar = useCallback((node: HTMLDivElement | null) => {
+    toolbarRef.current = node
+    setToolbar(node)
+  }, [])
   // Focus ownership sampled at the moment a fold/unfold is about to commit; only that transition may recover it.
   const transitionOwnerRef = useRef<AppRailItemId | null>(null)
   const capacity = useAppRailSlotCapacity(toolbar, () => {
@@ -178,10 +184,7 @@ export function AppRail({
     >
       {/* Why pb-1: Help/Settings line up with the list footer icons and Settings' focus ring stays unclipped. */}
       <div
-        ref={(node) => {
-          toolbarRef.current = node
-          setToolbar(node)
-        }}
+        ref={attachToolbar}
         role="toolbar"
         aria-orientation="vertical"
         aria-label={navigationLabel}
