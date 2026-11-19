@@ -339,7 +339,7 @@ it("names this Orca's own mail about a server's Dispatch by its task and agent",
   expect(sender).toMatchObject({ name: 'Verify on Windows · Claude', agent: 'claude' })
 })
 
-it("names a worker's mail by its task and agent once its terminal is gone", () => {
+it("names a worker's mail by its task and agent once its terminal tab is gone", () => {
   const run = db.createRun({
     objective: 'coordinate',
     coordinatorHandle: null,
@@ -355,8 +355,8 @@ it("names a worker's mail by its task and agent once its terminal is gone", () =
   })
   db.prepareStartingWorkerAuthority({
     dispatchId: started.dispatch.id,
-    handle: 'term_gone',
-    paneKey: 'tab_term_gone:leaf',
+    handle: 'term_worker',
+    paneKey: 'tab_term_worker:leaf',
     processIncarnation: 'p:1',
     worktreeId: WORKTREE,
     effects: [],
@@ -364,7 +364,7 @@ it("names a worker's mail by its task and agent once its terminal is gone", () =
   })
   db.markWorkerDispatchReady(started.dispatch.id)
   const status = db.insertMessage({
-    from: 'term_gone',
+    from: 'term_worker',
     to: `run:${run.id}`,
     subject: 'halfway',
     runId: run.id,
@@ -380,4 +380,49 @@ it("names a worker's mail by its task and agent once its terminal is gone", () =
   }).senders[0]
   expect(sender).toMatchObject({ name: 'Fix the login page · Codex', agent: 'codex' })
   expect(sender).not.toHaveProperty('host')
+})
+
+it("names a legacy paired server's relayed mail by its task, agent and server", () => {
+  const run = db.createRun({
+    objective: 'coordinate',
+    coordinatorHandle: null,
+    coordinatorPaneKey: null,
+    coordinatorOrcaSessionId: CHAT
+  })
+  const task = db.createTask({ runId: run.id, spec: 'Port the build' })
+  const started = db.createStartingWorkerDispatch({
+    creator: { kind: 'system' },
+    maxDepth: 8,
+    taskId: task.id,
+    startOptions: { agent: 'codex' },
+    federation: {
+      environmentId: 'environment-win',
+      environmentName: 'winbox',
+      peerFingerprint: 'peer-win',
+      protocolVersion: 3
+    }
+  })
+  const { message } = db.importFederatedRelayItem({
+    dispatchId: started.dispatch.id,
+    sequence: 1,
+    message: {
+      id: 'msg_relayed_status',
+      runId: run.id,
+      from: 'term_on_server',
+      to: `run:${run.id}`,
+      subject: 'halfway',
+      body: '',
+      type: 'status',
+      priority: 'normal'
+    },
+    lifecycle: { kind: 'none' }
+  })
+  const sender = structuredMailSource({
+    db,
+    mailboxHandle: `run:${run.id}`,
+    dispatchId: null,
+    senderSnapshot: (party, reported, recorded) => names().snapshotOf(party, reported, recorded),
+    batch: [message]
+  }).senders[0]
+  expect(sender).toMatchObject({ name: 'Port the build · Codex', agent: 'codex', host: 'winbox' })
 })

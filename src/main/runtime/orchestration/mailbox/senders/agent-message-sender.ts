@@ -1,5 +1,6 @@
 import {
   liveSenderAgent,
+  liveSenderName,
   observeOrchestrationSender,
   orchestrationSenderName,
   orchestrationSenderAgent,
@@ -31,8 +32,8 @@ export type SenderSnapshot = {
   host?: string
 }
 
-/** `recorded`: the worker the message was written from. A live chat or terminal names the sender;
- *  once neither is, its worker does, else today's lookup. */
+/** `recorded`: the worker the message was written from. A live chat or terminal name wins; once
+ *  neither names the sender, its worker does, else the sender's own lookup. */
 export function observeSenderSnapshot(
   party: AgentMessageSender['party'],
   sources: SenderNamingSources,
@@ -40,10 +41,11 @@ export function observeSenderSnapshot(
   recorded?: WorkerIdentity | null
 ): SenderSnapshot {
   const observation = observeOrchestrationSender(party, sources, reportedDispatchId)
-  const live = observation.chat !== null || observation.terminal !== null
-  const worker = live ? null : (recorded ?? observedWorker(observation, sources.db))
+  const liveName = liveSenderName(observation, sources)
+  const worker = liveName ? null : (recorded ?? observedWorker(observation, sources.db))
   return {
     name:
+      liveName ||
       (worker && workerIdentityName(worker)) ||
       orchestrationSenderName(party, sources, reportedDispatchId, observation),
     agent:
