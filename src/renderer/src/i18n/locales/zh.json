@@ -16151,11 +16151,9 @@
           "feature": {
             "tip": {
               "copy": {
-                "1fcdfc5fe8": "新功能",
                 "f98e9d1bad": "搜索所有智能体会话",
                 "990cc29865": "按对话内容查找任意过往会话，然后从智能体停止的位置继续",
                 "91e2719807": "启用会话搜索",
-                "52e9e84809": "提示",
                 "3eacedec93": "用 Orca CLI 让智能体驱动 Orca",
                 "8d54d0ff53": "让智能体协调子工作树，并在工作树之间通信",
                 "0080bc86eb": "安装 CLI 与技能",
@@ -22706,16 +22704,17 @@
   },
   "featureTips": {
     "voice": {
-      "demoPrompt": "评审此差异的边界情况，并为发现的问题补充测试",
-      "startDictation": "开始听写",
-      "agentPromptTitle": "代理提示",
-      "listening": "正在聆听...",
       "unassignedInstruction": "在聚焦窗格中开始语音听写前，请先指定听写快捷键",
       "shortcutInstruction": "将焦点移至终端、编辑器或智能体提示词输入框，然后按 <shortcut/> 开始语音听写。再次按 <shortcut/> 即可停止",
       "changeInSettings": "随时在<link>设置 → 语音</link>中更改模型、听写模式或快捷键",
       "title": "在任意窗格中听写",
       "description": "在任意已聚焦的窗格中开始语音听写，再次使用快捷键即可停止",
-      "cta": "设置语音听写"
+      "cta": "设置语音听写",
+      "demoFirstPhrase": "在小屏幕上，结账按钮会盖住页脚。",
+      "demoSecondPhrase": "能加个测试吗？",
+      "demoUserPrompt": "加上支付徽标",
+      "demoTabTitle": "结账页脚",
+      "demoReply": "已在结账页脚加上支付徽标。"
     },
     "sessionSearch": {
       "ageHours": "2小时",

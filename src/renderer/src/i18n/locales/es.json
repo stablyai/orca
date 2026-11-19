@@ -21319,16 +21319,17 @@
       "cta": "Activar la búsqueda de sesiones"
     },
     "voice": {
-      "demoPrompt": "Revisa este diff en busca de casos límite y agrega pruebas para lo que encuentres.",
-      "startDictation": "Iniciar dictado",
-      "agentPromptTitle": "Prompt del agente",
-      "listening": "Escuchando...",
       "unassignedInstruction": "Asigna un atajo de dictado antes de iniciar el dictado por voz en un panel enfocado.",
       "shortcutInstruction": "Enfoca un terminal, un editor o un campo de entrada del agente y pulsa <shortcut/> para iniciar el dictado por voz. Pulsa <shortcut/> de nuevo para detenerlo.",
       "changeInSettings": "Cambia el modelo, el modo de dictado o el atajo cuando quieras en <link>Ajustes → Voz</link>.",
       "title": "Dicta en cualquier panel",
       "description": "Inicia el dictado de voz en cualquier panel con el foco y vuelve a usar el atajo para detenerlo.",
-      "cta": "Configurar el dictado de voz"
+      "cta": "Configurar el dictado de voz",
+      "demoFirstPhrase": "El botón de pago tapa el pie en pantallas pequeñas.",
+      "demoSecondPhrase": "¿Añades un test?",
+      "demoUserPrompt": "Añade logos de pago",
+      "demoTabTitle": "Pie del checkout",
+      "demoReply": "Añadí logos de pago al pie del checkout."
     },
     "eyebrowNew": "Nuevo",
     "eyebrowTip": "Consejo",

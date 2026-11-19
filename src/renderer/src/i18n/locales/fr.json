@@ -21251,16 +21251,17 @@
   },
   "featureTips": {
     "voice": {
-      "demoPrompt": "Relisez ce diff à la recherche de cas limites et ajoutez des tests pour tout ce que vous trouvez.",
-      "startDictation": "Démarrer la dictée",
-      "agentPromptTitle": "Prompt d'agent",
-      "listening": "Écoute...",
       "unassignedInstruction": "Assignez un raccourci de dictée avant de lancer la dictée vocale dans un volet actif.",
       "shortcutInstruction": "Placez le focus sur un terminal, un éditeur ou un champ de saisie d'agent, puis appuyez sur <shortcut/> pour démarrer la dictée vocale. Appuyez à nouveau sur <shortcut/> pour l'arrêter.",
       "changeInSettings": "Modifiez le modèle, le mode de dictée ou le raccourci à tout moment dans <link>Paramètres → Voix</link>.",
       "title": "Dictez dans n’importe quel volet",
       "description": "Démarrez la dictée vocale dans un volet actif, puis utilisez à nouveau le raccourci pour l’arrêter.",
-      "cta": "Configurer la dictée vocale"
+      "cta": "Configurer la dictée vocale",
+      "demoFirstPhrase": "Le bouton de paiement masque le pied de page sur petit écran.",
+      "demoSecondPhrase": "Tu ajoutes un test ?",
+      "demoUserPrompt": "Ajoute les logos de paiement",
+      "demoTabTitle": "Pied du checkout",
+      "demoReply": "Logos de paiement ajoutés au pied du checkout."
     },
     "sessionSearch": {
       "ageHours": "2 h",

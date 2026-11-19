@@ -702,16 +702,17 @@
   },
   "featureTips": {
     "voice": {
-      "demoPrompt": "Revise este diff em busca de casos extremos e adicione testes para tudo o que encontrar.",
-      "startDictation": "Iniciar ditado",
-      "agentPromptTitle": "Prompt do agente",
-      "listening": "Ouvindo...",
       "unassignedInstruction": "Atribua um atalho de ditado antes de iniciar o ditado por voz em um painel em foco.",
       "shortcutInstruction": "Coloque o foco em um terminal, editor ou prompt de agente e pressione <shortcut/> para iniciar o ditado por voz. Pressione <shortcut/> novamente para parar.",
       "changeInSettings": "Altere o modelo, o modo de ditado ou o atalho a qualquer momento em <link>Configurações → Voz</link>.",
       "title": "Dite em qualquer painel",
       "description": "Inicie o ditado por voz em qualquer painel em foco e use o atalho novamente para parar.",
-      "cta": "Configurar ditado por voz"
+      "cta": "Configurar ditado por voz",
+      "demoFirstPhrase": "O botão de pagamento cobre o rodapé em telas pequenas.",
+      "demoSecondPhrase": "Pode pôr um teste?",
+      "demoUserPrompt": "Adicione selos de pagamento",
+      "demoTabTitle": "Rodapé do checkout",
+      "demoReply": "Adicionei selos de pagamento ao rodapé."
     },
     "sessionSearch": {
       "enableFailed": "Não foi possível ativar a busca de sessões. Tente novamente.",
