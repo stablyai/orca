@@ -31,8 +31,7 @@ export type OwnerUsageState =
       lastKnown: RateLimitState | null
     }
 
-/** A host that answers without usage is reachable, so "cannot reach" would be false. */
-export type OwnerUsageFailureReason = 'unreachable' | 'usage-not-published'
+export type { OwnerAccountsFailure as OwnerUsageFailureReason } from '@/runtime/provider-accounts/observations/owner-accounts-stream'
 
 type UsageProviderKey = {
   [K in keyof RateLimitState]-?: RateLimitState[K] extends ProviderRateLimits | null ? K : never
