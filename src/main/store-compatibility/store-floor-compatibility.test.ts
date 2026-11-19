@@ -12,7 +12,7 @@ import {
   type FloorCheckedStore
 } from './floor-checked-stores.test-fixture'
 import { floorSchemaViolations } from './floor-schema-compatibility.test-fixture'
-import { STORE_FLOOR } from './floor/store-floor-release'
+import { STORE_FLOOR } from './fixtures/store-floor-release'
 
 const dirs: string[] = []
 const tempDir = (): string => {

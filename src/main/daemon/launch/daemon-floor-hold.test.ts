@@ -6,7 +6,7 @@ import { afterEach, beforeEach, expect, it } from 'vitest'
 import { z } from 'zod'
 import { setAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { PROTOCOL_VERSION } from '../protocol/daemon-protocol-version'
-import { STORE_FLOOR } from '../../store-compatibility/floor/store-floor-release'
+import { STORE_FLOOR } from '../../store-compatibility/fixtures/store-floor-release'
 import { buildDaemonScriptArgs } from './daemon-launched-child-spawn'
 import { getDaemonEntryPath } from './daemon-launch-paths'
 import {

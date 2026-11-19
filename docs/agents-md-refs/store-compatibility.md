@@ -2,7 +2,7 @@
 
 A user who goes from this build back to the floor release, then forward again, must lose nothing: no lost, duplicated or reopened chats, tabs, attachments, settings or terminals, and no slow first launch.
 
-**The floor** is the release named in `src/main/store-compatibility/floor/store-floor-release.ts`, normally the current stable. It is raised only at a release:
+**The floor** is the release named in `src/main/store-compatibility/fixtures/store-floor-release.ts`, normally the current stable. It is raised only at a release:
 
 1. Run `node config/scripts/store-compatibility/write-floor-store-schemas.mjs v<release>`.
 2. Point `STORE_FLOOR` at the new fixture and update its release, commit and versions.
@@ -18,7 +18,7 @@ The profile state, chat journal, chat domain and orchestration stores are checke
 
 - **Allowed:**
   - new tables;
-  - new nullable or defaulted columns, except on a table the floor inserts into without a column list (`floor/<release>-positional-insert-tables.json`);
+  - new nullable or defaulted columns, except on a table the floor inserts into without a column list (`fixtures/<release>-positional-insert-tables.json`);
   - new non-unique indexes;
   - new tables' own triggers.
 - **Forbidden:**
@@ -31,7 +31,7 @@ The profile state, chat journal, chat domain and orchestration stores are checke
   - adding a UNIQUE index to a floor table (the floor's inserts start failing);
   - changing a floor trigger's body. Give the new body a new name: `IF NOT EXISTS` keeps whichever body was created first.
 - **user_version** of the profile, chat journal and chat domain must equal the floor's. A newer one makes the floor refuse the profile and open chats read-only. Orchestration may be newer, because the floor writes it as is.
-- **A trigger this build adds to a floor table** fires inside the floor's writes too. List it in `floor/reviewed-floor-table-triggers.json` with why it is safe. It must use only built-in SQL and never `RAISE`.
+- **A trigger this build adds to a floor table** fires inside the floor's writes too. List it in `fixtures/reviewed-floor-table-triggers.json` with why it is safe. It must use only built-in SQL and never `RAISE`.
 - **The chat record `schemaVersion`** must equal the floor's. Records with any other version are invisible to the floor.
 - **The chat journal row version** must equal the floor's. The floor refuses rows with a higher version as newer and stops writing that chat.
 

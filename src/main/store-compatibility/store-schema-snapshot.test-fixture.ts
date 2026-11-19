@@ -58,6 +58,9 @@ const TableListRow = z.object({ wr: z.number(), strict: z.number() })
 const IndexListRow = z.object({ name: z.string(), unique: z.number() })
 const IndexColumnRow = z.object({ name: z.string().nullable() })
 
+/** The character that closes each SQL quote: literals, quoted names, and SQLite's [bracketed] names. */
+const CLOSING_QUOTE: Readonly<Record<string, string>> = { "'": "'", '"': '"', '`': '`', '[': ']' }
+
 /** Collapse whitespace outside SQL string literals and quoted names; literal text stays as written. */
 export function normalizeSql(sql: string): string {
   let out = ''
@@ -66,9 +69,9 @@ export function normalizeSql(sql: string): string {
     if (quote) {
       out += char
       quote = char === quote ? null : quote
-    } else if (char === "'" || char === '"' || char === '`') {
+    } else if (CLOSING_QUOTE[char]) {
       out += char
-      quote = char
+      quote = CLOSING_QUOTE[char]
     } else if (/\s/.test(char)) {
       out += out.endsWith(' ') ? '' : ' '
     } else {
@@ -124,8 +127,8 @@ function parenthesizedClauses(
       const char = sql[end]
       if (quote) {
         quote = char === quote ? null : quote
-      } else if (char === "'" || char === '"' || char === '`') {
-        quote = char
+      } else if (CLOSING_QUOTE[char]) {
+        quote = CLOSING_QUOTE[char]
       } else {
         depth += char === '(' ? 1 : char === ')' ? -1 : 0
       }

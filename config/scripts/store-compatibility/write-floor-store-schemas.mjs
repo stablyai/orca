@@ -13,11 +13,11 @@ if (!tag || !/^v\d+\.\d+\.\d+$/.test(tag)) {
 }
 const repo = resolve(import.meta.dirname, '../../..')
 const moduleDir = 'src/main/store-compatibility'
-const output = join(repo, moduleDir, 'floor', `${tag.slice(1)}-store-schemas.json`)
+const output = join(repo, moduleDir, 'fixtures', `${tag.slice(1)}-store-schemas.json`)
 const positionalOutput = join(
   repo,
   moduleDir,
-  'floor',
+  'fixtures',
   `${tag.slice(1)}-positional-insert-tables.json`
 )
 const checkout = mkdtempSync(join(tmpdir(), 'store-floor-'))
