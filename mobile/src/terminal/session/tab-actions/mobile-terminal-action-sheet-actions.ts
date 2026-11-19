@@ -13,9 +13,11 @@ export function getMobileTerminalActionSheetActions<
   target: Target | null
   tabs: readonly Tab[]
   isTabChatView: (tabId: string) => boolean
+  isTabMapView: (tabId: string) => boolean
   nativeChatTranscriptIsLocalReadable: boolean
   onDismiss: () => void
   onToggleChat: (tabId: string) => void
+  onToggleMap: (tabId: string) => void
   isPhoneMode: (handle: string) => boolean
   onToggleDisplayMode: (handle: string) => void
   onRename: (target: Target) => void
@@ -39,9 +41,11 @@ export function getMobileTerminalActionSheetActions<
       terminalHandle: target.handle,
       tabs: args.tabs,
       isTabChatView: args.isTabChatView,
+      isTabMapView: args.isTabMapView,
       nativeChatTranscriptIsLocalReadable: args.nativeChatTranscriptIsLocalReadable,
       onClose: args.onDismiss,
-      onToggle: args.onToggleChat
+      onToggle: args.onToggleChat,
+      onToggleMap: args.onToggleMap
     }),
     {
       id: 'toggleDisplayMode',

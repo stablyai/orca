@@ -44,6 +44,7 @@ import type { MobileNativeChatUsageLimit } from './status/use-mobile-native-chat
 export type MobileNativeChatController = {
   sessionViewReady: boolean
   isTabChatView: (tabId: string) => boolean
+  isTabMapView: (tabId: string) => boolean
   setTabView: (tabId: string, view: MobileSessionView) => void
   toggleTabChatView: (tabId: string) => void
   showNativeChat: boolean
