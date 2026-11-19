@@ -29366,7 +29366,6 @@
     "versions": "{{installed}} → {{latest}}",
     "claudeProduct": "Claude Code",
     "codexProduct": "Codex CLI",
-    "modelPickerRow": "Update {{product}} for new models",
     "commandCopied": "Command copied",
     "commandNotCopied": "Could not copy the command",
     "copyCommand": "Copy",
