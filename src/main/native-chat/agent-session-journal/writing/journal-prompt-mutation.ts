@@ -33,10 +33,10 @@ function promptGone(message: string): PendingPromptValidation {
 
 /** A restored answer writes over the agent-exit ending, or puts it back when delivery failed. */
 function restorable(prompt: PendingPromptBody): boolean {
+  const { resolution } = prompt
   return (
-    isAgentExitPromptBody(prompt) ||
-    (prompt.resolution.state === 'resolved' &&
-      prompt.resolution.endedBy === AGENT_EXIT_PROMPT_ENDING)
+    (resolution.state === 'resolved' && resolution.endedBy === AGENT_EXIT_PROMPT_ENDING) ||
+    isAgentExitPromptBody(prompt)
   )
 }
 

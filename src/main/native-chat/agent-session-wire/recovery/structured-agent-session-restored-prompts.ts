@@ -183,7 +183,11 @@ export class StructuredAgentSessionRestoredPrompts {
       )
       if ('verdict' in started) {
         void started.verdict().then(
-          (outcome) => outcome.outcome === 'refused' && this.undo(journal, sessionId, params),
+          async (outcome) => {
+            if (outcome.outcome === 'refused') {
+              await this.undo(journal, sessionId, params)
+            }
+          },
           () => this.holds.drop(sessionId)
         )
       } else if (started.done.outcome === 'refused') {

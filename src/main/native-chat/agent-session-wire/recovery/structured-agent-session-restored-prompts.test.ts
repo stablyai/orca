@@ -106,20 +106,25 @@ function rig({ startRejected = false } = {}) {
           }
         }
       },
-      awaitSendHandedOver: async (_sessionId, clientMessageId) =>
+      awaitSendHandedOver: async () => undefined,
+      awaitSendSettlement: async (_sessionId, clientMessageId) =>
         startRejected
           ? {
-              clientMessageId,
-              fence: 3,
-              payloadFingerprint: 'fp',
-              dispatchState: 'rejected',
-              providerItemId: null,
-              reason: 'spawn failed',
-              submittedAt: 1_000,
-              resolvedAt: 1_000
+              value: {
+                clientMessageId,
+                submission: {
+                  clientMessageId,
+                  fence: 3,
+                  payloadFingerprint: 'fp',
+                  dispatchState: 'rejected',
+                  providerItemId: null,
+                  reason: 'spawn failed',
+                  submittedAt: 1_000,
+                  resolvedAt: 1_000
+                }
+              }
             }
           : undefined,
-      awaitSendSettlement: async () => undefined,
       awaitSendDispatched: async () => undefined,
       sessions: new Map(),
       logger: { warn: () => {}, error: () => {} }
