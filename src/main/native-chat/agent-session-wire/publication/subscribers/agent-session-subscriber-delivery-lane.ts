@@ -163,11 +163,18 @@ export class SubscriberDeliveryLane {
   /** `counted` spans one sample: subscribers of one chat share each snapshot, counted once. */
   retention(now: number, counted: Set<object>): SubscriberDeliveryRetention {
     const entries = this.active ? [this.active, ...this.pending] : this.pending
+    // `delivering` covers an active live-text entry and live text an opening or snapshot sends.
+    const held = this.pending.flatMap((entry) =>
+      entry.kind === 'live-text' ? [entry.liveText.items] : []
+    )
+    if (this.delivering) {
+      held.push(this.delivering)
+    }
     let liveTextBytes = 0
-    for (const entry of entries) {
-      if (entry.kind === 'live-text' && !counted.has(entry.liveText.items)) {
-        counted.add(entry.liveText.items)
-        liveTextBytes += heldBytesOf(entry.liveText.items)
+    for (const items of held) {
+      if (!counted.has(items)) {
+        counted.add(items)
+        liveTextBytes += heldBytesOf(items)
       }
     }
     const oldest = entries.reduce((since, entry) => Math.min(since, entry.since), now)
