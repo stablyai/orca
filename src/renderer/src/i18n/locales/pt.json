@@ -22559,7 +22559,6 @@
       "copyAddress": "Copiar endereço",
       "showDetails": "Mostrar a tarefa e a última mensagem de {{name}}",
       "task": "Tarefa",
-      "asksYou": "Pergunta a você",
       "chatUnavailable": "Este host não pode abrir o chat. Tente novamente.",
       "terminalExited": "Este terminal foi encerrado.",
       "openOnHost": "Abra este agente em {{host}}.",

@@ -22000,7 +22000,6 @@
       "copyAddress": "复制地址",
       "showDetails": "显示 {{name}} 的任务和最新消息",
       "task": "任务",
-      "asksYou": "向你提问",
       "openFailed": "{{name}}：{{detail}}",
       "chatUnavailable": "此主机无法打开该聊天，请重试",
       "terminalExited": "此终端已退出",

@@ -21486,7 +21486,6 @@
       "copyAddress": "アドレスをコピー",
       "showDetails": "{{name}} のタスクと最新のメッセージを表示",
       "task": "タスク",
-      "asksYou": "あなたへの質問",
       "openFailed": "{{name}}: {{detail}}",
       "chatUnavailable": "このホストではチャットを開けません。もう一度お試しください。",
       "terminalExited": "このターミナルは終了しています。",

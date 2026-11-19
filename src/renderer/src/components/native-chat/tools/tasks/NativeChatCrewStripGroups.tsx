@@ -89,12 +89,10 @@ export function StripGroupHeading({
 export function NativeChatCrewStripGroups({
   crew,
   subagents,
-  selfLabel,
   renderSubagent
 }: {
   crew: NativeChatCrew
   subagents: readonly BackgroundRosterTask[]
-  selfLabel: string
   renderSubagent: (task: BackgroundRosterTask) => React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
@@ -169,7 +167,6 @@ export function NativeChatCrewStripGroups({
       look={lookOf.get(row.partyKey)!}
       target={crew.target}
       badge={badge}
-      selfLabel={selfLabel}
       canMention={canMention}
       mention={mention}
       expanded={expanded.has(row.partyKey)}

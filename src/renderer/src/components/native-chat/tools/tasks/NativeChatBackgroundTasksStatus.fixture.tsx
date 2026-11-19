@@ -31,9 +31,16 @@ function row(
 const workers: OrchestrationCrewRow[] = [
   row('w1', 'auth-tests', 'codex', 'working', {
     task: { title: 'Rewrite auth integration tests', state: 'dispatched' },
+    // A question to the coordinator is also the worker's latest message.
     pendingQuestion: {
       preview: 'Should the session fixture keep the legacy cookie, or drop it with the migration?',
       at: ago(1)
+    },
+    latest: {
+      direction: 'from',
+      preview: 'Should the session fixture keep the legacy cookie, or drop it with the migration?',
+      at: ago(1),
+      sequence: 5
     }
   }),
   row('w2', 'migrate-db', 'claude', 'working', {
@@ -140,7 +147,6 @@ function crew(rows: OrchestrationCrewSnapshot, needsYou: number): NativeChatCrew
   ).size
   return {
     target: { kind: 'local' },
-    selfLabel: 'Claude',
     canMention: true,
     subscribe: () => () => {},
     read: () => UNKNOWN_CREW_STATE,

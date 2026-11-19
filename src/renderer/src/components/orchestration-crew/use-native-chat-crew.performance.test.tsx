@@ -62,8 +62,7 @@ function Chat(props: { sessionId: string; isVisible: boolean }) {
     sessionId: props.sessionId,
     isVisible: props.isVisible,
     composerRef,
-    canMention: true,
-    selfLabel: 'Claude'
+    canMention: true
   })
   useNativeChatCrew(source)
   useNativeChatCrewState(source)
@@ -115,8 +114,7 @@ function Session(_props: { update: number }) {
     sessionId: SESSIONS[9],
     isVisible: true,
     composerRef,
-    canMention: true,
-    selfLabel: 'Claude'
+    canMention: true
   })
   const subagents = useStructuredNativeChatSubagents({
     sessionId: SESSIONS[9],

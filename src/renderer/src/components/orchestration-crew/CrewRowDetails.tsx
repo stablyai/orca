@@ -41,14 +41,7 @@ export function CrewRowDetails({ row }: { row: OrchestrationCrewRow }) {
           t('components.orchestrationCrew.noTask', 'No shared task')
         )}
       </dd>
-      {row.pendingQuestion ? (
-        <>
-          <dt className="text-status-warning">
-            {t('components.orchestrationCrew.asksYou', 'Asks you')}
-          </dt>
-          <dd className="min-w-0 whitespace-pre-wrap">{row.pendingQuestion.preview}</dd>
-        </>
-      ) : row.latest ? (
+      {row.latest ? (
         <>
           <dt className="text-muted-foreground">
             {t('components.orchestrationCrew.latest', 'Latest')}

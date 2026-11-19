@@ -191,8 +191,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     sessionId: props.sessionId,
     isVisible: props.isVisible,
     composerRef,
-    canMention,
-    selfLabel: agentLabel
+    canMention
   })
   const cancelPrompt = () => cancelStructuredPrompt(controller, prompt)
   const surface = useNativeChatSurface({

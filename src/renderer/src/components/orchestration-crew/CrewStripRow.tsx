@@ -13,11 +13,10 @@ import { CrewRowMenu } from './CrewRowMenu'
 import { CrewAgentIcons, type CrewRowLook } from './CrewAgentIcons'
 import { IconButton } from './CrewRowView'
 
-/** The one-line preview: an approval of yours, else a question to this chat, else the latest message. */
+/** The one-line preview: an approval of yours, else the latest message. */
 function crewRowPreview(
   row: OrchestrationCrewRow,
   look: CrewRowLook,
-  selfLabel: string,
   t: Translate
 ): { text: string; at?: string; warning: boolean } {
   if (look.status === 'permission') {
@@ -31,16 +30,6 @@ function crewRowPreview(
       ),
       at: approval?.at ?? row.latest?.at,
       warning: true
-    }
-  }
-  if (row.pendingQuestion) {
-    return {
-      text: t('components.orchestrationCrew.askedPreview', 'Asked {{name}} · {{preview}}', {
-        name: selfLabel,
-        preview: row.pendingQuestion.preview
-      }),
-      at: row.pendingQuestion.at,
-      warning: false
     }
   }
   if (!row.latest) {
@@ -64,7 +53,6 @@ export const CrewStripRow = memo(function CrewStripRow({
   look,
   target,
   badge,
-  selfLabel,
   canMention,
   mention,
   expanded,
@@ -75,8 +63,6 @@ export const CrewStripRow = memo(function CrewStripRow({
   target: RuntimeClientTarget
   /** "Worker" where rows of several kinds mix. */
   badge?: string
-  /** This chat's name, which a worker's question is addressed to. */
-  selfLabel: string
   canMention: boolean
   mention: (row: OrchestrationCrewRow, look: CrewRowLook) => void
   expanded: boolean
@@ -86,7 +72,7 @@ export const CrewStripRow = memo(function CrewStripRow({
   // memo() skips the parent re-render a language switch relies on.
   useUiLanguageRevision()
   const [menuOpen, setMenuOpen] = useState(false)
-  const preview = crewRowPreview(row, look, selfLabel, t)
+  const preview = crewRowPreview(row, look, t)
   const mentionable = canMention && Boolean(row.sendAddress)
   const open = () => void openOrchestrationCrewAgent(row, target)
   const tip = !row.sendAddress

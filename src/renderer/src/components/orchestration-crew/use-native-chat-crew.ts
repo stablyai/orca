@@ -27,8 +27,6 @@ export type CrewMention = { row: OrchestrationCrewRow; agentType: string }
 /** This chat's crew subscription, stable while the chat stays the same: readers subscribe to what they show. */
 export type NativeChatCrewSource = {
   target: RuntimeClientTarget
-  /** This chat's name, which a worker's question is addressed to. */
-  selfLabel: string
   canMention: boolean
   subscribe: (listener: () => void) => () => void
   read: () => CrewState
@@ -54,15 +52,13 @@ export function useNativeChatCrewSource({
   sessionId,
   isVisible,
   composerRef,
-  canMention,
-  selfLabel
+  canMention
 }: {
   target: RuntimeClientTarget
   sessionId: string
   isVisible: boolean
   composerRef: RefObject<NativeChatComposerHandle | null>
   canMention: boolean
-  selfLabel: string
 }): NativeChatCrewSource | null {
   const party = isVisible && isOrcaSessionId(sessionId) ? formatOrcaSessionAddress(sessionId) : null
   const kind = target.kind
@@ -98,7 +94,6 @@ export function useNativeChatCrewSource({
       observation
         ? {
             target: kind === 'local' ? { kind } : { kind, environmentId: environmentId ?? '' },
-            selfLabel,
             canMention,
             subscribe: observation.subscribe,
             read: observation.read,
@@ -107,7 +102,7 @@ export function useNativeChatCrewSource({
             insertName
           }
         : null,
-    [observation, kind, environmentId, selfLabel, canMention, mention, insertName]
+    [observation, kind, environmentId, canMention, mention, insertName]
   )
 }
 

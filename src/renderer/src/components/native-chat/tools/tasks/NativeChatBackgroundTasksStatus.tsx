@@ -317,7 +317,6 @@ export function NativeChatBackgroundTasksStatus(props: {
                   <NativeChatCrewStripGroups
                     crew={crew}
                     subagents={groups.find((group) => group.kind === 'agent')?.tasks ?? NO_TASKS}
-                    selfLabel={crew.selfLabel}
                     renderSubagent={(entry) =>
                       taskRow(entry, crew.canMention ? crew.insertName : undefined)
                     }
