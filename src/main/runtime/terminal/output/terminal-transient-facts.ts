@@ -1,3 +1,4 @@
+import { TerminalCommandPaint } from '../input/terminal-command-paint'
 import { OrcaRuntimeWithScheduleWaitBlockedCheck } from '../wait/terminal-wait-blocked-checks'
 import type { PtyTransientFact } from '../../../providers/pty/events'
 import type {
@@ -62,7 +63,9 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
     const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
     if (pty) {
       pty.tailPendingAnsi = ''
-      pty.commandPaint?.noteGap()
+      // Before any output, too: a gap ahead of the reattach fence still rules out its vouch.
+      pty.commandPaint ??= new TerminalCommandPaint()
+      pty.commandPaint.noteGap()
     }
     for (const leaf of this.getLeavesForPty(ptyId)) {
       leaf.tailPendingAnsi = ''

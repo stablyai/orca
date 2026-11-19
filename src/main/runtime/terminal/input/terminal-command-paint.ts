@@ -204,7 +204,8 @@ export class TerminalCommandPaint {
     this.scanner.reset()
     this.gapSinceReattach ||= this.reattach !== 'vouched'
     if (this.awaitsReattachedCommand()) {
-      this.awaitingPaint = true
+      // A gap only arrives on a live stream, so the program can be asked to repaint again.
+      this.awaitingPaint = this.repaintRequestable = true
       return
     }
     this.startedAt = null
