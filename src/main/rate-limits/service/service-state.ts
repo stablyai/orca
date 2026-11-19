@@ -240,6 +240,8 @@ export abstract class RateLimitServiceState {
         if (!this.stateListeners.size && (!this.mainWindow || this.mainWindow.isDestroyed())) {
           continue
         }
+        const claudeGeneration = this.claudeFetchGeneration
+        const codexGeneration = this.codexFetchGeneration
         let state: RateLimitState
         try {
           state = await this.getState()
@@ -249,8 +251,12 @@ export abstract class RateLimitServiceState {
           }
           throw error
         }
-        // Deliver completed snapshots even when newer updates are queued.
-        if (this.publicationStopped) {
+        // Usage-only updates can progress, but account switches invalidate snapshot attribution.
+        if (
+          this.publicationStopped ||
+          claudeGeneration !== this.claudeFetchGeneration ||
+          codexGeneration !== this.codexFetchGeneration
+        ) {
           continue
         }
         for (const listener of this.stateListeners) {

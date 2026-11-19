@@ -879,7 +879,7 @@
 6 src/main/orca-profiles/cloud-session/profile-cloud-session-store.ts
 7 src/main/orca-profiles/orca-account-service.ts
 1 src/main/orca-profiles/profile-account-user-id.ts
-21 src/main/orca-profiles/profile-index-store.ts # writeRollingFileBackup replaces copyFileSync (main-sync-fs 12 -> 11)
+20 src/main/orca-profiles/profile-index-store.ts
 1 src/main/orca-profiles/profile-storage-paths.ts
 6 src/main/orca-profiles/project-transfer/profile-active-transfer.ts
 2 src/main/orca-profiles/project-transfer/profile-project-domain-move-intent.ts

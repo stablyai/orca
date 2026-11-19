@@ -1,7 +1,13 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  writeFileSync
+} from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { dirname } from 'node:path'
-import { writeRollingFileBackup } from '../filesystem/rolling-file-backup'
 import {
   bestEffortFsyncDirectorySync,
   fsyncFileSync
@@ -118,7 +124,7 @@ export function writeProfileIndex(indexPath: string, index: OrcaProfileIndex): v
   // Never replace the recovery backup with a corrupt primary index.
   if (existsSync(indexPath) && readProfileIndexFile(indexPath)) {
     try {
-      writeRollingFileBackup(indexPath, `${indexPath}.bak`)
+      copyFileSync(indexPath, `${indexPath}.bak`)
     } catch {
       // Backup failure must not block the primary write.
     }
