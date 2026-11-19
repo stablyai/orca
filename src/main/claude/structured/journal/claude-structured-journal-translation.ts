@@ -40,6 +40,7 @@ import { ClaudeUsageLimits } from './claude-usage-limits'
 import { ClaudeThreadGoal } from './claude-thread-goal'
 import { createClaudeFinalOutputCoverage } from './claude-final-output-coverage'
 import { withClaudeConversationContent } from './claude-internal-message-content'
+import { journalClaudeFullAccessRefusal } from '../permissions/claude-full-access-refusal'
 import {
   journalClaudePluginInputFailure,
   settleClaudeInterruptedTurn
@@ -175,6 +176,7 @@ export function createClaudeJournalTranslator(
       if (isRootClaudeFrame(event.message)) {
         if (event.message.type === 'system' && event.message.subtype === 'init') {
           turn.observeProviderCycleStart()
+          journalClaudeFullAccessRefusal(deps, event.message, fallbackId, turnScope())
         } else if (
           event.startsTurn === true ||
           event.message.type === 'assistant' ||

@@ -224,6 +224,8 @@ export type ClaudeAcquisitionAttempt = {
   finish: () => void
   /** The resolved launch's account, read by the translator to word a sign-in failure. */
   account?: ClaudeStructuredLaunch['account']
+  /** The resolved launch asked for Full access, read by the translator to notice Claude refusing it. */
+  fullAccess?: boolean
 }
 
 export function createClaudeAcquisitionAttempt(

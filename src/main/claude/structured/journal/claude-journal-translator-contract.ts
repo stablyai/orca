@@ -35,6 +35,8 @@ export type ClaudeJournalTranslatorDeps = {
   acceptStartupFailure?: (message: Record<string, unknown>) => boolean
   /** True while a send written with priority `now` has not been echoed. */
   steerAwaitingEcho?: () => boolean
+  /** True once per chat when this root init shows Claude refused the launch's Full access. */
+  claimFullAccessRefusal?: (init: Record<string, unknown>) => boolean
 }
 
 export type ClaudeJournalTranslator = {

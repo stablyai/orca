@@ -9,7 +9,14 @@ import type {
 import type { ClaudeStreamJsonConnection } from '../../claude-stream-json-connection'
 import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
-import type { ClaudeInitProof } from '../startup/claude-structured-init-proof'
+import {
+  readClaudeFrameString,
+  type ClaudeInitProof
+} from '../startup/claude-structured-init-proof'
+import {
+  claimClaudeFullAccessRefusalNotice,
+  claudeFullAccessRefusedAtStart
+} from '../permissions/claude-full-access-refusal'
 import type { ClaudeJournalBoundDelivery } from './claude-journal-bound-delivery'
 import type {
   ClaudeAcquisitionAttempt,
@@ -48,6 +55,11 @@ export function createClaudeSessionJournalTranslator(
         bindPromptItemId: (itemId, promptKey) =>
           attempt.prompts.bindJournalItemId(itemId, promptKey),
         acceptStartupFailure,
+        claimFullAccessRefusal: (init) =>
+          claudeFullAccessRefusedAtStart(
+            attempt.fullAccess ? 'bypassPermissions' : undefined,
+            readClaudeFrameString(init, 'permissionMode')
+          ) && claimClaudeFullAccessRefusalNotice(failure.sessionId),
         steerAwaitingEcho: () =>
           currentSession()?.dispatchWaiters.some((waiter) => waiter.steers) ?? false
       })
