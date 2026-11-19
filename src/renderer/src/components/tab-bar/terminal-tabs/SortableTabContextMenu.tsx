@@ -234,7 +234,7 @@ export function SortableTabContextMenu({
           {renameShortcut ? <ContextMenuShortcut>{renameShortcut}</ContextMenuShortcut> : null}
         </ContextMenuItem>
       ) : null}
-      <div className="pt-1.5 pr-2.5 pb-1.5 pl-8">
+      <div className="px-2.5 py-1.5">
         <div className="text-2xs font-semibold text-muted-foreground mb-1.5">
           {t('auto.components.tab.bar.SortableTabContextMenu.35e8892fd0', 'Tab Color')}
         </div>
