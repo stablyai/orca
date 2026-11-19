@@ -9,7 +9,7 @@ import { createWorkspaceCleanupPolicyWrite } from './workspace-cleanup-policy-cl
 type Write = ReturnType<typeof createWorkspaceCleanupPolicyWrite>
 export type CleanupWriteResult = Awaited<ReturnType<Write['settle']>>
 type PendingWrite = {
-  phase: 'sending' | 'checking'
+  phase: 'sending' | 'checking' | 'disconnected'
   result: Promise<CleanupWriteResult>
   resolve: (value: CleanupWriteResult) => void
   write: Write
@@ -54,7 +54,13 @@ function settle(key: string, entry: PendingWrite): Promise<void> {
   const request = entry.write.settle().then((result) => complete(key, entry, result))
   entry.settlement = request
   void request
-    .catch(() => undefined)
+    .catch(() => {
+      if (pending.get(key) === entry) {
+        entry.phase = 'disconnected'
+        entry.settlement = undefined
+        notify(key)
+      }
+    })
     .finally(() => {
       if (entry.settlement === request) {
         entry.settlement = undefined
@@ -71,7 +77,7 @@ export async function waitForCleanupWrite(owner: RuntimeClientTarget): Promise<v
   const key = ownerKey(owner)
   const entry = pending.get(key)
   if (entry) {
-    if (entry.phase === 'checking') {
+    if (entry.phase !== 'sending') {
       void settle(key, entry).catch(() => undefined)
     }
     await entry.result

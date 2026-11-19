@@ -26,3 +26,23 @@ export function workspaceCleanupChangeMessage(
       return t('components.settings.workspaceCleanup.change.checkingSaved', 'Checking saved rules…')
   }
 }
+
+export function workspaceCleanupPinFailure(
+  tooLate: boolean | undefined,
+  name: string,
+  t: Translate
+) {
+  const template = tooLate
+    ? t(
+        'components.settings.workspaceCleanup.change.keepTooLate',
+        "Couldn't keep {{name}} because deletion has already started. Rule not changed.",
+        { name: '\uFFFC' }
+      )
+    : t(
+        'components.settings.workspaceCleanup.change.pinFailed',
+        "Couldn't keep {{name}}. Rule not changed.",
+        { name: '\uFFFC' }
+      )
+  const [before = '', after = ''] = template.split('\uFFFC')
+  return { before, name, after }
+}

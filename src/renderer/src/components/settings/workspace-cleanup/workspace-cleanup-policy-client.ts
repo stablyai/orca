@@ -47,7 +47,7 @@ export function createWorkspaceCleanupPolicyWrite(
       outcome:
         JSON.stringify(actual) === JSON.stringify(desired)
           ? ('saved' as const)
-          : receipt === 'cancelled'
+          : receipt === 'cancelled' && JSON.stringify(saved.state) === JSON.stringify(read.state)
             ? ('failed' as const)
             : ('conflict' as const)
     }

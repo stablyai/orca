@@ -167,15 +167,16 @@ export function queueWorkspaceDelete<T>(
   selector: string,
   hostId: string | undefined,
   requested: Partial<Record<RemovalFlag, boolean>> &
-    Pick<RemoveManagedWorktreeOptions, 'deleteBranch'> & {
+    Pick<RemoveManagedWorktreeOptions, 'deleteBranch' | 'expectedWorktree'> & {
       approvedNestedWorktrees?: readonly NestedWorktreeRemovalApproval[]
     },
   run: (
     removal: Record<RemovalFlag, boolean> &
-      Pick<RemoveManagedWorktreeOptions, 'hostId' | 'deleteBranch'>
+      Pick<RemoveManagedWorktreeOptions, 'hostId' | 'deleteBranch' | 'expectedWorktree'>
   ) => Promise<T>
 ): Promise<T> {
   const removal = {
+    ...(requested.expectedWorktree ? { expectedWorktree: { ...requested.expectedWorktree } } : {}),
     ...(requested.deleteBranch !== undefined ? { deleteBranch: requested.deleteBranch } : {}),
     force: requested.force === true,
     runHooks: requested.runHooks === true,
@@ -203,7 +204,8 @@ export function queueWorkspaceArchive<T>(
   runtime: LifecycleRuntime & ObservingRuntime,
   selector: string,
   hostId: string | undefined,
-  run: () => Promise<T>
+  run: () => Promise<T>,
+  expectedWorktree?: RemoveManagedWorktreeOptions['expectedWorktree']
 ): Promise<T> {
   return submitCheckoutDelete(runtime, selector, hostId, {
     kind: 'delete',
@@ -211,7 +213,7 @@ export function queueWorkspaceArchive<T>(
     lostContact: deleteLostContact,
     observe: observeTerminals(runtime, selector),
     delete: {
-      key: 'archive',
+      key: expectedWorktree ? `archive:instance:${expectedWorktree.instanceId}` : 'archive',
       force: false,
       label: getExplicitWorktreeIdSelector(selector) ?? selector
     }

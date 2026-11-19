@@ -1,3 +1,4 @@
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import {
   getRepoExecutionHostId,
   type ExecutionHostId
@@ -64,4 +65,23 @@ export function resolveWorktreeRemovalMetadata(
     return meta
   }
   return meta.hostId === hostId ? meta : undefined
+}
+
+export function resolveUnambiguousWorktreeRemovalRepo(
+  store: WorktreeRemovalRepoSource,
+  target: { repoId: string; id: string },
+  hostId: ExecutionHostId | undefined,
+  requireGit: boolean
+): { repo: Repo | undefined; hostId: ExecutionHostId | undefined } {
+  const owner = resolveWorktreeRemovalRepoOwner(store, target.repoId, hostId)
+  if (owner.kind === 'ambiguous') {
+    throw new Error(
+      `Workspace identity is ambiguous across hosts: ${target.id}. Retry with an explicit host.`
+    )
+  }
+  const repo = owner.kind === 'resolved' ? owner.repo : undefined
+  if (requireGit && (!repo || isFolderRepo(repo))) {
+    throw new Error('The reviewed Git workspace is no longer registered.')
+  }
+  return { repo, hostId: repo ? (hostId ?? getRepoExecutionHostId(repo)) : hostId }
 }

@@ -42,10 +42,11 @@ export async function removeWorktree(
   options = removalWorkerOptions({
     ...options,
     observeChildTermination: (terminated, writes) => {
-      observe?.(terminated, writes)
       if (writes) {
+        options.onCheckoutDeleteStart?.()
         writers.push(terminated)
       }
+      observe?.(terminated, writes)
     }
   })
   try {
@@ -90,7 +91,15 @@ async function performRemoveWorktree(
   }
   const execOptions = {
     ...finalizationOptions,
-    ...(options.checkoutDeleteSignal ? { signal: options.checkoutDeleteSignal } : {})
+    ...(options.checkoutDeleteSignal ? { signal: options.checkoutDeleteSignal } : {}),
+    ...(options.checkoutDeleteGuard
+      ? {
+          canStart: () => {
+            options.checkoutDeleteGuard!()
+            return options.canStart?.() !== false
+          }
+        }
+      : {})
   }
   const args = [...longPathArgs, 'worktree', 'remove']
   if (force) {
@@ -98,6 +107,7 @@ async function performRemoveWorktree(
   }
   args.push(worktreePath)
   await runUnderWorktreeDeleteLimit(async () => {
+    options.checkoutDeleteGuard?.()
     if (usesNativeWindowsRemoval(worktreePath, options)) {
       await removeWindowsCheckout(repoPath, worktreePath, force, {
         ...options,
@@ -248,6 +258,9 @@ async function removeCheckoutLeftByGit(
       return
     }
     throw error
+  }
+  if (options.checkoutDeleteGuard) {
+    throw new Error('The checkout remains after Git deletion; automatic cleanup left it in place.')
   }
   console.warn(`[git] worktree remove left files at "${worktreePath}"; deleting them`)
   await removeHostTree(worktreePath, { signal: options.checkoutDeleteSignal })

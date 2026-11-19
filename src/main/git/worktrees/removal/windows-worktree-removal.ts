@@ -51,7 +51,19 @@ export async function removeWindowsCheckout(
 ): Promise<void> {
   await removeHostCheckout(
     root,
-    (checkClean) => authorizeWindowsCheckout(repo, root, force, options, false, checkClean),
+    async (checkClean) => {
+      const authorized = await authorizeWindowsCheckout(
+        repo,
+        root,
+        force,
+        options,
+        false,
+        checkClean
+      )
+      options.checkoutDeleteGuard?.()
+      options.onCheckoutDeleteStart?.()
+      return authorized
+    },
     options.checkoutDeleteSignal
   )
 }

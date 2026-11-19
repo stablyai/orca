@@ -226,3 +226,45 @@ it('does not fence another window live writer through a shared localStorage jour
   expect(saved).toBe(true)
   expect(cancelled).toBe(false)
 })
+
+it.each(['global', 'project'] as const)(
+  'distinguishes a refused %s save from a concurrent edit',
+  async (scope) => {
+    for (const changed of [false, true]) {
+      const rules = getDefaultWorkspaceCleanupRules()
+      const read: WorkspaceCleanupPolicyRead = {
+        protocol: 3,
+        expiresAt: 1_900_000_060_000,
+        state: {
+          repoId: scope === 'global' ? null : 'repo',
+          rules,
+          projects: [{ id: 'repo', hostId: 'local', policy: { mode: 'custom', rules } }]
+        }
+      }
+      const desired = { ...rules, merged: { ...rules.merged, enabled: true } }
+      const change: WorkspaceCleanupPolicyChange =
+        scope === 'global'
+          ? { scope: 'global', rules: desired }
+          : { scope: 'project', repoId: 'repo', policy: { mode: 'custom', rules: desired } }
+      const actual = structuredClone(read)
+      if (changed) {
+        if (scope === 'global') {
+          actual.state.rules.inactive.afterDays = 1
+        } else if (actual.state.projects[0].policy?.mode === 'custom') {
+          actual.state.projects[0].policy.rules.inactive.afterDays = 1
+        }
+      }
+      rpc.mockImplementation(async (_owner, method) => {
+        if (method === 'workspaceCleanup.settlePolicyWrite') {
+          return { outcome: 'cancelled' }
+        }
+        if (method === 'workspaceCleanup.policyState') {
+          return actual
+        }
+        throw new Error(`Unexpected method ${method}`)
+      })
+      const write = createWorkspaceCleanupPolicyWrite({ kind: 'local' }, change, read)
+      expect((await write.settle()).outcome).toBe(changed ? 'conflict' : 'failed')
+    }
+  }
+)

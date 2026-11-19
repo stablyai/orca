@@ -13,6 +13,10 @@ import {
 } from '../../ui/dialog'
 import { VirtualizedList } from '../../ui/virtualized-list'
 import { WorkspaceCleanupRuleChangeRow } from './workspace-cleanup-rule-change-row'
+import {
+  WorkspaceCleanupChangeFeedback,
+  type CleanupPinFailure
+} from './workspace-cleanup-change-feedback'
 import { WorkspaceCleanupKeepSelection } from './workspace-cleanup-keep-selection'
 import type {
   WorkspaceCleanupPolicyState,
@@ -47,6 +51,8 @@ export function WorkspaceCleanupRuleChangeDialog({
   onToggleKeep,
   confirming = false,
   settling = false,
+  disconnected = false,
+  pinFailure,
   error,
   onRetry,
   onCloseAutoFocus
@@ -57,6 +63,8 @@ export function WorkspaceCleanupRuleChangeDialog({
   onToggleKeep: (row: WorkspaceCleanupPreviewRow) => void
   confirming?: boolean
   settling?: boolean
+  disconnected?: boolean
+  pinFailure?: CleanupPinFailure | null
   error?: string | null
   onRetry?: () => void
   onCloseAutoFocus?: (event: Event) => void
@@ -207,7 +215,7 @@ export function WorkspaceCleanupRuleChangeDialog({
             ref={status}
             role="status"
             tabIndex={-1}
-            className="space-y-1 rounded-md bg-muted p-3 text-sm outline-none focus:ring-[3px] focus:ring-ring/50"
+            className="space-y-1 rounded-md bg-muted p-3 text-sm outline-none"
           >
             {request.status.policyChanged && proposedRules ? (
               <p>
@@ -320,7 +328,7 @@ export function WorkspaceCleanupRuleChangeDialog({
               )}
               {deletedBytes > 0 ? ` · ${formatBytes(deletedBytes)}` : null}
             </p>
-            {selected.count || disablingProtection ? (
+            {selected.count && !disablingProtection ? (
               <p>
                 {t(
                   'components.settings.workspaceCleanup.change.keptPinned',
@@ -344,19 +352,14 @@ export function WorkspaceCleanupRuleChangeDialog({
               </p>
             ) : null}
             {error ? (
-              <p
-                ref={failure}
-                role="alert"
-                tabIndex={-1}
-                className="outline-none focus:ring-[3px] focus:ring-ring/50"
-              >
-                {error}{' '}
-                {onRetry ? (
-                  <button type="button" className="underline" onClick={onRetry}>
-                    {t('components.settings.workspaceCleanup.retry', 'Try again')}
-                  </button>
-                ) : null}
-              </p>
+              <WorkspaceCleanupChangeFeedback
+                elementRef={failure}
+                error={error}
+                pinFailure={pinFailure}
+                settling={settling}
+                disconnected={disconnected}
+                onRetry={onRetry}
+              />
             ) : null}
           </div>
           <div className="flex shrink-0 justify-end gap-2">

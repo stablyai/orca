@@ -177,6 +177,8 @@ export function WorkspaceCleanupSettingsPane({
         onToggleKeep={change.toggleKeep}
         confirming={change.saving}
         settling={change.settling}
+        disconnected={change.disconnected}
+        pinFailure={change.pinFailure}
         error={change.error}
         onRetry={change.retry}
         onCloseAutoFocus={change.returnFocus}

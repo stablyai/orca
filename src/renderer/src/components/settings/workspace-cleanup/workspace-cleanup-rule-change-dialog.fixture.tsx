@@ -77,6 +77,13 @@ export const refreshedMixedKeep = defineFixture({
   render: () => {
     const value = request(),
       list = rows(3)
+    list[0].evaluation = { action: 'delete', reason: 'inactive' }
+    list[1].evaluation = { action: 'delete', reason: 'merged' }
+    list[2] = {
+      ...list[2],
+      displayName: 'refresh-added-docs',
+      evaluation: { action: 'delete', reason: 'merged' }
+    }
     return (
       <Example
         value={{

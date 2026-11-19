@@ -1,4 +1,7 @@
-import { workspaceCleanupChangeMessage } from './workspace-cleanup-change-messages'
+import {
+  workspaceCleanupChangeMessage,
+  workspaceCleanupPinFailure
+} from './workspace-cleanup-change-messages'
 import { useWorkspaceCleanupChangeFocus } from './use-workspace-cleanup-change-focus'
 import {
   confirmWorkspaceCleanupChange,
@@ -26,6 +29,7 @@ import type {
 } from '../../../../../shared/workspace-cleanup/workspace-cleanup-run'
 import { createCleanupChangeRequest } from './workspace-cleanup-change-preview'
 import type { WorkspaceCleanupRuleChangeRequest } from './workspace-cleanup-rule-change-dialog'
+import type { CleanupPinFailure } from './workspace-cleanup-change-feedback'
 
 export function useWorkspaceCleanupRuleChange({
   owner,
@@ -52,8 +56,12 @@ export function useWorkspaceCleanupRuleChange({
   const [failedCheck, setFailedCheck] = useState(false)
   const ownerWrite = useWorkspaceCleanupPolicyWrite(owner, scopeKey)
   const settling =
-    ownerWrite.phase === 'checking' || recovering || (ownerWrite.phase === 'sending' && !saving)
+    ownerWrite.phase === 'checking' ||
+    ownerWrite.phase === 'disconnected' ||
+    recovering ||
+    (ownerWrite.phase === 'sending' && !saving)
   const [error, setError] = useState<string | null>(null)
+  const [pinFailure, setPinFailure] = useState<CleanupPinFailure | null>(null)
   const [errorSetting, setErrorSetting] = useState<CleanupChangeIntent['setting'] | null>(null)
   const lastIntent = useRef<CleanupChangeIntent | null>(null)
   const [unsavedChanges, setUnsavedChanges] = useState(0)
@@ -71,6 +79,7 @@ export function useWorkspaceCleanupRuleChange({
     setErrorSetting(null)
     setPending(null)
     setError(null)
+    setPinFailure(null)
     setChecking(null)
     setSaving(false)
   }
@@ -138,6 +147,7 @@ export function useWorkspaceCleanupRuleChange({
     lastIntent.current = intent
     setErrorSetting(intent.setting)
     setError(null)
+    setPinFailure(null)
     setEnabling(intent.kind === 'enable')
     setFailedCheck(false)
     const token = generation.current
@@ -199,6 +209,7 @@ export function useWorkspaceCleanupRuleChange({
     }
   }
   const cancel = () => {
+    setPinFailure(null)
     setPending(null)
     finish(generation.current, true)
   }
@@ -210,6 +221,7 @@ export function useWorkspaceCleanupRuleChange({
     const token = generation.current
     setSaving(true)
     setError(null)
+    setPinFailure(null)
     try {
       const result = await confirmWorkspaceCleanupChange(owner, pending, repoId, () =>
         active(token)
@@ -224,19 +236,9 @@ export function useWorkspaceCleanupRuleChange({
         return
       }
       if (result.kind === 'pin-failed') {
-        setError(
-          result.tooLate
-            ? t(
-                'components.settings.workspaceCleanup.change.keepTooLate',
-                "Couldn't keep {{name}} because deletion has already started. Rule not changed.",
-                { name: result.row.displayName }
-              )
-            : t(
-                'components.settings.workspaceCleanup.change.pinFailed',
-                "Couldn't keep {{name}}. Rule not changed.",
-                { name: result.row.displayName }
-              )
-        )
+        const failure = workspaceCleanupPinFailure(result.tooLate, result.row.displayName, t)
+        setPinFailure(failure)
+        setError(failure.before + failure.name + failure.after)
         confirming.current = false
         setSaving(false)
         return
@@ -257,6 +259,8 @@ export function useWorkspaceCleanupRuleChange({
     checking,
     saving,
     settling,
+    disconnected: ownerWrite.phase === 'disconnected',
+    pinFailure,
     enabling,
     failedCheck,
     errorSetting,

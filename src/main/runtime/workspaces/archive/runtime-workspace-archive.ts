@@ -14,7 +14,10 @@ import { resolveWorktreeRemovalRoute } from '../../../workspaces/removal/worktre
 import { resolveWorktreeRemovalRepoOwner } from '../../../workspaces/removal/worktree-removal-repo-owner'
 import { findPendingWorktreeRemovalConflict } from '../../../workspaces/removal/worktree-removal-table'
 import { withProjectWorktreeCreate } from '../../../workspaces/creation/worktree-create-in-flight'
-import { getExplicitWorktreeIdSelector } from '../catalog/runtime-worktree-selection'
+import {
+  getExplicitWorktreeIdSelector,
+  type RemoveManagedWorktreeOptions
+} from '../catalog/runtime-worktree-selection'
 import { prepareRuntimeLocalWorktreeSetup } from '../creation/runtime-local-worktree-setup'
 import { createdWorktreeLifecycleIdentity } from '../lifecycle/worktree-lifecycle-event'
 import { RuntimeNestedWorktreeRemoval } from '../removal/runtime-nested-worktree-removal'
@@ -60,7 +63,7 @@ export abstract class RuntimeWorkspaceArchive extends RuntimeNestedWorktreeRemov
   /** Delete the checkout through the normal removal refusals, keeping the branch and every workspace record. */
   async archiveManagedWorktree(
     worktreeSelector: string,
-    options: { hostId?: string } = {}
+    options: Pick<RemoveManagedWorktreeOptions, 'hostId' | 'expectedWorktree'> = {}
   ): Promise<ArchiveManagedWorktreeResult> {
     const store = this.requireStore()
     const requiredHostId = parseExecutionHostId(options.hostId)?.id
@@ -70,6 +73,7 @@ export abstract class RuntimeWorkspaceArchive extends RuntimeNestedWorktreeRemov
       let warning: string | undefined
       try {
         ;({ warning } = await this.removeManagedWorktree(`id:${target.id}`, {
+          ...(options.expectedWorktree ? { expectedWorktree: options.expectedWorktree } : {}),
           archive: {
             markArchived: (worktree) =>
               markWorktreeCheckoutArchived(store, target.id, hostId, worktree)
@@ -80,7 +84,12 @@ export abstract class RuntimeWorkspaceArchive extends RuntimeNestedWorktreeRemov
           ...(options.hostId ? { hostId: options.hostId } : {})
         }))
       } catch (error) {
-        await unmarkArchiveIfCheckoutRemains(store, target, hostId)
+        await unmarkArchiveIfCheckoutRemains(
+          store,
+          target,
+          hostId,
+          options.expectedWorktree?.instanceId
+        )
         throw error
       }
       const archived = readWorktreeMetaForHost(store, target.id, hostId)?.archivedCheckout

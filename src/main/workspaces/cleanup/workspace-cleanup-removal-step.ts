@@ -138,8 +138,19 @@ export async function removeWorkspaceForCleanup(args: {
     if (recheck.action === 'archive') {
       const hostId = workspace.ref.executionHostId
       const admission = await admitWorkspaceCleanup(store, fresh.ref, () =>
-        queueWorkspaceArchive(runtime, selector, hostId, () =>
-          runtime.archiveManagedWorktree(selector, hostId ? { hostId } : {})
+        queueWorkspaceArchive(
+          runtime,
+          selector,
+          hostId,
+          () =>
+            runtime.archiveManagedWorktree(selector, {
+              ...(hostId ? { hostId } : {}),
+              expectedWorktree: {
+                worktreeId: fresh.ref.worktreeId,
+                instanceId: fresh.ref.instanceId!
+              }
+            }),
+          { worktreeId: fresh.ref.worktreeId, instanceId: fresh.ref.instanceId! }
         )
       )
       if (!admission.admitted) {
@@ -150,8 +161,15 @@ export async function removeWorkspaceForCleanup(args: {
     }
     // Never forced: Git's own dirty-checkout refusal stays the last guard.
     const admission = await admitWorkspaceCleanup(store, fresh.ref, () =>
-      queueWorkspaceDelete(runtime, selector, workspace.ref.executionHostId, {}, (removal) =>
-        runtime.removeManagedWorktree(selector, { ...removal, waitForBackgroundRemoval: true })
+      queueWorkspaceDelete(
+        runtime,
+        selector,
+        workspace.ref.executionHostId,
+        {
+          expectedWorktree: { worktreeId: fresh.ref.worktreeId, instanceId: fresh.ref.instanceId! }
+        },
+        (removal) =>
+          runtime.removeManagedWorktree(selector, { ...removal, waitForBackgroundRemoval: true })
       )
     )
     if (!admission.admitted) {

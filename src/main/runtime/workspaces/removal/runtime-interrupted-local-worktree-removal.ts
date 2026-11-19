@@ -49,6 +49,7 @@ import {
   type LocalWorktreeFilesystemOptions
 } from '../../../workspaces/removal/local-worktree-filesystem'
 import type { WorktreeRemovalRecord } from '../../../workspaces/removal/worktree-removal-records'
+import { WorktreeRemovalExpectation } from '../../../workspaces/removal/worktree-removal-expectation'
 import {
   cleanupRemovedWorktreePushTarget,
   finishRuntimeLocalWorktreeRemoval,
@@ -73,6 +74,12 @@ export function interruptedLocalWorktreeRemovalJob(
   record: WorktreeRemovalRecord,
   host: InterruptedWorktreeRemovalHost
 ): BackgroundWorktreeRemovalJob {
+  const expectation = record.expectedInstanceId
+    ? new WorktreeRemovalExpectation(host.store, {
+        worktreeId: record.worktreeId,
+        instanceId: record.expectedInstanceId
+      })
+    : undefined
   const resolveRemovedPushTarget = () =>
     resolveWorktreeRemovalMetadata(
       host.store,
@@ -82,11 +89,13 @@ export function interruptedLocalWorktreeRemovalJob(
     )?.pushTarget
   return {
     run: async (stopSignal) => {
+      expectation?.check()
       const removedPushTarget = resolveRemovedPushTarget()
       const result = await finishInterruptedLocalWorktreeRemoval({
         record,
         store: host.store,
         stopSignal,
+        expectation,
         removedPushTarget,
         acquireWatcherRemoval: (path) => {
           // Take the gate in the same tick as the loading fence so no spawn can enter between them.
@@ -99,6 +108,7 @@ export function interruptedLocalWorktreeRemovalJob(
           host.preservedBranchCleanup.preserveHead(result, fallbackHead),
         // remember() clears the cleanup target when no branch was preserved.
         finishRemoval: async (result, _rememberBranch, fallbackHead) => {
+          expectation?.check()
           host.preservedBranchCleanup.remember(
             record.worktreeId,
             undefined,
@@ -118,7 +128,7 @@ export function interruptedLocalWorktreeRemovalJob(
 
 type InterruptedLocalWorktreeRemovalArgs = Pick<
   RuntimeLocalWorktreeRemovalFinishArgs,
-  'removedPushTarget' | 'closeWatchers' | 'preserveBranchHead' | 'finishRemoval'
+  'removedPushTarget' | 'closeWatchers' | 'preserveBranchHead' | 'finishRemoval' | 'expectation'
 > & {
   store: RuntimeStore
   record: WorktreeRemovalRecord
@@ -139,6 +149,7 @@ async function finishInterruptedLocalWorktreeRemoval(
   }
   const localOptions = getLocalProjectWorktreeGitOptions(store, repo)
   const finishArgs: RuntimeLocalWorktreeRemovalFinishArgs = {
+    expectation: args.expectation,
     store,
     removedPushTarget: args.removedPushTarget,
     closeWatchers: args.closeWatchers,
@@ -174,6 +185,10 @@ async function finishInterruptedLocalWorktreeRemoval(
   if (deletable && !isRecordedCheckout(deletable, record)) {
     throw differentCheckoutAtPathError(record.worktreePath)
   }
+  args.expectation?.check()
+  if (args.expectation && !deletable) {
+    throw new Error('The reviewed Git workspace is no longer registered; files were left in place.')
+  }
   const native = usesNativeWindowsRemoval(record.worktreePath, localOptions)
   const removalOptions = {
     ...localOptions,
@@ -192,6 +207,11 @@ async function finishInterruptedLocalWorktreeRemoval(
       args.stopSignal
     ))
   ) {
+    if (args.expectation) {
+      throw new Error(
+        'The reviewed Git workspace checkout is incomplete; files were left in place.'
+      )
+    }
     throwIfSignalAborted(args.stopSignal)
     // If Git deleted .git first, it cannot remove/validate the checkout; prune registration only and keep all files for the checks below.
     await removeStaleLocalWorktreeRegistration({

@@ -6,6 +6,7 @@ import {
 } from '../../../../shared/execution-host/execution-host'
 import { splitWorktreeId } from '../../../../shared/worktree/id'
 import type { GitPushTarget, GitWorktreeInfo } from '../../../../shared/worktree/types'
+import type { ExpectedWorktreeRemoval } from '../../../workspaces/removal/worktree-removal-expectation'
 
 export type RuntimeWorktreeRemovalTarget = {
   id: string
@@ -16,6 +17,7 @@ export type RuntimeWorktreeRemovalTarget = {
 
 /** Named options prevent interchangeable safety-waiver booleans from silently authorizing the wrong destructive delete. */
 export type RemoveManagedWorktreeOptions = {
+  expectedWorktree?: ExpectedWorktreeRemoval
   force?: boolean
   deleteBranch?: boolean
   runHooks?: boolean
@@ -39,6 +41,7 @@ export function getRuntimeWorktreeRemovalOptionsKey(
     | 'allowFailedArchiveHook'
     | 'deleteBranch'
     | 'archive'
+    | 'expectedWorktree'
   >
 ): string {
   // Forced retries must not coalesce onto an attempt refusing unverified PTY stop.
@@ -54,7 +57,10 @@ export function getRuntimeWorktreeRemovalOptionsKey(
         : 'keep-branch'
   const removalKey = `${options.force ? 'force' : 'normal'}:${hooksKey}:${ptyKey}:${archiveKey}:${branchKey}`
   // An archive keeps the metadata a plain delete purges; they must never share one reply.
-  return options.archive ? `archive:${removalKey}` : removalKey
+  const expected = options.expectedWorktree
+    ? `:instance:${options.expectedWorktree.instanceId}`
+    : ''
+  return `${options.archive ? `archive:${removalKey}` : removalKey}${expected}`
 }
 
 // Null host is host-unaware; unstamped legacy rows are adoptable, but either explicit host spelling must match exactly.

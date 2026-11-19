@@ -5,12 +5,16 @@ import {
 } from './worktree-removal-leftover'
 import type { WorktreeRemovalFailure, WorktreeRemovalRecord } from './worktree-removal-records'
 import { worktreeCheckoutExists } from './worktree-removal-table'
+import { WorktreeRemovalIncarnationChangedError } from './worktree-removal-expectation'
 
 /** Keep the branch and push target until a retry removes the folder, so a half-done delete loses nothing. */
 export async function failureLeftByGit(
   record: WorktreeRemovalRecord,
   error: unknown
 ): Promise<WorktreeRemovalFailure | undefined> {
+  if (error instanceof WorktreeRemovalIncarnationChangedError) {
+    return undefined
+  }
   const message = error instanceof Error ? error.message : String(error)
   const failure = {
     message: message.replace(
