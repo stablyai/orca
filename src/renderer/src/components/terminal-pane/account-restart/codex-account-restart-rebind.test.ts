@@ -1,6 +1,8 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { ConnectPanePtySession } from '../pty-connection/connect-pane-pty-session'
+import { createIpcPtyTransport } from '../pty-transport/ipc/pty-transport'
+import { installIpcPtyWindow } from '../pty-transport/ipc/pty-transport-test-harness'
 import { installActivePanePtyBinding } from '../pty-connection/lifecycle/active-pane-pty-binding'
 import { captureCodexAccountRestartConnection } from './codex-account-restart-connection'
 import {
@@ -301,4 +303,53 @@ it('keeps a disconnected committed result available until its exact owner reconn
     })
   }
   expect(useAppStore.getState().terminalLayoutsByTabId.tab.ptyIdsByLeafId?.[leaf]).toBe('old')
+})
+
+it('retires a late account result after main has already published a different connected owner', async () => {
+  useAppStore.setState(useAppStore.getInitialState(), true)
+  const call = vi.fn().mockResolvedValue(snapshot({ ptyId: 'old', incarnationId: 'inc-old' }))
+  vi.stubGlobal('window', { api: { runtime: { call } } })
+  installIpcPtyWindow(window, {})
+  seed()
+  useAppStore.getState().queuePaneAccountRestarts(['old'], 'codex')
+  const request = useAppStore.getState().claimCodexAccountRestart(key)
+  if (!request) {
+    throw new Error('restart was not accepted')
+  }
+  await prepareCodexAccountRestart(request)
+  const retained = new Map([[leaf, 'successor output']])
+  const value = mountedSpawnSession(request, retained, async () => undefined)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture supplies captured account connection startup and settlement ports.
+  const connection = captureCodexAccountRestartConnection(value as unknown as ConnectPanePtySession)
+  if (!connection) {
+    throw new Error('restart was not captured')
+  }
+  vi.mocked(window.api.pty.spawn).mockImplementation(async () => {
+    useAppStore.getState().replaceTerminalLayoutPanePtyId('tab', leaf, 'winner')
+    const resolved = snapshot({ ptyId: 'winner', incarnationId: 'inc-winner' }, 2)
+    call.mockResolvedValue({
+      ...resolved,
+      result: { terminal: { ...resolved.result.terminal, ptyId: 'winner', connected: true } }
+    })
+    return { id: 'created', incarnationId: 'inc-created' }
+  })
+  const transport = createIpcPtyTransport({})
+  const options = {
+    url: '',
+    callbacks: {},
+    ...connection.options(() => true),
+    shouldContinue: connection.continue
+  }
+  try {
+    const result = await transport.connect(options)
+    connection.settle(null, 1, options, () => true)
+    expect(result).toBeUndefined()
+    expect(transport.getPtyId()).toBeNull()
+    expect(useAppStore.getState().pendingPaneAccountRestarts[key]).toBeUndefined()
+    expect(value.deps.accountRestartToken).toBeUndefined()
+    expect(useAppStore.getState().terminalLayoutsByTabId.tab.ptyIdsByLeafId?.[leaf]).toBe('winner')
+    expect(retained.get(leaf)).toBe('successor output')
+  } finally {
+    transport.destroy?.()
+  }
 })
