@@ -1,8 +1,4 @@
-import {
-  isPaneSleepRecord,
-  type SleepingAgentSessionRecord
-} from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
+import type { SleepingAgentSessionRecord } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { replaceRecordEntries } from '@/store/record-transitions/keyed-record-transitions'
 import { projectAgentPaneConversation } from '../conversation/agent-pane-conversation'
 import type { AppState } from '../../../types'
@@ -18,23 +14,6 @@ export type AgentStatusLiveUpdateReduction = {
   patch: Partial<AppState>
   /** Rows the cap dropped, so freshness can move its cached minimum without a full rescan. */
   evictedEntries: AgentStatusEntry[]
-}
-
-// A slept pane's record waits for its wake: the agent's last status can land while its PTY stops, or after.
-function sleepRecordAwaitsWake(
-  state: AppState,
-  paneKey: string,
-  record: SleepingAgentSessionRecord | undefined
-): boolean {
-  const pane = record && isPaneSleepRecord(record) ? parsePaneKey(paneKey) : null
-  if (!pane) {
-    return false
-  }
-  const livePtyIds = state.ptyIdsByTabId[pane.tabId] ?? []
-  const leafPtyId = state.terminalLayoutsByTabId[pane.tabId]?.ptyIdsByLeafId?.[pane.leafId]
-  return leafPtyId
-    ? state.suppressedPtyExitIds[leafPtyId] === true || !livePtyIds.includes(leafPtyId)
-    : livePtyIds.length === 0
 }
 
 export function reduceAgentStatusLiveUpdate(
@@ -83,9 +62,7 @@ export function reduceAgentStatusLiveUpdate(
     nextLaunchConfigs = { ...state.agentLaunchConfigByPaneKey }
     delete nextLaunchConfigs[paneKey]
   }
-  const recordChange = sleepRecordAwaitsWake(state, paneKey, existingSleepingRecord)
-    ? null
-    : liveResumeRecordChange(existingSleepingRecord, liveRecoveryRecord)
+  const recordChange = liveResumeRecordChange(existingSleepingRecord, liveRecoveryRecord)
   if (recordChange === 'clear') {
     nextSleepingAgentSessions = replaceRecordEntries<SleepingAgentSessionRecord>(
       state.sleepingAgentSessionsByPaneKey,

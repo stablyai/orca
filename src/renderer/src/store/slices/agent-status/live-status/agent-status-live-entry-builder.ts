@@ -26,6 +26,7 @@ import {
   conversationSessionStartedAt
 } from '../conversation/agent-conversation-acceptance'
 import { liveEntryChildFields } from './agent-status-live-entry-children'
+import { paneSleepRecordAwaitsWake } from './agent-status-slept-pane'
 import {
   canReuseStatusProviderSession,
   statusRetainsResumableIdentity
@@ -45,6 +46,10 @@ export function buildAgentStatusLiveEntry(
   const existing = state.agentStatusByPaneKey.get(paneKey)
   if (existing && updatedAt < existing.updatedAt && !timing?.allowOlderTimestamp) {
     return { entry: null, reason: 'stale' }
+  }
+  // A live row would let the next session capture replace the sleep record.
+  if (paneSleepRecordAwaitsWake(state, paneKey)) {
+    return { entry: null, reason: 'slept-pane' }
   }
   const effectiveTitle = terminalTitle ?? existing?.terminalTitle
   const { history, lastCompletedAssistantMessage, stateObservedAt } =
