@@ -1,4 +1,4 @@
-// Running CSS animations sample styles every frame, even when clipped or transparent.
+// Running CSS animations make the compositor tick every refresh even when scrolled out of view or clipped.
 export const OFFSCREEN_ANIMATION_ATTRIBUTE = 'data-animation-offscreen'
 const RUNNING_ANIMATION_ATTRIBUTE = 'data-animation-running'
 

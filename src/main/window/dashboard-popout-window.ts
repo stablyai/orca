@@ -21,7 +21,6 @@ import type {
   KeybindingOverrides
 } from '../../shared/keybindings/types'
 import { wslHostsWindowArguments } from '../wsl/host-lifecycle/wsl-host-gate'
-import { MAIN_THREAD_ANIMATION_ARGUMENTS } from './presentation/main-thread-animation-arguments'
 import { isMacAppPasteInput } from './editing/mac-app-paste-input'
 
 const MIN_WIDTH = 480
@@ -169,7 +168,7 @@ export function createOrFocusDashboardPopout(
       partition: DASHBOARD_POPOUT_PARTITION,
       // No webviews run here; disable embedding and omit host identity so client-placed pages stay mirrors.
       webviewTag: false,
-      additionalArguments: [...MAIN_THREAD_ANIMATION_ARGUMENTS, ...wslArguments]
+      ...(wslArguments.length > 0 ? { additionalArguments: wslArguments } : {})
     }
   })
   installPrivilegedWindowNavigationPolicy(window.webContents)

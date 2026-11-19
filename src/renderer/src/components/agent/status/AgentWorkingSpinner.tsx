@@ -44,7 +44,7 @@ function observeSpinner(el: HTMLSpanElement): () => void {
   }
 }
 
-// CSS rotation avoids JS style writes; callers provide size.
+// CSS compositor rotation avoids JS input-thread work; callers provide size.
 export function AgentWorkingSpinner({ className }: { className?: string }): React.JSX.Element {
   return (
     <span
