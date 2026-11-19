@@ -44,7 +44,8 @@ vi.mock('./use-bot-items', () => ({
     failed: true,
     retry: chat.retry
   }),
-  readMoreClosedItems: vi.fn()
+  readMoreClosedItems: vi.fn(),
+  useStableBotItemChats: (chatIds: readonly string[] | null) => chatIds
 }))
 vi.mock('../AddConnectorDialog', () => ({ manageConnectors: vi.fn() }))
 vi.mock('../bot-automation-open', () => ({ openBotAutomation: vi.fn() }))
@@ -63,8 +64,8 @@ afterEach(() => {
   localStorage.clear()
 })
 
-const FILTER = { chatId: 'chat-release', needsYou: false }
-const NO_FILTER = { chatId: null, needsYou: false }
+const FILTER = { chatIds: ['chat-release'], botIds: null, needsYou: false }
+const NO_FILTER = { chatIds: null, botIds: null, needsYou: false }
 const NO_ASKS: BotNeedsYouAsks = { needs: [], stoppedForSignIn: [], itemOf: () => null }
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the row reads only these fields.

@@ -40,3 +40,27 @@ it('lists each pull request once across worker, pr: and URL links, even without 
     title: null
   })
 })
+
+const step = (ref: string, latest: string | null): BotItemLinkView => ({
+  kind: 'dispatch',
+  ref,
+  latest,
+  title: 'Run one more e2e',
+  state: 'working',
+  host: null,
+  startedAt: 5,
+  settledAt: null,
+  report: null,
+  pr: null
+})
+
+it("lists one worker for every linked step of its follow-up chain, the chain's newest included", () => {
+  const rows = botItemLinkRows([
+    step('ctx_1', 'ctx_9'),
+    step('ctx_3', 'ctx_9'),
+    step('ctx_9', null),
+    step('ctx_5', 'ctx_9'),
+    step('ctx_other', null)
+  ])
+  expect(rows.map((row) => row.key)).toEqual(['dispatch:ctx_1', 'dispatch:ctx_other'])
+})

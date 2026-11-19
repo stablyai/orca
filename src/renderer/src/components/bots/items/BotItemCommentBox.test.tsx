@@ -13,8 +13,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import type { Bot } from '../../../../../shared/bot-types'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
 
-const sent = vi.hoisted(() => vi.fn(() => Promise.resolve()))
-vi.mock('./use-bot-items', () => ({ commentOnBotItem: sent }))
+const sent = vi.fn()
 const mentionQueries = vi.hoisted((): (string | null)[] => [])
 vi.mock('../../native-chat/composer/pickers/use-native-chat-mention-files', () => ({
   useNativeChatMentionFiles: ({ query }: { query: string | null }) => {
@@ -62,7 +61,15 @@ afterEach(() => {
 })
 
 function renderBox(ref?: React.Ref<BotItemCommentBoxHandle>, uid = 6) {
-  render(<BotItemCommentBox ref={ref} bot={BOT} item={makeTestBotItem(uid)} attachTo={null} />)
+  render(
+    <BotItemCommentBox
+      ref={ref}
+      bot={BOT}
+      item={makeTestBotItem(uid)}
+      attachTo={null}
+      onSend={sent}
+    />
+  )
   return screen.getByRole('textbox', { name: 'Comment' })
 }
 
@@ -76,7 +83,7 @@ it('sends on Enter, adds a line on Shift+Enter, and leaves an IME composing Ente
   expect(sent).not.toHaveBeenCalled()
 
   fireEvent.keyDown(box, { key: 'Enter' })
-  expect(sent).toHaveBeenCalledWith(BOT, 'uid-61', 'Go with the proposed flow.', [])
+  expect(sent).toHaveBeenCalledWith('Go with the proposed flow.', [])
 })
 
 it('types a redirected key into the box at its caret and focuses it', () => {
@@ -141,7 +148,7 @@ it("numbers an image's pill by its thumbnail and posts it as [Image #N], as chat
     },
     'immediate'
   )
-  render(<BotItemCommentBox bot={BOT} item={item} attachTo={null} />)
+  render(<BotItemCommentBox bot={BOT} item={item} attachTo={null} onSend={sent} />)
   const box = screen.getByRole('textbox', { name: 'Comment' })
 
   await waitFor(() =>
@@ -153,7 +160,7 @@ it("numbers an image's pill by its thumbnail and posts it as [Image #N], as chat
   )
   fireEvent.keyDown(box, { key: 'Enter' })
 
-  expect(sent).toHaveBeenCalledWith(BOT, 'uid-66', 'Before [Image #2] after [Image #1]', [
+  expect(sent).toHaveBeenCalledWith('Before [Image #2] after [Image #1]', [
     '/store/a.png',
     '/store/b.png'
   ])

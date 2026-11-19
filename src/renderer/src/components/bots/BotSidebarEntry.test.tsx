@@ -48,10 +48,10 @@ vi.mock('./use-bot-chat-tree', async (importOriginal) => {
   const actual = await importOriginal<typeof ChatTree>()
   return {
     ...actual,
-    useBotChatTree: (bot: Bot | null) =>
+    useBotOwnChatTree: (bot: Bot | null) =>
       mocks.chatTree
         ? { ...mocks.chatTree, loadMore: () => {}, retry: () => {} }
-        : actual.useBotChatTree(bot)
+        : actual.useBotOwnChatTree(bot)
   }
 })
 vi.mock('@/lib/bot-hosts', async (importOriginal) => ({

@@ -37,6 +37,7 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { MobileBotTextButton } from '../MobileBotTextButton'
 import { MobileBotItemRow } from './MobileBotItemRow'
 import { MobileBotNeedsYouGroup } from './MobileBotNeedsYouGroup'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { openPhoneAsk, type PhoneAsk, type PhoneAskOpeners } from './phone-needs-you-asks'
 import type { BotItemSheet } from './MobileBotItemSheets'
 import type { PhoneBotItems } from './use-phone-bot-items'
@@ -57,7 +58,9 @@ export function MobileBotItemsTab({
   setSheet,
   after,
   asks,
-  askOpeners
+  askOpeners,
+  client,
+  showToast
 }: {
   botName: string
   items: PhoneBotItems
@@ -80,6 +83,8 @@ export function MobileBotItemsTab({
   /** Orca's asks the phone reads, as the filter keeps them; they lead Needs you whatever the items say. */
   asks: readonly PhoneAsk[]
   askOpeners: PhoneAskOpeners
+  client: RpcClient | null
+  showToast: (message: string) => void
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -110,6 +115,8 @@ export function MobileBotItemsTab({
       disabled={!online}
       renderItem={() => null}
       onOpenAsk={(ask) => openPhoneAsk(ask, askOpeners)}
+      client={client}
+      onSkipFailed={showToast}
     />
   )
   if (!read) {
@@ -203,6 +210,8 @@ export function MobileBotItemsTab({
           disabled={disabled}
           renderItem={(item) => row(item, id)}
           onOpenAsk={(ask) => openPhoneAsk(ask, askOpeners)}
+          client={client}
+          onSkipFailed={showToast}
         />
       ) : (
         <ItemGroup
