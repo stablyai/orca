@@ -12,9 +12,9 @@ import { storeJournalItemOutput } from './journal-stored-output'
 import {
   JOURNAL_OUTPUT_FILE_INDEX,
   JOURNAL_OUTPUT_FILE_SCHEMA,
-  journalOutputFilePath,
   registerJournalOutputFileRoot
 } from './journal-output-files'
+import { journalOutputFilePath } from './journal-output-file-references'
 import { sweepJournalOutputFiles } from './journal-output-file-sweep'
 
 /** One whole sweep: every unit until the sweep says it is done. */

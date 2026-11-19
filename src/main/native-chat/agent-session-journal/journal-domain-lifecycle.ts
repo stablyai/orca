@@ -1,5 +1,5 @@
 import { applyJournalDomainLifecycleDispatches } from './journal-domain-lifecycle-dispatch'
-import { sameJournalItemBody } from './journal-output-files'
+import { sameJournalItemBody } from './journal-output-file-references'
 import { isDeepStrictEqual } from 'node:util'
 import type Database from '../../sqlite/sync-database'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'

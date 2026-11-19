@@ -15,7 +15,7 @@ import {
   writeAgentSessionContextSnapshot
 } from '../../conversation-context/agent-session-context-snapshots'
 import type { JournalContinuedPayload } from '../../agent-session-journal/journal-reads'
-import { journalOutputFilePath } from '../../agent-session-journal/journal-output-files'
+import { journalOutputFilePath } from '../../agent-session-journal/journal-output-file-references'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   ContinuedTranscriptMarkers,

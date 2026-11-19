@@ -1,8 +1,8 @@
 import { readdirSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import type Database from '../../sqlite/sync-database'
+import { JOURNAL_OUTPUT_FILE_DIRECTORY } from './journal-output-file-references'
 import {
-  JOURNAL_OUTPUT_FILE_DIRECTORY,
   JOURNAL_OUTPUT_FILE_REFERENCED,
   JOURNAL_OUTPUT_FILE_STAGING,
   journalOutputFileRoot

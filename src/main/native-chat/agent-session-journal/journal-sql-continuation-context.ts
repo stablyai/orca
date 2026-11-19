@@ -10,7 +10,7 @@ import type {
 import { journalContextEpoch } from './context-epochs/journal-context-epoch'
 import type { SqliteBindings, SqliteRow } from '../../sqlite/sqlite-statement'
 import { readJournalStoredRow } from './journal-stored-output-rows'
-import { journalOutputFile } from './journal-output-files'
+import { journalOutputFile } from './journal-output-file-references'
 
 const PAGE = 256
 // Rows under this size carry their whole text; a larger tool output or patch streams in byte chunks.

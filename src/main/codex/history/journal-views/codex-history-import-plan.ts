@@ -1,5 +1,5 @@
 import { projectCodexHistoryItem } from './codex-history-projection'
-import { sameJournalItemBody } from '../../../native-chat/agent-session-journal/journal-output-files'
+import { sameJournalItemBody } from '../../../native-chat/agent-session-journal/journal-output-file-references'
 import { CodexSubagentExecutions } from '../../structured/background-work/codex-subagent-executions'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,

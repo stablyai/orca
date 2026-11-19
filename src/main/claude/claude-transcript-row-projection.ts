@@ -1,4 +1,4 @@
-import { sameJournalItemBody } from '../native-chat/agent-session-journal/journal-output-files'
+import { sameJournalItemBody } from '../native-chat/agent-session-journal/journal-output-file-references'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem

@@ -1,13 +1,14 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { isDeepStrictEqual } from 'node:util'
 import { closeSync, fsyncSync, mkdirSync, openSync, rmSync, statSync, writeSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import type Database from '../../sqlite/sync-database'
-import type {
-  AgentJournalBoundedPayload,
-  AgentJournalItemBody,
-  AgentJournalRenderItem
-} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import {
+  JOURNAL_OUTPUT_FILE_DIRECTORY,
+  type JournalFileBackedPayload,
+  journalOutputFile,
+  journalOutputFilePath
+} from './journal-output-file-references'
 import { renameFileWithWindowsRetry } from '../../../shared/file-write/windows-retry-file-operations'
 import { utf8Head } from './item-lifecycle/journal-payload-bounds'
 import { JOURNAL_ITEM_DETAIL_MAX_BYTES } from './journal-domain-item-wire'
@@ -15,7 +16,6 @@ import { JOURNAL_ITEM_DETAIL_MAX_BYTES } from './journal-domain-item-wire'
 /** Off until builds that export only a saved head are out of the downgrade window; reads always work. */
 export const JOURNAL_OUTPUT_FILE_WRITES = false
 
-export const JOURNAL_OUTPUT_FILE_DIRECTORY = 'agent-session-outputs'
 const DIRECTORY = JOURNAL_OUTPUT_FILE_DIRECTORY
 const WRITE_SLICE_CHARS = 1024 * 1024
 export const JOURNAL_OUTPUT_FILE_STAGING = 'staging'
@@ -41,9 +41,6 @@ export const JOURNAL_OUTPUT_FILE_SCHEMA = `CREATE TABLE IF NOT EXISTS journal_ou
 export const JOURNAL_OUTPUT_FILE_INDEX = `CREATE INDEX IF NOT EXISTS journal_items_output_file
   ON journal_items(${OUTPUT_FILE}) WHERE ${OUTPUT_FILE_ROWS};`
 
-/** A completed output or patch kept beside the journal; `head` is its start, `outputFile` its sha256. */
-export type JournalFileBackedPayload = AgentJournalBoundedPayload & { outputFile: string }
-
 const roots = new WeakMap<Database.Database, { root: string; writes: boolean }>()
 
 /** The writer's state directory; a database without one keeps every output inline. */
@@ -57,15 +54,6 @@ export function registerJournalOutputFileRoot(
 
 export function journalOutputFileRoot(db: Database.Database): string | undefined {
   return roots.get(db)?.root
-}
-
-export function journalOutputFilePath(stateDirectory: string, digest: string): string {
-  return join(stateDirectory, DIRECTORY, digest.slice(0, 2), `${digest}.txt`)
-}
-
-export function journalOutputFile(payload: AgentJournalBoundedPayload | undefined): string | null {
-  const file: unknown = payload && 'outputFile' in payload ? payload.outputFile : undefined
-  return typeof file === 'string' && /^[0-9a-f]{64}$/.test(file) ? file : null
 }
 
 /**
@@ -263,39 +251,4 @@ function syncDirectory(path: string): void {
   } finally {
     closeSync(fd)
   }
-}
-
-/** A saved body whose output moved to its file still equals the whole output it was cut from. */
-export function sameJournalItemBody(
-  saved: AgentJournalItemBody,
-  next: AgentJournalItemBody
-): boolean {
-  return isDeepStrictEqual(saved, withSavedOutputFile(saved, next))
-}
-
-function withSavedOutputFile(
-  saved: AgentJournalItemBody,
-  next: AgentJournalItemBody
-): AgentJournalItemBody {
-  const matches = (
-    kept: AgentJournalBoundedPayload | undefined,
-    whole: AgentJournalBoundedPayload | undefined
-  ) =>
-    kept !== undefined &&
-    whole !== undefined &&
-    journalOutputFile(kept) !== null &&
-    !whole.truncated &&
-    whole.digest === kept.digest &&
-    whole.byteLength === kept.byteLength
-  if (
-    saved.kind === 'tool-call' &&
-    next.kind === 'tool-call' &&
-    matches(saved.output, next.output)
-  ) {
-    return { ...next, output: saved.output }
-  }
-  if (saved.kind === 'diff' && next.kind === 'diff' && matches(saved.patch, next.patch)) {
-    return { ...next, patch: saved.patch }
-  }
-  return next
 }
