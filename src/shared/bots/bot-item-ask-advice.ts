@@ -76,40 +76,49 @@ function repliesWithOption(words: string): boolean {
 }
 
 const URL_END = new Set(['.', ',', ';', ':', '!', '?', ')'])
+const SCHEME = /[A-Za-z0-9+.-]/
 
-/** A word as a reader sees it: a Markdown link without its target, a URL as only the punctuation
- *  after it. Linear in the word. */
-function shownWord(word: string): string {
+/** A word without its closed Markdown link targets: `[label](target)` shows as `[label]`. An
+ *  unclosed `](` hides nothing. Linear in the word. */
+function withoutLinkTargets(word: string): string {
   let shown = ''
   let at = 0
   for (;;) {
     const open = word.indexOf('](', at)
-    if (open === -1) {
-      shown += word.slice(at)
-      break
+    const close = open === -1 ? -1 : word.indexOf(')', open + 2)
+    if (close === -1) {
+      return shown + word.slice(at)
     }
     shown += word.slice(at, open + 1)
-    const close = word.indexOf(')', open + 2)
-    if (close === -1) {
-      break
-    }
     at = close + 1
   }
-  if (!shown.includes('://')) {
-    return shown
-  }
-  let end = shown.length
-  while (end > 0 && URL_END.has(shown[end - 1]!)) {
-    end -= 1
-  }
-  return ` ${shown.slice(end)}`
 }
 
-/** The words a reader sees: no code, link targets or URLs. Every pass is linear in the text. */
+/** A word as a reader sees it: no link targets, and a URL (from its scheme to the word's end) as
+ *  only the punctuation after it; text before the URL stays. Linear in the word. */
+function shownWord(word: string): string {
+  const shown = withoutLinkTargets(word)
+  const slashes = shown.indexOf('://')
+  if (slashes === -1) {
+    return shown
+  }
+  let start = slashes
+  while (start > 0 && SCHEME.test(shown[start - 1]!)) {
+    start -= 1
+  }
+  let end = shown.length
+  while (end > slashes && URL_END.has(shown[end - 1]!)) {
+    end -= 1
+  }
+  return `${shown.slice(0, start)} ${shown.slice(end)}`
+}
+
+/** The words a reader sees: no closed code spans or fences, link targets or URLs. An unclosed
+ *  backtick or fence hides nothing. Every pass is linear in the text. */
 function prose(text: string): string {
   return text
     .slice(0, SCAN_LIMIT)
-    .replace(/```[\s\S]*?(?:```|$)/g, ' ')
+    .replace(/```[\s\S]*?```/g, ' ')
     .replace(/`[^`\n]*`/g, ' ')
     .replace(/\S+/g, shownWord)
 }

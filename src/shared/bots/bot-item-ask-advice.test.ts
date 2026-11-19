@@ -102,6 +102,40 @@ describe('botItemAskAdvice', () => {
     expect(codes({ comment: 'Are [a](x),[b](y)/363e3235aa01 ok?' })).toEqual(['jargon'])
   })
 
+  // Only a closed code span, fence or link target, or a URL up to its word's end, hides text; an id
+  // anywhere else stays visible.
+  it.each([
+    ['unclosed link target keeps its question', 'Is [fix](unfinished?', []],
+    ['unclosed link target keeps its id', 'Ship it? [plan](x,ctx_e24f9ab3c1d2', ['jargon']],
+    ['unclosed label', 'Ship it? [plan,ctx_e24f9ab3c1d2', ['jargon']],
+    ['unclosed bracket', 'Ship it? (ctx_e24f9ab3c1d2', ['jargon']],
+    ['after nested links', 'Ship it? [a]([b](c))ctx_e24f9ab3c1d2', ['jargon']],
+    ['after adjacent links', 'Ship it? [a](x)[b](y)ctx_e24f9ab3c1d2', ['jargon']],
+    ['inside a closed link target', 'Ship [it](x/ctx_e24f9ab3c1d2)?', []],
+    ['unclosed backtick', 'Ship it? `ctx_e24f9ab3c1d2', ['jargon']],
+    ['backtick closed on another line', 'Ship it? `a\nctx_e24f9ab3c1d2 b`', ['jargon']],
+    ['unclosed fence', 'Ship it?\n```\nctx_e24f9ab3c1d2', ['jargon']],
+    ['inside a closed fence', 'Ship it?\n```\nctx_e24f9ab3c1d2\n```', []],
+    ['inside a URL', 'Ship it? see,https://x.dev/ctx_e24f9ab3c1d2', []],
+    ['before a URL in the same word', 'Ship it? ctx_e24f9ab3c1d2,https://x.dev', ['jargon']],
+    ['question mark after a URL', 'Is it https://x.dev?', []]
+  ])('masks: %s', (_name, comment, expected) => {
+    expect(codes({ comment })).toEqual(expected)
+  })
+
+  it.each([
+    ['[', '[a'],
+    ['(', '(a'],
+    ['](', '](a'],
+    ['closed link', '[a](b)'],
+    ['backtick', '`a'],
+    ['fence', '```a'],
+    ['URL', 'h://'],
+    ['colon', 'a:/']
+  ])('reads 8,000 characters of repeated %s', (_name, unit) => {
+    expect(() => botItemAskAdvice({ comment: unit.repeat(8_000 / unit.length) })).not.toThrow()
+  })
+
   it('skips ids inside parent-relative, Windows and wrapped paths', () => {
     for (const comment of [
       'Is ../runs/ctx_e24f9ab3c1d2/notes.md right?',
