@@ -72,7 +72,7 @@ type AgentPane = LocalTerminalLeaf & {
 }
 
 type ClaudeAccountView = {
-  host: ClaudeHostFolders | undefined
+  host: ClaudeHostFolders
   launchAccountId: string | null
 }
 
@@ -121,18 +121,19 @@ function readAgentRunning(state: AppState, pane: AgentPane): Promise<boolean | '
   )
 }
 
-async function readClaudeAccountView(state: AppState): Promise<ClaudeAccountView> {
-  let host: ClaudeHostFolders | undefined
+/** Undefined when the host's folders cannot be read: an own folder would then pass for System default. */
+async function readClaudeAccountView(state: AppState): Promise<ClaudeAccountView | undefined> {
+  let host: ClaudeHostFolders
   try {
     host = await window.api.claudeAccounts.list()
   } catch {
-    // Without the host's folders only saved account folders can be told apart.
+    return undefined
   }
   const selected =
     state.settings?.activeClaudeManagedAccountIdsByRuntime?.host ??
     state.settings?.activeClaudeManagedAccountId ??
     null
-  return { host, launchAccountId: claudeLaunchAccountId(host ?? { accounts: [] }, selected) }
+  return { host, launchAccountId: claudeLaunchAccountId(host, selected) }
 }
 
 function claudeAccountReason(
@@ -149,10 +150,8 @@ function claudeAccountReason(
   if (folder?.kind === 'own-folder') {
     return 'own-folder'
   }
-  // Why a known folder only: without a transcript nothing shows the restart would change accounts.
-  return folder && !isClaudePaneOnAccount(folder, view.launchAccountId, view.host)
-    ? 'other-account'
-    : null
+  // Why an unknown folder too: the restart launches on the selected account, so fail closed as the switch does.
+  return isClaudePaneOnAccount(folder, view.launchAccountId, view.host) ? null : 'other-account'
 }
 
 function judgeRestart(
@@ -182,10 +181,13 @@ function judgeRestart(
   if (WORK_FOLDER_SCOPED_AGENTS.has(agent) && !session.cwd) {
     return cant('no-cwd')
   }
-  const accountReason =
-    agent === 'claude' && claudeView ? claudeAccountReason(state, session, claudeView) : null
-  if (accountReason) {
-    return cant(accountReason)
+  if (agent === 'claude') {
+    const accountReason = claudeView
+      ? claudeAccountReason(state, session, claudeView)
+      : 'couldnt-check'
+    if (accountReason) {
+      return cant(accountReason)
+    }
   }
   // Why dismissed too: the notice means this pane runs on an account other than the selected one.
   if (agent === 'codex' && state.codexRestartNoticeByPtyId[pane.ptyId]) {
