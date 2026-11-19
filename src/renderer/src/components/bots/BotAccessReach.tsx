@@ -42,9 +42,7 @@ import { botAgentLabel, botErrorMessage } from './bot-presentation'
 import { setBotGoogle, useBotGoogleReach } from './google/google-connect-client'
 import { useTurnOnBotGoogle } from './google/use-turn-on-bot-google'
 import { NewBotDialog } from './NewBotDialog'
-
-/** This window is on the computer the bot runs on. */
-const HERE = { computer: BOT_ACCESS_COPY.thisComputer }
+import { useBotAccessPlace } from './use-bot-access-place'
 
 const copy = (t: Translate, id: BotAccessCopyId, values: Record<string, unknown> = {}): string =>
   t(`bots.access.${id}`, BOT_ACCESS_COPY[id], values)
@@ -76,18 +74,19 @@ export function BotAccessSummary({
   others: readonly string[]
 }): React.JSX.Element {
   const t = useTranslate()
+  const place = useBotAccessPlace(bot.hostId)
   const { who, control } = botAccessSummary(others)
   return (
     <div className="mb-2 space-y-0.5">
       <p className="text-sm font-medium">{copy(t, who.id, { ...who.values, name: bot.name })}</p>
       <p className="text-xs leading-5 text-muted-foreground">
-        {copy(t, control.id, { ...control.values, name: bot.name, ...HERE })}
+        {copy(t, control.id, { ...control.values, name: bot.name, ...place })}
       </p>
     </div>
   )
 }
 
-/** What the people added can do with the bot, alone: shown only once someone besides the owner is. */
+/** Show the access consequence before anyone is added. */
 export function BotAccessControlLine({
   bot,
   others,
@@ -96,15 +95,13 @@ export function BotAccessControlLine({
   bot: Bot
   others: readonly string[]
   className?: string
-}): React.JSX.Element | null {
+}): React.JSX.Element {
   const t = useTranslate()
-  if (others.length === 0) {
-    return null
-  }
+  const place = useBotAccessPlace(bot.hostId)
   const { control } = botAccessSummary(others)
   return (
     <p className={className}>
-      {copy(t, control.id, { ...control.values, name: bot.name, ...HERE })}
+      {copy(t, control.id, { ...control.values, name: bot.name, ...place })}
     </p>
   )
 }
@@ -141,12 +138,13 @@ const CONNECTOR_ICON: Record<BotAccessConnector, React.ElementType> = {
 function reachWords(
   t: Translate,
   bot: Bot,
-  line: BotReachLine
+  line: BotReachLine,
+  place: { computer: string }
 ): { title: string; detail?: string; Icon: React.ElementType } {
   switch (line.kind) {
     case 'computer':
       return {
-        title: copy(t, 'reachComputer', HERE),
+        title: copy(t, 'reachComputer', place),
         detail: copy(t, 'reachComputerDetail'),
         Icon: Laptop
       }
@@ -173,12 +171,13 @@ export function BotAccessReachList({
   className?: string
 }): React.JSX.Element {
   const t = useTranslate()
+  const place = useBotAccessPlace(bot.hostId)
   const { permission, google } = useBotAccessSignals(bot)
   const lines = botAccessReach({ agent: bot.agent, permission, connector, google })
   return (
     <ul className={className ?? 'space-y-2.5 text-sm'}>
       {lines.map((line) => {
-        const { title, detail, Icon } = reachWords(t, bot, line)
+        const { title, detail, Icon } = reachWords(t, bot, line, place)
         return (
           <li
             key={line.kind === 'google' ? `google:${line.area}` : line.kind}
@@ -213,6 +212,7 @@ function BotAccessAdvice({
   onKeepOnlyMe: () => void
 }): React.JSX.Element | null {
   const t = useTranslate()
+  const place = useBotAccessPlace(bot.hostId)
   const [applied, setApplied] = useState<Applied[]>([])
   const [newBotOpen, setNewBotOpen] = useState(false)
   const turnOnGoogle = useTurnOnBotGoogle()
@@ -320,7 +320,7 @@ function BotAccessAdvice({
       })}
       {open ? (
         <p className="text-xs leading-5 text-muted-foreground">
-          {copy(t, 'separateBot', HERE)}{' '}
+          {copy(t, 'separateBot', place)}{' '}
           <Button variant="link" size="inlineText" onClick={() => setNewBotOpen(true)}>
             {copy(t, 'newBot')}
           </Button>

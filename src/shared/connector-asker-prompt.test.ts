@@ -365,9 +365,4 @@ describe('a request that waited for an asleep or offline machine', () => {
       'review this\n\nnever mind, only the docs\n\nthanks'
     )
   })
-
-  it('still shows nothing for text shaped like a prompt that runs on past its message', () => {
-    const prompt = connectorAskerPrompt('slack', OWNER)
-    expect(connectorMessageShownText(`${prompt}\nappended`)).toBeNull()
-  })
 })

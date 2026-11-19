@@ -4341,7 +4341,6 @@
             "27a74f91f0": "Rien en cours d'exécution pour le moment",
             "298f4be7f2": "CPU",
             "2aa2de6cb9": "Nom",
-            "1fedf94eae": "Charge CPU cumulée. Une valeur supérieure à 100 % signifie que plusieurs cœurs travaillent simultanément.",
             "e7cf14ec78": "Sessions de terminal indisponibles. La liste est peut-être obsolète.",
             "93b0de3c21": "Redémarrer",
             "f85af9cda6": "Instantanés de ressources et sessions de terminal indisponibles.",
@@ -4747,8 +4746,6 @@
                   "terminalSessionCount_one": "{{count}} session de terminal",
                   "terminalSessionCount_other": "{{count}} sessions de terminal",
                   "terminalSessionCount_many": "{{count}} sessions de terminal",
-                  "memoryUnavailable": "mémoire indisponible",
-                  "tooltipSummary": "Gestionnaire de ressources - {{memory}} - {{sessions}}",
                   "spaceScanReady": "Analyse Space prête",
                   "sessionsGroupedByWorkspace": "Les sessions de terminal sont regroupées par espace de travail.",
                   "noTerminalSessions": "Aucune session de terminal pour le moment.",
@@ -6237,7 +6234,6 @@
         },
         "SidebarWorkspaceOptionsMenu": {
           "hosts": "Hôtes",
-          "showSection": "Afficher",
           "allHostsDetail": "Afficher tous les hôtes",
           "configuredSshHost": "SSH configuré",
           "projectSshHost": "SSH du projet",
@@ -6287,7 +6283,6 @@
           "219ebf1961": "Nom de branche",
           "folderPathIdentity": "Branche / chemin de dossier",
           "cli": "Orca CLI",
-          "workspaceOptions": "Options de l'espace de travail",
           "optionsActiveFilters_one": "Options de l’espace de travail ({{count}} filtre actif)",
           "optionsActiveFilters_other": "Options de l’espace de travail ({{count}} filtres actifs)",
           "optionsActiveFilters_many": "Options de l’espace de travail ({{count}} filtres actifs)",
@@ -24256,8 +24251,7 @@
     },
     "upcoming": {
       "tidyNightAfter": "Chaque nuit après {{from}}, ou dès que cet ordinateur est réveillé",
-      "tidyWeekAfter": "Une fois par semaine après {{from}}, ou dès que cet ordinateur est réveillé",
-      "lookDueNow": "Prévu maintenant · {{every}}"
+      "tidyWeekAfter": "Une fois par semaine après {{from}}, ou dès que cet ordinateur est réveillé"
     },
     "palette": {
       "placeholder": "Rechercher bots, chats, terminaux, espaces de travail, tâches, paramètres et actions...",

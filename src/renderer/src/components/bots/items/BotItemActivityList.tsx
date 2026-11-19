@@ -28,7 +28,7 @@ import { botItemActorName } from '../../../../../shared/bots/bot-item-actor-name
 import { botItemStatusName } from './bot-item-status-name'
 import { BOT_ITEM_COMMENT_ATTRIBUTE, BotItemCommentCard } from './BotItemCommentCard'
 import { BotItemStatusIcon } from './BotItemStatusIcon'
-import { formatBotItemSnoozeTime } from './BotItemSnooze'
+import { formatBotItemSnoozeTime } from './bot-item-snooze-time'
 import type { BotItemPendingComments } from './use-bot-item-pending-comments'
 
 const TIME = { hour: 'numeric', minute: '2-digit' } as const

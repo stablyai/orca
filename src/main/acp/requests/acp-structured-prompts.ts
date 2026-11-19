@@ -70,11 +70,13 @@ export class AcpStructuredPrompts {
         settle: (reply) => {
           if (this.open.get(key) === entry) {
             this.open.delete(key)
+            this.lane()?.agentTurn.awaitRequests(this.open.size > 0)
           }
           resolve(reply)
         }
       }
       this.open.set(key, entry)
+      lane.agentTurn.awaitRequests(true)
       // Unclaimed requests withdraw immediately; claimed answers finish their commit.
       context.signal.addEventListener(
         'abort',
@@ -147,6 +149,7 @@ export class AcpStructuredPrompts {
 
   clear(): void {
     this.open.clear()
+    this.lane()?.agentTurn.awaitRequests(false)
   }
 
   private find(itemId: string): OpenRequest | null {
