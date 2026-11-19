@@ -215,6 +215,7 @@ export class RuntimeAccountController {
     options: {
       movesRunningSessions?: true
       runningSessions?: ClaudeAccountSwitchRunningSessions
+      answersAsk?: true
     } = {}
   ): Promise<ClaudeAccountSelectResult> {
     const { claudeAccounts } = this.requireServices()
@@ -222,6 +223,13 @@ export class RuntimeAccountController {
       return claudeAccounts.selectAccount(accountId)
     }
     const before = claudeAccounts.listAccounts()
+    // Why: a later switch made the answer stale, and selecting its account would undo that switch.
+    if (
+      options.answersAsk &&
+      getSelectedClaudeAccountIdInState(before, { runtime: 'host' }) !== accountId
+    ) {
+      return before
+    }
     const after = await claudeAccounts.selectAccount(accountId)
     const account = before.accounts.find((candidate) => candidate.id === accountId)
     const target: ClaudeAccountSelectionTarget = account

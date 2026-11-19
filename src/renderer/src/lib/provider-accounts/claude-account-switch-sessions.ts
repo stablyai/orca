@@ -120,11 +120,11 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
   if (args.owner.kind !== 'local') {
     const { owner, after } = args
     return announceHostMove(args.hostMove, args.before, after, async () => {
-      // The same account sent again with `restart` answers the Ask the server left open.
+      // Answers the Ask the server left open; it does nothing once a later switch has replaced it.
       const reply = await callRuntimeRpc<ClaudeAccountSelectResult>(
         owner,
         'accounts.selectClaude',
-        { accountId: after.accountId, runningSessions: 'restart' },
+        { accountId: after.accountId, runningSessions: 'restart', answersAsk: true },
         { timeoutMs: 30_000 }
       )
       return reply.runningSessions

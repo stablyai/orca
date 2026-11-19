@@ -1,7 +1,6 @@
 import { OrcaRuntimeWithRestartAgentPaneInPlace } from './restart-agent-pane-in-place'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { normalizeCodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import {
   normalizeAgentProviderSession,
   type AgentProviderSessionMetadata
@@ -13,6 +12,7 @@ import {
   type ClaudePaneFolder
 } from '../../../../shared/agent-accounts/claude/claude-pane-account-folder'
 import { readClaudeForeground } from './claude-pane-foreground-read'
+import { claudeHostAccountSwitch } from './claude-host-account-switch'
 import type {
   ClaudeAccountSelectionChange,
   ClaudeHostRunningSessionsMove,
@@ -55,8 +55,12 @@ export abstract class OrcaRuntimeWithClaudeRunningPaneAccountMove extends OrcaRu
       return Promise.resolve(undefined)
     }
     this.claudeSelectionEpoch += 1
-    const move = this.answeredClaudeMove(change) ?? change
-    this.askedClaudeMove = undefined
+    const answered = this.answeredClaudeMove(change)
+    const move = answered ?? change
+    // A selection that moves nothing on the host (the same account again, a WSL lane) leaves the Ask open.
+    if (answered || claudeHostAccountSwitch(change).movesHost) {
+      this.askedClaudeMove = undefined
+    }
     // The switch is already saved: a failed plan must not fail its reply.
     const planned = this.claudePanePlans
       .then(() => this.planClaudePaneMove(move))
@@ -100,16 +104,10 @@ export abstract class OrcaRuntimeWithClaudeRunningPaneAccountMove extends OrcaRu
     | undefined
   > {
     const settings = this.store?.getSettings()
-    const fromAccountId = claudeLaunchAccountId(change.before.state, change.before.accountId)
-    const toAccountId = claudeLaunchAccountId(change.after.state, change.after.accountId)
+    const { fromAccountId, movesHost } = claudeHostAccountSwitch(change)
     // The switching client's choice wins: this host's own setting is one no paired desktop edits.
     const policy = change.runningSessions ?? settings?.claudeAccountSwitchRunningSessions ?? 'ask'
-    // Why: a WSL lane keeps its own pointer.
-    if (
-      normalizeCodexAccountSelectionTarget(change.target).runtime !== 'host' ||
-      fromAccountId === toAccountId ||
-      policy === 'keep'
-    ) {
+    if (!movesHost || policy === 'keep') {
       return undefined
     }
     const saved = settings?.claudeManagedAccounts ?? []
