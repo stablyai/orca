@@ -7,6 +7,7 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { ExternalLink, House, MessageSquare } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { selectFocusedTab } from '@/lib/focused-chat-workers'
@@ -190,16 +191,25 @@ export function BotItemBody({
       {/* Pasted-text and file pills open their preview from the bot's host; files drop anywhere here. */}
       <NativeChatMarkdownImageOwnerContext value={imageOwner}>
         <NativeChatTextAttachmentScope enabled>
-          <NativeChatPaneFileDropSurface className="flex min-h-0 flex-1 flex-col">
+          {/* A size container: the comment box caps its height to a share of this pane's (`cqh`). */}
+          <NativeChatPaneFileDropSurface className="flex min-h-0 flex-1 flex-col [container-type:size]">
             <NativeChatFileLinkExistenceContext value={fileContext?.existence ?? null}>
               <NativeChatLinkClickContext value={links.onLinkClick}>
-                {/* Only as tall as its content: the comment box (or the question) follows the last entry,
-                    and spare height falls below it rather than between. */}
-                <div className="relative flex min-h-0 flex-initial flex-col">
+                {/* The comment box stays at the bottom; an open question follows the last entry instead,
+                    with spare height below it rather than between. */}
+                <div
+                  className={cn(
+                    'relative flex min-h-0 flex-col',
+                    ask.shown ? 'flex-initial' : 'flex-1'
+                  )}
+                >
                   <div
                     ref={scrollRef}
                     {...scrollerProps}
-                    className="scrollbar-sleek min-h-0 flex-initial overflow-y-auto [overflow-anchor:none]"
+                    className={cn(
+                      'scrollbar-sleek min-h-0 overflow-y-auto [overflow-anchor:none]',
+                      ask.shown ? 'flex-initial' : 'flex-1'
+                    )}
                   >
                     <BotItemHeader
                       bot={bot}

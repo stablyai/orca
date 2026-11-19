@@ -4373,7 +4373,7 @@
   "bots": {
     "link": {
       "pairTitle": "配對電腦",
-      "pairRequired": "若要開啟此連結，請將這部手機與電腦配對。",
+      "pairRequired": "若要開啟此連結，請將這部手機與電腦配對，然後重新開啟該連結。",
       "pairAction": "配對電腦",
       "openFailed": "無法開啟此連結",
       "ambiguous": "此機器人位於 {{names}}。請在你想用的電腦上透過 Orca 開啟聊天。",

@@ -3,8 +3,8 @@ import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../../share
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { rollbackFailedPtyBinding } from './pty-binding-write-rollback'
-import { cloneWorkspaceSessionState } from '../../restoring-sessions/session-owner-fields'
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../../restoring-sessions/workspace-session-write-rollback'
+import { freezePublishedWorkspaceSession } from '../../restoring-sessions/published-workspace-session-freeze'
 import { clearReplacedPaneBinding } from './replaced-pane-binding'
 
 import type { PtyBindingSourceExpectation } from '../store'
@@ -117,14 +117,7 @@ export class PtyBindingPersistenceOperations {
     const { runtime, sessions } = this[ptyBindingPersistenceOperationsContext]
     const resolved = resolveHostId(hostId)
     const publish = (session: WorkspaceSessionState): void => {
-      if (resolved === LOCAL_EXECUTION_HOST_ID) {
-        runtime.state.workspaceSession = session
-      } else {
-        runtime.state.workspaceSessionsByHostId = {
-          ...runtime.state.workspaceSessionsByHostId,
-          [resolved]: session
-        }
-      }
+      publishPtyBindingSession(runtime, resolved, session)
       markPtyBindingSessionDirty(runtime, resolved)
     }
     return runtime.runDurableMutation(() => {
@@ -147,20 +140,18 @@ export class PtyBindingPersistenceOperations {
       if (!session.tabsByWorktree[binding.worktreeId]?.some((tab) => tab.id === binding.tabId)) {
         return { value: false, persist: false }
       }
-      const before = cloneWorkspaceSessionState(session)
       const retired = clearReplacedPaneBinding(session, { ...binding, parentTabId: binding.tabId })
       // Publish directly: renderer snapshot repair would revive the retired binding.
       publish(retired)
       bumpPtyBindingGeneration(runtime, resolved, binding.leafId)
-      const staged = cloneWorkspaceSessionState(retired)
       return {
         value: true,
         writtenHostIds: [resolved],
         rollback: () => {
           publish(
             rollbackWorkspaceSessionAfterFailedAsyncWrite(
-              before,
-              staged,
+              session,
+              retired,
               sessions.getWorkspaceSession(resolved)
             )
           )
@@ -280,45 +271,44 @@ function writePtyBinding(
   paneKey: string
 ): () => void {
   const { runtime, sessions } = owner[ptyBindingPersistenceOperationsContext]
-  const sessionBeforeBinding = cloneWorkspaceSessionState(session)
-  const restore = (restoredSession = sessionBeforeBinding): void => {
-    if (resolvedHostId === LOCAL_EXECUTION_HOST_ID) {
-      runtime.state.workspaceSession = restoredSession
-    } else {
-      runtime.state.workspaceSessionsByHostId = {
-        ...runtime.state.workspaceSessionsByHostId,
-        [resolvedHostId]: restoredSession
-      }
-    }
-  }
+  const bound = applyPtyBinding(args, session, bindingWorktreeId, paneKey)
   try {
-    if (resolvedHostId !== LOCAL_EXECUTION_HOST_ID) {
-      runtime.state.workspaceSessionsByHostId = {
-        ...runtime.state.workspaceSessionsByHostId,
-        [resolvedHostId]: session
-      }
-    }
-    applyPtyBinding(args, session, bindingWorktreeId, paneKey)
+    publishPtyBindingSession(runtime, resolvedHostId, bound)
     bumpPtyBindingGeneration(runtime, resolvedHostId, args.leafId)
     markPtyBindingSessionDirty(runtime, resolvedHostId)
-    const boundSession = cloneWorkspaceSessionState(session)
-    return () => {
-      const current = sessions.getWorkspaceSession(resolvedHostId)
-      const rolledBack = rollbackFailedPtyBinding(
-        sessionBeforeBinding,
-        boundSession,
-        current,
-        bindingWorktreeId,
-        args.tabId,
-        args.leafId
-      )
-      if (rolledBack !== current) {
-        restore(rolledBack)
-        bumpPtyBindingGeneration(runtime, resolvedHostId, args.leafId)
-      }
-    }
   } catch (error) {
-    restore()
+    publishPtyBindingSession(runtime, resolvedHostId, session)
     throw error
+  }
+  return () => {
+    const current = sessions.getWorkspaceSession(resolvedHostId)
+    const rolledBack = rollbackFailedPtyBinding(
+      session,
+      bound,
+      current,
+      bindingWorktreeId,
+      args.tabId,
+      args.leafId
+    )
+    if (rolledBack !== current) {
+      publishPtyBindingSession(runtime, resolvedHostId, rolledBack)
+      bumpPtyBindingGeneration(runtime, resolvedHostId, args.leafId)
+    }
+  }
+}
+
+function publishPtyBindingSession(
+  runtime: PtyBindingPersistenceOperationsRuntime,
+  hostId: ReturnType<typeof resolveHostId>,
+  session: WorkspaceSessionState
+): void {
+  freezePublishedWorkspaceSession(session)
+  if (hostId === LOCAL_EXECUTION_HOST_ID) {
+    runtime.state.workspaceSession = session
+  } else {
+    runtime.state.workspaceSessionsByHostId = {
+      ...runtime.state.workspaceSessionsByHostId,
+      [hostId]: session
+    }
   }
 }

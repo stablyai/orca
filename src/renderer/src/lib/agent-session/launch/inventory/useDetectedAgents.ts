@@ -1,6 +1,7 @@
 import { useAppStateViewActive, useAppStateValue } from '@/store/retained-views/app-state-view'
 import { useCallback, useEffect, useRef } from 'react'
 import { useAppStore } from '@/store/index'
+import { useRuntimeHostStatusViewSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { getLocalAgentPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { localAgentInventoryContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
 import { runtimeHostContactForEntry } from '../../../../../../shared/remote-runtime/host-status/runtime-host-contact'
@@ -93,12 +94,8 @@ export function useDetectedAgents(
 
   // Why: a probe that failed while the host was down must re-run once contact returns, and only then.
   // 'down' only when the host's status says so; a never-asked host is still probed as before.
-  const runtimeContactEpoch = useAppStateValue((s) => {
-    if (targetKind !== 'runtime' || !targetId) {
-      return null
-    }
-    const entry = s.runtimeStatusByEnvironmentId.get(targetId)
-    if (!entry) {
+  const runtimeContactEpoch = useRuntimeHostStatusViewSelector(targetId, (entry) => {
+    if (targetKind !== 'runtime' || !targetId || !entry) {
       return null
     }
     return runtimeHostContactForEntry(entry).verdict === 'live'

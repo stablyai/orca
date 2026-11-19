@@ -33,26 +33,26 @@ describe('the turn changed-files card on the phone', () => {
   })
 
   function turnDiffPaths(showsTurnDiffs: boolean) {
+    const view = createElement(Harness, {
+      messages: editTurn,
+      enabled: true,
+      isWorking: false,
+      showsTurnDiffs
+    })
     act(() => {
-      renderer = create(
-        createElement(Harness, {
-          messages: editTurn,
-          enabled: true,
-          isWorking: false,
-          showsTurnDiffs
-        })
-      )
+      if (renderer) {
+        renderer.update(view)
+      } else {
+        renderer = create(view)
+      }
     })
     const { resolveRow }: ReturnType<typeof useMobileNativeChatTurnDisclosure> =
       renderer!.root.findByType(Result).props.disclosure
     return resolveRow(1, editTurn[1]).turnDiff?.files.map((file) => file.path)
   }
 
-  it('shows the edited files in a normal chat', () => {
+  it('clears the changed files when the chat switches to hiding them', () => {
     expect(turnDiffPaths(true)).toEqual(['/repo/notes.md'])
-  })
-
-  it('shows nothing in a chat whose own edits are scratch files', () => {
     expect(turnDiffPaths(false)).toBeUndefined()
   })
 })

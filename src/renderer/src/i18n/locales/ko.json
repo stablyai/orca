@@ -6977,9 +6977,9 @@
           "8fbe1f37c1": "환경",
           "2d133152fa": "기본 환경 없음",
           "3f1bdf3cb4": "환경 텍스트가 너무 커서 안전하게 파싱할 수 없습니다.",
-          "codexSessionSource": "가져올 Codex 홈",
-          "codexSessionSourceInfo": "Codex 기록 가져오기 정보",
-          "codexSessionSourceTooltip": "Orca는 격리된 홈에서 Codex를 실행합니다. 기존 Codex 홈을 지정하여 세션 기록을 가져옵니다. 비워두면 ~/.codex를 사용합니다.",
+          "codexSessionSource": "Codex 대화를 가져올 위치",
+          "codexSessionSourceInfo": "Codex 대화 가져오기 정보",
+          "codexSessionSourceTooltip": "계정 간에 기록을 공유하는 동안 Orca는 이 Codex 홈의 대화를 ~/.codex에 복사하여 /resume에 표시되게 합니다. 대화가 복사된 후 이 폴더에서 추가된 내용은 복사본에 반영되지 않습니다.",
           "03e1a5081a": "{{value0}}에서",
           "25a41a9aad": "이 서버에 설치된 에이전트 다시 감지",
           "remoteDetectionFailed": "설치된 에이전트를 감지하지 못했습니다. 호스트 연결을 확인한 뒤 다시 시도하세요.",
@@ -20867,16 +20867,17 @@
   },
   "featureTips": {
     "voice": {
-      "demoPrompt": "극단적인 경우에 대해 이 차이점을 검토하고 찾은 항목에 대한 테스트를 추가하세요.",
-      "startDictation": "받아쓰기 시작",
-      "agentPromptTitle": "에이전트 프롬프트",
-      "listening": "청취...",
       "unassignedInstruction": "초점이 맞춰진 창에서 음성 받아쓰기를 시작하기 전에 받아쓰기 바로가기를 할당하세요.",
       "shortcutInstruction": "터미널, 편집기 또는 에이전트 프롬프트에 포커스를 두고 <shortcut/> 키를 눌러 음성 받아쓰기를 시작하세요. 중지하려면 <shortcut/> 키를 다시 누르세요.",
       "changeInSettings": "<link>설정 → 음성</link>에서 언제든 모델, 받아쓰기 모드 또는 단축키를 변경할 수 있습니다.",
       "title": "어떤 창에서든 받아쓰기",
       "description": "포커스가 있는 창에서 음성 받아쓰기를 시작하고, 같은 단축키를 다시 눌러 중지하세요.",
-      "cta": "음성 받아쓰기 설정"
+      "cta": "음성 받아쓰기 설정",
+      "demoFirstPhrase": "작은 화면에서 결제 버튼이 푸터를 가려요.",
+      "demoSecondPhrase": "테스트도 추가해 줄래?",
+      "demoUserPrompt": "결제 배지 추가해 줘",
+      "demoTabTitle": "체크아웃 푸터",
+      "demoReply": "체크아웃 푸터에 결제 배지를 추가했어요."
     },
     "sessionSearch": {
       "ageHours": "2시간",

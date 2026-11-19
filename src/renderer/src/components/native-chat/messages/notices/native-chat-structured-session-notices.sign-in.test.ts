@@ -34,22 +34,16 @@ function notices(sessionError: string | null, signedIn = false, causeText?: stri
 const UNRELATED_ERROR = 'unrelated-session-error'
 
 describe('structuredSessionNotices sign-in', () => {
-  it('keeps an independent session error beside the sign-in row, without its button', () => {
-    const shown = notices(UNRELATED_ERROR)
-    expect(shown).toMatchObject([
-      { key: 'launch', signIn: { signedIn: false } },
-      { key: 'session', text: UNRELATED_ERROR }
-    ])
-    expect(shown[1]?.signIn).toBeUndefined()
-    expect(shown[1]?.action).toBeUndefined()
-  })
-
-  it('still shows the independent error once signed in', () => {
-    const shown = notices(UNRELATED_ERROR, true)
-    expect(shown).toMatchObject([
-      { key: 'launch', signIn: { signedIn: true } },
-      { key: 'session', text: UNRELATED_ERROR }
-    ])
+  it('keeps an independent session error separate before and after sign-in', () => {
+    for (const signedIn of [false, true]) {
+      const shown = notices(UNRELATED_ERROR, signedIn)
+      expect(shown).toMatchObject([
+        { key: 'launch', signIn: { signedIn } },
+        { key: 'session', text: UNRELATED_ERROR }
+      ])
+      expect(shown[1]?.signIn).toBeUndefined()
+      expect(shown[1]?.action).toBeUndefined()
+    }
   })
 
   it('keeps host words that carry a provider diagnostic under the sign-in row', () => {

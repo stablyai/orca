@@ -150,7 +150,11 @@ export function commentOnBotItem(
   text: string
 ): Promise<BotItemWriteOutcome> {
   return write(async () => {
-    const reply = await itemComment.request(client, { item: uid, text })
+    const reply = await itemComment.request(
+      client,
+      { item: uid, text },
+      { failWhenDisconnected: true }
+    )
     try {
       itemComment.interpret(reply)
       return null
@@ -168,11 +172,15 @@ export function setBotItemsStatus(
   reason?: string
 ): Promise<BotItemWriteOutcome> {
   return write(async () => {
-    const reply = await itemsStatus.request(client, {
-      items: [...uids],
-      status,
-      ...(reason ? { reason } : {})
-    })
+    const reply = await itemsStatus.request(
+      client,
+      {
+        items: [...uids],
+        status,
+        ...(reason ? { reason } : {})
+      },
+      { failWhenDisconnected: true }
+    )
     try {
       itemsStatus.interpret(reply)
       return null
@@ -190,10 +198,14 @@ export function snoozeBotItems(
   until: number | null
 ): Promise<BotItemWriteOutcome> {
   return write(async () => {
-    const reply = await itemsSnooze.request(client, {
-      items: items.map((item) => ({ item: item.uid, othersLastEventId: item.othersLastEventId })),
-      until
-    })
+    const reply = await itemsSnooze.request(
+      client,
+      {
+        items: items.map((item) => ({ item: item.uid, othersLastEventId: item.othersLastEventId })),
+        until
+      },
+      { failWhenDisconnected: true }
+    )
     try {
       itemsSnooze.interpret(reply)
       return null

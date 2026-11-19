@@ -12,7 +12,6 @@
 1 src/main/agent-launch/trust/agent-trust-ownership-ledger.ts
 2 src/main/agent-launch/trust/agent-trust-path-canonicalization.ts # moved out of agent-trust-presets.ts (its count dropped by 2) so the Codex trust worker shares it
 12 src/main/agent-launch/trust/agent-trust-presets.ts
-2 src/main/agent-launch/trust/antigravity-workspace-trust-ownership.ts
 1 src/main/agent-launch/trust/execution-host-workspace-trust.ts
 1 src/main/ai-vault-search/worker/session-search-worker-client.ts
 4 src/main/ai-vault/parse-cache/session-parse-cache-legacy-json.ts
@@ -43,7 +42,6 @@
 1 src/main/browser-passwords/browser-password-chromium-import.ts
 2 src/main/browser-passwords/browser-password-vault-file.ts
 2 src/main/browser/agent-browser/helper-process/agent-browser-binary.ts
-2 src/main/browser/agent-browser/helper-process/agent-browser-dependency-binary.ts
 2 src/main/browser/agent-browser/helper-process/agent-browser-process-environment.ts
 1 src/main/browser/agent-browser/session-lifecycle/agent-browser-session-reset.ts
 1 src/main/browser/bundled-main-file-path.ts
@@ -334,7 +332,7 @@
 3 src/main/orca-profiles/catalog/other-profile-workspace-catalog.ts
 3 src/main/orca-profiles/cloud-auth/profile-artifact-cloud-cleanup.ts
 1 src/main/orca-profiles/cloud-auth/profile-cloud-index.ts
-5 src/main/orca-profiles/cloud-session/profile-cloud-session-store.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
+4 src/main/orca-profiles/cloud-session/profile-cloud-session-store.ts # superseded-session unlink on a rare memory-only sign-in or rotation stays ordered with the sync saves, sign-out and quit flush (#44285)
 11 src/main/orca-profiles/profile-index-store.ts
 4 src/main/orca-profiles/project-transfer/profile-project-move-intent.ts
 3 src/main/orca-profiles/project-transfer/profile-project-move-record.ts
@@ -606,8 +604,8 @@
 3 src/shared/remote-runtime/serve-supervisor/serve-abort-park.ts
 7 src/shared/remote-runtime/serve-supervisor/serve-bundle-park.ts
 1 src/shared/remote-runtime/serve-supervisor/serve-user-data-path.ts
-14 src/shared/secure-storage/secure-file.ts
 1 src/shared/secure-storage/secure-file-async-write.ts # one renameSync per publish, in the same turn as the shouldPublish fence so a sign-out clear cannot land between; staging and fsync are async
+14 src/shared/secure-storage/secure-file.ts
 1 src/shared/secure-storage/secure-path-metadata-snapshot.ts
 2 src/shared/secure-storage/secure-path-windows-acl.ts
 2 src/shared/secure-storage/windows-security-addon.ts

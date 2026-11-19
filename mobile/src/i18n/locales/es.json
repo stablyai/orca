@@ -4482,7 +4482,7 @@
   "bots": {
     "link": {
       "pairTitle": "Vincular un ordenador",
-      "pairRequired": "Para abrir este enlace, vincula este teléfono con un ordenador.",
+      "pairRequired": "Para abrir este enlace, vincula este teléfono con un ordenador y vuelve a abrir el enlace.",
       "pairAction": "Vincular un ordenador",
       "openFailed": "No se pudo abrir este enlace",
       "ambiguous": "Este bot está en {{names}}. Abre el chat en Orca en el ordenador que quieras.",

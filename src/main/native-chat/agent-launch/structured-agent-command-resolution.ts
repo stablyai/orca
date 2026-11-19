@@ -97,7 +97,7 @@ export function resolveStructuredAgentCommand(
     const resolved = resolveGuestNativeProgram(command, options, stock.resolve)
     // The user's own install wins; Orca's copy serves hosts that have none.
     const managed =
-      isManagedAgentCli(agent) && !stock.command && (resolved === null || !isAbsolute(resolved))
+      isManagedAgentCli(agent) && (resolved === null || !isAbsolute(resolved))
         ? managedAgentCommand(agent)
         : null
     if (managed) {

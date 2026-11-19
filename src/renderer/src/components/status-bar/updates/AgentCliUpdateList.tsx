@@ -67,7 +67,7 @@ function AgentCliUpdateListRow({
     <div>
       <div className="flex h-9 items-center gap-2 rounded-md pr-1 pl-2">
         <AgentIcon agent={row.agent} size={14} />
-        <span className="truncate text-[13px]">{agentCliProductName(row.agent, t)}</span>
+        <span className="truncate text-[13px]">{agentCliProductName(row.agent, t, 'short')}</span>
         <span className="ml-auto flex shrink-0 items-center gap-1.5">
           {run?.phase === 'running' ? (
             <>

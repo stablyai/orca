@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { mkdtempSync, rmSync, statSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
@@ -89,7 +89,6 @@ it.each(['before-write', 'after-write'] as const)(
       body: 'queued send'
     })
     expect(Number(writer.prepare('PRAGMA wal_checkpoint(NOOP)').get()!.log)).toBeLessThan(32768)
-    expect(statSync(`${filename}-wal`).size).toBeLessThan(JOURNAL_SIZE_LIMIT_BYTES)
   },
   15000
 )

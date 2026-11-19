@@ -3,6 +3,7 @@ import { WorkerThreadRequestQueue } from '../../../worker-threads/worker-thread-
 import { getOrcaUserDataPath } from '../../configuration/homes/codex-home-paths'
 import { runExclusivelyForCodexTrustConfig } from '../toml/codex-trust-config-mutation-queue'
 import { spawnCodexProjectTrustWorker } from './codex-project-trust-worker-spawn'
+import { getAntigravityTrustLedgerPath } from '../../../agent-launch/trust/antigravity-workspace-trust-ownership'
 import type {
   CodexHookPassWorkerRequest,
   CodexHookPassWorkerResult
@@ -150,4 +151,19 @@ export async function removeOrcaCreatedProjectTrustEntries(projectPath: string):
       }
     })
   }
+}
+
+/**
+ * Removes the Antigravity `trustedWorkspaces` entries Orca created for `workspacePath`, on the
+ * worker and inside the queue Antigravity grants use, so neither overwrites the other. Never throws.
+ */
+export function removeOrcaCreatedAntigravityTrustOffMain(workspacePath: string): Promise<void> {
+  const ledgerPath = getAntigravityTrustLedgerPath()
+  return runExclusivelyForCodexTrustConfig(ledgerPath, async () => {
+    try {
+      await request((id) => ({ id, kind: 'removeAntigravityOwned', workspacePath, ledgerPath }))
+    } catch (error) {
+      console.warn('[antigravity-trust] Failed to remove an Orca-created trust entry:', error)
+    }
+  })
 }

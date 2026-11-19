@@ -1584,7 +1584,6 @@
         "readOnly": "Read-only here. Change them in {{agent}}.",
         "plugin": "Plugin",
         "title": "Tools",
-        "unsupported": "This bot uses the tools set up in {{agent}} itself.",
         "details": {
           "reading": "Reading tool details…",
           "editTitle": "Edit tool",
@@ -8834,9 +8833,9 @@
           "8fbe1f37c1": "Environment",
           "2d133152fa": "No default environment",
           "3f1bdf3cb4": "Environment text is too large to parse safely.",
-          "codexSessionSource": "Codex home to import from",
-          "codexSessionSourceInfo": "About importing Codex history",
-          "codexSessionSourceTooltip": "Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex.",
+          "codexSessionSource": "Import Codex conversations from",
+          "codexSessionSourceInfo": "About importing Codex conversations",
+          "codexSessionSourceTooltip": "While history is shared across accounts, Orca copies this Codex home's conversations into ~/.codex so /resume lists them. Turns added in this folder after a conversation is copied don't reach the copy.",
           "noAgentsDetected": "No agents detected. If one is installed, the probe may have timed out.",
           "9f30095d49": "Agent permissions"
         },
@@ -17386,11 +17385,9 @@
           "feature": {
             "tip": {
               "copy": {
-                "1fcdfc5fe8": "New",
                 "f98e9d1bad": "Search every agent session",
                 "990cc29865": "Find any past conversation by what was said in it, then pick up where the agent left off.",
                 "91e2719807": "Turn on session search",
-                "52e9e84809": "Tip",
                 "3eacedec93": "Let agents drive Orca with the Orca CLI",
                 "8d54d0ff53": "Enable agents to coordinate child worktrees and communicate between worktrees.",
                 "0080bc86eb": "Install CLI & Skills",
@@ -23926,16 +23923,17 @@
   },
   "featureTips": {
     "voice": {
-      "demoPrompt": "Review this diff for edge cases and add tests for anything you find.",
-      "startDictation": "Start dictation",
-      "agentPromptTitle": "Agent prompt",
-      "listening": "Listening...",
       "unassignedInstruction": "Assign a dictation shortcut before starting voice dictation in a focused pane.",
       "shortcutInstruction": "Focus a terminal, editor, or agent prompt, then press <shortcut/> to start voice dictation. Press <shortcut/> again to stop.",
       "changeInSettings": "Change the model, dictation mode, or shortcut anytime in <link>Settings → Voice</link>.",
       "title": "Dictate into any pane",
       "description": "Start voice dictation in any focused pane, then use the shortcut again to stop.",
-      "cta": "Set up voice dictation"
+      "cta": "Set up voice dictation",
+      "demoFirstPhrase": "The checkout button overlaps the footer on small screens.",
+      "demoSecondPhrase": "Can you add a test?",
+      "demoUserPrompt": "Add payment badges",
+      "demoTabTitle": "Checkout footer",
+      "demoReply": "Added payment badges to the checkout footer."
     },
     "sessionSearch": {
       "enableFailed": "Could not turn on session search. Try again.",
@@ -28798,7 +28796,6 @@
       "lastTidied": "last tidied {{when}}",
       "memoryFiles_one": "MEMORY.md and {{count}} topic file",
       "memoryFiles_other": "MEMORY.md and {{count}} topic files",
-      "toolsInAgent": "Set up in {{agent}}",
       "toolsFrom": "{{count}} from {{agent}}",
       "toolsMore": "{{count}} more from {{agent}}",
       "withAccess": "{{service}} {{people}} with access",
@@ -29477,8 +29474,18 @@
     "versions": "{{installed}} → {{latest}}",
     "modelRequiresClaude": "Requires Claude Code CLI {{version}}",
     "modelRequiresCodex": "Requires Codex CLI {{version}}",
+    "modelRequires": "Requires {{product}} {{version}}",
     "claudeProduct": "Claude Code",
     "codexProduct": "Codex CLI",
+    "grokProduct": "Grok Build",
+    "opencodeProduct": "OpenCode",
+    "opencode2Product": "OpenCode 2",
+    "ompProduct": "OMP",
+    "copilotProduct": "GitHub Copilot CLI",
+    "copilotShortProduct": "Copilot CLI",
+    "kimiProduct": "Kimi Code",
+    "cursorProduct": "Cursor CLI",
+    "hermesProduct": "Hermes Agent",
     "commandCopied": "Command copied",
     "commandNotCopied": "Could not copy the command",
     "copyCommand": "Copy",
