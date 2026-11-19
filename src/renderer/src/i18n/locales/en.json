@@ -21813,9 +21813,6 @@
         "explanation": "Continue, and the agent first checks whether its last step finished.",
         "usageLimitExplanation": "Asks the agent to continue where it left off. Use it once the limit resets."
       },
-      "antigravitySignIn": {
-        "sentence": "Antigravity isn't signed in. Sign in under <settings>Settings → Accounts → Antigravity</settings>. Then send your message again."
-      },
       "signIn": {
         "title": "Sign in to {{agent}} to start chatting"
       },
@@ -22499,6 +22496,16 @@
         "showMore": "Show more",
         "running": "Running",
         "failed": "Failed"
+      },
+      "signInNotice": {
+        "signedIn": "Signed in. Send again.",
+        "notSent": "Not sent: {{agent}} isn't signed in.",
+        "notSignedIn": "{{agent}} isn't signed in.",
+        "opensAntigravitySettings": "Opens Settings → Accounts → Antigravity",
+        "signIn": "Sign in",
+        "signsInClaudeAccount": "Signs in this Claude account",
+        "runsCommand": "Runs {{command}} in a terminal",
+        "thenSlashCommand": "Sign in, then type {{slashCommand}}."
       }
     },
     "tab": {

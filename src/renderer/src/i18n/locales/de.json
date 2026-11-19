@@ -20007,9 +20007,6 @@
         "failed": "Dieser Chat konnte nicht fortgesetzt werden. Erneut versuchen oder eine Nachricht senden.",
         "explanation": "Beim Fortfahren prüft der Agent zuerst, ob sein letzter Schritt abgeschlossen wurde."
       },
-      "antigravitySignIn": {
-        "sentence": "Antigravity ist nicht angemeldet. Unter <settings>Einstellungen → Konten → Antigravity</settings> anmelden. Danach die Nachricht erneut senden."
-      },
       "claudeSignIn": {
         "signingIn": "Anmeldung läuft…"
       },
