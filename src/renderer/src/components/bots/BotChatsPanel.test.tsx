@@ -225,6 +225,7 @@ describe('the Chats tab', () => {
   })
 
   it('sends an older host to Home, where its work still shows', () => {
+    useAppStore.setState({ rightSidebarTab: 'bot-chats' })
     showTree({ state: 'unsupported' })
     renderPanel()
     fireEvent.click(screen.getByRole('button', { name: 'See its work in Home' }))
