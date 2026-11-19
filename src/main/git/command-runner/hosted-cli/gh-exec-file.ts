@@ -203,7 +203,7 @@ export async function ghExecFileWithScopeAsync(
           signal: options.signal,
           stdin: options.stdin,
           onChildTerminated: reportChildEnded,
-          onWorkerLost: reportChildEnded,
+          workerLossEndsLifetime: true,
           onDeadlineKill: () => logHostedCliDeadlineKill('gh', resolved.binary, args, timeoutMs)
         },
         resolved.termination

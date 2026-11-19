@@ -33,7 +33,6 @@ import { trackGitWorktreeMutation } from './git-worktree-mutation-state'
 import { trackGitRefMutation } from './git-ref-mutation-state'
 import { routeLocalGitOptions, runAdmittedWslGit } from './host-routing/local-git-runtime-route'
 import { gitRunsIn } from './host-routing/git-runs-in'
-import { isAbandonedWorkerChildError } from '../../worker-thread-child-process/worker-thread-child-process'
 
 async function gitExecFileAsyncUnlocked(
   args: string[],
@@ -83,6 +82,9 @@ async function gitExecFileAsyncUnlocked(
       // Which Git ran: a project's runtime can route it into a distro whatever its cwd.
       span?.setAttribute('git.runs_in', gitRunsIn(resolved))
       const timeoutMs = gitCommandTimeoutMs(args, options.timeout, options.timeoutMsForTest)
+      const readOnly = classifyGitCommand(args) === 'read'
+      // Set once a child's worker is lost: its permit is back in the pool, so nothing may replay on it.
+      let workerLost = false
       const capture = (
         command: ResolvedCommand
       ): Promise<{ stdout: string | Buffer; stderr: string | Buffer }> => {
@@ -90,10 +92,7 @@ async function gitExecFileAsyncUnlocked(
         terminationState.current = new Promise<void>((resolve) => {
           reportTerminated = resolve
         })
-        options.observeChildTermination?.(
-          terminationState.current,
-          classifyGitCommand(args) !== 'read'
-        )
+        options.observeChildTermination?.(terminationState.current, !readOnly)
         const captureOptions = {
           cwd: command.cwd,
           ownedPosixGroup: process.platform !== 'win32' && !command.wsl,
@@ -109,12 +108,15 @@ async function gitExecFileAsyncUnlocked(
           // Admission already passed; the capture rechecks at the spawn call itself.
           ...(options.canStart ? { canStart: options.canStart } : {}),
           onChildTerminated: reportTerminated,
-          // A lost worker's child returns its permit now; mutation fences and termination observers keep
-          // waiting on its end, so only an unobserved read ends with the worker.
-          onWorkerLost:
-            classifyGitCommand(args) === 'read' && !options.observeChildTermination
-              ? reportTerminated
-              : grant.release,
+          // A lost worker's child returns its permit now; a write's mutation fences keep waiting on its end,
+          // while a read (which no fence or writer observer tracks) ends with the worker.
+          onWorkerLost: () => {
+            workerLost = true
+            if (!readOnly) {
+              grant.release()
+            }
+          },
+          workerLossEndsLifetime: readOnly,
           ...(options.onStderr ? { onStderr: options.onStderr } : {}),
           ...(timeoutMs === undefined
             ? {}
@@ -178,8 +180,7 @@ async function gitExecFileAsyncUnlocked(
         }
         return await runCapturedCommand()
       } catch (error) {
-        // Its permit already returned and its end is unproven: never replay over a lost worker's child.
-        if (isAbandonedWorkerChildError(error)) {
+        if (workerLost) {
           throw error
         }
         return await retryGitFetchRefRace(
@@ -188,7 +189,8 @@ async function gitExecFileAsyncUnlocked(
           runCapturedCommand,
           () => terminationState.current,
           options.signal,
-          options.canStart
+          // A replay after a lost worker would run on a permit already returned.
+          () => !workerLost && options.canStart?.() !== false
         )
       } finally {
         releaseGitAdmissionAfter(terminationState.current, grant)
@@ -287,7 +289,7 @@ async function gitExecFileAsyncBufferInSpan(
         admissionTier: options.admissionTier,
         onChildTerminated: reportTerminated,
         // A buffered read holds only admission, so a lost worker ends it.
-        onWorkerLost: reportTerminated,
+        workerLossEndsLifetime: true,
         ...(timeoutMs === undefined
           ? {}
           : { createTimeoutError: () => new GitCommandTimeoutError(timeoutMs) })

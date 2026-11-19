@@ -27,6 +27,8 @@ export type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
   onChildTerminated?: () => void
   /** The child's worker died before its end was proven: capacity such as Git admission may return, fences may not. */
   onWorkerLost?: () => void
+  /** The caller holds no mutation fence, so a lost worker ends the child's lifetime without proof. */
+  workerLossEndsLifetime?: boolean
   admissionTier?: GitAdmissionTier
   createTimeoutError?: () => Error
   /** Called once when the deadline — not an abort — is what ended the process. */
@@ -275,7 +277,7 @@ export function execFileCapture(
             child,
             options.onWorkerLost,
             reportChildTerminated,
-            options.onWorkerLost === options.onChildTerminated
+            options.workerLossEndsLifetime === true
           )
         }
         if (!terminating) {
