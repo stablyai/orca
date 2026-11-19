@@ -1,4 +1,4 @@
-import { open, readFile, rm, stat, statfs, writeFile } from 'node:fs/promises'
+import { open, rm, stat, statfs, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { potentiallyLiveRemoteAttachmentSql } from '../federation/remote-attachment-liveness'
@@ -11,8 +11,6 @@ const MIN_FREE_FRACTION = 0.25
 const MAX_LIVE_BYTES = 128 * MIB
 const QUIT_BUDGET_MS = 2_000
 const EXIT_GRACE_MS = 500
-// Quit pays the wait once: a stopped attempt waits until the live data shrinks this much.
-const MAX_TIMEOUTS = 1
 const MARKER_WRITE_MS = 250
 // How long the child waits for other connections to close; the runtime's checkpoint worker exits async.
 const LOCK_WAIT_MS = 300
@@ -20,7 +18,6 @@ const LOCK_WAIT_MS = 300
 const RECOVERY_MS = 500
 // Our close checkpoints only if the child died after 'ready'; this (journal_size_limit) bounds that close.
 const MAX_WAL_BYTES = 8 * MIB
-const RETRY_LIVE_FRACTION = 0.75
 
 /** Orchestration state another agent or process may still act on; compaction waits for a quit with none. */
 export const ACTIVE_ORCHESTRATION_WORK_SQL = `SELECT
@@ -42,7 +39,7 @@ export type OrchestrationDbCompaction =
   | { kind: 'too-large'; liveBytes: number }
   | { kind: 'low-disk'; neededBytes: number; availableBytes: number }
   | { kind: 'busy' }
-  | { kind: 'deferred'; timeouts: number }
+  | { kind: 'deferred' }
   | { kind: 'timed-out'; ms: number }
   | { kind: 'compacted'; beforeBytes: number; afterBytes: number; ms: number }
   | { kind: 'failed'; error: string }
@@ -116,37 +113,24 @@ async function readHeaderCounts(filename: string): Promise<PageCounts | null> {
   }
 }
 
-type CompactionDeferral = { liveBytes: number; timeouts: number }
-
-function deferralFile(filename: string): string {
+/** Present once an attempt started; quit pays the wait for a file at most once. */
+function attemptMarker(filename: string): string {
   return `${filename}-compaction-deferred`
 }
 
-async function readDeferral(filename: string): Promise<CompactionDeferral | null> {
+async function markerExists(filename: string): Promise<boolean> {
   try {
-    const parsed: unknown = JSON.parse(await readFile(deferralFile(filename), 'utf8'))
-    return typeof parsed === 'object' &&
-      parsed !== null &&
-      'liveBytes' in parsed &&
-      typeof parsed.liveBytes === 'number' &&
-      'timeouts' in parsed &&
-      typeof parsed.timeouts === 'number'
-      ? { liveBytes: parsed.liveBytes, timeouts: parsed.timeouts }
-      : null
+    await stat(attemptMarker(filename))
+    return true
   } catch {
-    return null
+    return false
   }
 }
 
-/** False when the note couldn't be saved. */
-async function writeDeferral(
-  filename: string,
-  deferral: CompactionDeferral | null
-): Promise<boolean> {
+/** True only when this quit created the marker, so two quits never both attempt. */
+async function claimAttempt(filename: string): Promise<boolean> {
   try {
-    await (deferral
-      ? writeFile(deferralFile(filename), JSON.stringify(deferral))
-      : rm(deferralFile(filename), { force: true }))
+    await writeFile(attemptMarker(filename), '', { flag: 'wx' })
     return true
   } catch {
     return false
@@ -189,13 +173,8 @@ export async function compactOrchestrationDb(
   if (liveBytes > MAX_LIVE_BYTES) {
     return { kind: 'too-large', liveBytes }
   }
-  const deferral = await readDeferral(filename)
-  if (
-    deferral &&
-    deferral.timeouts >= MAX_TIMEOUTS &&
-    liveBytes > deferral.liveBytes * RETRY_LIVE_FRACTION
-  ) {
-    return { kind: 'deferred', timeouts: deferral.timeouts }
+  if (await markerExists(filename)) {
+    return { kind: 'deferred' }
   }
   const neededBytes = 2 * counts.pages * counts.pageSize
   const availableBytes = await availableBytesIn(dirname(filename))
@@ -209,19 +188,15 @@ export async function compactOrchestrationDb(
   if (active === 'timeout') {
     // A history too long to check in time would cost the full wait on every quit; count it as the one try.
     const timedOut = { kind: 'timed-out' as const, ms: Math.round(performance.now() - started) }
-    await settlesWithin(
-      writeDeferral(filename, { liveBytes, timeouts: (deferral?.timeouts ?? 0) + 1 }),
-      MARKER_WRITE_MS
-    )
+    await settlesWithin(claimAttempt(filename), MARKER_WRITE_MS)
     return timedOut
   }
   if (active) {
     return { kind: 'active' }
   }
-  // Recorded before the wait, so a quit cut off mid-attempt still counts as the one wait it paid. A disk
+  // Claimed before the wait, so a quit cut off mid-attempt still counts as the one wait it paid. A disk
   // that can't write it promptly gets no attempt; if the write lands later it just defers the file.
-  const write = writeDeferral(filename, { liveBytes, timeouts: (deferral?.timeouts ?? 0) + 1 })
-  if ((await settlesWithin(write, MARKER_WRITE_MS)) !== true) {
+  if ((await settlesWithin(claimAttempt(filename), MARKER_WRITE_MS)) !== true) {
     return { kind: 'busy' }
   }
   const remainingMs = budgetMs - (performance.now() - started)
@@ -246,10 +221,9 @@ export async function compactOrchestrationDb(
           result: { kind: 'timed-out' as const, ms: Math.round(performance.now() - started) },
           heldLock: false
         }
-  // Only success clears the note: rewriting it after any other outcome could erase another quit's note,
-  // and a file that stays busy or active is not worth a wait on every quit.
+  // Only success clears the marker: every spawned attempt may have cost a wait, busy and active included.
   if (result.kind === 'compacted') {
-    await writeDeferral(filename, null)
+    await rm(attemptMarker(filename), { force: true }).catch(() => {})
   } else if (heldLock && (result.kind === 'timed-out' || result.kind === 'failed')) {
     // A VACUUM stopped under its exclusive lock leaves its copy in the WAL; clear it now, after the
     // windows closed, rather than on the next launch's first open.

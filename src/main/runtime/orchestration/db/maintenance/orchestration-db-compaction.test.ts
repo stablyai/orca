@@ -128,7 +128,7 @@ describe('compactOrchestrationDb', () => {
     holder.kill('SIGKILL')
     await once(holder, 'exit')
     // That attempt counted as the file's one try.
-    expect(await compactOrchestrationDb(file, AMPLE)).toEqual({ kind: 'deferred', timeouts: 1 })
+    expect(await compactOrchestrationDb(file, AMPLE)).toEqual({ kind: 'deferred' })
     expect(inspect(file)).toEqual({ autoVacuum: 0, integrity: 'ok' })
   })
 
@@ -145,15 +145,15 @@ describe('compactOrchestrationDb', () => {
     expect((await compactOrchestrationDb(file, { isActive: () => 'timeout' })).kind).toBe(
       'timed-out'
     )
-    expect(await compactOrchestrationDb(file, AMPLE)).toEqual({ kind: 'deferred', timeouts: 1 })
+    expect(await compactOrchestrationDb(file, AMPLE)).toEqual({ kind: 'deferred' })
     expect(inspect(file).autoVacuum).toBe(0)
   })
 
-  it('stops trying after one stopped attempt until the live data shrinks', async () => {
+  it('stops trying after one stopped attempt', async () => {
     const file = legacyDatabase()
     await compactOrchestrationDb(file, { budgetMs: 0 })
 
-    expect(await compactOrchestrationDb(file, AMPLE)).toEqual({ kind: 'deferred', timeouts: 1 })
+    expect(await compactOrchestrationDb(file, AMPLE)).toEqual({ kind: 'deferred' })
     expect(inspect(file).autoVacuum).toBe(0)
   })
 
