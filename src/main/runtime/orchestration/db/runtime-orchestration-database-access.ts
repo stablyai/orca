@@ -68,20 +68,39 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
       : null
   }
 
-  /** At the end of a clean quit: closes the database for a one-time compaction when no orchestration work is
-   *  in flight, and keeps it closed. The file, or null when work remains or there is no file. */
-  closeOrchestrationDbForQuit(): string | null {
+  orchestrationDbFileForQuit(): string | null {
     const filename = this.orchestrationDbPath()
+    return existsSync(filename) ? filename : null
+  }
+
+  /** In-flight orchestration work, including Runs whose coordinator is still alive in a terminal. */
+  hasActiveOrchestrationWork(): boolean {
     const db = this._orchestrationDb
-    if (db && db.db.prepare(ACTIVE_ORCHESTRATION_WORK_SQL).get()?.active) {
-      return null
+    if (!db) {
+      return false
     }
+    if (db.db.prepare(ACTIVE_ORCHESTRATION_WORK_SQL).get()?.active) {
+      return true
+    }
+    return db.db
+      .prepare('SELECT coordinator_handle, coordinator_pane_key FROM runs')
+      .all()
+      .some(
+        (run) =>
+          (typeof run.coordinator_handle === 'string' &&
+            this.isLiveOrchestrationHandle(run.coordinator_handle)) ||
+          (typeof run.coordinator_pane_key === 'string' &&
+            this.hasLiveTerminalForPaneKey(run.coordinator_pane_key))
+      )
+  }
+
+  /** At the end of a clean quit, for a one-time compaction: closes the database and keeps it closed. */
+  closeOrchestrationDbForQuit(): void {
     this.orchestrationDbClosedForQuit = true
     this.orchestrationDbMaintenance?.stop()
     this.orchestrationDbMaintenance = undefined
-    db?.close()
+    this._orchestrationDb?.close()
     this._orchestrationDb = null
-    return existsSync(filename) ? filename : null
   }
 
   setOrchestrationDb(db: OrchestrationDb): void {

@@ -1,7 +1,9 @@
-import { open, statfs } from 'node:fs/promises'
+import { open, readFile, rm, statfs, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { tmpdir } from 'node:os'
 import { spawnProcess } from '@orca/process-host'
+import { potentiallyLiveRemoteAttachmentSql } from '../federation/remote-attachment-liveness'
+import { compactionChildSource } from './orchestration-db-compaction-child-source'
 
 const MIB = 1024 * 1024
 const MIN_FREE_BYTES = 32 * MIB
@@ -10,14 +12,21 @@ const MIN_FREE_FRACTION = 0.25
 const MAX_LIVE_BYTES = 256 * MIB
 const QUIT_BUDGET_MS = 2_000
 const EXIT_GRACE_MS = 500
+// Two stopped attempts mean this disk can't finish in time; wait until the live data shrinks this much.
+const MAX_TIMEOUTS = 2
+const RETRY_LIVE_FRACTION = 0.75
 
-/** Work another agent or process may still finish; compaction waits for a quit with none. */
+/** Orchestration state another agent or process may still act on; compaction waits for a quit with none. */
 export const ACTIVE_ORCHESTRATION_WORK_SQL = `SELECT
   EXISTS(SELECT 1 FROM dispatch_contexts WHERE status IN ('pending', 'dispatched'))
   OR EXISTS(SELECT 1 FROM worker_dispatches
-    WHERE state NOT IN ('failed', 'succeeded', 'stopped', 'abandoned'))
+    WHERE state IN ('starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown'))
   OR EXISTS(SELECT 1 FROM worker_terminal_resources
-    WHERE release_state IN ('requested', 'releasing', 'unknown')) AS active`
+    WHERE ownership_state = 'owned' AND release_state <> 'released')
+  OR EXISTS(SELECT 1 FROM remote_dispatch_attachments WHERE ${potentiallyLiveRemoteAttachmentSql()})
+  OR EXISTS(SELECT 1 FROM remote_questions WHERE status = 'pending')
+  OR EXISTS(SELECT 1 FROM decision_gates WHERE status = 'pending')
+  OR EXISTS(SELECT 1 FROM coordinator_runs WHERE status = 'running') AS active`
 
 type PageCounts = { pageSize: number; pages: number; freePages: number }
 
@@ -27,6 +36,7 @@ export type OrchestrationDbCompaction =
   | { kind: 'too-large'; liveBytes: number }
   | { kind: 'low-disk'; neededBytes: number; availableBytes: number }
   | { kind: 'busy' }
+  | { kind: 'deferred'; timeouts: number }
   | { kind: 'timed-out'; ms: number }
   | { kind: 'compacted'; beforeBytes: number; afterBytes: number; ms: number }
   | { kind: 'failed'; error: string }
@@ -35,67 +45,6 @@ export type OrchestrationDbCompaction =
 function isCompactionWarranted({ pageSize, pages, freePages }: PageCounts): boolean {
   return freePages * pageSize >= MIN_FREE_BYTES && freePages >= pages * MIN_FREE_FRACTION
 }
-
-// Run as a node child, not a worker thread: only a process can be stopped in the middle of a VACUUM.
-// Decides on SQLite's own counts (WAL included), under an exclusive lock, and prints one JSON line.
-const compactionChildSource = `
-const { DatabaseSync } = require('node:sqlite');
-const { statfsSync } = require('node:fs');
-const { dirname } = require('node:path');
-const w = JSON.parse(process.env.ORCA_ORCHESTRATION_COMPACTION);
-const report = (result) => process.stdout.write(JSON.stringify(result) + '\\n');
-const available = (dir) => {
-  try {
-    const disk = statfsSync(dir);
-    return Number(disk.bavail) * Number(disk.bsize);
-  } catch {
-    return 0;
-  }
-};
-const started = performance.now();
-let db;
-try {
-  db = new DatabaseSync(w.filename);
-  const pragma = (name) => Object.values(db.prepare('PRAGMA ' + name).get())[0];
-  // Fails at once if any other connection, in any process, has the file open.
-  db.exec('PRAGMA busy_timeout = 0; PRAGMA locking_mode = EXCLUSIVE; BEGIN EXCLUSIVE; COMMIT');
-  const pageSize = pragma('page_size');
-  const pages = pragma('page_count');
-  const freePages = pragma('freelist_count');
-  const fileBytes = pages * pageSize;
-  const liveBytes = (pages - freePages) * pageSize;
-  const warranted =
-    freePages * pageSize >= w.minFreeBytes && freePages >= pages * w.minFreeFraction;
-  if (pragma('auto_vacuum') !== 0 || !warranted) {
-    report({ kind: 'not-needed' });
-  } else if (db.prepare(w.activeWorkSql).get().active) {
-    // Rechecked under the lock: another process may have started work since the runtime looked.
-    report({ kind: 'active' });
-  } else if (liveBytes > w.maxLiveBytes) {
-    report({ kind: 'too-large', liveBytes });
-  } else {
-    // VACUUM builds the copy in the temp directory, then writes it through the WAL beside the file.
-    const neededBytes = 2 * fileBytes;
-    const availableBytes = available(dirname(w.filename));
-    if (availableBytes < neededBytes || available(w.tempDir) < liveBytes) {
-      report({ kind: 'low-disk', neededBytes, availableBytes });
-    } else {
-      db.exec('PRAGMA auto_vacuum = INCREMENTAL; VACUUM; PRAGMA wal_checkpoint(TRUNCATE)');
-      report({
-        kind: 'compacted',
-        beforeBytes: fileBytes,
-        afterBytes: pragma('page_count') * pageSize,
-        ms: Math.round(performance.now() - started)
-      });
-    }
-  }
-} catch (error) {
-  const code = (error && error.errcode) & 0xff;
-  report(code === 5 || code === 6 ? { kind: 'busy' } : { kind: 'failed', error: String(error) });
-} finally {
-  db?.close();
-}
-`
 
 /** Where SQLite builds VACUUM's copy: it honors SQLITE_TMPDIR first. */
 function sqliteTempDir(): string {
@@ -152,16 +101,70 @@ function readChildResult(output: string): OrchestrationDbCompaction | null {
   }
 }
 
+type CompactionDeferral = { liveBytes: number; timeouts: number }
+
+function deferralFile(filename: string): string {
+  return `${filename}-compaction-deferred`
+}
+
+async function readDeferral(filename: string): Promise<CompactionDeferral | null> {
+  try {
+    const parsed: unknown = JSON.parse(await readFile(deferralFile(filename), 'utf8'))
+    return typeof parsed === 'object' &&
+      parsed !== null &&
+      'liveBytes' in parsed &&
+      typeof parsed.liveBytes === 'number' &&
+      'timeouts' in parsed &&
+      typeof parsed.timeouts === 'number'
+      ? { liveBytes: parsed.liveBytes, timeouts: parsed.timeouts }
+      : null
+  } catch {
+    return null
+  }
+}
+
+/** Remembers stopped attempts, so a disk too slow for the budget doesn't pay it on every quit. */
+async function recordOutcome(
+  filename: string,
+  liveBytes: number,
+  result: OrchestrationDbCompaction
+): Promise<void> {
+  try {
+    if (result.kind === 'timed-out') {
+      const previous = await readDeferral(filename)
+      await writeFile(
+        deferralFile(filename),
+        JSON.stringify({ liveBytes, timeouts: (previous?.timeouts ?? 0) + 1 })
+      )
+    } else if (result.kind === 'compacted') {
+      await rm(deferralFile(filename), { force: true })
+    }
+  } catch {
+    // Only a retry hint; losing it costs one more bounded attempt.
+  }
+}
+
+export type OrchestrationDbQuitOwner = {
+  /** The database file, or null when there is none. */
+  orchestrationDbFileForQuit(): string | null
+  /** Orchestration work in flight, including live coordinators only this process can see. */
+  hasActiveOrchestrationWork(): boolean
+  /** Closes this process's connection and keeps it closed. */
+  closeOrchestrationDbForQuit(): void
+}
+
 /**
  * One VACUUM of an orchestration database made before incremental auto-vacuum, so it can return pages from
- * then on. The caller must hold no connection to the file. Stopped at `budgetMs`, which rolls it back; a busy,
- * active or stopped file is left for a later quit, and the switched file never qualifies again.
+ * then on. `release` runs once the child has joined the file, to close the caller's connection without making
+ * that close the last one. Stopped at `budgetMs`, which rolls it back; a busy, active or stopped file is left
+ * for a later quit, and the switched file never qualifies again.
  */
 export async function compactOrchestrationDb(
   filename: string,
-  budgetMs = QUIT_BUDGET_MS
+  options: { budgetMs?: number; isActive?: () => boolean; release?: () => void } = {}
 ): Promise<OrchestrationDbCompaction> {
-  // A cheap first look, so ordinary quits start no process; the child decides on SQLite's own view.
+  const { budgetMs = QUIT_BUDGET_MS, isActive = () => false, release = () => {} } = options
+  // A cheap first look, so ordinary quits do nothing else; the child decides on SQLite's own view.
   const counts = await readHeaderCounts(filename)
   if (!counts || !isCompactionWarranted(counts)) {
     return { kind: 'not-needed' }
@@ -170,11 +173,32 @@ export async function compactOrchestrationDb(
   if (liveBytes > MAX_LIVE_BYTES) {
     return { kind: 'too-large', liveBytes }
   }
+  const deferral = await readDeferral(filename)
+  if (
+    deferral &&
+    deferral.timeouts >= MAX_TIMEOUTS &&
+    liveBytes > deferral.liveBytes * RETRY_LIVE_FRACTION
+  ) {
+    return { kind: 'deferred', timeouts: deferral.timeouts }
+  }
   const neededBytes = 2 * counts.pages * counts.pageSize
   const availableBytes = await availableBytesIn(dirname(filename))
   if (availableBytes < neededBytes || (await availableBytesIn(sqliteTempDir())) < liveBytes) {
     return { kind: 'low-disk', neededBytes, availableBytes }
   }
+  if (isActive()) {
+    return { kind: 'active' }
+  }
+  const result = await runCompactionChild(filename, budgetMs, release)
+  await recordOutcome(filename, liveBytes, result)
+  return result
+}
+
+function runCompactionChild(
+  filename: string,
+  budgetMs: number,
+  release: () => void
+): Promise<OrchestrationDbCompaction> {
   const started = performance.now()
   return new Promise((resolve) => {
     let child: ReturnType<typeof spawnProcess>
@@ -201,9 +225,20 @@ export async function compactOrchestrationDb(
       return
     }
     let output = ''
+    let released = false
     let timedOut = false
     child.stdout?.on('data', (chunk: Buffer) => {
       output += chunk.toString()
+      if (!released && output.startsWith('ready\n')) {
+        released = true
+        try {
+          release()
+          child.stdin?.end('go\n')
+        } catch (error) {
+          child.kill('SIGKILL')
+          finish({ kind: 'failed', error: String(error) })
+        }
+      }
     })
     let grace: NodeJS.Timeout | undefined
     const finish = (result: OrchestrationDbCompaction): void => {
@@ -231,21 +266,19 @@ export async function compactOrchestrationDb(
   })
 }
 
-export type OrchestrationDbQuitOwner = {
-  /** Closes the runtime's connection when no orchestration work is in flight; the file, or null to skip. */
-  closeOrchestrationDbForQuit(): string | null
-}
-
-/** Last step of a clean quit, after every other teardown settled: nothing can open the file again. */
+/** Last step of a clean quit, after every other teardown settled: nothing else uses the file. */
 export async function compactOrchestrationDbAtQuit(
   owner: OrchestrationDbQuitOwner | null | undefined
 ): Promise<void> {
   try {
-    const filename = owner?.closeOrchestrationDbForQuit()
-    if (!filename) {
+    const filename = owner?.orchestrationDbFileForQuit()
+    if (!owner || !filename) {
       return
     }
-    const result = await compactOrchestrationDb(filename)
+    const result = await compactOrchestrationDb(filename, {
+      isActive: () => owner.hasActiveOrchestrationWork(),
+      release: () => owner.closeOrchestrationDbForQuit()
+    })
     if (result.kind === 'failed') {
       console.warn('[orchestration] database compaction failed', result.error)
     } else if (result.kind !== 'not-needed') {

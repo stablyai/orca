@@ -296,7 +296,11 @@ function installWillQuitHandler(): void {
         if (pendingTeardowns.length > 0) {
           console.warn('[shutdown] Quit teardown deadline reached', { pendingTeardowns })
         }
-        teardownSettledCleanly = pendingTeardowns.length === 0
+        return pendingTeardowns.length === 0 ? teardownSettlement : null
+      })
+      .then((settled) => {
+        // Settled is not clean: a rejected teardown may have left a writer behind.
+        teardownSettledCleanly = settled?.every((result) => result.status === 'fulfilled') === true
       })
       .then(() => shutdownTelemetry())
       .then(() => shutdownObservability())

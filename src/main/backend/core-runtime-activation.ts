@@ -32,6 +32,7 @@ import { restoreOrcadTerminalAuthority } from '../orcad/host-runtime/orcad-resto
 import { installOrcadFeatureReadiness } from '../runtime/rpc/startup/orcad-readiness'
 import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { installOrcadConnectorHost, installOrcadRelayAndAccount } from '../orcad/orcad-orca-account'
+import type { OrchestrationDbQuitOwner } from '../runtime/orchestration/db/maintenance/orchestration-db-compaction'
 
 export async function activateBackendRuntime(
   host: BackendCoreHost,
@@ -43,6 +44,15 @@ export async function activateBackendRuntime(
   const { time: timed, report: reportStartupTiming } = createOrcadStartupTiming()
   // Overlap login-shell probing with imports and store startup.
   const loginEnvironment = adoptWslHostLoginEnvironmentLogged()
+  let compactionOwner: OrchestrationDbQuitOwner | undefined
+  // Registered first, so it runs last, after every other cleanup; skipped when any of them failed.
+  registerCleanup(async ({ failed }) => {
+    if (!failed && compactionOwner) {
+      const { compactOrchestrationDbAtQuit } =
+        await import('../runtime/orchestration/db/maintenance/orchestration-db-compaction')
+      await compactOrchestrationDbAtQuit(compactionOwner)
+    }
+  })
   const { ready: daemonStartup } = await prepareBackendDaemon(
     loginEnvironment,
     timed,
@@ -164,13 +174,6 @@ export async function activateBackendRuntime(
   const { createOrcadPairedEnvironmentOptions } =
     await import('../orcad/host-runtime/orcad-paired-environment-options')
   const pairedEnvironments = createOrcadPairedEnvironmentOptions()
-  const { compactOrchestrationDbAtQuit } =
-    await import('../runtime/orchestration/db/maintenance/orchestration-db-compaction')
-  let compactionOwner: InstanceType<typeof OrcaRuntimeService> | undefined
-  // Registered before the runtime's own cleanups, so it runs after them; skipped when any of them failed.
-  registerCleanup(({ failed }) =>
-    failed ? undefined : compactOrchestrationDbAtQuit(compactionOwner)
-  )
   const runtime = new OrcaRuntimeService(profileStore, stats, {
     legacyStructuredSessionTabIds: chatJournal.open.legacySessionTabIds,
     // Persistent signatures let restarted runtimes adopt PTYs owned before restart.

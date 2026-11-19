@@ -118,8 +118,28 @@ describe('compactOrchestrationDb', () => {
   it('stops at its budget and leaves the file as it was', async () => {
     const file = legacyDatabase()
 
-    expect((await compactOrchestrationDb(file, 0)).kind).toBe('timed-out')
+    expect((await compactOrchestrationDb(file, { budgetMs: 0 })).kind).toBe('timed-out')
     expect(inspect(file)).toEqual({ autoVacuum: 0, integrity: 'ok' })
+  })
+
+  it('stops trying after two stopped attempts until the live data shrinks', async () => {
+    const file = legacyDatabase()
+    await compactOrchestrationDb(file, { budgetMs: 0 })
+    await compactOrchestrationDb(file, { budgetMs: 0 })
+
+    expect(await compactOrchestrationDb(file)).toEqual({ kind: 'deferred', timeouts: 2 })
+    expect(inspect(file).autoVacuum).toBe(0)
+  })
+
+  it('compacts once the caller hands over its own open connection', async () => {
+    const file = legacyDatabase()
+    const own = new DatabaseSync(file)
+    own.prepare('SELECT count(*) FROM runs').get()
+
+    const result = await compactOrchestrationDb(file, { release: () => own.close() })
+
+    expect(result.kind).toBe('compacted')
+    expect(inspect(file)).toEqual({ autoVacuum: 2, integrity: 'ok' })
   })
 
   it('skips a file with under 32 MiB free', async () => {
