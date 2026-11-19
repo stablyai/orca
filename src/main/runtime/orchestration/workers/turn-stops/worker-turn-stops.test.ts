@@ -14,7 +14,7 @@ import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
 import { createRootDispatch } from '../../db/root-dispatch-test-fixture'
 import { TerminalWorkerTurnStops } from './terminal-worker-turn-stops'
-import { reportWorkerTurnStop } from './worker-turn-stop-report'
+import { reportWorkerTurnStop, stopReportId } from './worker-turn-stop-report'
 
 const PANE = makePaneKey('tab-worker', '11111111-1111-4111-8111-111111111111')
 const HANDLE = 'term_worker'
@@ -369,6 +369,28 @@ describe('chat worker turn stops', () => {
     expect(ctx.mail().map((m) => m.subject)).toEqual(
       Array(3).fill('Worker stopped without reporting')
     )
+  })
+
+  it('does not report again a rest that an earlier build already reported, after an upgrade', () => {
+    const ctx = setup(formatOrcaSessionAddress(CHAT_SESSION))
+    writeAndTake(ctx)
+    // The earlier build keyed an idle finish by the coordinator mail the worker had taken.
+    ctx.db.insertMessage({
+      id: stopReportId(ctx.dispatch.id, 'finished:1'),
+      from: formatOrcaSessionAddress(CHAT_SESSION),
+      to: `run:${ctx.run.id}`,
+      subject: 'Worker stopped without reporting',
+      type: 'escalation',
+      runId: ctx.run.id
+    })
+    const chat = chatWithTimers(ctx)
+    chat.finish('turn-1')
+    chat.runTimers()
+    expect(ctx.mail()).toHaveLength(1)
+    writeAndTake(ctx)
+    chat.finish('turn-2')
+    chat.runTimers()
+    expect(ctx.mail()).toHaveLength(2)
   })
 
   it('retiring the owner suppresses pending reports and permits a fresh owner to report', async () => {

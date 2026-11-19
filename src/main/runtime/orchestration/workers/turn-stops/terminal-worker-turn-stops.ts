@@ -11,12 +11,11 @@ import type { OrchestrationDb } from '../../db/orchestration-db'
 import { readCoordinatorMailCount } from '../../db/messages/dispatch-read-mail'
 import { redactWorkerTerminalView } from '../../terminal-authority/views/worker-terminal-redaction'
 import {
-  reportWorkerTurnStop,
   workerTurnStopDispatchId,
   type WorkerTurnStopDispatch,
-  type WorkerTurnStopReason,
   type WorkerTurnStopReportDeps
 } from './worker-turn-stop-report'
+import { observeWorker, type WorkerRest } from './worker-presence-report'
 import { firstWithin } from '../approvals/first-within'
 import { showsClaudeDialog } from '../../../terminal/wait/claude-open-dialog-hold'
 import type { WorkerApprovalPayload } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
@@ -63,6 +62,17 @@ export class TerminalWorkerTurnStops {
 
   observe(change: AgentPaneChange): void {
     this.news.observe(change)
+    // A turn starting is the worker's own news: once per edge, not per hook post.
+    const working =
+      change.kind === 'moved'
+        ? change.to === 'working'
+        : change.kind === 'seeded' && change.phase === 'working'
+    if (working && !this.deps.readHookRow(change.paneKey)?.structuredHost) {
+      const resolved = this.resolve(change.paneKey)
+      if (resolved) {
+        observeWorker(resolved.db, resolved.target, { presence: 'working' }, this.deps)
+      }
+    }
   }
 
   /** A pane restored at rest: its stop came while Orca was down, so no live edge announced it. */
@@ -87,7 +97,7 @@ export class TerminalWorkerTurnStops {
     if (!stopped) {
       return
     }
-    const reason: WorkerTurnStopReason =
+    const reason: WorkerRest['reason'] =
       hookRowAgentPhase(stop.row) === 'needs-you'
         ? 'needs-input'
         : agentVerdictDisplayMark(stop.row) === 'failed'
@@ -111,17 +121,22 @@ export class TerminalWorkerTurnStops {
     if (!resolved) {
       return
     }
-    const sent = reportWorkerTurnStop(
+    const sent = observeWorker(
       resolved.db,
       resolved.target,
       {
-        from: resolved.handle,
-        stopKey: `${stop.paneKey}:${stop.row.stateStartedAt}`,
-        turnStartedAt: stop.row.turnStartedAt,
-        reason,
-        mailTaken: stop.mailTaken,
-        lastOutput,
-        ...(approval ? { approval } : {})
+        presence: 'at-rest',
+        // A relaunched agent in the same pane is a new process, whatever its hook clock says.
+        fence: `${this.deps.getProcessIncarnation(resolved.handle) ?? resolved.handle}:${stop.row.stateStartedAt}`,
+        legacyStopKey: `${stop.paneKey}:${stop.row.stateStartedAt}`,
+        rest: {
+          from: resolved.handle,
+          turnStartedAt: stop.row.turnStartedAt,
+          reason,
+          mailTaken: stop.mailTaken,
+          lastOutput,
+          ...(approval ? { approval } : {})
+        }
       },
       this.deps
     )
