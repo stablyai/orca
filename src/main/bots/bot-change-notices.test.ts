@@ -163,24 +163,15 @@ describe('followAgentPhasesForBots', () => {
   it('notices each phase a worker moves through, from the host status store', () => {
     const { notices, report } = follow()
     report(WORKER_PANE, 'repo-1::/tmp/worker', 'working')
-    const afterStart = notices.changed.mock.calls.length
-    expect(afterStart).toBeGreaterThan(0)
+    const scope = { botIds: ['bot-scout'], kinds: ['status', 'workers'] }
+    expect(notices.changed).toHaveBeenCalledExactlyOnceWith(scope)
     // Repeating a phase is a tick, not a change.
     report(WORKER_PANE, 'repo-1::/tmp/worker', 'working')
-    expect(notices.changed).toHaveBeenCalledTimes(afterStart)
+    expect(notices.changed).toHaveBeenCalledTimes(1)
     report(WORKER_PANE, 'repo-1::/tmp/worker', 'blocked')
-    expect(notices.changed).toHaveBeenCalledTimes(afterStart + 1)
+    expect(notices.changed).toHaveBeenCalledTimes(2)
     report(WORKER_PANE, 'repo-1::/tmp/worker', 'done')
-    expect(notices.changed).toHaveBeenCalledTimes(afterStart + 2)
-  })
-
-  it("tells a worker's phase to its bot's worker readers, so a linked item re-reads its state", () => {
-    const { notices, report } = follow()
-    report(WORKER_PANE, 'repo-1::/tmp/worker', 'working')
-    expect(notices.changed).toHaveBeenCalledWith({
-      botIds: ['bot-scout'],
-      kinds: ['status', 'workers']
-    })
+    expect(notices.changed.mock.calls).toEqual([[scope], [scope], [scope]])
   })
 
   it('notices a bot home pane, and not a plain agent in a project worktree', () => {

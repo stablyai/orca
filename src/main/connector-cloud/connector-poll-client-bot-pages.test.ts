@@ -28,30 +28,18 @@ function startWith(bots: ConnectorBot[]) {
 }
 
 describe('a machine with more bots than one hello lists', () => {
-  it('registers every bot with a cloud that takes pages', async () => {
+  it('keeps the first hello empty, then registers all bots through pages', async () => {
     h.fake.features = ['slack.teams', 'bots.pages']
     const bots = botList(45)
-    const { client } = startWith(bots)
-    await settle()
-    expect(h.fake.registeredBots).toEqual(ids(bots))
-    const pages = h.fake.requestsTo(CONNECTOR_PATHS.botPages)
-    expect(pages).toHaveLength(Math.ceil(45 / CONNECTOR_CLIENT_LIMITS.maxHelloBots))
-    expect(h.fake.hellos.at(-1)).toMatchObject({
-      botPages: { pages: pages.length }
-    })
-    expect(h.fake.hellos.at(-1)).not.toHaveProperty('bots')
-    client.stop()
-  })
-
-  it('never lists part of its bots before the cloud says it takes pages', async () => {
-    h.fake.features = ['bots.pages']
-    const bots = botList(25)
-    // Registered by an earlier session; a first hello listing 20 would unregister five of them.
-    h.fake.registeredBots = ids(bots)
+    // Registered by an earlier session; a partial hello would unregister the remaining bots.
+    h.fake.registeredBots = ids([...bots.slice(1), bot(99)])
     const { client } = startWith(bots)
     await settle()
     expect(h.fake.hellos[0]).not.toHaveProperty('bots')
     expect(h.fake.hellos.map(listed).filter((count) => count !== null)).toEqual([])
+    const pages = h.fake.requestsTo(CONNECTOR_PATHS.botPages)
+    expect(pages).toHaveLength(Math.ceil(bots.length / CONNECTOR_CLIENT_LIMITS.maxHelloBots))
+    expect(h.fake.hellos.at(-1)).toMatchObject({ botPages: { pages: pages.length } })
     expect(h.fake.registeredBots).toEqual(ids(bots))
     client.stop()
   })

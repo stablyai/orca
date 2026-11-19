@@ -8,7 +8,7 @@ import { connectorReplyTurnOutcome } from '../../shared/agent-session/journal/jo
 import type { ConnectorFailure } from '../../shared/connectors/connector-cloud-contract'
 import type { ConnectorWorkLink } from '../../shared/connector-work-link-contract'
 import type { ConnectorReplyJournal } from '../connector-cloud/connector-reply-outbox'
-import { capUtf8 } from '../connector-cloud/connector-snapshot'
+import { capAnswer } from '../connector-cloud/connector-snapshot'
 
 export type EndedTurnReplies = {
   sessionId: string
@@ -75,7 +75,7 @@ export function conversationReplyFill(
         outcome,
         answerDeliveryId,
         turnItemId: turn.turnItemId,
-        ...(prose ? { prose: capUtf8(prose, JOURNAL_CONNECTOR_REPLY_PROSE_BYTES) } : {}),
+        ...(prose ? { prose: capAnswer(prose, JOURNAL_CONNECTOR_REPLY_PROSE_BYTES) } : {}),
         ...(outcome === 'failed' && turn.failure ? { failure: turn.failure } : {}),
         ...(turn.links.length > 0 ? { links: turn.links } : {})
       })

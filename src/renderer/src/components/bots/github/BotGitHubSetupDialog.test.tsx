@@ -671,7 +671,11 @@ describe('BotGitHubSetupDialog', () => {
   })
 
   it('"Not you?" asks first when a bot answers on GitHub, and keeps the link on Cancel', async () => {
-    mocks.readBots.mockReturnValue([{ ...bot, name: 'Scout', github: {} }])
+    mocks.readBots.mockReturnValue([
+      { ...bot, name: 'Scout', github: {} },
+      { ...bot, id: 'paused', name: 'Sleepy', github: {}, paused: true },
+      { ...bot, id: 'unlinked', name: 'Elsewhere', github: null }
+    ])
     confirm.mockResolvedValue(false)
     api.botGitHub.state.mockResolvedValue({
       ok: true,

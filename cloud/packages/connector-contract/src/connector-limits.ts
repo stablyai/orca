@@ -24,6 +24,12 @@ export const CONNECTOR_LIMITS = {
   // The machine refuses a delivery with less than this left before its deadline.
   minDeadlineLeftMs: 10_000,
   maxLastAssistantMessageBytes: 8 * 1024,
+  // What a turn's answer may be from a machine told `answers.long`: what one message holds in the
+  // sources that post it. The cloud takes up to this from any machine.
+  maxLongAnswerBytes: 32 * 1024,
+  // What a running turn is doing: its line, and its plan's steps.
+  maxActivityTextChars: 120,
+  maxActivitySteps: 20,
   // The admitted deliveries one reply event settles; a longer group goes as several events.
   maxReplyDeliveryIds: 100,
   // A prompt's text for a card that links to Orca (its header, questions and option labels).
