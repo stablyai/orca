@@ -1,7 +1,7 @@
 import { observeVisibleAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 // The Automations card's rows: Look around, Tidy memory, automations and waits, each with its switch
 // (waits: Cancel) and how its newest run went.
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { botTarget } from '@/lib/bot-hosts'
 import { CalendarClock, Eye, Hourglass, LoaderCircle, Moon, RefreshCw, Zap } from 'lucide-react'
 import { toast } from 'sonner'
@@ -32,12 +32,22 @@ import { everyText, pausedText, ranText, upcomingAt } from './bot-upcoming-copy'
 import { waitRowDetail } from './bot-wait-copy'
 import { useLooking } from './BotUpNextSection'
 import { useOrcaCloudSignedOut } from './orca-cloud-signed-out'
+import { UsageLimitStopMark, usageLimitStopMeta } from './BotUsageLimitMark'
+import { useBotUsageLimitStops, type BotUsageLimitStop } from './use-bot-usage-limit-stops'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 
 const ICON = 'size-4 text-muted-foreground'
 
 /** Hidden exactly while Look now shows: the row hovered, or the button itself focused. */
 export const LOOK_NOW_SHOWN_HIDES =
   'group-hover/upcoming:invisible group-has-[[data-look-now]:focus-within]/upcoming:invisible'
+
+/** The stop of the bot's last look, read from its host's status feed like its chats'. */
+function useLastLookStop(bot: Bot, sessionId: string | undefined): BotUsageLimitStop | null {
+  const homes = useMemo(() => [folderWorkspaceKey(bot.folderWorkspaceId)], [bot.folderWorkspaceId])
+  const stops = useBotUsageLimitStops(bot, homes)
+  return sessionId ? (stops.find((stop) => stop.sessionId === sessionId) ?? null) : null
+}
 
 const NOT_LOOKED: UpNextState = { running: false, seenAt: 0 }
 
@@ -117,6 +127,8 @@ function LookAroundRow({
   const t = useTranslate()
   const setting = botLookAround(bot)
   const { looking, lookNowClicked } = useLooking(bot, state ?? NOT_LOOKED)
+  // Its last look stopped on the usage limit: the stop says so in place of Failed and its note.
+  const stop = useLastLookStop(bot, looking ? undefined : state?.lastSessionId)
   const every = everyText(setting.every)
   const detail = !setting.on
     ? pausedText()
@@ -168,15 +180,27 @@ function LookAroundRow({
         icon={<Eye className={ICON} />}
         title={name}
         aside={
-          <RunMark
-            mark={looking ? { kind: 'running' } : row.mark}
-            now={now}
-            // Look now shows over where the mark ends: the mark steps aside while it does.
-            className={setting.on ? LOOK_NOW_SHOWN_HIDES : undefined}
-          />
+          stop ? (
+            <span
+              className={cn(
+                'flex shrink-0 items-center gap-1 text-2xs font-medium whitespace-nowrap text-status-warning-text',
+                setting.on && LOOK_NOW_SHOWN_HIDES
+              )}
+            >
+              <UsageLimitStopMark stop={stop} />
+              {usageLimitStopMeta(t, stop)}
+            </span>
+          ) : (
+            <RunMark
+              mark={looking ? { kind: 'running' } : row.mark}
+              now={now}
+              // Look now shows over where the mark ends: the mark steps aside while it does.
+              className={setting.on ? LOOK_NOW_SHOWN_HIDES : undefined}
+            />
+          )
         }
         detail={detail}
-        note={setting.on && state?.error && !state.running ? state.error : undefined}
+        note={setting.on && state?.error && !state.running && !stop ? state.error : undefined}
         onOpen={() => openBotSettings(bot.id, 'look-around')}
       />
     </UpcomingRowFrame>

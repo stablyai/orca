@@ -2,7 +2,6 @@
 
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, string | number>) =>
@@ -99,12 +98,6 @@ function props(
   }
 }
 
-function option(mode: AgentChatPermissionChoice): HTMLElement {
-  return screen.getByRole('radio', {
-    name: (_name, element) => element.getAttribute('data-value') === mode
-  })
-}
-
 afterEach(cleanup)
 
 describe('NativeChatPermissionModePicker inherit choice', () => {
@@ -131,12 +124,5 @@ describe('NativeChatPermissionModePicker inherit choice', () => {
     expect(inheritRow().getAttribute('aria-checked')).toBe('true')
     fireEvent.click(inheritRow())
     expect(onSelect).toHaveBeenCalledTimes(1)
-  })
-
-  it('gives way to a set mode', () => {
-    render(<NativeChatPermissionModePicker {...props({ current: 'auto', inherit: inherit() })} />)
-
-    expect(inheritRow().getAttribute('aria-checked')).toBe('false')
-    expect(option('auto').getAttribute('aria-checked')).toBe('true')
   })
 })

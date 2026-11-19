@@ -28,7 +28,7 @@ export function useActivityThreadActionBindings({
   markAllReadThreads: AgentPaneThread[]
   acknowledgeAgents: (paneKeys: string[], reads?: undefined, intent?: 'explicit') => void
   unacknowledgeAgents: (paneKeys: string[]) => void
-  setSelectedPaneKey: (paneKey: string | null) => void
+  setSelectedPaneKey?: (paneKey: string | null) => void
 }): ActivityThreadActionBindings {
   // Keep row handlers stable across status pings; refs supply current thread sets without invalidating every memoized row.
   const visibleThreadsRef = useRef(visibleThreads)

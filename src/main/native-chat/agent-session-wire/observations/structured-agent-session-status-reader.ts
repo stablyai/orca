@@ -51,8 +51,8 @@ export function createStructuredAgentSessionStatusReader(
     const turnEnd = record
       ? {
           botSession: deps.isBotHome?.(record.location.workspaceId) === true,
-          quietEnd: (outcome: 'success' | 'failure') =>
-            deps.quietTurnEnd?.(sessionId, outcome) === true
+          quietEnd: (outcome: 'success' | 'failure', usageLimited?: boolean) =>
+            deps.quietTurnEnd?.(sessionId, outcome, usageLimited) === true
         }
       : undefined
     return projections.readSql(

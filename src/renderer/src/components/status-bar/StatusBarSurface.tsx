@@ -19,6 +19,7 @@ import { StatusBarUsageEmptyCta } from './usage/StatusBarUsageEmptyCta'
 import { StatusBarUsageChangeNotices } from './usage/StatusBarUsageChangeNotices'
 import { UpdateStatusSegment } from './updates/UpdateStatusSegment'
 import { SkillUpdateStatusSegment } from './updates/SkillUpdateStatusSegment'
+import { AgentCliUpdateStatusSegment } from './updates/AgentCliUpdateStatusSegment'
 import { NativeChatResumeStatusSegment } from './NativeChatResumeStatusSegment'
 import { CaffeinateStatusSegment } from './CaffeinateStatusSegment'
 import { PluginsStatusSegment } from './plugins/PluginsStatusSegment'
@@ -332,6 +333,7 @@ export function StatusBarSurface({
           ) : null}
           <RemoteServerUpdateStatusSegment iconOnly={segmentsIconOnly} />
           <SkillUpdateStatusSegment iconOnly={segmentsIconOnly} />
+          <AgentCliUpdateStatusSegment iconOnly={segmentsIconOnly} />
           <NativeChatResumeStatusSegment iconOnly={segmentsIconOnly} />
           <UpdateStatusSegment compact={compact} iconOnly={segmentsIconOnly} />
           {showGitBlame ? <GitBlameStatusSegment iconOnly={segmentsIconOnly} /> : null}

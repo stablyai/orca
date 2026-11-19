@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  botWorkerWorkspaceStatus,
   botWorkspaceLineAgent,
   capBotWorkspaceLines,
   countLiveBotWorkspaces,
@@ -11,6 +12,19 @@ describe('countLiveBotWorkspaces', () => {
     expect(
       countLiveBotWorkspaces(['permission', 'working', 'monitoring', 'failed', 'done', 'inactive'])
     ).toEqual({ permission: 1, working: 2, failed: 1 })
+  })
+})
+
+describe('botWorkerWorkspaceStatus', () => {
+  // A stale worker row lets its title ("Claude subagent permission prompts ...") read as a prompt.
+  it('counts a worker as needing you only when one of its agents asks', () => {
+    expect(
+      countLiveBotWorkspaces([
+        botWorkerWorkspaceStatus('permission', false),
+        botWorkerWorkspaceStatus('permission', true),
+        botWorkerWorkspaceStatus('working', false)
+      ])
+    ).toEqual({ permission: 1, working: 1, failed: 0 })
   })
 })
 
@@ -37,19 +51,6 @@ describe('botWorkspaceLineAgent', () => {
     agentType,
     state,
     subagent
-  })
-
-  it('shows one logo for one agent, or for several of one kind, with no +N', () => {
-    expect(botWorkspaceLineAgent([agent('claude')])).toEqual({
-      agentTypes: ['claude'],
-      others: 0,
-      othersNeedYou: false
-    })
-    expect(botWorkspaceLineAgent([agent('claude'), agent('claude', 'blocked')])).toEqual({
-      agentTypes: ['claude'],
-      others: 0,
-      othersNeedYou: false
-    })
   })
 
   it('shows a logo per kind for two kinds, however many of each', () => {

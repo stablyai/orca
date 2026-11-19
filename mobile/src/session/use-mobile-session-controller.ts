@@ -36,6 +36,7 @@ import { useMobileSessionPresentation } from './use-mobile-session-presentation'
 import { useMobileSessionStoredChatTab } from './use-mobile-session-stored-chat-tab'
 import { useMobileSessionPanelRouteActions } from './use-mobile-session-panel-route-actions'
 import { useMobileSessionBot } from './use-mobile-session-bot'
+import { useTerminalHostSettings } from '../terminal/preferences/terminal-host-settings'
 
 export function useMobileSessionController() {
   const foundation = useMobileSessionFoundation()
@@ -145,7 +146,8 @@ export function useMobileSessionController() {
   )
   const bot = Object.assign(panelRouteActions, useMobileSessionBot(panelRouteActions))
   // The one owner of opening an existing chat, so a fork's source link follows its selection rules.
-  return Object.assign(bot, preferences, { openNativeSession })
+  const terminalHostSettings = useTerminalHostSettings(bot.client, bot.connState)
+  return Object.assign(bot, preferences, { openNativeSession, terminalHostSettings })
 }
 
 export type MobileSessionController = ReturnType<typeof useMobileSessionController>

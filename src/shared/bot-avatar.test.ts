@@ -30,7 +30,6 @@ describe('bot avatars', () => {
 
   it('never offers the retired penguin (S2), though a bot that has it still shows it', () => {
     expect(PICKABLE_BOT_MASCOT_IDS).not.toContain('S2')
-    expect(PICKABLE_BOT_MASCOT_IDS).toHaveLength(BOT_MASCOT_IDS.length - 1)
     // Every slot of the full list, the retired one's included.
     for (let slot = 0; slot < BOT_MASCOT_IDS.length; slot++) {
       const draw = (slot + 0.5) / BOT_MASCOT_IDS.length

@@ -16,14 +16,15 @@ const group = (overrides: Partial<BotGroup> = {}): BotGroup => ({
 })
 
 describe('withSavedGroup', () => {
-  it("keeps the listed preview and place when the save's plain record arrives", () => {
+  it('keeps the listed preview and rejects an older save after a revision updates', () => {
     const listed = group({ latest: { authorName: null, text: 'hi', at: 1 }, sidebarOrder: 3 })
-    const [merged] = withSavedGroup([listed], group({ name: 'Crew two', revision: 3 }))
-    expect(merged).toMatchObject({ name: 'Crew two', sidebarOrder: 3, latest: { text: 'hi' } })
-  })
-
-  it('keeps a newer revision the change event listed first', () => {
-    const listed = group({ revision: 4, name: 'Newer' })
-    expect(withSavedGroup([listed], group({ revision: 3 }))[0]?.name).toBe('Newer')
+    const updated = withSavedGroup([listed], group({ name: 'Crew two', revision: 3 }))
+    expect(updated[0]).toMatchObject({
+      name: 'Crew two',
+      revision: 3,
+      sidebarOrder: 3,
+      latest: { text: 'hi' }
+    })
+    expect(withSavedGroup(updated, group())).toEqual(updated)
   })
 })
