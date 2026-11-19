@@ -203,6 +203,9 @@ export function UpdateCard(): React.JSX.Element | null {
       return
     }
     event.preventDefault()
+    if (status.state === 'downloaded' && status.autoRestartAt !== undefined) {
+      return
+    }
     if (
       status.state === 'downloading' ||
       status.state === 'downloaded' ||
@@ -212,6 +215,13 @@ export function UpdateCard(): React.JSX.Element | null {
     } else {
       handleDismissWithAnimation()
     }
+  }
+
+  const handleDecline = (): void => {
+    void window.api.updater.declineAutoRestart().catch((error) => {
+      console.error('[updates] failed to decline automatic restart:', error)
+    })
+    handleCollapseWithAnimation()
   }
 
   const cardContent = (
@@ -229,6 +239,7 @@ export function UpdateCard(): React.JSX.Element | null {
       onMediaLoad={() => setMediaLoaded(true)}
       onUpdate={handleUpdate}
       onInstallRetry={handleInstallRetry}
+      onDecline={handleDecline}
       onDismiss={handleDismissWithAnimation}
       onCollapse={handleCollapseWithAnimation}
     />

@@ -110,14 +110,28 @@ export function UpdateDownloadingContent({
 
 export function UpdateReadyToInstallContent({
   version,
+  description,
   onRestart,
+  onDecline,
   onClose
 }: {
   version: string
+  description?: string
   onRestart: () => void
+  onDecline?: () => void
   onClose: () => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const restartButton = (
+    <Button
+      variant="default"
+      size="sm"
+      onClick={onRestart}
+      className={onDecline ? undefined : 'w-full'}
+    >
+      {t('auto.components.UpdateCard.68b235d264', 'Restart to Update')}
+    </Button>
+  )
   return (
     <div className="flex flex-col gap-3 p-4">
       <div className="flex items-start justify-between gap-2">
@@ -135,15 +149,23 @@ export function UpdateReadyToInstallContent({
         </Button>
       </div>
       <p className="text-sm text-muted-foreground">
-        {t(
-          'auto.components.UpdateCard.6714206e5a',
-          "Orca v{{value0}} is downloaded. Restart when you're ready.",
-          { value0: version }
-        )}
+        {description ??
+          t(
+            'auto.components.UpdateCard.6714206e5a',
+            "Orca v{{value0}} is downloaded. Restart when you're ready.",
+            { value0: version }
+          )}
       </p>
-      <Button variant="default" size="sm" onClick={onRestart} className="w-full">
-        {t('auto.components.UpdateCard.68b235d264', 'Restart to Update')}
-      </Button>
+      {onDecline ? (
+        <div className="flex flex-wrap gap-2">
+          {restartButton}
+          <Button variant="outline" size="sm" onClick={onDecline}>
+            {t('updates.autoRestart.notNow', 'Not now')}
+          </Button>
+        </div>
+      ) : (
+        restartButton
+      )}
     </div>
   )
 }

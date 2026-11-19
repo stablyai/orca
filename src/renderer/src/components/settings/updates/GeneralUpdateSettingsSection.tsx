@@ -16,6 +16,7 @@ import {
 import { GeneralRemoteServerUpdates } from './GeneralRemoteServerUpdates'
 import { ReleaseChannelSection } from './ReleaseChannelSection'
 import { UpdateDelaySetting } from './UpdateDelaySetting'
+import { InstallUpdatesWhenAwaySetting } from './InstallUpdatesWhenAwaySetting'
 import { formatUpdateDelayDate } from './update-delay-copy'
 import { useNow } from '@/lib/window-activity/use-now'
 import { isDelayedUpdatePending } from '../../../../../shared/updater/update-delay'
@@ -289,6 +290,7 @@ export function GeneralUpdateSettingsSection({
         </p>
       </SearchableSetting>
       <UpdateDelaySetting />
+      <InstallUpdatesWhenAwaySetting />
       {channelSwitcherRevealed ? <ReleaseChannelSection /> : null}
       <GeneralRemoteServerUpdates />
       {children}

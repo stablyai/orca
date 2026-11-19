@@ -50,6 +50,10 @@ const slots = new Map<string, Slot>()
 const sessions = new Map<string, Session>()
 let quitting = false
 
+export function hasOpenPlainSshTerminals(): boolean {
+  return sessions.size > 0
+}
+
 function sshMissingMessage(platform: NodeJS.Platform): string {
   return platform === 'win32'
     ? 'Orca couldn’t find OpenSSH (ssh.exe) on this computer. Install “OpenSSH Client” in Windows Settings > System > Optional features, then try again.'

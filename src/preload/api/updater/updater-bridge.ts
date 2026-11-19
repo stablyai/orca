@@ -9,17 +9,18 @@ export const updaterApi = {
   getVersion: () => ipcRenderer.invoke('updater:getVersion'),
   check: (options) => ipcRenderer.invoke('updater:check', options),
   download: () => ipcRenderer.invoke('updater:download'),
+  declineAutoRestart: () => ipcRenderer.invoke('updater:declineAutoRestart'),
   dismissNudge: () => ipcRenderer.invoke('updater:dismissNudge'),
   dismissAvailableUpdate: () => ipcRenderer.invoke('updater:dismissAvailableUpdate'),
   getLinuxPackageInstallInstructions: () =>
     ipcRenderer.invoke('updater:getLinuxPackageInstallInstructions'),
   showLinuxPackage: () => ipcRenderer.invoke('updater:showLinuxPackage'),
   listBuilds: (channel, options) => ipcRenderer.invoke('updater:listBuilds', channel, options),
-  quitAndInstall: (): Promise<void> =>
+  quitAndInstall: (options): Promise<void> =>
     prepareAndInvokeUpdaterInstall(
       window,
       updaterQuitAbortRelay,
-      () => ipcRenderer.invoke('updater:quitAndInstall'),
+      () => ipcRenderer.invoke('updater:quitAndInstall', options),
       awaitBeforeUnloadCheckpoint
     ),
 
@@ -32,5 +33,10 @@ export const updaterApi = {
     const listener = (_event: Electron.IpcRendererEvent) => callback()
     ipcRenderer.on('updater:clearDismissal', listener)
     return () => ipcRenderer.removeListener('updater:clearDismissal', listener)
+  },
+  onAutoRestartDue: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent) => callback()
+    ipcRenderer.on('updater:autoRestartDue', listener)
+    return () => ipcRenderer.removeListener('updater:autoRestartDue', listener)
   }
 } satisfies PreloadApi['updater']

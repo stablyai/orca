@@ -46,15 +46,29 @@ export function createUiUpdateActions(set: UISliceSet, get: UISliceGet): Partial
           (status.version !== undefined && previousStatus.version === undefined) ||
           (status.recovery?.kind === 'linux-package-install' &&
             previousStatus.recovery?.kind !== 'linux-package-install'))
-      if (status.state !== previousStatus.state || errorBecameActionable) {
+      const quietUnattended =
+        'unattended' in status && status.unattended === true && !updateUserInitiatedCycle
+      const newUnattendedUpdate =
+        quietUnattended &&
+        (!('unattended' in previousStatus) ||
+          previousStatus.unattended !== true ||
+          status.version !== previousStatus.version)
+      if (status.state === 'downloaded' && status.autoRestartAt !== undefined) {
+        update.updateCardCollapsed = false
+      } else if (
+        status.state !== previousStatus.state ||
+        errorBecameActionable ||
+        newUnattendedUpdate
+      ) {
         // Quiet check failures start collapsed so the status bar can still disclose them.
         update.updateCardCollapsed =
-          status.state === 'error' &&
-          !status.userInitiated &&
-          !updateUserInitiatedCycle &&
-          status.version === undefined &&
-          status.recovery?.kind !== 'linux-package-install' &&
-          !('version' in previousStatus && previousStatus.version !== undefined)
+          quietUnattended ||
+          (status.state === 'error' &&
+            !status.userInitiated &&
+            !updateUserInitiatedCycle &&
+            status.version === undefined &&
+            status.recovery?.kind !== 'linux-package-install' &&
+            !('version' in previousStatus && previousStatus.version !== undefined))
       }
       set(update)
     },

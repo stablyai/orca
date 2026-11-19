@@ -44,7 +44,7 @@ export class JournalSqlActivity {
     })
   }
 
-  private get active(): boolean {
+  get active(): boolean {
     return this.foreground > 0 || this.sessions.size > 0
   }
 
