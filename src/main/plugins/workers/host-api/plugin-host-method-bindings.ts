@@ -48,6 +48,7 @@ export type PluginWorktreeContext = {
   worktreeId: string
   /** Host-qualified identity key, which `workspace.list` ids carry; absent without one. */
   identityKey?: string
+  activeSessionId?: string | null
   branch: string
   displayName: string
 }

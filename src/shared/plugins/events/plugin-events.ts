@@ -104,7 +104,7 @@ export const PLUGIN_EVENT_SUMMARIES: Record<PluginEventName, string> = {
   'agent.status.changed':
     'An agent in a terminal pane changed status; `workspaceId` is null when Orca cannot tie the pane to a workspace, `workspaceListId` (host API 1.7) is the id `workspace.list` gives that workspace, `terminalId` names its terminal when Orca lists it, and `sessionId` (host API 1.8) is what `agent.resume` takes.',
   'workspace.changed':
-    'The focused workspace changed, or its terminals were opened, closed or renamed; `context` is what `workspace.readContext` now answers, its `workspaceId` included. Each new subscriber first gets the current context.',
+    'The focused workspace or selected native chat changed, or its terminals were opened, closed or renamed; `context` is what `workspace.readContext` now answers, its `workspaceId` and known `activeSessionId` (host API 1.11) included. Each new subscriber first gets the current context.',
   'editor.typography.changed':
     "What Orca's file editor uses changed (a setting or the editor zoom); the payload is what `editor.readTypography` now answers. Needs no capability."
 }

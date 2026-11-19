@@ -178,6 +178,8 @@ export type RuntimeSyncWindowGraph = {
   singleGroupWorkspaceGridSize?: { cols: number; rows: number }
   /** Merge changed workspace selections; absent leaves prior entries, null means none shown. Layout-owner builds only. */
   activeGroupByWorkspace?: Record<string, string | null>
+  /** Complete native-chat focus map from this desktop renderer; missing entries are unknown. */
+  activeSessionIdsByWorkspace?: Record<string, string | null>
   /** The sender publication this window last applied; main answers "unchanged" while it holds. */
   agentSenderBase?: AgentSenderRevision
   /** The orchestration revision this window last applied; main omits an unchanged projection. */
