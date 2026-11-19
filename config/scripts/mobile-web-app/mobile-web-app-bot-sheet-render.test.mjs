@@ -406,7 +406,7 @@ describeRender('a bot’s home chat in a real browser', () => {
   it('shows a failed Activity read and retries through the existing refresh path', async () => {
     const { page, errors } = await openBotHome(['bots.mobile.v1'], { 'bots.activity': null })
     await openMobileBotSheet(page, BOT.name)
-    await waitForText(page, 'Couldn’t load activity.')
+    await waitForText(page, 'Couldn’t load activity')
     await captureBotView(page, 'mobile-activity-retry')
     const before = await page.evaluate(
       () =>
