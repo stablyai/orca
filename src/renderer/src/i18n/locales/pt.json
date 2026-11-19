@@ -23027,11 +23027,9 @@
   "worktree": {
     "nestedRemoval": {
       "refreshFailed": "Não foi possível atualizar a lista de espaços de trabalho",
-      "review": "Excluir com worktrees aninhadas…",
       "description": "Isso exclui permanentemente \"{{name}}\", todas as worktrees aninhadas listadas abaixo e todos os arquivos nelas, incluindo alterações não commitadas. Seus terminais e agentes serão interrompidos.",
       "detached": "HEAD desanexado",
       "loading": "Verificando worktrees aninhadas…",
-      "order": "As worktrees aninhadas são excluídas primeiro. Se uma falhar, a exclusão para e a worktree principal é mantida. As branches seguem suas configurações de exclusão existentes.",
       "cancel": "Cancelar",
       "retry": "Revisar novamente",
       "deleting": "Excluindo…",
@@ -23064,13 +23062,11 @@
       "forceDelete": "Forçar exclusão",
       "alwaysForceDelete": "Sempre forçar exclusão",
       "batchTitle": "Excluir {{count}} espaços de trabalho?",
-      "batchVerb": "Excluir {{count}} espaços de trabalho",
       "withChildrenTitle_one": "Excluir {{name}} e {{count}} espaço de trabalho filho?",
       "withChildrenTitle_other": "Excluir {{name}} e {{count}} espaços de trabalho filhos?",
       "withChildrenTitle_many": "Excluir {{name}} e {{count}} espaços de trabalho filhos?",
       "allVerb": "Excluir tudo",
       "singleTitle": "Excluir {{name}}?",
-      "singleVerb": "Excluir espaço de trabalho",
       "forceExplanation": "O Git não conseguiu excluí-lo porque há alterações. A exclusão forçada remove essas alterações mesmo assim.",
       "errorDetails": "Detalhes",
       "changesIncomplete": "Não foi possível verificar completamente algumas alterações."
