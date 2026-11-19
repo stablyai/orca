@@ -17,9 +17,19 @@ const h = pollClientHarness()
 const { startClient, poll } = h
 
 describe('ConnectorPollClient', () => {
-  it('publishes its initial snapshot after connecting', async () => {
-    const { client } = startClient()
+  it('applies the hello answer, publishes the initial snapshot and starts polling', async () => {
+    const helloAnswered = vi.fn()
+    h.fake.features = ['webhooks']
+    h.fake.webhookTombstones = ['wh_7Kx2pQ9mZbV4tL1r']
+    const { client } = startClient(undefined, undefined, (machine) => {
+      machine.helloAnswered = helloAnswered
+    })
     await settle()
+    expect(helloAnswered).toHaveBeenCalledExactlyOnceWith({
+      helloRev: expect.any(Number),
+      features: ['webhooks'],
+      webhookTombstones: ['wh_7Kx2pQ9mZbV4tL1r']
+    })
     expect(h.fake.events).toEqual([{ kind: 'snapshot', conversations: [] }])
     expect(h.fake.requestsTo(CONNECTOR_PATHS.poll)).toHaveLength(1)
     client.stop()
