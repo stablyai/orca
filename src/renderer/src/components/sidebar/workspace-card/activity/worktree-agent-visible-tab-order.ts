@@ -55,24 +55,26 @@ function rankVisibleTabs({ tabs, groups, layout, legacyOrder }: WorktreeTabLayou
  *
  * @param tabIdOf The id that matches an item to its tab: a terminal tab's entity id, or an
  *   agent-session tab's own id. `undefined` puts the item last.
+ * @param tabLayout The workspace's tabs, tab groups and layout. Its `legacyOrder` applies only
+ *   while `groups` is empty, before the groups load.
  *
  * @example
  * const agents = [
- *   { name: 'a1', terminalId: 'terminal-a' },
- *   { name: 'none' }, // no tab: goes last
- *   { name: 'b1', terminalId: 'terminal-b' },
- *   { name: 'b2', terminalId: 'terminal-b' } // shares b1's tab: stays after b1
+ *   { name: 'agent in alpha', tabRef: 'terminal-alpha' },
+ *   { name: 'agent with no tab' }, // no tab: goes last
+ *   { name: 'chat agent', tabRef: 'tab-chat' }, // agent-session tab: matched by its tab id
+ *   { name: 'subagent in alpha', tabRef: 'terminal-alpha' } // shares a tab: keeps its order
  * ]
- * orderByVisibleTabs(agents, (agent) => agent.terminalId, {
+ * orderByVisibleTabs(agents, (agent) => agent.tabRef, {
  *   tabs: [
- *     { id: 'tab-a', entityId: 'terminal-a', contentType: 'terminal', groupId: 'g', ... },
- *     { id: 'tab-b', entityId: 'terminal-b', contentType: 'terminal', groupId: 'g', ... }
+ *     { id: 'tab-alpha', entityId: 'terminal-alpha', contentType: 'terminal', groupId: 'g', ... },
+ *     { id: 'tab-chat', entityId: 'chat-1', contentType: 'agent-session', groupId: 'g', ... }
  *   ],
- *   groups: [{ id: 'g', tabOrder: ['tab-b', 'tab-a'], ... }],
+ *   groups: [{ id: 'g', tabOrder: ['tab-chat', 'tab-alpha'], ... }],
  *   layout: { type: 'leaf', groupId: 'g' },
  *   legacyOrder: []
  * })
- * // → b1, b2, a1, none
+ * // → chat agent, agent in alpha, subagent in alpha, agent with no tab
  */
 export function orderByVisibleTabs<T>(
   items: readonly T[],
