@@ -85,7 +85,7 @@ export function closeRemovedHostTwinState(
       [...terminalTabIds].flatMap((tabId) => get().ptyIdsByTabId[tabId] ?? [])
     )
     const killedPtyIds = new Set<string>()
-    const retiredPtyIds = new Set<string>()
+    const retiredPtyIds = new Set(removed?.mixedTabPtyIds ?? [])
     for (const [tabId, plan] of plans) {
       for (const ptyId of [
         ...plan.localOrSshPtyIds,
