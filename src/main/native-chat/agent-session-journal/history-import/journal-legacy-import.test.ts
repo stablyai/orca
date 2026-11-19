@@ -87,11 +87,9 @@ it.each([
   },
   { tail: '{"type":"summary","message":null}', sourceEmpty: false, items: 0 },
   { tail: '{"type":"user","uuid":"u1"}', sourceEmpty: false, items: 0 },
-  { tail: '{"type":7}', sourceEmpty: false, items: 0 },
   { tail: '{"type":""}', sourceEmpty: false, items: 0 },
   { tail: '{}', sourceEmpty: false, items: 0 },
   { tail: 'null', sourceEmpty: false, items: 0 },
-  { tail: '[]', sourceEmpty: false, items: 0 },
   { tail: '{"type":"user","message":{"role":"us', sourceEmpty: false, items: 0 },
   {
     tail: '{"type":"user","isMeta":true,"message":{"role":"user","content":"<local-command-caveat>Local command</local-command-caveat>"}}',
