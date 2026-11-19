@@ -3,6 +3,7 @@ import { resolveStatusBarUsageTemplate } from '../../../../../shared/status-bar/
 import { buildUsageFormatValues, renderUsageFormatTemplate } from './usage-format-template'
 import { AlertTriangle } from 'lucide-react'
 import React from 'react'
+import { useSectionOnScreen } from '../../right-sidebar/source-control/panel/section-viewport-presence'
 import type {
   OwnerNotSetUpPlaceholder,
   ProviderRateLimits,
@@ -192,17 +193,31 @@ function CustomUsageText({
   )
 }
 
-export function ProviderSegment({
-  p,
-  compact,
-  display,
-  mode = 'verbose'
-}: {
+type ProviderSegmentProps = {
   p: ProviderRateLimits | null
   compact: boolean
   display: UsagePercentageDisplay
   mode?: StatusBarUsageMode
-}): React.JSX.Element {
+  countdownActive?: boolean
+}
+
+/** A chip in the clipping status bar row: clipped chips stop their countdown wakes. */
+export function ClippedRowProviderSegment(props: ProviderSegmentProps): React.JSX.Element {
+  const [ref, onScreen] = useSectionOnScreen('viewport')
+  return (
+    <span ref={ref} className="inline-flex items-center">
+      <ProviderSegment {...props} countdownActive={onScreen} />
+    </span>
+  )
+}
+
+export function ProviderSegment({
+  p,
+  compact,
+  display,
+  mode = 'verbose',
+  countdownActive = true
+}: ProviderSegmentProps): React.JSX.Element {
   const t = useTranslate()
   const provider = p?.provider ?? 'claude'
   const usageFormat = useAppStore((state) => state.statusBarUsageFormat)
@@ -219,14 +234,17 @@ export function ProviderSegment({
   const sections = getStatusBarUsageSections(p, mode, t)
   const groupedBuckets = sections.map((section) => section.window).filter(isGroupedUsagePool)
   const showLabels = mode === 'verbose' || !compact
+  // Why: gate only the clock, never the label, so visibility can't change width and re-trigger itself.
   const now = useResetCountdownClock(
-    template && p
-      ? [p.session?.resetsAt, p.weekly?.resetsAt, p.fableWeekly?.resetsAt, p.monthly?.resetsAt]
-      : showLabels
-        ? groupedBuckets
-            .filter((bucket) => clampUsedPercent(bucket.usedPercent) >= USAGE_WARNING_PERCENT)
-            .map((bucket) => bucket.resetsAt)
-        : []
+    !countdownActive
+      ? []
+      : template && p
+        ? [p.session?.resetsAt, p.weekly?.resetsAt, p.fableWeekly?.resetsAt, p.monthly?.resetsAt]
+        : showLabels
+          ? groupedBuckets
+              .filter((bucket) => clampUsedPercent(bucket.usedPercent) >= USAGE_WARNING_PERCENT)
+              .map((bucket) => bucket.resetsAt)
+          : []
   )
 
   // Why static: unfocused windows never poll, so a pending chip's pulse would redraw the compositor indefinitely.

@@ -32,7 +32,7 @@ import { CodexSwitcherMenu } from './accounts/CodexSwitcherMenu'
 import { ProviderDetailsMenu } from './usage/ProviderDetailsMenu'
 import { AntigravityUsageMenu } from './usage/AntigravityUsageMenu'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
-import { ProviderSegment } from './usage/StatusBarProviderSegment'
+import { ClippedRowProviderSegment } from './usage/StatusBarProviderSegment'
 import { UsageUnitLabel, usageChipShowsPercentage } from './usage/usage-unit-label'
 import { useStatusBarController } from './composition/use-status-bar-controller'
 import { scrollStripSidewaysOnWheel } from '../tab-bar/strip/tab-strip-scroll-metrics'
@@ -171,7 +171,7 @@ export function StatusBarSurface({
                   >
                     {showUnitLabel ? <UsageUnitLabel display={usagePercentageDisplay} /> : null}
                     {rosterProviders.map((p) => (
-                      <ProviderSegment
+                      <ClippedRowProviderSegment
                         key={p.provider}
                         p={p}
                         compact={false}
