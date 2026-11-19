@@ -19,18 +19,29 @@ const writer = randomUUID()
 let seq = 0
 const lastActivatedProject = new WeakMap<RpcClient, string>()
 
-export async function captureMobilePersonalOpening(args: {
+type PersonalOpening = () => Promise<PersonalProjectOrder | undefined>
+type PersonalOpeningArgs = {
   hostId: string | undefined
   client: RpcClient | null
   capabilities: readonly string[]
   catalog: ServedProjectSections | null
   target: Worktree
   rows: readonly Worktree[]
-}): Promise<(() => Promise<PersonalProjectOrder | undefined>) | null> {
+}
+
+/** Null at once for a host without personal order, so opening its workspace never waits. */
+export function captureMobilePersonalOpening(
+  args: PersonalOpeningArgs
+): Promise<PersonalOpening | null> | null {
+  return args.capabilities.includes(PERSONAL_PROJECT_ORDER_CAPABILITY)
+    ? capturePersonalOpening(args)
+    : null
+}
+
+async function capturePersonalOpening(args: PersonalOpeningArgs): Promise<PersonalOpening | null> {
   if (
     !args.client ||
     !args.hostId ||
-    !args.capabilities.includes(PERSONAL_PROJECT_ORDER_CAPABILITY) ||
     !args.catalog ||
     args.target.workspaceKind === 'folder-workspace'
   ) {
@@ -93,31 +104,33 @@ export function isAcknowledgedWorkspaceActivation(value: unknown): boolean {
   )
 }
 
-export async function applyAcknowledgedMobilePersonalOpening(
-  reply: RpcResponse,
-  opening: (() => Promise<PersonalProjectOrder | undefined>) | null,
+/** The activation reply handler that records an acknowledged opening in this view. */
+export function acknowledgeMobilePersonalOpening(
+  opening: PersonalOpening | null,
   state: {
     clientRef: { current: RpcClient | null }
     viewRef: { current: MobileViewState }
     setView: (view: MobileViewState) => void
   },
   client: RpcClient | null
-): Promise<void> {
-  const activation = worktreeActivate.interpret(reply)
-  if (!activation.accepted || !isAcknowledgedWorkspaceActivation(activation.value)) {
-    return
+): (reply: RpcResponse) => Promise<void> {
+  return async (reply) => {
+    const activation = worktreeActivate.interpret(reply)
+    if (!activation.accepted || !isAcknowledgedWorkspaceActivation(activation.value)) {
+      return
+    }
+    const order = await opening?.()
+    if (!order || state.clientRef.current !== client) {
+      return
+    }
+    const next = {
+      ...state.viewRef.current,
+      personalProjectOrder: newerPersonalProjectOrder(
+        state.viewRef.current.personalProjectOrder,
+        order
+      )
+    }
+    state.viewRef.current = next
+    state.setView(next)
   }
-  const order = await opening?.()
-  if (!order || state.clientRef.current !== client) {
-    return
-  }
-  const next = {
-    ...state.viewRef.current,
-    personalProjectOrder: newerPersonalProjectOrder(
-      state.viewRef.current.personalProjectOrder,
-      order
-    )
-  }
-  state.viewRef.current = next
-  state.setView(next)
 }

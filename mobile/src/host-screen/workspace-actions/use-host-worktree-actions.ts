@@ -1,9 +1,8 @@
 import type { HostWorktreeActionsArgs } from '../host-worktree-actions-contract'
-import { PERSONAL_PROJECT_ORDER_CAPABILITY } from '../../../../src/shared/personal-project-order'
 
 import {
   captureMobilePersonalOpening,
-  applyAcknowledgedMobilePersonalOpening
+  acknowledgeMobilePersonalOpening
 } from '../../worktree/personal-project-opening'
 import { useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
@@ -262,16 +261,15 @@ export function useHostWorktreeActions(args: HostWorktreeActionsArgs) {
       if (routeHost === null) {
         return
       }
-      const personalOpening = hostCapabilities.includes(PERSONAL_PROJECT_ORDER_CAPABILITY)
-        ? await captureMobilePersonalOpening({
-            client,
-            hostId,
-            capabilities: hostCapabilities,
-            catalog: args.projectCatalog ?? state.servedProjectSections,
-            target: item,
-            rows: [...state.worktrees, ...serverWorkspaces.worktrees]
-          })
-        : null
+      const capture = captureMobilePersonalOpening({
+        client,
+        hostId,
+        capabilities: hostCapabilities,
+        catalog: args.projectCatalog ?? state.servedProjectSections,
+        target: item,
+        rows: [...state.worktrees, ...serverWorkspaces.worktrees]
+      })
+      const personalOpening = capture && (await capture)
       // Use an empty missing hostId: the shell refuses /h//session, whereas the string undefined would name an accepted host.
       const executionHost = routeHost ? `&executionHost=${encodeURIComponent(routeHost)}` : ''
       const pane = paneKey ? `&paneKey=${encodeURIComponent(paneKey)}` : ''
@@ -291,9 +289,7 @@ export function useHostWorktreeActions(args: HostWorktreeActionsArgs) {
               notifyClients: false,
               navigation: 'caller'
             })
-            .then((reply) =>
-              applyAcknowledgedMobilePersonalOpening(reply, personalOpening, state, client)
-            )
+            .then(acknowledgeMobilePersonalOpening(personalOpening, state, client))
             .catch(() => null)
         }
       })
