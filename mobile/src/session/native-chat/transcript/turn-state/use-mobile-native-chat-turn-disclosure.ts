@@ -142,7 +142,8 @@ export function useMobileNativeChatTurnDisclosure({
       return { listMessages: rows, waitingRows: [], indexById: null }
     }
     return {
-      listMessages: rows.filter((message) => !ids?.has(message.id) && !quiet?.ids.has(message.id)),
+      // Rows merged into a later one are among the quiet ids, and draw inside it.
+      listMessages: (quiet?.shown ?? rows).filter((m) => !ids?.has(m.id) && !quiet?.ids.has(m.id)),
       waitingRows: rows.flatMap((item, index) => (ids?.has(item.id) ? [{ item, index }] : [])),
       indexById: new Map(rows.map((message, index) => [message.id, index]))
     }

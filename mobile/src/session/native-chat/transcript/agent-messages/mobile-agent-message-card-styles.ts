@@ -31,6 +31,7 @@ export const styles = themedStyleSheet(() => ({
   compactSenders: { flex: 1, minWidth: 0, flexWrap: 'nowrap', alignItems: 'center' },
   compactSender: { minWidth: 0, flexShrink: 1, minHeight: 44 },
   compactBody: { paddingHorizontal: spacing.md, paddingBottom: spacing.sm, gap: spacing.xs },
+  mergedEntry: { gap: spacing.xs },
   meta: { color: colors.textMuted, fontSize: typography.metaSize, flexShrink: 1 },
   senders: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   sender: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },

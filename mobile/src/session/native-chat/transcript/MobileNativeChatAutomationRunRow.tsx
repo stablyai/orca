@@ -16,6 +16,10 @@ import {
   type AutomationRunRowState,
   type AutomationRunWording
 } from '../../../../../src/shared/automations/automation-run-row-words'
+import {
+  mergedRunFailures,
+  type MergedRunFailure
+} from '../../../../../src/shared/native-chat/transcript/events/native-chat-event-plan'
 import { botAutomationWhenParts } from '../../../../../src/shared/bots/bot-automation-when'
 import { formatAutomationScheduleDescriptor } from '../../../automations/automation-schedule-label'
 import { MobileSourceCopyButton } from '../../../components/code-presentation/MobileSourceCopyButton'
@@ -75,6 +79,7 @@ export function MobileAutomationRunMessage({
         text={text}
         timestamp={message.timestamp}
         {...(notStarted ? { error: notStarted.error } : {})}
+        earlierFailures={mergedRunFailures(message)}
         fontScale={fontScale}
       />
     </View>
@@ -90,6 +95,7 @@ export function MobileNativeChatAutomationRunRow({
   text,
   timestamp,
   error,
+  earlierFailures,
   fontScale
 }: {
   messageId: string
@@ -98,6 +104,8 @@ export function MobileNativeChatAutomationRunRow({
   text: string
   timestamp: number | null
   error?: string
+  /** Earlier tries of this run that couldn't start, merged into its row, newest first. */
+  earlierFailures?: readonly MergedRunFailure[]
   fontScale: number
 }): React.JSX.Element {
   const wording = useMobileAutomationRowWording(run.automation)
@@ -144,6 +152,18 @@ export function MobileNativeChatAutomationRunRow({
             </Text>
           </>
         ) : null}
+        {earlierFailures?.map((failure) => (
+          <View key={failure.id}>
+            <Text style={[styles.heading, meta]}>
+              {[say('couldNotStart'), failure.timestamp ? time(failure.timestamp) : null]
+                .filter(Boolean)
+                .join(' · ')}
+            </Text>
+            <Text selectable style={[styles.error, meta]}>
+              {failure.error}
+            </Text>
+          </View>
+        ))}
         {instructions ? (
           <>
             <Text style={[styles.heading, meta]}>{say('instructions')}</Text>
