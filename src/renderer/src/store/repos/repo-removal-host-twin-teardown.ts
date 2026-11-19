@@ -101,9 +101,21 @@ function matchesCapturedAccountRestart(
   if (
     !captured ||
     !r.leafId ||
-    !(Object.keys(captured) as (keyof MixedAccountRestart)[]).every(
-      (key) => key === 'oldIncarnationId' || r[key] === captured[key]
-    ) ||
+    r.requestId !== captured.requestId ||
+    r.attemptId !== captured.attemptId ||
+    r.executorId !== captured.executorId ||
+    r.worktreeId !== captured.worktreeId ||
+    r.tabId !== captured.tabId ||
+    r.tabCreatedAt !== captured.tabCreatedAt ||
+    r.leafId !== captured.leafId ||
+    r.hostId !== captured.hostId ||
+    r.hostEpoch !== captured.hostEpoch ||
+    r.environmentId !== captured.environmentId ||
+    r.pairingRevision !== captured.pairingRevision ||
+    r.runtimeId !== captured.runtimeId ||
+    r.oldPtyId !== captured.oldPtyId ||
+    r.resultPtyId !== captured.resultPtyId ||
+    r.resultIncarnationId !== captured.resultIncarnationId ||
     (r.oldIncarnationId && r.oldIncarnationId !== captured.oldIncarnationId) ||
     !isCurrentCodexAccountRestart(state, r, tabs)
   ) {
