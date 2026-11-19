@@ -42,8 +42,13 @@ export const START_FAILURE_COPY = {
       AGENT_SESSION_FAILURE_COPY.couldNotRestart,
       values
     ),
+  // Mobile's catalog keeps its own wording, which the shared desktop default no longer matches.
   cliTooOld: (values) =>
-    translate('session.failure.cliTooOld', AGENT_SESSION_FAILURE_COPY.cliTooOld, values),
+    translate(
+      'session.failure.cliTooOld',
+      '{{agent}} {{installedVersion}} is too old for chats. Update to {{minimumVersion}} or newer.',
+      values
+    ),
   startTimedOut: (values) =>
     translate('session.failure.startTimedOut', AGENT_SESSION_FAILURE_COPY.startTimedOut, values),
   startTimedOutKeepsHappening: (values) =>
