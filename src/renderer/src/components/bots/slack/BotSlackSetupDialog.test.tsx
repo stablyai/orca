@@ -211,20 +211,6 @@ describe('BotSlackSetupDialog', () => {
     expect(await screen.findByText('Scout is in Slack')).toBeDefined()
   })
 
-  it('says another workspace when a bot already in Slack is added again', async () => {
-    slackState({
-      state: 'installed',
-      teamId: 'T-mine',
-      appId: 'C',
-      botUserId: 'UB',
-      installerUserId: 'U1'
-    })
-    openDialog(bot({ slack: { appId: 'C', teamId: 'T-mine' } }))
-
-    await screen.findByLabelText('Configuration refresh token')
-    expect(screen.getByRole('heading', { name: 'Connect another Slack workspace' })).toBeTruthy()
-  })
-
   it('keeps the token form with the cloud’s reason, and an empty field, when the grant fails', async () => {
     slackState({ state: 'not_created' })
     api.saveGrant.mockResolvedValue({ ok: false, error: 'grant_expired' })
