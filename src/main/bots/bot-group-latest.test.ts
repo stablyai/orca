@@ -33,13 +33,14 @@ describe('a group as the sidebar lists it', () => {
     const asked = await send('@Scout look')
     mocks.snapshot.mockImplementation(async (sessionId) =>
       journal(sessionId, [
-        { operationId: asked.turns[0]!.operationId, text: 'Found it', at: asked.createdAt + 1 }
+        { operationId: asked.turns[0]!.operationId, text: 'Found it', at: asked.createdAt }
       ])
     )
     await noteBotGroupMemberReply(runtime, group.members[0]!.sessionId)
     expect(groups.store.listing()[0]?.latest).toMatchObject({
       authorName: 'Scout',
-      text: 'Found it'
+      text: 'Found it',
+      at: asked.createdAt
     })
     mocks.snapshot.mockReset()
     mocks.snapshot.mockRejectedValue(new Error('a member chat was read'))
@@ -164,94 +165,53 @@ describe('a group as the sidebar lists it', () => {
     })
   })
 
-  it('lists a reply that ended after an owner post in the same millisecond', async () => {
+  it('keeps the newest same-millisecond reply as reads finish in and out of order', async () => {
     const { groups, runtime } = fixture()
-    const group = await groups.create({ name: 'Review', botIds: ['bot-0'] })
+    const group = await groups.create({ name: 'Review', botIds: ['bot-0', 'bot-1', 'bot-2'] })
     const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000)
     try {
       const asked = await groups.send({
         groupId: group.id,
         revision: group.revision,
         messageId: randomUUID(),
-        text: '@Scout one'
+        text: '@Scout @Forge @Sage compare plans'
       })
-      mocks.snapshot.mockImplementation(async (sessionId) =>
-        journal(sessionId, [
-          { operationId: asked.turns[0]!.operationId, text: 'Same-ms reply', at: 1_000 }
+      await vi.waitFor(() => expect(mocks.send).toHaveBeenCalledTimes(3))
+      const [scout, forge, sage] = asked.turns
+      const pending = Promise.withResolvers<void>()
+      const started = Promise.withResolvers<void>()
+      mocks.snapshot.mockImplementationOnce(async (sessionId) => {
+        started.resolve()
+        await pending.promise
+        return journal(sessionId, [
+          { operationId: scout.operationId, text: 'Scout reply', at: 1_000 }
         ])
-      )
-      await noteBotGroupMemberReply(runtime, group.members[0]!.sessionId)
-    } finally {
-      clock.mockRestore()
-    }
-    expect(groups.store.listing()[0]?.latest).toMatchObject({ text: 'Same-ms reply' })
-  })
-
-  it("keeps the later of two members' same-millisecond replies when the earlier read lands last", async () => {
-    const { groups, runtime } = fixture()
-    const group = await groups.create({ name: 'Review', botIds: ['bot-0', 'bot-1'] })
-    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000)
-    try {
-      const { scout, forge } = await askBoth(groups, group)
-      const pending: (() => void)[] = []
-      mocks.snapshot.mockImplementationOnce(
-        (sessionId) =>
-          new Promise((resolve) => {
-            pending.push(() =>
-              resolve(
-                journal(sessionId, [
-                  { operationId: scout.operationId, text: 'Older Scout reply', at: 1_000 }
-                ])
-              )
-            )
-          })
-      )
+      })
       const olderRead = noteBotGroupMemberReply(runtime, scout.sessionId)
-      await vi.waitFor(() => expect(pending).toHaveLength(1))
-      mocks.snapshot.mockImplementationOnce(async (sessionId) =>
-        journal(sessionId, [
-          { operationId: forge.operationId, text: 'Newer Forge reply', at: 1_000 }
-        ])
-      )
-      await noteBotGroupMemberReply(runtime, forge.sessionId)
-      for (const resolve of pending) {
-        resolve()
-      }
-      await olderRead
-    } finally {
-      clock.mockRestore()
-    }
-    expect(groups.store.listing()[0]?.latest).toMatchObject({
-      authorName: 'Forge',
-      text: 'Newer Forge reply'
-    })
-  })
+      await started.promise
 
-  it("lists the later of two members' same-millisecond replies when reads land in order", async () => {
-    const { groups, runtime } = fixture()
-    const group = await groups.create({ name: 'Review', botIds: ['bot-0', 'bot-1'] })
-    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000)
-    try {
-      const { scout, forge } = await askBoth(groups, group)
-      mocks.snapshot.mockImplementationOnce(async (sessionId) =>
-        journal(sessionId, [
-          { operationId: scout.operationId, text: 'Older Scout reply', at: 1_000 }
-        ])
-      )
-      await noteBotGroupMemberReply(runtime, scout.sessionId)
-      mocks.snapshot.mockImplementationOnce(async (sessionId) =>
-        journal(sessionId, [
-          { operationId: forge.operationId, text: 'Newer Forge reply', at: 1_000 }
-        ])
-      )
-      await noteBotGroupMemberReply(runtime, forge.sessionId)
+      try {
+        for (const [turn, reply] of [
+          [forge, 'Forge reply'],
+          [sage, 'Sage reply']
+        ] as const) {
+          mocks.snapshot.mockImplementationOnce(async (sessionId) =>
+            journal(sessionId, [{ operationId: turn.operationId, text: reply, at: 1_000 }])
+          )
+          await noteBotGroupMemberReply(runtime, turn.sessionId)
+          expect(groups.store.listing()[0]?.latest).toMatchObject({ text: reply })
+        }
+      } finally {
+        pending.resolve()
+        await olderRead
+      }
+      expect(groups.store.listing()[0]?.latest).toMatchObject({
+        authorName: 'Sage',
+        text: 'Sage reply'
+      })
     } finally {
       clock.mockRestore()
     }
-    expect(groups.store.listing()[0]?.latest).toMatchObject({
-      authorName: 'Forge',
-      text: 'Newer Forge reply'
-    })
   })
 
   it('keeps its sidebar place through a membership edit and forgets it on delete', async () => {
@@ -315,26 +275,4 @@ function journal(sessionId: string, replies: { operationId: string; text: string
       ]
     })
   }
-}
-
-/** One post to Scout and Forge, once both turns were handed to their sessions. */
-async function askBoth(
-  groups: ReturnType<typeof fixture>['groups'],
-  group: { id: string; revision: number }
-) {
-  const asked = await groups.send({
-    groupId: group.id,
-    revision: group.revision,
-    messageId: randomUUID(),
-    text: '@Scout @Forge both please'
-  })
-  await vi.waitFor(() => expect(mocks.send).toHaveBeenCalledTimes(2))
-  const turn = (botId: string) => {
-    const found = asked.turns.find((candidate) => candidate.botId === botId)
-    if (!found) {
-      throw new Error(`no turn for ${botId}`)
-    }
-    return found
-  }
-  return { scout: turn('bot-0'), forge: turn('bot-1') }
 }
