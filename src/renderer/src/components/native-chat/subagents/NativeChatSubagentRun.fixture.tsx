@@ -51,10 +51,10 @@ const block: NativeChatSubagentGroupBlock = {
   ]
 }
 
-function Roster() {
+function Roster({ roster = block }: { roster?: NativeChatSubagentGroupBlock }) {
   return (
     <div className="native-chat-appearance p-4">
-      <NativeChatSubagentRun block={block} onOpenSubagent={() => {}} />
+      <NativeChatSubagentRun block={roster} onOpenSubagent={() => {}} />
     </div>
   )
 }
@@ -91,4 +91,9 @@ export const opened = defineFixture({
 export const narrow = defineFixture({
   width: 320,
   render: () => <Roster />
+})
+
+export const single = defineFixture({
+  width: 560,
+  render: () => <Roster roster={{ ...block, agents: block.agents.slice(0, 1) }} />
 })

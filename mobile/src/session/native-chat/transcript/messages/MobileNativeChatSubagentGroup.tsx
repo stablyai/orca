@@ -1,6 +1,9 @@
 import { Text, View } from 'react-native'
 import { Bot } from 'lucide-react-native'
-import { formatSubagentTokens } from '../../../../../../src/shared/native-chat/transcript/subagents/native-chat-subagent-group-header'
+import {
+  formatSubagentTokens,
+  nativeChatSubagentGroupHeader
+} from '../../../../../../src/shared/native-chat/transcript/subagents/native-chat-subagent-group-header'
 import { sayMobileNativeChatSubagentGroup as say } from './native-chat-subagent-group-copy'
 import { sayMobileNativeChatSessionOption as sayOption } from '../../input/session-options/native-chat-session-option-copy'
 import { normalizeSubagentState } from '../../../../../../src/shared/native-chat/transcript/subagents/native-chat-subagent-summary'
@@ -82,8 +85,8 @@ function SubagentRow({
   )
 }
 
-/** A turn's subagents, one row each. Trust host-recorded child state: a parent turn ending does not
- *  prove its children stopped. */
+/** A turn's subagents under one summary row, closed until the reader opens it; a lone subagent is its
+ *  own row. Trust host-recorded child state: a parent turn ending does not prove its children stopped. */
 export function MobileNativeChatSubagentGroup({
   block,
   fontScale
@@ -95,12 +98,34 @@ export function MobileNativeChatSubagentGroup({
   if (block.agents.length === 0) {
     return null
   }
-  return (
+  const rows = (
     <View testID="subagent-group" style={styles.group}>
       {block.agents.map((agent) => (
         <SubagentRow key={agent.id} agent={agent} groupId={block.groupId} fontScale={fontScale} />
       ))}
     </View>
+  )
+  if (block.agents.length === 1) {
+    return rows
+  }
+  const header = nativeChatSubagentGroupHeader(block.agents, say)
+  const state = header.alertState ?? header.verdictState
+  const verdict = [header.verdict, header.alert === null ? null : `+${header.alert}`, header.tokens]
+    .filter(Boolean)
+    .join(' · ')
+  return (
+    <MobileNativeChatEventRow
+      testID="subagent-summary"
+      icon={<Bot size={14} color={colors.textMuted} strokeWidth={2} />}
+      badge={header.working ? 'running' : state === 'failed' ? 'failed' : null}
+      label={`${header.headline}, ${verdict}`}
+      disclosureKey={`subagent-roster:${block.groupId}`}
+      fontScale={fontScale}
+      details={rows}
+    >
+      <MobileNativeChatEventName>{header.headline}</MobileNativeChatEventName>
+      {` · ${verdict}`}
+    </MobileNativeChatEventRow>
   )
 }
 

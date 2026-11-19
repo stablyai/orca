@@ -115,8 +115,9 @@ function NativeChatSubagentRow({
   )
 }
 
-/** A turn's subagents under one summary row, one row each once opened. Trust journal child states:
- *  children outlive their spawning turn, and only host/provider settlement proves lost contact. */
+/** A turn's subagents under one summary row, one row each once opened; a lone subagent is its own row.
+ *  Trust journal child states: children outlive their spawning turn, and only host/provider
+ *  settlement proves lost contact. */
 export function NativeChatSubagentRun({
   block,
   disclosureId,
@@ -136,6 +137,12 @@ export function NativeChatSubagentRun({
   )
   if (header.total === 0) {
     return null
+  }
+  if (header.total === 1) {
+    // One row either way, and its name says more than "1 subagent".
+    return (
+      <NativeChatSubagentRows block={block} disclosureId={disclosureId} onOpen={onOpenSubagent} />
+    )
   }
   const { working, headline, verdictState, verdict, alertState, alert, clockStartedAt } = header
   return (
@@ -178,7 +185,12 @@ export function NativeChatSubagentRun({
         />
       </button>
       {open ? (
-        <NativeChatSubagentRows block={block} disclosureId={disclosureId} onOpen={onOpenSubagent} />
+        <NativeChatSubagentRows
+          block={block}
+          disclosureId={disclosureId}
+          onOpen={onOpenSubagent}
+          className="mt-1"
+        />
       ) : null}
     </div>
   )
@@ -187,14 +199,16 @@ export function NativeChatSubagentRun({
 function NativeChatSubagentRows({
   block,
   disclosureId,
-  onOpen
+  onOpen,
+  className
 }: {
   block: NativeChatSubagentGroupBlock
   disclosureId?: string
   onOpen?: (agentId: string) => void
+  className?: string
 }): React.JSX.Element {
   return (
-    <div className="mt-1 flex flex-col gap-1">
+    <div className={cn('flex flex-col gap-1', className)}>
       {block.agents.map((agent) => (
         <NativeChatSubagentRow
           key={agent.id}
