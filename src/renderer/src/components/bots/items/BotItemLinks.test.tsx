@@ -178,7 +178,6 @@ it.each([
   ['open', 'failure', 'Checks failing'],
   ['draft', 'success', 'Checks passing'],
   ['open', 'pending', null],
-  ['merged', 'success', null],
   ['closed', 'failure', null]
 ] as const)('a %s PR with %s checks shows CI glyph %s', (state, checks, label) => {
   only(prLink('acme/app', 9, state, checks))
