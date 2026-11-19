@@ -119,7 +119,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
-  sent.mockClear()
+  sent.mockReset()
   // Back to its own implementation, so one test's refusal never reaches the next.
   answered.mockReset()
   openAppHttpLink.mockClear()
