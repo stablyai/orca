@@ -21,6 +21,8 @@ try {
   const pragma = (name) => Object.values(db.prepare('PRAGMA ' + name).get())[0];
   // Fails at once if any other connection, in any process, has the file open.
   db.exec('PRAGMA locking_mode = EXCLUSIVE; BEGIN EXCLUSIVE; COMMIT');
+  // From here on only this process can have written the WAL, so the parent may clean it up after a stop.
+  process.stdout.write('locked\\n');
   const pageSize = pragma('page_size');
   const pages = pragma('page_count');
   const freePages = pragma('freelist_count');

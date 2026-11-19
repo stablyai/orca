@@ -257,26 +257,32 @@ export async function compactOrchestrationDb(
   }
   // Recorded before the wait, so a quit cut off mid-attempt still counts as the one wait it paid; a disk
   // that can't write it promptly gets no attempt at all.
-  const write = writeDeferral(filename, { liveBytes, timeouts: (deferral?.timeouts ?? 0) + 1 })
+  const attempt = { liveBytes, timeouts: (deferral?.timeouts ?? 0) + 1 }
+  const write = writeDeferral(filename, attempt)
   const recorded = await settlesWithin(write, MARKER_WRITE_MS)
   if (recorded !== true) {
     if (recorded === 'late') {
       // No attempt ran, so a write that lands later mustn't defer the file.
-      void write.then((saved) => saved && writeDeferral(filename, deferral))
+      void write.then(
+        async (saved) =>
+          saved &&
+          JSON.stringify(await readDeferral(filename)) === JSON.stringify(attempt) &&
+          writeDeferral(filename, deferral)
+      )
     }
     return { kind: 'busy' }
   }
   const remainingMs = budgetMs - (performance.now() - started)
-  const { result, handedOff } =
+  const { result, heldLock } =
     remainingMs > 0
       ? await runCompactionChild(filename, remainingMs, release, started)
       : {
           result: { kind: 'timed-out' as const, ms: Math.round(performance.now() - started) },
-          handedOff: false
+          heldLock: false
         }
   if (!keepsDeferral(result)) {
     await writeDeferral(filename, result.kind === 'compacted' ? null : deferral)
-  } else if (handedOff) {
+  } else if (heldLock) {
     // A VACUUM stopped under its exclusive lock leaves its copy in the WAL; clear it now, after the
     // windows closed, rather than on the next launch's first open.
     const leftMs = budgetMs + EXIT_GRACE_MS + RECOVERY_MS - (performance.now() - started)
@@ -290,10 +296,10 @@ function runCompactionChild(
   budgetMs: number,
   release: () => void,
   started: number
-): Promise<{ result: OrchestrationDbCompaction; handedOff: boolean }> {
-  let handedOff = false
+): Promise<{ result: OrchestrationDbCompaction; heldLock: boolean }> {
+  let heldLock = false
   return new Promise((settle) => {
-    const resolve = (result: OrchestrationDbCompaction): void => settle({ result, handedOff })
+    const resolve = (result: OrchestrationDbCompaction): void => settle({ result, heldLock })
     let child: ReturnType<typeof spawnProcess>
     try {
       child = spawnProcess({
@@ -322,6 +328,7 @@ function runCompactionChild(
     let timedOut = false
     child.stdout?.on('data', (chunk: Buffer) => {
       output += chunk.toString()
+      heldLock ||= output.startsWith('ready\nlocked\n')
       if (!released && output.startsWith('ready\n')) {
         released = true
         // A stopped child can't take over; the WAL cap bounds the close if it died unseen.
@@ -330,7 +337,6 @@ function runCompactionChild(
         }
         try {
           release()
-          handedOff = true
           child.stdin?.end('go\n')
         } catch (error) {
           child.kill('SIGKILL')
