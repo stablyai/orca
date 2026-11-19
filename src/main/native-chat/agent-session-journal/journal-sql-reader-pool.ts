@@ -26,7 +26,6 @@ import type {
 } from './journal-domain-history-page'
 import { JournalReaderAdmission } from './journal-sql-reader-admission'
 import { JournalReaderReplyCredit } from './journal-sql-reader-reply-credit'
-import { observeRetainedBytes } from '../../memory/retained-bytes-budget'
 import {
   trackJournalReaderRetention,
   type JournalReaderRetention
@@ -46,11 +45,6 @@ export class JournalSqlReaderPool {
   private readonly replyCredit = new JournalReaderReplyCredit()
   /** Lifetime totals of readers already replaced, so the pool's totals never go backwards. */
   private readonly replaced = { receivedBytes: 0, consumedBytes: 0, creditWaitsExpired: 0 }
-  // Bounded by the readers' own credit; reported beside the other holders in crash diagnostics.
-  private readonly stopObserving = observeRetainedBytes('reads', () => {
-    const { inFlight, unconsumed, outstandingBytes } = this.retention()
-    return { bytes: outstandingBytes, items: inFlight + unconsumed }
-  })
 
   constructor(
     private readonly filename: string,
@@ -307,7 +301,6 @@ export class JournalSqlReaderPool {
   close(): Promise<void> {
     this.sourceLease?.abort()
     this.closed = true
-    this.stopObserving()
     this.forkRelease?.resolve()
     return (this.closing ??= Promise.all([
       this.sourceRelease?.promise,

@@ -40,21 +40,21 @@ export function heldBytesOf(payload: readonly AgentJournalRenderItem[]): number 
   return bytes
 }
 
-let refusals = 0
+let capped = 0
 
 /** Streams ended at their live-text cap since launch. */
-export function chatRetainedBytesRefusals(): number {
-  return refusals
+export function liveTextCapReachedCount(): number {
+  return capped
 }
 
-export function noteChatRetainedBytesRefused(): void {
-  refusals += 1
+export function noteLiveTextCapReached(): void {
+  capped += 1
 }
 
 /** A stream ended at its live-text cap; the client resumes from its cursor. */
-export class ChatRetainedBytesRefused extends Error {
-  constructor(holder: string) {
-    super(`${holder} would exceed its memory cap`)
-    this.name = 'ChatRetainedBytesRefused'
+export class SubscriberLiveTextCapReached extends Error {
+  constructor() {
+    super('subscriber live text would exceed its memory cap')
+    this.name = 'SubscriberLiveTextCapReached'
   }
 }

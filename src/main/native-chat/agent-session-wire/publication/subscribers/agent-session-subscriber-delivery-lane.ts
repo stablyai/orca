@@ -3,11 +3,11 @@ import type { AgentSessionTurnActivity } from '../../../../../shared/agent-sessi
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
 import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up'
 import {
-  ChatRetainedBytesRefused,
+  SubscriberLiveTextCapReached,
   CHAT_LIVE_TEXT_SUBSCRIBER_BYTES,
   heldBytesOf,
-  noteChatRetainedBytesRefused
-} from '../../../retention/chat-path-retained-bytes'
+  noteLiveTextCapReached
+} from '../../../retention/subscriber-live-text-cap'
 
 /** Reads every row after the subscriber's cursor when it runs, so a later one covers an earlier one. */
 export type SubscriberCatchUp = {
@@ -149,8 +149,8 @@ export class SubscriberDeliveryLane {
   }
 
   private refuse(): void {
-    noteChatRetainedBytesRefused()
-    this.runners.failed(new ChatRetainedBytesRefused('subscriber live text'))
+    noteLiveTextCapReached()
+    this.runners.failed(new SubscriberLiveTextCapReached())
     this.clear()
   }
 
