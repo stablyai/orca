@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Plug, Files, GitBranch, ListChecks, Workflow } from 'lucide-react'
+import { Activity, Plug, Files, GitBranch, ListChecks, Workflow } from 'lucide-react'
 import { useAppStore } from '@/store/index'
 import { useRepoById } from '@/store/repos/use-repository-catalog'
 import { isFolderRepo } from '../../../../../shared/repository/repo-kind'
@@ -113,6 +113,12 @@ export function useRightSidebarActivityItems({
         title: t('auto.components.right.sidebar.index.83a10e3c44', 'Checks'),
         shortcut: checksShortcut === 'Unassigned' ? '' : checksShortcut,
         gitOnly: true
+      },
+      {
+        id: 'zotz-background',
+        icon: Activity,
+        title: t('zotz.background.title', 'Background'),
+        shortcut: ''
       },
       {
         id: 'ports',
