@@ -240,10 +240,15 @@ export function createAgentPaneThreadProjection(store: ProjectionStore) {
     listeners.set(registered, needsAllThreads)
     return () => {
       listeners.delete(registered)
-      if (needsAllThreads && !Array.from(listeners.values()).some(Boolean)) {
-        // Badge readers never read the full snapshot; let it go with its last reader.
+      // Each mode's snapshot and thread cache go with that mode's last reader.
+      const remaining = Array.from(listeners.values())
+      if (needsAllThreads && !remaining.includes(true)) {
         full = null
         threadCache = createAgentPaneThreadReuseCache()
+      }
+      if (!needsAllThreads && !remaining.includes(false)) {
+        badge = null
+        badgeThreadCache = createAgentPaneThreadReuseCache()
       }
       if (listeners.size === 0 && release) {
         release()
