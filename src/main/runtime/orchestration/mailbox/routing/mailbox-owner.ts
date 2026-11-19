@@ -73,9 +73,8 @@ export class OrchestrationMailboxOwner {
         ? this.resolveRunMailbox(db, terminal, run.id, requestedMailbox, options)
         : null
     }
-    const runs = this.runsBoundToTerminal(db, terminal)
     // A coordinator of several Runs owns each one's mailbox; unnamed mail goes to its current Run.
-    const run = runs.find((bound) => requestedMailbox === `run:${bound.id}`) ?? runs[0]
+    const run = firstDefined(paneKeys, (paneKey) => db.getCurrentRunForPane?.(paneKey))
     if (run) {
       return this.resolveRunMailbox(db, terminal, run.id, requestedMailbox, options)
     }
@@ -125,18 +124,13 @@ export class OrchestrationMailboxOwner {
       return []
     }
     const db = this.deps.getDb()
-    const others = db
-      ? this.runsBoundToTerminal(db, terminal)
-          .map((run) => `run:${run.id}`)
-          .filter((handle) => handle !== mailboxHandle)
+    // Why only Runs with work: a coordinator's finished Runs pile up, and each held-mail probe asks this.
+    const withMail = db
+      ? terminal.paneKeys.flatMap(
+          (paneKey) => db.runMailboxesWithPointerWorkForPane?.(paneKey) ?? []
+        )
       : []
-    // One query instead of probing every finished Run; a Run without mail has nothing to deliver.
-    const withMail = db && others.length > 0 ? db.getMailboxesWithPointerWork(others) : new Set()
-    return [mailboxHandle, ...new Set(others.filter((handle) => withMail.has(handle)))]
-  }
-
-  private runsBoundToTerminal(db: OrchestrationDb, terminal: OrchestrationMailboxTerminal) {
-    return terminal.paneKeys.flatMap((paneKey) => db.runsBoundToPane?.(paneKey) ?? [])
+    return [mailboxHandle, ...new Set(withMail.filter((handle) => handle !== mailboxHandle))]
   }
 
   routeForeignDirectMessages(terminal: OrchestrationMailboxTerminal): RoutedOrchestrationMailbox[] {

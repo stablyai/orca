@@ -238,6 +238,19 @@ export class InMemoryOrchestrationMessages {
     return this.runsBoundToPane(paneKey)[0]
   }
 
+  runMailboxesWithPointerWorkForPane(paneKey: string): string[] {
+    return this.runsBoundToPane(paneKey)
+      .map((run) => `run:${run.id}`)
+      .filter((handle) =>
+        this.messages.some(
+          (message) =>
+            message.to_handle === handle &&
+            message.read === 0 &&
+            (!message.delivered_at || (message.pointer_enter_pending ?? 0) > 0)
+        )
+      )
+  }
+
   runsBoundToPane(
     paneKey: string
   ): { id: string; coordinator_handle: string | null; coordinator_pane_key: string | null }[] {
