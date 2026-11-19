@@ -202,10 +202,14 @@ export abstract class OrcaRuntimeWithHeadlessGapReseed extends OrcaRuntimeWithCr
       { scrollbackRows: 0, signal: capture.signal, recovery: true },
       this.getPtyLifecycleGeneration(ptyId)
     )
+    let deadlineTimer: ReturnType<typeof setTimeout> | undefined
     const snapshot = await Promise.race([
       pending,
-      delay(GAP_RESEED_CAPTURE_TIMEOUT_MS).then(() => null)
+      new Promise<null>((resolve) => {
+        deadlineTimer = setTimeout(() => resolve(null), GAP_RESEED_CAPTURE_TIMEOUT_MS)
+      })
     ])
+    clearTimeout(deadlineTimer)
     if (!snapshot) {
       // The slot bounds live captures: cancel a timed-out one before giving the slot back.
       stopGapJournal(recovery)
