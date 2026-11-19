@@ -24,19 +24,17 @@ import { useAppStore } from '@/store'
 
 export function TerminalLimitSetting({ scope }: { scope: SettingsHostScope }): React.JSX.Element {
   const environmentId = scope.target.kind === 'environment' ? scope.target.environmentId : null
-  const hostRevision = useAppStore((state) => {
-    if (environmentId === null) {
-      return '0:0'
-    }
+  const pairing = useAppStore((state) => {
     const host = state.runtimeEnvironments.find((item) => item.id === environmentId)
-    const pairing = host?.pairingRevision ?? host?.createdAt ?? 0
-    return `${pairing}:${getRuntimeEnvironmentConnectionGeneration(environmentId)}`
+    return host?.pairingRevision ?? host?.createdAt ?? 0
   })
-  const contactEpoch = useRuntimeHostStatusSelector(
+  // The connection generation advances with this host's status writes, so it is read with its entry.
+  const contact = useRuntimeHostStatusSelector(
     environmentId,
-    (entry) => entry?.hostContactEpoch ?? 0
+    (entry) =>
+      `${environmentId ? getRuntimeEnvironmentConnectionGeneration(environmentId) : 0}:${entry?.hostContactEpoch ?? 0}`
   )
-  const revision = `${hostRevision}:${contactEpoch}`
+  const revision = `${pairing}:${contact}`
   const contacted = useRuntimeHostStatusSelector(
     environmentId,
     (entry) => environmentId === null || runtimeHostContactForEntry(entry).verdict === 'live'
