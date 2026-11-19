@@ -83,8 +83,8 @@ export abstract class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeW
     if (!this.providerSnapshotPreferredPtys.has(ptyId)) {
       return this.readHeadlessVisibleTerminalState(ptyId)
     }
-    // A screen recovering from dropped output is unknown, never an empty frame.
-    if (this.headlessTerminals.get(ptyId)?.gapReseed) {
+    // A recovering screen is unknown, never an empty frame; one the provider owned before the gap keeps main's path below.
+    if (this.headlessTerminals.get(ptyId)?.gapReseed?.providerOwnedBeforeGap === false) {
       return null
     }
 

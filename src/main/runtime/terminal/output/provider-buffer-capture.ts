@@ -193,16 +193,10 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     if (visibleState) {
       return visibleState
     }
-    const recovery = this.headlessTerminals.get(ptyId)?.gapReseed
-    if (recovery) {
-      // A rebuilding screen is unknown, and the daemon is busy with recovery's captures: say so at once.
-      // A screen the provider owned before the gap keeps main's bounded capture.
-      return recovery.providerOwnedBeforeGap
-        ? this.readProviderTerminalTailLines(ptyId, limit, {
-            visibleScreenOnly: true,
-            timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS
-          })
-        : null
+    // A rebuilding screen is unknown, and the daemon is busy with recovery's captures: say so at once.
+    // A screen the provider owned before the gap already took main's cached, bounded provider path above.
+    if (this.headlessTerminals.get(ptyId)?.gapReseed) {
+      return null
     }
     // A rebuild that finished during the lookup left a trusted model to answer, not the daemon.
     if (this.readWholeScreenModel(ptyId)) {

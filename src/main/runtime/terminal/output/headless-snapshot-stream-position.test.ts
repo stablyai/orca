@@ -514,7 +514,9 @@ it('returns empty limited ConPTY history when recovery finishes during the provi
   })
   markNativeWindowsConptyPty(ptyId)
   try {
-    anchorStream(runtime, ptyId)
+    // A freshly spawned stream: main's model owned this screen before the gap.
+    runtime.synchronizePtyOutputSequenceFromProvider(ptyId, { value: 0, generation: 'reset' })
+    runtime.anchorProviderSequence(ptyId, 0, 0)
     runtime.onPtyData(ptyId, 'stale-1\r\nstale-2\r\n', 1)
     runtime.notePtyDataGap(ptyId, 9)
     await vi.waitFor(() => assert(recover))

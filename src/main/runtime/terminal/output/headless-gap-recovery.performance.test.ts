@@ -115,3 +115,50 @@ it.each([10, 100])(
   },
   30_000
 )
+
+// A screen the provider owned before the gap is read from its settled frame, as on main, not recaptured per read.
+it.each([10, 100])(
+  'captures each of %i provider-owned recovering screens once across repeated unchanged reads',
+  async (count) => {
+    const runtime = createRuntime()
+    const ptyIds = Array.from({ length: count }, (_, index) => `pty-owned-${index}`)
+    let readerCaptures = 0
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      getSize: () => grid,
+      serializeProviderBuffer: (ptyId, opts): Promise<PtyProviderBufferSnapshot> => {
+        if (opts?.recovery) {
+          return new Promise(() => {})
+        }
+        readerCaptures += 1
+        return Promise.resolve({
+          data: '\x1b[H\x1b[2Jprovider screen',
+          ...grid,
+          seq: runtime.getPtyOutputSequence(ptyId),
+          source: 'headless',
+          alternateScreen: true
+        })
+      }
+    })
+    try {
+      for (const ptyId of ptyIds) {
+        // A continued stream that no seed has settled: the provider owns its screen.
+        anchorStream(runtime, ptyId)
+        runtime.onPtyData(ptyId, 'before\r\n', 1)
+        runtime.notePtyDataGap(ptyId, 9)
+      }
+      for (let round = 0; round < 10; round += 1) {
+        for (const ptyId of ptyIds) {
+          const screen = await headlessOf(runtime).readScreenProjection(ptyId)
+          expect(screen?.lines).toEqual(['provider screen'])
+        }
+      }
+      expect(readerCaptures).toBe(count)
+    } finally {
+      await Promise.all(ptyIds.map((ptyId) => runtime.onPtyExit(ptyId, 0)))
+    }
+  },
+  30_000
+)

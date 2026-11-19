@@ -11,7 +11,8 @@ export function newGapRecovery(): GapRecovery {
     journalStart: 0,
     journalEnd: 0,
     journalChars: 0,
-    gaps: 0
+    gaps: 0,
+    providerOwnedBeforeGap: false
   }
 }
 
