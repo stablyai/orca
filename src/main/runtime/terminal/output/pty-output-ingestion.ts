@@ -87,7 +87,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
   /** Arrival-order mode scan: the settled tracker plus any in-flight snapshot capture's. */
   protected scanProviderModeTrackers(ptyId: string, data: string): void {
     this.providerModeTrackersByPtyId.get(ptyId)?.scan(data)
-    for (const tracker of this.providerModeSnapshotScansByPtyId.get(ptyId) ?? []) {
+    for (const tracker of this.providerModeSnapshotScansByPtyId.get(ptyId)?.keys() ?? []) {
       tracker.scan(data)
     }
   }

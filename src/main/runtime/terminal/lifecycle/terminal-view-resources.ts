@@ -115,7 +115,7 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
 
   protected providerModeSnapshotScansByPtyId = new Map<
     string,
-    Set<TerminalKittyKeyboardModeTracker>
+    Map<TerminalKittyKeyboardModeTracker, 'reader' | 'recovery'>
   >()
 
   protected providerBufferAcquisitionsByPtyId = new Map<string, ProviderBufferAcquisition>()
@@ -128,6 +128,15 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
 
   protected advancePtyBufferMutationEpoch(ptyId: string): void {
     this.ptyBufferMutationEpochById.set(ptyId, this.getPtyBufferMutationEpoch(ptyId) + 1)
+    const scans = this.providerModeSnapshotScansByPtyId.get(ptyId)
+    for (const [tracker, kind] of scans ?? []) {
+      if (kind === 'reader') {
+        scans?.delete(tracker)
+      }
+    }
+    if (scans?.size === 0) {
+      this.providerModeSnapshotScansByPtyId.delete(ptyId)
+    }
   }
 
   protected forgetPtyBufferMutationEpoch(ptyId: string): void {

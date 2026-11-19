@@ -46,10 +46,10 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     const liveModeTracker = new TerminalKittyKeyboardModeTracker()
     let liveModeTrackers = this.providerModeSnapshotScansByPtyId.get(ptyId)
     if (!liveModeTrackers) {
-      liveModeTrackers = new Set()
+      liveModeTrackers = new Map()
       this.providerModeSnapshotScansByPtyId.set(ptyId, liveModeTrackers)
     }
-    liveModeTrackers.add(liveModeTracker)
+    liveModeTrackers.set(liveModeTracker, opts.recovery ? 'recovery' : 'reader')
     try {
       // Why: daemon PTYs survive an app relaunch before any renderer mounts.
       // Mobile still needs their retained history without navigating desktop.
