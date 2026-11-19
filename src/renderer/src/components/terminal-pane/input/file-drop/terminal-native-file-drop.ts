@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { importExternalPathsToRuntime } from '@/runtime/files/imports/runtime-file-import-client'
+import { stageClientFilesForAgent } from '@/runtime/files/imports/agent-file-staging'
 import { translate } from '@/i18n/i18n'
 import { isWslUncPath } from '../../../../../../shared/file-access/wsl-paths'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
@@ -15,14 +15,11 @@ import {
   getTerminalTargetShellForWorktreePath,
   resolveTerminalDropTargetShell
 } from './terminal-drop-shell'
-import { isTerminalDropWindowsPathLike } from '../../../../../../shared/terminal/input/image-path-paste'
 import { writeTerminalDropPathsToCapturedTarget } from './terminal-drop-path-writer'
 import { showTerminalDropWriteFailure } from './terminal-drop-write-failure'
-import { joinRuntimeTerminalDropDir } from './terminal-drop-worktree-path'
 import type { captureTerminalDropTransportOwner } from './terminal-drop-transport-owner'
 import { toLocalWslDropPath } from './terminal-drop-local-wsl'
 import { terminalFileDropErrorMessage } from './terminal-native-file-drop-error'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 
 export async function deliverNativeTerminalFileDrop(
   args: NativeDropFlowArgs & {
@@ -127,7 +124,6 @@ async function uploadRuntimeDropPaths(
   }
 ): Promise<void> {
   const targetShell = getTerminalTargetShellForWorktreePath(args.worktreePath)
-  const destinationDir = joinRuntimeTerminalDropDir(args.worktreePath)
   const pending = toast.loading(
     translate(
       'auto.components.terminal.pane.terminal.drop.handler.uploadingFiles',
@@ -136,10 +132,10 @@ async function uploadRuntimeDropPaths(
     )
   )
   try {
-    const { results } = await importExternalPathsToRuntime(
+    const { staged, skipped, failed } = await stageClientFilesForAgent(
       {
         // Use the destination worktree’s owner, which may differ from the focused sidebar host.
-        target: runtimeTargetForOwnerEnvironment(args.runtimeEnvironmentId),
+        runtimeEnvironmentId: args.runtimeEnvironmentId,
         worktreeId: args.worktreeId,
         worktreePath: args.worktreePath,
         expectedExecutionHostId: args.expectedExecutionHostId,
@@ -147,20 +143,14 @@ async function uploadRuntimeDropPaths(
         expectedSshConnectionGeneration: args.expectedSshConnectionGeneration
       },
       args.dataPaths,
-      destinationDir,
-      { assertCurrent: args.assertCurrent, nameExtensionlessImages: true }
+      args.assertCurrent
     )
-    const imported = results.filter((result) => result.status === 'imported')
-    const importedPaths = imported.map((result) =>
-      isTerminalDropWindowsPathLike(args.worktreePath)
-        ? result.destPath.replace(/\//g, '\\')
-        : result.destPath
-    )
-    await pasteResolvedDropPaths({ ...args, paths: importedPaths, targetShell })
-    reportTerminalDropUploadSkipsAndFailures(
-      results.filter((result) => result.status === 'skipped'),
-      results.filter((result) => result.status === 'failed')
-    )
+    await pasteResolvedDropPaths({
+      ...args,
+      paths: staged.map(({ hostPath }) => hostPath),
+      targetShell
+    })
+    reportTerminalDropUploadSkipsAndFailures(skipped, failed)
   } catch (err) {
     toast.error(terminalFileDropErrorMessage(err, 'upload'))
   } finally {
