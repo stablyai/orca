@@ -274,6 +274,7 @@ export function ClientHostedBrowserPagePane(props: Props) {
     const unbindChrome = bindBrowserClientPageChromeListeners(webview, {
       browserPageId: browserTab.id,
       updatePageState: (pageId, updates) => updatePageStateFromGuest(pageId, updates),
+      publishFavicon: (faviconUrl) => publisher.publishFavicon(faviconUrl),
       dismissAddressBarSuggestions: () => dismissAddressBarSuggestionsRef.current?.(),
       applyViewportPreset: pageBox.applyOverride
     })
@@ -301,7 +302,6 @@ export function ClientHostedBrowserPagePane(props: Props) {
     unsubscribeMetadata = subscribeBrowserGuestMetadata(browserTab.id, webview, receiveMetadata)
     if (!guestAvailable) {
       cleanupGuest()
-      return cleanupGuest
     }
     return cleanupGuest
   }, [
