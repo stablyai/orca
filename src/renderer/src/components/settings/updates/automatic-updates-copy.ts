@@ -6,7 +6,7 @@ export function getAutomaticUpdatesSettingCopy(t: Translate = translate) {
     title: t('settings.automaticUpdates.title', 'Automatic updates'),
     description: t(
       'settings.automaticUpdates.description',
-      'When a background check finds an update, Orca downloads it and restarts to install it automatically.'
+      'On supported desktop installs, Orca downloads eligible updates on its regular check schedule and restarts to install them automatically.'
     )
   }
 }

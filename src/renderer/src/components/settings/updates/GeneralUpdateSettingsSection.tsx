@@ -106,7 +106,9 @@ export function GeneralUpdateSettingsSection({
             disabled={
               updateStatus.state === 'checking' ||
               updateStatus.state === 'downloading' ||
-              (updateStatus.state === 'downloaded' && updateStatus.automaticDownload)
+              (updateStatus.state === 'error' &&
+                updateStatus.messageCode === 'macStagingTimeout') ||
+              (updateStatus.state === 'downloaded' && updateStatus.installing)
             }
             className="gap-2"
           >

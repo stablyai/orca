@@ -1,11 +1,12 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { Info } from 'lucide-react'
 import { Button } from '../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
-import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
+import { Switch } from '../../ui/switch'
+import { SettingsRow } from '../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { getAutomaticUpdatesSettingCopy } from './automatic-updates-copy'
 
@@ -14,6 +15,7 @@ export function AutomaticUpdatesSetting(): React.JSX.Element {
   const enabled = useAppStore((state) => state.settings?.automaticUpdates === true)
   const settingsLoaded = useAppStore((state) => state.settings !== null)
   const updateSettings = useAppStore((state) => state.updateSettingsOrThrow)
+  const switchId = useId()
   const [saving, setSaving] = useState(false)
   const { title, description } = getAutomaticUpdatesSettingCopy(t)
 
@@ -28,31 +30,34 @@ export function AutomaticUpdatesSetting(): React.JSX.Element {
 
   return (
     <SearchableSetting title={title} description={description}>
-      <SettingsSwitchRow
-        label={
-          <span className="inline-flex items-center gap-1.5">
-            {title}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={t('settings.automaticUpdates.info', 'About automatic updates')}
-                >
-                  <Info className="size-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4} className="max-w-xs">
-                {description}
-              </TooltipContent>
-            </Tooltip>
-          </span>
+      <SettingsRow
+        label={title}
+        htmlFor={switchId}
+        labelAccessory={
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                aria-label={t('settings.automaticUpdates.info', 'About automatic updates')}
+              >
+                <Info className="size-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4} className="max-w-xs">
+              {description}
+            </TooltipContent>
+          </Tooltip>
         }
-        ariaLabel={title}
-        checked={enabled}
-        onChange={toggleAutomaticUpdates}
-        disabled={!settingsLoaded || saving}
+        control={
+          <Switch
+            id={switchId}
+            checked={enabled}
+            onCheckedChange={toggleAutomaticUpdates}
+            disabled={!settingsLoaded || saving}
+          />
+        }
       />
     </SearchableSetting>
   )

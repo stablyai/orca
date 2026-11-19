@@ -16,8 +16,6 @@ import { requestServeUpdateHandoff, failServeUpdateHandoff } from '../serve-upda
 import { UpdaterMacInstallPreflight } from '../mac-install/updater-mac-install-preflight'
 import { prepareThisProcessShipItStaging } from '../mac-install/shipit-leftover-recovery'
 import { MAC_DEFERRED_STAGING_TIMEOUT_MS } from './updater-state'
-import { prepareRendererForUpdate } from '../../window/renderer-relays/native-unload-coordinator'
-import { wslMoveInstallHold } from './updater-wsl-move-install-hold'
 
 export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight {
   protected async performQuitAndInstall(automatic = false): Promise<void> {
@@ -32,10 +30,6 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
     }
 
     const pendingVersion = this.getPendingInstallVersion()
-    if (automatic && this.getAutomaticUpdates?.() !== true) {
-      this.cancelAutomaticInstall(pendingVersion)
-      return
-    }
     if (this.deferHeadlessServeInstall('install', pendingVersion)) {
       return
     }
@@ -64,16 +58,7 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
       })
       return
     }
-    const wslHold = wslMoveInstallHold()
-    if (wslHold) {
-      recordUpdaterLifecycle(wslHold.lifecycleEvent, { version: pendingVersion || null })
-      this.sendToMainWindow('updater:quitAndInstallAborted')
-      this.sendInstallFailureStatus({
-        state: 'error',
-        message: wslHold.message,
-        retryAction: 'install',
-        ...(pendingVersion ? { version: pendingVersion } : {})
-      })
+    if (!this.canProceedWithInstall(pendingVersion, automatic)) {
       return
     }
     this.finishActiveUpdateCheckAttempt()
@@ -88,9 +73,6 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
         { state: 'downloaded', version: pendingVersion, installing: true },
         { force: true }
       )
-      if (automatic && !(await this.prepareAutomaticInstall(pendingVersion))) {
-        return
-      }
       if (!(await this.preflightMacInstall(pendingVersion))) {
         return
       }
@@ -131,6 +113,9 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
           return
         }
 
+        if (automatic && !(await this.prepareAutomaticInstall(pendingVersion))) {
+          return
+        }
         await commitServeSupervisorPark(() => getMacUpdateRunningInstances())
         // Deferred staging begins inside the native install call below.
         await (this.isMacStagingDeferredToInstall() ? prepareThisProcessShipItStaging() : null)
@@ -141,8 +126,7 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
         if (!this.quitAndInstallInProgress) {
           return
         }
-        if (automatic && this.getAutomaticUpdates?.() !== true) {
-          this.cancelAutomaticInstall(pendingVersion)
+        if (!this.canProceedWithInstall(pendingVersion, automatic)) {
           return
         }
         // Mark before native invoke so synchronous errors can recover; pre-native errors cannot.
@@ -230,28 +214,6 @@ export abstract class UpdaterInstallExecution extends UpdaterMacInstallPreflight
           : 'Could not restart to install the update. Quit and reopen Orca, then try again.'
       })
     }
-  }
-
-  private async prepareAutomaticInstall(version: string): Promise<boolean> {
-    const window = this.getMainWindow()
-    if (window && !window.isDestroyed() && !window.webContents.isDestroyed()) {
-      this.cancelAutomaticInstallPreparation = await prepareRendererForUpdate(window.webContents)
-      if (!this.cancelAutomaticInstallPreparation) {
-        this.resetQuitForUpdateState()
-        this.sendInstallFailureStatus({
-          state: 'error',
-          version,
-          retryAction: 'install',
-          ...updaterCodedMessage('automaticInstallCheckpointFailed')
-        })
-        return false
-      }
-    }
-    if (this.getAutomaticUpdates?.() !== true) {
-      this.cancelAutomaticInstall(version)
-      return false
-    }
-    return true
   }
 
   // Supervised serve disables autoInstallOnAppQuit; MacUpdater only stages inside quitAndInstall, so waiting first deadlocks.

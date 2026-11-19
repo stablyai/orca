@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { translateMain } from '../../i18n/main-i18n'
 import type { UpdateCheckOptions, UpdateStatus } from '../../../shared/updater/update-status-types'
 import type {
   RemoteServerUpdateInstallResult,
@@ -66,16 +67,14 @@ export abstract class UpdaterRemoteStatus extends UpdaterNudge {
     options?: UpdateCheckOptions
   ): RemoteServerUpdaterSnapshot {
     this.assertRemoteServerUpdateAvailable()
+    this.assertRemoteUpdaterIdle()
     this.checkForUpdatesFromMenu(options)
     return this.getRemoteServerUpdaterSnapshot(runtimeId)
   }
 
   protected downloadRemoteServerUpdate(runtimeId: string): RemoteServerUpdaterSnapshot {
     this.assertRemoteServerUpdateAvailable()
-    // The host may have started an automatic download since the client last checked the offer.
-    if (this.currentStatus.state === 'downloading' || this.currentStatus.state === 'downloaded') {
-      return this.getRemoteServerUpdaterSnapshot(runtimeId)
-    }
+    this.assertRemoteUpdaterIdle()
     if (this.currentStatus.state !== 'available') {
       throw new Error('remote_update_not_available')
     }
@@ -85,6 +84,7 @@ export abstract class UpdaterRemoteStatus extends UpdaterNudge {
 
   protected installRemoteServerUpdate(runtimeId: string): RemoteServerUpdateInstallResult {
     this.assertRemoteServerUpdateAvailable()
+    this.assertRemoteUpdaterIdle()
     if (this.currentStatus.state !== 'downloaded') {
       throw new Error('remote_update_not_downloaded')
     }
@@ -97,6 +97,22 @@ export abstract class UpdaterRemoteStatus extends UpdaterNudge {
     }
     this.quitAndInstall()
     return result
+  }
+
+  private assertRemoteUpdaterIdle(): void {
+    if (
+      this.macInstallerStagingVersion !== null ||
+      this.currentStatus.state === 'downloading' ||
+      this.pendingQuitAndInstallTimer ||
+      this.quitAndInstallInProgress
+    ) {
+      throw new Error(
+        translateMain(
+          'updates.remoteUpdateBusy',
+          'This server is already updating. Check again once it finishes.'
+        )
+      )
+    }
   }
 
   protected resolveUpdateInstallMode(isServeMode: boolean): UpdateInstallMode {

@@ -21,7 +21,7 @@ import type { UpdateCheckOptions } from '../../../../../shared/updater/update-st
 import { waitForReplacementRuntime } from './remote-server-restart-wait'
 import { getRemoteServerNewerThanClientVersion } from './remote-server-version-skew'
 import { remoteServerUpdateErrorMessage } from './remote-server-update-errors'
-import { checkRemoteServerUpdater, pollRemoteServerUpdater } from './remote-server-updater-polling'
+import { pollRemoteServerUpdater } from './remote-server-updater-polling'
 
 export type RemoteServerUpdatePhase =
   | 'checking'
@@ -156,22 +156,24 @@ export async function inspectRemoteServerUpdate(
 
   if (checkOptions) {
     try {
-      const { status: checked } = await checkRemoteServerUpdater(
-        environment.id,
-        transport,
-        checkOptions,
-        timing
-      )
-      if (
-        checked.state === 'available' ||
-        checked.state === 'downloading' ||
-        checked.state === 'downloaded'
-      ) {
+      const first = await transport.check(environment.id, checkOptions)
+      const checked =
+        first.status.state === 'available' || first.status.state === 'not-available'
+          ? first
+          : await pollRemoteServerUpdater(
+              environment.id,
+              transport,
+              timing,
+              (snapshot) =>
+                snapshot.status.state === 'available' || snapshot.status.state === 'not-available',
+              () => undefined
+            )
+      if (checked.status.state === 'available') {
         return {
           ...base,
           ...statusFields,
           phase: 'available',
-          targetVersion: checked.version
+          targetVersion: checked.status.version
         }
       }
       return {
@@ -220,13 +222,16 @@ export async function runRemoteServerUpdate(
       includePerfPrerelease:
         entry.targetVersion !== null && isPerfPrereleaseAppVersion(entry.targetVersion)
     }
-    const { status: offer } = await checkRemoteServerUpdater(
+    await transport.check(entry.environmentId, options.checkOptions ?? inferredCheckOptions)
+    const available = await pollRemoteServerUpdater(
       entry.environmentId,
       transport,
-      options.checkOptions ?? inferredCheckOptions,
-      timing
+      timing,
+      (snapshot) =>
+        snapshot.status.state === 'available' || snapshot.status.state === 'not-available',
+      () => undefined
     )
-    if (offer.state === 'not-available') {
+    if (available.status.state === 'not-available') {
       const status = await transport.getRuntimeStatus(entry.environmentId, 10_000)
       const currentVersion = status.appVersion?.trim() ?? ''
       if (!hasReachedAppVersion(currentVersion, entry.targetVersion)) {
@@ -241,31 +246,32 @@ export async function runRemoteServerUpdate(
       onProgress(next)
       return next
     }
-    if (offer.state === 'available' || offer.state === 'downloading') {
-      next = {
-        ...next,
-        phase: 'downloading',
-        targetVersion: offer.version,
-        progress: offer.state === 'downloading' ? offer.percent : 0
-      }
-      onProgress(next)
-      if (offer.state === 'available') {
-        await transport.download(entry.environmentId)
-      }
-      await pollRemoteServerUpdater(
-        entry.environmentId,
-        transport,
-        timing,
-        (snapshot) => snapshot.status.state === 'downloaded',
-        (snapshot) => {
-          if (snapshot.status.state === 'downloading') {
-            next = { ...next, progress: snapshot.status.percent }
-            onProgress(next)
-          }
-        }
-      )
-    } else if (offer.state !== 'downloaded') {
+    if (available.status.state !== 'available') {
       throw new Error('remote_update_status_unavailable')
+    }
+
+    next = {
+      ...next,
+      phase: 'downloading',
+      targetVersion: available.status.version,
+      progress: 0
+    }
+    onProgress(next)
+    await transport.download(entry.environmentId)
+    const downloaded = await pollRemoteServerUpdater(
+      entry.environmentId,
+      transport,
+      timing,
+      (snapshot) => snapshot.status.state === 'downloaded',
+      (snapshot) => {
+        if (snapshot.status.state === 'downloading') {
+          next = { ...next, progress: snapshot.status.percent }
+          onProgress(next)
+        }
+      }
+    )
+    if (downloaded.status.state !== 'downloaded') {
+      throw new Error('remote_update_download_incomplete')
     }
 
     const install = await transport.install(entry.environmentId)

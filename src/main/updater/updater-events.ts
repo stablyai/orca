@@ -49,6 +49,7 @@ export function registerAutoUpdaterHandlers({
   failMacStaging,
   isAwaitingMacStaging,
   isMacStagingDeferredToInstall,
+  watchMacStaging,
   shouldDeferMacQuitForInstall,
   recordCompletedUpdateCheck,
   restoreReleaseUpdateSource,
@@ -268,6 +269,7 @@ export function registerAutoUpdaterHandlers({
     // Squirrel must finish staging before macOS can install.
     if (process.platform === 'darwin' && !macInstallerReady && !isMacStagingDeferredToInstall()) {
       recordUpdaterLifecycle('macos_waiting_for_squirrel', { version: info.version })
+      watchMacStaging(info.version)
       sendStatus({ state: 'downloading', percent: 100, version: info.version })
       return
     }

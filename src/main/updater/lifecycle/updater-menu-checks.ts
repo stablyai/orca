@@ -10,8 +10,8 @@ export abstract class UpdaterMenuChecks extends UpdaterScheduling {
       this.pendingQuitAndInstallTimer ||
       this.quitAndInstallInProgress ||
       isMacInstallRequested() ||
-      this.currentStatus.state === 'downloading' ||
-      (this.currentStatus.state === 'downloaded' && this.currentStatus.automaticDownload)
+      this.macInstallerStagingVersion !== null ||
+      this.currentStatus.state === 'downloading'
     ) {
       return
     }

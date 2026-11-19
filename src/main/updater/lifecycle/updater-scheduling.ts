@@ -64,8 +64,8 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
     if (
       this.backgroundCheckLaunchPending ||
       this.currentStatus.state === 'checking' ||
-      this.currentStatus.state === 'downloading' ||
-      (this.currentStatus.state === 'downloaded' && this.currentStatus.automaticDownload)
+      this.macInstallerStagingVersion !== null ||
+      this.currentStatus.state === 'downloading'
     ) {
       return false
     }

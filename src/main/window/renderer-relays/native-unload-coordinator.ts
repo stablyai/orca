@@ -22,7 +22,7 @@ const NATIVE_UNLOAD_PREPARE_DEADLINE_MS =
 type ReloadOptions = { ignoreCache: boolean; replacedByClose?: boolean }
 const reloads = new WeakMap<WebContents, { options: ReloadOptions; promise: Promise<void> }>()
 const coordinators = new WeakMap<WebContents, NativeUnload>()
-const updatesInFlight = new WeakSet<WebContents>()
+const updatesInFlight = new WeakMap<WebContents, Promise<void>>()
 // Value is whether the close is part of a quit.
 const closesInFlight = new WeakMap<WebContents, boolean>()
 
@@ -177,15 +177,23 @@ export async function prepareRendererForUpdate(
   ) {
     return null
   }
-  updatesInFlight.add(contents)
+  const update = Promise.withResolvers<void>()
+  updatesInFlight.set(contents, update.promise)
+  const release = (): void => {
+    updatesInFlight.delete(contents)
+    update.resolve()
+  }
+  contents.once('destroyed', update.resolve)
   const outcome = await coordinator.prepare('update')
   if (outcome !== 'saved') {
-    updatesInFlight.delete(contents)
+    contents.removeListener('destroyed', update.resolve)
+    release()
     return null
   }
   return () => {
     coordinator.cancelPrepared()
-    updatesInFlight.delete(contents)
+    contents.removeListener('destroyed', update.resolve)
+    release()
   }
 }
 
@@ -231,8 +239,14 @@ export async function reloadWithRendererCheckpoint(
   return reload
 }
 
-/** A close requested mid-reload waits for that checkpoint's verdict, then replaces the reload. */
-export function replacePendingReloadWithClose(contents: WebContents): Promise<void> | undefined {
+/** Close waits for an update to finish or takes over an in-flight reload. */
+export function settleRendererPreparationBeforeClose(
+  contents: WebContents
+): Promise<void> | undefined {
+  const update = updatesInFlight.get(contents)
+  if (update) {
+    return update
+  }
   const pending = reloads.get(contents)
   if (!pending) {
     return undefined

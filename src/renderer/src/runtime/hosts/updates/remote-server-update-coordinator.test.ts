@@ -1,14 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import {
-  REMOTE_SERVER_UPDATE_CAPABILITY,
-  type RemoteServerUpdaterSnapshot
-} from '../../../../../shared/remote-runtime/host-catalog/remote-server-update'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { getRemoteServerNewerThanClientVersion } from './remote-server-version-skew'
 import {
   inspectRemoteServerUpdate,
-  runRemoteServerUpdate,
   type RemoteServerUpdateTransport
 } from './remote-server-update-coordinator'
 
@@ -53,35 +48,4 @@ describe('inspectRemoteServerUpdate', () => {
       '1.4.300'
     )
   })
-})
-
-it('installs a paired desktop update that the host already downloaded', async () => {
-  const snapshot: RemoteServerUpdaterSnapshot = {
-    appVersion: '1.4.300',
-    runtimeId: 'r1',
-    support: { installMode: 'interactive', automatic: true, reason: 'available' },
-    status: { state: 'downloaded', version: '1.4.301', automaticDownload: true }
-  }
-  let installed = false
-  const baseTransport = transportFor('1.4.300')
-  const transport: RemoteServerUpdateTransport = {
-    ...baseTransport,
-    getRuntimeStatus: async (environmentId) => ({
-      ...(await baseTransport.getRuntimeStatus(environmentId)),
-      appVersion: installed ? '1.4.301' : '1.4.300',
-      runtimeId: installed ? 'r2' : 'r1',
-      capabilities: [REMOTE_SERVER_UPDATE_CAPABILITY],
-      remoteUpdateSupport: snapshot.support
-    }),
-    check: async () => snapshot,
-    install: async () => {
-      installed = true
-      return { accepted: true, fromVersion: '1.4.300', targetVersion: '1.4.301', runtimeId: 'r1' }
-    }
-  }
-
-  const entry = await inspectRemoteServerUpdate(environment, '1.4.300', transport, {})
-  expect(entry).toMatchObject({ phase: 'available', targetVersion: '1.4.301' })
-  const result = await runRemoteServerUpdate(entry, transport, () => {})
-  expect(result).toMatchObject({ phase: 'updated', currentVersion: '1.4.301', runtimeId: 'r2' })
 })

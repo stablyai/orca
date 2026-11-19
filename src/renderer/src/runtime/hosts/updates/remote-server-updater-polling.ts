@@ -1,6 +1,4 @@
 import type { RemoteServerUpdaterSnapshot } from '../../../../../shared/remote-runtime/host-catalog/remote-server-update'
-import type { UpdateCheckOptions } from '../../../../../shared/updater/update-status-types'
-import type { RemoteServerUpdateTransport } from './remote-server-update-coordinator'
 import { updaterMessageText } from '@/app-shell/updates/updater-message-copy'
 
 type PollingTransport = {
@@ -12,33 +10,6 @@ type PollingTransport = {
 type PollingTiming = {
   operationTimeoutMs: number
   pollIntervalMs: number
-}
-
-function hasRemoteUpdateCheckResult({ status }: RemoteServerUpdaterSnapshot): boolean {
-  return (
-    status.state === 'available' ||
-    status.state === 'downloading' ||
-    status.state === 'downloaded' ||
-    status.state === 'not-available'
-  )
-}
-
-export async function checkRemoteServerUpdater(
-  environmentId: string,
-  transport: PollingTransport & Pick<RemoteServerUpdateTransport, 'check'>,
-  options: UpdateCheckOptions,
-  timing: PollingTiming
-): Promise<RemoteServerUpdaterSnapshot> {
-  const first = await transport.check(environmentId, options)
-  return hasRemoteUpdateCheckResult(first)
-    ? first
-    : pollRemoteServerUpdater(
-        environmentId,
-        transport,
-        timing,
-        hasRemoteUpdateCheckResult,
-        () => undefined
-      )
 }
 
 export async function pollRemoteServerUpdater(

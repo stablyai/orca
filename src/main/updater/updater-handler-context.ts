@@ -29,6 +29,7 @@ export type UpdaterHandlerContext = {
   failMacStaging: (error: unknown) => void
   isAwaitingMacStaging: () => boolean
   isMacStagingDeferredToInstall: () => boolean
+  watchMacStaging: (version: string) => void
   shouldDeferMacQuitForInstall: () => boolean
   recordCompletedUpdateCheck: () => void
   restoreReleaseUpdateSource: () => void

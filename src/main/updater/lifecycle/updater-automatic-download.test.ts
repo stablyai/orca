@@ -1,21 +1,24 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as PrereleaseFeed from '../releases/updater-prerelease-feed'
 import { UpdaterSetup } from './updater-setup'
 import { updaterMainWindow } from '../testing/updater-test-main-window'
 
-const { autoUpdater, nativeUpdater, prepareRendererForUpdate } = await vi.hoisted(async () => {
-  const { EventEmitter } = await import('node:events')
-  return {
-    autoUpdater: Object.assign(new EventEmitter(), {
-      setFeedURL: vi.fn(),
-      checkForUpdates: vi.fn<() => Promise<unknown>>(),
-      downloadUpdate: vi.fn(async () => []),
-      quitAndInstall: vi.fn()
-    }),
-    nativeUpdater: new EventEmitter(),
-    prepareRendererForUpdate: vi.fn<() => Promise<(() => void) | null>>()
-  }
-})
+const { autoUpdater, nativeUpdater, prepareRendererForUpdate, hasInProcessTerminalSessions } =
+  await vi.hoisted(async () => {
+    const { EventEmitter } = await import('node:events')
+    return {
+      autoUpdater: Object.assign(new EventEmitter(), {
+        setFeedURL: vi.fn(),
+        checkForUpdates: vi.fn<() => Promise<unknown>>(),
+        downloadUpdate: vi.fn(async () => []),
+        quitAndInstall: vi.fn()
+      }),
+      nativeUpdater: new EventEmitter(),
+      prepareRendererForUpdate: vi.fn<() => Promise<(() => void) | null>>(),
+      hasInProcessTerminalSessions: vi.fn<() => boolean>()
+    }
+  })
 
 vi.mock('electron', () => ({
   app: Object.assign(new EventEmitter(), { isPackaged: true, getVersion: () => '1.0.0' }),
@@ -33,6 +36,19 @@ vi.mock('../linux-package/linux-update-package-type', () => ({
   isExternallyManagedLinuxInstall: () => false
 }))
 vi.mock('../nudges/nudge-campaign', () => ({ fetchNudge: async () => null }))
+vi.mock('../releases/updater-prerelease-feed', async (original) => ({
+  ...(await original<typeof PrereleaseFeed>()),
+  fetchNewerReleaseTagsWithReadiness: async () => ({ state: 'ready', tags: ['v1.1.0'] })
+}))
+vi.mock('../mac-install/macos-update-running-instances', () => ({
+  getMacUpdateRunningInstances: async () => []
+}))
+vi.mock('./serve-supervisor-install-park', () => ({
+  parkServeSupervisorsForInstall: async () => ({ kind: 'parked' }),
+  commitServeSupervisorPark: async () => {},
+  releaseServeSupervisorPark: async () => {}
+}))
+vi.mock('../../ipc/pty/provider/kill-all', () => ({ hasInProcessTerminalSessions }))
 vi.mock('../releases/updater-changelog', () => ({ fetchChangelog: async () => null }))
 vi.mock('../../window/renderer-relays/native-unload-coordinator', () => ({
   prepareRendererForUpdate
@@ -42,16 +58,6 @@ vi.mock('../updater-lifecycle-diagnostics', () => ({ recordUpdaterLifecycle: vi.
 vi.mock('../../cli/appimage/appimage-copy-pre-extraction', () => ({
   preExtractDownloadedAppImageUpdate: async () => false
 }))
-
-class ReleaseUpdater extends UpdaterSetup {
-  protected override async pinDefaultReleaseFeed(): Promise<'ready'> {
-    return 'ready'
-  }
-
-  protected override async preflightMacInstall(): Promise<boolean> {
-    return true
-  }
-}
 
 function finishDownload(): void {
   autoUpdater.emit('update-downloaded', { version: '1.1.0', files: [] })
@@ -66,6 +72,7 @@ describe('automatic desktop updates', () => {
     autoUpdater.removeAllListeners()
     nativeUpdater.removeAllListeners()
     autoUpdater.quitAndInstall.mockClear()
+    hasInProcessTerminalSessions.mockReset().mockReturnValue(false)
     prepareRendererForUpdate.mockReset().mockResolvedValue(() => {})
     autoUpdater.checkForUpdates.mockImplementation(async () => {
       autoUpdater.emit('checking-for-update')
@@ -78,7 +85,7 @@ describe('automatic desktop updates', () => {
   })
 
   it('installs an eligible background update after the renderer has saved its state', async () => {
-    const updater = new ReleaseUpdater()
+    const updater = new UpdaterSetup()
     let finishCheckpoint!: (cancel: () => void) => void
     prepareRendererForUpdate.mockReturnValue(
       new Promise((resolve) => {
@@ -118,7 +125,7 @@ describe('automatic desktop updates', () => {
 
   it('keeps the update ready when the user opts out during the download', async () => {
     let automaticUpdates = true
-    const updater = new ReleaseUpdater()
+    const updater = new UpdaterSetup()
     updater.setupAutoUpdater(null, {
       getAutomaticUpdates: () => automaticUpdates,
       getLastUpdateCheckAt: Date.now
@@ -132,11 +139,52 @@ describe('automatic desktop updates', () => {
 
     expect(updater.getUpdateStatus()).toMatchObject({ state: 'downloaded', version: '1.1.0' })
     expect(autoUpdater.quitAndInstall).not.toHaveBeenCalled()
+    updater.checkForUpdates()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(updater.getUpdateStatus()).toMatchObject({ state: 'available', version: '1.1.0' })
+  })
+
+  it('does not restart when a non-persistent terminal starts during the checkpoint', async () => {
+    prepareRendererForUpdate.mockImplementation(async () => {
+      hasInProcessTerminalSessions.mockReturnValue(true)
+      return () => {}
+    })
+    const updater = new UpdaterSetup()
+    updater.setupAutoUpdater(
+      updaterMainWindow(() => {}),
+      {
+        getAutomaticUpdates: () => true,
+        getLastUpdateCheckAt: Date.now
+      }
+    )
+
+    updater.checkForUpdates()
+    await vi.advanceTimersByTimeAsync(0)
+    finishDownload()
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect(updater.getUpdateStatus()).toMatchObject({ state: 'error', retryable: false })
+    expect(autoUpdater.quitAndInstall).not.toHaveBeenCalled()
+  })
+
+  it('refuses a paired Perf check while the desktop updater owns the download', async () => {
+    const updater = new UpdaterSetup()
+    updater.setupAutoUpdater(null, {
+      getAutomaticUpdates: () => true,
+      getLastUpdateCheckAt: Date.now
+    })
+    updater.checkForUpdates()
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(() =>
+      updater.checkForRemoteServerUpdate('desktop', { includePerfPrerelease: true })
+    ).toThrow()
+    expect(updater.getUpdateStatus()).toMatchObject({ state: 'downloading', version: '1.1.0' })
   })
 
   it('leaves Orca running if it cannot save renderer state', async () => {
     prepareRendererForUpdate.mockResolvedValue(null)
-    const updater = new ReleaseUpdater()
+    const updater = new UpdaterSetup()
     updater.setupAutoUpdater(
       updaterMainWindow(() => {}),
       {
@@ -158,9 +206,33 @@ describe('automatic desktop updates', () => {
     expect(autoUpdater.quitAndInstall).not.toHaveBeenCalled()
   })
 
+  it.runIf(process.platform === 'darwin')(
+    'keeps the stalled Squirrel staging attempt fenced until its native result arrives',
+    async () => {
+      const updater = new UpdaterSetup()
+      updater.setupAutoUpdater(null, {
+        getAutomaticUpdates: () => true,
+        getLastUpdateCheckAt: Date.now
+      })
+      updater.checkForUpdates()
+      await vi.advanceTimersByTimeAsync(0)
+      autoUpdater.emit('update-downloaded', { version: '1.1.0', files: [] })
+      await vi.advanceTimersByTimeAsync(180_000)
+      expect(updater.getUpdateStatus()).toMatchObject({ state: 'error', version: '1.1.0' })
+
+      updater.checkForUpdatesFromMenu()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(updater.getUpdateStatus()).toMatchObject({ state: 'error', version: '1.1.0' })
+      expect(autoUpdater.quitAndInstall).not.toHaveBeenCalled()
+      nativeUpdater.emit('update-downloaded')
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(autoUpdater.quitAndInstall).toHaveBeenCalledWith(true, true)
+    }
+  )
+
   it('keeps the offer manual until the preference is enabled', async () => {
     let automaticUpdates = false
-    const updater = new ReleaseUpdater()
+    const updater = new UpdaterSetup()
     updater.setupAutoUpdater(null, {
       getAutomaticUpdates: () => automaticUpdates,
       getLastUpdateCheckAt: Date.now

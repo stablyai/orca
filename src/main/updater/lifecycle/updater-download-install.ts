@@ -9,11 +9,13 @@ import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { isExternallyManagedLinuxInstall } from '../linux-package/linux-update-package-type'
 import type { UpdateStatus } from '../../../shared/updater/update-status-types'
 import { updaterCodedMessage } from '../../../shared/updater/updater-failure-copy'
-import { QUIT_AND_INSTALL_DELAY_MS } from './updater-state'
+import { MAC_DEFERRED_STAGING_TIMEOUT_MS, QUIT_AND_INSTALL_DELAY_MS } from './updater-state'
 import { UpdaterRemoteStatus } from './updater-remote-status'
 import { prepareThisProcessShipItStaging } from '../mac-install/shipit-leftover-recovery'
 
 export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
+  private macStagingTimer: ReturnType<typeof setTimeout> | null = null
+
   protected quitAndInstall(automatic = false): void {
     if (
       this.localBuildSelectionInProgress ||
@@ -69,7 +71,37 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     }
   }
 
+  protected watchMacStaging(version: string): void {
+    if (this.macInstallerStagingVersion !== null) {
+      return
+    }
+    this.macInstallerStagingVersion = version
+    this.macStagingTimer = setTimeout(() => {
+      this.macStagingTimer = null
+      if (this.currentStatus.state === 'downloading' && this.currentStatus.version === version) {
+        // Squirrel may still finish this attempt. Keep its version fenced until a native result.
+        this.sendStatus({
+          state: 'error',
+          version,
+          retryable: false,
+          ...updaterCodedMessage('macStagingTimeout')
+        })
+      }
+    }, MAC_DEFERRED_STAGING_TIMEOUT_MS)
+  }
+
+  protected stopWatchingMacStaging(): void {
+    this.macInstallerStagingVersion = null
+    if (this.macStagingTimer) {
+      clearTimeout(this.macStagingTimer)
+      this.macStagingTimer = null
+    }
+  }
+
   protected publishDownloadStatus(status: UpdateStatus): void {
+    if (status.state === 'downloaded') {
+      this.stopWatchingMacStaging()
+    }
     if (status.state !== 'downloaded' || status.version !== this.automaticDownloadVersion) {
       this.sendStatus(status)
       return
@@ -112,6 +144,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
       this.pendingQuitAndInstallTimer ||
       this.quitAndInstallInProgress ||
       isMacInstallRequested() ||
+      this.macInstallerStagingVersion !== null ||
       this.downloadInFlight
     ) {
       return
@@ -147,6 +180,7 @@ export abstract class UpdaterDownloadInstall extends UpdaterRemoteStatus {
     if (this.deferHeadlessServeInstall('download', version)) {
       return
     }
+    this.stopWatchingMacStaging()
     this.automaticDownloadVersion = automatic ? version : null
     this.downloadInFlight = true
     const localBuildDownload = this.activeUpdateSource === 'local'

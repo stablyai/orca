@@ -66,6 +66,7 @@ export abstract class UpdaterState {
   protected autoUpdateCheckTimer: ReturnType<typeof setTimeout> | null = null
   protected nudgeCheckTimer: ReturnType<typeof setTimeout> | null = null
   protected pendingQuitAndInstallTimer: ReturnType<typeof setTimeout> | null = null
+  protected macInstallerStagingVersion: string | null = null
   protected macDeferredStagingTimer: ReturnType<typeof setTimeout> | null = null
   protected quitAndInstallInProgress = false
   protected cancelAutomaticInstallPreparation: (() => void) | null = null

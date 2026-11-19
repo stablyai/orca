@@ -13,6 +13,7 @@ import {
 } from '../../shared/app-lifecycle/shutdown/renderer-shutdown-events'
 import {
   ORCA_APP_RESTART_ABORTED_EVENT,
+  ORCA_AUTOMATIC_UPDATE_PREPARE_EVENT,
   ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT
 } from '../../shared/updater/updater-renderer-events'
 export async function awaitBeforeUnloadCheckpoint(): Promise<void> {
@@ -71,6 +72,28 @@ export async function invokeRendererRequestedReload(): Promise<void> {
 
 const nativeUnloadRequests = new Set<string>()
 let preparedNativeUnload: string | undefined
+let updateInputHold: { requestId: string; release: () => void } | undefined
+
+function holdUpdateInput(requestId: string): void {
+  const body = document.body
+  if (body) {
+    const previous = body.inert
+    body.inert = true
+    updateInputHold = {
+      requestId,
+      release: () => {
+        body.inert = previous
+      }
+    }
+  }
+}
+
+function releaseUpdateInput(requestId: string): void {
+  if (updateInputHold?.requestId === requestId) {
+    updateInputHold.release()
+    updateInputHold = undefined
+  }
+}
 
 // Main asks before menu, shortcut, DevTools and in-app reloads; prepare exactly like the renderer's own restart.
 ipcRenderer.on('app:prepare-native-unload', (_event, requestId: unknown, purpose: unknown) => {
@@ -79,6 +102,16 @@ ipcRenderer.on('app:prepare-native-unload', (_event, requestId: unknown, purpose
   }
   // Acknowledge before preparing so main can tell a frozen renderer from a slow save.
   ipcRenderer.send('app:native-unload-received', requestId)
+  if (purpose === 'update') {
+    if (
+      !window.dispatchEvent(new Event(ORCA_AUTOMATIC_UPDATE_PREPARE_EVENT, { cancelable: true }))
+    ) {
+      ipcRenderer.send('app:native-unload-prepared', { requestId, ok: false })
+      return
+    }
+    // Keep local input from creating state after the final checkpoint.
+    holdUpdateInput(requestId)
+  }
   nativeUnloadRequests.add(requestId)
   void prepareAndInvokeAppRestart(
     window,
@@ -88,8 +121,11 @@ ipcRenderer.on('app:prepare-native-unload', (_event, requestId: unknown, purpose
         ipcRenderer.send('app:native-unload-prepared', { requestId, ok: true })
       }
     },
-    awaitBeforeUnloadCheckpoint
+    awaitBeforeUnloadCheckpoint,
+    undefined,
+    () => !nativeUnloadRequests.has(requestId)
   ).catch((error: unknown) => {
+    releaseUpdateInput(requestId)
     if (!nativeUnloadRequests.delete(requestId)) {
       return
     }
@@ -107,6 +143,7 @@ ipcRenderer.on('app:native-unload-canceled', (_event, requestId: unknown) => {
   if (typeof requestId !== 'string') {
     return
   }
+  releaseUpdateInput(requestId)
   const pending = nativeUnloadRequests.delete(requestId)
   if (pending || preparedNativeUnload === requestId) {
     preparedNativeUnload = undefined
