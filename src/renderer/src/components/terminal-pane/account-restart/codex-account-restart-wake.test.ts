@@ -465,7 +465,10 @@ it.each(['connected', 'disconnected', 'removed during read'] as const)(
         ]
       ])
     })
-    admitTerminalNoticeLifetime('foreign-pty', { incarnationId: 'inc-foreign', fresh: true })
+    const foreignLifetime = admitTerminalNoticeLifetime('foreign-pty', {
+      incarnationId: 'inc-foreign',
+      fresh: true
+    })
     call.mockImplementation(async () => {
       if (control === 'removed during read') {
         useAppStore.setState({
@@ -494,7 +497,7 @@ it.each(['connected', 'disconnected', 'removed during read'] as const)(
         useAppStore.getState().terminalLayoutsByTabId.foreign.ptyIdsByLeafId?.[foreignLeaf]
       ).toBe('foreign-pty')
     } finally {
-      retireTerminalNoticeLifetime('foreign-pty')
+      retireTerminalNoticeLifetime(foreignLifetime)
     }
   }
 )

@@ -2137,32 +2137,31 @@ export function createRemoteRuntimePtyTransport(
   ): Promise<boolean> {
     const signal = options?.signal
     const targetHandle = handle
-    if (
-      !connected ||
-      !targetHandle ||
-      inputBlocked() ||
-      signal?.aborted ||
-      !canSendAccountInput(_inputKind)
-    ) {
+    const targetLifecycleEpoch = lifecycleEpoch
+    const targetIncarnation = authoritativePtyIncarnationId
+    const isCurrent = (): boolean =>
+      connected &&
+      handle === targetHandle &&
+      lifecycleEpoch === targetLifecycleEpoch &&
+      authoritativePtyIncarnationId === targetIncarnation &&
+      !inputBlocked() &&
+      !signal?.aborted &&
+      canSendAccountInput(_inputKind)
+    if (!targetHandle || !isCurrent()) {
       return false
     }
     if (!data) {
       return true
     }
     await inputBatcher.drain()
-    if (
-      !connected ||
-      handle !== targetHandle ||
-      inputBlocked() ||
-      !canSendAccountInput(_inputKind)
-    ) {
+    if (!isCurrent()) {
       return false
     }
     if (pendingViewportClaim && !getCurrentMultiplexedStream(targetHandle)) {
       const ready = await new Promise<boolean>((resolve) => {
         viewportClaimReadyWaiters.add(resolve)
       })
-      if (!ready || !connected || handle !== targetHandle) {
+      if (!ready || !isCurrent()) {
         return false
       }
     }
@@ -2177,7 +2176,7 @@ export function createRemoteRuntimePtyTransport(
     } catch {
       return false
     }
-    if (signal?.aborted) {
+    if (!isCurrent()) {
       return false
     }
     const stream = getCurrentMultiplexedStream(targetHandle)
@@ -2186,7 +2185,7 @@ export function createRemoteRuntimePtyTransport(
     }
     try {
       for (const chunk of iterateTerminalInputChunks(text)) {
-        if (!connected || handle !== targetHandle || inputBlocked() || signal?.aborted) {
+        if (!isCurrent()) {
           return false
         }
         // Why: acknowledged sends order behind pending debounce text but must not collapse large paste back into one remote RPC.
