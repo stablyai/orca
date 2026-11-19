@@ -5,7 +5,10 @@ import { openJournalDatabase } from '../native-chat/agent-session-journal/databa
 import { openJournalDomainDatabase } from '../native-chat/agent-session-journal/database/journal-domain-database'
 import { openWritableProfileStateDatabase } from '../persistence/profile-state/database/profile-state-database'
 import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
-import { readStoreSchemaSnapshot, type StoreSchemaSnapshot } from './store-schema-snapshot'
+import {
+  readStoreSchemaSnapshot,
+  type StoreSchemaSnapshot
+} from './store-schema-snapshot.test-fixture'
 
 export type FloorCheckedStore = 'profileState' | 'chatJournal' | 'chatDomain' | 'orchestration'
 export type FloorStoreSchema = { userVersion: number; sql: readonly string[] }

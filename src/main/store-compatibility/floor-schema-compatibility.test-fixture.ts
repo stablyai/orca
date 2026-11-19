@@ -1,4 +1,4 @@
-import type { StoreSchemaSnapshot } from './store-schema-snapshot'
+import type { StoreSchemaSnapshot } from './store-schema-snapshot.test-fixture'
 
 export type FloorSchemaPolicy = {
   /** Stores whose newer user_version the floor build refuses or opens read-only. */

@@ -20,7 +20,10 @@ const run = (command, args, cwd = repo, env = process.env) =>
 
 run('git', ['worktree', 'add', '--detach', checkout, tag])
 try {
-  for (const file of ['store-schema-snapshot.ts', 'floor-checked-stores.ts']) {
+  for (const file of [
+    'store-schema-snapshot.test-fixture.ts',
+    'floor-checked-stores.test-fixture.ts'
+  ]) {
     cpSync(join(repo, moduleDir, file), join(checkout, moduleDir, file))
   }
   // A test runs the tag's own store openers inside its own test runtime.
@@ -31,7 +34,7 @@ try {
       "import { tmpdir } from 'node:os'",
       "import { join } from 'node:path'",
       "import { it } from 'vitest'",
-      "import { formatFloorStoreSchemas } from './floor-checked-stores'",
+      "import { formatFloorStoreSchemas } from './floor-checked-stores.test-fixture'",
       "it('writes the floor store schemas', () => {",
       "  const dir = mkdtempSync(join(tmpdir(), 'store-floor-schemas-'))",
       `  writeFileSync(${JSON.stringify(output)}, formatFloorStoreSchemas(dir))`,
