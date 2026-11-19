@@ -30,17 +30,17 @@ export type CodexHistoryRead = {
   check: () => void
 }
 
-async function readHistoryResponse(
+async function readPage(
   input: CodexHistoryRead,
-  method: 'thread/turns/list' | 'thread/items/list',
-  params: Record<string, unknown>
+  cursor: string | null,
+  itemsView: 'summary' | 'full'
 ) {
   input.check()
   const page = readCodexJournalRecord(
     await waitForPromiseWithSignal(
       input.connection.request(
-        method,
-        { threadId: input.threadId, ...params },
+        'thread/turns/list',
+        { threadId: input.threadId, cursor, sortDirection: 'desc', limit: 100, itemsView },
         { timeoutMs: Math.max(1, input.deadline - Date.now()) }
       ),
       input.signal
@@ -53,63 +53,13 @@ async function readHistoryResponse(
   ) {
     throw new Error('invalid-page')
   }
+  const turns = page.data.map(readCodexJournalRecord)
+  const ids = turns.map(turnId)
   return {
-    data: page.data.map(readCodexJournalRecord),
+    turns,
+    ids,
     next: typeof page.nextCursor === 'string' && page.nextCursor ? page.nextCursor : null
   }
-}
-
-async function readTurnItems(input: CodexHistoryRead, id: string) {
-  const items: Record<string, unknown>[] = []
-  const cursors = new Set<string | null>()
-  const ids = new Set<string>()
-  let cursor: string | null = null
-  do {
-    if (cursors.has(cursor)) {
-      throw new Error('invalid-item-cursor')
-    }
-    cursors.add(cursor)
-    const page = await readHistoryResponse(input, 'thread/items/list', {
-      turnId: id,
-      cursor,
-      sortDirection: 'asc',
-      limit: 16
-    })
-    for (const entry of page.data) {
-      const item = readCodexJournalRecord(entry.item)
-      const itemId = readCodexJournalString(item, 'id')
-      if (entry.turnId !== id || !itemId || ids.has(itemId)) {
-        throw new Error('invalid-history-item')
-      }
-      ids.add(itemId)
-      items.push(item)
-    }
-    cursor = page.next
-  } while (cursor !== null)
-  return items
-}
-
-async function readPage(
-  input: CodexHistoryRead,
-  cursor: string | null,
-  itemsView: 'summary' | 'full'
-) {
-  // A single image-heavy turn can exceed V8's string limit in a full turn response.
-  const page = await readHistoryResponse(input, 'thread/turns/list', {
-    cursor,
-    sortDirection: 'desc',
-    limit: 100,
-    itemsView: 'summary'
-  })
-  const turns = page.data
-  const ids = turns.map(turnId)
-  if (itemsView === 'full') {
-    for (const turn of turns) {
-      turn.items = await readTurnItems(input, turnId(turn))
-      turn.itemsView = 'full'
-    }
-  }
-  return { turns, ids, next: page.next }
 }
 
 export function selectCodexHistoryTurn(

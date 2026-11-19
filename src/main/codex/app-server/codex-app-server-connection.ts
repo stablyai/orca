@@ -15,6 +15,7 @@ import {
 } from './codex-app-server-session'
 import { createCodexAppServerRecordDispatcher } from './codex-app-server-record-dispatch'
 import { createProviderRecordReader } from '../../provider-process/provider-record-reader'
+import { LARGE_JSON_RECORD_PARSER } from '../../../shared/json-stream/json-record-parser'
 import { withProviderRequestTimeout } from '../../provider-process/provider-request-timeout'
 import { withLostProviderOutcome } from '../../provider-process/provider-process-exit-status'
 import type {
@@ -102,6 +103,7 @@ async function connectCodexAppServer(
 
   const recordReader = createProviderRecordReader({
     stdout: child.stdout,
+    largeRecordParser: LARGE_JSON_RECORD_PARSER,
     onRecord: (parsed, line) => {
       if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
         handlers.onUnhandledFrame?.('frame:invalid-json', line)

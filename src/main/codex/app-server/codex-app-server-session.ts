@@ -19,6 +19,7 @@ import {
   type CodexAppServerSpawn
 } from './codex-app-server-process-tree-kill'
 import { createProviderRecordReader } from '../../provider-process/provider-record-reader'
+import { LARGE_JSON_RECORD_PARSER } from '../../../shared/json-stream/json-record-parser'
 
 export type CodexAppServerInvocation = {
   command: string
@@ -135,6 +136,7 @@ export async function runCodexAppServerSession<T>(
   })
 
   createProviderRecordReader({
+    largeRecordParser: LARGE_JSON_RECORD_PARSER,
     stdout: child.stdout,
     onRecord: (parsed) => {
       if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
