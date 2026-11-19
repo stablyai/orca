@@ -69,7 +69,10 @@ async function isGone(owner: BackendDesktopOwner): Promise<boolean> {
   try {
     process.kill(owner.pid, 0)
   } catch (error) {
-    return error instanceof Error && 'code' in error && error.code === 'ESRCH'
+    // EPERM: another user's process may hold the pid now; its start ticks decide.
+    if (error instanceof Error && 'code' in error && error.code === 'ESRCH') {
+      return true
+    }
   }
   const stat = await readFile(`/proc/${owner.pid}/stat`, 'utf8').catch(() => null)
   if (!stat) {

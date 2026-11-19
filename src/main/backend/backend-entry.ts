@@ -52,6 +52,11 @@ let usage: ReturnType<typeof createUsageService> | undefined
 let stopping: Promise<void> | undefined
 let booting = false
 let startup: Promise<void> | undefined
+// Linux: no bootstrap means main died before sending it, and a leaked IPC fd can hide that.
+const bootstrapDeadline =
+  process.platform === 'linux'
+    ? setTimeout(() => void stop(), ORCAD_SHUTDOWN_DEADLINE_MS * 2)
+    : undefined
 
 function stop(): Promise<void> {
   stopping ??= (async () => {
@@ -107,6 +112,7 @@ async function bootstrap(raw: unknown, port: BackendNativePort): Promise<void> {
     throw new Error('Backend was already bootstrapped.')
   }
   booting = true
+  clearTimeout(bootstrapDeadline)
   const config = BackendBootstrapSchema.parse(raw)
   if (
     config.requiredCapabilities.some(

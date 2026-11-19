@@ -56,7 +56,7 @@ export const BackendBootstrapSchema = z
     // Linux only: lets the backend stop once main is gone.
     desktopOwner: z
       .object({
-        pid: z.number().int().min(2),
+        pid: z.number().int().positive(),
         startTicks: z.string().regex(/^\d{1,20}$/),
         pidNamespace: z.string().min(1).max(64)
       })
