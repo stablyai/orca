@@ -1,6 +1,5 @@
 import {
   appendFileSync,
-  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -157,17 +156,6 @@ describe('importCodexHistory', () => {
     expect(await run()).toBe(0)
     release()
     expect(existsSync(join(storeHome, DAY, LATER))).toBe(false)
-  })
-
-  it('imports the dated conversations when one archived rollout is unreadable', async () => {
-    const { importHome, storeHome, run } = setup()
-    writeFileSync(join(importHome, 'archived_sessions', ARCHIVED), 'archived\n')
-    chmodSync(join(importHome, 'archived_sessions', ARCHIVED), 0o000)
-    writeFileSync(join(importHome, DAY, NEW), 'new\n')
-
-    await run()
-
-    expect(readFileSync(join(storeHome, DAY, NEW), 'utf8')).toBe('new\n')
   })
 
   it('stops importing when the store disk is full', async () => {

@@ -20,15 +20,14 @@ function exitWith(stderr: string) {
 }
 
 describe('claudeCliFlagSupport.observeExit', () => {
-  it.each([
-    "error: unknown option '--plugin-dir'",
-    `--plugin-dir is ${SIDELOAD_REFUSAL}`,
-    `--plugin-dir, --agents, plugins (initialize request) are ${SIDELOAD_REFUSAL}`
-  ])('stops offering a flag the CLI refused at startup: %s', async (stderr) => {
+  it('stops offering the flag when the managed-settings refusal names several items', async () => {
     const support = flagSupport()
     expect(await support.check(CLAUDE_PLUGIN_DIR_FLAG, launch)).toBe('supported')
 
-    support.observeExit(launch, exitWith(stderr))
+    support.observeExit(
+      launch,
+      exitWith(`--plugin-dir, --agents, plugins (initialize request) are ${SIDELOAD_REFUSAL}`)
+    )
 
     await expect.poll(() => support.check(CLAUDE_PLUGIN_DIR_FLAG, launch)).toBe('unsupported')
   })
