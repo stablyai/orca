@@ -1,7 +1,7 @@
 import type { SFTPWrapper, Stats } from 'ssh2'
 import { describe, expect, it, vi } from 'vitest'
-import type { SshFileTransferHost } from './connection/ssh-connection-file-transfers'
-import { createTarget } from './connection/ssh-connection-test-fixtures'
+import type { SshFileTransferHost } from './file-transfer/ssh-connection-file-transfers'
+import { createTarget } from './connection/testing/ssh-connection-test-fixtures'
 
 import { readSshFileChunk } from './ssh-remote-file-read'
 

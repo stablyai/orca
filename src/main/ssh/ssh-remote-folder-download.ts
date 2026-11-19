@@ -4,9 +4,9 @@ import type { FileEntryWithStats, SFTPWrapper, Stats } from 'ssh2'
 import {
   isWindowsAbsolutePathLike,
   normalizeRuntimePathSeparators
-} from '../../shared/cross-platform-path'
-import { sanitizeLocalDownloadFilename } from '../local-download-filename'
-import { fastGetViaSftp } from '../providers/ssh-filesystem-provider-sftp'
+} from '../../shared/file-access/cross-platform-path'
+import { sanitizeLocalDownloadFilename } from '../ipc/filesystem/downloads/local-download-filename'
+import { fastGetViaSftp } from './file-transfer/sftp/sftp-download'
 
 type SftpFactory = (signal?: AbortSignal) => Promise<SFTPWrapper>
 

@@ -9,10 +9,10 @@ import {
   buildOrcadCli,
   orcadChildOutputFilename,
   externalNativeAddons
-} from '../../config/scripts/orcad-entry-build.mjs'
-import { stageOrcadWindowsSecurity } from '../../config/scripts/orcad-windows-security.mjs'
-import { stageOrcadWindowsCliLauncher } from '../../config/scripts/orcad-windows-cli-launcher.mjs'
-import { probeWindowsSecurityAddon } from '../../config/scripts/build-windows-security-addon.mjs'
+} from '../../config/scripts/orcad-distribution/server-bundle/orcad-entry-build.mjs'
+import { stageOrcadWindowsSecurity } from '../../config/scripts/orcad-distribution/server-bundle/orcad-windows-security.mjs'
+import { stageOrcadWindowsCliLauncher } from '../../config/scripts/orcad-distribution/server-bundle/orcad-windows-cli-launcher.mjs'
+import { probeWindowsSecurityAddon } from '../../config/scripts/native-build/windows/build-windows-security-addon.mjs'
 
 const root = resolve(import.meta.dirname, '../..')
 const output = join(root, '.cache', 'orcad-dev')

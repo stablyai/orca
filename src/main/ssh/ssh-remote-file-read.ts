@@ -2,12 +2,12 @@ import type { Stats, SFTPWrapper } from 'ssh2'
 import { mkdtemp, open, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { RuntimeFileReadChunkResult } from '../../shared/runtime-file-contracts'
-import { downloadFileViaSystemSsh } from './system-transport/system-ssh-file-binary-transfer'
+import type { RuntimeFileReadChunkResult } from '../../shared/file-content/runtime-file-read'
+import { downloadFileViaSystemSsh } from './system-transport/file-transfer/system-ssh-file-binary-transfer'
 import type {
   SshFileTransferHost,
   SshRemoteFileOptions
-} from './connection/ssh-connection-file-transfers'
+} from './file-transfer/ssh-connection-file-transfers'
 
 export type SshRemoteFileReadChunkResult = RuntimeFileReadChunkResult & {
   size: number
