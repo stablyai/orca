@@ -12,6 +12,9 @@ vi.mock('../../../agent-hooks/server/agent-hook-server', () => ({
   agentHookServer: { setTerminalPaneLifecycle, pruneUnplacedSleepingPanes: () => {} }
 }))
 vi.mock('../provider/registry', () => ({ getProviderForPty }))
+vi.mock('../../../memory/pty-registry', () => ({
+  getRegisteredPtyPid: (ptyId: string) => (ptyId === 'pty-1' ? 4242 : null)
+}))
 vi.mock('../../../runtime/terminal/lifecycle/run-terminal-shell-alone', () => ({
   confirmRootShellAloneFromProcessTable: confirmRootShellAlone,
   paneAgentProcess: () => () => true
@@ -109,7 +112,6 @@ it.each([
       rootPid === 4242 ? proveShellAlone() : false
     )
     getProviderForPty.mockReturnValue({
-      listProcesses: async () => [{ id: 'pty-1', rootProcessId: 4242 }],
       confirmShellForeground: os === 'win32' ? proveShellAlone : async () => true,
       // Windows answers from its job census; a foreground name alone is not that census.
       inspectProcess: async () => ({
@@ -144,9 +146,7 @@ it('does not count a shell-alone proof once input reached the PTY while it ran',
     }
     return true
   })
-  getProviderForPty.mockReturnValue({
-    listProcesses: async () => [{ id: 'pty-1', rootProcessId: 4242 }]
-  })
+  getProviderForPty.mockReturnValue({})
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the proof only resolves the pane and reads its input facts.
   const runtime = {
     resolveTerminalPane: () => ({ ptyId: 'pty-1', incarnationId: 'birth-1' }),

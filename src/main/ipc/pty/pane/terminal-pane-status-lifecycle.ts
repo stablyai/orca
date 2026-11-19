@@ -5,7 +5,7 @@ import { toSshExecutionHostId } from '../../../../shared/execution-host/executio
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import { paneKeyPtyId } from './key-state'
-import { ptyFallbackRootPidById, ptyIncarnationById } from '../provider/ownership-state'
+import { ptyIncarnationById } from '../provider/ownership-state'
 import { getRegisteredPtyPid } from '../../../memory/pty-registry'
 import { isLocalHookConnectionId } from '../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import { getProviderForPty } from '../provider/registry'
@@ -35,7 +35,9 @@ export function bindTerminalPaneStatusLifecycle(
         // A typed agent holds no launch, and a shell without command marks (cmd.exe) says nothing
         // when it quits, so the proof stands on its own; a launch replaced meanwhile voids it.
         const launch = launchOf()
-        return (await paneShellAlone(runtime, paneKey, agent, () => launchOf() === launch)) === true
+        return (
+          (await paneShellAlone(runtime, paneKey, agent, () => launchOf() === launch)) !== false
+        )
       } catch {
         return false
       }
@@ -168,68 +170,19 @@ async function paneShellAlone(
  *  table instead, local or daemon alike. Windows shells stop no jobs, so the host's job census
  *  finding no child beside a shell foreground suffices there. Never fall back to a foreground
  *  name, which a live unrecognized agent shares. */
-// Spawn and adoption publish the shell PID; a host that published none pays one targeted
-// inventory per PTY incarnation, whose answer (a root or none) lasts until the PTY's teardown.
-type PtyProvider = ReturnType<typeof getProviderForPty>
-const pendingRootLookups = new Map<
-  PtyProvider,
-  { ptyIds: Set<string>; result: Promise<Map<string, number | undefined> | null> }
->()
-
-/** Cold lookups started together (a sleep's proofs) share one owner inventory. */
-function lookupRootPids(provider: PtyProvider, ptyId: string) {
-  let batch = pendingRootLookups.get(provider)
-  if (!batch) {
-    const ptyIds = new Set<string>()
-    const result = Promise.resolve().then(() => {
-      pendingRootLookups.delete(provider)
-      return provider.listProcesses({ ptyIds: [...ptyIds], targetOwnerOnly: true })
-    })
-    // One index of the shared reply serves every caller in the batch.
-    const rootPids = result.then(
-      (rows) => new Map(rows.map((row) => [row.id, row.rootProcessId] as const))
-    )
-    batch = { ptyIds, result: rootPids.catch(() => null) }
-    pendingRootLookups.set(provider, batch)
-  }
-  batch.ptyIds.add(ptyId)
-  return batch.result
-}
-
-async function readPtyRootPid(
-  provider: ReturnType<typeof getProviderForPty>,
-  ptyId: string,
-  incarnationId: string | undefined
-): Promise<number | undefined> {
-  const registered = getRegisteredPtyPid(ptyId)
-  if (registered) {
-    return registered
-  }
-  const known = ptyFallbackRootPidById.get(ptyId)
-  if (known && known.incarnationId === incarnationId) {
-    return known.rootPid ?? undefined
-  }
-  const rootPids = await lookupRootPids(provider, ptyId)
-  const rootPid = rootPids?.get(ptyId)
-  if (rootPids && incarnationId && ptyIncarnationById.get(ptyId) === incarnationId) {
-    ptyFallbackRootPidById.set(ptyId, { incarnationId, rootPid: rootPid ?? null })
-  }
-  return rootPid
-}
-
 async function confirmShellAlone(
   ptyId: string,
   incarnationId?: string,
   agent?: string
-): Promise<boolean> {
+): Promise<boolean | null> {
   const provider = getProviderForPty(ptyId)
   if (process.platform !== 'win32') {
-    const rootPid = await readPtyRootPid(provider, ptyId, incarnationId)
+    // Spawn and adoption publish the shell's PID; a host that published none (an older daemon)
+    // gives no proof, so the mark stands there, as on main.
+    const rootPid = getRegisteredPtyPid(ptyId)
     return rootPid
-      ? confirmRootShellAloneFromProcessTable(rootPid, {
-          paneAgent: paneAgentProcess(agent)
-        })
-      : false
+      ? confirmRootShellAloneFromProcessTable(rootPid, { paneAgent: paneAgentProcess(agent) })
+      : null
   }
   if ((await provider.confirmShellForeground?.(ptyId)) === true) {
     return true
