@@ -44,8 +44,24 @@ export function rememberChangeScope(
   rememberedScope = worktreeId ? { worktreeId, scope, owner } : null
 }
 
+let scopeSessionRevision = 0
+const scopeSessionListeners = new Set<() => void>()
+
+export function getChangeScopeSessionRevision(): number {
+  return scopeSessionRevision
+}
+
+export function subscribeChangeScopeSession(listener: () => void): () => void {
+  scopeSessionListeners.add(listener)
+  return () => scopeSessionListeners.delete(listener)
+}
+
 export function clearRememberedChangeScope(): void {
   rememberedScope = null
+  scopeSessionRevision += 1
+  for (const listener of scopeSessionListeners) {
+    listener()
+  }
 }
 
 export function changeScopeKey(scope: SourceControlChangeScope): string {

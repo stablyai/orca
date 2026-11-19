@@ -1,5 +1,6 @@
 import { useAppStore } from '@/store'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useSourceControlSectionActive } from './worktree-scope'
+import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { BoundedMap } from '../../../../../../shared/collections/bounded-map'
 import { resolveSourceControlGroupOrder } from '../../../../../../shared/source-control/listing/source-control-section-order'
 import { getNextSourceControlViewMode } from './header-toolbar'
@@ -8,6 +9,8 @@ import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
 import {
   ALL_CHANGES_SCOPE,
+  getChangeScopeSessionRevision,
+  subscribeChangeScopeSession,
   readRememberedChangeScope,
   rememberChangeScope,
   type SourceControlChangeScope,
@@ -39,6 +42,15 @@ export function useSourceControlPanelViewState({
   settings: SourceControlWorktreeContext['settings']
   updateSettings: SourceControlStoreActions['updateSettings']
 }) {
+  const sectionActive = useSourceControlSectionActive()
+  const subscribeScopeSession = useCallback(
+    (listener: () => void) => (sectionActive ? subscribeChangeScopeSession(listener) : () => {}),
+    [sectionActive]
+  )
+  const scopeSessionRevision = useSyncExternalStore(
+    subscribeScopeSession,
+    getChangeScopeSessionRevision
+  )
   const sourceControlRef = useRef<HTMLDivElement | null>(null)
   // Use state so virtual lists start observing the shared scroller when its element attaches.
   const [fileListScrollElement, setFileListScrollElement] = useState<HTMLDivElement | null>(null)
@@ -83,7 +95,7 @@ export function useSourceControlPanelViewState({
   }, [updateSettings])
 
   // Reset during render; key-based remounts on switches caused Windows IPC storms.
-  const viewIdentity = JSON.stringify([activeWorktreeId, owner])
+  const viewIdentity = JSON.stringify([activeWorktreeId, owner, scopeSessionRevision])
   const [viewStateWorktreeId, setViewStateWorktreeId] = useState(viewIdentity)
   if (viewStateWorktreeId !== viewIdentity) {
     setViewStateWorktreeId(viewIdentity)
