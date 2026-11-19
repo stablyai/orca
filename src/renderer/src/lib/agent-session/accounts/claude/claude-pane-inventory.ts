@@ -38,12 +38,12 @@ export type ClaudeSessionMoveCandidate = {
 /** Match npm agents by their fresh command line: generic node/python may now run user programs.
  *  Agent Teams: a packaged `orca claude-teams` leads the foreground as `Orca`, a name any `orca` command shares. */
 function isAgentProcess(processName: string | null, agent: TuiAgent, agentTeams: boolean): boolean {
-  return (
-    isAgentForegroundProcess(processName, agent) ||
-    (agentTeams &&
-      agent === 'claude' &&
-      recognizeAgentProcess(processName)?.agent === 'claude-agent-teams')
-  )
+  if (agent !== 'claude') {
+    return isAgentForegroundProcess(processName, agent)
+  }
+  // Why recognition only: the Claude account-switch scan never accepted `claude.<suffix>` names.
+  const recognized = recognizeAgentProcess(processName)?.agent
+  return recognized === 'claude' || (agentTeams && recognized === 'claude-agent-teams')
 }
 
 /** Confirm foreground identity: cached names flap to shells and native macOS binaries report version-folder names. */
