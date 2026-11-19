@@ -3350,7 +3350,6 @@
             "27a74f91f0": "Nada em execução agora",
             "298f4be7f2": "CPU",
             "2aa2de6cb9": "Nome",
-            "1fedf94eae": "Carga combinada de CPU. Valores acima de 100% significam que mais de um núcleo está trabalhando ao mesmo tempo.",
             "e7cf14ec78": "Sessões de terminal indisponíveis. A lista pode estar desatualizada.",
             "93b0de3c21": "Reiniciar",
             "f85af9cda6": "Snapshots de recursos e sessões de terminal estão indisponíveis.",

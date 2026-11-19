@@ -8,12 +8,9 @@ import {
 } from './resource-memory-metric-copy'
 
 const fixtureOwnerSplit = {
-  orca: { cpu: 6.4, memory: 987842478 },
-  agents: { cpu: 49.6, memory: 6023725056 },
-  yourProcesses: { cpu: 8.9, memory: 2029359923 },
-  otherApps: 14388140032,
-  available: 10951022182,
-  hostTotal: 34359738368
+  orca: { memory: 987842478 },
+  agents: { memory: 6023725056 },
+  yourProcesses: { memory: 2029359923 }
 }
 
 export const metricDetails = defineFixture({
@@ -43,12 +40,7 @@ export const ownerBreakdown = defineFixture({
       commitMetricCopy: null,
       commitToneClass: null,
       orphanCount: 2
-    }),
-  interact: async (frame) => {
-    const trigger = frame.querySelector<HTMLElement>('[tabindex="0"]')
-    trigger?.focus()
-    await new Promise((resolve) => setTimeout(resolve, 1200))
-  }
+    })
 })
 
 export const narrowMetricDetails = defineFixture({ ...metricDetails, width: 280 })

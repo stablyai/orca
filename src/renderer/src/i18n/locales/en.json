@@ -5643,7 +5643,6 @@
             "27a74f91f0": "Nothing running right now",
             "298f4be7f2": "CPU",
             "2aa2de6cb9": "Name",
-            "1fedf94eae": "Combined CPU load. Values above 100% mean more than one core is working at once.",
             "e7cf14ec78": "Terminal sessions unavailable. The list may be stale.",
             "93b0de3c21": "Restart",
             "f85af9cda6": "Resource snapshots and terminal sessions are unavailable.",
@@ -25710,12 +25709,8 @@
       "orca": "Orca",
       "agents": "Agents",
       "otherTerminals": "Other terminals",
-      "otherApps": "Other apps and system",
-      "description": "Orca is the app. Agents and Other terminals are the terminals you run in Orca. Other apps and system is everything else on this machine.",
-      "privateBytes": "Committed by Orca and terminals",
-      "availableOfTotal": "{{available}} available of {{total}}",
-      "available": "Available",
-      "overlapScaled": "Shared memory is counted in more than one process here, so the bar scales Orca, Agents and Other terminals down to fit what this machine reports as used."
+      "description": "Orca is the app. Agents are terminals running an agent; Other terminals are the rest you run in Orca. The bar shows each one's share of their combined memory.",
+      "privateBytes": "Committed by Orca and terminals"
     }
   },
   "browserExtensions": {

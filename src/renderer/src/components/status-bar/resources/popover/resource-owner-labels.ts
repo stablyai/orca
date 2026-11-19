@@ -3,14 +3,13 @@ import type { Translate } from '@/i18n/use-translate'
 import type { ResourceOwnerSplit } from './resource-owner-split'
 import { formatMemory } from './resource-usage-metrics'
 
-export type ResourceOwnerKey = 'orca' | 'agents' | 'yourProcesses' | 'otherApps'
+export type ResourceOwnerKey = 'orca' | 'agents' | 'yourProcesses'
 
 export function resourceOwnerLabels(t: Translate = translate): Record<ResourceOwnerKey, string> {
   return {
     orca: t('resourceManager.owner.orca', 'Orca'),
     agents: t('resourceManager.owner.agents', 'Agents'),
-    yourProcesses: t('resourceManager.owner.otherTerminals', 'Other terminals'),
-    otherApps: t('resourceManager.owner.otherApps', 'Other apps and system')
+    yourProcesses: t('resourceManager.owner.otherTerminals', 'Other terminals')
   }
 }
 

@@ -3,16 +3,13 @@ import type { PtyListedSession } from '../../../../../../shared/terminal/pty/lif
 import { isProgramStatusRow } from '../../../../../../shared/program-status/program-status-row'
 import { useAppStore } from '../../../../store/index'
 
-export type ResourceOwnerUsage = { cpu: number; memory: number }
+export type ResourceOwnerUsage = { memory: number }
 
-/** This machine's memory by who started it, so no single total reads as Orca's own usage. */
+/** Orca's tracked memory by who started it, so no single total reads as Orca's own usage. */
 export type ResourceOwnerSplit = {
   orca: ResourceOwnerUsage
   agents: ResourceOwnerUsage
   yourProcesses: ResourceOwnerUsage
-  otherApps: number
-  available: number
-  hostTotal: number
 }
 
 type DaemonSessionFacts = Pick<PtyListedSession, 'id' | 'paneKey' | 'agentOwnership'>
@@ -24,8 +21,8 @@ export function splitSnapshotByOwner(
   agentPaneKeys: { has(paneKey: string): boolean }
 ): ResourceOwnerSplit {
   const daemonById = new Map(daemonSessions.map((session) => [session.id, session]))
-  const agents = { cpu: 0, memory: 0 }
-  const yourProcesses = { cpu: 0, memory: 0 }
+  const agents = { memory: 0 }
+  const yourProcesses = { memory: 0 }
   for (const worktree of snapshot.worktrees) {
     for (const session of worktree.sessions) {
       const daemon = daemonById.get(session.sessionId)
@@ -34,22 +31,10 @@ export function splitSnapshotByOwner(
       // Why: the daemon proves only claimed agents present, so its 'absent' never rules out a hook-reported one.
       const isAgent =
         daemon?.agentOwnership === 'present' || (paneKey !== null && agentPaneKeys.has(paneKey))
-      const bucket = isAgent ? agents : yourProcesses
-      bucket.cpu += session.cpu
-      bucket.memory += session.memory
+      ;(isAgent ? agents : yourProcesses).memory += session.memory
     }
   }
-  const orca = { cpu: snapshot.app.cpu, memory: snapshot.app.memory }
-  const { totalMemory: hostTotal, usedMemory, availableMemory } = snapshot.host
-  const tracked = orca.memory + agents.memory + yourProcesses.memory
-  return {
-    orca,
-    agents,
-    yourProcesses,
-    otherApps: Math.max(0, usedMemory - tracked),
-    available: Math.max(0, availableMemory),
-    hostTotal
-  }
+  return { orca: { memory: snapshot.app.memory }, agents, yourProcesses }
 }
 
 /** Panes with a real agent; a finished program's kept result row is not one. */

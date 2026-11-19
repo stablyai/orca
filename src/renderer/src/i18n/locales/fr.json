@@ -4341,7 +4341,6 @@
             "27a74f91f0": "Rien en cours d'exécution pour le moment",
             "298f4be7f2": "CPU",
             "2aa2de6cb9": "Nom",
-            "1fedf94eae": "Charge CPU cumulée. Une valeur supérieure à 100 % signifie que plusieurs cœurs travaillent simultanément.",
             "e7cf14ec78": "Sessions de terminal indisponibles. La liste est peut-être obsolète.",
             "93b0de3c21": "Redémarrer",
             "f85af9cda6": "Instantanés de ressources et sessions de terminal indisponibles.",
