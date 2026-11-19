@@ -94,7 +94,7 @@ it('resolves refusal facts only for the exact live launch incarnation', () => {
   registerBoundPty(runtime, 'pty-a', TEST_WORKTREE_ID, null, {
     ...pane,
     incarnationId: 'inc-successor',
-    launchToken: 'attempt-successor'
+    launchToken: 'attempt-refused'
   })
   expect(
     runtime.resolveTerminalPane(`${SURFACE_TAB_ID}:${HEADLESS_LEAF_ID}`, TEST_WORKTREE_ID)

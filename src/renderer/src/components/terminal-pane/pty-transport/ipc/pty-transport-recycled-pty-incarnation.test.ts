@@ -157,4 +157,31 @@ describe('createIpcPtyTransport against a relay-recycled PTY id', () => {
       }
     }
   )
+
+  it.each(['obsolete', 'unverified'] as const)(
+    'does not bind a buffered exit for an %s account wake',
+    async (control) => {
+      const { createIpcPtyTransport } = await import('./pty-transport')
+      const { bufferPreHandlerPtyExit } = await import('../delivery/pty-pre-handler-buffer')
+      bufferPreHandlerPtyExit(RECYCLED_PTY_ID, 7, FRESH_INCARNATION_ID)
+      const exit = vi.fn()
+      const transport = createIpcPtyTransport({})
+      try {
+        const result = await transport.connect({
+          url: '',
+          sessionId: RECYCLED_PTY_ID,
+          attachOnlyView: true,
+          expectedIncarnationId: FRESH_INCARNATION_ID,
+          isAccountRestartCurrent: () => control !== 'obsolete',
+          verifyAccountRestartResult: async () => false,
+          callbacks: { onExit: exit }
+        })
+        expect(result).toBeUndefined()
+        expect(transport.getPtyId()).toBeNull()
+        expect(exit).not.toHaveBeenCalled()
+      } finally {
+        transport.disconnect()
+      }
+    }
+  )
 })
