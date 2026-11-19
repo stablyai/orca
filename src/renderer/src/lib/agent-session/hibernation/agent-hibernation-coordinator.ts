@@ -58,14 +58,17 @@ const coordinator: AgentHibernationCoordinatorState = {
   now: () => Date.now()
 }
 
+type PlannerSettings = AgentHibernationPlannerSnapshot['settings']
+
 function snapshotFromState(
   state: AppState,
   now: number,
   hostEvidence: HostPtyEvidence,
-  targetWorktreeId?: string
+  targetWorktreeId?: string,
+  settings: PlannerSettings = state.settings
 ): AgentHibernationPlannerSnapshot {
   return {
-    settings: state.settings,
+    settings,
     activeWorktreeId: state.activeWorktreeId,
     foregroundTerminalTabIds: getForegroundTerminalTabIds(),
     tabsByWorktree: targetWorktreeId
@@ -98,18 +101,23 @@ function snapshotFromState(
   }
 }
 
-async function currentCandidates(now: number, targetWorktreeId?: string) {
+async function currentCandidates(
+  now: number,
+  targetWorktreeId?: string,
+  settingsOverride?: PlannerSettings
+) {
   const hostEvidence = await collectHostPtyEvidence(useAppStore.getState(), targetWorktreeId)
   const freshState = useAppStore.getState()
+  const settings = settingsOverride ?? freshState.settings
   // Sample binding ages from the plan’s state so a first-seen pane cannot already qualify as long-idle.
   observeHibernationPtyBindings({
     tabsByWorktree: freshState.tabsByWorktree,
     terminalLayoutsByTabId: freshState.terminalLayoutsByTabId,
     now,
-    idleMs: getEffectiveAgentHibernationIdleMs(freshState.settings?.agentHibernationIdleMs)
+    idleMs: getEffectiveAgentHibernationIdleMs(settings?.agentHibernationIdleMs)
   })
   return planAgentHibernationCandidates(
-    snapshotFromState(freshState, now, hostEvidence, targetWorktreeId)
+    snapshotFromState(freshState, now, hostEvidence, targetWorktreeId, settings)
   )
     .filter((candidate) => {
       const owner = resolveAgentHibernationRuntimeOwner(freshState, candidate.worktreeId)
@@ -179,6 +187,16 @@ export async function runAgentHibernationTick(): Promise<void> {
   } finally {
     coordinator.tickInFlight = false
   }
+}
+
+/** Agents Agent Sleep would put to sleep if it were on with this idle time; the notice that offers it counts these. */
+export async function previewAgentSleepCandidates(
+  idleMs: number
+): Promise<AgentHibernationCandidate[]> {
+  return currentCandidates(coordinator.now(), undefined, {
+    experimentalAgentHibernation: true,
+    agentHibernationIdleMs: idleMs
+  })
 }
 
 export function startAgentHibernationCoordinator(

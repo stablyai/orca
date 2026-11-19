@@ -1,4 +1,9 @@
-export const PERF_NOTICE_IDS = ['disk-almost-full', 'hidden-browser-tabs'] as const
+export const PERF_NOTICE_IDS = [
+  'disk-almost-full',
+  'hidden-browser-tabs',
+  'memory-low',
+  'idle-agents'
+] as const
 export type PerfNoticeId = (typeof PERF_NOTICE_IDS)[number]
 
 export type PerfNoticeGlobalSettings = {

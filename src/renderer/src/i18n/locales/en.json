@@ -1914,11 +1914,21 @@
           "label": "Hidden browser tabs",
           "description": "Suggest Memory Saver when many hidden browser tabs stay loaded."
         },
+        "memoryLow": {
+          "label": "Low memory",
+          "description": "Suggest Agent Sleep when memory is low and agents are idle."
+        },
+        "idleAgents": {
+          "label": "Idle agents",
+          "description": "Suggest Agent Sleep when several agents have been idle for hours."
+        },
         "search": {
           "disk": "disk",
           "warning": "warning",
           "tabs": "tabs",
-          "memory": "memory"
+          "memory": "memory",
+          "sleep": "sleep",
+          "idle": "idle"
         }
       }
     }
@@ -29441,6 +29451,15 @@
       "description": "{{free}} left. Clean up workspaces you no longer need to free space.",
       "cleanUp": "Clean up workspaces"
     },
+    "memoryLow": {
+      "title": "Memory is low",
+      "description": "Agent Sleep frees memory from idle agents and resumes them when you return."
+    },
+    "idleAgents": {
+      "title": "{{count}} agents have been idle for 2 hours",
+      "description": "Agent Sleep frees their memory and resumes them when you return."
+    },
+    "turnOnAgentSleep": "Turn on Agent Sleep",
     "dontShowAgain": "Don't show again"
   }
 }

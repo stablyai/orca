@@ -37,6 +37,7 @@ export type MemoryApi = {
   getSnapshot: (admission?: ResourceViewAdmission) => Promise<MemorySnapshot>
   readPerfNoticeSignals: () => Promise<PerfNoticeSignals | null>
   countHiddenBrowserPages: (hiddenForMs: number) => Promise<number>
+  readAvailableMemoryFraction: () => Promise<number | null>
   resourceWindowVisible: () => Promise<boolean>
   onResourceWindowVisibility: (callback: (visible: boolean) => void) => () => void
 }

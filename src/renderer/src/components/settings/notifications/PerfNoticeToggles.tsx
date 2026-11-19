@@ -1,4 +1,4 @@
-import { Globe, HardDrive } from 'lucide-react'
+import { Globe, HardDrive, MemoryStick, Moon } from 'lucide-react'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import {
   isPerfNoticeOff,
@@ -42,6 +42,26 @@ export function PerfNoticeToggles({
         )}
         checked={!isPerfNoticeOff(settings, 'hidden-browser-tabs')}
         onToggle={() => toggle('hidden-browser-tabs')}
+      />
+      <NotificationSettingToggle
+        icon={<MemoryStick className="size-4" />}
+        label={t('settings.notifications.perfNotices.memoryLow.label', 'Low memory')}
+        description={t(
+          'settings.notifications.perfNotices.memoryLow.description',
+          'Suggest Agent Sleep when memory is low and agents are idle.'
+        )}
+        checked={!isPerfNoticeOff(settings, 'memory-low')}
+        onToggle={() => toggle('memory-low')}
+      />
+      <NotificationSettingToggle
+        icon={<Moon className="size-4" />}
+        label={t('settings.notifications.perfNotices.idleAgents.label', 'Idle agents')}
+        description={t(
+          'settings.notifications.perfNotices.idleAgents.description',
+          'Suggest Agent Sleep when several agents have been idle for hours.'
+        )}
+        checked={!isPerfNoticeOff(settings, 'idle-agents')}
+        onToggle={() => toggle('idle-agents')}
       />
     </>
   )
