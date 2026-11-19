@@ -20,6 +20,7 @@ export function structuredWorkerTerminalRefusal(
     )
   }
   // A chat address never names a terminal, live or not.
+  // ast-grep-ignore: orchestration-agent-kind-branch -- refuses a chat address passed as --terminal
   if (parseOrcaSessionAddress(handle)) {
     return agentSessionRefusal(
       `${handle} is a chat session, not a terminal, so terminal commands cannot address it. ` +
