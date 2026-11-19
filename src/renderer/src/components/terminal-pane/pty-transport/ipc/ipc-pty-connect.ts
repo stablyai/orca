@@ -47,6 +47,7 @@ export async function connectIpcPty(
   const { transportOptions, handlers } = context
   const { onPtySpawn, retainDisposedSpawn } = transportOptions
   const accountRestart = Boolean(options.accountRestart || options.isAccountRestartCurrent)
+  const requireMatchingExitIncarnation = accountRestart || Boolean(options.expectedIncarnationId)
   const shouldContinue = options.shouldContinue
   const onAccountRestartFailure = options.onAccountRestartFailure
   context.setCallbacks(options.callbacks)
@@ -60,12 +61,20 @@ export async function connectIpcPty(
     return
   }
   if (options.sessionId && options.expectedIncarnationId) {
-    discardPreHandlerPtyExitFromForeignIncarnation(options.sessionId, options.expectedIncarnationId)
+    discardPreHandlerPtyExitFromForeignIncarnation(
+      options.sessionId,
+      options.expectedIncarnationId,
+      requireMatchingExitIncarnation
+    )
   }
   if (
     options.sessionId &&
     (!accountRestart || options.expectedIncarnationId) &&
-    hasPreHandlerPtyExit(options.sessionId, options.expectedIncarnationId)
+    hasPreHandlerPtyExit(
+      options.sessionId,
+      options.expectedIncarnationId,
+      requireMatchingExitIncarnation
+    )
   ) {
     const result = { id: options.sessionId, incarnationId: options.expectedIncarnationId }
     if (
@@ -84,7 +93,11 @@ export async function connectIpcPty(
     if (context.isDestroyed()) {
       return
     }
-    handlers.registerExit(options.sessionId, options.expectedIncarnationId)
+    handlers.registerExit(
+      options.sessionId,
+      options.expectedIncarnationId,
+      requireMatchingExitIncarnation
+    )
     if (!context.isExpectedExitCurrent()) {
       return
     }
@@ -155,7 +168,11 @@ export async function connectIpcPty(
     }
 
     // Drop foreign-incarnation exits for fresh and restored sessions alike; identity proves they cannot belong to this attachment.
-    discardPreHandlerPtyExitFromForeignIncarnation(spawnResult.id, spawnResult.incarnationId)
+    discardPreHandlerPtyExitFromForeignIncarnation(
+      spawnResult.id,
+      spawnResult.incarnationId,
+      requireMatchingExitIncarnation
+    )
     if (!admittedSessionId && !spawnResult.isReattach && !spawnResult.coldRestore) {
       // Only fresh spawns discard pre-request state; reattach deliberately re-owns a pre-existing ID and needs its real buffered exit.
       discardPreHandlerPtyStateFromPriorIncarnation(spawnResult.id, priorIncarnationFence)
@@ -171,13 +188,23 @@ export async function connectIpcPty(
     if (context.isDestroyed()) {
       return
     }
-    if (!hasPreHandlerPtyExit(spawnResult.id, spawnResult.incarnationId)) {
+    if (
+      !hasPreHandlerPtyExit(
+        spawnResult.id,
+        spawnResult.incarnationId,
+        requireMatchingExitIncarnation
+      )
+    ) {
       admitTerminalNoticeLifetime(spawnResult.id, {
         incarnationId: spawnResult.incarnationId,
         fresh: !admittedSessionId && !spawnResult.isReattach && !spawnResult.coldRestore
       })
     }
-    const exitedBeforeAttach = handlers.registerExit(spawnResult.id, spawnResult.incarnationId)
+    const exitedBeforeAttach = handlers.registerExit(
+      spawnResult.id,
+      spawnResult.incarnationId,
+      requireMatchingExitIncarnation
+    )
     if (exitedBeforeAttach) {
       if (!context.isExpectedExitCurrent()) {
         return
