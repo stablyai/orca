@@ -170,6 +170,7 @@ function read(
     case 'named-turn':
     case 'message-options':
     case 'continuation-context':
+    case 'continuation-spill':
     case 'history-items':
     case 'claude-history-prompts':
     case 'canonical-item-ids':
