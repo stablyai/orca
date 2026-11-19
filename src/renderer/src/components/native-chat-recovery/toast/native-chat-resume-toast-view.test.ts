@@ -53,4 +53,20 @@ describe('resume toast view', () => {
     expect(view.resumable).toEqual(['stopped'])
     expect(view.counts.needsYou).toBe(1)
   })
+
+  it('keeps a chat the host refused without a failure record, as Open-only', () => {
+    const run: ResumeRun = {
+      startedAt: 1,
+      startedBy: 'user',
+      entries: [{ candidate: chat('refused') }],
+      inFlight: false,
+      continued: [{ sessionId: 'refused', outcome: 'refused' }]
+    }
+
+    const view = resumeToastView(run, [], resumeRunFailures(run, []))
+
+    expect(view.rows).toEqual([{ candidate: chat('refused'), state: 'needs-you', openOnly: true }])
+    expect(view.counts.needsYou).toBe(1)
+    expect(view.resumable).toEqual([])
+  })
 })

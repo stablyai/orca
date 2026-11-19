@@ -77,8 +77,7 @@ export async function continueRestartChunks(
       result.continued.push(
         ...restartContinuationHistory(
           chunk.filter((id) => !result.skipped.has(id)),
-          answer.continued,
-          listed
+          answer.continued
         )
       )
     } catch (error) {

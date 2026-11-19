@@ -12,13 +12,21 @@ function rowActions(row: ResumeToastRow, remote: boolean, t: Translate): ResumeF
   if (row.state !== 'needs-you') {
     return []
   }
-  if (!row.failure) {
-    return ['retry', 'open']
+  if (row.openOnly) {
+    return ['open']
   }
-  const guidance = resumeFailureGuidance(row.failure, t)
-  return [guidance.primary, guidance.secondary].filter(
-    (action): action is ResumeFailureAction => action !== null && !(remote && action === 'dismiss')
-  )
+  const guided: ResumeFailureAction[] = row.failure
+    ? (() => {
+        const guidance = resumeFailureGuidance(row.failure, t)
+        return [guidance.primary, guidance.secondary].filter(
+          (action): action is ResumeFailureAction => action !== null
+        )
+      })()
+    : ['retry', 'open']
+  // A server's chats can only be hidden by closing; this machine's can always be dismissed.
+  return remote
+    ? guided.filter((action) => action !== 'dismiss')
+    : [...guided.filter((action) => action !== 'dismiss'), 'dismiss']
 }
 
 function actionLabel(action: ResumeFailureAction, row: ResumeToastRow, t: Translate): string {
@@ -89,11 +97,16 @@ export function NativeChatResumeToastRow({
 }): React.JSX.Element {
   const t = useTranslate()
   const actions = rowActions(row, remote, t)
-  const reason = row.failure
-    ? resumeFailureGuidance(row.failure, t).text
-    : row.state === 'needs-you' || row.state === 'stopped'
-      ? resumeActivityLabel(row.candidate.activity, t)?.summary
-      : undefined
+  const reason = row.openOnly
+    ? t(
+        'auto.components.NativeChatResumeToast.refusedNoRecord',
+        'Orca couldn’t resume this chat. Open it to continue.'
+      )
+    : row.failure
+      ? resumeFailureGuidance(row.failure, t).text
+      : row.state === 'needs-you' || row.state === 'stopped'
+        ? resumeActivityLabel(row.candidate.activity, t)?.summary
+        : undefined
   return (
     <li className="flex min-w-0 items-start gap-2 rounded-md px-2 py-1.5 hover:bg-accent/40">
       <StateMark row={row} />

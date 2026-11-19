@@ -20525,7 +20525,8 @@
         "stateResumed": "Resumed",
         "stateNeedsYou": "Needs you",
         "stateResuming": "Resuming",
-        "stateStopped": "Stopped"
+        "stateStopped": "Stopped",
+        "refusedNoRecord": "Orca couldn’t resume this chat. Open it to continue."
       }
     },
     "i18n": {

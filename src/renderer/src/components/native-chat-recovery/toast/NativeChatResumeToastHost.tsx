@@ -28,12 +28,7 @@ export function NativeChatResumeToasts(): React.JSX.Element {
     <>
       <NativeChatResumeToastHost store={localNativeChatRestartStore} offerEnabled={enabled} />
       {runtimes.map(({ environment, store }) => (
-        <NativeChatResumeToastHost
-          key={environment.id}
-          store={store}
-          machineName={environment.name}
-          offerEnabled
-        />
+        <NativeChatResumeToastHost key={environment.id} store={store} offerEnabled />
       ))}
     </>
   )
@@ -42,11 +37,9 @@ export function NativeChatResumeToasts(): React.JSX.Element {
 /** Shows the store's report while it has an open request and something to say. */
 function NativeChatResumeToastHost({
   store,
-  machineName,
   offerEnabled
 }: {
   store: NativeChatRestartStore
-  machineName?: string
   offerEnabled: boolean
 }): null {
   const { candidates, failed } = useNativeChatRestartOffer(offerEnabled, store)
@@ -66,18 +59,24 @@ function NativeChatResumeToastHost({
     if (!visible) {
       return
     }
-    toast.custom(() => <ConnectedResumeToast store={store} machineName={machineName} />, {
+    // Only the person's own dismissal snoozes; this effect's cleanup must not consume a later request.
+    let owned = true
+    toast.custom(() => <ConnectedResumeToast store={store} />, {
       id,
       duration: Infinity,
       closeButton: false,
       unstyled: true,
-      // Swiping it away is the same snooze as its close button.
-      onDismiss: () => snoozeResumeToast(store)
+      onDismiss: () => {
+        if (owned) {
+          snoozeResumeToast(store)
+        }
+      }
     })
     return () => {
+      owned = false
       toast.dismiss(id)
     }
-  }, [visible, id, store, machineName])
+  }, [visible, id, store])
   return null
 }
 
@@ -88,11 +87,9 @@ function snoozeResumeToast(store: NativeChatRestartStore): void {
 }
 
 function ConnectedResumeToast({
-  store,
-  machineName
+  store
 }: {
   store: NativeChatRestartStore
-  machineName?: string
 }): React.JSX.Element | null {
   const { candidates, failed, listedAt } = useNativeChatRestartOffer(true, store)
   const run = useNativeChatRestartRun(store)
@@ -104,6 +101,13 @@ function ConnectedResumeToast({
   const openSettingsPage = useAppStore((state) => state.openSettingsPage)
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
   const remote = store.target.kind === 'environment'
+  // Read here, so a server renamed while its report is open updates in place.
+  const environmentId = store.target.kind === 'environment' ? store.target.environmentId : null
+  const machineName = useAppStore((state) =>
+    environmentId === null
+      ? undefined
+      : state.runtimeEnvironments.find((environment) => environment.id === environmentId)?.name
+  )
   const close = useCallback(() => snoozeResumeToast(store), [store])
 
   const finishedRun = view.phase === 'finished' ? run : null

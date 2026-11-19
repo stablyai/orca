@@ -12,6 +12,8 @@ export type ResumeToastRow = Readonly<{
   candidate: ResumeCandidate
   state: ResumeToastRowState
   failure?: ResumeFailure
+  /** The host refused it without filing a failure: nothing to retry or dismiss, only to open. */
+  openOnly?: true
 }>
 
 export type ResumeToastView = Readonly<{
@@ -67,6 +69,13 @@ export function resumeToastView(
             : 'stopped'
     return failure ? { candidate, state, failure } : { candidate, state }
   })
+  const shown = new Set(rows.map((row) => row.candidate.sessionId))
+  for (const sessionId of refusedWithoutRecord(run)) {
+    const entry = run?.entries.find((item) => item.candidate.sessionId === sessionId)
+    if (entry && !shown.has(sessionId)) {
+      rows.push({ candidate: entry.candidate, state: 'needs-you', openOnly: true })
+    }
+  }
   rows.sort((a, b) => ORDER[a.state] - ORDER[b.state])
   const count = (state: ResumeToastRowState) => rows.filter((row) => row.state === state).length
   const needsYou = count('needs-you')
@@ -82,12 +91,24 @@ export function resumeToastView(
     resumable: rows
       .filter(
         (row) =>
-          (row.state === 'stopped' || row.state === 'needs-you') && resumableByDefault(row.failure)
+          (row.state === 'stopped' || row.state === 'needs-you') &&
+          !row.openOnly &&
+          resumableByDefault(row.failure)
       )
       .map((row) => row.candidate.sessionId),
     interruptedByUpdate: rows.some((row) => row.candidate.trigger === 'update'),
     startedBy: run?.startedBy ?? null
   }
+}
+
+/** A settled run's refusals; the run view drops those the host filed no failure for. */
+function refusedWithoutRecord(run: ResumeRun | null): string[] {
+  if (!run || run.inFlight) {
+    return []
+  }
+  return (run.continued ?? [])
+    .filter((entry) => entry.outcome === 'refused')
+    .map((entry) => entry.sessionId)
 }
 
 function notIn(candidates: readonly ResumeCandidate[]) {
