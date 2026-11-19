@@ -130,4 +130,22 @@ describe('ConversationTurnActivity', () => {
     await vi.advanceTimersByTimeAsync(3_000)
     expect(plans.at(-1)).toEqual([{ title: 'newer', status: 'pending' }])
   })
+
+  it('drops a plan read begun before the teller was cleared, when it answers after a newer one', async () => {
+    const { activity, plans, tool, planReads } = harness()
+    const answers: ((content: string) => void)[] = []
+    const held = () =>
+      new Promise<{ tasks: { content: string; status: 'pending' }[] }>((resolve) =>
+        answers.push((content) => resolve({ tasks: [{ content, status: 'pending' }] }))
+      )
+    planReads.push(held, held)
+    tool('TodoWrite', 'first')
+    activity.clear()
+    tool('TodoWrite', 'second')
+    answers[1]?.('newer')
+    await vi.advanceTimersByTimeAsync(3_000)
+    answers[0]?.('older')
+    await vi.advanceTimersByTimeAsync(3_000)
+    expect(plans.at(-1)).toEqual([{ title: 'newer', status: 'pending' }])
+  })
 })

@@ -127,7 +127,8 @@ function openFence(text: string): string {
     }
     const [, marks, rest] = fence
     if (open === null) {
-      open = marks!
+      // Backticks after a backtick fence make the line inline code, which opens nothing.
+      open = marks![0] === '`' && rest!.includes('`') ? null : marks!
     } else if (marks![0] === open[0] && marks!.length >= open.length && rest!.trim() === '') {
       open = null
     }

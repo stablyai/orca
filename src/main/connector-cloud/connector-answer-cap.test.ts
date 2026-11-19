@@ -38,6 +38,11 @@ describe('capAnswer closing an open code block', () => {
     expect(capped.endsWith(`const a = 1\n${closing}\n\n${NOTE}`)).toBe(true)
   })
 
+  it('opens no block for a line of inline code that starts with backticks', () => {
+    const capped = capAnswer(`\`\`\`code\`\`\` text\n${'word '.repeat(400)}`, 600)
+    expect(capped.endsWith(`word\n\n${NOTE}`)).toBe(true)
+  })
+
   it('adds no fence after a block that already closed', () => {
     const capped = capAnswer(`\`\`\`\nx\n\`\`\`\n${'word '.repeat(400)}`, 600)
     expect(capped.endsWith(`word\n\n${NOTE}`)).toBe(true)

@@ -48,8 +48,10 @@ export class ConversationTurnActivity {
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>()
   // The plan-tool call each chat's plan was last read for, so one call is one read.
   private readonly planRead = new Map<string, string>()
-  // Each chat's plan reads, counted: one that answers after a later one began is out of date.
+  // Each chat's newest plan read, numbered across the teller's whole life (a cleared teller is
+  // watched again): one that answers after a later one began is out of date.
   private readonly planReads = new Map<string, number>()
+  private planReadCount = 0
 
   constructor(
     private readonly deps: {
@@ -118,7 +120,7 @@ export class ConversationTurnActivity {
       return
     }
     this.planRead.set(paneKey, call)
-    const read = (this.planReads.get(paneKey) ?? 0) + 1
+    const read = ++this.planReadCount
     this.planReads.set(paneKey, read)
     void this.deps
       .turnPlan?.(sessionId)
