@@ -28,6 +28,11 @@ export type LoadedWorkspaceLayout = {
   carried: CarriedSessionFields
 }
 
+/** What partition readers use; a partly reloaded partition holds no save inputs. */
+export type LoadedWorkspaceLayoutRead = Pick<LoadedWorkspaceLayout, 'desktopView' | 'facts'> & {
+  layout: Pick<WorkspaceLayoutModel, 'hostId' | 'workspaces'>
+}
+
 export type WorkspaceLayoutLoadResult = LoadedWorkspaceLayout & {
   /** Every on-disk value the next save writes differently from what was loaded. */
   changes: LayoutLoadChange[]

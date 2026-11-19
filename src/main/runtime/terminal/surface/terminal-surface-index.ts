@@ -10,7 +10,7 @@ import type {
   RuntimeSyncedTab,
   RuntimeSyncWindowGraph
 } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import type { LoadedWorkspaceLayout } from '../../../../shared/workspace-layout/persistence/workspace-layout-load-types'
+import type { LoadedWorkspaceLayoutRead } from '../../../../shared/workspace-layout/persistence/workspace-layout-load-types'
 import type {
   LayoutTab,
   WorkspaceLayout
@@ -29,7 +29,7 @@ import type { WorkspaceLayoutReads } from './workspace-layout-stream'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { loadChatTabLayout } from '../../session-tabs/chat/agent-session-tab-layout'
 
-type LoadedPartition = Pick<LoadedWorkspaceLayout, 'layout' | 'desktopView' | 'facts'>
+type LoadedPartition = LoadedWorkspaceLayoutRead
 
 export type MainPaneFacts = { binding: string; sleeping: boolean; incarnationId?: string }
 
@@ -53,7 +53,7 @@ export class TerminalSurfaceIndex {
   private current: MainTerminalSurfaces | null = null
   private currentJson = ''
   /** The loaded partitions `current` was projected from: the projection's own cached objects. */
-  private projectedFrom: (LoadedWorkspaceLayout | null)[] = []
+  private projectedFrom: (LoadedWorkspaceLayoutRead | null)[] = []
   private projectedHostIds: readonly ExecutionHostId[] = []
   private projectedHomes = ''
   private projectedTitles: boolean | null = null
@@ -147,7 +147,7 @@ export class TerminalSurfaceIndex {
 
   private project(
     hostIds: readonly ExecutionHostId[],
-    loaded: readonly (LoadedWorkspaceLayout | null)[]
+    loaded: readonly (LoadedWorkspaceLayoutRead | null)[]
   ): MainTerminalSurfaces {
     const partitions: LoadedPartition[] = []
     const worktreeIds = new Set<string>()
