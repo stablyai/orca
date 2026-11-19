@@ -123,10 +123,12 @@ export class WorkspaceSessionSaveBaseline {
   private epoch = 0
   private readonly acknowledged = new Map<string, SavedNode>()
 
-  /** A patch when the writer holds an acknowledged copy; otherwise the caller saves it whole. */
+  /** With 'patch', a patch when the writer holds an acknowledged copy; otherwise the caller saves it
+   *  whole, and 'whole' only records the candidate. */
   capture(
     domain: string,
-    value: unknown
+    value: unknown,
+    mode: 'patch' | 'whole'
   ): { patch?: ProfileStateDomainPatch; candidate: WorkspaceSessionSaveCandidate } {
     const depth = PROFILE_STATE_SPLIT_DOMAIN_DEPTHS.get(domain) ?? 0
     const node = isPlainContainer(value) ? snapshot(value, depth) : undefined
@@ -135,7 +137,7 @@ export class WorkspaceSessionSaveBaseline {
     }
     const candidate = { domain, epoch: this.epoch, node }
     const previous = this.acknowledged.get(domain)
-    if (!node || !previous?.keys) {
+    if (mode === 'whole' || !node || !previous?.keys) {
       return { candidate }
     }
     const operations: ProfileStateDomainPatchOperation[] = []

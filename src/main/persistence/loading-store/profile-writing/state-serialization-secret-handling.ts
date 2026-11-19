@@ -119,9 +119,9 @@ export class StateSerializationSecretHandlingOperations {
     for (const domain of saved) {
       const value = this.projectDomainToSave(domain, encrypt)
       if (sessionSaves && isWorkspaceSessionDomain(domain)) {
-        const { patch, candidate } = this.sessionSaveBaseline.capture(domain, value)
+        const { patch, candidate } = this.sessionSaveBaseline.capture(domain, value, sessionSaves)
         sessionCandidates.push(candidate)
-        if (patch && sessionSaves === 'patch') {
+        if (patch) {
           if (patch.operations.length > 0) {
             patches.push(patch)
           }
@@ -183,9 +183,13 @@ export class StateSerializationSecretHandlingOperations {
       const sessionCandidates: WorkspaceSessionSaveCandidate[] = []
       let hashPrefix = protectedStorageDegraded ? 'safeStorage-degraded\0' : ''
       for (const domain of sessionSaves ? WORKSPACE_SESSION_DOMAINS : []) {
-        const { patch, candidate } = this.sessionSaveBaseline.capture(domain, stateToSave[domain])
+        const { patch, candidate } = this.sessionSaveBaseline.capture(
+          domain,
+          stateToSave[domain],
+          sessionSaves
+        )
         sessionCandidates.push(candidate)
-        if (patch && sessionSaves === 'patch') {
+        if (patch) {
           patches.push(patch)
           delete stateToSave[domain]
           // Keep a patched capture's hash distinct from a whole one; changed entries force a write.

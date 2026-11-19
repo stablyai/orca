@@ -116,6 +116,10 @@ function beginWrite(
   if (!isCurrent()) {
     return undefined
   }
+  if (!complete.domains) {
+    // A whole-document payload replaces the session without recording the writer's copy.
+    baseline.clear()
+  }
   const { patches = [], sessionCandidates = [] } = complete
   const unchanged =
     complete.stateHash === lastWrittenStateHash &&

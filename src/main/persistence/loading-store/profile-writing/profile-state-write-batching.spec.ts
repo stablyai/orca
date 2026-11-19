@@ -35,6 +35,16 @@ export function registerProfileStateWriteBatchingTests(): void {
       expect(readState().workspaceSession.activeTabId).toBe('explicit-edit')
     })
 
+    it('saves an in-place session entry edit at a full checkpoint', async () => {
+      const { store, readState } = await fixture()
+      const [worktreeId, tabs] = Object.entries(store.getWorkspaceSession().tabsByWorktree)[0]!
+      tabs[0]!.title = 'checkpoint-edit'
+      await store.flushPendingOrThrowAsync({ fullCheckpoint: true })
+      expect(readState().workspaceSession.tabsByWorktree[worktreeId][0].title).toBe(
+        'checkpoint-edit'
+      )
+    })
+
     it('keeps a later flush ordered after an intervening durable mutation', async () => {
       const { store, authority, readState } = await fixture()
       const gate = authority.pause()
