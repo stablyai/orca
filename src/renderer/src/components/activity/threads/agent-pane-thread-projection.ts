@@ -220,8 +220,17 @@ export function createAgentPaneThreadProjection(store: ProjectionStore) {
   }
 
   function read(needsAllThreads: boolean): AgentPaneThreadSnapshot {
+    const started = performance.now()
     const current = currentInputs()
-    return needsAllThreads ? readFull(current) : readBadge(current)
+    const result = needsAllThreads ? readFull(current) : readBadge(current)
+    const ms = performance.now() - started
+    if (ms > 0.05) {
+      const g = globalThis as unknown as {
+        __orcaActivity?: { batches?: { start: number; ms: number }[] }
+      }
+      ;((g.__orcaActivity ??= {}).batches ??= []).push({ start: started, ms })
+    }
+    return result
   }
 
   function subscribe(listener: () => void, needsAllThreads: boolean): () => void {

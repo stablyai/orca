@@ -343,7 +343,8 @@ async function measureOnce({ arm, sha, buildDir, seedDir, options, runDir, outDi
         if (g.__orcaDispatch) {
           g.__orcaDispatch.timings = []
         }
-        g.__orcaActivity = { builds: 0, visits: 0, rebuilt: 0 }
+        g.__orcaActivity = { builds: 0, visits: 0, rebuilt: 0, batches: [] }
+        g.__orcaLongTasks = []
       })
       const started = Date.now()
       const driven = await SCENARIOS[name]({ page, userDataDir, windowMs })
@@ -369,7 +370,39 @@ async function measureOnce({ arm, sha, buildDir, seedDir, options, runDir, outDi
             max: +values.at(-1).toFixed(2)
           }
         }
-        return { dispatch: stats, activity: g.__orcaActivity ?? null }
+        const activity = g.__orcaActivity ?? null
+        let projection = null
+        if (activity?.batches?.length) {
+          const batches = activity.batches
+          const ms = batches.map((b) => b.ms).sort((a, b) => a - b)
+          const at = (q) => ms[Math.min(ms.length - 1, Math.floor(q * ms.length))]
+          const longs = g.__orcaLongTasks ?? []
+          let overlapping = 0
+          let attributed = 0
+          for (const task of longs) {
+            const inside = batches
+              .filter((b) => b.start >= task.start && b.start < task.start + task.ms)
+              .reduce((sum, b) => sum + b.ms, 0)
+            if (inside > 0) {
+              overlapping += 1
+            }
+            if (inside >= 25) {
+              attributed += 1
+            }
+          }
+          projection = {
+            n: ms.length,
+            p50: +at(0.5).toFixed(2),
+            p95: +at(0.95).toFixed(2),
+            max: +ms.at(-1).toFixed(2),
+            totalMs: Math.round(ms.reduce((s, v) => s + v, 0)),
+            longTasks: longs.length,
+            longTasksOverlapping: overlapping,
+            longTasksAttributed: attributed
+          }
+          delete activity.batches
+        }
+        return { dispatch: stats, activity, projection }
       })
       console.log(
         `[fanout-measure] ${label} ${name} ${JSON.stringify({ fanout, longN: rendererSnapshot.longN, longMs: rendererSnapshot.longMs, longMax: rendererSnapshot.longMax })}`
