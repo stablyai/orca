@@ -79,7 +79,7 @@ export const GOOGLE_FILES_METHODS = [
     handler: async (params, context) =>
       uploadDrive(googleApiForCaller(params, context), {
         ...params,
-        askedBy: await googleWriteAskedBy(params.callerSessionId, context)
+        askedBy: await googleWriteAskedBy(params, context)
       })
   }),
   defineMethod({
@@ -89,7 +89,7 @@ export const GOOGLE_FILES_METHODS = [
     handler: async (params, context) =>
       makeFolder(googleApiForCaller(params, context), {
         ...params,
-        askedBy: await googleWriteAskedBy(params.callerSessionId, context)
+        askedBy: await googleWriteAskedBy(params, context)
       })
   }),
   defineMethod({
@@ -105,7 +105,7 @@ export const GOOGLE_FILES_METHODS = [
     handler: async (params, context) =>
       shareDrive(googleApiForCaller(params, context), {
         ...params,
-        askedBy: await googleWriteAskedBy(params.callerSessionId, context)
+        askedBy: await googleWriteAskedBy(params, context)
       })
   }),
   defineMethod({
@@ -121,7 +121,7 @@ export const GOOGLE_FILES_METHODS = [
     handler: async (params, context) =>
       createDoc(googleApiForCaller(params, context), {
         ...params,
-        askedBy: await googleWriteAskedBy(params.callerSessionId, context)
+        askedBy: await googleWriteAskedBy(params, context)
       })
   }),
   defineMethod({
@@ -143,8 +143,7 @@ export const GOOGLE_FILES_METHODS = [
     handler: async (params, context) =>
       commentOnDoc(googleApiForCaller(params, context), {
         ...params,
-        text:
-          (await attributedGoogleText(params.text, params.callerSessionId, context)) ?? params.text
+        text: (await attributedGoogleText(params.text, params, context)) ?? params.text
       })
   }),
   defineMethod({

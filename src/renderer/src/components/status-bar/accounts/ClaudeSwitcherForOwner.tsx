@@ -147,7 +147,7 @@ export function ClaudeSwitcherForOwner({
         )
         return
       }
-      const next = await selectClaudeProviderAccount(runtimeTarget, {
+      const { runningSessions, ...next } = await selectClaudeProviderAccount(runtimeTarget, {
         accountId,
         runtime: target.runtime,
         wslDistro: target.wslDistro
@@ -161,12 +161,13 @@ export function ClaudeSwitcherForOwner({
         await fetchSettings()
       }
       const nextActiveAccountId = getClaudeStatusActiveId(next, target)
-      if (!chatAction && previousActiveAccountId !== nextActiveAccountId) {
+      if (runningSessions || (!chatAction && previousActiveAccountId !== nextActiveAccountId)) {
         void handleRunningClaudeSessionsAfterSwitch({
           owner: runtimeTarget,
           target,
           before: { state: accountState, accountId: previousActiveAccountId },
-          after: { state: next, accountId: nextActiveAccountId }
+          after: { state: next, accountId: nextActiveAccountId },
+          ...(runningSessions ? { hostMove: runningSessions } : {})
         })
       }
     } catch (error) {

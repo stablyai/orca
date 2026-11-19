@@ -1,6 +1,7 @@
 // What orchestration's own records say about workers started for items: the item a Dispatch was
 // started for (`worker-start --item`), the chat that started it, and a Dispatch's lineage.
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
+import type { BotItemLinkInput } from './bot-items-input'
 import {
   lineageLiveSession,
   readAgentSessionRecordStore
@@ -23,6 +24,32 @@ export function lineageAncestors(db: OrchestrationDb, dispatchId: string): strin
     id = db.getDispatchContextById(id)?.follow_up_of_dispatch_id ?? null
   }
   return seen
+}
+
+/** The first Dispatch of the follow-up chain a Dispatch belongs to: every step of one worker shares it. */
+function dispatchChainRoot(db: OrchestrationDb, dispatchId: string): string {
+  return lineageAncestors(db, dispatchId).at(-1) ?? dispatchId
+}
+
+/** The links worth adding: a Dispatch on a follow-up chain already linked (or linked earlier in the
+ *  same list) is that worker again. */
+export function linksOutsideLinkedChains(
+  db: OrchestrationDb,
+  linked: readonly BotItemLinkInput[],
+  links: readonly BotItemLinkInput[]
+): BotItemLinkInput[] {
+  const chains = new Set(
+    linked.flatMap((link) => (link.kind === 'dispatch' ? [dispatchChainRoot(db, link.ref)] : []))
+  )
+  return links.filter((link) => {
+    if (link.kind !== 'dispatch') {
+      return true
+    }
+    const chain = dispatchChainRoot(db, link.ref)
+    const known = chains.has(chain)
+    chains.add(chain)
+    return !known
+  })
 }
 
 /** The chat whose worker-start made a Dispatch: its live session, and the chat id its writes keep. */

@@ -63,7 +63,8 @@ import {
   sanitizePerWorktreePreferences,
   sanitizeWorkspaceCleanupDismissals,
   sanitizeActivityBarPosition,
-  hydratedUIPartialMatchesState,
+  keepUnchangedHydratedFields,
+  hydratedFieldsAreState,
   clampPetSize
 } from './ui-slice-hydration-sanitizers'
 import {
@@ -275,6 +276,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
             source === 'startup' ? sanitizeHydratedActiveView(ui.activeView) : s.activeView,
           persistedUIReady: true
         }
+        keepUnchangedHydratedFields(s, hydrated as Partial<UISlice>)
         // Capture authoritative baseline before overlaying dirty/in-flight local fields or their diff vanishes (STA-5781). Nonnumeric width fallback may differ from main until the next drag.
         const nextWriteBaseline = capturePersistedUIWriteBaseline(hydrated)
         const previousBaseline = s.persistedUIWriteBaseline
@@ -299,7 +301,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
         const nextWriteBaselineGeneration = writeBaselineMoved
           ? s.persistedUIWriteBaselineGeneration + 1
           : s.persistedUIWriteBaselineGeneration
-        if (hydratedUIPartialMatchesState(s, hydrated as Partial<UISlice>)) {
+        if (hydratedFieldsAreState(s, hydrated as Partial<UISlice>)) {
           if (!writeBaselineMoved) {
             return s
           }

@@ -136,7 +136,7 @@ export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePty
       const normalized = normalizeTerminalChunk(data, pty.tailPendingAnsi)
       ptyNormalized = normalized
       pty.tailPendingAnsi = normalized.pendingAnsi
-      observeTerminalCommandPaint(pty, data, normalized.text)
+      observeTerminalCommandPaint(pty, data, normalized.text, at)
       const nextTail = appendNormalizedToTailBuffer(
         pty.tailBuffer,
         pty.tailPartialLine,

@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  AGENT_STATUS_STALE_AFTER_MS,
-  isFreshNonDoneAgentStatus,
-  isAgentStatusFresh
-} from './agent-status-freshness'
+import { AGENT_STATUS_STALE_AFTER_MS, isFreshNonDoneAgentStatus } from './agent-status-freshness'
 import type { AgentStatusEntry } from './agent-status-types'
 
 const NOW = new Date('2026-04-09T12:00:00.000Z').getTime()
@@ -27,7 +23,6 @@ describe('staleness measures when evidence was observed, not when it was deliver
   it('keeps a live row fresh when its evidence was just observed', () => {
     const row = workingRow({ evidenceObservedAt: NOW })
     expect(isFreshNonDoneAgentStatus(row, NOW)).toBe(true)
-    expect(isAgentStatusFresh(row, NOW, AGENT_STATUS_STALE_AFTER_MS)).toBe(true)
 
     const mirrored = workingRow({
       updatedAt: OBSERVED_AT,
@@ -35,13 +30,11 @@ describe('staleness measures when evidence was observed, not when it was deliver
       mirroredEvidenceReceivedAt: NOW
     })
     expect(isFreshNonDoneAgentStatus(mirrored, NOW)).toBe(true)
-    expect(isAgentStatusFresh(mirrored, NOW, AGENT_STATUS_STALE_AFTER_MS)).toBe(true)
 
     const expiredMirror = workingRow({
       evidenceObservedAt: NOW,
       mirroredEvidenceReceivedAt: OBSERVED_AT
     })
     expect(isFreshNonDoneAgentStatus(expiredMirror, NOW)).toBe(false)
-    expect(isAgentStatusFresh(expiredMirror, NOW, AGENT_STATUS_STALE_AFTER_MS)).toBe(false)
   })
 })

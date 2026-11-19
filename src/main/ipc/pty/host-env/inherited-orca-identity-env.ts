@@ -3,7 +3,10 @@
 // desktop app, Electron serve, orcad, the terminal daemon) is never such a child itself, so any copy it
 // inherited names a terminal or agent of whichever Orca launched it, and a child holding it could pass
 // as that owner terminal.
-import { ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV } from '../../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
+import {
+  BOT_TOOLS_TOKEN_ENV,
+  ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV
+} from '../../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import {
   ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV,
   ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV,
@@ -11,9 +14,6 @@ import {
   ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV
 } from '../../../../shared/orchestration/orchestration-compatibility-evidence'
 import { AGENT_PANE_HOOK_ENV_KEYS, ORCA_AGENT_SESSION_CALLER_ENV_KEYS } from './spawn-env-keys'
-
-/** A bot agent's key to its tool relay. */
-export const BOT_TOOLS_TOKEN_ENV = 'ORCA_BOT_TOOLS_TOKEN'
 
 /** Which runtime the `orca` CLI targets; an inherited one points a child's CLI at another Orca. */
 export const REMOTE_RUNTIME_SELECTOR_ENV_KEYS = [

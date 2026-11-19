@@ -18,6 +18,10 @@ export type MobileNativeChatTurnRow = {
   turnKey?: string
   /** The row is the user message its turn starts from, whether or not the turn folds. */
   opensTurn?: true
+  /** An automation's row opened the turn. */
+  inAutomationTurn?: true
+  /** The turn said something or did something others see. */
+  inActingTurn?: true
   activeTurnIsWorking: boolean
   trailingRun: boolean
   workRun?: readonly NativeChatMessage[]

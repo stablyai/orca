@@ -177,9 +177,17 @@ describe('bots.create', () => {
     expect(bots.update).not.toHaveBeenCalled()
   })
 
-  it("writes a proposed bot's soul before its first turn, which offers to take over its workspaces", async () => {
+  it("defers the first turn for a takeover and runs it after writing a proposed bot's soul", async () => {
     const { bots, order, dispatcher } = createRuntime()
     const seed = { purpose: 'Tracks what’s blocking the 1.5 release.', templateId: 'release' }
+
+    chats.send.mockClear()
+    expect(
+      await dispatcher.dispatch(request('bots.create', { name: '  ', takingOver: true }), OWNER)
+    ).toMatchObject({ ok: true, result: { bot: { id: 'cutter' } } })
+    expect(bots.create).toHaveBeenCalledExactlyOnceWith({ name: '' })
+    expect(chats.send).not.toHaveBeenCalled()
+    order.length = 0
 
     expect(
       await dispatcher.dispatch(
@@ -234,7 +242,7 @@ describe('bots.create', () => {
     expect(bots.create).not.toHaveBeenCalled()
   })
 
-  it('creates from a card once: accepting it again returns that bot with no second first turn', async () => {
+  it('returns the original bot when a second acceptance includes an unknown template', async () => {
     const { bots, proposer, dispatcher } = createRuntime(
       makeTestBot({ id: 'atlas', name: 'Atlas' })
     )
@@ -251,10 +259,20 @@ describe('bots.create', () => {
     chats.send.mockClear()
     expect(
       await dispatcher.dispatch(
-        request('bots.create', { name: 'Cutter', fromOffer, handOff }),
+        request('bots.create', {
+          name: 'Cutter',
+          fromOffer,
+          handOff,
+          fromTemplate: { id: 'from-a-newer-build', skills: [] }
+        }),
         OWNER
       )
     ).toMatchObject({ ok: true, result: { bot: { id: 'cutter' } } })
+    expect(bots.createFromOffer).toHaveBeenLastCalledWith(
+      { name: 'Cutter', fromOffer },
+      undefined,
+      expect.any(Function)
+    )
     expect(chats.send).not.toHaveBeenCalled()
     expect(bots.create).not.toHaveBeenCalled()
   })
@@ -373,8 +391,21 @@ describe('bots.update from a phone', () => {
 
   it.each([
     ['add a person', { addMembers: [{ id: 'U9', name: 'Nora', source: 'slack' }] }],
+    ['replace the member list', { members: [dana] }],
+    ['change permissions', { permissionMode: 'full-access' }]
+  ])("refuses an agent's CLI that tries to %s", async (_label, updates) => {
+    const { bots, dispatcher } = phoneRuntime()
+
+    expect(
+      await dispatcher.dispatch(request('bots.update', { botId: 'bot-1', updates }), {
+        caller: LOCAL_CLI_RPC_CALLER
+      })
+    ).toMatchObject({ ok: false })
+    expect(bots.update).not.toHaveBeenCalled()
+  })
+
+  it.each([
     ['take a person off', { removeMembers: [{ id: 'U1', source: 'slack' }] }],
-    ['change permissions', { permissionMode: null }],
     ['pause it', { paused: true }],
     ['change a connector', { slack: null }]
   ])("lets an agent's CLI %s", async (_label, updates) => {
@@ -483,7 +514,7 @@ describe('bots.access.decide', () => {
     info.mockRestore()
   })
 
-  it("lets an agent's CLI answer an access request", async () => {
+  it("refuses an agent's CLI that answers an access request", async () => {
     const { cloud, decisions } = fakeAccessCloud([makeAccessRequest()])
     const bot = makeTestBot({ slack: { appId: 'A1', teamId: 'T1' } })
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the method reads only runtime.bots, the connector cloud and the runtime id, which the stub provides.
@@ -501,8 +532,8 @@ describe('bots.access.decide', () => {
         request('bots.access.decide', { requestId: 'req-1', decision: 'declined' }),
         { caller: LOCAL_CLI_RPC_CALLER }
       )
-    ).toMatchObject({ ok: true, result: { ok: true } })
-    expect(decisions).toHaveLength(1)
+    ).toMatchObject({ ok: false })
+    expect(decisions).toHaveLength(0)
   })
 
   it("refreshes the host's store once after deciding, and lists from it without the cloud", async () => {
@@ -524,7 +555,8 @@ describe('bots.access.decide', () => {
     vi.spyOn(console, 'info').mockImplementation(() => {})
 
     await dispatcher.dispatch(
-      request('bots.access.decide', { requestId: 'req-1', decision: 'declined' })
+      request('bots.access.decide', { requestId: 'req-1', decision: 'declined' }),
+      { caller: DESKTOP_RPC_CALLER }
     )
     const decisionCalls = call.mock.calls.length
     expect(await dispatcher.dispatch(request('bots.access.list', null))).toMatchObject({

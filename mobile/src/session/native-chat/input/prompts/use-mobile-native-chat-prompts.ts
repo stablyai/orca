@@ -4,7 +4,7 @@ import {
   scanPendingAsks
 } from '../../../../../../src/shared/native-chat/input/native-chat-ask'
 import { useMemo } from 'react'
-import { asyncQuestionsAfterSkip } from '../../../../../../src/shared/agent-session/view/structured-agent-session-async-questions'
+import { shownStructuredAgentSessionAsyncQuestions } from '../../../../../../src/shared/agent-session/view/structured-agent-session-async-questions'
 import type { AgentStatusEntry } from '../../../../../../src/shared/agent-status/contracts/agent-status-types'
 import type { AskPrompt } from '../../../../../../src/shared/native-chat/input/questions/native-chat-ask-types'
 import {
@@ -50,9 +50,15 @@ export function useMobileNativeChatPrompts(args: {
   const queuedCards = structured?.queued?.cards
   const queuedTexts = useMemo(() => queuedCards?.map((card) => card.text), [queuedCards])
   const skippedThrough = structured?.asyncQuestionSkip?.skippedThrough
+  const awaiting = structured?.asyncQuestionSkip?.awaiting
   const contributors = useMemo(
-    () => asyncQuestionsAfterSkip(scan?.contributors ?? [], skippedThrough),
-    [scan, skippedThrough]
+    () =>
+      shownStructuredAgentSessionAsyncQuestions(
+        scan?.contributors ?? [],
+        transcriptLoading ? null : messages,
+        { awaiting, skippedThrough }
+      ),
+    [scan, transcriptLoading, messages, awaiting, skippedThrough]
   )
   const pendingAsk = useMemo(
     () =>

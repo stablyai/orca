@@ -74,7 +74,10 @@ const itemsSnooze = bindDeferredRpcOperation(
   })
 )
 
-export type BotItemRead<T> = { kind: 'read'; value: T } | { kind: 'failed'; notFound: boolean }
+/** `message` says why a read failed: the host's refusal or the transport's error, when either gave one. */
+export type BotItemRead<T> =
+  | { kind: 'read'; value: T }
+  | { kind: 'failed'; notFound: boolean; message?: string }
 
 /** Every open item, closed ones a page at a time (`closedCursor` for the next), or one chat's. */
 export async function readBotItems(
@@ -89,9 +92,13 @@ export async function readBotItems(
     )
     return answer.kind === 'answered'
       ? { kind: 'read', value: answer.value }
-      : { kind: 'failed', notFound: false }
-  } catch {
-    return { kind: 'failed', notFound: false }
+      : {
+          kind: 'failed',
+          notFound: false,
+          message: answer.kind === 'failed' ? answer.message : undefined
+        }
+  } catch (error) {
+    return { kind: 'failed', notFound: false, message: error instanceof Error ? error.message : '' }
   }
 }
 

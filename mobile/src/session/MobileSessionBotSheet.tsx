@@ -2,9 +2,13 @@ import { appendReturnedDraftText } from '../../../src/shared/native-chat/input/d
 import { openBotChatTab } from './bot-chat-tab-open'
 import { setMobileNativeChatDraftText } from './native-chat/composer/drafts/mobile-native-chat-draft-store'
 import { mobileNativeChatScopeKey } from './native-chat/conversation/mobile-native-chat-scope-key'
-import { useContext } from 'react'
+import { useContext, useMemo } from 'react'
 import { MobileBotSheet } from '../bots/MobileBotSheet'
 import { MobileBotPanel } from '../bots/MobileBotPanel'
+import { MobileDictationLiveContext } from '../dictation/mobile-dictation-live-context'
+import { useMobileDictationLive } from '../dictation/use-mobile-dictation-live'
+import { MobileNativeChatDictationPreviewContext } from './native-chat/composer/dictation/mobile-native-chat-dictation-preview-context'
+import { BotItemCommentMicContext } from '../bots/items/bot-item-comment-mic'
 import { navigateToMobileFilePreview } from '../files/preview/mobile-file-preview-navigation'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
@@ -42,13 +46,40 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
     itemsOnPhone,
     botPanel,
     setBotPanel,
-    connState
+    connState,
+    dictation
   } = controller
   const server = useContext(WorkspaceServerContext)
   const router = useWorkspaceRouteHandoff()
   const t = useMobileTranslation()
   const executionHost = useWorkspaceExecutionHost()
   const openMobileSession = useOpenMobileSession()
+  // An item's comment box dictates with this screen's one dictation, as its chat composers do.
+  const dictationLive = useMobileDictationLive(dictation, controller.cancelDictation, hostId ?? '')
+  const { dictationEnabled, dictationMode, handleDictationToggle } = controller
+  const { handleDictationPressIn, handleDictationPressOut } = controller
+  const { isStarting, isRecording, isProcessing } = dictation
+  const mic = useMemo(
+    () => ({
+      onMicPress: dictationEnabled ? handleDictationToggle : undefined,
+      micActive: isStarting || isRecording,
+      micStarting: isStarting,
+      micProcessing: isProcessing,
+      dictationMode,
+      onMicPressIn: handleDictationPressIn,
+      onMicPressOut: handleDictationPressOut
+    }),
+    [
+      dictationEnabled,
+      dictationMode,
+      handleDictationPressIn,
+      handleDictationPressOut,
+      handleDictationToggle,
+      isProcessing,
+      isRecording,
+      isStarting
+    ]
+  )
   const accessRequests = useBotAccessRequests({
     client,
     routeBot,
@@ -132,6 +163,8 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
         )
       }
     : null
+  const hostName =
+    (server ? server.name : controller.hostName) || t('bots.items.thisComputer', 'The computer')
   if (itemsOnPhone && hostId) {
     const closePanel = () => setBotPanel(null)
     const panelTreeActions: BotChatTreeActions = {
@@ -145,52 +178,64 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
       }
     }
     return (
-      <MobileBotPanel
-        open={botPanel}
-        onClose={closePanel}
-        routeBot={routeBot}
-        client={client}
-        online={connState === 'connected'}
-        hostName={
-          (server ? server.name : controller.hostName) ||
-          t('bots.items.thisComputer', 'The computer')
-        }
-        hostId={hostId}
-        worktreeId={worktreeId}
-        hostKey={hostBotsKey(hostId, executionHost)}
-        listNeedsYou={routeBot.needsYou}
-        treeActions={panelTreeActions}
-        accessRequests={accessRequests}
-        onOpenItemChat={(item) => {
-          closePanel()
-          openBotChatTab({ chatId: item.chat.id, home: item.chat.kind === 'home' }, chatTabScope)
-        }}
-        onOpenFile={(path, toast) => {
-          // Only a file in the bot's folder opens, as on the desktop.
-          if (!isBotFolderPath(path)) {
-            toast(t('bots.items.link.fileOutside', "{{path}} isn't in this bot's folder", { path }))
-            return
-          }
-          navigateToMobileFilePreview(
-            router,
-            {
-              hostId,
-              worktreeId,
-              relativePath: path.replace(/^\.\//, ''),
-              name: path.split('/').at(-1) ?? path
-            },
-            { embedded: true, onRequestClose: closePanel }
-          )
-        }}
-        onStartSuggestion={startSuggestion}
-        onNewAutomation={newAutomation}
-      />
+      <MobileDictationLiveContext.Provider value={dictationLive}>
+        <MobileNativeChatDictationPreviewContext.Provider value={controller.chatDictationPreview}>
+          <BotItemCommentMicContext.Provider value={mic}>
+            <MobileBotPanel
+              open={botPanel}
+              onClose={closePanel}
+              routeBot={routeBot}
+              client={client}
+              online={connState === 'connected'}
+              hostName={hostName}
+              hostId={hostId}
+              worktreeId={worktreeId}
+              hostKey={hostBotsKey(hostId, executionHost)}
+              listNeedsYou={routeBot.needsYou}
+              treeActions={panelTreeActions}
+              accessRequests={accessRequests}
+              onOpenItemChat={(item) => {
+                closePanel()
+                openBotChatTab(
+                  { chatId: item.chat.id, home: item.chat.kind === 'home' },
+                  chatTabScope
+                )
+              }}
+              onOpenFile={(path, toast) => {
+                // Only a file in the bot's folder opens, as on the desktop.
+                if (!isBotFolderPath(path)) {
+                  toast(
+                    t('bots.items.link.fileOutside', "{{path}} isn't in this bot's folder", {
+                      path
+                    })
+                  )
+                  return
+                }
+                navigateToMobileFilePreview(
+                  router,
+                  {
+                    hostId,
+                    worktreeId,
+                    relativePath: path.replace(/^\.\//, ''),
+                    name: path.split('/').at(-1) ?? path
+                  },
+                  { embedded: true, onRequestClose: closePanel }
+                )
+              }}
+              onStartSuggestion={startSuggestion}
+              onNewAutomation={newAutomation}
+            />
+          </BotItemCommentMicContext.Provider>
+        </MobileNativeChatDictationPreviewContext.Provider>
+      </MobileDictationLiveContext.Provider>
     )
   }
   return (
     <MobileBotSheet
       hostKey={hostBotsKey(hostId ?? '', executionHost)}
       treeActions={treeActions}
+      online={connState === 'connected'}
+      hostName={hostName}
       visible={showBotSheet}
       onClose={() => setShowBotSheet(false)}
       routeBot={routeBot}
