@@ -36,6 +36,7 @@ export const NATIVE_CHAT_AGENTS = [
   'opencode2',
   'omp',
   'copilot',
+  'codebuddy',
   'cursor',
   'kimi',
   'pi',
@@ -56,6 +57,8 @@ const AGENT_CHAT_PERMISSION_MODES_BY_AGENT: Record<
   opencode2: ACP_CHAT_PERMISSION_MODES,
   omp: ACP_CHAT_PERMISSION_MODES,
   copilot: ACP_CHAT_PERMISSION_MODES,
+  // CodeBuddy exposes Claude Code's four modes, including its own Auto reviewer.
+  codebuddy: CLAUDE_CHAT_PERMISSION_MODES,
   cursor: ACP_CHAT_PERMISSION_MODES,
   kimi: KIMI_CHAT_PERMISSION_MODES,
   // Pi asks no approvals, so its chats run with every tool it has, as its terminal does.
