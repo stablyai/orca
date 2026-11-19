@@ -15,11 +15,9 @@ vi.mock('../main-process-state', () => ({
 const { installMainWindowAgentStatusListeners } = await import('./main-window-agent-status')
 
 it('tells the window that a tmux-hosted conversation is shared, so it writes no checkpoint', () => {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the listener only forwards status to this window.
-  installMainWindowAgentStatusListeners({
-    window: {} as BrowserWindow,
-    onRecordAgentState: () => {}
-  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the listener never reads the window it is given.
+  const window = {} as BrowserWindow
+  installMainWindowAgentStatusListeners({ window, onRecordAgentState: () => {} })
   const providerSession = { key: 'session_id' as const, id: 'codex-in-tmux' }
   retainTmuxWriterTopology(providerSession)
   setListener.mock.lastCall![0]({
@@ -36,4 +34,24 @@ it('tells the window that a tmux-hosted conversation is shared, so it writes no 
     'agentStatus:set',
     expect.objectContaining({ paneKey: 'tab-1:pane-1', sharedHost: true })
   )
+})
+
+it("sends no identity for an agent that ended, so a quit conversation isn't checkpointed again", () => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the listener never reads the window it is given.
+  const window = {} as BrowserWindow
+  installMainWindowAgentStatusListeners({ window, onRecordAgentState: () => {} })
+  send.mockClear()
+  setListener.mock.lastCall![0]({
+    paneKey: 'tab-1:pane-1',
+    tabId: 'tab-1',
+    worktreeId: 'wt-1',
+    connectionId: null,
+    receivedAt: 1,
+    stateStartedAt: 1,
+    payload: { state: 'done', prompt: '', agentType: 'codex' },
+    providerSession: { key: 'session_id', id: 'quit-codex' },
+    providerSessionOnly: true,
+    agentPresence: { agent: 'codex', ended: true }
+  })
+  expect(send).not.toHaveBeenCalled()
 })

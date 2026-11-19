@@ -55,6 +55,10 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
     // reach the window as shared so it leaves no resume checkpoint.
     const shared = cliWriterTopology(row) === 'shared' ? { sharedHost: true as const } : {}
     if (providerSessionOnly) {
+      // An ended agent's retained identity is no conversation for the window to checkpoint.
+      if (agentPresence?.ended) {
+        return
+      }
       // Idle Pi session_start only refreshes resume identity; skip titles, telemetry and status UI.
       state.mainWindow?.webContents.send('agentStatus:set', {
         ...payload,
