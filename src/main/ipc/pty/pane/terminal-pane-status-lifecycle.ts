@@ -170,6 +170,28 @@ async function paneShellAlone(
  *  name, which a live unrecognized agent shares. */
 // Spawn and adoption publish the shell PID; a host that published none pays one targeted
 // inventory per PTY incarnation, whose answer (a root or none) lasts until the PTY's teardown.
+type PtyProvider = ReturnType<typeof getProviderForPty>
+const pendingRootLookups = new Map<
+  PtyProvider,
+  { ptyIds: Set<string>; result: ReturnType<PtyProvider['listProcesses']> | Promise<null> }
+>()
+
+/** Cold lookups started together (a sleep's proofs) share one owner inventory. */
+function lookupRootPids(provider: PtyProvider, ptyId: string) {
+  let batch = pendingRootLookups.get(provider)
+  if (!batch) {
+    const ptyIds = new Set<string>()
+    const result = Promise.resolve().then(() => {
+      pendingRootLookups.delete(provider)
+      return provider.listProcesses({ ptyIds: [...ptyIds], targetOwnerOnly: true })
+    })
+    batch = { ptyIds, result: result.catch(() => null) }
+    pendingRootLookups.set(provider, batch)
+  }
+  batch.ptyIds.add(ptyId)
+  return batch.result
+}
+
 async function readPtyRootPid(
   provider: ReturnType<typeof getProviderForPty>,
   ptyId: string,
@@ -183,9 +205,7 @@ async function readPtyRootPid(
   if (known && known.incarnationId === incarnationId) {
     return known.rootPid ?? undefined
   }
-  const processes = await provider
-    .listProcesses({ ptyIds: [ptyId], targetOwnerOnly: true })
-    .catch(() => null)
+  const processes = await lookupRootPids(provider, ptyId)
   const rootPid = processes?.find((entry) => entry.id === ptyId)?.rootProcessId
   if (processes && incarnationId && ptyIncarnationById.get(ptyId) === incarnationId) {
     ptyFallbackRootPidById.set(ptyId, { incarnationId, rootPid: rootPid ?? null })
