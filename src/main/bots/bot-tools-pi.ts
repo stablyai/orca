@@ -5,12 +5,15 @@ import type { BotLaunchTools } from './bot-launch-tools'
 export const PI_BOT_TOOLS_ENV = 'ORCA_PI_BOT_TOOLS'
 export const PI_BOT_TOOLS_EXTENSION_FILE = 'orca-bot-tools.ts'
 
-// The variable is dropped once read so the commands Pi runs don't inherit it; a server Pi refuses
-// is skipped, since an extension that throws stops Pi.
+// The variable is dropped once read so the commands Pi runs don't inherit it, and kept for the process
+// so a reload, which reruns this in a fresh runtime, registers them again; a server Pi refuses is
+// skipped, since an extension that throws stops Pi.
 export const PI_BOT_TOOLS_EXTENSION_SOURCE = [
+  `const KEPT = Symbol.for('orca.${PI_BOT_TOOLS_ENV}')`,
   'export default function (pi) {',
-  `  const raw = process.env.${PI_BOT_TOOLS_ENV}`,
+  `  globalThis[KEPT] ??= process.env.${PI_BOT_TOOLS_ENV}`,
   `  delete process.env.${PI_BOT_TOOLS_ENV}`,
+  '  const raw = globalThis[KEPT]',
   "  if (!raw || typeof pi.registerMcpServer !== 'function') return",
   '  for (const [name, config] of Object.entries(JSON.parse(raw))) {',
   '    try {',
