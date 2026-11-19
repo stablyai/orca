@@ -136,6 +136,7 @@ it.each(['notice before typing', 'notice before flush'] as const)(
         isVisibleRef: { current: true }
       },
       pane: { id: 1, leafId: leaf, terminal: { options: {} } },
+      noteTerminalInputForPty: () => {},
       paneStartup: { command: 'codex' },
       getSleepingRecordForPane: () => null
     } as never)
