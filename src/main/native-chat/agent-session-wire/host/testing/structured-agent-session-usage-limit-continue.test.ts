@@ -148,19 +148,13 @@ function sweepOver(
   })
 }
 
-it('continues every chat whose limit reset in the same pass', async () => {
-  const sent: string[] = []
-  await sweepOver({ tabs: ['chat-a', 'chat-b', 'chat-c'], background: [] }, sent).tick()
-  expect(sent).toEqual(['chat-a', 'chat-b', 'chat-c'])
-})
-
 // Bot chats and kept-open structured workers run with no tab.
 const TABLESS = { tabs: [], background: ['bot-chat', 'worker-chat'] }
 
-it('continues tabless bot and worker chats at their reset', async () => {
+it('continues both visible and tabless chats whose limit reset in the same pass', async () => {
   const sent: string[] = []
-  await sweepOver(TABLESS, sent).tick()
-  expect(sent).toEqual(['bot-chat', 'worker-chat'])
+  await sweepOver({ ...TABLESS, tabs: ['chat-a'] }, sent).tick()
+  expect(sent).toEqual(['chat-a', 'bot-chat', 'worker-chat'])
 })
 
 it('continues no tabless chat while automatic continue is off', async () => {

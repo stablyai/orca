@@ -31,6 +31,7 @@ import {
   type BotDirectApp
 } from './bot-app-catalog'
 import { BotAppBrandLogo } from './BotAppBrandLogo'
+import { BotAppCategoryIcon } from './BotAppCategoryIcon'
 import { BotAppCaption } from './BotAppRow'
 import { BotAppStepHeader } from './BotAppStepParts'
 import { ComposioAccountStep, WebhooksStep } from './BotAppSteps'
@@ -345,7 +346,11 @@ export function BotAppsCatalog({
       <>
         {shown.map(({ category, count }) => (
           <section key={category} aria-label={botAppCategoryName(category)}>
-            <BotAppCaption title={botAppCategoryName(category)} count={count} />
+            <BotAppCaption
+              icon={<BotAppCategoryIcon category={category} />}
+              title={botAppCategoryName(category)}
+              count={count}
+            />
             <ul className="flex flex-col">
               {direct.filter((row) => row.app.category === category).map(directRow)}
             </ul>

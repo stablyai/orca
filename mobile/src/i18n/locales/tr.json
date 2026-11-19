@@ -620,10 +620,6 @@
       "imageTooLarge": "Görsel eklenemeyecek kadar büyük",
       "permissionDenied": "Fotoğraf erişim izni reddedildi"
     },
-    "agentMessage": {
-      "handedOffToAgent": "Ajana devredildi",
-      "startedAgent": "Ajan başlatıldı"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "Ek yanıtı okunamıyor. Tekrar deneyin.",
       "incompleteReply": "Ek değişti veya yanıtı eksikti. Kapatıp tekrar deneyin.",

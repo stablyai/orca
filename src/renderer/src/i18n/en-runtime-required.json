@@ -1623,7 +1623,8 @@
         "inHours_other": "In {{count}} hours",
         "later": "Later today",
         "monday": "Monday",
-        "tomorrow": "Tomorrow"
+        "tomorrow": "Tomorrow",
+        "week": "In a week"
       },
       "stale": {
         "confirm_one": "Cancel {{count}} stale item?",

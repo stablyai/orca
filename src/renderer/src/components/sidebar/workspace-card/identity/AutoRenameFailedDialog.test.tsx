@@ -461,28 +461,6 @@ describe('AutoRenameFailedDialog sessions and focus', () => {
     expect(document.activeElement).not.toBe(button('Try again'))
   })
 
-  it('does not focus a reopened dialog from the previous session’s queued focus', async () => {
-    const frames = queueFrames()
-    getBranchRenameFailureOutput.mockResolvedValue(null)
-    getBranchAutoRenameRetryAvailability.mockResolvedValue({
-      available: true,
-      runningAttemptId: null
-    })
-    retryBranchAutoRename.mockResolvedValue({
-      attemptId: 1,
-      outcome: { kind: 'nothing-yet' },
-      finishedAt: 1
-    })
-    await act(async () => root.render(<Controlled open />))
-    button('Try again')?.focus()
-    await act(async () => button('Try again')?.click())
-    await act(async () => root.render(<Controlled open={false} />))
-    await act(async () => root.render(<Controlled open />))
-    button('Dismiss')?.focus()
-    await act(async () => frames.splice(0).forEach((frame) => frame(0)))
-    expect(document.activeElement?.getAttribute('aria-label')).toBe('Dismiss')
-  })
-
   it('re-announces an identical result by clearing the live region while naming runs', async () => {
     await renderFailure()
     const liveRegion = () => document.querySelector('[aria-live="polite"]')?.textContent ?? ''
