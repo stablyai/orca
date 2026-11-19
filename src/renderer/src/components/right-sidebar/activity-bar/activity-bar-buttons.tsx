@@ -130,6 +130,7 @@ export function TopActivityOverflowMenu({
         <button
           type="button"
           data-activity-overflow-trigger=""
+          data-holds-active-tab={holdsActiveTab ? '' : undefined}
           className={cn(
             'relative flex h-[36px] w-8 shrink-0 items-center justify-center transition-colors hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
             holdsActiveTab ? 'text-foreground' : 'text-muted-foreground/60',

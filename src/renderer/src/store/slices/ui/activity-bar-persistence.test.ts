@@ -18,6 +18,22 @@ it('restores the saved activity order and hidden panels from the write payload',
   }
 })
 
+it('restores the bot-page order separately from the workspace order', () => {
+  vi.stubGlobal('window', { api: { ui: { set: vi.fn().mockResolvedValue(undefined) } } })
+  try {
+    const payload = persistedUIWriteFieldsToWireUpdate({
+      activityBarOrder: ['explorer', 'checks'],
+      activityBarBotOrder: ['bot-chats', 'explorer']
+    })
+    const store = createUIStore()
+    store.getState().hydratePersistedUI(makePersistedUI(payload))
+    expect(store.getState().activityBarOrder).toEqual(['explorer', 'checks'])
+    expect(store.getState().activityBarBotOrder).toEqual(['bot-chats', 'explorer'])
+  } finally {
+    vi.unstubAllGlobals()
+  }
+})
+
 it('does not treat equal hydrated arrangements as local edits or overwrite a newer window', () => {
   vi.stubGlobal('window', { api: { ui: { set: vi.fn().mockResolvedValue(undefined) } } })
   try {
