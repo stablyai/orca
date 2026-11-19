@@ -8,6 +8,8 @@ A user who goes from this build back to the floor release, then forward again, m
 2. Point `STORE_FLOOR` at the new fixture and update its release, commit and versions.
 3. Delete the old fixture.
 
+That is the goal. The tests below prove part of it: the floor can open and write every store this build created or migrated, at the schema level, and can find this build's terminal daemon. They don't prove that rows survive a migration or that stored payloads keep their meaning; the review rules and each migration's own old-writer test cover those.
+
 Anything here protects only downgrades to builds that already contain it. Rules this build follows on its own work against today's floor. Rules that make older builds tolerant only help once those builds are the floor.
 
 ## Enforced by `store-floor-compatibility.test.ts`
@@ -20,7 +22,8 @@ The profile state, chat journal, chat domain and orchestration stores are checke
   - new non-unique indexes;
   - new tables' own triggers.
 - **Forbidden:**
-  - dropping or rebuilding a floor table, column or index;
+  - dropping a floor table, column or index;
+  - changing a floor index under its name (give the new definition a new name; the floor recreates some indexes with `IF NOT EXISTS` and pins others with `INDEXED BY`);
   - changing a floor column's type, NOT NULL, default, primary key or generated expression (the floor reports the profile as damaged);
   - adding or removing `WITHOUT ROWID` or `STRICT` on a floor table;
   - adding a NOT NULL column with no default;
@@ -30,11 +33,14 @@ The profile state, chat journal, chat domain and orchestration stores are checke
 - **user_version** of the profile, chat journal and chat domain must equal the floor's. A newer one makes the floor refuse the profile and open chats read-only. Orchestration may be newer, because the floor writes it as is.
 - **A trigger this build adds to a floor table** fires inside the floor's writes too. List it in `floor/reviewed-floor-table-triggers.json` with why it is safe. It must use only built-in SQL and never `RAISE`.
 - **The chat record `schemaVersion`** must equal the floor's. Records with any other version are invisible to the floor.
+- **The chat journal row version** must equal the floor's. The floor refuses rows with a higher version as newer and stops writing that chat.
 
-`daemon-floor-hold.test.ts` keeps the floor able to find this build's terminal daemon by its pid record, socket path (including the Windows pipe hash and the short Unix path for long user-data folders), token name and command line. That way the floor shows this build's terminals read-only with Reopen, instead of restoring them a second time. Every protocol bump must keep it passing.
+`daemon-floor-hold.test.ts` checks discovery only: it doesn't start a daemon or connect a floor client. It keeps the floor able to find this build's terminal daemon by its pid record, socket path (including the Windows pipe hash and the short Unix path for long user-data folders), token name and command line. That way the floor shows this build's terminals read-only with Reopen, instead of restoring them a second time. Every protocol bump must keep it passing.
 
-## Review rules the tests can't see
+## Review rules
 
+- **Rebuilding a floor table** (copy, drop, rename) passes the shape check, so it must keep every row, and every rowid other rows or the floor rely on.
+- **A change that alters a floor-visible representation or how floor-written state is adopted** (a migration, writer, trigger, import or recovery path, or cleanup) ships an old-writer/old-reader test at the layer that owns the change. Seed literal historical rows (`writeFloorShapedStore` creates the store as the floor does), exercise the changed mechanism, run the floor's relevant operation, reopen with this build and assert literal results. Reopen a second time when a one-shot adoption or retirement is involved. Schema equality alone doesn't cover these.
 - **Strict chat storage:** declare first, write later. The floor treats a journal row with an undeclared key or union tag as newer and stops writing that chat. Ship the declaration and reader in one release, and write the field only once that release is the floor. Gate writes with a switch like `JOURNAL_TEXT_TAIL_WRITES` or `JOURNAL_STORED_OUTPUT_WRITES`.
 - **Fold before you can die:** data this build keeps only in tables the floor doesn't read must reach floor-visible rows before a crash can strand it, not only on clean quit.
 - **Renames dual-write** the old key until the floor reads the new one. Example: `experimentalConnectors` -> `botsEnabled`.

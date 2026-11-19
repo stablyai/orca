@@ -44,8 +44,12 @@ export function floorSchemaViolations(
         violations.push(`column ${table}.${floorColumn[0]} changed`)
       }
     }
+    // Generated columns take no positional values.
     const columnOrder = (shape: typeof floorTable): string =>
-      shape.columns.map((column) => column[0]).join(',')
+      shape.columns
+        .filter((column) => column[5] < 2)
+        .map((column) => column[0])
+        .join(',')
     if (
       policy.positionalInsertTables.includes(table) &&
       columnOrder(currentTable) !== columnOrder(floorTable)
@@ -81,7 +85,7 @@ export function floorSchemaViolations(
     if (!index) {
       violations.push(`index ${name} dropped`)
     } else if (index.sql !== floorIndex.sql) {
-      violations.push(`index ${name} changed`)
+      violations.push(`index ${name} changed; give the new definition a new name`)
     }
   }
   for (const [name, floorTrigger] of Object.entries(floor.triggers)) {

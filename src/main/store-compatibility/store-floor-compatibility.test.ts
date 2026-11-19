@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { AGENT_SESSION_RECORD_SCHEMA_VERSION } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { PROTOCOL_VERSION } from '../daemon/protocol/daemon-protocol-version'
 import {
@@ -66,6 +67,10 @@ describe(`stores stay writable by ${STORE_FLOOR.release}`, () => {
 
   it('keeps chat records readable by the floor build', () => {
     expect(AGENT_SESSION_RECORD_SCHEMA_VERSION).toBe(STORE_FLOOR.agentSessionRecordSchemaVersion)
+  })
+
+  it('keeps chat journal rows writable by the floor build', () => {
+    expect(AGENT_SESSION_JOURNAL_SCHEMA_VERSION).toBe(STORE_FLOOR.agentSessionJournalSchemaVersion)
   })
 
   it('never lowers the terminal daemon protocol below the floor', () => {

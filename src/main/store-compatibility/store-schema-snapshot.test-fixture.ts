@@ -88,14 +88,33 @@ export function tableCheckClauses(sql: string): string[] {
 /** Each generated column's `AS (...)` expression, keyed by the column name before it. */
 function generatedColumnExpressions(sql: string): Map<string, string> {
   return new Map(
-    parenthesizedClauses(sql, /("[^"]*"|`[^`]*`|\[[^\]]*\]|\w+)[^,(]*?\bAS\s*\(/gi).map(
-      ([name, clause]) => [/^["`[]/.test(name) ? name.slice(1, -1) : name, clause]
-    )
+    parenthesizedClauses(
+      sql,
+      /("[^"]*"|`[^`]*`|\[[^\]]*\]|\w+)(?:\(\s*[+-]?\d+\s*(?:,\s*[+-]?\d+\s*)?\)|[^,(])*?\bAS\s*\(/gi,
+      true
+    ).map(([name, clause]) => [/^["`[]/.test(name) ? name.slice(1, -1) : name, clause])
   )
 }
 
-/** [first capture group, normalized clause] for each match of `pattern`, which must end at an open parenthesis. */
-function parenthesizedClauses(sql: string, pattern: RegExp): [string, string][] {
+/** An unread expression would compare equal on both sides, so it fails loudly instead. */
+function generatedExpression(
+  generated: Map<string, string>,
+  table: string,
+  column: string
+): string {
+  const expression = generated.get(column)
+  if (expression === undefined) {
+    throw new Error(`Could not read the generated expression of ${table}.${column}`)
+  }
+  return expression
+}
+
+/** [first capture group, normalized clause] for each match of `pattern`, which must end at an open parenthesis; expressionOnly keeps just that parenthesized part. */
+function parenthesizedClauses(
+  sql: string,
+  pattern: RegExp,
+  expressionOnly = false
+): [string, string][] {
   const clauses: [string, string][] = []
   for (let match = pattern.exec(sql); match; match = pattern.exec(sql)) {
     let depth = 1
@@ -111,7 +130,8 @@ function parenthesizedClauses(sql: string, pattern: RegExp): [string, string][] 
         depth += char === '(' ? 1 : char === ')' ? -1 : 0
       }
     }
-    clauses.push([match[1] ?? '', normalizeSql(sql.slice(match.index, end))])
+    const start = expressionOnly ? match.index + match[0].length - 1 : match.index
+    clauses.push([match[1] ?? '', normalizeSql(sql.slice(start, end))])
   }
   return clauses
 }
@@ -153,7 +173,7 @@ function tableShape(db: Database.Database, table: string, sql: string): StoreTab
       column.dflt_value,
       column.pk,
       column.hidden,
-      column.hidden >= 2 ? (generated.get(column.name) ?? '<unparsed>') : null
+      column.hidden >= 2 ? generatedExpression(generated, table, column.name) : null
     ]),
     checks: tableCheckClauses(sql),
     foreignKeys: foreignKeys.sort(),
