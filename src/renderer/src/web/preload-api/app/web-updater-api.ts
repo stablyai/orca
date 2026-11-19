@@ -11,6 +11,7 @@ export function createUpdaterApi(): NonNullable<Partial<PreloadApi>['updater']> 
     check: () => Promise.resolve(),
     download: () => Promise.resolve(),
     quitAndInstall: () => Promise.resolve(),
+    declineAutoRestart: () => Promise.resolve(),
     dismissNudge: () => Promise.resolve(),
     dismissAvailableUpdate: () => Promise.resolve(),
     getLinuxPackageInstallInstructions: () => Promise.reject(new Error(desktopOnlyMessage)),
@@ -27,6 +28,7 @@ export function createUpdaterApi(): NonNullable<Partial<PreloadApi>['updater']> 
         )
       }),
     onStatus: () => noopUnsubscribe,
-    onClearDismissal: () => noopUnsubscribe
+    onClearDismissal: () => noopUnsubscribe,
+    onAutoRestartDue: () => noopUnsubscribe
   }
 }

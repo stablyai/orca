@@ -29,8 +29,18 @@ export function isUpdateCardVisible({
   if (status.state === 'idle') {
     return false
   }
+  if (status.state === 'downloaded' && status.autoRestartAt !== undefined) {
+    return true
+  }
+  if (status.state === 'available' && status.unattended && !updateUserInitiatedCycle) {
+    return false
+  }
   if (cachedVersion && dismissedVersion === cachedVersion && !updateUserInitiatedCycle) {
-    if (status.state !== 'downloading' && status.state !== 'error') {
+    if (
+      status.state !== 'downloading' &&
+      status.state !== 'error' &&
+      !(status.state === 'downloaded' && status.unattended)
+    ) {
       return false
     }
   }

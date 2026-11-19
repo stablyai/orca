@@ -18,4 +18,14 @@ export function registerUpdaterStatusIpcBridge(unsubs: (() => void)[]): void {
       useAppStore.getState().clearDismissedUpdateVersion()
     })
   )
+  unsubs.push(
+    window.api.updater.onAutoRestartDue(() => {
+      void window.api.updater.quitAndInstall({ unattended: true }).catch((error) => {
+        console.error('[updater] Failed to restart for an update:', error)
+        return window.api.updater.declineAutoRestart().catch((declineError) => {
+          console.error('[updater] Failed to decline automatic restart:', declineError)
+        })
+      })
+    })
+  )
 }

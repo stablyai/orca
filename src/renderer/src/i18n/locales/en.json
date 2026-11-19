@@ -1760,6 +1760,12 @@
       "ab7e864374": "About update delay",
       "ee1d96f74a": "Skip delay once"
     },
+    "installUpdatesWhenAway": {
+      "title": "Install updates when you're away",
+      "description": "Download updates in the background and restart to install them when your screen is locked or you've been away for 10 minutes. Orca waits while a restart would interrupt a chat or other work.",
+      "keywordAutomatic": "automatic",
+      "keywordIdle": "idle"
+    },
     "editorFormatOnSave": {
       "description": "Format text before manual saves and auto save. Configure a formatter command in Settings > Projects. Off by default.",
       "keywords": "formatter format on save prettier biome gofmt",
@@ -25277,6 +25283,12 @@
     }
   },
   "updates": {
+    "autoRestart": {
+      "countdownTitle": "Restarting to update",
+      "countdownBody": "Orca restarts in {{time}} to install v{{version}}.",
+      "readyBody": "Orca v{{version}} will install the next time you step away.",
+      "notNow": "Not now"
+    },
     "installBlock": {
       "instancesLabel": "Instances using Orca",
       "browserLabel": "Background browser",

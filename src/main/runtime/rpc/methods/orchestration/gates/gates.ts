@@ -13,6 +13,10 @@ import {
 // Keep one coordinator reference for runStop; the DB allows only one active run.
 let activeCoordinator: Coordinator | null = null
 
+export function hasActiveCoordinatorRun(): boolean {
+  return activeCoordinator !== null
+}
+
 export const ORCHESTRATION_GATE_METHODS = [
   // Return the run id immediately; callers query persisted progress while coordination runs in the background.
   defineOrchestrationMethod({
@@ -70,7 +74,6 @@ export const ORCHESTRATION_GATE_METHODS = [
 
       if (activeCoordinator) {
         activeCoordinator.stop()
-        activeCoordinator = null
       }
 
       return { runId: run.id, stopped: true }

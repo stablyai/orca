@@ -36,6 +36,7 @@ export function statusesEqual(left: UpdateStatus, right: UpdateStatus): boolean 
         left.version === right.version &&
         left.activeNudgeId === right.activeNudgeId &&
         left.releaseUrl === right.releaseUrl &&
+        left.unattended === right.unattended &&
         // Changelog objects are recreated per check; dedupe by presence rather than reference.
         Boolean(left.changelog) === Boolean(right.changelog)
       )
@@ -44,6 +45,7 @@ export function statusesEqual(left: UpdateStatus, right: UpdateStatus): boolean 
         right.state === 'downloading' &&
         left.version === right.version &&
         left.activeNudgeId === right.activeNudgeId &&
+        left.unattended === right.unattended &&
         left.percent === right.percent
       )
     case 'downloaded':
@@ -51,7 +53,9 @@ export function statusesEqual(left: UpdateStatus, right: UpdateStatus): boolean 
         right.state === 'downloaded' &&
         left.version === right.version &&
         left.activeNudgeId === right.activeNudgeId &&
-        left.releaseUrl === right.releaseUrl
+        left.releaseUrl === right.releaseUrl &&
+        left.unattended === right.unattended &&
+        left.autoRestartAt === right.autoRestartAt
       )
     case 'error':
       return (
@@ -61,6 +65,7 @@ export function statusesEqual(left: UpdateStatus, right: UpdateStatus): boolean 
         left.retryable === right.retryable &&
         left.retryAction === right.retryAction &&
         left.userInitiated === right.userInitiated &&
+        left.unattended === right.unattended &&
         left.activeNudgeId === right.activeNudgeId &&
         // Recovery identity fences async actions, so same-valued recaptures must reach the renderer.
         left.recovery === right.recovery

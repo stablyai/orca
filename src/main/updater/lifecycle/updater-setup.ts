@@ -18,7 +18,7 @@ import { registerAutoUpdaterHandlers } from '../updater-events'
 import { getServeUpdateHandoffFailure } from '../serve-update-handoff'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { AUTO_UPDATE_CHECK_INTERVAL_MS } from './updater-state'
-import { UpdaterDownloadInstall } from './updater-download-install'
+import { UpdaterAwayInstall } from './updater-away-install'
 import { configureMacShipItScheduling } from '../mac-install/macos-shipit-scheduling'
 import { handleElectronUpdaterProxyLogin } from './electron-updater-proxy-session'
 import { resolveWindowsUpdateInstallDirectory } from './windows-update-install-directory'
@@ -35,11 +35,13 @@ export type UpdaterSetupOptions = {
   setDismissedUpdateNudgeId?: (id: string | null) => void
   getReleaseChannelOverride?: () => ReleaseChannel | null
   getUpdateDelayDays?: () => number
+  getInstallUpdatesWhenAway?: () => boolean
+  findRestartInterruptingWork?: () => string | null
   installMode?: UpdateInstallMode
   onBeforeQuitFailure?: PreQuitCleanupFailureMode
 }
 
-export class UpdaterSetup extends UpdaterDownloadInstall {
+export class UpdaterSetup extends UpdaterAwayInstall {
   checkForUpdates(): void {
     this.checkForUpdatesInBackground()
   }
@@ -52,8 +54,8 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     super.downloadUpdate()
   }
 
-  quitAndInstall(): void {
-    super.quitAndInstall()
+  quitAndInstall(options?: { unattended?: boolean }): void {
+    super.quitAndInstall(options)
   }
 
   isQuittingForUpdate(): boolean {
@@ -127,6 +129,8 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     this._setDismissedUpdateNudgeId = opts?.setDismissedUpdateNudgeId ?? null
     this.getReleaseChannelOverride = opts?.getReleaseChannelOverride ?? null
     this.getUpdateDelayDays = opts?.getUpdateDelayDays ?? null
+    this.getInstallUpdatesWhenAway = opts?.getInstallUpdatesWhenAway ?? null
+    this.findRestartInterruptingWork = opts?.findRestartInterruptingWork ?? null
     this.updateInstallMode = opts?.installMode ?? 'interactive'
     this.lastInstallDeferralVersion = { download: null, install: null }
 
@@ -178,6 +182,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
       return
     }
     this.autoUpdaterInitialized = true
+    this.installAwayRestartSignals()
     autoUpdater.on('login', handleElectronUpdaterProxyLogin)
 
     registerAutoUpdaterHandlers({

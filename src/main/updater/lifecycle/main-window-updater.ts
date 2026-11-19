@@ -12,8 +12,10 @@ import { applyProxyToElectronUpdaterSession } from './electron-updater-proxy-ses
 import { updaterErrorMessage } from './updater-coded-error'
 import { updaterCodedMessage } from '../../../shared/updater/updater-failure-copy'
 import { normalizeUpdateDelayDays } from '../../../shared/updater/update-delay'
+import { findRestartInterruptingWork } from '../away-install/restart-interrupting-work'
 import {
   checkForUpdatesFromMenu,
+  declineAutoRestart,
   dismissAvailableUpdate,
   dismissNudge,
   downloadUpdate,
@@ -71,6 +73,8 @@ function buildUpdaterSetupOptions(store: Store, options?: UpdaterSetupHooks): Up
     },
     getReleaseChannelOverride: () => store.getUI().releaseChannelOverride ?? null,
     getUpdateDelayDays: () => normalizeUpdateDelayDays(store.getSettings().updateDelayDays),
+    getInstallUpdatesWhenAway: () => store.getSettings().installUpdatesWhenAway === true,
+    findRestartInterruptingWork,
     onBeforeQuitFailure: options?.onBeforeUpdateQuitFailure,
     installMode: options?.updateInstallMode
   }
@@ -148,6 +152,7 @@ export function registerUpdaterHandlers(_store: Store): void {
   ipcMain.removeHandler('updater:check')
   ipcMain.removeHandler('updater:download')
   ipcMain.removeHandler('updater:quitAndInstall')
+  ipcMain.removeHandler('updater:declineAutoRestart')
   ipcMain.removeHandler('updater:dismissNudge')
   ipcMain.removeHandler('updater:dismissAvailableUpdate')
   ipcMain.removeHandler('updater:getLinuxPackageInstallInstructions')
@@ -161,7 +166,10 @@ export function registerUpdaterHandlers(_store: Store): void {
     return checkForUpdatesFromMenu(options)
   })
   ipcMain.handle('updater:download', () => downloadUpdate())
-  ipcMain.handle('updater:quitAndInstall', () => quitAndInstall())
+  ipcMain.handle('updater:quitAndInstall', (_event, options?: { unattended?: boolean }) =>
+    quitAndInstall(options)
+  )
+  ipcMain.handle('updater:declineAutoRestart', () => declineAutoRestart())
   ipcMain.handle('updater:dismissNudge', () => dismissNudge())
   ipcMain.handle('updater:dismissAvailableUpdate', () => dismissAvailableUpdate())
   // Package paths/native reveal belong only to the current trusted main renderer; refuse guests, popouts and stale/utility windows.

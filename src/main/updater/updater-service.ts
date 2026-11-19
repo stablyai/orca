@@ -59,8 +59,12 @@ export function downloadUpdate(): void {
   updater.downloadUpdate()
 }
 
-export function quitAndInstall(): void {
-  updater.quitAndInstall()
+export function quitAndInstall(options?: { unattended?: boolean }): void {
+  updater.quitAndInstall(options)
+}
+
+export function declineAutoRestart(): void {
+  updater.declineAutoRestart()
 }
 
 export function isQuittingForUpdate(): boolean {

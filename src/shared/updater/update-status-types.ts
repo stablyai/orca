@@ -93,6 +93,8 @@ export type UpdateStatus = (
       /** Linux only: a package manager owns this install, so Orca cannot apply the update itself.
        *  Additive and optional — older clients simply keep offering their own download. */
       externallyManaged?: boolean
+      /** Main installs this update unattended; older clients ignore this field. */
+      unattended?: boolean
     }
   | {
       state: 'not-available'
@@ -102,7 +104,14 @@ export type UpdateStatus = (
       /** Optional so older paired clients keep rendering "up to date". */
       unsupportedSystemUpdate?: UnsupportedSystemUpdate
     }
-  | { state: 'downloading'; percent: number; version: string; activeNudgeId?: string }
+  | {
+      state: 'downloading'
+      percent: number
+      version: string
+      activeNudgeId?: string
+      /** Main installs this update unattended; older clients ignore this field. */
+      unattended?: boolean
+    }
   | {
       state: 'downloaded'
       version: string
@@ -110,6 +119,10 @@ export type UpdateStatus = (
       activeNudgeId?: string
       /** Install preparation is in progress; older clients can still render downloaded. */
       installing?: boolean
+      /** Main installs this update unattended; older clients ignore this field. */
+      unattended?: boolean
+      /** Countdown deadline in epoch milliseconds while an automatic restart is pending. */
+      autoRestartAt?: number
     }
   | {
       state: 'error'
@@ -124,6 +137,7 @@ export type UpdateStatus = (
       /** A staged update can retry installation without downloading again; older hosts omit this. */
       retryAction?: 'install'
       userInitiated?: boolean
+      unattended?: boolean
       activeNudgeId?: string
       recovery?: LinuxPackageInstallRecovery
       /** Optional so older paired clients retain the diagnostic and install retry. */

@@ -11,7 +11,8 @@ export type UpdaterApi = {
   getStatus: () => Promise<UpdateStatus>
   check: (options?: UpdateCheckOptions) => Promise<void>
   download: () => Promise<void>
-  quitAndInstall: () => Promise<void>
+  quitAndInstall: (options?: { unattended?: boolean }) => Promise<void>
+  declineAutoRestart: () => Promise<void>
   dismissNudge: () => Promise<void>
   dismissAvailableUpdate: () => Promise<void>
   /** Desktop-only. Rejects unless the current status carries `linux-package-install` recovery. */
@@ -26,4 +27,5 @@ export type UpdaterApi = {
 
   onStatus: (callback: (status: UpdateStatus) => void) => () => void
   onClearDismissal: (callback: () => void) => () => void
+  onAutoRestartDue: (callback: () => void) => () => void
 }

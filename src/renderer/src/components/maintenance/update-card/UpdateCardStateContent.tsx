@@ -14,6 +14,7 @@ import {
   UpdateAvailableSimpleContent
 } from './UpdateAvailableCardContent'
 import { UpdateDownloadingContent, UpdateReadyToInstallContent } from './UpdateDownloadCardContent'
+import { UpdateAutoRestartCardContent } from './UpdateAutoRestartCardContent'
 
 export function UpdateCardStateContent({
   status,
@@ -29,6 +30,7 @@ export function UpdateCardStateContent({
   onMediaLoad,
   onUpdate,
   onInstallRetry,
+  onDecline,
   onDismiss,
   onCollapse
 }: {
@@ -48,6 +50,7 @@ export function UpdateCardStateContent({
   onMediaLoad: () => void
   onUpdate: () => void
   onInstallRetry: () => void
+  onDecline: () => void
   onDismiss: () => void
   onCollapse: () => void
 }): React.JSX.Element | null {
@@ -112,6 +115,28 @@ export function UpdateCardStateContent({
             )}
           </p>
         </div>
+      )
+    }
+    if (status.unattended && !hasStartedDownload) {
+      return status.autoRestartAt !== undefined ? (
+        <UpdateAutoRestartCardContent
+          version={status.version}
+          restartAt={status.autoRestartAt}
+          onRestart={onInstallRetry}
+          onDecline={onDecline}
+        />
+      ) : (
+        <UpdateReadyToInstallContent
+          version={status.version}
+          description={t(
+            'updates.autoRestart.readyBody',
+            'Orca v{{version}} will install the next time you step away.',
+            { version: status.version }
+          )}
+          onRestart={onInstallRetry}
+          onDecline={onDecline}
+          onClose={onCollapse}
+        />
       )
     }
     return hasStartedDownload ? (
