@@ -14,9 +14,8 @@ type RememberedRoot = {
 const FULL_LISTING_RETRY_MS = 60_000
 const rootByPtyId = new Map<string, RememberedRoot>()
 let sharedListing: Promise<void> | null = null
-// Why: a listing answered before a terminal retired must not restore its root.
-const retiredDuringLookups = new Set<string>()
-let lookupsInFlight = 0
+// Why: a listing answered before a terminal retired must not restore its root; each lookup fences its own span.
+const lookupFences = new Set<Set<string>>()
 let fullListingUnavailableUntil = 0
 
 /** A local terminal's root process, or 'replaced' when the PTY is no longer the expected incarnation.
@@ -30,26 +29,26 @@ export async function readLegacyPtyRootProcessId(
   if (!remember) {
     return readTargetRoot(controller, ptyId, expectedIncarnationId)
   }
-  lookupsInFlight++
+  const retired = new Set<string>()
+  lookupFences.add(retired)
   try {
-    return await readRememberedRoot(controller, ptyId, expectedIncarnationId)
+    return await readRememberedRoot(controller, ptyId, expectedIncarnationId, retired)
   } finally {
-    if (--lookupsInFlight === 0) {
-      retiredDuringLookups.clear()
-    }
+    lookupFences.delete(retired)
   }
 }
 
 async function readRememberedRoot(
   controller: ListingController,
   ptyId: string,
-  expectedIncarnationId: string | undefined
+  expectedIncarnationId: string | undefined,
+  retired: ReadonlySet<string>
 ): Promise<number | 'replaced' | null> {
   let remembered = rootByPtyId.get(ptyId)
   if (!remembered || !matchesIncarnation(remembered, expectedIncarnationId)) {
     if (Date.now() >= fullListingUnavailableUntil) {
       // Why one shared listing: each cold terminal listing every session alone costs terminals × sessions.
-      sharedListing ??= rememberAllRoots(controller).finally(() => {
+      sharedListing ??= fenced(rememberAllRoots, controller).finally(() => {
         sharedListing = null
       })
       // Why fall back: an unrelated daemon's failure must not blind this terminal's own owner.
@@ -60,7 +59,7 @@ async function readRememberedRoot(
     remembered = rootByPtyId.get(ptyId)
     if (!remembered || !matchesIncarnation(remembered, expectedIncarnationId)) {
       const root = await readTargetRoot(controller, ptyId, expectedIncarnationId)
-      if (typeof root !== 'number' || retiredDuringLookups.has(ptyId)) {
+      if (typeof root !== 'number' || retired.has(ptyId)) {
         return root
       }
       // Falls through so its start time is pinned now, not at a later probe after a PID reuse.
@@ -87,8 +86,8 @@ async function readRememberedRoot(
 /** The root lives as long as its terminal: bounded by live PTYs, not a size cap that would thrash. */
 export function forgetLegacyPtyRoot(ptyId: string): void {
   rootByPtyId.delete(ptyId)
-  if (lookupsInFlight > 0) {
-    retiredDuringLookups.add(ptyId)
+  for (const retired of lookupFences) {
+    retired.add(ptyId)
   }
 }
 
@@ -97,10 +96,26 @@ function matchesIncarnation(root: RememberedRoot, expected: string | undefined):
   return !root.incarnationId || !expected || root.incarnationId === expected
 }
 
-async function rememberAllRoots(controller: ListingController): Promise<void> {
+async function fenced(
+  list: (controller: ListingController, retired: ReadonlySet<string>) => Promise<void>,
+  controller: ListingController
+): Promise<void> {
+  const retired = new Set<string>()
+  lookupFences.add(retired)
+  try {
+    await list(controller, retired)
+  } finally {
+    lookupFences.delete(retired)
+  }
+}
+
+async function rememberAllRoots(
+  controller: ListingController,
+  retired: ReadonlySet<string>
+): Promise<void> {
   const listed = new Map<string, { incarnationId: string | undefined; pid: number }>()
   for (const pane of (await controller.listProcesses?.(LOCAL_EXECUTION_HOST_ID)) ?? []) {
-    if (pane.rootProcessId && !retiredDuringLookups.has(pane.id)) {
+    if (pane.rootProcessId && !retired.has(pane.id)) {
       listed.set(pane.id, { incarnationId: pane.incarnationId, pid: pane.rootProcessId })
     }
   }

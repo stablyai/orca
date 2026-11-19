@@ -6,14 +6,15 @@ const confirmations = { count: 0 }
 const read = (
   processName: string | null,
   stoppedAgents?: string[],
-  agent: TuiAgent | undefined = 'claude'
+  agent: TuiAgent | undefined = 'claude',
+  confirmedName = processName
 ) =>
   readMailboxForeground(
     {
       getForegroundProcess: async () => processName,
       confirmForegroundProcess: async () => {
         confirmations.count += 1
-        return processName
+        return confirmedName
       },
       supportsForegroundObservation: () => true,
       inspectProcess: async () => ({
@@ -63,4 +64,12 @@ it('a plainly named program in front is judged without a host-wide confirmation'
     await expect(read('vim', ['claude'])).resolves.toMatchObject({ foreground: 'non-shell' })
   }
   expect(confirmations.count).toBe(0)
+})
+
+it('an unrecognized name with the expected agent not stopped is still confirmed, so the returning agent is seen', async () => {
+  confirmations.count = 0
+  await expect(read('agent-native', undefined, 'claude', 'claude')).resolves.toMatchObject({
+    foreground: 'agent'
+  })
+  expect(confirmations.count).toBe(1)
 })
