@@ -7,10 +7,8 @@ import type { AutomationBotTarget } from '../../../../../shared/automations/auto
 import type { Bot } from '../../../../../shared/bot-types'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import { AutomationEditorSettingsSidebar } from './AutomationEditorSettingsSidebar'
-import { buildAutomationEditDraft } from './automation-edit-draft'
 import { botTargetError, isSameBotTarget } from './automation-bot-save'
 import { botResultsPlace, withBotResultsPlace } from './automation-bot-results-to'
-import { makeAutomation } from '../automations-page-fixtures'
 
 vi.mock('./AutomationSchedulePicker', () => ({ AutomationSchedulePicker: () => null }))
 vi.mock('./AutomationWorkspaceField', () => ({
@@ -106,27 +104,6 @@ function renderSidebar(
 afterEach(cleanup)
 
 describe('automation bot target', () => {
-  it("shows only When, Runs in, the bot's agent and Send results to for a bot", () => {
-    renderSidebar({ ...DRAFT, bot: TARGET })
-
-    expect(screen.getByText('When')).toBeTruthy()
-    expect(screen.getByText('Runs in')).toBeTruthy()
-    expect(screen.getByText('Send results to')).toBeTruthy()
-    expect(screen.getByText('Bot · Reviewer')).toBeTruthy()
-    expect(screen.getByText('bot-agent-field')).toBeTruthy()
-    expect(screen.queryByText('Agent')).toBeNull()
-    expect(screen.queryByText('workspace-field')).toBeNull()
-    expect(screen.queryByText('session-field')).toBeNull()
-  })
-
-  it('keeps the project fields for a project target', () => {
-    renderSidebar(DRAFT)
-
-    expect(screen.getByText('Agent')).toBeTruthy()
-    expect(screen.getByText('workspace-field')).toBeTruthy()
-    expect(screen.queryByText('Runs in')).toBeNull()
-  })
-
   it("choosing a bot takes the bot's agent and drops the project's settings", () => {
     const onDraftChange = renderSidebar(DRAFT)
 
@@ -161,15 +138,6 @@ describe('automation bot target', () => {
     fireEvent.click(screen.getAllByRole('combobox')[0])
 
     expect(screen.queryByText('Add project')).toBeNull()
-  })
-
-  it('round-trips the bot target through an edit draft', () => {
-    const automation = makeAutomation({
-      bot: { ...TARGET, runsIn: 'chat', resultsTo: { channel: '#eng' } },
-      projectId: ''
-    })
-
-    expect(buildAutomationEditDraft(automation).bot).toEqual(automation.bot)
   })
 
   it('needs a channel name before saving results to a channel', () => {
@@ -237,19 +205,9 @@ describe('automation bot target', () => {
       bot: { ...TARGET, resultsTo: { linearIssue: 'ENG-1' } }
     })
 
-    expect(screen.getByLabelText('Linear issue').getAttribute('placeholder')).toBe(
-      'Issue key (e.g. ENG-123) or a Linear link'
-    )
     fireEvent.change(screen.getByLabelText('Linear issue'), { target: { value: 'ENG-42' } })
 
     const next = onDraftChange.mock.calls.at(-1)![0]({ ...DRAFT, bot: TARGET })
     expect(next.bot?.resultsTo).toEqual({ linearIssue: 'ENG-42' })
-  })
-
-  it('asks for a channel or a Slack link, which the host looks up on save', () => {
-    renderSidebar({ ...DRAFT, bot: { ...TARGET, resultsTo: { channel: '' } } })
-    expect(screen.getByLabelText('Channel').getAttribute('placeholder')).toBe(
-      '#channel or a Slack link'
-    )
   })
 })

@@ -338,6 +338,9 @@ export class StructuredAgentSessionHost {
 
   subscribeTurnCompletions = this.clientDelivery.subscribeTurnCompletions
   readStatusSummary = this.clientDelivery.readStatusSummary
+  /** The usage-limit continue as the journal stands now, ahead of the next status publish. */
+  readUsageLimitContinue = async (id: string) =>
+    this.usageLimitContinue.readState(id, await this.clientDelivery.readUsageLimitCut(id))
   publishedWork = this.clientDelivery.readPublishedWork
 
   private collaborators = () => ({

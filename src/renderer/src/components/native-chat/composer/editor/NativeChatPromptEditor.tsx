@@ -17,7 +17,10 @@ import { TextSelection } from '@tiptap/pm/state'
 import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { shallow } from 'zustand/shallow'
 import { EditorContent } from '@tiptap/react'
-import { useNativeChatComposerEditor } from './native-chat-composer-editor-owner'
+import {
+  NativeChatComposerEditorView,
+  useNativeChatComposerEditor
+} from './native-chat-composer-editor-owner'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import {
@@ -25,7 +28,7 @@ import {
   insertPromptMention,
   NativeChatFileReference,
   NativeChatImageReference,
-  nativeChatPromptPills,
+  nativeChatPromptPillsFor,
   promptLeafText,
   promptText,
   promptTextOffset,
@@ -104,9 +107,7 @@ function NativePromptEditor({
         trailingNode: false
       }),
       NativeChatAgentReference,
-      ...nativeChatPromptPills.filter(
-        (pill) => imageChips || pill.name !== NativeChatImageReference.name
-      ),
+      ...nativeChatPromptPillsFor(imageChips),
       NativeChatUnkernedRunDecorations,
       NativeChatHardBreakParagraphs,
       // A disabled box still says why it is disabled, as the plain text box's placeholder does.
@@ -338,7 +339,7 @@ function NativePromptEditor({
               // Why both: the text check covers other paragraphs, the view covers soft wraps.
               return (
                 !beyond.includes('\n') &&
-                editor.view.endOfTextblock(edge === 'start' ? 'up' : 'down')
+                mountedEditorView(editor)?.endOfTextblock(edge === 'start' ? 'up' : 'down') === true
               )
             },
             select: () => {
@@ -407,6 +408,7 @@ function NativePromptEditor({
   return (
     <NativeChatPastedTextScopeProvider value={scopeKey ?? ''}>
       <NativeChatImageRowProvider value={imageRow ?? NO_IMAGES}>
+        <NativeChatComposerEditorView editor={editor} />
         <EditorContent
           editor={editor}
           {...events}

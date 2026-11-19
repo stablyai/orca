@@ -75,13 +75,17 @@ export function preserveMissingWorkspaceSessionTerminalBindings(
     options.targetIdForWorktree ??
     ((worktreeId: string) => bindingRecovery.getConnectionIdForWorktree(worktreeId))
 
+  // Copy on write: the session can hold a window's sent objects, which callers still compare.
+  let restoredTabs: typeof nextTabs | undefined
+  let restoredLayouts: typeof nextLayouts | undefined
+
   for (const [worktreeId, tabs] of Object.entries(nextTabs)) {
     const priorList = priorTabs[worktreeId]
     if (!priorList) {
       continue
     }
     let priorById: Map<string, (typeof priorList)[number]> | undefined
-    for (const tab of tabs) {
+    for (const [index, tab] of tabs.entries()) {
       if (ambiguousTabIds.has(tab.id)) {
         continue
       }
@@ -112,7 +116,10 @@ export function preserveMissingWorkspaceSessionTerminalBindings(
           tabId: tab.id
         })
       ) {
-        tab.ptyId = priorTab.ptyId
+        restoredTabs ??= { ...nextTabs }
+        const restored = restoredTabs[worktreeId] === tabs ? [...tabs] : restoredTabs[worktreeId]!
+        restored[index] = { ...tab, ptyId: priorTab.ptyId }
+        restoredTabs[worktreeId] = restored
       }
     }
   }
@@ -164,7 +171,9 @@ export function preserveMissingWorkspaceSessionTerminalBindings(
       continue
     }
 
-    layout.ptyIdsByLeafId = { ...restorableBindings, ...incoming }
+    const restoredLayout = { ...layout, ptyIdsByLeafId: { ...restorableBindings, ...incoming } }
+    restoredLayouts ??= { ...nextLayouts }
+    restoredLayouts[tabId] = restoredLayout
     const buffersByLeafId = preserveMissingLeafRecordEntries(
       priorLayout.buffersByLeafId,
       layout.buffersByLeafId,
@@ -181,17 +190,24 @@ export function preserveMissingWorkspaceSessionTerminalBindings(
       liveLeafIds
     )
     if (buffersByLeafId) {
-      layout.buffersByLeafId = buffersByLeafId
+      restoredLayout.buffersByLeafId = buffersByLeafId
     }
     if (scrollbackRefsByLeafId) {
-      layout.scrollbackRefsByLeafId = scrollbackRefsByLeafId
+      restoredLayout.scrollbackRefsByLeafId = scrollbackRefsByLeafId
     }
     if (titlesByLeafId) {
-      layout.titlesByLeafId = titlesByLeafId
+      restoredLayout.titlesByLeafId = titlesByLeafId
     }
   }
 
-  return session
+  if (!restoredTabs && !restoredLayouts) {
+    return session
+  }
+  return {
+    ...session,
+    ...(restoredTabs ? { tabsByWorktree: restoredTabs } : {}),
+    ...(restoredLayouts ? { terminalLayoutsByTabId: restoredLayouts } : {})
+  }
 }
 
 export function sshTargetIdForWorkspaceSessionHost(

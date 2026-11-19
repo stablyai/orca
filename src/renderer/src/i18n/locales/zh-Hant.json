@@ -13386,10 +13386,8 @@
             "f61af83316": "新增資料夾",
             "37c875d827": "新檔案",
             "b3e288bf41": "無法下載「{{value0}}」。",
-            "f729bcd97d": "無法下載資料夾「{{value0}}」。",
             "1a3df04ae1": "開啟",
             "bce4d4e44f": "已下載「{{value0}}」",
-            "a4029c996b": "已下載資料夾「{{value0}}」",
             "e26010014a": "被 .gitignore 忽略",
             "a06551beee": "Enter",
             "66a29dde82": "複製相對路徑",
@@ -18947,7 +18945,6 @@
         "sendAgainToTryOnceMore": "請重新傳送您的訊息，再試一次。",
         "couldNotStart": "{{agent}} 無法啟動。",
         "couldNotRestart": "{{agent}} 無法重新啟動。",
-        "cliTooOld": "{{agent}} {{installedVersion}} 版本過舊，無法用於聊天。請更新至 {{minimumVersion}} 或較新版本。",
         "startTimedOut": "{{agent}} 啟動時間過長（{{seconds}} 秒後仍未回應 {{method}}）。",
         "startTimedOutKeepsHappening": "如果此問題持續發生，執行此聊天的電腦可能負載過高。",
         "notSignedIn": "{{agent}} 尚未登入。",
@@ -19557,7 +19554,7 @@
       "rewind": {
         "unsupported": "此聊天無法返回到更早的訊息。",
         "historyNotPaginated": "此舊版 Codex 聊天無法返回到更早的訊息。請開始新聊天以使用「回溯到此處」。",
-        "busy": "當代理程式閒置且此聊天中沒有等待您處理的內容時可用。",
+        "busy": "聊天閒置時可用",
         "staleEpoch": "對話已發生變化。請檢視最新訊息後重試。",
         "invalidTarget": "對話無法返回到此訊息。未做任何更改。",
         "historyLimit": "此對話過長，無法回溯。未做任何更改。",
@@ -19590,14 +19587,7 @@
         "unreported": "此工作階段無法提供上下文用量。"
       },
       "agentMessage": {
-        "messageFrom": "訊息來自",
         "unnamedSender": "一個代理程式",
-        "messageFromCoordinator": "來自協調者的訊息",
-        "startedWorker": "已啟動工作代理程式",
-        "handedOffToAgent": "已交接給代理程式",
-        "startedAgent": "已啟動代理程式",
-        "taskFromCoordinator": "來自協調者的任務",
-        "updateFromWorker": "來自工作代理程式的更新",
         "senderReplaced": "{{name}} 已不在其終端機中執行；目前有另一個代理程式在該終端機中執行。如有需要，請從側邊欄開啟該終端機。",
         "senderAmbiguous": "Orca 無法判斷 {{name}} 在哪個終端機中執行。請從側邊欄開啟終端機。",
         "senderNotRunning": "{{name}} 已停止執行。請從側邊欄啟動新的代理程式以繼續其工作。",
@@ -21876,9 +21866,7 @@
     "updateFailed": "無法更新專案欄位"
   },
   "mediaPreview": {
-    "unavailable": "無法播放此媒體檔案。檔案可能不可用或使用了不支援的編解碼器。",
-    "openFailed": "無法在預設應用程式中開啟此檔案。",
-    "openDefault": "在預設應用程式中開啟"
+    "unavailable": "無法播放此媒體檔案。檔案可能不可用或使用了不支援的編解碼器。"
   },
   "workspace": {
     "branchChoice": {

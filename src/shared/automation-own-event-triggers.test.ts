@@ -3,7 +3,6 @@ import type { Automation } from './automations/automation-definition'
 import {
   assertAutomationEventTriggers,
   EVENT_ONLY_SCHEDULE,
-  takesOwnEvents,
   type AutomationEventTrigger
 } from './automation-event-triggers'
 
@@ -18,8 +17,6 @@ const automation = (on: AutomationEventTrigger[]) =>
 
 describe('your own events on a rule', () => {
   it('start only github.pr_opened', () => {
-    expect(takesOwnEvents({ source: 'github', event: 'pr_opened' })).toBe(true)
-    expect(takesOwnEvents({ source: 'github', event: 'comment' })).toBe(false)
     expect(() =>
       assertAutomationEventTriggers(
         automation([{ id: 'on-1', source: 'github', event: 'pr_opened', fromOwner: true }])

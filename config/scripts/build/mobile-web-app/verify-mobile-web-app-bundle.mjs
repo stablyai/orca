@@ -34,8 +34,9 @@ export const MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES = 384 * 1024
 
 // Our own fence on the page's code, well inside the phone contract (32 MiB total, 10 MiB per asset in
 // manifest-contract.ts); routes are split and the entry is capped below, so no one asset nears 10 MiB.
-// Plus 206 KiB for the bot and group screens (mascots are 131 KB of it), measured 2026-11-18.
-export const MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES = 10.25 * 1024 * 1024 + 206 * 1024
+// 10.25 MiB plus 216 KiB for the bot and group screens (mascots are 131 KB of it; 211 KiB measured
+// 2026-11-18), then 11 MiB so the phone parity round that reuses desktop code fits.
+export const MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES = 11 * 1024 * 1024
 
 // Only these licensed terminal fonts have their own allowance; other fonts (KaTeX's) and code count.
 // The page fetches each only when the terminal draws with it, so none weighs on first open.

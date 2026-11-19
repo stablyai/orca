@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   advanceGoogleConsole,
   GOOGLE_CONSOLE_START,
-  GOOGLE_PERSONAL_APP_LINKS,
   googleConsoleStepUrl,
   googleConsoleSteps,
   googleEnableApisUrl,
@@ -18,14 +17,6 @@ function walk(addresses: string[]): GoogleConsoleProgress {
 }
 
 describe('Google console setup', () => {
-  it("gives a personal app Orca's home page, privacy policy and domain", () => {
-    expect(GOOGLE_PERSONAL_APP_LINKS).toEqual({
-      homePage: 'https://www.onorca.dev',
-      privacyPolicy: 'https://www.onorca.dev/privacy',
-      authorizedDomain: 'onorca.dev'
-    })
-  })
-
   it('adds Publish only for a personal account', () => {
     expect(googleConsoleSteps('company')).toEqual(['project', 'apis', 'branding', 'client'])
     // Publish stays greyed until Branding has the links, so they come first.
@@ -56,16 +47,14 @@ describe('Google console setup', () => {
     expect(all.searchParams.has('project')).toBe(false)
   })
 
-  it('points each step at the project once known', () => {
+  it('targets the known project and includes an account only when provided', () => {
     expect(googleConsoleStepUrl('client', { choices: ['gmail'], projectId: 'acme-orca' })).toBe(
       `${C}/auth/clients/create?project=acme-orca`
     )
     expect(googleConsoleStepUrl('project', { choices: ['gmail'], projectId: 'acme-orca' })).toBe(
       `${C}/projectcreate`
     )
-  })
 
-  it('opens console pages without an account, and a known account where one is given', () => {
     for (const step of googleConsoleSteps('personal')) {
       const url = new URL(googleConsoleStepUrl(step, { choices: ['gmail'], projectId: 'p' }))
       expect(url.searchParams.has('authuser')).toBe(false)
@@ -90,6 +79,7 @@ describe('Google console setup', () => {
   it('ticks steps only when their own page moved on', () => {
     // A project already selected before the create page does not count.
     expect(walk([`${C}/home/dashboard?project=old-project-1`]).done).toEqual([])
+    expect(walk([`${C}/auth/overview?project=acme-orca`]).done).toEqual([])
     const progress = walk([
       `${C}/projectcreate?project=old-project-1`,
       `${C}/home/dashboard?project=orca-google-41023`,
@@ -100,9 +90,5 @@ describe('Google console setup', () => {
     ])
     expect(progress.done).toEqual(['project', 'apis', 'branding'])
     expect(progress.projectId).toBe('orca-google-41023')
-  })
-
-  it('does not tick the sign-in screen from its overview alone', () => {
-    expect(walk([`${C}/auth/overview?project=acme-orca`]).done).toEqual([])
   })
 })

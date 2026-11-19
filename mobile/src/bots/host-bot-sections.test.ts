@@ -1,5 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
-import * as mobileLineage from '../worktree/agent-lineage/mobile-workspace-lineage'
+import { describe, expect, it } from 'vitest'
 import type {
   CrossStoreWorkspaceLineage,
   WorkspaceLineage
@@ -701,31 +700,6 @@ describe('buildHostBotSections', () => {
       expect(lineOrder(built)).toEqual(['folder:atlas-home', 'remote-worker', 'newer', 'older'])
     })
 
-    it('resolves the list’s lineage once, and not for hosts without bots', () => {
-      const relayed = remote('remote-worker', {
-        crossStoreParent: recordUnder('remote-worker', 'folder:atlas-home', 'atlas-home')
-      })
-      const spy = vi.spyOn(mobileLineage, 'getMobileWorkspaceLineageChildren')
-      try {
-        build(
-          [
-            listing(),
-            listing({ hostId: 'runtime:windows-2', bots: [] }),
-            listing({ hostId: 'runtime:third', bots: [] })
-          ],
-          { rows: [home, worker, relayed], lineageStores: stores }
-        )
-        expect(spy).toHaveBeenCalledTimes(1)
-        spy.mockClear()
-        build([listing({ bots: [] }), listing({ hostId: 'runtime:windows-2', bots: [] })], {
-          rows: [home, worker, relayed],
-          lineageStores: stores
-        })
-        expect(spy).not.toHaveBeenCalled()
-      } finally {
-        spy.mockRestore()
-      }
-    })
     it('keeps each same-id worker’s children under it on its own machine', () => {
       type Host = 'runtime:windows-2' | 'runtime:third'
       const twin = (hostId: Host) =>

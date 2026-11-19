@@ -18,7 +18,8 @@ import { googleBotAsk } from '../../../../shared/google/google-bot-connect-state
 import { botTurns } from '../../../bots/bot-automation-sessions'
 import { hostGoogleBotState } from '../../../bots/bot-google-access'
 import { getGoogleConnect } from '../../../google/google-connect'
-import { botOfCaller } from '../../../bots/bot-of-caller'
+import { BOT_TOKEN_ENDED, botOfToken } from '../../../bots/bot-of-caller'
+import { botOfSession } from '../../../bots/bot-session-tabs'
 import { runtimeBotChats } from '../../../bots/bot-chat-session'
 import { LOOK_AROUND_REFUSAL } from '../../../bots/bot-look-around-policy'
 import {
@@ -47,19 +48,23 @@ export function googleSetupStartLine(from: string): string {
   return `Google setup started by your owner (from ${from}). Run \`orca bot google-setup show\` and carry on from there.`
 }
 
-/** The run's bot and who is asking. A bot reaches only its own; anything a CLI sends counts as a bot,
- *  since an agent can leave its chat id off. */
+/** The run's bot, named by its run's token, and who is asking. A bot reaches only its own; anything a
+ *  CLI sends counts as a bot, since an agent can leave its token off. */
 function whose(
-  params: { callerSessionId?: string; botId?: string },
+  params: { botToken?: string; callerSessionId?: string; botId?: string },
   context: RpcContext
 ): { botId: string; actor: GoogleSetupActor } {
   const { runtime } = context
   runtime.bots.assertEnabled()
-  const bot = botOfCaller(runtime, params.callerSessionId, context.pairedDeviceId)
-  if (bot) {
-    if (params.callerSessionId && runtime.lookAround.botOfLook(params.callerSessionId)) {
-      throw new InvalidArgumentError(LOOK_AROUND_REFUSAL)
-    }
+  if (params.callerSessionId && runtime.lookAround.botOfLook(params.callerSessionId)) {
+    throw new InvalidArgumentError(LOOK_AROUND_REFUSAL)
+  }
+  const caller = botOfToken(runtime, params.botToken, context.pairedDeviceId)
+  if (caller.kind === 'ended') {
+    throw new InvalidArgumentError(BOT_TOKEN_ENDED)
+  }
+  if (caller.kind === 'bot') {
+    const { bot } = caller
     if (params.botId && params.botId !== bot.id) {
       throw new InvalidArgumentError('A bot can only work on its own Google setup.')
     }
@@ -104,7 +109,11 @@ export async function answerGoogleSetupCard(
   values: string[]
 ): Promise<GoogleSetupRun> {
   const { prev, run } = applied(botId, actor, { action: 'answer', card, values })
-  writeGoogleSetupCards(chatOf(runtime, botId), prev, run)
+  const written = writeGoogleSetupCards(chatOf(runtime, botId), prev, run)
+  // The services card now asks the owner; their answer to it wakes the bot, so it can't start early.
+  if (written.some((ref) => ref.card === 'services')) {
+    return run
+  }
   await runtimeBotChats(runtime).sendToChat(
     botId,
     googleSetupAnswerLine(card, values),
@@ -231,7 +240,11 @@ async function routeBotStart(
     botName: bot.name
   })
   if (ask.kind === 'card') {
-    const sessionId = callerSessionId ?? chatOf(context.runtime, botId)
+    // The chat it ran from only when that is this bot's; the session id names, it never authorizes.
+    const sessionId =
+      callerSessionId && botOfSession(context.runtime.bots, callerSessionId)?.id === botId
+        ? callerSessionId
+        : chatOf(context.runtime, botId)
     if (!sessionId) {
       throw new InvalidArgumentError("Run this from a bot's chat.")
     }
