@@ -156,7 +156,7 @@ export function routeAllUnreadDirectMessagesToRunMailbox(
   runId: string,
   directHandle: string
 ): number {
-  return this.db
+  const moved = this.db
     .prepare(
       `UPDATE messages SET to_handle = ?
        WHERE run_id = ? AND to_handle = ? AND read = 0
@@ -168,7 +168,8 @@ export function routeAllUnreadDirectMessagesToRunMailbox(
              AND ${workerSeatGrabSql('alias')}
          )`
     )
-    .run(`run:${runId}`, runId, directHandle).changes
+    .run(`run:${runId}`, runId, directHandle)
+  return Number(moved.changes)
 }
 
 export type RunCoordinatorMailRoutingMethods = {
