@@ -1,11 +1,11 @@
 import { useCallback, useSyncExternalStore } from 'react'
-import { createRuntimeStatusSubscriptions } from './runtime-status-subscriptions'
+import { runtimeStatusSubscriptionsFor } from './runtime-status-subscriptions'
 import { isDisconnectedRuntimeHostState } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import type { RuntimeEnvironmentStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { useAppStore } from '../../../index'
 import { useAppStateView, useAppStateViewActive } from '../../../retained-views/app-state-view'
 
-const runtimeStatusSubscriptions = createRuntimeStatusSubscriptions(useAppStore)
+const runtimeStatusSubscriptions = runtimeStatusSubscriptionsFor(useAppStore)
 
 export function useRuntimeHostDisconnected(environmentId: string | null) {
   const subscribe = useCallback(
