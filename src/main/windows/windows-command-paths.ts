@@ -1,4 +1,4 @@
-import { delimiter, join, win32 } from 'node:path'
+import { delimiter, win32 } from 'node:path'
 import { statSync } from 'node:fs'
 
 const WINDOWS_EXECUTABLE_EXTENSION_RE = /\.(cmd|exe|bat|com)$/i
@@ -31,7 +31,8 @@ export function getRegExePath(env: NodeJS.ProcessEnv = process.env): string {
 
 export function resolveWindowsCommand(
   command: string,
-  env: NodeJS.ProcessEnv = process.env
+  env: NodeJS.ProcessEnv = process.env,
+  cwd: string = process.cwd()
 ): string {
   if (process.platform !== 'win32') {
     return command
@@ -45,6 +46,7 @@ export function resolveWindowsCommand(
     return command
   }
 
+  const baseDir = cwd || process.cwd()
   const names = WINDOWS_EXECUTABLE_EXTENSION_RE.test(command)
     ? [command]
     : [`${command}.cmd`, `${command}.exe`, `${command}.bat`, command]
@@ -58,7 +60,7 @@ export function resolveWindowsCommand(
       continue
     }
     for (const name of names) {
-      const candidate = join(directory, name)
+      const candidate = win32.resolve(baseDir, directory, name)
       try {
         if (statSync(candidate, { throwIfNoEntry: false })?.isFile()) {
           return candidate

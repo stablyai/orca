@@ -55,4 +55,25 @@ describe('resolveWindowsCommand', () => {
       expect(resolveWindowsCommand('C:\\custom\\tool.exe', env)).toBe('C:\\custom\\tool.exe')
     }
   )
+
+  it.skipIf(process.platform !== 'win32')(
+    'resolves relative PATH segments against the supplied cwd as absolute paths',
+    () => {
+      const repoDir = join(root, 'repo')
+      const relBin = join(repoDir, 'bin')
+      const fallbackDir = join(root, 'tools')
+      mkdirSync(relBin, { recursive: true })
+      mkdirSync(fallbackDir, { recursive: true })
+
+      const repoTool = join(relBin, 'tool.cmd')
+      const fallbackTool = join(fallbackDir, 'tool.cmd')
+      writeFileSync(repoTool, '@echo off\r\n')
+      writeFileSync(fallbackTool, '@echo off\r\n')
+
+      const env = { PATH: `bin;${fallbackDir}` }
+      expect(resolveWindowsCommand('tool.cmd', env, repoDir)).toBe(repoTool)
+      expect(resolveWindowsCommand('tool', env, repoDir)).toBe(repoTool)
+      expect(resolveWindowsCommand('tool.cmd', env, root)).toBe(fallbackTool)
+    }
+  )
 })
