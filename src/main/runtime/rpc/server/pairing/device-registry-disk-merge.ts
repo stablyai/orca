@@ -47,7 +47,7 @@ export function mergeDeviceRegistrySave(
         return diskRow
           ? withLatestSighting(
               mergeRow(baseline.get(device.deviceId), device, diskRow),
-              diskRow.lastSeenAt
+              Math.max(device.lastSeenAt, diskRow.lastSeenAt)
             )
           : device
       }),
@@ -79,8 +79,8 @@ function mergeRow(
   return Object.keys(fromDisk).length > 0 ? { ...local, ...fromDisk } : local
 }
 
-function withLatestSighting(device: DeviceEntry, diskLastSeenAt: number): DeviceEntry {
-  return diskLastSeenAt > device.lastSeenAt ? { ...device, lastSeenAt: diskLastSeenAt } : device
+function withLatestSighting(device: DeviceEntry, latestSeenAt: number): DeviceEntry {
+  return latestSeenAt > device.lastSeenAt ? { ...device, lastSeenAt: latestSeenAt } : device
 }
 
 /**

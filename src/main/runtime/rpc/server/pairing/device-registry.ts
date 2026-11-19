@@ -101,12 +101,13 @@ export class DeviceRegistry extends DeviceRegistrySightings {
     return this.addDevice(name, scope, pairingReach, grants, options)
   }
 
-  /** A creator already revoked would leave the new offer unusable: attribute only a paired one. */
+  /** A creator already revoked would leave the new offer unusable: attribute only an authorized one. */
   private withLiveCreator(options: PendingOfferOptions): PendingOfferOptions {
     const { createdByDeviceId, ...rest } = options
-    return createdByDeviceId !== undefined && this.getDevice(createdByDeviceId) === null
-      ? rest
-      : options
+    return createdByDeviceId === undefined ||
+      this.listAuthorizedDevices().some((device) => device.deviceId === createdByDeviceId)
+      ? options
+      : rest
   }
 
   private setPairingReach(

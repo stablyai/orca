@@ -213,16 +213,15 @@ export class PushDispatcher {
     targets: readonly PushTarget[],
     results: readonly { registrationId: string; status: string }[]
   ): void {
-    const dead = results.filter((result) => result.status === 'dead')
-    const devices = dead.length > 0 ? this.registry.listAuthorizedDevices() : []
-    for (const result of dead) {
+    for (const result of results.filter(({ status }) => status === 'dead')) {
       const target = targets.find(
         (entry) => entry.registration.registrationId === result.registrationId
       )
       if (
         !target ||
-        devices.find((device) => device.deviceId === target.deviceId)?.pushRegistration !==
-          target.registration
+        // Re-read per clear: the previous clear may have adopted a newer registration from disk.
+        this.registry.listAuthorizedDevices().find((device) => device.deviceId === target.deviceId)
+          ?.pushRegistration !== target.registration
       ) {
         continue
       }
