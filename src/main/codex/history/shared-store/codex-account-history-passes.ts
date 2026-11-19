@@ -1,5 +1,4 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { randomUUID } from 'node:crypto'
 import { basename, dirname, join } from 'node:path'
 import { withSpan } from '../../../observability/tracer'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
@@ -14,39 +13,21 @@ import {
   requestHostCodexIndexHeal
 } from './codex-account-history-index'
 import { shareCodexAccountHistory, unshareCodexAccountHistory } from './codex-account-history-links'
-import { importCodexHistory } from '../import/codex-history-import'
-import { forgetStoreFoldersWithoutHardLinks } from '../import/codex-history-import-staging'
-import { resolveHostCodexSessionSourceHome } from '../rollouts/codex-session-source-home'
-import { isCodexHistorySharedAcrossAccounts } from '../../../codex-accounts/runtime-home/routing/codex-history-sharing'
-import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import {
+  CodexHistoryImportRunner,
+  type CodexHistoryImportSettings
+} from '../import/codex-history-import-runner'
 
 import { CodexHistoryPassRequests } from './codex-history-pass-queue'
 import { WRITER_LOCKS } from './codex-thread-writer-locks'
 import { isLinkedDirectory } from '../../../filesystem/merged-directory-link'
 
 const BUSY_RETRY_MS = 5 * 60_000
-// Launches and selections within this of the last import don't read the folder again.
-const IMPORT_INTERVAL_MS = 10 * 60_000
 // Retries start outside any pass's trace, so each is its own trace instead of nesting forever.
 const inRootContext = AsyncLocalStorage.snapshot()
 
 const INDEX_PENDING_DIR = (): string =>
   join(getOrcaUserDataPath(), 'codex-account-history', 'index-pending')
-// Names this run's staged import copies, so a sweep never removes one still to be published.
-const IMPORT_RUN_ID = randomUUID().replaceAll('-', '').slice(0, 12)
-const IMPORT_LEDGER_PATH = (): string =>
-  join(getOrcaUserDataPath(), 'codex-account-history', 'import-ledger.json')
-
-type CodexHistoryImportSettings = Pick<
-  GlobalSettings,
-  'codexSessionSourceHome' | 'codexShareHistoryAcrossAccounts'
->
-
-// The folder to import from, or null while there is none or history isn't shared.
-function resolveImportHome(settings: CodexHistoryImportSettings): string | null {
-  const importHome = resolveHostCodexSessionSourceHome(settings)
-  return importHome && isCodexHistorySharedAcrossAccounts(settings) ? importHome : null
-}
 
 /**
  * Host account history passes, one at a time (homes merging into one store at once would race on
@@ -71,9 +52,27 @@ export class CodexAccountHistoryPasses {
   private readonly owedChecks = new Map<string, { accountHome: string }>()
   private checking = false
   // When each import folder last finished a pass this run.
-  private readonly importedAt = new Map<string, number>()
-  private importing: Promise<void> | null = null
-  private importAgain = false
+  private readonly imports = new CodexHistoryImportRunner({
+    indexPendingDir: INDEX_PENDING_DIR,
+    // Only publishing pauses the index heal: a frozen import folder must not hold it.
+    publish: (job) =>
+      this.requests.enqueue('host', async () => {
+        this.activePasses += 1
+        this.startedPasses += 1
+        try {
+          return await job()
+        } finally {
+          this.activePasses -= 1
+        }
+      }),
+    waitForLaunches: () => this.requests.whenNoLaunchWaiting('host'),
+    requestIndexHeal: () =>
+      requestHostCodexIndexHeal(INDEX_PENDING_DIR(), getSystemCodexHomePath(), this.passProgress),
+    imported: () => {
+      requestHostCodexIndexHeal(INDEX_PENDING_DIR(), getSystemCodexHomePath(), this.passProgress)
+      this.checkOwed()
+    }
+  })
   private startedPasses = 0
   private readonly passProgress = {
     isPaused: (): boolean => this.activePasses > 0,
@@ -128,75 +127,12 @@ export class CodexAccountHistoryPasses {
     )
   }
 
-  /**
-   * Copies the import folder's conversations that ~/.codex lacks into it: at most once per
-   * interval, unless the setting changed. Copies are made outside the queue, pausing while a
-   * launch waits, and each is published by a short job in it. One import runs at a time; a
-   * setting change during one starts another after it.
-   */
+  /** Copies the import folder's conversations that ~/.codex lacks into it (see the runner). */
   importHistory(
     getSettings: () => CodexHistoryImportSettings,
     options: { settingChanged?: boolean } = {}
   ): Promise<void> {
-    if (options.settingChanged) {
-      forgetStoreFoldersWithoutHardLinks()
-      this.importedAt.clear()
-    }
-    if (this.importing) {
-      this.importAgain ||= options.settingChanged === true
-      return this.importing
-    }
-    const importing = (async () => {
-      do {
-        this.importAgain = false
-        await this.importOnce(getSettings)
-      } while (this.importAgain)
-    })()
-    this.importing = importing.finally(() => {
-      this.importing = null
-    })
-    return this.importing
-  }
-
-  private async importOnce(getSettings: () => CodexHistoryImportSettings): Promise<void> {
-    const importHome = resolveImportHome(getSettings())
-    if (!importHome) {
-      return
-    }
-    const key = normalizeRuntimePathForComparison(importHome)
-    if (Date.now() - (this.importedAt.get(key) ?? -Infinity) < IMPORT_INTERVAL_MS) {
-      return
-    }
-    try {
-      const copied = await importCodexHistory({
-        importHome,
-        storeHome: getSystemCodexHomePath(),
-        ledgerPath: IMPORT_LEDGER_PATH(),
-        indexPendingDir: INDEX_PENDING_DIR(),
-        runId: IMPORT_RUN_ID,
-        isCurrent: () =>
-          !isCodexAccountHistoryWorkStopping() && resolveImportHome(getSettings()) === importHome,
-        waitForLaunches: () => this.requests.whenNoLaunchWaiting('host'),
-        // Only publishing pauses the index heal: a frozen import folder must not hold it.
-        publish: (job) =>
-          this.requests.enqueue('host', async () => {
-            this.activePasses += 1
-            this.startedPasses += 1
-            try {
-              return await job()
-            } finally {
-              this.activePasses -= 1
-            }
-          })
-      })
-      if (copied !== null) {
-        this.importedAt.set(key, Date.now())
-      }
-    } catch (error) {
-      console.warn('[codex-history-import] Importing Codex conversations failed:', error)
-    }
-    requestHostCodexIndexHeal(INDEX_PENDING_DIR(), getSystemCodexHomePath(), this.passProgress)
-    this.checkOwed()
+    return this.imports.importHistory(getSettings, options)
   }
 
   private async runPass(key: string, accountHome: string, shared: boolean): Promise<void> {
