@@ -337,9 +337,9 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
         />
 
         {isMainWorktree ? null : (
-          // Reserve space for file checks and disclosures so the dialog and buttons stay in place.
+          // Keep file checks from moving the footer. Only the user can expand the compact preview.
           <div
-            className={`scrollbar-sleek flex max-h-[50vh] min-w-0 flex-col gap-3 overflow-y-auto ${hasTargetList ? 'h-48' : 'h-24'}`}
+            className={`scrollbar-sleek flex max-h-[50vh] min-w-0 flex-col overflow-y-auto ${hasTargetList ? 'h-48 gap-3' : 'h-16 gap-1 has-[button[aria-expanded=true]]:h-auto'}`}
           >
             {!isBatchDelete && hasUnknownChangeState && <DeleteWorktreeUnknownChangesWarning />}
             {isBatchDelete ? (

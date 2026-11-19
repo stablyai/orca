@@ -96,6 +96,7 @@ export function DeleteWorktreeDialogFooter({
 
   return (
     <DialogFooter
+      className="mt-0"
       start={
         !isMainWorktree && saveRemembered ? (
           <>
