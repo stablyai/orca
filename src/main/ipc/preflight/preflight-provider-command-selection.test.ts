@@ -197,7 +197,7 @@ describe.runIf(process.platform === 'win32')('native provider batch selection', 
 
     await expect(findRunnableLocalCommand(cli)).resolves.toEqual({
       status: 'available',
-      binary: path.posix.join(good, `${cli}.CMD`)
+      binary: path.join(good, `${cli}.CMD`)
     })
     await expect(providerCommand(cli, undefined, root)).resolves.toMatchObject({
       stdout: expect.stringContaining('good-api')
