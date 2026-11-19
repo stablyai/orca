@@ -1,7 +1,7 @@
 {
   "id": "hermes",
   "engineVersion": 1,
-  "profile": { "screenSource": "trusted" },
+  "profile": { "hooks": "authoritative", "screenSource": "trusted" },
   "anchors": [],
   "rules": [
     {
