@@ -20195,7 +20195,6 @@
         "backToMain": "返回主智能体",
         "mainAgent": "主智能体",
         "promptFromMain": "来自主智能体的提示词",
-        "clickToOpen": "点击打开",
         "backTo": "返回 {{value0}}",
         "path": "子智能体路径",
         "stateHeading": {
