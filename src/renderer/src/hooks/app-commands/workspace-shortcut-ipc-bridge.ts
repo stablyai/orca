@@ -7,6 +7,10 @@ import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-
 import { isGitRepoKind } from '../../../../shared/repository/repo-kind'
 import { runBuiltInOrReplacement } from '@/lib/plugins/commands/plugin-command-replacements'
 import { useAppStore } from '../../store/index'
+import {
+  requestActiveWorkspaceDelete,
+  resolveActiveWorkspaceDeleteIntent
+} from '@/components/sidebar/workspace-actions/deletion/active-workspace-delete'
 import { toggleAgentDashboardFromShortcut } from './agent-dashboard-command'
 import { openNewWorkspaceFromShortcut } from './new-workspace-command'
 import { canNavigateWorktreeHistory } from '../../app-shell/chrome/titlebar-worktree-history-controls'
@@ -33,6 +37,17 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
       openNewWorkspaceFromShortcut(store)
     })
   )
+
+  if (window.api.ui.onDeleteCurrentWorkspace) {
+    unsubs.push(
+      window.api.ui.onDeleteCurrentWorkspace(() => {
+        const intent = resolveActiveWorkspaceDeleteIntent()
+        if (intent) {
+          runBuiltInOrReplacement('workspace.delete', () => requestActiveWorkspaceDelete(intent))
+        }
+      })
+    )
+  }
 
   if (window.api.ui.onOpenWorkspaceBoard) {
     unsubs.push(

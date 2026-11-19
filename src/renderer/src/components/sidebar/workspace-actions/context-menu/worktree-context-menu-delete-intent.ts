@@ -41,13 +41,17 @@ export function createWorktreeContextMenuDeleteIntent(args: {
   return { kind: 'worktree', worktree: { id, instanceId, hostId } }
 }
 
-export function runWorktreeContextMenuDeleteIntent(intent: WorktreeContextMenuDeleteIntent): void {
+export function runWorktreeContextMenuDeleteIntent(
+  intent: WorktreeContextMenuDeleteIntent,
+  options: { confirmed?: boolean } = {}
+): void {
   if (intent.kind === 'batch') {
     runWorktreeBatchDelete(intent.worktrees)
     return
   }
   if (intent.kind === 'worktree') {
     runWorktreeDelete(intent.worktree.id, {
+      ...(options.confirmed ? { confirmed: true } : {}),
       expectedInstanceId: intent.worktree.instanceId,
       ...(intent.worktree.hostId ? { expectedHostId: intent.worktree.hostId } : {})
     })

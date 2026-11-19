@@ -84,7 +84,7 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
   },
   {
     id: 'workspace.delete',
-    title: 'Delete Selected Workspace',
+    title: 'Delete Workspace',
     group: 'Global',
     scope: 'global',
     searchKeywords: [
@@ -92,6 +92,7 @@ export const KEYBINDING_DEFINITION_CORE_1: readonly KeybindingDefinition[] = [
       'global',
       'workspace',
       'selected workspace',
+      'current workspace',
       'sidebar',
       'worktree',
       'delete',

@@ -46,7 +46,10 @@ export function installMainWindowShortcutRouting(args: {
     const { focusedShortcutContext, isAutoRepeat } = options
     if (
       focus.isFloatingTerminalInputFocused() &&
-      (action.type === 'toggleLeftSidebar' || action.type === 'toggleRightSidebar')
+      (action.type === 'toggleLeftSidebar' ||
+        action.type === 'toggleRightSidebar' ||
+        // The floating terminal is not the active workspace; leave the chord to it.
+        action.type === 'deleteCurrentWorkspace')
     ) {
       return false
     }
@@ -99,7 +102,10 @@ export function installMainWindowShortcutRouting(args: {
       return true
     }
 
-    if (action.type === 'toggleQuickCommandsMenu' && isAutoRepeat) {
+    if (
+      (action.type === 'toggleQuickCommandsMenu' || action.type === 'deleteCurrentWorkspace') &&
+      isAutoRepeat
+    ) {
       event.preventDefault()
       return true
     }

@@ -20,6 +20,10 @@ import type { usePluginCommands } from '@/store/plugins/catalog/plugin-contribut
 import { isGitRepoKind } from '../../../../shared/repository/repo-kind'
 import { openPluginsSettings } from '@/components/settings/navigation/open-plugins-settings'
 import { resolveActiveTabRenameTarget } from './active-tab-rename-target'
+import {
+  requestActiveWorkspaceDelete,
+  resolveActiveWorkspaceDeleteIntent
+} from '../../components/sidebar/workspace-actions/deletion/active-workspace-delete'
 import { createPluginsSettingsShortcutHandler } from './plugin-settings-shortcut-handler'
 import type {
   KeybindingActionId,
@@ -229,6 +233,23 @@ export function createAppCommandHandlers(
           useAppStore.getState().setSidebarOpen(true)
           requestScrollToCurrentWorkspaceRevealAndRename()
         })
+      }
+    ],
+    [
+      'workspace.delete',
+      () => {
+        // The focused sidebar list deletes its own selected rows; the floating panel is not the active workspace.
+        if (
+          floatingWorkspaceFocused ||
+          (input?.target instanceof Element && input.target.matches('[data-worktree-sidebar]'))
+        ) {
+          return false
+        }
+        const intent = resolveActiveWorkspaceDeleteIntent()
+        if (!intent) {
+          return false
+        }
+        return claim('workspace.delete', () => requestActiveWorkspaceDelete(intent))
       }
     ],
     [

@@ -8,6 +8,12 @@ import {
 } from '../../../../../../shared/keybindings/modifier-double-tap-detector'
 import { textInputOwnsComposition } from '../../../../../../shared/keybindings/text-input-shortcut-policy'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
+import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
+import {
+  armWorkspaceDeleteConfirmation,
+  confirmWorkspaceDeleteConfirmation
+} from '../../workspace-actions/deletion/workspace-delete-confirmation'
 import {
   runWorktreeContextMenuDeleteIntent,
   type WorktreeContextMenuDeleteIntent
@@ -64,7 +70,7 @@ export function useSidebarWorkspaceDeleteKeyboard({
         e.preventDefault()
         e.stopPropagation()
         dropPreview()
-        runWorktreeContextMenuDeleteIntent(intent)
+        requestSidebarWorkspaceDelete(intent)
       }
       return true
     },
@@ -81,4 +87,38 @@ export function useSidebarWorkspaceDeleteKeyboard({
     [process, resetDeleteGesture]
   )
   return { handleDeleteKeyDown, handleContainerKeyUp, resetDeleteGesture }
+}
+
+export function workspaceDeleteIdentity(
+  intent: Exclude<WorktreeContextMenuDeleteIntent, { kind: 'batch' }>
+): string {
+  return intent.kind === 'worktree'
+    ? getWorktreeHostIdentity(intent.worktree)
+    : getWorktreeHostIdentity({
+        id: folderWorkspaceKey(intent.folderWorkspaceId),
+        hostId: intent.executionHostId
+      })
+}
+
+/** Batches keep their dialog; a single row deletes on a second press while its prompt shows. Returns true when it armed. */
+export function requestSidebarWorkspaceDelete(intent: WorktreeContextMenuDeleteIntent): boolean {
+  if (intent.kind === 'batch') {
+    runWorktreeContextMenuDeleteIntent(intent)
+    return false
+  }
+  const identity = workspaceDeleteIdentity(intent)
+  if (isDeleteConfirmationOnScreen(identity) && confirmWorkspaceDeleteConfirmation(identity)) {
+    runWorktreeContextMenuDeleteIntent(intent, { confirmed: true })
+    return false
+  }
+  armWorkspaceDeleteConfirmation(identity)
+  return true
+}
+
+// Why: a filtered-out row never draws the prompt, and a modal hides it; never delete unseen.
+export function isDeleteConfirmationOnScreen(identity: string): boolean {
+  return Array.from(document.querySelectorAll<HTMLElement>('[data-workspace-delete-confirm]')).some(
+    (notice) =>
+      notice.dataset.workspaceDeleteConfirm === identity && !notice.closest('[aria-hidden="true"]')
+  )
 }
