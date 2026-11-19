@@ -104,7 +104,13 @@ export function startBackgroundWorktreeRemoval(
   args: {
     removal: Pick<
       WorktreeRemovalRecord,
-      'worktreeId' | 'repoId' | 'repoPath' | 'deleteBranch' | 'force' | 'expectedInstanceId'
+      | 'worktreeId'
+      | 'repoId'
+      | 'repoPath'
+      | 'deleteBranch'
+      | 'force'
+      | 'expectedInstanceId'
+      | 'expectedCheckoutIdentity'
     > & { worktree: Pick<GitWorktreeInfo, 'path' | 'branch' | 'head'> }
   } & BackgroundWorktreeRemovalJob
 ): Promise<RemoveWorktreeResult> {

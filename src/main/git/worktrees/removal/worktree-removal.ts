@@ -90,6 +90,9 @@ async function performRemoveWorktree(
     admissionExempt: true as const
   }
   const execOptions = {
+    ...(options.checkoutDeleteIdentity
+      ? { worktreeCheckoutGuard: { identity: options.checkoutDeleteIdentity } }
+      : {}),
     ...finalizationOptions,
     ...(options.checkoutDeleteSignal ? { signal: options.checkoutDeleteSignal } : {}),
     ...(options.checkoutDeleteGuard
@@ -125,8 +128,26 @@ async function performRemoveWorktree(
           )
         }
         await gitExecFileAsync(
-          [...longPathArgs, 'worktree', 'remove', '--force', '--', worktreePath],
-          finalizationOptions
+          [
+            ...longPathArgs,
+            'worktree',
+            'remove',
+            ...(options.checkoutDeleteIdentity ? [] : ['--force']),
+            '--',
+            worktreePath
+          ],
+          {
+            ...finalizationOptions,
+            ...(options.checkoutDeleteIdentity
+              ? {
+                  spawnOnWorkerThread: true,
+                  worktreeCheckoutGuard: {
+                    identity: options.checkoutDeleteIdentity,
+                    checkoutRemoved: true as const
+                  }
+                }
+              : {})
+          }
         )
       }
     } else {
@@ -223,7 +244,9 @@ export async function deleteBranchOfUnregisteredWorktree(
 
 function removalWorkerOptions(options: RemoveWorktreeOptions): RemoveWorktreeOptions {
   // uv_spawn can block even for async Git; keep native process creation off Electron's UI loop.
-  return process.platform === 'darwin' ? { ...options, spawnOnWorkerThread: true } : options
+  return process.platform === 'darwin' || options.checkoutDeleteIdentity
+    ? { ...options, spawnOnWorkerThread: true }
+    : options
 }
 
 export async function localBranchExists(

@@ -1,3 +1,8 @@
+import {
+  captureWorktreeCheckoutIdentity,
+  assertWorktreeCheckoutIdentity
+} from '../removal/worktree-checkout-identity'
+import type { WorktreeCheckoutIdentity } from '../../../shared/worktree/removal/worktree-checkout-identity'
 import type {
   WorkspaceCleanupPolicyState,
   WorkspaceCleanupPolicyChange
@@ -46,6 +51,7 @@ const WORKTREE_PS_LIMIT = 100_000
 const LIVE_AGENT_STATES = new Set(['working', 'blocked', 'waiting'])
 
 export type WorkspaceCleanupWorkspace = {
+  checkoutIdentity?: WorktreeCheckoutIdentity
   ref: WorkspaceCleanupWorkspaceRef
   repo: Repo
   policy: ResolvedWorkspaceCleanupPolicy
@@ -214,6 +220,7 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
   comparison?: { state: WorkspaceCleanupPolicyState; change: WorkspaceCleanupPolicyChange }
   requireComplete?: boolean
   freshInventory?: boolean
+  captureCheckoutIdentity?: boolean
   signal?: AbortSignal
 }): Promise<WorkspaceCleanupWorkspace[]> {
   const { store, runtime, globalRules, now, worktreeId, signal } = args
@@ -241,6 +248,7 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
   const owned = ps.worktrees.filter(
     (summary) =>
       isOwnedSummary(summary, repos) &&
+      (!worktreeId || summary.worktreeId === worktreeId) &&
       (!args.comparison?.state.repoId || summary.repoId === args.comparison.state.repoId)
   )
   const summaries =
@@ -282,6 +290,16 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
       )
     })
     .map((summary) => summary.worktreeId)
+  const target = args.captureCheckoutIdentity
+    ? summaries.find((row) => row.worktreeId === worktreeId)
+    : undefined
+  const checkoutIdentity = target?.worktreeInstanceId
+    ? await captureWorktreeCheckoutIdentity(
+        target.path,
+        target.worktreeInstanceId,
+        repos.get(target.repoId)!.path
+      )
+    : undefined
   const candidates = await scanTargets(
     store,
     runtime,
@@ -290,6 +308,9 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
     args.comparison ? ps.worktrees.length : undefined,
     args.requireComplete ?? Boolean(args.comparison)
   )
+  if (checkoutIdentity) {
+    await assertWorktreeCheckoutIdentity(checkoutIdentity)
+  }
   const dirtyEditors = dirtyEditorWorktreeIds(store, runtime)
   const scanned = new Set(gitTargets)
   return summaries.map((summary) => {
@@ -304,6 +325,7 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
         ? { ...inputWithoutGit(summary), blockers: ['git-status-error'] }
         : inputWithoutGit(summary)
     return {
+      ...(summary.worktreeId === worktreeId && checkoutIdentity ? { checkoutIdentity } : {}),
       ref: {
         worktreeId: summary.worktreeId,
         ...(summary.worktreeInstanceId ? { instanceId: summary.worktreeInstanceId } : {}),

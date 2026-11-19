@@ -1,3 +1,4 @@
+import type { WorktreeCheckoutSpawnGuard } from '../../../../shared/worktree/removal/worktree-checkout-identity'
 import { createOutputSink } from '@orca/process-host/bounded-output-sink'
 import type { ChildProcess } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
@@ -8,6 +9,7 @@ import {
 } from '../../../worker-thread-child-process/worker-thread-child-process'
 
 type CaptureOptions = {
+  worktreeCheckoutGuard?: WorktreeCheckoutSpawnGuard
   cwd?: string | URL
   env?: NodeJS.ProcessEnv
   encoding?: string | null
@@ -51,6 +53,9 @@ export function workerExecFile(
   return spawnedExecFile(command, options, callback, () =>
     spawnProcessOnWorkerThread({
       program: command,
+      ...(options.worktreeCheckoutGuard
+        ? { worktreeCheckoutGuard: options.worktreeCheckoutGuard }
+        : {}),
       args,
       cwd: options.cwd instanceof URL ? fileURLToPath(options.cwd) : options.cwd,
       // The worker's env is a copy from its start; send main's current one (PATH refreshes after launch).

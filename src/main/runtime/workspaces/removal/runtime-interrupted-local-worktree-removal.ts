@@ -11,7 +11,7 @@ import {
 } from '../../../workspaces/removal/worktree-background-removal'
 import {
   resolveWorktreeRemovalMetadata,
-  resolveWorktreeRemovalRepoOwner
+  resolveLocalWorktreeRemovalRepo
 } from '../../../workspaces/removal/worktree-removal-repo-owner'
 import type { RuntimePreservedBranchCleanup } from '../../repositories/runtime-preserved-branch-cleanup'
 import { listWorktreesSharedStrict as listWorktreesStrict } from '../../../git/worktrees/catalog/worktree-scan-cache'
@@ -77,7 +77,8 @@ export function interruptedLocalWorktreeRemovalJob(
   const expectation = record.expectedInstanceId
     ? new WorktreeRemovalExpectation(host.store, {
         worktreeId: record.worktreeId,
-        instanceId: record.expectedInstanceId
+        instanceId: record.expectedInstanceId,
+        checkoutIdentity: record.expectedCheckoutIdentity
       })
     : undefined
   const resolveRemovedPushTarget = () =>
@@ -90,6 +91,9 @@ export function interruptedLocalWorktreeRemovalJob(
   return {
     run: async (stopSignal) => {
       expectation?.check()
+      if (expectation) {
+        await expectation.verifyCheckout(record.worktreePath)
+      }
       const removedPushTarget = resolveRemovedPushTarget()
       const result = await finishInterruptedLocalWorktreeRemoval({
         record,
@@ -142,7 +146,7 @@ async function finishInterruptedLocalWorktreeRemoval(
   args: InterruptedLocalWorktreeRemovalArgs
 ): Promise<RemoveWorktreeResult> {
   const { record, store } = args
-  const repo = localRemovalRepo(store, record.repoId)
+  const repo = resolveLocalWorktreeRemovalRepo(store, record.repoId)
   if (!repo) {
     console.warn(`[worktrees] dropping removal of ${record.worktreePath}: its repo is gone`)
     return {}
@@ -315,9 +319,4 @@ async function isCheckoutMissingGitLink(
   } catch (error) {
     return getErrorCode(error) === 'ENOENT'
   }
-}
-
-function localRemovalRepo(store: RuntimeStore, repoId: string) {
-  const owner = resolveWorktreeRemovalRepoOwner(store, repoId, LOCAL_EXECUTION_HOST_ID)
-  return owner.kind === 'resolved' ? owner.repo : undefined
 }

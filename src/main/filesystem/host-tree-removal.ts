@@ -1,3 +1,4 @@
+import { mapSettledWithConcurrency } from '../../shared/concurrency/map-with-concurrency'
 // Host deletion needs bounded Windows lock retries and unpatched fs for Electron’s .asar handling.
 
 import { getErrorCode } from '../git/worktrees/worktree-operation-options'
@@ -40,7 +41,8 @@ export async function removeHostTree(
 export async function removeHostCheckout(
   targetPath: string,
   authorize: (checkClean: boolean) => Promise<boolean>,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  guard?: (markerGone: boolean) => Promise<void>
 ): Promise<void> {
   const root = toHostRemovalPath(targetPath)
   let markerGone = false
@@ -54,9 +56,27 @@ export async function removeHostCheckout(
           markerGone = !(await authorize(true))
           if (!markerGone) {
             const names = await namesExceptCheckoutMarker(root)
-            const results = await Promise.allSettled(
-              names.map((name) => rm(join(root, name), { recursive: true, force: true }))
-            )
+            let guardFailure: unknown
+            const removeChild = async (name: string) => {
+              if (guardFailure) {
+                throw guardFailure
+              }
+              if (guard) {
+                try {
+                  await guard(false)
+                  if (guardFailure) {
+                    throw guardFailure
+                  }
+                } catch (error) {
+                  guardFailure = error
+                  throw error
+                }
+              }
+              return rm(join(root, name), { recursive: true, force: true })
+            }
+            const results = guard
+              ? await mapSettledWithConcurrency(names, 4, removeChild)
+              : await Promise.allSettled(names.map(removeChild))
             const failures = results.filter((result) => result.status === 'rejected')
             const failure =
               failures.find(
@@ -69,6 +89,7 @@ export async function removeHostCheckout(
             markerGone = !(await authorize(false))
             if (!markerGone) {
               try {
+                await guard?.(false)
                 await unlink(join(root, '.git'))
               } catch (error) {
                 if (getErrorCode(error) !== 'ENOENT') {
@@ -79,6 +100,7 @@ export async function removeHostCheckout(
             }
           }
         }
+        await guard?.(markerGone)
         await removeHostEmptyDirectory(root)
       }
     })

@@ -1,3 +1,4 @@
+import { WorktreeRemovalIncarnationChangedError } from '../../../../shared/worktree/removal/worktree-checkout-identity'
 import { runProcess } from '@orca/process-host'
 import type { ChildProcess } from 'node:child_process'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
@@ -17,6 +18,10 @@ export async function execFileCaptureToTermination(
   options: Omit<ExecFileCaptureOptions, 'onStderr' | 'stdin'> & { stdin?: string | Uint8Array },
   termination?: WslProcessGroupTermination
 ): Promise<{ stdout: string | Buffer; stderr: string | Buffer }> {
+  if (options.worktreeCheckoutGuard) {
+    options.onChildTerminated?.()
+    throw new WorktreeRemovalIncarnationChangedError()
+  }
   // runProcess already reports spawn cost through spawnProcess.
   let program: string
   try {

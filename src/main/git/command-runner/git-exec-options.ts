@@ -1,3 +1,4 @@
+import type { WorktreeCheckoutSpawnGuard } from '../../../shared/worktree/removal/worktree-checkout-identity'
 // Bound output to avoid V8 string overflow; match the relay's MAX_GIT_BUFFER.
 export const DEFAULT_GIT_MAX_BUFFER = 10 * 1024 * 1024
 
@@ -34,6 +35,7 @@ export type GitExecOptions = {
   admissionExempt?: true
   /** Native macOS deletion spawns use the shared process worker. */
   spawnOnWorkerThread?: boolean
+  worktreeCheckoutGuard?: WorktreeCheckoutSpawnGuard
   /** Observe stderr without changing capture/errors; incompatible with terminationBarrier. */
   onStderr?: (chunk: string) => void
 }

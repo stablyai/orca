@@ -122,6 +122,7 @@ export async function removeWorkspaceForCleanup(args: {
       worktreeId: workspace.ref.worktreeId,
       withFolderSiblings: workspace.folderSiblings.length > 0,
       readPairedFolderChildren: workspace.readPairedFolderChildren,
+      captureCheckoutIdentity: true,
       signal: args.signal
     })
     if (!fresh) {
@@ -147,10 +148,15 @@ export async function removeWorkspaceForCleanup(args: {
               ...(hostId ? { hostId } : {}),
               expectedWorktree: {
                 worktreeId: fresh.ref.worktreeId,
-                instanceId: fresh.ref.instanceId!
+                instanceId: fresh.ref.instanceId!,
+                checkoutIdentity: fresh.checkoutIdentity
               }
             }),
-          { worktreeId: fresh.ref.worktreeId, instanceId: fresh.ref.instanceId! }
+          {
+            worktreeId: fresh.ref.worktreeId,
+            instanceId: fresh.ref.instanceId!,
+            checkoutIdentity: fresh.checkoutIdentity
+          }
         )
       )
       if (!admission.admitted) {
@@ -166,7 +172,11 @@ export async function removeWorkspaceForCleanup(args: {
         selector,
         workspace.ref.executionHostId,
         {
-          expectedWorktree: { worktreeId: fresh.ref.worktreeId, instanceId: fresh.ref.instanceId! }
+          expectedWorktree: {
+            worktreeId: fresh.ref.worktreeId,
+            instanceId: fresh.ref.instanceId!,
+            checkoutIdentity: fresh.checkoutIdentity
+          }
         },
         (removal) =>
           runtime.removeManagedWorktree(selector, { ...removal, waitForBackgroundRemoval: true })

@@ -1,3 +1,5 @@
+import { spawnProcessOnWorkerThread } from '../../worker-thread-child-process/worker-thread-child-process'
+import { captureWorktreeCheckoutIdentity } from '../removal/worktree-checkout-identity'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { runProcessSync } from '@orca/process-host'
 import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
@@ -44,7 +46,7 @@ vi.mock('electron', () => ({
 }))
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))
-installRealWorkerThreadChildProcesses()
+const worker = installRealWorkerThreadChildProcesses({ latchRemoval: true })
 const old = Date.UTC(2026, 9, 1)
 class RemovalRuntime extends OrcaRuntimeService {
   override readonly workspaceLifecycle: WorkspaceLifecycleQueue | null
@@ -207,55 +209,62 @@ it.each([true, false])(
     ).toBe(true)
   }
 )
-it('refuses a persisted deletion of A after a real same-branch replacement B', async () => {
-  const f = await fixture(false)
-  const head = f.git('-C', f.path, 'rev-parse', 'HEAD')
-  f.git('-C', f.root, 'worktree', 'remove', '--force', f.path)
-  f.git('-C', f.root, 'worktree', 'add', f.path, 'topic')
-  f.store.removeWorktreeMeta(f.target)
-  f.store.setWorktreeMeta(f.target, { instanceId: 'B', isPinned: true })
-  await writeWorktreeRemovalRecords(testState.dir, () => [
-    {
-      worktreeId: f.id,
-      repoId: 'repo',
-      repoPath: f.root,
-      worktreePath: f.path,
-      branch: 'topic',
-      head,
-      deleteBranch: true,
-      force: false,
-      requestedAt: old,
-      expectedInstanceId: 'A'
+it.each([true, false])(
+  'refuses a persisted deletion of A after a real replacement (metadata=%s)',
+  async (rotateMetadata) => {
+    const f = await fixture(false)
+    const checkoutIdentity = await captureWorktreeCheckoutIdentity(f.path, 'A', f.root)
+    const head = f.git('-C', f.path, 'rev-parse', 'HEAD')
+    f.git('-C', f.root, 'worktree', 'remove', '--force', f.path)
+    f.git('-C', f.root, 'worktree', 'add', f.path, 'topic')
+    if (rotateMetadata) {
+      f.store.removeWorktreeMeta(f.target)
+      f.store.setWorktreeMeta(f.target, { instanceId: 'B', isPinned: true })
     }
-  ])
-  const [record] = await readWorktreeRemovalRecords(testState.dir)
-  if (!record) {
-    throw new Error('Missing persisted removal')
+    await writeWorktreeRemovalRecords(testState.dir, () => [
+      {
+        worktreeId: f.id,
+        repoId: 'repo',
+        repoPath: f.root,
+        worktreePath: f.path,
+        branch: 'topic',
+        head,
+        deleteBranch: true,
+        force: false,
+        requestedAt: old,
+        expectedInstanceId: 'A',
+        expectedCheckoutIdentity: checkoutIdentity
+      }
+    ])
+    const [record] = await readWorktreeRemovalRecords(testState.dir)
+    if (!record) {
+      throw new Error('Missing persisted removal')
+    }
+    const job = interruptedLocalWorktreeRemovalJob(record, {
+      store: f.store,
+      acquireWatcherRemoval: f.runtime.acquireFileWatcherRemoval,
+      closeWatchers: async () => {},
+      preservedBranchCleanup: { preserveHead: (result) => result ?? {}, remember: () => {} },
+      purge: () => f.store.removeWorktreeMeta(f.target),
+      onRemoved: () => {},
+      publish: () => {}
+    })
+    await loadWorktreeRemovalRecords(testState.dir)
+    const pending = waitForPendingWorktreeRemoval(f.id)
+    if (!pending) {
+      throw new Error('Missing recovered removal')
+    }
+    resumeInterruptedWorktreeRemovals(() => job)
+    await expect(pending).rejects.toThrow()
+    await _settlePendingWorktreeRemovalsForTests()
+    expect(await readWorktreeRemovalRecords(testState.dir)).toEqual([])
+    expect(readFileSync(join(f.path, 'tracked'), 'utf8')).toBe('seed')
+    expect(f.store.getWorktreeMetaForHost(f.id, 'local')).toMatchObject({
+      instanceId: rotateMetadata ? 'B' : 'A',
+      isPinned: rotateMetadata
+    })
   }
-  const job = interruptedLocalWorktreeRemovalJob(record, {
-    store: f.store,
-    acquireWatcherRemoval: f.runtime.acquireFileWatcherRemoval,
-    closeWatchers: async () => {},
-    preservedBranchCleanup: { preserveHead: (result) => result ?? {}, remember: () => {} },
-    purge: () => f.store.removeWorktreeMeta(f.target),
-    onRemoved: () => {},
-    publish: () => {}
-  })
-  await loadWorktreeRemovalRecords(testState.dir)
-  const pending = waitForPendingWorktreeRemoval(f.id)
-  if (!pending) {
-    throw new Error('Missing recovered removal')
-  }
-  resumeInterruptedWorktreeRemovals(() => job)
-  await expect(pending).rejects.toThrow()
-  await _settlePendingWorktreeRemovalsForTests()
-  expect(await readWorktreeRemovalRecords(testState.dir)).toEqual([])
-  expect(readFileSync(join(f.path, 'tracked'), 'utf8')).toBe('seed')
-  expect(f.store.getWorktreeMetaForHost(f.id, 'local')).toMatchObject({
-    instanceId: 'B',
-    isPinned: true
-  })
-})
+)
 it.each([true, false])(
   'retires a proven Git preflight refusal before Keep or another cleanup (queue=%s)',
   async (queued) => {
@@ -324,3 +333,71 @@ it.each([
     }
   }
 )
+
+it.each([
+  { queued: true, rotateMetadata: true },
+  { queued: false, rotateMetadata: true },
+  { queued: true, rotateMetadata: false },
+  { queued: false, rotateMetadata: false }
+])(
+  'refuses a real replacement after worker dispatch and before spawn (queue=$queued, metadata=$rotateMetadata)',
+  async ({ queued, rotateMetadata }) => {
+    const f = await fixture(queued)
+    const [workspace] = await collectWorkspaceCleanupWorkspaces({
+      store: f.store,
+      runtime: f.runtime,
+      globalRules: f.rules,
+      now: Date.now()
+    })
+    const dispatched = worker.holdRemoval()
+    const removal = removeWorkspaceForCleanup({
+      store: f.store,
+      runtime: f.runtime,
+      workspace,
+      globalRules: () => f.rules,
+      now: Date.now
+    })
+    try {
+      await Promise.race([
+        dispatched,
+        removal.then(() => {
+          throw new Error('Removal never reached the worker queue')
+        })
+      ])
+      f.git('-C', f.root, 'worktree', 'remove', '--force', f.path)
+      f.git('-C', f.root, 'worktree', 'add', f.path, 'topic')
+      if (rotateMetadata) {
+        f.store.removeWorktreeMeta(f.target)
+        f.store.setWorktreeMeta(f.target, { instanceId: 'B', isPinned: true })
+      }
+    } finally {
+      worker.releaseRemoval()
+    }
+    expect(await removal).toMatchObject({ outcome: 'failed' })
+    expect(existsSync(f.path)).toBe(true)
+    expect(readFileSync(join(f.path, 'tracked'), 'utf8')).toBe('seed')
+    expect(f.store.getWorktreeMetaForHost(f.id, 'local')).toMatchObject({
+      instanceId: rotateMetadata ? 'B' : 'A',
+      isPinned: rotateMetadata
+    })
+  }
+)
+
+it('refuses a valid checkout proof attached to a different Git removal target', async () => {
+  const f = await fixture(false)
+  const proof = await captureWorktreeCheckoutIdentity(f.path, 'A', f.root)
+  const other = join(testState.dir, 'other-checkout')
+  f.git('-C', f.root, 'worktree', 'add', '-qb', 'other', other)
+  const error = await new Promise<unknown>((resolve) => {
+    const child = spawnProcessOnWorkerThread({
+      program: 'git',
+      args: ['worktree', 'remove', other],
+      cwd: f.root,
+      worktreeCheckoutGuard: { identity: proof }
+    })
+    child.once('error', resolve)
+    child.once('close', () => resolve(null))
+  })
+  expect(error).toMatchObject({ code: 'ERR_ORCA_WORKTREE_CHANGED' })
+  expect(readFileSync(join(other, 'tracked'), 'utf8')).toBe('seed')
+})

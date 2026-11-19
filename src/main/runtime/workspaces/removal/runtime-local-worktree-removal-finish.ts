@@ -48,6 +48,7 @@ export async function finishRuntimeLocalWorktreeRemoval(
           ...(checkoutDeleteSignal ? { checkoutDeleteSignal } : {}),
           ...(args.expectation
             ? {
+                checkoutDeleteIdentity: args.expectation.checkoutIdentity,
                 checkoutDeleteGuard: () => args.expectation!.check(),
                 onCheckoutDeleteStart: () => args.expectation!.joined()
               }

@@ -100,6 +100,7 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(
 ): Promise<RemoveWorktreeResult & { warning?: string }> {
   const { repo, registeredWorktree, localOptions } = args
   const canonicalPath = registeredWorktree.path
+  await args.expectation?.bindCheckout(canonicalPath, repo.path)
   const hooks = getEffectiveHooks(repo)
   let warning: string | undefined
   // Archive refusal precedes refresh, preflights, PTY stop and Git deletion; failure must leave them untouched (#19334).
@@ -220,7 +221,12 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(
         worktree: refreshed,
         deleteBranch: args.deleteBranch,
         force: args.force,
-        ...(args.expectation ? { expectedInstanceId: args.expectation.expected.instanceId } : {})
+        ...(args.expectation
+          ? {
+              expectedInstanceId: args.expectation.expected.instanceId,
+              expectedCheckoutIdentity: args.expectation.checkoutIdentity
+            }
+          : {})
       },
       run: async (stopSignal) => {
         const result = await finishRuntimeLocalWorktreeRemoval(args, refreshed, gate, stopSignal)

@@ -1,3 +1,5 @@
+import { WorktreeRemovalIncarnationChangedError } from '../../../../shared/worktree/removal/worktree-checkout-identity'
+import type { WorktreeCheckoutSpawnGuard } from '../../../../shared/worktree/removal/worktree-checkout-identity'
 import { execFile, type ChildProcess, type ExecFileOptions } from 'node:child_process'
 import { recordSubprocessSpawn } from '../../../diagnostics/main-thread-churn-probe'
 import { endSubprocessStdin } from '../../../../shared/process-streams/subprocess-stdin-write'
@@ -35,6 +37,7 @@ export type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
   onDeadlineKill?: () => void
   onStderr?: (chunk: string) => void
   spawnOnWorkerThread?: boolean
+  worktreeCheckoutGuard?: WorktreeCheckoutSpawnGuard
   /** Native Git only: launch an owned group and retain it after abnormal stop until proof. */
   ownedPosixGroup?: boolean
   /** Rechecked synchronously at the spawn call, after any async executable resolution. */
@@ -65,8 +68,13 @@ export function execFileCapture(
     const useWorker =
       process.platform === 'win32'
         ? options.spawnOnWorkerThread !== false && canSpawnOnWorkerThread()
-        : options.spawnOnWorkerThread === true && process.platform === 'darwin'
+        : options.spawnOnWorkerThread === true
     const callerOwnsDeadline = useWorker && process.platform === 'win32'
+    if (options.worktreeCheckoutGuard && !useWorker) {
+      options.onChildTerminated?.()
+      reject(new WorktreeRemovalIncarnationChangedError())
+      return
+    }
     const deadline =
       options.timeout && options.timeout > 0 ? performance.now() + options.timeout : null
     let timer: NodeJS.Timeout | null = null
@@ -236,7 +244,12 @@ export function execFileCapture(
               ? { ...captureOptions, errorCommand: [command, ...args].join(' '), onOverflow: stop }
               : captureOptions
           child = useWorker
-            ? workerExecFile(command, args, workerOptions, complete)
+            ? workerExecFile(
+                command,
+                args,
+                { ...workerOptions, worktreeCheckoutGuard: options.worktreeCheckoutGuard },
+                complete
+              )
             : ownedPosixGroup
               ? spawnedExecFile(command, captureOptions, complete, () =>
                   spawnNativeProcess(

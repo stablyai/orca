@@ -1,6 +1,7 @@
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import {
   getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../shared/repository/repo-types'
@@ -84,4 +85,12 @@ export function resolveUnambiguousWorktreeRemovalRepo(
     throw new Error('The reviewed Git workspace is no longer registered.')
   }
   return { repo, hostId: repo ? (hostId ?? getRepoExecutionHostId(repo)) : hostId }
+}
+
+export function resolveLocalWorktreeRemovalRepo(
+  store: WorktreeRemovalRepoSource,
+  repoId: string
+): Repo | undefined {
+  const owner = resolveWorktreeRemovalRepoOwner(store, repoId, LOCAL_EXECUTION_HOST_ID)
+  return owner.kind === 'resolved' ? owner.repo : undefined
 }
