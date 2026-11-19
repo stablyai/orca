@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -13,13 +14,15 @@ const WORKTREE_ID = 'wt-target'
 const TAB_ID = 'tab-target'
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const PTY_ID = 'pty-target'
+const T0 = 1_700_000_000_000
 
 function terminalSnapshot(
   worktree: string,
   ptyId: string,
   onTabRead?: () => void
 ): RuntimeMobileSessionTabsSnapshot {
-  const tab = {
+  const tab: RuntimeMobileSessionTerminalTab = {
+    type: 'terminal',
     id: `${TAB_ID}::${LEAF_ID}`,
     parentTabId: TAB_ID,
     leafId: LEAF_ID,
@@ -35,8 +38,6 @@ function terminalSnapshot(
         return 'terminal'
       }
     })
-  } else {
-    Object.assign(tab, { type: 'terminal' })
   }
   return {
     worktree,
@@ -45,7 +46,7 @@ function terminalSnapshot(
     activeGroupId: null,
     activeTabId: tab.id,
     activeTabType: 'terminal',
-    tabs: [tab as RuntimeMobileSessionTabsSnapshot['tabs'][number]]
+    tabs: [tab]
   }
 }
 
@@ -58,10 +59,7 @@ describe('PTY title fanout to mobile session snapshots', () => {
       kill: () => true,
       getForegroundProcess: async () => null
     })
-    vi.spyOn(
-      runtime as unknown as { resolveTerminalWorkspaceLaunchScope: () => Promise<unknown> },
-      'resolveTerminalWorkspaceLaunchScope'
-    ).mockResolvedValue({
+    vi.spyOn(runtime, 'resolveTerminalWorkspaceLaunchScope').mockResolvedValue({
       id: WORKTREE_ID,
       path: '/repo/app',
       connectionId: null,
@@ -88,7 +86,7 @@ describe('PTY title fanout to mobile session snapshots', () => {
       }
       fleetTabReads = 0
       const before = runtime.mobileSessionTabsByWorktree.get(WORKTREE_ID)!.snapshotVersion
-      runtime.onPtyData(PTY_ID, `\x1b]0;Task ${++title}\x07`, Date.now())
+      runtime.onPtyData(PTY_ID, `\x1b]0;Task ${++title}\x07`, T0 + title)
 
       expect({
         fleetTabReads,
