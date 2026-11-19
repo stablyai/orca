@@ -263,7 +263,7 @@ function startReaders(count) {
   const source = `
     const { workerData } = require('node:worker_threads');
     const { DatabaseSync } = require('node:sqlite');
-    const db = new DatabaseSync(workerData.filename, { readOnly: true });
+    const db = new DatabaseSync(workerData.filename, { readOnly: true, timeout: 5000 });
     const read = db.prepare("SELECT length(payload_json) AS bytes FROM journal_items WHERE session_id=? ORDER BY ordinal LIMIT 400");
     const sessions = db.prepare("SELECT session_id FROM journal_chat_state WHERE session_id NOT LIKE 'burst-%' LIMIT 2000").all().map((row) => row.session_id);
     const loop = () => {
