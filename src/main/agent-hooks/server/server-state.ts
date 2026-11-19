@@ -169,6 +169,15 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
 
   /** A stopping pane's agent keeps its row for the sleep gate, whatever shape it rests in. */
   protected preservesStoppingAgent(paneKey: string): boolean {
+    const resolved = this.resolvePaneKeyAlias(paneKey)
+    // A saved record never rests in sleep, so only a stopping pane reads it.
+    if (
+      !this.state.lastStatusByPaneKey.has(resolved) &&
+      !this.getTmuxSelectedStatus(resolved) &&
+      this.terminalPaneLifecycle?.isStopping(paneKey) !== true
+    ) {
+      return false
+    }
     const identity = this.paneAgentIdentity(paneKey)
     return (
       identity !== null &&

@@ -35,7 +35,11 @@ export abstract class AgentHookServerPaneSleep extends AgentHookServerAuthorityF
     const row = this.state.lastStatusByPaneKey.get(resolved) as
       | EnrichedAgentHookEventPayload
       | undefined
-    if (this.paneAgentIdentity(resolved)?.processTopology === 'shared') {
+    // Only a live or tmux row can be shared; a saved record never is, so a plain spawn reads none.
+    if (
+      (row ?? this.getTmuxSelectedStatus(resolved)) &&
+      this.paneAgentIdentity(resolved)?.processTopology === 'shared'
+    ) {
       this.dropStatusEntry(resolved, { preserveResumeIdentity: false })
       this.emitPaneStatusCleared({ paneKey: resolved })
       return
@@ -85,10 +89,25 @@ export abstract class AgentHookServerPaneSleep extends AgentHookServerAuthorityF
     const legacy = this.state.lastStatusByPaneKey.get(resolved) as
       | EnrichedAgentHookEventPayload
       | undefined
+    const live = legacy ?? this.getTmuxSelectedStatus(resolved)
+    if (
+      live?.paneSleep?.ptyId === ptyId &&
+      (!live.paneSleep.incarnationId ||
+        !incarnationId ||
+        live.paneSleep.incarnationId === incarnationId)
+    ) {
+      return true
+    }
+    if (
+      this.terminalPaneLifecycle?.ownsProcess(resolved, ptyId, incarnationId) !== true ||
+      this.terminalPaneLifecycle.isReversibleStop(ptyId, incarnationId) !== true
+    ) {
+      return false
+    }
+    // Only a reversible stop of the pane's own process reads its saved conversation.
     const identity = this.paneAgentIdentity(resolved)
     const previous: EnrichedAgentHookEventPayload | undefined =
-      legacy ??
-      this.getTmuxSelectedStatus(resolved) ??
+      live ??
       (identity
         ? {
             paneKey: resolved,
@@ -102,21 +121,9 @@ export abstract class AgentHookServerPaneSleep extends AgentHookServerAuthorityF
           }
         : undefined)
     if (
-      previous?.paneSleep?.ptyId === ptyId &&
-      (!previous.paneSleep.incarnationId ||
-        !incarnationId ||
-        previous.paneSleep.incarnationId === incarnationId)
-    ) {
-      return true
-    }
-    if (this.terminalPaneLifecycle?.ownsProcess(resolved, ptyId, incarnationId) !== true) {
-      return false
-    }
-    if (
       !previous ||
       !identity ||
       identity.ended ||
-      this.terminalPaneLifecycle?.isReversibleStop(ptyId, incarnationId) !== true ||
       this.terminalPaneLifecycle.isPlaced(previous) !== true
     ) {
       return false
