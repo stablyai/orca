@@ -299,6 +299,11 @@ const summary = (values) => ({
 async function run(arm, sessions, round) {
   // Builds share this process; each sizes its own worker send ledger, so none inherits another's.
   setEnvironmentData('orca.worker-send-ledger.v1', undefined)
+  // Every run starts from an empty WAL, so no arm inherits the WAL an earlier run left behind.
+  const { DatabaseSync } = await import('node:sqlite')
+  const raw = new DatabaseSync(filename)
+  raw.exec('PRAGMA wal_checkpoint(TRUNCATE)')
+  raw.close()
   const owner = new arm.JournalSqlOwner(filename, dir, arm.workerPath)
   await owner.opened()
   const timings = []
