@@ -29459,8 +29459,8 @@
     },
     "disk": {
       "title": "Your disk is almost full",
-      "description": "{{free}} left. Clean up workspaces you no longer need to free space.",
-      "cleanUp": "Clean up workspaces"
+      "description": "{{free}} left. Clean up workspaces you no longer need in",
+      "resourceManagerLink": "the Resource Manager"
     },
     "dontShowAgain": "Don't show again"
   },

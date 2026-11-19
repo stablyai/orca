@@ -10,7 +10,11 @@ export type PerfNotice =
   | { id: 'hidden-browser-tabs'; count: number; hours: number }
   | { id: 'disk-almost-full'; freeLabel: string }
 
-type Copy = { title: string; description: string; action: string; run: () => void }
+type Copy = {
+  title: string
+  description: React.ReactNode
+  action?: { label: string; onClick: () => void }
+}
 
 /** The hours Memory Saver will use once on, so the copy matches what the button does. */
 export function memorySaverHours(): number {
@@ -36,22 +40,44 @@ function copyFor(notice: PerfNotice): Copy {
             defaultValue_one: "Memory Saver frees tabs you haven't viewed in {{count}} hour."
           }
         ),
-        action: translate('perfNotices.hiddenTabs.turnOnMemorySaver', 'Turn on Memory Saver'),
-        run: () =>
-          void useAppStore.getState().updateSettings({ browserGuestWorktreeRetentionBudget: true })
+        action: {
+          label: translate('perfNotices.hiddenTabs.turnOnMemorySaver', 'Turn on Memory Saver'),
+          onClick: () =>
+            void useAppStore
+              .getState()
+              .updateSettings({ browserGuestWorktreeRetentionBudget: true })
+        }
       }
     case 'disk-almost-full':
       return {
         title: translate('perfNotices.disk.title', 'Your disk is almost full'),
-        description: translate(
-          'perfNotices.disk.description',
-          '{{free}} left. Clean up workspaces you no longer need to free space.',
-          { free: notice.freeLabel }
-        ),
-        action: translate('perfNotices.disk.cleanUp', 'Clean up workspaces'),
-        run: () => useAppStore.getState().openModal('workspace-cleanup')
+        // Why: name the Resource Manager so users can find cleanup again after the toast is gone.
+        description: (
+          <p>
+            {translate(
+              'perfNotices.disk.description',
+              '{{free}} left. Clean up workspaces you no longer need in',
+              { free: notice.freeLabel }
+            )}{' '}
+            <button
+              type="button"
+              onClick={() => {
+                useAppStore.getState().openModal('workspace-cleanup')
+                toast.dismiss(perfNoticeToastId(notice.id))
+              }}
+              className="cursor-pointer font-medium text-popover-foreground underline underline-offset-2 hover:text-primary"
+            >
+              {translate('perfNotices.disk.resourceManagerLink', 'the Resource Manager')}
+            </button>
+            .
+          </p>
+        )
       }
   }
+}
+
+function perfNoticeToastId(id: PerfNotice['id']): string {
+  return `perf-notice-${id}`
 }
 
 export function showPerfNotice(notice: PerfNotice, now: number): void {
@@ -59,11 +85,11 @@ export function showPerfNotice(notice: PerfNotice, now: number): void {
   recordPerfNoticeShown(id, now)
   const copy = copyFor(notice)
   toast(copy.title, {
-    id: `perf-notice-${id}`,
+    id: perfNoticeToastId(id),
     description: copy.description,
     duration: Infinity,
     classNames: TRAILING_ACTIONS_CLASS_NAMES,
-    action: { label: copy.action, onClick: copy.run },
+    action: copy.action,
     cancel: {
       label: translate('perfNotices.dontShowAgain', "Don't show again"),
       onClick: () => {
