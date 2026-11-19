@@ -5,7 +5,7 @@ import type {
 } from '../../profile-state/documents/profile-state-domain-patches'
 
 /** One saved value; container keys are re-read on every save, so in-place key edits show up. */
-type SavedNode = { value: unknown; keys?: string[]; children?: SavedNode[] }
+type SavedNode = { value: unknown; keys?: string[]; children?: SavedNode[]; json?: string }
 
 export type WorkspaceSessionSaveCandidate = {
   domain: string
@@ -42,6 +42,16 @@ function snapshot(value: unknown, depth: number): SavedNode {
   return { value, keys, children }
 }
 
+// Tests record each captured entry's JSON so an in-place edit that skips clear() fails loudly.
+
+function recordEntryJson(node: SavedNode): void {
+  if (node.children) {
+    node.children.forEach(recordEntryJson)
+  } else {
+    node.json = JSON.stringify(node.value)
+  }
+}
+
 function sameKeys(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((key, index) => key === b[index])
 }
@@ -53,6 +63,15 @@ function diff(
   operations: ProfileStateDomainPatchOperation[]
 ): void {
   if (!current.keys || !current.children || !previous.keys || !previous.children) {
+    if (
+      previous.json !== undefined &&
+      Object.is(current.value, previous.value) &&
+      JSON.stringify(current.value) !== previous.json
+    ) {
+      throw new Error(
+        `Saved session entry ${JSON.stringify(path)} was edited in place; replace it or clear the save baseline`
+      )
+    }
     if (current.keys || previous.keys || !Object.is(current.value, previous.value)) {
       operations.push({ kind: 'set', path: [...path], payload: JSON.stringify(current.value) })
     }
@@ -104,16 +123,21 @@ export class WorkspaceSessionSaveBaseline {
   private epoch = 0
   private readonly acknowledged = new Map<string, SavedNode>()
 
-  /** A patch when the writer holds an acknowledged copy; otherwise the caller saves it whole. */
+  /** With 'patch', a patch when the writer holds an acknowledged copy; otherwise the caller saves it
+   *  whole, and 'whole' only records the candidate. */
   capture(
     domain: string,
-    value: unknown
+    value: unknown,
+    mode: 'patch' | 'whole'
   ): { patch?: ProfileStateDomainPatch; candidate: WorkspaceSessionSaveCandidate } {
     const depth = PROFILE_STATE_SPLIT_DOMAIN_DEPTHS.get(domain) ?? 0
     const node = isPlainContainer(value) ? snapshot(value, depth) : undefined
+    if (node && process.env.VITEST) {
+      recordEntryJson(node)
+    }
     const candidate = { domain, epoch: this.epoch, node }
     const previous = this.acknowledged.get(domain)
-    if (!node || !previous?.keys) {
+    if (mode === 'whole' || !node || !previous?.keys) {
       return { candidate }
     }
     const operations: ProfileStateDomainPatchOperation[] = []

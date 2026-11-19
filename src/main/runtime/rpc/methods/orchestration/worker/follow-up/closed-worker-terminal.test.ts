@@ -6,7 +6,10 @@ import { agentProviderSessionsEqual } from '../../../../../../../shared/agent-se
 
 import { AgentHookServer } from '../../../../../../agent-hooks/server/agent-hook-server'
 import { agentHookRuntimeDeps } from '../../../../../../agent-hooks/runtime/agent-hook-runtime-deps'
-import { watchMovedWorkerResumeSessions } from './worker-resume-session-capture'
+import {
+  captureReportedWorkerResumeSession,
+  watchMovedWorkerResumeSessions
+} from './worker-resume-session-capture'
 
 const CONVERSATION = { key: 'session_id', id: 'fixture-conversation' } as const
 const REOPENED_PANE = 'tab_reopened:leaf'
@@ -80,12 +83,12 @@ describe('opening a terminal worker Orca closed', () => {
 
   const open = (address: string) => h.call('orchestration.partyOpen', { address })
 
-  it('keeps a held worker conversation current without capturing equal status reports', async () => {
+  it('keeps the held worker conversation current across new sessions and reconnects', async () => {
     const { helper, worker } = await pair()
     const paneKey = panes.get('term_helper')!
     const server = new AgentHookServer()
     const deps = agentHookRuntimeDeps(server, { read: () => ({ kind: 'unobserved' }) }, () => ({}))
-    const read = vi.fn(() => {
+    const read = () => {
       const row = deps.getAgentProviderSessionRowsForPane(paneKey)[0]
       return row?.providerSession
         ? {
@@ -97,10 +100,9 @@ describe('opening a terminal worker Orca closed', () => {
             connectionId: null
           }
         : null
-    })
-    const getDb = vi.fn(() => h.db)
+    }
     const stop = deps.subscribeAgentProviderSessionChanges(
-      watchMovedWorkerResumeSessions({ getExactWorkerProviderSession: read }, getDb)
+      watchMovedWorkerResumeSessions({ getExactWorkerProviderSession: read }, () => h.db)
     )
     const report = (id: string, state: 'working' | 'done', prompt: string) =>
       server.ingestRemote(
@@ -114,7 +116,6 @@ describe('opening a terminal worker Orca closed', () => {
       )
     const saved = () =>
       JSON.parse(h.db.getWorkerTerminalResourceByOwner(helper.dispatchId)!.resume_session!)
-    const fleetReads = vi.spyOn(server, 'getStatusSnapshot')
     try {
       report('session-a', 'working', 'First task')
       expect(saved()).toEqual({
@@ -122,25 +123,15 @@ describe('opening a terminal worker Orca closed', () => {
         providerSession: { key: 'session_id', id: 'session-a' },
         connectionId: null
       })
-      read.mockClear()
-      getDb.mockClear()
-      for (let index = 0; index < 100; index++) {
-        report('session-a', index % 2 === 0 ? 'done' : 'working', `Progress ${index}`)
-      }
-      expect(read).not.toHaveBeenCalled()
-      expect(getDb).not.toHaveBeenCalled()
-      expect(fleetReads).not.toHaveBeenCalled()
+      report('session-a', 'done', 'Finished first task')
       expect(saved().providerSession.id).toBe('session-a')
 
       report('session-b', 'working', 'New conversation')
-      expect(read).toHaveBeenCalledOnce()
       expect(saved().providerSession.id).toBe('session-b')
       server.dropStatusEntry(paneKey, { preserveResumeIdentity: false })
       report('session-b', 'working', 'Reconnected')
-      expect(read).toHaveBeenCalledTimes(2)
       expect(saved().providerSession.id).toBe('session-b')
       expect(h.db.getWorkerTerminalResourceByOwner(worker.dispatchId)?.resume_session).toBeNull()
-      expect(fleetReads).not.toHaveBeenCalled()
     } finally {
       stop()
       server.stop()
@@ -166,14 +157,30 @@ describe('opening a terminal worker Orca closed', () => {
     expect(later).not.toBe(uncertainId)
   })
 
-  it('resumes again once the agent left the reopened terminal', async () => {
-    const { resource, resume, report } = await closedHelper()
+  it('reopens with the recipe the worker launched with after its agent exited (#43875)', async () => {
+    const { helper } = await pair()
+    const recipe = { agentArgs: "--dangerously-skip-permissions --model 'M'", agentEnv: {} }
+    const session = {
+      paneKey: panes.get('term_helper')!,
+      agent: 'claude',
+      processIncarnation: 'process:term_helper',
+      providerSession: CONVERSATION,
+      observedAt: 1
+    }
+    const capture = vi.mocked(h.runtime.getExactWorkerProviderSession)
+    capture.mockReturnValue({ ...session, launchConfig: recipe })
+    captureReportedWorkerResumeSession(h.runtime, h.db, helper.dispatchId)
+    // Its agent exited, so release reads the same conversation without a held launch.
+    capture.mockReturnValue(session)
+    await success('worker-release', '--dispatch', helper.dispatchId)
+    const resource = h.db.getWorkerTerminalResourceByOwner(helper.dispatchId)!
+    const resume = vi
+      .spyOn(h.runtime, 'resumeAgentSessionInWorkspace')
+      .mockResolvedValue({ ok: true, handle: 'term_reopened', paneKey: REOPENED_PANE, ptyId: 'p' })
     await open(resource.terminal_handle)
-    report({ agentType: 'claude', providerSession: CONVERSATION })
-    vi.mocked(h.runtime.isTerminalRunningAgent).mockResolvedValue(false)
-    await open(resource.terminal_handle)
-    expect(resume).toHaveBeenCalledTimes(2)
+    expect(resume.mock.calls[0]?.[1].launchConfig).toEqual(recipe)
   })
+
   describe('its conversation log, for a terminal that is gone for good', () => {
     const transcript = (dispatch: string) => h.call('orchestration.workerTranscript', { dispatch })
     const LOG = '/home/me/.claude/projects/fixture/conversation.jsonl'

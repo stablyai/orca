@@ -7,6 +7,7 @@ import type { NativeChatRowTypography } from '../../viewport/virtualization/nati
 import type { NativeChatSideChatForkOffer } from '../../messages/actions/native-chat-side-chat-fork-point'
 import type { NativeChatSubagentHead } from '../../subagents/native-chat-subagent-scope'
 
+import type { OrchestrationSessionWorker } from '../../../../../../shared/orchestration-session-workers'
 import type { NativeChatMarkdownImageSources } from '../../../../../../shared/native-chat/transcript/images/native-chat-generated-image-answers'
 
 export type NativeChatTranscriptSlotsInput = {
@@ -33,6 +34,8 @@ export type NativeChatTranscriptSlotsInput = {
   forkOffer?: NativeChatSideChatForkOffer
   /** Subagents no roster row in this transcript names, each drawn as a head at its first row. */
   subagentHeads?: readonly NativeChatSubagentHead[]
+  /** The chat's own workers, which tell back-to-back worker rows about one Dispatch. */
+  workers?: readonly OrchestrationSessionWorker[]
   /** The open reasoning block the live activity line discloses: its row takes no slot meanwhile. */
   liveReasoningId?: string | null
 }

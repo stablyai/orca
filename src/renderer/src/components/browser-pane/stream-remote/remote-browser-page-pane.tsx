@@ -160,7 +160,8 @@ export function RemoteBrowserPagePane({
 
   const {
     applyRemoteTabInfo,
-    prepareCertificateProceed,
+    abandonRemoteNavigation,
+    stopRemotePage,
     scheduleRemoteTabInfoRefresh,
     runRemoteNavigation,
     navigateToUrl,
@@ -379,14 +380,17 @@ export function RemoteBrowserPagePane({
         addressBarEditSession={addressBarEditSession}
         busy={busy}
         loading={browserTab.loading}
-        loadFailed={browserTab.loadError !== null}
+        loadErrorCode={browserTab.loadError?.code ?? null}
         markup={markup}
         frameUrl={frameUrl}
         isActive={isActive}
         history={history}
         onBack={() => void runRemoteNavigation('browser.back')}
         onForward={() => void runRemoteNavigation('browser.forward')}
-        onReload={() => void runRemoteNavigation('browser.reload')}
+        onReload={(ignoreCache) =>
+          void runRemoteNavigation('browser.reload', undefined, ignoreCache)
+        }
+        onStop={() => void stopRemotePage()}
       />
       <RemoteBrowserPageViewport
         remoteViewportRef={remoteViewportRef}
@@ -409,7 +413,7 @@ export function RemoteBrowserPagePane({
         onGoto={(url) => runRemoteNavigation('browser.goto', url)}
         onNavigateToUrl={navigateToUrl}
         onReconnect={reconnectRemoteStream}
-        onBeforeProceedCertificate={prepareCertificateProceed}
+        onBeforeProceedCertificate={abandonRemoteNavigation}
         handleRemotePointerDown={handleRemotePointerDown}
         handleRemotePointerUp={handleRemotePointerUp}
         handleRemoteContextMenu={handleRemoteContextMenu}

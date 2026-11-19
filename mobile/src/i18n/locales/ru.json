@@ -690,10 +690,6 @@
       "imageTooLarge": "Изображение слишком большое для прикрепления",
       "permissionDenied": "Нет доступа к фото"
     },
-    "agentMessage": {
-      "handedOffToAgent": "Передано агенту",
-      "startedAgent": "Агент запущен"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "Не удалось прочитать ответ для вложения. Повторите попытку.",
       "incompleteReply": "Вложение изменилось или ответ был неполным. Закройте его и повторите попытку.",
@@ -2357,6 +2353,7 @@
       "providerUnavailable": "{{agent}} не смог ответить, поскольку сервис занят. Выберите другую модель или немного подождите и отправьте сообщение снова.",
       "providerSafetyStopped": "{{agent}} остановил этот ответ после проверки безопасности. Проверьте запрос и отправьте его снова.",
       "providerResponseFailed": "{{agent}} не удалось завершить этот ответ. Откройте подробности, чтобы узнать больше.",
+      "providerResponseFailedQuoted": "{{agent}} не удалось завершить этот ответ: {{detail}}.",
       "selectedModel": "выбранную модель",
       "providerRejected": "{{agent}} не принял это сообщение.",
       "providerRejectedQuoted": "{{agent}} не принял это сообщение: {{detail}}.",

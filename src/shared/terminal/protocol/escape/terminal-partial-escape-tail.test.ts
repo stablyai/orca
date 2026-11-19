@@ -58,6 +58,9 @@ describe('extractPartialEscapeTail', () => {
     expect(extractPartialEscapeTail('\x1b] \x1b\x1b^')).toBe('\x1b^')
     expect(extractPartialEscapeTail('\x1bPq\x1b\x1b[3')).toBe('\x1b[3')
     expect(extractPartialEscapeTail('\x1b]0;t\x1b\x1b')).toBe('\x1b')
+
+    const pending = advancePartialEscapeTail('', '\x1bPq\x1b')
+    expect(advancePartialEscapeTail(pending, '\x1b[3')).toBe('\x1b[3')
   })
 })
 

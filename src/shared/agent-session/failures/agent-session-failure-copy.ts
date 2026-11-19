@@ -123,6 +123,7 @@ export const AGENT_SESSION_FAILURE_COPY = {
     '{{agent}} stopped this response after a safety check. Review your request and send again.',
   providerResponseFailed:
     "{{agent}} couldn't finish this response. Open Details for more information.",
+  providerResponseFailedQuoted: "{{agent}} couldn't finish this response: {{detail}}.",
   modelNotSelected:
     '{{agent}} has no model selected. Check your model selection and {{agent}} sign-in, then send again.',
   modelUnavailableUpdate:

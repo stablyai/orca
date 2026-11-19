@@ -6,11 +6,12 @@ import {
 } from '../../../../../../shared/native-chat/transcript/notices/claude-model-fallback'
 import { NativeChatUsageLimitRow } from '../../usage/NativeChatUsageLimitRow'
 import { agentSessionGoalControlWords } from '../../session/goals/agent-session-goal-control-words'
-import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
+import { AlertCircle, AlertTriangle, Info, Notebook } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { NativeChatForkedFromRow } from './NativeChatForkedFromRow'
 import { NativeChatAutoReviewDenialRow } from './NativeChatAutoReviewDenialRow'
 import { NativeChatPullRequestEventLine } from './NativeChatPullRequestEventLine'
+import { NativeChatEventRow } from '../events/NativeChatEventRow'
 import { PULL_REQUEST_EVENT_PRESENTATION } from '../../../../../../shared/native-chat/transcript/notices/native-chat-pull-request-event'
 import { NativeChatMarkdown } from '../../markdown/NativeChatMarkdown'
 import { NativeChatCodeBlock } from '../../markdown/code/NativeChatCodeBlock'
@@ -146,13 +147,18 @@ export function NativeChatNoticeRow({
   if (block.botContext) {
     const { botId, changed } = block.botContext
     return (
-      <button
-        type="button"
-        onClick={() => openBotSettings(botId, changed.length === 1 ? changed[0] : undefined)}
-        className="min-w-0 max-w-full rounded-md text-left text-sm text-chat-foreground-faint hover:text-chat-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      <NativeChatEventRow
+        icon={<Notebook aria-hidden className="size-3.5" />}
+        timestamp={timestamp}
       >
-        {changed.map((change) => BOT_CONTEXT_WORDS[change]()).join(' · ')}
-      </button>
+        <button
+          type="button"
+          onClick={() => openBotSettings(botId, changed.length === 1 ? changed[0] : undefined)}
+          className="line-clamp-2 rounded-sm text-left hover:text-chat-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {changed.map((change) => BOT_CONTEXT_WORDS[change]()).join(' · ')}
+        </button>
+      </NativeChatEventRow>
     )
   }
   if (look.kind === 'host-status') {
