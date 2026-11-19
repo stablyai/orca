@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { withBotConnectorRuntime } from '../../../lib/bot-connector-host-calls.test-fixture'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Bot } from '../../../../../shared/bot-types'
 
@@ -98,26 +98,37 @@ afterEach(() => {
   cleanup()
   resetComposioClientForTest()
   Reflect.deleteProperty(window, 'api')
+  vi.useRealTimers()
 })
 
 describe('Add to <bot>', () => {
   it('signs in to an address that needs it from this computer, with no paste-back', async () => {
+    let signedIn = false
     answer({
       ...tools,
       'bots.tools.add': () => ({ tool: signInTool('pagerduty') }),
       // Orca opened the browser itself; the sign-in is under way.
-      'bots.tools.connect': orcaConnect
+      'bots.tools.connect': orcaConnect,
+      'bots.tools.signInStatus': () => ({ status: signedIn ? 'done' : 'pending' })
     })
     open()
     fireEvent.click(screen.getByRole('button', { name: 'Add by URL' }))
     fireEvent.change(await screen.findByLabelText('Server URL or start command'), {
       target: { value: 'https://mcp.pagerduty.com/mcp' }
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+    vi.useFakeTimers()
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+    })
 
-    expect(await screen.findByText('Finish in your browser')).toBeTruthy()
+    expect(screen.getByText('Finish in your browser')).toBeTruthy()
     expect(screen.queryByText(/is on Reviewer/)).toBeNull()
     expect(screen.queryByRole('button', { name: 'Signing in on another computer?' })).toBeNull()
+
+    signedIn = true
+    await act(() => vi.advanceTimersByTimeAsync(2_000))
+    expect(screen.getByRole('button', { name: 'Done' })).toBeTruthy()
+    expect(screen.queryByText('Finish in your browser')).toBeNull()
   })
 
   it('routes a curated Composio app found by search by Composio’s own sign-in record', async () => {
