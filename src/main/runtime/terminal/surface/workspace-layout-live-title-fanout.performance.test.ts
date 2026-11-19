@@ -1,4 +1,4 @@
-// Perf contract (STA-16160): a live title change rechecked every published workspace while a layout subscriber was attached.
+// Perf contract (#44627, STA-16160): a live title change or one-workspace write rechecked every published workspace while a layout subscriber was attached.
 
 import { expect, it } from 'vitest'
 import {
