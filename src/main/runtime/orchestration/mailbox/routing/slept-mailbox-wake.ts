@@ -143,17 +143,13 @@ export class SleptMailboxWake {
   /** Re-derive tracked mailboxes and every sleeping pane's owned inboxes from current rows. */
   reconcile(panes: Iterable<string>): void {
     const db = this.deps.db()
-    const mailboxes = new Set([
-      ...this.owed.keys(),
-      ...this.succeeded.keys(),
-      ...this.attempted.keys()
-    ])
+    const mailboxes = new Set([...this.owed.keys(), ...this.succeeded.keys()])
     const visited = new Set(mailboxes)
     for (const pane of panes) {
-      if (db && this.hasObligation(pane)) {
-        for (const mailbox of sleepingMailOwnerMailboxes(db, pane, visited)) {
-          mailboxes.add(mailbox)
-        }
+      const owned =
+        db && this.hasObligation(pane) ? sleepingMailOwnerMailboxes(db, pane, visited) : []
+      for (const mailbox of owned) {
+        mailboxes.add(mailbox)
       }
     }
     for (const mailbox of mailboxes) {
