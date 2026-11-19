@@ -156,7 +156,8 @@ export function useRemoteBrowserPageNavigation({
         { worktree: runtimeWorktree, page: pageId },
         { timeoutMs: 10_000, suppressFeatureInteraction: true }
       )
-      lifecycle.session.scheduleTabInfoRefresh({ ...token, remotePageId: pageId }, 0)
+      // Read the stopped page's state; the session ignores the read if anything newer lands first.
+      await lifecycle.session.refreshTabInfo({ ...token, remotePageId: pageId })
     } catch (error) {
       if (!isCurrentRemoteOperationToken({ ...token, remotePageId: pageId })) {
         return

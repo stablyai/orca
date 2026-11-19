@@ -136,6 +136,33 @@ describe('remote browser authoritative page state', () => {
     expect(currentPage().loading).toBe(false)
   })
 
+  it('Stop releases a pending reload and stops the host page', async () => {
+    const { result, busy } = renderNavigation()
+    const reload = deferred<unknown>()
+    const calls: string[] = []
+    vi.mocked(callRuntimeRpc).mockImplementation(async (_target, method, params) => {
+      calls.push(`${String(method)} ${JSON.stringify(params)}`)
+      return method === 'browser.reload' ? reload.promise : undefined
+    })
+    let pending!: Promise<void>
+    await act(async () => {
+      pending = result.current.runRemoteNavigation('browser.reload', undefined, true)
+    })
+    expect(currentPage().loading).toBe(true)
+    await act(() => result.current.stopRemotePage())
+    expect(currentPage().loading).toBe(false)
+    expect(busy).toHaveBeenLastCalledWith(false)
+    await act(async () => {
+      reload.resolve({ url: 'https://example.test/', title: 'Example' })
+      await pending
+    })
+    expect(currentPage().loading).toBe(false)
+    expect(calls.filter((call) => !call.startsWith('browser.tabShow'))).toEqual([
+      'browser.reload {"worktree":"worktree-a","page":"remote-page-a","ignoreCache":true}',
+      'browser.stop {"worktree":"worktree-a","page":"remote-page-a"}'
+    ])
+  })
+
   it('does not bless external ABA or clear native-owned loading during local cleanup', async () => {
     const { session, tokens, result } = renderNavigation()
     act(() => result.current.applyRemoteTabInfo(failedTab()))
