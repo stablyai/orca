@@ -8,8 +8,8 @@ import { osc52ClipboardDefaultOnOverridesPersistedOff } from '../../../../../sha
 import {
   normalizeTuiAgentArgsRecord,
   normalizeTuiAgentEnvRecord
-} from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
-import { normalizeDisabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
+} from '../../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import { normalizeDisabledTuiAgents } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import {
   applyPRBotAuthorOverride,
   normalizePRBotAuthorOverrides

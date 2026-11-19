@@ -199,7 +199,7 @@ describe('web settings preload API', () => {
 
   it('forwards agent default launch args updates to a paired runtime', async () => {
     const runtimeCalls: { method: string; params: unknown }[] = []
-    vi.doMock('./web-runtime-client', () => ({
+    vi.doMock('../../runtime/client/web-runtime-client', () => ({
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
@@ -217,7 +217,7 @@ describe('web settings preload API', () => {
 
     const globals = installBrowserGlobals('Linux')
     writeStoredRuntimeEnvironment(globals.storage)
-    const { installWebPreloadApi } = await import('./web-preload-api')
+    const { installWebPreloadApi } = await import('../../web-preload-api')
     installWebPreloadApi()
 
     const settings = await globals.window.api.settings.set({
