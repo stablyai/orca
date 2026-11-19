@@ -23653,8 +23653,7 @@
       "from": "From",
       "youPreview": "You: {{preview}}",
       "composerUnavailable": "The message box can't take a mention now",
-      "mentionTip": "Mention {{name}}",
-      "talkingWithHint": "Messaged this chat in the last 30 min"
+      "mentionTip": "Mention {{name}}"
     },
     "orchestration": {
       "workerAutoClose": {

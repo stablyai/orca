@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import type { OrchestrationCrewRow } from '../../../../../../shared/orchestration/orchestration-crew'
 import type { BackgroundRosterTask } from '../../../../../../shared/agent-status/presentation/background-tasks/background-task-roster'
@@ -50,39 +49,24 @@ type AgentEntry =
 export function StripGroupHeading({
   label,
   count,
-  hint,
   action
 }: {
   label: string
   count?: number
-  /** What the group holds, on hover. */
-  hint?: string
   action?: React.ReactNode
 }): React.JSX.Element {
-  const text = (
-    <span className="font-mono text-3xs uppercase tracking-wider">
-      {label}
-      {count === undefined ? null : <span className="ml-1.5">{count}</span>}
-    </span>
-  )
   return (
     <div className="flex min-h-5 items-center gap-1.5 px-0.5 pb-1 text-muted-foreground">
-      {hint ? (
-        <Tooltip>
-          <TooltipTrigger asChild>{text}</TooltipTrigger>
-          <TooltipContent side="top" sideOffset={4}>
-            {hint}
-          </TooltipContent>
-        </Tooltip>
-      ) : (
-        text
-      )}
+      <span className="font-mono text-3xs uppercase tracking-wider">
+        {label}
+        {count === undefined ? null : <span className="ml-1.5">{count}</span>}
+      </span>
       {action ? <span className="ml-auto">{action}</span> : null}
     </div>
   )
 }
 
-/** Managed by, Agents (workers and subagents) and Talking with. Mounted only while the list is open,
+/** Managed by and Agents (workers and subagents). Mounted only while the list is open,
  *  so rows, live looks and their store selectors cost nothing at rest. */
 export function NativeChatCrewStripGroups({
   crew,
@@ -99,14 +83,13 @@ export function NativeChatCrewStripGroups({
   const sections = crew.rows?.sections
   const managedBy = sections?.managedBy ?? NO_ROWS
   const workers = sections?.managing ?? NO_ROWS
-  const talkingWith = sections?.talkingWith ?? NO_ROWS
   // One look per party: a party in two sections keeps one.
   const parties = useMemo(() => {
     const seen = new Set<string>()
-    return [...managedBy, ...workers, ...talkingWith].filter(
+    return [...managedBy, ...workers].filter(
       (row) => !seen.has(row.partyKey) && Boolean(seen.add(row.partyKey))
     )
-  }, [managedBy, workers, talkingWith])
+  }, [managedBy, workers])
   const looks = useCrewRowLooks(parties, crew.target)
   const lookOf = useMemo(
     () => new Map(parties.map((row, index) => [row.partyKey, looks[index]!])),
@@ -134,14 +117,6 @@ export function NativeChatCrewStripGroups({
         a.index - b.index
     )
   }, [workers, subagents, rank])
-  const peers = useMemo(
-    () =>
-      talkingWith
-        .map((row, index) => ({ row, index }))
-        .sort((a, b) => rank(a.row) - rank(b.row) || a.index - b.index)
-        .map(({ row }) => row),
-    [talkingWith, rank]
-  )
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set())
   const toggle = useCallback((partyKey: string) => {
     setExpanded((previous) => {
@@ -175,7 +150,6 @@ export function NativeChatCrewStripGroups({
   const workerBadge = t('components.native-chat.backgroundTasks.workerBadge', 'Worker')
   const managedByLabel = t('components.orchestrationCrew.managedBy', 'Managed by')
   const agentsLabel = say('groupAgents')
-  const talkingWithLabel = t('components.orchestrationCrew.talkingWith', 'Talking with')
   return (
     <>
       {managedBy.length > 0 ? (
@@ -217,21 +191,6 @@ export function NativeChatCrewStripGroups({
             {agents.map((entry) =>
               entry.kind === 'worker' ? crewRow(entry.row, workerBadge) : renderSubagent(entry.task)
             )}
-          </ul>
-        </StripGroup>
-      ) : null}
-      {peers.length > 0 ? (
-        <StripGroup>
-          <StripGroupHeading
-            label={talkingWithLabel}
-            count={peers.length}
-            hint={t(
-              'components.orchestrationCrew.talkingWithHint',
-              'Messaged this chat in the last 30 min'
-            )}
-          />
-          <ul role="list" aria-label={talkingWithLabel} className="space-y-0.5">
-            {peers.map((row) => crewRow(row))}
           </ul>
         </StripGroup>
       ) : null}

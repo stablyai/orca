@@ -128,14 +128,10 @@ export function crewRowNeedsYou(row: Pick<OrchestrationCrewRow, 'role' | 'status
   return row.role === 'worker' && (row.status === 'waiting' || row.status === 'blocked')
 }
 
-/** Every party once, however many sections it appears in, and the managed workers waiting on the person. */
+/** The manager and workers once each, and the managed workers waiting on the person. */
 export function crewSummary(snapshot: OrchestrationCrewSnapshot): OrchestrationCrewSummary {
   const parties = new Set<string>()
-  for (const section of [
-    snapshot.sections.managedBy,
-    snapshot.sections.managing,
-    snapshot.sections.talkingWith
-  ]) {
+  for (const section of [snapshot.sections.managedBy, snapshot.sections.managing]) {
     for (const row of section) {
       parties.add(row.partyKey)
     }

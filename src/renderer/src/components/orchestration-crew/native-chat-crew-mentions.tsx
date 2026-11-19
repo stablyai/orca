@@ -50,8 +50,7 @@ export function crewAgentMentions(
   const references = new Map<string, OrchestrationAgentReference>()
   const sections = [
     [rows.sections.managedBy, t('components.orchestrationCrew.managedBy', 'Managed by')],
-    [rows.sections.managing, null],
-    [rows.sections.talkingWith, t('components.orchestrationCrew.talkingWith', 'Talking with')]
+    [rows.sections.managing, null]
   ] as const
   for (const [section, fallback] of sections) {
     for (const row of section) {

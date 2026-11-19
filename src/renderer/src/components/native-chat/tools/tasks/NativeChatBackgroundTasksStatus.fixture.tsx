@@ -2,9 +2,10 @@ import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { nativeChatAppearanceStyle } from '../../appearance/native-chat-appearance-style'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
 import type { AgentSessionBackgroundTask } from '../../../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
-import type {
-  OrchestrationCrewRow,
-  OrchestrationCrewSnapshot
+import {
+  crewSummary,
+  type OrchestrationCrewRow,
+  type OrchestrationCrewSnapshot
 } from '../../../../../../shared/orchestration/orchestration-crew'
 import type { NativeChatCrew } from '../../../orchestration-crew/use-native-chat-crew'
 import { UNKNOWN_CREW_STATE } from '../../../orchestration-crew/orchestration-crew-subscription'
@@ -141,11 +142,7 @@ const workerRows: OrchestrationCrewSnapshot = {
 }
 
 function crew(rows: OrchestrationCrewSnapshot, needsYou: number): NativeChatCrew {
-  const agents = new Set(
-    [...rows.sections.managedBy, ...rows.sections.managing, ...rows.sections.talkingWith].map(
-      (entry) => entry.partyKey
-    )
-  ).size
+  const { agents } = crewSummary(rows)
   return {
     target: { kind: 'local' },
     canMention: true,

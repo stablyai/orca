@@ -1,13 +1,29 @@
 import { Badge } from '@/components/ui/badge'
 import { recomputeOn } from '@/lib/recompute-on'
-import { formatTimeAgo } from '@/components/right-sidebar/ai-vault/session-list/ai-vault-session-time'
+import { formatUiNarrowDuration } from '@/i18n/relative-time-format'
+import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/class-names'
 import { useNow } from '@/lib/window-activity/use-now'
 import { useTranslate } from '@/i18n/use-translate'
 import type { OrchestrationCrewRow } from '../../../../shared/orchestration/orchestration-crew'
 
+/** A compact age ("3m", "2h", "4d"), as the strip's other rows show elapsed time. */
+function crewAge(at: number, now: number): string {
+  const minutes = Math.floor((now - at) / 60_000)
+  if (minutes < 1) {
+    return translate('auto.components.right.sidebar.AiVaultSessionDetails.justNow', 'Just now')
+  }
+  if (minutes < 60) {
+    return formatUiNarrowDuration(minutes, 'minute')
+  }
+  const hours = Math.floor(minutes / 60)
+  return hours < 24
+    ? formatUiNarrowDuration(hours, 'hour')
+    : formatUiNarrowDuration(Math.floor(hours / 24), 'day')
+}
+
 export function CrewRowTime({ at, className }: { at?: string; className?: string }) {
-  // Re-render on the sidebar's shared coarse tick so "2m ago" keeps advancing while the panel is open.
+  // Re-render on the sidebar's shared coarse tick so the age keeps advancing while the list is open.
   const now = useNow(30_000)
   if (!at) {
     return null
@@ -19,7 +35,7 @@ export function CrewRowTime({ at, className }: { at?: string; className?: string
       dateTime={date.toISOString()}
       className={cn('shrink-0 text-2xs text-muted-foreground', className)}
     >
-      {recomputeOn([now], () => formatTimeAgo(date.getTime()))}
+      {recomputeOn([now], () => crewAge(date.getTime(), now))}
     </time>
   ) : null
 }
