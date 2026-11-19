@@ -43,15 +43,6 @@ async function press(field: HTMLInputElement, key: string): Promise<void> {
 describe('BotNameInlineEdit', () => {
   afterEach(cleanup)
 
-  it('Enter saves the trimmed name through the bot update', async () => {
-    const update = vi.fn(async () => ({ ...bot, name: 'Release bot' }))
-    const field = edit(update)
-    fireEvent.change(field, { target: { value: '  Release bot ' } })
-    await press(field, 'Enter')
-    expect(update).toHaveBeenCalledWith({ name: 'Release bot' })
-    expect(screen.queryByRole('textbox')).toBeNull()
-  })
-
   it('leaving the field saves too', async () => {
     const update = vi.fn(async () => ({ ...bot, name: 'Release bot' }))
     const field = edit(update)
@@ -92,7 +83,7 @@ describe('BotNameInlineEdit', () => {
     expect(screen.getByRole('button', { name: 'Rename Bot builder' })).toBeTruthy()
   })
 
-  it('focus moved on while the name saves stays where it went', async () => {
+  it('Enter saves the trimmed name without taking focus back when the write finishes', async () => {
     let finish: (saved: Bot) => void = () => {}
     const update = vi.fn(
       () =>
@@ -111,11 +102,15 @@ describe('BotNameInlineEdit', () => {
     if (!(field instanceof HTMLInputElement)) {
       throw new Error('not an input')
     }
-    fireEvent.change(field, { target: { value: 'Release bot' } })
-    await press(field, 'Enter')
+    fireEvent.change(field, { target: { value: '  Release bot ' } })
+    await act(async () => {
+      fireEvent.keyDown(field, { key: 'Enter' })
+    })
+    expect(update).toHaveBeenCalledExactlyOnceWith({ name: 'Release bot' })
     const next = screen.getByRole('button', { name: 'Next' })
     next.focus()
     await act(async () => finish({ ...bot, name: 'Release bot' }))
+    expect(screen.queryByRole('textbox')).toBeNull()
     expect(document.activeElement).toBe(next)
   })
 })
