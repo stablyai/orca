@@ -30,7 +30,7 @@ export function createBrowserClientPageMetadataPublisher(options: {
   onUnpublished?: (detail: BrowserClientPageMetadataUnpublished) => void
 }): {
   publish(snapshot: BrowserClientPageMetadataSnapshot): void
-  /** Icons arrive between metadata events, so a new one resends the last snapshot. */
+  /** Icons arrive between metadata events, so gaining or losing one resends the last snapshot. */
   publishFavicon(faviconUrl: string | null): void
   dispose(): void
 } {
@@ -112,11 +112,10 @@ export function createBrowserClientPageMetadataPublisher(options: {
     publishFavicon: (next) => {
       // The runtime rejects an over-long icon, which would drop the whole update with it.
       const safe = remoteTabFaviconUrl(next)
-      if (safe === faviconUrl) {
-        return
-      }
+      const arrivedOrCleared = (safe === null) !== (faviconUrl == null)
       faviconUrl = safe
-      if (last) {
+      // Animated icons swap many times a second, so a swap rides the next metadata publish.
+      if (arrivedOrCleared && last) {
         publish(last)
       }
     },
