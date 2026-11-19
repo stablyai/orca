@@ -1,22 +1,28 @@
 import type { z } from 'zod'
 import type { ApprovalAnswerParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-approval-answer-params'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
+import { isAgentRpcCaller } from '../../../callers/rpc-caller-identity'
+import { ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { OrchestrationAccessRuleInput } from './orchestration-method-access'
 
 export type WorkerApprovalAccess = { answeredBy: 'person' | 'coordinator'; reason: string | null }
 
 /** Approve requires a person, or an agent caller when the user's setting is on; deny allows an agent
- *  or a person. A person is proven by the transport: only the desktop app's own IPC. A paired device
- *  can carry a remote CLI, so it counts as an agent. The setting read is this machine's, which runs
- *  the worker. */
+ *  or a person. A person is proven by the transport: the desktop app's own IPC, or a paired window or
+ *  phone that says so; the orca CLI never does, so an older CLI fails closed. An agent session and a
+ *  paired Orca's forwarded call are agents. The setting read is this machine's, which runs the worker. */
 export function workerApprovalAccess({
   params,
   ctx
 }: OrchestrationAccessRuleInput<z.infer<typeof ApprovalAnswerParams>>): WorkerApprovalAccess {
-  const person = ctx.caller?.kind === 'desktop'
+  const person =
+    ctx.caller?.kind === 'desktop' ||
+    (ctx.caller?.kind === 'paired-device' &&
+      !isAgentRpcCaller(ctx.caller) &&
+      ctx.orchestrationCaller === undefined &&
+      ctx.clientCapabilities?.includes(ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY) === true)
   const reason = params.reason?.trim() || null
-  // Without a reason it is not a coordinator's approve: a person on a remote-connected desktop
-  // sends none, and keeps the refusal they always got.
+  // Without a reason it is not a coordinator's approve.
   if (
     params.decision === 'allow' &&
     !person &&
