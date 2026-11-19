@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import type { ReactElement } from 'react'
+import type { ActiveRightSidebarTab } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import { DndContext } from '@dnd-kit/core'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -28,7 +29,7 @@ type BarProps = {
   visibleItems?: ActivityBarItem[]
   overflowItems?: ActivityBarItem[]
   hiddenActiveItem?: ActivityBarItem
-  effectiveTab?: string
+  effectiveTab?: ActiveRightSidebarTab
   arrangementItems?: ActivityBarItem[]
 }
 
