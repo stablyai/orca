@@ -6,6 +6,11 @@ import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { runProcess, runProcessSync } from './run-process'
 import { resolveSpawn } from './spawn-resolution'
+import {
+  resolveWindowsComSpec,
+  windowsPowerShellPath,
+  windowsSystem32Binary
+} from './windows-system-binary'
 import { WINDOWS_ARGUMENT_CORPUS } from './__fixtures__/windows-argument-corpus'
 
 describe('resolveSpawn', () => {
@@ -34,6 +39,30 @@ describe('resolveSpawn', () => {
       }
       expect(quoted, `${name}: line ends mid-quote`).toBe(false)
     }
+  })
+
+  it('resolves ComSpec and SystemRoot case-insensitively, ignores blank values, and falls back to System32 cmd.exe', () => {
+    expect(
+      resolveSpawn({ program: 'C:\\missing.cmd', env: { COMSPEC: 'D:\\custom\\cmd.exe' } }, 'win32')
+        .file
+    ).toBe('D:\\custom\\cmd.exe')
+    expect(
+      resolveSpawn({ program: 'C:\\missing.cmd', env: { comspec: '  E:\\cmd.exe  ' } }, 'win32')
+        .file
+    ).toBe('E:\\cmd.exe')
+    expect(
+      resolveWindowsComSpec({ ComSpec: '   ' }, { COMSPEC: 'F:\\Windows\\System32\\cmd.exe' })
+    ).toBe('F:\\Windows\\System32\\cmd.exe')
+    expect(resolveWindowsComSpec({ ComSpec: '', systemroot: 'D:\\Windows' }, {})).toBe(
+      'D:\\Windows\\System32\\cmd.exe'
+    )
+    expect(resolveWindowsComSpec({}, {})).toBe('C:\\Windows\\System32\\cmd.exe')
+    expect(windowsSystem32Binary('taskkill.exe', { SystemRoot: '', WINDIR: 'E:\\Windows' })).toBe(
+      'E:\\Windows\\System32\\taskkill.exe'
+    )
+    expect(windowsPowerShellPath({ systemroot: 'F:\\Windows' })).toBe(
+      'F:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+    )
   })
 })
 

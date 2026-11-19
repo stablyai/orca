@@ -1,6 +1,7 @@
 import type { SpawnOptions as NodeSpawnOptions } from 'node:child_process'
 import { buildWindowsCmdShimCommandLine, isCmdInterpretedProgram } from './windows-command-line'
 import { resolveWindowsCmdShim } from './windows-cmd-shim-resolution'
+import { resolveWindowsComSpec } from './windows-system-binary'
 import type { ProcessSpec } from './process-spec'
 import { assertWslDistroAllowed } from './wsl-distro-allowlist'
 import { assertWslNotLatchedAbsent } from './wsl-not-installed-latch'
@@ -50,7 +51,7 @@ export function resolveSpawn(spec: ProcessSpec, platform: NodeJS.Platform): Reso
   }
 
   // Node rejects direct .cmd/.bat spawns; build the cmd line ourselves to preserve quoting and hiding.
-  const comSpec = spec.env?.ComSpec ?? process.env.ComSpec ?? 'cmd.exe'
+  const comSpec = resolveWindowsComSpec(spec.env)
   return {
     file: comSpec,
     args: [buildWindowsCmdShimCommandLine(spec.program, args)],
