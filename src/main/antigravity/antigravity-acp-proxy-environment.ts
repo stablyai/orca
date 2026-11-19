@@ -30,6 +30,15 @@ export async function prepareAntigravityAcpProxyEnvironment(
     if (!system) {
       return
     }
+    // The system has a proxy policy we cannot mirror (wildcard exclusions, PAC): import nothing,
+    // but keep the private harness WebSocket off whatever proxy the child inherits (#44498).
+    if (system.kind === 'unrepresentable') {
+      const loopback = appendBypass(existingBypass, LOOPBACK)
+      prepared.NO_PROXY = loopback
+      prepared.no_proxy = loopback
+      Object.assign(env, prepared)
+      return
+    }
     for (const [scheme, value] of Object.entries(system.proxies)) {
       prepared[`${scheme}_proxy`] = value
       // Retain an uppercase value that another consumer already selects.
@@ -39,6 +48,12 @@ export async function prepareAntigravityAcpProxyEnvironment(
     }
     bypass = system.bypass
   } else if (![...proxies.keys()].some((scheme) => scheme !== 'no')) {
+    // Caller manages routing with a no_proxy-only mapping; imports stay untouched, but loopback
+    // still must not follow whatever proxy the child inherits from the system policy.
+    const loopback = appendBypass(existingBypass, LOOPBACK)
+    prepared.NO_PROXY = loopback
+    prepared.no_proxy = loopback
+    Object.assign(env, prepared)
     return
   }
   const additions = [...bypass, ...LOOPBACK]

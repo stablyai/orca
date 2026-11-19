@@ -1,15 +1,19 @@
 import { isIP } from 'node:net'
 import { runProcess } from '@orca/process-host'
 
-type PythonSystemProxy = {
-  proxies: Readonly<Record<string, string>>
-  bypass: readonly string[]
-}
+/** Environment-importable system proxies, or the fact that the system has a proxy policy we cannot mirror. */
+export type PythonSystemProxyRead =
+  | {
+      kind: 'environment'
+      proxies: Readonly<Record<string, string>>
+      bypass: readonly string[]
+    }
+  | { kind: 'unrepresentable' }
 
-let pending: Promise<PythonSystemProxy | null> | null = null
+let pending: Promise<PythonSystemProxyRead | null> | null = null
 
 /** Read on the execution host, never through the desktop's Chromium proxy session. */
-export function readMacosPythonProxyEnvironment(): Promise<PythonSystemProxy | null> {
+export function readMacosPythonProxyEnvironment(): Promise<PythonSystemProxyRead | null> {
   if (process.platform !== 'darwin') {
     return Promise.resolve(null)
   }
@@ -19,7 +23,7 @@ export function readMacosPythonProxyEnvironment(): Promise<PythonSystemProxy | n
   }))
 }
 
-async function readSystemProxy(): Promise<PythonSystemProxy | null> {
+async function readSystemProxy(): Promise<PythonSystemProxyRead | null> {
   try {
     const result = await runProcess({
       program: '/usr/sbin/scutil',
@@ -36,7 +40,7 @@ async function readSystemProxy(): Promise<PythonSystemProxy | null> {
   }
 }
 
-function parseSystemProxy(output: string): PythonSystemProxy | null {
+export function parseSystemProxy(output: string): PythonSystemProxyRead | null {
   const fields = new Map<string, string>()
   const exceptions: string[] = []
   let depth = 0
@@ -85,17 +89,19 @@ function parseSystemProxy(output: string): PythonSystemProxy | null {
   if (!opened || depth !== 0) {
     return null
   }
-  // Python ignores PAC; an environment mapping cannot preserve arbitrary PAC policies.
+  // Python ignores PAC; an environment mapping cannot preserve arbitrary PAC policies,
+  // but the launch still needs loopback bypassed away from whatever policy is active.
   if (
     Number(fields.get('ProxyAutoConfigEnable') ?? 0) !== 0 ||
     Number(fields.get('ProxyAutoDiscoveryEnable') ?? 0) !== 0
   ) {
-    return null
+    return { kind: 'unrepresentable' }
   }
   if (fields.has('ExceptionsList') && fields.get('ExceptionsList') !== '<array> {') {
     return null
   }
   const bypass: string[] = []
+  let exclusionsUnrepresentable = false
   for (const entry of exceptions) {
     if (['localhost', '127.0.0.1', '::1', '[::1]'].includes(entry.toLowerCase())) {
       continue
@@ -105,8 +111,9 @@ function parseSystemProxy(output: string): PythonSystemProxy | null {
     } else if (entry === '*.local') {
       bypass.push('.local')
     } else if (!isPrivateIpv4Prefix(entry)) {
-      // NO_PROXY widens domain wildcards to their apex and exact hostnames to suffixes.
-      return null
+      // NO_PROXY widens domain wildcards to their apex and exact hostnames to suffixes, so an
+      // environment mapping would route differently; the caller keeps loopback direct instead.
+      exclusionsUnrepresentable = true
     }
   }
   const proxies: Record<string, string> = {}
@@ -133,7 +140,10 @@ function parseSystemProxy(output: string): PythonSystemProxy | null {
     proxies[scheme] = `http://${host}${port === undefined ? '' : `:${port}`}`
   }
   // Private/link-local ranges and exclude-simple are omitted; no exact NO_PROXY equivalent exists.
-  return Object.keys(proxies).length ? { proxies, bypass } : null
+  if (exclusionsUnrepresentable && Object.keys(proxies).length > 0) {
+    return { kind: 'unrepresentable' }
+  }
+  return Object.keys(proxies).length ? { kind: 'environment', proxies, bypass } : null
 }
 
 function isPrivateIpv4Prefix(value: string): boolean {
