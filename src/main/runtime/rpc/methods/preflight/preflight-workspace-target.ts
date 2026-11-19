@@ -6,7 +6,10 @@ import { resolveWorkspaceAgentDetectionHost } from '../../../../preflight/worksp
 import { resolveWorktreeHostRouting } from '../../../workspaces/catalog/worktree-launch-host-repo'
 
 export async function resolveQualifiedAgentDetectionHost(
-  runtime: OrcaRuntimeService,
+  runtime: Pick<
+    OrcaRuntimeService,
+    'requireStore' | 'resolveAgentDetectionHost' | 'showManagedWorktree'
+  >,
   params: { worktreeId?: string; worktreeHostId?: ExecutionHostId; repoId?: string }
 ) {
   const hostId = params.worktreeHostId
