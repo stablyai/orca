@@ -1,4 +1,5 @@
 import { ownRetainedString } from '../text/own-retained-string'
+import { createNdjsonRecordAssembly, type NdjsonLargeRecordParser } from './ndjson-record-assembly'
 
 export const NDJSON_MAX_LINE_BYTES = 16 * 1024 * 1024
 
@@ -30,7 +31,7 @@ export type IncrementalNdjsonFramer = {
   feed(chunk: string): void
   resume(): void
   reset(): void
-  /** Once input has ended: the unterminated last line, never parsed as a record. */
+  /** Unterminated last line, or its diagnostic prefix when streamed; never emits a record. */
   takeTail(): string
 }
 
@@ -39,6 +40,8 @@ export type IncrementalNdjsonFramerOptions = {
   shouldPause?: () => boolean
   /** Skips parsing lines the consumer can rule out from their text. */
   acceptLine?: (line: string) => boolean
+  /** Without acceptLine, stream large records; their raw-line diagnostic is a prefix. */
+  largeRecordParser?: NdjsonLargeRecordParser
 }
 
 function boundedUtf8Prefix(value: string, maxBytes: number): string {
@@ -73,7 +76,9 @@ export function createIncrementalNdjsonFramer(
   // No line can exceed an unbounded limit, so measuring segments and keeping a rejection prefix is dead work.
   const unbounded = maxLineBytes === Number.POSITIVE_INFINITY
   const maxPendingInputBytes = Math.max(REJECTED_LINE_PREFIX_MAX_BYTES, maxLineBytes * 2)
-  let lineSegments: string[] = []
+  const record = createNdjsonRecordAssembly(
+    options.acceptLine ? undefined : options.largeRecordParser
+  )
   let lineBytes = 0
   let prefixSegments: string[] = []
   let prefixBytes = 0
@@ -89,7 +94,7 @@ export function createIncrementalNdjsonFramer(
   )
 
   const clearLine = (): void => {
-    lineSegments = []
+    record.reset()
     lineBytes = 0
     prefixSegments = []
     prefixBytes = 0
@@ -182,31 +187,24 @@ export function createIncrementalNdjsonFramer(
           clearLine()
           discardingOversizedLine = !hasNewline
           onRejected(rejected)
-        } else if (!hasNewline) {
-          const pending = detachFrom(segment, input)
-          if (!unbounded) {
-            rememberPrefix(pending, segmentBytes)
-          }
-          lineSegments.push(pending)
-          lineBytes = nextLineBytes
-          return
         } else {
-          lineSegments.push(segment)
-          const line = lineSegments.length === 1 ? lineSegments[0] : lineSegments.join('')
-          clearLine()
-          if (!/^\s*$/.test(line) && (options.acceptLine?.(line) ?? true)) {
-            let parsed: unknown
-            try {
-              parsed = JSON.parse(line)
-            } catch (error) {
-              onRejected({
-                kind: 'invalid-json',
-                line,
-                error: error instanceof Error ? error : new Error(String(error))
-              })
-              continue
+          const pending = hasNewline ? segment : detachFrom(segment, input)
+          record.write(pending)
+          lineBytes = nextLineBytes
+          if (!hasNewline) {
+            if (!unbounded) {
+              rememberPrefix(pending, segmentBytes)
             }
-            onRecord(parsed, line)
+            return
+          }
+          const parsed = record.finish(options.acceptLine)
+          clearLine()
+          if (parsed.kind === 'invalid') {
+            onRejected({ kind: 'invalid-json', line: parsed.line, error: parsed.error })
+            continue
+          }
+          if (parsed.kind === 'record') {
+            onRecord(parsed.value, parsed.line)
           }
         }
       }
@@ -278,7 +276,7 @@ export function createIncrementalNdjsonFramer(
       const tail =
         discardingOversizedLine || discardingPausedSuffix
           ? ''
-          : `${lineSegments.join('')}${pendingInput ?? ''}`
+          : `${record.tail()}${pendingInput ?? ''}`
       clearLine()
       pendingInput = null
       return tail

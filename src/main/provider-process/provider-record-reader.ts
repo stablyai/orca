@@ -1,6 +1,7 @@
 import type { Readable } from 'node:stream'
 import {
   createIncrementalNdjsonFramer,
+  type IncrementalNdjsonFramerOptions,
   type NdjsonRejectedRecord
 } from '../../shared/json-stream/main-process-ndjson-framer'
 
@@ -16,11 +17,13 @@ export function createProviderRecordReader(input: {
   onRecord: (record: unknown, line: string) => void
   onRejected: (rejected: NdjsonRejectedRecord) => void
   onFatal: (error: Error) => void
+  largeRecordParser?: IncrementalNdjsonFramerOptions['largeRecordParser']
 }): ProviderRecordReader {
   let paused = false
   const framer = createIncrementalNdjsonFramer(input.onRecord, input.onRejected, {
     // The provider owns this local stdio stream, so valid agent payloads keep full fidelity.
     maxLineBytes: Number.POSITIVE_INFINITY,
+    largeRecordParser: input.largeRecordParser,
     shouldPause: () => paused
   })
 
