@@ -111,6 +111,7 @@ export function createCodexAccountRestartActions(
             }),
             hostId: getResourceExecutionHostIdForWorktree(s, pane.worktreeId),
             phase: startup ? 'accepted' : 'failed',
+            notDispatched: startup ? undefined : true,
             startupInput: startup ? null : startupInput,
             startup,
             ...(error ? { error } : {})
