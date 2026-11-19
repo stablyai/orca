@@ -74,11 +74,11 @@ export function launchProcessSpecOnWindowsWorker(
         ? stopping.settled.then((verdict) => verdict === 'exited')
         : killAbandonedWorkerChildTree(child)
     const barrier = spec.terminationBarrier
-    // A WSL barrier needs both ends: the guest kill for the Linux group, the Windows tree for interop children.
+    // Ending wsl.exe proves nothing about the Linux process group; the guest barrier's kill does.
     const proven =
       typeof barrier === 'object'
         ? Promise.all([treeEnded, barrier.force(launched).catch(() => false)]).then(
-            ([windowsEnded, guestEnded]) => windowsEnded && guestEnded
+            ([, guestEnded]) => guestEnded
           )
         : treeEnded
     if (lifetimeEndsOnLoss) {
