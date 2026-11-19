@@ -9,6 +9,7 @@ import {
   type HostedReviewInfo
 } from '../../shared/source-control/hosted-review/hosted-review-contracts'
 import { assertRemoteUrlReadable } from '../git/remotes/remote-url-probe'
+import { isRemoteListedAbsent } from '../git/remotes/remote-name-listing'
 import { forgetGiteaPullRequestReads } from '../gitea/pull-request-read-forgetting'
 import type { ForgeProviderId } from './forge-provider'
 import { getForgeProviderForRepository } from './forge-provider-detection'
@@ -117,11 +118,24 @@ export async function readHostedReviewForBranch(
           ...(input.localGitExecOptions ? { localGitExecOptions: input.localGitExecOptions } : {})
         })
         if (!provider) {
+          const connectionId = hostedReviewSshConnectionId(input.executionHostId)
+          const { wslDistro } = getHostedReviewLocalGitOptions(input)
+          // Detection's own listing already proved origin absent under this config: nothing to probe.
+          if (
+            await isRemoteListedAbsent(
+              input.repoPath,
+              'origin',
+              connectionId,
+              wslDistro ? { wslDistro } : {}
+            )
+          ) {
+            return null
+          }
           // Detection swallows errors; probe reachability first so timeouts/relay loss cannot cache definitive no-review (P1-D).
           await assertRemoteUrlReadable({
             repoPath: input.repoPath,
             // The probe is the leaf that still dials: it takes the SSH target, not the host id.
-            connectionId: hostedReviewSshConnectionId(input.executionHostId),
+            connectionId,
             ...getHostedReviewLocalGitOptions(input)
           })
           return null

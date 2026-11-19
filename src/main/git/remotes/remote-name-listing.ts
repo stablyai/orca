@@ -150,3 +150,28 @@ export async function shouldProbeGitRemote(
   const remotes = await listCachedRemoteNames(repoPath, connectionId, localGitOptions)
   return remotes === null || remotes.includes(remoteName)
 }
+
+/** True only when this repo's fresh, config-signed listing lacks the remote; reads no Git and spawns
+ *  nothing, so a cold or unsigned listing (WSL, unreadable config) or an SSH repo says false. */
+export async function isRemoteListedAbsent(
+  repoPath: string,
+  remoteName: string,
+  connectionId?: string | null,
+  localGitOptions: RemoteNameListingGitOptions = {}
+): Promise<boolean> {
+  if (connectionId) {
+    return false
+  }
+  const cached = remoteNameListingCache.get(remoteNameListingCacheKey(repoPath, localGitOptions))
+  if (
+    cached?.configSignature === undefined ||
+    cached.expiresAt <= Date.now() ||
+    cached.remotes.includes(remoteName)
+  ) {
+    return false
+  }
+  const current = await readLocalGitConfigSignature(
+    listingGitConfigContext(repoPath, localGitOptions)
+  )
+  return current === cached.configSignature
+}
