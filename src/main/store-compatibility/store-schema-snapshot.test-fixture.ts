@@ -69,17 +69,22 @@ const SQL_CLOSERS: Readonly<Record<string, string>> = {
 }
 
 /** SQLite's whitespace; other Unicode spaces can be part of an unquoted name. */
-const SQL_WHITESPACE = /[ \t\n\f\r]/
+const SQL_WHITESPACE = /[ \t\n\v\f\r]/
 
-/** `sql` with comments blanked to spaces, and whether each character is code rather than a literal or quoted name. */
-function sqlCode(sql: string): { text: string; code: boolean[] } {
+/**
+ * `sql` with comments blanked to spaces; `shape` also masks the inside of each literal and quoted name, so
+ * patterns can't match across them. `code` says whether a character is outside every literal and quoted name.
+ */
+function sqlCode(sql: string): { text: string; shape: string; code: boolean[] } {
   let text = ''
+  let shape = ''
   const code: boolean[] = []
   for (let i = 0; i < sql.length;) {
     const opener = SQL_CLOSERS[sql.slice(i, i + 2)] ? sql.slice(i, i + 2) : sql[i]
     const closer = SQL_CLOSERS[opener]
     if (!closer) {
       text += sql[i]
+      shape += sql[i]
       code.push(true)
       i++
       continue
@@ -89,11 +94,13 @@ function sqlCode(sql: string): { text: string; code: boolean[] } {
     const comment = opener === '--' || opener === '/*'
     for (let j = i; j < end; j++) {
       text += comment ? ' ' : sql[j]
+      const edge = j === i || (j === end - 1 && found !== -1)
+      shape += comment ? ' ' : edge ? sql[j] : '_'
       code.push(comment)
     }
     i = end
   }
-  return { text, code }
+  return { text, shape, code }
 }
 
 /** Collapse whitespace and drop comments in SQL code; literals and quoted names stay as written. */
@@ -153,8 +160,8 @@ function parenthesizedClauses(
   expressionOnly = false
 ): [string, string][] {
   const clauses: [string, string][] = []
-  const { text, code } = sqlCode(sql)
-  for (let match = pattern.exec(text); match; match = pattern.exec(text)) {
+  const { text, shape, code } = sqlCode(sql)
+  for (let match = pattern.exec(shape); match; match = pattern.exec(shape)) {
     if (!code[match.index + match[0].length - 1]) {
       continue
     }
@@ -162,11 +169,12 @@ function parenthesizedClauses(
     let end = match.index + match[0].length
     for (; end < text.length && depth > 0; end++) {
       if (code[end]) {
-        depth += text[end] === '(' ? 1 : text[end] === ')' ? -1 : 0
+        depth += shape[end] === '(' ? 1 : shape[end] === ')' ? -1 : 0
       }
     }
     const start = expressionOnly ? match.index + match[0].length - 1 : match.index
-    clauses.push([match[1] ?? '', normalizeSql(text.slice(start, end))])
+    const name = text.slice(match.index, match.index + (match[1]?.length ?? 0))
+    clauses.push([name, normalizeSql(text.slice(start, end))])
   }
   return clauses
 }
