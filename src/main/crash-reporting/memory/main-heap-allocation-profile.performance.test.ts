@@ -28,7 +28,7 @@ vi.mock('../../worker-threads/worker-thread-entry-path', () => ({
 
 const GB = 2 ** 30
 
-// Guards #PR_NUMBER: reads start at 1.5 GB, and each forces a full GC on main, so a heap that keeps
+// Guards #44881: reads start at 1.5 GB, and each forces a full GC on main, so a heap that keeps
 // crossing that line must not pay for one every time.
 describe('main heap allocation profile reads', () => {
   beforeEach(() => {
