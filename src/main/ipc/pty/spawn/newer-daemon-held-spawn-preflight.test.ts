@@ -49,9 +49,10 @@ const WORKTREE = 'repo1::/tmp/feature'
 beforeEach(() => {
   mocks.resolveStartupTarget.mockReset()
   mocks.releaseAbsentOwner.mockReset()
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: no daemon answers for the saved id, so the hold reads only these two.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: no daemon answers for the saved id, so the hold reads only these three.
   const noOwner = {
     hasRoute: () => false,
+    probe: async () => false,
     resolve: async () => ({ kind: 'absent' })
   } as unknown as DaemonSessionOwnerResolver<DaemonPtyAdapter>
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: preflight refuses before it calls anything else on the provider.

@@ -25,6 +25,16 @@ async function resolveHeldOwner(
   return resolution.provider
 }
 
+/** Dispatch reattaches a session a daemon of this build lists even when another daemon's inventory fails. */
+async function refuseUnlessListed(
+  sessionId: string,
+  ownerResolver: DaemonSessionOwnerResolver<DaemonPtyAdapter>
+): Promise<void> {
+  if ((await ownerResolver.probe(sessionId)) !== true) {
+    await resolveHeldOwner(sessionId, ownerResolver)
+  }
+}
+
 /** Gate every spawn source against duplicating sessions a newer, unadoptable daemon may still own. */
 export async function routeSpawnOrHold(
   opts: PtyHeldSpawnRequest,
@@ -44,8 +54,6 @@ export function heldSpawnRefusal(
     const ownerResolver = getOwnerResolver()
     const routed = opts.sessionId !== undefined && ownerResolver.hasRoute(opts.sessionId)
     const sessionId = opts.attachOnly ? null : heldSessionId(opts, routed)
-    return sessionId === null
-      ? undefined
-      : resolveHeldOwner(sessionId, ownerResolver).then(() => {})
+    return sessionId === null ? undefined : refuseUnlessListed(sessionId, ownerResolver)
   }
 }
