@@ -10,8 +10,8 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host/ex
 import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 import '../structured-agent-session-launch-intent'
 import { StructuredAgentSessionOwnerUnresolvedError } from '../structured-agent-session-launch-errors'
-import { buildAgentLaunchRouteInput } from './agent-launch-route-input'
 import {
+  buildAgentLaunchRouteInput,
   routeHostStatuses,
   type AgentLaunchRouteArgs,
   type AgentLaunchRouteStore

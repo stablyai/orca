@@ -295,8 +295,7 @@ export function RepositoryHostSetupsSection({
                         sshTargetLabels,
                         removedSshTargetLabels,
                         sshTargetsHydrated,
-                        sshStateByEnvironment,
-                        runtimeStatusByEnvironmentId
+                        sshStateByEnvironment
                       },
                       runtimeOwnerEnvironmentId,
                       executionHost.targetId

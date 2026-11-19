@@ -151,7 +151,7 @@ export function useTerminalPaneChatProjection({
         activePaneCanResumeInChat:
           !activePaneIsChatLeaf &&
           activeLeafId !== null &&
-          canPaneOfferResumeInNewChat(state, {
+          canPaneOfferResumeInNewChat(state, statuses, {
             worktreeId,
             paneKey: makePaneKey(tabId, activeLeafId)
           })

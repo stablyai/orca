@@ -234,12 +234,13 @@ export function useAgentMenuObservation(
   const executionHostId = unresolvedTarget
     ? undefined
     : ExecutionHost.parseExecutionHostId(facts.executionHostId)?.id
+  const { detectedIds } = detection
   const rows = buildNewTabAgentMenuRows({
     settings,
-    detectedOnHost: detection.detectedIds,
+    detectedOnHost: detectedIds,
     chatAgents,
     chatProgram: (agent) =>
-      unresolvedTarget ? 'unlearned' : readChatProgram(state, agent, input, detection.detectedIds),
+      unresolvedTarget ? 'unlearned' : readChatProgram({ hostStatuses }, agent, input, detectedIds),
     hostChatAnswer: answerFor,
     offerAgentSetup: options?.offerAgentSetup,
     hostPlatform: facts.hostPlatform
