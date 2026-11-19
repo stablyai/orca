@@ -19,11 +19,11 @@ import {
   projectTerminalTailLines,
   projectTerminalVisibleLines
 } from '../view/orca-runtime-terminal-projection'
+import { VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from './provider-snapshot-budget'
 import {
-  AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
-  VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS
-} from './provider-snapshot-budget'
-import { DAEMON_SESSION_SCROLLBACK_ROWS } from '../../../daemon/sessions/daemon-session-scrollback-window'
+  readSettledRecoveredHistory,
+  warnRecoveredHistoryUnavailable
+} from './recovered-terminal-history-read'
 import { isNativeWindowsConptyPty } from './terminal-model-query-authority'
 
 export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaRuntimeWithSerializeTerminalBufferFromAvailableState {
@@ -192,9 +192,10 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     providerSnapshot: RuntimeProviderSnapshotReadOptions
   ): Promise<RuntimeTerminalRead> {
     const projection = await this.readRenderedTerminalTailLines(ptyId, limit, providerSnapshot)
-    return projection.lines.length > 0
+    // A recovered terminal's stream tail predates the rebuild: even a blank screen replaces it.
+    return projection.lines.length > 0 || projection.historyCut
       ? buildVisibleSnapshotReadFallback(
-          read,
+          projection.historyCut ? { ...read, limited: true } : read,
           projection.lines,
           limit,
           projection.draft,
@@ -223,11 +224,15 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
     // A model rebuilt screen-only after dropped output has no history; the provider kept it.
     const recoveredHistory = state.historyFromProvider && !providerSnapshot.visibleScreenOnly
     if (recoveredHistory) {
-      const provider = await this.readRecoveredTerminalHistory(ptyId, rowLimit, providerSnapshot)
+      const size = this.getTerminalSize(ptyId)
+      const key = `${generation}:${this.getPtyOutputSequence(ptyId)}:${size?.cols}x${size?.rows}`
+      const provider = await readSettledRecoveredHistory(state, key, rowLimit, (rows, timeoutMs) =>
+        this.readProviderTerminalTailLines(ptyId, rows, { ...providerSnapshot, timeoutMs })
+      )
       if (provider.lines.length > 0) {
         return provider
       }
-      console.warn('[terminal] recovered history unavailable; reading the visible screen:', ptyId)
+      warnRecoveredHistoryUnavailable(state, ptyId)
     }
     await state.writeChain
     // The same model can turn untrusted while the read waited: a gap keeps it rather than replacing it.
@@ -238,39 +243,12 @@ export abstract class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaR
       return { lines: [] }
     }
     // The rebuilt model's own history predates the rebuild, so only its current screen is safe to return.
-    return providerSnapshot.visibleScreenOnly || recoveredHistory
+    if (recoveredHistory) {
+      return { ...projectTerminalVisibleLines(state.emulator), historyCut: true }
+    }
+    return providerSnapshot.visibleScreenOnly
       ? projectTerminalVisibleLines(state.emulator)
       : projectTerminalTailLines(state.emulator, rowLimit)
-  }
-
-  /** Daemon history: the full request (durable history can take seconds), then its live window, retried for a busy terminal. */
-  private async readRecoveredTerminalHistory(
-    ptyId: string,
-    rowLimit: number,
-    providerSnapshot: RuntimeProviderSnapshotReadOptions
-  ): Promise<RuntimeTerminalProjection> {
-    const liveRows = Math.min(rowLimit, DAEMON_SESSION_SCROLLBACK_ROWS)
-    const attempts = [
-      {
-        rows: rowLimit,
-        timeoutMs:
-          rowLimit > liveRows
-            ? AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS
-            : VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS
-      },
-      { rows: liveRows, timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS },
-      { rows: liveRows, timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS }
-    ]
-    for (const attempt of attempts) {
-      const provider = await this.readProviderTerminalTailLines(ptyId, attempt.rows, {
-        ...providerSnapshot,
-        timeoutMs: attempt.timeoutMs
-      })
-      if (provider.lines.length > 0) {
-        return provider
-      }
-    }
-    return { lines: [] }
   }
 
   protected async readProviderTerminalTailLines(

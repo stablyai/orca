@@ -390,9 +390,64 @@ it('reads a 2,000-line history of a rebuilt ConPTY terminal from the daemon, nev
     expect(read.tail.at(-1)).toBe('line 1500')
     expect(read.tail.length).toBeGreaterThan(900)
     expect(read.tail).not.toContain('stale burst')
+    // Only the live window answered, so the read says it holds less than was asked.
+    expect(read.limited).toBe(true)
   } finally {
     clearNativeWindowsConptyPty('pty-big')
     await runtime.onPtyExit('pty-big', 0)
+  }
+})
+
+it("reuses a recovered terminal's durable history until its output changes", async () => {
+  const lines = Array.from({ length: 1500 }, (_, index) => `line ${index + 1}`)
+  let fullReads = 0
+  const runtime = createRuntime()
+  runtime.setPtyController({
+    write: () => true,
+    kill: () => true,
+    getForegroundProcess: async () => null,
+    getSize: () => grid,
+    serializeProviderBuffer: async (_ptyId, opts) => {
+      fullReads += (opts?.scrollbackRows ?? 0) > 1000 ? 1 : 0
+      return {
+        data: opts?.scrollbackRows ? lines.join('\r\n') : '\x1b[H\x1b[2Jline 1500',
+        ...grid,
+        seq: opts?.scrollbackRows ? 1_000_000 : 16,
+        source: 'headless'
+      }
+    }
+  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: OrcaRuntimeService inherits these protected methods with exactly these signatures.
+  const reads = runtime as unknown as {
+    serializeHeadlessTerminalBuffer(ptyId: string): Promise<{ data: string } | null>
+    withVisibleSnapshotFallback(
+      ptyId: string,
+      read: RuntimeTerminalRead,
+      opts: { limit?: number }
+    ): Promise<RuntimeTerminalRead>
+  }
+  const readTail = () =>
+    reads.withVisibleSnapshotFallback(
+      'pty-cache',
+      { handle: 'term', status: 'running', tail: [], truncated: false, nextCursor: null },
+      { limit: 2000 }
+    )
+  markNativeWindowsConptyPty('pty-cache')
+  try {
+    anchorStream(runtime, 'pty-cache')
+    runtime.onPtyData('pty-cache', 'stale\r\n', 1)
+    runtime.notePtyDataGap('pty-cache', 9)
+    await vi.waitFor(async () => assert(await reads.serializeHeadlessTerminalBuffer('pty-cache')))
+    for (let read = 0; read < 10; read++) {
+      expect((await readTail()).tail.at(-1)).toBe('line 1500')
+    }
+    expect(fullReads).toBe(1)
+    runtime.onPtyData('pty-cache', 'more\r\n', 2)
+    await readTail()
+    expect(fullReads).toBe(2)
+  } finally {
+    clearNativeWindowsConptyPty('pty-cache')
+    await runtime.onPtyExit('pty-cache', 0)
   }
 })
 
