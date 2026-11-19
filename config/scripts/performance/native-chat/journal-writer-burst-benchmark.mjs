@@ -309,8 +309,16 @@ async function run(arm, sessions, round) {
   const stopAt = startedAt + seconds * 1000
   const tag = `${arm.name}-${sessions}-${round}-${startedAt}`
   let inWindow = 0
+  // The longest stretch with no acknowledged write at all, across every chat.
+  let lastAck = performance.now()
+  let maxGap = 0
   const ack = () => {
-    inWindow += Date.now() <= stopAt ? 1 : 0
+    const now = performance.now()
+    if (Date.now() <= stopAt) {
+      inWindow++
+      maxGap = Math.max(maxGap, now - lastAck)
+    }
+    lastAck = now
   }
   const stops = Array.from({ length: sessions }, (_, index) =>
     stream(owner, `burst-${index}`, tag, stopAt, (ms) => {
@@ -324,6 +332,7 @@ async function run(arm, sessions, round) {
   )
   const probe = []
   const chain = []
+  const sends = []
   await new Promise((resolve) => setTimeout(resolve, 3000))
   // A sending chat's writes carry `urgent`, as the store marks them; builds without the lane ignore it.
   const control = (label) => ({
@@ -340,6 +349,7 @@ async function run(arm, sessions, round) {
   // Handover, then (timed) the turn item and the accepted receipt, as a send's journal chain runs.
   for (let index = 0; Date.now() < stopAt - 3000; index++) {
     const label = `probe-${arm.name}-${sessions}-${Date.now()}-${index}`
+    const sentAt = performance.now()
     await owner.write(control(`${label}-handover`))
     ack()
     const startedAt = performance.now()
@@ -352,6 +362,7 @@ async function run(arm, sessions, round) {
     await owner.write(control(`${label}-accepted`))
     ack()
     chain.push(performance.now() - startedAt)
+    sends.push(performance.now() - sentAt)
     await new Promise((resolve) => setTimeout(resolve, 1500))
   }
   // Streams run the whole window, so throughput divides by the time it was measured over.
@@ -373,6 +384,9 @@ async function run(arm, sessions, round) {
     sessions,
     turnItemMs: summary(probe),
     receiptMs: summary(chain),
+    // The whole journal chain of a send: handover, turn item, accepted receipt.
+    sendMs: summary(sends),
+    maxNoWriteGapMs: Math.round(maxGap),
     streamWriteMs: summary(streamWrites),
     // Counted from completions, so builds without writer timing still report throughput.
     // Completions inside the measured window only; the drain and close after it are not counted.

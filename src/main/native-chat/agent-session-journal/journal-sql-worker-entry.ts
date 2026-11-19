@@ -148,8 +148,7 @@ type CommitResponse = Extract<JournalSqlResponse, { type: 'committed' | 'effects
 type TimedResponse = CommitResponse | Extract<JournalSqlResponse, { type: 'failed' }>
 /** Bound ready work before opening a transaction, then yield after its acknowledgements. */
 async function drain(): Promise<void> {
-  const bulkAdmitted = checkpoint?.admits(false) ?? true
-  const head = queue.peek(bulkAdmitted)
+  const head = queue.peek()
   if (head && head.command.type !== 'close' && parking && !checkpoint!.admits(!!head.urgent)) {
     // Waiting for WAL room must not hold the writer while a send's urgent write queues behind it.
     await parking.park(!!head.urgent)
@@ -158,7 +157,7 @@ async function drain(): Promise<void> {
   }
   const depth = queue.size
   const startedAt = performance.now()
-  const pending = queue.take(bulkAdmitted)
+  const pending = queue.take()
   const urgent = pending.every((request) => request.urgent)
   const writes = pending.filter(
     (request): request is WriteRequest =>
