@@ -23,16 +23,20 @@ import {
 } from '../automation-runs/profile-state-automation-runs-writer'
 import {
   deleteProfileStateDomainParts,
-  readSplitDomainWriteState,
-  writeProfileStateDomainParts
+  readSplitDomainWriteState
 } from '../document-parts/profile-state-document-parts-storage'
+import {
+  writePartsPatch,
+  writeWholeSplitDomain,
+  type CommittedSplitDomains,
+  type PreparedPartsPatch,
+  type ProfileStateDomainPatching
+} from './profile-state-split-domain-writes'
 import { isProfileStateSplitDomain } from '../document-parts/profile-state-document-parts'
 import {
   prepareProfileStateDomainPatches,
-  type PreparedProfileStateDomainPatch,
   type ProfileStateDomainPatch
 } from './profile-state-domain-patches'
-import { isWorkspaceSessionDomain } from '../../workspace-session-domains'
 import {
   prepareProfileStateDomainMutation,
   validateProfileStateDomainTransaction,
@@ -65,14 +69,6 @@ export type ProfileStateDomainTransaction = {
 
 function rejectPatch(): never {
   throw new Error('Profile state patches can only be applied by the writer')
-}
-
-export type ProfileStateDomainPatching = {
-  prepare: (
-    db: Database.Database,
-    patch: PreparedProfileStateDomainPatch
-  ) => PreparedProfileStateMutation
-  remember: (db: Database.Database, mutations: readonly PreparedProfileStateMutation[]) => void
 }
 
 export type ProfileStateDomainWriteResult = {
@@ -123,9 +119,9 @@ export function writeProfileStateDomains(
     rejectPatch()
   }
 
-  const patched: PreparedProfileStateMutation[] = []
+  const committed: CommittedSplitDomains = new Map()
   const result = withProfileStateWriteTransaction(db, () => {
-    patched.length = 0
+    committed.clear()
     const actualRevision = readProfileStateRevision(db)
     if (actualRevision !== transaction.expectedRevision) {
       throw new ProfileStateRevisionConflictError(transaction.expectedRevision, actualRevision)
@@ -192,10 +188,24 @@ export function writeProfileStateDomains(
     for (const mutation of prepared) {
       admit(mutation)
     }
+    const partsUpdates: PreparedPartsPatch[] = []
     for (const patch of patches) {
       const mutation = preparePatch(db, patch)
-      patched.push(mutation)
-      admit(mutation)
+      if (!('kind' in mutation)) {
+        admit(mutation)
+        continue
+      }
+      const splitState = readSplitDomainWriteState(db, mutation.domain)
+      if (splitState.kind !== 'parts') {
+        throw new Error(`Profile state patch lost its stored parts: ${mutation.domain}`)
+      }
+      assertProfileStateDocumentRevision(splitState.revision, actualRevision, mutation.domain)
+      splitStates.set(mutation.domain, splitState)
+      if (mutation.contentHash === splitState.contentHash) {
+        committed.set(mutation.domain, mutation.previous)
+      } else {
+        partsUpdates.push(mutation)
+      }
     }
     if (transaction.automationRunsAfter !== undefined) {
       const delta = prepareProfileStateAutomationRunsDelta(
@@ -225,11 +235,14 @@ export function writeProfileStateDomains(
       }
     }
 
-    if (updates.length === 0) {
+    if (updates.length === 0 && partsUpdates.length === 0) {
       return { changed: false, revision: actualRevision, changedDomains: [] }
     }
 
     const nextRevision = actualRevision + 1
+    for (const patch of partsUpdates) {
+      writePartsPatch(db, patch, nextRevision, committed)
+    }
     for (const mutation of updates) {
       if (mutation.automationRuns) {
         applyProfileStateAutomationRuns(db, mutation.automationRuns, nextRevision)
@@ -247,19 +260,20 @@ export function writeProfileStateDomains(
           throw new Error(`Profile state domain update timestamp is invalid: ${mutation.domain}`)
         }
         const splitState = splitStates.get(mutation.domain)
+        const payload = mutation.payload
         if (
           splitState?.kind === 'parts' &&
-          writeProfileStateDomainParts(db, {
-            domain: mutation.domain,
-            payload: mutation.payload,
-            value: mutation.splitDomainValue,
-            payloadHash: mutation.payloadHash!,
-            domainVersion: mutation.domainVersion,
-            revision: nextRevision,
-            updatedAt,
-            legacyRevision: splitState.legacyRevision,
-            diffExisting: true
-          })
+          writeWholeSplitDomain(
+            db,
+            { ...mutation, payload },
+            {
+              revision: nextRevision,
+              updatedAt,
+              legacyRevision: splitState.legacyRevision,
+              diffExisting: true
+            },
+            committed
+          )
         ) {
           continue
         }
@@ -283,17 +297,17 @@ export function writeProfileStateDomains(
         )
         if (isProfileStateSplitDomain(mutation.domain)) {
           // The legacy row now matches; later writes touch only the parts that change.
-          writeProfileStateDomainParts(db, {
-            domain: mutation.domain,
-            payload: mutation.payload,
-            value: mutation.splitDomainValue,
-            payloadHash: mutation.payloadHash!,
-            domainVersion: mutation.domainVersion,
-            revision: nextRevision,
-            updatedAt,
-            legacyRevision: nextRevision,
-            diffExisting: false
-          })
+          writeWholeSplitDomain(
+            db,
+            { ...mutation, payload },
+            {
+              revision: nextRevision,
+              updatedAt,
+              legacyRevision: nextRevision,
+              diffExisting: false
+            },
+            committed
+          )
         }
       }
     }
@@ -304,13 +318,10 @@ export function writeProfileStateDomains(
     return {
       changed: true,
       revision: nextRevision,
-      changedDomains: updates.map(({ domain }) => domain)
+      changedDomains: [...updates, ...partsUpdates].map(({ domain }) => domain)
     }
   })
   // Whole session writes are cached too, so the next patch doesn't re-read what was just written.
-  patching?.remember(db, [
-    ...prepared.filter(({ domain }) => isWorkspaceSessionDomain(domain)),
-    ...patched
-  ])
+  patching?.remember(db, committed)
   return result
 }

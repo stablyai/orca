@@ -18,7 +18,11 @@ import {
   PROFILE_STATE_DOCUMENT_PARTS_TABLE
 } from '../database/profile-state-database-schema'
 import type { ProfileStateDocumentPart } from './profile-state-document-parts'
-import { assignProfileStatePartOrdinals } from './profile-state-document-part-ordinals'
+import {
+  readStoredPartRows,
+  writeProfileStatePartRows,
+  type StoredPartRow
+} from './profile-state-part-rows'
 
 type PartsMeta = {
   domainVersion: number
@@ -189,8 +193,15 @@ export function clearProfileStateDocumentParts(db: Database.Database): void {
     DELETE FROM ${PROFILE_STATE_DOCUMENT_PARTS_META_TABLE};`)
 }
 
+/** What a split write stored, so the writer can patch it next without reading it back. */
+export type StoredProfileStateDomainParts = {
+  parts: readonly ProfileStateDocumentPart[]
+  hashes: readonly string[]
+  rows: Map<string, StoredPartRow>
+}
+
 /**
- * Write only the parts whose content or position changed. Returns false when the payload
+ * Write only the parts whose content or position changed. Returns undefined when the payload
  * cannot be split losslessly; the caller then stores it as an ordinary legacy row.
  */
 export function writeProfileStateDomainParts(
@@ -209,13 +220,13 @@ export function writeProfileStateDomainParts(
     /** Existing parts are a valid base to diff against. */
     diffExisting: boolean
   }
-): boolean {
+): StoredProfileStateDomainParts | undefined {
   if (!hasProfileStateDocumentPartsTables(db)) {
-    return false
+    return undefined
   }
   const depth = PROFILE_STATE_SPLIT_DOMAIN_DEPTHS.get(args.domain)
   if (depth === undefined) {
-    return false
+    return undefined
   }
   const parts = splitProfileStateDomainValue(
     args.value === undefined ? JSON.parse(args.payload) : args.value,
@@ -224,82 +235,26 @@ export function writeProfileStateDomainParts(
   // Non-canonical JSON (whitespace, escapes) would not round-trip byte-for-byte.
   if (assembleProfileStateDomainPayload(parts) !== args.payload) {
     deleteProfileStateDomainParts(db, args.domain)
-    return false
+    return undefined
   }
-  const existing = new Map<string, { ordinal: number; contentHash: string }>()
-  if (args.diffExisting) {
-    for (const row of db
-      .prepare(
-        `SELECT part_key, ordinal, content_hash FROM ${PROFILE_STATE_DOCUMENT_PARTS_TABLE}
-         WHERE domain = ?`
-      )
-      .iterate(args.domain)) {
-      if (isRecord(row) && typeof row.part_key === 'string') {
-        existing.set(row.part_key, {
-          ordinal: Number(row.ordinal),
-          contentHash: String(row.content_hash)
-        })
-      }
-    }
-  } else {
+  if (!args.diffExisting) {
     db.prepare(`DELETE FROM ${PROFILE_STATE_DOCUMENT_PARTS_TABLE} WHERE domain = ?`).run(
       args.domain
     )
   }
-  const ordinals = assignProfileStatePartOrdinals(
-    parts.map(({ key }) => key),
-    new Map([...existing].map(([key, { ordinal }]) => [key, ordinal]))
-  )
-  const insert = db.prepare(
-    `INSERT INTO ${PROFILE_STATE_DOCUMENT_PARTS_TABLE}
-     (domain, part_key, ordinal, payload, content_hash) VALUES (?, ?, ?, ?, ?)`
-  )
-  const updatePayload = db.prepare(
-    `UPDATE ${PROFILE_STATE_DOCUMENT_PARTS_TABLE} SET ordinal = ?, payload = ?, content_hash = ?
-     WHERE domain = ? AND part_key = ?`
-  )
-  const updateOrdinal = db.prepare(
-    `UPDATE ${PROFILE_STATE_DOCUMENT_PARTS_TABLE} SET ordinal = ? WHERE domain = ? AND part_key = ?`
-  )
-  const remove = db.prepare(
-    `DELETE FROM ${PROFILE_STATE_DOCUMENT_PARTS_TABLE} WHERE domain = ? AND part_key = ?`
-  )
-  const seen = new Set<string>()
-  parts.forEach((part, index) => {
-    seen.add(part.key)
-    const ordinal = ordinals[index]!
-    const previous = existing.get(part.key)
-    const contentHash = hashProfileStatePart(part.payload)
-    if (!previous) {
-      insert.run(args.domain, part.key, ordinal, part.payload, contentHash)
-    } else if (previous.contentHash !== contentHash) {
-      updatePayload.run(ordinal, part.payload, contentHash, args.domain, part.key)
-    } else if (previous.ordinal !== ordinal) {
-      updateOrdinal.run(ordinal, args.domain, part.key)
-    }
-  })
-  for (const key of existing.keys()) {
-    if (!seen.has(key)) {
-      remove.run(args.domain, key)
-    }
-  }
-  db.prepare(
-    `INSERT INTO ${PROFILE_STATE_DOCUMENT_PARTS_META_TABLE}
-     (domain, domain_version, revision, updated_at, content_hash, legacy_revision)
-     VALUES (?, ?, ?, ?, ?, ?)
-     ON CONFLICT(domain) DO UPDATE SET
-       domain_version = excluded.domain_version,
-       revision = excluded.revision,
-       updated_at = excluded.updated_at,
-       content_hash = excluded.content_hash,
-       legacy_revision = excluded.legacy_revision`
-  ).run(
+  const hashes = parts.map(({ payload }) => hashProfileStatePart(payload))
+  const rows = writeProfileStatePartRows(
+    db,
     args.domain,
-    args.domainVersion,
-    args.revision,
-    args.updatedAt,
-    args.payloadHash,
-    args.legacyRevision
+    parts.map((part, index) => ({ ...part, hash: hashes[index]! })),
+    args.diffExisting ? readStoredPartRows(db, args.domain) : new Map(),
+    {
+      domainVersion: args.domainVersion,
+      revision: args.revision,
+      updatedAt: args.updatedAt,
+      contentHash: args.payloadHash,
+      legacyRevision: args.legacyRevision
+    }
   )
-  return true
+  return { parts, hashes, rows }
 }
