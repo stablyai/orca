@@ -13,13 +13,14 @@ export function usageHostKey(target: RuntimeClientTarget): string {
 /** This computer's usage comes from its own backend; a remote host computes its own and answers over RPC. */
 export function usageApiForHost<Key extends UsageProviderKey>(
   target: RuntimeClientTarget,
-  key: Key
+  key: Key,
+  signal: AbortSignal
 ): PreloadApi[Key] {
   if (target.kind === 'local') {
     return window.api[key]
   }
   return createRuntimeUsageProviderApi(
-    (method, params, timeoutMs) => callRuntimeRpc(target, method, params, { timeoutMs }),
+    (method, params, timeoutMs) => callRuntimeRpc(target, method, params, { timeoutMs, signal }),
     key
   )
 }

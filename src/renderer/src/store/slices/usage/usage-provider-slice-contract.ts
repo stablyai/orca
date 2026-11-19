@@ -75,7 +75,8 @@ export type UsageProviderConfig<
   name: Name
   initialScope: T['scope']
   initialRange: T['range']
-  getApi: (host: RuntimeClientTarget) => UsageApi<T>
+  /** `signal` ends with the Stats view; local reads ignore it and are dropped by view instead. */
+  getApi: (host: RuntimeClientTarget, signal: AbortSignal) => UsageApi<T>
   hasCachedData: (scanState: T['snapshot']['scanState']) => boolean
 }
 export type ClaudeUsageTypes = UsageProviderTypes<

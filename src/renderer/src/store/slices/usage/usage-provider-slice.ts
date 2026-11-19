@@ -24,10 +24,8 @@ export function createUsageProviderSlice<
 
     type Intent = 0 | 1 | 2
     type Operation = {
-      /** The Stats host view this operation serves; a host switch starts a new one. */
+      /** The Stats host view this operation serves; once it is no longer shown, the operation neither writes nor runs queued intents. */
       view: number
-      /** The view changed; this operation must neither write nor run queued intents. */
-      abandoned: boolean
       intent: Intent
       phase: 'reading' | 'refreshing' | 'projecting'
       disconnected: boolean
@@ -83,7 +81,6 @@ export function createUsageProviderSlice<
         markLoading(view)
       }
       if (operation && operation.view !== view) {
-        operation.abandoned = true
         operation.disconnected = true
         operation = null
         pending = null
@@ -105,7 +102,6 @@ export function createUsageProviderSlice<
       }
       const current: Operation = {
         view,
-        abandoned: false,
         intent,
         phase: 'reading',
         disconnected: false,
@@ -113,7 +109,7 @@ export function createUsageProviderSlice<
         promise: Promise.resolve()
       }
       operation = current
-      const api = config.getApi(target)
+      const api = config.getApi(target, get().statsHostSignal)
       const unsubscribe = api.onConnectionChanged?.((connected, detail) => {
         if (detail?.initial || detail?.unavailable) {
           return
@@ -132,7 +128,7 @@ export function createUsageProviderSlice<
       current.promise = Promise.resolve()
         .then(async () => {
           let next: Intent | null = intent
-          while (next !== null && !current.abandoned) {
+          while (next !== null && view === shownView()) {
             current.intent = next
             current.phase = 'reading'
             current.disconnected = false
@@ -189,7 +185,7 @@ export function createUsageProviderSlice<
                 updateFailure(view, { read: false })
               }
             } catch (error) {
-              if (current.abandoned) {
+              if (view !== shownView()) {
                 break
               }
               updateFailure(view, { read: true, ...(next === 2 ? { refresh: true } : {}) })
@@ -201,7 +197,7 @@ export function createUsageProviderSlice<
               }
               console.error(`Failed to fetch ${config.name} usage:`, error)
             }
-            next = current.abandoned ? null : pending
+            next = view === shownView() ? pending : null
           }
           if (operation === current) {
             operation = null
@@ -220,24 +216,26 @@ export function createUsageProviderSlice<
     const observeUsage = (): (() => void) => {
       const target = get().statsHost
       const view = get().statsHostEpoch
-      const unsubscribe = config.getApi(target).onConnectionChanged?.((connected, detail) => {
-        if (detail?.initial) {
-          updateFailure(view, { terminal: detail.unavailable === true })
-          return
-        }
-        if (detail?.unavailable) {
-          updateFailure(view, { terminal: true })
-          return
-        }
-        if (connected) {
-          updateFailure(view, { terminal: false })
-          if (view === shownView()) {
-            void request(0, true)
+      const unsubscribe = config
+        .getApi(target, get().statsHostSignal)
+        .onConnectionChanged?.((connected, detail) => {
+          if (detail?.initial) {
+            updateFailure(view, { terminal: detail.unavailable === true })
+            return
           }
-        } else {
-          stopLoading(view)
-        }
-      })
+          if (detail?.unavailable) {
+            updateFailure(view, { terminal: true })
+            return
+          }
+          if (connected) {
+            updateFailure(view, { terminal: false })
+            if (view === shownView()) {
+              void request(0, true)
+            }
+          } else {
+            stopLoading(view)
+          }
+        })
       void fetchUsage()
       return () => unsubscribe?.()
     }
@@ -247,7 +245,7 @@ export function createUsageProviderSlice<
       const view = get().statsHostEpoch
       try {
         const nextScanState: T['snapshot']['scanState'] | undefined = await config
-          .getApi(target)
+          .getApi(target, get().statsHostSignal)
           .setEnabled({ enabled })
         if (!nextScanState) {
           return

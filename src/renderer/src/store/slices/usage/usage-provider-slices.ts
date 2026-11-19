@@ -25,7 +25,7 @@ export const createClaudeUsageSlice = createUsageProviderSlice<
   name: 'Claude',
   initialScope: 'orca',
   initialRange: '30d',
-  getApi: (host) => usageApiForHost(host, 'claudeUsage'),
+  getApi: (host, signal) => usageApiForHost(host, 'claudeUsage', signal),
   hasCachedData: (state) => state.hasAnyClaudeData
 })
 
@@ -34,7 +34,7 @@ export const createCodexUsageSlice = createUsageProviderSlice<'codex', 'Codex', 
   name: 'Codex',
   initialScope: 'orca',
   initialRange: '30d',
-  getApi: (host) => usageApiForHost(host, 'codexUsage'),
+  getApi: (host, signal) => usageApiForHost(host, 'codexUsage', signal),
   hasCachedData: (state) => state.hasAnyCodexData
 })
 
@@ -47,7 +47,7 @@ export const createOpenCodeUsageSlice = createUsageProviderSlice<
   name: 'OpenCode',
   initialScope: 'orca',
   initialRange: '30d',
-  getApi: (host) => usageApiForHost(host, 'openCodeUsage'),
+  getApi: (host, signal) => usageApiForHost(host, 'openCodeUsage', signal),
   hasCachedData: (state) => state.hasAnyOpenCodeData
 })
 
@@ -56,7 +56,7 @@ export const createMuseUsageSlice = createUsageProviderSlice<'muse', 'Muse', Mus
   name: 'Muse',
   initialScope: 'orca',
   initialRange: '30d',
-  getApi: (host) => usageApiForHost(host, 'museUsage'),
+  getApi: (host, signal) => usageApiForHost(host, 'museUsage', signal),
   hasCachedData: (state) => state.hasAnyMuseData
 })
 
