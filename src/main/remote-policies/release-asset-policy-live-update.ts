@@ -173,7 +173,11 @@ export class ReleaseAssetPolicyLiveUpdater<P extends { revision: number }> {
     this.fetched = { policy, downloaded: parsed.policy, at: Date.now() }
     // Before the write, so the policy applies this run even if caching it fails.
     this.deps.onFetched?.(policy)
-    if (stale) {
+    // Against the file, not memory: a write that failed earlier is retried by the next download.
+    if (
+      parsed.policy.revision < policy.revision ||
+      (cached !== null && parsed.policy.revision <= cached.revision)
+    ) {
       return
     }
     try {
