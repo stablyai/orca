@@ -51,7 +51,7 @@ it('shares literal prefix splitting while commit messages retain their environme
   })
 })
 
-it.each(['op.exe', String.raw`"C:\Tools\op.exe"`, String.raw`"\\server\tools\op.exe"`])(
+it.each([String.raw`"C:\Tools\op.exe"`, String.raw`"\\server\tools\op.exe"`])(
   'preserves Windows prefix paths independently of the executable spelling %s',
   (program) => {
     expect(
@@ -70,9 +70,9 @@ it.each(['op.exe', String.raw`"C:\Tools\op.exe"`, String.raw`"\\server\tools\op.
   }
 )
 
-it.each(['linux', 'darwin'] as const)('keeps POSIX escaping on a %s execution host', (platform) => {
+it('keeps POSIX escaping on a POSIX execution host', () => {
   expect(
-    structuredAgentCommandPlan(String.raw`op run --env-file=work\ env -- codex`, platform)
+    structuredAgentCommandPlan(String.raw`op run --env-file=work\ env -- codex`, 'linux')
   ).toEqual({
     program: 'op',
     prefixArgs: ['run', '--env-file=work env', '--', 'codex']

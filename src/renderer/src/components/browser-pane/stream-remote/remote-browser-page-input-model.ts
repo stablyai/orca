@@ -222,26 +222,24 @@ export function resolveRemoteBrowserCssViewport(input: {
   const deviceHeight = getPositiveFiniteNumber(input.frameMetadata?.deviceHeight)
   const requestedWidth = getPositiveFiniteNumber(input.requestedViewportSize?.width)
   const requestedHeight = getPositiveFiniteNumber(input.requestedViewportSize?.height)
+  // Sizes in device pixels cover fewer CSS pixels on a zoomed page.
+  const zoom = getPositiveFiniteNumber(input.frameMetadata?.zoomFactor) ?? 1
   const framesMatchRequest =
     (deviceWidth === null || requestedWidth === null || deviceWidth === requestedWidth) &&
     (deviceHeight === null || requestedHeight === null || deviceHeight === requestedHeight)
   if (!framesMatchRequest) {
     return {
-      width: deviceWidth ?? input.naturalSize.width,
-      height: deviceHeight ?? input.naturalSize.height
+      width: (deviceWidth ?? input.naturalSize.width) / zoom,
+      height: (deviceHeight ?? input.naturalSize.height) / zoom
     }
   }
   return {
     width:
       getPositiveFiniteNumber(input.cssViewportSize?.width) ??
-      requestedWidth ??
-      deviceWidth ??
-      input.naturalSize.width,
+      (requestedWidth ?? deviceWidth ?? input.naturalSize.width) / zoom,
     height:
       getPositiveFiniteNumber(input.cssViewportSize?.height) ??
-      requestedHeight ??
-      deviceHeight ??
-      input.naturalSize.height
+      (requestedHeight ?? deviceHeight ?? input.naturalSize.height) / zoom
   }
 }
 

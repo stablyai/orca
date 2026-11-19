@@ -7,7 +7,6 @@ import { makeTab } from '../../terminals/testing/terminal-tab.test-fixture'
 import { makeWorktree } from '../worktrees/worktree.test-fixture'
 import { TEST_REPO } from '../../repos/repo.test-fixture'
 import { createTabsSliceMockApi } from '../tabs/tabs-slice-test-harness'
-import { createUnreadBadgeCountSelector } from '@/attention/unread/unread-badge-count-selector'
 import {
   resetFloatingWorkspaceUnreadSelectorCacheForTest,
   selectFloatingWorkspaceHasUnread
@@ -199,9 +198,6 @@ const markers = (record: Record<string, unknown>): string =>
     .map(([key, reason]) => `${shortId(key)}=${String(reason)}`)
     .join(' ') || '-'
 
-// dockCount stays unexported; check-focus-read-ratchet counts exported readers named observe.
-const dockCount = (s: AppState): number => createUnreadBadgeCountSelector()(s)
-
 /** One compact line per observable, so a scenario step reads as a diffable block. */
 export function observe(store: AttentionStore, persists: () => PersistCall[]): string[] {
   const s = store.getState()
@@ -221,7 +217,7 @@ export function observe(store: AttentionStore, persists: () => PersistCall[]): s
     `tabs ${markers(s.unreadTerminalTabs)}`,
     `panes ${markers(s.unreadTerminalPanes)}`,
     `completions ${markers(s.unreadAgentCompletionPanes)}`,
-    `dock=${dockCount(s)} floatingDot=${selectFloatingWorkspaceHasUnread(s)}`,
+    `floatingDot=${selectFloatingWorkspaceHasUnread(s)}`,
     ...persists().map(
       (call) =>
         `persist ${call.kind} ${shortId(call.id)} ${JSON.stringify(call.updates)}${

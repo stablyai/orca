@@ -232,7 +232,7 @@ import {
   BotToolsList
 } from './bots-tools-params'
 import { BotWorkForget, BotWorkList } from './bots-work-params'
-import { CertificateProceed, Reload } from './browser/browser-core-params'
+import { CertificateProceed, PageZoom, Reload } from './browser/browser-core-params'
 import { ExtensionList, ExtensionReload } from './browser/browser-extension-params'
 import { MouseClick } from './browser/browser-extras-params'
 import { BrowserIdentitySet, ProfileCreate } from './browser/browser-identity-params'
@@ -1402,6 +1402,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.upload': Upload,
   'browser.viewport': Viewport,
   'browser.wait': Wait,
+  'browser.zoom': PageZoom,
   'clipboard.abortImageUpload': AbortImageUpload,
   'clipboard.appendImageUploadChunk': AppendImageUploadChunk,
   'clipboard.commitImageUpload': CommitImageUpload,

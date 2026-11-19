@@ -2,7 +2,7 @@ import { createAcpModelCatalogProbe } from '../../acp/discovery/acp-model-catalo
 import { acpLaunchSpecFor } from '../../acp/launch/acp-launch-registry'
 import { openCodeAcpAccountBinding } from '../../opencode/accounts/opencode-structured-account-home'
 import { ManagedDataAccountService } from '../../managed-data-accounts/service'
-import { mkdtemp, writeFile, readFile, rm, mkdir } from 'node:fs/promises'
+import { mkdtemp, writeFile, readFile, rename, rm, mkdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { expect, it, onTestFinished } from 'vitest'
@@ -64,6 +64,8 @@ it.each(['grok', 'codex'])(
     expect(await read()).toMatchObject({ models: [{ id: 'first' }] })
     model = 'second'
     await writeFile(join(folder, '.claude.json'), 'probe usage')
+    await writeFile(`${config}.tmp`, '{}')
+    await rename(`${config}.tmp`, config)
     await read()
     expect(await read()).toMatchObject({ models: [{ id: 'first' }] })
     await writeFile(script, 'version-two-with-new-model')
