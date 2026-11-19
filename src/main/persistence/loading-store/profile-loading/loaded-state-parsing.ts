@@ -86,6 +86,8 @@ export class LoadedStateParsingOperations {
 
     let result: PersistedState | null = null
     let parsed: LoadedProfileState | undefined
+    // The profile as stored, before load migrations add keys that would hide a new profile.
+    let storedProfile: unknown
     let chatUiLaunchTipAudience: ChatUiLaunchTipAudience | null = null
     try {
       if (fileExistedOnLoad) {
@@ -106,6 +108,7 @@ export class LoadedStateParsingOperations {
         if (parsed === undefined) {
           throw new Error('Profile state startup snapshot is missing')
         }
+        storedProfile = parsed
         parsed = this.cohorts.migrateCohortSeeds(parsed, true)
         // Freeze audience before defaults or migrations alter the saved Chat UI state.
         chatUiLaunchTipAudience = this.cohorts.captureChatUiLaunchTipAudience(parsed)
@@ -256,7 +259,7 @@ export class LoadedStateParsingOperations {
             this.cohorts.migrateTelemetry(current, fileExistedOnLoad),
             parsed
           ),
-          parsed
+          storedProfile
         ),
         parsed,
         audience
