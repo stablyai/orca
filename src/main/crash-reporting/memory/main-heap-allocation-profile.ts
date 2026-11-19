@@ -1,4 +1,5 @@
 import { Session } from 'node:inspector'
+import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { crashReporter } from 'electron'
 import { recordDurableCrashBreadcrumb } from '../breadcrumbs/durable-crash-breadcrumb'
@@ -131,7 +132,7 @@ function read(current: Sampling, totalBytes: number, mainBytes: number): void {
       if (!profile || sampling !== current) {
         return
       }
-      const summary = summarizeSamplingProfile(profile, mainBundlePrefix())
+      const summary = summarizeSamplingProfile(profile, mainBundlePrefix(), mainPackagePrefixes())
       recordDurableCrashBreadcrumb('main_heap_allocation_profile', {
         totalHeapMB: Math.round(totalBytes / MB),
         mainHeapMB: Math.round(mainBytes / MB),
@@ -168,4 +169,11 @@ function annotateCrashReport(summary: Record<string, unknown>): void {
 
 function mainBundlePrefix(): string {
   return `${pathToFileURL(currentWorkerEntryLayout(__dirname).moduleDir).href}/`
+}
+
+/** Shipped dependencies such as the agent SDK live beside out/, packed or unpacked. */
+function mainPackagePrefixes(): string[] {
+  const appRoot = resolve(currentWorkerEntryLayout(__dirname).moduleDir, '..', '..')
+  const roots = new Set([appRoot, appRoot.replace(/\.asar$/, '.asar.unpacked')])
+  return [...roots].map((root) => `${pathToFileURL(join(root, 'node_modules')).href}/`)
 }

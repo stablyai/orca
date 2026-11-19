@@ -41,3 +41,45 @@ describe('summarizeSamplingProfile', () => {
     ).toEqual(['14KB (other script)'])
   })
 })
+
+describe('summarizeSamplingProfile with shipped packages', () => {
+  const APP_MODULES = 'file:///Applications/Orca.app/Contents/Resources/app.asar/node_modules/'
+
+  it('names a shipped dependency by package file and redacts every other path', () => {
+    const summary = summarizeSamplingProfile(
+      {
+        head: {
+          callFrame: frame('(root)', '', '0'),
+          selfSize: 0,
+          children: [
+            leaf(
+              frame(
+                'readMessages',
+                `${APP_MODULES}@anthropic-ai/claude-agent-sdk/sdk.mjs`,
+                '7',
+                154
+              ),
+              10
+            ),
+            leaf(
+              frame('clientSecret', 'file:///Users/someone/acme-app/node_modules/acme/index.js'),
+              4
+            ),
+            leaf(frame('escape', `${APP_MODULES}../../../../Users/someone/notes.js`), 3),
+            leaf(frame('loose', `${APP_MODULES}Customer Files/plan.js`), 2)
+          ]
+        }
+      },
+      BUNDLE,
+      [APP_MODULES]
+    )
+    const sites = Object.keys(summary)
+      .filter((key) => /^site\d+$/.test(key))
+      .sort()
+      .map((key) => String(summary[key]))
+    expect(sites).toEqual([
+      '10KB readMessages@@anthropic-ai/claude-agent-sdk/sdk.mjs:155:5',
+      '9KB (other script)'
+    ])
+  })
+})

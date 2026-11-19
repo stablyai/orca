@@ -9,6 +9,9 @@ const MAX_STACK_TEXT_LENGTH = 225
 // Main's shared bundle chunks sit one folder down.
 const BUNDLE_FILE_NAME = /^(?:chunks\/)?[\w.-]+\.[cm]?js$/
 const CODE_IDENTIFIER = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/
+// A shipped dependency's own file, named by package: `@scope/pkg/dir/file.mjs`.
+const PACKAGE_FILE_NAME = /^(?:@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]*\/(?:[\w.-]+\/)*[\w.-]+\.[cm]?js$/
+const MAX_PACKAGE_FILE_NAME_LENGTH = 96
 // V8 runtime frames without scripts use labels such as (GC) and (V8 API).
 const RUNTIME_LABEL = /^\([A-Za-z0-9 _-]{1,24}\)$/
 
@@ -29,10 +32,12 @@ export type SamplingProfile = { head: SamplingProfileNode }
 /** Retain names only for trusted bundle frames and V8 builtins; replace all others with fixed labels. */
 export function summarizeSamplingProfile(
   profile: SamplingProfile,
-  trustedScriptPrefix: string | null
+  trustedScriptPrefix: string | null,
+  // The app's own node_modules: shipped dependencies, never user files.
+  trustedPackagePrefixes: readonly string[] = []
 ): CrashReportBreadcrumbData {
   const describe = (node: SamplingProfileNode): string =>
-    describeFrame(node.callFrame, trustedScriptPrefix)
+    describeFrame(node.callFrame, trustedScriptPrefix, trustedPackagePrefixes)
   const sites = new Map<string, number>()
   let totalBytes = 0
   const walk: { node: SamplingProfileNode; stack: SamplingProfileNode[] }[] = [
@@ -72,7 +77,11 @@ function joinFrames(described: string[]): string {
   return text
 }
 
-function describeFrame(frame: CallFrame, trustedScriptPrefix: string | null): string {
+function describeFrame(
+  frame: CallFrame,
+  trustedScriptPrefix: string | null,
+  trustedPackagePrefixes: readonly string[]
+): string {
   const { functionName, url, scriptId, lineNumber, columnNumber } = frame
   if (!url) {
     // URL-less eval code has real script IDs and potentially user-derived names.
@@ -86,13 +95,8 @@ function describeFrame(frame: CallFrame, trustedScriptPrefix: string | null): st
       ? functionName
       : '(native)'
   }
-  const fileName = url.slice(trustedScriptPrefix?.length ?? 0)
-  if (
-    !trustedScriptPrefix ||
-    !url.startsWith(trustedScriptPrefix) ||
-    !BUNDLE_FILE_NAME.test(fileName) ||
-    fileName.length > MAX_FILE_NAME_LENGTH
-  ) {
+  const fileName = trustedFileName(url, trustedScriptPrefix, trustedPackagePrefixes)
+  if (!fileName) {
     return '(other script)'
   }
   // Replace invalid names; stripping characters could evade report redaction.
@@ -101,6 +105,27 @@ function describeFrame(frame: CallFrame, trustedScriptPrefix: string | null): st
       ? functionName
       : '(anonymous)'
   return `${name}@${fileName}:${lineNumber + 1}:${columnNumber + 1}`
+}
+
+function trustedFileName(
+  url: string,
+  trustedScriptPrefix: string | null,
+  trustedPackagePrefixes: readonly string[]
+): string | null {
+  if (trustedScriptPrefix && url.startsWith(trustedScriptPrefix)) {
+    const fileName = url.slice(trustedScriptPrefix.length)
+    return BUNDLE_FILE_NAME.test(fileName) && fileName.length <= MAX_FILE_NAME_LENGTH
+      ? fileName
+      : null
+  }
+  const packagePrefix = trustedPackagePrefixes.find((prefix) => url.startsWith(prefix))
+  if (!packagePrefix) {
+    return null
+  }
+  const fileName = url.slice(packagePrefix.length)
+  return PACKAGE_FILE_NAME.test(fileName) && fileName.length <= MAX_PACKAGE_FILE_NAME_LENGTH
+    ? fileName
+    : null
 }
 
 /** Bundle assets URL beside the window's page, or null for unsupported page URLs. */
