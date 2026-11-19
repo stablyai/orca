@@ -20,6 +20,7 @@ export function DocPreviewToolbar({
   onCopyRelativePath,
   onOpenSource,
   onOpenExternally,
+  onOpenInBrowser,
   elementTools,
   markupActive,
   onToggleMarkup,
@@ -38,6 +39,7 @@ export function DocPreviewToolbar({
   onCopyRelativePath: () => void
   onOpenSource: () => void
   onOpenExternally: () => void
+  onOpenInBrowser?: () => void
   elementTools: BrowserChromeElementTools
   markupActive: boolean
   onToggleMarkup: () => void
@@ -95,6 +97,7 @@ export function DocPreviewToolbar({
           onHardReload={onHardReload}
           onOpenSource={onOpenSource}
           onOpenExternally={onOpenExternally}
+          onOpenInBrowser={onOpenInBrowser}
           onCopyPath={onCopyPath}
           onCopyRelativePath={onCopyRelativePath}
           overflow={overflow}

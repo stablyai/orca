@@ -1,4 +1,12 @@
-import { Copy, ExternalLink, FileCode2, MoreHorizontal, RefreshCw, RotateCcw } from 'lucide-react'
+import {
+  Copy,
+  ExternalLink,
+  FileCode2,
+  Globe,
+  MoreHorizontal,
+  RefreshCw,
+  RotateCcw
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -16,6 +24,7 @@ export function DocPreviewOverflowMenu({
   onHardReload,
   onOpenSource,
   onOpenExternally,
+  onOpenInBrowser,
   onCopyPath,
   onCopyRelativePath,
   overflow
@@ -24,6 +33,8 @@ export function DocPreviewOverflowMenu({
   onHardReload: () => void
   onOpenSource: () => void
   onOpenExternally: () => void
+  /** Absent until the preview holds a grant to stream. */
+  onOpenInBrowser?: () => void
   onCopyPath: () => void
   /** Why it lives here: the preview hides the editor's path header, which was the only way to copy it. */
   onCopyRelativePath: () => void
@@ -61,6 +72,12 @@ export function DocPreviewOverflowMenu({
           <FileCode2 className="size-3.5" />
           {t('auto.components.editor.HtmlDocPreview.openSourceControl', 'Open source file')}
         </DropdownMenuItem>
+        {onOpenInBrowser ? (
+          <DropdownMenuItem onSelect={onOpenInBrowser}>
+            <Globe className="size-3.5" />
+            {t('auto.components.editor.HtmlDocPreview.openInBrowserControl', 'Open in browser')}
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem onSelect={onOpenExternally}>
           <ExternalLink className="size-3.5" />
           {t(

@@ -79,3 +79,22 @@ export function openDocPreviewExternally(document: DocPreviewDocument): void {
   }
   void downloadAndOpenRemoteTerminalFile(fileContext, document.filePath)
 }
+
+/** Streams the open preview to the default browser, so relative assets load live instead of being downloaded. */
+export function openDocPreviewInBrowser(grantId: string): void {
+  void window.api.docPreview
+    .openInBrowser(grantId)
+    .then((opened) => {
+      if (!opened) {
+        throw new Error('revoked')
+      }
+    })
+    .catch(() => {
+      toast.error(
+        translate(
+          'auto.components.editor.HtmlDocPreview.openInBrowserFailed',
+          "Couldn't open this preview in the browser. Reload the preview and try again."
+        )
+      )
+    })
+}

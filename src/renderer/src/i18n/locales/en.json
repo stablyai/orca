@@ -18282,7 +18282,9 @@
           "directoryAccessRequestOverflow": "{{folders}}, and {{count}} more",
           "directoryAccessRequestMultiple": "This preview wants to read files in {{folders}}.",
           "allowDirectories": "Allow {{count}} folders",
-          "editAddressControl": "Edit address"
+          "editAddressControl": "Edit address",
+          "openInBrowserFailed": "Couldn't open this preview in the browser. Reload the preview and try again.",
+          "openInBrowserControl": "Open in browser"
         },
         "LargeDiffLoadPrompt": {
           "a0af0198aa": "Large diffs are not rendered by default.",

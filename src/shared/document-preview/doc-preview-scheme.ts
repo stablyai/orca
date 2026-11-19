@@ -8,6 +8,7 @@ export const DOC_PREVIEW_MINT_GRANT_CHANNEL = 'docPreview:mintGrant'
 export const DOC_PREVIEW_REVOKE_GRANT_CHANNEL = 'docPreview:revokeGrant'
 export const DOC_PREVIEW_AUTHORIZE_DIRECTORY_CHANNEL = 'docPreview:authorizeDirectory'
 export const DOC_PREVIEW_EXTERNAL_LINK_CHANNEL = 'docPreview:externalLink'
+export const DOC_PREVIEW_OPEN_IN_BROWSER_CHANNEL = 'docPreview:openInBrowser'
 /** Renderer/main only: accept trusted anchor reports exclusively from live grant-bound preview guests; never expose this channel to paired clients. */
 export const DOC_PREVIEW_LINK_CLICK_CHANNEL = 'docPreview:linkClick'
 

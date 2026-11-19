@@ -22,7 +22,11 @@ import { selectWorktreeHostDisplayLabel } from '@/runtime/hosts/display/executio
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
-import { openDocPreviewExternally, openDocPreviewSource } from './doc-preview-document-actions'
+import {
+  openDocPreviewExternally,
+  openDocPreviewInBrowser,
+  openDocPreviewSource
+} from './doc-preview-document-actions'
 import {
   DocPreviewDirectoryAccessBanner,
   useDocPreviewDirectoryAccess
@@ -343,6 +347,7 @@ export function HtmlDocPreview({
         onCopyRelativePath={() => void window.api.ui.writeClipboardText(relativePath)}
         onOpenSource={() => openDocPreviewSource(previewDocument)}
         onOpenExternally={() => openDocPreviewExternally(previewDocument)}
+        onOpenInBrowser={grantId ? () => openDocPreviewInBrowser(grantId) : undefined}
         elementTools={elementTools}
         markupActive={markup.isActive}
         onToggleMarkup={() => (markup.isActive ? markup.cancel() : void markup.start())}

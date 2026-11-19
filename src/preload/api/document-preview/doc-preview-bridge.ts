@@ -4,6 +4,7 @@ import {
   DOC_PREVIEW_LOAD_FAILURE_CHANNEL,
   DOC_PREVIEW_AUTHORIZE_DIRECTORY_CHANNEL,
   DOC_PREVIEW_MINT_GRANT_CHANNEL,
+  DOC_PREVIEW_OPEN_IN_BROWSER_CHANNEL,
   DOC_PREVIEW_REVOKE_GRANT_CHANNEL,
   type DocPreviewFailure,
   type DocPreviewExternalLink
@@ -18,6 +19,8 @@ export const docPreviewApi = {
     ipcRenderer.invoke(DOC_PREVIEW_REVOKE_GRANT_CHANNEL, grantId),
   authorizeDirectory: (grantId: string, relativePath: string): Promise<boolean> =>
     ipcRenderer.invoke(DOC_PREVIEW_AUTHORIZE_DIRECTORY_CHANNEL, grantId, relativePath),
+  openInBrowser: (grantId: string): Promise<boolean> =>
+    ipcRenderer.invoke(DOC_PREVIEW_OPEN_IN_BROWSER_CHANNEL, grantId),
   onExternalLink: (callback: (payload: DocPreviewExternalLink) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: DocPreviewExternalLink): void =>
       callback(payload)

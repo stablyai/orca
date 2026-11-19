@@ -28,6 +28,8 @@ export type DocPreviewApi = {
     mintGrant: (request: DocPreviewGrantRequest) => Promise<{ grantId: string; url: string }>
     revokeGrant: (grantId: string) => Promise<boolean>
     authorizeDirectory: (grantId: string, relativePath: string) => Promise<boolean>
+    /** Streams the live grant to this machine's default browser over loopback; false once revoked. */
+    openInBrowser: (grantId: string) => Promise<boolean>
     onExternalLink: (callback: (payload: DocPreviewExternalLink) => void) => () => void
     onLoadFailure: (callback: (payload: DocPreviewFailure) => void) => () => void
   }

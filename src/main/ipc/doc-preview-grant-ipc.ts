@@ -4,6 +4,7 @@ import {
   DOC_PREVIEW_AUTHORIZE_DIRECTORY_CHANNEL,
   DOC_PREVIEW_LINK_CLICK_CHANNEL,
   DOC_PREVIEW_MINT_GRANT_CHANNEL,
+  DOC_PREVIEW_OPEN_IN_BROWSER_CHANNEL,
   DOC_PREVIEW_REVOKE_GRANT_CHANNEL
 } from '../../shared/document-preview/doc-preview-scheme'
 import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
@@ -15,6 +16,7 @@ import {
   type DocPreviewOwner
 } from '../browser/document-preview/doc-preview-grant-registry'
 import { isTrustedBrowserRenderer } from './browser/browser-renderer-trust'
+import { openDocPreviewInSystemBrowser } from '../browser/document-preview/doc-preview-loopback-server'
 
 export type DocPreviewGrantRequest = {
   owner: DocPreviewOwner
@@ -88,6 +90,14 @@ export function registerDocPreviewGrantHandlers(): void {
       typeof grantId === 'string' &&
       typeof relativePath === 'string' &&
       authorizeDocPreviewDirectory(grantId, relativePath)
+  )
+
+  ipcMain.handle(
+    DOC_PREVIEW_OPEN_IN_BROWSER_CHANNEL,
+    async (event, grantId: unknown): Promise<boolean> =>
+      isTrustedBrowserRenderer(event.sender) &&
+      typeof grantId === 'string' &&
+      openDocPreviewInSystemBrowser(grantId)
   )
 
   // Guest senders are untrusted; the policy checks a live bound grant and web URL.
