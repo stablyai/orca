@@ -14,6 +14,7 @@ import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { MobileNativeChatComposerSuggestions } from './menus/MobileNativeChatComposerMenu'
 import { MobileNativeChatComposerField } from './field/MobileNativeChatComposerField'
+import { MobileClaudeStatusRow } from './MobileClaudeStatusRow'
 import { MobileNativeChatComposerAttachments } from './attachments/MobileNativeChatComposerAttachments'
 import type { PendingNativeChatFile } from './attachments/mobile-native-chat-file-attachment'
 import { MobileNativeChatComposerAttachButton } from './attachments/MobileNativeChatComposerAttachButton'
@@ -35,7 +36,6 @@ import { MobileNativeChatComposerPlanChip } from './commands/MobileNativeChatCom
 import type { MobileNativeChatComposerProps } from './mobile-native-chat-composer-props'
 import { MobileNativeChatMcpTray } from '../mcp/MobileNativeChatMcpTray'
 import { MobileNativeChatQuoteTab } from './quotes/MobileNativeChatQuoteTab'
-import { MobileClaudeStatusRow } from './MobileClaudeStatusRow'
 
 const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
@@ -293,10 +293,12 @@ export function MobileNativeChatComposer({
               {...{ micActive, micStarting, micProcessing, cancelRef, trailing: contextRing.ring }}
             >
               <MobileNativeChatComposerAttachButton
-                {...{ onAttachImage, isAttaching, menu }}
+                onAttachImage={onAttachImage}
                 onAttachFiles={structured?.onAttachFiles}
                 structured={structured !== null}
+                isAttaching={isAttaching}
                 disabled={disabled || offline}
+                menu={menu}
               />
               {roomReplies}
               {sessionOptions ? (
