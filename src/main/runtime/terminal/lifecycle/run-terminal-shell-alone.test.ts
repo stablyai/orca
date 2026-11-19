@@ -10,7 +10,7 @@ vi.mock(
   })
 )
 
-const { confirmRootShellAloneFromProcessTable, isStoppedAgent } =
+const { confirmRootShellAloneFromProcessTable, stoppedAgentBlocks } =
   await import('./run-terminal-shell-alone')
 
 const SHELL: ProcessTableRow = { pid: 100, ppid: 1, stat: 'Ss+', command: '/bin/zsh' }
@@ -39,10 +39,18 @@ it.skipIf(process.platform === 'win32').each([
     90,
     [LOGIN, LOGIN_SHELL, { pid: 102, ppid: 100, stat: 'T', command: 'vim notes.md' }],
     true
+  ],
+  [
+    'a login root, another agent suspended before this one ran',
+    90,
+    [LOGIN, LOGIN_SHELL, { pid: 103, ppid: 100, stat: 'T', command: 'claude' }],
+    true
   ]
 ] as const)('confirms the shell alone from %s', async (_, rootPid, rows, expected) => {
   snapshot.mockResolvedValue([...rows])
   expect(
-    await confirmRootShellAloneFromProcessTable(rootPid, { stoppedJobBlocks: isStoppedAgent })
+    await confirmRootShellAloneFromProcessTable(rootPid, {
+      stoppedJobBlocks: stoppedAgentBlocks('codex')
+    })
   ).toBe(expected)
 })

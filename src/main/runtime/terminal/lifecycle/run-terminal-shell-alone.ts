@@ -13,10 +13,13 @@ import { recognizeAgentProcessFromCommandLine } from '../../../../shared/agent-s
 import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
 import type { TerminalProcessInspection } from '../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 
-/** Only a stopped agent keeps an agent's exit unproven; a stopped editor from before its launch
- *  does not. */
-export function isStoppedAgent(row: { command: string }): boolean {
-  return recognizeAgentProcessFromCommandLine(row.command) !== null
+/** Only a stopped job running the pane's agent (any agent when unknown) keeps its exit unproven;
+ *  a stopped editor or another agent suspended before it does not. */
+export function stoppedAgentBlocks(agent?: string): (row: { command: string }) => boolean {
+  return (row) => {
+    const recognized = recognizeAgentProcessFromCommandLine(row.command)
+    return recognized !== null && (!agent || recognized.agent === agent)
+  }
 }
 
 /** POSIX: the PTY's shell owns the terminal's foreground group and nothing under it is stopped. */

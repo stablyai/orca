@@ -63,7 +63,8 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
 
   private async confirmCommandFinishedExit(resolved: string): Promise<boolean> {
     const row = this.state.lastStatusByPaneKey.get(resolved)
-    const alone = await this.terminalPaneLifecycle?.confirmShellAlone?.(resolved)
+    const agent = this.paneAgentIdentity(resolved)?.status.agentType
+    const alone = await this.terminalPaneLifecycle?.confirmShellAlone?.(resolved, agent)
     // A newer row may be the same conversation's; only a later proof can settle it.
     if (this.state.lastStatusByPaneKey.get(resolved) !== row) {
       return false

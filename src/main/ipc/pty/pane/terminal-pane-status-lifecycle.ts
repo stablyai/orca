@@ -13,7 +13,7 @@ import { isShellProcess } from '../../../../shared/agent-status/process/shell-pr
 import { isRemoteExecutionHostPtyId } from '../../../../shared/execution-host/remote-execution-host-pty-id'
 import {
   confirmRootShellAloneFromProcessTable,
-  isStoppedAgent
+  stoppedAgentBlocks
 } from '../../../runtime/terminal/lifecycle/run-terminal-shell-alone'
 
 export function bindTerminalPaneStatusLifecycle(
@@ -31,6 +31,7 @@ export function bindTerminalPaneStatusLifecycle(
           (await paneShellAlone(
             runtime,
             paneKey,
+            agent,
             () => runtime?.getLaunchStatementForPaneKey(paneKey, agent) === launch
           )) === true
         )
@@ -39,8 +40,8 @@ export function bindTerminalPaneStatusLifecycle(
       }
     },
     // Windows gives a command mark no proof against a nested shell, so the mark stands, as on main.
-    confirmShellAlone: async (paneKey) =>
-      process.platform === 'win32' ? null : paneShellAlone(runtime, paneKey),
+    confirmShellAlone: async (paneKey, agent) =>
+      process.platform === 'win32' ? null : paneShellAlone(runtime, paneKey, agent),
     readSavedRecord: (paneKey) => {
       try {
         const worktreeId = runtime?.getTerminalWorktreeIdForPaneKey(paneKey)
@@ -115,6 +116,7 @@ export function bindTerminalPaneStatusLifecycle(
 async function paneShellAlone(
   runtime: OrcaRuntimeService | undefined,
   paneKey: string,
+  agent: string | undefined,
   stillCurrent: () => boolean = () => true
 ): Promise<boolean | null> {
   if (!runtime) {
@@ -128,7 +130,7 @@ async function paneShellAlone(
     if (isRemoteExecutionHostPtyId(pane.ptyId)) {
       return null
     }
-    const shellAlone = await confirmShellAlone(pane.ptyId, pane.incarnationId ?? undefined)
+    const shellAlone = await confirmShellAlone(pane.ptyId, pane.incarnationId ?? undefined, agent)
     const current = runtime.resolveTerminalPane(paneKey)
     return (
       shellAlone &&
@@ -167,12 +169,18 @@ async function readPtyRootPid(
   return rootPid
 }
 
-async function confirmShellAlone(ptyId: string, incarnationId?: string): Promise<boolean> {
+async function confirmShellAlone(
+  ptyId: string,
+  incarnationId?: string,
+  agent?: string
+): Promise<boolean> {
   const provider = getProviderForPty(ptyId)
   if (process.platform !== 'win32') {
     const rootPid = await readPtyRootPid(provider, ptyId, incarnationId)
     return rootPid
-      ? confirmRootShellAloneFromProcessTable(rootPid, { stoppedJobBlocks: isStoppedAgent })
+      ? confirmRootShellAloneFromProcessTable(rootPid, {
+          stoppedJobBlocks: stoppedAgentBlocks(agent)
+        })
       : false
   }
   if ((await provider.confirmShellForeground?.(ptyId)) === true) {

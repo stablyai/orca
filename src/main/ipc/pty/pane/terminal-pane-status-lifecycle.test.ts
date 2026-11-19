@@ -14,7 +14,7 @@ vi.mock('../../../agent-hooks/server/agent-hook-server', () => ({
 vi.mock('../provider/registry', () => ({ getProviderForPty }))
 vi.mock('../../../runtime/terminal/lifecycle/run-terminal-shell-alone', () => ({
   confirmRootShellAloneFromProcessTable: confirmRootShellAlone,
-  isStoppedAgent: () => true
+  stoppedAgentBlocks: () => () => true
 }))
 
 const platform = process.platform
