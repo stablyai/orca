@@ -13,7 +13,6 @@ import type {
   RefusedPaneResume
 } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { UnprovenAgentExits } from './unproven-agent-exits'
-import { isLocalHookConnectionId } from '../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 
 export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
@@ -39,11 +38,11 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
     const verifiable = this.hasVerifiableAgentProcess(paneKey)
     const unprovable = identity?.ended === false && !shared && !verifiable
     // A mark's exit status can't tell a quit from a stop (Ctrl-Z). A local process answers through
-    // its presence probe, a stopped one included; a remote one can't be probed, so its mark stands.
+    // its presence probe, a stopped one included; one the probe can't reach (SSH, WSL) lets the
+    // mark stand, as on main.
     const awaitsHost = options?.confirmedExit === true && !verifiable
-    const connectionId = this.state.lastStatusByPaneKey.get(resolved)?.connectionId ?? null
-    const confirmedExit =
-      options?.confirmedExit === true && verifiable && !isLocalHookConnectionId(connectionId)
+    const probed = this.state.lastStatusByPaneKey.get(resolved)?.connectionId === null
+    const confirmedExit = options?.confirmedExit === true && verifiable && !probed
     const { paneKeys, authorityChanged } = this.revokeProcessAuthority(paneKey)
     const { untouched } = this.reconcileEndedProcess(
       paneKeys,
