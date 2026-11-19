@@ -24,7 +24,6 @@ import type {
   AgentJournalToolCallEnding,
   AgentJournalToolCallState
 } from '../agent-session/journal/agent-session-journal-types'
-import type { AgentJournalMessageSource } from '../agent-session/journal/agent-journal-typed-by'
 import type { AgentType } from '../agent-status/contracts/agent-status-types'
 import type { NativeChatToolMetadata } from './tools/native-chat-tool-identity'
 import type {
@@ -36,7 +35,10 @@ import type { AutomationRunMessage } from '../automations/automation-run-message
 import type { WaitEnding } from '../automation-once'
 import type { AgentMessageSource } from '../agent-session/journal/agent-session-message-source'
 import type { ConnectorMessageAsker } from '../connector-message-asker'
-import type { OtherPersonTypist } from '../agent-session/journal/agent-journal-typed-by'
+import type {
+  AgentJournalMessageSource,
+  OtherPersonTypist
+} from '../agent-session/journal/agent-journal-typed-by'
 import type { BotItemNoteView } from '../bots/bot-item-note'
 import type { BotContextNote } from '../bots/bot-context-note'
 import type { AutomationResultNote } from '../bots/bot-automation-result-note'
