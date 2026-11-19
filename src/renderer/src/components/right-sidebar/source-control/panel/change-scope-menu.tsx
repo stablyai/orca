@@ -193,7 +193,7 @@ export function SourceControlChangeScopeMenuContent({
           </DropdownMenuRadioItem>
         ))}
       </DropdownMenuRadioGroup>
-      {historyState.status === 'error' && !result ? (
+      {historyState.status === 'error' ? (
         <div className="flex items-center gap-2 px-2.5 py-1 text-xs text-muted-foreground">
           <span className="min-w-0 flex-1 truncate" title={historyState.error}>
             {t(
