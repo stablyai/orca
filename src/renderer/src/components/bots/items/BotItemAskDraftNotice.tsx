@@ -131,7 +131,7 @@ export function BotItemAskDraftNotices({
   }
   return (
     <div className="flex shrink-0 flex-col gap-2 px-3.5 pt-2">
-      {shown.map(({ key, draft, fate }) => {
+      {shown.map(({ key, eventId, draft, fate }) => {
         const text = botItemAnswerDraftText(draft)
         if (fate === 'ours') {
           return null
@@ -159,6 +159,7 @@ export function BotItemAskDraftNotices({
                       bot,
                       item.uid,
                       key,
+                      eventId,
                       draft.commentUnconfirmed!.text,
                       onReconcile
                     )

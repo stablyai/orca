@@ -21,7 +21,9 @@ const answered = vi.hoisted(() => vi.fn((..._args: unknown[]) => Promise.resolve
 vi.mock('./use-bot-items', () => ({
   commentOnBotItem: sent,
   setBotItemsStatus: vi.fn(),
-  answerBotItem: answered
+  answerBotItem: answered,
+  // The host's own read: the item as it holds it now.
+  showBotItem: () => Promise.resolve({ item: read.current!.item, events: [] })
 }))
 const fileContextOwners = vi.hoisted(() => vi.fn((..._args: unknown[]) => new Map()))
 vi.mock('../BotGroupTranscriptOwner', () => ({ useBotGroupFileContexts: fileContextOwners }))
@@ -592,11 +594,49 @@ it('posts once however fast Send again is pressed', async () => {
 
   fireEvent.click(screen.getByRole('button', { name: 'Send again' }))
   fireEvent.click(screen.getByRole('button', { name: 'Send again' }))
+  // The post goes once the host's read says the question is still open.
+  await flush()
   land()
   await flush()
 
   expect(sent).toHaveBeenCalledTimes(2)
   expect(screen.getByRole('status').textContent).toContain('Sent as a comment')
+})
+
+it("never answers a replacement question with an older host's comment for the one it replaced", async () => {
+  // The host replaces the question while it refuses the answer as one it can't record.
+  answered.mockImplementationOnce(() => {
+    read.current = {
+      ...read.current!,
+      item: askingItem(36, { eventId: 'e9', text: 'Which color?' })
+    }
+    return Promise.resolve('unsupported')
+  })
+  const page = rerenderable(askingItem(36))
+  page.reconcileTo(askingItem(36, { eventId: 'e9', text: 'Which color?' }), eventsUpTo(9))
+  typeAnswer('Ship B')
+  fireEvent.click(screen.getByRole('button', { name: /Submit/ }))
+  await flush()
+
+  expect(sent).not.toHaveBeenCalled()
+  const notice = screen.getByRole('status')
+  expect(notice.textContent).toContain('This question changed before your answer went')
+  expect(notice.textContent).toContain('Ship B')
+})
+
+it('posts nothing on Send again once the question it answers was replaced', async () => {
+  const page = await unconfirmedComment(44)
+  page.reconcileTo(askingItem(44, { eventId: 'e9', text: 'Which color?' }), eventsUpTo(9))
+  act(() => read.current!.retry())
+
+  fireEvent.click(screen.getByRole('button', { name: 'Send again' }))
+  await flush()
+
+  // Only the first attempt, whose reply was lost, ever posted.
+  expect(sent).toHaveBeenCalledTimes(1)
+  expect(screen.getByRole('status').textContent).toContain(
+    'This question changed before your answer went'
+  )
 })
 
 it('reads Activity again after Send again', async () => {

@@ -138,7 +138,13 @@ export function BotItemAskCard({
           markBotItemAnswerDraft(draftKey, { answeredId: sent.id })
         } else if (outcome === 'unsupported') {
           // An older host keeps it only as a comment, posted once.
-          await sendBotItemAnswerAsComment(bot, item.uid, draftKey, botItemAnswerText(ask, answers))
+          await sendBotItemAnswerAsComment(
+            bot,
+            item.uid,
+            draftKey,
+            question.eventId,
+            botItemAnswerText(ask, answers)
+          )
           onCollapse()
         } else {
           toast.info(

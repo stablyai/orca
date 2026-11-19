@@ -5,7 +5,7 @@
 // this card's own.
 import { useSyncExternalStore } from 'react'
 import type { BotRef } from '@/lib/bot-hosts'
-import { commentOnBotItem } from './use-bot-items'
+import { commentOnBotItem, showBotItem } from './use-bot-items'
 import { normalizeBotItemAnswers } from '../../../../../shared/bots/bot-item-ask'
 import type { AskPrompt } from '../../../../../shared/native-chat/input/questions/native-chat-ask-types'
 
@@ -129,13 +129,17 @@ export function dropBotItemAnswerDraft(key: string): void {
 // Drafts whose comment is being posted now: one post at a time each, whoever asks.
 const commentsInFlight = new Set<string>()
 
-/** An older host's comment for this answer, one post at a time per draft: on a reply it is sent; with
- *  none it may have gone, and the page says so and waits for the owner's Send again. Never retried
- *  on its own, and a failure never undoes a post that already went. `settled` runs after either. */
+/** An older host's comment for this answer to `question` (its event id), one post at a time per draft:
+ *  on a reply it is sent; with none it may have gone, and the page says so and waits for the owner's
+ *  Send again. Never retried on its own, and a failure never undoes a post that already went. Posted
+ *  only while `question` is still the item's open question: an older host takes a comment on a
+ *  waiting item as the answer to whichever question is open, so after a replacement it would answer
+ *  that one. Otherwise nothing goes and the answer stays kept. `settled` runs after any of these. */
 export async function sendBotItemAnswerAsComment(
   bot: BotRef,
   uid: string,
   key: string,
+  question: string,
   text: string,
   settled?: () => void
 ): Promise<void> {
@@ -145,6 +149,12 @@ export async function sendBotItemAnswerAsComment(
   commentsInFlight.add(key)
   markBotItemAnswerDraft(key, { commentSending: true })
   try {
+    // Read right before the post: the host has no write that checks the question itself.
+    const { item } = await showBotItem(bot, uid, { after: question })
+    if (item.status !== 'needs_you' || item.question?.eventId !== question) {
+      markBotItemAnswerDraft(key, { commentUnconfirmed: undefined })
+      return
+    }
     await commentOnBotItem(bot, uid, text, [])
     markBotItemAnswerDraft(key, { sentAsComment: true, commentUnconfirmed: undefined })
   } catch {
