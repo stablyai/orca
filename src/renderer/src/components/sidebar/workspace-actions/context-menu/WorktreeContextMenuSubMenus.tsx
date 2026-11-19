@@ -46,7 +46,7 @@ export function WorktreeCopySubMenu({ model }: { model: WorktreeContextMenuModel
           <Copy className="size-3.5" />
           {t('auto.components.sidebar.WorktreeContextMenu.copyNameOption', 'Copy workspace title')}
         </DropdownMenuItem>
-        {singleAgentTab ? (
+        {agentSessionTabs.length === 1 && singleAgentTab ? (
           <>
             <DropdownMenuItem
               onSelect={() => model.handleCopyAgentTabId(singleAgentTab)}
