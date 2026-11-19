@@ -35,6 +35,8 @@ export type NativeChatGlobalSettings = {
   nativeChatMarkNewMessages?: boolean
   /** The agent's suggested next prompt in an empty composer. Absent means on. */
   nativeChatPromptSuggestions?: boolean
+  /** Code fences start wrapped; the per-block toggle stays the override. Absent means off. */
+  nativeChatWrapCodeBlocks?: boolean
 }
 
 /** Not written into default settings, so flipping this reaches everyone who never chose. */
@@ -166,4 +168,11 @@ export function nativeChatShowsPromptSuggestions(
   settings: { readonly nativeChatPromptSuggestions?: unknown } | null | undefined
 ): boolean {
   return settings?.nativeChatPromptSuggestions !== false
+}
+
+/** Only explicit ON starts code fences wrapped; the per-block toggle stays the override. */
+export function nativeChatWrapsCodeBlocks(
+  settings: { readonly nativeChatWrapCodeBlocks?: unknown } | null | undefined
+): boolean {
+  return settings?.nativeChatWrapCodeBlocks === true
 }

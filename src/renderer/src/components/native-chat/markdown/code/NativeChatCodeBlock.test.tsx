@@ -2,9 +2,11 @@
 
 import '@testing-library/jest-dom/vitest'
 import { cleanup, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { NativeChatCodeBlock } from './NativeChatCodeBlock'
+import { NativeChatCodeWrapDefaultContext } from './native-chat-code-wrap-default'
 
 vi.mock('@/lib/syntax-highlighting/oniguruma', async () => ({
   loadOniguruma: (await import('@/lib/syntax-highlighting/oniguruma-test-harness'))
@@ -36,5 +38,28 @@ describe('NativeChatCodeBlock', () => {
     expect(second.container.querySelectorAll('span[style*="--syntax-dark"]')).toHaveLength(colored)
     expect(screen.getByText('lastLine')).toBeInTheDocument()
     expect(second.container.querySelector('pre')?.textContent).toBe(code)
+  })
+
+  it('starts wrapped from the transcript default, and the block toggle still overrides it', async () => {
+    const code = 'const sorted = await listWorkspaces({ includeArchived: false, limit: 100 })'
+    const block = (defaultWrapped: boolean) => (
+      <NativeChatCodeWrapDefaultContext.Provider value={defaultWrapped}>
+        <NativeChatCodeBlock language="typescript" plain>
+          <code>{code}</code>
+        </NativeChatCodeBlock>
+      </NativeChatCodeWrapDefaultContext.Provider>
+    )
+    const wrapped = render(block(true))
+    const pre = () => wrapped.container.querySelector('pre')!
+    await screen.findByText(code)
+    expect(pre().className).toContain('whitespace-pre-wrap')
+    await userEvent.click(screen.getByRole('button', { name: 'Disable line wrap' }))
+    expect(pre().className).toContain('overflow-x-auto')
+    expect(pre().className).not.toContain('whitespace-pre-wrap')
+    wrapped.unmount()
+
+    expect(render(block(false)).container.querySelector('pre')?.className).toContain(
+      'overflow-x-auto'
+    )
   })
 })

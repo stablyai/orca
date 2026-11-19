@@ -7,6 +7,7 @@ import { getCodeFenceLanguageLabel } from './code-fence-language-label'
 import { NativeChatCopyButton } from '../../messages/actions/NativeChatCopyButton'
 import { NativeChatMarkdownRowKeyContext } from '../native-chat-markdown-row-identity'
 import { useNativeChatDisclosure } from '../../messages/disclosure/native-chat-disclosure-store'
+import { NativeChatCodeWrapDefaultContext } from './native-chat-code-wrap-default'
 import { NativeChatHighlightedCode } from './NativeChatHighlightedCode'
 
 /** Code fences need their own copy target rather than the whole chat message. */
@@ -24,12 +25,13 @@ export function NativeChatCodeBlock({
   const t = useTranslate()
   const code = extractCodeText(children)
   const rowKey = useContext(NativeChatMarkdownRowKeyContext)
+  const wrapsByDefault = useContext(NativeChatCodeWrapDefaultContext)
   // Keep wrap state in the transcript store so windowing and streaming block recuts cannot reset it; never persist it.
   const { open: wrapped, setOpen: setWrapped } = useNativeChatDisclosure(
     rowKey === undefined || sourceLine === undefined
       ? undefined
       : `code-wrap:${rowKey}:${sourceLine}`,
-    false
+    wrapsByDefault
   )
   const actions = code ? (
     <>
