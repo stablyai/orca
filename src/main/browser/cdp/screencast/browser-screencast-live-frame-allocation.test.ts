@@ -45,7 +45,13 @@ function createLiveFrameRoute(
   }
   const isClosed = () => false
   const isStopping = () => false
-  const pacer = createBrowserScreencastFramePacer({ dbg, options, isClosed, isStopping })
+  const pacer = createBrowserScreencastFramePacer({
+    dbg,
+    options,
+    isClosed,
+    isStopping,
+    readZoomFactor: () => 1
+  })
   const handler = createBrowserScreencastMessageHandler({
     dbg,
     options,

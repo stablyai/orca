@@ -424,7 +424,7 @@
 1 test-timeout-needs-reason:tests/e2e/terminal/remote-layout/headless-paired-remote-terminal-viewer-size.spec.ts
 1 test-timeout-needs-reason:tests/e2e/terminal/remote-parking/paired-remote-terminal-initial-snapshot-scrollback.spec.ts
 1 test-timeout-needs-reason:tests/e2e/terminal/remote-parking/paired-remote-terminal-truncated-tail-first-paint.spec.ts
-6 test-timeout-needs-reason:tests/e2e/terminal/rendering/terminal-column-desync-repro.spec.ts
+5 test-timeout-needs-reason:tests/e2e/terminal/rendering/terminal-column-desync-repro.spec.ts
 3 test-timeout-needs-reason:tests/e2e/terminal/retention/terminal-tab-close-running-confirm-mouse.spec.ts
 1 test-timeout-needs-reason:tests/e2e/terminal/retention/terminal-tab-close-running-confirm.spec.ts
 2 test-timeout-needs-reason:tests/e2e/workspaces/sidebar/sidebar-unread-older-paired-host.spec.ts

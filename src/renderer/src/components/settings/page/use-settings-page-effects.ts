@@ -1,6 +1,7 @@
 import { cancelSettingsListReveal } from '../section-layout/settings-list-scroll'
 import { resolveGeneralSubPage } from '../general/general-sub-pages'
 import { useEffect } from 'react'
+import { ORCA_AUTOMATIC_UPDATE_PREPARE_EVENT } from '../../../../../shared/updater/updater-renderer-events'
 import { toast } from 'sonner'
 import { useAppStore } from '../../../store/index'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings/matching'
@@ -134,7 +135,13 @@ export function useSettingsPageEffects(
 
   // Use the discard dialog for close/quit; a bare unload veto offers no way to resolve dirty state.
   useEffect(() => {
-    return registerWindowCloseGuard(() => {
+    const protectDraft = (event: Event): void => {
+      if (hasUnsavedSourceControlAiPromptChangesRef.current) {
+        event.preventDefault()
+      }
+    }
+    window.addEventListener(ORCA_AUTOMATIC_UPDATE_PREPARE_EVENT, protectDraft)
+    const unregisterCloseGuard = registerWindowCloseGuard(() => {
       if (isIntentionalAppRestartInProgress()) {
         return true
       }
@@ -143,6 +150,10 @@ export function useSettingsPageEffects(
       }
       return promptDiscardSourceControlAiPromptChanges()
     })
+    return () => {
+      unregisterCloseGuard()
+      window.removeEventListener(ORCA_AUTOMATIC_UPDATE_PREPARE_EVENT, protectDraft)
+    }
   }, [hasUnsavedSourceControlAiPromptChangesRef, promptDiscardSourceControlAiPromptChanges])
 
   useEffect(() => {

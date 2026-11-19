@@ -616,10 +616,6 @@
       "imageTooLarge": "画像が大きすぎて添付できません。",
       "permissionDenied": "写真へのアクセスが拒否されました。"
     },
-    "agentMessage": {
-      "handedOffToAgent": "Agentに引き継ぎました",
-      "startedAgent": "Agentを開始しました"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "添付ファイルの応答を読み取れません。もう一度お試しください。",
       "incompleteReply": "添付ファイルが変更されたか、応答が不完全でした。閉じてもう一度お試しください。",
@@ -2219,6 +2215,7 @@
       "providerUnavailable": "サービスが混雑しているため、{{agent}} は応答できませんでした。別のモデルを選ぶか、しばらく待ってから再送してください。",
       "providerSafetyStopped": "{{agent}} は安全確認の後、この応答を停止しました。リクエストを見直して再送してください。",
       "providerResponseFailed": "{{agent}} はこの応答を完了できませんでした。詳細を開いて確認してください。",
+      "providerResponseFailedQuoted": "{{agent}} はこの応答を完了できませんでした: {{detail}}。",
       "selectedModel": "選択されたモデル",
       "providerRejected": "{{agent}} はこのメッセージを受け付けませんでした。",
       "providerRejectedQuoted": "{{agent}} はこのメッセージを受け付けませんでした: {{detail}}。",

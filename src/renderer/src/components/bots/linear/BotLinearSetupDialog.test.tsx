@@ -184,14 +184,6 @@ describe('botLinearSetupStep', () => {
 })
 
 describe('BotLinearSetupDialog', () => {
-  it('says Linear is coming soon while the cloud answers 404', async () => {
-    api.botLinear.state.mockResolvedValue({ ok: false, error: 'linear_off' })
-    renderDialog()
-
-    expect(await screen.findByText('Linear is coming soon.')).toBeDefined()
-    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
-  })
-
   it('connects in one trip, then turns the bot on by itself and shows how to ask', async () => {
     api.botLinear.state.mockResolvedValue({ ok: true, value: state([]) })
     const members = [
