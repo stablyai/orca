@@ -68,6 +68,8 @@ export type AgentHookEventPayload = {
   stopHookActive?: true
   /** Provider turn identity folded into hostTurn; never stored or sent directly. */
   nativeTurnKey?: string
+  /** A live main-agent event that opens a provider turn by its new native id, ahead of the turn's prompt event. */
+  opensTurn?: true
   /** Saved host-private turn record; snapshot/IPC/relay allow-lists exclude it. */
   hostTurn?: HostTurnRecord
   /** Claude live work the child list does not show (a shell, a cron, an owed task notification); rejects false input-based interrupts. */
@@ -95,4 +97,14 @@ export type ToolSnapshot = {
   /** Tool output remains visible in status cards but must not render as assistant prose in chat. */
   lastAssistantMessageIsToolOutput?: boolean
   clearLastAssistantMessage?: boolean
+}
+
+/** Work agy runs beside the parent turn; see HookListenerState.antigravityChildWorkByPaneKey. */
+export type AntigravityChildWork = {
+  subagentParent?: string
+  commands?: Set<string>
+  /** Subagent conversations whose latest hook was not a fully idle Stop. */
+  openSubagents?: Set<string>
+  /** When a subagent last sent a fully idle Stop after the parent's latest event; agy may then end with no parent Stop. */
+  helpersIdleAt?: number
 }

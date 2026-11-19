@@ -178,7 +178,14 @@ export function useNativeChatNavigation({
   const linkTarget = useBotLinkItemTarget((state) => state.target)
   useEffect(() => {
     if (isVisible && ready && linkTarget && linkTarget.sessionId === sessionId) {
-      startHistoryJump({ kind: 'item', id: linkTarget.itemId }, (result) => {
+      const itemId = linkTarget.itemId
+      if (itemId === undefined) {
+        consumeBotLinkItem(linkTarget)
+        beginNavigation()
+        scrollToBottom()
+        return
+      }
+      startHistoryJump({ kind: 'item', id: itemId }, (result) => {
         if (useBotLinkItemTarget.getState().target !== linkTarget) {
           return
         }
@@ -190,7 +197,16 @@ export function useNativeChatNavigation({
         }
       })
     }
-  }, [isVisible, ready, linkTarget, sessionId, startHistoryJump, releaseHistory, scrollToBottom])
+  }, [
+    isVisible,
+    ready,
+    linkTarget,
+    sessionId,
+    startHistoryJump,
+    beginNavigation,
+    releaseHistory,
+    scrollToBottom
+  ])
   const jumpToLatest = useCallback(() => {
     beginNavigation()
     scrollToBottom()

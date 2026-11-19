@@ -82,14 +82,24 @@ describe('BotTemplatesDialog', () => {
     expect(useAppStore.getState().activeView).toBe('tasks')
   })
 
-  it('keeps the detail header and Use template… out of the part that scrolls', () => {
-    openBotTemplates('ci-failures')
+  it('filters by category and keeps the search when changing categories', () => {
+    openBotTemplates()
     renderDialog()
-    const scrolling = screen.getByRole('region', { name: 'About CI failures' })
+    const coding = screen.getByRole('radio', { name: 'Coding' })
+    const releaseNotes = { name: /^Release notes/ }
 
-    expect(within(scrolling).getByText('What it does first')).toBeTruthy()
-    expect(within(scrolling).queryByRole('button', { name: 'Use template…' })).toBeNull()
-    expect(within(scrolling).queryByRole('heading', { level: 2 })).toBeNull()
+    fireEvent.click(coding)
+    expect(screen.getByRole('radio', { name: 'Coding', checked: true })).toBe(coding)
+    expect(screen.getByRole('option', { name: /^Dependency updates/ })).toBeTruthy()
+    expect(screen.queryByRole('option', releaseNotes)).toBeNull()
+
+    const search = screen.getByRole('textbox', { name: 'Search templates' })
+    fireEvent.change(search, { target: { value: 'release notes' } })
+    expect(screen.queryByRole('listbox')).toBeNull()
+
+    fireEvent.click(screen.getByRole('radio', { name: 'All' }))
+    expect(screen.getByRole('option', releaseNotes)).toBeTruthy()
+    expect(screen.queryByRole('option', { name: /^Dependency updates/ })).toBeNull()
   })
 
   it('creates only through New bot, opened over the dialog, with the skills left ticked', async () => {

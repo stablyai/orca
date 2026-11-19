@@ -2919,7 +2919,6 @@
       "src/main/wsl/orcad/wsl-orcad-real-distro-lane.test.ts": 1061,
       "src/main/wsl/orcad/wsl-orcad-stdio-bridge-e9.test.ts": 1203,
       "src/main/wsl/orcad/wsl-orcad-stdio-bridge.test.ts": 471,
-      "src/main/wsl/orcad/wsl-orcad-update-admission-move-hold.test.ts": 630,
       "src/main/wsl/orcad/wsl-orcad-update-admission.test.ts": 707,
       "src/main/wsl/orcad/wsl-orcad-update-move-hold-driver.test.ts": 1995,
       "src/main/wsl/orcad/wsl-orcad-watch.test.ts": 447,

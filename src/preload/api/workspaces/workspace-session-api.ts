@@ -4,6 +4,10 @@ import type {
   WorkspaceSessionState
 } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
+import type {
+  WorkspaceSessionEntriesPatch,
+  WorkspaceSessionEntriesPatchResult
+} from '../../../shared/workspace-session/workspace-session-entries-patch'
 import type { TerminalSurfaceCloseTarget } from '../../../shared/workspace-layout/terminal-surfaces/terminal-surface-close-target'
 
 export type WorkspaceSessionApi = {
@@ -14,6 +18,11 @@ export type WorkspaceSessionApi = {
     listHostIds: () => Promise<ExecutionHostId[]>
     set: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => Promise<void>
     patch: (args: WorkspaceSessionPatch, hostId?: ExecutionHostId) => Promise<void>
+    /** Changed keys only; absent where the session store takes whole fields (paired web client). */
+    patchEntries?: (
+      args: WorkspaceSessionEntriesPatch,
+      hostId?: ExecutionHostId
+    ) => Promise<WorkspaceSessionEntriesPatchResult>
     /** Commits a terminal tab or split-pane close into main's membership. */
     closeTerminalSurface: (args: {
       worktreeId: string

@@ -1,5 +1,5 @@
 // Add to <bot>'s body: the rail, the search and the list it filters, or the step an Add opened.
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useDeferredValue, useRef, useState } from 'react'
 import { Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { Input } from '@/components/ui/input'
@@ -31,6 +31,7 @@ import {
   type BotDirectApp
 } from './bot-app-catalog'
 import { BotAppBrandLogo } from './BotAppBrandLogo'
+import { BotAppCategoryIcon } from './BotAppCategoryIcon'
 import { BotAppCaption } from './BotAppRow'
 import { BotAppStepHeader } from './BotAppStepParts'
 import { ComposioAccountStep, WebhooksStep } from './BotAppSteps'
@@ -82,6 +83,8 @@ export function BotAppsCatalog({
   const composio = useComposioBot(bot)
   const [view, setView] = useState<BotAppsView>('all')
   const [query, setQuery] = useState('')
+  // Let the dialog and its search field paint before mounting the catalog rows.
+  const showApps = useDeferredValue(true, false)
   const searchRef = useRef<HTMLInputElement>(null)
   const close = useCallback(() => onOpenChange(false), [onOpenChange])
   const manage = onManage
@@ -265,7 +268,7 @@ export function BotAppsCatalog({
     />
   )
 
-  const list = ((): React.ReactNode => {
+  const renderList = (): React.ReactNode => {
     const composioSection = (alone: boolean) => (
       <ComposioSection
         view={composio}
@@ -341,9 +344,12 @@ export function BotAppsCatalog({
     const shown = view === 'all' ? categories : categories.filter((c) => c.category === view)
     return (
       <>
-        {shown.map(({ category, count }) => (
+        {shown.map(({ category }) => (
           <section key={category} aria-label={botAppCategoryName(category)}>
-            <BotAppCaption title={botAppCategoryName(category)} count={count} />
+            <BotAppCaption
+              icon={<BotAppCategoryIcon category={category} />}
+              title={botAppCategoryName(category)}
+            />
             <ul className="flex flex-col">
               {direct.filter((row) => row.app.category === category).map(directRow)}
             </ul>
@@ -352,7 +358,7 @@ export function BotAppsCatalog({
         {view === 'all' && toolsOn ? composioSection(shown.length === 0) : null}
       </>
     )
-  })()
+  }
 
   const railProps: BotAppsRailProps = {
     bot,
@@ -394,8 +400,11 @@ export function BotAppsCatalog({
           </div>
           <BotAppsRailMenu {...railProps} />
         </div>
-        <div className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto px-3 pt-0.5 pb-3.5">
-          {list}
+        <div
+          aria-busy={!showApps}
+          className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto px-3 pt-0.5 pb-3.5"
+        >
+          {showApps ? renderList() : null}
         </div>
       </div>
     </div>

@@ -33,6 +33,8 @@ export type SplitPaneInMainOptions = {
   keepPaneOnStartFailure?: boolean
   /** The user's own act (a CLI or window split); without it a stopped WSL distro holds the start. */
   wslUserAct?: true
+  /** The new terminal's handle, drawn by a caller that must know it before the process starts. */
+  preAllocatedHandle?: string
 }
 
 export abstract class OrcaRuntimeWithSplitPaneInMain extends OrcaRuntimeWithSplitPtyBackedTerminal {
@@ -106,7 +108,7 @@ export abstract class OrcaRuntimeWithSplitPaneInMain extends OrcaRuntimeWithSpli
       undefined,
       { wslUserAct: opts.wslUserAct === true }
     ).catch((error: unknown) => this.keepSplitThatCannotStart(source, opts, error))
-    const preAllocatedHandle = this.createPreAllocatedTerminalHandle()
+    const preAllocatedHandle = opts.preAllocatedHandle ?? this.createPreAllocatedTerminalHandle()
     const result = await spawnInAdmittedPane(this.store, controller, {
       ...resolvePtyFirstSize({ pane: opts.initialSize }),
       cwd: opts.cwd ?? workspace.path,

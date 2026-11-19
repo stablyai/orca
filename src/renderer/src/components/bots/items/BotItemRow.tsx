@@ -1,8 +1,10 @@
-// One item in a bot's Items tab. Hover or focus on an open row swaps its age (a snoozed row's wake time)
+// One item in a bot's Items tab. Hover or keyboard focus on an open row swaps its age (a snoozed row's wake time)
 // for ✓ Done and ⋯ (Done, Snooze, Cancel); hovering its icon shows its checkbox, and once any row is checked every row shows one. A dot
 // marks a row that changed since the tab was last opened. A pointer-opened ⋯ menu closes when the
 // pointer leaves row and menu.
+import { useId } from 'react'
 import { Check, CircleCheck, CircleSlash, MoreHorizontal } from 'lucide-react'
+import CommentMarkdown from '@/components/comment-markdown/CommentMarkdown'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -20,14 +22,14 @@ import {
   isBotItemLive,
   type BotItem
 } from '../../../../../shared/bots/bot-items'
+import type { Bot } from '../../../../../shared/bot-types'
+import { BotRowHoverCard } from '../BotPanelRow'
 import { BotItemNumberColumn } from './BotItemNumberColumn'
+import { BotItemRowFace } from './BotItemRowFace'
 import { BotItemStatusIcon } from './BotItemStatusIcon'
 import { BOT_ITEM_ROW_HOVER_ACTIONS } from './bot-item-row-hover-actions'
-import {
-  BotItemSnoozeMenuItems,
-  formatBotItemSnoozeTime,
-  type BotItemSnoozing
-} from './BotItemSnooze'
+import { BotItemSnoozeMenuItems, type BotItemSnoozing } from './BotItemSnooze'
+import { formatBotItemSnoozeTime } from './bot-item-snooze-time'
 
 export type BotItemRowAction = { kind: 'open' } | { kind: 'done' } | { kind: 'cancel' }
 
@@ -41,7 +43,9 @@ export function BotItemRow({
   selecting,
   now,
   onSelect,
-  onAction
+  onAction,
+  face = null,
+  place = null
 }: {
   item: BotItem
   stale: boolean
@@ -55,11 +59,16 @@ export function BotItemRow({
   now: number
   onSelect: (selected: boolean, range: boolean) => void
   onAction: (action: BotItemRowAction) => void
+  /** Its bot, in a group's merged list. */
+  face?: Bot | null
+  /** Its chat's name, when the list shows chats beyond the one it is about. */
+  place?: string | null
 }): React.JSX.Element {
   const t = useTranslate()
   const closed = item.status === 'done' || item.status === 'canceled'
-  // Only Needs you has a second line, the bot's question; In progress's spinner is its live signal.
-  const line = !stale && !snoozed && item.status === 'needs_you' ? item.question?.text : null
+  // Needs you's question shows in the row's hover card; the row stays one line like the others.
+  const question = !stale && !snoozed && item.status === 'needs_you' ? item.question?.text : null
+  const questionId = useId()
   const checkbox = selecting || selected
   const { rowRef, triggerRef, ...menu } = useMenuPointerExitClose<
     HTMLDivElement,
@@ -71,7 +80,7 @@ export function BotItemRow({
       role="listitem"
       data-bot-item={item.number}
       className={cn(
-        'group/item relative flex min-w-0 items-start gap-2 rounded-sm px-2 py-1 hover:bg-accent focus-within:bg-accent has-[[data-state=open]]:bg-accent',
+        'group/item relative flex min-w-0 items-start gap-2 rounded-sm px-2 py-1 hover:bg-accent has-[:focus-visible]:bg-accent has-[[data-state=open]]:bg-accent',
         selected && 'bg-accent'
       )}
     >
@@ -93,55 +102,79 @@ export function BotItemRow({
           }}
         />
       </span>
-      <button
-        type="button"
-        data-bot-item-open=""
-        title={item.title}
-        className="min-w-0 flex-1 cursor-pointer rounded-sm text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-        onClick={() => onAction({ kind: 'open' })}
+      {face ? <BotItemRowFace bot={face} /> : null}
+      <BotRowHoverCard
+        card={
+          question ? (
+            <>
+              <p className="font-medium text-foreground">{item.title}</p>
+              <CommentMarkdown
+                content={question}
+                className="mt-1 text-xs leading-4 text-muted-foreground"
+              />
+            </>
+          ) : null
+        }
       >
-        <span className="flex min-w-0 items-start">
-          <BotItemNumberColumn number={item.number} />
-          <span className="min-w-0 flex-1">
-            <span className="flex min-w-0 items-center gap-2">
-              <span
-                className={cn(
-                  'min-w-0 flex-1 truncate text-[13px] leading-5',
-                  closed ? 'text-muted-foreground' : 'text-foreground'
-                )}
-              >
-                {item.title}
+        <button
+          type="button"
+          data-bot-item-open=""
+          title={question ? undefined : item.title}
+          aria-describedby={question ? questionId : undefined}
+          className="min-w-0 flex-1 cursor-pointer rounded-sm text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          onClick={() => onAction({ kind: 'open' })}
+        >
+          <span className="flex min-w-0 items-start">
+            <BotItemNumberColumn number={item.number} />
+            <span className="min-w-0 flex-1">
+              <span className="flex min-w-0 items-center gap-2">
+                <span
+                  className={cn(
+                    'min-w-0 flex-1 truncate text-[13px] leading-5',
+                    closed ? 'text-muted-foreground' : 'text-foreground'
+                  )}
+                >
+                  {item.title}
+                </span>
+                {/* Only open rows have hover actions, so only they give the age up to them. */}
+                <span
+                  className={cn(
+                    'flex shrink-0 items-center gap-2',
+                    !closed &&
+                      'group-has-[:focus-visible]/item:invisible group-hover/item:invisible group-has-[[data-state=open]]/item:invisible'
+                  )}
+                >
+                  {unseen ? (
+                    <span aria-hidden className="size-1.5 rounded-full bg-foreground" />
+                  ) : null}
+                  {snoozed && item.snoozedUntil !== null ? (
+                    <span className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
+                      {t('bots.items.snooze.rowUntil', 'until {{when}}', {
+                        when: formatBotItemSnoozeTime(item.snoozedUntil, now)
+                      })}
+                    </span>
+                  ) : (
+                    <span className="text-xs tabular-nums text-muted-foreground @max-[284px]:hidden">
+                      {formatShortTimeAgo(botItemActivityAt(item, now), now)}
+                    </span>
+                  )}
+                </span>
               </span>
-              {/* Only open rows have hover actions, so only they give the age up to them. */}
-              <span
-                className={cn(
-                  'flex shrink-0 items-center gap-2',
-                  !closed &&
-                    'group-focus-within/item:invisible group-hover/item:invisible group-has-[[data-state=open]]/item:invisible'
-                )}
-              >
-                {unseen ? (
-                  <span aria-hidden className="size-1.5 rounded-full bg-foreground" />
-                ) : null}
-                {snoozed && item.snoozedUntil !== null ? (
-                  <span className="whitespace-nowrap text-xs tabular-nums text-muted-foreground">
-                    {t('bots.items.snooze.rowUntil', 'until {{when}}', {
-                      when: formatBotItemSnoozeTime(item.snoozedUntil, now)
-                    })}
-                  </span>
-                ) : (
-                  <span className="text-xs tabular-nums text-muted-foreground @max-[284px]:hidden">
-                    {formatShortTimeAgo(botItemActivityAt(item, now), now)}
-                  </span>
-                )}
-              </span>
+              {/* A group's list names the chat a row is from on a quiet second line. */}
+              {place ? (
+                <span className="block truncate text-xs leading-4 text-muted-foreground">
+                  {place}
+                </span>
+              ) : null}
             </span>
-            {line ? (
-              <span className="block truncate text-xs leading-4 text-muted-foreground">{line}</span>
-            ) : null}
           </span>
+        </button>
+      </BotRowHoverCard>
+      {question ? (
+        <span id={questionId} hidden>
+          {question}
         </span>
-      </button>
+      ) : null}
       {closed ? null : (
         <span className={cn(BOT_ITEM_ROW_HOVER_ACTIONS, 'gap-0.5 has-[[data-state=open]]:flex')}>
           <Button

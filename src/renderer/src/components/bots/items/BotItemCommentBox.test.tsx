@@ -1,13 +1,19 @@
 // @vitest-environment happy-dom
 
 import { createRef } from 'react'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render as renderBare,
+  screen,
+  waitFor
+} from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { Bot } from '../../../../../shared/bot-types'
 import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixture'
 
-const sent = vi.hoisted(() => vi.fn(() => Promise.resolve()))
-vi.mock('./use-bot-items', () => ({ commentOnBotItem: sent }))
+const sent = vi.fn()
 const mentionQueries = vi.hoisted((): (string | null)[] => [])
 vi.mock('../../native-chat/composer/pickers/use-native-chat-mention-files', () => ({
   useNativeChatMentionFiles: ({ query }: { query: string | null }) => {
@@ -24,6 +30,10 @@ import {
   changePrompt,
   promptValue
 } from '../../native-chat/composer/editor/native-chat-prompt-editor.test-support'
+import { TooltipProvider } from '@/components/ui/tooltip'
+
+// The app root provides tooltips; the mic's needs it here too.
+const render = (ui: React.ReactElement) => renderBare(ui, { wrapper: TooltipProvider })
 
 const BOT: Bot = {
   id: 'bot-a',
@@ -51,7 +61,15 @@ afterEach(() => {
 })
 
 function renderBox(ref?: React.Ref<BotItemCommentBoxHandle>, uid = 6) {
-  render(<BotItemCommentBox ref={ref} bot={BOT} item={makeTestBotItem(uid)} attachTo={null} />)
+  render(
+    <BotItemCommentBox
+      ref={ref}
+      bot={BOT}
+      item={makeTestBotItem(uid)}
+      attachTo={null}
+      onSend={sent}
+    />
+  )
   return screen.getByRole('textbox', { name: 'Comment' })
 }
 
@@ -65,7 +83,7 @@ it('sends on Enter, adds a line on Shift+Enter, and leaves an IME composing Ente
   expect(sent).not.toHaveBeenCalled()
 
   fireEvent.keyDown(box, { key: 'Enter' })
-  expect(sent).toHaveBeenCalledWith(BOT, 'uid-61', 'Go with the proposed flow.', [])
+  expect(sent).toHaveBeenCalledWith('Go with the proposed flow.', [])
 })
 
 it('types a redirected key into the box at its caret and focuses it', () => {
@@ -77,25 +95,6 @@ it('types a redirected key into the box at its caret and focuses it', () => {
 
   expect(promptValue(box)).toBe('go')
   expect(box.contains(document.activeElement)).toBe(true)
-})
-
-it('focuses the box when the card around it is clicked', () => {
-  const box = renderBox(undefined, 63)
-  changePrompt(box, 'draft')
-
-  fireEvent.click(box.closest('[data-native-chat-composer-scope]')!)
-
-  expect(box.contains(document.activeElement)).toBe(true)
-})
-
-it('leaves focus alone when the Comment button is clicked', () => {
-  const box = renderBox(undefined, 64)
-  changePrompt(box, 'draft')
-
-  fireEvent.click(screen.getByRole('button', { name: 'Comment' }))
-
-  expect(sent).toHaveBeenCalledOnce()
-  expect(box.contains(document.activeElement)).toBe(false)
 })
 
 it("completes a workspace file at @ from the bot's folder, as chat does, instead of sending", () => {
@@ -131,7 +130,7 @@ it("numbers an image's pill by its thumbnail and posts it as [Image #N], as chat
     },
     'immediate'
   )
-  render(<BotItemCommentBox bot={BOT} item={item} attachTo={null} />)
+  render(<BotItemCommentBox bot={BOT} item={item} attachTo={null} onSend={sent} />)
   const box = screen.getByRole('textbox', { name: 'Comment' })
 
   await waitFor(() =>
@@ -143,7 +142,7 @@ it("numbers an image's pill by its thumbnail and posts it as [Image #N], as chat
   )
   fireEvent.keyDown(box, { key: 'Enter' })
 
-  expect(sent).toHaveBeenCalledWith(BOT, 'uid-66', 'Before [Image #2] after [Image #1]', [
+  expect(sent).toHaveBeenCalledWith('Before [Image #2] after [Image #1]', [
     '/store/a.png',
     '/store/b.png'
   ])

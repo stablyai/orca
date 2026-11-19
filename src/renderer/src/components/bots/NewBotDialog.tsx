@@ -1,6 +1,10 @@
 import React, { useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { LayoutTemplate } from 'lucide-react'
+import {
+  AddRemoteHostDialog,
+  type AddRemoteHostMode
+} from '@/components/sidebar/host-admission/ssh/AddRemoteHostDialog'
 import { useAppStore } from '@/store'
 import {
   Dialog,
@@ -29,7 +33,10 @@ import {
 } from '../../../../shared/execution-host/execution-host'
 import { useBotAgentSetup } from './use-bot-agent-setup'
 import { proposalCreateParams, type BotProposal } from '../../../../shared/bots/bot-proposal'
-import { BOTS_TEMPLATES_RUNTIME_CAPABILITY } from '../../../../shared/bot-runtime-capabilities'
+import {
+  BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY,
+  BOTS_TEMPLATES_RUNTIME_CAPABILITY
+} from '../../../../shared/bot-runtime-capabilities'
 import { useBotHostHas } from '@/lib/bot-host-status'
 import { botTemplate, type BotTemplateSkill } from '../../../../shared/bots/bot-templates'
 import { NewBotTemplateParts } from './NewBotTemplateParts'
@@ -120,6 +127,7 @@ export function NewBotDialog({
   const nameRef = useRef<HTMLInputElement>(null)
   const formRef = useRef<HTMLFormElement>(null)
   const [name, setName] = useState(proposal?.name ?? initialName ?? '')
+  const [addHostMode, setAddHostMode] = useState<AddRemoteHostMode | null>(null)
   const [draft, setDraft] = useState(() => draftOf(proposal, initialPurpose))
   const hostChoice = useBotCreateHost(open, hosts, offerHostId)
   const { hostId, blocked } = hostChoice.host
@@ -127,8 +135,12 @@ export function NewBotDialog({
   const { choices } = menu
   const agentSetup = useBotAgentSetup(choices, hostId, initialAgent)
   const [creating, setCreating] = useState(false)
+  const canCreate = !creating && !blocked && choices.length > 0
   const createdBot = useRef(false)
-  const picture = useNewBotPicture(proposal?.mascot)
+  const picture = useNewBotPicture(
+    useBotHostHas(hostId, BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY),
+    proposal?.mascot
+  )
   // From Bot templates itself (Blank bot), the row would only lead back to it.
   const fromTemplates = useAppStore((state) => state.activeModal === 'bot-templates')
   const trimmedName = name.trim()
@@ -141,6 +153,7 @@ export function NewBotDialog({
 
   const close = (made?: Bot): void => {
     setName(proposal?.name ?? '')
+    setAddHostMode(null)
     setDraft(draftOf(proposal, initialPurpose))
     agentSetup.reset()
     picture.reset()
@@ -161,7 +174,7 @@ export function NewBotDialog({
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
     // No name is fine: the runtime names it "New bot", numbered past ones already there.
-    if (creating || blocked) {
+    if (!canCreate) {
       return
     }
     setCreating(true)
@@ -183,6 +196,7 @@ export function NewBotDialog({
           : { name: trimmedName }),
         ...agentSetup.setup,
         avatar: picture.avatar,
+        avatarColor: picture.avatarColor,
         ...(takingOver ? { takingOver } : {})
       })
       bot = await picture.saveUpload(bot)
@@ -208,16 +222,15 @@ export function NewBotDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        // A proposal's lines get a wider, single-column dialog; past the window's height its body scrolls above a pinned footer.
         className={cn(
-          'max-w-md sm:max-w-md',
-          proposal && 'max-h-[calc(100vh-3rem)] grid-rows-[auto_minmax(0,1fr)] max-w-xl sm:max-w-xl'
+          'max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-md grid-rows-[auto_minmax(0,1fr)] sm:max-w-md',
+          proposal && 'max-w-xl sm:max-w-xl'
         )}
         {...keyboardNavMarkerHandlers}
         onOpenAutoFocus={(event) => {
           // The name, not Radix's first tabbable (the picture arrows), so typing names the bot.
           event.preventDefault()
-          nameRef.current?.focus({ preventScroll: true })
+          nameRef.current?.focus()
         }}
         onCloseAutoFocus={(event) => {
           // The new bot's page is opening and its composer takes focus; the New bot button must not.
@@ -242,22 +255,20 @@ export function NewBotDialog({
         </DialogHeader>
         <form
           ref={formRef}
-          className={proposal ? 'flex min-h-0 flex-col gap-4' : 'space-y-4'}
+          className="flex min-h-0 flex-col gap-4"
           onSubmit={(event) => void handleSubmit(event)}
           onKeyDown={(event) => {
-            if (isScreenSubmitShortcut(event)) {
+            if (
+              isScreenSubmitShortcut(event) &&
+              event.target instanceof Node &&
+              event.currentTarget.contains(event.target)
+            ) {
               event.preventDefault()
               formRef.current?.requestSubmit()
             }
           }}
         >
-          <div
-            className={
-              proposal
-                ? '-mx-1 min-h-0 space-y-4 overflow-y-auto px-1 scrollbar-sleek'
-                : 'space-y-4'
-            }
-          >
+          <div className="-mx-4 -mt-3 min-h-0 space-y-4 overflow-x-hidden overflow-y-auto px-4 pt-3 scrollbar-sleek">
             {/* The nudge reads this computer's other apps, so it shows only while this computer is picked. */}
             {onImport && hostId === LOCAL_EXECUTION_HOST_ID ? (
               <BotImportNudge
@@ -273,6 +284,8 @@ export function NewBotDialog({
               custom={picture.custom}
               onChange={picture.onChange}
               onUpload={picture.onUpload}
+              color={picture.color}
+              onColorChange={picture.onColorChange}
               uploadLink
             />
             <div className="space-y-1">
@@ -299,7 +312,7 @@ export function NewBotDialog({
               model={menu.model}
               choices={choices}
               onSetupChange={agentSetup.setSetup}
-              name={name}
+              onAddHost={hosts ? undefined : setAddHostMode}
             />
             {proposal ? (
               <div className="border-t border-border pt-4">
@@ -328,7 +341,7 @@ export function NewBotDialog({
               />
             ) : null}
           </div>
-          <div className="flex shrink-0 items-center gap-3 pt-1">
+          <div className="flex shrink-0 flex-wrap items-center gap-3 pt-1">
             {/* It closes this dialog, so it shows only before anything is typed. */}
             {showTemplateLink ? (
               <button
@@ -343,22 +356,20 @@ export function NewBotDialog({
                 {t('bots.new.fromTemplate', 'Start from a template')}
               </button>
             ) : null}
-            {template ? (
-              <span className="text-xs text-muted-foreground">
-                {t('bots.new.nothingUntilCreate', 'Nothing is created until you press Create bot.')}
-              </span>
-            ) : null}
             <BotCreateButton
               type="submit"
               className="ml-auto"
               busy={creating}
-              disabled={creating || Boolean(blocked) || choices.length === 0}
+              disabled={!canCreate}
             >
               {t('bots.new.createBot', 'Create bot')}
             </BotCreateButton>
           </div>
         </form>
       </DialogContent>
+      {addHostMode ? (
+        <AddRemoteHostDialog mode={addHostMode} onOpenChange={setAddHostMode} />
+      ) : null}
     </Dialog>
   )
 }

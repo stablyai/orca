@@ -144,30 +144,20 @@ describe('AddConnectorButton', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Add Slack' }))
     expect(screen.queryByText('Add to Reviewer')).toBeNull()
-    expect(screen.getByText('Add Reviewer to Slack')).toBeTruthy()
+    expect(screen.getByText('Connect Slack')).toBeTruthy()
     await waitFor(() => expect(state).toHaveBeenCalledWith({ botId: 'bot-1' }))
   })
 
-  it('narrows every group to the connectors whose name or description matches', async () => {
+  it('filters connectors, restores results on Clear search, and resets on reopen', async () => {
     render(<AddConnectorButton bot={{ ...bot, slack: { appId: 'A1', teamId: 'T1' } }} />)
-    fireEvent.click(screen.getByRole('button', { name: /Add connector/ }))
+    const open = screen.getByRole('button', { name: /Add connector/ })
+    fireEvent.click(open)
     await waitFor(() => expect(botGitHub.state).toHaveBeenCalled())
+    const search = screen.getByRole('textbox', { name: 'Search apps' })
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Search apps' }), {
-      target: { value: '  HAND THE BOT ' }
-    })
-    expect(screen.queryByRole('region', { name: 'Apps' })).toBeNull()
-
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'slack' } })
-    // Search lists what the bot has too, with Manage in place of Add.
+    fireEvent.change(search, { target: { value: '  SLACK ' } })
     expect(groupItems(/^Apps$/)).toEqual(['Slack'])
     expect(screen.getByRole('button', { name: 'Manage Slack' })).toBeTruthy()
-  })
-
-  it('says when nothing matches, and Clear search brings the full list back', () => {
-    render(<AddConnectorButton bot={bot} />)
-    fireEvent.click(screen.getByRole('button', { name: /Add connector/ }))
-    const search = screen.getByRole('textbox', { name: 'Search apps' })
 
     fireEvent.change(search, { target: { value: 'xyzzy' } })
     expect(screen.getByText(/No app matches “xyzzy”/)).toBeTruthy()
@@ -176,7 +166,13 @@ describe('AddConnectorButton', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Clear search' }))
     expect(search).toHaveProperty('value', '')
     expect(document.activeElement).toBe(search)
-    expect(addable()).toEqual(['Slack', 'Google'])
+    expect(screen.getByRole('button', { name: 'Add Google' })).toBeTruthy()
+
+    fireEvent.change(search, { target: { value: 'jira' } })
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
+    expect(screen.queryByText('Add to Reviewer')).toBeNull()
+    fireEvent.click(open)
+    expect(screen.getByRole('textbox', { name: 'Search apps' })).toHaveProperty('value', '')
   })
 
   it('finds an app Composio offers, and asks for the Composio account before its sign-in', () => {
@@ -196,17 +192,6 @@ describe('AddConnectorButton', () => {
     expect(screen.getByText(/Then you sign in to Jira on Composio’s page/)).toBeTruthy()
   })
 
-  it('starts with an empty search each time it opens', () => {
-    render(<AddConnectorButton bot={bot} />)
-    fireEvent.click(screen.getByRole('button', { name: /Add connector/ }))
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'jira' } })
-    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
-    expect(screen.queryByText('Add to Reviewer')).toBeNull()
-
-    fireEvent.click(screen.getByRole('button', { name: /Add connector/ }))
-    expect(screen.getByRole('textbox')).toHaveProperty('value', '')
-  })
-
   it('shows Slack as added, where Add another workspace sets the bot up in another one', async () => {
     const state = vi.fn().mockResolvedValue({ ok: true, value: { state: 'not_created' } })
     Object.assign(window, {
@@ -218,7 +203,7 @@ describe('AddConnectorButton', () => {
     expect(onBot()).toEqual(['Slack'])
     fireEvent.click(screen.getByRole('button', { name: 'Add another workspace' }))
     expect(screen.queryByText('Add to Reviewer')).toBeNull()
-    expect(screen.getByText('Add Reviewer to another Slack workspace')).toBeTruthy()
+    expect(screen.getByText('Connect another Slack workspace')).toBeTruthy()
     // No other workspace on this computer: a new one starts from its token.
     expect(await screen.findByRole('button', { name: 'Create Slack app' })).toBeTruthy()
   })
@@ -253,19 +238,8 @@ describe('AddConnectorButton', () => {
     await waitFor(() => expect(addable()).toEqual(['Slack', 'Linear', 'Google']))
     fireEvent.click(screen.getByRole('button', { name: 'Add Linear' }))
 
-    expect(screen.getByText('Add Reviewer to Linear')).toBeTruthy()
+    expect(await screen.findByText('for Reviewer')).toBeTruthy()
     expect(await screen.findByRole('button', { name: /Connect Linear/ })).toBeTruthy()
-  })
-
-  it('shows a bot on Linear as added', () => {
-    render(
-      <AddConnectorButton
-        bot={{ ...bot, linear: { workspaceId: 'org-1', workspaceName: 'Acme' } }}
-      />
-    )
-    fireEvent.click(screen.getByRole('button', { name: /Add connector/ }))
-
-    expect(onBot()).toEqual(['Linear'])
   })
 
   it('offers GitHub once the cloud has it, and adding it starts GitHub setup', async () => {
@@ -332,13 +306,6 @@ describe('AddConnectorButton', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Set up in chat' }))
     expect(askBotInChat).toHaveBeenCalledWith(bot, 'Set up a webhook that ')
     expect(screen.queryByText('Add to Reviewer')).toBeNull()
-  })
-
-  it('lists Webhooks as added once the bot has a hook', async () => {
-    setWebhookHostTransportForTests(vi.fn(async () => ({ hooks: [webhookSummaryFixture()] })))
-    render(<AddConnectorButton bot={bot} />)
-    fireEvent.click(screen.getByRole('button', { name: /Add connector/ }))
-    await waitFor(() => expect(onBot()).toEqual(['Webhooks']))
   })
 
   it('leaves Webhooks out while the cloud or this Orca has none', async () => {

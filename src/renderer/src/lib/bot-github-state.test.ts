@@ -69,34 +69,6 @@ describe('bot GitHub state', () => {
     expect(readBotGitHub('local')).toEqual({ status: 'loading' })
   })
 
-  it('stops checking with nothing new once the wait runs out, and clears when GitHub changes', async () => {
-    vi.useFakeTimers()
-    try {
-      signIn('cy')
-      state.mockResolvedValue({ ok: true, value: linked })
-      await refreshBotGitHub('local')
-      void awaitGitHubChange('local', 60_000)
-      expect(readGitHubAwait('local')).toBe('checking')
-      await vi.advanceTimersByTimeAsync(70_000)
-      expect(readGitHubAwait('local')).toBe('unchanged')
-      await refreshBotGitHub('local')
-      expect(readGitHubAwait('local')).toBe('unchanged')
-
-      void awaitGitHubChange('local', 60_000)
-      state.mockResolvedValue({
-        ok: true,
-        value: {
-          ...linked,
-          installations: [{ installationId: '9', accountLogin: 'acme', repositories: null }]
-        }
-      })
-      await vi.advanceTimersByTimeAsync(5_000)
-      expect(readGitHubAwait('local')).toBe(null)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('drops an expired wait’s "nothing new" once a later read finds the change', async () => {
     vi.useFakeTimers()
     try {
@@ -104,6 +76,7 @@ describe('bot GitHub state', () => {
       state.mockResolvedValue({ ok: true, value: linked })
       await refreshBotGitHub('local')
       void awaitGitHubChange('local', 60_000)
+      expect(readGitHubAwait('local')).toBe('checking')
       await vi.advanceTimersByTimeAsync(70_000)
       expect(readGitHubAwait('local')).toBe('unchanged')
 

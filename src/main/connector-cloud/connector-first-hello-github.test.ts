@@ -14,7 +14,7 @@ const linked: ConnectorGitHubState = {
   defaultBotId: null
 }
 
-function startWithGitHub(answerAfterMs: number, waitFirst: boolean) {
+function startWithGitHub(answerAfterMs: number) {
   const fetchState = vi.fn(
     () =>
       new Promise<{ ok: true; value: ConnectorGitHubState }>((resolve) =>
@@ -33,9 +33,7 @@ function startWithGitHub(answerAfterMs: number, waitFirst: boolean) {
           .map((workspaceId) => ({ source: 'github' as const, workspaceId, members: [] }))
       }
     ]
-    if (waitFirst) {
-      machine.beforeFirstHello = () => installations.firstAnswer(3_000)
-    }
+    machine.beforeFirstHello = () => installations.firstAnswer(3_000)
   })
   installations.onChange(() => started.client.sayChanged())
   return { ...started, fetchState }
@@ -43,7 +41,7 @@ function startWithGitHub(answerAfterMs: number, waitFirst: boolean) {
 
 describe('the first hello of a host with a GitHub bot', () => {
   it('waits for the first GitHub read, so one hello goes out with the installs', async () => {
-    const { client, fetchState } = startWithGitHub(500, true)
+    const { client, fetchState } = startWithGitHub(500)
     await settle(1_000)
     expect(fetchState).toHaveBeenCalledTimes(1)
     expect(h.fake.requestsTo(CONNECTOR_PATHS.hello)).toHaveLength(1)
@@ -53,15 +51,8 @@ describe('the first hello of a host with a GitHub bot', () => {
     client.stop()
   })
 
-  it('without the wait, the first hello lists none and a second follows (the old two)', async () => {
-    const { client } = startWithGitHub(500, false)
-    await settle(1_000)
-    expect(h.fake.requestsTo(CONNECTOR_PATHS.hello)).toHaveLength(2)
-    client.stop()
-  })
-
   it('a GitHub read slower than the bound holds the hello no longer than it', async () => {
-    const { client } = startWithGitHub(60_000, true)
+    const { client } = startWithGitHub(60_000)
     await settle(3_500)
     expect(h.fake.requestsTo(CONNECTOR_PATHS.hello)).toHaveLength(1)
     client.stop()
