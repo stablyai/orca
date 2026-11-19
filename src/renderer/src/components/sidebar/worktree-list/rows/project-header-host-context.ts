@@ -1,4 +1,5 @@
 import {
+  LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
@@ -125,8 +126,12 @@ export function getProjectHeaderHostContexts(args: {
       detail: host?.detail ?? getHostContextLabel(hostId)
     })
   }
-  // Only colliding names across machines need a host label.
+  // Zotz: remote-host projects always name their device; local ones only label on name collisions.
   return new Map(
-    [...candidates].filter(([key]) => (hostsByLabel.get(sectionLabels.get(key)!)?.size ?? 0) > 1)
+    [...candidates].filter(
+      ([key, context]) =>
+        context.hostId !== LOCAL_EXECUTION_HOST_ID ||
+        (hostsByLabel.get(sectionLabels.get(key)!)?.size ?? 0) > 1
+    )
   )
 }

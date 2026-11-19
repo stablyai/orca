@@ -24383,6 +24383,26 @@
       "outputUnavailable": "No se pudo leer la salida.",
       "outputEmpty": "Todavía no hay salida",
       "outputNotShared": "Este agente no comparte la salida de sus shells."
+    },
+    "deleteReview": {
+      "loading": "Cargando cambios…",
+      "failed": "No se pudieron cargar los cambios",
+      "binary": "Archivo binario; compáralo en Source Control",
+      "noTextChanges": "Sin cambios de texto",
+      "truncated_one": "… {{count}} línea más",
+      "truncated_other": "… {{count}} líneas más",
+      "truncated_many": "… {{count}} líneas más",
+      "showDiff": "Ver cambios"
+    },
+    "removeProject": {
+      "checking": "Revisando si las conversaciones tienen cambios sin commitear…",
+      "uncommitted_one": "{{count}} conversación tiene cambios sin commitear",
+      "uncommitted_other": "{{count}} conversaciones tienen cambios sin commitear",
+      "uncommitted_many": "{{count}} conversaciones tienen cambios sin commitear",
+      "uncommittedDetail": "Se quedan en el disco, pero el proyecto y sus conversaciones salen de Zotz. Abre cada lista para revisar los cambios.",
+      "changesKept_one": "{{count}} cambio sin commitear",
+      "changesKept_other": "{{count}} cambios sin commitear",
+      "changesKept_many": "{{count}} cambios sin commitear"
     }
   }
 }

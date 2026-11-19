@@ -26009,6 +26009,23 @@
       "outputUnavailable": "The output could not be read.",
       "outputEmpty": "No output yet",
       "outputNotShared": "This agent does not share the output of its shells."
+    },
+    "deleteReview": {
+      "loading": "Loading changes…",
+      "failed": "Could not load the changes",
+      "binary": "Binary file; compare it in Source Control",
+      "noTextChanges": "No text changes",
+      "truncated_one": "… {{count}} more line",
+      "truncated_other": "… {{count}} more lines",
+      "showDiff": "Show changes"
+    },
+    "removeProject": {
+      "checking": "Checking conversations for uncommitted changes…",
+      "uncommitted_one": "{{count}} conversation has uncommitted changes",
+      "uncommitted_other": "{{count}} conversations have uncommitted changes",
+      "uncommittedDetail": "They stay on disk, but this project and its conversations leave Zotz. Open a list to review each change.",
+      "changesKept_one": "{{count}} uncommitted change",
+      "changesKept_other": "{{count}} uncommitted changes"
     }
   }
 }

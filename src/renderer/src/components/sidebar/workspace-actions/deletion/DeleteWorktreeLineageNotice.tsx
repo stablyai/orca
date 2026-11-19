@@ -124,6 +124,7 @@ export function DeleteWorktreeLineageNotice({
                   {!preserveChildren && (
                     <>
                       <DeleteWorktreeDirtyChangeHint
+                        owner={child}
                         checkState={changeCheckStatesByWorktreeId?.get(
                           child.hostId ? getWorktreeHostIdentity(child) : child.id
                         )}

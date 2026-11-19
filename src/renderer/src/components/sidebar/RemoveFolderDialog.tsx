@@ -21,6 +21,7 @@ import { getRecipeVmSshTargetForHost } from '@/runtime/ephemeral-vm/recipe-vm-ma
 import { RemovalUnsavedFilesNotice } from './workspace-actions/deletion/RemovalUnsavedFilesNotice'
 import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import { projectRemovalTargets } from './workspace-actions/deletion/removal-unsaved-files'
+import { ZotzProjectRemovalChanges } from '../zotz/deletion/ZotzProjectRemovalChanges'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
@@ -155,6 +156,9 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
           ) : null}
         </DialogHeader>
         <RemovalUnsavedFilesNotice targets={unsavedTargets} enabled={isOpen} />
+        {repoId ? (
+          <ZotzProjectRemovalChanges repoId={repoId} hostId={hostId} isOpen={isOpen} />
+        ) : null}
         <DialogFooter>
           <Button variant="outline" onClick={() => handleOpenChange(false)}>
             {t('auto.components.sidebar.RemoveFolderDialog.d36883e046', 'Cancel')}
