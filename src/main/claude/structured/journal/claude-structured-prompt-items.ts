@@ -17,7 +17,12 @@ import { encodeClaudeQuestionOptionId } from './claude-structured-prompt-replies
 import type { ClaudePendingPrompt } from '../permissions/claude-prompt-registry'
 import { journalPromptRequestDigest } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-prompt-request-digest'
 
-/** A subagent's request can't be re-asked by a resumed session, so only the lead's prompts get one. */
+// Claude doesn't report the shell's directory, and a resumed session's shell starts back in the
+// project, so the same command can mean another directory.
+const DIRECTORY_DEPENDENT_TOOLS = new Set(['Bash', 'PowerShell'])
+
+/** A subagent's request can't be re-asked by a resumed session, so only the lead's prompts get one.
+ *  A shell command's digest names its own call: its card still restores, its re-ask is asked live. */
 function claudeRequestDigest(prompt: ClaudePendingPrompt): { requestDigest?: string } {
   return prompt.agentId
     ? {}
@@ -28,7 +33,8 @@ function claudeRequestDigest(prompt: ClaudePendingPrompt): { requestDigest?: str
           input: prompt.input,
           // "Allow for this session" grants the re-asked request's own suggestions.
           suggestions: prompt.suggestions,
-          blockedPath: prompt.blockedPath
+          blockedPath: prompt.blockedPath,
+          ...(DIRECTORY_DEPENDENT_TOOLS.has(prompt.toolName) ? { call: prompt.toolUseId } : {})
         })
       }
 }

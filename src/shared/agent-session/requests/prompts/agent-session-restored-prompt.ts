@@ -178,5 +178,5 @@ export function restoredPromptContinuationMessage(
   if (intent === 'reject_once' || intent === 'reject_always') {
     return `${lead} You asked for approval of:\n${asked}\nThe user denied it. Don't make that request again; carry on another way, or say what you need from them.`
   }
-  return `${lead} You asked for approval of:\n${asked}\nThe user approved it. Make the same request again, unchanged, and Orca approves it for them; then carry on. If what you need has changed, ask again normally.`
+  return `${lead} You asked for approval of:\n${asked}\nThe user approved it. Make the same request again, unchanged, then carry on. If what you need has changed, ask again normally.`
 }
