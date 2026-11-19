@@ -15,7 +15,6 @@ import { canShowPerfNotice } from './perf-notice-ledger'
 import {
   availableFraction,
   countIdleAgents,
-  hasTerminalCandidates,
   HIDDEN_TAB_MIN,
   IDLE_AGENT_MIN,
   idleAgentCandidates,
@@ -32,7 +31,7 @@ const HOUR = 60 * MINUTE
 const LOW_MEMORY_HOLD_MS = 2 * MINUTE
 // Why: each owner check takes a full process snapshot, so a failed one waits hours, not minutes.
 const OWNER_SHARE_RECHECK_MS = 6 * HOUR
-// Why: proving idle agents lists local sessions, so a check without a toast waits an hour.
+// Why: proving idle agents walks the workspace catalog, so a check without a toast waits an hour.
 const IDLE_AGENT_RECHECK_MS = HOUR
 const HIDDEN_TABS_RECHECK_MS = 10 * MINUTE
 const AGENT_SLEEP_IDLE_MS = 30 * MINUTE
@@ -58,14 +57,6 @@ type Gate = () => boolean
 /** Wall-clock ms at which the user counts as away, so main starts no process sweep after it. */
 type ActiveUntil = () => number
 
-async function localSessions(): Promise<Awaited<ReturnType<typeof window.api.pty.listSessions>>> {
-  try {
-    return await window.api.pty.listSessions({ connectionId: null })
-  } catch {
-    return []
-  }
-}
-
 /** Memory-low names terminals only when they hold most of the used memory; never Orca, never other apps. */
 async function memoryLowNotice(
   now: number,
@@ -76,15 +67,20 @@ async function memoryLowNotice(
   if (!hasResourceManager()) {
     return null
   }
-  const [snapshot, sessions] = await Promise.all([
-    window.api.memory.getSnapshot({ whileFocused: true, activeUntil: activeUntil() }),
-    localSessions()
-  ])
+  const snapshot = await window.api.memory.getSnapshot({
+    whileFocused: true,
+    activeUntil: activeUntil()
+  })
   if (blocked()) {
     return null
   }
   const state = useAppStore.getState()
-  const split = splitSnapshotByOwner(snapshot, sessions, readAgentPaneKeys())
+  // Why: no daemon listing, so it starts no RPC; unkeyed samples land in Your processes, so only
+  // fully keyed samples may name Your terminals.
+  const split = splitSnapshotByOwner(snapshot, [], readAgentPaneKeys())
+  const allKeyed = snapshot.worktrees.every((worktree) =>
+    worktree.sessions.every((session) => session.paneKey != null)
+  )
   const used = snapshot.host.usedMemory
   const terminals = split.agents.memory + split.yourProcesses.memory
   if (used <= 0 || terminals / used < TERMINAL_SHARE_MIN) {
@@ -93,8 +89,7 @@ async function memoryLowNotice(
   if (
     PERF_NOTICE_OFFERS_AGENT_SLEEP &&
     !state.settings?.experimentalAgentHibernation &&
-    countIdleAgents(state, idleAgentCandidates(state, now, AGENT_SLEEP_IDLE_MS), sessions)
-      .terminal > 0
+    countIdleAgents(state, idleAgentCandidates(state, now, AGENT_SLEEP_IDLE_MS)).terminal > 0
   ) {
     return { id: 'memory-low', variant: 'agent-sleep' }
   }
@@ -103,31 +98,20 @@ async function memoryLowNotice(
     variant:
       split.agents.memory / used >= TERMINAL_SHARE_MIN
         ? 'agents'
-        : split.yourProcesses.memory / used >= TERMINAL_SHARE_MIN
+        : allKeyed && split.yourProcesses.memory / used >= TERMINAL_SHARE_MIN
           ? 'your-terminals'
           : 'terminals'
   }
 }
 
-async function idleAgentsNotice(
-  now: number,
-  blocked: Gate,
-  tracking: Tracking
-): Promise<PerfNotice | null> {
-  const candidates = idleAgentCandidates(useAppStore.getState(), now)
+function idleAgentsNotice(now: number, tracking: Tracking): PerfNotice | null {
+  const state = useAppStore.getState()
+  const candidates = idleAgentCandidates(state, now)
   if (candidates.length < IDLE_AGENT_MIN) {
     return null
   }
   tracking.idleCheckedAt = now
-  // Why: chats are proven from the store, so only terminal candidates pay for the pane listing.
-  const sessions = hasTerminalCandidates(candidates) ? await localSessions() : []
-  if (blocked()) {
-    return null
-  }
-  // Why: agents may have started working during the listing; only rows still idle count.
-  const state = useAppStore.getState()
-  const stillIdle = idleAgentCandidates(state, Date.now())
-  const idle = countIdleAgents(state, stillIdle, sessions)
+  const idle = countIdleAgents(state, candidates)
   if (idle.terminal + idle.chats < IDLE_AGENT_MIN) {
     return null
   }
@@ -182,7 +166,7 @@ async function evaluate(
     now - tracking.idleCheckedAt >= IDLE_AGENT_RECHECK_MS &&
     canShowPerfNotice('idle-agents', now)
   ) {
-    notice = await idleAgentsNotice(now, blocked, tracking)
+    notice = idleAgentsNotice(now, tracking)
   }
   if (blocked()) {
     return CADENCE.tight

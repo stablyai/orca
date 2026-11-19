@@ -1,6 +1,7 @@
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { PerfNoticeSignals } from '../../../../shared/diagnostics/perf-notice-signals'
-import type { PtyListedSession } from '../../../../shared/terminal/pty/lifecycle/pty-listed-session'
+import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { isProgramStatusRow } from '../../../../shared/program-status/program-status-row'
 import {
@@ -62,43 +63,40 @@ export function idleAgentCandidates(
   return candidates
 }
 
-/** Terminal agents need a pane listing; chats are proven from the store alone. */
-export function hasTerminalCandidates(candidates: readonly AgentStatusEntry[]): boolean {
-  return candidates.some((entry) => !entry.structuredHostOwned)
+/** A terminal agent's pane still holds a PTY on this machine (the row is dropped when its command finishes). */
+function hasLocalPty(state: AppState, entry: AgentStatusEntry): boolean {
+  const pane = parsePaneKey(entry.paneKey)
+  const ptyId = pane && state.terminalLayoutsByTabId[pane.tabId]?.ptyIdsByLeafId?.[pane.leafId]
+  return !!ptyId && getPtyExecutionHost(ptyId) === null && entry.connectionId == null
 }
 
 /**
- * Agents still holding memory on this machine. A terminal agent counts only while its pane still has
- * a live local session (the row is dropped when the agent's command finishes); a chat counts only
- * while the host runs its agent, its workspace is local, and auto-stop is off.
+ * Agents still holding memory on this machine, proven from the store alone so a check starts no IPC.
+ * A terminal agent counts while its pane holds a local PTY in a local workspace; a chat counts while
+ * the host runs its agent, its workspace is local, and auto-stop is off.
  */
 export function countIdleAgents(
   state: AppState,
-  candidates: readonly AgentStatusEntry[],
-  localSessions: readonly Pick<PtyListedSession, 'paneKey' | 'exiting'>[]
+  candidates: readonly AgentStatusEntry[]
 ): IdleAgents {
-  // Why: the daemon proves only claimed agents present, so a live pane plus its agent row is the proof.
-  const liveAgentPanes = new Set<string>()
-  for (const session of localSessions) {
-    if (session.paneKey && !session.exiting) {
-      liveAgentPanes.add(session.paneKey)
-    }
-  }
   const chatsNeverStop = nativeChatIdleStopMinutes(state.settings) === 0
-  const chatCandidates = chatsNeverStop
-    ? candidates.filter((entry) => entry.structuredHostOwned && entry.worktreeId)
-    : []
-  // Why: one catalog walk per check, never one per chat.
-  const localWorktrees = chatCandidates.length > 0 ? collectLocalWorktreeIds(state) : null
+  const counted = candidates.filter((entry) =>
+    entry.structuredHostOwned ? chatsNeverStop : hasLocalPty(state, entry)
+  )
+  // Why: one catalog walk per check, never one per agent.
+  const localWorktrees = counted.length > 0 ? collectLocalWorktreeIds(state) : null
+  const isLocal = (entry: AgentStatusEntry): boolean =>
+    !!localWorktrees && !!entry.worktreeId && localWorktrees.has(entry.worktreeId)
   const labels = new Set<string>()
   let terminal = 0
   let chats = 0
-  for (const entry of candidates) {
+  for (const entry of counted) {
+    if (!isLocal(entry)) {
+      continue
+    }
     if (entry.structuredHostOwned) {
-      if (localWorktrees && entry.worktreeId && localWorktrees.has(entry.worktreeId)) {
-        chats += 1
-      }
-    } else if (liveAgentPanes.has(entry.paneKey)) {
+      chats += 1
+    } else {
       terminal += 1
       labels.add(formatAgentTypeLabel(entry.agentType))
     }
