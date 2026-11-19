@@ -54,10 +54,8 @@ export type AgentRestartCandidate = {
   worktreeId: string
   tabId: string
   leafId: string
-  /** Checked by default only when restartable and quiet; a row restored but not yet confirmed is never quiet. */
+  /** Checked by default only when restartable and quiet, and shown as Working otherwise; a restored, unconfirmed row is never quiet. */
   quiet: boolean
-  /** Shown as Working rather than Idle. */
-  busy: boolean
 } & RestartVerdict
 
 // Why: these resume by work folder (agent-resume-argv.ts), so without the recorded one they reopen another session.
@@ -239,7 +237,6 @@ export async function localAgentRestartCandidates(
         tabId: pane.tabId,
         leafId: pane.leafId,
         quiet: !!entry && !entry.restoredUnconfirmed && isAgentPaneQuiet(entry, evidence),
-        busy: !!entry && entry.state !== 'done',
         ...judgeRestart(state, pane, paneRunning, claudeView)
       }
     ]

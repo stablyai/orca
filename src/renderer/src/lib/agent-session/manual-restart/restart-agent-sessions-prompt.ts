@@ -61,10 +61,6 @@ export async function openRestartAgentSessionsPrompt(): Promise<void> {
   } finally {
     scanning = false
   }
-  if (generation !== scanGeneration) {
-    toast.dismiss(scanToast)
-    return
-  }
   if (candidates.length === 0) {
     toast.info(translate('agentSessionRestart.none', 'No agent sessions to restart.'), {
       id: scanToast

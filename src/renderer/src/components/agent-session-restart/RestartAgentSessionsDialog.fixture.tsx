@@ -20,17 +20,10 @@ const pane = (index: number, worktreeId: string) => ({
 })
 
 const candidates: AgentRestartCandidate[] = [
-  { ...pane(0, ORCA), agent: 'claude', restartable: true, quiet: true, busy: false },
-  { ...pane(1, ORCA), agent: 'claude', restartable: true, quiet: false, busy: true },
-  { ...pane(2, SITE), agent: 'codex', restartable: true, quiet: true, busy: false },
-  {
-    ...pane(3, SITE),
-    agent: 'codex',
-    restartable: false,
-    reason: 'no-session',
-    quiet: false,
-    busy: false
-  }
+  { ...pane(0, ORCA), agent: 'claude', restartable: true, quiet: true },
+  { ...pane(1, ORCA), agent: 'claude', restartable: true, quiet: false },
+  { ...pane(2, SITE), agent: 'codex', restartable: true, quiet: true },
+  { ...pane(3, SITE), agent: 'codex', restartable: false, reason: 'no-session', quiet: false }
 ]
 
 const prompts = [
@@ -62,7 +55,7 @@ function status(prompt: string, index: number): [string, AgentStatusEntry] {
       worktreeId: candidate.worktreeId,
       tabId: candidate.tabId,
       agentType: candidate.agent,
-      state: candidate.busy ? 'working' : 'done',
+      state: candidate.quiet ? 'done' : 'working',
       prompt,
       updatedAt: now,
       stateStartedAt: now,

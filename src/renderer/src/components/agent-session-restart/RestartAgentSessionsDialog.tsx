@@ -89,7 +89,7 @@ export function RestartAgentSessionsPromptDialog({
               fallbackTitle={t('agentSessionRestart.session', '{{agent}} session', {
                 agent: formatAgentTypeLabel(candidate.agent)
               })}
-              busy={candidate.busy}
+              busy={!candidate.quiet}
               reason={candidate.restartable ? undefined : cantRestartLabel(candidate.reason, t)}
               fixed={fixed}
               checked={ticked.has(candidate.ptyId)}

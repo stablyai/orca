@@ -129,8 +129,7 @@ describe('localAgentRestartCandidates', () => {
         leafId: LEAF_ID,
         agent: 'codex',
         restartable: true,
-        quiet: true,
-        busy: false
+        quiet: true
       }
     ])
   })
