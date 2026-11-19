@@ -14,6 +14,7 @@ import {
   type FleetTeamOpenOverrides
 } from './FleetProjectSection'
 import { FleetSummaryBand } from './FleetSummaryBand'
+import { createFleetAgeFormatter } from './fleet-age-formatter'
 import {
   loadFleetCollapsedProjects,
   saveFleetCollapsedProjects
@@ -40,6 +41,7 @@ export function AgentFleetView({
   className?: string
 }): React.JSX.Element {
   const t = useTranslate()
+  const formatAge = useMemo(() => createFleetAgeFormatter(t), [t])
   const view = useMemo(() => buildFleetView(cards), [cards])
   const [width, setWidth] = useState<number | null>(null)
   const measureRef = useMeasuredWidth(setWidth)
@@ -75,6 +77,7 @@ export function AgentFleetView({
               onTeamOpenChange={onTeamOpenChange}
               width={width}
               now={now}
+              formatAge={formatAge}
               onOpenCard={onOpenCard}
             />
           ))}

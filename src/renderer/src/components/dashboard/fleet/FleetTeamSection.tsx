@@ -4,6 +4,7 @@ import type { FleetCardOpener } from './FleetNetworkNode'
 import { FleetNetworkOutline } from './FleetNetworkOutline'
 import { FleetNetworkTree } from './FleetNetworkTree'
 import { FleetTeamHeader } from './FleetTeamHeader'
+import type { FleetAgeFormatter } from './fleet-age-formatter'
 import { fleetFoldedAttentionClass } from './fleet-bucket-presentation'
 import { FLEET_TEAM_TREE_INSET_PX, type FleetTeamLayout } from './fleet-team-fold'
 import type { FleetProject, FleetTeam } from './fleet-view-model'
@@ -15,6 +16,7 @@ export function FleetTeamSection({
   open,
   onOpenChange,
   now,
+  formatAge,
   onOpenCard
 }: {
   team: FleetTeam
@@ -23,6 +25,7 @@ export function FleetTeamSection({
   open: boolean
   onOpenChange: (open: boolean) => void
   now: number
+  formatAge: FleetAgeFormatter
   onOpenCard: FleetCardOpener
 }): React.JSX.Element {
   return (
@@ -38,6 +41,7 @@ export function FleetTeamSection({
                 root={team.root}
                 project={project}
                 now={now}
+                formatAge={formatAge}
                 onOpenCard={onOpenCard}
               />
             </div>
@@ -47,6 +51,7 @@ export function FleetTeamSection({
                 root={team.root}
                 project={project}
                 now={now}
+                formatAge={formatAge}
                 onOpenCard={onOpenCard}
               />
             </div>

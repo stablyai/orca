@@ -1,38 +1,67 @@
+import { memo } from 'react'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { AgentQuestionIcon } from '@/components/agent/status/AgentQuestionIcon'
 import { AgentStateDot } from '@/components/agent/status/AgentStateDot'
-import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import {
   dashboardCardDisplayState,
   type DashboardCard
 } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
+import { sameDashboardCard } from '../board/dashboard-card-equality'
 import {
-  dashboardCardAgeLabel,
-  dashboardCardSurfaceClass
+  dashboardCardAgeBucket,
+  dashboardCardSurfaceClass,
+  type DashboardCardAgeBucket
 } from '../board/dashboard-card-presentation'
 import { FleetNodeLocation } from './FleetNodeLocation'
 import { FleetNodeSubagents } from './FleetNodeSubagents'
+import type { FleetAgeFormatter } from './fleet-age-formatter'
 import { fleetCardTitle } from './fleet-card-title'
 import type { FleetProject } from './fleet-view-model'
 
 export type FleetCardOpener = (card: DashboardCard) => void
 
-export function FleetNetworkNode({
-  card,
-  project,
-  now,
-  onOpenCard,
-  maxWidthPx
-}: {
+type FleetNetworkNodeProps = {
   card: DashboardCard
   project: FleetProject
   now: number
+  formatAge: FleetAgeFormatter
   onOpenCard: FleetCardOpener
   maxWidthPx?: number
-}): React.JSX.Element {
-  const t = useTranslate()
-  const ageLabel = dashboardCardAgeLabel(card, now, t)
+}
+
+function sameAgeBucket(
+  a: DashboardCardAgeBucket | null,
+  b: DashboardCardAgeBucket | null
+): boolean {
+  return a === null || b === null ? a === b : a.unit === b.unit && a.count === b.count
+}
+
+function sameFleetNode(previous: FleetNetworkNodeProps, next: FleetNetworkNodeProps): boolean {
+  return (
+    previous.onOpenCard === next.onOpenCard &&
+    previous.formatAge === next.formatAge &&
+    previous.maxWidthPx === next.maxWidthPx &&
+    previous.project.key === next.project.key &&
+    previous.card.workspaceKind === next.card.workspaceKind &&
+    sameDashboardCard(previous.card, next.card) &&
+    sameAgeBucket(
+      dashboardCardAgeBucket(previous.card, previous.now),
+      dashboardCardAgeBucket(next.card, next.now)
+    )
+  )
+}
+
+export const FleetNetworkNode = memo(function FleetNetworkNode({
+  card,
+  project,
+  now,
+  formatAge,
+  onOpenCard,
+  maxWidthPx
+}: FleetNetworkNodeProps): React.JSX.Element {
+  const age = dashboardCardAgeBucket(card, now)
+  const ageLabel = age ? formatAge(age) : null
   return (
     <button
       type="button"
@@ -67,4 +96,4 @@ export function FleetNetworkNode({
       </span>
     </button>
   )
-}
+}, sameFleetNode)

@@ -1,5 +1,6 @@
 import { cn } from '@/lib/class-names'
 import { FleetNetworkNode, type FleetCardOpener } from './FleetNetworkNode'
+import type { FleetAgeFormatter } from './fleet-age-formatter'
 import { FLEET_TREE_BRANCH_GUTTER_PX, FLEET_TREE_NODE_MAX_WIDTH_PX } from './fleet-team-fold'
 import type { FleetNode, FleetProject } from './fleet-view-model'
 
@@ -22,11 +23,13 @@ function FleetNetworkBranch({
   node,
   project,
   now,
+  formatAge,
   onOpenCard
 }: {
   node: FleetNode
   project: FleetProject
   now: number
+  formatAge: FleetAgeFormatter
   onOpenCard: FleetCardOpener
 }): React.JSX.Element {
   return (
@@ -38,6 +41,7 @@ function FleetNetworkBranch({
         card={node.card}
         project={project}
         now={now}
+        formatAge={formatAge}
         onOpenCard={onOpenCard}
         maxWidthPx={FLEET_TREE_NODE_MAX_WIDTH_PX}
       />
@@ -49,6 +53,7 @@ function FleetNetworkBranch({
               node={child}
               project={project}
               now={now}
+              formatAge={formatAge}
               onOpenCard={onOpenCard}
             />
           ))}
@@ -62,16 +67,24 @@ export function FleetNetworkTree({
   root,
   project,
   now,
+  formatAge,
   onOpenCard
 }: {
   root: FleetNode
   project: FleetProject
   now: number
+  formatAge: FleetAgeFormatter
   onOpenCard: FleetCardOpener
 }): React.JSX.Element {
   return (
     <ul className="flex">
-      <FleetNetworkBranch node={root} project={project} now={now} onOpenCard={onOpenCard} />
+      <FleetNetworkBranch
+        node={root}
+        project={project}
+        now={now}
+        formatAge={formatAge}
+        onOpenCard={onOpenCard}
+      />
     </ul>
   )
 }

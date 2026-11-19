@@ -5,6 +5,7 @@ import { FleetNetworkNode, type FleetCardOpener } from './FleetNetworkNode'
 import { FleetProjectHeader } from './FleetProjectHeader'
 import { FleetSoloHeader } from './FleetSoloHeader'
 import { FleetTeamSection } from './FleetTeamSection'
+import type { FleetAgeFormatter } from './fleet-age-formatter'
 import { fleetFoldedAttentionClass } from './fleet-bucket-presentation'
 import { fleetTeamLayout } from './fleet-team-fold'
 import type { FleetProject } from './fleet-view-model'
@@ -22,6 +23,7 @@ export function FleetProjectSection({
   onTeamOpenChange,
   width,
   now,
+  formatAge,
   onOpenCard
 }: {
   project: FleetProject
@@ -32,6 +34,7 @@ export function FleetProjectSection({
   onTeamOpenChange: FleetTeamOpenChange
   width: number
   now: number
+  formatAge: FleetAgeFormatter
   onOpenCard: FleetCardOpener
 }): React.JSX.Element {
   return (
@@ -53,6 +56,7 @@ export function FleetProjectSection({
               open={teamOpenOverrides.get(team.root.card.paneKey) ?? !team.settled}
               onOpenChange={(teamOpen) => onTeamOpenChange(team.root.card.paneKey, teamOpen)}
               now={now}
+              formatAge={formatAge}
               onOpenCard={onOpenCard}
             />
           ))}
@@ -66,6 +70,7 @@ export function FleetProjectSection({
                     card={card}
                     project={project}
                     now={now}
+                    formatAge={formatAge}
                     onOpenCard={onOpenCard}
                   />
                 ))}

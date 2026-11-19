@@ -18,30 +18,53 @@ export function dashboardCardSurfaceClass(card: DashboardCard): string {
     : 'border-border/60 bg-card hover:border-border hover:bg-accent/40'
 }
 
-function formatStartedAgo(startedAt: number, now: number, t: Translate): string {
+export type DashboardCardAgeBucket =
+  | { unit: 'justNow'; count: 0 }
+  | { unit: 'minutes' | 'hours' | 'days'; count: number }
+
+function ageBucketSince(startedAt: number, now: number): DashboardCardAgeBucket {
   const seconds = Math.max(0, Math.floor((now - startedAt) / 1000))
   if (seconds < 60) {
-    return t('dashboardPopout.card.time.justNow', 'just now')
+    return { unit: 'justNow', count: 0 }
   }
   const minutes = Math.floor(seconds / 60)
   if (minutes < 60) {
-    return t('dashboardPopout.card.time.minutes', '{{count}}m', { count: minutes })
+    return { unit: 'minutes', count: minutes }
   }
   const hours = Math.floor(minutes / 60)
   if (hours < 24) {
-    return t('dashboardPopout.card.time.hours', '{{count}}h', { count: hours })
+    return { unit: 'hours', count: hours }
   }
-  return t('dashboardPopout.card.time.days', '{{count}}d', {
-    count: Math.floor(hours / 24)
-  })
+  return { unit: 'days', count: Math.floor(hours / 24) }
 }
 
 /** Count from completion when present, otherwise start, matching the worktree sidebar; null when neither is known. */
+export function dashboardCardAgeBucket(
+  card: DashboardCard,
+  now: number
+): DashboardCardAgeBucket | null {
+  const timestamp = card.finishedAt ?? card.startedAt
+  return timestamp > 0 ? ageBucketSince(timestamp, now) : null
+}
+
+export function formatDashboardCardAge(age: DashboardCardAgeBucket, t: Translate): string {
+  switch (age.unit) {
+    case 'justNow':
+      return t('dashboardPopout.card.time.justNow', 'just now')
+    case 'minutes':
+      return t('dashboardPopout.card.time.minutes', '{{count}}m', { count: age.count })
+    case 'hours':
+      return t('dashboardPopout.card.time.hours', '{{count}}h', { count: age.count })
+    case 'days':
+      return t('dashboardPopout.card.time.days', '{{count}}d', { count: age.count })
+  }
+}
+
 export function dashboardCardAgeLabel(
   card: DashboardCard,
   now: number,
   t: Translate = translate
 ): string | null {
-  const timestamp = card.finishedAt ?? card.startedAt
-  return timestamp > 0 ? formatStartedAgo(timestamp, now, t) : null
+  const age = dashboardCardAgeBucket(card, now)
+  return age ? formatDashboardCardAge(age, t) : null
 }
