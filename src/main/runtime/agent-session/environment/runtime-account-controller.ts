@@ -40,6 +40,7 @@ import {
   selectedClaudeAccountId,
   subscribeRuntimeAccountChanges
 } from './runtime-account-change-subscription'
+import { readRuntimeAccountsSnapshot } from './runtime-account-snapshot'
 import type { ManagedAccountNameProvider } from '../../../../shared/agent-accounts/managed-account-display-names'
 
 export type RuntimeAccountServices = {
@@ -132,23 +133,13 @@ export class RuntimeAccountController {
   }
 
   async getSnapshot(): Promise<AccountsSnapshot> {
-    const { claudeAccounts, codexAccounts, rateLimits } = this.requireServices()
-    return {
-      ...this.dataAccountsSnapshot(),
-      claude: claudeAccounts.listAccounts(),
-      codex: await codexAccounts.listAccounts(),
-      rateLimits: await rateLimits.getState()
-    }
+    return readRuntimeAccountsSnapshot(this.requireServices(), () => this.dataAccountsSnapshot())
   }
 
   async getStreamSnapshot(): Promise<AccountsSnapshot> {
-    const { claudeAccounts, codexAccounts, rateLimits } = this.requireServices()
-    return {
-      ...this.streamDataAccountsSnapshot(),
-      claude: claudeAccounts.listAccounts(),
-      codex: await codexAccounts.listAccounts(),
-      rateLimits: await rateLimits.getState()
-    }
+    return readRuntimeAccountsSnapshot(this.requireServices(), () =>
+      this.streamDataAccountsSnapshot()
+    )
   }
 
   private streamDataAccountsSnapshot(): Pick<AccountsSnapshot, 'opencode' | 'devin'> {
