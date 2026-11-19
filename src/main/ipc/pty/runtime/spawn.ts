@@ -45,14 +45,22 @@ export async function spawnPtyFromRuntimeController(
           replace: async () => {
             const operation = ctx.accountRestartOperation!
             operation.stop = 'unknown'
-            if (
-              !(await stopAndWaitPtyFromRuntimeController(
-                deps,
-                condition.expected.kind === 'endpoint' ? condition.expected.ptyId : '',
-                { keepHistory: true }
-              ))
-            ) {
-              throw new Error('terminal_replaced_pty_stop_unverified')
+            const original = operation.original!
+            const settleStop = deps.runtime?.intentionalPtyStops?.mark(
+              original.ptyId,
+              'replaced',
+              original.incarnationId
+            )
+            let stopped = false
+            try {
+              stopped = await stopAndWaitPtyFromRuntimeController(deps, original.ptyId, {
+                keepHistory: true
+              })
+              if (!stopped) {
+                throw new Error('terminal_replaced_pty_stop_unverified')
+              }
+            } finally {
+              settleStop?.(stopped)
             }
             operation.stop = 'confirmed-retired'
             ctx.replacedPaneOwner = {
