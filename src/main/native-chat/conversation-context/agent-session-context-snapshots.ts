@@ -69,6 +69,8 @@ export async function writeAgentSessionContextSnapshot(
     if (!published || !isCurrent()) {
       throw new Error('Chat context snapshot publication was replaced')
     }
+    // Fresh as of the return itself, however long the awaits above took; nothing awaits after this.
+    publishedAt.set(path, Date.now())
     void sweepAgentSessionContextSnapshots(root)
     return path
   } finally {
