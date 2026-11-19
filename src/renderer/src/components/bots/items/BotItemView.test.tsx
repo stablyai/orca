@@ -712,3 +712,20 @@ it('offers back words typed before the first send that the answer left out', asy
 
   expect(screen.getByRole('status').textContent).toContain('ask Ops first')
 })
+
+it("keeps a several-step question's steps and count inside the card's bordered body", () => {
+  renderAt(
+    askingItem(45, {
+      ask: {
+        questions: [
+          { prompt: 'Which format?', options: [{ label: 'Checklist' }, { label: 'Paragraph' }] },
+          { prompt: 'Which theme?', options: [{ label: 'Light' }, { label: 'Dark' }] }
+        ]
+      }
+    })
+  )
+
+  const body = document.querySelector<HTMLElement>('[data-native-chat-question-surface]')!
+  expect(within(body).getByRole('button', { name: 'Step 1' })).toBeTruthy()
+  expect(within(body).getByText('1/2')).toBeTruthy()
+})

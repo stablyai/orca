@@ -16,6 +16,8 @@ export type NativeChatQuestionCardLook = {
   header?: React.ReactNode
   /** Draws the question's words in place of the plain heading (an item clamps a long ask). */
   renderQuestion?: (content: string) => React.ReactNode
+  /** Several steps' tabs and count sit inside the bordered body, not above and below it. */
+  stepsInSurface?: boolean
 }
 
 /** An answer in progress the card starts from and reports back to, kept by its surface across remounts
@@ -59,7 +61,8 @@ export function NativeChatQuestionSteps({
   current,
   answered,
   disabled,
-  onStep
+  onStep,
+  className
 }: {
   questions: AskPrompt['questions']
   current: number
@@ -67,10 +70,11 @@ export function NativeChatQuestionSteps({
   answered: readonly boolean[]
   disabled: boolean
   onStep: (index: number) => void
+  className?: string
 }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <div className="mb-2 flex shrink-0 gap-1 overflow-x-auto pb-1 scrollbar-sleek">
+    <div className={cn('mb-2 flex shrink-0 gap-1 overflow-x-auto pb-1 scrollbar-sleek', className)}>
       {questions.map((qq, i) => (
         <button
           key={i}

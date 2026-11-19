@@ -34,11 +34,14 @@ import {
   botItemQuestionContext
 } from './BotItemQuestionRow'
 import { BotItemStatusIcon } from './BotItemStatusIcon'
+import { BotItemLinkedRefs } from './BotItemLinkedRefs'
 import { formatBotItemSnoozeTime } from './bot-item-snooze-time'
 import type { BotItemPendingComments } from './use-bot-item-pending-comments'
 
 const TIME = { hour: 'numeric', minute: '2-digit' } as const
 const ACTOR = 'font-medium text-foreground/80'
+// Where a linked event's refs go in its translated sentence.
+const LINKS_SLOT = '\u0000'
 
 function str(value: unknown): string {
   return typeof value === 'string' ? value : ''
@@ -147,15 +150,19 @@ function EventBody({ event, item }: { event: BotItemEvent; item: BotItem }): Rea
             : t('bots.items.activity.made', 'added this item')}
         </>
       )
-    case 'linked':
+    case 'linked': {
+      // The sentence is translated around its refs, which render with their own break points.
+      const [before = '', after = ''] = t('bots.items.activity.linked', 'linked {{links}}', {
+        links: LINKS_SLOT
+      }).split(LINKS_SLOT)
       return (
         <>
-          {by}{' '}
-          {t('bots.items.activity.linked', 'linked {{links}}', {
-            links: Array.isArray(data.links) ? data.links.join(', ') : ''
-          })}
+          {by} {before}
+          <BotItemLinkedRefs links={Array.isArray(data.links) ? data.links.map(String) : []} />
+          {after}
         </>
       )
+    }
     case 'snoozed':
       return (
         <>

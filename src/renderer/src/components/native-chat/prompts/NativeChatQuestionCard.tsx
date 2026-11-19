@@ -252,6 +252,17 @@ export function NativeChatQuestionCard({
         onCollapse()
       }
     : undefined
+  const stepsInSurface = look?.stepsInSurface === true
+  const steps = (className?: string): React.JSX.Element => (
+    <NativeChatQuestionSteps
+      questions={prompt.questions}
+      current={index}
+      answered={prompt.questions.map((_, i) => answerFor(i).length > 0)}
+      disabled={isSubmitting}
+      onStep={goTo}
+      className={className}
+    />
+  )
 
   return (
     <div
@@ -273,19 +284,12 @@ export function NativeChatQuestionCard({
       }
     >
       <div className="mx-auto flex min-h-0 w-full max-w-(--chat-content-max-width) flex-col px-3 pt-2 pb-4 sm:px-4">
-        {total > 1 ? (
-          <NativeChatQuestionSteps
-            questions={prompt.questions}
-            current={index}
-            answered={prompt.questions.map((_, i) => answerFor(i).length > 0)}
-            disabled={isSubmitting}
-            onStep={goTo}
-          />
-        ) : null}
+        {total > 1 && !stepsInSurface ? steps() : null}
 
         {/* One 14px gutter (px-3.5) for the question, option tiles and footer, so their edges line up.
             The box scrolls as a last resort, when a tall typed answer outgrows the pane's cap. */}
         <div
+          data-native-chat-question-surface
           className={cn(
             'flex min-h-0 flex-col overflow-y-auto rounded-[14px] border border-question-card-border bg-chat-composer-surface shadow-sm scrollbar-sleek',
             look?.surfaceClassName
@@ -294,6 +298,14 @@ export function NativeChatQuestionCard({
           {/* Question and options scroll together; only the answer row stays pinned, so a short pane still reaches every option. */}
           <div className="min-h-24 shrink overflow-y-auto scrollbar-sleek">
             {look?.header}
+            {total > 1 && stepsInSurface ? (
+              <div className="flex items-center gap-2 px-3.5 pt-2">
+                {steps('mb-0 min-w-0 shrink')}
+                <span className="ml-auto shrink-0 pb-1 text-xs tabular-nums text-muted-foreground">
+                  {index + 1}/{total}
+                </span>
+              </div>
+            ) : null}
             <NativeChatQuestionCardHeader
               question={q.question}
               isSubmitting={isSubmitting}
@@ -422,7 +434,7 @@ export function NativeChatQuestionCard({
           </div>
         </div>
 
-        {total > 1 ? (
+        {total > 1 && !stepsInSurface ? (
           <p className="mt-2 shrink-0 text-right text-xs text-muted-foreground">
             {index + 1}/{total}
           </p>

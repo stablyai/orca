@@ -187,6 +187,7 @@ export function BotItemAskCard({
           frameClassName:
             'max-h-none shrink bg-transparent [&>div]:px-3.5 [&>div]:pt-1 [&>div]:pb-3',
           surfaceClassName: BOT_ITEM_OPEN_ASK_SURFACE,
+          stepsInSurface: true,
           renderQuestion: (content) => <BotItemQuestionHeading text={content} />,
           header: (
             <>
