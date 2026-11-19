@@ -44,6 +44,13 @@ export async function prepareRuntimePtySpawn(
   }
   // SSH execution is rejected here; remaining preparation belongs to this machine.
   ctx.provider = getProvider(getConnectionExecutionHostId(args.connectionId))
+  // Refuse a saved id a newer daemon may still run before anything is prepared under it.
+  const held = ctx.preAdoptedStablePane
+    ? undefined
+    : ctx.provider.refuseHeldSpawn?.({ sessionId: args.sessionId, isNewSession: args.isNewSession })
+  if (held) {
+    await held
+  }
   const freshSpawnRecovery = ctx.preAdoptedStablePane
     ? undefined
     : recoverFreshSpawnProviderRouting(ctx.provider, args.sessionId, args.isNewSession)

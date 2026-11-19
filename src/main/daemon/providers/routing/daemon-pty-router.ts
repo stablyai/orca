@@ -21,7 +21,7 @@ import type {
 import { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
 import type { DaemonIdleRetirementResult } from '../adapter/daemon-pty-runtime-state'
 import { DaemonRouterRetirement } from './daemon-router-retirement'
-import { routeSpawnOrHold } from './daemon-router-newer-daemon-hold'
+import { heldSpawnRefusal, routeSpawnOrHold } from './daemon-router-newer-daemon-hold'
 import { findLegacySessionOwner } from './daemon-router-legacy-owner'
 import { retireExitedLegacyAdapter, type ExitedLegacyVerdict } from './daemon-router-exited-legacy'
 import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
@@ -85,16 +85,18 @@ export class DaemonPtyRouter implements IPtyProvider {
       const adapter =
         (opts.sessionId ? this.sessionAdapters.get(opts.sessionId) : undefined) ??
         (await findLegacySessionOwner(opts, this.current, this.legacy, this.legacyExitProof))
-      const held = await routeSpawnOrHold(opts, adapter, this.current, this.ownerResolver)
-      const result = await held.target.spawn(held.opts)
+      const target = await routeSpawnOrHold(opts, adapter, this.current, this.ownerResolver)
+      const result = await target.spawn(opts)
       if (!result.exitedBeforeSpawnReply) {
-        this.ownerResolver.recordRoute(result.id, held.target, result.incarnationId)
+        this.ownerResolver.recordRoute(result.id, target, result.incarnationId)
       }
       return result
     } finally {
       this.retirement.spawnInFlight--
     }
   }
+
+  refuseHeldSpawn = heldSpawnRefusal(() => this.ownerResolver)
 
   requestIdleRetirement(): Promise<DaemonIdleRetirementResult> {
     return this.retirement.requestIdleRetirement()
@@ -142,10 +144,9 @@ export class DaemonPtyRouter implements IPtyProvider {
 
   hasPty(id: string): boolean {
     const routed = this.sessionAdapters.get(id)
-    if (routed) {
-      return routed.hasPty(id)
-    }
-    return this.current.hasPty(id) || this.legacy.some((adapter) => adapter.hasPty(id))
+    return routed
+      ? routed.hasPty(id)
+      : this.current.hasPty(id) || this.legacy.some((adapter) => adapter.hasPty(id))
   }
 
   getPtyAvailability(id: string): boolean | null {
