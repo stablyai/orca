@@ -311,7 +311,8 @@ describe('Coordinator', () => {
       expect(dispatch).toBeDefined()
       db.insertMessage({
         runId,
-        from: i === 0 ? `dispatch:${dispatch!.id}` : dispatch!.assignee_handle,
+        from:
+          i === 0 ? `dispatch:${dispatch!.id}` : (dispatch?.assignee_handle ?? 'missing-worker'),
         to: 'coord',
         subject: `Failed attempt ${i + 1}`,
         type: 'escalation',
