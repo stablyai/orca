@@ -1,6 +1,5 @@
 // The bounded read behind a connector conversation's working state: only its workers that may still
 // run, read off the runtime's thread, then projected with the runtime's liveness evidence.
-import type { FleetDurableWorker } from '../../../../../../shared/orchestration/fleet/orchestration-fleet-projection'
 import type { OrchestrationSessionWorker } from '../../../../../../shared/orchestration-session-workers'
 import type { SessionPartyReader } from '../../../../orchestration/addressing/session-party-reader'
 import { structuredWorkerProcessIncarnation } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
@@ -8,6 +7,11 @@ import type {
   ChatPartyRows,
   ConnectorWorkerCandidate
 } from '../../../../orchestration/db/connector-workers/connector-worker-candidates'
+import {
+  ORCHESTRATION_FLEET_PAGE_MAX,
+  type FleetDurableWorker
+} from '../../../../../../shared/orchestration/fleet/orchestration-fleet-projection'
+import { fleetWorkerIdentity } from '../../../../../../shared/orchestration/fleet/orchestration-fleet-agent-status-evidence'
 import { orchestrationReader } from '../../../../orchestration/db/reader-worker/orchestration-reader-client'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { projectWorkerAttentionInput } from '../../../../orchestration/db/worker-terminal/worker-terminal-attention-query'
@@ -57,24 +61,31 @@ export async function readConnectorWorkerActivity(
   const now = Date.now()
   const evidence = readDispatchFleetEvidence(runtime)
   const parties = prefetchedParties(db, chatParties)
-  // Each chat is projected on its own, as before: a status's owner is judged among one chat's workers.
-  for (const [sessionId, group] of groupBySession(candidates)) {
-    const ids = new Set(group.map((candidate) => candidate.row.dispatchId))
-    const { fleet, chatStatusRows } = await projectDispatchFleet(
-      runtime,
-      group.map((candidate) => candidate.row),
-      new Map(
-        group.map((candidate) => [
-          candidate.row.dispatchId,
-          projectWorkerAttentionInput(candidate.attention, now)
-        ])
-      ),
-      now,
-      { federatedRows: federated.filter((row) => ids.has(row.dispatch_id)), evidence, parties }
-    )
-    const facts = bySession.get(sessionId)
+  const sessionOf = new Map(
+    candidates.map((candidate) => [candidate.row.dispatchId, candidate.sessionId])
+  )
+  // Projected in as few passes as keep each conversation's status owners its own (see packConversations).
+  const projections = await Promise.all(
+    packConversations(candidates).map((group) => {
+      const ids = new Set(group.map((candidate) => candidate.row.dispatchId))
+      return projectDispatchFleet(
+        runtime,
+        group.map((candidate) => candidate.row),
+        new Map(
+          group.map((candidate) => [
+            candidate.row.dispatchId,
+            projectWorkerAttentionInput(candidate.attention, now)
+          ])
+        ),
+        now,
+        { federatedRows: federated.filter((row) => ids.has(row.dispatch_id)), evidence, parties }
+      )
+    })
+  )
+  for (const { fleet, chatStatusRows } of projections) {
     for (const projected of fleet.workers) {
       const durable = fleet.durable.get(projected.dispatchId)
+      const facts = bySession.get(sessionOf.get(projected.dispatchId) ?? '')
       if (!durable || !facts) {
         continue
       }
@@ -113,16 +124,49 @@ function workerChatSessionId(
   return resolveStructuredWorkerIdentity(handle, db)?.sessionId ?? chatAssigneeSessionId(handle)
 }
 
-function groupBySession(
+/**
+ * Conversations packed into projections no two of which share a pane or terminal handle across
+ * conversations. A pane-bound status counts only when one projected worker owns its pane and handle,
+ * so a projection holding one conversation's workers judges owners exactly as reading it alone did;
+ * conversations that share none (the usual case) all fit one projection.
+ */
+function packConversations(
   candidates: readonly ConnectorWorkerCandidate[]
-): Map<string, ConnectorWorkerCandidate[]> {
-  const groups = new Map<string, ConnectorWorkerCandidate[]>()
+): ConnectorWorkerCandidate[][] {
+  const bySession = new Map<string, ConnectorWorkerCandidate[]>()
   for (const candidate of candidates) {
-    const group = groups.get(candidate.sessionId) ?? []
+    const group = bySession.get(candidate.sessionId) ?? []
     group.push(candidate)
-    groups.set(candidate.sessionId, group)
+    bySession.set(candidate.sessionId, group)
   }
-  return groups
+  const packs: { owners: Map<string, string>; candidates: ConnectorWorkerCandidate[] }[] = []
+  for (const [sessionId, group] of bySession) {
+    const keys = group.flatMap(({ row }) => identityKeys(row))
+    // One fleet page per pack, so no conversation's workers straddle a page's owner index.
+    let pack = packs.find(
+      (candidate) =>
+        candidate.candidates.length + group.length <= ORCHESTRATION_FLEET_PAGE_MAX &&
+        keys.every((key) => (candidate.owners.get(key) ?? sessionId) === sessionId)
+    )
+    if (!pack) {
+      pack = { owners: new Map(), candidates: [] }
+      packs.push(pack)
+    }
+    for (const key of keys) {
+      pack.owners.set(key, sessionId)
+    }
+    pack.candidates.push(...group)
+  }
+  return packs.map((pack) => pack.candidates)
+}
+
+function identityKeys(row: ConnectorWorkerCandidate['row']): string[] {
+  const identity = fleetWorkerIdentity(row)
+  if (identity.kind === 'unidentifiable') {
+    return []
+  }
+  const handle = `handle:${identity.terminalHandle}`
+  return identity.kind === 'pane_and_terminal' ? [handle, `pane:${identity.paneKey}`] : [handle]
 }
 
 /** The chats' party rows as the reader read them; a session it did not read asks the database. */

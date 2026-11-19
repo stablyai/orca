@@ -14,7 +14,7 @@ import type { FederatedDispatchRow } from '../orchestration-records'
 import { getWorkerTerminalResourceByProcessIncarnation } from '../worker-terminal/worker-terminal-resource-store'
 import { hasRecordedStructuredWorkerSession } from '../dispatch-context/dispatch-lookup'
 import { parseOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
-import { structuredWorkerProcessIncarnation } from '../../terminal-authority/structured-sessions/structured-worker-identity'
+import { structuredWorkerProcessIncarnation } from '../../terminal-authority/structured-sessions/structured-worker-incarnation'
 import type { WorkerTerminalResourceRow } from '../../terminal-authority/release/worker-terminal-ownership'
 
 export type ConnectorWorkerRow = ReturnType<typeof listWorkerTerminalResources>[number]
