@@ -10,7 +10,6 @@ import {
   automationsChangedWindowDetail
 } from '@/components/automations/events/automations-changed-window-event'
 import type { Bot } from '../../../../shared/bot-types'
-import { hasRuntimeRpcErrorCode } from '../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import { reuseEqualJson } from '../../../../shared/reuse-equal-json'
 import type { BotChangeKind } from '../../../../shared/bots/bot-change-scope'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
@@ -19,8 +18,8 @@ import { structuredAgentSessionStatusPaneKey } from '../../../../shared/agent-se
 type BotReadEntry<T> = {
   bot: BotRef
   value: T | null
-  /** Why the last read brought nothing: the host lacks the method, or the read failed. */
-  failure: 'unsupported' | 'failed' | null
+  /** The last read failed. */
+  failure: 'failed' | null
   listeners: Set<() => void>
   /** Only the latest read lands, so an older one finishing late cannot overwrite it. */
   latest: number
@@ -46,7 +45,7 @@ export type BotHostRead<T> = {
   refreshFailed: (key: string) => boolean
 }
 
-export type BotHostReadState = 'loading' | 'ready' | 'failed' | 'unsupported'
+export type BotHostReadState = 'loading' | 'ready' | 'failed'
 
 export function createBotHostRead<T>(
   method: string,
@@ -103,14 +102,9 @@ export function createBotHostRead<T>(
         }
       }
     } catch (error) {
-      // An older host lacks the method on every change notice; its surface falls back quietly.
-      const unsupported = hasRuntimeRpcErrorCode(error, 'method_not_found')
-      if (!unsupported) {
-        console.error(failure, error)
-      }
-      const next = unsupported ? 'unsupported' : 'failed'
-      if (current === entry.latest && entries.get(key) === entry && entry.failure !== next) {
-        entry.failure = next
+      console.error(failure, error)
+      if (current === entry.latest && entries.get(key) === entry && entry.failure !== 'failed') {
+        entry.failure = 'failed'
         entry.listeners.forEach((listener) => listener())
       }
     } finally {

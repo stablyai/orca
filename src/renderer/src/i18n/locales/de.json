@@ -4605,7 +4605,6 @@
             "27a74f91f0": "Derzeit ist nichts aktiv",
             "298f4be7f2": "CPU",
             "2aa2de6cb9": "Name",
-            "1fedf94eae": "Gesamte CPU-Auslastung. Werte über 100% bedeuten, dass mehrere Kerne gleichzeitig arbeiten.",
             "e7cf14ec78": "Terminal-Sitzungen sind nicht verfügbar. Die Liste ist möglicherweise veraltet.",
             "93b0de3c21": "Neu starten",
             "f85af9cda6": "Momentaufnahmen der Ressourcennutzung und Terminal-Sitzungen sind nicht verfügbar.",
@@ -4997,8 +4996,6 @@
                 "copy": {
                   "terminalSessionCount_one": "{{count}} Terminal-Sitzung",
                   "terminalSessionCount_other": "{{count}} Terminal-Sitzungen",
-                  "memoryUnavailable": "Speicher nicht verfügbar",
-                  "tooltipSummary": "Ressourcenverwaltung - {{memory}} - {{sessions}}",
                   "spaceScanReady": "Speicherplatz-Scan bereit",
                   "sessionsGroupedByWorkspace": "Terminal-Sitzungen sind nach Arbeitsbereich gruppiert.",
                   "noTerminalSessions": "Noch keine Terminal-Sitzungen.",
@@ -6418,7 +6415,6 @@
         },
         "SidebarWorkspaceOptionsMenu": {
           "hosts": "Hosts",
-          "showSection": "Anzeigen",
           "allHostsDetail": "Alle Hosts anzeigen",
           "configuredSshHost": "Konfigurierter SSH-Host",
           "projectSshHost": "Projekt-SSH-Host",
@@ -6468,7 +6464,6 @@
           "219ebf1961": "Branch-Name",
           "folderPathIdentity": "Branch / Ordnerpfad",
           "cli": "Orca CLI",
-          "workspaceOptions": "Arbeitsbereichsoptionen",
           "optionsActiveFilters_one": "Arbeitsbereichsoptionen ({{count}} Filter aktiv)",
           "optionsActiveFilters_other": "Arbeitsbereichsoptionen ({{count}} Filter aktiv)",
           "optionsFilterCount_one": "Arbeitsbereichsoptionen ({{count}} Filter)",
@@ -7692,9 +7687,9 @@
           "8fbe1f37c1": "Umgebung",
           "2d133152fa": "Keine Standardumgebung",
           "3f1bdf3cb4": "Der Umgebungstext ist zu groß, um sicher analysiert zu werden.",
-          "codexSessionSource": "Codex-Home-Verzeichnis für den Import",
-          "codexSessionSourceInfo": "Informationen zum Import des Codex-Verlaufs",
-          "codexSessionSourceTooltip": "Orca führt Codex in einem isolierten Home-Verzeichnis aus. Hier das vorhandene Codex-Home-Verzeichnis angeben, um dessen Sitzungsverlauf zu importieren. Bei leerem Feld wird ~/.codex verwendet.",
+          "codexSessionSource": "Codex-Unterhaltungen importieren aus",
+          "codexSessionSourceInfo": "Informationen zum Import von Codex-Unterhaltungen",
+          "codexSessionSourceTooltip": "Solange der Verlauf kontoübergreifend geteilt wird, kopiert Orca die Unterhaltungen dieses Codex-Home-Verzeichnisses nach ~/.codex, damit /resume sie anzeigt. Beiträge, die nach dem Kopieren in diesem Ordner hinzukommen, erreichen die Kopie nicht.",
           "noAgentsDetected": "Keine Agenten erkannt. Falls einer installiert ist, hat die Erkennung möglicherweise das Zeitlimit überschritten.",
           "9f30095d49": "Agentenberechtigungen"
         },
@@ -19244,6 +19239,7 @@
         "providerUnavailable": "{{agent}} konnte nicht antworten, weil der Dienst ausgelastet ist. Wähle ein anderes Modell oder warte kurz und sende erneut.",
         "providerSafetyStopped": "{{agent}} hat diese Antwort nach einer Sicherheitsprüfung gestoppt. Überprüfe deine Anfrage und sende sie erneut.",
         "providerResponseFailed": "{{agent}} konnte diese Antwort nicht abschließen. Öffnen Sie die Details für weitere Informationen.",
+        "providerResponseFailedQuoted": "{{agent}} konnte diese Antwort nicht abschließen: {{detail}}.",
         "modelUnavailable": "{{agent}} konnte {{detail}} nicht verwenden. Ein anderes Modell auswählen und erneut senden.",
         "selectedModel": "das ausgewählte Modell",
         "providerRejected": "{{agent}} hat diese Nachricht nicht angenommen.",
@@ -20010,9 +20006,6 @@
         "continue": "Fortfahren",
         "failed": "Dieser Chat konnte nicht fortgesetzt werden. Erneut versuchen oder eine Nachricht senden.",
         "explanation": "Beim Fortfahren prüft der Agent zuerst, ob sein letzter Schritt abgeschlossen wurde."
-      },
-      "antigravitySignIn": {
-        "sentence": "Antigravity ist nicht angemeldet. Unter <settings>Einstellungen → Konten → Antigravity</settings> anmelden. Danach die Nachricht erneut senden."
       },
       "claudeSignIn": {
         "signingIn": "Anmeldung läuft…"
@@ -22843,7 +22836,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "Worktree wechseln",
+      "worktreePalette": "Alles durchsuchen",
       "worktreeNavigateUp": "Zum vorherigen Worktree wechseln",
       "worktreeNavigateDown": "Zum nächsten Worktree wechseln",
       "workspaceCreate": "Worktree erstellen",
@@ -22955,6 +22948,9 @@
       "45347db2a3": "Tab-Navigation",
       "aab2837fa5": "Schnellbefehle",
       "3492a954c8": "Terminal-Bereiche"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "Worktree wechseln"
     }
   },
   "gpuFallback": {
@@ -23673,8 +23669,7 @@
     },
     "upcoming": {
       "tidyNightAfter": "Jede Nacht ab {{from}} oder sobald dieser Computer wach ist",
-      "tidyWeekAfter": "Einmal pro Woche ab {{from}} oder sobald dieser Computer wach ist",
-      "lookDueNow": "Jetzt fällig · {{every}}"
+      "tidyWeekAfter": "Einmal pro Woche ab {{from}} oder sobald dieser Computer wach ist"
     },
     "palette": {
       "placeholder": "Bots, Chats, Terminals, Arbeitsbereiche, Aufgaben, Einstellungen und Aktionen suchen…",

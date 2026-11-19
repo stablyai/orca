@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Text, View } from 'react-native'
 import {
-  BOT_ACCESS_FROM_PHONE,
+  botAccessPlace,
   botAccessCopy,
   type BotAccessCopyId
 } from '../../../src/shared/bots/bot-access-copy'
@@ -11,11 +11,14 @@ import {
   botStartingPermission,
   type BotAccessFix
 } from '../../../src/shared/bots/bot-access-reach'
+import type { BotMember } from '../../../src/shared/bot-types'
 import { ConfirmContent } from '../components/sheets/ConfirmModal'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
 import { MobileBotTextButton } from './MobileBotTextButton'
 import { phoneBotReachLines, type PhoneAccessBot } from './bot-access-request-copy'
 import { optionStyles } from './mobile-bot-option-styles'
+import { memberSourceLabel } from './mobile-bot-sheet-copy'
 
 // The phone can't read the app's chat permission, nor turn Google off: those stay on the desktop.
 const PHONE_FIXES: Record<
@@ -24,6 +27,31 @@ const PHONE_FIXES: Record<
 > = {
   'only-me': { headingId: 'fixOnlyMe', actionId: 'fixOnlyMeAction' },
   'ask-for-approval': { headingId: 'fixAsk', actionId: 'fixAskAction' }
+}
+
+/** One person who can ask, with Remove. */
+export function MobileBotMemberRow(props: {
+  member: BotMember
+  disabled: boolean
+  onRemove: () => void
+}) {
+  const t = useMobileTranslation()
+  return (
+    <ListRow
+      title={props.member.name}
+      subtitle={memberSourceLabel(props.member)}
+      accessory={
+        <MobileBotTextButton
+          label={t('bots.settings.remove', 'Remove')}
+          accessibilityLabel={t('bots.settings.removeName', 'Remove {{name}}', {
+            name: props.member.name
+          })}
+          disabled={props.disabled}
+          onPress={props.onRemove}
+        />
+      }
+    />
+  )
 }
 
 /** The desktop's Who can ask summary and advice, from the same shared model, for the bot sheet. */
@@ -37,6 +65,7 @@ export function MobileBotWhoCanAsk(props: {
 }) {
   const { bot } = props
   const name = bot.name
+  const place = botAccessPlace(bot.accessHost ?? { kind: 'unknown', name: null })
   const others = bot.members.map((member) => member.name || member.id)
   const permission = botStartingPermission(bot, null)
   const { who, control } = botAccessSummary(others)
@@ -61,7 +90,7 @@ export function MobileBotWhoCanAsk(props: {
           {botAccessCopy(who.id, { ...who.values, name })}
         </Text>
         <Text style={optionStyles.optionRowDetail}>
-          {botAccessCopy(control.id, { ...control.values, name, ...BOT_ACCESS_FROM_PHONE })}
+          {botAccessCopy(control.id, { ...control.values, name, ...place })}
         </Text>
       </View>
       {bot.members.length > 0 ? <ListGroup>{props.children}</ListGroup> : null}
@@ -96,7 +125,7 @@ export function MobileBotWhoCanAsk(props: {
             ))}
           </ListGroup>
           <Text style={[optionStyles.optionRowDetail, optionStyles.optionPageTitle]}>
-            {botAccessCopy('separateBot', BOT_ACCESS_FROM_PHONE)}
+            {botAccessCopy('separateBot', place)}
           </Text>
         </>
       ) : null}

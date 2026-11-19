@@ -3996,7 +3996,6 @@
             "27a74f91f0": "지금은 실행 중인 항목이 없습니다.",
             "298f4be7f2": "CPU",
             "2aa2de6cb9": "이름",
-            "1fedf94eae": "결합된 CPU 로드. 100%를 초과하는 값은 두 개 이상의 코어가 동시에 작동하고 있음을 의미합니다.",
             "e7cf14ec78": "Terminal 세션을 사용할 수 없습니다. 목록이 오래되었을 수 있습니다.",
             "93b0de3c21": "다시 시작",
             "f85af9cda6": "리소스 스냅샷과 terminal 세션을 사용할 수 없습니다.",
@@ -4373,8 +4372,6 @@
                 "copy": {
                   "terminalSessionCount_one": "터미널 세션 {{count}}개",
                   "terminalSessionCount_other": "터미널 세션 {{count}}개",
-                  "memoryUnavailable": "메모리 정보 없음",
-                  "tooltipSummary": "리소스 관리자 - {{memory}} - {{sessions}}",
                   "spaceScanReady": "공간 스캔 준비됨",
                   "sessionsGroupedByWorkspace": "터미널 세션은 워크스페이스별로 그룹화됩니다.",
                   "noTerminalSessions": "아직 터미널 세션이 없습니다.",
@@ -5737,7 +5734,6 @@
           "e029a2d775": "상태",
           "c2c7a45cda": "없음",
           "hosts": "호스트",
-          "showSection": "표시",
           "allHostsDetail": "모든 호스트 표시",
           "configuredSshHost": "구성된 SSH",
           "projectSshHost": "프로젝트 SSH",
@@ -5750,7 +5746,6 @@
           "automation": "자동화",
           "folderPathIdentity": "브랜치 / 폴더 경로",
           "cli": "Orca CLI",
-          "workspaceOptions": "워크스페이스 옵션",
           "optionsActiveFilters_other": "워크스페이스 옵션(필터 {{count}}개 활성)",
           "optionsFilterCount_other": "워크스페이스 옵션(필터 {{count}}개)"
         },
@@ -6982,9 +6977,9 @@
           "8fbe1f37c1": "환경",
           "2d133152fa": "기본 환경 없음",
           "3f1bdf3cb4": "환경 텍스트가 너무 커서 안전하게 파싱할 수 없습니다.",
-          "codexSessionSource": "가져올 Codex 홈",
-          "codexSessionSourceInfo": "Codex 기록 가져오기 정보",
-          "codexSessionSourceTooltip": "Orca는 격리된 홈에서 Codex를 실행합니다. 기존 Codex 홈을 지정하여 세션 기록을 가져옵니다. 비워두면 ~/.codex를 사용합니다.",
+          "codexSessionSource": "Codex 대화를 가져올 위치",
+          "codexSessionSourceInfo": "Codex 대화 가져오기 정보",
+          "codexSessionSourceTooltip": "계정 간에 기록을 공유하는 동안 Orca는 이 Codex 홈의 대화를 ~/.codex에 복사하여 /resume에 표시되게 합니다. 대화가 복사된 후 이 폴더에서 추가된 내용은 복사본에 반영되지 않습니다.",
           "03e1a5081a": "{{value0}}에서",
           "25a41a9aad": "이 서버에 설치된 에이전트 다시 감지",
           "remoteDetectionFailed": "설치된 에이전트를 감지하지 못했습니다. 호스트 연결을 확인한 뒤 다시 시도하세요.",
@@ -18530,6 +18525,7 @@
         "providerUnavailable": "서비스가 혼잡하여 {{agent}}이(가) 응답하지 못했습니다. 다른 모델을 선택하거나 잠시 기다린 후 다시 보내세요.",
         "providerSafetyStopped": "{{agent}}이(가) 안전 검사 후 이 응답을 중단했습니다. 요청을 검토한 후 다시 보내세요.",
         "providerResponseFailed": "{{agent}}이(가) 이 응답을 완료하지 못했습니다. 자세한 내용을 열어 확인하세요.",
+        "providerResponseFailedQuoted": "{{agent}}이(가) 이 응답을 완료하지 못했습니다: {{detail}}.",
         "modelUnavailable": "{{agent}}이(가) {{detail}}을(를) 사용하지 못했습니다. 다른 모델을 선택하고 다시 보내세요.",
         "selectedModel": "선택한 모델",
         "providerRejected": "{{agent}}이(가) 이 메시지를 받아들이지 않았습니다.",
@@ -19261,9 +19257,6 @@
         "replace": "바꾸기",
         "replaceDescription": "여기서 “{{title}}”을(를) 재개하면 이 채팅에서 {{agent}}이(가) 하고 있는 작업이 중지됩니다.",
         "replaceTitle": "이 채팅을 바꿀까요?"
-      },
-      "antigravitySignIn": {
-        "sentence": "Antigravity에 로그인되어 있지 않습니다. <settings>설정 → 계정 → Antigravity</settings>에서 로그인한 후 메시지를 다시 보내세요."
       },
       "claudeSignIn": {
         "signingIn": "로그인 중…"
@@ -22379,7 +22372,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "워크트리 전환",
+      "worktreePalette": "전체 검색",
       "worktreeNavigateUp": "이전 워크트리",
       "worktreeNavigateDown": "다음 워크트리",
       "workspaceCreate": "워크트리 만들기",
@@ -22491,6 +22484,9 @@
       "45347db2a3": "탭 탐색",
       "aab2837fa5": "빠른 명령어",
       "3492a954c8": "터미널 창"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "워크트리 전환"
     }
   },
   "gpuFallback": {
@@ -23538,8 +23534,7 @@
     },
     "upcoming": {
       "tidyNightAfter": "매일 밤 {{from}} 이후, 또는 이 컴퓨터가 깨어난 후",
-      "tidyWeekAfter": "일주일에 한 번 {{from}} 이후, 또는 이 컴퓨터가 깨어난 후",
-      "lookDueNow": "지금 실행 예정 · {{every}}"
+      "tidyWeekAfter": "일주일에 한 번 {{from}} 이후, 또는 이 컴퓨터가 깨어난 후"
     },
     "palette": {
       "placeholder": "봇, 채팅, 터미널, 워크스페이스, 작업, 설정 및 동작 검색...",

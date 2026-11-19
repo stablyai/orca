@@ -112,6 +112,10 @@ export async function initializeReadyFoundation(): Promise<void> {
   }
   // Post-ready naming preserves packaged Keychain identity; dev already renamed before ready.
   app.setName(identity.appName)
+  // Older builds put an unread count on the dock icon; clear any that is still showing.
+  if (process.platform === 'darwin') {
+    app.dock?.setBadge('')
+  }
   updateGpuAccelerationAboutPanel()
   if (state.isServeMode) {
     // Profile loading can decrypt and hang; fence unreachable keychains first.

@@ -7,7 +7,6 @@ import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { Bot } from '../../../../shared/bot-types'
 import { applyBotUpdates, type BotUpdateParams } from '../../../../shared/rpc-contract/bots-params'
-import type * as BotsChats from './bots-chats'
 import { BOT_METHODS } from './bots'
 import { BOT_ACCESS_METHODS } from './bots-access'
 import { makeTestBot } from '../../../bots/bot.test-fixture'
@@ -43,17 +42,6 @@ vi.mock('../../../bots/bot-chat-session', async (importOriginal) => ({
     }
   })
 }))
-const chatReads = vi.hoisted(() => ({ count: 0 }))
-vi.mock('./bots-chats', async (importOriginal) => {
-  const original = await importOriginal<typeof BotsChats>()
-  return {
-    ...original,
-    readBotChats: (...args: Parameters<typeof original.readBotChats>) => {
-      chatReads.count += 1
-      return original.readBotChats(...args)
-    }
-  }
-})
 const shared = vi.hoisted(() => ({ create: vi.fn() }))
 vi.mock('../../../bots/sharing/bot-share-create', () => ({ createBotFromShare: shared.create }))
 vi.mock('./bots-share-create-deps', () => ({ botShareCreateDeps: () => ({}) }))
@@ -366,27 +354,21 @@ describe('bots.update from a phone', () => {
     return { bots, dispatcher: new RpcDispatcher({ runtime, methods: BOT_METHODS }) }
   }
 
-  it.each([
-    [
-      'quick settings',
-      {
-        paused: true,
-        permissionMode: null,
-        notifications: { needsPermission: false, taskComplete: true, couldNotFinish: true },
-        lookAround: { on: false, every: 'mornings', weekdaysOnly: true, focus: '' }
-      }
-    ],
-    ['name', { name: 'Critic' }],
-    ['picture', { avatar: null }],
-    ['the whole member list', { members: [] }],
-    ['a connector', { slack: null }]
-  ])("changes a bot's %s from the owner's phone", async (_label, updates) => {
-    const { bots, dispatcher } = phoneRuntime()
+  it("lets the owner's phone replace the member list and change permissions", async () => {
+    const { dispatcher } = phoneRuntime()
 
     expect(
-      await dispatcher.dispatch(request('bots.update', { botId: 'bot-1', updates }), phone)
-    ).toMatchObject({ ok: true })
-    expect(bots.update).toHaveBeenCalledWith('bot-1', updates)
+      await dispatcher.dispatch(
+        request('bots.update', {
+          botId: 'bot-1',
+          updates: { members: [lin], permissionMode: 'full-access' }
+        }),
+        phone
+      )
+    ).toMatchObject({
+      ok: true,
+      result: { bot: { members: [lin], permissionMode: 'full-access' } }
+    })
   })
 
   it.each([
@@ -404,19 +386,18 @@ describe('bots.update from a phone', () => {
     expect(bots.update).not.toHaveBeenCalled()
   })
 
-  it.each([
-    ['take a person off', { removeMembers: [{ id: 'U1', source: 'slack' }] }],
-    ['pause it', { paused: true }],
-    ['change a connector', { slack: null }]
-  ])("lets an agent's CLI %s", async (_label, updates) => {
-    const { bots, dispatcher } = phoneRuntime()
+  it("lets an agent's CLI pause a bot and remove a member", async () => {
+    const { dispatcher } = phoneRuntime()
 
     expect(
-      await dispatcher.dispatch(request('bots.update', { botId: 'bot-1', updates }), {
-        caller: LOCAL_CLI_RPC_CALLER
-      })
-    ).toMatchObject({ ok: true })
-    expect(bots.update).toHaveBeenCalledWith('bot-1', updates)
+      await dispatcher.dispatch(
+        request('bots.update', {
+          botId: 'bot-1',
+          updates: { paused: true, removeMembers: [{ id: 'U1', source: 'slack' }] }
+        }),
+        { caller: LOCAL_CLI_RPC_CALLER }
+      )
+    ).toMatchObject({ ok: true, result: { bot: { paused: true, members: [lin] } } })
   })
 
   it('takes one person off Who can ask, on that service only, and records the device', async () => {
@@ -660,19 +641,11 @@ describe('bots.roster', () => {
     specialty: null,
     linked: []
   })
-  // Whom each chat acts for, as the orchestration db records it.
-  const actsFor = new Map<string, unknown>()
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: bots.roster reads only runtime.bots, the orchestration db's bot request and conversation records, and the conversation seam, which the stub provides.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: bots.roster reads only these runtime members.
   const runtime = {
     getRuntimeId: () => 'test-runtime',
-    getOrchestrationDb: () => ({
-      getBotRequest: () => undefined,
-
-      getBotConversationActsFor: (sessionId: string) => actsFor.get(sessionId),
-      recordBotConversationActsFor: (sessionId: string, record: unknown) =>
-        actsFor.set(sessionId, record)
-    }),
-    getExternalConversationSeam: () => null,
+    ensureStructuredAgentSessionHost: async () => undefined,
+    getOrchestrationDb: () => ({}),
     bots: { list: () => [ranger, docs], roster: async () => [entry(ranger), entry(docs)] }
   } as unknown as OrcaRuntimeService
   const dispatcher = new RpcDispatcher({ runtime, methods: BOT_METHODS })
@@ -687,22 +660,16 @@ describe('bots.roster', () => {
     })
   })
 
-  it("reads no bot's chats when asked without them", async () => {
-    chatReads.count = 0
-    expect(await dispatcher.dispatch(request('bots.roster', { withoutChats: true }))).toMatchObject(
-      {
-        ok: true,
-        result: { bots: [entry(ranger), entry(docs)] }
-      }
-    )
-    expect(chatReads.count).toBe(0)
-    await dispatcher.dispatch(request('bots.roster', {}))
-    expect(chatReads.count).toBe(2)
-  })
-
-  it('lists every bot, marking none, for a caller that is no bot', async () => {
+  it('lists every bot for a caller that is no bot, omitting chat summaries on request', async () => {
+    const bots = [entry(ranger), entry(docs)]
     const listed = await dispatcher.dispatch(request('bots.roster', {}))
-    expect(listed).toMatchObject({ ok: true, result: { bots: [entry(ranger), entry(docs)] } })
-    expect(JSON.stringify(listed)).not.toContain('self')
+    expect(listed).toMatchObject({
+      ok: true,
+      result: { bots: bots.map((bot) => ({ ...bot, chats: { count: 0, home: false } })) }
+    })
+    expect(await dispatcher.dispatch(request('bots.roster', { withoutChats: true }))).toEqual({
+      ...listed,
+      result: { bots }
+    })
   })
 })

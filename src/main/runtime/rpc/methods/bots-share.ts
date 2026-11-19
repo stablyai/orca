@@ -8,17 +8,19 @@ import {
   BotShareStop
 } from '../../../../shared/rpc-contract/bots-share-params'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import { isAgentRpcCaller } from '../callers/rpc-caller-identity'
 import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
 
 export const BOT_SHARE_OWNER_ONLY =
   'Only your owner shares a bot, in Orca: Settings, the bot, Share bot….'
 
 /** Publishing puts the owner's bot on the web under their account, so every share call comes from
- *  the owner in Orca (a window or a paired device); any other caller, named or not, is refused. */
+ *  the owner in Orca (a window or a paired device); any other caller, named or not, is refused. An
+ *  agent's `orca` CLI is refused too, including one calling over a paired device's pairing. */
 export function assertOwner(context: RpcContext): void {
   context.runtime.bots.assertEnabled()
   const kind = context.caller?.kind
-  if (kind !== 'desktop' && kind !== 'paired-device') {
+  if ((kind !== 'desktop' && kind !== 'paired-device') || isAgentRpcCaller(context.caller)) {
     throw new InvalidArgumentError(BOT_SHARE_OWNER_ONLY)
   }
 }
@@ -41,10 +43,10 @@ export const BOT_SHARE_METHODS = [
     name: 'bots.share.prepare',
     permission: 'workspace',
     params: BotSharePrepare,
-    handler: async ({ botId, setupNote, last, ...selection }, context) =>
+    handler: async ({ botId, setupNote, last, localOnly, ...selection }, context) =>
       context.runtime
         .botShares()
-        .prepare(authorizedBot(context, botId), selection, { setupNote, last })
+        .prepare(authorizedBot(context, botId), selection, { setupNote, last, localOnly })
   }),
   defineMethod({
     name: 'bots.share.publish',

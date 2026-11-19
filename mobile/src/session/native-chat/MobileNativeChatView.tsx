@@ -5,7 +5,8 @@ import type { NativeChatDirectiveBotCard } from '../../../../src/shared/native-c
 import type { MobileNativeChatViewProps } from './mobile-native-chat-view-props'
 import { useMobileNativeChatItemNavigation } from './transcript/viewport/use-mobile-native-chat-item-navigation'
 import { MobileStateView } from '../../components/feedback/MobileStateView'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useContext, useMemo } from 'react'
+import { MobileNativeChatBotIdentityContext } from './mobile-native-chat-bot-identity'
 import { nativeChatTaskListPredecessors } from '../../../../src/shared/native-chat/input/task-lists/native-chat-task-list-history'
 import {
   MobileNativeChatDisclosureContext,
@@ -203,6 +204,7 @@ export function MobileNativeChatView({
     [loadEarlierNearTop, scrollMayLoadEarlier, recordScrollMetrics]
   )
 
+  const turnBot = useContext(MobileNativeChatBotIdentityContext)
   const turns = useMobileNativeChatTurnDisclosure({
     messages: data,
     enabled: true,
@@ -215,7 +217,8 @@ export function MobileNativeChatView({
     stopping: turnIndicator?.stopping === true,
     lineYields: ask != null || permission != null || question != null,
     receipts,
-    scopeKey: sendSurfaceId
+    scopeKey: sendSurfaceId,
+    showsTurnDiffs: turnBot === null
   })
 
   const rowKeys = useMobileNativeChatRowKeys(folded, messages, sendSurfaceId, turns.presentation)

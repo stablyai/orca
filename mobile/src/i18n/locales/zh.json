@@ -659,17 +659,6 @@
       "imageTooLarge": "图片过大，无法添加",
       "permissionDenied": "照片访问权限被拒绝"
     },
-    "agentMessage": {
-      "startedWorker": "已启动工作者",
-      "reopenedWorker": "已重新打开工作者",
-      "sentFollowUpToWorker": "已向工作者发送后续消息",
-      "handedOffToAgent": "已移交给智能体",
-      "startedAgent": "已启动智能体",
-      "taskFromCoordinator": "来自协调者的任务",
-      "messageFromCoordinator": "来自协调者的消息",
-      "updateFromWorker": "来自工作者的更新",
-      "messageFrom": "消息来自"
-    },
     "textAttachmentPreview": {
       "unreadableReply": "无法读取附件响应。请重试。",
       "incompleteReply": "附件已更改或响应不完整。请关闭后重试。",
@@ -2713,6 +2702,7 @@
       "providerUnavailable": "{{agent}} 因服务繁忙而无法回复。请选择其他模型，或稍等片刻后重新发送。",
       "providerSafetyStopped": "{{agent}} 在安全检查后停止了此次回复。请检查您的请求后重新发送。",
       "providerResponseFailed": "{{agent}} 未能完成此回复。打开详情了解更多信息。",
+      "providerResponseFailedQuoted": "{{agent}} 未能完成此回复：{{detail}}",
       "selectedModel": "所选模型"
     },
     "fileReader": {

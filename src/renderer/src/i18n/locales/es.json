@@ -4072,7 +4072,6 @@
             "27a74f91f0": "No hay nada ejecutándose ahora mismo",
             "298f4be7f2": "CPU",
             "2aa2de6cb9": "Nombre",
-            "1fedf94eae": "Carga de CPU combinada. Los valores superiores al 100% significan que más de un núcleo está trabajando a la vez.",
             "e7cf14ec78": "Sesiones de terminal no disponibles. La lista puede estar obsoleta.",
             "93b0de3c21": "Reiniciar",
             "f85af9cda6": "Las snapshots de recursos y las sesiones de terminal no están disponibles.",
@@ -4473,8 +4472,6 @@
                   "terminalSessionCount_one": "{{count}} sesión de terminal",
                   "terminalSessionCount_other": "{{count}} sesiones de terminal",
                   "terminalSessionCount_many": "{{count}} sesiones de terminal",
-                  "memoryUnavailable": "memoria no disponible",
-                  "tooltipSummary": "Administrador de recursos - {{memory}} - {{sessions}}",
                   "spaceScanReady": "Escaneo de espacio listo",
                   "sessionsGroupedByWorkspace": "Las sesiones de terminal se agrupan por espacio de trabajo.",
                   "noTerminalSessions": "Aún no hay sesiones de terminal.",
@@ -5983,7 +5980,6 @@
           "e029a2d775": "Estado",
           "c2c7a45cda": "Ninguno",
           "hosts": "Hosts",
-          "showSection": "Mostrar",
           "allHostsDetail": "Mostrar todos los hosts",
           "configuredSshHost": "SSH configurado",
           "projectSshHost": "SSH del proyecto",
@@ -5996,7 +5992,6 @@
           "219ebf1961": "Nombre de rama",
           "folderPathIdentity": "Rama / ruta de carpeta",
           "cli": "Orca CLI",
-          "workspaceOptions": "Opciones de espacio de trabajo",
           "optionsActiveFilters_one": "Opciones de espacio de trabajo ({{count}} filtro activo)",
           "optionsActiveFilters_other": "Opciones de espacio de trabajo ({{count}} filtros activos)",
           "optionsActiveFilters_many": "Opciones de espacio de trabajo ({{count}} filtros activos)",
@@ -7272,9 +7267,9 @@
           "8fbe1f37c1": "Entorno",
           "2d133152fa": "Sin entorno predeterminado",
           "3f1bdf3cb4": "El texto de entorno es demasiado grande para analizarlo de forma segura.",
-          "codexSessionSource": "Directorio Codex a importar",
-          "codexSessionSourceInfo": "Sobre la importación del historial de Codex",
-          "codexSessionSourceTooltip": "Orca ejecuta Codex en un directorio aislado. Señala aquí a tu directorio Codex existente para importar el historial de sesiones. Dejar vacío usa ~/.codex.",
+          "codexSessionSource": "Importar conversaciones de Codex desde",
+          "codexSessionSourceInfo": "Sobre la importación de conversaciones de Codex",
+          "codexSessionSourceTooltip": "Mientras el historial se comparte entre cuentas, Orca copia las conversaciones de este directorio Codex a ~/.codex para que /resume las muestre. Los turnos añadidos en esta carpeta después de copiar una conversación no llegan a la copia.",
           "03e1a5081a": "on {{value0}}",
           "25a41a9aad": "Volver a detectar los agentes instalados en este servidor",
           "remoteDetectionFailed": "No se pudieron detectar los agentes instalados. Verifique la conexión del host e inténtelo nuevamente.",
@@ -18949,6 +18944,7 @@
         "providerUnavailable": "{{agent}} no pudo responder porque el servicio está ocupado. Elige otro modelo o espera un poco y vuelve a enviar el mensaje.",
         "providerSafetyStopped": "{{agent}} detuvo esta respuesta tras una comprobación de seguridad. Revisa tu solicitud y vuelve a enviarla.",
         "providerResponseFailed": "{{agent}} no pudo terminar esta respuesta. Abre los detalles para obtener más información.",
+        "providerResponseFailedQuoted": "{{agent}} no pudo terminar esta respuesta: {{detail}}.",
         "modelUnavailable": "{{agent}} no pudo usar {{detail}}. Elige otro modelo y vuelve a enviar el mensaje.",
         "selectedModel": "el modelo seleccionado",
         "providerRejected": "{{agent}} no aceptó este mensaje.",
@@ -19775,9 +19771,6 @@
         "replace": "Reemplazar",
         "replaceDescription": "Reanudar “{{title}}” aquí detendrá lo que {{agent}} está haciendo en este chat.",
         "replaceTitle": "¿Reemplazar este chat?"
-      },
-      "antigravitySignIn": {
-        "sentence": "Antigravity no ha iniciado sesión. Inicia sesión en <settings>Ajustes → Cuentas → Antigravity</settings>. Después, vuelve a enviar tu mensaje."
       },
       "claudeSignIn": {
         "signingIn": "Iniciando sesión…"
@@ -23064,7 +23057,7 @@
   },
   "keybindings": {
     "title": {
-      "worktreePalette": "Cambiar de worktree",
+      "worktreePalette": "Buscar en todo",
       "worktreeNavigateUp": "Worktree anterior",
       "worktreeNavigateDown": "Worktree siguiente",
       "workspaceCreate": "Crear worktree",
@@ -23176,6 +23169,9 @@
       "45347db2a3": "Navegación entre pestañas",
       "aab2837fa5": "Comandos rápidos",
       "3492a954c8": "Paneles del terminal"
+    },
+    "searchKeyword": {
+      "worktreePaletteFormerTitle": "Cambiar de worktree"
     }
   },
   "gpuFallback": {
@@ -24234,8 +24230,7 @@
     },
     "upcoming": {
       "tidyNightAfter": "Cada noche a partir de las {{from}}, o en cuanto este ordenador esté activo",
-      "tidyWeekAfter": "Una vez por semana a partir de las {{from}}, o en cuanto este ordenador esté activo",
-      "lookDueNow": "Pendiente ahora · {{every}}"
+      "tidyWeekAfter": "Una vez por semana a partir de las {{from}}, o en cuanto este ordenador esté activo"
     },
     "palette": {
       "placeholder": "Busca bots, chats, terminales, espacios de trabajo, tareas, ajustes y acciones...",
