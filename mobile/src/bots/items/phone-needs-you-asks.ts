@@ -3,11 +3,7 @@
 // so the phone's count can be lower than the desktop's.
 import { useMemo } from 'react'
 import type { BotChatTreeChat, BotChatTreeWorker } from '../../../../src/shared/bots/bot-chat-tree'
-import {
-  botItemsByDispatch,
-  filterBotNeeds,
-  type BotItemFilter
-} from '../../../../src/shared/bots/bot-item-groups'
+import { botItemsByDispatch } from '../../../../src/shared/bots/bot-item-groups'
 import type { BotItem } from '../../../../src/shared/bots/bot-items'
 import { botNeedsYouCount } from '../../../../src/shared/bots/bot-now'
 
@@ -21,7 +17,7 @@ export type PhoneAsk = {
   number: number | null
   /** The tool an approval asks to run, when the worker's status says. */
   tool: { name: string; input: string | null } | null
-  /** The chat it belongs to, for the chat filter. */
+  /** The chat it belongs to. */
   chatId: string
   /** What a tap opens; null when the phone can't reach it. */
   open: { chat: BotChatTreeChat } | { worker: BotChatTreeWorker } | null
@@ -91,13 +87,12 @@ export function openPhoneAsk(ask: PhoneAsk, openers: PhoneAskOpeners): void {
   }
 }
 
-/** The asks the filter keeps (`shown`), and the tab's count: every ask the phone reads plus `itemCount`.
+/** Every ask the phone reads, and the tab's count: those asks plus `itemCount`.
  *  It is what the phone lists, so it is lower than the desktop's when a sign-in or access request waits. */
 export function usePhoneNeedsYouAsks({
   chats,
   workers,
   items,
-  filter,
   itemCount
 }: {
   /** The chats tree once read. */
@@ -105,10 +100,9 @@ export function usePhoneNeedsYouAsks({
   /** The activity read's workers, for their dots and tools. */
   workers: readonly ({ key: string } & PhoneWorkerAsk)[] | undefined
   items: readonly BotItem[] | undefined
-  filter: BotItemFilter
   /** Needs you items that aren't stale, unfiltered. */
   itemCount: number
-}): { shown: readonly PhoneAsk[]; count: number } {
+}): { asks: readonly PhoneAsk[]; count: number } {
   const all = useMemo(() => {
     const byDispatch = botItemsByDispatch(items ?? [])
     const seen = new Map((workers ?? []).map((row) => [row.key, row]))
@@ -118,6 +112,5 @@ export function usePhoneNeedsYouAsks({
       (dispatchId) => byDispatch.get(dispatchId) ?? null
     )
   }, [chats, workers, items])
-  const shown = useMemo(() => filterBotNeeds(all, filter, (ask) => ask.chatId), [all, filter])
-  return { shown, count: botNeedsYouCount(all.length, itemCount) }
+  return { asks: all, count: botNeedsYouCount(all.length, itemCount) }
 }

@@ -83,7 +83,7 @@ export type BotItemRead<T> =
 export async function readBotItems(
   client: RpcClient,
   botId: string,
-  page: { chatId?: string; closedCursor?: string } = {}
+  page: { closedCursor?: string } = {}
 ): Promise<BotItemRead<BotItemsListRead>> {
   try {
     const answer = readHostMethodReply(
