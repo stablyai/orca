@@ -15,6 +15,7 @@ function installPageCounters() {
       state.longN += 1
       state.longMs += entry.duration
       state.longMax = Math.max(state.longMax, entry.duration)
+      ;(globalThis.__orcaLongTasks ??= []).push({ start: entry.startTime, ms: entry.duration })
     }
   })
   observer.observe({ type: 'longtask', buffered: false })
