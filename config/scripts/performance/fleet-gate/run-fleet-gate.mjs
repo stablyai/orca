@@ -387,11 +387,16 @@ async function measureOnce({ arm, sha, buildDir, seedDir, options, runDir, outDi
       await SCENARIO_SETUP[name]?.(page)
       await resetMainProbe(app)
       await renderer.reset()
+      await resetFanoutStats(page)
       const started = Date.now()
       const driven = await SCENARIOS[name]({ page, userDataDir, windowMs })
       const elapsed = Date.now() - started
       const main = await snapshotMainProbe(app)
       const rendererSnapshot = await renderer.snapshot()
+      const fanout = await readFanoutStats(page)
+      console.log(
+        `[fanout-measure] ${label} ${name} ${JSON.stringify({ fanout, longN: rendererSnapshot.longN, longMs: rendererSnapshot.longMs, longMax: rendererSnapshot.longMax })}`
+      )
       // After the snapshot, so a scenario's cleanup (e.g. typing's backspaces) is never measured or counted.
       await driven.cleanup?.()
       const ptyWrites = main.inByChannel['pty:write']?.n ?? 0

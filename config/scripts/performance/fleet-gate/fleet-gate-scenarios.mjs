@@ -514,6 +514,58 @@ async function switchWorkspaces({ page, windowMs }) {
 // Run by the runner before it resets the probes, so a window never counts its own setup.
 export const SCENARIO_SETUP = { typing: showTerminalWorkspace, switch: dismissOverlays }
 
+const HOST_COUNT = 20
+const HOST_WRITES_PER_SECOND = 20
+
+// Measurement only: unreachable hosts republishing status, timed per synchronous store write (the subscriber fanout).
+async function flapHostStatus({ page, windowMs }) {
+  const started = Date.now()
+  const deadline = started + windowMs
+  let writes = 0
+  while (Date.now() < deadline) {
+    await page.evaluate(
+      ({ step, hosts }) => {
+        const g = globalThis
+        g.__orcaDispatch ??= {}
+        g.__orcaDispatch.timings ??= []
+        const id = `fleet-gate-host-${String(step % hosts)}`
+        const flip = Math.floor(step / hosts) % 2 === 0 ? 'a' : 'b'
+        const t0 = performance.now()
+        window.__store.getState().setRuntimeEnvironmentStatus(id, {
+          status: null,
+          checkedAt: Date.now(),
+          appVersion: flip
+        })
+        g.__orcaDispatch.timings.push({ kind: 'host', ms: performance.now() - t0 })
+      },
+      { step: writes, hosts: HOST_COUNT }
+    )
+    writes += 1
+    await sleep(Math.max(0, started + (writes * 1_000) / HOST_WRITES_PER_SECOND - Date.now()))
+  }
+  const entries = await page.evaluate(
+    (hosts) =>
+      Array.from({ length: hosts }, (_, i) =>
+        window.__store.getState().runtimeStatusByEnvironmentId.has(`fleet-gate-host-${String(i)}`)
+      ).filter(Boolean).length,
+    HOST_COUNT
+  )
+  const planned = Math.floor((windowMs / 1_000) * HOST_WRITES_PER_SECOND)
+  return {
+    note: `${String(writes)} host status writes over ${String(entries)} synthetic hosts`,
+    cleanup: () =>
+      page.evaluate((hosts) => {
+        for (let i = 0; i < hosts; i += 1) {
+          window.__store.getState().clearRuntimeEnvironmentStatus(`fleet-gate-host-${String(i)}`)
+        }
+      }, HOST_COUNT),
+    undriven:
+      writes < planned * (1 - MAX_MISSED_SHARE) || entries < HOST_COUNT
+        ? `${String(writes)} of ${String(planned)} planned writes over ${String(entries)} hosts`
+        : null
+  }
+}
+
 export const SCENARIOS = {
   idle: async ({ windowMs }) => {
     await sleep(windowMs)
@@ -521,5 +573,6 @@ export const SCENARIOS = {
   },
   typing: typeIntoComposer,
   streaming: streamAgentStatus,
-  switch: switchWorkspaces
+  switch: switchWorkspaces,
+  host: flapHostStatus
 }
