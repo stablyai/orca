@@ -1,4 +1,5 @@
 import { readFile, rm } from 'node:fs/promises'
+import { rmSync } from 'node:fs'
 import { stageCredentialFile } from '../../credentials/credential-file-io'
 import { join } from 'node:path'
 import { getSecretStore, type SecretStore } from '../../../shared/secure-storage/secret-store'
@@ -6,7 +7,7 @@ import {
   OrcaCloudSessionStorageRefusedError,
   sealedStorageRefusal
 } from './profile-cloud-session-sealing'
-import { isUnreadableError } from '../../../shared/secure-storage/secure-file'
+import { writeSecureFile, isUnreadableError } from '../../../shared/secure-storage/secure-file'
 import type {
   OrcaCloudCapabilities,
   OrcaCloudOrgSummary,
@@ -116,12 +117,10 @@ function sealedSessionFormat(secrets: SecretStore): SealedSessionFormat {
     : 'electron-safe-storage-v1'
 }
 
-export async function writeOrcaCloudSessionFile(
-  profileId: string,
-  userDataPath: string,
+function serializeSession(
   session: OrcaCloudSession,
-  requireSealed = false
-): Promise<OrcaCloudSessionPersistence> {
+  requireSealed: boolean
+): { persistence: Exclude<OrcaCloudSessionPersistence, 'none'>; data: string | null } {
   const secrets = getSecretStore()
   // Checked at write time: the store can change while a remote sign-in waits on the browser.
   const refusal = requireSealed ? sealedStorageRefusal(secrets) : null
@@ -135,12 +134,7 @@ export async function writeOrcaCloudSessionFile(
       savedAt: Date.now(),
       ciphertext: secrets.encryptString(JSON.stringify(session)).toString('base64')
     }
-    await stageCredentialFile(
-      getOrcaCloudSessionPath(profileId, userDataPath),
-      JSON.stringify(encrypted, null, 2),
-      { createDirectory: true }
-    )
-    return 'encrypted'
+    return { persistence: 'encrypted', data: JSON.stringify(encrypted, null, 2) }
   }
 
   if (allowsPlaintextOrcaCloudSession()) {
@@ -150,17 +144,40 @@ export async function writeOrcaCloudSessionFile(
       savedAt: Date.now(),
       session
     }
-    await stageCredentialFile(
-      getOrcaCloudSessionPath(profileId, userDataPath),
-      JSON.stringify(plaintext, null, 2),
-      { createDirectory: true }
-    )
-    return 'dev-plaintext'
+    return { persistence: 'dev-plaintext', data: JSON.stringify(plaintext, null, 2) }
   }
 
-  // A new sign-in or rotation supersedes the old disk session, even when the new tokens stay in memory.
-  await rm(getOrcaCloudSessionPath(profileId, userDataPath), { force: true })
-  return 'memory-only'
+  return { persistence: 'memory-only', data: null }
+}
+
+export async function writeOrcaCloudSessionFile(
+  profileId: string,
+  userDataPath: string,
+  session: OrcaCloudSession,
+  requireSealed = false
+): Promise<OrcaCloudSessionPersistence> {
+  const { persistence, data } = serializeSession(session, requireSealed)
+  const path = getOrcaCloudSessionPath(profileId, userDataPath)
+  await (data === null
+    ? rm(path, { force: true })
+    : stageCredentialFile(path, data, { createDirectory: true }))
+  return persistence
+}
+
+// OS session-end cannot await promises; only failed rotations use this fallback.
+export function writeOrcaCloudSessionFileOnShutdown(
+  profileId: string,
+  userDataPath: string,
+  session: OrcaCloudSession
+): Exclude<OrcaCloudSessionPersistence, 'none'> {
+  const { persistence, data } = serializeSession(session, false)
+  const path = getOrcaCloudSessionPath(profileId, userDataPath)
+  if (data === null) {
+    rmSync(path, { force: true })
+  } else {
+    writeSecureFile(path, data)
+  }
+  return persistence
 }
 
 export async function readOrcaCloudSessionFile(

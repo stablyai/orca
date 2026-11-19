@@ -1,10 +1,14 @@
 import { rm } from 'node:fs/promises'
 import type { OrcaCloudSessionPersistence } from '../../../shared/orca-profiles/orca-profiles'
-import { inCredentialFileOrder } from '../../credentials/credential-file-io'
+import {
+  hasPendingCredentialFileOperation,
+  inCredentialFileOrder
+} from '../../credentials/credential-file-io'
 import {
   getOrcaCloudSessionPath,
   readOrcaCloudSessionFile,
   writeOrcaCloudSessionFile,
+  writeOrcaCloudSessionFileOnShutdown,
   type OrcaCloudSession,
   type OrcaCloudSessionReadResult
 } from './profile-cloud-session-file'
@@ -146,6 +150,30 @@ export async function flushUnsavedOrcaCloudSessions(): Promise<void> {
   }
   for (const [key, unsaved] of unsavedRotations) {
     await inSessionOrder(unsaved.profileId, unsaved.userDataPath, () => retryUnsavedRotation(key))
+  }
+}
+
+// Never overtake an admitted file operation when the OS gives us no async drain.
+export function flushUnsavedOrcaCloudSessionsOnShutdown(): void {
+  for (const [key, unsaved] of unsavedRotations) {
+    const path = getOrcaCloudSessionPath(unsaved.profileId, unsaved.userDataPath)
+    if (
+      hasPendingCredentialFileOperation(path) ||
+      hasPendingCredentialFileOperation(`${path}.owner`)
+    ) {
+      continue
+    }
+    try {
+      const persistence = writeOrcaCloudSessionFileOnShutdown(
+        unsaved.profileId,
+        unsaved.userDataPath,
+        unsaved.session
+      )
+      rememberMemorySession(key, { session: unsaved.session, persistence })
+      unsavedRotations.delete(key)
+    } catch {
+      // Best effort: the OS will not wait for an asynchronous retry.
+    }
   }
 }
 

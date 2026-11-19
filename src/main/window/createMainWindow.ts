@@ -16,7 +16,7 @@ import { rememberWindowMaterial } from './presentation/window-material-suppressi
 import { markSystemSessionEnding } from '../crash-reporting/process-exits/expected-teardown-state'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
-import { flushUnsavedCloudSessions } from '../orca-profiles/cloud-session/profile-cloud-session-owner'
+import { flushUnsavedOrcaCloudSessionsOnShutdown } from '../orca-profiles/cloud-session/profile-cloud-session-store'
 import type { Store } from '../persistence/loading-store/store'
 import { closeDashboardPopout } from './dashboard-popout-window'
 import { closeWorkspaceSpaceWindow } from './workspace-space-window'
@@ -182,7 +182,7 @@ export function createMainWindow(
 
   // Unlike query-session-end, session-end cannot be canceled before this signal is recorded.
   if (process.platform === 'win32') {
-    mainWindow.on('session-end', async (event) => {
+    mainWindow.on('session-end', (event) => {
       markSystemSessionEnding()
       // Record positive OS shutdown evidence; task-kill and shutdown tree deaths otherwise look identical.
       recordDurableCrashBreadcrumb('system_session_end', {
@@ -190,9 +190,9 @@ export function createMainWindow(
           ? event.reasons.filter((reason) => typeof reason === 'string').join(',')
           : ''
       })
-      await flushUnsavedCloudSessions()
       // Windows emits no will-quit for an OS shutdown or logoff, so its teardown never records it.
       recordAgentSessionRuntimeEnd('quit')
+      flushUnsavedOrcaCloudSessionsOnShutdown()
     })
   }
 

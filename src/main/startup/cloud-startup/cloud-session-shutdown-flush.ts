@@ -1,9 +1,6 @@
-import { app, powerMonitor, type Event } from 'electron'
+import { powerMonitor } from 'electron'
+import { flushUnsavedOrcaCloudSessionsOnShutdown } from '../../orca-profiles/cloud-session/profile-cloud-session-store'
 
-// Route OS shutdown through awaited quit teardown; Windows reports session-end per window.
 export function installCloudSessionShutdownFlush(): void {
-  powerMonitor.on('shutdown', (event?: Event) => {
-    event?.preventDefault()
-    app.quit()
-  })
+  powerMonitor.on('shutdown', flushUnsavedOrcaCloudSessionsOnShutdown)
 }

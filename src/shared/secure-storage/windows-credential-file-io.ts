@@ -2,7 +2,7 @@ import { reportSecurePathHardening as report } from './secure-path-hardening-rep
 import { mayAttemptHardening, recordHardeningOutcome } from './secure-path-hardening-retry-budget'
 import { Worker } from 'node:worker_threads'
 import { toNamespacedPath } from 'node:path'
-import { stat, writeFile } from 'node:fs/promises'
+import { open, stat } from 'node:fs/promises'
 import {
   DEFAULT_HARDENING_CACHE_BOUNDS,
   SecurePathHardeningCache
@@ -82,23 +82,41 @@ function fileOperation(
 
 export async function createWindowsCredentialStage(
   path: string,
-  strict: boolean
+  data: string | Buffer,
+  strict: boolean,
+  syncFile = false
 ): Promise<boolean> {
   const security = loadWindowsSecurity()
   if ('error' in security) {
     if (strict) {
       throw new Error('Private Windows credential-file protection is unavailable.')
     }
-    await writeFile(path, Buffer.alloc(0), { mode: 0o600 })
+    const handle = await open(path, 'wx', 0o600)
+    try {
+      await handle.writeFile(data)
+      if (syncFile) {
+        await handle.sync()
+      }
+    } finally {
+      await handle.close()
+    }
     return false
   }
   const nativePath = toNamespacedPath(path)
   await fileOperation(security, 'createFileWithDacl', [
     nativePath,
     hardenedDaclSddl(security.userSid, false),
-    Buffer.alloc(0),
+    typeof data === 'string' ? Buffer.from(data) : data,
     strict
   ])
+  if (syncFile && !strict) {
+    const handle = await open(path, 'r+')
+    try {
+      await handle.sync()
+    } finally {
+      await handle.close()
+    }
+  }
   try {
     const aces = (await fileOperation(security, 'getDaclAces', [nativePath])) as ReturnType<
       WindowsSecurity['addon']['getDaclAces']
@@ -121,10 +139,24 @@ async function fileStamp(path: string): Promise<string> {
   return [s.dev, s.ino, s.size, s.mode, s.ctimeNs, s.mtimeNs, s.birthtimeNs].join(':')
 }
 
-export async function hardenWindowsCredentialPath(
-  path: string,
-  directory: boolean
-): Promise<boolean> {
+const hardeningDirectories = new Map<string, Promise<boolean>>()
+
+export function hardenWindowsCredentialPath(path: string, directory: boolean): Promise<boolean> {
+  const key = toNamespacedPath(path).toLowerCase()
+  if (!directory) {
+    return hardenWindowsPath(path, false)
+  }
+  const pending = hardeningDirectories.get(key)
+  if (pending) {
+    return pending
+  }
+  const operation = hardenWindowsPath(path, true)
+  hardeningDirectories.set(key, operation)
+  void operation.finally(() => hardeningDirectories.delete(key))
+  return operation
+}
+
+async function hardenWindowsPath(path: string, directory: boolean): Promise<boolean> {
   if (directory && hardenedDirectories.get(path)) {
     return true
   }

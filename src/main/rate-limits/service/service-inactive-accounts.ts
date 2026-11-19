@@ -29,7 +29,9 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     for (const account of accounts) {
       this.inactiveClaudeFetching.add(account.id)
     }
-    this.pushToRenderer()
+    void this.pushToRenderer().catch((error: unknown) =>
+      console.warn('[rate-limits] Failed to publish inactive account usage', error)
+    )
 
     try {
       for (const account of accounts) {
@@ -42,7 +44,9 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
           if (!this.isCurrentInactiveClaudeAccount(account.id)) {
             this.inactiveClaudeCache.delete(account.id)
           }
-          this.pushToRenderer()
+          void this.pushToRenderer().catch((error: unknown) =>
+            console.warn('[rate-limits] Failed to publish inactive account usage', error)
+          )
           continue
         }
         try {
@@ -60,7 +64,9 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
             if (!this.isCurrentInactiveClaudeAccount(account.id)) {
               this.inactiveClaudeCache.delete(account.id)
             }
-            this.pushToRenderer()
+            void this.pushToRenderer().catch((error: unknown) =>
+              console.warn('[rate-limits] Failed to publish inactive account usage', error)
+            )
             continue
           }
           const cached = this.inactiveClaudeCache.get(account.id) ?? null
@@ -76,7 +82,9 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
           }
         }
         this.inactiveClaudeFetching.delete(account.id)
-        this.pushToRenderer()
+        void this.pushToRenderer().catch((error: unknown) =>
+          console.warn('[rate-limits] Failed to publish inactive account usage', error)
+        )
       }
 
       if (!signal.aborted && fetchGeneration === this.inactiveClaudeAccountsGeneration) {
@@ -117,7 +125,9 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
           if (!this.isCurrentInactiveCodexAccount(account.id)) {
             this.inactiveCodexCache.delete(account.id)
           }
-          this.pushToRenderer()
+          void this.pushToRenderer().catch((error: unknown) =>
+            console.warn('[rate-limits] Failed to publish inactive account usage', error)
+          )
           continue
         }
         if (staggerNextProbe) {
@@ -131,7 +141,9 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
             if (!this.isCurrentInactiveCodexAccount(account.id)) {
               this.inactiveCodexCache.delete(account.id)
             }
-            this.pushToRenderer()
+            void this.pushToRenderer().catch((error: unknown) =>
+              console.warn('[rate-limits] Failed to publish inactive account usage', error)
+            )
             continue
           }
         }
@@ -141,7 +153,9 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
         }
         staggerNextProbe = true
         this.inactiveCodexFetching.add(account.id)
-        this.pushToRenderer()
+        void this.pushToRenderer().catch((error: unknown) =>
+          console.warn('[rate-limits] Failed to publish inactive account usage', error)
+        )
         try {
           // Read the managed home directly; do not materialize credentials in the shared runtime.
           const fresh = await fetchCodexRateLimits({
@@ -159,7 +173,9 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
             if (!this.isCurrentInactiveCodexAccount(account.id)) {
               this.inactiveCodexCache.delete(account.id)
             }
-            this.pushToRenderer()
+            void this.pushToRenderer().catch((error: unknown) =>
+              console.warn('[rate-limits] Failed to publish inactive account usage', error)
+            )
             continue
           }
           const cached = this.inactiveCodexCache.get(account.id) ?? null
@@ -175,7 +191,9 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
           }
         }
         this.inactiveCodexFetching.delete(account.id)
-        this.pushToRenderer()
+        void this.pushToRenderer().catch((error: unknown) =>
+          console.warn('[rate-limits] Failed to publish inactive account usage', error)
+        )
       }
 
       if (!signal.aborted && fetchGeneration === this.inactiveCodexAccountsGeneration) {
@@ -191,7 +209,9 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     this.inactiveClaudeAccountsGeneration += 1
     this.inactiveClaudeCache.delete(accountId)
     this.inactiveClaudeFetching.delete(accountId)
-    this.pushToRenderer()
+    void this.pushToRenderer().catch((error: unknown) =>
+      console.warn('[rate-limits] Failed to publish inactive account usage', error)
+    )
   }
 
   protected isCurrentInactiveClaudeAccount(accountId: string): boolean {
@@ -242,6 +262,8 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     // Clear one account without invalidating sibling fetches/results.
     this.inactiveCodexCache.delete(accountId)
     this.inactiveCodexFetching.delete(accountId)
-    this.pushToRenderer()
+    void this.pushToRenderer().catch((error: unknown) =>
+      console.warn('[rate-limits] Failed to publish inactive account usage', error)
+    )
   }
 }

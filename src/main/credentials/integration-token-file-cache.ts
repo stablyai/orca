@@ -19,8 +19,9 @@ export function createIntegrationTokenFileCache(args: {
   filePath: (id: string) => string
 }) {
   const entries = new Map<string, IntegrationStateFileCache<TokenFileState>>()
-  const stateFor = async (id: string): Promise<TokenFileState> => {
-    let entry = entries.get(id)
+  const readingEntries = new Map<string, IntegrationStateFileCache<TokenFileState>>()
+  const entryFor = (id: string): IntegrationStateFileCache<TokenFileState> => {
+    let entry = readingEntries.get(id) ?? entries.get(id)
     if (!entry) {
       entry = createIntegrationStateFileCache<TokenFileState>({
         filePath: () => args.filePath(id),
@@ -36,8 +37,9 @@ export function createIntegrationTokenFileCache(args: {
       }
       entries.delete(oldest)
     }
-    return entry.get()
+    return entry
   }
+  const stateFor = (id: string) => entryFor(id).get()
   async function readToken(id: string, force = true): Promise<string | null> {
     // Stamp before decrypting so a concurrent rotation cannot pin older bytes as current.
     const state = await stateFor(id)
@@ -74,7 +76,14 @@ export function createIntegrationTokenFileCache(args: {
       )
     },
     read(id: string, force = true): Promise<string | null> {
-      return inCredentialFileOrder(`${args.filePath(id)}.mutation`, () => readToken(id, force))
+      return inCredentialFileOrder(`${args.filePath(id)}.mutation`, async () => {
+        readingEntries.set(id, entryFor(id))
+        try {
+          return await readToken(id, force)
+        } finally {
+          readingEntries.delete(id)
+        }
+      })
     },
     async error(id: string): Promise<string | undefined> {
       return inCredentialFileOrder(
@@ -83,9 +92,13 @@ export function createIntegrationTokenFileCache(args: {
       )
     },
     forget(id: string): void {
+      readingEntries.get(id)?.invalidate()
       entries.delete(id)
     },
     clear(): void {
+      for (const entry of readingEntries.values()) {
+        entry.invalidate()
+      }
       entries.clear()
     }
   }

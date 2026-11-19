@@ -14,10 +14,18 @@ import {
 
 const operations = new Map<string, Promise<unknown>>()
 
+function credentialFileKey(path: string): string {
+  const absolute = resolve(path)
+  return process.platform === 'win32' ? absolute.toLowerCase() : absolute
+}
+
+export function hasPendingCredentialFileOperation(path: string): boolean {
+  return operations.has(credentialFileKey(path))
+}
+
 /** Keep reads, replacements and deletes in invocation order, including failed operations. */
 export function inCredentialFileOrder<T>(path: string, run: () => Promise<T>): Promise<T> {
-  const absolute = resolve(path)
-  const key = process.platform === 'win32' ? absolute.toLowerCase() : absolute
+  const key = credentialFileKey(path)
   const next = (operations.get(key) ?? Promise.resolve()).then(run, run)
   const settled = next.catch(() => {})
   operations.set(key, settled)
@@ -91,26 +99,26 @@ export async function stageCredentialFile(
   let restricted = true
   try {
     if (process.platform === 'win32') {
-      // Create the private inode before asynchronously writing any secret bytes.
       restricted = await createWindowsCredentialStage(
         temp,
-        options.requirePrivateWindowsFile ?? false
+        data,
+        options.requirePrivateWindowsFile ?? false,
+        options.durable || options.syncFile
       )
       if (options.requirePrivateWindowsFile && !restricted) {
         throw new Error('Private Windows credential-file protection could not be verified.')
       }
-    }
-    const handle = await open(temp, process.platform === 'win32' ? 'r+' : 'wx', 0o600)
-    try {
-      await handle.writeFile(data)
-      if (process.platform !== 'win32') {
+    } else {
+      const handle = await open(temp, 'wx', 0o600)
+      try {
+        await handle.writeFile(data)
         await handle.chmod(0o600)
+        if (options.durable || options.syncFile) {
+          await handle.sync()
+        }
+      } finally {
+        await handle.close()
       }
-      if (options.durable || options.syncFile) {
-        await handle.sync()
-      }
-    } finally {
-      await handle.close()
     }
     if (options.shouldPublish && !(await options.shouldPublish())) {
       return false
