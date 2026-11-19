@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path'
 import '../../../filesystem/atomic-file-publication'
 import { renameFileWithWindowsRetry } from '../../../../shared/file-write/windows-retry-file-operations'
 import { writeRollingFileBackup } from '../../../filesystem/rolling-file-backup'
+import { assertGuardedFileCurrent } from '../../../filesystem/concurrent-file-edit-guard'
 import {
   observeFilePublication,
   observedExistsSync as existsSync,
@@ -33,6 +34,7 @@ export function writeTomlConfigAtomically(
     if (existsSync(writePath)) {
       writeRollingFileBackup(writePath, `${writePath}.bak`)
     }
+    assertGuardedFileCurrent(writePath)
     // Checked before every rename attempt, so only the re-read is left between check and rename.
     const stillCurrent = options ? () => options.stillCurrent(writePath) : undefined
     if (!renameFileWithWindowsRetry(temporaryPath, writePath, stillCurrent)) {

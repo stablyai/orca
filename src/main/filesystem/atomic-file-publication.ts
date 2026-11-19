@@ -10,6 +10,8 @@ import { grantDirAcl } from '../windows/windows-directory-acl'
 import { isPermissionError } from './permission-errors'
 import { nodeFileContentsEqualSync } from '../../shared/file-content/node-file-content-equality'
 import { renameFileWithWindowsRetry } from '../../shared/file-write/windows-retry-file-operations'
+import { assertGuardedFileCurrent, recordGuardedPublication } from './concurrent-file-edit-guard'
+import { digestFileContent } from './file-content-observation'
 
 export function writeFileAtomically(
   targetPath: string,
@@ -17,6 +19,7 @@ export function writeFileAtomically(
   options?: { mode?: number }
 ): void {
   const tmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
+  assertGuardedFileCurrent(targetPath)
   try {
     writeFileSync(tmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
     renameFileWithWindowsRetry(tmpPath, targetPath)
@@ -52,6 +55,25 @@ export function writeFileAtomicallyIfUnchanged(
 ): boolean {
   // Guarded recovery moves files through a held name; keep those passes eligible for retry.
   invalidateFileObservation(targetPath)
+  assertGuardedFileCurrent(targetPath)
+  const published = attemptGuardedAtomicWriteWithAclRepair(
+    targetPath,
+    expectedContents,
+    contents,
+    options
+  )
+  if (published) {
+    recordGuardedPublication(targetPath, digestFileContent(contents))
+  }
+  return published
+}
+
+function attemptGuardedAtomicWriteWithAclRepair(
+  targetPath: string,
+  expectedContents: string | null,
+  contents: string,
+  options?: { mode?: number }
+): boolean {
   try {
     return attemptGuardedAtomicWrite(targetPath, expectedContents, contents, options)
   } catch (error) {

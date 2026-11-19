@@ -15,7 +15,7 @@ import {
 } from 'node:fs'
 import type * as Fs from 'node:fs'
 import type * as Os from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { setupCodexHookHomes } from './hook-service-test-harness'
 
 const { getPathMock, homedirMock, prepareFactoryHooks, controls } = vi.hoisted(() => {
@@ -43,6 +43,11 @@ const { getPathMock, homedirMock, prepareFactoryHooks, controls } = vi.hoisted((
 })
 
 vi.mock('electron', () => ({ app: { getPath: getPathMock } }))
+vi.mock('../../trust/project-trust/codex-project-trust-worker-spawn', async () => ({
+  spawnCodexProjectTrustWorker: (
+    await import('../../trust/project-trust/codex-project-trust-worker.test-fixture')
+  ).codexProjectTrustTestWorker.factory
+}))
 vi.mock('./hook-service', () => ({
   codexHookService: { prepareRuntimeHomeForLaunch: prepareFactoryHooks }
 }))
@@ -126,6 +131,7 @@ import { CodexHookService } from './codex-hook-service-implementation'
 import { getManagedScriptPath } from '../definitions/codex-hook-definition'
 import { createCodexRuntimeHomeLaunchPreparation } from '../../configuration/homes/codex-runtime-home-launch-preparation'
 import { syncSystemConfigIntoManagedCodexHome } from '../../configuration/settings/codex-config-mirror'
+import { codexProjectTrustTestWorker } from '../../trust/project-trust/codex-project-trust-worker.test-fixture'
 
 const homes = setupCodexHookHomes(homedirMock, getPathMock)
 beforeEach(() => {
@@ -168,15 +174,14 @@ describe('completed Codex launch preparation', () => {
     const prepare = createCodexRuntimeHomeLaunchPreparation({
       getRuntimeHome: () => ({
         prepareForCodexLaunchAsync: async (_target, _env, options) => {
-          const sync = (): boolean =>
-            syncSystemConfigIntoManagedCodexHome({
-              systemHomePath: join(homes.tmpHome, '.codex'),
-              runtimeHomePath: home
-            })
+          const mirrorHomes = {
+            systemHomePath: join(homes.tmpHome, '.codex'),
+            runtimeHomePath: home
+          }
           if (options?.deferConfigSync) {
-            options.deferConfigSync(sync)
+            options.deferConfigSync(mirrorHomes)
           } else {
-            sync()
+            syncSystemConfigIntoManagedCodexHome(mirrorHomes)
           }
           return home
         }
@@ -197,12 +202,10 @@ describe('completed Codex launch preparation', () => {
     const prepare = createCodexRuntimeHomeLaunchPreparation({
       getRuntimeHome: () => ({
         prepareForCodexLaunchAsync: async (_target, _env, options) => {
-          options?.deferConfigSync?.(() =>
-            syncSystemConfigIntoManagedCodexHome({
-              systemHomePath: join(homes.tmpHome, '.codex'),
-              runtimeHomePath: home
-            })
-          )
+          options?.deferConfigSync?.({
+            systemHomePath: join(homes.tmpHome, '.codex'),
+            runtimeHomePath: home
+          })
           return home
         }
       }),
@@ -246,7 +249,7 @@ describe('completed Codex launch preparation', () => {
     expect(readFileSync(join(other, 'config.toml'), 'utf8')).toContain('model = "A"')
   })
 
-  it('retries when the mirror processed a temporary source instead of the final source', async () => {
+  it('redoes the pass when the source changed while the mirror read it', async () => {
     const { service, home, source, runtime } = seed()
     await settle(service, home)
     writeFileSync(source, 'model = "A"\n')
@@ -255,9 +258,49 @@ describe('completed Codex launch preparation', () => {
       return () => writeFileSync(source, 'model = "A"\n')
     }
     await service.installForLaunchPrep(home, true, () => true)
-    expect(readFileSync(runtime, 'utf8')).toContain('model = "B"')
-    await service.installForLaunchPrep(home, true, () => true)
     expect(readFileSync(runtime, 'utf8')).toContain('model = "A"')
+    expect(readFileSync(runtime, 'utf8')).not.toContain('model = "B"')
+  })
+
+  it('takes the hooks back out when Off lands while the worker installs them', async () => {
+    const { service, home } = seed()
+    let enabled = true
+    controls.aroundMirror = () => {
+      enabled = false
+      return () => {}
+    }
+
+    await service.installForLaunchPrep(home, true, () => enabled)
+
+    expect(readFileSync(join(home, 'hooks.json'), 'utf8')).not.toContain(
+      basename(getManagedScriptPath())
+    )
+  })
+
+  it('still mirrors the launch config when the hook worker dies', async () => {
+    const { service, home, runtime } = seed('C')
+    mkdirSync(home, { recursive: true })
+    prepareFactoryHooks.mockImplementation(service.prepareRuntimeHomeForLaunch.bind(service))
+    const prepare = createCodexRuntimeHomeLaunchPreparation({
+      getRuntimeHome: () => ({
+        prepareForCodexLaunchAsync: async (_target, _env, options) => {
+          options?.deferConfigSync?.({
+            systemHomePath: join(homes.tmpHome, '.codex'),
+            runtimeHomePath: home
+          })
+          return home
+        }
+      }),
+      getSettings: () => undefined
+    })
+    codexProjectTrustTestWorker.controls.crashesOn = (request) => request.kind === 'hookPass'
+    try {
+      expect(await prepare()).toBe(home)
+    } finally {
+      codexProjectTrustTestWorker.controls.crashesOn = () => false
+    }
+
+    expect(readFileSync(runtime, 'utf8')).toContain('model = "C"')
   })
 
   it.each(['temporarily absent', 'temporarily locked'] as const)(

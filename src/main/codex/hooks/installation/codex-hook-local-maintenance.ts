@@ -5,98 +5,27 @@ import {
   removeManagedCommands
 } from '../../../agent-hooks/installation/commands/managed-hook-command-matching'
 import { readHooksJson } from '../../../agent-hooks/installation/configuration/hooks-json-read'
-import { syncSystemConfigIntoManagedCodexHome } from '../../configuration/settings/codex-config-mirror'
-import { upsertHookTrustEntries } from '../../trust/toml/config-toml-trust'
-import {
-  getCodexConfigTomlPath,
-  getConfigPath,
-  writeCodexHooksJson
-} from '../definitions/codex-hook-definition'
+import { getConfigPath, writeCodexHooksJson } from '../definitions/codex-hook-definition'
 import { getCodexManagedScriptFileName } from '../definitions/codex-hook-identity'
 import { cleanupLegacyManagedHookRepresentations } from '../reconciliation/codex-hook-legacy-cleanup'
+import { finishCodexHookPass, runCodexHookPassEffectsOffMain } from './codex-hook-pass-off-main'
+import type { CodexLaunchConfigPreparation } from './codex-hook-launch-preparation'
 import { removeRealHomeCodexHookForOptOut } from '../reconciliation/codex-real-home-hook-install'
 import type { CodexHookHashes } from '../../trust/hooks/codex-hook-trust-derivation'
-import {
-  removeRuntimeManagedHookTrustEntries,
-  removeStaleRuntimeHookTrustEntries
-} from '../../trust/hooks/codex-hook-trust-cleanup'
-import {
-  applyMirroredRuntimeUserHookTrustStates,
-  getRuntimeHooksWithSystemUserHooks
-} from '../../trust/hooks/codex-hook-user-mirroring'
-import {
-  getOrcaManagedCodexHomePath,
-  getSystemCodexHomePath
-} from '../../configuration/homes/codex-home-paths'
-import {
-  promoteCodexRuntimeHookApprovalsToSystem,
-  snapshotCodexRuntimeHookTrustProvenance
-} from '../../trust/hooks/hook-trust-promotion'
+import { removeRuntimeManagedHookTrustEntries } from '../../trust/hooks/codex-hook-trust-cleanup'
+import { getOrcaManagedCodexHomePath } from '../../configuration/homes/codex-home-paths'
 
 export async function refreshCodexRuntimeUserHooksExclusively(
   runtimeHomePath: string,
   getStatus: (runtimeHomePath: string) => AgentHookInstallStatus,
-  onComplete?: () => void
+  onComplete?: () => void,
+  configPreparation?: CodexLaunchConfigPreparation
 ): Promise<AgentHookInstallStatus> {
-  const configPath = getConfigPath(runtimeHomePath)
-  // Save in-Orca approvals before rewriting the runtime positions they are keyed against.
-  let complete = promoteCodexRuntimeHookApprovalsToSystem(runtimeHomePath)
-  const config = readHooksJson(configPath)
-  if (!config) {
-    // Malformed runtime hooks must not prevent legacy cleanup during disabled launch prep.
-    await cleanupLegacyManagedHookRepresentations()
-    return {
-      agent: 'codex',
-      state: 'error',
-      configPath,
-      managedHooksPresent: false,
-      detail: 'Could not parse Codex hooks.json'
-    }
-  }
-
-  const isManagedCommand = createManagedCommandMatcher(getCodexManagedScriptFileName())
-  const hookPlan = getRuntimeHooksWithSystemUserHooks(config.hooks, isManagedCommand, configPath)
-  if (!hookPlan) {
-    return {
-      agent: 'codex',
-      state: 'error',
-      configPath,
-      managedHooksPresent: false,
-      detail: 'Could not read system Codex hooks.json'
-    }
-  }
-  config.hooks = hookPlan.hooks
-  writeCodexHooksJson(configPath, hookPlan.hooks)
-
-  try {
-    const tomlPath = getCodexConfigTomlPath(runtimeHomePath)
-    const trustEntries = hookPlan.trustEntries.map(({ entry }) => entry)
-    const mirrored = syncSystemConfigIntoManagedCodexHome({
-      runtimeHomePath,
-      systemHomePath: getSystemCodexHomePath()
-    })
-    complete = mirrored && complete
-    // Write current user hashes before stale cleanup removes managed trust with status hooks unavailable.
-    upsertHookTrustEntries(tomlPath, trustEntries)
-    removeStaleRuntimeHookTrustEntries(tomlPath, configPath, trustEntries)
-    applyMirroredRuntimeUserHookTrustStates(tomlPath, hookPlan.trustEntries)
-  } catch (error) {
-    return {
-      agent: 'codex',
-      state: 'error',
-      configPath,
-      managedHooksPresent: false,
-      detail: `User hooks refreshed but trust entries could not be written: ${error instanceof Error ? error.message : String(error)}. Run /hooks in Codex to approve.`
-    }
-  }
-  const snapshotted = snapshotCodexRuntimeHookTrustProvenance(runtimeHomePath)
-
-  const cleaned = await cleanupLegacyManagedHookRepresentations()
-  const status = getStatus(runtimeHomePath)
-  if (complete && snapshotted && cleaned && status.state !== 'error') {
-    onComplete?.()
-  }
-  return status
+  const effects = await runCodexHookPassEffectsOffMain(
+    { mode: 'refresh', runtimeHomePath },
+    configPreparation
+  )
+  return finishCodexHookPass(runtimeHomePath, effects, getStatus, onComplete)
 }
 
 export async function removeCodexHooksExclusively(

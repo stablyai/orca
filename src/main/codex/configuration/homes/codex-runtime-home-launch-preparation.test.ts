@@ -10,6 +10,11 @@ const { prepareHooks, grantRead, paths } = vi.hoisted(() => ({
   grantRead: vi.fn(),
   paths: { root: '' }
 }))
+vi.mock('../../trust/project-trust/codex-project-trust-worker-spawn', async () => ({
+  spawnCodexProjectTrustWorker: (
+    await import('../../trust/project-trust/codex-project-trust-worker.test-fixture')
+  ).codexProjectTrustTestWorker.factory
+}))
 vi.mock('electron', () => ({ app: { getPath: () => paths.root } }))
 vi.mock('os', async (importOriginal) => ({
   ...(await importOriginal<typeof Os>()),
@@ -43,12 +48,10 @@ describe('managed Codex launch configuration', () => {
       writeFileSync(join(systemHomePath, 'config.toml'), expectedConfig)
       const runtimeHome: Pick<CodexRuntimeHomeService, 'prepareForCodexLaunchAsync'> = {
         prepareForCodexLaunchAsync: async (_target, _env, options) => {
-          const sync = (): boolean =>
-            syncSystemConfigIntoManagedCodexHome({ systemHomePath, runtimeHomePath })
           if (options?.deferConfigSync) {
-            options.deferConfigSync(sync)
+            options.deferConfigSync({ systemHomePath, runtimeHomePath })
           } else {
-            sync()
+            syncSystemConfigIntoManagedCodexHome({ systemHomePath, runtimeHomePath })
           }
           return runtimeHomePath
         }
@@ -76,22 +79,24 @@ describe('managed Codex launch configuration', () => {
     }
   )
 
-  it('propagates the original deferred config failure through the hook warning boundary', async () => {
+  it("propagates the worker's deferred config failure through the hook warning boundary", async () => {
     const failure = new Error('Config could not be prepared')
     const prepare = createCodexRuntimeHomeLaunchPreparation({
       getRuntimeHome: () => ({
         prepareForCodexLaunchAsync: async (_target, _env, options) => {
-          options?.deferConfigSync?.(() => {
-            throw failure
+          options?.deferConfigSync?.({
+            runtimeHomePath: join(paths.root, 'managed'),
+            systemHomePath: join(paths.root, '.codex')
           })
           return join(paths.root, 'managed')
         }
       }),
       getSettings: () => undefined
     })
-    prepareHooks.mockImplementation(async (_home, _target, _enabled, _codex, config) =>
-      config?.run()
-    )
+    prepareHooks.mockImplementation(async (_home, _target, _enabled, _codex, config) => {
+      config?.settle({ error: failure })
+      return config?.run()
+    })
     await expect(prepare()).rejects.toBe(failure)
   })
 })
