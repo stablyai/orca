@@ -36,7 +36,10 @@ import { getRepoExecutionHostId } from '../../../../../shared/execution-host/exe
 import { useResourceViewVisible } from './use-resource-view-visible'
 import { useResourcePtyActions } from './pty/use-resource-pty-actions'
 import { useResourceMemorySnapshot } from './use-resource-memory-snapshot'
-import { onResourceManagerOpenRequest } from './resource-manager-open-request'
+import {
+  onResourceManagerOpenRequest,
+  trackResourceManagerOpen
+} from './resource-manager-open-request'
 import { useTranslate } from '@/i18n/use-translate'
 
 let lastSelectedResourceTab: 'resources' | 'ptys' = 'resources'
@@ -68,6 +71,7 @@ export function useResourceUsageStatusController() {
       }),
     []
   )
+  useEffect(() => (open ? trackResourceManagerOpen() : undefined), [open])
   const setSelectedTab = (tab: string): void => {
     if (tab !== 'resources' && tab !== 'ptys') {
       return

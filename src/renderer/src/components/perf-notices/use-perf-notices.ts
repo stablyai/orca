@@ -4,6 +4,7 @@ import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrom
 import type { PerfNoticeSignals } from '../../../../shared/diagnostics/perf-notice-signals'
 import { formatMemory } from '../status-bar/resources/popover/resource-usage-metrics'
 import { splitSnapshotByOwner } from '../status-bar/resources/popover/resource-owner-split'
+import { isResourceManagerOpen } from '../status-bar/resources/resource-manager-open-request'
 import { canShowPerfNotice } from './perf-notice-ledger'
 import {
   availableFraction,
@@ -126,7 +127,11 @@ function startPerfNoticeLoop(): () => void {
   const tick = async (): Promise<void> => {
     timer = null
     const now = Date.now()
-    if (now - lastKeyAt < TYPING_QUIET_MS || useAppStore.getState().activeModal !== 'none') {
+    if (
+      now - lastKeyAt < TYPING_QUIET_MS ||
+      useAppStore.getState().activeModal !== 'none' ||
+      isResourceManagerOpen()
+    ) {
       schedule(CADENCE.waiting)
       return
     }
